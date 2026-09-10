@@ -19,9 +19,18 @@ async function gridTypeOfScene(
   worldId: string,
   sceneName: string,
 ): Promise<string | undefined> {
-  const result = await graphql<{ data?: { scenes: { name: string; gridType: string }[] } }>(
+  const result = await graphql<{
+    data?: { scenes: { name: string; gridType: string }[] };
+  }>(
     page,
-    `query ($worldId: UUID!) { scenes(worldId: $worldId) { name gridType } }`,
+    `
+      query ($worldId: UUID!) {
+        scenes(worldId: $worldId) {
+          name
+          gridType
+        }
+      }
+    `,
     { worldId },
   );
   return result.data?.scenes.find((s) => s.name === sceneName)?.gridType;
@@ -36,7 +45,9 @@ test("a scene created after the world default changes inherits that default, wit
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
   await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-  const worldId = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname)?.[1];
+  const worldId = /\/world\/([^/]+)\/staging$/.exec(
+    new URL(page.url()).pathname,
+  )?.[1];
   if (!worldId) throw new Error("Could not extract world id");
 
   // Set the world default to Hexagons.
@@ -49,7 +60,9 @@ test("a scene created after the world default changes inherits that default, wit
   await page.goto(`/world/${worldId}/scenes`);
   await page.getByTestId("new-scene-name-input").fill(hexSceneName);
   await page.getByTestId("add-scene-button").click();
-  await expect(page.getByRole("link", { name: hexSceneName })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("link", { name: hexSceneName })).toBeVisible({
+    timeout: 10_000,
+  });
 
   expect(await gridTypeOfScene(page, worldId, hexSceneName)).toBe("hex");
 
@@ -62,9 +75,13 @@ test("a scene created after the world default changes inherits that default, wit
   await page.goto(`/world/${worldId}/scenes`);
   await page.getByTestId("new-scene-name-input").fill(gridlessSceneName);
   await page.getByTestId("add-scene-button").click();
-  await expect(page.getByRole("link", { name: gridlessSceneName })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("link", { name: gridlessSceneName })).toBeVisible(
+    { timeout: 10_000 },
+  );
 
-  expect(await gridTypeOfScene(page, worldId, gridlessSceneName)).toBe("gridless");
+  expect(await gridTypeOfScene(page, worldId, gridlessSceneName)).toBe(
+    "gridless",
+  );
 
   // The earlier Hex scene's grid type is unaffected by the later default change (FR-016).
   expect(await gridTypeOfScene(page, worldId, hexSceneName)).toBe("hex");

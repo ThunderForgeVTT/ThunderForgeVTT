@@ -134,7 +134,6 @@ async function expectSyncStatus(page: Page, status: string, message: string) {
     .toBe(status);
 }
 
-
 /**
  * Give a context a way to lose its peers without losing anything else.
  *
@@ -178,10 +177,14 @@ async function installPeerCutter(context: BrowserContext): Promise<void> {
 
 /** Drop every peer connection this page holds, and say how many there were. */
 async function severPeers(page: Page): Promise<number> {
-  const closed = await page.evaluate(() =>
-    (window as unknown as { __severPeers?: () => number }).__severPeers?.() ?? 0,
+  const closed = await page.evaluate(
+    () =>
+      (window as unknown as { __severPeers?: () => number }).__severPeers?.() ??
+      0,
   );
-  expect(closed, "the cutter must have had connections to cut").toBeGreaterThan(0);
+  expect(closed, "the cutter must have had connections to cut").toBeGreaterThan(
+    0,
+  );
   return closed;
 }
 
@@ -231,7 +234,11 @@ interface Table {
  * them could establish afterwards: peer signaling rides GraphQL, so a channel
  * that has not formed before the link is cut will never form.
  */
-async function seatTable(browser: Browser, prefix: string, playerCount: number): Promise<Table> {
+async function seatTable(
+  browser: Browser,
+  prefix: string,
+  playerCount: number,
+): Promise<Table> {
   // The invite flow writes to the clipboard, and a context without that
   // permission throws before the new invite is stored — see
   // scene-live-launch.spec.ts, which hit the same thing.
@@ -240,14 +247,22 @@ async function seatTable(browser: Browser, prefix: string, playerCount: number):
   });
   const gmPage = await gmContext.newPage();
   await register(gmPage, `${prefix}gm`);
-  const worldId = await createWorldAndPlay(gmPage, `E2E Isolated ${uniqueSuffix()}`);
+  const worldId = await createWorldAndPlay(
+    gmPage,
+    `E2E Isolated ${uniqueSuffix()}`,
+  );
   await waitForEngineReady(gmPage);
   const sceneId = await firstSceneId(gmPage, worldId);
   const tokenId = await createToken(gmPage);
 
   const players: Seat[] = [];
   for (let i = 0; i < playerCount; i += 1) {
-    const page = await inviteAndJoinAsPlayer(browser, gmPage, worldId, `${prefix}p${i}`);
+    const page = await inviteAndJoinAsPlayer(
+      browser,
+      gmPage,
+      worldId,
+      `${prefix}p${i}`,
+    );
     players.push({
       context: page.context(),
       page,
@@ -280,7 +295,8 @@ async function seatTable(browser: Browser, prefix: string, playerCount: number):
     await expect
       .poll(() => peerCounters(page).then((c) => c.peers), {
         timeout: 120_000,
-        message: "every client must hold an open channel to every other before the cut",
+        message:
+          "every client must hold an open channel to every other before the cut",
       })
       .toBeGreaterThanOrEqual(everyone.length - 1);
   }
@@ -359,7 +375,6 @@ async function closeTable(table: Table) {
   await table.gm.context.close().catch(() => {});
 }
 
-
 // ---------------------------------------------------------------------------
 // The trust model (T108–T108c)
 // ---------------------------------------------------------------------------
@@ -435,9 +450,10 @@ async function reconcile(
     `reconcileQueuedChanges failed: ${JSON.stringify(res.errors)}`,
   ).toBe(undefined);
   const outcomes = res.data?.reconcileQueuedChanges;
-  expect(outcomes, "the server must answer with one outcome per change").toHaveLength(
-    changes.length,
-  );
+  expect(
+    outcomes,
+    "the server must answer with one outcome per change",
+  ).toHaveLength(changes.length);
   return outcomes!;
 }
 
@@ -447,36 +463,58 @@ function moveCommand(tokenId: string, x: number, y: number) {
 }
 
 /** Create a token straight through the mutation, with no engine in the way. */
-async function newToken(page: Page, sceneId: string, x = 0, y = 0): Promise<string> {
+async function newToken(
+  page: Page,
+  sceneId: string,
+  x = 0,
+  y = 0,
+): Promise<string> {
   const res = await graphql<{
     data?: { createToken?: { tokenId: string } };
     errors?: unknown;
   }>(
     page,
-    `mutation ($input: GraphQLCreateTokenInput!) {
-       createToken(input: $input) { tokenId }
-     }`,
+    `
+      mutation ($input: GraphQLCreateTokenInput!) {
+        createToken(input: $input) {
+          tokenId
+        }
+      }
+    `,
     { input: { sceneId, x, y } },
   );
-  expect(res.errors, `createToken failed: ${JSON.stringify(res.errors)}`).toBe(undefined);
+  expect(res.errors, `createToken failed: ${JSON.stringify(res.errors)}`).toBe(
+    undefined,
+  );
   const tokenId = res.data?.createToken?.tokenId;
   expect(tokenId, "the fixture must actually create a token").toBeTruthy();
   return tokenId!;
 }
 
 /** Hand a token to a user, so a non-GM submitter is entitled to move it. */
-async function ownToken(page: Page, tokenId: string, userId: string): Promise<void> {
+async function ownToken(
+  page: Page,
+  tokenId: string,
+  userId: string,
+): Promise<void> {
   const res = await graphql<{
     data?: { updateToken?: { ownerUserId: string | null } };
     errors?: unknown;
   }>(
     page,
-    `mutation ($tokenId: UUID!, $input: GraphQLUpdateTokenInput!) {
-       updateToken(tokenId: $tokenId, input: $input) { tokenId ownerUserId }
-     }`,
+    `
+      mutation ($tokenId: UUID!, $input: GraphQLUpdateTokenInput!) {
+        updateToken(tokenId: $tokenId, input: $input) {
+          tokenId
+          ownerUserId
+        }
+      }
+    `,
     { tokenId, input: { ownerUserId: userId } },
   );
-  expect(res.errors, `updateToken failed: ${JSON.stringify(res.errors)}`).toBe(undefined);
+  expect(res.errors, `updateToken failed: ${JSON.stringify(res.errors)}`).toBe(
+    undefined,
+  );
   expect(res.data?.updateToken?.ownerUserId).toBe(userId);
 }
 
@@ -498,30 +536,44 @@ async function rollAndRecord(
     errors?: unknown;
   }>(
     roller,
-    `mutation ($input: RollDiceInput!) {
-       rollDice(input: $input) { formula resultValue }
-     }`,
+    `
+      mutation ($input: RollDiceInput!) {
+        rollDice(input: $input) {
+          formula
+          resultValue
+        }
+      }
+    `,
     { input: { worldId, formula: "3d20+7" } },
   );
-  expect(rolled.errors, `rollDice failed: ${JSON.stringify(rolled.errors)}`).toBe(
-    undefined,
-  );
+  expect(
+    rolled.errors,
+    `rollDice failed: ${JSON.stringify(rolled.errors)}`,
+  ).toBe(undefined);
   const determined = rolled.data?.rollDice?.resultValue;
-  expect(determined, "the server must have resolved the roll").toBeGreaterThan(0);
+  expect(determined, "the server must have resolved the roll").toBeGreaterThan(
+    0,
+  );
 
   // The record id is only readable by the Game Master (spec 014 FR-014), which
   // is also the only session that would ever be submitting one of these.
   const records = await graphql<{
-    data?: { worldRollRecords?: { id: string; resolution: { resultValue: number } }[] };
+    data?: {
+      worldRollRecords?: { id: string; resolution: { resultValue: number } }[];
+    };
     errors?: unknown;
   }>(
     gm,
-    `query ($worldId: UUID!) {
-       worldRollRecords(worldId: $worldId, limit: 5) {
-         id
-         resolution { resultValue }
-       }
-     }`,
+    `
+      query ($worldId: UUID!) {
+        worldRollRecords(worldId: $worldId, limit: 5) {
+          id
+          resolution {
+            resultValue
+          }
+        }
+      }
+    `,
     { worldId },
   );
   expect(
@@ -531,7 +583,10 @@ async function rollAndRecord(
   const match = (records.data?.worldRollRecords ?? []).find(
     (record) => record.resolution.resultValue === determined,
   );
-  expect(match, "the roll the server resolved must be in its own records").toBeTruthy();
+  expect(
+    match,
+    "the roll the server resolved must be in its own records",
+  ).toBeTruthy();
   return { recordId: match!.id, determined: determined! };
 }
 
@@ -543,9 +598,21 @@ async function serverToken(
 ): Promise<{ x: number; y: number } | null> {
   const res = await graphql<{
     data?: { tokens?: { tokenId: string; x: number; y: number }[] };
-  }>(page, `query ($sceneId: UUID!) { tokens(sceneId: $sceneId) { tokenId x y } }`, {
-    sceneId,
-  });
+  }>(
+    page,
+    `
+      query ($sceneId: UUID!) {
+        tokens(sceneId: $sceneId) {
+          tokenId
+          x
+          y
+        }
+      }
+    `,
+    {
+      sceneId,
+    },
+  );
   return res.data?.tokens?.find((token) => token.tokenId === tokenId) ?? null;
 }
 
@@ -569,14 +636,23 @@ async function trustTable(
     permissions: ["clipboard-read", "clipboard-write"],
   });
   const gm = await gmContext.newPage();
-  const worldId = await registerAndCreateWorld(gm, `E2E Trust ${uniqueSuffix()}`, prefix);
+  const worldId = await registerAndCreateWorld(
+    gm,
+    `E2E Trust ${uniqueSuffix()}`,
+    prefix,
+  );
   const [sceneId] = await sceneIds(gm, worldId);
   const gmUserId = await currentUserId(gm);
 
   const players: Page[] = [];
   const playerIds: string[] = [];
   for (let i = 0; i < playerCount; i += 1) {
-    const page = await inviteAndJoinAsPlayer(browser, gm, worldId, `${prefix}p${i}`);
+    const page = await inviteAndJoinAsPlayer(
+      browser,
+      gm,
+      worldId,
+      `${prefix}p${i}`,
+    );
     players.push(page);
     playerIds.push(await currentUserId(page));
   }
@@ -584,7 +660,11 @@ async function trustTable(
 }
 
 async function closeTrustTable(table: TrustTable) {
-  for (const player of table.players) await player.context().close().catch(() => {});
+  for (const player of table.players)
+    await player
+      .context()
+      .close()
+      .catch(() => {});
   await table.gmContext.close().catch(() => {});
 }
 
@@ -611,14 +691,21 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
     const player = table.players[0].page;
 
     const before = await serverTokenPosition(gm, table.sceneId, table.tokenId);
-    expect(before, "the token should exist server-side before the server goes away").toBeTruthy();
+    expect(
+      before,
+      "the token should exist server-side before the server goes away",
+    ).toBeTruthy();
 
     await isolateTable(table.seats);
 
     // The state itself, on both clients. Not an intermediate detail: it is
     // what tells the players their changes are provisional (FR-063), and
     // reaching it is what licenses everything below.
-    await expectSyncStatus(gm, "server-isolated", "the GM should see the table, not an outage");
+    await expectSyncStatus(
+      gm,
+      "server-isolated",
+      "the GM should see the table, not an outage",
+    );
     await expectSyncStatus(
       player,
       "server-isolated",
@@ -628,7 +715,9 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
     await dragToken(gm, table.tokenId, { dx: 200, dy: -140 });
     const intent = await tokenPosition(gm, table.tokenId);
     expect(intent, "the GM's drag must move their own view").toBeTruthy();
-    expect(intent!.x, "the GM's drag must actually move the token").not.toBe(before!.x);
+    expect(intent!.x, "the GM's drag must actually move the token").not.toBe(
+      before!.x,
+    );
 
     // The half that makes it play rather than solitaire: the move crossed the
     // data channel, was adjudicated, and landed on the other person's screen
@@ -653,15 +742,21 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
     // SC-019's second half: accepted on reconnection. The submission rides the
     // GM's own session, which is the whole of the trust model.
     await expect
-      .poll(() => serverTokenPosition(gm, table.sceneId, table.tokenId).then((p) => p?.x), {
-        timeout: 120_000,
-        message: "what the table agreed should reach the server once it is back",
-      })
+      .poll(
+        () =>
+          serverTokenPosition(gm, table.sceneId, table.tokenId).then(
+            (p) => p?.x,
+          ),
+        {
+          timeout: 120_000,
+          message:
+            "what the table agreed should reach the server once it is back",
+        },
+      )
       .toBeCloseTo(intent!.x, 0);
 
     await closeTable(table);
   });
-
 
   /**
    * SC-020 / FR-058, first half: losing *any* peer stops adjudicated play at
@@ -686,7 +781,11 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
 
     await isolateTable(table.seats);
     for (const seat of table.seats) {
-      await expectSyncStatus(seat.page, "server-isolated", "the whole table is here");
+      await expectSyncStatus(
+        seat.page,
+        "server-isolated",
+        "the whole table is here",
+      );
     }
 
     // The control: while everyone is present, an adjudicated move reaches
@@ -750,7 +849,11 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
 
     await isolateTable(table.seats);
     for (const seat of table.seats) {
-      await expectSyncStatus(seat.page, "server-isolated", "the whole table is here");
+      await expectSyncStatus(
+        seat.page,
+        "server-isolated",
+        "the whole table is here",
+      );
     }
 
     // The control again, and this time it also establishes that a *player's*
@@ -761,14 +864,18 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
     await expect
       .poll(() => tokenPosition(bob, table.tokenId).then((p) => p?.x), {
         timeout: 90_000,
-        message: "with a Game Master present, a player's move reaches the table",
+        message:
+          "with a Game Master present, a player's move reaches the table",
       })
       .toBeCloseTo(adjudicated!.x, 0);
 
     // The arbiter leaves.
     await severPeers(gm);
 
-    await expectAdjudicationEnded(alice, "play stops rather than electing anyone");
+    await expectAdjudicationEnded(
+      alice,
+      "play stops rather than electing anyone",
+    );
     await expectAdjudicationEnded(bob, "for both of them");
 
     // The two of them can still reach each other. That is the whole point:
@@ -810,7 +917,11 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
 
     await isolateTable(table.seats);
     for (const seat of table.seats) {
-      await expectSyncStatus(seat.page, "server-isolated", "the whole table is here");
+      await expectSyncStatus(
+        seat.page,
+        "server-isolated",
+        "the whole table is here",
+      );
     }
 
     await dragToken(gm, table.tokenId, { dx: 160, dy: -100 });
@@ -858,7 +969,10 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
       (await tokenPosition(gm, table.tokenId))!.x,
       "each half still edits locally, for the server to settle later",
     ).not.toBeCloseTo(agreed!.x, 0);
-    expect((await tokenPosition(bob, table.tokenId))!.x).not.toBeCloseTo(agreed!.x, 0);
+    expect((await tokenPosition(bob, table.tokenId))!.x).not.toBeCloseTo(
+      agreed!.x,
+      0,
+    );
 
     await closeTable(table);
   });
@@ -892,11 +1006,16 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
 
     // 1. Alice, claiming to relay Bob's change. The whole of FR-061a.
     const impersonation = await reconcile(alice, table.worldId, [
-      { localId: "as-bob", command: moveCommand(relayed, 210, -140), attributedToUserId: bobId },
+      {
+        localId: "as-bob",
+        command: moveCommand(relayed, 210, -140),
+        attributedToUserId: bobId,
+      },
     ]);
-    expect(impersonation[0].applied, "a player may never submit on someone else's behalf").toBe(
-      false,
-    );
+    expect(
+      impersonation[0].applied,
+      "a player may never submit on someone else's behalf",
+    ).toBe(false);
     expect(impersonation[0].reason).toBe("PERMISSION_DENIED");
     expect(
       await serverToken(table.gm, table.sceneId, relayed),
@@ -913,13 +1032,20 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
       ownSubmission[0].applied,
       "a player replaying their own change must still be accepted",
     ).toBe(true);
-    expect(await serverToken(table.gm, table.sceneId, own)).toMatchObject({ x: 90, y: 60 });
+    expect(await serverToken(table.gm, table.sceneId, own)).toMatchObject({
+      x: 90,
+      y: 60,
+    });
 
     // 3. The identical submission from the Game Master. Same command, same
     //    attribution, different submitter — and that difference is the
     //    entire trust model (ADR-052, "The trust model, stated plainly").
     const relayedByGm = await reconcile(table.gm, table.worldId, [
-      { localId: "gm-as-bob", command: moveCommand(relayed, 210, -140), attributedToUserId: bobId },
+      {
+        localId: "gm-as-bob",
+        command: moveCommand(relayed, 210, -140),
+        attributedToUserId: bobId,
+      },
     ]);
     expect(
       relayedByGm[0].applied,
@@ -955,7 +1081,11 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
 
     // A real roll, resolved by the server, which is what makes there be
     // something to disagree with (ADR-044).
-    const { recordId, determined } = await rollAndRecord(alice, table.gm, table.worldId);
+    const { recordId, determined } = await rollAndRecord(
+      alice,
+      table.gm,
+      table.worldId,
+    );
     const claimed = determined + 13;
 
     const moved = await newToken(table.gm, table.sceneId);
@@ -965,14 +1095,24 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
           localId: "disputed",
           command: moveCommand(moved, 175, -95),
           attributedToUserId: aliceId,
-          reportedOutcome: { kind: "dice", version: 1, recordId, value: claimed },
+          reportedOutcome: {
+            kind: "dice",
+            version: 1,
+            recordId,
+            value: claimed,
+          },
         },
       ])
     )[0];
 
     // Never auto-rejected, never interrupted (FR-066).
-    expect(outcome.applied, "a discrepancy must not reject the change").toBe(true);
-    expect(outcome.reason, "nor turn it into a failure of some other kind").toBeNull();
+    expect(outcome.applied, "a discrepancy must not reject the change").toBe(
+      true,
+    );
+    expect(
+      outcome.reason,
+      "nor turn it into a failure of some other kind",
+    ).toBeNull();
     // Never altered: the move lands exactly where it was asked to.
     expect(
       await serverToken(table.gm, table.sceneId, moved),
@@ -981,7 +1121,10 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
 
     // Both numbers, inspectable, attributed to the originator rather than to
     // the Game Master who relayed it.
-    expect(outcome.discrepancy, "the GM must be shown the difference").not.toBeNull();
+    expect(
+      outcome.discrepancy,
+      "the GM must be shown the difference",
+    ).not.toBeNull();
     expect(outcome.discrepancy!.reportedValue).toBe(claimed);
     expect(outcome.discrepancy!.determinedValue).toBe(determined);
     expect(outcome.discrepancy!.recordId).toBe(recordId);
@@ -999,7 +1142,12 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
         {
           localId: "disputed-by-player",
           command: moveCommand(moved, 176, -96),
-          reportedOutcome: { kind: "dice", version: 1, recordId, value: claimed },
+          reportedOutcome: {
+            kind: "dice",
+            version: 1,
+            recordId,
+            value: claimed,
+          },
         },
       ])
     )[0];
@@ -1043,7 +1191,10 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
         },
       ])
     )[0];
-    expect(onBehalf.applied, "acting for a player is ordinary and unremarkable").toBe(true);
+    expect(
+      onBehalf.applied,
+      "acting for a player is ordinary and unremarkable",
+    ).toBe(true);
     expect(onBehalf.reason).toBeNull();
     expect(
       onBehalf.discrepancy,
@@ -1054,7 +1205,10 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
     // event and nothing else: their own reconcile call — the only channel
     // that carries a verdict — has nothing to report.
     const playerSees = await reconcile(alice, table.worldId, []);
-    expect(playerSees, "the player has nothing owing and hears nothing").toHaveLength(0);
+    expect(
+      playerSees,
+      "the player has nothing owing and hears nothing",
+    ).toHaveLength(0);
     expect(
       await serverToken(alice, table.sceneId, quiet),
       "the player simply sees the token where the table put it",
@@ -1062,7 +1216,11 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
 
     // And the control: the machinery is running, and does flag a genuine
     // mismatch on an otherwise identical relayed change.
-    const { recordId, determined } = await rollAndRecord(alice, table.gm, table.worldId);
+    const { recordId, determined } = await rollAndRecord(
+      alice,
+      table.gm,
+      table.worldId,
+    );
     const control = (
       await reconcile(table.gm, table.worldId, [
         {
@@ -1114,7 +1272,11 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
     const [alice] = table.players;
     const [aliceId] = table.playerIds;
 
-    const { recordId, determined } = await rollAndRecord(alice, table.gm, table.worldId);
+    const { recordId, determined } = await rollAndRecord(
+      alice,
+      table.gm,
+      table.worldId,
+    );
     const claimed = determined + 11;
 
     // A separate world the Game Master also owns, for the "the record is not
@@ -1123,10 +1285,16 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
     // compare against.
     const otherWorldId = await (async () => {
       await table.gm.goto("/worlds/create");
-      await table.gm.locator("#world-name").fill(`E2E Trust Other ${uniqueSuffix()}`);
+      await table.gm
+        .locator("#world-name")
+        .fill(`E2E Trust Other ${uniqueSuffix()}`);
       await table.gm.getByRole("button", { name: /create world/i }).click();
-      await table.gm.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 20_000 });
-      const match = /\/world\/([^/]+)\/staging$/.exec(new URL(table.gm.url()).pathname);
+      await table.gm.waitForURL(/\/world\/[^/]+\/staging$/, {
+        timeout: 20_000,
+      });
+      const match = /\/world\/([^/]+)\/staging$/.exec(
+        new URL(table.gm.url()).pathname,
+      );
       return match![1];
     })();
 
@@ -1219,7 +1387,6 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
     await closeTrustTable(table);
   });
 
-
   /**
    * FR-065 / FR-067, at the surface the requirement is actually about: what
    * the Game Master *sees*, and what everybody else does not.
@@ -1277,10 +1444,14 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
 
     const roll = async (page: Page) => {
       await page.goto(`/world/${table.worldId}/play`);
-      await expect(page.getByTestId("dice-roller-panel")).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByTestId("dice-roller-panel")).toBeVisible({
+        timeout: 60_000,
+      });
       await page.getByTestId("dice-formula-input").fill("1d20");
       await page.getByTestId("dice-roll-button").click();
-      await expect(page.getByTestId("dice-roll-result")).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByTestId("dice-roll-result")).toBeVisible({
+        timeout: 30_000,
+      });
     };
 
     await roll(table.gm);
@@ -1289,7 +1460,9 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
     await expect(table.gm.getByTestId("roll-discrepancy-marker")).toBeVisible({
       timeout: 15_000,
     });
-    await expect(table.gm.getByTestId("roll-result-total")).toHaveText(String(CLAIMED));
+    await expect(table.gm.getByTestId("roll-result-total")).toHaveText(
+      String(CLAIMED),
+    );
 
     // Both values inspectable, and nothing offered to do about them: the
     // popover has two numbers and a sentence, and no control that would make
@@ -1298,9 +1471,9 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
     await expect(table.gm.getByTestId("roll-discrepancy-claimed")).toHaveText(
       String(CLAIMED),
     );
-    await expect(table.gm.getByTestId("roll-discrepancy-determined")).toHaveText(
-      String(DETERMINED),
-    );
+    await expect(
+      table.gm.getByTestId("roll-discrepancy-determined"),
+    ).toHaveText(String(DETERMINED));
     const details = table.gm.getByTestId("roll-discrepancy-details");
     await expect(details).toContainText("stands as rolled");
     await expect(
@@ -1310,7 +1483,9 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
 
     // And the player, given the identical payload, sees an ordinary roll.
     await roll(player);
-    await expect(player.getByTestId("roll-result-total")).toHaveText(String(CLAIMED));
+    await expect(player.getByTestId("roll-result-total")).toHaveText(
+      String(CLAIMED),
+    );
     await expect(
       player.getByTestId("roll-discrepancy-marker"),
       "a mark against a player must never be visible to the table (FR-067)",
@@ -1318,5 +1493,4 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
 
     await closeTrustTable(table);
   });
-
 });

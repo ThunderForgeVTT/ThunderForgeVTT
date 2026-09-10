@@ -49,7 +49,8 @@ async function createWorld(page: Page, worldName: string): Promise<string> {
   await page.getByRole("button", { name: /create world/i }).click();
   await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
   const match = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname);
-  if (!match) throw new Error(`Could not extract world id from URL: ${page.url()}`);
+  if (!match)
+    throw new Error(`Could not extract world id from URL: ${page.url()}`);
   return match[1];
 }
 
@@ -58,7 +59,10 @@ test.describe("Spec 016: GM assigns a game system and its legal notice is persis
     page,
   }) => {
     await register(page, freshCredentials("e2esystem"));
-    const worldId = await createWorld(page, `E2E System Settings ${uniqueSuffix()}`);
+    const worldId = await createWorld(
+      page,
+      `E2E System Settings ${uniqueSuffix()}`,
+    );
 
     // Spec 021: world creation now sends a game-system picker default
     // (Genie), so a freshly-created world already has one assigned rather
@@ -83,18 +87,29 @@ test.describe("Spec 016: GM assigns a game system and its legal notice is persis
     // legal notice before confirming" flow (FR-004's "point of selection"
     // review step), without needing a second implemented system.
     await page.getByRole("option", { name: "Genie", exact: true }).click();
-    await expect(page.getByTestId("pending-system-confirmation")).toBeVisible({ timeout: 10_000 });
-    const pendingLegalText = await page.getByTestId("pending-system-confirmation").innerText();
+    await expect(page.getByTestId("pending-system-confirmation")).toBeVisible({
+      timeout: 10_000,
+    });
+    const pendingLegalText = await page
+      .getByTestId("pending-system-confirmation")
+      .innerText();
     expect(pendingLegalText.length).toBeGreaterThan(0);
 
     await page.getByRole("button", { name: "Confirm" }).click();
-    await expect(page.getByText("System assigned.")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("System assigned.")).toBeVisible({
+      timeout: 10_000,
+    });
     await expect(page.getByTestId("active-system-card")).toContainText("Genie");
 
     // Persists across a fresh navigation, not just optimistic local state.
     await page.goto(`/world/${worldId}/settings/system`);
-    await expect(page.getByTestId("active-system-card")).toContainText("Genie", { timeout: 10_000 });
-    await expect(page.getByTestId("active-system-card")).not.toContainText(/no system assigned yet/i);
+    await expect(page.getByTestId("active-system-card")).toContainText(
+      "Genie",
+      { timeout: 10_000 },
+    );
+    await expect(page.getByTestId("active-system-card")).not.toContainText(
+      /no system assigned yet/i,
+    );
   });
 
   test("a non-GM member sees the active system and its legal notice, but no picker", async ({
@@ -108,7 +123,10 @@ test.describe("Spec 016: GM assigns a game system and its legal notice is persis
     // Spec 021: world creation already assigns Genie by default, so there's
     // no separate "GM assigns a system" step needed before checking that a
     // non-GM member sees the same info with no picker.
-    const worldId = await createWorld(gmPage, `E2E System Settings Viewer ${uniqueSuffix()}`);
+    const worldId = await createWorld(
+      gmPage,
+      `E2E System Settings Viewer ${uniqueSuffix()}`,
+    );
 
     await gmPage.goto(`/world/${worldId}`);
     await gmPage.getByRole("button", { name: "Generate Join Link" }).click();
@@ -123,14 +141,20 @@ test.describe("Spec 016: GM assigns a game system and its legal notice is persis
     await register(playerPage, freshCredentials("e2esystemplayer"));
     await playerPage.goto(`/join/${inviteCode}`);
     await playerPage.getByRole("button", { name: "Join Campaign" }).click();
-    await playerPage.waitForURL((url) => url.pathname.startsWith(`/world/${worldId}`), {
-      timeout: 15_000,
-    });
+    await playerPage.waitForURL(
+      (url) => url.pathname.startsWith(`/world/${worldId}`),
+      {
+        timeout: 15_000,
+      },
+    );
 
     await playerPage.goto(`/world/${worldId}/settings/system`);
-    await expect(playerPage.getByTestId("active-system-card")).toContainText("Genie", {
-      timeout: 10_000,
-    });
+    await expect(playerPage.getByTestId("active-system-card")).toContainText(
+      "Genie",
+      {
+        timeout: 10_000,
+      },
+    );
     // No GM-only picker for a non-GM member.
     await expect(playerPage.getByTestId("system-picker-card")).toHaveCount(0);
 
@@ -144,10 +168,17 @@ test.describe("Spec 022 User Story 4: System Settings relabel + Default Scene Gr
     page,
   }) => {
     await register(page, freshCredentials("e2esystemlabel"));
-    const worldId = await createWorld(page, `E2E System Settings Labels ${uniqueSuffix()}`);
+    const worldId = await createWorld(
+      page,
+      `E2E System Settings Labels ${uniqueSuffix()}`,
+    );
     await page.goto(`/world/${worldId}/settings/system`);
 
-    await expect(page.getByTestId("system-picker-card").getByRole("heading", { name: "System Settings" })).toBeVisible();
+    await expect(
+      page
+        .getByTestId("system-picker-card")
+        .getByRole("heading", { name: "System Settings" }),
+    ).toBeVisible();
     await expect(page.getByLabel("Change System")).toBeVisible();
     await expect(page.getByLabel("Default Scene Grid Type")).toBeVisible();
 

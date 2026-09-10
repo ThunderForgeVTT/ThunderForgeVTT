@@ -61,13 +61,19 @@ test.describe("Client world cache — playing on through a lost connection (US7)
     await link.install();
 
     await register(page, "e2eoff");
-    const worldId = await createWorldAndPlay(page, `E2E Offline ${uniqueSuffix()}`);
+    const worldId = await createWorldAndPlay(
+      page,
+      `E2E Offline ${uniqueSuffix()}`,
+    );
     await waitForEngineReady(page);
     const sceneId = await firstSceneId(page, worldId);
     const tokenId = await createToken(page);
 
     const before = await serverTokenPosition(page, sceneId, tokenId);
-    expect(before, "the token should exist server-side before we go offline").toBeTruthy();
+    expect(
+      before,
+      "the token should exist server-side before we go offline",
+    ).toBeTruthy();
 
     link.cut();
     await waitForOffline(page, link);
@@ -96,15 +102,19 @@ test.describe("Client world cache — playing on through a lost connection (US7)
 
     // SC-015: applied on reconnect, and reported.
     await expect
-      .poll(() => serverTokenPosition(page, sceneId, tokenId).then((p) => p?.x), {
-        timeout: 90_000,
-        message: "the queued edit should reach the server on reconnect",
-      })
+      .poll(
+        () => serverTokenPosition(page, sceneId, tokenId).then((p) => p?.x),
+        {
+          timeout: 90_000,
+          message: "the queued edit should reach the server on reconnect",
+        },
+      )
       .not.toBe(before!.x);
 
-    await expect(page.getByTestId("reconcile-report")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("reconcile-report")).toBeVisible({
+      timeout: 30_000,
+    });
   });
-
 
   /**
    * SC-016: two people edit the same token with no connection, and the
@@ -136,12 +146,20 @@ test.describe("Client world cache — playing on through a lost connection (US7)
     const gmPage = await gmContext.newPage();
 
     await register(gmPage, "e2eogm");
-    const worldId = await createWorldAndPlay(gmPage, `E2E Offline Two ${uniqueSuffix()}`);
+    const worldId = await createWorldAndPlay(
+      gmPage,
+      `E2E Offline Two ${uniqueSuffix()}`,
+    );
     await waitForEngineReady(gmPage);
     const sceneId = await firstSceneId(gmPage, worldId);
     const tokenId = await createToken(gmPage);
 
-    const playerPage = await inviteAndJoinAsPlayer(browser, gmPage, worldId, "e2eopl");
+    const playerPage = await inviteAndJoinAsPlayer(
+      browser,
+      gmPage,
+      worldId,
+      "e2eopl",
+    );
     await giveTokenTo(gmPage, tokenId, await currentUserId(playerPage));
 
     // Both at the table, on the same scene, before either goes offline.
@@ -153,7 +171,10 @@ test.describe("Client world cache — playing on through a lost connection (US7)
     await waitForTokenTrafficToSettle(playerPage);
 
     const before = await serverTokenPosition(gmPage, sceneId, tokenId);
-    expect(before, "the token should exist server-side before anyone drops").toBeTruthy();
+    expect(
+      before,
+      "the token should exist server-side before anyone drops",
+    ).toBeTruthy();
 
     const gmLink = severableLink(gmPage);
     const playerLink = severableLink(playerPage);
@@ -184,11 +205,17 @@ test.describe("Client world cache — playing on through a lost connection (US7)
     // equal, which makes every convergence assertion below pass by
     // comparing the starting position with itself.
     expect(gmIntent, "the GM's drag must move their own view").toBeTruthy();
-    expect(playerIntent, "the player's drag must move their own view").toBeTruthy();
-    expect(gmIntent!.x, "the GM's drag must actually move the token").not.toBe(before!.x);
-    expect(playerIntent!.x, "the player's drag must actually move the token").not.toBe(
+    expect(
+      playerIntent,
+      "the player's drag must move their own view",
+    ).toBeTruthy();
+    expect(gmIntent!.x, "the GM's drag must actually move the token").not.toBe(
       before!.x,
     );
+    expect(
+      playerIntent!.x,
+      "the player's drag must actually move the token",
+    ).not.toBe(before!.x);
     expect(
       (await serverTokenPosition(gmPage, sceneId, tokenId))!.x,
       "neither edit may be written through while offline",
@@ -199,10 +226,15 @@ test.describe("Client world cache — playing on through a lost connection (US7)
     playerLink.restore();
     await waitForOnline(playerPage, playerLink);
     await expect
-      .poll(() => serverTokenPosition(playerPage, sceneId, tokenId).then((p) => p?.x), {
-        timeout: 90_000,
-        message: "the player's queued edit should be applied on their reconnect",
-      })
+      .poll(
+        () =>
+          serverTokenPosition(playerPage, sceneId, tokenId).then((p) => p?.x),
+        {
+          timeout: 90_000,
+          message:
+            "the player's queued edit should be applied on their reconnect",
+        },
+      )
       .toBeCloseTo(playerIntent!.x, 0);
     expect(
       playerLink.reconcileRequests(),
@@ -216,10 +248,13 @@ test.describe("Client world cache — playing on through a lost connection (US7)
     gmLink.restore();
     await waitForOnline(gmPage, gmLink);
     await expect
-      .poll(() => serverTokenPosition(gmPage, sceneId, tokenId).then((p) => p?.x), {
-        timeout: 90_000,
-        message: "a Game Master reconnecting later still wins",
-      })
+      .poll(
+        () => serverTokenPosition(gmPage, sceneId, tokenId).then((p) => p?.x),
+        {
+          timeout: 90_000,
+          message: "a Game Master reconnecting later still wins",
+        },
+      )
       .toBeCloseTo(gmIntent!.x, 0);
 
     // Convergence, which is the easy half.
@@ -232,9 +267,9 @@ test.describe("Client world cache — playing on through a lost connection (US7)
 
     // And the half that matters: the player is told, rather than left
     // believing an edit stands that does not.
-    await expect(
-      playerPage.getByTestId("reconcile-superseded"),
-    ).toBeVisible({ timeout: 60_000 });
+    await expect(playerPage.getByTestId("reconcile-superseded")).toBeVisible({
+      timeout: 60_000,
+    });
     await expect(playerPage.getByTestId("reconcile-superseded")).toContainText(
       "the Game Master",
     );
@@ -250,7 +285,10 @@ test.describe("Client world cache — playing on through a lost connection (US7)
     await link.install();
 
     await register(page, "e2eoffdel");
-    const worldId = await createWorldAndPlay(page, `E2E Offline Gone ${uniqueSuffix()}`);
+    const worldId = await createWorldAndPlay(
+      page,
+      `E2E Offline Gone ${uniqueSuffix()}`,
+    );
     await waitForEngineReady(page);
     const sceneId = await firstSceneId(page, worldId);
     const tokenId = await createToken(page);
@@ -285,7 +323,9 @@ test.describe("Client world cache — playing on through a lost connection (US7)
       },
       { token: tokenId },
     );
-    expect(deleted, "the token should have been deleted server-side").toBe(true);
+    expect(deleted, "the token should have been deleted server-side").toBe(
+      true,
+    );
 
     link.restore();
     await waitForOnline(page, link);
@@ -293,9 +333,13 @@ test.describe("Client world cache — playing on through a lost connection (US7)
     // Discarded with a reason, never resurrected. Recreating something
     // someone deliberately removed is the failure FR-035a's create/delete
     // restriction exists to avoid.
-    await expect(page.getByTestId("reconcile-report")).toBeVisible({ timeout: 90_000 });
+    await expect(page.getByTestId("reconcile-report")).toBeVisible({
+      timeout: 90_000,
+    });
     await expect(
-      page.locator('[data-testid="reconcile-rejected"] [data-reason="GONE_AWAY"]'),
+      page.locator(
+        '[data-testid="reconcile-rejected"] [data-reason="GONE_AWAY"]',
+      ),
     ).toBeVisible({ timeout: 30_000 });
 
     expect(
@@ -304,4 +348,3 @@ test.describe("Client world cache — playing on through a lost connection (US7)
     ).toBeNull();
   });
 });
-

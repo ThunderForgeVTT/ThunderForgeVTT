@@ -31,9 +31,13 @@ async function registerGm(page: Page): Promise<void> {
   await page.locator("#register-username").fill(username);
   await page.locator("#register-email").fill(`${username}@example.test`);
   await page.locator("#register-password").fill("Sup3r-Secret-Passphrase!");
-  await page.locator("#register-password-confirmation").fill("Sup3r-Secret-Passphrase!");
+  await page
+    .locator("#register-password-confirmation")
+    .fill("Sup3r-Secret-Passphrase!");
   await page.getByRole("button", { name: "Create account" }).click();
-  await page.waitForURL((url) => !url.pathname.startsWith("/register"), { timeout: 15_000 });
+  await page.waitForURL((url) => !url.pathname.startsWith("/register"), {
+    timeout: 15_000,
+  });
 }
 
 /**
@@ -85,7 +89,9 @@ async function openAbilitiesTab(page: Page, worldId: string): Promise<void> {
 }
 
 test.describe("Abilities compendium (US1)", () => {
-  test("a GM creates an ability, finds it by search, and previews it", async ({ page }) => {
+  test("a GM creates an ability, finds it by search, and previews it", async ({
+    page,
+  }) => {
     await registerGm(page);
     const worldId = await createWorld(page, `E2E Abilities ${uniqueSuffix()}`);
 
@@ -104,7 +110,9 @@ test.describe("Abilities compendium (US1)", () => {
     // Create — appears without a reload.
     const name = `Fireball ${uniqueSuffix()}`;
     await page.getByTestId("new-ability-name-input").fill(name);
-    await page.getByTestId("new-ability-description-input").fill("A roaring ball of flame.");
+    await page
+      .getByTestId("new-ability-description-input")
+      .fill("A roaring ball of flame.");
     await page.getByTestId("add-ability-button").click();
 
     const table = page.getByTestId("ability-catalog-table");
@@ -114,8 +122,12 @@ test.describe("Abilities compendium (US1)", () => {
     // Search narrows the table (SC-003).
     await page.getByTestId("ability-catalog-search-input").fill(name);
     await expect(table).toContainText(name);
-    await page.getByTestId("ability-catalog-search-input").fill("definitely-no-such-ability");
-    await expect(page.getByTestId("ability-tab-empty")).toBeVisible({ timeout: 15_000 });
+    await page
+      .getByTestId("ability-catalog-search-input")
+      .fill("definitely-no-such-ability");
+    await expect(page.getByTestId("ability-tab-empty")).toBeVisible({
+      timeout: 15_000,
+    });
     await page.getByTestId("ability-catalog-search-input").fill("");
 
     // Row select opens the preview panel beside the table.
@@ -127,58 +139,84 @@ test.describe("Abilities compendium (US1)", () => {
     await expect(preview).toContainText("A roaring ball of flame.");
   });
 
-  test("duplicate names are allowed and only advisory (FR-006/FR-007)", async ({ page }) => {
+  test("duplicate names are allowed and only advisory (FR-006/FR-007)", async ({
+    page,
+  }) => {
     await registerGm(page);
-    const worldId = await createWorld(page, `E2E Ability Dupes ${uniqueSuffix()}`);
+    const worldId = await createWorld(
+      page,
+      `E2E Ability Dupes ${uniqueSuffix()}`,
+    );
     await openAbilitiesTab(page, worldId);
 
     const name = `Cleave ${uniqueSuffix()}`;
     await page.getByTestId("new-ability-name-input").fill(name);
     await page.getByTestId("add-ability-button").click();
-    await expect(page.getByTestId("ability-catalog-table")).toContainText(name, {
-      timeout: 15_000,
-    });
+    await expect(page.getByTestId("ability-catalog-table")).toContainText(
+      name,
+      {
+        timeout: 15_000,
+      },
+    );
 
     // Typing the same name surfaces a non-blocking "did you mean?" hint...
     await page.getByTestId("new-ability-name-input").fill(name);
-    await expect(page.getByTestId("ability-name-suggestion")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("ability-name-suggestion")).toBeVisible({
+      timeout: 15_000,
+    });
 
     // ...and creating anyway succeeds — the hint never gates (FR-006).
     await page.getByTestId("add-ability-button").click();
-    await expect(page.getByTestId("ability-catalog-table").getByText(name, { exact: false })).toHaveCount(
-      2,
-      { timeout: 15_000 },
-    );
+    await expect(
+      page
+        .getByTestId("ability-catalog-table")
+        .getByText(name, { exact: false }),
+    ).toHaveCount(2, { timeout: 15_000 });
   });
 
   test("a GM can hide an ability, and the badge reflects it (FR-024a/FR-024d)", async ({
     page,
   }) => {
     await registerGm(page);
-    const worldId = await createWorld(page, `E2E Ability Hidden ${uniqueSuffix()}`);
+    const worldId = await createWorld(
+      page,
+      `E2E Ability Hidden ${uniqueSuffix()}`,
+    );
     await openAbilitiesTab(page, worldId);
 
     const name = `Soul Harvest ${uniqueSuffix()}`;
     await page.getByTestId("new-ability-name-input").fill(name);
     await page.getByTestId("add-ability-button").click();
-    await expect(page.getByTestId("ability-catalog-table")).toContainText(name, {
-      timeout: 15_000,
-    });
+    await expect(page.getByTestId("ability-catalog-table")).toContainText(
+      name,
+      {
+        timeout: 15_000,
+      },
+    );
 
     // Not hidden to begin with (FR-024a default).
-    await expect(page.locator('[data-testid^="ability-gm-only-badge-"]')).toHaveCount(0);
+    await expect(
+      page.locator('[data-testid^="ability-gm-only-badge-"]'),
+    ).toHaveCount(0);
 
     // Open its detail page and hide it.
-    await page.locator('[data-testid^="ability-catalog-view-"]').first().click();
+    await page
+      .locator('[data-testid^="ability-catalog-view-"]')
+      .first()
+      .click();
     await page.waitForURL(/\/ability\/[^/]+\/view$/, { timeout: 15_000 });
     await page.getByTestId("ability-gm-only-toggle").click();
-    await expect(page.getByTestId("ability-gm-only-badge")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("ability-gm-only-badge")).toBeVisible({
+      timeout: 15_000,
+    });
 
     // The DM still sees it in the catalog, now marked (FR-024d) — a player
     // would not see it at all, which is covered server-side by
     // gm_only_ability_is_absent_from_every_non_dm_surface.
     await openAbilitiesTab(page, worldId);
-    await expect(page.locator('[data-testid^="ability-gm-only-badge-"]')).toHaveCount(1, {
+    await expect(
+      page.locator('[data-testid^="ability-gm-only-badge-"]'),
+    ).toHaveCount(1, {
       timeout: 15_000,
     });
   });
@@ -188,18 +226,27 @@ test.describe("Abilities compendium (US1)", () => {
     page,
   }) => {
     await registerGm(page);
-    const worldId = await createWorld(page, `E2E Ability Effects ${uniqueSuffix()}`);
+    const worldId = await createWorld(
+      page,
+      `E2E Ability Effects ${uniqueSuffix()}`,
+    );
     await openAbilitiesTab(page, worldId);
 
     const name = `Lightning ${uniqueSuffix()}`;
     await page.getByTestId("new-ability-name-input").fill(name);
     await page.getByTestId("add-ability-button").click();
-    await expect(page.getByTestId("ability-catalog-table")).toContainText(name, {
-      timeout: 15_000,
-    });
+    await expect(page.getByTestId("ability-catalog-table")).toContainText(
+      name,
+      {
+        timeout: 15_000,
+      },
+    );
 
     // Effects are edited on the detail page, in edit mode.
-    await page.locator('[data-testid^="ability-catalog-edit-"]').first().click();
+    await page
+      .locator('[data-testid^="ability-catalog-edit-"]')
+      .first()
+      .click();
     await page.waitForURL(/\/ability\/[^/]+\/edit$/, { timeout: 15_000 });
     const editor = page.getByTestId("ability-effect-editor");
     await expect(editor).toBeVisible({ timeout: 15_000 });
@@ -209,13 +256,19 @@ test.describe("Abilities compendium (US1)", () => {
     await page.getByTestId("new-ability-effect-formula").fill("+++");
     await page.getByTestId("new-ability-effect-target").fill("Hit Points");
     await page.getByTestId("add-ability-effect-button").click();
-    await expect(editor).toContainText(/at least one letter or digit/, { timeout: 15_000 });
-    await expect(page.locator('[data-testid^="ability-effect-row-"]')).toHaveCount(0);
+    await expect(editor).toContainText(/at least one letter or digit/, {
+      timeout: 15_000,
+    });
+    await expect(
+      page.locator('[data-testid^="ability-effect-row-"]'),
+    ).toHaveCount(0);
 
     // A valid effect saves.
     await page.getByTestId("new-ability-effect-formula").fill("3d6");
     await page.getByTestId("add-ability-effect-button").click();
-    await expect(page.locator('[data-testid^="ability-effect-row-"]')).toHaveCount(1, {
+    await expect(
+      page.locator('[data-testid^="ability-effect-row-"]'),
+    ).toHaveCount(1, {
       timeout: 15_000,
     });
 
@@ -223,13 +276,20 @@ test.describe("Abilities compendium (US1)", () => {
     await page.getByTestId("new-ability-effect-formula").fill("1d20 + STAT");
     await page.getByTestId("new-ability-effect-target").fill("Attack Roll");
     await page.getByTestId("add-ability-effect-button").click();
-    await expect(page.locator('[data-testid^="ability-effect-row-"]')).toHaveCount(2, {
+    await expect(
+      page.locator('[data-testid^="ability-effect-row-"]'),
+    ).toHaveCount(2, {
       timeout: 15_000,
     });
 
     // Removing one leaves the other untouched.
-    await page.locator('[data-testid^="ability-effect-remove-"]').first().click();
-    await expect(page.locator('[data-testid^="ability-effect-row-"]')).toHaveCount(1, {
+    await page
+      .locator('[data-testid^="ability-effect-remove-"]')
+      .first()
+      .click();
+    await expect(
+      page.locator('[data-testid^="ability-effect-row-"]'),
+    ).toHaveCount(1, {
       timeout: 15_000,
     });
     // The surviving row's formula lives in an input value, not the card's

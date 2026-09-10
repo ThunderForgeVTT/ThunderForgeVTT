@@ -22,9 +22,15 @@ import { registerAndCreateWorld } from "./fixtures/helpers";
  * the invariant, and the invariant is now enforced server-side.
  */
 test.describe("Spec 018 Scenario 9: a Genie session reaches a definitive win or loss", () => {
-  test("the Doom Clock filling ends the session in a loss", async ({ page }) => {
+  test("the Doom Clock filling ends the session in a loss", async ({
+    page,
+  }) => {
     test.setTimeout(60_000);
-    const worldId = await registerAndCreateWorld(page, `E2E Genie Loss ${Date.now()}`, "e2eloss");
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Genie Loss ${Date.now()}`,
+      "e2eloss",
+    );
 
     await page.goto(`/world/${worldId}/staging`);
     const clocks = page.getByTestId("session-clocks");
@@ -44,9 +50,15 @@ test.describe("Spec 018 Scenario 9: a Genie session reaches a definitive win or 
     await expect(clocks).toContainText("Session lost", { timeout: 10_000 });
   });
 
-  test("resolving every Puzzle Clock ends the session in a win", async ({ page }) => {
+  test("resolving every Puzzle Clock ends the session in a win", async ({
+    page,
+  }) => {
     test.setTimeout(60_000);
-    const worldId = await registerAndCreateWorld(page, `E2E Genie Win ${Date.now()}`, "e2ewin");
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Genie Win ${Date.now()}`,
+      "e2ewin",
+    );
 
     await page.goto(`/world/${worldId}/staging`);
     const clocks = page.getByTestId("session-clocks");

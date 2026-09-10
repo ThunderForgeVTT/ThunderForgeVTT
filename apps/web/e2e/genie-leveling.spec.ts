@@ -9,19 +9,40 @@ import { graphql, registerAndCreateWorld } from "./fixtures/helpers";
  * kept in sync via `calculateMaxWishPoints` on every level change.
  */
 test.describe("Spec 019 Scenario 6: Wish Points scale on level-up", () => {
-  test("changing a character's level recalculates their max Wish Points", async ({ page }) => {
+  test("changing a character's level recalculates their max Wish Points", async ({
+    page,
+  }) => {
     test.setTimeout(60_000);
-    const worldId = await registerAndCreateWorld(page, `E2E Genie Leveling ${Date.now()}`, "e2elevel");
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Genie Leveling ${Date.now()}`,
+      "e2elevel",
+    );
 
     const actor = await graphql<{ data: { createActor: { id: string } } }>(
       page,
-      `mutation($input: CreateActorInput!) { createActor(input: $input) { id } }`,
-      { input: { worldId, label: "Leveling Test Genie", isNpc: false, gameSystemId: "genie" } },
+      `
+        mutation ($input: CreateActorInput!) {
+          createActor(input: $input) {
+            id
+          }
+        }
+      `,
+      {
+        input: {
+          worldId,
+          label: "Leveling Test Genie",
+          isNpc: false,
+          gameSystemId: "genie",
+        },
+      },
     );
     const actorId = actor.data.createActor.id;
 
     await page.goto(`/world/${worldId}/actor/${actorId}/edit`);
-    await expect(page.getByTestId("genie-actor-sheet")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("genie-actor-sheet")).toBeVisible({
+      timeout: 15_000,
+    });
     await page.getByRole("tab", { name: "Resources" }).click();
 
     const levelInput = page.getByTestId("genie-level-input");
@@ -42,18 +63,42 @@ test.describe("Spec 019 Scenario 6: Wish Points scale on level-up", () => {
 
     // Persisted server-side, not just local state: reload and re-check.
     await page.reload();
-    await expect(page.getByTestId("genie-actor-sheet")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("genie-actor-sheet")).toBeVisible({
+      timeout: 15_000,
+    });
     await page.getByRole("tab", { name: "Resources" }).click();
-    await expect(page.getByTestId("genie-level-input")).toHaveValue("5", { timeout: 10_000 });
-    await expect(page.getByTestId("genie-resources-tab")).toContainText("/ 6 max"); // level 5 -> 6 max wish points
+    await expect(page.getByTestId("genie-level-input")).toHaveValue("5", {
+      timeout: 10_000,
+    });
+    await expect(page.getByTestId("genie-resources-tab")).toContainText(
+      "/ 6 max",
+    ); // level 5 -> 6 max wish points
 
     // Verify server-side via the real actorSystemData query too.
     const systemData = await graphql<{
-      data: { actorSystemData: { traitData: { level: number }; resourceData: { max_wish_points: number } } };
-    }>(page, `query($actorId: UUID!) { actorSystemData(actorId: $actorId) { traitData resourceData } }`, {
-      actorId,
-    });
+      data: {
+        actorSystemData: {
+          traitData: { level: number };
+          resourceData: { max_wish_points: number };
+        };
+      };
+    }>(
+      page,
+      `
+        query ($actorId: UUID!) {
+          actorSystemData(actorId: $actorId) {
+            traitData
+            resourceData
+          }
+        }
+      `,
+      {
+        actorId,
+      },
+    );
     expect(systemData.data.actorSystemData.traitData.level).toBe(5);
-    expect(systemData.data.actorSystemData.resourceData.max_wish_points).toBe(6);
+    expect(systemData.data.actorSystemData.resourceData.max_wish_points).toBe(
+      6,
+    );
   });
 });

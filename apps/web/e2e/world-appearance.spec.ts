@@ -59,7 +59,10 @@ test.describe("a world's interface pack", () => {
   test("the settings surface names the active pack rather than a placeholder", async ({
     page,
   }) => {
-    const worldId = await registerAndCreateWorld(page, `Appearance ${uniqueSuffix()}`);
+    const worldId = await registerAndCreateWorld(
+      page,
+      `Appearance ${uniqueSuffix()}`,
+    );
     await page.goto(`/world/${worldId}/settings/system`);
 
     const card = page.getByTestId("world-appearance-card");
@@ -80,7 +83,10 @@ test.describe("a world's interface pack", () => {
   test("the base pack is offered on the same footing as any other", async ({
     page,
   }) => {
-    const worldId = await registerAndCreateWorld(page, `Peer ${uniqueSuffix()}`);
+    const worldId = await registerAndCreateWorld(
+      page,
+      `Peer ${uniqueSuffix()}`,
+    );
     await page.goto(`/world/${worldId}/settings/system`);
 
     const trigger = page.getByTestId("interface-pack-select");
@@ -323,10 +329,17 @@ test.describe("T060: a targeted pack dresses the sheet and nothing else", () => 
     // throughout, so for a character nobody has filled in it correctly draws
     // nothing — a true answer, and a poor subject for a test about two sheets
     // differing.
-    const steelWorld = await registerAndCreateWorld(page, `Silver ${uniqueSuffix()}`);
+    const steelWorld = await registerAndCreateWorld(
+      page,
+      `Silver ${uniqueSuffix()}`,
+    );
     await chooseSystem(page, steelWorld, "fate_core", "Fate Core");
     await choosePack(page, steelWorld, "Forged Silver");
-    const steelActor = await createActor(page, steelWorld, `Fate ${uniqueSuffix()}`);
+    const steelActor = await createActor(
+      page,
+      steelWorld,
+      `Fate ${uniqueSuffix()}`,
+    );
 
     await page.goto(`/world/${steelWorld}/actor/${steelActor}/view`);
     const sheet = page.locator('[data-slot="sheet-layout"]');
@@ -394,7 +407,10 @@ test.describe("T061: one wording for an unset pack binding", () => {
   test("the hub card and the world dashboard both name the pack in force", async ({
     page,
   }) => {
-    const worldId = await registerAndCreateWorld(page, `Label ${uniqueSuffix()}`);
+    const worldId = await registerAndCreateWorld(
+      page,
+      `Label ${uniqueSuffix()}`,
+    );
 
     await page.goto("/worlds");
     const card = page.getByText("Interface pack").first();
@@ -445,19 +461,25 @@ test.describe("T103: a failing pack surface is contained and names the pack", ()
    * earlier version of this boundary did not wrap.
    */
   async function serveABrokenLayout(page: Page): Promise<void> {
-    await page.route("**/api/interface-packs/*/manifest.json", async (route) => {
-      const response = await route.fetch();
-      const manifest = (await response.json()) as Record<string, unknown>;
-      // A container that promises children and has none.
-      manifest.layout = [{ kind: "column" }];
-      await route.fulfill({ response, json: manifest });
-    });
+    await page.route(
+      "**/api/interface-packs/*/manifest.json",
+      async (route) => {
+        const response = await route.fetch();
+        const manifest = (await response.json()) as Record<string, unknown>;
+        // A container that promises children and has none.
+        manifest.layout = [{ kind: "column" }];
+        await route.fulfill({ response, json: manifest });
+      },
+    );
   }
 
   test("the sheet is replaced by a named notice, and the session stays usable", async ({
     page,
   }) => {
-    const worldId = await registerAndCreateWorld(page, `Fault ${uniqueSuffix()}`);
+    const worldId = await registerAndCreateWorld(
+      page,
+      `Fault ${uniqueSuffix()}`,
+    );
     // Fate Core rather than Genie, and the reason is worth stating: Genie is
     // the one bundled system with a hand-written container in
     // `systemActorSheets.ts`, so `PackActorSheet` never mounts for it and
@@ -501,16 +523,25 @@ test.describe("T103: a failing pack surface is contained and names the pack", ()
     // The half a boundary gets wrong quietly: having caught once, it stays
     // caught, and the next sheet mounted into it shows the previous one's
     // error. Proved by fixing the pack and going back.
-    const worldId = await registerAndCreateWorld(page, `Recover ${uniqueSuffix()}`);
+    const worldId = await registerAndCreateWorld(
+      page,
+      `Recover ${uniqueSuffix()}`,
+    );
     await chooseSystem(page, worldId, "fate_core", "Fate Core");
     await choosePack(page, worldId, "Forge");
-    const actorId = await createActor(page, worldId, `Recover ${uniqueSuffix()}`);
+    const actorId = await createActor(
+      page,
+      worldId,
+      `Recover ${uniqueSuffix()}`,
+    );
 
     await serveABrokenLayout(page);
     await page.goto(`/world/${worldId}/actor/${actorId}/view`);
-    await expect(page.locator('[data-slot="pack-surface-failed"]')).toBeVisible({
-      timeout: 20_000,
-    });
+    await expect(page.locator('[data-slot="pack-surface-failed"]')).toBeVisible(
+      {
+        timeout: 20_000,
+      },
+    );
 
     await page.unroute("**/api/interface-packs/*/manifest.json");
     await page.goto(`/world/${worldId}/actor/${actorId}/view`);
@@ -518,6 +549,8 @@ test.describe("T103: a failing pack surface is contained and names the pack", ()
     await expect(page.locator('[data-slot="sheet-layout"]')).toBeVisible({
       timeout: 20_000,
     });
-    await expect(page.locator('[data-slot="pack-surface-failed"]')).toHaveCount(0);
+    await expect(page.locator('[data-slot="pack-surface-failed"]')).toHaveCount(
+      0,
+    );
   });
 });

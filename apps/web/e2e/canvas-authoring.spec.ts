@@ -378,7 +378,10 @@ async function expectSceneGridMatchesMap(
     return scenes.find((s) => s.backgroundAssetId) ?? null;
   }, worldId);
 
-  expect(scene, "a scene with an imported background should exist").not.toBeNull();
+  expect(
+    scene,
+    "a scene with an imported background should exist",
+  ).not.toBeNull();
   const { gridSize, width, height } = scene!;
   expect(gridSize).toBeGreaterThan(0);
 

@@ -131,13 +131,17 @@ test.describe("Spec 040: the instance is configurable by a person", () => {
 
       // The value was just written, so it exists to leak. Nothing on this
       // screen may contain it, in any form.
-      await expect(admin.getByTestId("instance-settings-panel")).not.toContainText(
-        secretValue,
-      );
+      await expect(
+        admin.getByTestId("instance-settings-panel"),
+      ).not.toContainText(secretValue);
       await expect(row).toContainText("Set");
 
-      await admin.getByTestId("instance-setting-history-toggle-mail.password").click();
-      const history = admin.getByTestId("instance-setting-history-mail.password");
+      await admin
+        .getByTestId("instance-setting-history-toggle-mail.password")
+        .click();
+      const history = admin.getByTestId(
+        "instance-setting-history-mail.password",
+      );
       await expect(history).toBeVisible({ timeout: 20_000 });
       await expect(history).toContainText("A secret was changed");
       await expect(history).not.toContainText(secretValue);
@@ -159,7 +163,9 @@ test.describe("Spec 040: the instance is configurable by a person", () => {
     await expect(mail).toHaveAttribute("data-available", "false");
     await expect(mail).toContainText("Not configured");
     // A gap is only useful if it says what to do about it.
-    await expect(mail.getByTestId(/^readiness-gap-mail\./).first()).toBeVisible();
+    await expect(
+      mail.getByTestId(/^readiness-gap-mail\./).first(),
+    ).toBeVisible();
     // The gap's sentence, verbatim from the registry, is the point of the
     // screen — a capability marked unavailable with nothing to do about it
     // would satisfy every assertion above.

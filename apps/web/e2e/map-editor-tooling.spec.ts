@@ -599,7 +599,12 @@ test.describe("Non-GM player sees no authoring controls (US1, T006)", () => {
 
     // Not merely hidden behind a closed rail: the panels themselves are
     // absent, which is what `WorldPage.tsx`'s `isSceneOwner` gate does.
-    for (const tool of ["lighting-tool", "shape-tool", "token-tool", "interaction-tool"]) {
+    for (const tool of [
+      "lighting-tool",
+      "shape-tool",
+      "token-tool",
+      "interaction-tool",
+    ]) {
       await expect(player.getByTestId(tool)).toHaveCount(0);
     }
 

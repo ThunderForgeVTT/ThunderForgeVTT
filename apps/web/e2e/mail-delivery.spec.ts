@@ -1,5 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openAdminPage, readSetting, writeSettingOrThrow } from "./fixtures/admin";
+import {
+  openAdminPage,
+  readSetting,
+  writeSettingOrThrow,
+} from "./fixtures/admin";
 import {
   clearInbox,
   expectNoMessage,
@@ -130,7 +134,9 @@ async function configureWorkingMail(port: number): Promise<void> {
 
 async function sendTestTo(to: string): Promise<void> {
   await admin.goto("/admin/mail");
-  await expect(admin.getByTestId("mail-panel")).toBeVisible({ timeout: 20_000 });
+  await expect(admin.getByTestId("mail-panel")).toBeVisible({
+    timeout: 20_000,
+  });
   await admin.getByTestId("mail-test-to").fill(to);
   await admin.getByTestId("mail-test-send").click();
   await expect(admin.getByTestId("mail-test-result")).toBeVisible({
@@ -214,9 +220,11 @@ test.describe("Spec 040 Scenario D: mail, end to end", () => {
     expect(page).not.toContain(SMTP_PASSWORD.toLowerCase());
     // `innerText` does not include an input's value, so the fields are read
     // separately rather than assumed covered by the sweep above.
-    const values = await admin.locator("input").evaluateAll((nodes) =>
-      nodes.map((node) => (node as HTMLInputElement).value).join(" "),
-    );
+    const values = await admin
+      .locator("input")
+      .evaluateAll((nodes) =>
+        nodes.map((node) => (node as HTMLInputElement).value).join(" "),
+      );
     expect(values.toLowerCase()).not.toContain(SMTP_PASSWORD.toLowerCase());
 
     await expectNoMessage(RECIPIENT);
@@ -238,7 +246,9 @@ test.describe("Spec 040 Scenario D: mail, end to end", () => {
     const capability = admin.getByTestId("readiness-capability-send_mail");
     await expect(capability).toBeVisible({ timeout: 20_000 });
     await expect(capability).toHaveAttribute("data-available", "false");
-    await expect(capability.getByTestId("readiness-gap-mail.host")).toBeVisible();
+    await expect(
+      capability.getByTestId("readiness-gap-mail.host"),
+    ).toBeVisible();
 
     await clearInbox();
     await sendTestTo(RECIPIENT);

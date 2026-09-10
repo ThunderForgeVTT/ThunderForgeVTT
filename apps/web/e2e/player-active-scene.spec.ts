@@ -44,7 +44,9 @@ test("a player receives the map and grid of the scene their world is playing", a
 
   await register(gmPage, freshCredentials("e2egmscene"));
   await gmPage.goto("/worlds/create");
-  await gmPage.locator("#world-name").fill(`E2E Active Scene ${uniqueSuffix()}`);
+  await gmPage
+    .locator("#world-name")
+    .fill(`E2E Active Scene ${uniqueSuffix()}`);
   await gmPage.getByRole("button", { name: /create world/i }).click();
   await gmPage.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 20_000 });
   const worldId = /\/world\/([^/]+)\/staging$/.exec(
@@ -75,7 +77,8 @@ test("a player receives the map and grid of the scene their world is playing", a
         ),
       {
         timeout: 60_000,
-        message: "a player must be given the grid of the scene they are playing",
+        message:
+          "a player must be given the grid of the scene they are playing",
       },
     )
     .toBe(true);

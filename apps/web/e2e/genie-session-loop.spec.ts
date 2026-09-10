@@ -37,7 +37,9 @@ test.describe("Spec 018 Scenarios 8-9: the Genie GM session loop", () => {
     // arrives before deciding.
     const panel = page.getByTestId("genie-session-panel");
     const startButton = page.getByTestId("start-genie-session-button");
-    await expect(panel.or(startButton).first()).toBeVisible({ timeout: 15_000 });
+    await expect(panel.or(startButton).first()).toBeVisible({
+      timeout: 15_000,
+    });
     if (await startButton.isVisible().catch(() => false)) {
       await startButton.click();
     }
@@ -47,9 +49,13 @@ test.describe("Spec 018 Scenarios 8-9: the Genie GM session loop", () => {
     const wishPool = page.getByTestId("session-wish-pool");
     await expect(wishPool).toContainText("3 / 3 remaining");
 
-    await wishPool.locator("#wish-narrative-effect").fill("The lock springs open on its own.");
+    await wishPool
+      .locator("#wish-narrative-effect")
+      .fill("The lock springs open on its own.");
     await wishPool.getByRole("button", { name: "Spend a Wish" }).click();
-    await expect(wishPool).toContainText("2 / 3 remaining", { timeout: 10_000 });
+    await expect(wishPool).toContainText("2 / 3 remaining", {
+      timeout: 10_000,
+    });
 
     const clocks = page.getByTestId("session-clocks");
     await expect(clocks).toContainText("0 / 6");

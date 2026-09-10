@@ -68,7 +68,10 @@ test.describe("Client world cache — background prefetch (US8)", () => {
   test("a scene never opened is already cached, and switching to it fetches nothing (SC-023, T119)", async ({
     page,
   }) => {
-    const worldId = await registerAndCreateWorld(page, `E2E Prefetch ${uniqueSuffix()}`);
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Prefetch ${uniqueSuffix()}`,
+    );
     const [firstSceneId] = await sceneIds(page, worldId);
 
     // A second scene, visible to its GM either way, holding art nothing has
@@ -76,7 +79,12 @@ test.describe("Client world cache — background prefetch (US8)", () => {
     const secondName = `Unvisited ${uniqueSuffix()}`;
     const secondSceneId = await createScene(page, worldId, secondName);
     await setSceneHidden(page, secondSceneId, false);
-    const unvisitedAssetId = await createCanvasAsset(page, worldId, secondSceneId, 41);
+    const unvisitedAssetId = await createCanvasAsset(
+      page,
+      worldId,
+      secondSceneId,
+      41,
+    );
     const unvisitedFingerprint = await assetFingerprint(page, unvisitedAssetId);
 
     // Something on the *open* scene too, so the prefetch has to share the
@@ -142,13 +150,21 @@ test.describe("Client world cache — background prefetch (US8)", () => {
   test("the open scene is served before anything speculative (SC-024, FR-070, T120)", async ({
     page,
   }) => {
-    const worldId = await registerAndCreateWorld(page, `E2E Yield ${uniqueSuffix()}`);
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Yield ${uniqueSuffix()}`,
+    );
     const [firstSceneId] = await sceneIds(page, worldId);
 
     const secondName = `Unvisited ${uniqueSuffix()}`;
     const secondSceneId = await createScene(page, worldId, secondName);
     await setSceneHidden(page, secondSceneId, false);
-    const speculativeId = await createCanvasAsset(page, worldId, secondSceneId, 45);
+    const speculativeId = await createCanvasAsset(
+      page,
+      worldId,
+      secondSceneId,
+      45,
+    );
 
     // The demand side has to be a scene *background*, not a pasted asset.
     // This is the whole reason an earlier version of this test failed: only
@@ -160,14 +176,18 @@ test.describe("Client world cache — background prefetch (US8)", () => {
     await waitForEngineReady(page);
     await importMapBackground(page, CHAMBER_MAP);
     const demandId = await sceneBackgroundAssetId(page, worldId, firstSceneId);
-    expect(demandId, "the open scene needs a background to demand").toBeTruthy();
+    expect(
+      demandId,
+      "the open scene needs a background to demand",
+    ).toBeTruthy();
 
     // Recorded in arrival order, so the assertion is about precedence rather
     // than about how long anything took.
     const order: string[] = [];
     page.on("response", (response) => {
       if (response.request().method() !== "GET") return;
-      if (response.url().includes(`/api/canvas-assets/${demandId}`)) order.push("demand");
+      if (response.url().includes(`/api/canvas-assets/${demandId}`))
+        order.push("demand");
       if (response.url().includes(`/api/canvas-assets/${speculativeId}`)) {
         order.push("speculative");
       }
@@ -218,8 +238,9 @@ test.describe("Client world cache — background prefetch (US8)", () => {
       const calls: string[] = [];
       (window as unknown as { __bg: string[] }).__bg = calls;
 
-      const sync = (window as unknown as { SyncManager?: { prototype: object } })
-        .SyncManager;
+      const sync = (
+        window as unknown as { SyncManager?: { prototype: object } }
+      ).SyncManager;
       if (sync?.prototype) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (sync.prototype as any).register = function (tag: string) {
@@ -246,12 +267,20 @@ test.describe("Client world cache — background prefetch (US8)", () => {
       }
     });
 
-    const worldId = await registerAndCreateWorld(page, `E2E NoBg ${uniqueSuffix()}`);
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E NoBg ${uniqueSuffix()}`,
+    );
     const [firstSceneId] = await sceneIds(page, worldId);
     const secondName = `Unvisited ${uniqueSuffix()}`;
     const secondSceneId = await createScene(page, worldId, secondName);
     await setSceneHidden(page, secondSceneId, false);
-    const unvisitedAssetId = await createCanvasAsset(page, worldId, secondSceneId, 43);
+    const unvisitedAssetId = await createCanvasAsset(
+      page,
+      worldId,
+      secondSceneId,
+      43,
+    );
     const unvisitedFingerprint = await assetFingerprint(page, unvisitedAssetId);
     await createCanvasAsset(page, worldId, firstSceneId, 44);
 

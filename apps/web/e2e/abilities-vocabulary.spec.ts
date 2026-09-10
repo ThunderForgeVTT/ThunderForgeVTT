@@ -111,14 +111,20 @@ const SYSTEMS = [
   { id: "genie", title: "Genie" },
   { id: "dnd5e", title: "5E System Core" },
   { id: "pathfinder2e", title: "Pathfinder Second Edition" },
-  { id: "blades_in_the_dark", title: "Blades in the Dark / Forged in the Dark" },
+  {
+    id: "blades_in_the_dark",
+    title: "Blades in the Dark / Forged in the Dark",
+  },
 ];
 
 test.describe("US1: every system's own tab set, in its own words", () => {
   for (const system of SYSTEMS) {
     test(`${system.title} presents its own ability types`, async ({ page }) => {
       await registerGm(page);
-      const worldId = await createWorld(page, `Vocab ${system.id} ${uniqueSuffix()}`);
+      const worldId = await createWorld(
+        page,
+        `Vocab ${system.id} ${uniqueSuffix()}`,
+      );
       await chooseSystem(page, worldId, system.title);
 
       const vocabulary = await vocabularyOf(page, worldId);
@@ -134,11 +140,17 @@ test.describe("US1: every system's own tab set, in its own words", () => {
       const tabs = page.getByTestId("ability-type-tabs");
       for (const kind of vocabulary.types) {
         const tab = page.getByTestId(`ability-type-tab-${kind.id}`);
-        await expect(tab, `${system.id} should show a ${kind.id} tab`).toBeVisible();
+        await expect(
+          tab,
+          `${system.id} should show a ${kind.id} tab`,
+        ).toBeVisible();
         await expect(tab).toContainText(kind.pluralLabel);
       }
       const rendered = (await tabs.innerText()).trim();
-      expect(rendered.length, "no tab may render blank (SC-013)").toBeGreaterThan(0);
+      expect(
+        rendered.length,
+        "no tab may render blank (SC-013)",
+      ).toBeGreaterThan(0);
 
       // FR-003: the umbrella term names the area itself, not just the tabs.
       await expect(
@@ -154,7 +166,11 @@ test.describe("US1: every system's own tab set, in its own words", () => {
     // change only ever exercised against a system that declares plenty.
     await registerGm(page);
     const worldId = await createWorld(page, `Vocab bare ${uniqueSuffix()}`);
-    await chooseSystem(page, worldId, "Blades in the Dark / Forged in the Dark");
+    await chooseSystem(
+      page,
+      worldId,
+      "Blades in the Dark / Forged in the Dark",
+    );
 
     const vocabulary = await vocabularyOf(page, worldId);
     expect(vocabulary.umbrella.pluralLabel).toBe("Abilities");
@@ -170,9 +186,9 @@ test.describe("US1: every system's own tab set, in its own words", () => {
 
     await openAbilities(page, worldId);
     for (const kind of vocabulary.types) {
-      await expect(page.getByTestId(`ability-type-tab-${kind.id}`)).toContainText(
-        kind.pluralLabel,
-      );
+      await expect(
+        page.getByTestId(`ability-type-tab-${kind.id}`),
+      ).toContainText(kind.pluralLabel);
     }
   });
 
@@ -204,7 +220,9 @@ test.describe("US1: every system's own tab set, in its own words", () => {
     await expect(table).toContainText(name);
 
     // FR-007: the count equals the rows the tab lists.
-    await expect(page.getByTestId(`ability-type-count-${first.id}`)).toHaveText("1");
+    await expect(page.getByTestId(`ability-type-count-${first.id}`)).toHaveText(
+      "1",
+    );
 
     // FR-009 again, from the other side: a sibling tab does not show it.
     await page.getByTestId(`ability-type-tab-${second.id}`).click();
@@ -282,9 +300,9 @@ test.describe("US3: a system names its own ability types", () => {
     const table = page.getByTestId("ability-catalog-table");
     await expect(table).toBeVisible({ timeout: 15_000 });
     await expect(table).toContainText(name);
-    await expect(
-      page.getByTestId("ability-type-count-enchantment"),
-    ).toHaveText("1");
+    await expect(page.getByTestId("ability-type-count-enchantment")).toHaveText(
+      "1",
+    );
 
     // And it is not in the Spells tab.
     await page.getByTestId("ability-type-tab-spell").click();

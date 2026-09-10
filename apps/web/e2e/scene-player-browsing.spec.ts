@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { freshCredentials, inviteAndJoinAsPlayer, register } from "./fixtures/helpers";
+import {
+  freshCredentials,
+  inviteAndJoinAsPlayer,
+  register,
+} from "./fixtures/helpers";
 
 /**
  * Spec 022 (User Story 2, P2): players see a table of only the non-hidden
@@ -23,7 +27,9 @@ test("player sees only non-hidden scenes, can preview one, and it disappears aga
   await gmPage.locator("#world-name").fill(worldName);
   await gmPage.getByRole("button", { name: /create world/i }).click();
   await gmPage.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-  const worldId = /\/world\/([^/]+)\/staging$/.exec(new URL(gmPage.url()).pathname)?.[1];
+  const worldId = /\/world\/([^/]+)\/staging$/.exec(
+    new URL(gmPage.url()).pathname,
+  )?.[1];
   if (!worldId) throw new Error("Could not extract world id");
 
   const playerPage = await inviteAndJoinAsPlayer(browser, gmPage, worldId);
@@ -33,36 +39,56 @@ test("player sees only non-hidden scenes, can preview one, and it disappears aga
   await gmPage.goto(`/world/${worldId}/scenes`);
   await gmPage.getByTestId("new-scene-name-input").fill(visibleName);
   await gmPage.getByTestId("add-scene-button").click();
-  await expect(gmPage.getByRole("link", { name: visibleName })).toBeVisible({ timeout: 10_000 });
+  await expect(gmPage.getByRole("link", { name: visibleName })).toBeVisible({
+    timeout: 10_000,
+  });
   await gmPage.getByRole("link", { name: visibleName }).click();
-  await gmPage.waitForURL(new RegExp(`/world/${worldId}/scenes/[^/]+$`), { timeout: 10_000 });
+  await gmPage.waitForURL(new RegExp(`/world/${worldId}/scenes/[^/]+$`), {
+    timeout: 10_000,
+  });
 
-  const summaryEditor = gmPage.getByTestId("scene-summary-editor").locator(".cm-content");
+  const summaryEditor = gmPage
+    .getByTestId("scene-summary-editor")
+    .locator(".cm-content");
   await summaryEditor.click();
   await summaryEditor.fill("A quiet tavern, safe for now.");
   await gmPage.getByRole("button", { name: "Save summary" }).click();
-  await expect(gmPage.getByText("Summary saved.")).toBeVisible({ timeout: 10_000 });
+  await expect(gmPage.getByText("Summary saved.")).toBeVisible({
+    timeout: 10_000,
+  });
 
   await gmPage.getByTestId("scene-hidden-toggle").click();
-  await expect(gmPage.getByTestId("scene-hidden-toggle")).toBeChecked({ timeout: 10_000 });
+  await expect(gmPage.getByTestId("scene-hidden-toggle")).toBeChecked({
+    timeout: 10_000,
+  });
 
   // Hidden scene: create it, leave it hidden (the default).
   const hiddenName = `Hidden Scene ${uniqueSuffix()}`;
   await gmPage.goto(`/world/${worldId}/scenes`);
   await gmPage.getByTestId("new-scene-name-input").fill(hiddenName);
   await gmPage.getByTestId("add-scene-button").click();
-  await expect(gmPage.getByRole("link", { name: hiddenName })).toBeVisible({ timeout: 10_000 });
+  await expect(gmPage.getByRole("link", { name: hiddenName })).toBeVisible({
+    timeout: 10_000,
+  });
 
   // Player: only the visible scene appears.
   await playerPage.goto(`/world/${worldId}/scenes`);
-  await expect(playerPage.getByRole("link", { name: visibleName })).toBeVisible({ timeout: 10_000 });
-  await expect(playerPage.getByRole("link", { name: hiddenName })).toHaveCount(0);
+  await expect(playerPage.getByRole("link", { name: visibleName })).toBeVisible(
+    { timeout: 10_000 },
+  );
+  await expect(playerPage.getByRole("link", { name: hiddenName })).toHaveCount(
+    0,
+  );
 
   // Player opens the visible scene's detail gateway — read-only summary,
   // no GM controls (hidden toggle, Launch, import).
   await playerPage.getByRole("link", { name: visibleName }).click();
-  await playerPage.waitForURL(new RegExp(`/world/${worldId}/scenes/[^/]+$`), { timeout: 10_000 });
-  await expect(playerPage.getByTestId("scene-summary-view")).toContainText("A quiet tavern, safe for now.");
+  await playerPage.waitForURL(new RegExp(`/world/${worldId}/scenes/[^/]+$`), {
+    timeout: 10_000,
+  });
+  await expect(playerPage.getByTestId("scene-summary-view")).toContainText(
+    "A quiet tavern, safe for now.",
+  );
   await expect(playerPage.getByTestId("scene-hidden-toggle")).toHaveCount(0);
   await expect(playerPage.getByTestId("launch-scene-button")).toHaveCount(0);
   await expect(playerPage.getByTestId("scene-import-card")).toHaveCount(0);
@@ -70,11 +96,17 @@ test("player sees only non-hidden scenes, can preview one, and it disappears aga
   // GM re-hides the visible scene.
   await gmPage.goto(`/world/${worldId}/scenes`);
   await gmPage.getByRole("link", { name: visibleName }).click();
-  await gmPage.waitForURL(new RegExp(`/world/${worldId}/scenes/[^/]+$`), { timeout: 10_000 });
+  await gmPage.waitForURL(new RegExp(`/world/${worldId}/scenes/[^/]+$`), {
+    timeout: 10_000,
+  });
   await gmPage.getByTestId("scene-hidden-toggle").click();
-  await expect(gmPage.getByTestId("scene-hidden-toggle")).not.toBeChecked({ timeout: 10_000 });
+  await expect(gmPage.getByTestId("scene-hidden-toggle")).not.toBeChecked({
+    timeout: 10_000,
+  });
 
   // Player's refreshed table no longer shows it.
   await playerPage.goto(`/world/${worldId}/scenes`);
-  await expect(playerPage.getByRole("link", { name: visibleName })).toHaveCount(0);
+  await expect(playerPage.getByRole("link", { name: visibleName })).toHaveCount(
+    0,
+  );
 });

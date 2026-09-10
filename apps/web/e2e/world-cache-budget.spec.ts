@@ -107,7 +107,9 @@ async function createAnotherWorld(page: Page, name: string): Promise<string> {
   await page.locator("#world-name").fill(name);
   await page.getByRole("button", { name: /create world/i }).click();
   await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 20_000 });
-  const id = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname)?.[1];
+  const id = /\/world\/([^/]+)\/staging$/.exec(
+    new URL(page.url()).pathname,
+  )?.[1];
   expect(id, "the second world should have been created").toBeTruthy();
   return id!;
 }
@@ -131,14 +133,18 @@ test.describe("Client world cache — living within the reported quota (US4)", (
     const roomy = budgetOf(await openWorldAndSync(page, worldId, sync));
     console.log(`[budget] roomy: ${JSON.stringify(roomy)}`);
     expect(roomy.quotaUnknown, "the faked estimate should be read").toBe(false);
-    expect(roomy.limit, "half of the reported quota").toBe(ROOMY_QUOTA_BYTES / 2);
+    expect(roomy.limit, "half of the reported quota").toBe(
+      ROOMY_QUOTA_BYTES / 2,
+    );
 
     await reportQuota(page, TIGHT_QUOTA_BYTES);
     const before = sync.count();
     await page.reload();
     const tight = budgetOf(await sync.next(before));
     console.log(`[budget] tight: ${JSON.stringify(tight)}`);
-    expect(tight.limit, "half of the smaller quota").toBe(TIGHT_QUOTA_BYTES / 2);
+    expect(tight.limit, "half of the smaller quota").toBe(
+      TIGHT_QUOTA_BYTES / 2,
+    );
 
     // The point of recomputing on every open rather than once: the limit is a
     // fact about the machine right now, and it moved by two orders of
@@ -190,9 +196,10 @@ test.describe("Client world cache — living within the reported quota (US4)", (
     const summary = budgetOf(await sync.next(before));
     console.log(`[budget] no estimate: ${JSON.stringify(summary)}`);
 
-    expect(summary.quotaUnknown, "the refusal should be reported as unknown").toBe(
-      true,
-    );
+    expect(
+      summary.quotaUnknown,
+      "the refusal should be reported as unknown",
+    ).toBe(true);
     expect(summary.evicted, "an unknown quota must evict nothing").toBe(0);
     expect(
       await holdsFingerprint(page, worldId, fingerprint),
@@ -212,7 +219,12 @@ test.describe("Client world cache — living within the reported quota (US4)", (
       "e2ebudget",
     );
     const firstScenes = await sceneIds(page, firstWorld);
-    const firstAsset = await createCanvasAsset(page, firstWorld, firstScenes[0], 9001);
+    const firstAsset = await createCanvasAsset(
+      page,
+      firstWorld,
+      firstScenes[0],
+      9001,
+    );
     const firstFingerprint = await assetFingerprint(page, firstAsset);
 
     // Roomy while the first world is cached, so the eviction below is caused
@@ -244,7 +256,9 @@ test.describe("Client world cache — living within the reported quota (US4)", (
     // still be stored and an eviction can only mean the LRU rule ran.
     await reportQuota(page, MODEST_QUOTA_BYTES);
     const summary = budgetOf(await openWorldAndSync(page, secondWorld, sync));
-    console.log(`[budget] after opening the second world: ${JSON.stringify(summary)}`);
+    console.log(
+      `[budget] after opening the second world: ${JSON.stringify(summary)}`,
+    );
 
     expect(
       summary.evicted,
@@ -306,10 +320,9 @@ test.describe("Client world cache — living within the reported quota (US4)", (
       summary.insufficient,
       "a world too big for the whole budget must be reported as insufficient",
     ).toBe(true);
-    expect(
-      summary.inUse,
-      "nothing should have been filed",
-    ).toBeLessThanOrEqual(summary.limit);
+    expect(summary.inUse, "nothing should have been filed").toBeLessThanOrEqual(
+      summary.limit,
+    );
 
     // The degradation, stated as the spec states it: fetch without storing.
     // Not "fetch and fail", and not "store anyway and blow the budget".

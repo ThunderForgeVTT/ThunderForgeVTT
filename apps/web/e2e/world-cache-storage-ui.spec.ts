@@ -48,7 +48,9 @@ async function panelRows(page: Page): Promise<Map<string, string>> {
 
 async function openStoragePanel(page: Page): Promise<void> {
   await page.goto("/settings/storage");
-  await expect(page.getByTestId("storage-panel")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("storage-panel")).toBeVisible({
+    timeout: 30_000,
+  });
 }
 
 /** Create a second world through the form, and return its id. */
@@ -57,7 +59,9 @@ async function createAnotherWorld(page: Page, name: string): Promise<string> {
   await page.locator("#world-name").fill(name);
   await page.getByRole("button", { name: /create world/i }).click();
   await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 20_000 });
-  const id = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname)?.[1];
+  const id = /\/world\/([^/]+)\/staging$/.exec(
+    new URL(page.url()).pathname,
+  )?.[1];
   expect(id, "the second world should have been created").toBeTruthy();
   return id!;
 }
@@ -86,7 +90,10 @@ test.describe("Client world cache — seeing and reclaiming storage (US5)", () =
       })
       .toBe(true);
 
-    const worldB = await createAnotherWorld(page, `E2E Storage B ${uniqueSuffix()}`);
+    const worldB = await createAnotherWorld(
+      page,
+      `E2E Storage B ${uniqueSuffix()}`,
+    );
     const scenesB = await sceneIds(page, worldB);
     const assetB = await createCanvasAsset(page, worldB, scenesB[0], 6540);
     const fingerprintB = await assetFingerprint(page, assetB);
@@ -94,7 +101,8 @@ test.describe("Client world cache — seeing and reclaiming storage (US5)", () =
     await expect
       .poll(() => holdsFingerprint(page, worldB, fingerprintB), {
         timeout: 90_000,
-        message: "world B must be cached too, or 'the others are intact' proves nothing",
+        message:
+          "world B must be cached too, or 'the others are intact' proves nothing",
       })
       .toBe(true);
 
@@ -102,7 +110,9 @@ test.describe("Client world cache — seeing and reclaiming storage (US5)", () =
     await openStoragePanel(page);
     const total = await page.getByTestId("storage-total").textContent();
     console.log(`[storage] total reported: ${total?.trim()}`);
-    expect(total, "the panel should report a non-zero total").not.toMatch(/^0 B/);
+    expect(total, "the panel should report a non-zero total").not.toMatch(
+      /^0 B/,
+    );
 
     const before = await panelRows(page);
     console.log(`[storage] rows: ${JSON.stringify([...before])}`);
@@ -113,12 +123,18 @@ test.describe("Client world cache — seeing and reclaiming storage (US5)", () =
     expect(before.has(worldB), "both cached worlds should appear").toBe(true);
 
     // FR-026: clear one.
-    const rowA = page.locator(`[data-testid="storage-world-row"][data-world-id="${worldA}"]`);
+    const rowA = page.locator(
+      `[data-testid="storage-world-row"][data-world-id="${worldA}"]`,
+    );
     await rowA.getByTestId("storage-clear-world").click();
-    await expect(page.getByTestId("storage-note")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("storage-note")).toBeVisible({
+      timeout: 30_000,
+    });
 
     const after = await panelRows(page);
-    console.log(`[storage] rows after clearing A: ${JSON.stringify([...after])}`);
+    console.log(
+      `[storage] rows after clearing A: ${JSON.stringify([...after])}`,
+    );
     expect(
       after.has(worldA),
       "the cleared world should no longer be occupying space",
@@ -174,18 +190,29 @@ test.describe("Client world cache — seeing and reclaiming storage (US5)", () =
     const fingerprint = await assetFingerprint(page, assetId);
     await openWorldAndSync(page, worldId, sync);
     await expect
-      .poll(() => holdsFingerprint(page, worldId, fingerprint), { timeout: 90_000 })
+      .poll(() => holdsFingerprint(page, worldId, fingerprint), {
+        timeout: 90_000,
+      })
       .toBe(true);
 
     await openStoragePanel(page);
     await page.getByTestId("storage-clear-all").click();
-    await expect(page.getByTestId("storage-note")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("storage-note")).toBeVisible({
+      timeout: 30_000,
+    });
 
     await expect
-      .poll(() => page.getByTestId("storage-empty").isVisible().catch(() => false), {
-        timeout: 30_000,
-        message: "with everything cleared the panel should say so",
-      })
+      .poll(
+        () =>
+          page
+            .getByTestId("storage-empty")
+            .isVisible()
+            .catch(() => false),
+        {
+          timeout: 30_000,
+          message: "with everything cleared the panel should say so",
+        },
+      )
       .toBe(true);
     expect(await worldBlobs(page, worldId)).toHaveLength(0);
 

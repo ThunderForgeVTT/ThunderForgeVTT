@@ -238,7 +238,9 @@ test.describe("A Game Master finds their rulebook's sections", () => {
     await expect(warning).not.toContainText("dnd5e");
 
     // It is specific: a count a GM can check against their own compendium.
-    await expect(page.getByTestId("system-change-counts")).toContainText("1 ability");
+    await expect(page.getByTestId("system-change-counts")).toContainText(
+      "1 ability",
+    );
 
     // And it can be backed out of, which is the difference between a warning
     // and a trap.

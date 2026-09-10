@@ -35,7 +35,10 @@ async function register(page: Page, creds: Credentials): Promise<void> {
   await page.getByRole("button", { name: "Create account" }).click();
 }
 
-async function registerAndCreateWorld(page: Page, worldName: string): Promise<string> {
+async function registerAndCreateWorld(
+  page: Page,
+  worldName: string,
+): Promise<string> {
   await register(page, freshCredentials("e2edice"));
   await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
   await page.locator("#world-name").fill(worldName);
@@ -48,12 +51,16 @@ async function registerAndCreateWorld(page: Page, worldName: string): Promise<st
   return match[1];
 }
 
-test("triggering a roll shows a result, and the DM sees it in roll history afterward", async ({ page }) => {
+test("triggering a roll shows a result, and the DM sees it in roll history afterward", async ({
+  page,
+}) => {
   const worldName = `E2E Dice ${uniqueSuffix()}`;
   const worldId = await registerAndCreateWorld(page, worldName);
 
   await page.getByTestId("play-button").click();
-  await page.waitForURL(new RegExp(`/world/${worldId}/play$`), { timeout: 15_000 });
+  await page.waitForURL(new RegExp(`/world/${worldId}/play$`), {
+    timeout: 15_000,
+  });
   await expect(page.locator("canvas")).toBeVisible({ timeout: 20_000 });
 
   const panel = page.getByTestId("dice-roller-panel");
@@ -61,7 +68,9 @@ test("triggering a roll shows a result, and the DM sees it in roll history after
   await page.getByTestId("dice-formula-input").fill("1d20");
   await page.getByTestId("dice-roll-button").click();
 
-  await expect(page.getByTestId("dice-roll-result")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId("dice-roll-result")).toBeVisible({
+    timeout: 10_000,
+  });
   const resultText = await page.getByTestId("dice-roll-result").innerText();
   expect(resultText).toMatch(/1d20:\s*-?\d+/);
 
@@ -90,10 +99,14 @@ test("triggering a roll shows a result, and the DM sees it in roll history after
     try {
       return JSON.parse(text);
     } catch {
-      throw new Error(`Non-JSON response (status ${res.status}): ${text.slice(0, 500)}`);
+      throw new Error(
+        `Non-JSON response (status ${res.status}): ${text.slice(0, 500)}`,
+      );
     }
   }, worldId);
 
   expect(historyResponse.data.worldRollRecords.length).toBeGreaterThan(0);
-  expect(historyResponse.data.worldRollRecords[0].resolution.formula).toBe("1d20");
+  expect(historyResponse.data.worldRollRecords[0].resolution.formula).toBe(
+    "1d20",
+  );
 });

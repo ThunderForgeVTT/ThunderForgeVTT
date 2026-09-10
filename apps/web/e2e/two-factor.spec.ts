@@ -1,9 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import { createHmac } from "node:crypto";
-import { ADMIN_USER } from "./fixtures/global-setup";
 import {
   freshCredentials,
   graphql,
+  loginAsAdmin,
   register,
   type Credentials,
 } from "./fixtures/helpers";
@@ -670,9 +670,12 @@ test.describe("the instance-wide policy", () => {
   }
 
   /** `redirectAfterLogin` sends an admin to /admin, so wait for either. */
+  /**
+   * FR-027: an administrator holds a second factor, so this is two steps.
+   * `loginAsAdmin` reads the secret `global-setup` enrolled for this run.
+   */
   async function signInAsAdmin(page: Page): Promise<void> {
-    await submitCredentials(page, ADMIN_USER.identifier, ADMIN_USER.password);
-    await page.waitForURL(/\/(admin|welcome)$/, { timeout: 20_000 });
+    await loginAsAdmin(page);
   }
 
   test("switching it on challenges an account that never enrolled, and switching it off releases them", async ({

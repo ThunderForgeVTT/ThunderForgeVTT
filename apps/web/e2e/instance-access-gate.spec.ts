@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
-import { ADMIN_USER, DEMO_USER } from "./fixtures/global-setup";
-import { graphql, login, uniqueSuffix } from "./fixtures/helpers";
+import { DEMO_USER } from "./fixtures/global-setup";
+import { graphql, login, loginAsAdmin, uniqueSuffix } from "./fixtures/helpers";
 
 /**
  * Spec 035 US1 / ADR-072: a closed instance is closed on **every** path.
@@ -47,11 +47,6 @@ async function setPolicy(page: Page, policy: string): Promise<void> {
  * the admin area, and a first draft of this spec waited only for `/welcome`
  * and timed out on a login that had entirely succeeded.
  */
-async function loginAsAdmin(page: Page): Promise<void> {
-  await login(page, ADMIN_USER.identifier, ADMIN_USER.password);
-  await page.waitForURL(/\/(admin|welcome)$/, { timeout: 20_000 });
-}
-
 /** Puts the instance back to open, signing in first only if needed. */
 async function restoreOpen(page: Page): Promise<void> {
   try {

@@ -153,7 +153,10 @@ test.describe("Spec 040 Scenario F: an instance says what it is not ready for", 
   test("closing a capability's gaps turns it available, and says so positively", async () => {
     const before = await readReadiness(admin);
     const capability = before.capabilities.find((c) => c.key === CAPABILITY);
-    expect(capability, `this instance declares no \`${CAPABILITY}\``).toBeTruthy();
+    expect(
+      capability,
+      `this instance declares no \`${CAPABILITY}\``,
+    ).toBeTruthy();
 
     for (const gap of capability?.gaps ?? []) {
       const value = ACCEPTABLE[gap.settingKey];
@@ -176,12 +179,17 @@ test.describe("Spec 040 Scenario F: an instance says what it is not ready for", 
     await expect(card).toContainText("Available");
 
     const after = await readReadiness(admin);
-    expect(after.capabilities.find((c) => c.key === CAPABILITY)?.gaps).toEqual([]);
+    expect(after.capabilities.find((c) => c.key === CAPABILITY)?.gaps).toEqual(
+      [],
+    );
   });
 
   test("clearing a setting takes the capability back, so the report is derived and not remembered", async () => {
     const key = closedGaps[0];
-    expect(key, "the previous test closed no gap, so there is none to reopen").toBeTruthy();
+    expect(
+      key,
+      "the previous test closed no gap, so there is none to reopen",
+    ).toBeTruthy();
 
     await writeSettingOrThrow(admin, key, null);
 

@@ -25,21 +25,60 @@ test.describe("Spec 018 Scenario 7: a full combat encounter using only Genie con
     // --- Scenario 3 leg: stage an NPC ---
     const npc = await graphql<{ data: { createActor: { id: string } } }>(
       page,
-      `mutation($input: CreateActorInput!) { createActor(input: $input) { id } }`,
-      { input: { worldId, label: "Encounter NPC", isNpc: true, gameSystemId: "genie" } },
+      `
+        mutation ($input: CreateActorInput!) {
+          createActor(input: $input) {
+            id
+          }
+        }
+      `,
+      {
+        input: {
+          worldId,
+          label: "Encounter NPC",
+          isNpc: true,
+          gameSystemId: "genie",
+        },
+      },
     );
     const npcId = npc.data.createActor.id;
     await graphql(
       page,
-      `mutation($input: GraphQLUpdateActorSystemDataInput!) { updateActorSystemData(input: $input) { id } }`,
-      { input: { actorId: npcId, gameSystemId: "genie", dataType: "trait_data", data: { size_category: "large" } } },
+      `
+        mutation ($input: GraphQLUpdateActorSystemDataInput!) {
+          updateActorSystemData(input: $input) {
+            id
+          }
+        }
+      `,
+      {
+        input: {
+          actorId: npcId,
+          gameSystemId: "genie",
+          dataType: "trait_data",
+          data: { size_category: "large" },
+        },
+      },
     );
 
     // --- Scenario 4 leg (part 1): a PC to apply/clear a condition on ---
     const pc = await graphql<{ data: { createActor: { id: string } } }>(
       page,
-      `mutation($input: CreateActorInput!) { createActor(input: $input) { id } }`,
-      { input: { worldId, label: "Encounter PC", isNpc: false, gameSystemId: "genie" } },
+      `
+        mutation ($input: CreateActorInput!) {
+          createActor(input: $input) {
+            id
+          }
+        }
+      `,
+      {
+        input: {
+          worldId,
+          label: "Encounter PC",
+          isNpc: false,
+          gameSystemId: "genie",
+        },
+      },
     );
     const pcId = pc.data.createActor.id;
 
@@ -61,15 +100,31 @@ test.describe("Spec 018 Scenario 7: a full combat encounter using only Genie con
     await expect(dicePanel).toBeVisible({ timeout: 15_000 });
     await page.getByTestId("dice-formula-input").fill("4d6kh3x=6cs>=4");
     await page.getByTestId("dice-roll-button").click();
-    await expect(page.getByTestId("dice-roll-result")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId("dice-roll-result")).toBeVisible({
+      timeout: 10_000,
+    });
 
     // --- Scenario 2 leg: a scene-topology switch ---
     const createGridless = await graphql<{
       data: { createScene: { sceneId: string; name: string } };
     }>(
       page,
-      `mutation($input: GraphQLCreateSceneInput!) { createScene(input: $input) { sceneId gridType name } }`,
-      { input: { worldId, name: "Wish-Warped Encounter Zone", gridType: "gridless" } },
+      `
+        mutation ($input: GraphQLCreateSceneInput!) {
+          createScene(input: $input) {
+            sceneId
+            gridType
+            name
+          }
+        }
+      `,
+      {
+        input: {
+          worldId,
+          name: "Wish-Warped Encounter Zone",
+          gridType: "gridless",
+        },
+      },
     );
     const gridlessScene = createGridless.data.createScene;
 
@@ -78,8 +133,11 @@ test.describe("Spec 018 Scenario 7: a full combat encounter using only Genie con
     await ensureSidebarOpen(page);
     await page.getByTestId("scene-switcher").click();
     await page.getByRole("option", { name: gridlessScene.name }).click();
-    await expect(page.getByTestId("scene-switcher")).toContainText(gridlessScene.name, {
-      timeout: 10_000,
-    });
+    await expect(page.getByTestId("scene-switcher")).toContainText(
+      gridlessScene.name,
+      {
+        timeout: 10_000,
+      },
+    );
   });
 });

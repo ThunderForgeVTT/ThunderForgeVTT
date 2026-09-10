@@ -68,7 +68,8 @@ async function createWorld(page: Page, worldName: string): Promise<string> {
   await page.getByRole("button", { name: /create world/i }).click();
   await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
   const match = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname);
-  if (!match) throw new Error(`Could not extract world id from URL: ${page.url()}`);
+  if (!match)
+    throw new Error(`Could not extract world id from URL: ${page.url()}`);
   return match[1];
 }
 
@@ -85,7 +86,10 @@ test.describe("Spec 032 T108: a pack's panels reach the pages that host them", (
     page,
   }) => {
     await register(page, freshCredentials("e2eslotgm"));
-    const worldId = await createWorld(page, `E2E Panel Slots ${uniqueSuffix()}`);
+    const worldId = await createWorld(
+      page,
+      `E2E Panel Slots ${uniqueSuffix()}`,
+    );
 
     await page.goto(`/world/${worldId}/settings/system`);
 
@@ -101,9 +105,9 @@ test.describe("Spec 032 T108: a pack's panels reach the pages that host them", (
     // signals `onWorldChanged`; if that signal were dropped the checkbox
     // would still look right here and be wrong after a navigation.
     await page.goto(`/world/${worldId}/settings/system`);
-    await expect(page.getByTestId("genie-resource-carryover-toggle")).toBeChecked(
-      { checked: !before, timeout: 15_000 },
-    );
+    await expect(
+      page.getByTestId("genie-resource-carryover-toggle"),
+    ).toBeChecked({ checked: !before, timeout: 15_000 });
   });
 
   /**
@@ -120,7 +124,10 @@ test.describe("Spec 032 T108: a pack's panels reach the pages that host them", (
     });
     const gmPage = await gmContext.newPage();
     await register(gmPage, freshCredentials("e2eslotowner"));
-    const worldId = await createWorld(gmPage, `E2E Panel Slots Viewer ${uniqueSuffix()}`);
+    const worldId = await createWorld(
+      gmPage,
+      `E2E Panel Slots Viewer ${uniqueSuffix()}`,
+    );
 
     await gmPage.goto(`/world/${worldId}`);
     await gmPage.getByRole("button", { name: "Generate Join Link" }).click();
@@ -167,7 +174,10 @@ test.describe("Spec 032 T108: a pack's panels reach the pages that host them", (
     page,
   }) => {
     await register(page, freshCredentials("e2eslotnone"));
-    const worldId = await createWorld(page, `E2E Panel Slots Bare ${uniqueSuffix()}`);
+    const worldId = await createWorld(
+      page,
+      `E2E Panel Slots Bare ${uniqueSuffix()}`,
+    );
 
     await page.goto(`/world/${worldId}/settings/system`);
     await expect(page.getByTestId("active-system-card")).toBeVisible({
@@ -190,9 +200,9 @@ test.describe("Spec 032 T108: a pack's panels reach the pages that host them", (
     await expect(page.getByTestId("active-system-card")).toBeVisible({
       timeout: 15_000,
     });
-    await expect(
-      page.getByTestId("genie-resource-carryover-card"),
-    ).toHaveCount(0);
+    await expect(page.getByTestId("genie-resource-carryover-card")).toHaveCount(
+      0,
+    );
 
     // Nor `world-staging`. The staging page still renders everything of its
     // own; it simply ends after the invite link.
@@ -200,8 +210,8 @@ test.describe("Spec 032 T108: a pack's panels reach the pages that host them", (
     await expect(page.getByTestId("world-staging-page")).toBeVisible({
       timeout: 15_000,
     });
-    await expect(
-      page.getByTestId("genie-session-panel-wrapper"),
-    ).toHaveCount(0);
+    await expect(page.getByTestId("genie-session-panel-wrapper")).toHaveCount(
+      0,
+    );
   });
 });

@@ -592,6 +592,72 @@ mod tests {
         );
     }
 
+    /// The guard whose absence is invisible from outside: **verification does
+    /// the same work whichever code was offered.**
+    ///
+    /// `consume_recovery_code` verifies against every unspent hash with no
+    /// early exit. Add a `break` on first match and nothing observable
+    /// changes — the right codes still admit, the wrong ones are still
+    /// refused, and every other test in this file still passes. What changes
+    /// is that the *time taken* tells the caller how far down the set their
+    /// code was, which for a ten-code set is three bits of a credential handed
+    /// over for free.
+    ///
+    /// So this is a timing test, which is a thing to be careful about. It is
+    /// written to be safe rather than tight: Argon2 is deliberately expensive
+    /// — tens of milliseconds a verification — so with ten codes the gap
+    /// between "stopped at the first" and "checked all ten" is close to
+    /// tenfold. Asserting merely that the first is not *dramatically* faster
+    /// than the last leaves an enormous margin for a loaded machine, and still
+    /// fails an early `break` by a mile.
+    ///
+    /// If this ever goes flaky, raise the tolerance rather than delete it. The
+    /// alternative is a guarantee nothing checks.
+    #[tokio::test]
+    async fn matching_the_first_code_costs_what_matching_the_last_one_costs() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let first_user = insert_test_user(&mut conn);
+        let last_user = insert_test_user(&mut conn);
+        drop(conn);
+
+        let first_set = issue_recovery_codes(&state, first_user).await.unwrap();
+        let last_set = issue_recovery_codes(&state, last_user).await.unwrap();
+
+        // Warm the process: the very first Argon2 in a test binary pays for
+        // allocation the rest do not, and attributing that to the loop would
+        // be measuring the wrong thing.
+        let _ = consume_recovery_code(&state, first_user, "not-a-code").await;
+
+        let started = std::time::Instant::now();
+        assert!(
+            consume_recovery_code(&state, first_user, &first_set[0])
+                .await
+                .unwrap()
+        );
+        let cost_of_the_first = started.elapsed();
+
+        let started = std::time::Instant::now();
+        assert!(
+            consume_recovery_code(&state, last_user, &last_set[RECOVERY_CODE_SET_SIZE - 1])
+                .await
+                .unwrap()
+        );
+        let cost_of_the_last = started.elapsed();
+
+        // Four times, against a real ratio of about ten. Wide enough that a
+        // busy machine does not fail it; narrow enough that an early exit
+        // cannot hide in it.
+        assert!(
+            cost_of_the_last < cost_of_the_first * 4,
+            "matching the last code took {cost_of_the_last:?} against \
+             {cost_of_the_first:?} for the first. That difference is the \
+             position of a code in the set, told to whoever offered it — \
+             `consume_recovery_code` must verify every unspent hash with no \
+             early exit."
+        );
+    }
+
     /// FR-011. The count is what tells somebody they are running low, so it
     /// has to fall as codes are spent and reset when a set is replaced.
     #[tokio::test]

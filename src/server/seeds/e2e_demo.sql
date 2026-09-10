@@ -50,7 +50,24 @@ VALUES (
   false,
   true
 )
-ON CONFLICT (id) DO UPDATE SET is_admin = true;
+-- FR-027/FR-031: an administrator must hold a second factor, computed from the
+-- role. So this row is *reset* to holding none on every seed, and
+-- `global-setup.ts` then enrols one through the API and shares the secret with
+-- the suite. It cannot be seeded here: the stored secret is encrypted with the
+-- instance's own key, which SQL has no access to.
+ON CONFLICT (id) DO UPDATE SET
+  is_admin = true,
+  two_factor_enabled = false,
+  two_factor_secret_encrypted = NULL,
+  two_factor_confirmed_at = NULL,
+  two_factor_pending_secret_encrypted = NULL,
+  two_factor_pending_started_at = NULL,
+  two_factor_last_used_step = NULL,
+  two_factor_failed_attempts = 0,
+  two_factor_locked_until = NULL;
+
+DELETE FROM user_recovery_codes
+WHERE user_id = '00000000-0000-0000-0000-0000000000e1';
 
 -- Demo user. Password is "Sup3r-Secret-Passphrase!" (matches the
 -- convention used by apps/web/e2e/fixtures/helpers.ts's freshCredentials),

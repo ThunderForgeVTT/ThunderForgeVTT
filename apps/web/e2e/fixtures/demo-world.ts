@@ -1,6 +1,10 @@
 import { test as base, expect } from "@playwright/test";
 import fs from "node:fs";
-import { DEMO_STATE_PATH, DEMO_WORLD_PATH, type DemoWorld } from "./global-setup";
+import {
+  DEMO_STATE_PATH,
+  DEMO_WORLD_PATH,
+  type DemoWorld,
+} from "./global-setup";
 
 function readDemoWorld(): DemoWorld {
   if (!fs.existsSync(DEMO_WORLD_PATH)) {

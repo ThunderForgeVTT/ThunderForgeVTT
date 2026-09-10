@@ -232,20 +232,16 @@ test.describe("Spec 017 US1: a joining player picks a GM-designated character", 
     await expect(selectB).toBeVisible({ timeout: 15_000 });
 
     const [resultA, resultB] = await Promise.allSettled([
-      selectA
-        .click()
-        .then(() =>
-          pageA.waitForURL(new RegExp(`/world/${worldId}$`), {
-            timeout: 15_000,
-          }),
-        ),
-      selectB
-        .click()
-        .then(() =>
-          pageB.waitForURL(new RegExp(`/world/${worldId}$`), {
-            timeout: 15_000,
-          }),
-        ),
+      selectA.click().then(() =>
+        pageA.waitForURL(new RegExp(`/world/${worldId}$`), {
+          timeout: 15_000,
+        }),
+      ),
+      selectB.click().then(() =>
+        pageB.waitForURL(new RegExp(`/world/${worldId}$`), {
+          timeout: 15_000,
+        }),
+      ),
     ]);
 
     const successes = [resultA, resultB].filter(

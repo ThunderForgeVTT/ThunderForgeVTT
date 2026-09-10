@@ -2,7 +2,7 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 import { ADMIN_USER } from "./fixtures/global-setup";
 import {
   freshCredentials,
-  login,
+  loginAsAdmin,
   register,
   type Credentials,
 } from "./fixtures/helpers";
@@ -140,8 +140,18 @@ async function isSignedIn(page: Page): Promise<boolean> {
 async function asOperator(browser: Browser): Promise<Page> {
   const context = await browser.newContext();
   const page = await context.newPage();
-  await login(page, ADMIN_USER.identifier, ADMIN_USER.password);
-  await page.goto("/admin/configuration");
+  // Spec 041 FR-027: an administrator holds a second factor, so signing in
+  // as one takes two steps. `loginAsAdmin` does both.
+  await loginAsAdmin(page);
+  // `/admin/security` — the section that holds the instance-wide enforcement
+  // switch, and now the one-account controls beside it. Not
+  // `/admin/configuration`, which is OAuth and the manifest.
+  await page.goto("/admin/security");
+  await expect(page.getByRole("heading", { name: /one account/i })).toBeVisible(
+    {
+      timeout: 30_000,
+    },
+  );
   return page;
 }
 

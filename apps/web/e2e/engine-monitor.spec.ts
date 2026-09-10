@@ -27,7 +27,10 @@ test("the readout is off until asked for, then shows live frames and latency", a
   // Diagnostics nobody asked for must not be sitting over the map.
   await expect(page.getByTestId("engine-monitor")).toHaveCount(0);
 
-  await page.getByTestId("world-dock").getByRole("button", { name: /settings/i }).click();
+  await page
+    .getByTestId("world-dock")
+    .getByRole("button", { name: /settings/i })
+    .click();
   await page.getByTestId("engine-monitor-toggle").click();
 
   const monitor = page.getByTestId("engine-monitor");
@@ -52,7 +55,9 @@ test("the readout is off until asked for, then shows live frames and latency", a
   await expect
     .poll(
       async () => {
-        const text = await page.getByTestId("engine-monitor-latency").innerText();
+        const text = await page
+          .getByTestId("engine-monitor-latency")
+          .innerText();
         const ms = Number.parseInt(text, 10);
         return Number.isNaN(ms) ? -1 : ms;
       },
@@ -66,5 +71,7 @@ test("the readout is off until asked for, then shows live frames and latency", a
   // The preference outlives the page, or it is not a preference.
   await page.reload();
   await expect(page.locator("canvas")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId("engine-monitor")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId("engine-monitor")).toBeVisible({
+    timeout: 20_000,
+  });
 });

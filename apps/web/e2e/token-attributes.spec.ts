@@ -268,7 +268,6 @@ for (const system of SYSTEMS) {
       ).toBe(system.groundSpeed);
     }
 
-     
     console.log(
       `[attributes] ${system.systemId} attrs=${row!.attributes.length} speeds=${
         row!.speeds.map((s) => `${s.id}:${s.value}`).join(",") || "none"

@@ -1,9 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
-import { ADMIN_USER } from "./fixtures/global-setup";
 import {
   freshCredentials,
   graphql,
-  login,
+  loginAsAdmin,
   register,
   uniqueSuffix,
 } from "./fixtures/helpers";
@@ -107,11 +106,6 @@ async function setPolicy(page: Page, policy: string): Promise<void> {
     `,
     { policy },
   );
-}
-
-async function loginAsAdmin(page: Page): Promise<void> {
-  await login(page, ADMIN_USER.identifier, ADMIN_USER.password);
-  await page.waitForURL(/\/(admin|welcome)$/, { timeout: 20_000 });
 }
 
 test.describe("Spec 036 US6: external sign-in, against a real handshake", () => {

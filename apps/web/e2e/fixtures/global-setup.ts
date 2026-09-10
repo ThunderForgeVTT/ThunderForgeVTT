@@ -1,8 +1,9 @@
-import { chromium, type FullConfig } from "@playwright/test";
+import { chromium, type FullConfig, type Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { login } from "./helpers";
+import { totpAt } from "./totp";
 
 // Per-shard when sharding, so parallel stacks do not race on one file.
 //
@@ -16,6 +17,29 @@ export const DEMO_DIR =
   process.env.THUNDERFORGE_E2E_DEMO_DIR ?? path.join(__dirname, ".demo");
 export const DEMO_STATE_PATH = path.join(DEMO_DIR, "storage-state.json");
 export const DEMO_WORLD_PATH = path.join(DEMO_DIR, "world.json");
+
+/**
+ * The seeded administrator's TOTP secret, for this run only.
+ *
+ * # Why this file has to exist
+ *
+ * Spec 041 FR-027: an administrator must hold a second factor, and the rule is
+ * computed from `is_admin` rather than stored — so as of 2026-09-09 the seeded
+ * `e2eadmin` cannot sign in with a password alone. Every spec that reaches the
+ * `/admin` surface has to answer a challenge.
+ *
+ * It cannot be seeded in SQL: the stored secret is encrypted with the
+ * instance's own key, which the seed file has no access to. So the seed clears
+ * the factor, this setup enrols one through the API — the same three calls a
+ * person makes — and writes the secret here for `loginAsAdmin` to read.
+ *
+ * Per-shard, like the storage state beside it, and for the same reason: each
+ * stack has its own database and its own encrypted secret.
+ */
+export const ADMIN_SECOND_FACTOR_PATH = path.join(
+  DEMO_DIR,
+  "admin-second-factor.json",
+);
 
 const SEED_SQL_PATH = path.join(
   __dirname,
@@ -66,6 +90,72 @@ function applySeedSql(): void {
 }
 
 /**
+ * Give the seeded administrator a second factor, and write the secret down.
+ *
+ * FR-027 means an administrator signs in with a password *and* a code, so the
+ * suite needs a code it can compute. This does exactly what a person does —
+ * `setup/start`, then `setup/confirm` with a code from the secret it hands
+ * back — rather than writing a row, because the secret is stored encrypted
+ * with the instance's key.
+ *
+ * The confirmation uses the **previous** step's code: confirming spends the
+ * step it matched (FR-016), and the first spec to sign in a moment later would
+ * otherwise offer a code the server has already seen.
+ */
+async function enrolTheAdministrator(
+  page: Page,
+  baseURL: string,
+): Promise<void> {
+  const start = await page.request.post(
+    `${baseURL}/api/authentication/2fa/setup/start`,
+    {
+      data: {
+        username: ADMIN_USER.identifier,
+        password: ADMIN_USER.password,
+      },
+    },
+  );
+  if (start.status() !== 200) {
+    throw new Error(
+      `Could not begin the administrator's enrolment (${start.status()}): ${(
+        await start.text()
+      ).slice(0, 300)}`,
+    );
+  }
+  const otpauthUrl = ((await start.json()) as { otpauth_url?: string })
+    .otpauth_url;
+  const secret = otpauthUrl
+    ? new URL(otpauthUrl).searchParams.get("secret")
+    : null;
+  if (!secret) {
+    throw new Error(`No secret in the enrolment response: ${otpauthUrl}`);
+  }
+
+  const confirm = await page.request.post(
+    `${baseURL}/api/authentication/2fa/setup/confirm`,
+    {
+      data: {
+        username: ADMIN_USER.identifier,
+        password: ADMIN_USER.password,
+        code: totpAt(secret, Date.now() / 1000 - 30),
+      },
+    },
+  );
+  if (confirm.status() !== 200) {
+    throw new Error(
+      `Could not confirm the administrator's enrolment (${confirm.status()}): ${(
+        await confirm.text()
+      ).slice(0, 300)}`,
+    );
+  }
+
+  fs.writeFileSync(
+    ADMIN_SECOND_FACTOR_PATH,
+    JSON.stringify({ secret }, null, 2),
+  );
+}
+
+/**
  * Seeds one demo user + demo world (on the "genie" game system) via the
  * SQL seed file, then logs in once via the real UI to capture a reusable
  * storageState. Specs that just need to launch straight into the play
@@ -99,6 +189,8 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
   const browser = await chromium.launch();
   const context = await browser.newContext({ baseURL });
   const page = await context.newPage();
+
+  await enrolTheAdministrator(page, baseURL);
 
   await login(page, DEMO_USER.identifier, DEMO_USER.password);
   await page.waitForURL(/\/welcome$/, { timeout: 15_000 });

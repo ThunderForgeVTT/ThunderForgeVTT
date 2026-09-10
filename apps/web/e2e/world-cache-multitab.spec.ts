@@ -184,7 +184,10 @@ test.describe("Client world cache — more than one tab (US3, T055e/T055f)", () 
     // reader would misread, and OPFS's own write semantics — a swap file
     // committed on close — are what should make it unobservable.
     for (const blob of blobs) {
-      expect(blob.size, `${blob.path} must not be a zero-length stub`).toBeGreaterThan(0);
+      expect(
+        blob.size,
+        `${blob.path} must not be a zero-length stub`,
+      ).toBeGreaterThan(0);
     }
 
     // And what is on disk is sealed, not the image. Cheap to check here, and
@@ -211,7 +214,9 @@ test.describe("Client world cache — more than one tab (US3, T055e/T055f)", () 
       await tab.reload();
       await waitForEngineReady(tab);
       const refetched = requests.stop();
-      console.log(`[cache-multitab] tab ${name} refetches on reload: ${refetched}`);
+      console.log(
+        `[cache-multitab] tab ${name} refetches on reload: ${refetched}`,
+      );
       expect(
         refetched,
         `tab ${name} should serve the asset from the shared local store`,
@@ -266,7 +271,9 @@ test.describe("Client world cache — more than one tab (US3, T055e/T055f)", () 
     await tabB.reload();
     await waitForEngineReady(tabB);
     const warmRefetches = warm.stop();
-    console.log(`[cache-multitab] tab B refetches while warm: ${warmRefetches}`);
+    console.log(
+      `[cache-multitab] tab B refetches while warm: ${warmRefetches}`,
+    );
     expect(
       warmRefetches,
       "tab B should be serving the asset from the cache before sign-out",
@@ -311,7 +318,9 @@ test.describe("Client world cache — more than one tab (US3, T055e/T055f)", () 
     // The stored record is gone too, which is what makes the drop permanent
     // rather than a thing the next read would undo.
     const keysAfter = await sessionKeyState(tabB);
-    console.log(`[cache-multitab] tab B key state after sign-out: ${keysAfter}`);
+    console.log(
+      `[cache-multitab] tab B key state after sign-out: ${keysAfter}`,
+    );
     expect(keysAfter, "sign-out must discard the stored key").toContain(
       "keys=0",
     );

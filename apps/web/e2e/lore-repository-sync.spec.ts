@@ -64,7 +64,8 @@ async function createWorld(page: Page, worldName: string): Promise<string> {
   await page.getByRole("button", { name: /create world/i }).click();
   await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
   const match = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname);
-  if (!match) throw new Error(`Could not extract world id from URL: ${page.url()}`);
+  if (!match)
+    throw new Error(`Could not extract world id from URL: ${page.url()}`);
   return match[1];
 }
 
@@ -93,7 +94,10 @@ test.describe("Spec 034 User Story 2: a world is unharmed by its mirror", () => 
     page,
   }) => {
     await register(page, freshCredentials("e2eloreharm"));
-    const worldId = await createWorld(page, `E2E Lore Unharmed ${uniqueSuffix()}`);
+    const worldId = await createWorld(
+      page,
+      `E2E Lore Unharmed ${uniqueSuffix()}`,
+    );
 
     // Visit the settings surface first, so the connection machinery is loaded
     // and answering rather than never having been asked.
@@ -118,7 +122,9 @@ test.describe("Spec 034 User Story 2: a world is unharmed by its mirror", () => 
       timeout: 15_000,
     });
 
-    const slug = /\/lore\/([^/]+)\/view$/.exec(new URL(page.url()).pathname)?.[1];
+    const slug = /\/lore\/([^/]+)\/view$/.exec(
+      new URL(page.url()).pathname,
+    )?.[1];
     if (!slug) throw new Error("no slug");
 
     // Reading the entry back is the half FR-028 is about: lore behaves exactly
@@ -200,7 +206,10 @@ test.describe("Spec 034: an instance with no repository integration", () => {
     page,
   }) => {
     await register(page, freshCredentials("e2eloresec"));
-    const worldId = await createWorld(page, `E2E Lore Secrets ${uniqueSuffix()}`);
+    const worldId = await createWorld(
+      page,
+      `E2E Lore Secrets ${uniqueSuffix()}`,
+    );
 
     const payloads: string[] = [];
     page.on("response", async (response) => {
@@ -309,7 +318,10 @@ test.describe("Spec 034 User Story 3: incoming changes are off until asked for",
     page,
   }) => {
     await register(page, freshCredentials("e2eloreincoming"));
-    const worldId = await createWorld(page, `E2E Lore Incoming ${uniqueSuffix()}`);
+    const worldId = await createWorld(
+      page,
+      `E2E Lore Incoming ${uniqueSuffix()}`,
+    );
 
     await page.goto(`/world/${worldId}/settings/system`);
     await expect(page.getByTestId("lore-repository-card")).toBeVisible({
@@ -334,7 +346,10 @@ test.describe("Spec 034 User Story 3: incoming changes are off until asked for",
     page,
   }) => {
     await register(page, freshCredentials("e2eloreincsrv"));
-    const worldId = await createWorld(page, `E2E Lore Incoming Wire ${uniqueSuffix()}`);
+    const worldId = await createWorld(
+      page,
+      `E2E Lore Incoming Wire ${uniqueSuffix()}`,
+    );
 
     const payloads: string[] = [];
     page.on("response", async (response) => {
@@ -354,8 +369,10 @@ test.describe("Spec 034 User Story 3: incoming changes are off until asked for",
     const all = payloads.join("\n");
     expect(all.length, "no GraphQL response was captured").toBeGreaterThan(0);
     // `incomingBody` is the field that would carry text from outside the app.
-    expect(all, "a repository proposal reached a world that never asked for one")
-      .not.toContain("incomingBody");
+    expect(
+      all,
+      "a repository proposal reached a world that never asked for one",
+    ).not.toContain("incomingBody");
   });
 });
 
@@ -401,7 +418,9 @@ async function integrationConfigured(page: Page): Promise<boolean> {
     });
     return res.text();
   });
-  return JSON.parse(body)?.data?.instanceRepositoryIntegration?.configured === true;
+  return (
+    JSON.parse(body)?.data?.instanceRepositoryIntegration?.configured === true
+  );
 }
 
 test.describe("Spec 034 T036/T038: connecting a real repository", () => {
@@ -455,7 +474,9 @@ test.describe("Spec 034 T036/T038: connecting a real repository", () => {
     // return to this world and this person.
     const href = await link.getAttribute("href");
     expect(href, "the hand-off has no address").toBeTruthy();
-    expect(href, "the hand-off carries no anti-forgery state").toContain("state=");
+    expect(href, "the hand-off carries no anti-forgery state").toContain(
+      "state=",
+    );
   });
 
   test("the mirror reaches a real repository and a clone matches", async ({
@@ -468,7 +489,10 @@ test.describe("Spec 034 T036/T038: connecting a real repository", () => {
     );
 
     await register(page, freshCredentials("e2eloremirror"));
-    const worldId = await createWorld(page, `E2E Lore Mirror ${uniqueSuffix()}`);
+    const worldId = await createWorld(
+      page,
+      `E2E Lore Mirror ${uniqueSuffix()}`,
+    );
 
     await page.goto(`/world/${worldId}/settings/system`);
     await expect(page.getByTestId("lore-repository-card")).toBeVisible({
@@ -526,7 +550,10 @@ test.describe("Spec 034 T036/T038: connecting a real repository", () => {
           },
         );
         return done?.data?.completeLoreRepositoryConnection
-          ? { repositoryRef: done.data.completeLoreRepositoryConnection.repositoryRef }
+          ? {
+              repositoryRef:
+                done.data.completeLoreRepositoryConnection.repositoryRef,
+            }
           : { error: JSON.stringify(done?.errors) };
       },
       {
@@ -537,7 +564,10 @@ test.describe("Spec 034 T036/T038: connecting a real repository", () => {
       },
     );
 
-    expect(connected.error, `connecting failed: ${connected.error}`).toBeUndefined();
+    expect(
+      connected.error,
+      `connecting failed: ${connected.error}`,
+    ).toBeUndefined();
     expect(connected.repositoryRef).toBe(LIVE_REPO);
 
     // FR-038: the notice gate is real, and nothing has synchronised yet.

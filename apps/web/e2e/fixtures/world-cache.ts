@@ -1,4 +1,9 @@
-import { expect, type ConsoleMessage, type Page, type Response } from "@playwright/test";
+import {
+  expect,
+  type ConsoleMessage,
+  type Page,
+  type Response,
+} from "@playwright/test";
 import { graphql, waitForEngineReady } from "./helpers";
 
 /**
@@ -163,7 +168,10 @@ export async function opfsFiles(page: Page): Promise<OpfsFile[]> {
  * The cached blobs for one world: `/<user-scope>/<world-id>/<fingerprint>.bin`
  * (see `BlobPath` in crates/thunderforge-cache-browser/src/opfs.rs).
  */
-export async function worldBlobs(page: Page, worldId: string): Promise<OpfsFile[]> {
+export async function worldBlobs(
+  page: Page,
+  worldId: string,
+): Promise<OpfsFile[]> {
   const files = await opfsFiles(page);
   return files.filter(
     (f) => f.path.includes(`/${worldId}/`) && f.path.endsWith(".bin"),
@@ -189,7 +197,10 @@ export async function holdsFingerprint(
  * Asserts a 200 — which doubles as the "this user really could read this
  * asset" precondition every revocation test needs.
  */
-export async function assetFingerprint(page: Page, assetId: string): Promise<string> {
+export async function assetFingerprint(
+  page: Page,
+  assetId: string,
+): Promise<string> {
   const probe = await page.evaluate(async (url) => {
     // `cache: "no-store"`, always. The route answers with
     // `Cache-Control: private, max-age=3600`, so an ordinary fetch would be
@@ -233,7 +244,10 @@ export async function assetFingerprint(page: Page, assetId: string): Promise<str
  * the population this test is about. What Cache Storage still holds is a
  * separate question, measured by `serviceWorkerHoldsAsset` below.
  */
-export async function assetStatus(page: Page, assetId: string): Promise<number> {
+export async function assetStatus(
+  page: Page,
+  assetId: string,
+): Promise<number> {
   return page.evaluate(
     async ({ url, nonce }) => {
       const res = await fetch(`${url}?probe=${nonce}`, {
@@ -476,7 +490,10 @@ export async function createCanvasAsset(
  * success: a paste that uploaded nothing is the exact failure that would
  * make a cache test pass while measuring an empty store.
  */
-export async function pasteCanvasImage(page: Page, seed: number): Promise<string> {
+export async function pasteCanvasImage(
+  page: Page,
+  seed: number,
+): Promise<string> {
   const uploads: { id?: string; errors?: unknown }[] = [];
   const onResponse = async (res: Response) => {
     if (!res.url().includes("/api/graphql")) return;
@@ -486,7 +503,10 @@ export async function pasteCanvasImage(page: Page, seed: number): Promise<string
         errors?: unknown;
       };
       if (json.data?.uploadCanvasImage) {
-        uploads.push({ id: json.data.uploadCanvasImage.id, errors: json.errors });
+        uploads.push({
+          id: json.data.uploadCanvasImage.id,
+          errors: json.errors,
+        });
       }
     } catch {
       // Not JSON, or a body already consumed elsewhere. Not our response.
@@ -630,7 +650,10 @@ export async function switchToScene(page: Page, name: string): Promise<void> {
  * which is collapsed by default, so the section is opened first — the same
  * gate `canvas-authoring.spec.ts` handles before creating a scene.
  */
-export async function importMapBackground(page: Page, filePath: string): Promise<void> {
+export async function importMapBackground(
+  page: Page,
+  filePath: string,
+): Promise<void> {
   await openSettingsDock(page, "map-import-tool");
   const tool = page.getByTestId("map-import-tool");
   await tool
@@ -795,7 +818,10 @@ export interface BlobProbe {
  * SC-004a — going through the app would only demonstrate that the app chooses
  * not to read the data.
  */
-export async function probeBlobs(page: Page, worldId: string): Promise<BlobProbe[]> {
+export async function probeBlobs(
+  page: Page,
+  worldId: string,
+): Promise<BlobProbe[]> {
   return page.evaluate(async (world) => {
     interface DirLike {
       kind: string;
@@ -922,7 +948,6 @@ export async function sessionKeyState(page: Page): Promise<string> {
     });
   });
 }
-
 
 /**
  * The peer module's own counters, as the app reports them.

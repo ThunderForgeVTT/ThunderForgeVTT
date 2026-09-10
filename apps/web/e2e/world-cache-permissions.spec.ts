@@ -25,7 +25,6 @@ import {
   type GqlResult,
 } from "./fixtures/world-cache";
 
-
 /**
  * Spec 028 User Story 2 (T042-T044): cached content stops being readable
  * when the permission that justified caching it goes away.
@@ -81,8 +80,6 @@ async function playerUserId(page: Page, worldId: string): Promise<string> {
   ).toBe(1);
   return players[0].userId;
 }
-
-
 
 test.describe("Client world cache — losing access (US2, T042-T044)", () => {
   // Two browser contexts, an engine start in each, a real upload and two full

@@ -55,7 +55,9 @@ async function addAnAbility(page: Page, worldId: string): Promise<void> {
   await expect(page.getByTestId("ability-type-tabs")).toBeVisible({
     timeout: 20_000,
   });
-  await page.getByTestId("new-ability-name-input").fill(`Ward ${uniqueSuffix()}`);
+  await page
+    .getByTestId("new-ability-name-input")
+    .fill(`Ward ${uniqueSuffix()}`);
   await page.getByTestId("add-ability-button").click();
   await expect(page.getByTestId("ability-catalog-table")).toBeVisible({
     timeout: 15_000,
@@ -84,7 +86,9 @@ test.describe("US2: a system change is counted, red, and asked twice", () => {
     // generic sentence.
     const warning = page.getByTestId("system-change-warning");
     await expect(warning).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByTestId("system-change-counts")).toContainText("1 ability");
+    await expect(page.getByTestId("system-change-counts")).toContainText(
+      "1 ability",
+    );
 
     // FR-026: it must not overstate. Nothing is destroyed here, and saying so
     // would be false — a false warning is worse than none, because it teaches
@@ -102,14 +106,18 @@ test.describe("US2: a system change is counted, red, and asked twice", () => {
       "permanently",
       "cannot be undone",
     ]) {
-      expect(text, `the warning must not claim "${claim}"`).not.toContain(claim);
+      expect(text, `the warning must not claim "${claim}"`).not.toContain(
+        claim,
+      );
     }
     expect(text).toContain("hides this content");
     expect(text).toContain("switching back restores");
 
     // FR-027: one confirmation is not enough. The legal-notice confirmation
     // does not even appear until the data risk is accepted.
-    await expect(page.getByTestId("pending-system-confirmation")).toHaveCount(0);
+    await expect(page.getByTestId("pending-system-confirmation")).toHaveCount(
+      0,
+    );
     await page.getByTestId("system-change-accept-risk").click();
 
     const confirmation = page.getByTestId("pending-system-confirmation");
@@ -133,9 +141,16 @@ test.describe("US2: a system change is counted, red, and asked twice", () => {
 
     const before = await graphql(
       page,
-      `query C($worldId: UUID!) {
-        worldContentInventory(worldId: $worldId) { counts { kind count } }
-      }`,
+      `
+        query C($worldId: UUID!) {
+          worldContentInventory(worldId: $worldId) {
+            counts {
+              kind
+              count
+            }
+          }
+        }
+      `,
       { worldId },
     );
 
@@ -149,9 +164,16 @@ test.describe("US2: a system change is counted, red, and asked twice", () => {
     await expect(page.getByTestId("system-change-warning")).toHaveCount(0);
     const after = await graphql(
       page,
-      `query C($worldId: UUID!) {
-        worldContentInventory(worldId: $worldId) { counts { kind count } }
-      }`,
+      `
+        query C($worldId: UUID!) {
+          worldContentInventory(worldId: $worldId) {
+            counts {
+              kind
+              count
+            }
+          }
+        }
+      `,
       { worldId },
     );
     expect(after.data?.worldContentInventory).toEqual(
@@ -159,7 +181,9 @@ test.describe("US2: a system change is counted, red, and asked twice", () => {
     );
   });
 
-  test("an empty world switches in one step, with no warning", async ({ page }) => {
+  test("an empty world switches in one step, with no warning", async ({
+    page,
+  }) => {
     // FR-029. Its auto-created default scene does not make it non-empty —
     // every world has one, so counting scenes would put the red panel in front
     // of a GM on a world they made a minute ago, and a warning shown when
@@ -197,16 +221,27 @@ test.describe("US2: a system change is counted, red, and asked twice", () => {
     ).toBeTruthy();
 
     const forged = await graphql(page, MUTATION, {
-      input: { worldId, gameSystemId: "dnd5e", acknowledgedDigest: "0000000000000000" },
+      input: {
+        worldId,
+        gameSystemId: "dnd5e",
+        acknowledgedDigest: "0000000000000000",
+      },
     });
-    expect(forged.errors?.length, "a made-up digest must be refused").toBeTruthy();
+    expect(
+      forged.errors?.length,
+      "a made-up digest must be refused",
+    ).toBeTruthy();
 
     // A real digest, then the world changes underneath it.
     const counted = await graphql(
       page,
-      `query C($worldId: UUID!, $target: String) {
-        worldContentInventory(worldId: $worldId, targetSystemId: $target) { digest }
-      }`,
+      `
+        query C($worldId: UUID!, $target: String) {
+          worldContentInventory(worldId: $worldId, targetSystemId: $target) {
+            digest
+          }
+        }
+      `,
       { worldId, target: "dnd5e" },
     );
     const digest = (
@@ -227,7 +262,13 @@ test.describe("US2: a system change is counted, red, and asked twice", () => {
     // And the world is still on its original system.
     const world = await graphql(
       page,
-      `query W($worldId: UUID!) { world(id: $worldId) { gameSystemId } }`,
+      `
+        query W($worldId: UUID!) {
+          world(id: $worldId) {
+            gameSystemId
+          }
+        }
+      `,
       { worldId },
     );
     const system = (
@@ -269,9 +310,12 @@ test.describe("Where the halves meet: an ability survives its system leaving", (
     const name = `Frostbrand ${uniqueSuffix()}`;
     await page.getByTestId("new-ability-name-input").fill(name);
     await page.getByTestId("add-ability-button").click();
-    await expect(page.getByTestId("ability-catalog-table")).toContainText(name, {
-      timeout: 15_000,
-    });
+    await expect(page.getByTestId("ability-catalog-table")).toContainText(
+      name,
+      {
+        timeout: 15_000,
+      },
+    );
 
     // Switch to Genie, which has never heard of an Enchantment. FR-037: the
     // warning counts what is about to become unrecognised.
@@ -287,9 +331,12 @@ test.describe("Where the halves meet: an ability survives its system leaving", (
       .getByTestId("pending-system-confirmation")
       .getByRole("button", { name: /confirm/i })
       .click();
-    await expect(page.getByTestId("active-system-card")).toContainText("Genie", {
-      timeout: 15_000,
-    });
+    await expect(page.getByTestId("active-system-card")).toContainText(
+      "Genie",
+      {
+        timeout: 15_000,
+      },
+    );
 
     // FR-034/FR-035: still listed, under a marked tab, labelled with the
     // identity it was authored under — and *not* shown as a Scroll, which is
@@ -298,13 +345,17 @@ test.describe("Where the halves meet: an ability survives its system leaving", (
     await expect(page.getByTestId("ability-type-tabs")).toBeVisible({
       timeout: 20_000,
     });
-    const unrecognisedTab = page.getByTestId("ability-type-tab-__unrecognised__");
+    const unrecognisedTab = page.getByTestId(
+      "ability-type-tab-__unrecognised__",
+    );
     await expect(unrecognisedTab).toBeVisible();
     await unrecognisedTab.click();
     const table = page.getByTestId("ability-catalog-table");
     await expect(table).toContainText(name);
     await expect(table).toContainText("enchantment");
-    await expect(page.getByTestId("ability-type-tab-enchantment")).toHaveCount(0);
+    await expect(page.getByTestId("ability-type-tab-enchantment")).toHaveCount(
+      0,
+    );
 
     // FR-035a: no creation offered here — FR-013 forbids authoring a type the
     // active system does not recognise.

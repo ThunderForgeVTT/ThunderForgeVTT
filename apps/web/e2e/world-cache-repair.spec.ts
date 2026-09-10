@@ -141,7 +141,8 @@ async function editWorldStore(
         }>;
         removeEntry(name: string): Promise<void>;
       }
-      const root = (await navigator.storage.getDirectory()) as unknown as DirLike;
+      const root =
+        (await navigator.storage.getDirectory()) as unknown as DirLike;
 
       // The scope directory is an opaque per-user hash; find the one that
       // already holds this world rather than trying to re-derive it.
@@ -190,7 +191,10 @@ async function editWorldStore(
             resolve("no keys store");
             return;
           }
-          const all = db.transaction("keys", "readonly").objectStore("keys").getAll();
+          const all = db
+            .transaction("keys", "readonly")
+            .objectStore("keys")
+            .getAll();
           all.onerror = () => resolve("cannot read the keys store");
           all.onsuccess = () => {
             const found = (all.result as unknown[]).find(
@@ -286,7 +290,9 @@ async function storedSha(
   fingerprint: string,
 ): Promise<string | null> {
   const blobs = await probeBlobs(page, worldId);
-  return blobs.find((b) => b.path.endsWith(`/${fingerprint}.bin`))?.sha256 ?? null;
+  return (
+    blobs.find((b) => b.path.endsWith(`/${fingerprint}.bin`))?.sha256 ?? null
+  );
 }
 
 /** Reload, and return the sync summary that page load produced. */
@@ -307,7 +313,11 @@ test.describe("Client world cache — repairing a divergent store (FR-019, SC-00
   }) => {
     const errors = watchPageErrors(page);
     const sync = watchCacheSync(page);
-    const { worldId, fingerprint } = await warmWorldWithAsset(page, "Orphan", sync);
+    const { worldId, fingerprint } = await warmWorldWithAsset(
+      page,
+      "Orphan",
+      sync,
+    );
 
     // The damage. One complete file nothing refers to — bytes no index row
     // can reach, which is dead weight forever. And one empty file, which is
@@ -315,11 +325,19 @@ test.describe("Client world cache — repairing a divergent store (FR-019, SC-00
     const orphan = fabricatedFingerprint("orphan");
     const unfinished = fabricatedFingerprint("unfinished");
     expect(
-      await editWorldStore(page, worldId, { kind: "plant", name: orphan, size: 4096 }),
+      await editWorldStore(page, worldId, {
+        kind: "plant",
+        name: orphan,
+        size: 4096,
+      }),
       "planting failed",
     ).toBe("");
     expect(
-      await editWorldStore(page, worldId, { kind: "plant", name: unfinished, size: 0 }),
+      await editWorldStore(page, worldId, {
+        kind: "plant",
+        name: unfinished,
+        size: 0,
+      }),
       "planting failed",
     ).toBe("");
 
@@ -335,7 +353,9 @@ test.describe("Client world cache — repairing a divergent store (FR-019, SC-00
 
     // Reopening runs a sync, and the repair rides along with it.
     const second = await reloadAndSync(page, sync);
-    console.log(`[cache-repair] sync after planting: ${JSON.stringify(second)}`);
+    console.log(
+      `[cache-repair] sync after planting: ${JSON.stringify(second)}`,
+    );
 
     expect(
       second.blobsReclaimed,
@@ -363,7 +383,10 @@ test.describe("Client world cache — repairing a divergent store (FR-019, SC-00
     ).toBe(true);
 
     sync.stop();
-    expect(errors.stop(), "a repair must not surface an error to the user").toEqual([]);
+    expect(
+      errors.stop(),
+      "a repair must not surface an error to the user",
+    ).toEqual([]);
   });
 
   test("a blob that decrypts to the wrong content is discarded and refetched on read (T052, SC-005)", async ({
@@ -427,16 +450,22 @@ test.describe("Client world cache — repairing a divergent store (FR-019, SC-00
     // the *opening* scene means the switched scene's background is cached
     // without ever having been loaded at boot.
     const planned = await reloadAndSync(page, sync);
-    console.log(`[cache-repair] sync after importing: ${JSON.stringify(planned)}`);
+    console.log(
+      `[cache-repair] sync after importing: ${JSON.stringify(planned)}`,
+    );
     await expect
       .poll(() => holdsFingerprint(page, worldId, fingerprint), {
         timeout: 90_000,
-        message: "the second scene's background must be cached before it is forged",
+        message:
+          "the second scene's background must be cached before it is forged",
       })
       .toBe(true);
 
     const original = await storedSha(page, worldId, fingerprint);
-    expect(original, "the asset must be on disk before it can be corrupted").toBeTruthy();
+    expect(
+      original,
+      "the asset must be on disk before it can be corrupted",
+    ).toBeTruthy();
 
     // Replace the blob's contents with a well-formed envelope over the wrong
     // plaintext. This is the corruption `read_blob`'s fingerprint check exists
@@ -462,7 +491,8 @@ test.describe("Client world cache — repairing a divergent store (FR-019, SC-00
     await expect
       .poll(() => requests.count(), {
         timeout: 90_000,
-        message: "a blob that fails its own fingerprint must fall through to the network",
+        message:
+          "a blob that fails its own fingerprint must fall through to the network",
       })
       .toBeGreaterThanOrEqual(1);
     requests.stop();
@@ -482,7 +512,8 @@ test.describe("Client world cache — repairing a divergent store (FR-019, SC-00
         },
         {
           timeout: 90_000,
-          message: "the corrupt blob should have been replaced by a correct one",
+          message:
+            "the corrupt blob should have been replaced by a correct one",
         },
       )
       .toBe(true);
@@ -502,7 +533,9 @@ test.describe("Client world cache — repairing a divergent store (FR-019, SC-00
     ).toBe(0);
 
     sync.stop();
-    expect(errors.stop(), "a corrupt blob must not surface an error").toEqual([]);
+    expect(errors.stop(), "a corrupt blob must not surface an error").toEqual(
+      [],
+    );
   });
 
   test("an index row naming a blob that is gone is dropped, and the asset comes back (FR-019)", async ({
@@ -522,7 +555,10 @@ test.describe("Client world cache — repairing a divergent store (FR-019, SC-00
     // (silence means unchanged), and the item is then never fetched *and*
     // never served — a permanent hole that looks exactly like a working cache.
     expect(
-      await editWorldStore(page, worldId, { kind: "delete", name: fingerprint }),
+      await editWorldStore(page, worldId, {
+        kind: "delete",
+        name: fingerprint,
+      }),
       "deleting the blob failed",
     ).toBe("");
     expect(
@@ -552,7 +588,9 @@ test.describe("Client world cache — repairing a divergent store (FR-019, SC-00
     // The next open is the one that heals it: the manifest no longer claims
     // the item, so the server offers it and the prefetch stores it.
     const second = await reloadAndSync(page, sync);
-    console.log(`[cache-repair] sync after the row was dropped: ${JSON.stringify(second)}`);
+    console.log(
+      `[cache-repair] sync after the row was dropped: ${JSON.stringify(second)}`,
+    );
     expect(
       second.fetch,
       "with the lie removed, the server must offer the item again",
@@ -575,6 +613,9 @@ test.describe("Client world cache — repairing a divergent store (FR-019, SC-00
     ).toBe(0);
 
     sync.stop();
-    expect(errors.stop(), "a repair must not surface an error to the user").toEqual([]);
+    expect(
+      errors.stop(),
+      "a repair must not surface an error to the user",
+    ).toEqual([]);
   });
 });

@@ -42,7 +42,9 @@ test("launching a different scene live-switches every member already in Play, wi
   await gmPage.locator("#world-name").fill(worldName);
   await gmPage.getByRole("button", { name: /create world/i }).click();
   await gmPage.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-  const worldId = /\/world\/([^/]+)\/staging$/.exec(new URL(gmPage.url()).pathname)?.[1];
+  const worldId = /\/world\/([^/]+)\/staging$/.exec(
+    new URL(gmPage.url()).pathname,
+  )?.[1];
   if (!worldId) throw new Error("Could not extract world id");
 
   const playerPage = await inviteAndJoinAsPlayer(browser, gmPage, worldId);
@@ -52,11 +54,17 @@ test("launching a different scene live-switches every member already in Play, wi
   await gmPage.goto(`/world/${worldId}/scenes`);
   await gmPage.getByTestId("new-scene-name-input").fill(secondSceneName);
   await gmPage.getByTestId("add-scene-button").click();
-  await expect(gmPage.getByRole("link", { name: secondSceneName })).toBeVisible({ timeout: 10_000 });
+  await expect(gmPage.getByRole("link", { name: secondSceneName })).toBeVisible(
+    { timeout: 10_000 },
+  );
   await gmPage.getByRole("link", { name: secondSceneName }).click();
-  await gmPage.waitForURL(new RegExp(`/world/${worldId}/scenes/[^/]+$`), { timeout: 10_000 });
+  await gmPage.waitForURL(new RegExp(`/world/${worldId}/scenes/[^/]+$`), {
+    timeout: 10_000,
+  });
   await gmPage.getByTestId("scene-hidden-toggle").click();
-  await expect(gmPage.getByTestId("scene-hidden-toggle")).toBeChecked({ timeout: 10_000 });
+  await expect(gmPage.getByTestId("scene-hidden-toggle")).toBeChecked({
+    timeout: 10_000,
+  });
 
   // Both GM and player enter Play — world creation already auto-launched
   // the world's default scene (spec 010 FR-004 reconciled with FR-002d),
@@ -74,16 +82,22 @@ test("launching a different scene live-switches every member already in Play, wi
   // live-broadcast assertion (FR-002b/SC-006): it must reflect the switch
   // via the open WebSocket subscription, with no manual refresh/rejoin.
   await ensureSidebarOpen(playerPage);
-  await expect(playerPage.getByTestId("scene-switcher")).toContainText(secondSceneName, {
-    timeout: 15_000,
-  });
+  await expect(playerPage.getByTestId("scene-switcher")).toContainText(
+    secondSceneName,
+    {
+      timeout: 15_000,
+    },
+  );
 
   // Sanity check that Launch itself actually persisted (a fresh visit,
   // not a live-sync assertion — the GM necessarily left Play to launch).
   await gmPage.goto(`/world/${worldId}/play`);
   await expect(gmPage.locator("canvas")).toBeVisible({ timeout: 15_000 });
   await ensureSidebarOpen(gmPage);
-  await expect(gmPage.getByTestId("scene-switcher")).toContainText(secondSceneName, {
-    timeout: 15_000,
-  });
+  await expect(gmPage.getByTestId("scene-switcher")).toContainText(
+    secondSceneName,
+    {
+      timeout: 15_000,
+    },
+  );
 });

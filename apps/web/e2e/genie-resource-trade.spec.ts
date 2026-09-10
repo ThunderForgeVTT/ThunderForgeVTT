@@ -11,14 +11,18 @@ import { freshCredentials, graphql, register } from "./fixtures/helpers";
  * the only way a second party actually gets access to a world today.
  */
 
-async function registerAndCreateWorldOnDashboard(page: Page, worldName: string): Promise<string> {
+async function registerAndCreateWorldOnDashboard(
+  page: Page,
+  worldName: string,
+): Promise<string> {
   await register(page, freshCredentials("e2etradegm"));
   await page.goto("/worlds/create");
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
   await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
   const match = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname);
-  if (!match) throw new Error(`Could not extract world id from URL: ${page.url()}`);
+  if (!match)
+    throw new Error(`Could not extract world id from URL: ${page.url()}`);
   const worldId = match[1];
   await page.goto(`/world/${worldId}`);
   await expect(page).toHaveURL(new RegExp(`/world/${worldId}$`));
@@ -35,31 +39,72 @@ async function extractInviteCode(page: Page): Promise<string> {
 }
 
 test.describe("Spec 019: Session Resource trading between two real players", () => {
-  test("a GM proposes a trade and the recipient sees it as an incoming proposal", async ({ browser }) => {
+  test("a GM proposes a trade and the recipient sees it as an incoming proposal", async ({
+    browser,
+  }) => {
     test.setTimeout(120_000);
 
-    const gmContext = await browser.newContext({ permissions: ["clipboard-read", "clipboard-write"] });
+    const gmContext = await browser.newContext({
+      permissions: ["clipboard-read", "clipboard-write"],
+    });
     const gmPage = await gmContext.newPage();
-    const worldId = await registerAndCreateWorldOnDashboard(gmPage, `E2E Genie Trade ${Date.now()}`);
+    const worldId = await registerAndCreateWorldOnDashboard(
+      gmPage,
+      `E2E Genie Trade ${Date.now()}`,
+    );
 
     // GM's own PC.
     const gmActor = await graphql<{ data: { createActor: { id: string } } }>(
       gmPage,
-      `mutation($input: CreateActorInput!) { createActor(input: $input) { id } }`,
-      { input: { worldId, label: "GM Trader", isNpc: false, gameSystemId: "genie" } },
+      `
+        mutation ($input: CreateActorInput!) {
+          createActor(input: $input) {
+            id
+          }
+        }
+      `,
+      {
+        input: {
+          worldId,
+          label: "GM Trader",
+          isNpc: false,
+          gameSystemId: "genie",
+        },
+      },
     );
     const gmActorId = gmActor.data.createActor.id;
 
     // A second PC, available for the incoming player to claim.
-    const playerActor = await graphql<{ data: { createActor: { id: string } } }>(
+    const playerActor = await graphql<{
+      data: { createActor: { id: string } };
+    }>(
       gmPage,
-      `mutation($input: CreateActorInput!) { createActor(input: $input) { id } }`,
-      { input: { worldId, label: "Player Trader", isNpc: false, gameSystemId: "genie" } },
+      `
+        mutation ($input: CreateActorInput!) {
+          createActor(input: $input) {
+            id
+          }
+        }
+      `,
+      {
+        input: {
+          worldId,
+          label: "Player Trader",
+          isNpc: false,
+          gameSystemId: "genie",
+        },
+      },
     );
     const playerActorId = playerActor.data.createActor.id;
     await graphql(
       gmPage,
-      `mutation($actorId: UUID!, $available: Boolean!) { setActorAvailability(actorId: $actorId, available: $available) { id } }`,
+      `
+        mutation ($actorId: UUID!, $available: Boolean!) {
+          setActorAvailability(actorId: $actorId, available: $available) {
+            id
+          }
+        }
+      `,
       { actorId: playerActorId, available: true },
     );
 
@@ -71,9 +116,16 @@ test.describe("Spec 019: Session Resource trading between two real players", () 
     await register(playerPage, freshCredentials("e2etradeplayer"));
     await playerPage.goto(`/join/${inviteCode}`);
     await playerPage.getByRole("button", { name: "Join Campaign" }).click();
-    await playerPage.waitForURL(new RegExp(`/world/${worldId}/actor-select$`), { timeout: 15_000 });
-    await playerPage.getByTestId("available-actor-row").getByRole("button", { name: "Select" }).click();
-    await playerPage.waitForURL(new RegExp(`/world/${worldId}$`), { timeout: 15_000 });
+    await playerPage.waitForURL(new RegExp(`/world/${worldId}/actor-select$`), {
+      timeout: 15_000,
+    });
+    await playerPage
+      .getByTestId("available-actor-row")
+      .getByRole("button", { name: "Select" })
+      .click();
+    await playerPage.waitForURL(new RegExp(`/world/${worldId}$`), {
+      timeout: 15_000,
+    });
 
     // Start the session and propose from the GM staging page.
     await gmPage.goto(`/world/${worldId}/staging`);
@@ -83,7 +135,9 @@ test.describe("Spec 019: Session Resource trading between two real players", () 
     if (await startButton.isVisible().catch(() => false)) {
       await startButton.click();
     }
-    await expect(gmPage.getByTestId("genie-session-panel")).toBeVisible({ timeout: 15_000 });
+    await expect(gmPage.getByTestId("genie-session-panel")).toBeVisible({
+      timeout: 15_000,
+    });
 
     const tradeForm = gmPage.locator("text=Propose a Trade").locator("..");
     await expect(tradeForm).toBeVisible({ timeout: 10_000 });
@@ -93,20 +147,35 @@ test.describe("Spec 019: Session Resource trading between two real players", () 
 
     // Confirm via the real query the mutation used (server-side truth).
     const proposals = await graphql<{
-      data: { genieTradeProposals: { fromActorId: string; fromQuantity: number }[] };
+      data: {
+        genieTradeProposals: { fromActorId: string; fromQuantity: number }[];
+      };
     }>(
       gmPage,
-      `query($actorId: UUID!) { genieTradeProposals(actorId: $actorId) { fromActorId fromQuantity } }`,
+      `
+        query ($actorId: UUID!) {
+          genieTradeProposals(actorId: $actorId) {
+            fromActorId
+            fromQuantity
+          }
+        }
+      `,
       { actorId: playerActorId },
     );
-    expect(proposals.data.genieTradeProposals.some((p) => p.fromActorId === gmActorId && p.fromQuantity === 2)).toBe(
-      true,
-    );
+    expect(
+      proposals.data.genieTradeProposals.some(
+        (p) => p.fromActorId === gmActorId && p.fromQuantity === 2,
+      ),
+    ).toBe(true);
 
     // And confirm the real UI, as the recipient, renders it.
     await playerPage.goto(`/world/${worldId}/staging`);
-    await expect(playerPage.getByTestId("genie-session-panel")).toBeVisible({ timeout: 15_000 });
-    await expect(playerPage.getByText("Incoming Trade Proposals")).toBeVisible({ timeout: 10_000 });
+    await expect(playerPage.getByTestId("genie-session-panel")).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(playerPage.getByText("Incoming Trade Proposals")).toBeVisible({
+      timeout: 10_000,
+    });
     await expect(playerPage.getByText(/GM Trader offers 2/)).toBeVisible();
 
     // Spec 019: declining removes it from the recipient's own view and
@@ -114,13 +183,22 @@ test.describe("Spec 019: Session Resource trading between two real players", () 
     // sets status to "rejected", the DB's existing but previously-unused
     // check-constraint value for this).
     await playerPage.getByRole("button", { name: "Decline" }).click();
-    await expect(playerPage.getByText("Incoming Trade Proposals")).toHaveCount(0, { timeout: 10_000 });
+    await expect(playerPage.getByText("Incoming Trade Proposals")).toHaveCount(
+      0,
+      { timeout: 10_000 },
+    );
 
     const declined = await graphql<{
       data: { genieTradeProposals: { fromActorId: string }[] };
     }>(
       playerPage,
-      `query($actorId: UUID!) { genieTradeProposals(actorId: $actorId) { fromActorId } }`,
+      `
+        query ($actorId: UUID!) {
+          genieTradeProposals(actorId: $actorId) {
+            fromActorId
+          }
+        }
+      `,
       { actorId: playerActorId },
     );
     expect(declined.data.genieTradeProposals).toHaveLength(0);
@@ -157,20 +235,54 @@ test.describe("Spec 019 T012: two clients connected at once, each seeing the oth
 
     const gmActor = await graphql<{ data: { createActor: { id: string } } }>(
       gmPage,
-      `mutation($input: CreateActorInput!) { createActor(input: $input) { id } }`,
-      { input: { worldId, label: "GM Trader", isNpc: false, gameSystemId: "genie" } },
+      `
+        mutation ($input: CreateActorInput!) {
+          createActor(input: $input) {
+            id
+          }
+        }
+      `,
+      {
+        input: {
+          worldId,
+          label: "GM Trader",
+          isNpc: false,
+          gameSystemId: "genie",
+        },
+      },
     );
     const gmActorId = gmActor.data.createActor.id;
 
-    const playerActor = await graphql<{ data: { createActor: { id: string } } }>(
+    const playerActor = await graphql<{
+      data: { createActor: { id: string } };
+    }>(
       gmPage,
-      `mutation($input: CreateActorInput!) { createActor(input: $input) { id } }`,
-      { input: { worldId, label: "Player Trader", isNpc: false, gameSystemId: "genie" } },
+      `
+        mutation ($input: CreateActorInput!) {
+          createActor(input: $input) {
+            id
+          }
+        }
+      `,
+      {
+        input: {
+          worldId,
+          label: "Player Trader",
+          isNpc: false,
+          gameSystemId: "genie",
+        },
+      },
     );
     const playerActorId = playerActor.data.createActor.id;
     await graphql(
       gmPage,
-      `mutation($actorId: UUID!, $available: Boolean!) { setActorAvailability(actorId: $actorId, available: $available) { id } }`,
+      `
+        mutation ($actorId: UUID!, $available: Boolean!) {
+          setActorAvailability(actorId: $actorId, available: $available) {
+            id
+          }
+        }
+      `,
       { actorId: playerActorId, available: true },
     );
 
@@ -196,9 +308,11 @@ test.describe("Spec 019 T012: two clients connected at once, each seeing the oth
     // The GM opens the session first, so the player's page below has something
     // to subscribe to when it mounts.
     await gmPage.goto(`/world/${worldId}/staging`);
-    await expect(gmPage.getByTestId("genie-session-panel-wrapper")).toBeVisible({
-      timeout: 15_000,
-    });
+    await expect(gmPage.getByTestId("genie-session-panel-wrapper")).toBeVisible(
+      {
+        timeout: 15_000,
+      },
+    );
     const startButton = gmPage.getByTestId("start-genie-session-button");
     if (await startButton.isVisible().catch(() => false)) {
       await startButton.click();
@@ -235,15 +349,24 @@ test.describe("Spec 019 T012: two clients connected at once, each seeing the oth
 
     // The other direction: the recipient declines, and the server agrees.
     await playerPage.getByRole("button", { name: "Decline" }).click();
-    await expect(playerPage.getByText("Incoming Trade Proposals")).toHaveCount(0, {
-      timeout: 15_000,
-    });
+    await expect(playerPage.getByText("Incoming Trade Proposals")).toHaveCount(
+      0,
+      {
+        timeout: 15_000,
+      },
+    );
 
     const after = await graphql<{
       data: { genieTradeProposals: { fromActorId: string }[] };
     }>(
       gmPage,
-      `query($actorId: UUID!) { genieTradeProposals(actorId: $actorId) { fromActorId } }`,
+      `
+        query ($actorId: UUID!) {
+          genieTradeProposals(actorId: $actorId) {
+            fromActorId
+          }
+        }
+      `,
       { actorId: playerActorId },
     );
     expect(

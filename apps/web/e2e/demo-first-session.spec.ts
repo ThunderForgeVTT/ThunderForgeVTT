@@ -122,9 +122,19 @@ async function activeSceneId(
 ): Promise<string | null> {
   const result = await graphql<{
     data?: { world?: { activeSceneId?: string | null } };
-  }>(page, `query ($id: UUID!) { world(id: $id) { activeSceneId } }`, {
-    id: worldId,
-  });
+  }>(
+    page,
+    `
+      query ($id: UUID!) {
+        world(id: $id) {
+          activeSceneId
+        }
+      }
+    `,
+    {
+      id: worldId,
+    },
+  );
   return result.data?.world?.activeSceneId ?? null;
 }
 
@@ -281,9 +291,10 @@ test.describe("The demo: from an empty browser to a table with two people at it"
 
       await test.step("the GM presses Generate Join Link and gets something to send", async () => {
         joinCode = await generateJoinLink(gmPage, worldId);
-        expect(joinCode.length, "a join link with no code in it").toBeGreaterThan(
-          0,
-        );
+        expect(
+          joinCode.length,
+          "a join link with no code in it",
+        ).toBeGreaterThan(0);
       });
 
       await test.step("the player signs up and uses the link", async () => {
@@ -350,9 +361,7 @@ test.describe("The demo: from an empty browser to a table with two people at it"
 
       await test.step("the player can open their own character while the map stays up", async () => {
         await openDockTab(playerPage, "actors");
-        const sheetButton = playerPage
-          .getByTestId(/^actor-view-/)
-          .first();
+        const sheetButton = playerPage.getByTestId(/^actor-view-/).first();
         await expect(sheetButton).toBeVisible({ timeout: 20_000 });
         await sheetButton.click();
 

@@ -63,7 +63,10 @@ export async function register(page: Page, prefix: string): Promise<string> {
   return username;
 }
 
-export async function createWorldAndPlay(page: Page, name: string): Promise<string> {
+export async function createWorldAndPlay(
+  page: Page,
+  name: string,
+): Promise<string> {
   await page.goto("/worlds/create");
   await page.locator("#world-name").fill(name);
   await page.getByRole("button", { name: /create world/i }).click();
@@ -216,7 +219,9 @@ const AIM_OFFSETS: { dx: number; dy: number }[] = (() => {
       points.push({ dx, dy });
     }
   }
-  return points.sort((a, b) => a.dx * a.dx + a.dy * a.dy - (b.dx * b.dx + b.dy * b.dy));
+  return points.sort(
+    (a, b) => a.dx * a.dx + a.dy * a.dy - (b.dx * b.dx + b.dy * b.dy),
+  );
 })();
 
 /**
@@ -253,7 +258,8 @@ export async function dragToken(
   // press. Between rounds the position is read again and the search restarts.
   for (let round = 0; round < 4; round += 1) {
     const at = await tokenPosition(page, tokenId);
-    if (!at) throw new Error(`token ${tokenId} is not in this client's world store`);
+    if (!at)
+      throw new Error(`token ${tokenId} is not in this client's world store`);
 
     for (const offset of AIM_OFFSETS) {
       const from = { x: cx + at.x + offset.dx, y: cy - at.y + offset.dy };
@@ -407,7 +413,10 @@ export async function giveTokenTo(
   if (!ok) throw new Error("could not give the token to the player");
 }
 
-export async function firstSceneId(page: Page, worldId: string): Promise<string> {
+export async function firstSceneId(
+  page: Page,
+  worldId: string,
+): Promise<string> {
   const sceneId = await page.evaluate(async (world) => {
     // The CSRF header is not optional: GraphQL is served over POST, so
     // `require_csrf_for_session` treats every query as state-changing and
@@ -510,7 +519,8 @@ export async function waitForOffline(
   await expect
     .poll(() => link.blockedBeats(), {
       timeout: 90_000,
-      message: "the client should keep beating, and those beats should be refused",
+      message:
+        "the client should keep beating, and those beats should be refused",
     })
     .toBeGreaterThanOrEqual(4);
   // One further beat interval, so the failure the threshold turns on has been

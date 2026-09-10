@@ -1,10 +1,11 @@
 import { execFileSync } from "node:child_process";
 import { expect, test, type Browser, type Page } from "@playwright/test";
-import { ADMIN_USER, DEMO_USER } from "./fixtures/global-setup";
+import { DEMO_USER } from "./fixtures/global-setup";
 import {
   graphql,
   inviteAndJoinAsPlayer,
   login,
+  loginAsAdmin,
   registerAndCreateWorld,
   uniqueSuffix,
 } from "./fixtures/helpers";
@@ -295,7 +296,9 @@ async function fileCounterNoticeViaApi(
 async function openAdminPage(browser: Browser): Promise<Page> {
   const context = await browser.newContext();
   const page = await context.newPage();
-  await login(page, ADMIN_USER.identifier, ADMIN_USER.password);
+  // Spec 041 FR-027: an administrator holds a second factor, so signing in
+  // as one takes two steps. `loginAsAdmin` does both.
+  await loginAsAdmin(page);
   await page.waitForURL(/\/(admin|welcome)$/, { timeout: 20_000 });
   return page;
 }

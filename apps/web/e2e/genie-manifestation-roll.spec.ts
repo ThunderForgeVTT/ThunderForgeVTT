@@ -45,7 +45,10 @@ async function register(page: Page, creds: Credentials): Promise<void> {
   await page.getByRole("button", { name: "Create account" }).click();
 }
 
-async function registerAndCreateWorld(page: Page, worldName: string): Promise<string> {
+async function registerAndCreateWorld(
+  page: Page,
+  worldName: string,
+): Promise<string> {
   await register(page, freshCredentials("e2egenie"));
   await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
   await page.locator("#world-name").fill(worldName);
@@ -58,7 +61,11 @@ async function registerAndCreateWorld(page: Page, worldName: string): Promise<st
   return match[1];
 }
 
-async function graphql<T>(page: Page, query: string, variables: Record<string, unknown>): Promise<T> {
+async function graphql<T>(
+  page: Page,
+  query: string,
+  variables: Record<string, unknown>,
+): Promise<T> {
   return page.evaluate(
     async ({ query, variables }) => {
       const csrfToken = document.cookie
@@ -79,7 +86,9 @@ async function graphql<T>(page: Page, query: string, variables: Record<string, u
       try {
         return JSON.parse(text);
       } catch {
-        throw new Error(`Non-JSON response (status ${res.status}): ${text.slice(0, 500)}`);
+        throw new Error(
+          `Non-JSON response (status ${res.status}): ${text.slice(0, 500)}`,
+        );
       }
     },
     { query, variables },
@@ -90,7 +99,10 @@ test.describe("Spec 018 Scenario 1: the Manifestation roll exercises keep/drop +
   test("a GM assigns the Genie system through the real System Settings UI, reviewing its legal notice", async ({
     page,
   }) => {
-    const worldId = await registerAndCreateWorld(page, `E2E Genie System ${uniqueSuffix()}`);
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Genie System ${uniqueSuffix()}`,
+    );
 
     // Genie is now the server-side default (prepare_world_input,
     // src/server/src/graphql/helpers.rs) for a world created with no
@@ -106,24 +118,38 @@ test.describe("Spec 018 Scenario 1: the Manifestation roll exercises keep/drop +
     await page.getByTestId("system-picker").click();
     await page.getByRole("option", { name: "Genie", exact: true }).click();
 
-    await expect(page.getByTestId("pending-system-confirmation")).toBeVisible({ timeout: 10_000 });
-    const pendingLegalText = await page.getByTestId("pending-system-confirmation").innerText();
+    await expect(page.getByTestId("pending-system-confirmation")).toBeVisible({
+      timeout: 10_000,
+    });
+    const pendingLegalText = await page
+      .getByTestId("pending-system-confirmation")
+      .innerText();
     // FR-010/FR-011/SC-003: wholly original, no third-party attribution.
     expect(pendingLegalText.toLowerCase()).not.toContain("srd");
-    expect(pendingLegalText.toLowerCase()).not.toContain("wizards of the coast");
+    expect(pendingLegalText.toLowerCase()).not.toContain(
+      "wizards of the coast",
+    );
 
     await page.getByRole("button", { name: "Confirm" }).click();
-    await expect(page.getByText("System assigned.")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("System assigned.")).toBeVisible({
+      timeout: 10_000,
+    });
     await expect(page.getByTestId("active-system-card")).toContainText("Genie");
 
     await page.goto(`/world/${worldId}/settings/system`);
-    await expect(page.getByTestId("active-system-card")).toContainText("Genie", { timeout: 10_000 });
+    await expect(page.getByTestId("active-system-card")).toContainText(
+      "Genie",
+      { timeout: 10_000 },
+    );
   });
 
   test("triggering a Manifestation-shaped roll (4d6kh3x=6cs>=4) shows a real result with correct keep/drop, exploding, and success-counting in the roll record", async ({
     page,
   }) => {
-    const worldId = await registerAndCreateWorld(page, `E2E Manifestation ${uniqueSuffix()}`);
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Manifestation ${uniqueSuffix()}`,
+    );
 
     // Assign Genie as the world's system first (Scenario setup — not
     // strictly required by rollDice, which is system-agnostic, but keeps
@@ -132,11 +158,15 @@ test.describe("Spec 018 Scenario 1: the Manifestation roll exercises keep/drop +
     await page.getByTestId("system-picker").click();
     await page.getByRole("option", { name: "genie" }).click();
     await page.getByRole("button", { name: "Confirm" }).click();
-    await expect(page.getByText("System assigned.")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("System assigned.")).toBeVisible({
+      timeout: 10_000,
+    });
 
     await page.goto(`/world/${worldId}/staging`);
     await page.getByTestId("play-button").click();
-    await page.waitForURL(new RegExp(`/world/${worldId}/play$`), { timeout: 15_000 });
+    await page.waitForURL(new RegExp(`/world/${worldId}/play$`), {
+      timeout: 15_000,
+    });
     await expect(page.locator("canvas")).toBeVisible({ timeout: 20_000 });
 
     const panel = page.getByTestId("dice-roller-panel");
@@ -155,11 +185,18 @@ test.describe("Spec 018 Scenario 1: the Manifestation roll exercises keep/drop +
     for (let attempt = 0; attempt < 25 && !sawExplosion; attempt++) {
       await page.getByTestId("dice-formula-input").fill("4d6kh3x=6cs>=4");
       await page.getByTestId("dice-roll-button").click();
-      if (await page.getByTestId("dice-roll-error").isVisible({ timeout: 2000 }).catch(() => false)) {
+      if (
+        await page
+          .getByTestId("dice-roll-error")
+          .isVisible({ timeout: 2000 })
+          .catch(() => false)
+      ) {
         const errText = await page.getByTestId("dice-roll-error").innerText();
         throw new Error(`dice-roll-error: ${errText}`);
       }
-      await expect(page.getByTestId("dice-roll-result")).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByTestId("dice-roll-result")).toBeVisible({
+        timeout: 10_000,
+      });
 
       const historyResponse = await graphql<{
         data: {
@@ -174,7 +211,22 @@ test.describe("Spec 018 Scenario 1: the Manifestation roll exercises keep/drop +
         };
       }>(
         page,
-        `query($worldId: UUID!) { worldRollRecords(worldId: $worldId, limit: 1) { id resolution { formula resultValue dice { rolls kept finalValue } } } }`,
+        `
+          query ($worldId: UUID!) {
+            worldRollRecords(worldId: $worldId, limit: 1) {
+              id
+              resolution {
+                formula
+                resultValue
+                dice {
+                  rolls
+                  kept
+                  finalValue
+                }
+              }
+            }
+          }
+        `,
         { worldId },
       );
 
@@ -189,7 +241,9 @@ test.describe("Spec 018 Scenario 1: the Manifestation roll exercises keep/drop +
 
       // Acceptance scenario 3: result equals count of kept dice with
       // final value >= 4 (success-counting).
-      const expectedSuccesses = lastRecord.dice.filter((d) => d.kept && d.finalValue >= 4).length;
+      const expectedSuccesses = lastRecord.dice.filter(
+        (d) => d.kept && d.finalValue >= 4,
+      ).length;
       expect(lastRecord.resultValue).toBe(expectedSuccesses);
 
       if (lastRecord.dice.some((d) => d.kept && d.rolls.length > 1)) {
@@ -199,7 +253,9 @@ test.describe("Spec 018 Scenario 1: the Manifestation roll exercises keep/drop +
 
     expect(lastRecord).not.toBeNull();
     if (sawExplosion) {
-      const explodedDie = lastRecord!.dice.find((d) => d.kept && d.rolls.length > 1)!;
+      const explodedDie = lastRecord!.dice.find(
+        (d) => d.kept && d.rolls.length > 1,
+      )!;
       // Acceptance scenario 2: full reroll/explosion chain present. Per
       // the dice engine's actual convention (crates/thunderforge-dice's
       // own genie_manifestation_roll_composes_keep_explode_and_success_count
@@ -208,7 +264,9 @@ test.describe("Spec 018 Scenario 1: the Manifestation roll exercises keep/drop +
       // not match the engine's real semantics; this asserts the real
       // behavior rather than the spec's stale wording.
       expect(explodedDie.rolls[0]).toBe(6);
-      expect(explodedDie.finalValue).toBe(explodedDie.rolls[explodedDie.rolls.length - 1]);
+      expect(explodedDie.finalValue).toBe(
+        explodedDie.rolls[explodedDie.rolls.length - 1],
+      );
     } else {
       test.info().annotations.push({
         type: "note",

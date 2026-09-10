@@ -1,4 +1,7 @@
 import { expect, type Browser, type Page } from "@playwright/test";
+import fs from "node:fs";
+import { ADMIN_SECOND_FACTOR_PATH, ADMIN_USER } from "./global-setup";
+import { totpAt } from "./totp";
 
 /**
  * Shared UI-driven e2e helpers, extracted from the near-identical
@@ -52,6 +55,70 @@ export async function login(
   await page.locator("#login-identifier").fill(identifier);
   await page.locator("#login-password").fill(password);
   await page.getByRole("button", { name: /sign in/i }).click();
+}
+
+/**
+ * Sign in as the seeded administrator, second factor and all.
+ *
+ * # Why every admin login has to go through here
+ *
+ * Spec 041 FR-027, as of 2026-09-09: an administrator must hold a second
+ * factor, computed from `is_admin` rather than stored, so there is no
+ * administrator anywhere that signs in on a password alone. Before that,
+ * `login(page, ADMIN_USER...)` was enough; now it leaves the page sitting on
+ * the challenge step, and the symptom is whatever the spec asked for next
+ * failing to appear — which reads like a broken admin page rather than an
+ * unfinished sign-in.
+ *
+ * The secret comes from `global-setup`, which enrols the administrator once per
+ * run and writes it down. It cannot be seeded in SQL, because the stored secret
+ * is encrypted with the instance's own key.
+ */
+export async function loginAsAdmin(page: Page): Promise<void> {
+  await login(page, ADMIN_USER.identifier, ADMIN_USER.password);
+
+  const code = page.locator("#login-two-factor");
+  await expect(
+    code,
+    "an administrator must be challenged for a second factor (FR-027)",
+  ).toBeVisible({ timeout: 20_000 });
+
+  const { secret } = JSON.parse(
+    fs.readFileSync(ADMIN_SECOND_FACTOR_PATH, "utf-8"),
+  ) as { secret: string };
+
+  // Retried across step boundaries, because the administrator is one account
+  // signed in by many tests. FR-016 spends the step a code matched, so two
+  // admin sign-ins inside the same thirty seconds mean the second offers a
+  // code the server has already seen — correctly refused, and nothing to do
+  // with what the spec is testing. Waiting for the next step and trying again
+  // is what a person would do, and it is the only thing that can work.
+  const STEP_SECONDS = 30;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await code.fill(totpAt(secret, Date.now() / 1000));
+    await page.getByRole("button", { name: /^verify$/i }).click();
+    try {
+      await page.waitForURL((url) => !url.pathname.startsWith("/login"), {
+        timeout: 8_000,
+        waitUntil: "commit",
+      });
+      return;
+    } catch {
+      // Still on /login. If the code was refused because its step was spent,
+      // the next step's code is a different code.
+      const secondsIntoStep = (Date.now() / 1000) % STEP_SECONDS;
+      await new Promise((resolve) =>
+        setTimeout(resolve, (STEP_SECONDS - secondsIntoStep + 1) * 1000),
+      );
+    }
+  }
+
+  throw new Error(
+    "The administrator could not complete the second-factor step after three " +
+      "attempts across three separate TOTP steps. That is not a spent code; " +
+      "look at the secret `global-setup` wrote and at whether the seed reset " +
+      "the administrator's factor.",
+  );
 }
 
 export async function register(page: Page, creds: Credentials): Promise<void> {

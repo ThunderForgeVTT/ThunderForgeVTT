@@ -127,6 +127,52 @@ fn every_refusal_says_what_to_do_about_it() {
 /// while its codes survive is an account that can still be admitted by a
 /// credential nothing now protects — and the codes live in a different table,
 /// which is exactly how that gets forgotten.
+/// FR-012, the price itself: **the password alone is not enough.**
+///
+/// This is the requirement the whole route exists for. A session proves the
+/// password was held at sign-in — possibly days ago, on a machine that has
+/// since changed hands — and this is the one action that makes every future
+/// sign-in cheaper, so it costs possession as well.
+///
+/// Driven through `verify_second_factor_proof`, which is the shared "prove you
+/// still hold it" used by removal and by regeneration alike. A request
+/// carrying neither proof is refused before anything is verified, and so is
+/// one carrying both — two chances counted as one attempt.
+#[tokio::test]
+async fn possession_is_not_optional_and_is_not_doubled() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().expect("conn");
+    let user_id = insert_test_user(&mut conn);
+    drop(conn);
+    enrol_with_codes(&state, user_id);
+
+    let neither =
+        super::super::recovery::verify_second_factor_proof(&state, user_id, None, None).await;
+    assert!(
+        neither.is_err(),
+        "the password alone must not turn a second factor off (FR-012)",
+    );
+    assert!(
+        neither
+            .as_ref()
+            .err()
+            .is_some_and(|message| message.starts_with("Provide exactly one")),
+        "and it is refused for its shape, before anything is verified: {neither:?}",
+    );
+
+    let both = super::super::recovery::verify_second_factor_proof(
+        &state,
+        user_id,
+        Some("000000"),
+        Some("AAAA-BBBB"),
+    )
+    .await;
+    assert!(
+        both.is_err(),
+        "offering both proofs is asking for two chances counted as one attempt",
+    );
+}
+
 #[tokio::test]
 async fn removal_takes_the_secret_the_pending_enrolment_and_every_recovery_code() {
     let state = test_app_state();

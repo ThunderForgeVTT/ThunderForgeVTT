@@ -22,7 +22,13 @@ test.describe("Spec 018 Scenario 4: applying and clearing a condition", () => {
       data: { createActor: { id: string } };
     }>(
       page,
-      `mutation($input: CreateActorInput!) { createActor(input: $input) { id } }`,
+      `
+        mutation ($input: CreateActorInput!) {
+          createActor(input: $input) {
+            id
+          }
+        }
+      `,
       {
         input: {
           worldId: demoWorld.worldId,
@@ -54,18 +60,30 @@ test.describe("Spec 018 Scenario 4: applying and clearing a condition", () => {
 
     // Conditions tab on the sheet itself should reflect it too.
     await page.getByRole("tab", { name: "Conditions" }).click();
-    await expect(page.getByTestId("genie-condition-track-sheet").getByText("Bound")).toBeVisible();
+    await expect(
+      page.getByTestId("genie-condition-track-sheet").getByText("Bound"),
+    ).toBeVisible();
 
     await page.reload();
-    await expect(page.getByTestId("genie-actor-sheet")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByTestId("genie-condition-editor").getByLabel("Bound")).toBeChecked();
+    await expect(page.getByTestId("genie-actor-sheet")).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(
+      page.getByTestId("genie-condition-editor").getByLabel("Bound"),
+    ).toBeChecked();
 
     // Clear it.
-    const boundAfterReload = page.getByTestId("genie-condition-editor").getByLabel("Bound");
+    const boundAfterReload = page
+      .getByTestId("genie-condition-editor")
+      .getByLabel("Bound");
     await boundAfterReload.click();
     await expect(boundAfterReload).not.toBeChecked({ timeout: 10_000 });
     await page.reload();
-    await expect(page.getByTestId("genie-actor-sheet")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByTestId("genie-condition-editor").getByLabel("Bound")).not.toBeChecked();
+    await expect(page.getByTestId("genie-actor-sheet")).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(
+      page.getByTestId("genie-condition-editor").getByLabel("Bound"),
+    ).not.toBeChecked();
   });
 });

@@ -31,7 +31,10 @@ function uniqueSuffix(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
-async function registerAndCreateWorld(page: Page, worldName: string): Promise<void> {
+async function registerAndCreateWorld(
+  page: Page,
+  worldName: string,
+): Promise<void> {
   const suffix = uniqueSuffix();
   const username = `e2epaste${suffix}`;
   const email = `${username}@example.test`;
@@ -76,7 +79,9 @@ async function createScene(page: Page, name: string): Promise<void> {
   await expect(page.getByTestId("new-scene-name-input")).toBeHidden({
     timeout: 10_000,
   });
-  await expect(page.locator('[data-testid="scene-switcher"]:visible')).toContainText(name);
+  await expect(
+    page.locator('[data-testid="scene-switcher"]:visible'),
+  ).toContainText(name);
 }
 
 /** Dispatches a synthetic `paste` ClipboardEvent carrying real PNG bytes.
@@ -205,9 +210,13 @@ test.describe("Paste-to-canvas image assets (US3)", () => {
         const gqlPayload = (await gqlRes.json()) as {
           data?: { canvasImageAssetsForScene?: { id: string; kind: string }[] };
         };
-        const found = gqlPayload.data?.canvasImageAssetsForScene?.some((a) => a.id === assetId);
+        const found = gqlPayload.data?.canvasImageAssetsForScene?.some(
+          (a) => a.id === assetId,
+        );
 
-        const bytesRes = await fetch(`/api/canvas-assets/${assetId}`, { credentials: "same-origin" });
+        const bytesRes = await fetch(`/api/canvas-assets/${assetId}`, {
+          credentials: "same-origin",
+        });
         return {
           foundAfterReload: found ?? false,
           bytesStatus: bytesRes.status,
@@ -227,26 +236,33 @@ test.describe("Paste-to-canvas image assets (US3)", () => {
     // because it has a UUID in the URL."
     const strangerContext = await browser.newContext();
     const strangerPage = await strangerContext.newPage();
-    await registerAndCreateWorld(strangerPage, `E2E Paste Stranger ${uniqueSuffix()}`);
-    const strangerFetch = await strangerPage.evaluate(
-      async (assetId) => {
-        const res = await fetch(`/api/canvas-assets/${assetId}`, { credentials: "same-origin" });
-        return res.status;
-      },
-      assetId,
+    await registerAndCreateWorld(
+      strangerPage,
+      `E2E Paste Stranger ${uniqueSuffix()}`,
     );
+    const strangerFetch = await strangerPage.evaluate(async (assetId) => {
+      const res = await fetch(`/api/canvas-assets/${assetId}`, {
+        credentials: "same-origin",
+      });
+      return res.status;
+    }, assetId);
     expect(strangerFetch).toBe(403);
     await strangerContext.close();
   });
 
-  test("pasting non-image clipboard content is ignored, no upload attempted", async ({ page }) => {
+  test("pasting non-image clipboard content is ignored, no upload attempted", async ({
+    page,
+  }) => {
     await registerAndCreateWorld(page, `E2E Paste Ignore ${uniqueSuffix()}`);
     await createScene(page, "Paste Ignore Scene");
     await page.waitForTimeout(1_000);
 
     let uploadAttempted = false;
     page.on("request", (request) => {
-      if (request.url().includes("/api/graphql") && request.method() === "POST") {
+      if (
+        request.url().includes("/api/graphql") &&
+        request.method() === "POST"
+      ) {
         const postData = request.postData() ?? "";
         if (postData.includes("uploadCanvasImage")) {
           uploadAttempted = true;
