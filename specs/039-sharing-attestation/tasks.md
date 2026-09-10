@@ -65,11 +65,11 @@ because the version identity is the hash of the final words: revising the text
 after attestations exist is a version transition (which is fine, and is US4),
 but revising it *during* Phase 3 is churn.
 
-- [ ] T006 Rename `legal/collection-sharing-terms.md` to `legal/sharing-terms.md` and reword it to cover four publishing paths rather than one collection, keeping it to two short sections — the file's own comment argues that a wall of text at a button is a wall of text nobody reads, and that argument still holds
-- [ ] T007 In `legal/sharing-terms.md`, revise the second section: "A copy someone takes is theirs, and **cannot be recalled**" becomes untrue for copies disabled by a takedown the day FR-023 ships. **Reviewer decision** — the product must not tell people something it no longer does
-- [ ] T008 Write `legal/operator-responsibilities.md` — net-new prose saying plainly that the legal obligations of everything in an instance belong to whoever operates it: the content in it, notices filed against it, the law where it runs; and that registering a designated agent, where the jurisdiction requires one, is the operator's own act and is not performed by this software (FR-042, FR-055)
-- [ ] T009 [P] Update `legal/README.md`'s status table with the two new documents, and add a section explaining that a document's version identity is the hash of its own words, so editing prose mints a version and editing the leading HTML comment does not
-- [ ] T010 [P] Update `apps/web/src/legal/__tests__/legalDocuments.test.ts` for the rename, keeping the existing assertions that `[OPERATOR]` markers survive rendering rather than being silently swallowed
+- [X] T006 Renamed to `legal/sharing-terms.md` and reworded for four publishing paths, still two short sections. Its comment now also records that the version identity is the hash of its own body, so a reviewer knows a typo fix is free and a meaning change is a version transition. **Draft — still needs a lawyer**, as `legal/README.md` says of everything here
+- [~] T007 **Blocked on T004.** In `legal/sharing-terms.md`, revise the second section: "A copy someone takes is theirs, and **cannot be recalled**" becomes untrue for copies disabled by a takedown the day FR-023 ships. **Reviewer decision** — the product must not tell people something it no longer does
+- [X] T008 Write `legal/operator-responsibilities.md` — net-new prose saying plainly that the legal obligations of everything in an instance belong to whoever operates it: the content in it, notices filed against it, the law where it runs; and that registering a designated agent, where the jurisdiction requires one, is the operator's own act and is not performed by this software (FR-042, FR-055)
+- [X] T009 [P] `legal/README.md`: both documents in the status table, and a new section on version identity — editing a sentence mints a version and every earlier attestation keeps resolving to the earlier words; editing the leading comment does not
+- [X] T010 [P] `legalDocuments.test.ts` updated for the rename and for the new document; the `[OPERATOR]`-markers-survive-rendering assertions are untouched. 564 web tests pass
 
 ---
 

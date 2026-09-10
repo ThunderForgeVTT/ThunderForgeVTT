@@ -30,17 +30,24 @@ describe("legalDocuments", () => {
    * shows a title over nothing. Named explicitly rather than counted, because
    * "there are four documents" passes while the wrong four are present.
    *
-   * `collection-sharing-terms` has no route of its own — spec 026's FR-026
-   * renders it inline at the share step, which is the only place it is read.
-   * It belongs here for exactly the reason the others do: if the glob stops
-   * matching, the share step renders an empty box above the button and a Game
-   * Master shares without being told what sharing does.
+   * `sharing-terms` has no route of its own — spec 026's FR-026 renders it
+   * inline at the share step, which is the only place it is read, and spec 039
+   * extends that to the actor, item and ability paths. It belongs here for
+   * exactly the reason the others do: if the glob stops matching, the share
+   * step renders an empty box above the button and somebody shares without
+   * being told what sharing does.
+   *
+   * Renamed from `collection-sharing-terms` when it stopped being about
+   * collections (spec 039 T006). `operator-responsibilities` is new in the same
+   * change: it is the one document rendered to somebody who is *becoming* an
+   * operator rather than using the instance.
    */
   it.each([
     "dmca-policy",
     "terms-of-service",
     "privacy-policy",
-    "collection-sharing-terms",
+    "sharing-terms",
+    "operator-responsibilities",
   ])("publishes %s, which a rendered surface depends on", (slug) => {
     expect(legalSections(slug).length).toBeGreaterThan(0);
   });

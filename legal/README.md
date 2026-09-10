@@ -18,12 +18,36 @@ review actionable rather than advisory.
 
 ## What is here
 
-| File                     | Where it appears                      | Status                                                       |
-| ------------------------ | ------------------------------------- | ------------------------------------------------------------ |
-| `dmca-policy.md`         | `/legal/dmca`                         | **Needs legal review before launch**                         |
-| `notice-attestations.md` | The takedown and counter-notice forms | **Needs legal review before launch** — statutory             |
-| `terms-of-service.md`    | `/legal/terms`                        | **Base draft. Never reviewed.** Carries `[OPERATOR]` markers |
-| `privacy-policy.md`      | `/legal/privacy`                      | **Base draft. Never reviewed.** Carries `[OPERATOR]` markers |
+| File                           | Where it appears                                      | Status                                                                                                              |
+| ------------------------------ | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `dmca-policy.md`               | `/legal/dmca`                                         | **Needs legal review before launch**                                                                                |
+| `notice-attestations.md`       | The takedown and counter-notice forms                 | **Needs legal review before launch** — statutory                                                                    |
+| `terms-of-service.md`          | `/legal/terms`                                        | **Base draft. Never reviewed.** Carries `[OPERATOR]` markers                                                        |
+| `privacy-policy.md`            | `/legal/privacy`                                      | **Base draft. Never reviewed.** Carries `[OPERATOR]` markers                                                        |
+| `sharing-terms.md`             | The share step, on all four publishing paths          | **Needs legal review before launch** — renamed from `collection-sharing-terms.md`                                   |
+| `operator-responsibilities.md` | First-run setup, to whoever is taking the instance on | **Needs legal review most of all.** The only document here that is not a restatement of something already published |
+
+## A document's version identity is the hash of its own words
+
+Spec 039 and ADR-076. `sharing-terms.md` and `operator-responsibilities.md` are
+compiled into the server and archived in `terms_versions` at startup, identified
+by `<slug>@<first 16 hex of sha256(normalised body)>`. "Normalised" means: the
+leading HTML comment stripped and the body trimmed — the same thing
+`legalDocuments.ts`'s `sectionsOf` already does before rendering.
+
+So:
+
+- **Editing a sentence mints a version.** Every attestation made against the
+  previous words keeps resolving to those words, forever. That is the whole
+  point: an agreement is evidence of what somebody agreed to, not of when they
+  clicked.
+- **Editing the leading comment does not.** Explain, warn and cross-reference in
+  there freely.
+
+Nobody has to remember to bump anything, and nobody can change the meaning
+without changing the identity. A hand-maintained version number would be wrong
+the first time somebody fixed a typo without thinking about it, and wrong
+silently.
 
 `notice-attestations.md` is read differently from the others, and the
 difference matters if you edit it. Its `##` headings are **stable identifiers**

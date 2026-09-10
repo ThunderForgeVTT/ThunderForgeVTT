@@ -47,7 +47,7 @@ import type {
  */
 
 /** FR-026's text, compiled in from `legal/` like every other legal document. */
-const SHARE_TERMS = legalSections("collection-sharing-terms");
+const SHARE_TERMS = legalSections("sharing-terms");
 
 /** One thing that can go in a collection, from any of the five sources. */
 type Candidate = {
@@ -563,8 +563,8 @@ function CollectionCard({
                   the two things a person has to have taken in *before* they
                   share, and a policy page they could go and read is not the
                   same as having read it. The prose lives in
-                  `legal/collection-sharing-terms.md` so it can be reviewed by
-                  somebody who does not read TypeScript.
+                  `legal/sharing-terms.md` so it can be reviewed by somebody who
+                  does not read TypeScript.
                 */}
                 <div
                   className="grid gap-3 rounded-lg border border-input p-4"
