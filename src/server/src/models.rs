@@ -2491,3 +2491,71 @@ pub struct NewLegalEnquiry {
     pub body: String,
     pub submitted_by: Option<uuid::Uuid>,
 }
+
+/// Spec 039 / ADR-076: one archived version of one legal document.
+///
+/// There is no `NewTermsVersion` insertable-by-a-caller shape and no update
+/// shape, deliberately. The only writer is
+/// `legal::ensure_terms_versions_recorded`, which inserts-if-absent at startup
+/// from the compiled-in prose, and **nothing ever updates or deletes a row**: a
+/// row is a historical fact about what a document said, and an UPDATE here
+/// would rewrite what people agreed to.
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = crate::schema::terms_versions)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct TermsVersion {
+    /// `<slug>@<16 hex>`. Opaque — compared for equality, never parsed.
+    pub version_id: String,
+    pub document_slug: String,
+    /// The words as they were: comments stripped, trimmed.
+    pub body: String,
+    pub first_seen_at: chrono::NaiveDateTime,
+}
+
+/// Spec 039 / ADR-076: one person, one moment, one version, one act.
+///
+/// Note what this struct does **not** have: no `updated_at`, and no update
+/// shape anywhere in the tree. A record somebody can revise is not a record.
+/// The single mutation permitted is `attestation::redact_for_deleted_account`,
+/// which nulls `subject_username` and changes nothing else (FR-010, FR-037).
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = crate::schema::attestations)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct Attestation {
+    pub id: uuid::Uuid,
+    /// `'share'` or `'operator'`, mirrored by a CHECK constraint.
+    pub purpose: String,
+    /// No foreign key to `users`: this record outlives its subject. See the
+    /// migration for the argument.
+    pub subject_user_id: uuid::Uuid,
+    /// NULL once the account has been deleted. The only field that names a
+    /// human.
+    pub subject_username: Option<String>,
+    pub terms_version_id: String,
+    pub publishable_kind: Option<String>,
+    pub publishable_id: Option<uuid::Uuid>,
+    /// A pointer, not a dependency: revoking or deleting the share leaves this
+    /// record standing (FR-007).
+    pub share_id: Option<uuid::Uuid>,
+    pub world_id: Option<uuid::Uuid>,
+    pub attested_at: chrono::NaiveDateTime,
+}
+
+/// What a publish writes, inside the transaction that mints the share row.
+///
+/// `attested_at` is not here: the database's `DEFAULT CURRENT_TIMESTAMP` is the
+/// moment, and a caller that could supply a timestamp is a caller that could
+/// write its own evidence (FR-014).
+#[derive(Insertable, Debug, Clone)]
+#[diesel(table_name = crate::schema::attestations)]
+pub struct NewAttestation {
+    pub id: uuid::Uuid,
+    pub purpose: String,
+    pub subject_user_id: uuid::Uuid,
+    pub subject_username: Option<String>,
+    pub terms_version_id: String,
+    pub publishable_kind: Option<String>,
+    pub publishable_id: Option<uuid::Uuid>,
+    pub share_id: Option<uuid::Uuid>,
+    pub world_id: Option<uuid::Uuid>,
+}

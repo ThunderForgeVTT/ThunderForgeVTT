@@ -39,6 +39,21 @@ diesel::table! {
 }
 
 diesel::table! {
+    attestations (id) {
+        id -> Uuid,
+        purpose -> Text,
+        subject_user_id -> Uuid,
+        subject_username -> Nullable<Text>,
+        terms_version_id -> Text,
+        publishable_kind -> Nullable<Text>,
+        publishable_id -> Nullable<Uuid>,
+        share_id -> Nullable<Uuid>,
+        world_id -> Nullable<Uuid>,
+        attested_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     auth_security_settings (id) {
         id -> Int4,
         two_factor_required_for_all_users -> Bool,
@@ -625,6 +640,15 @@ diesel::table! {
         updated_by -> Uuid,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    terms_versions (version_id) {
+        version_id -> Text,
+        document_slug -> Text,
+        body -> Text,
+        first_seen_at -> Timestamp,
     }
 }
 
@@ -1269,6 +1293,7 @@ diesel::table! {
 }
 
 diesel::joinable!(admin_bootstrap_oauth_sessions -> oauth_providers (provider_id));
+diesel::joinable!(attestations -> terms_versions (terms_version_id));
 diesel::joinable!(canvas_image_assets -> worlds (world_id));
 diesel::joinable!(feedback_attachments -> feedback_submissions (submission_id));
 diesel::joinable!(feedback_delivery_attempts -> feedback_submissions (submission_id));
@@ -1386,6 +1411,7 @@ diesel::joinable!(world_tokens -> worlds (world_id));
 diesel::allow_tables_to_appear_in_same_query!(
     admin_bootstrap_oauth_sessions,
     admin_bootstrap_setup,
+    attestations,
     auth_security_settings,
     canvas_image_assets,
     content_moderation_actions,
@@ -1424,6 +1450,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     scene_state_fingerprints,
     scenes,
     shapes,
+    terms_versions,
     token_resource_disclosure,
     tokens,
     two_factor_events,
