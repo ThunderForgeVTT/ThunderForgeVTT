@@ -440,7 +440,15 @@ mod tests {
             .flat_map(|d| d.env_var.into_iter().chain(d.env_aliases.iter().copied()))
             .map(|name| (name, None))
             .collect();
+        // "Nothing set" has to mean the rows as well as the variables. A
+        // declaration resolves from either, so clearing only the environment
+        // leaves whatever the database happens to hold — and the shared
+        // development database now holds a seeded notice contact (spec 039
+        // T005), which made this helper quietly describe a *configured*
+        // instance while claiming the opposite.
+        let keys: Vec<&str> = declarations().iter().map(|d| d.key).collect();
         temp_env(&vars, || {
+            let _rows = crate::settings::test_env::without_rows(&state, &keys);
             let settings = block_on(resolve_all(&state)).expect("resolves");
             body(settings);
         });

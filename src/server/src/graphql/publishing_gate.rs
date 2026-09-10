@@ -71,19 +71,48 @@ const NOTICE_CONTACT: [(&str, &str); 3] = [
 pub(crate) struct InstancePublishing {
     _lock: MutexGuard<'static, ()>,
     previous: Vec<(&'static str, Option<String>)>,
+    /// The rows, taken away for as long as this guard lives.
+    ///
+    /// Clearing the environment is not enough: a declaration resolves from the
+    /// environment **or** from a row, so an instance with a seeded
+    /// `notice.contact_email` is configured no matter what the variables say.
+    /// Spec 039's T005 seeded exactly that into the shared development
+    /// database, and these tests stopped being able to create the condition
+    /// they are about — the gate was wide open and the assertions failed with
+    /// a share link in hand.
+    ///
+    /// `None` for the configured case, which needs nothing taken away.
+    _rows: Option<crate::settings::test_env::AbsentRows>,
 }
 
 /// An instance that may publish beyond a world.
 pub(crate) fn publishable_instance() -> InstancePublishing {
-    with_notice_contact(true)
+    with_notice_contact(true, None)
 }
 
 /// An instance with nowhere to serve a copyright notice.
-pub(crate) fn unpublishable_instance() -> InstancePublishing {
-    with_notice_contact(false)
+///
+/// Takes the `AppState` because it has to take the **rows** away as well as the
+/// variables — see [`InstancePublishing`]'s `_rows`.
+pub(crate) fn unpublishable_instance(state: &crate::state::AppState) -> InstancePublishing {
+    with_notice_contact(false, Some(state))
 }
 
-fn with_notice_contact(configured: bool) -> InstancePublishing {
+/// The declared keys behind `Capability::PublishBeyondWorld`, as rows.
+///
+/// Named here rather than derived from `NOTICE_CONTACT`'s variable names,
+/// because the row key and the variable name are two different vocabularies and
+/// deriving one from the other is a rename away from being silently wrong.
+const NOTICE_CONTACT_KEYS: [&str; 3] = [
+    "notice.contact_name",
+    "notice.contact_email",
+    "notice.contact_postal_address",
+];
+
+fn with_notice_contact(
+    configured: bool,
+    state: Option<&crate::state::AppState>,
+) -> InstancePublishing {
     let _lock = lock();
     let previous: Vec<(&'static str, Option<String>)> = NOTICE_CONTACT
         .iter()
@@ -102,7 +131,14 @@ fn with_notice_contact(configured: bool) -> InstancePublishing {
         }
     }
 
-    InstancePublishing { _lock, previous }
+    let _rows =
+        state.map(|state| crate::settings::test_env::without_rows(state, &NOTICE_CONTACT_KEYS));
+
+    InstancePublishing {
+        _lock,
+        previous,
+        _rows,
+    }
 }
 
 impl Drop for InstancePublishing {
@@ -380,7 +416,7 @@ mod tests {
         let state = test_app_state();
         let codes = share_one_of_everything(&state).await;
 
-        let _unconfigured = unpublishable_instance();
+        let _unconfigured = unpublishable_instance(&state);
         crate::readiness::may_publish_beyond_world(&state)
             .await
             .expect_err("the instance must now refuse to publish, or this test proves nothing");
@@ -484,7 +520,7 @@ mod tests {
             (owner_id, insert_test_item(&mut conn, world_id, owner_id))
         };
 
-        let _unconfigured = unpublishable_instance();
+        let _unconfigured = unpublishable_instance(&state);
         let refusal = create_item_share_link_impl(&state, owner_id, false, item_id)
             .await
             .expect_err("an instance that cannot be served a notice must not publish");

@@ -25,6 +25,8 @@ pub mod ability_vocabulary;
 pub mod adapters;
 pub mod admin;
 pub mod assets_serve;
+/// Spec 039 / ADR-076: what somebody agreed to, when, and to publish what.
+pub mod attestation;
 pub mod attributes;
 pub mod auth;
 pub mod auth_middleware;
@@ -67,6 +69,10 @@ pub mod network;
 pub mod peer_signaling;
 /// Spec 036: which client of an account is at the table.
 pub mod play_field;
+/// Spec 039 US1/US3: the gate every publishing path passes before it mints a
+/// share code. In the impl rather than the resolver — a policy enforced only in
+/// a UI is a policy with a hole in it.
+pub mod publishing;
 pub mod pubsub;
 /// Spec 041 FR-002: an `otpauth://` URI as a grid of dark/light modules, for
 /// the enrolment screen to draw. A matrix and never markup — see the module

@@ -233,7 +233,12 @@ test.describe("spec 026: gather a world's content, share it, copy it", () => {
     // FR-026: the terms are on screen before the button, not behind a link.
     const terms = page.getByTestId("share-terms");
     await expect(terms).toBeVisible();
-    await expect(terms).toContainText("responsible for what you share");
+    // Spec 039 T006 reworded this from "share" to "publish" when the terms
+    // stopped being about collections and started covering all four publishing
+    // paths. Kept as an assertion on the *words* rather than on the element
+    // existing: an empty box above the button is what a broken glob or a
+    // renamed file produces, and this is the coupling that notices.
+    await expect(terms).toContainText("responsible for what you publish");
     await expect(terms).toContainText("cannot be recalled");
 
     await page

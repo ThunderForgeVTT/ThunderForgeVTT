@@ -70,6 +70,81 @@ pub(crate) mod test_env {
         LOCK.lock().unwrap_or_else(|e| e.into_inner())
     }
 
+    /// Take some settings **rows** away for the length of a test, and put them
+    /// back afterwards.
+    ///
+    /// # Why this is needed as well as `temp_env`
+    ///
+    /// Because a declaration resolves from the environment *or* from a row, and
+    /// clearing only the environment leaves whatever is in the table. That is
+    /// exactly what happened when spec 039's T005 seeded a notice contact into
+    /// the shared development database: three spec-040 tests that assert "an
+    /// instance with no notice contact refuses to publish" could no longer
+    /// create the condition they were about, and failed with the gate wide open.
+    ///
+    /// The lesson is the one `instance_access`'s `PolicyGuard` learned the same
+    /// evening: **a test that depends on global state has to establish it**, not
+    /// assume the database was empty. Nothing else in the tree may assume the
+    /// absence of a row.
+    ///
+    /// The caller must already hold [`lock`] — this takes no lock of its own,
+    /// because its callers are async and hold theirs across an `.await`.
+    pub struct AbsentRows {
+        pool: crate::state::DbPool,
+        previous: Vec<(String, String)>,
+    }
+
+    /// Remove the rows for `keys`, remembering what they held.
+    pub fn without_rows(state: &crate::state::AppState, keys: &[&str]) -> AbsentRows {
+        use crate::schema::instance_settings;
+        use diesel::prelude::*;
+
+        let owned: Vec<String> = keys.iter().map(|k| (*k).to_string()).collect();
+        let mut conn = state
+            .db_pool
+            .get()
+            .expect("a connection to clear the settings rows");
+
+        let previous: Vec<(String, String)> = instance_settings::table
+            .filter(instance_settings::key.eq_any(&owned))
+            .select((instance_settings::key, instance_settings::value))
+            .load(&mut conn)
+            .expect("read the settings rows");
+
+        diesel::delete(instance_settings::table.filter(instance_settings::key.eq_any(&owned)))
+            .execute(&mut conn)
+            .expect("clear the settings rows");
+
+        AbsentRows {
+            pool: state.db_pool.clone(),
+            previous,
+        }
+    }
+
+    impl Drop for AbsentRows {
+        fn drop(&mut self) {
+            use crate::schema::instance_settings;
+            use diesel::prelude::*;
+
+            // Best-effort: a test that has already failed must not be reported
+            // as a panic in its own cleanup.
+            let Ok(mut conn) = self.pool.get() else {
+                return;
+            };
+            for (key, value) in &self.previous {
+                let _ = diesel::insert_into(instance_settings::table)
+                    .values((
+                        instance_settings::key.eq(key),
+                        instance_settings::value.eq(value),
+                    ))
+                    .on_conflict(instance_settings::key)
+                    .do_update()
+                    .set(instance_settings::value.eq(value))
+                    .execute(&mut conn);
+            }
+        }
+    }
+
     /// Set some variables, run, restore — with the same lock held.
     pub fn temp_env(vars: &[(&str, Option<&str>)], body: impl FnOnce()) {
         let _guard = lock();
