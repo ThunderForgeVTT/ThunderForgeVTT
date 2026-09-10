@@ -294,6 +294,10 @@ pub(crate) struct SessionStateResponse {
     pub(crate) authenticated: bool,
     pub(crate) user: PublicUser,
     pub(crate) session_expires_at: chrono::NaiveDateTime,
+    /// Spec 039 US7: this account is disabled and may reach only its standing
+    /// page — the download and the appeal. The client sends the person there
+    /// rather than into a product that would refuse them everywhere.
+    pub(crate) account_disabled: bool,
 }
 
 #[derive(Debug, Serialize)]

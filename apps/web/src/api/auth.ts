@@ -24,6 +24,7 @@ interface AuthResponsePayload {
     authenticated: boolean;
     session_expires_at: string;
     user: AuthUser;
+    account_disabled?: boolean;
   } | null;
 }
 
@@ -98,6 +99,7 @@ function normalizeAuthResponse(
       ? {
           authenticated: payload.session.authenticated,
           sessionExpiresAt: payload.session.session_expires_at,
+          accountDisabled: payload.session.account_disabled ?? false,
           user: {
             ...payload.session.user,
             role:

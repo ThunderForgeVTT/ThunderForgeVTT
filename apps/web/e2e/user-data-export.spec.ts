@@ -40,8 +40,13 @@ interface ExportPayload {
   worlds: { id: string; name: string }[];
   worldTokens: { id: string }[];
   worldEvents: { id: string }[];
-  scenes: { status: string }[];
-  actors: { status: string }[];
+  // v2 (spec 039 T076): the person's own content, in the export's shapes.
+  scenes: { id: string; name: string }[];
+  actors: { id: string; label: string }[];
+  items: { id: string }[];
+  abilities: { id: string }[];
+  loreEntries: { id: string }[];
+  collections: { id: string }[];
   assetPacks: { status: string }[];
   gameSystems: { status: string }[];
 }
@@ -60,8 +65,12 @@ const EXPORT_QUERY = `
       worlds { id name }
       worldTokens { id }
       worldEvents { id }
-      scenes { schemaVersion status }
-      actors { schemaVersion status }
+      scenes
+      actors
+      items
+      abilities
+      loreEntries
+      collections
       assetPacks { schemaVersion status }
       gameSystems { schemaVersion status }
     }
@@ -103,7 +112,7 @@ test.describe("ADR-011: the export answers for the person signed in", () => {
 
     const payload = await exportFor(page);
 
-    expect(payload.manifest.schemaVersion).toBe("v1");
+    expect(payload.manifest.schemaVersion).toBe("v2");
     expect(Number.isNaN(new Date(payload.manifest.exportedAt).getTime())).toBe(
       false,
     );
@@ -192,7 +201,7 @@ test.describe("ADR-011: the export answers for the person signed in", () => {
       manifest: { schema_version: string; counts: { worlds: number } };
       worlds: { id: string }[];
     };
-    expect(downloaded.manifest.schema_version).toBe("v1");
+    expect(downloaded.manifest.schema_version).toBe("v2");
     expect(downloaded.worlds.map((world) => world.id)).toContain(worldId);
     expect(downloaded.manifest.counts.worlds).toBe(downloaded.worlds.length);
 
@@ -222,24 +231,17 @@ test.describe("ADR-011: the export answers for the person signed in", () => {
   });
 
   /**
-   * A pinning test, not an aspiration.
-   *
-   * ADR-011 reserved `scenes`, `actors`, `assetPacks` and `gameSystems` as
-   * placeholders in May 2026, "until those domains are implemented". They are
-   * implemented now — this test creates an actor and the export still returns
-   * an empty array — so the placeholders are stale rather than pending:
-   * `export_user_data_payload` covers worlds, tokens and events only.
-   *
-   * The assertion records what the contract does today, so that filling it in
-   * fails here and is noticed, rather than passing silently against a test
-   * that hedged. Whoever fills it in should rewrite this to assert the
-   * content and amend ADR-011 to say so.
+   * What this was: a pinning test recording that `scenes` and `actors` were
+   * empty placeholders, written so that filling them in would fail here and be
+   * noticed. Spec 039 T076 filled them in — the export's schema is `v2` and
+   * ADR-011 is amended — so this now asserts the content, as its own comment
+   * asked whoever filled them in to do.
    *
    * It matters beyond tidiness: spec 039 offers a disabled account thirty days
    * to download its data, and a download missing that person's characters,
    * lore and items is not the remedy that spec promises.
    */
-  test("the placeholder domains are still empty, and that is a known gap", async ({
+  test("the export carries the person's own characters and scenes", async ({
     page,
   }) => {
     const worldId = await registerAndCreateWorld(
@@ -256,8 +258,14 @@ test.describe("ADR-011: the export answers for the person signed in", () => {
 
     const payload = await exportFor(page);
     expect(payload.worlds.map((world) => world.id)).toContain(worldId);
-    expect(payload.actors).toEqual([]);
-    expect(payload.scenes).toEqual([]);
+    expect(
+      payload.actors.map((actor) => actor.label),
+      "the character they made",
+    ).toContain("Someone Worth Exporting");
+    expect(
+      payload.scenes.length,
+      "the world's starter scene is theirs",
+    ).toBeGreaterThan(0);
     expect(payload.assetPacks).toEqual([]);
     expect(payload.gameSystems).toEqual([]);
   });

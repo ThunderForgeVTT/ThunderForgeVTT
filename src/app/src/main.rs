@@ -506,6 +506,13 @@ async fn run() {
     eprintln!("[Server] 🚀 Starting feedback delivery task");
     thunderforge_server::feedback::schedule::spawn_feedback_delivery_task(app_state.clone());
 
+    // Spec 039 US7: the account-standing backstop. Opens windows the strike
+    // path missed, closes ones whose strikes aged out, and ends the ones that
+    // are due and set to end without a person. The mechanism is the strike
+    // path and the admin view; this is what catches the rest.
+    eprintln!("[Server] 🚀 Starting account standing task");
+    thunderforge_server::moderation::standing::spawn_standing_task(app_state.clone());
+
     // Spawn the presence listener task (Phase 4.9.B.3)
     eprintln!("[Server] 🚀 Starting presence listener task");
     thunderforge_server::network::spawn_presence_listener_task(presence_sender);
@@ -571,6 +578,13 @@ async fn run() {
         app_state.clone(),
         thunderforge_server::auth_middleware::require_authenticated_user,
     ));
+    // Spec 039 FR-031: the download is one of the two things a disabled account
+    // may still do, so it is the one user route that admits one.
+    let user_export_router =
+        thunderforge_server::users::export_router().route_layer(from_fn_with_state(
+            app_state.clone(),
+            thunderforge_server::auth_middleware::require_authenticated_user_even_if_disabled,
+        ));
     let map_import_router =
         thunderforge_server::map_import::router().route_layer(from_fn_with_state(
             app_state.clone(),
@@ -620,6 +634,18 @@ async fn run() {
                 )),
         )
         .route("/ws", get(graphql_ws_handler))
+        // Spec 039 US7: GraphQL admits a disabled account and runs its own
+        // allowlist, resolver by resolver — `authenticated_user` refuses one,
+        // and exactly five surfaces use the `_even_if_disabled` form. Refusing
+        // here instead would take the appeal and the download with it.
+        .route_layer(from_fn_with_state(
+            app_state.clone(),
+            thunderforge_server::auth_middleware::require_authenticated_user_even_if_disabled,
+        ));
+
+    // The world event stream is not a remedy, so it refuses a disabled account
+    // like every other signed-in route.
+    let events_router = Router::new()
         .route(
             "/events/{world_id}",
             get(thunderforge_server::network::websocket_handler),
@@ -639,6 +665,7 @@ async fn run() {
         .route("/readyz", get(readiness_handler))
         .route("/status", get(status_handler))
         .merge(graphql_router)
+        .merge(events_router)
         .merge(public_graphql_router)
         .merge(thunderforge_server::auth::router())
         // Spec 041 FR-024, and the shape the whole admin surface should have.
@@ -658,6 +685,7 @@ async fn run() {
             )),
         )
         .merge(user_router)
+        .merge(user_export_router)
         .merge(world_router)
         .merge(map_import_router)
         .merge(canvas_assets_router)

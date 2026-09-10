@@ -78,16 +78,26 @@ const ADMIN_ONLY: &[(&str, &str)] = &[
         "legalDocumentVersion",
         r#"{ legalDocumentVersion(versionId: "sharing-terms@0000000000000000") { __typename } }"#,
     ),
-    // Spec 039 SC-003: who agreed to publish one named thing, and to which
-    // words. Names a person, so it is the notice handler's and nobody else's —
-    // and its name carries no marker `is_operator_shaped` would catch, which
-    // is exactly why it is listed rather than left to the heuristic.
     // Spec 039 US5: anybody's strikes. A person's own standing is theirs
     // (`myStanding`); anyone else's is the notice handler's.
     (
         "accountStanding",
         r#"{ accountStanding(accountId: "00000000-0000-0000-0000-000000000000") { __typename } }"#,
     ),
+    // Spec 039 US7: deciding somebody's appeal, and carrying out a window's
+    // end. The two decisions only an administrator makes.
+    (
+        "resolveAppeal",
+        r#"mutation { resolveAppeal(accountId: "00000000-0000-0000-0000-000000000000", upheld: false) { __typename } }"#,
+    ),
+    (
+        "executeTermination",
+        r#"mutation { executeTermination(accountId: "00000000-0000-0000-0000-000000000000") }"#,
+    ),
+    // Spec 039 SC-003: who agreed to publish one named thing, and to which
+    // words. Names a person, so it is the notice handler's and nobody else's —
+    // and its name carries no marker `is_operator_shaped` would catch, which
+    // is exactly why it is listed rather than left to the heuristic.
     (
         "attestationsFor",
         r#"{ attestationsFor(publishableKind: "item", publishableId: "00000000-0000-0000-0000-000000000000") { __typename } }"#,
@@ -219,6 +229,8 @@ const AUTHENTICATED: &[&str] = &[
     // Spec 039 US5: the caller's own standing and notices, likewise.
     "myStanding",
     "myNotices",
+    // US7: the person's own appeal, against their own window.
+    "fileAppeal",
 ];
 
 /// Root fields deliberately reachable without an account, each for a stated
@@ -257,6 +269,7 @@ fn ordinary_user() -> AuthenticatedUser {
         // The whole point.
         is_admin: false,
         role: "User".to_string(),
+        disabled: false,
     }
 }
 

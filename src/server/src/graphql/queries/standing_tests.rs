@@ -29,6 +29,7 @@ fn as_user(user_id: Uuid) -> AuthenticatedUser {
         expires_at: chrono::Utc::now().naive_utc() + chrono::Duration::hours(1),
         is_admin: false,
         role: "User".to_string(),
+        disabled: false,
     }
 }
 
@@ -209,4 +210,74 @@ fn standing_is_readable_in_the_contracted_shape() {
             "the schema must declare `{declaration}`",
         );
     }
+}
+
+/// Decided 2026-09-10: a disabled account keeps the counter-notice, and filing
+/// one is a way back. Three real takedowns disable the account; the owner,
+/// still disabled, counter-notices one; that case stops counting, and the
+/// account is restored there and then — the window closed as `counter_notice`.
+#[tokio::test]
+async fn a_disabled_accounts_counter_notice_is_the_way_back() {
+    use crate::schema::account_terminations;
+    use diesel::prelude::*;
+
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().expect("conn");
+    let owner = insert_test_user(&mut conn);
+    let world = insert_test_world(&mut conn, owner);
+    let items = [
+        insert_test_item(&mut conn, world, owner),
+        insert_test_item(&mut conn, world, owner),
+        insert_test_item(&mut conn, world, owner),
+    ];
+    drop(conn);
+
+    let mut cases = Vec::new();
+    for item in items {
+        let case = submit_takedown_notice_impl(&state, a_valid_notice(item))
+            .await
+            .expect("notice");
+        cases.push(case.case_id);
+    }
+    let disabled = crate::moderation::standing::standing_of(&state, owner)
+        .await
+        .expect("standing");
+    assert!(disabled.disabled, "three strikes disable the account");
+
+    let mut as_disabled = as_user(owner);
+    as_disabled.disabled = true;
+    let response = schema(state.clone())
+        .execute(
+            Request::new(format!(
+                r#"mutation {{ submitCounterNotice(input: {{
+                    caseId: "{case}",
+                    removedMaterialDescription: "The item, which is my own work.",
+                    goodFaithMistakeStatement: true,
+                    consentToJurisdiction: true,
+                    contactInformation: "owner@realdomain.org",
+                    signature: "Owen Owner"
+                }}) {{ currentStatus }} }}"#,
+                case = cases[0],
+            ))
+            .data(as_disabled),
+        )
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+
+    let after = crate::moderation::standing::standing_of(&state, owner)
+        .await
+        .expect("standing");
+    assert!(!after.disabled, "restored when they filed, not at the tick");
+    assert_eq!(after.strike_count(), 2);
+
+    let mut conn = state.db_pool.get().expect("conn");
+    let reason: Option<String> = account_terminations::table
+        .filter(account_terminations::account_id.eq(owner))
+        .select(account_terminations::closed_reason)
+        .first(&mut conn)
+        .expect("the window");
+    assert_eq!(
+        reason.as_deref(),
+        Some(crate::moderation::standing::closed_reason::COUNTER_NOTICE)
+    );
 }

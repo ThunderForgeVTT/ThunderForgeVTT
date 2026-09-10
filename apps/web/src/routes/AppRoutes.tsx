@@ -109,9 +109,12 @@ function renderPlayRoute(page: ReactNode) {
   );
 }
 
+/** The one page a disabled account may reach (spec 039 FR-031). */
+const STANDING_PATH = "/settings/standing";
+
 function RequireAuthenticated({ children }: { children: ReactNode }) {
   const location = useLocation();
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isDisabled, isLoading } = useAuth();
 
   if (isLoading) {
     return <Loader fullScreen label="Restoring session" />;
@@ -125,6 +128,13 @@ function RequireAuthenticated({ children }: { children: ReactNode }) {
         replace
       />
     );
+  }
+
+  // Spec 039 US7: a disabled account can download its data and appeal —
+  // both on the standing page — and nothing else. Anywhere else would be a
+  // page of refusals, so it is sent where its remedies are.
+  if (isDisabled && location.pathname !== STANDING_PATH) {
+    return <Navigate to={STANDING_PATH} replace />;
   }
 
   return <>{children}</>;

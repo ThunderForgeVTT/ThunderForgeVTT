@@ -514,9 +514,15 @@ test.describe("spec 015 US2: the counter-notice half of notice-and-takedown", ()
     const admin = await openAdminPage(browser);
 
     try {
+      // Every item exists before the first notice: the third upheld case
+      // disables the account (spec 039 US7), and a disabled account makes
+      // nothing new.
+      const made: { id: string; name: string }[] = [];
       for (let i = 0; i < 4; i += 1) {
         const name = `Blocked Relic ${i} ${suffix}`;
-        const id = await createItem(page, worldId, name);
+        made.push({ id: await createItem(page, worldId, name), name });
+      }
+      for (const { id, name } of made) {
         const caseId = await fileTakedown(
           claimant,
           id,
@@ -528,8 +534,17 @@ test.describe("spec 015 US2: the counter-notice half of notice-and-takedown", ()
       const contested = items[0];
       const untouched = items[1];
 
-      // The owner files a counter-notice on one of them, through the page.
-      await page.goto(`/world/${worldId}/item/${contested.id}/view`);
+      // The owner files a counter-notice on one of them. Four upheld cases
+      // have disabled the account, so its content pages send it to its
+      // standing page — which is where a disabled account's counter-notice
+      // lives (spec 039, decided 2026-09-10).
+      await page.goto("/settings/standing");
+      const contestedStrike = page
+        .getByTestId("standing-strike")
+        .filter({ hasText: contested.caseId });
+      await contestedStrike
+        .getByRole("button", { name: "File a counter-notice" })
+        .click();
       await expect(page.getByTestId("counter-notice-form")).toBeVisible({
         timeout: 15_000,
       });
@@ -581,14 +596,9 @@ test.describe("spec 015 US2: the counter-notice half of notice-and-takedown", ()
       // window is the answer to the dispute; a timer must not overturn it.
       elapseWaitingPeriod(contested.caseId);
 
-      await page.goto(`/world/${worldId}/item/${contested.id}/view`);
-      await expect(page.getByText("Content disabled")).toBeVisible({
-        timeout: 15_000,
-      });
-      await expect(
-        page.getByRole("heading", { name: contested.name }),
-      ).toHaveCount(0);
-
+      // The owner's account is still disabled — four upheld cases — so its
+      // content pages are not where to look. The case record is, and it is
+      // what every read of the content consults.
       const record = await readCase(admin, contested.caseId);
       expect(record.currentStatus).toBe("CONTENT_REMAINS_DISABLED");
       expect(

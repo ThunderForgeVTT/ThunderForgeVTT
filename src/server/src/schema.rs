@@ -23,6 +23,26 @@ diesel::table! {
 }
 
 diesel::table! {
+    account_terminations (id) {
+        id -> Uuid,
+        account_id -> Uuid,
+        opened_at -> Timestamptz,
+        deletion_due_at -> Timestamptz,
+        strike_count_at_open -> Int4,
+        requires_human -> Bool,
+        disables_account -> Bool,
+        appeal_state -> Text,
+        appeal_statement -> Nullable<Text>,
+        appeal_filed_at -> Nullable<Timestamptz>,
+        appeal_resolved_at -> Nullable<Timestamptz>,
+        appeal_resolved_by -> Nullable<Uuid>,
+        appeal_note -> Nullable<Text>,
+        closed_at -> Nullable<Timestamptz>,
+        closed_reason -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
     admin_bootstrap_oauth_sessions (id) {
         id -> Uuid,
         provider_id -> Uuid,
@@ -1422,6 +1442,7 @@ diesel::joinable!(world_tokens -> worlds (world_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     account_notices,
+    account_terminations,
     admin_bootstrap_oauth_sessions,
     admin_bootstrap_setup,
     attestations,

@@ -170,6 +170,12 @@ impl ModerationQuery {
     async fn repeat_infringer_flags(&self, ctx: &Context<'_>) -> GraphQLResult<Vec<Uuid>> {
         let state = app_state(ctx)?;
         admin_user(ctx)?;
+        // Spec 039 T072: the standing sweep runs where an administrator looks,
+        // so what they see is current — and so nothing depends on the five-
+        // minute tick, including a test.
+        crate::moderation::standing::run_due_standing_work(state)
+            .await
+            .map_err(Error::new)?;
         repeat_infringer_flags_impl(state).await
     }
 }

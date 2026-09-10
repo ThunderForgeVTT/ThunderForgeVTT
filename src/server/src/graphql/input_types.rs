@@ -276,9 +276,20 @@ pub struct GraphQLExportManifest {
     pub world_tokens: i32,
     pub world_events: i32,
     pub policies: i32,
+    pub scenes: i32,
+    pub actors: i32,
+    pub items: i32,
+    pub abilities: i32,
+    pub lore_entries: i32,
+    pub collections: i32,
 }
 
 /// Complete user data export payload
+///
+/// Spec 039 T076 (ADR-011 as amended, schema `v2`): the person's own content
+/// comes as JSON in the export's shapes — the same objects the download
+/// carries — rather than as a GraphQL type per table, which would be the raw
+/// dump ADR-011 rejected wearing a schema.
 #[derive(SimpleObject, Debug, Clone)]
 pub struct GraphQLExportMyDataPayload {
     pub manifest: GraphQLExportManifest,
@@ -287,8 +298,12 @@ pub struct GraphQLExportMyDataPayload {
     pub world_tokens: Vec<GraphQLWorldToken>,
     pub world_events: Vec<GraphQLWorldEvent>,
     pub policies: Vec<GraphQLPolicy>,
-    pub scenes: Vec<GraphQLPlaceholderDomainObject>,
-    pub actors: Vec<GraphQLPlaceholderDomainObject>,
+    pub scenes: Vec<async_graphql::Json<serde_json::Value>>,
+    pub actors: Vec<async_graphql::Json<serde_json::Value>>,
+    pub items: Vec<async_graphql::Json<serde_json::Value>>,
+    pub abilities: Vec<async_graphql::Json<serde_json::Value>>,
+    pub lore_entries: Vec<async_graphql::Json<serde_json::Value>>,
+    pub collections: Vec<async_graphql::Json<serde_json::Value>>,
     pub asset_packs: Vec<GraphQLPlaceholderDomainObject>,
     pub game_systems: Vec<GraphQLPlaceholderDomainObject>,
 }

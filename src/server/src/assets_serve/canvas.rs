@@ -198,6 +198,7 @@ mod tests {
             expires_at: chrono::Utc::now().naive_utc() + chrono::Duration::hours(1),
             is_admin: false,
             role: "Player".to_string(),
+            disabled: false,
         }
     }
 

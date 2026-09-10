@@ -2587,3 +2587,42 @@ pub struct NewAccountNotice {
     pub subject_ref: Option<serde_json::Value>,
     pub payload: Option<serde_json::Value>,
 }
+
+/// A termination window (spec 039 US7, data-model.md § 5) — the only stored
+/// piece of an account's standing.
+#[derive(Queryable, Selectable, Debug, Clone, PartialEq)]
+#[diesel(table_name = crate::schema::account_terminations)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct AccountTermination {
+    pub id: uuid::Uuid,
+    /// No foreign key: the row outlives the account.
+    pub account_id: uuid::Uuid,
+    pub opened_at: chrono::DateTime<chrono::Utc>,
+    pub deletion_due_at: chrono::DateTime<chrono::Utc>,
+    pub strike_count_at_open: i32,
+    pub requires_human: bool,
+    /// False only for the instance's last administrator (FR-039).
+    pub disables_account: bool,
+    pub appeal_state: String,
+    pub appeal_statement: Option<String>,
+    pub appeal_filed_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub appeal_resolved_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub appeal_resolved_by: Option<uuid::Uuid>,
+    pub appeal_note: Option<String>,
+    pub closed_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub closed_reason: Option<String>,
+}
+
+/// A window as opened. Everything about the appeal and the close is written
+/// later, by the only code allowed to write it.
+#[derive(Insertable, Debug, Clone)]
+#[diesel(table_name = crate::schema::account_terminations)]
+pub struct NewAccountTermination {
+    pub id: uuid::Uuid,
+    pub account_id: uuid::Uuid,
+    pub opened_at: chrono::DateTime<chrono::Utc>,
+    pub deletion_due_at: chrono::DateTime<chrono::Utc>,
+    pub strike_count_at_open: i32,
+    pub requires_human: bool,
+    pub disables_account: bool,
+}

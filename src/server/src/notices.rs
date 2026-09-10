@@ -29,6 +29,17 @@ pub mod kind {
     pub const STRIKE_RECORDED: &str = "strike_recorded";
     /// The strike that reached the suspension rung (FR-018).
     pub const PUBLISHING_SUSPENDED: &str = "publishing_suspended";
+    /// The third strike: disabled, the window's end date, and — in the first
+    /// sentence — that deletion is irreversible (FR-030, FR-036).
+    pub const ACCOUNT_DISABLED: &str = "account_disabled";
+    /// An appeal was decided, either way (FR-033).
+    pub const APPEAL_RESOLVED: &str = "appeal_resolved";
+    /// Restored without anybody asking — a strike aged out, or a case was
+    /// resolved in the person's favour (FR-035).
+    pub const ACCOUNT_RESTORED: &str = "account_restored";
+    /// To a player: the world their character lived in was deleted with its
+    /// creator's account, and the character was moved to them first.
+    pub const ACTOR_RESCUED: &str = "actor_rescued";
 }
 
 /// Write one notice, on a connection the caller already holds — so it lands

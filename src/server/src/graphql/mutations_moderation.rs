@@ -494,8 +494,25 @@ impl ModerationMutation {
         input: SubmitCounterNoticeInput,
     ) -> GraphQLResult<GraphQLModerationCase> {
         let state = app_state(ctx)?;
-        let auth_user = authenticated_user(ctx)?;
-        submit_counter_notice_impl(state, auth_user.user_id, auth_user.is_admin, input).await
+        // Spec 039 (decided 2026-09-10): on the disabled-account allowlist. A
+        // counter-notice is the statutory route back, and the account the
+        // notices disabled is exactly the one that most needs it. The impl
+        // still admits only the content's own GM.
+        let auth_user = crate::graphql::helpers::authenticated_user_even_if_disabled(ctx)?;
+        let filed =
+            submit_counter_notice_impl(state, auth_user.user_id, auth_user.is_admin, input).await?;
+
+        // A case under counter-notice review stops counting, so an account at
+        // the threshold may now be below it. Swept now rather than at the
+        // tick, so the person is restored when they file, not five minutes
+        // later. The counter-notice is already recorded; a sweep that fails
+        // is the backstop's to retry, not a reason to report failure.
+        if let Err(e) =
+            crate::moderation::standing::run_due_standing_work_for(state, auth_user.user_id).await
+        {
+            tracing::warn!("standing sweep after a counter-notice failed: {e}");
+        }
+        Ok(filed)
     }
 
     async fn resolve_moderation_case(

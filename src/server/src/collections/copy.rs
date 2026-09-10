@@ -196,6 +196,59 @@ pub async fn copy_shared_collection_to_world_impl(
     .map_err(|e| Error::new(e.0))
 }
 
+/// Move one player's characters into a world of theirs, on a connection the
+/// caller holds (spec 039, the account-deletion decision of 2026-09-08).
+///
+/// The same copy a collection gets, in the same order and for the same
+/// reason: each character's own abilities and inventory items first, so the
+/// character that follows points at the copies rather than recording them as
+/// losses. Everything copied is owned by `player`.
+pub(crate) fn rescue_actors_sync(
+    conn: &mut PgConnection,
+    destination_world_id: Uuid,
+    player: Uuid,
+    actor_ids: &[Uuid],
+) -> Result<CopyContext, CopyError> {
+    use crate::schema::{world_actor_abilities, world_actor_inventory};
+
+    let mut ctx = CopyContext {
+        destination_world_id,
+        user_id: player,
+        ability_map: HashMap::new(),
+        item_map: HashMap::new(),
+        actor_map: HashMap::new(),
+        lore_map: HashMap::new(),
+        scene_map: HashMap::new(),
+        created: Vec::new(),
+        notes: Vec::new(),
+    };
+
+    let abilities: Vec<Uuid> = world_actor_abilities::table
+        .filter(world_actor_abilities::actor_id.eq_any(actor_ids))
+        .filter(world_actor_abilities::ability_id.is_not_null())
+        .select(world_actor_abilities::ability_id.assume_not_null())
+        .distinct()
+        .load(conn)?;
+    for ability in abilities {
+        copy_ability(conn, &mut ctx, ability)?;
+    }
+
+    let items: Vec<Uuid> = world_actor_inventory::table
+        .filter(world_actor_inventory::actor_id.eq_any(actor_ids))
+        .filter(world_actor_inventory::item_id.is_not_null())
+        .select(world_actor_inventory::item_id.assume_not_null())
+        .distinct()
+        .load(conn)?;
+    for item in items {
+        copy_item(conn, &mut ctx, item)?;
+    }
+
+    for actor in actor_ids {
+        copy_actor(conn, &mut ctx, *actor)?;
+    }
+    Ok(ctx)
+}
+
 /// Carried through the copy so each step can re-point references at the copies
 /// made by the steps before it.
 pub struct CopyContext {

@@ -28,6 +28,8 @@
 pub mod copy;
 pub mod membership;
 pub mod resolve;
+// Spec 039 / the 2026-09-08 decision: a player's character outlives the world.
+pub mod rescue;
 pub mod scene_copy;
 
 /// The five member types a collection may hold (FR-002).

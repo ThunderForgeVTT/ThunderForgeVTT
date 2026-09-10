@@ -29,10 +29,37 @@ pub fn app_state<'a>(ctx: &'a Context<'_>) -> GraphQLResult<&'a AppState> {
         .map_err(|_| Error::new("Application state unavailable"))
 }
 
+/// The refusal a disabled account meets everywhere but its remedies (spec 039
+/// FR-031). It says where to go, because every remedy is on that one page.
+pub const ACCOUNT_DISABLED: &str = "This account is disabled. Your account standing page \
+     shows why, when the decision takes effect, and your remedies: download your data, appeal, \
+     or file a counter-notice.";
+
 /// Extract the authenticated user from the GraphQL context.
 ///
-/// Returns an error if no user is authenticated (i.e., the request lacks valid auth headers).
+/// Returns an error if no user is authenticated, **or if the account is
+/// disabled** (spec 039 US7). That second refusal is what makes the allowlist
+/// fail closed: a resolver written next year calls this like every other, and
+/// is closed to a disabled account without anybody deciding it should be.
 pub fn authenticated_user<'a>(ctx: &'a Context<'_>) -> GraphQLResult<&'a AuthenticatedUser> {
+    let user = authenticated_user_even_if_disabled(ctx)?;
+    if user.disabled {
+        return Err(Error::new(ACCOUNT_DISABLED));
+    }
+    Ok(user)
+}
+
+/// The authenticated user, **disabled or not**.
+///
+/// Called by exactly the surfaces `contracts/standing-and-termination.md`
+/// allows a disabled account: `exportMyData`, `myStanding`, `myNotices`,
+/// `myAttestations`, `fileAppeal` and `submitCounterNotice`.
+/// `disabled_surface_tests` counts the call sites and fails on a seventh —
+/// adding one is a decision to widen what a disabled person can do, and should
+/// have to be made on purpose.
+pub fn authenticated_user_even_if_disabled<'a>(
+    ctx: &'a Context<'_>,
+) -> GraphQLResult<&'a AuthenticatedUser> {
     ctx.data::<AuthenticatedUser>()
         .map_err(|_| Error::new("Authentication required"))
 }

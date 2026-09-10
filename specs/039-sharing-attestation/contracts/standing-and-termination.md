@@ -112,35 +112,87 @@ and the refusal happens one layer up:
 |---|---|
 | `exportMyData` and `GET /api/user/data/export` | FR-031, FR-032 — the download |
 | `myStanding` | So the person can see the window and the date |
+| `myNotices` | So they can read what they were told — the page that shows the window shows these |
 | `myAttestations` | So they can see what they agreed to |
 | `fileAppeal` | FR-031 — the appeal |
-| sign-out | Nobody should be unable to leave |
+| `submitCounterNotice` | The statutory route back — *added 2026-09-10*. Still the content's own GM only |
 
 Everything else is refused, and a mutation added next year is refused by default
 because it will call `authenticated_user` like every other. The allowlist fails
 closed, which is the property that makes FR-031's "and can do nothing else"
-survive the next feature.
+survive the next feature. `graphql/disabled_surface_tests.rs` walks the crate
+for call sites and fails on a sixth.
+
+*Amended 2026-09-10 by the owner's decision:* **`submitCounterNotice` is on the
+list.** FR-031 read literally — "download and appeal, nothing else" — would have
+refused a DMCA counter-notice to the account the notices disabled, which is the
+one account that most needs the statutory process FR-020 says restoration must
+follow. A case under counter-notice review does not count (FR-027), so filing
+one on the third strike drops the account below the threshold, and the resolver
+sweeps that account at once: it is restored when it files, and its window closes
+as `counter_notice`. If staff uphold the takedown anyway, the case counts again
+and a new window opens. A disabled account files it from the standing page,
+since its content pages are out of reach.
+
+*Amended 2026-09-10, with US7:* **`myNotices` is on the list** — the standing
+page is where a disabled person reads that the window opened and when it ends,
+and a notice they cannot read is a notice they were not given. **The REST layer
+fails closed too**: `require_authenticated_user` refuses a disabled account, and
+exactly two routers use `require_authenticated_user_even_if_disabled` — GraphQL,
+which runs the allowlist above, and the download. **The authentication routes
+are not refused** — sign-in, sign-out, session refresh, and password and
+second-factor changes. A disabled person has to be able to sign in to reach
+their remedies, and securing the credential that reaches them is part of
+reaching them; none of those routes touches content.
 
 **Content owned by a disabled account stops being served publicly** (FR-038):
 share links belonging to it resolve as dead, on the same one-message rule
-`UNAVAILABLE` already uses. Other people's worlds are untouched — a world the
-account is merely a member of, and a world it created that other people are
-still in, are both left alone.
+`UNAVAILABLE` already uses — including when its standing cannot be read, which
+fails closed.
+
+*Amended 2026-09-10 by the owner's decision of 2026-09-08:* **a world the
+account created is deleted with it**, including one other people play in — the
+same rule as a person deleting their own account. What survives is each
+player's character: before the world goes, every actor owned by somebody else is
+moved into a world that player owns, inside a collection named for the world it
+came from, and the player is told. FR-038's "other people's worlds MUST NOT be
+destroyed" is replaced by "other people's **characters** MUST NOT be
+destroyed".
 
 ## The appeal
 
 ```graphql
 extend type Mutation {
   """
-  File an appeal against a disablement. One open appeal at a time.
+  File an appeal against a disablement. One per window.
   Callable by a disabled account.
   """
   fileAppeal(statement: String!): Termination!
 
-  "Resolve an appeal. Admin only."
-  resolveAppeal(accountId: UUID!, upheld: Boolean!, note: String): Termination!
+  """
+  Resolve an appeal. Admin only. overturnedCaseId names the strike the appeal
+  overturned; omitted, it is the most recent — the one that crossed the
+  threshold.
+  """
+  resolveAppeal(accountId: UUID!, upheld: Boolean!, note: String, overturnedCaseId: UUID): Termination!
+
+  """
+  Carry out a window that waits for a person (REQUIRES_HUMAN, the default).
+  Admin only. Refused before the date, while an appeal is open, and for the
+  instance's last administrator.
+  """
+  executeTermination(accountId: UUID!): Boolean!
 }
 ```
+
+*Amended 2026-09-10, with US7:* **one appeal per window, not one at a time.** A
+rejected appeal resumes the window from the date already passed (rule 1); if the
+person could then file again, each filing would pause deletion anew and the
+window would never end. **`executeTermination` exists** because the shipped
+default sends every due window to a person, and the person needs a control —
+this is the "administrator's queue" the ladder section describes, not a
+"disable this account" button: it acts only on a window the counting opened and
+the calendar closed.
 
 1. **An appeal pauses the deletion; it does not extend the window** (FR-034).
    An appeal open at `deletionDueAt` blocks execution until it resolves. A
@@ -186,12 +238,21 @@ move `deletionDueAt` into the past and call the admin surface rather than wait.
 
 ## Deletion
 
-`delete_user_data_owned`, with one change FR-038 forces: **a world the account
-created that has live members other than the account is not deleted.** It is
-retained, its public paths closed, and it is listed for an administrator. The
-existing function deletes every world in `worlds.created_by == user_id` along
-with its events and tokens, which would destroy other people's tables as a side
-effect of one account's disablement.
+`delete_user_data_owned` — the same code a person deleting their own account
+runs, on the connection the sweep holds, inside the transaction that closes the
+window.
+
+*Amended 2026-09-10 by the owner's decision of 2026-09-08*, replacing "a world
+with live members is retained": **the account's worlds are deleted, and each
+player's character is moved out first.** For every actor in those worlds owned
+by somebody else, the actor is copied — through the collections copy path, so
+its sheet, images and abilities come with it — into a world its player owns on
+**the same game system** (a new "<name>'s characters" world if they have none),
+inside a collection named for the world it came from, and the player gets an
+`actor_rescued` notice saying where. The same step runs when a person deletes
+their own account. The collection is deliberate: when content can live on a
+profile outside any world, organised by collections, a rescued character is
+already where that move expects it to be.
 
 Attestations are redacted rather than deleted: `subject_username -> NULL`,
 everything else kept (FR-010, FR-037). Deletion is real and irreversible, and

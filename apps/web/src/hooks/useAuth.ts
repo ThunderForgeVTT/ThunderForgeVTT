@@ -32,6 +32,8 @@ type AuthContextValue = {
   session: AuthSession | null;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  /** Spec 039 US7: disabled — the standing page is the only place to go. */
+  isDisabled: boolean;
   isLoading: boolean;
   login: (payload: LoginPayload) => Promise<AuthSessionResponse>;
   /** Exactly one of `code` or `recoveryCode` — see `verifyTwoFactor`. */
@@ -220,6 +222,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       session,
       isAuthenticated: Boolean(session?.authenticated),
       isAdmin: session?.user?.role === "admin",
+      isDisabled: Boolean(session?.accountDisabled),
       isLoading,
       login,
       completeTwoFactorChallenge,

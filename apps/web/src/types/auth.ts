@@ -44,6 +44,11 @@ export interface AuthSession {
   authenticated: boolean;
   sessionExpiresAt: string;
   user: AuthUser;
+  /**
+   * Spec 039 US7: the account is disabled and may reach only its standing
+   * page — the download and the appeal. Everywhere else would refuse it.
+   */
+  accountDisabled: boolean;
 }
 
 export interface AuthSessionResponse {

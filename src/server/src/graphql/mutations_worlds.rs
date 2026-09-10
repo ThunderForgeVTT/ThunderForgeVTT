@@ -39,6 +39,67 @@ use crate::state::AppState;
 /// the one place to change.
 pub const STARTER_SCENE_NAME: &str = "Starting Scene";
 
+/// The whole of "a world exists": the row, its starter scene made active, and
+/// whatever its system does when a world appears. One function, so every path
+/// that makes a world — creating one, and rescuing a player's characters into
+/// one (spec 039) — makes the same one.
+///
+/// The caller holds the transaction: a system that could not set itself up
+/// should not leave a half-made world behind.
+pub(crate) fn insert_world_sync(
+    conn: &mut PgConnection,
+    world: &World,
+    starter_scene_id: uuid::Uuid,
+    now: chrono::NaiveDateTime,
+) -> diesel::QueryResult<()> {
+    use crate::schema::scenes;
+
+    diesel::insert_into(worlds::table)
+        .values(world)
+        .execute(conn)?;
+
+    let scene_values = (
+        scenes::scene_id.eq(starter_scene_id),
+        scenes::world_id.eq(world.id),
+        scenes::name.eq(STARTER_SCENE_NAME),
+        scenes::description.eq::<Option<String>>(None),
+        scenes::type_.eq("battlemap"),
+        scenes::grid_size.eq(5),
+        scenes::grid_type.eq("square"),
+        scenes::width.eq(100),
+        scenes::height.eq(100),
+        scenes::metadata.eq::<Option<serde_json::Value>>(None),
+        scenes::owner_id.eq(world.created_by),
+        scenes::created_at.eq(now),
+        scenes::updated_at.eq(now),
+    );
+
+    diesel::insert_into(scenes::table)
+        .values(scene_values)
+        .execute(conn)?;
+
+    diesel::update(worlds::table.filter(worlds::id.eq(world.id)))
+        .set(worlds::active_scene_id.eq(starter_scene_id))
+        .execute(conn)?;
+
+    // Whatever the world's system wants doing when a world appears.
+    //
+    // This was a branch on one system's name inserting that system's session
+    // row — the last game system named in shared server code, and the only
+    // entry left in `check-system-registry.mjs`'s known list. The row still
+    // gets inserted; the pack does it now, and this file no longer knows which
+    // system that is or what the row is for (spec 032 T014a2, FR-004,
+    // ADR-063).
+    crate::world_hooks::run_world_created(
+        conn,
+        world.game_system_id.as_deref(),
+        crate::world_hooks::WorldCreated {
+            world_id: world.id,
+            created_by: world.created_by,
+        },
+    )
+}
+
 pub async fn create_world_impl(
     state: &AppState,
     user_id: uuid::Uuid,
@@ -93,61 +154,8 @@ pub async fn create_world_impl(
     // stays null for a world where nothing has ever been created/launched
     // (not reachable via normal world creation).
     let default_scene_id = uuid::Uuid::now_v7();
-    let world_system_id = inserted_world.game_system_id.clone();
     tokio::task::spawn_blocking(move || {
-        use crate::schema::scenes;
-
-        conn.transaction(|conn| {
-            diesel::insert_into(worlds::table)
-                .values(&inserted_world)
-                .execute(conn)?;
-
-            let scene_values = (
-                scenes::scene_id.eq(default_scene_id),
-                scenes::world_id.eq(inserted_world.id),
-                scenes::name.eq(STARTER_SCENE_NAME),
-                scenes::description.eq::<Option<String>>(None),
-                scenes::type_.eq("battlemap"),
-                scenes::grid_size.eq(5),
-                scenes::grid_type.eq("square"),
-                scenes::width.eq(100),
-                scenes::height.eq(100),
-                scenes::metadata.eq::<Option<serde_json::Value>>(None),
-                scenes::owner_id.eq(user_id),
-                scenes::created_at.eq(now),
-                scenes::updated_at.eq(now),
-            );
-
-            diesel::insert_into(scenes::table)
-                .values(scene_values)
-                .execute(conn)?;
-
-            diesel::update(worlds::table.filter(worlds::id.eq(inserted_world.id)))
-                .set(worlds::active_scene_id.eq(default_scene_id))
-                .execute(conn)?;
-
-            // Whatever the world's system wants doing when a world appears.
-            //
-            // This was a branch on one system's name inserting that system's
-            // session row — the last game system named in shared server code,
-            // and the only entry left in `check-system-registry.mjs`'s known
-            // list. The row still gets inserted; the pack does it now, and
-            // this file no longer knows which system that is or what the row
-            // is for (spec 032 T014a2, FR-004, ADR-063).
-            //
-            // Inside the transaction deliberately: a system that could not set
-            // itself up should not leave a half-made world behind.
-            crate::world_hooks::run_world_created(
-                conn,
-                world_system_id.as_deref(),
-                crate::world_hooks::WorldCreated {
-                    world_id: inserted_world.id,
-                    created_by: user_id,
-                },
-            )?;
-
-            Ok::<_, diesel::result::Error>(())
-        })
+        conn.transaction(|conn| insert_world_sync(conn, &inserted_world, default_scene_id, now))
     })
     .await
     .map_err(|_| "Failed to spawn blocking task".to_string())?

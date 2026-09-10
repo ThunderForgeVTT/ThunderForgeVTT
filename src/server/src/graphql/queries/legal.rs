@@ -257,20 +257,17 @@ impl LegalDocumentQuery {
         with_archived_terms(state, records).await
     }
 
-    /// The caller's own attestations, newest first.
-    ///
-    /// Spec 039's `standing-and-termination.md` lists this among what a
-    /// **disabled** account may still reach — somebody shut out should still
-    /// be able to see what they agreed to. That allowlist arrives with US7;
-    /// until it does, no account is disabled and `authenticated_user` is the
-    /// whole of the check.
+    /// The caller's own attestations, newest first. Reachable by a
+    /// **disabled** account (`standing-and-termination.md`).
     async fn my_attestations(
         &self,
         ctx: &Context<'_>,
         limit: Option<i32>,
     ) -> GraphQLResult<Vec<GraphQLAttestation>> {
         let state = app_state(ctx)?;
-        let user = authenticated_user(ctx)?;
+        // On the disabled-account allowlist: somebody shut out should still
+        // be able to see what they agreed to.
+        let user = crate::graphql::helpers::authenticated_user_even_if_disabled(ctx)?;
         let limit = limit
             .unwrap_or(MY_ATTESTATIONS_DEFAULT)
             .clamp(1, MY_ATTESTATIONS_MAX);

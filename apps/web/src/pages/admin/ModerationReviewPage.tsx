@@ -15,6 +15,7 @@ import type { ModerationCaseRecord } from "@/types/moderation";
 import type { SeoConfig } from "@/types/seo";
 import { AdminSectionShell } from "./components/AdminSectionShell";
 import { CaseAgreement } from "./components/CaseAgreement";
+import { TerminationPanel } from "./components/TerminationPanel";
 
 export const moderationReviewPageSeo: SeoConfig = {
   title: "Content moderation review",
@@ -198,6 +199,10 @@ export default function ModerationReviewPage() {
               <h2 className="text-lg font-semibold">
                 Case history — {selectedAccountId}
               </h2>
+              <TerminationPanel
+                key={selectedAccountId}
+                accountId={selectedAccountId}
+              />
               {history === null ? (
                 <Loader label="Loading case history" />
               ) : history.length === 0 ? (

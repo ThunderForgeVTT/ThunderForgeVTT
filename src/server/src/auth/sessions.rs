@@ -732,6 +732,21 @@ pub(crate) async fn build_session_response(
         None
     };
 
+    // Spec 039 T072: an account with an open window sees the truth when it
+    // signs in. Somebody signing in on day thirty-one, or after a strike aged
+    // out, is shown what the sweep makes true — not a stale window.
+    let account_disabled = match crate::moderation::standing::standing_of(state, user_id).await {
+        Ok(standing) if standing.termination.is_some() => {
+            let _ = crate::moderation::standing::run_due_standing_work(state).await;
+            crate::moderation::standing::standing_of(state, user_id)
+                .await
+                .map(|now| now.disabled)
+                .unwrap_or(false)
+        }
+        Ok(standing) => standing.disabled,
+        Err(_) => false,
+    };
+
     Ok(AuthSessionResponse {
         status,
         message: message.to_string(),
@@ -739,6 +754,7 @@ pub(crate) async fn build_session_response(
             authenticated: true,
             user,
             session_expires_at,
+            account_disabled,
         }),
         recovery_codes_remaining: remaining,
         recovery_codes_low: remaining.map(crate::auth::two_factor::recovery_codes_low),

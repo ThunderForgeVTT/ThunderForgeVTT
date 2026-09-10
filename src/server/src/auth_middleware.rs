@@ -26,6 +26,14 @@ pub struct AuthenticatedUser {
     pub is_admin: bool,
     #[allow(dead_code)]
     pub role: String,
+    /// Spec 039 US7: an open termination has disabled this account.
+    ///
+    /// Resolved here and **refused one layer up**, never here: a blanket 401 at
+    /// session resolution would destroy the download and the appeal, and with
+    /// them the remedy (FR-031). `require_authenticated_user` and GraphQL's
+    /// `authenticated_user` refuse; the few surfaces that must not use the
+    /// `_even_if_disabled` forms.
+    pub disabled: bool,
 }
 
 static AUTH_RATE_LIMITER: OnceLock<Mutex<HashMap<String, Vec<i64>>>> = OnceLock::new();
@@ -208,7 +216,29 @@ pub fn client_ip(headers: &HeaderMap) -> String {
         .unwrap_or_else(|| "unknown".to_string())
 }
 
+/// The layer every signed-in REST router gets. **Refuses a disabled account**
+/// (spec 039 FR-031), so a router added next year is closed to one by default.
 pub async fn require_authenticated_user(
+    State(state): State<AppState>,
+    cookies: Cookies,
+    mut request: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    let authenticated_user = resolve_authenticated_user(&state, &cookies).await?;
+    if authenticated_user.disabled {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    request.extensions_mut().insert(authenticated_user);
+
+    Ok(next.run(request).await)
+}
+
+/// The same layer, admitting a disabled account. Applied to exactly two
+/// routers in `main.rs`: GraphQL, which runs its own allowlist resolver by
+/// resolver (`graphql::helpers::authenticated_user_even_if_disabled`), and the
+/// data download, which is one of the two remedies (FR-031).
+pub async fn require_authenticated_user_even_if_disabled(
     State(state): State<AppState>,
     cookies: Cookies,
     mut request: Request,
@@ -260,20 +290,29 @@ pub async fn resolve_authenticated_user(
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let session = tokio::task::spawn_blocking(move || {
-        user_sessions::table
+        let found = user_sessions::table
             .inner_join(users::table.on(users::id.eq(user_sessions::user_id)))
             .filter(user_sessions::id.eq(session_id))
             .filter(user_sessions::revoked_at.is_null())
             .filter(user_sessions::expires_at.gt(now))
             .select((UserSession::as_select(), users::is_admin))
             .first::<(UserSession, bool)>(&mut conn)
-            .optional()
+            .optional()?;
+        // Spec 039 US7: one indexed EXISTS, on the connection already held.
+        match found {
+            Some((session, is_admin)) => {
+                let disabled =
+                    crate::moderation::standing::is_disabled_sync(&mut conn, session.user_id)?;
+                Ok::<_, diesel::result::Error>(Some((session, is_admin, disabled)))
+            }
+            None => Ok(None),
+        }
     })
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let Some((session, is_admin)) = session else {
+    let Some((session, is_admin, disabled)) = session else {
         cookies
             .private(&state.key)
             .remove(Cookie::new("session", ""));
@@ -310,6 +349,7 @@ pub async fn resolve_authenticated_user(
         expires_at: session.expires_at,
         is_admin,
         role: user_role(is_admin).to_string(),
+        disabled,
     })
 }
 

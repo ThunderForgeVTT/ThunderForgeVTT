@@ -12,6 +12,8 @@ const LADDER: Ladder = Ladder {
     suspend_publishing_at: 2,
     threshold: 3,
     lookback_days: 365,
+    window_days: 30,
+    requires_human: true,
 };
 
 fn a_strike() -> Strike {
@@ -246,4 +248,332 @@ async fn a_case_that_does_not_count_tells_nobody_anything() {
 
     tell_of_strike_sync(&mut conn, account, Uuid::now_v7(), LADDER).expect("tell");
     assert!(notices_for(&mut conn, account).is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// US7: the window, the appeal, and the two remedies (T064–T066)
+// ---------------------------------------------------------------------------
+
+/// A ladder whose windows end without a person, so the sweep carries them out.
+/// Every sweep below is scoped to one account: the database is shared, and an
+/// unscoped sweep under this ladder would disable every account at the
+/// threshold in it.
+const TIMER_LADDER: Ladder = Ladder {
+    requires_human: false,
+    ..LADDER
+};
+
+/// Three strikes, and a window opened `days_ago` — so a window of thirty days
+/// opened forty days ago is ten days past due.
+fn a_window(conn: &mut PgConnection, days_ago: i64) -> (Uuid, AccountTermination) {
+    let (account, world) = an_account_in_a_world(conn);
+    for _ in 0..3 {
+        an_upheld_case(conn, account, world);
+    }
+    let opened = open_termination_sync(
+        conn,
+        account,
+        TIMER_LADDER,
+        Utc::now() - chrono::Duration::days(days_ago),
+    )
+    .expect("open")
+    .expect("three strikes open a window");
+    (account, opened)
+}
+
+fn account_exists(conn: &mut PgConnection, account: Uuid) -> bool {
+    use crate::schema::users;
+    diesel::select(diesel::dsl::exists(
+        users::table.filter(users::id.eq(account)),
+    ))
+    .get_result(conn)
+    .expect("exists")
+}
+
+/// T064 / FR-034: an appeal open when the window ends **pauses** the deletion.
+/// Deletion is never the outcome of the instance being slow to decide.
+#[tokio::test]
+async fn an_open_appeal_blocks_deletion_past_the_due_date() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().expect("conn");
+    let (account, opened) = a_window(&mut conn, 40);
+    assert!(opened.disables_account);
+    assert!(
+        opened.deletion_due_at < Utc::now(),
+        "the fixture is past due"
+    );
+
+    file_appeal_sync(&mut conn, account, "The work is mine.", Utc::now()).expect("appeal");
+    let report =
+        sweep_scoped_sync(&mut conn, TIMER_LADDER, Utc::now(), Some(account)).expect("sweep");
+
+    assert_eq!(report.deleted, 0);
+    assert!(
+        account_exists(&mut conn, account),
+        "nothing is deleted while an appeal is open"
+    );
+}
+
+/// T064: a rejected appeal resumes from the date already fixed. Filing on day
+/// twenty-nine bought no second window — the very next sweep carries it out.
+#[tokio::test]
+async fn a_rejected_appeal_resumes_from_the_date_already_passed() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().expect("conn");
+    let (account, opened) = a_window(&mut conn, 40);
+    let admin = insert_test_user(&mut conn);
+
+    file_appeal_sync(&mut conn, account, "Please reconsider.", Utc::now()).expect("appeal");
+    let rejected = resolve_appeal_sync(
+        &mut conn,
+        account,
+        admin,
+        &AppealDecision {
+            upheld: false,
+            note: Some("The notices were valid.".to_string()),
+            overturned_case: None,
+        },
+        TIMER_LADDER,
+        Utc::now(),
+    )
+    .expect("reject");
+    assert_eq!(
+        rejected.deletion_due_at, opened.deletion_due_at,
+        "a rejection does not move the date"
+    );
+
+    let report =
+        sweep_scoped_sync(&mut conn, TIMER_LADDER, Utc::now(), Some(account)).expect("sweep");
+    assert_eq!(report.deleted, 1);
+    assert!(
+        !account_exists(&mut conn, account),
+        "real deletion (FR-036)"
+    );
+
+    let closed: Option<String> = account_terminations::table
+        .filter(account_terminations::id.eq(opened.id))
+        .select(account_terminations::closed_reason)
+        .first(&mut conn)
+        .expect("the row outlives the account");
+    assert_eq!(closed.as_deref(), Some(closed_reason::DELETED));
+}
+
+/// T064 / FR-033: an upheld appeal restores the account, cancels the deletion,
+/// and removes the strike it overturned.
+#[tokio::test]
+async fn an_upheld_appeal_restores_and_removes_the_strike() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().expect("conn");
+    let (account, _) = a_window(&mut conn, 5);
+    let admin = insert_test_user(&mut conn);
+    assert!(is_disabled_sync(&mut conn, account).expect("disabled"));
+
+    file_appeal_sync(&mut conn, account, "The third was never mine.", Utc::now()).expect("appeal");
+    resolve_appeal_sync(
+        &mut conn,
+        account,
+        admin,
+        &AppealDecision {
+            upheld: true,
+            note: None,
+            overturned_case: None,
+        },
+        TIMER_LADDER,
+        Utc::now(),
+    )
+    .expect("uphold");
+
+    let after = standing_of_sync(&mut conn, account, TIMER_LADDER).expect("standing");
+    assert!(!after.disabled, "restored");
+    assert!(after.termination.is_none(), "the window is closed");
+    assert_eq!(
+        after.strike_count(),
+        2,
+        "the overturned strike no longer counts"
+    );
+    assert!(
+        notices_for(&mut conn, account)
+            .iter()
+            .any(|(kind, payload)| kind == notices::kind::APPEAL_RESOLVED
+                && payload.as_ref().is_some_and(|p| p["upheld"] == true)),
+        "and the person is told",
+    );
+}
+
+/// FR-035: a strike that ages past the lookback while an account is disabled
+/// is recounted, and the account is restored without anybody asking.
+#[tokio::test]
+async fn a_strike_ageing_out_while_disabled_restores_the_account() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().expect("conn");
+    let (account, opened) = a_window(&mut conn, 5);
+
+    let oldest: Uuid = content_moderation_actions::table
+        .filter(content_moderation_actions::account_id.eq(account))
+        .order(content_moderation_actions::created_at.asc())
+        .select(content_moderation_actions::case_id)
+        .first(&mut conn)
+        .expect("a case");
+    diesel::update(content_moderation_actions::table)
+        .filter(content_moderation_actions::case_id.eq(oldest))
+        .set(content_moderation_actions::created_at.eq(Utc::now() - chrono::Duration::days(400)))
+        .execute(&mut conn)
+        .expect("age it");
+
+    let report =
+        sweep_scoped_sync(&mut conn, TIMER_LADDER, Utc::now(), Some(account)).expect("sweep");
+    assert_eq!(report.closed, 1);
+    assert!(!is_disabled_sync(&mut conn, account).expect("disabled"));
+
+    let reason: Option<String> = account_terminations::table
+        .filter(account_terminations::id.eq(opened.id))
+        .select(account_terminations::closed_reason)
+        .first(&mut conn)
+        .expect("row");
+    assert_eq!(reason.as_deref(), Some(closed_reason::STRIKES_AGED_OUT));
+    assert!(
+        notices_for(&mut conn, account)
+            .iter()
+            .any(|(kind, _)| kind == notices::kind::ACCOUNT_RESTORED),
+        "told they are back",
+    );
+}
+
+/// The window opens at the moment of the third strike (FR-030), not at the
+/// next sweep — and the notice says when it ends.
+#[tokio::test]
+async fn the_third_strike_opens_the_window_there_and_then() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().expect("conn");
+    let (account, world) = an_account_in_a_world(&mut conn);
+    for _ in 0..3 {
+        let case = an_upheld_case(&mut conn, account, world);
+        tell_of_strike_sync(&mut conn, account, case, LADDER).expect("tell");
+    }
+
+    let standing = standing_of_sync(&mut conn, account, LADDER).expect("standing");
+    assert!(standing.disabled);
+    let window = standing.termination.expect("open");
+    assert!(
+        window.requires_human,
+        "the shipped default waits for a person"
+    );
+    let disabled_notice = notices_for(&mut conn, account)
+        .into_iter()
+        .find(|(kind, _)| kind == notices::kind::ACCOUNT_DISABLED)
+        .expect("told at the start of the window (FR-036)");
+    assert!(disabled_notice.1.expect("payload")["deletionDueAt"].is_string());
+}
+
+/// T066 / FR-039: the last administrator's window is written, needs a person,
+/// and does **not** disable them. With another administrator it is an
+/// ordinary window.
+#[test]
+fn the_last_administrator_is_never_disabled_by_the_counting() {
+    assert_eq!(
+        termination_terms(TIMER_LADDER, true, 0),
+        (false, true),
+        "the only administrator: written, a person decides, not disabled",
+    );
+    assert_eq!(
+        termination_terms(TIMER_LADDER, true, 1),
+        (true, false),
+        "an administrator with a colleague is treated like anybody else",
+    );
+    assert_eq!(termination_terms(TIMER_LADDER, false, 0), (true, false));
+    assert_eq!(
+        termination_terms(LADDER, false, 3),
+        (true, true),
+        "the snapshot follows the setting when FR-039 does not apply",
+    );
+}
+
+/// An administrator cannot carry out the last administrator's window.
+#[tokio::test]
+async fn no_administrator_can_delete_the_last_one() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().expect("conn");
+    let (account, world) = an_account_in_a_world(&mut conn);
+    for _ in 0..3 {
+        an_upheld_case(&mut conn, account, world);
+    }
+    // Written directly with the terms FR-039 gives the last administrator,
+    // because making this database hold exactly one would change global state.
+    diesel::insert_into(account_terminations::table)
+        .values(&NewAccountTermination {
+            id: Uuid::now_v7(),
+            account_id: account,
+            opened_at: Utc::now() - chrono::Duration::days(40),
+            deletion_due_at: Utc::now() - chrono::Duration::days(10),
+            strike_count_at_open: 3,
+            requires_human: true,
+            disables_account: false,
+        })
+        .execute(&mut conn)
+        .expect("window");
+
+    let refused = execute_by_administrator_sync(&mut conn, account, Utc::now());
+    assert!(refused.is_err());
+    assert!(account_exists(&mut conn, account));
+    assert!(!is_disabled_sync(&mut conn, account).expect("disabled"));
+}
+
+/// T065 / FR-032: downloading writes nothing to the window, and appealing
+/// writes nothing to the download — in both orders. Exercising one remedy
+/// forfeits nothing of the other.
+#[tokio::test]
+async fn downloading_and_appealing_leave_each_other_alone_in_either_order() {
+    let state = test_app_state();
+
+    let exported = |value: crate::users::UserDataExport| {
+        let mut json = serde_json::to_value(value).expect("json");
+        json["manifest"]["exported_at"] = serde_json::Value::Null;
+        json
+    };
+    let window_of = |conn: &mut PgConnection, account: Uuid| -> AccountTermination {
+        account_terminations::table
+            .filter(account_terminations::account_id.eq(account))
+            .select(AccountTermination::as_select())
+            .first(conn)
+            .expect("window")
+    };
+
+    for appeal_first in [false, true] {
+        let mut conn = state.db_pool.get().expect("conn");
+        let (account, _) = a_window(&mut conn, 5);
+        drop(conn);
+
+        let download = || crate::users::export_user_data_payload(&state, account);
+        let appeal = || {
+            let mut conn = state.db_pool.get().expect("conn");
+            file_appeal_sync(&mut conn, account, "Mine.", Utc::now()).expect("appeal");
+        };
+
+        let before_download = exported(download().await.expect("export"));
+        if appeal_first {
+            appeal();
+        }
+        let mut conn = state.db_pool.get().expect("conn");
+        let window_before = window_of(&mut conn, account);
+        drop(conn);
+
+        let after_download = exported(download().await.expect("export"));
+        let mut conn = state.db_pool.get().expect("conn");
+        assert_eq!(
+            window_of(&mut conn, account),
+            window_before,
+            "downloading moved nothing in the window (appeal first: {appeal_first})",
+        );
+        drop(conn);
+
+        if !appeal_first {
+            appeal();
+        }
+        assert_eq!(
+            exported(download().await.expect("export")),
+            after_download,
+            "appealing changed nothing in the download (appeal first: {appeal_first})",
+        );
+        assert_eq!(before_download, after_download);
+    }
 }

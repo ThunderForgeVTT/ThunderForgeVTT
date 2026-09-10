@@ -263,7 +263,8 @@ impl UserQuery {
 
     async fn export_my_data(&self, ctx: &Context<'_>) -> GraphQLResult<GraphQLExportMyDataPayload> {
         let state = app_state(ctx)?;
-        let auth_user = authenticated_user(ctx)?;
+        // One of the two remedies a disabled account keeps (spec 039 FR-031).
+        let auth_user = crate::graphql::helpers::authenticated_user_even_if_disabled(ctx)?;
         export_user_data_payload(state, auth_user.user_id)
             .await
             .map(GraphQLExportMyDataPayload::from)

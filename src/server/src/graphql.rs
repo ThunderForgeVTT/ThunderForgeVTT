@@ -183,6 +183,9 @@ pub use mutations_party::PartyMutation;
 // Spec 015: DMCA notice-and-takedown moderation mutations
 pub mod mutations_moderation;
 pub use mutations_moderation::ModerationMutation;
+// Spec 039 US7: the appeal, and the two decisions only an administrator makes.
+pub mod mutations_standing;
+pub use mutations_standing::StandingMutation;
 
 pub mod mutations_roll;
 pub use mutations_roll::RollMutation;
@@ -250,6 +253,11 @@ pub use mutations_admin::*;
 #[cfg(test)]
 #[path = "graphql/admin_surface_tests.rs"]
 mod admin_surface_tests;
+
+// Spec 039 T067: what a disabled account can still reach — exactly the
+// allowlist, and no more.
+#[cfg(test)]
+mod disabled_surface_tests;
 
 /// Spec 036 FR-010: a subscription stops when the session behind it does.
 /// Separate from `subscriptions` so the rule can be tested without opening a
@@ -414,6 +422,7 @@ pub struct MutationRoot(
     PickupMutation,
     PartyMutation,
     ModerationMutation,
+    StandingMutation,
     RollMutation,
     // Spec 036 US3b: `rollCheck(worldId, actorId, checkId)`.
     RollCheckMutation,

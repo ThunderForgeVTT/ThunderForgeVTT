@@ -23,16 +23,33 @@ impl From<UserDataDeleteSummary> for GraphQLDeleteMyDataPayload {
     }
 }
 
+/// One of the export's content shapes, as the JSON the download carries.
+fn as_json<T: serde::Serialize>(values: Vec<T>) -> Vec<async_graphql::Json<serde_json::Value>> {
+    values
+        .into_iter()
+        // A derived `Serialize` over plain fields cannot fail; `Null` rather
+        // than a panic is the answer if one ever did.
+        .map(|value| async_graphql::Json(serde_json::to_value(value).unwrap_or_default()))
+        .collect()
+}
+
 impl From<UserDataExport> for GraphQLExportMyDataPayload {
     fn from(export: UserDataExport) -> Self {
+        let counts = &export.manifest.counts;
         Self {
             manifest: GraphQLExportManifest {
                 schema_version: export.manifest.schema_version.to_string(),
                 exported_at: export.manifest.exported_at,
-                worlds: export.manifest.counts.worlds as i32,
-                world_tokens: export.manifest.counts.world_tokens as i32,
-                world_events: export.manifest.counts.world_events as i32,
-                policies: export.manifest.counts.policies as i32,
+                worlds: counts.worlds as i32,
+                world_tokens: counts.world_tokens as i32,
+                world_events: counts.world_events as i32,
+                policies: counts.policies as i32,
+                scenes: counts.scenes as i32,
+                actors: counts.actors as i32,
+                items: counts.items as i32,
+                abilities: counts.abilities as i32,
+                lore_entries: counts.lore_entries as i32,
+                collections: counts.collections as i32,
             },
             user: GraphQLUser {
                 id: export.user.id,
@@ -56,22 +73,12 @@ impl From<UserDataExport> for GraphQLExportMyDataPayload {
                 .collect(),
             // policies are disabled (module not implemented)
             policies: vec![],
-            scenes: export
-                .scenes
-                .into_iter()
-                .map(|item| GraphQLPlaceholderDomainObject {
-                    schema_version: item.schema_version.to_string(),
-                    status: item.status.to_string(),
-                })
-                .collect(),
-            actors: export
-                .actors
-                .into_iter()
-                .map(|item| GraphQLPlaceholderDomainObject {
-                    schema_version: item.schema_version.to_string(),
-                    status: item.status.to_string(),
-                })
-                .collect(),
+            scenes: as_json(export.scenes),
+            actors: as_json(export.actors),
+            items: as_json(export.items),
+            abilities: as_json(export.abilities),
+            lore_entries: as_json(export.lore_entries),
+            collections: as_json(export.collections),
             asset_packs: export
                 .asset_packs
                 .into_iter()

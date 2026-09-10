@@ -71,12 +71,17 @@ fn load_active_share(
     conn: &mut diesel::PgConnection,
     share_code: &str,
 ) -> Result<AbilityShare, String> {
-    world_ability_shares::table
+    let share = world_ability_shares::table
         .filter(world_ability_shares::share_code.eq(share_code))
         .filter(world_ability_shares::revoked.eq(false))
         .select(AbilityShare::as_select())
         .first::<AbilityShare>(conn)
-        .map_err(|_| UNAVAILABLE.to_string())
+        .map_err(|_| UNAVAILABLE.to_string())?;
+    // Spec 039 FR-038: a disabled owner's links resolve as dead. Fails closed.
+    if crate::moderation::standing::is_disabled_sync(conn, share.created_by).unwrap_or(true) {
+        return Err(UNAVAILABLE.to_string());
+    }
+    Ok(share)
 }
 
 /// Testable core of `sharedAbility` (FR-033).

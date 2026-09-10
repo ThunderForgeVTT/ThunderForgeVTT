@@ -39,12 +39,25 @@ pub struct ExportQuery {
     format: Option<String>,
 }
 
+pub mod export_content;
+
+pub use export_content::{
+    ExportedAbility, ExportedActor, ExportedCollection, ExportedItem, ExportedLoreEntry,
+    ExportedScene,
+};
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ExportCounts {
     pub worlds: usize,
     pub world_tokens: usize,
     pub world_events: usize,
     pub policies: usize,
+    pub scenes: usize,
+    pub actors: usize,
+    pub items: usize,
+    pub abilities: usize,
+    pub lore_entries: usize,
+    pub collections: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -68,8 +81,15 @@ pub struct UserDataExport {
     pub world_tokens: Vec<WorldToken>,
     pub world_events: Vec<WorldEvent>,
     pub policies: Vec<String>, // Policy disabled
-    pub scenes: Vec<PlaceholderDomainExport>,
-    pub actors: Vec<PlaceholderDomainExport>,
+    /// Spec 039 T076 (ADR-011 as amended): what the person made, as the
+    /// export's own shapes rather than table rows.
+    pub scenes: Vec<ExportedScene>,
+    pub actors: Vec<ExportedActor>,
+    pub items: Vec<ExportedItem>,
+    pub abilities: Vec<ExportedAbility>,
+    pub lore_entries: Vec<ExportedLoreEntry>,
+    pub collections: Vec<ExportedCollection>,
+    /// Still reserved: neither is something a person makes.
     pub asset_packs: Vec<PlaceholderDomainExport>,
     pub game_systems: Vec<PlaceholderDomainExport>,
 }
@@ -95,9 +115,15 @@ pub struct UserDataDeleteResponse {
 }
 
 pub fn router() -> Router<AppState> {
-    Router::new()
-        .route("/user/data/export", get(export_user_data))
-        .route("/user/data", delete(delete_user_data))
+    Router::new().route("/user/data", delete(delete_user_data))
+}
+
+/// The download, on a router of its own because it is one of the two things a
+/// **disabled** account may still do (spec 039 FR-031). `main.rs` layers it
+/// with `require_authenticated_user_even_if_disabled`; everything in
+/// [`router`] refuses a disabled account like every other route.
+pub fn export_router() -> Router<AppState> {
+    Router::new().route("/user/data/export", get(export_user_data))
 }
 
 impl From<User> for PublicUser {
@@ -164,7 +190,7 @@ pub async fn export_user_data_payload(
         .get()
         .map_err(|_| "Failed to get DB connection".to_string())?;
 
-    let (user, owned_worlds, owned_tokens, owned_events, owned_policies) =
+    let (user, owned_worlds, owned_tokens, owned_events, owned_policies, content) =
         tokio::task::spawn_blocking(move || {
             let user = users::table
                 .filter(users::id.eq(user_id))
@@ -191,12 +217,15 @@ pub async fn export_user_data_payload(
 
             let owned_policies: Vec<String> = vec![]; // Policies disabled
 
+            let content = export_content::load_content_sync(&mut conn, user_id)?;
+
             Ok::<_, diesel::result::Error>((
                 user,
                 owned_worlds,
                 owned_tokens,
                 owned_events,
                 owned_policies,
+                content,
             ))
         })
         .await
@@ -205,13 +234,20 @@ pub async fn export_user_data_payload(
 
     Ok(UserDataExport {
         manifest: ExportManifest {
-            schema_version: "v1",
+            // v2: the person's own content, as shapes (ADR-011 as amended).
+            schema_version: "v2",
             exported_at: Utc::now(),
             counts: ExportCounts {
                 worlds: owned_worlds.len(),
                 world_tokens: owned_tokens.len(),
                 world_events: owned_events.len(),
                 policies: owned_policies.len(),
+                scenes: content.scenes.len(),
+                actors: content.actors.len(),
+                items: content.items.len(),
+                abilities: content.abilities.len(),
+                lore_entries: content.lore_entries.len(),
+                collections: content.collections.len(),
             },
         },
         user: PublicUser::from(user),
@@ -219,8 +255,12 @@ pub async fn export_user_data_payload(
         world_tokens: owned_tokens,
         world_events: owned_events,
         policies: owned_policies,
-        scenes: Vec::new(),
-        actors: Vec::new(),
+        scenes: content.scenes,
+        actors: content.actors,
+        items: content.items,
+        abilities: content.abilities,
+        lore_entries: content.lore_entries,
+        collections: content.collections,
         asset_packs: Vec::new(),
         game_systems: Vec::new(),
     })
@@ -361,6 +401,16 @@ fn delete_user_data_sync(
         .get()
         .map_err(|_| "Failed to get DB connection".to_string())?;
 
+    delete_user_data_on(&mut conn, user_id).map_err(|_| "Failed to delete user data".to_string())
+}
+
+/// The deletion itself, on a connection the caller holds — so the termination
+/// sweep (spec 039 US7) runs the same code a person deleting their own account
+/// does, inside the transaction that closes the window.
+pub(crate) fn delete_user_data_on(
+    conn: &mut PgConnection,
+    user_id: uuid::Uuid,
+) -> Result<UserDataDeleteSummary, diesel::result::Error> {
     conn.transaction(|conn| {
         let mut summary = UserDataDeleteSummary::default();
 
@@ -368,6 +418,12 @@ fn delete_user_data_sync(
             .filter(worlds::created_by.eq(user_id))
             .select(worlds::id)
             .load::<uuid::Uuid>(conn)?;
+
+        // Decided 2026-09-08 (spec 039's contract records it): the account's
+        // worlds go, including ones other people play in — but every
+        // character owned by somebody else is moved to its player first. In
+        // this transaction, so a rescue that failed means nothing was deleted.
+        crate::collections::rescue::rescue_characters_sync(conn, user_id, &owned_world_ids)?;
 
         if !owned_world_ids.is_empty() {
             summary.world_events_deleted += diesel::delete(
@@ -437,7 +493,6 @@ fn delete_user_data_sync(
 
         Ok::<UserDataDeleteSummary, diesel::result::Error>(summary)
     })
-    .map_err(|_| "Failed to delete user data".to_string())
 }
 
 fn normalize_export_format(format: Option<&str>) -> Result<&'static str, &'static str> {
@@ -584,5 +639,217 @@ mod tests {
         assert_eq!(username, None, "and the name must not");
         assert_eq!(kept_version, version);
         assert_eq!(kept_publishable, Some(publishable_id));
+    }
+
+    /// Where each of `player`'s characters now lives: `(actor, world, world name)`.
+    fn characters_of(
+        conn: &mut diesel::PgConnection,
+        player: uuid::Uuid,
+    ) -> Vec<(uuid::Uuid, uuid::Uuid, String)> {
+        use crate::schema::{world_actors, worlds};
+        use diesel::prelude::*;
+
+        let placed: Vec<(uuid::Uuid, uuid::Uuid)> = world_actors::table
+            .filter(world_actors::owned_by.eq(player))
+            .select((world_actors::id, world_actors::world_id))
+            .load(conn)
+            .expect("characters");
+        placed
+            .into_iter()
+            .map(|(actor, world)| {
+                let name: String = worlds::table
+                    .filter(worlds::id.eq(world))
+                    .select(worlds::name)
+                    .first(conn)
+                    .expect("world");
+                (actor, world, name)
+            })
+            .collect()
+    }
+
+    /// Decided 2026-09-08, and spec 039's T068 as amended by it: deleting an
+    /// account deletes its worlds — even one somebody else plays in — and
+    /// moves each player's character to that player first, filed as a
+    /// collection named for the world it came from. The GM's own NPC goes
+    /// with the world.
+    #[tokio::test]
+    async fn a_players_character_outlives_the_world_it_was_played_in() {
+        use crate::schema::{account_notices, world_collection_members, world_collections, worlds};
+        use crate::test_support::{
+            insert_test_actor, insert_test_scene, insert_test_user, insert_test_world,
+            test_app_state,
+        };
+        use diesel::prelude::*;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().expect("conn");
+        let gm = insert_test_user(&mut conn);
+        let campaign = insert_test_world(&mut conn, gm);
+        let scene = insert_test_scene(&mut conn, campaign, gm);
+        let player = insert_test_user(&mut conn);
+        let character = insert_test_actor(&mut conn, campaign, scene, player);
+        insert_test_actor(&mut conn, campaign, scene, gm);
+        let campaign_name: String = worlds::table
+            .filter(worlds::id.eq(campaign))
+            .select(worlds::name)
+            .first(&mut conn)
+            .expect("name");
+        drop(conn);
+
+        super::delete_user_data_sync(&state, gm).expect("delete");
+
+        let mut conn = state.db_pool.get().expect("conn");
+        let campaign_left: i64 = worlds::table
+            .filter(worlds::id.eq(campaign))
+            .count()
+            .get_result(&mut conn)
+            .expect("count");
+        assert_eq!(
+            campaign_left, 0,
+            "the world goes with its creator — decided, not a defect"
+        );
+
+        let rescued = characters_of(&mut conn, player);
+        assert_eq!(
+            rescued.len(),
+            1,
+            "the player's character, and only theirs: {rescued:?}"
+        );
+        let (copy, home, home_name) = &rescued[0];
+        assert_ne!(*copy, character, "a copy, in a world that survives");
+        assert!(
+            home_name.ends_with("'s characters"),
+            "a world of the player's own: {home_name}",
+        );
+
+        let filed_under: String = world_collection_members::table
+            .inner_join(
+                world_collections::table
+                    .on(world_collections::id.eq(world_collection_members::collection_id)),
+            )
+            .filter(world_collection_members::member_id.eq(*copy))
+            .filter(world_collections::world_id.eq(*home))
+            .select(world_collections::name)
+            .first(&mut conn)
+            .expect("filed in a collection");
+        assert_eq!(
+            filed_under, campaign_name,
+            "named for the world it came from"
+        );
+
+        let told: i64 = account_notices::table
+            .filter(account_notices::account_id.eq(player))
+            .filter(account_notices::kind.eq(crate::notices::kind::ACTOR_RESCUED))
+            .count()
+            .get_result(&mut conn)
+            .expect("count");
+        assert_eq!(told, 1, "and the player is told where it went");
+    }
+
+    /// Spec 039 T076: the download carries what the person made — the
+    /// character they own (with what it carries), and the items, abilities,
+    /// lore and collections they wrote. A download missing them is not the
+    /// remedy a disabled account is offered.
+    #[tokio::test]
+    async fn the_export_carries_everything_a_person_made() {
+        use crate::schema::{world_actor_inventory, world_collections};
+        use crate::test_support::{
+            insert_test_ability, insert_test_actor, insert_test_item, insert_test_lore_entry,
+            insert_test_scene, insert_test_user, insert_test_world, test_app_state,
+        };
+        use diesel::prelude::*;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().expect("conn");
+        let author = insert_test_user(&mut conn);
+        let world = insert_test_world(&mut conn, author);
+        let scene = insert_test_scene(&mut conn, world, author);
+        let actor = insert_test_actor(&mut conn, world, scene, author);
+        let item = insert_test_item(&mut conn, world, author);
+        let ability = insert_test_ability(&mut conn, world, author);
+        let lore = insert_test_lore_entry(&mut conn, world, author);
+        let now = chrono::Utc::now().naive_utc();
+        diesel::insert_into(world_actor_inventory::table)
+            .values((
+                world_actor_inventory::id.eq(uuid::Uuid::now_v7()),
+                world_actor_inventory::actor_id.eq(actor),
+                world_actor_inventory::item_id.eq(Some(item)),
+                world_actor_inventory::item_name_snapshot.eq("Lantern"),
+                world_actor_inventory::quantity.eq(2),
+                world_actor_inventory::created_at.eq(now),
+                world_actor_inventory::updated_at.eq(now),
+            ))
+            .execute(&mut conn)
+            .expect("inventory");
+        let collection = uuid::Uuid::now_v7();
+        diesel::insert_into(world_collections::table)
+            .values((
+                world_collections::id.eq(collection),
+                world_collections::world_id.eq(world),
+                world_collections::name.eq("Mine"),
+                world_collections::created_by.eq(author),
+                world_collections::updated_by.eq(author),
+                world_collections::created_at.eq(now),
+                world_collections::updated_at.eq(now),
+            ))
+            .execute(&mut conn)
+            .expect("collection");
+        drop(conn);
+
+        let export = super::export_user_data_payload(&state, author)
+            .await
+            .expect("export");
+
+        assert_eq!(export.manifest.schema_version, "v2");
+        let exported_actor = export
+            .actors
+            .iter()
+            .find(|a| a.id == actor)
+            .expect("the character");
+        assert_eq!(
+            exported_actor.inventory,
+            vec![super::export_content::ExportedInventoryLine {
+                name: "Lantern".to_string(),
+                quantity: 2,
+            }],
+            "with what it carries",
+        );
+        assert!(export.items.iter().any(|i| i.id == item));
+        assert!(export.abilities.iter().any(|a| a.id == ability));
+        assert!(export.lore_entries.iter().any(|l| l.id == lore));
+        assert!(export.collections.iter().any(|c| c.id == collection));
+        assert!(export.scenes.iter().any(|s| s.id == scene));
+        assert_eq!(export.manifest.counts.actors, export.actors.len());
+    }
+
+    /// A player who already has a world on the same system gets the character
+    /// there, rather than a new world every time a campaign ends.
+    #[tokio::test]
+    async fn a_rescued_character_goes_to_a_world_the_player_already_has() {
+        use crate::test_support::{
+            insert_test_actor, insert_test_scene, insert_test_user, insert_test_world,
+            test_app_state,
+        };
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().expect("conn");
+        let gm = insert_test_user(&mut conn);
+        let campaign = insert_test_world(&mut conn, gm);
+        let scene = insert_test_scene(&mut conn, campaign, gm);
+        let player = insert_test_user(&mut conn);
+        let their_own = insert_test_world(&mut conn, player);
+        insert_test_scene(&mut conn, their_own, player);
+        insert_test_actor(&mut conn, campaign, scene, player);
+        drop(conn);
+
+        super::delete_user_data_sync(&state, gm).expect("delete");
+
+        let mut conn = state.db_pool.get().expect("conn");
+        let rescued = characters_of(&mut conn, player);
+        assert_eq!(rescued.len(), 1);
+        assert_eq!(
+            rescued[0].1, their_own,
+            "the world they already had on this system"
+        );
     }
 }

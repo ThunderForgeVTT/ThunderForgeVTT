@@ -210,6 +210,7 @@ async fn run_mutation(
             expires_at: chrono::Utc::now().naive_utc() + chrono::Duration::hours(1),
             is_admin: false,
             role: "User".to_string(),
+            disabled: false,
         });
 
     schema(state).execute(request).await
@@ -337,6 +338,7 @@ async fn a_declared_value_exposes_its_pool_as_two_numbers() {
         expires_at: chrono::Utc::now().naive_utc() + chrono::Duration::hours(1),
         is_admin: false,
         role: "User".to_string(),
+        disabled: false,
     });
 
     let response = schema(&state).execute(request).await;

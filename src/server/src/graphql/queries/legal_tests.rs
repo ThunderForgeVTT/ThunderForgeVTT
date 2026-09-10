@@ -94,6 +94,7 @@ fn caller(user_id: uuid::Uuid, is_admin: bool) -> AuthenticatedUser {
         expires_at: chrono::Utc::now().naive_utc() + chrono::Duration::hours(1),
         is_admin,
         role: if is_admin { "Admin" } else { "User" }.to_string(),
+        disabled: false,
     }
 }
 

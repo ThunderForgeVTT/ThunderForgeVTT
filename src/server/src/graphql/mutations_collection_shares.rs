@@ -93,12 +93,19 @@ pub fn load_active_share(
     conn: &mut PgConnection,
     share_code: &str,
 ) -> Result<CollectionShare, String> {
-    world_collection_shares::table
+    let share = world_collection_shares::table
         .filter(world_collection_shares::share_code.eq(share_code))
         .filter(world_collection_shares::revoked.eq(false))
         .select(CollectionShare::as_select())
         .first::<CollectionShare>(conn)
-        .map_err(|_| UNAVAILABLE.to_string())
+        .map_err(|_| UNAVAILABLE.to_string())?;
+    // Spec 039 FR-038: a disabled owner's links resolve as dead, with the one
+    // sentence every dead link gets. Fails closed — a standing that cannot be
+    // read is not a licence to serve.
+    if crate::moderation::standing::is_disabled_sync(conn, share.created_by).unwrap_or(true) {
+        return Err(UNAVAILABLE.to_string());
+    }
+    Ok(share)
 }
 
 /// Testable core of `collectionShareLink` (FR-010a): the active share for a
