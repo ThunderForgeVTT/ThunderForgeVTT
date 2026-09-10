@@ -10,6 +10,7 @@
 //! complete without new scheduler infrastructure (see tasks.md's header
 //! note and research.md R3).
 
+pub mod standing;
 pub mod validation;
 
 use chrono::Utc;
@@ -50,6 +51,104 @@ pub fn repeat_infringer_threshold() -> i64 {
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(3)
+}
+
+/// One strike: an upheld takedown that was not restored (FR-027).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Strike {
+    pub case_id: Uuid,
+    pub entity_type: String,
+    pub entity_id: Uuid,
+    pub world_id: Uuid,
+    /// When the case last became upheld — the moment its lookback runs from.
+    pub recorded_at: chrono::DateTime<Utc>,
+}
+
+/// Whether a case whose latest event is `action` counts as a strike.
+///
+/// Only a disabling outcome counts. A notice still under counter-notice review,
+/// a restored case and a rejected notice all end on an event that is not one of
+/// these — which is how an accusation stays not-a-strike, and how a withdrawn
+/// notice or a successful counter-notice removes one.
+pub fn counts_as_strike(action: &str) -> bool {
+    action == action_type::CONTENT_DISABLED || action == action_type::CONTENT_REMAINS_DISABLED
+}
+
+/// Every account's strikes inside the lookback, each account's oldest first.
+///
+/// **The one definition of a strike** (FR-027). `repeatInfringerFlags` and the
+/// standing ladder both read it, so the flag and the consequence cannot drift
+/// apart. Each case is judged by its latest event within the lookback; `only`
+/// narrows to one account without changing that rule, because every event on a
+/// case carries the same `account_id`.
+pub fn strikes_by_account(
+    conn: &mut PgConnection,
+    only: Option<Uuid>,
+    lookback_days: i64,
+) -> QueryResult<std::collections::BTreeMap<Uuid, Vec<Strike>>> {
+    let cutoff = Utc::now() - chrono::Duration::days(lookback_days);
+    let mut query = content_moderation_actions::table
+        .filter(content_moderation_actions::created_at.ge(cutoff))
+        .filter(content_moderation_actions::account_id.is_not_null())
+        .into_boxed();
+    if let Some(account_id) = only {
+        query = query.filter(content_moderation_actions::account_id.eq(account_id));
+    }
+    let rows = query
+        .order(content_moderation_actions::created_at.asc())
+        .select(ContentModerationAction::as_select())
+        .load::<ContentModerationAction>(conn)?;
+
+    let mut latest: std::collections::BTreeMap<Uuid, ContentModerationAction> =
+        std::collections::BTreeMap::new();
+    for row in rows {
+        latest
+            .entry(row.case_id)
+            .and_modify(|existing| {
+                if row.created_at > existing.created_at {
+                    *existing = row.clone();
+                }
+            })
+            .or_insert(row);
+    }
+
+    let mut strikes: std::collections::BTreeMap<Uuid, Vec<Strike>> =
+        std::collections::BTreeMap::new();
+    for case in latest.into_values() {
+        if !counts_as_strike(&case.action_type) {
+            continue;
+        }
+        let Some(account_id) = case.account_id else {
+            continue;
+        };
+        strikes.entry(account_id).or_default().push(Strike {
+            case_id: case.case_id,
+            entity_type: case.entity_type,
+            entity_id: case.entity_id,
+            world_id: case.world_id,
+            recorded_at: case.created_at,
+        });
+    }
+    for list in strikes.values_mut() {
+        list.sort_by_key(|strike| strike.recorded_at);
+    }
+    Ok(strikes)
+}
+
+/// One account's strikes inside the lookback, oldest first.
+pub fn strikes_of(
+    conn: &mut PgConnection,
+    account_id: Uuid,
+    lookback_days: i64,
+) -> QueryResult<Vec<Strike>> {
+    Ok(strikes_by_account(conn, Some(account_id), lookback_days)?
+        .remove(&account_id)
+        .unwrap_or_default())
+}
+
+/// How many strikes one account holds under the lookback in force.
+pub fn strike_count(conn: &mut PgConnection, account_id: Uuid) -> QueryResult<i64> {
+    Ok(strikes_of(conn, account_id, repeat_infringer_lookback_days())?.len() as i64)
 }
 
 /// Action-type string constants — kept centralized so every module that

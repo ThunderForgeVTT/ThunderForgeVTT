@@ -8,7 +8,8 @@ consequence, a window, and a way for a person to see where they stand.
 ```graphql
 type Strike {
   caseId: UUID!
-  entityType: String!
+  entityType: ModerationEntityType!
+  entityId: UUID!
   worldId: UUID!
   recordedAt: String!
   "When this strike stops counting, from the existing lookback."
@@ -27,11 +28,25 @@ type Termination {
 type Standing {
   strikes: [Strike!]!
   strikeCount: Int!
+  "The rungs in force on this instance, so a person can see how many remain."
+  warnAt: Int!
+  suspendPublishingAt: Int!
   "The threshold in force on this instance."
   threshold: Int!
+  warned: Boolean!
   mayPublish: Boolean!
   disabled: Boolean!
   termination: Termination
+}
+
+"What a person was told. The words are rendered from kind + payload, never stored."
+type AccountNotice {
+  id: UUID!
+  kind: String!
+  subjectRef: JSON
+  payload: JSON
+  createdAt: String!
+  readAt: String
 }
 
 extend type Query {
@@ -40,8 +55,19 @@ extend type Query {
 
   "Anyone's standing. Admin only."
   accountStanding(accountId: UUID!): Standing!
+
+  "What the caller has been told about their own account, newest first."
+  myNotices(limit: Int): [AccountNotice!]!
 }
 ```
+
+*Amended 2026-09-10, with US5:* `Strike` names the content (`entityId`, and the
+entity type as the moderation enum rather than a string); `Standing` carries
+every rung, not only the threshold, because FR-028's "how many remain" is a
+question about the next rung, not the last; and `myNotices` is the read side of
+`account_notices`, without which a notice is written and never seen.
+`Standing.termination` and the `Termination` type arrive with US7, which creates
+the table they read — a type with no instance would be a promise in the schema.
 
 `myStanding` is FR-029 and it is not decorative: FR-028 says nobody may reach
 the third strike having never been told about the first two, and a page that

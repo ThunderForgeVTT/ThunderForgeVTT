@@ -1,0 +1,164 @@
+//! Where an account stands, and what it has been told.
+//!
+//! Spec 039 US5, `contracts/standing-and-termination.md`.
+//!
+//! `myStanding` is FR-029 and it is not decorative: FR-028 says nobody may
+//! reach the third strike having never been told about the first two, and a
+//! page that answers "where do I stand" at any moment is half of keeping that
+//! promise. `myNotices` is the other half.
+
+use async_graphql::{Context, Json, Object, SimpleObject};
+use uuid::Uuid;
+
+use crate::graphql::types::ModerationEntityType;
+use crate::graphql::{Error, GraphQLResult, admin_user, app_state, authenticated_user};
+use crate::moderation::standing::Standing;
+
+/// One strike: what it was, and when it stops counting.
+#[derive(SimpleObject, Debug, Clone)]
+#[graphql(name = "Strike")]
+pub struct GraphQLStrike {
+    pub case_id: Uuid,
+    pub entity_type: ModerationEntityType,
+    pub entity_id: Uuid,
+    pub world_id: Uuid,
+    pub recorded_at: String,
+    /// When this strike stops counting, from the existing lookback.
+    pub ages_out_at: String,
+}
+
+/// Everything here is derived on read — there is no stored count to go stale.
+#[derive(SimpleObject, Debug, Clone)]
+#[graphql(name = "Standing")]
+pub struct GraphQLStanding {
+    /// Oldest first.
+    pub strikes: Vec<GraphQLStrike>,
+    pub strike_count: i32,
+    /// The rungs in force on this instance, so a person can see how many
+    /// remain before each consequence.
+    pub warn_at: i32,
+    pub suspend_publishing_at: i32,
+    pub threshold: i32,
+    pub warned: bool,
+    pub may_publish: bool,
+    pub disabled: bool,
+}
+
+/// What a person was told. The words are the client's to render from `kind`
+/// and `payload`; they are not stored, so a wording fix reaches every notice.
+#[derive(SimpleObject, Debug, Clone)]
+#[graphql(name = "AccountNotice")]
+pub struct GraphQLAccountNotice {
+    pub id: Uuid,
+    pub kind: String,
+    pub subject_ref: Option<Json<serde_json::Value>>,
+    pub payload: Option<Json<serde_json::Value>>,
+    pub created_at: String,
+    pub read_at: Option<String>,
+}
+
+fn to_graphql(standing: Standing) -> GraphQLResult<GraphQLStanding> {
+    let ladder = standing.ladder;
+    let strike_count = standing.strike_count() as i32;
+    let warned = standing.warned();
+    let strikes = standing
+        .strikes
+        .into_iter()
+        .map(|strike| {
+            // Every strike was written through `ModerationEntityType::as_db_str`,
+            // so an unknown value is somebody editing the table by hand — worth
+            // an error rather than a strike quietly missing from the list.
+            let entity_type = ModerationEntityType::from_db_str(&strike.entity_type)
+                .ok_or_else(|| Error::new("A strike names content of an unknown kind"))?;
+            Ok(GraphQLStrike {
+                case_id: strike.case_id,
+                entity_type,
+                entity_id: strike.entity_id,
+                world_id: strike.world_id,
+                recorded_at: strike.recorded_at.to_rfc3339(),
+                ages_out_at: ladder.ages_out_at(strike.recorded_at).to_rfc3339(),
+            })
+        })
+        .collect::<GraphQLResult<Vec<_>>>()?;
+
+    Ok(GraphQLStanding {
+        strikes,
+        strike_count,
+        warn_at: ladder.warn_at as i32,
+        suspend_publishing_at: ladder.suspend_publishing_at as i32,
+        threshold: ladder.threshold as i32,
+        warned,
+        may_publish: standing.may_publish,
+        disabled: standing.disabled,
+    })
+}
+
+/// How many notices a person gets when they do not say.
+const MY_NOTICES_DEFAULT: i32 = 50;
+const MY_NOTICES_MAX: i32 = 200;
+
+#[derive(Default)]
+pub struct StandingQuery;
+
+#[Object]
+impl StandingQuery {
+    /// The caller's own standing (FR-029).
+    ///
+    /// On the list of what a disabled account may still reach, in
+    /// `standing-and-termination.md` — the person has to be able to see the
+    /// window and the date. That allowlist arrives with US7; until then no
+    /// account is disabled and `authenticated_user` is the whole of the check.
+    async fn my_standing(&self, ctx: &Context<'_>) -> GraphQLResult<GraphQLStanding> {
+        let state = app_state(ctx)?;
+        let user = authenticated_user(ctx)?;
+        let standing = crate::moderation::standing::standing_of(state, user.user_id)
+            .await
+            .map_err(Error::new)?;
+        to_graphql(standing)
+    }
+
+    /// Anyone's standing. Admin-only, for the reason `moderationCase` is.
+    async fn account_standing(
+        &self,
+        ctx: &Context<'_>,
+        account_id: Uuid,
+    ) -> GraphQLResult<GraphQLStanding> {
+        let state = app_state(ctx)?;
+        let _ = admin_user(ctx)?;
+        let standing = crate::moderation::standing::standing_of(state, account_id)
+            .await
+            .map_err(Error::new)?;
+        to_graphql(standing)
+    }
+
+    /// What the caller has been told about their own account, newest first
+    /// (FR-028).
+    async fn my_notices(
+        &self,
+        ctx: &Context<'_>,
+        limit: Option<i32>,
+    ) -> GraphQLResult<Vec<GraphQLAccountNotice>> {
+        let state = app_state(ctx)?;
+        let user = authenticated_user(ctx)?;
+        let limit = limit.unwrap_or(MY_NOTICES_DEFAULT).clamp(1, MY_NOTICES_MAX);
+
+        let rows = crate::notices::for_account(state, user.user_id, i64::from(limit))
+            .await
+            .map_err(Error::new)?;
+        Ok(rows
+            .into_iter()
+            .map(|notice| GraphQLAccountNotice {
+                id: notice.id,
+                kind: notice.kind,
+                subject_ref: notice.subject_ref.map(Json),
+                payload: notice.payload.map(Json),
+                created_at: notice.created_at.to_rfc3339(),
+                read_at: notice.read_at.map(|at| at.to_rfc3339()),
+            })
+            .collect())
+    }
+}
+
+#[cfg(test)]
+#[path = "standing_tests.rs"]
+mod standing_tests;

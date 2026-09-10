@@ -11,6 +11,18 @@ pub mod sql_types {
 }
 
 diesel::table! {
+    account_notices (id) {
+        id -> Uuid,
+        account_id -> Uuid,
+        kind -> Text,
+        subject_ref -> Nullable<Jsonb>,
+        payload -> Nullable<Jsonb>,
+        created_at -> Timestamptz,
+        read_at -> Nullable<Timestamptz>,
+    }
+}
+
+diesel::table! {
     admin_bootstrap_oauth_sessions (id) {
         id -> Uuid,
         provider_id -> Uuid,
@@ -1409,6 +1421,7 @@ diesel::joinable!(world_roll_records -> worlds (world_id));
 diesel::joinable!(world_tokens -> worlds (world_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
+    account_notices,
     admin_bootstrap_oauth_sessions,
     admin_bootstrap_setup,
     attestations,

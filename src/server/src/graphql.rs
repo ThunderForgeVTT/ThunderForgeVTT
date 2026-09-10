@@ -286,6 +286,8 @@ pub struct QueryRoot(
     // every publishing path's dialog reads it, and because an operator handling
     // a notice reaches an archived version through it.
     queries::LegalDocumentQuery,
+    // Spec 039 US5: where an account stands, and what it has been told.
+    queries::StandingQuery,
     AssetQuery,
     ActorQuery,
     ActorPermissionQuery,

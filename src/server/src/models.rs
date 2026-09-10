@@ -2559,3 +2559,31 @@ pub struct NewAttestation {
     pub share_id: Option<uuid::Uuid>,
     pub world_id: Option<uuid::Uuid>,
 }
+
+/// Something a person was told about their own account (spec 039 FR-028,
+/// data-model.md § 6). `kind` plus `payload` is rendered by the client; the
+/// words are deliberately not stored.
+#[derive(Queryable, Selectable, Debug, Clone)]
+#[diesel(table_name = crate::schema::account_notices)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct AccountNotice {
+    pub id: uuid::Uuid,
+    /// No foreign key; account deletion removes these explicitly.
+    pub account_id: uuid::Uuid,
+    pub kind: String,
+    pub subject_ref: Option<serde_json::Value>,
+    pub payload: Option<serde_json::Value>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub read_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// A notice as written. `created_at` is the database's to set.
+#[derive(Insertable, Debug, Clone)]
+#[diesel(table_name = crate::schema::account_notices)]
+pub struct NewAccountNotice {
+    pub id: uuid::Uuid,
+    pub account_id: uuid::Uuid,
+    pub kind: String,
+    pub subject_ref: Option<serde_json::Value>,
+    pub payload: Option<serde_json::Value>,
+}

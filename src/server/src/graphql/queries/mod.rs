@@ -25,6 +25,8 @@ pub mod lore_sync;
 pub mod moderation;
 pub mod roll;
 pub mod scene;
+// Spec 039 US5: `myStanding`, `accountStanding`, `myNotices`.
+pub mod standing;
 pub mod token_attributes;
 pub mod token_status;
 pub mod user;
@@ -50,6 +52,7 @@ pub use lore_sync::LoreSyncQuery;
 pub use moderation::ModerationQuery;
 pub use roll::RollQuery;
 pub use scene::SceneQuery;
+pub use standing::StandingQuery;
 pub use user::UserQuery;
 pub use world_content::WorldContentQuery;
 pub use world_events_since::WorldEventsSinceQuery;

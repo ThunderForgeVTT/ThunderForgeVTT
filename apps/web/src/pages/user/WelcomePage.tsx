@@ -210,6 +210,16 @@ export default function WelcomePage() {
                   <Link to="/settings/security">Account security</Link>
                 </Button>
               </Card>
+              <Card surface="stone" className="grid gap-3 p-6">
+                <h3 className="text-lg font-semibold">Account standing</h3>
+                <p className="text-muted-foreground">
+                  Any takedowns against things you have shared, and what they
+                  mean for sharing.
+                </p>
+                <Button asChild variant="secondary">
+                  <Link to="/settings/standing">Account standing</Link>
+                </Button>
+              </Card>
             </div>
           </section>
         </main>

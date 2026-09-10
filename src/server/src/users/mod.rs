@@ -423,6 +423,15 @@ fn delete_user_data_sync(
         // on its records, and never a redaction for a deletion that rolled back.
         crate::attestation::redact_for_deleted_account(conn, user_id)?;
 
+        // Spec 039 FR-037: a notice is addressed to a person and says nothing
+        // once they are gone, so unlike an agreement it does not survive them.
+        // The moderation cases it described are untouched.
+        diesel::delete(
+            crate::schema::account_notices::table
+                .filter(crate::schema::account_notices::account_id.eq(user_id)),
+        )
+        .execute(conn)?;
+
         summary.users_deleted +=
             diesel::delete(users::table.filter(users::id.eq(user_id))).execute(conn)? as i64;
 

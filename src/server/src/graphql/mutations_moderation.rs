@@ -226,6 +226,20 @@ pub async fn submit_takedown_notice_impl(
                 .execute(&mut conn)
                 .map_err(|e| e.to_string())?;
 
+            // Spec 039 FR-028: the content is disabled, which makes this a
+            // strike — and the person is told on this connection, straight
+            // after it exists, so nobody reaches a third strike having never
+            // heard about the first two.
+            if let Some(owner) = account_id {
+                crate::moderation::standing::tell_of_strike_sync(
+                    &mut conn,
+                    owner,
+                    case_id,
+                    crate::moderation::standing::Ladder::from_env(),
+                )
+                .map_err(|e| e.to_string())?;
+            }
+
             load_case_events(&mut conn, case_id).map_err(|e| e.to_string())
         })
         .await
@@ -410,6 +424,13 @@ pub async fn resolve_moderation_case_impl(
                 .first::<ContentModerationAction>(&mut conn)
                 .map_err(|_| "Case not found".to_string())?;
 
+            // Spec 039 FR-028: a resolution that upholds a case which was not
+            // already counting is a new strike, and the person is told. One
+            // that re-affirms a case already counting is not news.
+            let becomes_strike = !crate::moderation::counts_as_strike(&last.action_type)
+                && crate::moderation::counts_as_strike(resolution.as_db_str());
+            let owner = last.account_id;
+
             diesel::insert_into(content_moderation_actions::table)
                 .values(NewContentModerationAction {
                     case_id,
@@ -433,6 +454,16 @@ pub async fn resolve_moderation_case_impl(
                 })
                 .execute(&mut conn)
                 .map_err(|e| e.to_string())?;
+
+            if becomes_strike && let Some(owner) = owner {
+                crate::moderation::standing::tell_of_strike_sync(
+                    &mut conn,
+                    owner,
+                    case_id,
+                    crate::moderation::standing::Ladder::from_env(),
+                )
+                .map_err(|e| e.to_string())?;
+            }
 
             load_case_events(&mut conn, case_id).map_err(|e| e.to_string())
         })

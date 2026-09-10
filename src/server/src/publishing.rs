@@ -22,12 +22,10 @@
 //!    which spec 040 built as its FR-026 and which the four impls already call
 //!    first. Asked before ownership so a misconfigured instance answers the same
 //!    sentence to every caller instead of leaking which of them owns what.
-//! 2. **The version is one this instance knows** — this module.
-//! 3. **Ownership**, which each impl checks its own way and keeps.
-//!
-//! Standing (FR-018 — an account at the suspension rung may not publish) is
-//! US5's and is not here yet. When it lands it is one call between 1 and 2, and
-//! nothing else in this module moves.
+//! 2. **The account may publish** — `moderation::standing` (US5, FR-018). An
+//!    account at the suspension rung is refused here, once, for all four paths.
+//! 3. **The version is one this instance knows** — this module.
+//! 4. **Ownership**, which each impl checks its own way and keeps.
 //!
 //! # What the client may supply, and what it may not
 //!
@@ -63,6 +61,17 @@ pub struct AttestationInput {
 const TERMS_REFUSED: &str =
     "This share needs the current sharing agreement. Reload the page and try again.";
 
+/// The refusal a suspended account gets (FR-021).
+///
+/// In terms somebody can act on: what is paused and what is not (FR-019 — their
+/// own content is untouched), where to see why, and the process that changes
+/// it. It names no strike, case or count; the standing page is where those
+/// live, for the person and nobody else.
+pub const PUBLISHING_SUSPENDED: &str = "Sharing is paused on this account while takedowns \
+     against it still count. Everything you have made is still yours to play, edit and read. \
+     Your account standing page shows each strike, when it stops counting, and how a \
+     counter-notice can clear it.";
+
 /// May this publish proceed, and what will be recorded if it does?
 ///
 /// On success the caller writes the returned [`PendingAttestation`] **inside the
@@ -80,6 +89,15 @@ pub async fn require_attestation(
     world_id: Option<uuid::Uuid>,
     offered: &AttestationInput,
 ) -> GraphQLResult<PendingAttestation> {
+    // FR-018: standing before the words. An account that may not publish is
+    // told that, rather than asked to reload for an agreement it could not use.
+    let standing = crate::moderation::standing::standing_of(state, subject)
+        .await
+        .map_err(Error::new)?;
+    if !standing.may_publish {
+        return Err(Error::new(PUBLISHING_SUSPENDED));
+    }
+
     let offered_version = offered.terms_version_id.trim().to_string();
     if offered_version.is_empty() {
         return Err(Error::new(TERMS_REFUSED));

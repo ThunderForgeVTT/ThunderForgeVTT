@@ -59,6 +59,7 @@ const FeedbackSettingsPage = lazy(
   () => import("@/pages/user/FeedbackSettingsPage"),
 );
 const SecuritySettingsPage = lazy(pageLoaders.securitySettings);
+const StandingPage = lazy(pageLoaders.standing);
 const JoinWorldPage = lazy(pageLoaders.joinWorld);
 const NotFoundPage = lazy(pageLoaders.notFound);
 
@@ -817,6 +818,15 @@ export default function AppRoutes({
                 <SecuritySettingsPage />,
                 "Loading account security",
               )}
+            </RequireAuthenticated>
+          }
+        />
+        {/* Spec 039 US5 (FR-029): where a person stands, at any time. */}
+        <Route
+          path="/settings/standing"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<StandingPage />, "Loading your standing")}
             </RequireAuthenticated>
           }
         />

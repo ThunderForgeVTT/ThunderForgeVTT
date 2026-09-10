@@ -82,6 +82,12 @@ const ADMIN_ONLY: &[(&str, &str)] = &[
     // words. Names a person, so it is the notice handler's and nobody else's —
     // and its name carries no marker `is_operator_shaped` would catch, which
     // is exactly why it is listed rather than left to the heuristic.
+    // Spec 039 US5: anybody's strikes. A person's own standing is theirs
+    // (`myStanding`); anyone else's is the notice handler's.
+    (
+        "accountStanding",
+        r#"{ accountStanding(accountId: "00000000-0000-0000-0000-000000000000") { __typename } }"#,
+    ),
     (
         "attestationsFor",
         r#"{ attestationsFor(publishableKind: "item", publishableId: "00000000-0000-0000-0000-000000000000") { __typename } }"#,
@@ -210,6 +216,9 @@ const AUTHENTICATED: &[&str] = &[
     "myWorlds",
     // Spec 039: the caller's own agreements, filtered on the caller's id.
     "myAttestations",
+    // Spec 039 US5: the caller's own standing and notices, likewise.
+    "myStanding",
+    "myNotices",
 ];
 
 /// Root fields deliberately reachable without an account, each for a stated

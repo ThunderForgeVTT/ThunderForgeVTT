@@ -9,7 +9,7 @@ use crate::graphql::types::{
 };
 use crate::graphql::*;
 use crate::models::ContentModerationAction;
-use crate::moderation::{action_type, repeat_infringer_lookback_days, repeat_infringer_threshold};
+use crate::moderation::{repeat_infringer_lookback_days, repeat_infringer_threshold};
 use crate::schema::content_moderation_actions;
 use crate::state::AppState;
 
@@ -103,11 +103,12 @@ pub async fn moderation_history_for_account_impl(
     Ok(by_case.into_values().filter_map(to_graphql_case).collect())
 }
 
-/// Testable core of `ModerationQuery::repeat_infringer_flags` (FR-009).
-/// Counts, per account, distinct cases whose *latest* event is
-/// `content_disabled`/`content_remains_disabled` within the configured
-/// lookback window, and returns accounts at/over the configured
-/// threshold.
+/// Testable core of `ModerationQuery::repeat_infringer_flags` (FR-009): the
+/// accounts at or over the configured threshold.
+///
+/// What counts as a strike is `moderation::strikes_by_account`'s to say, not
+/// this function's (spec 039 T057) — the standing ladder reads the same
+/// definition, so the flag and the consequence cannot disagree.
 pub async fn repeat_infringer_flags_impl(state: &AppState) -> GraphQLResult<Vec<Uuid>> {
     let mut conn = state
         .db_pool
@@ -117,48 +118,16 @@ pub async fn repeat_infringer_flags_impl(state: &AppState) -> GraphQLResult<Vec<
     let lookback_days = repeat_infringer_lookback_days();
     let threshold = repeat_infringer_threshold();
 
-    let rows = tokio::task::spawn_blocking(move || {
-        let cutoff = chrono::Utc::now() - chrono::Duration::days(lookback_days);
-        content_moderation_actions::table
-            .filter(content_moderation_actions::created_at.ge(cutoff))
-            .filter(content_moderation_actions::account_id.is_not_null())
-            .order(content_moderation_actions::created_at.asc())
-            .select(ContentModerationAction::as_select())
-            .load::<ContentModerationAction>(&mut conn)
+    let strikes = tokio::task::spawn_blocking(move || {
+        crate::moderation::strikes_by_account(&mut conn, None, lookback_days)
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(|_| Error::new("Failed to load moderation history"))?;
 
-    // Group by case, take each case's latest event, then count upheld
-    // (disabled/remains-disabled) cases per account.
-    let mut by_case: std::collections::BTreeMap<Uuid, ContentModerationAction> =
-        std::collections::BTreeMap::new();
-    for row in rows {
-        by_case
-            .entry(row.case_id)
-            .and_modify(|existing| {
-                if row.created_at > existing.created_at {
-                    *existing = row.clone();
-                }
-            })
-            .or_insert(row);
-    }
-
-    let mut counts: std::collections::BTreeMap<Uuid, i64> = std::collections::BTreeMap::new();
-    for case in by_case.values() {
-        let upheld = matches!(
-            case.action_type.as_str(),
-            v if v == action_type::CONTENT_DISABLED || v == action_type::CONTENT_REMAINS_DISABLED
-        );
-        if upheld && let Some(account_id) = case.account_id {
-            *counts.entry(account_id).or_insert(0) += 1;
-        }
-    }
-
-    Ok(counts
+    Ok(strikes
         .into_iter()
-        .filter(|(_, count)| *count >= threshold)
+        .filter(|(_, held)| held.len() as i64 >= threshold)
         .map(|(account_id, _)| account_id)
         .collect())
 }

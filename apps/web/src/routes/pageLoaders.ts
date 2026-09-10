@@ -14,6 +14,7 @@ export const pageLoaders = {
   welcome: () => import("@/pages/user/WelcomePage"),
   storageSettings: () => import("@/pages/user/StorageSettingsPage"),
   securitySettings: () => import("@/pages/user/SecuritySettingsPage"),
+  standing: () => import("@/pages/user/StandingPage"),
   worldList: () => import("@/pages/world/WorldListPage"),
   createWorld: () => import("@/pages/world/CreateWorldPage"),
   worldDashboard: () => import("@/pages/world/WorldDashboardPage"),
