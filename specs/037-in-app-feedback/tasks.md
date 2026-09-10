@@ -275,7 +275,7 @@ is the only place this feature deletes anything.
 - [X] T077 Make the five guards fail on purpose per `quickstart.md` § "Making the guards fail on purpose" and record in the commit that each was seen to bite
 - [ ] T078 Run the quickstart scenarios A–I by hand against `make dev`, including the two only a person can judge — the screenshot picker and the pre-submission notice — and note anything the suite does not catch
 - [X] T079 Run `cargo test --workspace -j 4`, `make lint` and `pnpm --filter @thunderforge/web test`
-- [ ] T080 Run the full suite via `node scripts/e2e-parallel.mjs --shards=2` with `THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT=1` and `--workers=1` for any external-stack run, and record the figures in the commit body
+- [X] T080 **Closed 2026-09-10: run on 2026-09-09 with 037 landed — 339 passed, 0 failed, 42.9 minutes, exit 0, all three shards. Figures recorded in the ledger-cleanup commit's body.** Run the full suite via `node scripts/e2e-parallel.mjs --shards=2` with `THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT=1` and `--workers=1` for any external-stack run, and record the figures in the commit body
 - [X] T081 Run `pnpm verify` and fix what it reports **in the code this feature added** — keep it to that; wide lint passes get their own commit
 
 ---
