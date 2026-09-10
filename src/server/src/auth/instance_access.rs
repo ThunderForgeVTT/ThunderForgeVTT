@@ -343,18 +343,43 @@ mod tests {
     /// process-global environment variables behind the same idiom.
     static POLICY_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
+    /// Holds the lock, and puts the instance back to `open` when it is
+    /// dropped.
+    ///
+    /// # Why the restore matters outside this file
+    ///
+    /// `instance_access_settings` is one global row, and it is the *same* row
+    /// the local dev instance reads. Whichever of these tests ran last used to
+    /// leave its policy behind — so a suite that finished on the `closed` case
+    /// left a closed instance, and the e2e suite running against the same
+    /// database then failed **every spec that registers an account**, with a
+    /// timeout on `#register-username` and nothing anywhere near the cause. It
+    /// looked exactly like a broken registration page.
+    ///
+    /// `open` is the right thing to restore to: it is what the migration's
+    /// conditional seed chooses for a database that already has users in it,
+    /// which every database this runs against does.
+    struct PolicyGuard {
+        _lock: tokio::sync::MutexGuard<'static, ()>,
+        pool: crate::state::DbPool,
+    }
+
+    impl Drop for PolicyGuard {
+        fn drop(&mut self) {
+            // Best-effort: a test that has already failed must not be reported
+            // as a panic in the cleanup instead.
+            if let Ok(mut conn) = self.pool.get() {
+                set_instance_access_policy(&mut conn, "open");
+            }
+        }
+    }
+
     /// The policy must be set explicitly rather than inherited from the
     /// migration's seed: the shared test database has users in it, so it
     /// seeded `open`, and a test that assumed otherwise would pass for the
     /// wrong reason.
-    async fn arrange(
-        policy: &str,
-    ) -> (
-        tokio::sync::MutexGuard<'static, ()>,
-        crate::state::AppState,
-        uuid::Uuid,
-    ) {
-        let guard = POLICY_LOCK.lock().await;
+    async fn arrange(policy: &str) -> (PolicyGuard, crate::state::AppState, uuid::Uuid) {
+        let lock = POLICY_LOCK.lock().await;
         dotenvy::dotenv().ok();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
@@ -379,6 +404,10 @@ mod tests {
         };
         set_instance_access_policy(&mut conn, policy);
         drop(conn);
+        let guard = PolicyGuard {
+            _lock: lock,
+            pool: state.db_pool.clone(),
+        };
         (guard, state, admin_id)
     }
 
