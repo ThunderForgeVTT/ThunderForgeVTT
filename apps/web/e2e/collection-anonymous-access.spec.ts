@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
+  currentSharingTermsVersion,
   graphql,
   registerAndCreateWorld,
   uniqueSuffix,
@@ -112,14 +113,22 @@ test.describe("spec 026: what a stranger can learn", () => {
       }>(
         page,
         `
-          mutation S($collectionId: UUID!) {
-            createCollectionShareLink(collectionId: $collectionId) {
+          mutation S($collectionId: UUID!, $attestation: AttestationInput!) {
+            createCollectionShareLink(
+              collectionId: $collectionId
+              attestation: $attestation
+            ) {
               id
               shareCode
             }
           }
         `,
-        { collectionId },
+        {
+          collectionId,
+          attestation: {
+            termsVersionId: await currentSharingTermsVersion(page),
+          },
+        },
       );
       return shared.data.createCollectionShareLink;
     };

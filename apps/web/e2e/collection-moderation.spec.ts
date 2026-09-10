@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
+  currentSharingTermsVersion,
   graphql,
   registerAndCreateWorld,
   uniqueSuffix,
@@ -116,13 +117,21 @@ test.describe("spec 026: a takedown reaches one member, not the collection", () 
     }>(
       page,
       `
-        mutation S($collectionId: UUID!) {
-          createCollectionShareLink(collectionId: $collectionId) {
+        mutation S($collectionId: UUID!, $attestation: AttestationInput!) {
+          createCollectionShareLink(
+            collectionId: $collectionId
+            attestation: $attestation
+          ) {
             shareCode
           }
         }
       `,
-      { collectionId },
+      {
+        collectionId,
+        attestation: {
+          termsVersionId: await currentSharingTermsVersion(page),
+        },
+      },
     );
     const sharePath = `/collection/${shared.data.createCollectionShareLink.shareCode}`;
 

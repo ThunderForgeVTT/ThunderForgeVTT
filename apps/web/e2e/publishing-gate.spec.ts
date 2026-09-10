@@ -7,6 +7,7 @@ import {
   type GqlResult,
 } from "./fixtures/admin";
 import {
+  currentSharingTermsVersion,
   freshCredentials,
   graphql,
   register,
@@ -66,15 +67,18 @@ const CONFIGURED: Record<(typeof NOTICE_KEYS)[number], string> = {
   "notice.contact_postal_address": "1 Anvil Road, Forgeton",
 };
 
+// Spec 039 FR-001: publishing takes an agreement, and these are direct API
+// calls — exactly the caller the gate exists for. The identity is read from the
+// server rather than written here; see `currentSharingTermsVersion`.
 const CREATE_ITEM_SHARE = `
-  mutation ShareItem($id: UUID!) {
-    createItemShareLink(itemId: $id) { id shareCode }
+  mutation ShareItem($id: UUID!, $attestation: AttestationInput!) {
+    createItemShareLink(itemId: $id, attestation: $attestation) { id shareCode }
   }
 `;
 
 const CREATE_ABILITY_SHARE = `
-  mutation ShareAbility($id: UUID!) {
-    createAbilityShareLink(abilityId: $id) { id shareCode }
+  mutation ShareAbility($id: UUID!, $attestation: AttestationInput!) {
+    createAbilityShareLink(abilityId: $id, attestation: $attestation) { id shareCode }
   }
 `;
 
@@ -90,6 +94,19 @@ type ShareResult = GqlResult<{
 }>;
 
 let admin: Page;
+/**
+ * Spec 039 FR-001: the identity every publish here must echo back.
+ *
+ * Read from the server once, because it is the same for the whole file — and
+ * read rather than written down, because a hard-coded identity would be a test
+ * passing against words nobody shipped.
+ *
+ * Note the interaction with this file's subject: the notice-contact gate is
+ * checked **before** the attestation, so an unconfigured instance refuses with
+ * the copyright message and never looks at the agreement. That ordering is what
+ * makes these tests still about FR-026.
+ */
+let termsVersionId: string;
 /** What the stack was configured with before this file touched it. */
 const original: Record<string, string | null> = {};
 /** Non-empty when the environment fixes a notice setting; see the note above. */
@@ -199,6 +216,7 @@ test.describe.configure({ mode: "serial" });
 test.describe("Spec 040 FR-026: the publishing gate", () => {
   test.beforeAll(async ({ browser }) => {
     admin = await openAdminPage(browser);
+    termsVersionId = await currentSharingTermsVersion(admin);
     const settings = await readSettings(admin);
     fixedByEnvironment = [];
     for (const key of NOTICE_KEYS) {
@@ -244,7 +262,10 @@ test.describe("Spec 040 FR-026: the publishing gate", () => {
       ["an item", CREATE_ITEM_SHARE, itemId],
       ["an ability", CREATE_ABILITY_SHARE, abilityId],
     ] as const) {
-      const refused = await graphql<ShareResult>(page, mutation, { id });
+      const refused = await graphql<ShareResult>(page, mutation, {
+        id,
+        attestation: { termsVersionId },
+      });
       expect(
         refused.data?.createItemShareLink ??
           refused.data?.createAbilityShareLink,
@@ -269,6 +290,7 @@ test.describe("Spec 040 FR-026: the publishing gate", () => {
 
     const item = await graphql<ShareResult>(page, CREATE_ITEM_SHARE, {
       id: itemId,
+      attestation: { termsVersionId },
     });
     expect(
       item.errors,
@@ -278,6 +300,7 @@ test.describe("Spec 040 FR-026: the publishing gate", () => {
 
     const ability = await graphql<ShareResult>(page, CREATE_ABILITY_SHARE, {
       id: abilityId,
+      attestation: { termsVersionId },
     });
     expect(ability.errors).toBeFalsy();
     expect(ability.data?.createAbilityShareLink?.shareCode).toBeTruthy();
@@ -309,6 +332,7 @@ test.describe("Spec 040 FR-026: the publishing gate", () => {
 
     const minted = await graphql<ShareResult>(page, CREATE_ITEM_SHARE, {
       id: itemId,
+      attestation: { termsVersionId },
     });
     const shareCode = minted.data?.createItemShareLink?.shareCode;
     expect(
@@ -328,6 +352,7 @@ test.describe("Spec 040 FR-026: the publishing gate", () => {
     );
     const refused = await graphql<ShareResult>(page, CREATE_ITEM_SHARE, {
       id: secondItemId,
+      attestation: { termsVersionId },
     });
     expect(refused.data?.createItemShareLink).toBeFalsy();
     expect(refused.errors?.[0]?.message ?? "").toContain("copyright");

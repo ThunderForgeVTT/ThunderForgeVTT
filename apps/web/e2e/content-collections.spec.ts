@@ -5,6 +5,7 @@ import {
   createNpcViaCompendium,
 } from "./fixtures/content";
 import {
+  currentSharingTermsVersion,
   graphql,
   launchSceneByName,
   openDockTab,
@@ -503,13 +504,21 @@ test.describe("spec 026: a collection at its limit", () => {
     }>(
       page,
       `
-        mutation S($collectionId: UUID!) {
-          createCollectionShareLink(collectionId: $collectionId) {
+        mutation S($collectionId: UUID!, $attestation: AttestationInput!) {
+          createCollectionShareLink(
+            collectionId: $collectionId
+            attestation: $attestation
+          ) {
             shareCode
           }
         }
       `,
-      { collectionId },
+      {
+        collectionId,
+        attestation: {
+          termsVersionId: await currentSharingTermsVersion(page),
+        },
+      },
     );
 
     const destinationWorldId = await graphql<{
