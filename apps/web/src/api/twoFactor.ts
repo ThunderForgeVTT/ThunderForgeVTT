@@ -1,6 +1,7 @@
 import { withCsrf } from "@/api/auth";
 import type {
   PendingTwoFactorEnrolment,
+  TwoFactorHistoryEntry,
   TwoFactorConfirmation,
   TwoFactorQrMatrix,
   TwoFactorStatus,
@@ -285,6 +286,57 @@ export async function readTwoFactorStatus(): Promise<TwoFactorStatus | null> {
     recoveryCodesLow: payload.recovery_codes_low ?? false,
     enrolmentPending: payload.enrolment_pending ?? false,
   };
+}
+
+/**
+ * Spec 041 FR-015: what has happened to this account's second factor.
+ *
+ * # Why the app reads this at all
+ *
+ * Because a great many ThunderForge instances have no mail configured, and
+ * that is not a broken state — it is the ordinary one for somebody running
+ * this for their table on a machine in a cupboard. On such an instance the
+ * notice about a reset or a removal sits in the outbox, blocked, and this list
+ * is the only way the account holder finds out. It is the notification.
+ *
+ * Returns an empty list rather than throwing when it cannot be read: a
+ * security page that fails to load because one panel could not is worse than a
+ * page with one quiet panel.
+ */
+export async function readTwoFactorHistory(): Promise<TwoFactorHistoryEntry[]> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/authentication/2fa/history`, {
+      credentials: "same-origin",
+    });
+  } catch {
+    return [];
+  }
+
+  if (!response.ok) {
+    return [];
+  }
+
+  const payload = await readJson<{
+    events?: {
+      occurred_at?: string;
+      event_type?: string;
+      by_someone_else?: boolean;
+    }[];
+  }>(response);
+
+  return (payload?.events ?? []).flatMap((event) =>
+    typeof event.occurred_at === "string" &&
+    typeof event.event_type === "string"
+      ? [
+          {
+            occurredAt: event.occurred_at,
+            eventType: event.event_type,
+            bySomeoneElse: event.by_someone_else === true,
+          },
+        ]
+      : [],
+  );
 }
 
 /**

@@ -151,6 +151,13 @@ pub fn router() -> Router<AppState> {
         // The enrolment screen cannot offer to turn something on without
         // being able to ask whether it already is.
         .route("/authentication/2fa/status", get(two_factor_status))
+        // Spec 041 FR-015: what happened to this account's second factor, for
+        // the very common instance that cannot send mail. On such an instance
+        // this page *is* the notification.
+        .route(
+            "/authentication/2fa/history",
+            get(crate::auth::two_factor::events::two_factor_history),
+        )
         // Spec 041 US2 (FR-010): a fresh set of recovery codes, which costs
         // possession of the factor and invalidates every earlier code.
         .route(

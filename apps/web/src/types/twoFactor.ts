@@ -78,3 +78,16 @@ export interface TwoFactorStatus {
   recoveryCodesLow: boolean;
   enrolmentPending: boolean;
 }
+
+/**
+ * One entry in this account's second-factor history (FR-015).
+ *
+ * `bySomeoneElse` rather than an actor: "an administrator did this" is what
+ * the account holder needs and can act on. *Which* administrator is an
+ * operator's question, asked of an operator's surface.
+ */
+export interface TwoFactorHistoryEntry {
+  occurredAt: string;
+  eventType: string;
+  bySomeoneElse: boolean;
+}

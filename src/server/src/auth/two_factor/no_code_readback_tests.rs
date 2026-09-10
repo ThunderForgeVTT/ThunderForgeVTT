@@ -54,6 +54,7 @@ fn the_only_second_factor_routes_are_the_ones_that_are_meant_to_exist() {
 
     let expected = [
         "/authentication/2fa/disable",
+        "/authentication/2fa/history",
         "/authentication/2fa/recovery-codes",
         "/authentication/2fa/setup/confirm",
         "/authentication/2fa/setup/start",

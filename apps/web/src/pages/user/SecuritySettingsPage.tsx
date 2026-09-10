@@ -3,6 +3,7 @@ import { Container } from "@/components/ui/container/Container";
 import { PasswordChangePanel } from "@/pages/user/components/PasswordChangePanel";
 import { TwoFactorEnrolmentPanel } from "@/pages/user/components/TwoFactorEnrolmentPanel";
 import { SessionListPanel } from "@/pages/user/components/SessionListPanel";
+import { TwoFactorHistoryPanel } from "@/pages/user/components/TwoFactorHistoryPanel";
 import { TwoFactorRemovalPanel } from "@/pages/user/components/TwoFactorRemovalPanel";
 import type { SeoConfig } from "@/types/seo";
 
@@ -51,6 +52,11 @@ export function SecuritySettingsPage() {
               same decision and belongs on the same screen, not hidden
               somewhere a person would have to hunt for it. */}
           <TwoFactorRemovalPanel />
+          {/*
+           * FR-015. On an instance with no mail configured — which is most of
+           * the small self-hosted ones — this list is the notification.
+           */}
+          <TwoFactorHistoryPanel />
           {/* Spec 036 US4: the other half of not evicting sessions on sign-in
               — an account that can hold ten and cannot see them has traded
               one problem for a worse one. */}
