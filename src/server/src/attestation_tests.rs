@@ -37,7 +37,7 @@ async fn each_publish_writes_its_own_record() {
     assert_ne!(first, second);
     drop(conn);
 
-    let history = for_publishable(&state, approved.kind, approved.publishable_id)
+    let history = for_content(&state, approved.kind.into(), approved.publishable_id)
         .await
         .expect("read");
     assert_eq!(
@@ -70,7 +70,7 @@ async fn an_attestation_survives_its_share_being_deleted() {
     // There was never a row for this `share_id` — which is the point. The
     // column carries no foreign key, so the record does not depend on it, and a
     // share that is gone is indistinguishable from one that never was.
-    let history = for_publishable(&state, approved.kind, approved.publishable_id)
+    let history = for_content(&state, approved.kind.into(), approved.publishable_id)
         .await
         .expect("read");
     assert_eq!(history.len(), 1);
@@ -131,6 +131,112 @@ async fn deleting_an_account_removes_the_name_and_nothing_else() {
         ),
         "redaction must change exactly one field — everything else is what a \
          notice arriving in eighteen months needs",
+    );
+}
+
+/// SC-003 for everything shared inside a collection: a notice about an item,
+/// or about a lore entry that was never published any other way, reaches the
+/// collection's agreement — and only the collections it is actually in.
+///
+/// Drop the membership half of `for_content` and the lore entry comes back
+/// with no agreement at all, which is what a notice handler saw before.
+#[tokio::test]
+async fn a_collections_agreement_covers_what_is_inside_it() {
+    use crate::schema::{world_collection_members, world_collections};
+    use crate::test_support::{insert_test_item, insert_test_lore_entry, insert_test_world};
+
+    let state = test_app_state();
+    let version = archived_version(&state).await;
+    let mut conn = state.db_pool.get().expect("conn");
+    let user_id = insert_test_user(&mut conn);
+    let world_id = insert_test_world(&mut conn, user_id);
+    let item_id = insert_test_item(&mut conn, world_id, user_id);
+    let lore_id = insert_test_lore_entry(&mut conn, world_id, user_id);
+
+    let now = chrono::Utc::now().naive_utc();
+    let mut collection = |name: &str| {
+        let id = uuid::Uuid::now_v7();
+        diesel::insert_into(world_collections::table)
+            .values((
+                world_collections::id.eq(id),
+                world_collections::world_id.eq(world_id),
+                world_collections::name.eq(name),
+                world_collections::created_by.eq(user_id),
+                world_collections::updated_by.eq(user_id),
+                world_collections::created_at.eq(now),
+                world_collections::updated_at.eq(now),
+            ))
+            .execute(&mut conn)
+            .expect("collection");
+        id
+    };
+    let containing = collection("holds both");
+    let unrelated = collection("holds neither");
+
+    for (member_type, member_id) in [("item", item_id), ("lore", lore_id)] {
+        diesel::insert_into(world_collection_members::table)
+            .values((
+                world_collection_members::id.eq(uuid::Uuid::now_v7()),
+                world_collection_members::collection_id.eq(containing),
+                world_collection_members::member_type.eq(member_type),
+                world_collection_members::member_id.eq(member_id),
+                world_collection_members::sort_order.eq(0),
+                world_collection_members::added_by.eq(user_id),
+                world_collection_members::created_at.eq(now),
+            ))
+            .execute(&mut conn)
+            .expect("member");
+    }
+
+    let about = |kind: PublishableKind, publishable_id: uuid::Uuid| PendingAttestation {
+        kind,
+        publishable_id,
+        ..pending(user_id, "someone", &version)
+    };
+    for (kind, id) in [
+        (PublishableKind::Item, item_id),
+        (PublishableKind::Collection, containing),
+        (PublishableKind::Collection, unrelated),
+    ] {
+        record_sync(&mut conn, &about(kind, id), uuid::Uuid::now_v7()).expect("record");
+    }
+    drop(conn);
+
+    let published_as = |records: Vec<Attestation>| {
+        let mut ids: Vec<uuid::Uuid> = records.iter().filter_map(|r| r.publishable_id).collect();
+        ids.sort();
+        ids
+    };
+    let sorted = |mut ids: Vec<uuid::Uuid>| {
+        ids.sort();
+        ids
+    };
+
+    let for_item = for_content(&state, CoveredKind::Item, item_id)
+        .await
+        .expect("read");
+    assert_eq!(
+        published_as(for_item),
+        sorted(vec![item_id, containing]),
+        "its own agreement and its collection's — not a collection it is not in",
+    );
+
+    let for_lore = for_content(&state, CoveredKind::Lore, lore_id)
+        .await
+        .expect("read");
+    assert_eq!(
+        published_as(for_lore),
+        vec![containing],
+        "lore is only ever published inside a collection, so that is its agreement",
+    );
+
+    let for_collection = for_content(&state, CoveredKind::Collection, containing)
+        .await
+        .expect("read");
+    assert_eq!(
+        published_as(for_collection),
+        vec![containing],
+        "a collection's own history is its own; its members' do not flow upward",
     );
 }
 

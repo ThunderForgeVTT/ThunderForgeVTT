@@ -1,7 +1,9 @@
-import { expect, test, type Page } from "@playwright/test";
+import { execFileSync } from "node:child_process";
+import { expect, test, type Browser, type Page } from "@playwright/test";
 import {
   currentSharingTermsVersion,
   graphql,
+  loginAsAdmin,
   registerAndCreateWorld,
   uniqueSuffix,
 } from "./fixtures/helpers";
@@ -264,5 +266,367 @@ test.describe("Spec 039: the server requires an agreement to publish", () => {
       { worldId },
     );
     expect(before.data?.worldCollections?.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 5: the record, and what happens when the words change (US2, US4)
+// ---------------------------------------------------------------------------
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Runs SQL against this shard's database, the way `dmca-counter-notice` moves a
+ * clock. Every value interpolated here is checked against a strict pattern
+ * first, so nothing a test computes can become SQL.
+ */
+function sql(statement: string): string {
+  const container =
+    process.env.THUNDERFORGE_POSTGRES_CONTAINER ?? "thunderforge-postgres";
+  const database = process.env.THUNDERFORGE_DB_NAME ?? "thunderforge";
+  const dbUser = process.env.THUNDERFORGE_DB_USER ?? "postgres";
+  return execFileSync(
+    "docker",
+    [
+      "exec",
+      "-i",
+      container,
+      "psql",
+      "-U",
+      dbUser,
+      "-d",
+      database,
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-t",
+      "-A",
+    ],
+    { input: statement, encoding: "utf-8", stdio: ["pipe", "pipe", "inherit"] },
+  );
+}
+
+function assertUuid(value: string): string {
+  if (!UUID_PATTERN.test(value)) {
+    throw new Error(`Refusing to put a non-UUID into SQL: ${value}`);
+  }
+  return value;
+}
+
+/**
+ * The state a revision of `legal/sharing-terms.md` followed by a restart leaves
+ * behind: the archive holds the old words beside the new, and an agreement made
+ * before the revision names the old ones.
+ *
+ * # Why this is seeded rather than done by editing the file
+ *
+ * The terms are compiled into the server with `include_str!`, so "revise and
+ * restart" is really "revise, rebuild and restart" — minutes, per shard — and
+ * editing a tracked file while the suite runs HMRs it into every other shard's
+ * stack. What a revision *does* to the database is two rows, and the boot-time
+ * write that produces the new one is held by
+ * `archiving_twice_leaves_the_first_row_exactly_as_it_was` in
+ * `legal/legal_tests.rs`. Everything this test asserts is read back through the
+ * running product.
+ */
+function anAgreementMadeBeforeARevision(
+  collectionId: string,
+  subjectUserId: string,
+): { versionId: string; marker: string } {
+  const hex = Array.from({ length: 16 }, () =>
+    Math.floor(Math.random() * 16).toString(16),
+  ).join("");
+  const versionId = `sharing-terms@${hex}`;
+  const marker = `words-before-the-revision-${hex}`;
+  const body = `## What it said then\n\nThis build no longer ships these words: ${marker}.`;
+
+  sql(
+    `INSERT INTO terms_versions (version_id, document_slug, body, first_seen_at) ` +
+      `VALUES ('${versionId}', 'sharing-terms', '${body}', NOW() - INTERVAL '40 days');` +
+      `INSERT INTO attestations (id, purpose, subject_user_id, subject_username, ` +
+      `terms_version_id, publishable_kind, publishable_id, share_id, attested_at) ` +
+      `VALUES (gen_random_uuid(), 'share', '${assertUuid(subjectUserId)}', 'before', ` +
+      `'${versionId}', 'collection', '${assertUuid(collectionId)}', gen_random_uuid(), ` +
+      `NOW() - INTERVAL '30 days');`,
+  );
+  return { versionId, marker };
+}
+
+const ATTESTATIONS_FOR = `
+  query A($publishableKind: String!, $publishableId: UUID!) {
+    attestationsFor(publishableKind: $publishableKind, publishableId: $publishableId) {
+      id
+      subjectUsername
+      attestedAt
+      termsVersionId
+      terms { versionId sections { heading body } }
+    }
+  }
+`;
+
+type AttestationView = {
+  id: string;
+  subjectUsername: string | null;
+  attestedAt: string;
+  termsVersionId: string;
+  terms: {
+    versionId: string;
+    sections: { heading: string | null; body: string }[];
+  };
+};
+
+async function myAccountId(page: Page): Promise<string> {
+  const me = await graphql<Gql<{ me: { id: string } | null }>>(
+    page,
+    `query Me { me { id } }`,
+    {},
+  );
+  const id = me.data?.me?.id;
+  expect(id, JSON.stringify(me.errors)).toBeTruthy();
+  return id as string;
+}
+
+async function openAdmin(browser: Browser): Promise<Page> {
+  const context = await browser.newContext();
+  const admin = await context.newPage();
+  await loginAsAdmin(admin);
+  await admin.waitForURL(/\/(admin|welcome)$/, { timeout: 20_000 });
+  return admin;
+}
+
+test.describe("Spec 039: an agreement is evidence rather than a moment", () => {
+  test.setTimeout(240_000);
+
+  /**
+   * US4 / T039, and the property ADR-076 exists for: **revising the terms does
+   * not rewrite what anybody agreed to.**
+   *
+   * An agreement from before a revision, and one made now through the product,
+   * for the same collection. Each must resolve to its own words, and the old
+   * one must come back exactly as it was recorded — same version, same moment.
+   * `Attestation.terms` implemented as "the current document with a version
+   * label" fails the first assertion about the old record's words.
+   */
+  test("revising the terms leaves every earlier agreement where it was", async ({
+    page,
+    browser,
+  }) => {
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Attestation Revision ${uniqueSuffix()}`,
+    );
+    const collectionId = await aCollectionWithSomethingInIt(page, worldId);
+    const before = anAgreementMadeBeforeARevision(
+      collectionId,
+      await myAccountId(page),
+    );
+
+    const current = await currentSharingTermsVersion(page);
+    expect(current, "the fixture must differ from what this build ships").not.toBe(
+      before.versionId,
+    );
+    const shared = await graphql<
+      Gql<{ createCollectionShareLink: { shareCode: string } }>
+    >(page, SHARE_COLLECTION, {
+      collectionId,
+      attestation: { termsVersionId: current },
+    });
+    expect(
+      shared.data?.createCollectionShareLink?.shareCode,
+      JSON.stringify(shared.errors),
+    ).toBeTruthy();
+
+    const admin = await openAdmin(browser);
+    try {
+      const read = await graphql<Gql<{ attestationsFor: AttestationView[] }>>(
+        admin,
+        ATTESTATIONS_FOR,
+        { publishableKind: "collection", publishableId: collectionId },
+      );
+      const records = read.data?.attestationsFor ?? [];
+      expect(records, JSON.stringify(read.errors)).toHaveLength(2);
+
+      const [newest, oldest] = records;
+      expect(newest.termsVersionId, "newest first").toBe(current);
+      expect(newest.terms.versionId).toBe(current);
+      expect(
+        JSON.stringify(newest.terms.sections),
+        "the new agreement is to the words this build ships",
+      ).toContain("responsible for what you publish");
+
+      expect(oldest.termsVersionId, "the old agreement did not move").toBe(
+        before.versionId,
+      );
+      expect(oldest.terms.versionId).toBe(before.versionId);
+      expect(
+        JSON.stringify(oldest.terms.sections),
+        "and it resolves to the words it agreed to, not today's",
+      ).toContain(before.marker);
+      expect(JSON.stringify(oldest.terms.sections)).not.toContain(
+        "responsible for what you publish",
+      );
+      const ageInDays =
+        (Date.now() - new Date(oldest.attestedAt).getTime()) / 86_400_000;
+      expect(
+        ageInDays,
+        "nothing re-stamped it when the new agreement was written",
+      ).toBeGreaterThan(29);
+
+      // The archive answers the same question by version alone.
+      const archived = await graphql<
+        Gql<{ legalDocumentVersion: { sections: { body: string }[] } | null }>
+      >(
+        admin,
+        `query V($versionId: String!) {
+          legalDocumentVersion(versionId: $versionId) { sections { body } }
+        }`,
+        { versionId: before.versionId },
+      );
+      expect(
+        JSON.stringify(archived.data?.legalDocumentVersion),
+      ).toContain(before.marker);
+    } finally {
+      await admin.context().close();
+    }
+  });
+
+  /**
+   * US2 / T037, SC-003: **from a notice to the agreement in under a minute,
+   * without a developer.**
+   *
+   * A real takedown against something a real person shared; then, as the
+   * administrator, only the case reference and the moderation page. The
+   * assertion is that the page — not a query — shows who agreed and the words.
+   */
+  test("a notice handler reaches the agreement from the case, on the page", async ({
+    page,
+    browser,
+  }) => {
+    const suffix = uniqueSuffix();
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Attestation Notice ${suffix}`,
+      "e2eattest",
+    );
+    const item = await graphql<Gql<{ createItem: { id: string } }>>(
+      page,
+      CREATE_ITEM,
+      { input: { worldId, name: `Borrowed Crown ${suffix}`, description: null } },
+    );
+    const itemId = item.data?.createItem.id as string;
+    expect(itemId, JSON.stringify(item.errors)).toBeTruthy();
+
+    const shared = await graphql<
+      Gql<{ createItemShareLink: { shareCode: string } }>
+    >(
+      page,
+      `mutation S($itemId: UUID!, $attestation: AttestationInput!) {
+        createItemShareLink(itemId: $itemId, attestation: $attestation) { shareCode }
+      }`,
+      {
+        itemId,
+        attestation: { termsVersionId: await currentSharingTermsVersion(page) },
+      },
+    );
+    expect(
+      shared.data?.createItemShareLink?.shareCode,
+      JSON.stringify(shared.errors),
+    ).toBeTruthy();
+
+    // And published a second way: inside a collection. A shared collection
+    // serves its members, so its agreement covers this item too, and the
+    // notice handler has to see both.
+    const collection = await graphql<Gql<{ createCollection: { id: string } }>>(
+      page,
+      CREATE_COLLECTION,
+      {
+        input: { worldId, name: `Regalia ${suffix}`, description: null },
+      },
+    );
+    const collectionId = collection.data?.createCollection.id as string;
+    expect(collectionId, JSON.stringify(collection.errors)).toBeTruthy();
+    await graphql(page, ADD_MEMBER, {
+      input: { collectionId, memberType: "item", memberId: itemId },
+    });
+    const sharedCollection = await graphql<
+      Gql<{ createCollectionShareLink: { shareCode: string } }>
+    >(page, SHARE_COLLECTION, {
+      collectionId,
+      attestation: { termsVersionId: await currentSharingTermsVersion(page) },
+    });
+    expect(
+      sharedCollection.data?.createCollectionShareLink?.shareCode,
+      JSON.stringify(sharedCollection.errors),
+    ).toBeTruthy();
+
+    const me = await graphql<Gql<{ me: { username: string } | null }>>(
+      page,
+      `query Me { me { username } }`,
+      {},
+    );
+    const sharer = me.data?.me?.username as string;
+    expect(sharer).toBeTruthy();
+
+    // The claimant needs no account (spec 015 FR-002).
+    const claimantContext = await browser.newContext();
+    const claimant = await claimantContext.newPage();
+    const admin = await openAdmin(browser);
+    try {
+      await claimant.goto("/legal/dmca");
+      await expect(claimant.getByTestId("takedown-notice-form")).toBeVisible();
+      await claimant.getByLabel("Content type").click();
+      await claimant.getByRole("option", { name: "Item" }).click();
+      await claimant.locator("#dmca-entity-id").fill(itemId);
+      await claimant.locator("#dmca-claimant-name").fill("Jane Claimant");
+      await claimant
+        .locator("#dmca-claimant-contact")
+        .fill("jane.claimant@example.test");
+      await claimant
+        .locator("#dmca-work-description")
+        .fill("An original work, registered copyright.");
+      await claimant
+        .locator("#dmca-infringing-location")
+        .fill(`The item "Borrowed Crown ${suffix}".`);
+      await claimant.locator("#dmca-good-faith").click();
+      await claimant.locator("#dmca-accuracy").click();
+      await claimant.locator("#dmca-signature").fill("Jane Claimant");
+      await claimant.getByTestId("takedown-notice-submit").click();
+      const accepted = claimant.getByTestId("takedown-notice-accepted");
+      await expect(accepted).toBeVisible({ timeout: 15_000 });
+      const caseId = (await accepted.locator("code").innerText()).trim();
+      expect(caseId).toMatch(UUID_PATTERN);
+
+      await admin.goto("/admin/moderation");
+      await admin.locator("#moderation-case-reference").fill(caseId);
+      await admin.getByRole("button", { name: "Open case" }).click();
+      const opened = admin.getByTestId("opened-case");
+      await expect(opened).toContainText(itemId, { timeout: 15_000 });
+
+      await opened.getByTestId("case-agreement-open").click();
+      const records = opened.getByTestId("case-agreement-record");
+      await expect(
+        records,
+        "the item's own agreement and its collection's",
+      ).toHaveCount(2, { timeout: 15_000 });
+      for (const record of await records.all()) {
+        await expect(record, "who agreed").toContainText(sharer);
+      }
+
+      const viaCollection = records.filter({
+        has: admin.getByTestId("case-agreement-via-collection"),
+      });
+      await expect(viaCollection).toHaveCount(1);
+      await expect(viaCollection).toContainText(collectionId);
+
+      const first = records.first();
+      await first.getByText("The words agreed to").click();
+      await expect(
+        first.getByTestId("case-agreement-terms"),
+        "and to what",
+      ).toContainText("responsible for what you publish");
+    } finally {
+      await claimantContext.close();
+      await admin.context().close();
+    }
   });
 });

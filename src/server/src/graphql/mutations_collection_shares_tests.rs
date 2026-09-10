@@ -157,9 +157,9 @@ async fn a_successful_publish_leaves_one_agreement_naming_its_link() {
     let f = fixture();
     let (collection_id, share) = shared_fixture(&f).await;
 
-    let recorded = crate::attestation::for_publishable(
+    let recorded = crate::attestation::for_content(
         &f.state,
-        crate::attestation::PublishableKind::Collection,
+        crate::attestation::CoveredKind::Collection,
         collection_id,
     )
     .await

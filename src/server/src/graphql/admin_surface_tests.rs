@@ -78,6 +78,14 @@ const ADMIN_ONLY: &[(&str, &str)] = &[
         "legalDocumentVersion",
         r#"{ legalDocumentVersion(versionId: "sharing-terms@0000000000000000") { __typename } }"#,
     ),
+    // Spec 039 SC-003: who agreed to publish one named thing, and to which
+    // words. Names a person, so it is the notice handler's and nobody else's —
+    // and its name carries no marker `is_operator_shaped` would catch, which
+    // is exactly why it is listed rather than left to the heuristic.
+    (
+        "attestationsFor",
+        r#"{ attestationsFor(publishableKind: "item", publishableId: "00000000-0000-0000-0000-000000000000") { __typename } }"#,
+    ),
     // Spec 041 US6/US7: one account by exact identifier, so an operator can
     // act on the second factor of somebody who has asked them for help.
     (
@@ -196,7 +204,13 @@ const OPERATOR_SHAPED_BUT_NOT_ADMIN: &[&str] = &[
 /// Root fields any signed-in account may reach. Listed, not tested here: what
 /// they authorise beyond "signed in" is world membership and per-object
 /// permission, which their own suites cover.
-const AUTHENTICATED: &[&str] = &["mySessions", "myTwoFactorEvents", "myWorlds"];
+const AUTHENTICATED: &[&str] = &[
+    "mySessions",
+    "myTwoFactorEvents",
+    "myWorlds",
+    // Spec 039: the caller's own agreements, filtered on the caller's id.
+    "myAttestations",
+];
 
 /// Root fields deliberately reachable without an account, each for a stated
 /// reason. This table is the one to read twice: an addition here is a decision

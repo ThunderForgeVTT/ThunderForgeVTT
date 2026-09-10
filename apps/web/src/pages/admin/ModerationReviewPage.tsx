@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import {
+  getModerationCase,
   getModerationHistoryForAccount,
   getRepeatInfringerFlags,
   resolveModerationCase,
@@ -7,11 +8,13 @@ import {
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
+import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/loader/Loader";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import type { ModerationCaseRecord } from "@/types/moderation";
 import type { SeoConfig } from "@/types/seo";
 import { AdminSectionShell } from "./components/AdminSectionShell";
+import { CaseAgreement } from "./components/CaseAgreement";
 
 export const moderationReviewPageSeo: SeoConfig = {
   title: "Content moderation review",
@@ -34,6 +37,27 @@ export default function ModerationReviewPage() {
   );
   const [history, setHistory] = useState<ModerationCaseRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Spec 039 SC-003: a person handling a notice has its case reference in
+  // hand, and must reach the case — and from it the agreement — without the
+  // account first being flagged three times.
+  const [caseReference, setCaseReference] = useState("");
+  const [openedCase, setOpenedCase] = useState<
+    ModerationCaseRecord | "missing" | null
+  >(null);
+
+  const openCase = async (event: FormEvent) => {
+    event.preventDefault();
+    const reference = caseReference.trim();
+    if (!reference) {
+      return;
+    }
+    setOpenedCase(null);
+    try {
+      setOpenedCase((await getModerationCase(reference)) ?? "missing");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to open the case");
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -98,6 +122,49 @@ export default function ModerationReviewPage() {
           {error ? <StatusBadge variant="danger">{error}</StatusBadge> : null}
 
           <Card className="grid gap-3 p-6">
+            <h2 className="text-lg font-semibold">Open a case</h2>
+            <form
+              className="flex flex-wrap items-center gap-2"
+              onSubmit={(event) => void openCase(event)}
+            >
+              <label htmlFor="moderation-case-reference" className="sr-only">
+                Case reference
+              </label>
+              <Input
+                id="moderation-case-reference"
+                className="max-w-md font-mono"
+                placeholder="Case reference"
+                value={caseReference}
+                onChange={(event) => setCaseReference(event.target.value)}
+              />
+              <Button type="submit" size="sm">
+                Open case
+              </Button>
+            </form>
+            {openedCase === "missing" ? (
+              <p className="text-sm text-muted-foreground">
+                No case has that reference.
+              </p>
+            ) : openedCase ? (
+              <div className="grid gap-2" data-testid="opened-case">
+                <div className="flex items-center justify-between gap-3">
+                  <code className="text-sm">{openedCase.caseId}</code>
+                  <StatusBadge variant="warning">
+                    {openedCase.currentStatus}
+                  </StatusBadge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {openedCase.entityType} · {openedCase.entityId}
+                </p>
+                <CaseAgreement
+                  entityType={openedCase.entityType}
+                  entityId={openedCase.entityId}
+                />
+              </div>
+            ) : null}
+          </Card>
+
+          <Card className="grid gap-3 p-6">
             <h2 className="text-lg font-semibold">Repeat-infringer flags</h2>
             {flaggedAccountIds === null ? (
               <Loader label="Loading flags" />
@@ -153,6 +220,10 @@ export default function ModerationReviewPage() {
                       <p className="text-xs text-muted-foreground">
                         {moderationCase.entityType} · {moderationCase.entityId}
                       </p>
+                      <CaseAgreement
+                        entityType={moderationCase.entityType}
+                        entityId={moderationCase.entityId}
+                      />
                       {moderationCase.currentStatus ===
                       "COUNTER_NOTICE_FORWARDED" ? (
                         <Button

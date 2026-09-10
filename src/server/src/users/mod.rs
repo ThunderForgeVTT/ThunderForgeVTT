@@ -417,6 +417,12 @@ fn delete_user_data_sync(
             diesel::delete(user_sessions::table.filter(user_sessions::user_id.eq(user_id)))
                 .execute(conn)? as i64;
 
+        // Spec 039 FR-010/FR-037: the agreements survive the account, with the
+        // name removed. Inside this transaction so the redaction and the
+        // deletion are one act — never a deleted account whose name is still
+        // on its records, and never a redaction for a deletion that rolled back.
+        crate::attestation::redact_for_deleted_account(conn, user_id)?;
+
         summary.users_deleted +=
             diesel::delete(users::table.filter(users::id.eq(user_id))).execute(conn)? as i64;
 
@@ -502,5 +508,72 @@ mod tests {
 
         assert_eq!(first, second);
         assert!(!first.is_empty());
+    }
+
+    /// Spec 039 FR-010/FR-037, through the real deletion path: the account
+    /// goes, its agreements stay, and the name is the only thing that leaves
+    /// with it.
+    ///
+    /// `attestation_tests` proves `redact_for_deleted_account` does the right
+    /// thing. This proves somebody calls it — remove the call from
+    /// `delete_user_data_sync` and the name survives the account.
+    #[tokio::test]
+    async fn an_agreement_outlives_the_account_that_made_it() {
+        use crate::attestation::{PendingAttestation, PublishableKind, record_sync};
+        use crate::schema::{attestations, users};
+        use crate::test_support::{insert_test_user, test_app_state};
+        use diesel::prelude::*;
+
+        let state = test_app_state();
+        crate::legal::ensure_terms_versions_recorded(&state)
+            .await
+            .expect("archive");
+        let version = crate::legal::sharing_terms().version_id;
+
+        let mut conn = state.db_pool.get().expect("conn");
+        let user_id = insert_test_user(&mut conn);
+        let publishable_id = uuid::Uuid::now_v7();
+        record_sync(
+            &mut conn,
+            &PendingAttestation {
+                subject_user_id: user_id,
+                subject_username: Some("leaving".to_string()),
+                terms_version_id: version.clone(),
+                kind: PublishableKind::Item,
+                publishable_id,
+                world_id: None,
+            },
+            uuid::Uuid::now_v7(),
+        )
+        .expect("record");
+        drop(conn);
+
+        let summary = super::delete_user_data_sync(&state, user_id).expect("delete");
+        assert_eq!(summary.users_deleted, 1);
+
+        let mut conn = state.db_pool.get().expect("conn");
+        let still_there: i64 = users::table
+            .filter(users::id.eq(user_id))
+            .count()
+            .get_result(&mut conn)
+            .expect("count");
+        assert_eq!(still_there, 0, "the account itself is gone");
+
+        let (username, kept_version, kept_publishable): (
+            Option<String>,
+            String,
+            Option<uuid::Uuid>,
+        ) = attestations::table
+            .filter(attestations::subject_user_id.eq(user_id))
+            .select((
+                attestations::subject_username,
+                attestations::terms_version_id,
+                attestations::publishable_id,
+            ))
+            .first(&mut conn)
+            .expect("the agreement must survive the account that made it");
+        assert_eq!(username, None, "and the name must not");
+        assert_eq!(kept_version, version);
+        assert_eq!(kept_publishable, Some(publishable_id));
     }
 }

@@ -51,6 +51,71 @@ impl PublishableKind {
     }
 }
 
+/// Anything a notice can name, and so anything an agreement can be asked about.
+///
+/// Wider than [`PublishableKind`] by one: a lore entry is never published on
+/// its own, but it is published inside a collection — and a notice about it has
+/// to reach the agreement behind that collection, or SC-003 fails for the only
+/// way lore is ever shared.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CoveredKind {
+    Collection,
+    Actor,
+    Item,
+    Ability,
+    Lore,
+}
+
+impl CoveredKind {
+    /// For a kind named by a caller. `None` for anything else, so a typo is
+    /// refused rather than answered with an empty history that reads as "nobody
+    /// agreed to anything".
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "collection" => Some(Self::Collection),
+            "actor" => Some(Self::Actor),
+            "item" => Some(Self::Item),
+            "ability" => Some(Self::Ability),
+            "lore" => Some(Self::Lore),
+            _ => None,
+        }
+    }
+
+    /// What it is attested as when published on its own, if it can be.
+    fn published_alone_as(self) -> Option<PublishableKind> {
+        match self {
+            Self::Collection => Some(PublishableKind::Collection),
+            Self::Actor => Some(PublishableKind::Actor),
+            Self::Item => Some(PublishableKind::Item),
+            Self::Ability => Some(PublishableKind::Ability),
+            Self::Lore => None,
+        }
+    }
+
+    /// Its `world_collection_members.member_type`, if it can sit in a
+    /// collection. Collections do not nest.
+    fn member_type(self) -> Option<&'static str> {
+        match self {
+            Self::Collection => None,
+            Self::Actor => Some("actor"),
+            Self::Item => Some("item"),
+            Self::Ability => Some("ability"),
+            Self::Lore => Some("lore"),
+        }
+    }
+}
+
+impl From<PublishableKind> for CoveredKind {
+    fn from(value: PublishableKind) -> Self {
+        match value {
+            PublishableKind::Collection => Self::Collection,
+            PublishableKind::Actor => Self::Actor,
+            PublishableKind::Item => Self::Item,
+            PublishableKind::Ability => Self::Ability,
+        }
+    }
+}
+
 /// `purpose`, mirrored by the migration's CHECK constraint.
 pub mod purpose {
     /// Somebody publishing something (US1–US4).
@@ -132,26 +197,56 @@ pub fn record_operator_sync(
     Ok(id)
 }
 
-/// Every attestation for one published thing, newest first.
+/// Every agreement under which one thing has been published, newest first:
+/// its own, and those of every collection it is in.
 ///
 /// The lookup a person handling a notice makes (FR-009, SC-003). There is **no
 /// join to a share row and no filter on one**: an attestation is returned
 /// whether or not the share it authorised still exists, because a revoked share
 /// does not un-agree anything (FR-007).
-pub async fn for_publishable(
+///
+/// # Why a collection's agreements count, and why by current membership
+///
+/// A shared collection serves its members live (`shared_collection_impl` reads
+/// them on every request), so whatever is in a collection now is being
+/// published under that collection's agreement — including something added
+/// after the agreement was made, which is exactly what a notice about it needs
+/// to see. What current membership cannot reach is a thing taken *out* of a
+/// collection after somebody adopted a copy; following copies is ADR-079's
+/// question, not this one's.
+pub async fn for_content(
     state: &AppState,
-    kind: PublishableKind,
-    publishable_id: uuid::Uuid,
+    kind: CoveredKind,
+    id: uuid::Uuid,
 ) -> Result<Vec<Attestation>, String> {
+    use crate::schema::world_collection_members as members;
+
     let mut conn = state
         .db_pool
         .get()
         .map_err(|_| "Failed to get DB connection".to_string())?;
 
     tokio::task::spawn_blocking(move || {
-        attestations::table
-            .filter(attestations::publishable_kind.eq(kind.as_str()))
-            .filter(attestations::publishable_id.eq(publishable_id))
+        let mut query = attestations::table.into_boxed();
+        if let Some(alone) = kind.published_alone_as() {
+            query = query.or_filter(
+                attestations::publishable_kind
+                    .eq(alone.as_str())
+                    .and(attestations::publishable_id.eq(id)),
+            );
+        }
+        if let Some(member_type) = kind.member_type() {
+            let containing = members::table
+                .filter(members::member_type.eq(member_type))
+                .filter(members::member_id.eq(id))
+                .select(members::collection_id.nullable());
+            query = query.or_filter(
+                attestations::publishable_kind
+                    .eq(PublishableKind::Collection.as_str())
+                    .and(attestations::publishable_id.eq_any(containing)),
+            );
+        }
+        query
             .order(attestations::attested_at.desc())
             .select(Attestation::as_select())
             .load(&mut conn)

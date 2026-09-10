@@ -117,6 +117,29 @@ export function getModerationHistoryForAccount(
   ).then((data) => data.moderationHistoryForAccount);
 }
 
+type ModerationCaseQuery = {
+  moderationCase: ModerationCaseRecord | null;
+};
+
+/**
+ * Compliance-staff-only. One case, by the reference the claimant was given —
+ * which is what a person handling a notice actually has in hand.
+ */
+export function getModerationCase(
+  caseId: string,
+): Promise<ModerationCaseRecord | null> {
+  return postGraphQL<ModerationCaseQuery>(
+    `
+      query ModerationCase($caseId: UUID!) {
+        moderationCase(caseId: $caseId) {
+          ${MODERATION_CASE_FIELDS}
+        }
+      }
+    `,
+    { caseId },
+  ).then((data) => data.moderationCase);
+}
+
 type RepeatInfringerFlagsQuery = {
   repeatInfringerFlags: string[];
 };

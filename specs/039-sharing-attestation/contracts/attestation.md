@@ -80,7 +80,11 @@ type Attestation {
 }
 
 extend type Query {
-  "Every attestation for one published thing, newest first. Admin-only."
+  """
+  Every agreement under which one thing has been published, newest first: its
+  own, and those of every collection it is currently in. Admin-only.
+  publishableKind is "collection", "actor", "item", "ability" or "lore".
+  """
   attestationsFor(publishableKind: String!, publishableId: UUID!): [Attestation!]!
 
   "The caller's own attestations, newest first."
@@ -115,6 +119,13 @@ extend type Query {
   not a record.
 - **No listing by version, by world or globally.** `attestationsFor` answers
   about one named thing, which is the question a notice actually asks.
+  *Amended 2026-09-10:* "about one named thing" includes the collections that
+  thing is in. A shared collection serves its members live, so a notice about an
+  item — and about any lore entry, which is only ever published inside a
+  collection — is answered by the collection's agreement as much as by the
+  item's own. Membership is read as it is now: something removed from a
+  collection after a copy was adopted is not reached, and following copies is
+  ADR-079's question.
 - **No IP address and no user agent.** Spec 035 set the rule that a record
   describes the act and never the person, and spec 036 followed it for sessions.
   An attestation is who, when, which words, which act — that is what makes it
