@@ -175,6 +175,24 @@ fn share_link_mutations(sdl: &str) -> Vec<String> {
         .collect()
 }
 
+/// The whole SDL line declaring each `create…ShareLink`, arguments and all.
+///
+/// Separate from [`share_link_mutations`] because the two guards want different
+/// things: one wants the names to go looking for impls, the other wants the
+/// argument list exactly as a client would read it.
+fn share_link_declarations(sdl: &str) -> Vec<String> {
+    sdl.lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with("create"))
+        .filter(|line| {
+            line.split(['(', ':'])
+                .next()
+                .is_some_and(|name| name.trim().ends_with("ShareLink"))
+        })
+        .map(str::to_string)
+        .collect()
+}
+
 /// `createCollectionShareLink` → `create_collection_share_link`.
 fn snake_case(name: &str) -> String {
     let mut out = String::with_capacity(name.len() + 4);
@@ -266,6 +284,10 @@ fn share_link_impls(sources: &[(PathBuf, String)]) -> Vec<String> {
 
 const GATE: &str = "may_publish_beyond_world";
 
+/// Spec 039's half of the gate: the call that refuses a publish with no
+/// agreement behind it.
+const ATTESTATION_GATE: &str = "require_attestation";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -284,6 +306,7 @@ mod tests {
         create_collection_impl,
     };
     use crate::graphql::mutations_item_shares::{create_item_share_link_impl, shared_item_impl};
+    use crate::publishing::an_agreement;
     use crate::state::AppState;
     use crate::test_support::{
         insert_test_ability, insert_test_actor, insert_test_item, insert_test_scene,
@@ -297,14 +320,15 @@ mod tests {
     /// The guard spec 039's `contracts/publishing-gate.md` asks for, in the
     /// shape this codebase can actually hold.
     ///
-    /// The contract proposes asserting that every `create*ShareLink` mutation
-    /// declares a non-null `attestation` argument. That argument does not
-    /// exist yet — the attestation record is spec 039's own work — so an SDL
-    /// assertion about it would fail on the four mutations that are correct
-    /// today, which is a guard nobody can keep. What *is* true today is that
-    /// each of them must consult the gate before minting a code, and that is
-    /// checked here: the schema supplies the list of mutations (so the fifth
-    /// is discovered, not remembered) and the source supplies the proof.
+    /// This half is spec 040's FR-026: each of them must consult the notice
+    /// contact gate before minting a code. The schema supplies the list of
+    /// mutations (so the fifth is discovered, not remembered) and the source
+    /// supplies the proof.
+    ///
+    /// The `attestation` argument the contract also asks about is now real, and
+    /// is asserted by `every_share_link_mutation_requires_an_attestation`
+    /// below. This comment used to say that argument did not exist yet; it
+    /// does, as of spec 039 Phase 4.
     #[test]
     fn every_share_link_mutation_consults_the_publishing_gate() {
         let sdl = async_graphql::Schema::build(
@@ -367,6 +391,65 @@ mod tests {
             "only {} share mutations were checked",
             checked.len()
         );
+    }
+
+    /// Spec 039 FR-002, and the mechanism by which it covers a content type
+    /// nobody has written yet.
+    ///
+    /// The requirement is not "the four paths we know about ask". It is that
+    /// **publishing** requires an attestation, so the fifth path inherits it
+    /// without anybody deciding to give it one. A requirement that lives only in
+    /// a spec is a requirement the next implementer does not read; this is what
+    /// that sentence has to mean in code.
+    ///
+    /// Two assertions, because either alone is escapable:
+    ///
+    /// - the **schema** must declare `attestation: AttestationInput!` — non-null,
+    ///   because a nullable argument is a requirement satisfied by omission;
+    /// - the **impl** must call `require_attestation`, because a resolver that
+    ///   accepts the argument and ignores it type-checks perfectly.
+    #[test]
+    fn every_share_link_mutation_requires_an_attestation() {
+        let sdl = async_graphql::Schema::build(
+            crate::graphql::QueryRoot::default(),
+            crate::graphql::MutationRoot::default(),
+            crate::graphql::SubscriptionRoot,
+        )
+        .finish()
+        .sdl();
+
+        let declarations = share_link_declarations(&sdl);
+        assert!(
+            declarations.len() >= 4,
+            "expected at least the four known publishing paths, found {}: {declarations:#?}",
+            declarations.len(),
+        );
+
+        for declaration in &declarations {
+            assert!(
+                declaration.contains("attestation: AttestationInput!"),
+                "this mutation publishes content beyond a world without asking \
+                 anybody to attest to their right to publish it (spec 039 \
+                 FR-001, FR-002):\n  {declaration}\n\nAdd \
+                 `attestation: crate::publishing::AttestationInput` to the \
+                 resolver and pass it to the impl. Non-null: an optional \
+                 agreement is not one.",
+            );
+        }
+
+        // And the argument must be *used*. A resolver that takes it and drops
+        // it satisfies the schema and none of the requirement.
+        let sources = crate_sources();
+        for name in share_link_impls(&sources) {
+            let body = function_body(&sources, &name).expect("its own source");
+            assert!(
+                body.contains(ATTESTATION_GATE),
+                "`{name}` mints a share link without calling \
+                 `publishing::{ATTESTATION_GATE}`. Accepting the argument and \
+                 ignoring it is the shape this feature exists to remove \
+                 (spec 039 FR-011, FR-014)."
+            );
+        }
     }
 
     /// The guard, aimed at a fifth content type that does not exist yet.
@@ -478,31 +561,55 @@ mod tests {
         BTreeMap::from([
             (
                 "collection",
-                create_collection_share_link_impl(state, owner_id, false, collection.id)
-                    .await
-                    .expect("collection shared")
-                    .share_code,
+                create_collection_share_link_impl(
+                    state,
+                    owner_id,
+                    false,
+                    collection.id,
+                    &an_agreement(state).await,
+                )
+                .await
+                .expect("collection shared")
+                .share_code,
             ),
             (
                 "actor",
-                create_actor_share_link_impl(state, owner_id, false, actor_id)
-                    .await
-                    .expect("actor shared")
-                    .share_code,
+                create_actor_share_link_impl(
+                    state,
+                    owner_id,
+                    false,
+                    actor_id,
+                    &an_agreement(state).await,
+                )
+                .await
+                .expect("actor shared")
+                .share_code,
             ),
             (
                 "item",
-                create_item_share_link_impl(state, owner_id, false, item_id)
-                    .await
-                    .expect("item shared")
-                    .share_code,
+                create_item_share_link_impl(
+                    state,
+                    owner_id,
+                    false,
+                    item_id,
+                    &an_agreement(state).await,
+                )
+                .await
+                .expect("item shared")
+                .share_code,
             ),
             (
                 "ability",
-                create_ability_share_link_impl(state, owner_id, false, ability_id)
-                    .await
-                    .expect("ability shared")
-                    .share_code,
+                create_ability_share_link_impl(
+                    state,
+                    owner_id,
+                    false,
+                    ability_id,
+                    &an_agreement(state).await,
+                )
+                .await
+                .expect("ability shared")
+                .share_code,
             ),
         ])
     }
@@ -521,9 +628,15 @@ mod tests {
         };
 
         let _unconfigured = unpublishable_instance(&state);
-        let refusal = create_item_share_link_impl(&state, owner_id, false, item_id)
-            .await
-            .expect_err("an instance that cannot be served a notice must not publish");
+        let refusal = create_item_share_link_impl(
+            &state,
+            owner_id,
+            false,
+            item_id,
+            &an_agreement(&state).await,
+        )
+        .await
+        .expect_err("an instance that cannot be served a notice must not publish");
         let message = refusal.message;
         assert!(
             message.contains("copyright"),

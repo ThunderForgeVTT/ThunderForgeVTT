@@ -161,6 +161,7 @@ pub async fn create_collection_share_link_impl(
     user_id: Uuid,
     is_admin: bool,
     collection_id: Uuid,
+    attestation: &crate::publishing::AttestationInput,
 ) -> GraphQLResult<CollectionShare> {
     // Spec 040 FR-026: an instance with no contact for copyright notices
     // publishes nothing beyond a world. Asked first, before ownership, so a
@@ -200,6 +201,23 @@ pub async fn create_collection_share_link_impl(
         }
     }
 
+    // Spec 039 FR-011/FR-014. Last of the refusals, and deliberately so: it is
+    // the only one whose message tells the caller to reload a page, and telling
+    // somebody that before telling them the collection is empty would send them
+    // round a loop that cannot fix anything.
+    //
+    // The gate writes nothing. What it returns is written below, inside the
+    // transaction that mints the code.
+    let pending = crate::publishing::require_attestation(
+        state,
+        user_id,
+        crate::attestation::PublishableKind::Collection,
+        collection_id,
+        Some(world_id),
+        attestation,
+    )
+    .await?;
+
     let mut conn = state
         .db_pool
         .get()
@@ -213,11 +231,18 @@ pub async fn create_collection_share_link_impl(
     };
 
     tokio::task::spawn_blocking(move || {
-        diesel::insert_into(world_collection_shares::table)
-            .values(&new_share)
-            .returning(CollectionShare::as_returning())
-            .get_result::<CollectionShare>(&mut conn)
-            .map_err(|e| format!("Failed to create share link: {e}"))
+        // One transaction: there is no interleaving in which a share link
+        // exists without its attestation, and none in which an attestation
+        // exists for a share that failed (FR-011).
+        conn.transaction::<_, diesel::result::Error, _>(|conn| {
+            let share = diesel::insert_into(world_collection_shares::table)
+                .values(&new_share)
+                .returning(CollectionShare::as_returning())
+                .get_result::<CollectionShare>(conn)?;
+            crate::attestation::record_sync(conn, &pending, share.id)?;
+            Ok(share)
+        })
+        .map_err(|e| format!("Failed to create share link: {e}"))
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -456,16 +481,26 @@ pub struct CollectionShareMutation;
 
 #[async_graphql::Object]
 impl CollectionShareMutation {
+    /// Spec 039 FR-001/FR-002: `attestation` is **non-null**. A nullable
+    /// argument is a requirement satisfied by omission, which is the shape this
+    /// feature exists to remove.
     async fn create_collection_share_link(
         &self,
         ctx: &Context<'_>,
         collection_id: Uuid,
+        attestation: crate::publishing::AttestationInput,
     ) -> GraphQLResult<GraphQLCollectionShareLink> {
         let state = app_state(ctx)?;
         let user = authenticated_user(ctx)?;
-        create_collection_share_link_impl(state, user.user_id, user.is_admin, collection_id)
-            .await
-            .map(Into::into)
+        create_collection_share_link_impl(
+            state,
+            user.user_id,
+            user.is_admin,
+            collection_id,
+            &attestation,
+        )
+        .await
+        .map(Into::into)
     }
 
     async fn revoke_collection_share_link(
@@ -511,452 +546,5 @@ impl CollectionShareMutation {
 pub(crate) mod publishing_gate;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::graphql::mutations_collection_shares::publishing_gate::{
-        InstancePublishing, publishable_instance,
-    };
-    use crate::graphql::mutations_collections::{
-        AddCollectionMemberInput, CreateCollectionInput, add_collection_member_impl,
-        create_collection_impl, delete_collection_impl,
-    };
-    use crate::test_support::*;
-
-    struct Fixture {
-        /// Every test in this module mints a share link, and spec 040 FR-026
-        /// refuses that on an instance with no notice contact. Held for the
-        /// length of the test, and for the length of the test *only*, so a
-        /// readiness test asserting the opposite is not racing us.
-        _publishing: InstancePublishing,
-        state: AppState,
-        owner_id: Uuid,
-        world_id: Uuid,
-        scene_id: Uuid,
-        item_id: Uuid,
-        ability_id: Uuid,
-        world_name: String,
-    }
-
-    fn fixture() -> Fixture {
-        let _publishing = publishable_instance();
-        dotenvy::dotenv().ok();
-        let state = test_app_state();
-        let mut conn = state.db_pool.get().expect("connection");
-
-        let owner_id = insert_test_user(&mut conn);
-        let world_id = insert_test_world(&mut conn, owner_id);
-        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
-        let item_id = insert_test_item(&mut conn, world_id, owner_id);
-        let ability_id = insert_test_ability(&mut conn, world_id, owner_id);
-
-        let world_name: String = crate::schema::worlds::table
-            .filter(crate::schema::worlds::id.eq(world_id))
-            .select(crate::schema::worlds::name)
-            .first(&mut conn)
-            .expect("world name");
-
-        Fixture {
-            _publishing,
-            state,
-            owner_id,
-            world_id,
-            scene_id,
-            item_id,
-            ability_id,
-            world_name,
-        }
-    }
-
-    /// A collection holding an item, an ability and a scene, already shared.
-    async fn shared_fixture(f: &Fixture) -> (Uuid, CollectionShare) {
-        let collection = create_collection_impl(
-            &f.state,
-            f.owner_id,
-            false,
-            CreateCollectionInput {
-                world_id: f.world_id,
-                name: "The Haunted Manor".to_string(),
-                description: Some("Rooms, curses and the reasons why.".to_string()),
-            },
-        )
-        .await
-        .expect("created");
-
-        for (member_type, member_id) in [
-            ("item", f.item_id),
-            ("ability", f.ability_id),
-            ("scene", f.scene_id),
-        ] {
-            add_collection_member_impl(
-                &f.state,
-                f.owner_id,
-                false,
-                AddCollectionMemberInput {
-                    collection_id: collection.id,
-                    member_type: member_type.to_string(),
-                    member_id,
-                },
-            )
-            .await
-            .expect("added");
-        }
-
-        let share = create_collection_share_link_impl(&f.state, f.owner_id, false, collection.id)
-            .await
-            .expect("shared");
-        (collection.id, share)
-    }
-
-    /// A rate-limit bucket nothing else in the process shares, so one test
-    /// exhausting its budget cannot fail another.
-    fn a_caller() -> String {
-        format!("test-{}", Uuid::new_v4())
-    }
-
-    /// FR-008: the code is 20 uppercase hex characters, v4-derived.
-    #[tokio::test]
-    async fn a_share_link_carries_an_unguessable_code() {
-        let f = fixture();
-        let (_, share) = shared_fixture(&f).await;
-        assert_eq!(share.share_code.len(), 20);
-        assert_eq!(share.share_code, share.share_code.to_uppercase());
-        assert!(!share.revoked);
-    }
-
-    /// FR-009a: no session. This is the whole of ADR-070 in one assertion —
-    /// `shared_collection_impl` takes no user and asks for none.
-    #[tokio::test]
-    async fn a_collection_previews_without_any_account() {
-        let f = fixture();
-        let (_, share) = shared_fixture(&f).await;
-
-        let preview = shared_collection_impl(&f.state, &a_caller(), share.share_code)
-            .await
-            .expect("an anonymous caller may read a shared collection");
-
-        assert_eq!(preview.name, "The Haunted Manor");
-        assert_eq!(preview.members.len(), 3);
-        assert_eq!(preview.withheld_count, 0);
-    }
-
-    /// US4 scenario 1: how many of each kind, before copying.
-    #[tokio::test]
-    async fn the_preview_says_how_many_of_each_kind() {
-        let f = fixture();
-        let (_, share) = shared_fixture(&f).await;
-
-        let preview = shared_collection_impl(&f.state, &a_caller(), share.share_code)
-            .await
-            .expect("preview");
-
-        let mut kinds: Vec<(String, i32)> = preview
-            .counts_by_type
-            .into_iter()
-            .map(|c| (c.member_type, c.count))
-            .collect();
-        kinds.sort();
-        assert_eq!(
-            kinds,
-            vec![
-                ("ability".to_string(), 1),
-                ("item".to_string(), 1),
-                ("scene".to_string(), 1),
-            ]
-        );
-    }
-
-    /// FR-009 / SC-007a: the preview reveals nothing about the source world.
-    ///
-    /// Serialised and searched rather than field-by-field, so a field added
-    /// later that happens to carry a world identifier is caught by a test
-    /// nobody remembered to update.
-    #[tokio::test]
-    async fn the_preview_reveals_nothing_about_the_source_world() {
-        let f = fixture();
-        let (_, share) = shared_fixture(&f).await;
-
-        let preview = shared_collection_impl(&f.state, &a_caller(), share.share_code)
-            .await
-            .expect("preview");
-
-        let rendered = format!("{preview:?}");
-        assert!(
-            !rendered.contains(&f.world_id.to_string()),
-            "the world id must not appear in the preview: {rendered}"
-        );
-        assert!(
-            !rendered.contains(&f.world_name),
-            "the world name must not appear in the preview: {rendered}"
-        );
-        assert!(
-            !rendered.contains(&f.owner_id.to_string()),
-            "the owner's id must not appear in the preview: {rendered}"
-        );
-    }
-
-    /// FR-010 + FR-009d: revoking makes the link unavailable, and the sentence
-    /// is the same one an unknown code produces.
-    #[tokio::test]
-    async fn a_revoked_share_is_indistinguishable_from_a_code_that_never_existed() {
-        let f = fixture();
-        let (_, share) = shared_fixture(&f).await;
-
-        shared_collection_impl(&f.state, &a_caller(), share.share_code.clone())
-            .await
-            .expect("works before revocation");
-
-        assert!(
-            revoke_collection_share_link_impl(&f.state, f.owner_id, false, share.id)
-                .await
-                .expect("revoked")
-        );
-
-        let revoked_error = shared_collection_impl(&f.state, &a_caller(), share.share_code)
-            .await
-            .expect_err("a revoked link must not resolve");
-        let unknown_error =
-            shared_collection_impl(&f.state, &a_caller(), "NOTAREALCODEATALL0".to_string())
-                .await
-                .expect_err("an unknown code must not resolve");
-
-        assert_eq!(
-            revoked_error.message, unknown_error.message,
-            "a revoked share and an unknown code must be indistinguishable (FR-009d)"
-        );
-        assert_eq!(revoked_error.message, UNAVAILABLE);
-    }
-
-    /// US2 scenario 4 + FR-009d: deleting the collection behaves as revoked,
-    /// and is likewise indistinguishable.
-    #[tokio::test]
-    async fn a_deleted_collection_reads_the_same_as_an_unknown_code() {
-        let f = fixture();
-        let (collection_id, share) = shared_fixture(&f).await;
-
-        delete_collection_impl(&f.state, f.owner_id, false, collection_id)
-            .await
-            .expect("deleted");
-
-        let error = shared_collection_impl(&f.state, &a_caller(), share.share_code)
-            .await
-            .expect_err("a deleted collection's link must not resolve");
-        assert_eq!(error.message, UNAVAILABLE);
-    }
-
-    /// FR-011: a revoked share leaves the collection and its artifacts alone.
-    /// Revocation ends the link, not the content.
-    #[tokio::test]
-    async fn revoking_touches_neither_the_collection_nor_its_artifacts() {
-        use crate::schema::world_items;
-
-        let f = fixture();
-        let (collection_id, share) = shared_fixture(&f).await;
-
-        revoke_collection_share_link_impl(&f.state, f.owner_id, false, share.id)
-            .await
-            .expect("revoked");
-
-        let mut conn = f.state.db_pool.get().expect("connection");
-        let collection_survives: i64 = world_collections::table
-            .filter(world_collections::id.eq(collection_id))
-            .count()
-            .get_result(&mut conn)
-            .expect("count");
-        assert_eq!(collection_survives, 1);
-
-        let item_survives: i64 = world_items::table
-            .filter(world_items::id.eq(f.item_id))
-            .count()
-            .get_result(&mut conn)
-            .expect("count");
-        assert_eq!(item_survives, 1);
-    }
-
-    /// A collection may be shared, revoked and shared again with a new code —
-    /// which is why the share is a separate row from the collection.
-    #[tokio::test]
-    async fn a_collection_can_be_shared_again_after_revocation() {
-        let f = fixture();
-        let (collection_id, first) = shared_fixture(&f).await;
-
-        revoke_collection_share_link_impl(&f.state, f.owner_id, false, first.id)
-            .await
-            .expect("revoked");
-
-        let second = create_collection_share_link_impl(&f.state, f.owner_id, false, collection_id)
-            .await
-            .expect("shared again");
-
-        assert_ne!(first.share_code, second.share_code, "a new code each time");
-        shared_collection_impl(&f.state, &a_caller(), second.share_code)
-            .await
-            .expect("the new link works");
-        shared_collection_impl(&f.state, &a_caller(), first.share_code)
-            .await
-            .expect_err("the old link stays dead");
-    }
-
-    /// FR-001b at share time: a member restricted after being added blocks the
-    /// share, and says which one.
-    #[tokio::test]
-    async fn a_member_restricted_after_being_added_blocks_a_new_share() {
-        use crate::schema::world_abilities;
-
-        let f = fixture();
-        let collection = create_collection_impl(
-            &f.state,
-            f.owner_id,
-            false,
-            CreateCollectionInput {
-                world_id: f.world_id,
-                name: "Restricted later".to_string(),
-                description: None,
-            },
-        )
-        .await
-        .expect("created");
-
-        add_collection_member_impl(
-            &f.state,
-            f.owner_id,
-            false,
-            AddCollectionMemberInput {
-                collection_id: collection.id,
-                member_type: "ability".to_string(),
-                member_id: f.ability_id,
-            },
-        )
-        .await
-        .expect("added while unrestricted");
-
-        let mut conn = f.state.db_pool.get().expect("connection");
-        diesel::update(world_abilities::table.filter(world_abilities::id.eq(f.ability_id)))
-            .set(world_abilities::gm_only.eq(true))
-            .execute(&mut conn)
-            .expect("restrict it");
-        drop(conn);
-
-        let error = create_collection_share_link_impl(&f.state, f.owner_id, false, collection.id)
-            .await
-            .expect_err("a restricted member must block the share");
-        assert!(
-            error.message.contains("Game Master"),
-            "the refusal must name the reason, got: {}",
-            error.message
-        );
-    }
-
-    /// FR-024: every member withheld reports that nothing is available, rather
-    /// than presenting an empty collection as complete.
-    #[tokio::test]
-    async fn a_collection_whose_members_all_vanished_says_nothing_is_available() {
-        use crate::schema::{scenes, world_abilities, world_items};
-
-        let f = fixture();
-        let (_, share) = shared_fixture(&f).await;
-
-        let mut conn = f.state.db_pool.get().expect("connection");
-        diesel::delete(world_items::table.filter(world_items::id.eq(f.item_id)))
-            .execute(&mut conn)
-            .expect("delete the item");
-        diesel::delete(world_abilities::table.filter(world_abilities::id.eq(f.ability_id)))
-            .execute(&mut conn)
-            .expect("delete the ability");
-        diesel::delete(scenes::table.filter(scenes::scene_id.eq(f.scene_id)))
-            .execute(&mut conn)
-            .expect("delete the scene");
-        drop(conn);
-
-        let error = shared_collection_impl(&f.state, &a_caller(), share.share_code)
-            .await
-            .expect_err("an entirely withheld collection must not read as complete");
-        assert!(error.message.contains("Nothing"), "got: {}", error.message);
-    }
-
-    /// FR-022: one member gone leaves the rest, and the absence is a count
-    /// rather than a name.
-    #[tokio::test]
-    async fn one_missing_member_is_counted_never_named() {
-        use crate::schema::world_items;
-
-        let f = fixture();
-        let (_, share) = shared_fixture(&f).await;
-
-        let item_name: String = {
-            let mut conn = f.state.db_pool.get().expect("connection");
-            let name = world_items::table
-                .filter(world_items::id.eq(f.item_id))
-                .select(world_items::name)
-                .first::<String>(&mut conn)
-                .expect("item name");
-            diesel::delete(world_items::table.filter(world_items::id.eq(f.item_id)))
-                .execute(&mut conn)
-                .expect("delete the item");
-            name
-        };
-
-        let preview = shared_collection_impl(&f.state, &a_caller(), share.share_code)
-            .await
-            .expect("the collection still opens");
-
-        assert_eq!(preview.members.len(), 2, "the rest are still there");
-        assert_eq!(preview.withheld_count, 1);
-        assert!(
-            !format!("{preview:?}").contains(&item_name),
-            "the withheld member must not be named"
-        );
-    }
-
-    /// FR-009c: the anonymous read is rate limited, and the refusal reveals
-    /// nothing about the code that was tried.
-    #[tokio::test]
-    async fn the_anonymous_read_is_rate_limited() {
-        let f = fixture();
-        let (_, share) = shared_fixture(&f).await;
-        let caller = a_caller();
-
-        let mut refused = None;
-        for _ in 0..200 {
-            if let Err(e) =
-                shared_collection_impl(&f.state, &caller, share.share_code.clone()).await
-            {
-                refused = Some(e);
-                break;
-            }
-        }
-
-        let error = refused.expect("a caller must eventually be rate limited");
-        assert!(
-            error.message.contains("Too many requests"),
-            "got: {}",
-            error.message
-        );
-        assert_ne!(
-            error.message, UNAVAILABLE,
-            "the rate-limit refusal must not masquerade as a bad code"
-        );
-    }
-
-    /// An empty collection cannot be shared. A link to nothing is a link that
-    /// reads as broken.
-    #[tokio::test]
-    async fn an_empty_collection_cannot_be_shared() {
-        let f = fixture();
-        let collection = create_collection_impl(
-            &f.state,
-            f.owner_id,
-            false,
-            CreateCollectionInput {
-                world_id: f.world_id,
-                name: "Empty".to_string(),
-                description: None,
-            },
-        )
-        .await
-        .expect("created");
-
-        create_collection_share_link_impl(&f.state, f.owner_id, false, collection.id)
-            .await
-            .expect_err("an empty collection must not be shareable");
-    }
-}
+#[path = "mutations_collection_shares_tests.rs"]
+mod tests;

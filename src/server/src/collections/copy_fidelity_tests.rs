@@ -1,4 +1,5 @@
 use super::*;
+use crate::publishing::an_agreement;
 
 /// SC-003: every member arrives, and the copier owns them (FR-017a).
 #[tokio::test]
@@ -378,9 +379,15 @@ async fn a_revoked_link_copies_nothing_at_all() {
     )
     .await
     .expect("added");
-    let share = create_collection_share_link_impl(&s.state, s.owner_id, false, collection.id)
-        .await
-        .expect("shared");
+    let share = create_collection_share_link_impl(
+        &s.state,
+        s.owner_id,
+        false,
+        collection.id,
+        &an_agreement(&s.state).await,
+    )
+    .await
+    .expect("shared");
 
     let mut conn = s.state.db_pool.get().expect("connection");
     let before: i64 = world_items::table

@@ -159,6 +159,25 @@ async fn username_of(state: &AppState, user_id: uuid::Uuid) -> GraphQLResult<Opt
     .map_err(|_| Error::new("Failed to read the account"))
 }
 
+/// The one thing every share test now needs: a valid agreement.
+///
+/// Archives the terms (so the version exists) and hands back the identity to
+/// echo. Named `an_agreement` rather than `valid_attestation` because at every
+/// call site it reads as what it is — the person agreed, and then they shared.
+///
+/// Here rather than in `test_support` so it sits beside the type it builds and
+/// beside the gate that will check it; a helper that drifts from its validator
+/// is a helper that starts passing tests the product would refuse.
+#[cfg(test)]
+pub(crate) async fn an_agreement(state: &AppState) -> AttestationInput {
+    crate::legal::ensure_terms_versions_recorded(state)
+        .await
+        .expect("the terms must be archived before anything can attest to them");
+    AttestationInput {
+        terms_version_id: crate::legal::sharing_terms().version_id,
+    }
+}
+
 #[cfg(test)]
 #[path = "publishing_tests.rs"]
 mod publishing_tests;

@@ -194,6 +194,7 @@ pub async fn create_item_share_link_impl(
     user_id: Uuid,
     is_admin: bool,
     item_id: Uuid,
+    attestation: &crate::publishing::AttestationInput,
 ) -> GraphQLResult<ItemShare> {
     // Spec 040 FR-026: an instance with no contact for copyright notices
     // publishes nothing beyond a world. Asked first, before permission, so a
@@ -210,6 +211,21 @@ pub async fn create_item_share_link_impl(
         return Err(Error::new("Only an Owner-level member may share this item"));
     }
 
+    // Spec 039 FR-011/FR-014. Last of the refusals: its message tells the
+    // caller to reload, which is only useful once everything else about the
+    // request is in order. The gate writes nothing.
+    let pending = crate::publishing::require_attestation(
+        state,
+        user_id,
+        crate::attestation::PublishableKind::Item,
+        item_id,
+        // Filled in from the item's own row inside the transaction below, so
+        // this stays one round trip.
+        None,
+        attestation,
+    )
+    .await?;
+
     let mut conn = state
         .db_pool
         .get()
@@ -223,11 +239,30 @@ pub async fn create_item_share_link_impl(
             created_by: user_id,
         };
 
-        diesel::insert_into(world_item_shares::table)
-            .values(&new_share)
-            .returning(ItemShare::as_returning())
-            .get_result::<ItemShare>(&mut conn)
-            .map_err(|e| format!("Failed to create share link: {e}"))
+        // One transaction: no interleaving leaves a share link without its
+        // attestation, or an attestation for a share that failed (FR-011).
+        conn.transaction::<_, diesel::result::Error, _>(|conn| {
+            let share = diesel::insert_into(world_item_shares::table)
+                .values(&new_share)
+                .returning(ItemShare::as_returning())
+                .get_result::<ItemShare>(conn)?;
+
+            let world_id: Uuid = world_items::table
+                .filter(world_items::id.eq(item_id))
+                .select(world_items::world_id)
+                .first(conn)?;
+
+            crate::attestation::record_sync(
+                conn,
+                &crate::attestation::PendingAttestation {
+                    world_id: Some(world_id),
+                    ..pending
+                },
+                share.id,
+            )?;
+            Ok(share)
+        })
+        .map_err(|e| format!("Failed to create share link: {e}"))
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -423,16 +458,24 @@ pub struct ItemShareMutation;
 
 #[async_graphql::Object]
 impl ItemShareMutation {
+    /// Spec 039 FR-001/FR-002: `attestation` is **non-null**.
     async fn create_item_share_link(
         &self,
         ctx: &Context<'_>,
         item_id: Uuid,
+        attestation: crate::publishing::AttestationInput,
     ) -> GraphQLResult<GraphQLItemShareLink> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        create_item_share_link_impl(state, auth_user.user_id, auth_user.is_admin, item_id)
-            .await
-            .map(GraphQLItemShareLink::from)
+        create_item_share_link_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            item_id,
+            &attestation,
+        )
+        .await
+        .map(GraphQLItemShareLink::from)
     }
 
     async fn revoke_item_share_link(
@@ -469,6 +512,7 @@ mod tests {
         CreateItemInput, ItemEffectInput, add_item_effect_impl, create_item_impl,
     };
     use crate::graphql::types::ItemEffectType;
+    use crate::publishing::an_agreement;
     use crate::test_support::{insert_test_user, insert_test_world, test_app_state};
 
     /// A distinct caller per test, so the shared rate limiter's window cannot
@@ -476,6 +520,58 @@ mod tests {
     /// keyed on a constant would make passing depend on test order.
     fn a_caller() -> String {
         format!("test-{}", Uuid::new_v4())
+    }
+
+    /// Spec 039 FR-012/FR-013 on the item path. One shape, four files — and the
+    /// SDL guard in `publishing_gate` is what makes the *fifth* file inherit it
+    /// without anybody writing a fifth copy of this test.
+    #[tokio::test]
+    async fn an_unknown_version_refuses_and_mints_no_item_link() {
+        use crate::schema::world_item_shares;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let item = create_item_impl(
+            &state,
+            owner_id,
+            false,
+            CreateItemInput {
+                world_id,
+                name: "Unattested Blade".to_string(),
+                description: None,
+            },
+        )
+        .await
+        .expect("created");
+
+        let real = an_agreement(&state).await;
+        let refusal = create_item_share_link_impl(
+            &state,
+            owner_id,
+            false,
+            item.id,
+            &crate::publishing::AttestationInput {
+                terms_version_id: "sharing-terms@ffffffffffffffff".to_string(),
+            },
+        )
+        .await
+        .expect_err("a version this instance never archived must be refused");
+
+        let message = refusal.message;
+        assert!(!message.contains(&real.terms_version_id), "{message}");
+        assert!(!message.contains('@'), "{message}");
+
+        let mut conn = state.db_pool.get().unwrap();
+        let links: i64 = world_item_shares::table
+            .filter(world_item_shares::item_id.eq(item.id))
+            .count()
+            .get_result(&mut conn)
+            .expect("count");
+        assert_eq!(links, 0, "a refused publish must leave no share link");
     }
 
     /// FR-022: only an Owner-level member (including the DM's implicit
@@ -503,15 +599,28 @@ mod tests {
         .await
         .expect("DM should create item");
 
-        let denied = create_item_share_link_impl(&state, outsider_id, false, item.id).await;
+        let denied = create_item_share_link_impl(
+            &state,
+            outsider_id,
+            false,
+            item.id,
+            &an_agreement(&state).await,
+        )
+        .await;
         assert!(
             denied.is_err(),
             "a non-Owner-level caller must not be able to share the item"
         );
 
-        let link = create_item_share_link_impl(&state, owner_id, false, item.id)
-            .await
-            .expect("the DM (implicit Owner) should be able to share the item");
+        let link = create_item_share_link_impl(
+            &state,
+            owner_id,
+            false,
+            item.id,
+            &an_agreement(&state).await,
+        )
+        .await
+        .expect("the DM (implicit Owner) should be able to share the item");
         assert!(!link.revoked);
     }
 
@@ -560,9 +669,15 @@ mod tests {
         .await
         .expect("effect should be added");
 
-        let link = create_item_share_link_impl(&state, source_owner_id, false, source_item.id)
-            .await
-            .expect("source DM should be able to share the item");
+        let link = create_item_share_link_impl(
+            &state,
+            source_owner_id,
+            false,
+            source_item.id,
+            &an_agreement(&state).await,
+        )
+        .await
+        .expect("source DM should be able to share the item");
 
         let denied = copy_shared_item_to_world_impl(
             &state,
@@ -625,9 +740,15 @@ mod tests {
         .await
         .expect("DM should create item");
 
-        let link = create_item_share_link_impl(&state, owner_id, false, item.id)
-            .await
-            .expect("owner should be able to share the item");
+        let link = create_item_share_link_impl(
+            &state,
+            owner_id,
+            false,
+            item.id,
+            &an_agreement(&state).await,
+        )
+        .await
+        .expect("owner should be able to share the item");
 
         // Sanity: share works before any takedown.
         assert!(
@@ -685,9 +806,15 @@ mod tests {
         .await
         .expect("DM should create item");
 
-        let link = create_item_share_link_impl(&state, owner_id, false, item.id)
-            .await
-            .expect("the owner may share");
+        let link = create_item_share_link_impl(
+            &state,
+            owner_id,
+            false,
+            item.id,
+            &an_agreement(&state).await,
+        )
+        .await
+        .expect("the owner may share");
 
         revoke_item_share_link_impl(&state, owner_id, false, link.id)
             .await
@@ -733,9 +860,15 @@ mod tests {
         .await
         .expect("DM should create item");
 
-        let link = create_item_share_link_impl(&state, owner_id, false, item.id)
-            .await
-            .expect("the owner may share");
+        let link = create_item_share_link_impl(
+            &state,
+            owner_id,
+            false,
+            item.id,
+            &an_agreement(&state).await,
+        )
+        .await
+        .expect("the owner may share");
 
         let preview = shared_item_impl(&state, "an-anonymous-visitor-item", link.share_code)
             .await
@@ -767,9 +900,15 @@ mod tests {
         .await
         .expect("DM should create item");
 
-        let link = create_item_share_link_impl(&state, owner_id, false, item.id)
-            .await
-            .expect("the owner may share");
+        let link = create_item_share_link_impl(
+            &state,
+            owner_id,
+            false,
+            item.id,
+            &an_agreement(&state).await,
+        )
+        .await
+        .expect("the owner may share");
 
         let caller = a_caller();
         let mut refused = None;
@@ -817,9 +956,15 @@ mod tests {
         .await
         .expect("DM should create item");
 
-        let link = create_item_share_link_impl(&state, owner_id, false, item.id)
-            .await
-            .expect("the owner may share");
+        let link = create_item_share_link_impl(
+            &state,
+            owner_id,
+            false,
+            item.id,
+            &an_agreement(&state).await,
+        )
+        .await
+        .expect("the owner may share");
 
         let recovered = item_share_link_impl(&state, owner_id, false, item.id)
             .await

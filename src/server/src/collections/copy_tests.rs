@@ -7,6 +7,7 @@ use crate::graphql::mutations_collections::{
     AddCollectionMemberInput, CreateCollectionInput, add_collection_member_impl,
     create_collection_impl,
 };
+use crate::publishing::an_agreement;
 use crate::test_support::*;
 use diesel::expression_methods::AggregateExpressionMethods;
 
@@ -94,10 +95,16 @@ async fn share_of(s: &Source, types: &[(&str, Uuid)], name: &str) -> String {
         .unwrap_or_else(|e| panic!("{member_type} must be addable: {e:?}"));
     }
 
-    create_collection_share_link_impl(&s.state, s.owner_id, false, collection.id)
-        .await
-        .expect("shared")
-        .share_code
+    create_collection_share_link_impl(
+        &s.state,
+        s.owner_id,
+        false,
+        collection.id,
+        &an_agreement(&s.state).await,
+    )
+    .await
+    .expect("shared")
+    .share_code
 }
 
 fn everything(s: &Source) -> Vec<(&'static str, Uuid)> {

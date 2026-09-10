@@ -1,4 +1,5 @@
 use super::*;
+use crate::publishing::an_agreement;
 
 /// FR-018: an actor's imagery and an item's icon travel with the copy.
 ///
@@ -201,9 +202,15 @@ async fn an_owner_can_retrieve_their_own_share_link_and_a_stranger_cannot() {
     )
     .await
     .expect("added");
-    let share = create_collection_share_link_impl(&s.state, s.owner_id, false, collection.id)
-        .await
-        .expect("shared");
+    let share = create_collection_share_link_impl(
+        &s.state,
+        s.owner_id,
+        false,
+        collection.id,
+        &an_agreement(&s.state).await,
+    )
+    .await
+    .expect("shared");
 
     let found = collection_share_link_impl(&s.state, s.owner_id, false, collection.id)
         .await

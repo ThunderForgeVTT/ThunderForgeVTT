@@ -108,16 +108,16 @@ remove, and the checklist says so.
 
 ### Tests for User Stories 1 and 3
 
-- [ ] T019 [P] [US3] Add the SDL guard test in `src/server/src/graphql/mod.rs` asserting **every** mutation matching `create*ShareLink` declares a non-null `attestation: AttestationInput` — this is the mechanism by which FR-002 covers a content type nobody has written yet
-- [ ] T020 [P] [US3] Add impl-level tests to `src/server/src/graphql/mutations_collection_shares.rs`: an unknown version id is refused, no share row is created, and the message names no valid version identity (FR-012, FR-013)
-- [ ] T021 [P] [US1] Add impl-level tests to `src/server/src/graphql/mutations_actor_shares.rs`, `mutations_item_shares.rs` and `mutations_ability_shares.rs` mirroring T020 — three files, one shape
+- [X] T019 [P] [US3] The SDL guard — **landed in `graphql/publishing_gate.rs`** beside spec 040's notice-contact guard rather than in `graphql/mod.rs`, because that file already reads the SDL for the mutation list and walks the crate source for the proof; a parallel mechanism would be a second thing to keep. Two assertions, because either alone is escapable: the schema must declare `attestation: AttestationInput!`, and the impl must actually *call* `require_attestation` — a resolver that accepts the argument and ignores it type-checks perfectly. **Broken on purpose and seen to bite** on exactly that case. The stale comment claiming the argument "does not exist yet" is gone
+- [X] T020 [P] [US3] Impl-level tests on the collection path: an unknown version refuses, the message names no valid identity nor anything shaped like one, **and no share row is left behind** — the gate runs before the insert, and that ordering is what this notices if somebody changes it. Plus the other side: a successful publish leaves exactly one agreement naming the link it authorised
+- [X] T021 [P] [US1] The same shape on the actor, item and ability paths. Four files is where it stops: the SDL guard is what makes the fifth inherit the requirement without a fifth copy of the test
 
 ### Implementation for User Stories 1 and 3
 
-- [ ] T022 [US3] Add `attestation: AttestationInput!` to `create_collection_share_link_impl` in `src/server/src/graphql/mutations_collection_shares.rs`, call `publishing::require_attestation` before the code is minted, and write the attestation **inside the same transaction** as the share row
-- [ ] T023 [P] [US1] Same change to `create_actor_share_link_impl` in `src/server/src/graphql/mutations_actor_shares.rs`
-- [ ] T024 [P] [US1] Same change to `create_item_share_link_impl` in `src/server/src/graphql/mutations_item_shares.rs`
-- [ ] T025 [P] [US1] Same change to `create_ability_share_link_impl` in `src/server/src/graphql/mutations_ability_shares.rs`
+- [X] T022 [US3] Add `attestation: AttestationInput!` to `create_collection_share_link_impl` in `src/server/src/graphql/mutations_collection_shares.rs`, call `publishing::require_attestation` before the code is minted, and write the attestation **inside the same transaction** as the share row
+- [X] T023 [P] [US1] Same change to `create_actor_share_link_impl` in `src/server/src/graphql/mutations_actor_shares.rs`
+- [X] T024 [P] [US1] Same change to `create_item_share_link_impl` in `src/server/src/graphql/mutations_item_shares.rs`
+- [X] T025 [P] [US1] Same change to `create_ability_share_link_impl` in `src/server/src/graphql/mutations_ability_shares.rs`
 - [ ] T026 [US1] Create `apps/web/src/components/legal/AttestationDialog.tsx` — one dialog, rendering `sharingTerms` from the server (not the Vite glob), returning the version identity to its caller, and short enough that sharing five things in a row stays a task somebody finishes (SC-007)
 - [ ] T027 [US1] Replace the inline terms block in `apps/web/src/pages/world-collections/WorldCollectionsPage.tsx` with the shared dialog, keeping the `share-terms` test id so existing coverage still points at something
 - [ ] T028 [P] [US1] Add the dialog to `apps/web/src/pages/world/actor/ActorDetailPage.tsx` — the first time this path has asked anything
