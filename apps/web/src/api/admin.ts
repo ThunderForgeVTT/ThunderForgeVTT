@@ -18,6 +18,7 @@ type AdminSettingsQuery = {
   systemManifest: SystemManifest;
   oauthProviders: OAuthProviderConfig[];
   authSecuritySettings: AuthSecuritySettings;
+  twoFactorCoverage: AdminSettingsData["twoFactorCoverage"];
   adminBootstrapSettings: AdminSettingsData["adminBootstrapSettings"];
 };
 
@@ -101,6 +102,11 @@ export function getAdminSettingsData(): Promise<AdminSettingsData> {
         twoFactorRequiredForAllUsers
         updatedAt
       }
+      twoFactorCoverage {
+        enrolled
+        notEnrolled
+        requiredNotEnrolled
+      }
       adminBootstrapSettings {
         setupCompleted
         adminCodeGeneratedAt
@@ -113,6 +119,7 @@ export function getAdminSettingsData(): Promise<AdminSettingsData> {
     systemManifest: data.systemManifest,
     oauthProviders: data.oauthProviders,
     authSecuritySettings: data.authSecuritySettings,
+    twoFactorCoverage: data.twoFactorCoverage,
     adminBootstrapSettings: data.adminBootstrapSettings,
   }));
 }

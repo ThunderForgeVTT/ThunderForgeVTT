@@ -240,6 +240,18 @@ pub(crate) struct SetupStatusResponse {
     pub(crate) required_settings: Vec<crate::auth::setup_requirements::RequiredSetting>,
     /// Spec 040 FR-002a. The predicate is 040's; the enrolment flow is 041's.
     pub(crate) second_factor_confirmed: bool,
+    /// Spec 041 FR-026: who to write to when you are locked out.
+    ///
+    /// Anonymous on purpose. A person who cannot sign in is, by definition,
+    /// anonymous to this server, and telling them "ask an administrator"
+    /// without saying *which* administrator is the dead end FR-026 is about.
+    ///
+    /// `support_email` is declared `RequiredAtSetup` and exists for precisely
+    /// this — "an address people can reach for help with this instance" — so
+    /// publishing it is what it is for, not a leak of it. `None` when the
+    /// instance has not set one, and the interface says so plainly rather than
+    /// sending somebody looking for a contact that does not exist.
+    pub(crate) support_email: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

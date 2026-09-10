@@ -556,6 +556,7 @@ export default function SettingsPage({
                     bootstrapSettings={
                       data.adminBootstrapSettings as AdminBootstrapSettings | null
                     }
+                    coverage={data.twoFactorCoverage}
                     onUpdate={updateSecurity}
                   />
                 </Card>

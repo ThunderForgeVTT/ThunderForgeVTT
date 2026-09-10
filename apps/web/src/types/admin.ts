@@ -71,6 +71,20 @@ export interface AuthSecuritySettings {
   updatedAt: string;
 }
 
+/**
+ * Spec 041 FR-021 / SC-007: how much of this instance holds a second factor.
+ *
+ * Counts, never a roster. A list of who has not enrolled is a list of accounts
+ * a stolen password is sufficient for, and it would be handed to anybody who
+ * takes over an operator's session.
+ */
+export interface TwoFactorCoverage {
+  enrolled: number;
+  notEnrolled: number;
+  /** Of those, how many are required to hold one — administrators included. */
+  requiredNotEnrolled: number;
+}
+
 export interface AdminBootstrapSettings {
   setupCompleted: boolean;
   adminCodeGeneratedAt: string | null;
@@ -83,6 +97,7 @@ export interface AdminSettingsData {
   systemManifest: SystemManifest;
   oauthProviders: OAuthProviderConfig[];
   authSecuritySettings: AuthSecuritySettings;
+  twoFactorCoverage: TwoFactorCoverage;
   adminBootstrapSettings: AdminBootstrapSettings | null;
 }
 

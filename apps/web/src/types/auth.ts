@@ -19,6 +19,15 @@ export interface SetupStatus {
    */
   access_policy: InstanceAccessPolicy;
   accepting_access_requests: boolean;
+  /**
+   * Spec 041 FR-026: who to write to when you are locked out.
+   *
+   * Optional because an instance may not have set one, and because a server
+   * older than this field simply does not send it. Both cases are the same
+   * to the interface: say plainly that there is nobody to write to, rather
+   * than send somebody looking for a contact that does not exist.
+   */
+  support_email?: string | null;
 }
 
 export interface AuthUser {

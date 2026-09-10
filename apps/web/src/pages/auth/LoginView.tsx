@@ -119,6 +119,11 @@ export function LoginView() {
   const [touched, setTouched] = useState<Partial<Record<LoginField, boolean>>>(
     {},
   );
+  /**
+   * Spec 041 FR-026. Read from `/authentication/setup/status`, which answers
+   * anonymously — which is the only kind of caller a locked-out person is.
+   */
+  const [supportEmail, setSupportEmail] = useState<string | null>(null);
   const [credentialAttempted, setCredentialAttempted] = useState(false);
   const [twoFactorAttempted, setTwoFactorAttempted] = useState(false);
   const twoFactorInputRef = useRef<HTMLInputElement | null>(null);
@@ -131,6 +136,7 @@ export function LoginView() {
         if (active) {
           setProviders(response.configured_oauth_providers);
           setAccessPolicy(response.access_policy);
+          setSupportEmail(response.support_email?.trim() || null);
         }
       })
       .catch(() => {
@@ -726,6 +732,42 @@ export function LoginView() {
                     Back to credentials
                   </Button>
                 </div>
+
+                {/*
+                 * FR-026. The last line on the screen somebody reaches when
+                 * the authenticator is gone *and* the recovery codes went
+                 * with it. Without it this page is a dead end: every control
+                 * on it asks for something the person no longer has.
+                 *
+                 * Named, not "contact an administrator" — an instruction with
+                 * no address is the dead end wearing a helpful voice. Where
+                 * the instance has set none, that is said plainly rather than
+                 * dressed up, because sending somebody looking for a contact
+                 * that does not exist is worse than telling them there isn't
+                 * one.
+                 */}
+                <p
+                  className="text-sm text-muted-foreground"
+                  data-testid="login-two-factor-help"
+                >
+                  {supportEmail ? (
+                    <>
+                      Lost your authenticator and your recovery codes? An
+                      administrator can reset your second factor — write to{" "}
+                      <a className="underline" href={`mailto:${supportEmail}`}>
+                        {supportEmail}
+                      </a>
+                      .
+                    </>
+                  ) : (
+                    <>
+                      Lost your authenticator and your recovery codes? Only an
+                      administrator of this instance can reset your second
+                      factor, and this instance has published no address to
+                      reach one at.
+                    </>
+                  )}
+                </p>
               </form>
             </Card>
           ) : null}

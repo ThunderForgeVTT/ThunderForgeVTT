@@ -148,6 +148,25 @@ pub(crate) async fn setup_status(
     // unset" is not something an anonymous caller has any business reading —
     // the same reasoning that limits `access_policy` to the one fact the
     // signed-out surface needs.
+    // Resolved once for this response, and used twice: the wizard's remaining
+    // questions while setup is open, and `support_email` always. `App.tsx`
+    // calls this endpoint on every page load, so a second `resolve_all` here
+    // would be a whole redundant read of the row-set, the manifest and the
+    // access policy per navigation.
+    let settings = resolve_all(&state).await.ok();
+
+    // FR-026. Published to anybody, including — especially — somebody who
+    // cannot sign in, which is the only audience this field has. It is
+    // declared `RequiredAtSetup` as "an address people can reach for help
+    // with this instance", so this is what it is for.
+    let support_email = settings.as_ref().and_then(|settings| {
+        settings
+            .value("support_email")
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+    });
+
     let (required, second_factor_confirmed) = if setup_completed {
         (Vec::new(), true)
     } else {
@@ -158,7 +177,12 @@ pub(crate) async fn setup_status(
         // was slow. Defaulting `second_factor_confirmed` to false is the safe
         // direction to be wrong in — it keeps setup open rather than letting
         // it finish on a read that did not happen.
-        evaluate_for_status(&state).await.unwrap_or_default()
+        match settings.as_ref() {
+            Some(settings) => evaluate_for_status(&state, settings)
+                .await
+                .unwrap_or_default(),
+            None => Default::default(),
+        }
     };
 
     // FR-003. Read per request, so a policy change takes effect without a
@@ -185,6 +209,7 @@ pub(crate) async fn setup_status(
             accepting_access_requests: false,
             required_settings: required,
             second_factor_confirmed,
+            support_email,
         }),
     )
 }
@@ -196,8 +221,10 @@ pub(crate) async fn setup_status(
 /// endpoint on **every page load**, so the difference between resolving the
 /// settings once and resolving them twice is a whole redundant read of the
 /// row-set, the manifest and the access policy per navigation.
-async fn evaluate_for_status(state: &AppState) -> Option<(Vec<RequiredSetting>, bool)> {
-    let settings = resolve_all(state).await.ok()?;
+async fn evaluate_for_status(
+    state: &AppState,
+    settings: &crate::settings::Settings,
+) -> Option<(Vec<RequiredSetting>, bool)> {
     let mut conn = state.db_pool.get().ok()?;
     let second_factor_confirmed = tokio::task::spawn_blocking(move || {
         crate::auth::setup_requirements::first_administrator_second_factor_confirmed(&mut conn)
@@ -206,7 +233,7 @@ async fn evaluate_for_status(state: &AppState) -> Option<(Vec<RequiredSetting>, 
     .ok()?
     .ok()?;
 
-    Some((required_settings(&settings), second_factor_confirmed))
+    Some((required_settings(settings), second_factor_confirmed))
 }
 
 /// FR-006: one step of the pass, written as it is completed.
