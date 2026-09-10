@@ -414,3 +414,34 @@ VALUES (
   'seed'
 )
 ON CONFLICT (id) DO NOTHING;
+
+-- Spec 039 FR-053: an instance with no notice contact publishes nothing.
+--
+-- `notice.contact_name`, `notice.contact_email` and `notice.contact_postal_address`
+-- are `RequiredFor(PublishBeyondWorld)` and `Backing::Row`, so once FR-053 is
+-- enforced an instance without them refuses **every** share path — which is
+-- most of `apps/web/e2e/`. Seeded here so the suite tests the feature rather
+-- than the absence of a configuration.
+--
+-- Written straight into `instance_settings` rather than through
+-- `settings::changes::write_setting`: a seed has no actor to attribute the
+-- change to, and `instance_setting_changes` is a record of *who changed what*,
+-- which is a question a seed cannot answer honestly. `updated_by` and
+-- `created_by` are left NULL, which is what the columns already mean by "the
+-- instance".
+--
+-- `.invalid` is reserved by RFC 2606 and can never receive mail. That is the
+-- right choice for a fixture and the wrong choice for a real instance, which
+-- is why `settings::validate` refuses reserved TLDs on the path a person types
+-- one in.
+INSERT INTO instance_settings (key, value, created_at, updated_at)
+VALUES
+  ('notice.contact_name', 'ThunderForge E2E Notice Contact', now(), now()),
+  ('notice.contact_email', 'notices@example.invalid', now(), now()),
+  (
+    'notice.contact_postal_address',
+    E'1 Test Street\nTestville, TS 00000\nTestland',
+    now(),
+    now()
+  )
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();

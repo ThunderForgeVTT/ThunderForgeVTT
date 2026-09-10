@@ -45,7 +45,15 @@ and US6's requirements come out of the spec.
 - [X] T002 [P] Write ADR-077 (account standing and the termination window) in `docs/adrs/20260909-077-account_standing_and_the_termination_window.md` — standing derived from the existing counting rather than stored, the window as the only row, the sweep as the fifth `spawn_*_task`, and `MODERATION_TERMINATION_REQUIRES_HUMAN` defaulting to true
 - [X] T003 [P] Write ADR-078 (the operator acknowledgement) in `docs/adrs/20260909-078-the_operator_acknowledgement.md` — an instance attesting on the same record as a person, why `instance_identity` is not reused, and the boundary with spec 040
 - [~] T004 **GATE** ADR-079 written as **PROPOSED** in `docs/adrs/20260909-079-adoption_provenance_and_the_reach_of_a_takedown.md`, carrying the guardrail determination, the three specific costs, and both outcomes spelled out. **Still needs the accountable owner's acceptance as ADR-069 has** — it is a liability decision that amends an accepted ADR, so it is not the implementer's to sign. Phases 1–5 do not wait on it; Phase 6 does. It reverses spec 026 FR-012's "no referential link back to the source" (`src/server/src/collections/copy.rs:10`) and amends ADR-069. If declined: strike FR-022–FR-023d and SC-006/SC-008 from `specs/039-sharing-attestation/spec.md`, delete Phase 6 from this file, and record the decision in the ADR as rejected
-- [ ] T005 Confirm `make dev`'s seed can set a notice contact and record in this file what it sets — with FR-053 enforced, an instance without one refuses every existing share test in `apps/web/e2e/`
+- [X] T005 The seed sets a notice contact. `src/server/seeds/e2e_demo.sql` — which `make dev` applies and `global-setup.ts` re-applies per e2e run — now writes three `instance_settings` rows:
+
+  | key | value |
+  |---|---|
+  | `notice.contact_name` | `ThunderForge E2E Notice Contact` |
+  | `notice.contact_email` | `notices@example.invalid` |
+  | `notice.contact_postal_address` | `1 Test Street / Testville, TS 00000 / Testland` |
+
+  All three are `Backing::Row` and `RequiredFor(Capability::PublishBeyondWorld)`, so with FR-053 enforced an instance without them refuses every share path. Written straight into the table rather than through `settings::changes::write_setting`: a seed has no actor, and `instance_setting_changes` records *who* changed a setting — a question a seed cannot answer honestly. `.invalid` is RFC 2606 and can never receive mail, which is right for a fixture and is exactly what `settings::validate` refuses on the path a person types one in. Applied against the local database and read back.
 
 ---
 
