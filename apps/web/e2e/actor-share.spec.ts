@@ -93,6 +93,10 @@ test.describe("US5: share an actor, copy it independently, then revoke", () => {
     const actorId = await createNpcAndOpenEdit(page, sourceWorldId, npcName);
 
     await page.getByRole("button", { name: "Share" }).click();
+    // Spec 039 FR-001: the Share button opens the agreement rather than minting
+    // a link. Until this dialog existed, this path published a character sheet —
+    // readable without an account since ADR-071 — having asked nothing.
+    await page.getByTestId("share-terms-agree").click();
     const shareUrl = await page.getByTestId("share-link-input").inputValue();
     expect(shareUrl).toContain("/shared/actor/");
 
@@ -199,6 +203,10 @@ test.describe("US5: share an actor, copy it independently, then revoke", () => {
     );
     await createNpcAndOpenEdit(page, sourceWorldId, npcName);
     await page.getByRole("button", { name: "Share" }).click();
+    // Spec 039 FR-001: the Share button opens the agreement rather than minting
+    // a link. Until this dialog existed, this path published a character sheet —
+    // readable without an account since ADR-071 — having asked nothing.
+    await page.getByTestId("share-terms-agree").click();
     const shareUrl = await page.getByTestId("share-link-input").inputValue();
 
     const outsiderContext = await browser.newContext();

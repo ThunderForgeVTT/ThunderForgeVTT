@@ -18,11 +18,16 @@ type CreateActorShareLinkMutation = {
 /** Requires effective Owner on the actor (FR-023). */
 export function createActorShareLink(
   actorId: string,
+  /**
+   * Spec 039 FR-001: the `versionId` from `sharingTerms`, echoed back
+   * unmodified. Required by the schema — an optional agreement is not one.
+   */
+  termsVersionId: string,
 ): Promise<ActorShareLinkRecord> {
   return postGraphQL<CreateActorShareLinkMutation>(
     `
-      mutation CreateActorShareLink($actorId: UUID!) {
-        createActorShareLink(actorId: $actorId) {
+      mutation CreateActorShareLink($actorId: UUID!, $attestation: AttestationInput!) {
+        createActorShareLink(actorId: $actorId, attestation: $attestation) {
           id
           actorId
           shareCode
@@ -31,7 +36,7 @@ export function createActorShareLink(
         }
       }
     `,
-    { actorId },
+    { actorId, attestation: { termsVersionId } },
   ).then((data) => data.createActorShareLink);
 }
 

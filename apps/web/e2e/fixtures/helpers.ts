@@ -121,6 +121,38 @@ export async function loginAsAdmin(page: Page): Promise<void> {
   );
 }
 
+/**
+ * Spec 039 FR-001: the version identity a publish must echo back.
+ *
+ * Read from the server, the way the dialog does. A test that hard-coded an
+ * identity would be a test that passes against words nobody shipped — and the
+ * server refuses an identity it never archived, so a made-up one fails for the
+ * right reason but tells you nothing about the path under test.
+ */
+export async function currentSharingTermsVersion(page: Page): Promise<string> {
+  const result = await graphql<{
+    data?: { sharingTerms?: { versionId: string } };
+    errors?: { message: string }[];
+  }>(
+    page,
+    `
+      query {
+        sharingTerms {
+          versionId
+        }
+      }
+    `,
+    {},
+  );
+  const versionId = result.data?.sharingTerms?.versionId;
+  if (!versionId) {
+    throw new Error(
+      `sharingTerms did not answer: ${JSON.stringify(result.errors ?? result)}`,
+    );
+  }
+  return versionId;
+}
+
 export async function register(page: Page, creds: Credentials): Promise<void> {
   await page.goto("/register");
   await page.locator("#register-username").fill(creds.username);

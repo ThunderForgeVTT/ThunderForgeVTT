@@ -71,6 +71,13 @@ const ADMIN_ONLY: &[(&str, &str)] = &[
     // Spec 041 FR-021: counts, and admin-only because the shape of an
     // instance's coverage is an operator's business and nobody else's.
     ("twoFactorCoverage", "{ twoFactorCoverage { __typename } }"),
+    // Spec 039: what an old agreement actually said. The notice-handling
+    // surface, not a public archive — admin-only for the reason
+    // `moderationCase` is.
+    (
+        "legalDocumentVersion",
+        r#"{ legalDocumentVersion(versionId: "sharing-terms@0000000000000000") { __typename } }"#,
+    ),
     // Spec 041 US6/US7: one account by exact identifier, so an operator can
     // act on the second factor of somebody who has asked them for help.
     (
@@ -197,6 +204,12 @@ const AUTHENTICATED: &[&str] = &["mySessions", "myTwoFactorEvents", "myWorlds"];
 const ANONYMOUS: &[&str] = &[
     // Spec 040: the operator values legal pages render. Published on purpose.
     "publishedOperatorValues",
+    // Spec 039 FR-045: what an operator takes on. Shown to somebody who is
+    // *becoming* an operator — first-run setup, before any account exists — so
+    // requiring a session would make it unreachable at the one moment it is
+    // about. It is a statement about responsibility and says nothing about this
+    // instance's contents.
+    "operatorStatement",
     // Share links (specs 026/027): the read needs no account by design, and is
     // rate-limited. A revoked share is indistinguishable from one that never
     // existed.

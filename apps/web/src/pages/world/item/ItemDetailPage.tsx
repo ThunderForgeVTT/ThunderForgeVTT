@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AttestationDialog } from "@/components/legal/AttestationDialog";
 import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { createItemShareLink, revokeItemShareLink } from "@/api/itemShares";
@@ -63,6 +64,12 @@ export default function ItemDetailPage({ mode }: ItemDetailPageProps) {
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [shareLinkId, setShareLinkId] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState(false);
+  /**
+   * Spec 039 FR-001: this path published a item — readable without
+   * an account since ADR-071 — having asked the person nothing. The Share
+   * button now opens the agreement rather than minting a link.
+   */
+  const [askingToShare, setAskingToShare] = useState(false);
   const [isRevoking, setIsRevoking] = useState(false);
   const { isGm: isDm } = useWorldRole(worldId, world);
 
@@ -200,11 +207,17 @@ export default function ItemDetailPage({ mode }: ItemDetailPageProps) {
     }
   };
 
-  const handleShare = async () => {
+  /**
+   * `termsVersionId` comes from the dialog, which got it from the server in
+   * the same request that gave it the words. Nothing here constructs it, and
+   * nothing here can publish without it (FR-014).
+   */
+  const handleShare = async (termsVersionId: string) => {
+    setAskingToShare(false);
     setIsSharing(true);
     setStatus(null);
     try {
-      const link = await createItemShareLink(itemId);
+      const link = await createItemShareLink(itemId, termsVersionId);
       const url = `${window.location.origin}/shared/item/${link.shareCode}`;
       setShareLink(url);
       setShareLinkId(link.id);
@@ -279,7 +292,7 @@ export default function ItemDetailPage({ mode }: ItemDetailPageProps) {
               <Button
                 variant="secondary"
                 icon="link"
-                onClick={() => void handleShare()}
+                onClick={() => setAskingToShare(true)}
                 disabled={isSharing}
               >
                 {isSharing ? "Sharing..." : "Share"}
@@ -296,6 +309,15 @@ export default function ItemDetailPage({ mode }: ItemDetailPageProps) {
             ) : null}
           </div>
         </div>
+
+        {askingToShare && !shareLink ? (
+          <AttestationDialog
+            publishing="item"
+            busy={isSharing}
+            onAgree={(termsVersionId) => void handleShare(termsVersionId)}
+            onCancel={() => setAskingToShare(false)}
+          />
+        ) : null}
 
         {shareLink ? (
           <Card className="grid gap-2 p-4">

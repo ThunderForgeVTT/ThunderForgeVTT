@@ -282,6 +282,10 @@ pub struct QueryRoot(
     // Spec 031: `authoringTools(worldId)` — which tools the caller may use.
     queries::AuthoringToolsQuery,
     InviteQuery,
+    // Spec 039: the sharing terms and their archive. On the query root because
+    // every publishing path's dialog reads it, and because an operator handling
+    // a notice reaches an archived version through it.
+    queries::LegalDocumentQuery,
     AssetQuery,
     ActorQuery,
     ActorPermissionQuery,

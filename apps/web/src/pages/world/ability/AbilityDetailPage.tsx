@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AttestationDialog } from "@/components/legal/AttestationDialog";
 import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import {
@@ -82,6 +83,12 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [shareLinkId, setShareLinkId] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState(false);
+  /**
+   * Spec 039 FR-001: this path published a ability — readable without
+   * an account since ADR-071 — having asked the person nothing. The Share
+   * button now opens the agreement rather than minting a link.
+   */
+  const [askingToShare, setAskingToShare] = useState(false);
 
   const { isGm: isDm } = useWorldRole(worldId, world);
 
@@ -228,11 +235,17 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
     }
   };
 
-  const handleShare = async () => {
+  /**
+   * `termsVersionId` comes from the dialog, which got it from the server in
+   * the same request that gave it the words. Nothing here constructs it, and
+   * nothing here can publish without it (FR-014).
+   */
+  const handleShare = async (termsVersionId: string) => {
+    setAskingToShare(false);
     setIsSharing(true);
     setStatus(null);
     try {
-      const link = await createAbilityShareLink(abilityId);
+      const link = await createAbilityShareLink(abilityId, termsVersionId);
       const url = `${window.location.origin}/shared/ability/${link.shareCode}`;
       setShareLink(url);
       setShareLinkId(link.id);
@@ -349,7 +362,7 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
             {ability.myPermissionLevel === "OWNER" ? (
               <Button
                 variant="secondary"
-                onClick={() => void handleShare()}
+                onClick={() => setAskingToShare(true)}
                 disabled={isSharing}
                 data-testid="ability-share-button"
               >
@@ -368,6 +381,15 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
             ) : null}
           </div>
         </div>
+
+        {askingToShare && !shareLink ? (
+          <AttestationDialog
+            publishing="ability"
+            busy={isSharing}
+            onAgree={(termsVersionId) => void handleShare(termsVersionId)}
+            onCancel={() => setAskingToShare(false)}
+          />
+        ) : null}
 
         {shareLink ? (
           <Card className="grid gap-2 p-5">

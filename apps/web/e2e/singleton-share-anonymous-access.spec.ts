@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
+  currentSharingTermsVersion,
   graphql,
   registerAndCreateWorld,
   uniqueSuffix,
@@ -116,6 +117,11 @@ test.describe("ADR-071: a stranger opens all three singleton shares", () => {
       },
     );
 
+    // Spec 039 FR-001: publishing requires an agreement, and these three
+    // mutations are direct API calls — which is exactly the caller the gate
+    // exists for. The identity comes from the server, like the dialog's does.
+    const termsVersionId = await currentSharingTermsVersion(page);
+
     const shareCodes = {
       ability: (
         await graphql<{
@@ -123,14 +129,20 @@ test.describe("ADR-071: a stranger opens all three singleton shares", () => {
         }>(
           page,
           `
-            mutation S($id: UUID!) {
-              createAbilityShareLink(abilityId: $id) {
+            mutation S($id: UUID!, $attestation: AttestationInput!) {
+              createAbilityShareLink(
+                abilityId: $id
+                attestation: $attestation
+              ) {
                 id
                 shareCode
               }
             }
           `,
-          { id: ability.data.createAbility.id },
+          {
+            id: ability.data.createAbility.id,
+            attestation: { termsVersionId },
+          },
         )
       ).data.createAbilityShareLink,
       item: (
@@ -139,14 +151,14 @@ test.describe("ADR-071: a stranger opens all three singleton shares", () => {
         }>(
           page,
           `
-            mutation S($id: UUID!) {
-              createItemShareLink(itemId: $id) {
+            mutation S($id: UUID!, $attestation: AttestationInput!) {
+              createItemShareLink(itemId: $id, attestation: $attestation) {
                 id
                 shareCode
               }
             }
           `,
-          { id: item.data.createItem.id },
+          { id: item.data.createItem.id, attestation: { termsVersionId } },
         )
       ).data.createItemShareLink,
       actor: (
@@ -155,14 +167,14 @@ test.describe("ADR-071: a stranger opens all three singleton shares", () => {
         }>(
           page,
           `
-            mutation S($id: UUID!) {
-              createActorShareLink(actorId: $id) {
+            mutation S($id: UUID!, $attestation: AttestationInput!) {
+              createActorShareLink(actorId: $id, attestation: $attestation) {
                 id
                 shareCode
               }
             }
           `,
-          { id: actor.data.createActor.id },
+          { id: actor.data.createActor.id, attestation: { termsVersionId } },
         )
       ).data.createActorShareLink,
     };

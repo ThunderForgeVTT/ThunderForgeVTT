@@ -19,11 +19,16 @@ type CreateItemShareLinkMutation = {
 /** Requires effective Owner on the item (FR-022). */
 export function createItemShareLink(
   itemId: string,
+  /**
+   * Spec 039 FR-001: the `versionId` from `sharingTerms`, echoed back
+   * unmodified. Required by the schema — an optional agreement is not one.
+   */
+  termsVersionId: string,
 ): Promise<ItemShareLinkRecord> {
   return postGraphQL<CreateItemShareLinkMutation>(
     `
-      mutation CreateItemShareLink($itemId: UUID!) {
-        createItemShareLink(itemId: $itemId) {
+      mutation CreateItemShareLink($itemId: UUID!, $attestation: AttestationInput!) {
+        createItemShareLink(itemId: $itemId, attestation: $attestation) {
           id
           itemId
           shareCode
@@ -32,7 +37,7 @@ export function createItemShareLink(
         }
       }
     `,
-    { itemId },
+    { itemId, attestation: { termsVersionId } },
   ).then((data) => data.createItemShareLink);
 }
 

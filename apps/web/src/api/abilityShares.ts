@@ -34,11 +34,16 @@ const EFFECT_FIELDS = `
 /** FR-032: Owner-level only, enforced server-side. */
 export function createAbilityShareLink(
   abilityId: string,
+  /**
+   * Spec 039 FR-001: the `versionId` from `sharingTerms`, echoed back
+   * unmodified. Required by the schema — an optional agreement is not one.
+   */
+  termsVersionId: string,
 ): Promise<AbilityShareLinkRecord> {
   return postGraphQL<{ createAbilityShareLink: AbilityShareLinkRecord }>(
     `
-      mutation CreateAbilityShareLink($abilityId: UUID!) {
-        createAbilityShareLink(abilityId: $abilityId) {
+      mutation CreateAbilityShareLink($abilityId: UUID!, $attestation: AttestationInput!) {
+        createAbilityShareLink(abilityId: $abilityId, attestation: $attestation) {
           id
           abilityId
           shareCode
@@ -47,7 +52,7 @@ export function createAbilityShareLink(
         }
       }
     `,
-    { abilityId },
+    { abilityId, attestation: { termsVersionId } },
   ).then((data) => data.createAbilityShareLink);
 }
 

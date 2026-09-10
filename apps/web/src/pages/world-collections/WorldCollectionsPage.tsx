@@ -14,8 +14,7 @@ import {
   revokeCollectionShareLink,
 } from "@/api/collections";
 import { getWorldItems } from "@/api/items";
-import { LegalProse } from "@/components/legal/LegalProse";
-import { legalSections } from "@/legal/legalDocuments";
+import { AttestationDialog } from "@/components/legal/AttestationDialog";
 import { getWorldLoreEntries } from "@/api/lore";
 import { getScenes } from "@/api/scenes";
 import { SEO } from "@/components/seo/SEO";
@@ -45,9 +44,6 @@ import type {
  * generic "could not add member" would leave an author with no idea which of
  * those three happened or what to do next.
  */
-
-/** FR-026's text, compiled in from `legal/` like every other legal document. */
-const SHARE_TERMS = legalSections("sharing-terms");
 
 /** One thing that can go in a collection, from any of the five sources. */
 type Candidate = {
@@ -409,14 +405,24 @@ function CollectionCard({
     }
   };
 
-  const handleShare = async () => {
+  const [sharing, setSharing] = useState(false);
+
+  /**
+   * Spec 039 FR-001: `termsVersionId` comes from the dialog, which got it from
+   * the server in the same request that gave it the words. Nothing here
+   * constructs it.
+   */
+  const handleShare = async (termsVersionId: string) => {
     setShareError(null);
+    setSharing(true);
     try {
-      setShare(await createCollectionShareLink(collection.id));
+      setShare(await createCollectionShareLink(collection.id, termsVersionId));
     } catch (err: unknown) {
       setShareError(
         err instanceof Error ? err.message : "Could not create a share link.",
       );
+    } finally {
+      setSharing(false);
     }
   };
 
@@ -559,34 +565,24 @@ function CollectionCard({
             {share === null ? (
               <div className="grid gap-3">
                 {/*
-                  FR-026. Shown before the button, not behind a link: these are
-                  the two things a person has to have taken in *before* they
-                  share, and a policy page they could go and read is not the
-                  same as having read it. The prose lives in
-                  `legal/sharing-terms.md` so it can be reviewed by somebody who
-                  does not read TypeScript.
+                  FR-026, and spec 039 FR-001. Shown before the button, not
+                  behind a link: these are the things a person has to have taken
+                  in *before* they share, and a policy page they could go and
+                  read is not the same as having read it.
+
+                  The words now come from the server rather than from this
+                  bundle's copy of `legal/sharing-terms.md`. That is spec 039's
+                  whole point: the identity recorded and the words shown have to
+                  come from the same place, or an agreement records words nobody
+                  saw. `AttestationDialog` is shared with the actor, item and
+                  ability paths, which until now asked nothing at all.
                 */}
-                <div
-                  className="grid gap-3 rounded-lg border border-input p-4"
-                  data-testid="share-terms"
-                >
-                  {SHARE_TERMS.map((section) => (
-                    <div
-                      key={section.heading ?? "opening"}
-                      className="grid gap-1"
-                    >
-                      {section.heading ? (
-                        <p className="text-sm font-medium">{section.heading}</p>
-                      ) : null}
-                      <LegalProse body={section.body} />
-                    </div>
-                  ))}
-                </div>
-                <div>
-                  <Button onClick={() => void handleShare()}>
-                    I have the right to share this — create a link
-                  </Button>
-                </div>
+                <AttestationDialog
+                  publishing="collection"
+                  busy={sharing}
+                  onAgree={(termsVersionId) => void handleShare(termsVersionId)}
+                  onCancel={() => setShareError(null)}
+                />
               </div>
             ) : share.revoked ? (
               <StatusBadge variant="warning">

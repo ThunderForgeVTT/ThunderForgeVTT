@@ -204,18 +204,23 @@ export function getCollectionShareLink(
 
 export function createCollectionShareLink(
   collectionId: string,
+  /**
+   * Spec 039 FR-001: the `versionId` from `sharingTerms`, echoed back
+   * unmodified. Required by the schema — an optional agreement is not one.
+   */
+  termsVersionId: string,
 ): Promise<CollectionShareLinkRecord> {
   return postGraphQL<{
     createCollectionShareLink: CollectionShareLinkRecord;
   }>(
     `
-      mutation CreateCollectionShareLink($collectionId: UUID!) {
-        createCollectionShareLink(collectionId: $collectionId) {
+      mutation CreateCollectionShareLink($collectionId: UUID!, $attestation: AttestationInput!) {
+        createCollectionShareLink(collectionId: $collectionId, attestation: $attestation) {
           ${SHARE_LINK_FIELDS}
         }
       }
     `,
-    { collectionId },
+    { collectionId, attestation: { termsVersionId } },
   ).then((data) => data.createCollectionShareLink);
 }
 

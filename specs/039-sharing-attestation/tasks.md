@@ -87,7 +87,7 @@ on its own, and every story below reads it.
 - [X] T015 Create `src/server/src/attestation.rs` — record, retrieve by publishable, retrieve by subject, and `redact_for_deleted_account` (nulls `subject_username`, keeps the rest) per data-model.md § 2; unit tests for each
 - [X] T016 Create `src/server/src/publishing.rs` — `AttestationInput` and `require_attestation`. **No `require_notice_contact`**: spec 040 owns it now (its FR-026, `readiness::may_publish_beyond_world`), and all four `create_*_share_link_impl` functions already call it first, so building a second one would be two gates for one requirement. `PublishableKind` lives in `attestation.rs` beside the record it describes. Standing (FR-018) is US5's and is one call away when it lands. Six tests, including that the gate **writes nothing** — a gate that recorded on approval would leave an agreement behind for a publish that then failed its ownership check
 - [ ] T017 [P] Create the migration `src/server/migrations/2026-09-07-134000-0000_account_notices/up.sql` and `down.sql` for `account_notices` per data-model.md § 6, and `src/server/src/notices.rs` to write and read them — the durable half of "the person is told"; delivery is spec 040's and the module doc says so
-- [ ] T018 Add `sharingTerms`, `operatorStatement` and `legalDocumentVersion` to `src/server/src/graphql/queries/legal.rs` per `contracts/attestation.md`, register on the query root in `src/server/src/graphql.rs`, and add an SDL guard test for the names the client uses
+- [X] T018 Add `sharingTerms`, `operatorStatement` and `legalDocumentVersion` to `src/server/src/graphql/queries/legal.rs` per `contracts/attestation.md`, register on the query root in `src/server/src/graphql.rs`, and add an SDL guard test for the names the client uses — `sharingTerms` requires a session; `operatorStatement` is **anonymous** (FR-045: the person it is shown to is setting an instance up and has no account yet); `legalDocumentVersion` is admin-only, the notice-handling surface rather than a public archive. The existing `admin_surface_tests` classification guard caught both new fields before I had classified them, which is the guard doing its job rather than me remembering
 
 **Checkpoint**: the terms have an identity, the identity has an archive, the archive has a record, and one function can refuse a publish
 
@@ -118,12 +118,12 @@ remove, and the checklist says so.
 - [X] T023 [P] [US1] Same change to `create_actor_share_link_impl` in `src/server/src/graphql/mutations_actor_shares.rs`
 - [X] T024 [P] [US1] Same change to `create_item_share_link_impl` in `src/server/src/graphql/mutations_item_shares.rs`
 - [X] T025 [P] [US1] Same change to `create_ability_share_link_impl` in `src/server/src/graphql/mutations_ability_shares.rs`
-- [ ] T026 [US1] Create `apps/web/src/components/legal/AttestationDialog.tsx` — one dialog, rendering `sharingTerms` from the server (not the Vite glob), returning the version identity to its caller, and short enough that sharing five things in a row stays a task somebody finishes (SC-007)
-- [ ] T027 [US1] Replace the inline terms block in `apps/web/src/pages/world-collections/WorldCollectionsPage.tsx` with the shared dialog, keeping the `share-terms` test id so existing coverage still points at something
-- [ ] T028 [P] [US1] Add the dialog to `apps/web/src/pages/world/actor/ActorDetailPage.tsx` — the first time this path has asked anything
-- [ ] T029 [P] [US1] Add the dialog to `apps/web/src/pages/world/item/ItemDetailPage.tsx`
-- [ ] T030 [P] [US1] Add the dialog to `apps/web/src/pages/world/ability/AbilityDetailPage.tsx`
-- [ ] T031 [P] [US1] Add the `attestation` argument to `apps/web/src/api/collections.ts`, `actorShares.ts`, `itemShares.ts` and `abilityShares.ts`
+- [X] T026 [US1] Create `apps/web/src/components/legal/AttestationDialog.tsx` — one dialog, rendering `sharingTerms` from the server (not the Vite glob), returning the version identity to its caller, and short enough that sharing five things in a row stays a task somebody finishes (SC-007)
+- [X] T027 [US1] Replace the inline terms block in `apps/web/src/pages/world-collections/WorldCollectionsPage.tsx` with the shared dialog, keeping the `share-terms` test id so existing coverage still points at something — the page no longer reads `legalSections("sharing-terms")` from its own bundle; that was the copy that could show one set of words while recording the identity of another
+- [X] T028 [P] [US1] Add the dialog to `apps/web/src/pages/world/actor/ActorDetailPage.tsx` — the first time this path has asked anything
+- [X] T029 [P] [US1] Add the dialog to `apps/web/src/pages/world/item/ItemDetailPage.tsx`
+- [X] T030 [P] [US1] Add the dialog to `apps/web/src/pages/world/ability/AbilityDetailPage.tsx`
+- [X] T031 [P] [US1] Add the `attestation` argument to `apps/web/src/api/collections.ts`, `actorShares.ts`, `itemShares.ts` and `abilityShares.ts` — plus `api/sharingTerms.ts`, which reads the words and the identity in one request
 - [ ] T032 [US1] Add `apps/web/e2e/sharing-attestation.spec.ts` covering US1's five acceptance scenarios and US3's three, including a direct API call with no attestation and one with a fabricated version id
 
 **Checkpoint**: the position is enforceable — four paths ask, and the server, not the page, is what requires it

@@ -14,6 +14,10 @@ pub mod interactives;
 pub mod inventory;
 pub mod invite;
 pub mod item;
+/// Spec 039: `sharingTerms`, `operatorStatement`, `legalDocumentVersion` — the
+/// words a client must show before it can publish, and the archive an old
+/// agreement resolves through.
+pub mod legal;
 pub mod lore;
 // Spec 034: `loreRepositoryConnection`, `loreSyncRuns`,
 // `instanceRepositoryIntegration`.
@@ -40,6 +44,7 @@ pub use healthcheck::HealthcheckQuery;
 pub use inventory::InventoryQuery;
 pub use invite::InviteQuery;
 pub use item::ItemQuery;
+pub use legal::LegalDocumentQuery;
 pub use lore::LoreQuery;
 pub use lore_sync::LoreSyncQuery;
 pub use moderation::ModerationQuery;
