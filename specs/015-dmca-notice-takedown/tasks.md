@@ -141,6 +141,7 @@ Existing two-project split: `src/server/` (Rust/Axum/Diesel/async-graphql backen
 - [X] T039 [P] Run `pnpm --filter @thunderforge/web build` and `pnpm --filter @thunderforge/web lint` (scoped check — this repo's frontend lint has pre-existing unrelated baseline problems; confirm you haven't added new ones, not that the whole project is clean)
 - [X] T040 Execute every scenario in `specs/015-dmca-notice-takedown/quickstart.md` against a running local dev stack, including the public-facing `/legal/dmca` reachability check (FR-001/SC-004)
 - [X] T041 [P] Confirm `./scripts/check-file-length.sh` shows no new failures introduced by this feature's files
+- [ ] T042 **Open — recorded by spec 039 T093, and this spec's to decide, not 039's.** A scene is not a moderated entity type: `collections::moderation_entity_type` returns `None` for `"scene"` (`src/server/src/collections/mod.rs`). So a scene inside a shared collection is never withheld from the collection's read and copy paths, and a takedown against scene content can only be filed against its images, which are separate entities. If spec 039's ADR-079 is accepted, an adopted scene would also record no adoption, so a takedown could not follow it. The code names the gap rather than assuming it away; closing it means making scenes a moderated type here. Spec 038's FR-026c already refuses to let audio ship with the same gap.
 
 ---
 

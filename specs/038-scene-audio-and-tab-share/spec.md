@@ -520,6 +520,15 @@ candidate for `/speckit-clarify`.
 - **Chromium only**, as everywhere else in this product. Tab audio sharing in
   particular is a capability that varies between browsers, and the suite
   proves nothing about the ones it does not run.
+- **Audio inherits the publishing gate by construction** (planning note,
+  recorded by spec 039 T092). Uploaded audio can only leave its world through a
+  path that already exists — a collection share or a `create*ShareLink`
+  mutation — and `src/server/src/graphql/publishing_gate.rs` fails the build
+  the day a share mutation exists without the notice-contact gate or the
+  required `attestation: AttestationInput!`. So FR-026d needs no separate
+  decision about agreements, the notice contact or account standing: an audio
+  share path is refused until it has all three, by the same guard that holds
+  the other four.
 
 ## Out of Scope
 

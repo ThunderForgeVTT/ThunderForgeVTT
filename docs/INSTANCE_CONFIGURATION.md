@@ -82,6 +82,44 @@ that will not come up.
 - **Admin → Mail** — whether mail works, a test message through the real
   outbox, and the outbox itself.
 
+## Moderation and account standing
+
+Seven values set how the notice-and-takedown programme counts and what the
+counting costs (spec 015, spec 039). They are **read from the environment
+only** — they are not in the settings registry, so they do not appear under
+Admin → Instance. Each is parse-or-default: a value that does not parse falls
+back to its default silently, the way all seven always have.
+
+| Variable | Default | What it sets |
+|---|---|---|
+| `MODERATION_COUNTER_NOTICE_WAITING_PERIOD_DAYS` | `14` | Days after a counter-notice is forwarded before the content comes back, absent further action from the claimant |
+| `MODERATION_REPEAT_INFRINGER_LOOKBACK_DAYS` | `365` | How far back an upheld, unrestored takedown still counts as a strike |
+| `MODERATION_REPEAT_INFRINGER_THRESHOLD` | `3` | The strike that disables the account and opens the deletion window |
+| `MODERATION_STRIKE_WARN_AT` | `1` | The strike at which the person is warned. Nothing else changes |
+| `MODERATION_STRIKE_SUSPEND_PUBLISHING_AT` | `2` | The strike at which sharing beyond a world is refused. Playing, editing and reading are untouched |
+| `MODERATION_TERMINATION_WINDOW_DAYS` | `30` | Days between disablement and deletion |
+| `MODERATION_TERMINATION_REQUIRES_HUMAN` | `true` | Whether a window's end waits for an administrator rather than a timer |
+
+Two things worth knowing before changing any of them:
+
+- **A window keeps the terms it opened with.** `MODERATION_TERMINATION_WINDOW_DAYS`
+  and `MODERATION_TERMINATION_REQUIRES_HUMAN` are snapshotted when a window
+  opens, so changing either later does not move a date somebody has already
+  been told.
+- **`MODERATION_TERMINATION_REQUIRES_HUMAN=true` is the shipped behaviour** on
+  purpose: at the end of the window the account lands in the administrators'
+  queue (Admin → Moderation) instead of being deleted. Automatic deletion is a
+  switch an operator throws. The instance's last administrator is never
+  disabled by the counting, whatever these are set to.
+
+The contact for copyright notices is **not** among these. It lives in the
+registry as `notice.contact_name`, `notice.contact_email` and
+`notice.contact_postal_address` — set during first-run setup or under Admin →
+Instance — and an instance without one refuses to publish anything beyond a
+world (spec 040 FR-026, spec 039 FR-053). The single
+`THUNDERFORGE_NOTICE_CONTACT` variable spec 039's plan anticipated was
+superseded by those settings before it was built.
+
 ## What is never rendered
 
 No credential, anywhere: not masked, not truncated, not length-hinted. The
