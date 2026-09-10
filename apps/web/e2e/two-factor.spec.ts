@@ -57,9 +57,11 @@ import {
  * # Known defects this file records rather than papers over
  *
  *   1. **There is still no way to switch two-factor off deliberately.**
- *      Nothing in the server sets `two_factor_enabled` back to false except
- *      registration and admin bootstrap. FR-012 and FR-014 specify a removal
- *      that proves possession; it does not exist yet.
+ *      A deliberate removal — password **and** possession — now exists at
+ *      `POST /authentication/2fa/disable` (FR-012, FR-014), and its cases live
+ *      in `two-factor-removal.spec.ts` rather than being repeated here: this
+ *      file is about the enrolment and the challenge, and that one is about
+ *      the way off.
  *
  *      What *was* here — `setup/start` clearing the confirmed factor on a
  *      password alone, so the only route off was also a route round — is
@@ -87,24 +89,22 @@ import {
  *      account that already holds a confirmed factor is a challenge to verify
  *      it, and is refused as an enrolment authorisation.
  *
- *      **The policy test below needs updating for this and has not been**
- *      (this file is owned by another change in flight). It signs in as an
- *      unenrolled account under the policy and waits for `#login-two-factor`,
- *      the *code* field. That field is no longer what such an account is
- *      shown: it now gets the enrolment card,
- *      `[data-testid="login-two-factor-enrol"]`, whose code input is
- *      `#two-factor-code`. The half of the assertion that still holds is
- *      `isSignedIn(user) === false` — the policy is still enforced, and the
- *      account still does not get in without a factor. What the test should
- *      assert instead is that the account is offered enrolment, completes it
- *      with a code computed from the secret the card shows, and lands signed
- *      in where it was going (FR-019, FR-020).
- *   3. A code is not bound to the step it was minted for
- *      (`totp.check_current(...).is_some()` drops the matched step), so the
- *      same six digits verify against a *new* challenge for as long as the
- *      skew window lasts. Not asserted here — a test that asserted replay
- *      succeeds would enshrine it. What is asserted is the protection that
- *      does exist: a consumed challenge is dead.
+ *      The policy test below now walks the whole of it: the enrolment card
+ *      appears, the code is computed from the typeable secret *the card
+ *      shows*, the recovery codes are on the screen at the one moment they are
+ *      free, and the sign-in that was interrupted finishes where it was going
+ *      (FR-019, FR-020). Turning the policy back off then gets a
+ *      *verification* challenge rather than none, which is FR-022: the factor
+ *      never depended on the policy.
+ *   3. ~~A code is not bound to the step it was minted for, so the same six
+ *      digits verify against a *new* challenge for as long as the skew window
+ *      lasts.~~ **Fixed on 2026-09-09 (FR-016).**
+ *      `matched_step` returns which step matched and a conditional
+ *      `UPDATE … WHERE two_factor_last_used_step IS NULL OR < $step` claims
+ *      it, so a step is spent once and the previous step's still-valid code
+ *      cannot be replayed either. Asserted below — a replayed code is refused
+ *      with the same message as a wrong one, because saying which would
+ *      confirm to an attacker that the code they intercepted was genuine.
  */
 
 /** Seconds per code — `STEP_SECONDS` in `crates/thunderforge-axum-auth-core`. */
@@ -514,6 +514,74 @@ test.describe("the login challenge", () => {
     expect(replay.status).toBe(400);
     expect(replay.body.status).toBe("two_factor_challenge_invalid");
   });
+
+  /**
+   * SC-005 / FR-016: **the same six digits, a fresh challenge, inside the
+   * window.**
+   *
+   * This is the replay the consumed challenge does *not* stop, and it is the
+   * one that matters: a code is valid for thirty seconds either side of its
+   * step, so somebody who reads it over a shoulder or out of a screenshot has
+   * up to ninety seconds to start their own sign-in with it. The challenge is
+   * new, so `consumed_at` has nothing to say — the refusal has to come from the
+   * *code*, which is why `two_factor_last_used_step` exists and why claiming a
+   * step is a conditional `UPDATE` rather than a read followed by a write.
+   *
+   * The refusal is deliberately the same one a wrong code gets. Telling the
+   * caller "that code was right but already used" would confirm that the code
+   * they intercepted was genuine, which is precisely the fact worth hiding
+   * from the only person who would ever see this message.
+   */
+  test("the same code cannot be used twice, even on a new challenge inside its window", async ({
+    page,
+  }) => {
+    const creds = freshCredentials("e2e2fa");
+    await register(page, creds);
+    const secret = await enrolTwoFactor(page, creds);
+    await logout(page);
+
+    const code = currentTotpCode(secret);
+
+    const first = await postAuth(page, "login", {
+      identifier: creds.username,
+      password: creds.password,
+    });
+    expect(first.body.status).toBe("two_factor_required");
+    const spent = await postAuth(page, "2fa/verify", {
+      challenge_id: first.body.login_two_factor_challenge_id,
+      code,
+    });
+    expect(spent.status, spent.body.message).toBe(200);
+    expect(await isSignedIn(page)).toBe(true);
+
+    // A second, entirely separate sign-in attempt — its own challenge, never
+    // consumed — offering the code that has just been spent.
+    await logout(page);
+    const second = await postAuth(page, "login", {
+      identifier: creds.username,
+      password: creds.password,
+    });
+    expect(second.body.status).toBe("two_factor_required");
+    const challengeId = second.body.login_two_factor_challenge_id;
+    expect(
+      challengeId,
+      "the second attempt must get its own challenge, or this proves nothing",
+    ).not.toBe(first.body.login_two_factor_challenge_id);
+
+    const replayed = await postAuth(page, "2fa/verify", {
+      challenge_id: challengeId,
+      code,
+    });
+    expect(
+      replayed.status,
+      "a code already spent must be refused even against a challenge that was never used",
+    ).toBe(401);
+    expect(
+      replayed.body.status,
+      "and refused as an invalid code — not as a used one, which would confirm it was genuine",
+    ).toBe("two_factor_invalid");
+    expect(await isSignedIn(page)).toBe(false);
+  });
 });
 
 test.describe("the instance-wide policy", () => {
@@ -617,10 +685,6 @@ test.describe("the instance-wide policy", () => {
       // the *enrolment* card, not the code field — this used to wait on
       // `#login-two-factor` and would now hang, having asked for the one
       // screen the fix replaced.
-      //
-      // The half that has not changed is the half worth keeping: whatever the
-      // screen offers, the account is not signed in until it satisfies the
-      // policy.
       await expect(user.getByTestId("login-two-factor-enrol")).toBeVisible({
         timeout: 15_000,
       });
@@ -629,14 +693,56 @@ test.describe("the instance-wide policy", () => {
         "an instance that requires 2FA must not sign in an account that has not satisfied it",
       ).toBe(false);
 
-      // Turning it off is the other half of the switch being real: the same
-      // account, the same password, and now no challenge.
+      // FR-020, and the whole point of FR-019: the offer has to be one the
+      // person can actually take, from this screen, and it has to land them
+      // where they were going. Anything less is the lockout with a friendlier
+      // caption.
+      //
+      // Every value used here comes off the card itself — the typeable secret
+      // the person would scan or copy — so this drives the same path a person
+      // does rather than a shortcut through the API.
+      const shownSecret = (
+        await user.getByTestId("two-factor-setup-key").innerText()
+      ).replace(/\s+/g, "");
+      expect(
+        shownSecret.length,
+        "the enrolment card must show a typeable secret, for somebody with no camera",
+      ).toBeGreaterThan(16);
+
+      await user
+        .getByTestId("two-factor-code")
+        .fill(currentTotpCode(shownSecret));
+      await user.getByTestId("two-factor-confirm").click();
+
+      // FR-006: the recovery codes are on this screen, at the one moment they
+      // are free — a fresh account under a new policy has no second
+      // administrator to ask and nowhere else to get them.
+      await expect(
+        user.getByTestId("two-factor-recovery-code").first(),
+      ).toBeVisible({ timeout: 20_000 });
+      await user.getByTestId("two-factor-acknowledge-codes").click();
+
+      // And the sign-in the person started finishes, rather than dumping them
+      // back at /login to do it again.
+      await user.waitForURL(/\/(welcome|worlds\/create)$/, { timeout: 20_000 });
+      expect(
+        await isSignedIn(user),
+        "confirming the enrolment must finish the sign-in it interrupted (FR-020)",
+      ).toBe(true);
+
+      // FR-022: turning the policy off does not disarm the factor that was
+      // just confirmed under it. The account is now enrolled, so the same
+      // password gets a *verification* challenge whatever the switch says —
+      // which is the opposite of what a stored requirement would have done.
       await setPolicy(page, false);
+      await user.context().clearCookies();
 
       await submitCredentials(user, creds.username, creds.password);
+      await expect(twoFactorField(user)).toBeVisible({ timeout: 15_000 });
+      await twoFactorField(user).fill(currentTotpCode(shownSecret));
+      await user.getByRole("button", { name: /^verify$/i }).click();
       await user.waitForURL(/\/(welcome|worlds\/create)$/, { timeout: 20_000 });
       expect(await isSignedIn(user)).toBe(true);
-      await expect(twoFactorField(user)).toHaveCount(0);
     } finally {
       await userContext.close();
     }
@@ -661,8 +767,11 @@ test.describe("switching two-factor back off", () => {
    * The assertion below did not change when the product was fixed; the
    * `test.fail()` above it was simply removed.
    *
-   * Still missing, and not covered here: a deliberate way to turn a second
-   * factor off, which FR-012 and FR-014 specify and nothing yet implements.
+   * The deliberate way off — password **and** possession — is
+   * `two-factor-removal.spec.ts`. It is a separate file because it is a
+   * separate act: this one asserts that starting an enrolment is *not* a way
+   * to remove a factor, and that only means something while a real way to
+   * remove one exists elsewhere.
    */
   test("a fresh enrolment request must not silently strip the confirmed factor", async ({
     page,

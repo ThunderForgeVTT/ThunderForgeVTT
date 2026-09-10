@@ -168,8 +168,8 @@ removal path FR-014 asks for, plus the step guard.
 - [X] T041 [US4] Implement the five-attempt challenge budget on `login_two_factor_challenges.failed_attempts` in `src/server/src/auth/two_factor/verification.rs`, and confirm the existing e2e assertion that a wrong code does not burn the challenge still holds (FR-017) — **landed as a per-account bound** (`two_factor/throttle.rs`, `users.two_factor_failed_attempts` + `two_factor_locked_until`) rather than per-challenge. A challenge budget bounds one challenge; an attacker asks for a new one. FR-017 is about the account, so the counter is on the account
 - [X] T042 [US4] Collapse every refusal on the verification path to one message and one status in `src/server/src/auth/two_factor/verification.rs`, per `contracts/verification.md` § Refusal shapes (FR-018)
 - [X] T043 [US4] Add the removal control, behind password plus possession, to `apps/web/src/pages/user/SecuritySettingsPage.tsx`
-- [ ] T044 [US4] Rewrite the `test.fail()` block in `apps/web/e2e/two-factor.spec.ts`: **delete the `test.fail()` line**, keep the assertion unchanged, and add the deliberate-removal cases beside it — which is what its own comment says to do when the server is fixed
-- [ ] T045 [US4] Add an e2e case to `apps/web/e2e/two-factor.spec.ts` for the same-code-twice refusal inside the window (SC-005)
+- [X] T044 [US4] The `test.fail()` line is gone and the assertion is unchanged. The deliberate-removal cases live in `apps/web/e2e/two-factor-removal.spec.ts` rather than beside it — separate acts, separate file — and the stale comments in `two-factor.spec.ts` claiming removal "does not exist yet" now point there
+- [X] T045 [US4] Add an e2e case for the same-code-twice refusal inside the window (SC-005) — a **fresh** challenge, so `consumed_at` has nothing to say and the refusal must come from the spent step, and refused with the same message as a wrong code
 
 **Checkpoint**: the hole is closed, with the test that was written for it going green
 
@@ -222,7 +222,7 @@ enrolled and complete enrolment in that same flow.
 - [X] T060 [US5] Add `twoFactorCoverage` to `src/server/src/graphql/queries/admin.rs` beside `auth_security_settings`, returning counts and never a list of accounts (FR-021)
 - [X] T061 [US5] Render the enrolment branch of the challenge step in `apps/web/src/pages/auth/LoginView.tsx` (FR-020) — `loginStep === "enrol"`, driven by the `two_factor_enrolment_required` status and the challenge id it carries
 - [X] T062 [US5] Show the coverage figures beside the switch in `apps/web/src/pages/admin/components/SecurityPanel.tsx`, including how many people the switch is about to ask something of — the sentence changes as the switch is moved, before it is saved
-- [ ] T063 [US5] Update the policy test in `apps/web/e2e/two-factor.spec.ts` to complete enrolment through the challenge and arrive signed in, and **delete the comment saying it "deliberately does not pretend the lockout is fine"** — the lockout is gone
+- [X] T063 [US5] The policy test now walks the whole of FR-019/FR-020: the enrolment card appears, the code is computed from the typeable secret **the card shows**, the recovery codes are on screen, and the interrupted sign-in finishes where it was going. Turning the policy back off then gets a *verification* challenge rather than none, which is FR-022. The stale header note is replaced with what the test does
 
 **Checkpoint**: an operator can turn the switch on without stranding anybody
 
@@ -266,8 +266,8 @@ appears in the record.
 
 ## Phase 10: Polish & Cross-Cutting Concerns
 
-- [ ] T075 [P] Document the second-factor lifecycle in `docs/` — the three entrances, what a recovery code is and is not, and where the administrator rule comes from
-- [ ] T076 [P] Update `MVP.md`'s two-factor line: it lists 2FA as shipped, which was true of the verifier and of nothing a person could reach
+- [X] T075 [P] Document the second-factor lifecycle in `docs/SECOND_FACTOR.md`
+- [X] T076 [P] Update `MVP.md`'s two-factor line, and say what "shipped" now covers — including that the claim used to rest on a verifier and a policy switch
 - [ ] T077 Make the six guards fail on purpose per quickstart.md § "Making the guards fail on purpose" and record in the commit that each was seen to bite — especially the constant-work one, which is the only guard here whose absence is invisible from outside
 - [ ] T078 Run quickstart scenarios A–I by hand against `make dev`, with a real authenticator app, and note anything the suite does not catch
 - [ ] T079 Run `cargo test --workspace -j 4`, `make lint` (lint-host + lint-wasm + file length) and `pnpm --filter @thunderforge/web test`

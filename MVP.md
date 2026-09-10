@@ -51,19 +51,39 @@ the least recently used, and a person can list their own sessions and end one
 or all of them (`mySessions`, `endSession`, `endAllSessions`). Exactly one
 client is at the table; the rest are companion surfaces.
 
-**Two-factor can now be switched on, and cannot be switched off.** The
-verifier, the challenge and the instance-wide policy are covered end to end
-(`apps/web/e2e/two-factor.spec.ts`), a confirmed factor can no longer be
-stripped by a password alone (ADR-081), and as of 2026-09-07 enrolment has an
-interface a person can actually reach: `/settings/security` for an account
-that has one, and — since the policy would otherwise lock out every account
-that had not enrolled by hand — the sign-in itself, where the login challenge
-doubles as the enrolment ticket (FR-019). Both entrances share one component,
-and enrolment issues ten single-use recovery codes.
+**Two-factor is a whole lifecycle, as of 2026-09-09 (spec 041).** It was
+listed as shipped for a long time on the strength of a verifier and a policy
+switch, which was true of nothing a person could reach. What exists now:
 
-What is still missing is a deliberate way to turn a second factor **off**,
-which spec 041's FR-012 and FR-014 specify and nothing implements. An account
-that enrols today cannot un-enrol; it can only replace its factor.
+- **Three entrances, one flow** — `/settings/security`, first-run setup, and
+  the sign-in itself, where the login challenge doubles as the enrolment
+  ticket so a policy cannot lock out an account that never enrolled by hand
+  (FR-019, ADR-082).
+- **Ten recovery codes**, Argon2id-hashed and shown exactly once, because the
+  store cannot produce them again (ADR-083).
+- **A deliberate way off** — `POST /authentication/2fa/disable`, costing
+  password **and** possession, which is what adding one cost. Starting an
+  enrolment is not a way off: a pending secret lives beside the live factor
+  rather than on top of it (ADR-081).
+- **Replay closed** (FR-016). A code is bound to the step it matched, claimed
+  by a conditional `UPDATE`, so the same six digits cannot be used twice
+  inside their own ninety-second window.
+- **Bounded guessing** (FR-017), per account rather than per address, applied
+  inside the shared verification helper so it covers every route that checks
+  the credential rather than the one it was written for.
+- **An administrator must hold one**, computed from the role rather than
+  stored, so it cannot drift (FR-027, ADR-094). First-run setup does not
+  complete without one.
+- **A defined path for somebody who has lost everything** — an operator reset,
+  recorded with the operator's own id against it, which replaces a `psql` edit
+  against a live table (FR-024). It cannot enrol and cannot issue codes.
+- **A record and a notice.** Every change is written in the transaction that
+  made it; the account holder is told by mail where an instance has any, and
+  by their own security page where it has none — which is most small
+  self-hosted ones (FR-015).
+- **One refusal.** Every credential refusal on the verification path says the
+  same thing, because "that code was right but already used" confirms an
+  intercepted code was genuine (FR-018).
 
 **First run now sets an instance up, and says what it did not.** As of
 2026-09-07 an empty database is walked through one pass — administrator
