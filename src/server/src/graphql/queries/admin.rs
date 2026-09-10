@@ -95,6 +95,26 @@ impl AdminQuery {
             .map_err(Error::new)
     }
 
+    /// Spec 041 US6/US7: find the one account an operator has been asked to
+    /// help, by exact username or email.
+    ///
+    /// Not a roster and not a prefix search. An operator with a real reason to
+    /// act on somebody's second factor already knows which account it is,
+    /// because that person has just asked them; a browsable list of who has no
+    /// second factor is a target list for whoever takes over this session.
+    async fn admin_account(
+        &self,
+        ctx: &Context<'_>,
+        identifier: String,
+    ) -> GraphQLResult<Option<GraphQLAdminAccount>> {
+        let state = app_state(ctx)?;
+        let _ = admin_user(ctx)?;
+        crate::admin::find_account_for_admin(state, &identifier)
+            .await
+            .map(|account| account.map(GraphQLAdminAccount::from))
+            .map_err(Error::new)
+    }
+
     async fn admin_bootstrap_settings(
         &self,
         ctx: &Context<'_>,

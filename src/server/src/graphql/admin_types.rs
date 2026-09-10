@@ -285,6 +285,41 @@ impl From<crate::admin::TwoFactorCoverage> for GraphQLTwoFactorCoverage {
     }
 }
 
+/// Spec 041 US6/US7: one account, as an operator needs to see it to act on
+/// its second factor.
+///
+/// Carries no password hash, no secret, no recovery code and no session.
+/// There is nothing here an operator could sign in with — which is the
+/// property that makes an operator surface for other people's second factors
+/// safe to have at all.
+#[derive(SimpleObject, Debug, Clone)]
+#[graphql(name = "AdminAccount")]
+pub struct GraphQLAdminAccount {
+    pub id: async_graphql::ID,
+    pub username: String,
+    pub email: String,
+    /// FR-027: an administrator must hold a second factor because of the role,
+    /// so the control that requires one of them has nothing to offer.
+    pub is_admin: bool,
+    pub two_factor_enabled: bool,
+    pub two_factor_confirmed_at: Option<chrono::NaiveDateTime>,
+    pub two_factor_admin_required: bool,
+}
+
+impl From<crate::admin::AdminAccountView> for GraphQLAdminAccount {
+    fn from(value: crate::admin::AdminAccountView) -> Self {
+        Self {
+            id: async_graphql::ID(value.id.to_string()),
+            username: value.username,
+            email: value.email,
+            is_admin: value.is_admin,
+            two_factor_enabled: value.two_factor_enabled,
+            two_factor_confirmed_at: value.two_factor_confirmed_at,
+            two_factor_admin_required: value.two_factor_admin_required,
+        }
+    }
+}
+
 /// Admin bootstrap/setup configuration
 #[derive(SimpleObject, Debug, Clone)]
 pub struct GraphQLAdminBootstrapSettings {

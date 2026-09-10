@@ -71,6 +71,12 @@ const ADMIN_ONLY: &[(&str, &str)] = &[
     // Spec 041 FR-021: counts, and admin-only because the shape of an
     // instance's coverage is an operator's business and nobody else's.
     ("twoFactorCoverage", "{ twoFactorCoverage { __typename } }"),
+    // Spec 041 US6/US7: one account by exact identifier, so an operator can
+    // act on the second factor of somebody who has asked them for help.
+    (
+        "adminAccount",
+        r#"{ adminAccount(identifier: "nobody") { __typename } }"#,
+    ),
     (
         "instanceAccessSettings",
         "{ instanceAccessSettings { __typename } }",

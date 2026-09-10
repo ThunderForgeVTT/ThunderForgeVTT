@@ -1,3 +1,12 @@
+/// Spec 041 FR-021/FR-023/FR-024: coverage counts and the one-account lookup an
+/// operator acts through. Its own file since `admin.rs` reached the length
+/// gate; the cut is by subject, not by convenience.
+#[path = "admin/two_factor_operations.rs"]
+pub mod two_factor_operations;
+pub use two_factor_operations::{
+    AdminAccountView, TwoFactorCoverage, find_account_for_admin, load_two_factor_coverage,
+};
+
 use crate::auth::instance_access::InstanceAccessPolicy;
 use crate::config::oauth_env::{parse_oauth_env_vars, resolve};
 use crate::models::{
@@ -427,86 +436,6 @@ pub async fn load_auth_security_settings(state: &AppState) -> Result<AuthSecurit
     .await
     .map_err(|_| "Failed to spawn blocking task".to_string())?
     .map_err(|_| "Failed to query auth security settings".to_string())
-}
-
-/// Spec 041 FR-021: three counts, computed in one pass.
-///
-/// # Why `required_not_enrolled` is computed here rather than counted
-///
-/// It is `required(user) AND NOT enrolled`, and `required(user)` includes
-/// `is_admin` — a term that exists nowhere as a column (ADR-094). So this is a
-/// query over the three inputs rather than a count of a flag, which is the
-/// same reason the rule itself is a function: there is no stored answer to
-/// count, and an instance that upgrades into the administrator rule needs no
-/// backfill for this figure to be right.
-///
-/// The instance-wide switch is read once and applied to every row, because it
-/// is a property of the instance rather than of an account.
-pub struct TwoFactorCoverage {
-    pub enrolled: i64,
-    pub not_enrolled: i64,
-    pub required_not_enrolled: i64,
-}
-
-pub async fn load_two_factor_coverage(state: &AppState) -> Result<TwoFactorCoverage, String> {
-    let instance_required = load_auth_security_settings(state)
-        .await?
-        .two_factor_required_for_all_users;
-
-    let mut conn = state
-        .db_pool
-        .get()
-        .map_err(|_| "Failed to get DB connection".to_string())?;
-
-    tokio::task::spawn_blocking(move || {
-        use crate::schema::users;
-
-        // One snapshot, not three. Under the default read-committed level each
-        // statement sees a different moment, so an account created between the
-        // enrolled count and the total makes `not_enrolled = total - enrolled`
-        // arrive one too high — and an account *deleted* between them makes it
-        // negative. Neither is a big number on a real instance, and both are a
-        // panel that contradicts itself for no reason a reader could work out.
-        // Repeatable-read costs nothing here: three counts, read-only, no
-        // contention to serialise against.
-        conn.build_transaction()
-            .repeatable_read()
-            .read_only()
-            .run(|conn| {
-                let enrolled: i64 = users::table
-                    .filter(users::two_factor_enabled.eq(true))
-                    .count()
-                    .get_result(conn)?;
-                let total: i64 = users::table.count().get_result(conn)?;
-
-                // Not enrolled *and* required. With the instance-wide switch on that
-                // is every unenrolled account; with it off it is the administrators
-                // plus the individually-required, which is exactly
-                // `required(user)` minus the term already known to be false.
-                let unenrolled_and_required: i64 = if instance_required {
-                    total - enrolled
-                } else {
-                    users::table
-                        .filter(users::two_factor_enabled.eq(false))
-                        .filter(
-                            users::is_admin
-                                .eq(true)
-                                .or(users::two_factor_admin_required.eq(true)),
-                        )
-                        .count()
-                        .get_result(conn)?
-                };
-
-                Ok(TwoFactorCoverage {
-                    enrolled,
-                    not_enrolled: total - enrolled,
-                    required_not_enrolled: unenrolled_and_required,
-                })
-            })
-    })
-    .await
-    .map_err(|_| "Failed to spawn blocking task".to_string())?
-    .map_err(|_: diesel::result::Error| "Failed to count two-factor coverage".to_string())
 }
 
 pub async fn update_two_factor_policy(

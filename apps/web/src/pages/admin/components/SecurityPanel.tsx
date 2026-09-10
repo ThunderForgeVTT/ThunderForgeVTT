@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button/Button";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { Switch } from "@/components/ui/switch";
+import { UserTwoFactorControl } from "@/pages/admin/components/UserTwoFactorControl";
 import type {
   AdminBootstrapSettings,
   AuthSecuritySettings,
@@ -115,6 +116,14 @@ export function SecurityPanel({
           {isSaving ? "Applying..." : "Update security policy"}
         </Button>
       </div>
+
+      {/*
+       * Spec 041 US6/US7. Beside the instance-wide switch because they are
+       * the same decision at two scales, and because an operator who has just
+       * read "3 accounts are required and have not enrolled" is one click
+       * from the account they were told about.
+       */}
+      <UserTwoFactorControl />
 
       <div className="grid gap-3">
         <div>

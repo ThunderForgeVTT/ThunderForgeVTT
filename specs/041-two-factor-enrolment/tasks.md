@@ -238,7 +238,7 @@ other is asked to enrol.
 
 - [X] T064 [P] [US6] Add server tests (`two_factor/policy_tests.rs`) asserting setting the per-account requirement affects that account and no other, records who set it, records the clearing as its own act, and writes nothing at all for an account that does not exist
 - [X] T065 [US6] Write a `requirement_set` / `requirement_cleared` event from `set_admin_user_two_factor_required`, in the same transaction as the column, via the extracted `set_user_requirement_sync`. **No `two_factor_required_by` column**: `two_factor_events.actor_user_id` already answers "by whom", and a denormalised copy of it on `users` would be a second source of the same fact that nothing keeps in step — the record describes the act (spec 035)
-- [ ] T066 [US6] Create `apps/web/src/pages/admin/components/UserTwoFactorControl.tsx` showing whether it is required and by whom, and wire it into the admin user surface
+- [X] T066 [US6] Create `apps/web/src/pages/admin/components/UserTwoFactorControl.tsx`, wired into the Security section beside the instance-wide switch — there was no admin *user* surface to wire it into, and this is the same decision at two scales. It is a **lookup by exact username or email, never a list**: an operator with a real reason to act already knows the account, and a browsable list of who has no second factor is a target list. "By whom" is answered on the account holder's own history rather than here, which is where FR-025 puts it
 - [ ] T067 [US6] Add the per-account requirement case to `apps/web/e2e/two-factor-admin.spec.ts`
 
 **Checkpoint**: the per-account switch is reachable without curl

@@ -1,4 +1,5 @@
 import { withCsrf } from "@/api/auth";
+import { postGraphQL } from "@/api/graphqlClient";
 import type {
   PendingTwoFactorEnrolment,
   TwoFactorHistoryEntry,
@@ -382,4 +383,96 @@ export async function disableTwoFactor(input: {
     );
   }
   return body.message ?? "Two-factor authentication is off for this account.";
+}
+
+/**
+ * Spec 041 US6/US7 — the two things an operator may do to somebody else's
+ * second factor, and the lookup that finds the account to do them to.
+ *
+ * # What an operator can and cannot do
+ *
+ * They can **require** one, and they can **reset** one. They cannot enrol a
+ * factor, cannot issue recovery codes, and cannot read anything they could
+ * sign in with — an operator who could hand out a working second factor could
+ * sign in as the account holder, which is the one thing this whole surface has
+ * to keep impossible.
+ *
+ * The lookup takes an exact username or email. Not a prefix, not a list: an
+ * operator with a real reason to act on somebody's second factor already knows
+ * which account it is, because that person has just asked them for help. A
+ * browsable list of who has no second factor is a target list for whoever
+ * takes over this session.
+ */
+export interface AdminAccountView {
+  id: string;
+  username: string;
+  email: string;
+  isAdmin: boolean;
+  twoFactorEnabled: boolean;
+  twoFactorConfirmedAt: string | null;
+  twoFactorAdminRequired: boolean;
+}
+
+export async function findAdminAccount(
+  identifier: string,
+): Promise<AdminAccountView | null> {
+  const data = await postGraphQL<{ adminAccount: AdminAccountView | null }>(
+    `
+      query AdminAccount($identifier: String!) {
+        adminAccount(identifier: $identifier) {
+          id
+          username
+          email
+          isAdmin
+          twoFactorEnabled
+          twoFactorConfirmedAt
+          twoFactorAdminRequired
+        }
+      }
+    `,
+    { identifier },
+  );
+  return data.adminAccount;
+}
+
+async function postAdmin(path: string, body?: unknown): Promise<string> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: withCsrf({ "Content-Type": "application/json" }),
+    body: JSON.stringify(body ?? {}),
+  });
+
+  const payload = (await response.json().catch(() => null)) as {
+    status?: string;
+    message?: string;
+  } | null;
+
+  if (!response.ok || payload?.status !== "success") {
+    throw new Error(payload?.message ?? "That could not be done.");
+  }
+  return payload.message ?? "Done.";
+}
+
+/** FR-023: require a second factor of one account, recorded against whoever did. */
+export function setAccountTwoFactorRequired(
+  userId: string,
+  required: boolean,
+): Promise<string> {
+  return postAdmin(`/authentication/admin/users/${userId}/2fa/required`, {
+    required,
+  });
+}
+
+/**
+ * FR-024: clear the second factor of somebody who has lost both their
+ * authenticator and their recovery codes.
+ *
+ * The account is left with **no** second factor, which is a state the product
+ * already understands. It is not enrolled, no codes are issued, and nobody is
+ * signed in — the person enrols again from their own screen, with a secret only
+ * they ever see.
+ */
+export function resetAccountSecondFactor(userId: string): Promise<string> {
+  return postAdmin(`/authentication/admin/users/${userId}/2fa/reset`);
 }
