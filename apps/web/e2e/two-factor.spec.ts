@@ -181,6 +181,43 @@ function currentTotpCode(secretBase32: string): string {
 }
 
 /**
+ * The code an enrolment should confirm with: the **previous** step's.
+ *
+ * # Why not simply "the code for now"
+ *
+ * FR-016 landed on 2026-09-09: confirming an enrolment *spends* the step its
+ * code matched, and a spent step is refused thereafter. A test that confirms
+ * with the current step's code and then signs in a moment later is offering a
+ * code the server has already seen, and gets refused for a reason that has
+ * nothing to do with what it is testing. Before the fix this passed whenever
+ * the step happened to tick over in between and failed when it did not — a
+ * genuine flake whose symptom, "the right code was refused", pointed at
+ * entirely the wrong thing.
+ *
+ * The previous step is still inside the ±1 skew window, so it confirms; and it
+ * is *lower* than the current step, so the code the test signs in with next is
+ * unspent. That means no sleeping — a 30-second wait would put every one of
+ * these tests over Playwright's own timeout.
+ *
+ * The only care needed is not to do it on a boundary, where "the previous
+ * step" could be two steps back by the time the server looks. Hence the short
+ * wait, which is at most a couple of seconds and usually none.
+ *
+ * A real person never meets any of this: they enrol and stay signed in.
+ */
+async function codeForConfirmingAnEnrolment(
+  secretBase32: string,
+): Promise<string> {
+  const secondsIntoStep = (Date.now() / 1000) % STEP_SECONDS;
+  if (secondsIntoStep > STEP_SECONDS - 3) {
+    await new Promise((resolve) =>
+      setTimeout(resolve, (STEP_SECONDS - secondsIntoStep + 1) * 1000),
+    );
+  }
+  return totpCodeAt(secretBase32, Date.now() / 1000 - STEP_SECONDS);
+}
+
+/**
  * A code that is valid for no step the server would accept.
  *
  * Six digits collide once in a million, and "once in a million" across a suite
@@ -286,7 +323,9 @@ async function enrolTwoFactor(page: Page, creds: Credentials): Promise<string> {
   const confirm = await postAuth(page, "2fa/setup/confirm", {
     username: creds.username,
     password: creds.password,
-    code: currentTotpCode(secret),
+    // The previous step, so the step this spends is lower than the one the
+    // caller will sign in with (FR-016). See `codeForConfirmingAnEnrolment`.
+    code: await codeForConfirmingAnEnrolment(secret),
   });
   expect(confirm.status, confirm.body.message).toBe(200);
   expect(confirm.body.status).toBe("success");
@@ -709,9 +748,14 @@ test.describe("the instance-wide policy", () => {
         "the enrolment card must show a typeable secret, for somebody with no camera",
       ).toBeGreaterThan(16);
 
+      // The previous step's code, for the reason
+      // `codeForConfirmingAnEnrolment` gives: this confirmation spends the
+      // step it matches, and the same secret is used again below to prove
+      // FR-022. An authenticator app shows this code too — it is inside the
+      // skew window, not a trick.
       await user
         .getByTestId("two-factor-code")
-        .fill(currentTotpCode(shownSecret));
+        .fill(await codeForConfirmingAnEnrolment(shownSecret));
       await user.getByTestId("two-factor-confirm").click();
 
       // FR-006: the recovery codes are on this screen, at the one moment they

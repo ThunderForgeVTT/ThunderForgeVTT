@@ -819,10 +819,24 @@ pub(crate) async fn admin_setup_oauth_callback(
         return bootstrap_error_redirect(msg.as_str());
     }
 
-    if let Some(return_to) = return_to
-        && let Ok(url) = Url::parse(&return_to)
-    {
-        return Redirect::temporary(url.as_str()).into_response();
+    // Spec 041 FR-028 / `contracts/requirement-policy.md` rule 3: an
+    // administrator provisioned through a provider is still an administrator,
+    // so they must hold a second factor before setup can finish — and the
+    // provider proving who they are is not that factor.
+    //
+    // `return_to` is where the operator asked to end up, and honouring it here
+    // would drop them at their destination with the wizard half-finished and
+    // no visible reason it had not completed. So the wizard comes first. It
+    // works out which step to show from the instance's own state, which means
+    // this needs no step name in the URL and cannot go stale when the steps
+    // change.
+    //
+    // `return_to` is deliberately dropped rather than carried through: the
+    // enrolment step ends inside the wizard, which then finishes setup, and a
+    // destination smuggled through three requests to be honoured at the end is
+    // more machinery than "the operator navigates once more" is worth.
+    if return_to.is_some() {
+        return Redirect::temporary("/setup").into_response();
     }
 
     (

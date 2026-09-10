@@ -45,7 +45,6 @@ use thunderforge_axum_oidc::userinfo::{
 use thunderforge_core::auth::Credentials;
 use tower_cookies::cookie::SameSite;
 use tower_cookies::{Cookie, Cookies};
-use url::Url;
 
 /// Spec 002: `require_world_member` — the shared world_members-based
 /// authorization guard for canvas asset reads/writes.
