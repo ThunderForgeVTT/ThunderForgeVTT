@@ -84,6 +84,16 @@ const ADMIN_ONLY: &[(&str, &str)] = &[
         "accountStanding",
         r#"{ accountStanding(accountId: "00000000-0000-0000-0000-000000000000") { __typename } }"#,
     ),
+    // Spec 039 US8: what this instance's operator took on, and taking on
+    // changed words (FR-044).
+    (
+        "instanceOperatorAcknowledgement",
+        "{ instanceOperatorAcknowledgement { __typename } }",
+    ),
+    (
+        "acknowledgeOperatorStatement",
+        r#"mutation { acknowledgeOperatorStatement(attestation: { termsVersionId: "operator-responsibilities@0000000000000000" }) { __typename } }"#,
+    ),
     // Spec 039 US7: deciding somebody's appeal, and carrying out a window's
     // end. The two decisions only an administrator makes.
     (

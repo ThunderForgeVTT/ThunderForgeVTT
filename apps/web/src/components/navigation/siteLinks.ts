@@ -42,6 +42,9 @@ export const SITE_LINK_GROUPS: readonly SiteLinkGroup[] = [
       // Named for what a person is trying to do, not for the statute. Somebody
       // reporting stolen artwork is not searching for "DMCA".
       { label: "Copyright notices", to: "/legal/dmca" },
+      // Spec 039 FR-045/FR-046: who runs this instance, and what that makes
+      // them responsible for.
+      { label: "Operator responsibilities", to: "/legal/operator" },
     ],
   },
 ];

@@ -14,6 +14,7 @@ const OAuthCallbackPage = lazy(pageLoaders.oauthCallback);
 const DmcaCompliancePage = lazy(pageLoaders.dmcaCompliance);
 const TermsOfServicePage = lazy(pageLoaders.termsOfService);
 const PrivacyPolicyPage = lazy(pageLoaders.privacyPolicy);
+const OperatorResponsibilitiesPage = lazy(pageLoaders.operatorResponsibilities);
 const AdminSettingsPage = lazy(pageLoaders.adminSettings);
 const AdminModerationReviewPage = lazy(pageLoaders.adminModerationReview);
 const SetupPage = lazy(pageLoaders.setup);
@@ -406,6 +407,14 @@ export default function AppRoutes({
           element={renderLazyPage(
             <PrivacyPolicyPage />,
             "Loading privacy policy",
+          )}
+        />
+        {/* Spec 039 FR-045: readable without an account or a repository. */}
+        <Route
+          path="/legal/operator"
+          element={renderLazyPage(
+            <OperatorResponsibilitiesPage />,
+            "Loading operator responsibilities",
           )}
         />
         <Route

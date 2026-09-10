@@ -142,7 +142,7 @@ async fn archived_versions(
 /// something skipped: `attestations.terms_version_id` is a foreign key into an
 /// append-only table, so this cannot happen without somebody editing the
 /// database, and silently dropping the record would hide exactly that.
-async fn with_archived_terms(
+pub(crate) async fn with_archived_terms(
     state: &AppState,
     records: Vec<crate::models::Attestation>,
 ) -> GraphQLResult<Vec<GraphQLAttestation>> {

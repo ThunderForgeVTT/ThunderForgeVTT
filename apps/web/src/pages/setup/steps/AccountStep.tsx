@@ -1,9 +1,16 @@
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import {
+  readOperatorStatement,
+  type VersionedLegalDocument,
+} from "@/api/sharingTerms";
 import { setupBasic, startSetupOAuth } from "@/services/auth";
+import { LegalProse } from "@/components/legal/LegalProse";
 import { Button } from "@/components/ui/button/Button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field/Field";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import type { SetupProvider } from "@/types/auth";
 import { cn } from "@/lib/utils";
@@ -59,6 +66,10 @@ const STRENGTH_BAR_CLASSES: Record<PasswordStrengthTone, string> = {
 };
 
 const emailPattern = /\S+@\S+\.\S+/;
+
+/** Spec 039 FR-041: the refusal when the operator statement is unacknowledged. */
+const ACKNOWLEDGEMENT_REQUIRED =
+  "Read the operator responsibilities above and acknowledge them before creating the administrator.";
 
 export function evaluatePasswordStrength(password: string): PasswordStrength {
   let score = 0;
@@ -126,6 +137,32 @@ export function AccountStep({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isStartingOAuth, setIsStartingOAuth] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  // Spec 039 US8: what this person takes on by becoming the operator, read
+  // from the server so the words shown and the version recorded are the same.
+  const [statement, setStatement] = useState<VersionedLegalDocument | null>(
+    null,
+  );
+  const [acknowledged, setAcknowledged] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void readOperatorStatement()
+      .then((document) => {
+        if (active) {
+          setStatement(document);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setFailure(
+            "The operator responsibilities could not be loaded. Reload the page to continue.",
+          );
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const strength = evaluatePasswordStrength(password);
 
@@ -169,13 +206,24 @@ export function AccountStep({
       return;
     }
 
+    if (!statement || !acknowledged) {
+      setFailure(ACKNOWLEDGEMENT_REQUIRED);
+      return;
+    }
+
     if (Object.values(errors).some(Boolean)) {
       return;
     }
 
     setIsSubmitting(true);
     try {
-      await setupBasic(adminCode, username.trim(), email.trim(), password);
+      await setupBasic(
+        adminCode,
+        username.trim(),
+        email.trim(),
+        password,
+        statement.versionId,
+      );
       onCreated({ username: username.trim(), password });
     } catch (error) {
       setFailure(
@@ -194,11 +242,21 @@ export function AccountStep({
       return;
     }
 
+    if (!statement || !acknowledged) {
+      setFailure(ACKNOWLEDGEMENT_REQUIRED);
+      return;
+    }
+
     setIsStartingOAuth(providerKey);
     setFailure(null);
 
     try {
-      await startSetupOAuth(providerKey, adminCode, oauthUsername || username);
+      await startSetupOAuth(
+        providerKey,
+        adminCode,
+        statement.versionId,
+        oauthUsername || username,
+      );
     } catch (error) {
       setFailure(
         error instanceof Error
@@ -216,6 +274,52 @@ export function AccountStep({
         invite somebody, and it is the account the rest of setup is performed
         as.
       </p>
+
+      {/* Spec 039 US8 (FR-041, FR-042): the one moment this can be said to
+          the person it binds. Both ways of creating the administrator below
+          are refused until it is acknowledged. */}
+      <section
+        className="grid gap-3 rounded-lg border border-border p-4"
+        data-testid="setup-operator-statement"
+      >
+        <h3 className="text-sm font-semibold">
+          What running this instance makes you responsible for
+        </h3>
+        {statement ? (
+          <div className="grid max-h-72 gap-3 overflow-y-auto">
+            {statement.sections.map((section, index) => (
+              <section
+                key={`${section.heading ?? ""}-${index}`}
+                className="grid gap-1"
+              >
+                {section.heading ? (
+                  <h4 className="text-sm font-semibold">{section.heading}</h4>
+                ) : null}
+                <LegalProse body={section.body} />
+              </section>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Loading the operator responsibilities…
+          </p>
+        )}
+        <div className="flex items-start gap-2">
+          <Checkbox
+            id="setup-operator-acknowledge"
+            data-testid="setup-operator-acknowledge"
+            checked={acknowledged}
+            disabled={!statement}
+            onCheckedChange={(value) => setAcknowledged(value === true)}
+          />
+          <Label
+            htmlFor="setup-operator-acknowledge"
+            className="text-sm font-normal"
+          >
+            I have read this, and I take it on as the operator of this instance.
+          </Label>
+        </div>
+      </section>
 
       <form onSubmit={onSubmit} className="grid gap-4">
         <Field

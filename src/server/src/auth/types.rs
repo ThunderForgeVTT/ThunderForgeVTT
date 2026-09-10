@@ -266,6 +266,11 @@ pub(crate) struct AdminSetupBasicRequest {
     pub(crate) username: String,
     pub(crate) email: String,
     pub(crate) password: String,
+    /// Spec 039 FR-041: the operator statement the person was shown. Required —
+    /// a setup request without it does not parse, so no path through setup
+    /// makes an administrator who was not told what they took on.
+    pub(crate) operator_acknowledgement:
+        crate::auth::operator_acknowledgement::OperatorAcknowledgementRequest,
 }
 
 #[derive(Debug, Deserialize)]
@@ -274,6 +279,10 @@ pub(crate) struct AdminSetupOAuthStartRequest {
     pub(crate) redirect_uri: String,
     pub(crate) username: Option<String>,
     pub(crate) return_to: Option<String>,
+    /// Spec 039 FR-041: acknowledged before the provider round trip, carried
+    /// through it on the bootstrap session, and recorded at the callback.
+    pub(crate) operator_acknowledgement:
+        crate::auth::operator_acknowledgement::OperatorAcknowledgementRequest,
 }
 
 #[derive(Debug, Serialize)]

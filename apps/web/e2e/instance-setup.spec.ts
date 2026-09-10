@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
+import { graphql } from "./fixtures/helpers";
 import { totpNow } from "./fixtures/totp";
 
 /**
@@ -148,6 +149,19 @@ test.describe("Spec 040 US1: from an empty database to a contactable instance", 
     await page
       .getByTestId("setup-account-password-confirmation")
       .fill(adminPassword);
+    // Spec 039 US8 (FR-041, FR-042): the person becoming the operator is
+    // shown what they take on, and setup will not create them until they
+    // acknowledge it.
+    await expect(page.getByTestId("setup-operator-statement")).toContainText(
+      "Running this instance makes you responsible for it",
+      { timeout: 30_000 },
+    );
+    await page.getByTestId("setup-account-submit").click();
+    await expect(
+      page.getByTestId("setup-account-error"),
+      "no administrator without the acknowledgement",
+    ).toContainText("acknowledge");
+    await page.getByTestId("setup-operator-acknowledge").click();
     await page.getByTestId("setup-account-submit").click();
 
     // 4. Who operates this instance — and it refuses to continue with the
@@ -256,6 +270,40 @@ test.describe("Spec 040 US1: from an empty database to a contactable instance", 
     // by-hand pass of Scenario A said so, and this is that change.
     await page.waitForURL(/\/admin(\?|$)/, { timeout: 30_000 });
 
+    // Spec 039 FR-043: the acknowledgement is on record — who, and which
+    // version — in the same table a sharing agreement is, and of the words
+    // this build ships.
+    const acknowledgement = await graphql<{
+      data?: {
+        instanceOperatorAcknowledgement?: {
+          isCurrent: boolean;
+          acknowledgement: { subjectUsername: string | null } | null;
+        };
+      };
+      errors?: { message: string }[];
+    }>(
+      page,
+      `
+        query {
+          instanceOperatorAcknowledgement {
+            isCurrent
+            acknowledgement {
+              subjectUsername
+            }
+          }
+        }
+      `,
+      {},
+    );
+    expect(
+      acknowledgement.data?.instanceOperatorAcknowledgement?.isCurrent,
+      JSON.stringify(acknowledgement.errors),
+    ).toBe(true);
+    expect(
+      acknowledgement.data?.instanceOperatorAcknowledgement?.acknowledgement
+        ?.subjectUsername,
+    ).toBe(`admin${suffix}`);
+
     // 9. And now the part that makes "contactable" mean something: a stranger,
     //    with no account, reads the legal pages and finds this operator named
     //    where a placeholder used to be.
@@ -324,6 +372,21 @@ test.describe("Spec 040 US1: from an empty database to a contactable instance", 
     // other route — this is the half that would still pass if the refusal
     // above had silently stored the value anyway.
     await expect(stranger.getByText(RESERVED_NOTICE_ADDRESS)).toHaveCount(0);
+
+    // Spec 039 FR-046/FR-048: the copyright page names this instance's
+    // operator as the party responsible, and says the project cannot act here.
+    const responsible = stranger.locator('[data-testid^="dmca-section-who"]');
+    await expect(responsible).toContainText(operatorName);
+    await expect(responsible).toContainText("does not operate this instance");
+
+    // FR-045: what the operator took on, readable without an account or a
+    // repository.
+    await stranger.goto("/legal/operator");
+    await expect(
+      stranger.getByTestId("legal-page-operator-responsibilities"),
+    ).toContainText("Running this instance makes you responsible for it", {
+      timeout: 30_000,
+    });
 
     // 10. And the prose markers nobody was asked about are still visibly
     //     markers. That is correct, not a defect: a page rendering an empty

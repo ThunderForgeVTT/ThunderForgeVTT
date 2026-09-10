@@ -15,6 +15,18 @@ Master or player enters into their own world's compendium — custom NPCs, items
 or lore — is that user's sole responsibility and is subject to the
 notice-and-takedown process below.
 
+## Who Is Responsible for This Instance
+
+This instance is run by {{operator.name}}. They — not the ThunderForge project —
+are responsible for what it hosts, for acting on notices about it, and for the
+law that applies where it runs.
+
+The ThunderForge project publishes the software this instance runs on. It does
+not operate this instance, has no access to it, and cannot remove or restore
+anything in it. A notice about content here goes to this instance's operator,
+through the form above or the designated contact below — they are the only party
+who can act on it.
+
 ## What We Can Reach, and What We Cannot
 
 ThunderForge lets a Game Master copy or synchronise their own world's content to

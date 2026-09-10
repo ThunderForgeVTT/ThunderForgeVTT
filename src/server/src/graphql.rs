@@ -186,6 +186,8 @@ pub use mutations_moderation::ModerationMutation;
 // Spec 039 US7: the appeal, and the two decisions only an administrator makes.
 pub mod mutations_standing;
 pub use mutations_standing::StandingMutation;
+// Spec 039 T085 (FR-044): a changed operator statement is acknowledged again.
+pub mod operator_acknowledgement;
 
 pub mod mutations_roll;
 pub use mutations_roll::RollMutation;
@@ -296,6 +298,8 @@ pub struct QueryRoot(
     queries::LegalDocumentQuery,
     // Spec 039 US5: where an account stands, and what it has been told.
     queries::StandingQuery,
+    // Spec 039 US8: what this instance's operator took on.
+    operator_acknowledgement::OperatorAcknowledgementQuery,
     AssetQuery,
     ActorQuery,
     ActorPermissionQuery,
@@ -423,6 +427,7 @@ pub struct MutationRoot(
     PartyMutation,
     ModerationMutation,
     StandingMutation,
+    operator_acknowledgement::OperatorAcknowledgementMutation,
     RollMutation,
     // Spec 036 US3b: `rollCheck(worldId, actorId, checkId)`.
     RollCheckMutation,

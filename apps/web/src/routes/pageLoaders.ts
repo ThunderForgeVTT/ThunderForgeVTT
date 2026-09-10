@@ -3,6 +3,8 @@ export const pageLoaders = {
   signup: () => import("@/pages/auth/RegisterPage"),
   oauthCallback: () => import("@/pages/auth/OAuthCallbackPage"),
   dmcaCompliance: () => import("@/pages/legal/DmcaCompliancePage"),
+  operatorResponsibilities: () =>
+    import("@/pages/legal/OperatorResponsibilitiesPage"),
   termsOfService: () => import("@/pages/legal/TermsOfServicePage"),
   privacyPolicy: () => import("@/pages/legal/PrivacyPolicyPage"),
   adminWelcome: () => import("@/pages/admin/AdminWelcomePage"),

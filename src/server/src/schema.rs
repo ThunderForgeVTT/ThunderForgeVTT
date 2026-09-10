@@ -56,6 +56,7 @@ diesel::table! {
         expires_at -> Timestamp,
         consumed_at -> Nullable<Timestamp>,
         created_at -> Timestamp,
+        operator_terms_version_id -> Nullable<Text>,
     }
 }
 

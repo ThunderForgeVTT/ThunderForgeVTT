@@ -232,6 +232,11 @@ pub(crate) mod setup_requirements;
 pub(crate) mod admin_setup;
 pub(crate) use admin_setup::*;
 
+/// Spec 039 US8: what the person becoming an operator is told, and the record
+/// that they were. Its own module so `admin_setup.rs` stays under the gate.
+#[path = "operator_acknowledgement.rs"]
+pub(crate) mod operator_acknowledgement;
+
 /// Spec 036 FR-005: the coarse client name a session is recognised by, read
 /// from the request and nowhere else. See the module header for why the raw
 /// `User-Agent` stops here.

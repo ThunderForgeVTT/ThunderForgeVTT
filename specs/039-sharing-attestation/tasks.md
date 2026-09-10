@@ -268,18 +268,18 @@ statement is shown, must be acknowledged, and is retrievable afterwards.
 
 ### Tests for User Story 8
 
-- [ ] T082 [P] [US8] Add a test in `src/server/src/auth/admin_setup.rs` asserting `admin_setup_basic` cannot complete without an operator acknowledgement (FR-041)
-- [ ] T083 [P] [US8] Add a test in `src/server/src/publishing.rs` asserting an instance with no notice contact refuses every publishing path **and** that a world, a scene and a roll still work (FR-053)
+- [X] T082 **Done** — in `auth/operator_acknowledgement_tests.rs` rather than `admin_setup.rs`: `neither_setup_path_parses_without_an_acknowledgement` (basic and OAuth start both refuse a body without one) and `only_an_archived_operator_version_is_an_acknowledgement`; the e2e walks the refusal in the product. [P] [US8] Add a test in `src/server/src/auth/admin_setup.rs` asserting `admin_setup_basic` cannot complete without an operator acknowledgement (FR-041)
+- [X] T083 **Done, by existing tests** — `publishing_gate.rs`'s `an_instance_with_no_notice_contact_refuses_to_mint_a_link` covers the refusal, and `every_share_link_mutation_consults_the_publishing_gate` pins the gate to the four share paths. `may_publish_beyond_world` has no other caller, so a world, a scene and a roll cannot be refused by it. [P] [US8] Add a test in `src/server/src/publishing.rs` asserting an instance with no notice contact refuses every publishing path **and** that a world, a scene and a roll still work (FR-053)
 
 ### Implementation for User Story 8
 
-- [ ] T084 [US8] Require `operatorAcknowledgement: AttestationInput!` on `admin_setup_basic` in `src/server/src/auth/admin_setup.rs`, recording it through `attestation.rs` with `purpose = 'operator'`
-- [ ] T085 [US8] Surface a changed operator statement to an administrator for re-acknowledgement rather than applying it silently, in `src/server/src/auth/admin_setup.rs` (FR-044)
-- [ ] T086 [P] [US8] Render the operator statement inside the running instance at `apps/web/src/pages/legal/` so it is readable without a repository (FR-045)
-- [ ] T087 [P] [US8] Add the acknowledgement step to the setup flow in `apps/web/src/pages/` — whichever component drives `adminSetupBasic`
-- [ ] T088 [US8] Make the legal pages and the DMCA page name the instance's operator as the responsible party and give a way to reach them, and say plainly that the project cannot act on content in an instance it does not run (FR-046, FR-048)
-- [ ] T089 [US8] Set a notice contact in `src/server/seeds/` so the existing e2e suite can still publish (closing T005)
-- [ ] T090 [US8] Add `apps/web/e2e/operator-acknowledgement.spec.ts` covering quickstart Scenario H against a fresh instance
+- [X] T084 **Done** — setup is REST (`/api/auth/admin/setup/basic` and the OAuth start), so it is a required `operator_acknowledgement` field on both request bodies, not a GraphQL input. Basic setup records inside its user-creating transaction; OAuth carries the version on the bootstrap session and records with the user on the callback. [US8] Require `operatorAcknowledgement: AttestationInput!` on `admin_setup_basic` in `src/server/src/auth/admin_setup.rs`, recording it through `attestation.rs` with `purpose = 'operator'`
+- [X] T085 **Done** — the one-operator index became one-per-version (`2026-09-10-120000-0000_operator_acknowledgement_per_version`); `instanceOperatorAcknowledgement` reports whether the latest acknowledgement is to the current words, and `OperatorAcknowledgementBanner` on the admin welcome page asks again when it is not (`acknowledgeOperatorStatement`). [US8] Surface a changed operator statement to an administrator for re-acknowledgement rather than applying it silently, in `src/server/src/auth/admin_setup.rs` (FR-044)
+- [X] T086 **Done** — `OperatorResponsibilitiesPage` at `/legal/operator`, linked from the footer, read through `/api/graphql/public`. [P] [US8] Render the operator statement inside the running instance at `apps/web/src/pages/legal/` so it is readable without a repository (FR-045)
+- [X] T087 **Done** — `pages/setup/steps/AccountStep.tsx`: the statement and a required acknowledgement, on both the password and the OAuth path. [P] [US8] Add the acknowledgement step to the setup flow in `apps/web/src/pages/` — whichever component drives `adminSetupBasic`
+- [X] T088 **Done** — `legal/dmca-policy.md` § "Who Is Responsible for This Instance" names `{{operator.name}}` and says the project does not operate this instance and cannot act on its content. [US8] Make the legal pages and the DMCA page name the instance's operator as the responsible party and give a way to reach them, and say plainly that the project cannot act on content in an instance it does not run (FR-046, FR-048)
+- [X] T089 **Done, with T005** — both seeds set `notice.contact_*`. [US8] Set a notice contact in `src/server/seeds/` so the existing e2e suite can still publish (closing T005)
+- [X] T090 **Done** — in `e2e/instance-setup.spec.ts`, the spec that already owns a fresh instance, rather than a new file: refusal without the acknowledgement, the recorded version, the DMCA page naming the operator, and `/legal/operator`. [US8] Add `apps/web/e2e/operator-acknowledgement.spec.ts` covering quickstart Scenario H against a fresh instance
 
 **Checkpoint**: the one link in the chain the project cannot enforce is at least stated to the person it applies to
 
@@ -287,9 +287,9 @@ statement is shown, must be acknowledged, and is retrievable afterwards.
 
 ## Phase 10: Polish & Cross-Cutting Concerns
 
-- [ ] T091 [P] Document the environment values this feature adds — the four ladder settings and `THUNDERFORGE_NOTICE_CONTACT` — beside the three moderation values, which appear nowhere outside `specs/015-dmca-notice-takedown/tasks.md` today
-- [ ] T092 [P] Record in `specs/038-scene-audio-and-tab-share/spec.md`'s planning notes that audio inherits the publishing gate by construction via the SDL guard test, so FR-026d needs no separate decision
-- [ ] T093 [P] Record the scene gap: `collections::moderation_entity_type`'s `"scene" => None` means a scene in a shared collection is never withheld and records no adoption. Add it to `specs/015-dmca-notice-takedown/` as an open item — it is not this feature's to close
+- [X] T091 **Done** — `docs/INSTANCE_CONFIGURATION.md` § "Moderation and account standing": all seven variables with their defaults, that they are environment-only (not in the registry), that a window keeps the terms it opened with, and why "a person decides" is the shipped default. `THUNDERFORGE_NOTICE_CONTACT` was superseded by spec 040's `notice.contact_*` settings before it was built; the section says so and points there. [P] Document the environment values this feature adds — the four ladder settings and `THUNDERFORGE_NOTICE_CONTACT` — beside the three moderation values, which appear nowhere outside `specs/015-dmca-notice-takedown/tasks.md` today
+- [X] T092 **Done** — recorded as an Assumption in spec 038: an audio share path is refused by `publishing_gate.rs`'s guard until it has the notice-contact gate and the required attestation, so FR-026d needs no separate decision. [P] Record in `specs/038-scene-audio-and-tab-share/spec.md`'s planning notes that audio inherits the publishing gate by construction via the SDL guard test, so FR-026d needs no separate decision
+- [X] T093 **Done** — spec 015's T042, open and that spec's to decide. [P] Record the scene gap: `collections::moderation_entity_type`'s `"scene" => None` means a scene in a shared collection is never withheld and records no adoption. Add it to `specs/015-dmca-notice-takedown/` as an open item — it is not this feature's to close
 - [ ] T094 Make five guards fail on purpose per quickstart.md § "Making the guards fail on purpose" and record in the commit that each was seen to bite
 - [ ] T095 Run quickstart Scenarios A–H by hand against `make dev` and note anything the suite does not catch
 - [ ] T096 Run `cargo test --workspace -j 4`, `make lint` (lint-host + lint-wasm + file length) and `pnpm --filter @thunderforge/web test`. The wasm half matters for a negative reason: this feature must not have touched the engine

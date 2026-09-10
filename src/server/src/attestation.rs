@@ -171,9 +171,10 @@ pub fn record_sync(
 ///
 /// The same table and the same rules, which is the only way FR-043's "on the
 /// same terms as a sharing attestation" stays true as either side changes. The
-/// migration's partial unique index allows one, so a second call is a
-/// `unique_violation` rather than a second row — which is the right answer to
-/// "setup ran twice".
+/// partial unique index allows one **per version of the words**: the same
+/// words twice is a `unique_violation` rather than a second row — the right
+/// answer to "setup ran twice" — and changed words, after an upgrade, are
+/// acknowledged afresh (FR-044).
 pub fn record_operator_sync(
     conn: &mut PgConnection,
     subject_user_id: uuid::Uuid,

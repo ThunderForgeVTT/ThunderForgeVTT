@@ -386,6 +386,8 @@ export async function setupBasic(
   username: string,
   email: string,
   password: string,
+  /** Spec 039 FR-041: the operator statement version the person acknowledged. */
+  operatorVersionId: string,
 ): Promise<string> {
   const response = await fetch(`${API_BASE}/authentication/setup/basic`, {
     method: "POST",
@@ -398,6 +400,7 @@ export async function setupBasic(
       username,
       email,
       password,
+      operator_acknowledgement: { terms_version_id: operatorVersionId },
     }),
   });
 
@@ -414,6 +417,13 @@ export async function setupBasic(
 export async function startSetupOAuth(
   providerKey: string,
   adminCode: string,
+  /**
+   * Spec 039 FR-041: the operator statement version acknowledged. Carried
+   * through the provider round trip on the server and recorded at the
+   * callback, so the OAuth path cannot make an administrator the local path
+   * would refuse.
+   */
+  operatorVersionId: string,
   username?: string,
 ): Promise<void> {
   const redirectUri = `${window.location.origin}${API_BASE}/authentication/setup/oauth/${providerKey}/callback`;
@@ -432,6 +442,7 @@ export async function startSetupOAuth(
         redirect_uri: redirectUri,
         username: username?.trim() ? username.trim() : undefined,
         return_to: returnTo,
+        operator_acknowledgement: { terms_version_id: operatorVersionId },
       }),
     },
   );

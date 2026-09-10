@@ -60,6 +60,10 @@ pub struct AdminBootstrapOAuthSession {
     pub expires_at: chrono::NaiveDateTime,
     pub consumed_at: Option<chrono::NaiveDateTime>,
     pub created_at: chrono::NaiveDateTime,
+    /// Spec 039 FR-041: the operator statement version acknowledged before
+    /// the provider round trip. `None` only on sessions started before it was
+    /// asked for; the callback refuses those.
+    pub operator_terms_version_id: Option<String>,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
@@ -77,6 +81,10 @@ pub struct NewAdminBootstrapOAuthSession {
     pub expires_at: chrono::NaiveDateTime,
     pub consumed_at: Option<chrono::NaiveDateTime>,
     pub created_at: chrono::NaiveDateTime,
+    /// Spec 039 FR-041: the operator statement version acknowledged before
+    /// the provider round trip. `None` only on sessions started before it was
+    /// asked for; the callback refuses those.
+    pub operator_terms_version_id: Option<String>,
 }
 
 #[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]

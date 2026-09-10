@@ -1,5 +1,7 @@
 import { postGraphQL } from "@/api/graphqlClient";
 
+const GRAPHQL_PUBLIC_ENDPOINT = "/api/graphql/public";
+
 /**
  * Spec 039 US1: the words somebody agrees to before they publish, read from the
  * server.
@@ -52,9 +54,13 @@ export function readSharingTerms(): Promise<VersionedLegalDocument> {
  * instance up and does not have an account yet.
  */
 export function readOperatorStatement(): Promise<VersionedLegalDocument> {
-  return postGraphQL<{ operatorStatement: VersionedLegalDocument }>(`
+  return postGraphQL<{ operatorStatement: VersionedLegalDocument }>(
+    `
     query OperatorStatement {
       operatorStatement { ${DOCUMENT_FIELDS} }
     }
-  `).then((data) => data.operatorStatement);
+  `,
+    undefined,
+    { endpoint: GRAPHQL_PUBLIC_ENDPOINT },
+  ).then((data) => data.operatorStatement);
 }

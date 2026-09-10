@@ -270,10 +270,72 @@ async fn a_persons_history_is_theirs_alone() {
     assert_eq!(history[0].subject_user_id, mine);
 }
 
+/// The operator rows are global to the database, and one test below clears
+/// them all. Held by every test here that writes one, so none of them sees
+/// another's rows appear or vanish mid-assertion.
+///
+/// An async lock, because these tests await while holding it: a blocking
+/// `std` guard held across an `.await` can stall the runtime's thread, which
+/// is the very flakiness the lock is here to prevent.
+async fn operator_rows() -> tokio::sync::MutexGuard<'static, ()> {
+    static LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    LOCK.lock().await
+}
+
+/// FR-044: one acknowledgement **per version of the words** — so an upgrade
+/// that changes them can be acknowledged, and the same words cannot be twice.
+#[tokio::test]
+async fn each_version_is_acknowledged_once_and_a_new_version_again() {
+    use crate::schema::terms_versions;
+
+    let _rows = operator_rows().await;
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().expect("conn");
+    let operator = insert_test_user(&mut conn);
+
+    let archive = |conn: &mut PgConnection| -> String {
+        let body = format!("## Operator words\n\n{}", uuid::Uuid::now_v7());
+        let version = crate::legal::version_id(crate::legal::OPERATOR_RESPONSIBILITIES_SLUG, &body);
+        diesel::insert_into(terms_versions::table)
+            .values(&crate::models::TermsVersion {
+                version_id: version.clone(),
+                document_slug: crate::legal::OPERATOR_RESPONSIBILITIES_SLUG.to_string(),
+                body,
+                first_seen_at: chrono::Utc::now().naive_utc(),
+            })
+            .execute(conn)
+            .expect("archive");
+        version
+    };
+    let before_upgrade = archive(&mut conn);
+    let after_upgrade = archive(&mut conn);
+
+    record_operator_sync(
+        &mut conn,
+        operator,
+        Some("operator".into()),
+        &before_upgrade,
+    )
+    .expect("the words setup showed");
+    assert!(
+        record_operator_sync(
+            &mut conn,
+            operator,
+            Some("operator".into()),
+            &before_upgrade
+        )
+        .is_err(),
+        "the same words, twice, is one acknowledgement too many",
+    );
+    record_operator_sync(&mut conn, operator, Some("operator".into()), &after_upgrade)
+        .expect("changed words are acknowledged afresh (FR-044)");
+}
+
 /// US8/FR-043: the operator acknowledgement is the same record, and there is
-/// one of it.
+/// one of it for the words this build ships.
 #[tokio::test]
 async fn an_instance_acknowledges_once_on_the_same_record() {
+    let _rows = operator_rows().await;
     let state = test_app_state();
     let version = crate::legal::operator_statement().version_id;
     crate::legal::ensure_terms_versions_recorded(&state)
@@ -282,9 +344,10 @@ async fn an_instance_acknowledges_once_on_the_same_record() {
     let mut conn = state.db_pool.get().expect("conn");
     let operator = insert_test_user(&mut conn);
 
-    // The table is global and this index is over a constant, so a previous run
-    // of this test may already hold the one row. Clear it first: the assertion
-    // is about the constraint, not about test ordering.
+    // The table is global and the index allows one row per version, so a
+    // previous run of this test may already hold the row for the words this
+    // build ships. Clear it first: the assertion is about the constraint, not
+    // about test ordering.
     diesel::delete(attestations::table.filter(attestations::purpose.eq(purpose::OPERATOR)))
         .execute(&mut conn)
         .expect("clear");

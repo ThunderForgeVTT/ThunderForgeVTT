@@ -485,6 +485,11 @@ pub(crate) async fn admin_setup_basic(
 
     let username = request.username.trim().to_string();
     let email = request.email.trim().to_lowercase();
+    let operator_version = request
+        .operator_acknowledgement
+        .terms_version_id
+        .trim()
+        .to_string();
     if username.is_empty() || email.is_empty() || request.password.is_empty() {
         return error_response(
             StatusCode::BAD_REQUEST,
@@ -563,6 +568,16 @@ pub(crate) async fn admin_setup_basic(
                 ));
             }
 
+            // Spec 039 FR-041: the operator statement, acknowledged — or no
+            // administrator. Recorded below, in this transaction.
+            if !operator_acknowledgement::is_operator_version_sync(conn, &operator_version)
+                .map_err(|_| "Failed to read the terms archive".to_string())?
+            {
+                return Err(TransactionError::Refused(
+                    operator_acknowledgement::ACKNOWLEDGEMENT_REFUSED.to_string(),
+                ));
+            }
+
             let user_id = uuid::Uuid::now_v7();
             diesel::insert_into(users::table)
                 .values((
@@ -580,6 +595,8 @@ pub(crate) async fn admin_setup_basic(
                 ))
                 .execute(conn)
                 .map_err(|_| "Failed to create admin user".to_string())?;
+            operator_acknowledgement::record_sync(conn, user_id, &operator_version)
+                .map_err(|_| "Failed to record the operator acknowledgement".to_string())?;
 
             // ADR-093: deliberately NOT `mark_admin_setup_complete_sync`. The
             // account step is the middle of the wizard now, not the end of it —
@@ -610,6 +627,9 @@ pub(crate) async fn admin_setup_basic(
         }
         Err(msg) if msg == "Username is already in use" || msg == "Email is already in use" => {
             return error_response(StatusCode::CONFLICT, "setup_conflict", msg.as_str());
+        }
+        Err(msg) if msg == operator_acknowledgement::ACKNOWLEDGEMENT_REFUSED => {
+            return error_response(StatusCode::BAD_REQUEST, "acknowledgement_required", &msg);
         }
         Err(msg) => {
             return error_response(
@@ -645,6 +665,29 @@ pub(crate) async fn admin_setup_oauth_start(
     Json(request): Json<AdminSetupOAuthStartRequest>,
 ) -> Result<(StatusCode, Json<AdminSetupOAuthStartResponse>), (StatusCode, Json<OAuthResponse>)> {
     ensure_admin_setup_code_valid(&state, &request.admin_code).await?;
+
+    // Spec 039 FR-041: acknowledged before the provider round trip, carried
+    // through it on the session, and recorded at the callback.
+    let operator_version = request
+        .operator_acknowledgement
+        .terms_version_id
+        .trim()
+        .to_string();
+    let mut conn = state.db_pool.get().expect("Failed to get DB connection");
+    let checked = operator_version.clone();
+    let known = tokio::task::spawn_blocking(move || {
+        operator_acknowledgement::is_operator_version_sync(&mut conn, &checked)
+    })
+    .await
+    .expect("Failed to spawn blocking task")
+    .unwrap_or(false);
+    if !known {
+        return Err(error_response(
+            StatusCode::BAD_REQUEST,
+            "acknowledgement_required",
+            operator_acknowledgement::ACKNOWLEDGEMENT_REFUSED,
+        ));
+    }
 
     let mut conn = state.db_pool.get().expect("Failed to get DB connection");
     let provider_key_clone = provider_key.clone();
@@ -693,6 +736,7 @@ pub(crate) async fn admin_setup_oauth_start(
         expires_at: now + chrono::Duration::minutes(10),
         consumed_at: None,
         created_at: now,
+        operator_terms_version_id: Some(operator_version),
     };
 
     let mut conn = state.db_pool.get().expect("Failed to get DB connection");
@@ -808,6 +852,7 @@ pub(crate) async fn admin_setup_oauth_callback(
         provider_email,
         desired_username,
         token_response,
+        auth_ctx.session.operator_terms_version_id.clone(),
     )
     .await
     {

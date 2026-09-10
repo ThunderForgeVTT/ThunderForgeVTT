@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import type { AdminWelcomeSummary } from "@/types/admin";
 import type { SeoConfig } from "@/types/seo";
 import { MetricsCard } from "./components/MetricsCard";
+import { OperatorAcknowledgementBanner } from "./components/OperatorAcknowledgementBanner";
 
 export const adminWelcomePageSeo: SeoConfig = {
   title: "Admin welcome",
@@ -88,6 +89,8 @@ export default function AdminWelcomePage() {
           </section>
 
           {status ? <StatusBadge variant="danger">{status}</StatusBadge> : null}
+
+          <OperatorAcknowledgementBanner />
 
           {summary ? (
             <>

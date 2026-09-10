@@ -46,6 +46,49 @@ extend type Query {
 through setup that produces an instance with an administrator and no
 acknowledgement.
 
+*Amended 2026-09-10, as built:*
+
+- **Setup is REST, not the GraphQL mutation sketched above.** Both first-run
+  paths — `POST /authentication/setup/basic` and
+  `POST /authentication/setup/oauth/{provider}/start` — carry
+  `operator_acknowledgement: { terms_version_id }` as a **required** field, so a
+  request without it does not parse. The local path checks the version against
+  the archive (the operator document's, not the sharing terms') and records the
+  attestation inside the transaction that creates the administrator. The OAuth
+  path checks it before the provider round trip, stores it on the bootstrap
+  session, and at the callback checks it again and records it in one
+  transaction with the administrator and their provider link — which that path
+  did not previously have.
+- **One acknowledgement per version**, not one ever (migration
+  `2026-09-10-120000-0000_operator_acknowledgement_per_version`). The same words
+  twice is still refused; changed words can be acknowledged. The `down.sql`
+  refuses to revert rather than delete an acknowledgement.
+- **Re-acknowledgement (FR-044)** is an admin query and mutation:
+
+  ```graphql
+  type OperatorAcknowledgementState {
+    "The most recent acknowledgement, of any version, in the words it was made to."
+    acknowledgement: Attestation
+    "The operator statement this build ships."
+    currentVersionId: String!
+    "False after an upgrade that changed the words, until acknowledged."
+    isCurrent: Boolean!
+  }
+
+  extend type Query {
+    instanceOperatorAcknowledgement: OperatorAcknowledgementState!
+  }
+
+  extend type Mutation {
+    "Only the version this build ships is accepted."
+    acknowledgeOperatorStatement(attestation: AttestationInput!): OperatorAcknowledgementState!
+  }
+  ```
+
+  The administrator's landing page shows the words and asks whenever
+  `isCurrent` is false — including on an instance set up before
+  acknowledgement existed.
+
 ## Rules
 
 1. **The statement is versioned like everything else** (FR-044) —

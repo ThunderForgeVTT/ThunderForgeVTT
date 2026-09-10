@@ -407,7 +407,11 @@ pub(crate) async fn create_admin_user_from_oauth(
     provider_email: Option<String>,
     desired_username: Option<String>,
     token_response: OAuthTokenResponse,
+    operator_version: Option<String>,
 ) -> Result<uuid::Uuid, (StatusCode, Json<OAuthResponse>)> {
+    use crate::auth::operator_acknowledgement::{
+        ACKNOWLEDGEMENT_REFUSED, is_operator_version_sync, record_sync,
+    };
     let Some(provider_email) = provider_email.map(|v| v.trim().to_lowercase()) else {
         return Err(error_response(
             StatusCode::BAD_GATEWAY,
@@ -517,30 +521,24 @@ pub(crate) async fn create_admin_user_from_oauth(
             return Err("OAuth account is already linked".to_string());
         }
 
-        let user_id = uuid::Uuid::now_v7();
-        diesel::insert_into(users::table)
-            .values((
-                users::id.eq(user_id),
-                users::username.eq(username),
-                users::email.eq(provider_email.clone()),
-                users::is_admin.eq(true),
-                users::password_hash.eq(random_password_hash),
-                users::created_at.eq(now),
-                users::updated_at.eq(now),
-                users::two_factor_enabled.eq(false),
-                users::two_factor_secret_encrypted.eq::<Option<String>>(None),
-                users::two_factor_confirmed_at.eq::<Option<chrono::NaiveDateTime>>(None),
-                users::two_factor_admin_required.eq(false),
-            ))
-            .execute(&mut conn)
-            .map_err(|_| "Failed to create admin user".to_string())?;
+        // Spec 039 FR-041: the acknowledgement given before the round trip,
+        // checked before anything is created.
+        let Some(operator_version) = operator_version else {
+            return Err(ACKNOWLEDGEMENT_REFUSED.to_string());
+        };
+        if !is_operator_version_sync(&mut conn, &operator_version)
+            .map_err(|_| "Failed to read the terms archive".to_string())?
+        {
+            return Err(ACKNOWLEDGEMENT_REFUSED.to_string());
+        }
 
+        let user_id = uuid::Uuid::now_v7();
         let oauth_account = NewUserOAuthAccount {
             id: uuid::Uuid::now_v7(),
             user_id,
             provider_id,
             provider_user_id,
-            provider_email: Some(provider_email),
+            provider_email: Some(provider_email.clone()),
             access_token_encrypted: Some(access_token_encrypted),
             refresh_token_encrypted,
             token_expires_at,
@@ -549,10 +547,31 @@ pub(crate) async fn create_admin_user_from_oauth(
             updated_at: now,
         };
 
-        diesel::insert_into(user_oauth_accounts::table)
-            .values(&oauth_account)
-            .execute(&mut conn)
-            .map_err(|_| "Failed to link OAuth account".to_string())?;
+        // One transaction: the administrator, their provider link, and the
+        // record of what they took on commit together or not at all.
+        conn.transaction::<_, diesel::result::Error, _>(|conn| {
+            diesel::insert_into(users::table)
+                .values((
+                    users::id.eq(user_id),
+                    users::username.eq(username),
+                    users::email.eq(provider_email),
+                    users::is_admin.eq(true),
+                    users::password_hash.eq(random_password_hash),
+                    users::created_at.eq(now),
+                    users::updated_at.eq(now),
+                    users::two_factor_enabled.eq(false),
+                    users::two_factor_secret_encrypted.eq::<Option<String>>(None),
+                    users::two_factor_confirmed_at.eq::<Option<chrono::NaiveDateTime>>(None),
+                    users::two_factor_admin_required.eq(false),
+                ))
+                .execute(conn)?;
+            diesel::insert_into(user_oauth_accounts::table)
+                .values(&oauth_account)
+                .execute(conn)?;
+            record_sync(conn, user_id, &operator_version)?;
+            Ok(())
+        })
+        .map_err(|_| "Failed to create admin user".to_string())?;
 
         // ADR-093: deliberately NOT `mark_admin_setup_complete_sync`. Setup
         // finishes at `/authentication/setup/complete`, once the required
@@ -576,6 +595,11 @@ pub(crate) async fn create_admin_user_from_oauth(
         Err(msg) if msg == "Setup has already been completed" => Err(error_response(
             StatusCode::CONFLICT,
             "setup_complete",
+            msg.as_str(),
+        )),
+        Err(msg) if msg == ACKNOWLEDGEMENT_REFUSED => Err(error_response(
+            StatusCode::BAD_REQUEST,
+            "acknowledgement_required",
             msg.as_str(),
         )),
         Err(msg)
