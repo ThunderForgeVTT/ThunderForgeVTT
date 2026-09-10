@@ -6,7 +6,7 @@ import {
   register,
   type Credentials,
 } from "./fixtures/helpers";
-import { totpAt } from "./fixtures/totp";
+import { codeForConfirmingAnEnrolment } from "./fixtures/totp";
 
 /**
  * Spec 041 US6 and US7, and quickstart Scenario I: what an operator may do to
@@ -28,34 +28,6 @@ import { totpAt } from "./fixtures/totp";
  * that acceptable. That is asserted as directly as an e2e can: the operator's
  * own screen after the reset, and the account's own state.
  */
-
-/** Seconds per code — `STEP_SECONDS` in `crates/thunderforge-axum-auth-core`. */
-const STEP_SECONDS = 30;
-
-/**
- * The code an enrolment should confirm with: the **previous** step's.
- *
- * Confirming an enrolment spends the step its code matched (FR-016), so a
- * sign-in immediately afterwards would offer a code the server has already
- * seen and be refused for a reason that has nothing to do with what is being
- * tested. The previous step is still inside the ±1 skew window so it confirms,
- * and it is lower than the current step so the next code is unspent — which
- * avoids a 30-second wait that would put these tests over Playwright's own
- * timeout. The short wait exists only to keep off a step boundary.
- *
- * A real person never meets any of this: they enrol and stay signed in.
- */
-async function codeForConfirmingAnEnrolment(
-  secretBase32: string,
-): Promise<string> {
-  const secondsIntoStep = (Date.now() / 1000) % STEP_SECONDS;
-  if (secondsIntoStep > STEP_SECONDS - 3) {
-    await new Promise((resolve) =>
-      setTimeout(resolve, (STEP_SECONDS - secondsIntoStep + 1) * 1000),
-    );
-  }
-  return totpAt(secretBase32, Date.now() / 1000 - STEP_SECONDS);
-}
 
 async function jsonHeaders(page: Page): Promise<Record<string, string>> {
   const csrf = (await page.context().cookies()).find(

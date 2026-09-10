@@ -200,7 +200,6 @@ test(`${WORLDS} worlds of ${PLAYERS_PER_WORLD} all hear their own table and no o
     SETUP_IN_FLIGHT,
   );
 
-   
   console.log(`[torture] created ${worldIds.length} worlds`);
 
   // One socket per player per world, laid out flat and then cut into shards.
@@ -239,7 +238,6 @@ test(`${WORLDS} worlds of ${PLAYERS_PER_WORLD} all hear their own table and no o
       `only ${connected}/${SUBSCRIBERS} sockets subscribed across ${shards.length} context(s)`,
     ).toBe(SUBSCRIBERS);
 
-     
     console.log(
       `[torture] ${connected} sockets live across ${shards.length} contexts`,
     );
@@ -288,7 +286,6 @@ test(`${WORLDS} worlds of ${PLAYERS_PER_WORLD} all hear their own table and no o
     const starved = counts.filter((c) => c === 0).length;
     const leaked = counts.filter((c) => c > 1).length;
 
-     
     console.log(
       `[torture] worlds=${WORLDS} playersPerWorld=${PLAYERS_PER_WORLD} ` +
         `subscribers=${SUBSCRIBERS} shards=${shards.length} ` +

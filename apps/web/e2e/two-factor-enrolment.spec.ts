@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { freshCredentials, register } from "./fixtures/helpers";
-import { totpAt } from "./fixtures/totp";
+import { codeForConfirmingAnEnrolment } from "./fixtures/totp";
 
 /**
  * Spec 041 US1: turning two-factor on, through the screen a person would use.
@@ -47,9 +47,11 @@ test.describe("Spec 041 US1: enrolling from the account's own screen", () => {
     });
     await expect(setupKey).toBeVisible();
 
+    // The previous step's code: confirming spends the step it matched (FR-016),
+    // and this test signs in again with the same secret below.
     await page
       .getByTestId("two-factor-code")
-      .fill(totpAt(secret, Math.floor(Date.now() / 1000)));
+      .fill(await codeForConfirmingAnEnrolment(secret));
     await page.getByTestId("two-factor-confirm").click();
 
     // Shown once, and said to be shown once.

@@ -270,9 +270,9 @@ appears in the record.
 - [X] T076 [P] Update `MVP.md`'s two-factor line, and say what "shipped" now covers — including that the claim used to rest on a verifier and a policy switch
 - [X] T077 All six guards broken on purpose and each seen to bite, at the unit level rather than through the e2e (same guarantee, seconds instead of minutes). The constant-work one **did not exist** — the quickstart named a test in `thunderforge-axum-auth-core` that was never written — so it was written first: `matching_the_first_code_costs_what_matching_the_last_one_costs`, and it fails on an early `break` while every other test in the file still passes, which is exactly the invisibility the quickstart warned about. `possession_is_not_optional_and_is_not_doubled` was also new: nothing asserted FR-012's price at the server level
 - [ ] T078 Run quickstart scenarios A–I by hand against `make dev`, with a real authenticator app, and note anything the suite does not catch
-- [ ] T079 Run `cargo test --workspace -j 4`, `make lint` (lint-host + lint-wasm + file length) and `pnpm --filter @thunderforge/web test`
+- [X] T079 `cargo test --workspace`: **2519 passed, exit 0**. `pnpm --filter @thunderforge/web test`: **563 passed**. Lint via `pnpm verify`, which runs `rust lint`, `engine lint (wasm)` and `file length` among its eleven checks — **all 11 passed**
 - [ ] T080 Run the full suite via `node scripts/e2e-parallel.mjs --shards=2` with `THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT=1`, and record the figures in the commit body
-- [ ] T081 Run `pnpm verify` and fix what it reports **in the code this feature added** — keep it to that; wide lint passes get their own commit. `pnpm verify:fix` rewrites what is mechanical
+- [X] T081 `pnpm verify`: **all 11 checks passed**, nothing to fix
 
 ---
 

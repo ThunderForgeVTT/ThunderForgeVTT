@@ -7,6 +7,7 @@ import {
   register,
   type Credentials,
 } from "./fixtures/helpers";
+import { codeForConfirmingAnEnrolment } from "./fixtures/totp";
 
 /**
  * Two-factor authentication, end to end: enrolment, the login challenge, a
@@ -178,43 +179,6 @@ function totpCodeAt(secretBase32: string, unixSeconds: number): string {
 /** The code that is valid right now. */
 function currentTotpCode(secretBase32: string): string {
   return totpCodeAt(secretBase32, Date.now() / 1000);
-}
-
-/**
- * The code an enrolment should confirm with: the **previous** step's.
- *
- * # Why not simply "the code for now"
- *
- * FR-016 landed on 2026-09-09: confirming an enrolment *spends* the step its
- * code matched, and a spent step is refused thereafter. A test that confirms
- * with the current step's code and then signs in a moment later is offering a
- * code the server has already seen, and gets refused for a reason that has
- * nothing to do with what it is testing. Before the fix this passed whenever
- * the step happened to tick over in between and failed when it did not — a
- * genuine flake whose symptom, "the right code was refused", pointed at
- * entirely the wrong thing.
- *
- * The previous step is still inside the ±1 skew window, so it confirms; and it
- * is *lower* than the current step, so the code the test signs in with next is
- * unspent. That means no sleeping — a 30-second wait would put every one of
- * these tests over Playwright's own timeout.
- *
- * The only care needed is not to do it on a boundary, where "the previous
- * step" could be two steps back by the time the server looks. Hence the short
- * wait, which is at most a couple of seconds and usually none.
- *
- * A real person never meets any of this: they enrol and stay signed in.
- */
-async function codeForConfirmingAnEnrolment(
-  secretBase32: string,
-): Promise<string> {
-  const secondsIntoStep = (Date.now() / 1000) % STEP_SECONDS;
-  if (secondsIntoStep > STEP_SECONDS - 3) {
-    await new Promise((resolve) =>
-      setTimeout(resolve, (STEP_SECONDS - secondsIntoStep + 1) * 1000),
-    );
-  }
-  return totpCodeAt(secretBase32, Date.now() / 1000 - STEP_SECONDS);
 }
 
 /**

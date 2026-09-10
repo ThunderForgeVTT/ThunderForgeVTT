@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { freshCredentials, login, register } from "./fixtures/helpers";
-import { totpAt } from "./fixtures/totp";
+import { codeForConfirmingAnEnrolment, totpAt } from "./fixtures/totp";
 
 /**
  * Spec 041 US4 (FR-012, FR-014): turning a second factor off, deliberately.
@@ -33,9 +33,12 @@ async function enrol(page: import("@playwright/test").Page, password: string) {
   const secret = ((await setupKey.textContent()) ?? "").replace(/\s+/g, "");
   expect(secret.length).toBeGreaterThan(0);
 
+  // The previous step's code: confirming spends the step it matched (FR-016),
+  // and every caller below uses this secret again a moment later. See
+  // `codeForConfirmingAnEnrolment`.
   await page
     .getByTestId("two-factor-code")
-    .fill(totpAt(secret, Math.floor(Date.now() / 1000)));
+    .fill(await codeForConfirmingAnEnrolment(secret));
   await page.getByTestId("two-factor-confirm").click();
   await expect(
     page.getByTestId("two-factor-recovery-code").first(),

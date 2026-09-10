@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { login } from "./helpers";
-import { totpAt } from "./totp";
+import { codeForConfirmingAnEnrolment } from "./totp";
 
 // Per-shard when sharding, so parallel stacks do not race on one file.
 //
@@ -137,7 +137,7 @@ async function enrolTheAdministrator(
       data: {
         username: ADMIN_USER.identifier,
         password: ADMIN_USER.password,
-        code: totpAt(secret, Date.now() / 1000 - 30),
+        code: await codeForConfirmingAnEnrolment(secret),
       },
     },
   );

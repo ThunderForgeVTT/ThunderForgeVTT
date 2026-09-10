@@ -261,7 +261,6 @@ test(`${SUBSCRIBERS} subscribers across shards all hear every event`, async ({
     const starved = counts.filter((c) => c === 0).length;
     const full = counts.filter((c) => c >= EVENTS).length;
 
-     
     console.log(
       `[torture] fanout=${SUBSCRIBERS} shards=${shards.length} ` +
         `expected=${EVENTS} starved=${starved} full=${full} ` +
