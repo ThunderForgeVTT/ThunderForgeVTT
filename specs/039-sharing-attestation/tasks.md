@@ -50,10 +50,10 @@ and US6's requirements come out of the spec.
   | key | value |
   |---|---|
   | `notice.contact_name` | `ThunderForge E2E Notice Contact` |
-  | `notice.contact_email` | `notices@example.invalid` |
+  | `notice.contact_email` | `notices@realdomain.org` |
   | `notice.contact_postal_address` | `1 Test Street / Testville, TS 00000 / Testland` |
 
-  All three are `Backing::Row` and `RequiredFor(Capability::PublishBeyondWorld)`, so with FR-053 enforced an instance without them refuses every share path. Written straight into the table rather than through `settings::changes::write_setting`: a seed has no actor, and `instance_setting_changes` records *who* changed a setting — a question a seed cannot answer honestly. `.invalid` is RFC 2606 and can never receive mail, which is right for a fixture and is exactly what `settings::validate` refuses on the path a person types one in. Applied against the local database and read back.
+  All three are `Backing::Row` and `RequiredFor(Capability::PublishBeyondWorld)`, so with FR-053 enforced an instance without them refuses every share path. Written straight into the table rather than through `settings::changes::write_setting`: a seed has no actor, and `instance_setting_changes` records *who* changed a setting — a question a seed cannot answer honestly. **Deliberately not a reserved-TLD address.** Spec 040 already implements this gate as its FR-026 (`graphql/publishing_gate.rs`), and `settings::validate::placeholder_problem` treats `.invalid`/`example.*`/`.test` as *not configured* — a `.invalid` address would have left the gate shut for a reason no test intended, with the row sitting there looking correct. Caught by reading 040's own fixture, which uses `realdomain.org` for exactly this. Applied against the local database and read back.
 
 ---
 

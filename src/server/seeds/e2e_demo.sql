@@ -430,14 +430,17 @@ ON CONFLICT (id) DO NOTHING;
 -- `created_by` are left NULL, which is what the columns already mean by "the
 -- instance".
 --
--- `.invalid` is reserved by RFC 2606 and can never receive mail. That is the
--- right choice for a fixture and the wrong choice for a real instance, which
--- is why `settings::validate` refuses reserved TLDs on the path a person types
--- one in.
+-- **Not** a `.invalid`/`example.*`/`.test` address, however tempting. Spec 040
+-- already implements this gate (its FR-026, `graphql/publishing_gate.rs`), and
+-- `settings::validate::placeholder_problem` treats a reserved TLD as **not
+-- configured** — so a `.invalid` address here would leave the gate shut for a
+-- reason no test intended, and every share spec would refuse while the row sat
+-- there looking correct. `realdomain.org` matches what the Rust-side fixture
+-- already uses, for the same reason.
 INSERT INTO instance_settings (key, value, created_at, updated_at)
 VALUES
   ('notice.contact_name', 'ThunderForge E2E Notice Contact', now(), now()),
-  ('notice.contact_email', 'notices@example.invalid', now(), now()),
+  ('notice.contact_email', 'notices@realdomain.org', now(), now()),
   (
     'notice.contact_postal_address',
     E'1 Test Street\nTestville, TS 00000\nTestland',
