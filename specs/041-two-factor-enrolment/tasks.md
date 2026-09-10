@@ -236,8 +236,8 @@ half FR-023 asks for that a boolean cannot answer.
 **Independent Test**: require it of one account and confirm that account and no
 other is asked to enrol.
 
-- [ ] T064 [P] [US6] Add a server test in `src/server/src/auth/two_factor/policy.rs` asserting setting the per-account requirement affects that account and no other, and records who set it
-- [ ] T065 [US6] Write `two_factor_required_by` and a `requirement_set` / `requirement_cleared` event from `set_admin_user_two_factor_required` (`src/server/src/auth/two_factor/policy.rs`, formerly `two_factor.rs:344`)
+- [X] T064 [P] [US6] Add server tests (`two_factor/policy_tests.rs`) asserting setting the per-account requirement affects that account and no other, records who set it, records the clearing as its own act, and writes nothing at all for an account that does not exist
+- [X] T065 [US6] Write a `requirement_set` / `requirement_cleared` event from `set_admin_user_two_factor_required`, in the same transaction as the column, via the extracted `set_user_requirement_sync`. **No `two_factor_required_by` column**: `two_factor_events.actor_user_id` already answers "by whom", and a denormalised copy of it on `users` would be a second source of the same fact that nothing keeps in step — the record describes the act (spec 035)
 - [ ] T066 [US6] Create `apps/web/src/pages/admin/components/UserTwoFactorControl.tsx` showing whether it is required and by whom, and wire it into the admin user surface
 - [ ] T067 [US6] Add the per-account requirement case to `apps/web/e2e/two-factor-admin.spec.ts`
 
@@ -255,7 +255,7 @@ appears in the record.
 - [X] T068 [P] [US7] Add server tests in `src/server/src/auth/two_factor/policy.rs` for the reset route: administrator only, idempotent on an account with no factor, and it signs nobody in and issues nothing
 - [X] T069 [US7] Implement `POST /authentication/admin/users/{user_id}/2fa/reset` — **landed as `two_factor/operator_reset.rs`**, not `policy.rs`, and behind `require_admin_user` as a layer as well as per `contracts/removal-and-reset.md`, behind the existing `verify_admin_request` (`src/server/src/auth/admin_setup.rs:394`)
 - [X] T070 [US7] Implement `src/server/src/auth/two_factor/events.rs` (landed) — the `two_factor_events` writer with separate `subject_user_id` and `actor_user_id`, written in the transaction it describes, and carry spec 035's rule forward: the record describes the act, never the person
-- [ ] T071 [US7] Add the best-effort notification seam in `src/server/src/auth/two_factor/events.rs` — called after commit, unable to fail the request, and a no-op until spec 040 provides mail (FR-001b, FR-015)
+- [X] T071 [US7] Add the best-effort notification seam — **landed as `two_factor/notify.rs`**, separate from `events.rs` because the two have opposite failure modes: an event that did not commit means the act did not happen, while a notice that did not send must never fail the act. Spec 040 has provided mail, so it enqueues through `mail::outbox` — which succeeds on an instance with no mail configured, leaving the row blocked with the unset settings named. Wired into removal, operator reset and recovery-code reissue
 - [ ] T072 [US7] Show the account's own second-factor events on `apps/web/src/pages/user/SecuritySettingsPage.tsx`, which is how a person is told on an instance that cannot send mail
 - [ ] T073 [US7] Name who can help on the challenge screen in `apps/web/src/pages/auth/LoginView.tsx`, from the realm manifest's `support_email`, and say so plainly where no administrator can act (FR-026)
 - [ ] T074 [US7] Add the reset control to the admin user surface and create `apps/web/e2e/two-factor-admin.spec.ts` covering quickstart Scenario I end to end, including that no step needs `psql`

@@ -66,6 +66,10 @@ pub(crate) mod throttle;
 /// it. The act, never the person — see the module header.
 pub(crate) mod events;
 
+/// Spec 041 FR-015 / FR-001b: telling the account holder, after the commit and
+/// unable to fail the request.
+pub(crate) mod notify;
+
 /// Spec 041 FR-016: a code is not accepted twice, including within its window.
 /// Tests the join between the rule in `totp.rs` and the path a sign-in takes.
 #[cfg(test)]

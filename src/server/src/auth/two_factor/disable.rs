@@ -325,13 +325,19 @@ pub(crate) async fn two_factor_disable(
     .await;
 
     match cleared {
-        Ok(Ok(())) => (
-            StatusCode::OK,
-            Json(TwoFactorDisableResponse {
-                status: "success",
-                message: "Two-factor authentication is off for this account.".to_string(),
-            }),
-        ),
+        Ok(Ok(())) => {
+            // FR-015, after the commit and unable to fail this request: the
+            // person who just weakened their own account is told, because the
+            // case that matters is the one where it was not them.
+            super::notify::tell(&state, user_id, super::notify::Change::Removed).await;
+            (
+                StatusCode::OK,
+                Json(TwoFactorDisableResponse {
+                    status: "success",
+                    message: "Two-factor authentication is off for this account.".to_string(),
+                }),
+            )
+        }
         _ => refuse(
             StatusCode::INTERNAL_SERVER_ERROR,
             "two_factor_error",

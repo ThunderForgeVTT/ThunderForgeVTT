@@ -98,22 +98,30 @@ pub(crate) async fn reset_second_factor(
     .await;
 
     match cleared {
-        Ok(Ok(())) => (
-            StatusCode::OK,
-            Json(OAuthResponse {
-                status: "success",
-                // Says what happened *and* what has to happen next: the account
-                // can now sign in with a password alone, which is a weaker
-                // state than it was in a moment ago, and whoever asked for this
-                // should be told to go and enrol again rather than left to
-                // discover it.
-                message: "Second factor reset. That account can sign in with \
+        Ok(Ok(())) => {
+            // FR-015/FR-025, and the most important of the three notices: the
+            // account holder did not do this and may not know it happened.
+            // After the commit, and it cannot fail the reset — an instance
+            // with no mail configured is the ordinary case for exactly the
+            // small self-hosted instances that need this route most.
+            super::notify::tell(&state, user_id, super::notify::Change::ResetByOperator).await;
+            (
+                StatusCode::OK,
+                Json(OAuthResponse {
+                    status: "success",
+                    // Says what happened *and* what has to happen next: the account
+                    // can now sign in with a password alone, which is a weaker
+                    // state than it was in a moment ago, and whoever asked for this
+                    // should be told to go and enrol again rather than left to
+                    // discover it.
+                    message: "Second factor reset. That account can sign in with \
                           its password, and should enrol a new factor."
-                    .to_string(),
-                challenge_id: None,
-                login_two_factor_challenge_id: None,
-            }),
-        ),
+                        .to_string(),
+                    challenge_id: None,
+                    login_two_factor_challenge_id: None,
+                }),
+            )
+        }
         _ => refuse(
             StatusCode::INTERNAL_SERVER_ERROR,
             "two_factor_error",

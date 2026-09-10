@@ -343,6 +343,15 @@ pub(crate) async fn regenerate_recovery_codes(
     match issue_recovery_codes(&state, user_id).await {
         Ok(codes) => {
             let remaining = codes.len() as i64;
+            // FR-015. Every earlier code has just stopped working, which is a
+            // thing the account holder needs to know about even — especially —
+            // if they did not do it.
+            super::notify::tell(
+                &state,
+                user_id,
+                super::notify::Change::RecoveryCodesReissued,
+            )
+            .await;
             (
                 StatusCode::OK,
                 Json(RecoveryCodesResponse {
