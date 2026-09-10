@@ -1,6 +1,5 @@
 import { type Browser, type Page } from "@playwright/test";
-import { ADMIN_USER } from "./global-setup";
-import { graphql, login } from "./helpers";
+import { graphql, loginAsAdmin } from "./helpers";
 
 /**
  * Reaching spec 040's administrator-only surfaces from a test.
@@ -110,8 +109,12 @@ export const UPDATE_INSTANCE_SETTING = `
 export async function openAdminPage(browser: Browser): Promise<Page> {
   const context = await browser.newContext();
   const page = await context.newPage();
-  await login(page, ADMIN_USER.identifier, ADMIN_USER.password);
-  await page.waitForURL(/\/(admin|welcome)$/, { timeout: 20_000 });
+  // Spec 041 FR-027: an administrator holds a second factor, so this is two
+  // steps. `loginAsAdmin` does both, using the secret `global-setup` enrolled
+  // for this run — a plain `login` leaves the page on the challenge step, and
+  // every test in the file is then skipped by a failing `beforeAll` whose
+  // message is about a locator rather than about a sign-in.
+  await loginAsAdmin(page);
   return page;
 }
 
