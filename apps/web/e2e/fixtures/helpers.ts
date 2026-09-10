@@ -1,4 +1,4 @@
-import { expect, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Page } from "@playwright/test";
 import fs from "node:fs";
 import { ADMIN_SECOND_FACTOR_PATH, ADMIN_USER } from "./global-setup";
 import { totpAt } from "./totp";
@@ -74,7 +74,27 @@ export async function login(
  * run and writes it down. It cannot be seeded in SQL, because the stored secret
  * is encrypted with the instance's own key.
  */
+/**
+ * The most the spent-code retry below can take: three attempts, each up to one
+ * TOTP step of waiting plus the eight-second check, after the first challenge
+ * appears. A budget, not an expectation — a first code that works returns in a
+ * second.
+ */
+const ADMIN_SIGN_IN_BUDGET_MS = 140_000;
+
 export async function loginAsAdmin(page: Page): Promise<void> {
+  // The retry can outlast a hook's default thirty seconds, and eight specs sign
+  // in as the administrator from a `beforeAll` that inherits exactly that. When
+  // one follows another admin sign-in inside the same step, the first code is
+  // spent, the retry waits for the next step, and the hook times out mid-wait —
+  // a failure that depends only on which spec ran before it. Extending whatever
+  // is running (a test or a hook) covers all eight and the next one. A timeout
+  // of 0 means "none", and is left alone rather than turned into one.
+  const info = test.info();
+  if (info.timeout > 0) {
+    info.setTimeout(info.timeout + ADMIN_SIGN_IN_BUDGET_MS);
+  }
+
   await login(page, ADMIN_USER.identifier, ADMIN_USER.password);
 
   const code = page.locator("#login-two-factor");
