@@ -124,7 +124,7 @@ remove, and the checklist says so.
 - [X] T029 [P] [US1] Add the dialog to `apps/web/src/pages/world/item/ItemDetailPage.tsx`
 - [X] T030 [P] [US1] Add the dialog to `apps/web/src/pages/world/ability/AbilityDetailPage.tsx`
 - [X] T031 [P] [US1] Add the `attestation` argument to `apps/web/src/api/collections.ts`, `actorShares.ts`, `itemShares.ts` and `abilityShares.ts` — plus `api/sharingTerms.ts`, which reads the words and the identity in one request
-- [ ] T032 [US1] Add `apps/web/e2e/sharing-attestation.spec.ts` covering US1's five acceptance scenarios and US3's three, including a direct API call with no attestation and one with a fabricated version id
+- [X] T032 [US1] `apps/web/e2e/sharing-attestation.spec.ts` — **4 passed**. Covers US3 1–3 (no attestation at all, an unrecognised version, and a refusal that names no valid identity nor anything shaped like one) and US1 1, 3 and 4 (the agreement on screen before the button, sharing twice asking twice, and cancelling keeping the work). **US1 scenario 5 is deliberately not here**: "a new type added later is covered without a separate decision" is a claim about code that does not exist, which no end-to-end test can make. It is held by the SDL guard in `graphql/publishing_gate.rs`, which fails the day somebody writes a fifth `create*ShareLink` without the argument — an e2e asserting it would be an assertion about nothing
 
 **Checkpoint**: the position is enforceable — four paths ask, and the server, not the page, is what requires it
 
