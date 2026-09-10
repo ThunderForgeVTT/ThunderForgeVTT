@@ -174,6 +174,71 @@ pub fn sections_of(normalised_body: &str) -> Vec<LegalSection> {
     sections
 }
 
+/// Archive every document this build serves, if it is not already archived.
+///
+/// # Why at startup, and why this is the whole of FR-016
+///
+/// FR-016 says an attestation always resolves to the words agreed to. That is
+/// not a property of the write path — it is a property of **ordering**: this
+/// runs from `main.rs` before the server accepts a request, so a version an
+/// attestation could name was archived before the server that would accept the
+/// attestation was listening. There is no window in which a publish can name a
+/// version that is not yet in the archive, which is why
+/// `attestations.terms_version_id` can afford to be a foreign key.
+///
+/// Insert-if-absent, and **nothing is ever updated**. A row is a historical fact
+/// about what a document said; an UPDATE here would rewrite what people agreed
+/// to. `ON CONFLICT DO NOTHING` rather than an upsert says that in code, and it
+/// also makes this safe to run on every boot and on every replica.
+///
+/// It walks [`documents()`] rather than a list of its own, because the failure
+/// worth designing out is a document the queries can serve and the archive
+/// never recorded — see `everything_servable_is_archivable`.
+pub async fn ensure_terms_versions_recorded(state: &crate::state::AppState) -> Result<(), String> {
+    use crate::schema::terms_versions;
+    use diesel::prelude::*;
+
+    let rows: Vec<crate::models::TermsVersion> = documents()
+        .into_iter()
+        .map(|document| crate::models::TermsVersion {
+            version_id: document.version_id,
+            document_slug: document.slug,
+            // The normalised body, which is what the identity was computed
+            // from and therefore what an old attestation must resolve to.
+            body: document
+                .sections
+                .iter()
+                .map(|section| match &section.heading {
+                    Some(heading) => format!("## {heading}\n\n{}", section.body),
+                    None => section.body.clone(),
+                })
+                .collect::<Vec<_>>()
+                .join("\n\n"),
+            // Overwritten by the column default; present because the struct is
+            // one shape for reading and writing.
+            first_seen_at: chrono::Utc::now().naive_utc(),
+        })
+        .collect();
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| "Failed to get DB connection".to_string())?;
+
+    tokio::task::spawn_blocking(move || {
+        diesel::insert_into(terms_versions::table)
+            .values(&rows)
+            .on_conflict(terms_versions::version_id)
+            .do_nothing()
+            .execute(&mut conn)
+    })
+    .await
+    .map_err(|_| "Failed to spawn blocking task".to_string())?
+    .map_err(|e| format!("Failed to archive the legal document versions: {e}"))?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 #[path = "legal_tests.rs"]
 mod legal_tests;

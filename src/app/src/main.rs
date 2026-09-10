@@ -536,6 +536,17 @@ async fn run() {
     thunderforge_server::admin::ensure_admin_defaults(&app_state)
         .await
         .expect("Failed to initialize admin configuration state");
+    // Spec 039 FR-016 / ADR-076: archive this build's legal document versions
+    // **before the server serves**. An attestation names a version, and the
+    // guarantee that it always resolves to the words agreed to is this
+    // ordering rather than anything on the write path.
+    //
+    // Fatal on failure, unlike the RustFS bootstrap below: an instance that
+    // could not archive its terms would accept publishes naming a version it
+    // has no record of, which is the one state the attestation must not have.
+    thunderforge_server::legal::ensure_terms_versions_recorded(&app_state)
+        .await
+        .expect("Failed to archive the legal document versions");
 
     // Spec 002 (FR-020): bootstrap the RustFS bucket so `docker compose
     // up` + this one command is the whole local-dev provisioning story,

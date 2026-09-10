@@ -145,3 +145,120 @@ fn a_preamble_before_the_first_heading_is_its_own_section() {
     assert_eq!(sections[0].body, "Opening words.");
     assert_eq!(sections[1].heading.as_deref(), Some("A heading"));
 }
+
+/// FR-016 as an ordering claim, driven against the database.
+///
+/// The property is not "the write path checks the archive" — it is that the
+/// archive is written **before anything can name a version**. So: run the
+/// archive, then assert every version this build serves is already there.
+///
+/// If somebody later moves this call after the server starts listening, this
+/// test still passes and the guarantee is gone; what it catches is the more
+/// likely mistake — a document served but not archived, or an archive write
+/// that silently did nothing.
+#[tokio::test]
+async fn every_servable_version_is_in_the_archive_after_the_startup_write() {
+    use crate::schema::terms_versions;
+    use diesel::prelude::*;
+
+    let state = crate::test_support::test_app_state();
+    ensure_terms_versions_recorded(&state)
+        .await
+        .expect("the archive write must succeed");
+
+    let mut conn = state.db_pool.get().expect("conn");
+    for document in documents() {
+        let archived: Option<String> = terms_versions::table
+            .filter(terms_versions::version_id.eq(&document.version_id))
+            .select(terms_versions::version_id)
+            .first(&mut conn)
+            .optional()
+            .expect("read");
+        assert_eq!(
+            archived.as_deref(),
+            Some(document.version_id.as_str()),
+            "`{}` is servable but not archived — an attestation naming it would \
+             point at words this instance has no record of",
+            document.slug,
+        );
+    }
+}
+
+/// Running it twice writes one row, and does not touch the one already there.
+///
+/// `ON CONFLICT DO NOTHING` rather than an upsert, because an upsert would
+/// rewrite `first_seen_at` — and "when did this version first appear" is the
+/// only history this table carries.
+#[tokio::test]
+async fn archiving_twice_leaves_the_first_row_exactly_as_it_was() {
+    use crate::schema::terms_versions;
+    use diesel::prelude::*;
+
+    let state = crate::test_support::test_app_state();
+    ensure_terms_versions_recorded(&state).await.expect("first");
+
+    let mut conn = state.db_pool.get().expect("conn");
+    let slug = SHARING_TERMS_SLUG;
+    let before: (String, chrono::NaiveDateTime) = terms_versions::table
+        .filter(terms_versions::document_slug.eq(slug))
+        .select((terms_versions::body, terms_versions::first_seen_at))
+        .order(terms_versions::first_seen_at.asc())
+        .first(&mut conn)
+        .expect("archived once");
+    drop(conn);
+
+    ensure_terms_versions_recorded(&state)
+        .await
+        .expect("second");
+
+    let mut conn = state.db_pool.get().expect("conn");
+    let after: (String, chrono::NaiveDateTime) = terms_versions::table
+        .filter(terms_versions::document_slug.eq(slug))
+        .select((terms_versions::body, terms_versions::first_seen_at))
+        .order(terms_versions::first_seen_at.asc())
+        .first(&mut conn)
+        .expect("still archived");
+
+    assert_eq!(
+        before, after,
+        "a second startup must not rewrite an archived version — `first_seen_at` \
+         is the only history this table carries",
+    );
+}
+
+/// The archived body is the words, not the file.
+///
+/// A row carrying the raw file — comments and all — would mean an old
+/// attestation resolves to text whose identity does not match its own version
+/// id, which is the failure in the shape hardest to notice.
+#[tokio::test]
+async fn the_archived_body_hashes_back_to_its_own_version_id() {
+    use crate::schema::terms_versions;
+    use diesel::prelude::*;
+
+    let state = crate::test_support::test_app_state();
+    ensure_terms_versions_recorded(&state)
+        .await
+        .expect("archive");
+
+    let mut conn = state.db_pool.get().expect("conn");
+    for document in documents() {
+        let body: String = terms_versions::table
+            .filter(terms_versions::version_id.eq(&document.version_id))
+            .select(terms_versions::body)
+            .first(&mut conn)
+            .expect("archived");
+        assert!(
+            !body.contains("<!--"),
+            "`{}` was archived with its comments, so its stored body is not what \
+             its identity was computed from",
+            document.slug,
+        );
+        assert_eq!(
+            version_id(&document.slug, &normalise(&body)),
+            document.version_id,
+            "the archived body of `{}` does not hash back to its own version id",
+            document.slug,
+        );
+    }
+}
