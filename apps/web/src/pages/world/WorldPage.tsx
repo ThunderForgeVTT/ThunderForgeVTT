@@ -84,6 +84,7 @@ import {
 } from "@/engine/bevy";
 import { useAuthoringTools } from "@/hooks/useAuthoringTools";
 import { permittedTools, reconcileOpenTool } from "@/lib/authoringTools";
+import { usePlaceActorTokens } from "./usePlaceActorTokens";
 import {
   getPeerTransferState,
   subscribeToPeerTransfer,
@@ -140,7 +141,6 @@ import {
 } from "@/components/world/GmToolRail/GmToolRail";
 import { SelectionFilterMenu } from "@/components/world/GmToolRail/SelectionFilterMenu";
 import { PlacedItemPrompt } from "@/components/world/PlacedItemPrompt";
-import { AboutInstance } from "@/components/navigation/AboutInstance";
 import { getMyActorClaim } from "@/api/actorClaims";
 import {
   WorldDock,
@@ -151,6 +151,7 @@ import { ActorsPanel } from "@/components/world/PlayDock/ActorsPanel";
 import { CombatPanel } from "@/components/world/PlayDock/CombatPanel";
 import { ClocksPanel } from "@/components/world/PlayDock/ClocksPanel";
 import { SettingsPanel } from "@/components/world/PlayDock/SettingsPanel";
+import { HelpPanel } from "@/components/world/PlayDock/HelpPanel";
 import type { CanvasImageAsset } from "@/api/assets";
 import type { WorldRecord } from "@/types/world";
 import type { SceneRecord } from "@/types/scene";
@@ -386,9 +387,13 @@ export default function WorldPage() {
    * `IsGameMaster` alone, as is token dragging, so for a Game Master a single
    * click was offered to every authoring system at once.
    *
-   * Closing the rail entirely (`null`) leaves the engine armed with whatever
-   * it had: there is no "no tool" mode, and inventing one here would make an
-   * empty rail behave differently from a collapsed one.
+   * Closing the rail entirely (`null`) returns the engine to Select. It used
+   * to leave the engine armed with whatever it had, so a Game Master who
+   * picked Lights and closed the rail placed a light with every click on the
+   * map, with nothing on screen saying a tool was armed — the "yellow dot"
+   * of two playtests (2026-09-01 #16, 2026-09-10 P2). Select is not an
+   * invented "no tool" mode: it is the rail's own default, and in it a click
+   * on empty map only deselects.
    */
   useEffect(() => {
     // Only a Game Master arms a tool. The rail itself is already gated on
@@ -396,9 +401,14 @@ export default function WorldPage() {
     // independently — this is the third layer, and it is here because a mode
     // request is a message chrome sends, and chrome should not be sending it
     // on a player's behalf at all. Defence in depth, not the only defence.
-    if (!isSceneOwner || !effectiveGmToolId) return;
-    void setAuthoringMode(effectiveGmToolId);
+    if (!isSceneOwner) return;
+    void setAuthoringMode(effectiveGmToolId ?? "select");
   }, [isSceneOwner, effectiveGmToolId]);
+
+  // Playtest 2026-09-10 P1: the actors pane's Place creates a token where it
+  // is dropped. `selectedSceneId`, not `sceneId`: the alias is declared
+  // further down.
+  usePlaceActorTokens(selectedSceneId, isSceneOwner);
 
   /**
    * Bumped whenever something might have changed the approval queue, so it
@@ -2191,6 +2201,14 @@ export default function WorldPage() {
         />
       ),
     },
+    // Playtest 2026-09-10 P4: About and Feedback, for every role. They used
+    // to float over the map, under the tool rail and the dock.
+    {
+      id: "help",
+      label: "About & feedback",
+      icon: "rune",
+      content: <HelpPanel />,
+    },
   ];
 
   return (
@@ -2620,13 +2638,6 @@ export default function WorldPage() {
         container. Spec 031 FR-014.
       */}
       <PlacedItemPrompt worldId={id} actorId={claimedActorId} />
-
-      {/*
-        The play field is the one shell with no footer, because it is a canvas
-        that fills the viewport. The links live behind this instead — small,
-        dim and in the corner, because it is the least important control here.
-      */}
-      <AboutInstance />
     </>
   );
 }

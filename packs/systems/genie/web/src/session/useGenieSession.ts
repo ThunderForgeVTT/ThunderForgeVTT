@@ -167,17 +167,12 @@ export function useGenieSession(
     (result: GenieSessionRecord | null) => {
       setSession((prev) => {
         if (result) return result;
-        // genieSession(worldId) only ever returns the *active* session by
-        // design (queries/genie_session.rs filters status="active") — a
-        // null result is ambiguous between "no session was ever started"
-        // and "the session just concluded" (possibly on another client,
-        // which is exactly what the live-sync NOTIFY handler below
-        // triggers this refetch for). Don't clobber an already-known
-        // concluded session with that ambiguous null — this is the same
-        // bug advancePuzzleClock/spendResourceOnPuzzleClock's direct
-        // mutation responses were fixed for earlier; a blind refetch()
-        // reintroduces it the moment anything (like live sync) calls it
-        // after a mutation that could have won/lost the session.
+        // genieSession(worldId) returns the latest session, concluded or
+        // not (playtest 2026-09-10 P5; it used to return only an active
+        // one, which made null ambiguous between "never started" and "just
+        // concluded"). A null now means no session exists. Keeping an
+        // already-known session over a null is still the safe merge: a
+        // refetch racing a reset should not blank the panel for a frame.
         if (prev && prev.status !== "ACTIVE") return prev;
         return null;
       });
@@ -373,12 +368,11 @@ export function useGenieSession(
     [session],
   );
 
-  // Deliberately not a refetch() after the mutation: genieSession(worldId)
-  // only ever returns the *active* session for a world
-  // (queries/genie_session.rs filters status="active"), so a mutation
-  // that resolves the last unresolved Puzzle Clock and wins the session
-  // would make the very next refetch come back null and blank the whole
-  // panel instead of showing the won state. Merge the mutation's
+  // Deliberately not a refetch() after the mutation. When genieSession
+  // returned only an *active* session, a refetch after the winning clock
+  // came back null and blanked the panel instead of showing the won state;
+  // it now returns concluded sessions too (playtest 2026-09-10 P5), but the
+  // mutation's own response is still the fresher answer. Merge the mutation's
   // response locally instead, and mirror the server's own win rule
   // (mutations_genie_session.rs's all_puzzle_clocks_resolved) so the UI
   // reflects "won" immediately — the server is still the authority on
@@ -435,8 +429,8 @@ export function useGenieSession(
   );
 
   // Same rationale as advancePuzzleClock above: this can also resolve the
-  // clock and win the session, so it merges the response locally instead
-  // of refetching into a null-because-concluded genieSession(worldId).
+  // clock and win the session, and its own response is the fresher answer,
+  // so it merges that locally rather than refetching.
   const spendResourceOnPuzzleClock = useCallback(
     async (
       clockId: string,

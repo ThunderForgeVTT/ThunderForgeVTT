@@ -47,6 +47,9 @@ impl Plugin for TokenPlugin {
                 // Before sizing/snapping, so a move resolves to its final cell
                 // in the same frame the key was pressed.
                 handle_token_movement_input,
+                // Art that failed to load becomes a swatch before sizing, so
+                // the swatch is sized in the frame it appears.
+                crate::systems::token_grid::fall_back_when_token_art_fails,
                 // Sizing before snapping: snapping depends on the footprint,
                 // and both run after the input systems above so a drag is
                 // resolved to its final cell within the same frame it ends.

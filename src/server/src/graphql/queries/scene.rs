@@ -227,16 +227,20 @@ impl SceneQuery {
 
         let tokens = tokio::task::spawn_blocking(move || {
             use crate::schema::tokens;
-            tokens::table
+            let rows = tokens::table
                 .filter(tokens::scene_id.eq(scene_id))
                 .select(crate::models::Token::as_select())
-                .load::<crate::models::Token>(&mut conn)
+                .load::<crate::models::Token>(&mut conn)?;
+            // Playtest 2026-09-10 P1: a token with no photo of its own shows
+            // its character's token art. This is the read the engine syncs
+            // from, so it is the one that has to carry it.
+            crate::graphql::token_art::tokens_with_art(&mut conn, rows)
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
         .map_err(|_| Error::new("Failed to load tokens"))?;
 
-        Ok(tokens.into_iter().map(GraphQLToken::from).collect())
+        Ok(tokens)
     }
 
     async fn fog_mask(

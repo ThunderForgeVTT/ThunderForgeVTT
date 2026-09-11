@@ -111,13 +111,15 @@ impl TokenMutation {
                 );
             }
 
-            Ok(token)
+            // With its character's art, as every token read now carries it.
+            let mut with_art = crate::graphql::token_art::tokens_with_art(&mut conn, vec![token])?;
+            Ok(with_art.remove(0))
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
         .map_err(|_| Error::new("Failed to create token (scene not found or not owned by you)"))?;
 
-        Ok(GraphQLToken::from(inserted_token))
+        Ok(inserted_token)
     }
 
     /// Update an existing token's position/properties (scene owner only)
@@ -244,7 +246,7 @@ impl TokenMutation {
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
         .map_err(|_| Error::new("Failed to update token (not found or not owned by you)"))?;
 
-        Ok(GraphQLToken::from(updated_token))
+        crate::graphql::token_art::token_with_art(state, updated_token).await
     }
 
     /// Delete a token (scene owner only)
@@ -412,7 +414,7 @@ impl TokenMutation {
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
         .map_err(|_| Error::new("Failed to move token (not found or not controlled by you)"))?;
 
-        Ok(GraphQLToken::from(updated_token))
+        crate::graphql::token_art::token_with_art(state, updated_token).await
     }
 
     /// Change the photo/avatar of the caller's own primary token. Spec 004
@@ -467,7 +469,7 @@ impl TokenMutation {
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
         .map_err(|_| Error::new("Failed to set photo (not your primary token)"))?;
 
-        Ok(GraphQLToken::from(updated_token))
+        crate::graphql::token_art::token_with_art(state, updated_token).await
     }
 }
 

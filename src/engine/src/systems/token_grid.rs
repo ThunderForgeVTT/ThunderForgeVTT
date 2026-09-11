@@ -51,6 +51,33 @@ pub(crate) fn size_tokens_to_grid(
     }
 }
 
+/// A token whose art failed to load draws its colour swatch instead of
+/// nothing (playtest 2026-09-10 P1).
+///
+/// `app.rs` falls back to the swatch only when a token has no photo URL. A
+/// URL that 404s, is refused, or will not decode left a sprite whose image
+/// never arrives, and Bevy draws nothing for that — so the token was
+/// invisible, which is worse than the square it was meant to improve on. Runs
+/// every frame because a load can fail at any point after the token spawns;
+/// once a swatch is swapped in its image is the default handle, which never
+/// reports a failure, so it is not swapped again.
+///
+/// Before `size_tokens_to_grid`, so the swatch is sized in the frame it
+/// appears.
+pub(crate) fn fall_back_when_token_art_fails(
+    asset_server: Res<AssetServer>,
+    mut tokens: Query<(&mut Sprite, &crate::components::Token), With<TokenIdentity>>,
+) {
+    for (mut sprite, token) in tokens.iter_mut() {
+        if matches!(
+            asset_server.load_state(sprite.image.id()),
+            bevy::asset::LoadState::Failed(_)
+        ) {
+            *sprite = Sprite::from_color(token.color, Vec2::ONE);
+        }
+    }
+}
+
 /// Snaps tokens to the grid.
 ///
 /// Runs only on tokens whose transform changed, so a settled board costs

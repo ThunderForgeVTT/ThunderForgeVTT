@@ -84,6 +84,21 @@ VALUES (
 )
 ON CONFLICT (id) DO NOTHING;
 
+-- The Demo World's session, as every world created on this system gets one
+-- (the pack's `start_session_for_new_world` hook, which a raw INSERT above
+-- never runs). Without it the seeded world was the one place a Game Master
+-- was still shown "Start Genie session" (playtest 2026-09-10 P5).
+INSERT INTO world_genie_sessions (id, world_id, doom_clock_max, created_by, created_at, updated_at)
+VALUES (
+  '00000000-0000-0000-0000-0000000000b3',
+  '00000000-0000-0000-0000-0000000000b0',
+  6,
+  '00000000-0000-0000-0000-0000000000a2',
+  now(),
+  now()
+)
+ON CONFLICT (id) DO NOTHING;
+
 -- user2 as an explicit world member — require_world_member only falls
 -- back to worlds.created_by for the *creator* (user1); user2 needs a
 -- real world_members row to have access at all.

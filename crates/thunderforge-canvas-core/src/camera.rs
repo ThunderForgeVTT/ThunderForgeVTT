@@ -138,12 +138,98 @@ pub fn fit_scale(content: Vec2, viewport: Vec2, limits: ZoomLimits) -> f32 {
     limits.clamp(by_width.max(by_height))
 }
 
+/// How far, in screen pixels, a pointer may travel with a button held and
+/// still be a click rather than a drag.
+///
+/// Right-click both pans (by dragging) and opens the context menu (by
+/// clicking), so something has to tell the two apart, and a hand on a mouse
+/// is never perfectly still. A few pixels absorbs the wobble without making a
+/// deliberate drag feel sticky.
+pub const DRAG_THRESHOLD_PX: f32 = 4.0;
+
+/// Whether a press whose pointer has travelled `travelled` screen pixels from
+/// where it went down is a drag.
+///
+/// `travelled` is the furthest the pointer got, not where it ended: a drag
+/// that wanders back to its starting point was still a drag, and must not
+/// open a menu on release.
+pub fn is_drag(travelled: f32) -> bool {
+    travelled.is_finite() && travelled > DRAG_THRESHOLD_PX
+}
+
+/// How far the camera moves, in world units, when the pointer drags from
+/// `from` to `to` (screen pixels) at `scale`.
+///
+/// Grab-the-map: the world point under the pointer stays under the pointer,
+/// so the camera moves *opposite* to the pointer. Screen y grows downward and
+/// world y grows upward, hence the sign flip on x and not on y. Multiplied by
+/// `scale` because one screen pixel is `scale` world units — a drag across the
+/// screen zoomed out covers more of the map than the same drag zoomed in.
+pub fn drag_pan(from: Vec2, to: Vec2, scale: f32) -> Vec2 {
+    let moved = to - from;
+    if !moved.is_finite() || !scale.is_finite() {
+        return Vec2::ZERO;
+    }
+    Vec2::new(-moved.x, moved.y) * scale
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn limits() -> ZoomLimits {
         ZoomLimits::default()
+    }
+
+    /// Where a screen point lands in the world, for a camera at `translation`
+    /// and `scale` over a viewport centred on `center` — the inverse of what
+    /// the renderer does, written out so the grab property can be checked.
+    fn world_at(screen: Vec2, center: Vec2, translation: Vec2, scale: f32) -> Vec2 {
+        let offset = screen - center;
+        translation + Vec2::new(offset.x, -offset.y) * scale
+    }
+
+    #[test]
+    fn the_point_you_grab_stays_under_the_pointer() {
+        let center = Vec2::new(800.0, 450.0);
+        let (from, to) = (Vec2::new(300.0, 200.0), Vec2::new(520.0, 90.0));
+        for scale in [0.5, 1.0, 3.0] {
+            let camera = Vec2::new(40.0, -25.0);
+            let grabbed = world_at(from, center, camera, scale);
+            let moved = camera + drag_pan(from, to, scale);
+            let now_under = world_at(to, center, moved, scale);
+            assert!(
+                (grabbed - now_under).length() < 1e-3,
+                "at scale {scale}, {grabbed:?} slid to {now_under:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn dragging_right_and_down_moves_the_camera_left_and_up() {
+        let pan = drag_pan(Vec2::ZERO, Vec2::new(10.0, 10.0), 1.0);
+        assert!(
+            pan.x < 0.0,
+            "a rightward drag moves the camera left: {pan:?}"
+        );
+        assert!(pan.y > 0.0, "a downward drag moves the camera up: {pan:?}");
+    }
+
+    #[test]
+    fn a_wobble_is_a_click_and_a_deliberate_move_is_a_drag() {
+        assert!(!is_drag(0.0));
+        assert!(!is_drag(DRAG_THRESHOLD_PX));
+        assert!(is_drag(DRAG_THRESHOLD_PX + 1.0));
+        assert!(
+            !is_drag(f32::NAN),
+            "an unknown distance must not swallow a click"
+        );
+    }
+
+    #[test]
+    fn a_non_finite_drag_moves_nothing() {
+        assert_eq!(drag_pan(Vec2::ZERO, Vec2::splat(f32::NAN), 1.0), Vec2::ZERO);
+        assert_eq!(drag_pan(Vec2::ZERO, Vec2::ONE, f32::INFINITY), Vec2::ZERO);
     }
 
     #[test]

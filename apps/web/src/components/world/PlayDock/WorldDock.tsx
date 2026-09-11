@@ -13,7 +13,10 @@ export type DockSectionId =
   // Spec 030: what the table has asked the Game Master to allow. Present only
   // for whoever runs the world.
   | "requests"
-  | "settings";
+  | "settings"
+  // Playtest 2026-09-10 P4: About and Feedback, which used to float over the
+  // map where other controls painted over them.
+  | "help";
 
 export interface DockSection {
   id: DockSectionId;

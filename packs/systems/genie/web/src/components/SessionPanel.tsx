@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import SessionClocks from "./SessionClocks";
 import SessionResourceTrade from "./SessionResourceTrade";
 import SessionWishPool from "./SessionWishPool";
@@ -32,9 +32,27 @@ const GENIE_SESSION_RESOURCE_TYPES = [
   { key: "essence", label: "Essence" },
 ];
 
+/** The Doom Clock a session starts with when there is no previous one to
+ * match — the ruleset's own default, carried from the pack's
+ * `start_session_for_new_world`. */
+const DEFAULT_DOOM_CLOCK_MAX = 6;
+
 /**
  * Spec 018/019 User Story 7: the Genie GM session loop — Session Wish
  * Pool, Doom/Puzzle Clocks, and (spec 019) Session Resource trading.
+ *
+ * # There is no "Start Genie session" button
+ *
+ * Playtest 2026-09-10 P5: a Game Master should just have clocks to set, not a
+ * session to start first. Every world created on this system already gets a
+ * session (`start_session_for_new_world`), so the button only ever appeared
+ * where that had not happened — a seeded world — and after every win or loss,
+ * because the query used to answer `null` for a concluded session. Now:
+ *
+ * - a world with no session at all gets one started as soon as its Game
+ *   Master opens this panel;
+ * - a won or lost session stays on screen, with its outcome, and the Game
+ *   Master resets the clocks to begin the next.
  */
 export function GenieSessionPanel({
   worldId,
@@ -45,6 +63,7 @@ export function GenieSessionPanel({
     session,
     loading,
     error,
+    refetch,
     startSession,
     spendWish,
     advanceDoomClock,
@@ -89,12 +108,28 @@ export function GenieSessionPanel({
   const [advanceDelta, setAdvanceDelta] = useState("1");
   const [isAdvancing, setIsAdvancing] = useState(false);
 
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!isGm) return;
     getWorldItems(worldId)
       .then(setWorldItems)
       .catch(() => setWorldItems([]));
   }, [isGm, worldId]);
+
+  // A world with no session at all gets one, once, when its Game Master opens
+  // the panel — see the component's doc. Once per mount: if the start is
+  // refused because another tab got there first, the refetch picks up that
+  // session rather than trying again.
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (!isGm || loading || error || session || autoStarted.current) return;
+    autoStarted.current = true;
+    startSession(DEFAULT_DOOM_CLOCK_MAX).catch(() => {
+      void refetch();
+    });
+  }, [isGm, loading, error, session, startSession, refetch]);
 
   // Only while there is nothing to show yet. `loading` goes true again on
   // every *background* refetch — and one runs whenever a world event says the
@@ -117,21 +152,31 @@ export function GenieSessionPanel({
   }
 
   if (!session) {
-    return isGm ? (
-      <Button
-        type="button"
-        variant="secondary"
-        data-testid="start-genie-session-button"
-        onClick={() => void startSession(6)}
+    return (
+      <p
+        className="text-sm text-muted-foreground"
+        data-testid="genie-session-starting"
       >
-        Start Genie session
-      </Button>
-    ) : (
-      <p className="text-sm text-muted-foreground">
-        No Genie session has started yet.
+        {isGm ? "Starting the session…" : "No Genie session has started yet."}
       </p>
     );
   }
+
+  const concluded = session.status !== "ACTIVE";
+
+  const handleResetClocks = async () => {
+    setIsResetting(true);
+    setResetError(null);
+    try {
+      await startSession(session.doomClockMax || DEFAULT_DOOM_CLOCK_MAX);
+    } catch (err) {
+      setResetError(
+        err instanceof Error ? err.message : "Failed to reset the clocks",
+      );
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   const grantableActors = myActor ? [myActor, ...partyMembers] : partyMembers;
 
@@ -204,6 +249,27 @@ export function GenieSessionPanel({
 
   return (
     <div className="grid gap-4" data-testid="genie-session-panel">
+      {isGm && concluded ? (
+        <Card className="grid gap-2 p-4" data-testid="genie-session-concluded">
+          <p className="text-sm">
+            The session was {session.status === "WON" ? "won" : "lost"}. Reset
+            the clocks to begin the next one.
+          </p>
+          {resetError ? (
+            <p className="text-sm text-destructive">{resetError}</p>
+          ) : null}
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            disabled={isResetting}
+            onClick={() => void handleResetClocks()}
+            data-testid="reset-genie-clocks-button"
+          >
+            Reset clocks
+          </Button>
+        </Card>
+      ) : null}
       {isGm ? (
         <Card
           className="grid gap-2 p-4"

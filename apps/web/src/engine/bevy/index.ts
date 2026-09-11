@@ -116,6 +116,25 @@ const state: EngineState = {
   worldId: null,
 };
 
+/**
+ * A read-only window onto the engine, for tests and for when the canvas says
+ * nothing — the engine's counterpart to `window.__worldProbe`, which can only
+ * see the store. Playtest 2026-09-10 P3: a pan happens in the engine and
+ * nowhere else, so a test has to be able to ask the engine where the camera
+ * is. Development only, like the world probe: `import.meta.env.DEV` is a
+ * constant, so none of this reaches a production bundle.
+ */
+function installEngineProbe(wasm: BevyWasmModule): void {
+  if (!import.meta.env.DEV || typeof window === "undefined") return;
+  const cameraState = (wasm as { camera_state?: () => string }).camera_state;
+  (window as unknown as Record<string, unknown>).__engineProbe = {
+    camera: (): { x: number; y: number; scale: number } | null =>
+      cameraState
+        ? (JSON.parse(cameraState()) as { x: number; y: number; scale: number })
+        : null,
+  };
+}
+
 async function getWasmModule(onProgress?: EngineLoadListener) {
   if (!loadPromise) {
     loadPromise = (async () => {
@@ -140,6 +159,7 @@ async function getWasmModule(onProgress?: EngineLoadListener) {
         // load (FR-004's spirit applied to the loader itself).
         await wasm.default();
       }
+      installEngineProbe(wasm);
       return wasm;
     })();
 

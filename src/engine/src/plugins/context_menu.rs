@@ -121,23 +121,46 @@ fn suppress_browser_menu(mut suppressed: ResMut<MenuSuppressed>) {
 }
 
 /// Report a right-click, with what was under it.
+///
+/// On **release**, and only if the pointer did not travel: right-drag pans
+/// the map (`camera::handle_drag_pan`, playtest 2026-09-10 P3), and a menu
+/// that opened on press would open at the start of every pan. The press
+/// position is the one reported — it is where the person aimed. The furthest
+/// the pointer got is what decides, not where it ended, so a drag that
+/// wanders back to its start is still a drag.
 fn report_right_click(
     mouse_button: Res<ButtonInput<MouseButton>>,
     windows: Query<&Window, With<PrimaryWindow>>,
     camera_query: Query<(&Camera, &GlobalTransform)>,
     tokens: Query<(&Transform, &TokenIdentity, Option<&TokenGridBehaviour>)>,
     grid: Option<Res<SceneGrid>>,
+    mut press: Local<Option<(Vec2, f32)>>,
 ) {
-    if !mouse_button.just_pressed(MouseButton::Right) {
+    let cursor = windows
+        .single()
+        .ok()
+        .and_then(|window| window.cursor_position());
+
+    if mouse_button.just_pressed(MouseButton::Right) {
+        *press = cursor.map(|at| (at, 0.0));
         return;
     }
-
-    let Ok(window) = windows.single() else {
+    if mouse_button.pressed(MouseButton::Right) {
+        if let (Some((at, travelled)), Some(cursor)) = (press.as_mut(), cursor) {
+            *travelled = travelled.max((cursor - *at).length());
+        }
+        return;
+    }
+    if !mouse_button.just_released(MouseButton::Right) {
+        return;
+    }
+    let Some((screen, travelled)) = press.take() else {
         return;
     };
-    let Some(screen) = window.cursor_position() else {
+    if thunderforge_canvas_core::camera::is_drag(travelled) {
+        // It was a pan.
         return;
-    };
+    }
     let Some((camera, camera_transform)) = camera_query.iter().next() else {
         return;
     };

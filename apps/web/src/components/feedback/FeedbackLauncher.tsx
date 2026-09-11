@@ -56,6 +56,14 @@ export function FeedbackLauncher() {
     return null;
   }
 
+  // The play field carries its own, in the dock's "About & feedback" section
+  // (playtest 2026-09-10 P4): floating here it sat under the dock rail and
+  // vanished behind any open dock section. FR-001 still holds there, since
+  // the dock rail is always on screen.
+  if (/^\/world\/[^/]+\/play\/?$/.test(location.pathname)) {
+    return null;
+  }
+
   return (
     <>
       {/*

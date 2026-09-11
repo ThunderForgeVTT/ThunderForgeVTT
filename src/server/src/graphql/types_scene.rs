@@ -434,6 +434,19 @@ impl From<crate::models::Token> for GraphQLToken {
     }
 }
 
+impl GraphQLToken {
+    /// Fills `photo_url` when the token has none of its own — its character's
+    /// token art, from `graphql::token_art`. A photo set on the token wins.
+    pub(crate) fn with_photo_fallback(mut self, fallback: Option<String>) -> Self {
+        if self.photo_url.as_deref().is_none_or(str::is_empty)
+            && let Some(url) = fallback
+        {
+            self.photo_url = Some(url);
+        }
+        self
+    }
+}
+
 // Token input types moved to input_types.rs (Phase 4.9.Z Step 3)
 
 #[derive(SimpleObject, Debug, Clone)]

@@ -67,9 +67,16 @@ pub async fn genie_session_impl(
             require_world_member(&mut conn, user_id, world_id)
                 .map_err(|_| "You must be a member of this world".to_string())?;
 
+            // The latest session, whatever its status. This used to return
+            // only an *active* one, which made `null` mean both "never
+            // started" and "just won or lost" — and the panel, unable to tell
+            // them apart, offered a Game Master "Start Genie session" after
+            // every ending (playtest 2026-09-10 P5). A concluded session is
+            // still the table's state: its clocks are locked (FR-016) and the
+            // outcome stands until the Game Master resets the clocks, which
+            // starts the next one.
             let session = world_genie_sessions::table
                 .filter(world_genie_sessions::world_id.eq(world_id))
-                .filter(world_genie_sessions::status.eq("active"))
                 .order(world_genie_sessions::created_at.desc())
                 .select(GenieSession::as_select())
                 .first::<GenieSession>(&mut conn)
@@ -429,6 +436,49 @@ mod tests {
             .await
             .unwrap();
         assert!(result.is_none());
+    }
+
+    /// Playtest 2026-09-10 P5: a won or lost session is still the table's
+    /// state. Before, the query answered `None` for it, and the panel could
+    /// not tell "just lost" from "never started" — so it offered a Game
+    /// Master "Start Genie session" after every ending.
+    #[tokio::test]
+    async fn a_concluded_session_is_still_returned() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        start_genie_session_impl(
+            &state,
+            owner_id,
+            false,
+            StartGenieSessionInput {
+                world_id,
+                doom_clock_max: 6,
+            },
+        )
+        .await
+        .unwrap();
+
+        let mut conn = state.db_pool.get().unwrap();
+        diesel::update(
+            world_genie_sessions::table.filter(world_genie_sessions::world_id.eq(world_id)),
+        )
+        .set(world_genie_sessions::status.eq("lost"))
+        .execute(&mut conn)
+        .unwrap();
+        drop(conn);
+
+        let result = genie_session_impl(&state, owner_id, world_id)
+            .await
+            .unwrap();
+        assert!(
+            result.is_some(),
+            "a lost session must still be returned, so the panel can show the \
+             outcome and offer to reset the clocks",
+        );
     }
 
     #[tokio::test]

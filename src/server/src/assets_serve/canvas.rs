@@ -62,7 +62,7 @@ pub fn router() -> Router<AppState> {
 /// `…/<uuid>.webp.meta`. Serving image bytes for that request would hand
 /// Bevy a "meta file" it then fails to parse as RON, failing the load;
 /// a 404 is what makes it fall back to the default meta and proceed.
-fn parse_asset_id(segment: &str) -> Option<Uuid> {
+pub(crate) fn parse_asset_id(segment: &str) -> Option<Uuid> {
     const IMAGE_EXTENSIONS: [&str; 2] = ["webp", "png"];
 
     let id = match segment.split_once('.') {

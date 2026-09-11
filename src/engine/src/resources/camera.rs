@@ -55,6 +55,19 @@ impl CameraManager {
         self.target_translation += delta;
     }
 
+    /// Pan by a delta with no glide — for a drag, where the map has to stay
+    /// under the pointer.
+    ///
+    /// `pan` moves only the target and lets `advance` ease toward it, which is
+    /// right for a programmatic move and wrong for a hand on the mouse: a map
+    /// that trails the pointer feels like dragging through syrup. Moving both
+    /// keeps them together, so an ease already in flight (a wheel zoom, say)
+    /// carries on from the dragged position rather than snapping back.
+    pub fn drag_by(&mut self, delta: Vec2) {
+        self.translation += delta;
+        self.target_translation += delta;
+    }
+
     fn limits(&self) -> ZoomLimits {
         ZoomLimits {
             min: self.zoom_min,

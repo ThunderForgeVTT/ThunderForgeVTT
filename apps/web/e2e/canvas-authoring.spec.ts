@@ -997,6 +997,260 @@ test.describe("Switching tools never authors (spec 031 FR-040, SC-008)", () => {
       }
     }
   });
+
+  test("closing the rail disarms the tool, so a click on the map places nothing", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+
+    // Playtest 2026-09-10 P2, the "yellow dot" of two playtests. The test
+    // above proves switching tools is inert; this is the case it could not
+    // see. Closing the rail used to leave the engine armed with the last
+    // tool, so after Lights every click on the map placed a light — a small
+    // amber square — with nothing on screen saying a tool was armed.
+    await registerAndCreateWorld(page, `E2E Rail Closed ${uniqueSuffix()}`);
+    await createScene(page, "Rail Closed Scene");
+    await waitForEngineReady(page);
+
+    const lights = async () =>
+      page.evaluate(() => window.__worldProbe?.state()?.counts.lights ?? null);
+    const before = await lights();
+    expect(
+      before,
+      "the world probe should be available in a dev build",
+    ).not.toBeNull();
+
+    // The control: with Lights armed, a click on the map does place a light.
+    // Without it, "nothing was placed" below could just mean the click never
+    // reached the engine.
+    const lightsTool = page.getByTestId("gm-tool-lights");
+    await lightsTool.click();
+    await expect(lightsTool).toHaveAttribute("aria-expanded", "true");
+    await clickCanvasAt(page, 120, 80);
+    await expect.poll(lights, { timeout: 15_000 }).toBe(before! + 1);
+
+    // Close the rail by clicking the open tool again.
+    await lightsTool.click();
+    await expect(lightsTool).toHaveAttribute("aria-expanded", "false");
+
+    await clickCanvasAt(page, -160, -40);
+    await clickCanvasAt(page, 60, -120);
+    // Long enough for a would-be create to make its round trip — asserting
+    // that something never happened needs a moment for it not to.
+    await page.waitForTimeout(2_000);
+    expect(await lights(), "a closed rail must place nothing").toBe(
+      before! + 1,
+    );
+  });
+});
+
+test.describe("Dragging the map (playtest 2026-09-10 P3)", () => {
+  test("a middle-drag and a right-drag both pan; a still right-click does not", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+
+    // The arrow keys stopped panning on 2026-08-26 ("panning is the mouse's
+    // job") and the mouse was never given the job; the camera's own tests
+    // called `pan()` directly, so they passed with no way to pan at all. This
+    // drives a real pointer and asks the engine where the camera went.
+    await registerAndCreateWorld(page, `E2E Pan ${uniqueSuffix()}`);
+    await createScene(page, "Pan Scene");
+    await waitForEngineReady(page);
+
+    const camera = async () =>
+      page.evaluate(
+        () =>
+          (
+            window as unknown as {
+              __engineProbe?: {
+                camera: () => { x: number; y: number; scale: number } | null;
+              };
+            }
+          ).__engineProbe?.camera() ?? null,
+      );
+
+    const start = await camera();
+    expect(
+      start,
+      "the engine probe should be available in a dev build",
+    ).not.toBeNull();
+
+    const box = await page.locator("canvas").first().boundingBox();
+    expect(box).not.toBeNull();
+    const cx = box!.x + box!.width / 2;
+    const cy = box!.y + box!.height / 2;
+
+    const drag = async (button: "middle" | "right", dx: number, dy: number) => {
+      await page.mouse.move(cx, cy);
+      await page.mouse.down({ button });
+      await page.mouse.move(cx + dx, cy + dy, { steps: 12 });
+      await page.mouse.up({ button });
+    };
+
+    // Grab-the-map: dragging right moves the camera left, by the drag times
+    // the zoom (one screen pixel is `scale` world units).
+    await drag("middle", 200, 0);
+    await expect
+      .poll(async () => (await camera())!.x, { timeout: 10_000 })
+      .toBeLessThan(start!.x - 150 * start!.scale);
+
+    // Dragging down moves the camera up, world y growing upward.
+    const afterMiddle = (await camera())!;
+    await drag("right", 0, 150);
+    await expect
+      .poll(async () => (await camera())!.y, { timeout: 10_000 })
+      .toBeGreaterThan(afterMiddle.y + 100 * afterMiddle.scale);
+
+    // A right-click that does not travel is a click, not a pan.
+    const afterRight = (await camera())!;
+    await page.mouse.click(cx, cy, { button: "right" });
+    await page.waitForTimeout(500);
+    const afterClick = (await camera())!;
+    expect(
+      Math.abs(afterClick.x - afterRight.x) +
+        Math.abs(afterClick.y - afterRight.y),
+      "a still right-click must not move the camera",
+    ).toBeLessThan(1);
+  });
+});
+
+test.describe("Placing a character from the actors pane (playtest 2026-09-10 P1)", () => {
+  /** A 1x1 PNG — the smallest image the upload will decode. */
+  const TINY_PNG = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+    "base64",
+  );
+
+  async function csrfHeader(page: Page): Promise<Record<string, string>> {
+    const token = (await page.context().cookies()).find(
+      (cookie) => cookie.name === "csrf_token",
+    )?.value;
+    return token ? { "x-csrf-token": token } : {};
+  }
+
+  async function gql<T>(
+    page: Page,
+    query: string,
+    variables: Record<string, unknown>,
+  ): Promise<T> {
+    const response = await page.request.post("/api/graphql", {
+      headers: {
+        "Content-Type": "application/json",
+        ...(await csrfHeader(page)),
+      },
+      data: { query, variables },
+    });
+    return (await response.json()) as T;
+  }
+
+  test("Place creates a token, and the token shows the character's own art", async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    // Two defects, one symptom. Place emitted a drop that nothing listened
+    // for, so no token was ever created (spec 031 T032's actor half, ticked
+    // without being wired). And a token that was created drew a flat colour
+    // square, because nothing connected the character's token image to what
+    // the engine draws.
+    await registerAndCreateWorld(page, `E2E Place ${uniqueSuffix()}`);
+    await createScene(page, "Place Scene");
+    await waitForEngineReady(page);
+    const worldId = /\/world\/([^/]+)/.exec(new URL(page.url()).pathname)![1];
+
+    const created = await gql<{ data: { createActor: { id: string } } }>(
+      page,
+      `mutation ($input: CreateActorInput!) { createActor(input: $input) { id } }`,
+      {
+        input: {
+          worldId,
+          label: `Placed Hero ${uniqueSuffix()}`,
+          isNpc: false,
+          gameSystemId: "genie",
+        },
+      },
+    );
+    const actorId = created.data.createActor.id;
+
+    // Its token art, through the same multipart upload the sheet uses.
+    const upload = await page.request.post("/api/graphql", {
+      headers: await csrfHeader(page),
+      multipart: {
+        operations: JSON.stringify({
+          query: `mutation ($actorId: UUID!, $role: String!, $file: Upload!) {
+            uploadActorImage(actorId: $actorId, role: $role, file: $file) { assetId }
+          }`,
+          variables: { actorId, role: "token", file: null },
+        }),
+        map: JSON.stringify({ "0": ["variables.file"] }),
+        "0": { name: "token.png", mimeType: "image/png", buffer: TINY_PNG },
+      },
+    });
+    const uploaded = (await upload.json()) as {
+      data?: { uploadActorImage: { assetId: string } };
+      errors?: { message: string }[];
+    };
+    expect(uploaded.errors, "the token art should upload").toBeUndefined();
+
+    const tokenCount = async () =>
+      page.evaluate(() => window.__worldProbe?.state()?.counts.tokens ?? null);
+    const before = await tokenCount();
+    expect(
+      before,
+      "the world probe should be available in a dev build",
+    ).not.toBeNull();
+
+    // Place, then drop it on the map.
+    await openDockTab(page, "actors");
+    await page.getByTestId(`actor-place-${actorId}`).click();
+    await clickCanvasAt(page, 0, 0);
+    await expect
+      .poll(tokenCount, {
+        timeout: 15_000,
+        message: "Place then a click must create a token",
+      })
+      .toBe(before! + 1);
+
+    // The token answers with the character's art, in a form the engine can
+    // load: `.webp`, because Bevy picks an image loader by extension.
+    const scenes = await gql<{
+      data: { scenes: { sceneId: string; name: string }[] };
+    }>(
+      page,
+      `query ($worldId: UUID!) { scenes(worldId: $worldId) { sceneId name } }`,
+      {
+        worldId,
+      },
+    );
+    const sceneId = scenes.data.scenes.find(
+      (scene) => scene.name === "Place Scene",
+    )!.sceneId;
+    const tokens = await gql<{
+      data: { tokens: { actorId: string | null; photoUrl: string | null }[] };
+    }>(
+      page,
+      `query ($sceneId: UUID!) { tokens(sceneId: $sceneId) { actorId photoUrl } }`,
+      {
+        sceneId,
+      },
+    );
+    const placed = tokens.data.tokens.find(
+      (token) => token.actorId === actorId,
+    );
+    expect(placed, "the placed token belongs to the character").toBeTruthy();
+    expect(placed!.photoUrl).toBe(
+      `/api/actor-assets/${uploaded.data!.uploadActorImage.assetId}.webp`,
+    );
+
+    // And that URL serves the image — while Bevy's `.meta` probe beside it is
+    // a 404, which is what lets the engine fall back to default settings.
+    const art = await page.request.get(placed!.photoUrl!);
+    expect(art.status()).toBe(200);
+    expect(art.headers()["content-type"]).toContain("image/webp");
+    const meta = await page.request.get(`${placed!.photoUrl!}.meta`);
+    expect(meta.status()).toBe(404);
+  });
 });
 
 test.describe("Placing a token from the actors pane (spec 031 US1)", () => {
