@@ -70,7 +70,7 @@ export interface Table {
 type Counts = { tokens: number; walls: number; lights: number; shapes: number };
 
 /** A GraphQL call that fails loudly, naming the operation that was refused. */
-async function must<T>(
+export async function must<T>(
   page: Page,
   query: string,
   variables: Record<string, unknown>,
@@ -182,6 +182,27 @@ export async function placeCharacter(
     tokenType?: "character" | "npc";
   },
 ): Promise<string> {
+  return (await placeCast(table, options)).tokenId;
+}
+
+/**
+ * The same, returning the actor as well as the token.
+ *
+ * Anything about a character rather than a piece — hit points, abilities, a
+ * game system's data — hangs off the actor, so a scenario that touches those
+ * needs both ids. `placeCharacter` is this with the actor dropped.
+ */
+export async function placeCast(
+  table: Table,
+  options: {
+    label: string;
+    at: Point;
+    seat?: Seat;
+    tokenType?: "character" | "npc";
+    /** Sizes the piece: 2 is an ogre, filling four squares of the grid. */
+    scale?: number;
+  },
+): Promise<{ actorId: string; tokenId: string }> {
   const { createActor } = await must<{ createActor: { id: string } }>(
     table.gm,
     `mutation ($input: CreateActorInput!) { createActor(input: $input) { id } }`,
@@ -206,6 +227,7 @@ export async function placeCharacter(
         x: options.at.x,
         y: options.at.y,
         tokenType: options.tokenType ?? (options.seat ? "character" : "npc"),
+        ...(options.scale === undefined ? {} : { scale: options.scale }),
       },
     },
   );
@@ -221,7 +243,7 @@ export async function placeCharacter(
       },
     );
   }
-  return createToken.tokenId;
+  return { actorId: createActor.id, tokenId: createToken.tokenId };
 }
 
 export async function addWall(
