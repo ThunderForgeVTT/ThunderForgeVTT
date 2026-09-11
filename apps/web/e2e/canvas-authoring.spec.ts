@@ -839,7 +839,7 @@ test.describe("Hand-drawn shape authoring (US2)", () => {
 
     // Text: the one sub-tool with a real, already-working UI path —
     // ShapeTool.tsx's own click-to-place popover, not engine tool state.
-    await page.getByRole("button", { name: "Text" }).click();
+    await page.getByRole("button", { name: "Text", exact: true }).click();
     const box = await canvasBox(page);
     await page.mouse.click(
       box.x + box.width / 2 + 100,
@@ -1041,6 +1041,92 @@ test.describe("Switching tools never authors (spec 031 FR-040, SC-008)", () => {
     expect(await lights(), "a closed rail must place nothing").toBe(
       before! + 1,
     );
+  });
+});
+
+test.describe("The Shapes panel's own buttons (playtest 2026-09-10 P10)", () => {
+  test("clicking a shape button and dragging draws it; text lands where it is clicked; a swatch recolours", async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    // The buttons used to change only React state: the engine's shape kind
+    // was reachable from the number keys alone, and the test above presses
+    // 1–4, which is why it passed while clicking "Rectangle" drew nothing.
+    // Nothing here presses a number key.
+    await registerAndCreateWorld(page, `E2E Shape Buttons ${uniqueSuffix()}`);
+    await createScene(page, "Shape Buttons Scene");
+    await waitForEngineReady(page, "shapes");
+    await expect(page.getByTestId("shape-tool")).toBeVisible();
+
+    const shapeCount = async () =>
+      page.evaluate(() => window.__worldProbe?.state()?.counts.shapes ?? null);
+    const before = await shapeCount();
+    expect(
+      before,
+      "the world probe should be available in a dev build",
+    ).not.toBeNull();
+
+    const rectangle = page.getByRole("button", { name: "Rectangle" });
+    await rectangle.click();
+    await expect(rectangle).toHaveAttribute("aria-pressed", "true");
+    await dragCanvas(page, { dx: -60, dy: -60 }, { dx: 60, dy: 60 });
+    await expect
+      .poll(shapeCount, {
+        timeout: 15_000,
+        message: "a drag after clicking Rectangle must draw one",
+      })
+      .toBe(before! + 1);
+
+    const ellipse = page.getByRole("button", { name: "Ellipse" });
+    await ellipse.click();
+    await dragCanvas(page, { dx: 140, dy: -60 }, { dx: 240, dy: 0 });
+    await expect.poll(shapeCount, { timeout: 15_000 }).toBe(before! + 2);
+
+    // Text is placed at the map point under the click — the engine's world is
+    // centred on the camera and grows upward — not at screen pixels.
+    await page.getByRole("button", { name: "Text", exact: true }).click();
+    const camera = await page.evaluate(
+      () =>
+        (
+          window as unknown as {
+            __engineProbe?: {
+              camera: () => { x: number; y: number; scale: number } | null;
+            };
+          }
+        ).__engineProbe?.camera() ?? null,
+    );
+    expect(camera, "the engine probe should be available").not.toBeNull();
+    const box = await canvasBox(page);
+    await page.mouse.click(
+      box.x + box.width / 2 + 100,
+      box.y + box.height / 2 + 100,
+    );
+    const popover = page.getByTestId("shape-text-popover");
+    await expect(popover).toBeVisible();
+    const expected = {
+      x: Math.round(camera!.x + 100 * camera!.scale),
+      y: Math.round(camera!.y - 100 * camera!.scale),
+    };
+    await expect(popover).toContainText(
+      `Placing text at (${expected.x}, ${expected.y})`,
+    );
+    await page.getByLabel("Text").fill("Trap!");
+    await page.getByRole("button", { name: "Add text" }).click();
+    await expect.poll(shapeCount, { timeout: 15_000 }).toBe(before! + 3);
+
+    // Disarm (clicking the pressed button again), select the rectangle, and
+    // recolour it: the swatch writes the index the engine actually reads.
+    await page.getByRole("button", { name: "Text", exact: true }).click();
+    await clickCanvasAt(page, 0, 0);
+    await expect(page.getByText("Selected shape")).toBeVisible({
+      timeout: 10_000,
+    });
+    const red = page
+      .getByTestId("shape-color-swatches")
+      .getByRole("button", { name: "Red" });
+    await red.click();
+    await expect(red).toHaveAttribute("aria-pressed", "true");
   });
 });
 

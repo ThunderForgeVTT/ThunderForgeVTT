@@ -5,6 +5,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { createShape } from "@/api/shapes";
+import { getCameraState, setActiveShapeTool } from "@/engine/bevy";
+import { screenToWorld } from "@/engine/bevy/screenToWorld";
 import type { WorldStore } from "@/engine/world/store";
 import type { ShapeKind, WorldShape } from "@/engine/world/types";
 
@@ -33,6 +35,21 @@ const DRAW_TOOLS: { value: DrawTool; label: string }[] = [
   { value: "ellipse", label: "Ellipse" },
   { value: "line", label: "Line/Arrow" },
   { value: "text", label: "Text" },
+];
+
+/**
+ * The colours a shape can be — the engine's own palette, in its order
+ * (`systems/shape.rs`'s `COLOR_PALETTE`). A shape's colour is stored as an
+ * index into it (`style.colorIndex`), which is what the engine reads. The old
+ * free colour picker wrote `style.color`, which nothing read, so changing a
+ * colour did nothing (playtest 2026-09-10 P10).
+ */
+const SHAPE_COLORS: { name: string; hex: string }[] = [
+  { name: "Blue", hex: "#66bff2" },
+  { name: "Red", hex: "#e64d4d" },
+  { name: "Green", hex: "#4de666" },
+  { name: "Amber", hex: "#f2b233" },
+  { name: "Violet", hex: "#cc66e6" },
 ];
 
 type TextPlacement = {
@@ -77,9 +94,24 @@ export function ShapeTool({
 
   const selectedShape = selectedShapeId ? shapes[selectedShapeId] : null;
 
-  const toggleTool = useCallback((tool: DrawTool) => {
-    setActiveTool((current) => (current === tool ? "none" : tool));
-    setTextPlacement(null);
+  const toggleTool = useCallback(
+    (tool: DrawTool) => {
+      const next = activeTool === tool ? "none" : tool;
+      setActiveTool(next);
+      setTextPlacement(null);
+      // Playtest 2026-09-10 P10: the engine decides what a drag draws, and
+      // these buttons never used to tell it — so a drag after "Rectangle"
+      // drew nothing. "text" disarms the engine: text is placed here.
+      void setActiveShapeTool(next);
+    },
+    [activeTool],
+  );
+
+  // Leaving the Shapes panel leaves nothing armed in the engine either.
+  useEffect(() => {
+    return () => {
+      void setActiveShapeTool("none");
+    };
   }, []);
 
   // Listen for a click directly on the canvas container while the text
@@ -106,12 +138,20 @@ export function ShapeTool({
       if (!onMap) {
         return;
       }
-      const rect = container.getBoundingClientRect();
-      setTextPlacement({
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top,
+      // The map point under the click, not screen pixels: the engine's world
+      // is centred on the camera and grows upward, so container-relative
+      // pixels put text away from the click and mirrored (P10).
+      const canvas =
+        target instanceof HTMLCanvasElement
+          ? target
+          : document.querySelector("canvas");
+      const box = (canvas ?? container).getBoundingClientRect();
+      const client = { x: event.clientX, y: event.clientY };
+      void getCameraState().then((camera) => {
+        if (!camera) return;
+        setTextPlacement(screenToWorld(client, box, camera));
+        setTextValue("");
       });
-      setTextValue("");
     };
 
     // Listened for on the document rather than on `container` itself,
@@ -188,13 +228,13 @@ export function ShapeTool({
   );
 
   const updateSelectedShapeColor = useCallback(
-    (color: string) => {
+    (colorIndex: number) => {
       if (!selectedShape) {
         return;
       }
 
       updateSelectedShape({
-        style: { ...(selectedShape.style ?? {}), color },
+        style: { ...(selectedShape.style ?? {}), colorIndex },
       });
     },
     [selectedShape, updateSelectedShape],
@@ -212,8 +252,9 @@ export function ShapeTool({
     worldStore.dispatch({ type: "select_shape", shapeId: null }, "ui");
   }, [selectedShape, worldStore]);
 
-  const selectedColor =
-    (selectedShape?.style?.color as string | undefined) ?? "#ffffff";
+  const rawColorIndex = selectedShape?.style?.colorIndex;
+  const selectedColorIndex =
+    typeof rawColorIndex === "number" ? rawColorIndex : null;
 
   return (
     <div className="grid gap-3" data-testid="shape-tool">
@@ -289,13 +330,29 @@ export function ShapeTool({
           </p>
 
           <div className="grid gap-1.5">
-            <Label htmlFor="shape-color">Color</Label>
-            <Input
-              id="shape-color"
-              type="color"
-              value={selectedColor}
-              onChange={(event) => updateSelectedShapeColor(event.target.value)}
-            />
+            <Label id="shape-color-label">Color</Label>
+            <div
+              className="flex gap-1.5"
+              role="group"
+              aria-labelledby="shape-color-label"
+              data-testid="shape-color-swatches"
+            >
+              {SHAPE_COLORS.map((swatch, index) => (
+                <button
+                  key={swatch.name}
+                  type="button"
+                  aria-label={swatch.name}
+                  aria-pressed={selectedColorIndex === index}
+                  onClick={() => updateSelectedShapeColor(index)}
+                  className={
+                    selectedColorIndex === index
+                      ? "size-7 rounded-full border-2 border-foreground"
+                      : "size-7 rounded-full border border-border"
+                  }
+                  style={{ backgroundColor: swatch.hex }}
+                />
+              ))}
+            </div>
           </div>
 
           <div className="flex items-center gap-2">

@@ -839,6 +839,51 @@ export async function setAuthoringMode(toolId: string): Promise<boolean> {
 }
 
 /**
+ * Tell the engine which shape a drag in the Shapes tool draws — `"freehand"`,
+ * `"rect"`, `"ellipse"`, `"line"`, or `"none"` to select and move instead.
+ *
+ * Playtest 2026-09-10 P10: the Shapes panel's buttons only ever changed React
+ * state, and the engine's shape kind was reachable from the number keys alone,
+ * so a drag after clicking "Rectangle" drew nothing. `"text"` is `"none"` to
+ * the engine: text is placed by `ShapeTool` itself, in the DOM.
+ *
+ * Returns whether the engine recognised the kind. Never throws, like
+ * `setAuthoringMode`.
+ */
+export async function setActiveShapeTool(kind: string): Promise<boolean> {
+  try {
+    const module = await getWasmModule();
+    const set = (
+      module as { set_active_shape_tool?: (kind: string) => boolean }
+    ).set_active_shape_tool;
+    if (!set) return false;
+    return set(kind);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Where the engine's camera is, in world units, or `null` if it cannot say —
+ * for turning a click on the page into a point on the map
+ * (`./screenToWorld`). Read-only.
+ */
+export async function getCameraState(): Promise<{
+  x: number;
+  y: number;
+  scale: number;
+} | null> {
+  try {
+    const module = await getWasmModule();
+    const read = (module as { camera_state?: () => string }).camera_state;
+    if (!read) return null;
+    return JSON.parse(read()) as { x: number; y: number; scale: number };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Tell the engine which tools this viewer may use.
  *
  * Not a hint. The engine refuses a mode request outside this set and disarms
