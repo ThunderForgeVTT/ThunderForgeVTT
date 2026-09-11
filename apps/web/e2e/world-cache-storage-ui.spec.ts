@@ -115,19 +115,17 @@ test.describe("Client world cache — seeing and reclaiming storage (US5)", () =
     // in a file that polls everywhere else, and it failed the full run of
     // 2026-09-11 by reading that loading state — 12.5s, against the 16.8s the
     // same test took when it passed.
-    let total: string | null = null;
     await expect
       .poll(
-        async () => {
-          total = await page.getByTestId("storage-total").textContent();
-          return total ?? "";
-        },
+        async () =>
+          (await page.getByTestId("storage-total").textContent()) ?? "",
         {
           timeout: 30_000,
           message: "the panel should report a non-zero total",
         },
       )
       .not.toMatch(/^0 B/);
+    const total = await page.getByTestId("storage-total").textContent();
     console.log(`[storage] total reported: ${total?.trim()}`);
 
     const before = await panelRows(page);
