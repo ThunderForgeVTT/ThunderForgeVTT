@@ -31,18 +31,14 @@ import { importMapBackground, sceneIds } from "./fixtures/world-cache";
  * not exercising this path at all, whatever else it contains — which is
  * exactly how the token sweep managed to look flat.
  *
- * # The finding: this path is currently unreachable
+ * # The shadow pass, switched on (playtest 2026-09-10 P9)
  *
- * With a real map, 32 shadow-casting lights and 1,600 vision-blocking walls,
- * `shadowQuads` is still zero at every level. The reason is in `darkness.rs`'s
- * own header — the layer is inert while ambient light is `Bright` — and scene
- * ambient is only settable through the engine's `set_ambient_light` command,
- * which nothing in the web application sends. Neither is
- * `set_lighting_overlay`. The lighting subsystem is built, has its own shader,
- * and cannot currently be switched on by the product.
- *
- * So this file measures lights and walls **as geometry**, and pins that zero
- * so the day it changes is the day this test asks to be rewritten.
+ * This file used to pin `shadowQuads` at zero: the darkness layer is inert
+ * while a scene is bright, and nothing in the product could make one
+ * anything else. A scene's light is now the Game Master's to set
+ * (`updateSceneAmbientLight`), so the sweep dims the scene the way they do
+ * and measures the pass it was written for — per-light shadow maps, with
+ * `shadowQuads` counting the (light, wall) pairs that cast a shadow in view.
  *
  * # Why the scene needs a real imported map
  *
@@ -223,7 +219,7 @@ async function populate(
   );
 }
 
-test("engine sweep: lights and walls as geometry, with the shadow pass proven inert", async ({
+test("engine sweep: shadow-casting lights against walls, in a dim scene", async ({
   page,
 }) => {
   // A measurement run. Creating thousands of walls through the real mutation
@@ -242,6 +238,30 @@ test("engine sweep: lights and walls as geometry, with the shadow pass proven in
   await page.goto(`/world/${worldId}/play`);
   await waitForEngineReady(page);
   await importMapBackground(page, CHAMBER_MAP);
+
+  // Dim, as a Game Master sets it from the Lights panel: the darkness layer
+  // and its shadows exist only in a scene that is not in daylight.
+  await page.evaluate(async (sceneId) => {
+    const csrf = document.cookie
+      .split(";")
+      .map((part) => part.trim())
+      .find((part) => part.startsWith("csrf_token="))
+      ?.slice("csrf_token=".length);
+    const res = await fetch("/api/graphql", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        ...(csrf ? { "x-csrf-token": csrf } : {}),
+      },
+      body: JSON.stringify({
+        query: `mutation ($sceneId: UUID!) { updateSceneAmbientLight(sceneId: $sceneId, ambientLight: "dim") { sceneId } }`,
+        variables: { sceneId },
+      }),
+    });
+    const body = await res.json();
+    if (body.errors) throw new Error(JSON.stringify(body.errors));
+  }, sceneId);
 
   const samples: Sample[] = [];
   let lightsMade = 0;
@@ -284,27 +304,14 @@ test("engine sweep: lights and walls as geometry, with the shadow pass proven in
     "every level must yield a real frame-rate reading from the engine",
   ).toEqual([]);
 
-  // What this sweep actually discovered, pinned so it cannot be forgotten.
-  //
-  // Every level reports zero shadow quads, on a real imported map, with 32
-  // shadow-casting lights and 1,600 vision-blocking walls. `darkness.rs`
-  // says why in its own header: "the whole layer is inert while ambient
-  // light is Bright". Scene ambient is set by the engine's
-  // `set_ambient_light` external command — and **nothing in the web
-  // application ever sends it**, nor `set_lighting_overlay`. So the darkness
-  // sheet, the light pools cut out of it, and the per-(light, wall) shadow
-  // quads are all unreachable from the shipped product, and the numbers
-  // above measure lights and walls purely as geometry.
-  //
-  // Asserted rather than commented, so this test fails the day someone wires
-  // ambient up — which is exactly when it should be extended to measure the
-  // pass it was originally written for.
+  // The pass being measured is the pass that ran: every level casts shadows.
+  // A level reporting none measured sprites and geometry again, which is the
+  // mistake this file was written to stop making.
   expect(
-    samples.every((sample) => sample.shadowQuads === 0),
-    "the shadow pass is currently unreachable from the app (scene ambient is " +
-      "never set, so darkness.rs stays inert). If this fails, lighting has been " +
-      "wired up and this sweep should now measure it.",
-  ).toBe(true);
+    samples.filter((sample) => sample.shadowQuads <= 0),
+    "every level of a dim scene with shadow-casting lights and walls must " +
+      "cast shadows — otherwise the sweep is not measuring the shadow pass",
+  ).toEqual([]);
 
   // A lit room with a few lights and a couple of hundred walls is an
   // ordinary dungeon map, not a stress case.
