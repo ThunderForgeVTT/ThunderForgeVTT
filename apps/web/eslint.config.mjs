@@ -9,6 +9,12 @@ export default tseslint.config(
   {
     ignores: [
       "dist/**",
+      // What `pnpm playtest` leaves behind. The HTML report ships Playwright's
+      // own bundled viewer, and linting that reported ~3,900 errors about
+      // minified code nobody here wrote — which is a lint run saying nothing
+      // about this repo at all.
+      "playtest-report/**",
+      "playtest-results/**",
       "postcss.config.js",
       "scripts/**",
       "tailwind.config.js",
