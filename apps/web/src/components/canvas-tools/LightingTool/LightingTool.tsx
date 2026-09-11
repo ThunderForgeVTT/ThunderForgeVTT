@@ -12,6 +12,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { WorldStore } from "@/engine/world/store";
+import {
+  AMBIENT_LEVELS,
+  type AmbientLevel,
+} from "@/engine/world/sync/sceneLighting";
 import type { WorldLight, WorldToken } from "@/engine/world/types";
 
 export interface LightingToolProps {
@@ -19,10 +23,20 @@ export interface LightingToolProps {
   lights: Record<string, WorldLight>;
   selectedLightId: string | null;
   tokens: Record<string, WorldToken>;
+  /** Playtest 2026-09-10 P9: the scene's baseline light. */
+  ambientLight?: AmbientLevel;
+  /** Set the scene's light; the control is hidden without it. */
+  onAmbientLightChange?: (level: AmbientLevel) => void;
 }
 
 const NO_TOKEN_VALUE = "__none__";
 const DEFAULT_LIGHT_COLOR = "#ffcc66";
+
+const AMBIENT_LABELS: Record<AmbientLevel, string> = {
+  bright: "Bright",
+  dim: "Dim",
+  dark: "Dark",
+};
 
 /**
  * LightingTool: canvas toolbar button that toggles "place light" mode,
@@ -46,6 +60,8 @@ export function LightingTool({
   lights,
   selectedLightId,
   tokens,
+  ambientLight = "bright",
+  onAmbientLightChange,
 }: LightingToolProps) {
   const [placeMode, setPlaceMode] = useState(false);
 
@@ -96,6 +112,40 @@ export function LightingTool({
 
   return (
     <div className="grid gap-3" data-testid="lighting-tool">
+      {onAmbientLightChange ? (
+        <div className="grid gap-1.5">
+          <p
+            id="scene-ambient-label"
+            className="text-xs font-semibold tracking-widest text-muted-foreground uppercase"
+          >
+            Scene light
+          </p>
+          <div
+            role="group"
+            aria-labelledby="scene-ambient-label"
+            className="flex gap-1"
+            data-testid="scene-ambient"
+          >
+            {AMBIENT_LEVELS.map((level) => (
+              <Button
+                key={level}
+                type="button"
+                size="sm"
+                variant={ambientLight === level ? "primary" : "secondary"}
+                aria-pressed={ambientLight === level}
+                onClick={() => onAmbientLightChange(level)}
+                data-testid={`scene-ambient-${level}`}
+              >
+                {AMBIENT_LABELS[level]}
+              </Button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Walls cast shadows in dim and dark scenes.
+          </p>
+        </div>
+      ) : null}
+
       <Button
         type="button"
         variant={placeMode ? "primary" : "secondary"}

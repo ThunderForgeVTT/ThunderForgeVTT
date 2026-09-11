@@ -339,6 +339,77 @@ async function dragCanvas(
  * the canvas: the claim is about what was *stored*, and a pixel-level check on
  * a WebGL canvas would be measuring the renderer instead.
  */
+/**
+ * Playtest 2026-09-10 P9: imported walls are on the map.
+ *
+ * A UVTT file counts from the image's top-left corner with y down; the engine
+ * draws the background centred on the origin with y up. The importer only
+ * scaled, so every imported wall, door and light sat half a map away from the
+ * art, mirrored — and shaded the wrong part of it. On the map means inside
+ * the background's rectangle, and on both sides of its middle.
+ */
+async function expectImportedWallsOnTheMap(page: Page): Promise<void> {
+  const worldId = /\/world\/([^/]+)\//.exec(new URL(page.url()).pathname)?.[1];
+  if (!worldId) throw new Error(`No world id in ${page.url()}`);
+
+  const { walls, width, height } = await page.evaluate(async (worldId) => {
+    const engine = (await import(
+      /* @vite-ignore */ "/src/engine/bevy/index.ts"
+    )) as typeof import("../src/engine/bevy/index");
+    const state = engine.getBoundWorldStore()?.getState();
+    const token = document.cookie
+      .split("; ")
+      .find((c) => c.startsWith("csrf_token="))
+      ?.split("=")[1];
+    // The scene the map was imported into: the one with a background, as
+    // `expectSceneGridMatchesMap` finds it.
+    const response = await fetch("/api/graphql", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { "x-csrf-token": token } : {}),
+      },
+      body: JSON.stringify({
+        query: `query S($worldId: UUID!) { scenes(worldId: $worldId) { width height backgroundAssetId } }`,
+        variables: { worldId },
+      }),
+    });
+    const body = await response.json();
+    const scenes = (body?.data?.scenes ?? []) as {
+      width?: number;
+      height?: number;
+      backgroundAssetId?: string | null;
+    }[];
+    const imported = scenes.find((s) => s.backgroundAssetId);
+    return {
+      walls: Object.values(state?.walls ?? {}).map((w) => [
+        w.x1,
+        w.y1,
+        w.x2,
+        w.y2,
+      ]),
+      width: imported?.width ?? 0,
+      height: imported?.height ?? 0,
+    };
+  }, worldId);
+
+  expect(walls.length, "the import created walls").toBeGreaterThan(0);
+  expect(width).toBeGreaterThan(0);
+  const xs = walls.flatMap(([x1, , x2]) => [x1, x2]);
+  const ys = walls.flatMap(([, y1, , y2]) => [y1, y2]);
+  for (const x of xs) expect(Math.abs(x)).toBeLessThanOrEqual(width / 2 + 1);
+  for (const y of ys) expect(Math.abs(y)).toBeLessThanOrEqual(height / 2 + 1);
+  expect(
+    Math.min(...xs) < 0 && Math.max(...xs) > 0,
+    "walls on both sides of the map's middle, left to right",
+  ).toBe(true);
+  expect(
+    Math.min(...ys) < 0 && Math.max(...ys) > 0,
+    "walls on both sides of the map's middle, top to bottom",
+  ).toBe(true);
+}
+
 async function expectSceneGridMatchesMap(
   page: Page,
   fixturePath: string,
@@ -474,6 +545,7 @@ test.describe("Native canvas authoring: map import and scene switching", () => {
     // resized. What has to hold is that the stored picture and the stored grid
     // describe the same map.
     await expectSceneGridMatchesMap(page, DEMO_MAP);
+    await expectImportedWallsOnTheMap(page);
 
     // --- Scene Two: import the simpler chamber map ---
     await createScene(page, "Scene Two");

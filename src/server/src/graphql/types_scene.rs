@@ -67,6 +67,9 @@ pub struct GraphQLScene {
     /// two numbers that differ — and computed here rather than in the client
     /// so the rule has one home. See `map_import::alignment`.
     pub background_grid_mismatch: Option<String>,
+    /// Playtest 2026-09-10 P9: `bright`, `dim` or `dark` — the light every
+    /// client showing this scene hands its engine.
+    pub ambient_light: String,
 }
 
 impl From<crate::models::Scene> for GraphQLScene {
@@ -125,6 +128,7 @@ impl From<crate::models::Scene> for GraphQLScene {
                 .preview_asset_id
                 .map(|id| format!("/api/scene-assets/{id}/thumb")),
             background_grid_mismatch,
+            ambient_light: scene.ambient_light,
         }
     }
 }

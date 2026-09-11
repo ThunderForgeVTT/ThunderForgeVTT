@@ -57,6 +57,86 @@ pub async fn update_scene_hidden_impl(
     Ok(GraphQLScene::from(updated_scene))
 }
 
+/// The levels a scene's ambient light may take — the column's own check
+/// constraint, and the three the engine's darkness layer draws.
+pub const AMBIENT_LEVELS: [&str; 3] = ["bright", "dim", "dark"];
+
+/// Testable core of `SceneMutation::update_scene_ambient_light` (playtest
+/// 2026-09-10 P9): a scene's baseline light.
+///
+/// The same authority as hiding a scene — any Game Master of its world. And
+/// announced on the world's event channel as well as returned, because every
+/// client showing the scene draws its darkness from it, not only the one that
+/// changed it. The update and the announcement are one transaction: a light
+/// that changed for the Game Master and for nobody else is the bug this
+/// exists to fix.
+pub async fn update_scene_ambient_light_impl(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    is_admin: bool,
+    scene_id: uuid::Uuid,
+    ambient_light: String,
+) -> GraphQLResult<GraphQLScene> {
+    use crate::schema::scenes;
+    use diesel::prelude::*;
+
+    let level = ambient_light.trim().to_ascii_lowercase();
+    if !AMBIENT_LEVELS.contains(&level.as_str()) {
+        return Err(Error::new("A scene's light is bright, dim or dark"));
+    }
+
+    let mut lookup_conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let world_id = tokio::task::spawn_blocking(move || {
+        scenes::table
+            .filter(scenes::scene_id.eq(scene_id))
+            .select(scenes::world_id)
+            .first::<uuid::Uuid>(&mut lookup_conn)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Scene not found"))?;
+
+    if !crate::auth::world_membership::is_dm_of_world(state, user_id, is_admin, world_id).await? {
+        return Err(Error::new(
+            "Only the DM (Owner or GM) may change a scene's light",
+        ));
+    }
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let updated_scene = tokio::task::spawn_blocking(move || {
+        conn.transaction::<_, diesel::result::Error, _>(|conn| {
+            let scene = diesel::update(scenes::table.filter(scenes::scene_id.eq(scene_id)))
+                .set(scenes::ambient_light.eq(&level))
+                .returning(crate::models::Scene::as_returning())
+                .get_result(conn)?;
+            crate::world_events::record_world_event(
+                conn,
+                world_id,
+                crate::world_events::EVENT_CODE_SCENE_LIGHTING_CHANGED,
+                Some(serde_json::json!({
+                    "action": "changed",
+                    "sceneId": scene_id.to_string(),
+                    "ambientLight": level,
+                })),
+                user_id,
+            )
+            .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+            Ok(scene)
+        })
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to change the scene's light"))?;
+
+    Ok(GraphQLScene::from(updated_scene))
+}
+
 /// Testable core of `SceneMutation::launch_scene` (spec 022,
 /// FR-002a/FR-002b/FR-002c, ADR-046). Sets the world's server-authoritative
 /// active scene and broadcasts the change over the existing `world_events`
@@ -204,6 +284,9 @@ impl SceneMutation {
                 // GM must explicitly un-hide via `updateSceneHidden`.
                 hidden: true,
                 preview_asset_id: None,
+                // The column's default: a new scene is lit as every scene
+                // always has been, until a Game Master says otherwise.
+                ambient_light: "bright".to_string(),
             };
 
             let values = (
@@ -315,6 +398,26 @@ impl SceneMutation {
             auth_user.is_admin,
             scene_id,
             hidden,
+        )
+        .await
+    }
+
+    /// Playtest 2026-09-10 P9: set a scene bright, dim or dark. See
+    /// `update_scene_ambient_light_impl`.
+    async fn update_scene_ambient_light(
+        &self,
+        ctx: &Context<'_>,
+        scene_id: uuid::Uuid,
+        ambient_light: String,
+    ) -> GraphQLResult<GraphQLScene> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        update_scene_ambient_light_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            scene_id,
+            ambient_light,
         )
         .await
     }

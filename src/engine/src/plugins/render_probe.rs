@@ -265,8 +265,10 @@ pub struct EngineStats {
     pub lights: usize,
     pub walls: usize,
     pub tokens: usize,
-    /// Meshes spawned for wall shadows — the term that grows as
-    /// lights x walls, and the first thing to check when a scene gets heavy.
+    /// Wall-shadow quads the lighting layer built — one per (light,
+    /// vision-blocking wall) pair that casts one. The term that grows as
+    /// lights x walls, the first thing to check when a scene gets heavy, and
+    /// zero whenever the scene is in daylight (`plugins/darkness.rs`).
     pub shadow_quads: usize,
     /// Update ticks this engine has run since `start()`, monotonic.
     ///
@@ -289,7 +291,7 @@ fn publish_engine_stats(
     tokens: Query<(), With<crate::TokenIdentity>>,
     light_set: Option<Res<crate::resources::LightSet>>,
     wall_set: Option<Res<crate::resources::WallSet>>,
-    meshes: Query<(), With<Mesh2d>>,
+    shadows: Option<Res<crate::plugins::darkness::ShadowStats>>,
 ) {
     if let Some(frame_time) = diagnostics
         .get(&FrameTimeDiagnosticsPlugin::FRAME_TIME)
@@ -313,8 +315,9 @@ fn publish_engine_stats(
     stats.tokens = tokens.iter().count();
     stats.lights = light_set.map_or(0, |set| set.lights().len());
     stats.walls = wall_set.map_or(0, |set| set.walls().len());
-    // Every Mesh2d that is not the single darkness quad is a shadow.
-    stats.shadow_quads = meshes.iter().count().saturating_sub(1);
+    // Counted where the quads are built — see `ShadowStats` for why it is no
+    // longer inferred from how many meshes exist.
+    stats.shadow_quads = shadows.map_or(0, |s| s.quads);
 
     // Mirror out to the wasm-visible slot. `App::run()` owns the `World` and
     // never returns on wasm, so a static is the only way out.

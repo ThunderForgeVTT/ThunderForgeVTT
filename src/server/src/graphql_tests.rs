@@ -702,6 +702,62 @@ async fn update_scene_hidden_requires_dm_role() {
     assert!(!updated.hidden, "hidden should now be false");
 }
 
+/// Playtest 2026-09-10 P9: only a Game Master sets a scene's light, only to a
+/// level the engine draws, and the change is announced to the whole world —
+/// every client showing the scene draws its darkness from it.
+#[tokio::test]
+async fn update_scene_ambient_light_requires_dm_role_and_is_announced() {
+    use super::update_scene_ambient_light_impl;
+    use crate::schema::world_events;
+    use crate::test_support::*;
+    use diesel::prelude::*;
+
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let owner_id = insert_test_user(&mut conn);
+    let world_id = insert_test_world(&mut conn, owner_id);
+    let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+    let player_id = insert_test_user(&mut conn);
+    insert_test_world_member(&mut conn, world_id, player_id, "Player");
+    drop(conn);
+
+    assert!(
+        update_scene_ambient_light_impl(&state, player_id, false, scene_id, "dark".into())
+            .await
+            .is_err(),
+        "a Player must not be able to change a scene's light"
+    );
+    assert!(
+        update_scene_ambient_light_impl(&state, owner_id, false, scene_id, "twilight".into())
+            .await
+            .is_err(),
+        "a scene's light is bright, dim or dark"
+    );
+
+    let updated = update_scene_ambient_light_impl(&state, owner_id, false, scene_id, "Dim".into())
+        .await
+        .expect("the DM (Owner) may change the scene's light");
+    assert_eq!(updated.ambient_light, "dim");
+
+    let mut conn = state.db_pool.get().unwrap();
+    let payloads: Vec<Option<serde_json::Value>> = world_events::table
+        .filter(world_events::world_id.eq(world_id))
+        .filter(world_events::event_code.eq(crate::world_events::EVENT_CODE_SCENE_LIGHTING_CHANGED))
+        .select(world_events::token_event)
+        .load(&mut conn)
+        .expect("world events should load");
+    assert_eq!(
+        payloads.len(),
+        1,
+        "one announcement, and none for the refused attempts"
+    );
+    let payload = payloads[0]
+        .clone()
+        .expect("the announcement carries the level");
+    assert_eq!(payload["sceneId"], scene_id.to_string());
+    assert_eq!(payload["ambientLight"], "dim");
+}
+
 #[tokio::test]
 async fn launch_scene_requires_dm_role_and_rejects_cross_world_scene() {
     use super::launch_scene_impl;

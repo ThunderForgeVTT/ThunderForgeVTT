@@ -21,7 +21,28 @@ const SCENE_FIELDS = `
   summaryRenderedHtml
   hidden
   previewUrl
+  ambientLight
 `;
+
+/**
+ * Set a scene bright, dim or dark (playtest 2026-09-10 P9). Game Masters only;
+ * the server announces the change to everyone showing the scene.
+ */
+export function updateSceneAmbientLight(
+  sceneId: string,
+  ambientLight: string,
+): Promise<SceneRecord> {
+  return postGraphQL<{ updateSceneAmbientLight: SceneRecord }>(
+    `
+      mutation UpdateSceneAmbientLight($sceneId: UUID!, $ambientLight: String!) {
+        updateSceneAmbientLight(sceneId: $sceneId, ambientLight: $ambientLight) {
+          ${SCENE_FIELDS}
+        }
+      }
+    `,
+    { sceneId, ambientLight },
+  ).then((data) => data.updateSceneAmbientLight);
+}
 
 type ScenesQuery = {
   scenes: SceneRecord[];

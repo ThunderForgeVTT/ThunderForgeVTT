@@ -9,6 +9,16 @@ pub(super) fn read_fixture(name: &str) -> Vec<u8> {
     std::fs::read(&path).unwrap_or_else(|e| panic!("failed to read fixture {path:?}: {e}"))
 }
 
+/// A placement for tests that count what an import builds rather than
+/// where it puts it.
+fn counting_only(grid_size: f64) -> ScenePlacement {
+    ScenePlacement {
+        grid_size,
+        width: 0.0,
+        height: 0.0,
+    }
+}
+
 /// Regression test: examples/maps/demo.dd2vtt's `image` field is
 /// genuinely WebP (DungeonDraft's own exporter choice), not PNG —
 /// discovered when a PNG-only magic-byte check rejected it with
@@ -57,23 +67,29 @@ fn parses_demo_fixture_with_expected_counts() {
     assert_eq!(parsed.file.portals.len(), 2, "2 doors/portals");
     assert_eq!(parsed.file.lights.len(), 12, "12 lights");
 
-    let target_grid_size = 128.0; // matches source pixels_per_grid for a 1:1 sanity check
-    let walls = walls_from_line_of_sight(&parsed.file.line_of_sight, target_grid_size);
+    // At the source's own pixels_per_grid, for a 1:1 sanity check.
+    let placement = ScenePlacement {
+        grid_size: 128.0,
+        width: parsed.file.resolution.map_size.x * 128.0,
+        height: parsed.file.resolution.map_size.y * 128.0,
+    };
+    let walls = walls_from_line_of_sight(&parsed.file.line_of_sight, &placement);
     // Sum of (points-1) per polygon for consecutive-pair walls.
     let expected_wall_count: usize = parsed.file.line_of_sight.iter().map(|p| p.len() - 1).sum();
     assert_eq!(walls.len(), expected_wall_count);
     assert_eq!(walls.len(), 31);
 
-    let doors = walls_from_portals(&parsed.file.portals, target_grid_size);
+    let doors = walls_from_portals(&parsed.file.portals, &placement);
     assert_eq!(doors.len(), 2);
     assert!(doors.iter().any(|d| d.door_state == "closed"));
 
-    let lights = lights_from_uvtt(&parsed.file.lights, target_grid_size);
+    let lights = lights_from_uvtt(&parsed.file.lights, &placement);
     assert_eq!(lights.len(), 12);
 
-    // 4.5 grid units * 128 px/grid == 576 px, sanity-checking the
-    // coordinate scale math against a known fixture value.
-    assert!((lights[0].x - 576.0).abs() < 1e-6);
+    // 4.5 grid units * 128 px/grid == 576 px from the map's left edge,
+    // sanity-checking the scale against a known fixture value — and the left
+    // edge is half the map left of the origin, where the background is drawn.
+    assert!((lights[0].x - (576.0 - placement.width / 2.0)).abs() < 1e-6);
 }
 
 #[test]
@@ -85,16 +101,16 @@ fn parses_chamber_fixture_walls_only() {
     assert_eq!(parsed.file.portals.len(), 0);
     assert_eq!(parsed.file.lights.len(), 0);
 
-    let walls = walls_from_line_of_sight(&parsed.file.line_of_sight, 128.0);
+    let walls = walls_from_line_of_sight(&parsed.file.line_of_sight, &counting_only(128.0));
     assert_eq!(
         walls.len(),
         4,
         "5-point polygon yields 4 consecutive-pair walls"
     );
 
-    let doors = walls_from_portals(&parsed.file.portals, 128.0);
+    let doors = walls_from_portals(&parsed.file.portals, &counting_only(128.0));
     assert_eq!(doors.len(), 0);
-    let lights = lights_from_uvtt(&parsed.file.lights, 128.0);
+    let lights = lights_from_uvtt(&parsed.file.lights, &counting_only(128.0));
     assert_eq!(lights.len(), 0);
 }
 
@@ -128,7 +144,7 @@ fn skips_degenerate_line_of_sight_polygons_without_crashing() {
     let parsed = parse_uvtt(json.as_bytes()).expect("should parse despite degenerate polygon");
     assert_eq!(parsed.skipped_degenerate_polygons, 1);
     assert_eq!(parsed.file.line_of_sight.len(), 1);
-    let walls = walls_from_line_of_sight(&parsed.file.line_of_sight, 100.0);
+    let walls = walls_from_line_of_sight(&parsed.file.line_of_sight, &counting_only(100.0));
     assert_eq!(walls.len(), 1);
 }
 
@@ -409,31 +425,38 @@ async fn assert_round_trip_matches_fixture(fixture_name: &str) {
     // enough to skip the GPU texture cap's resize — five of the eight
     // bundled fixtures are not, and for those this test was comparing the
     // database against coordinates for an image that was never written.
-    let stored_grid_size = {
+    //
+    // Likewise the placement: the stored background's size, which is where
+    // the engine draws it — centred on the origin (playtest 2026-09-10 P9).
+    let placement = {
         use crate::schema::scenes;
         let mut conn = state.db_pool.get().unwrap();
-        scenes::table
+        let (grid_size, width, height) = scenes::table
             .filter(scenes::scene_id.eq(scene_id))
-            .select(scenes::grid_size)
-            .first::<i32>(&mut conn)
-            .expect("scene should reload")
+            .select((scenes::grid_size, scenes::width, scenes::height))
+            .first::<(i32, i32, i32)>(&mut conn)
+            .expect("scene should reload");
+        ScenePlacement {
+            grid_size: f64::from(grid_size),
+            width: f64::from(width),
+            height: f64::from(height),
+        }
     };
-    let target_grid_size = f64::from(stored_grid_size);
 
     let mut expected_walls: Vec<WallSignature> =
-        walls_from_line_of_sight(&parsed.file.line_of_sight, target_grid_size)
+        walls_from_line_of_sight(&parsed.file.line_of_sight, &placement)
             .into_iter()
             .chain(walls_from_line_of_sight(
                 &parsed.file.objects_line_of_sight,
-                target_grid_size,
+                &placement,
             ))
-            .chain(walls_from_portals(&parsed.file.portals, target_grid_size))
+            .chain(walls_from_portals(&parsed.file.portals, &placement))
             .map(WallSignature::from)
             .collect();
     expected_walls = sorted(expected_walls);
 
     let mut expected_lights: Vec<LightSignature> =
-        lights_from_uvtt(&parsed.file.lights, target_grid_size)
+        lights_from_uvtt(&parsed.file.lights, &placement)
             .into_iter()
             .map(LightSignature::from)
             .collect();
@@ -739,17 +762,52 @@ async fn import_and_get_warnings(fixture_name: &str) -> Vec<String> {
     result.warnings
 }
 
-/// T017: `little-fish-academy.dd2vtt`'s non-default `ambient_light`
-/// must be disclosed (FR-012, FR-013).
+/// Playtest 2026-09-10 P9 (replacing T017's "ambient light is disclosed"):
+/// the file's ambient light is *applied* now, so an import sets the scene's
+/// level — replacing what the scene had, here a scene a Game Master had made
+/// dark — and there is no longer anything to warn about.
 #[tokio::test]
-async fn warnings_disclose_non_default_ambient_light() {
-    let warnings = import_and_get_warnings("little-fish-academy.dd2vtt").await;
+async fn an_import_sets_the_scenes_light_from_its_file() {
+    use crate::schema::scenes;
+    use crate::test_support::*;
+
+    dotenvy::dotenv().ok();
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let owner_id = insert_test_user(&mut conn);
+    let world_id = insert_test_world(&mut conn, owner_id);
+    let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+    diesel::update(scenes::table.filter(scenes::scene_id.eq(scene_id)))
+        .set(scenes::ambient_light.eq("dark"))
+        .execute(&mut conn)
+        .expect("darken the scene");
+    drop(conn);
+
+    let result = import_uvtt_impl(
+        &state,
+        owner_id,
+        false,
+        scene_id,
+        read_fixture("little-fish-academy.dd2vtt"),
+    )
+    .await
+    .expect("little-fish-academy should import");
     assert!(
-        warnings
+        !result
+            .warnings
             .iter()
             .any(|w| w.to_lowercase().contains("ambient")),
-        "expected an ambient_light warning, got: {warnings:?}"
+        "nothing about ambient light is left to disclose: {:?}",
+        result.warnings
     );
+
+    let mut conn = state.db_pool.get().unwrap();
+    let level: String = scenes::table
+        .filter(scenes::scene_id.eq(scene_id))
+        .select(scenes::ambient_light)
+        .first(&mut conn)
+        .expect("scene should reload");
+    assert_eq!(level, "bright", "the file is lit warm white, fff7e4");
 }
 
 /// T018: the synthetic fixture's freestanding portal and
@@ -819,31 +877,6 @@ fn freestanding_portal_warning_fires_only_when_present() {
         freestanding: true,
     }];
     assert!(freestanding_portal_warning(&one_freestanding).is_some());
-}
-
-#[test]
-fn ambient_light_warning_ignores_the_exporter_default() {
-    assert!(
-        ambient_light_warning(&UvttEnvironment {
-            baked_lighting: false,
-            ambient_light: None,
-        })
-        .is_none()
-    );
-    assert!(
-        ambient_light_warning(&UvttEnvironment {
-            baked_lighting: false,
-            ambient_light: Some("ffffffff".to_string()),
-        })
-        .is_none()
-    );
-    assert!(
-        ambient_light_warning(&UvttEnvironment {
-            baked_lighting: false,
-            ambient_light: Some("fffff7e4".to_string()),
-        })
-        .is_some()
-    );
 }
 
 #[test]

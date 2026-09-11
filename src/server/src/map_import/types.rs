@@ -69,8 +69,8 @@ pub struct UvttEnvironment {
     #[serde(default)]
     #[allow(dead_code)]
     pub baked_lighting: bool,
-    /// Read by `ambient_light_warning` (User Story 3) — present-and-set
-    /// values aren't applied to scene lighting by this import yet.
+    /// The map's ambient light as a colour; its brightness sets the scene's
+    /// ambient level (`ambient::ambient_level`).
     #[serde(default)]
     pub ambient_light: Option<String>,
 }
@@ -104,9 +104,8 @@ pub struct UvttFile {
     pub objects_line_of_sight: Vec<Vec<UvttPoint>>,
     #[serde(default)]
     pub portals: Vec<UvttPortal>,
-    /// Parsed but not yet wired to a scene-level ambient-light concept.
+    /// Its `ambient_light` sets the scene's ambient level.
     #[serde(default)]
-    #[allow(dead_code)]
     pub environment: UvttEnvironment,
     #[serde(default)]
     pub lights: Vec<UvttLight>,

@@ -670,6 +670,7 @@ diesel::table! {
         summary_rendered_html -> Nullable<Text>,
         hidden -> Bool,
         preview_asset_id -> Nullable<Uuid>,
+        ambient_light -> Text,
     }
 }
 

@@ -2,9 +2,11 @@
 //!
 //! Implements:
 //! - T023: the UVTT JSON parser (`UvttFile` + `parse_uvtt`) — `parse.rs`.
-//! - T024: grid-unit → target-scene-pixel coordinate conversion and the
-//!   wall/light "insert row" builders (`walls_from_line_of_sight`,
+//! - T024: grid-unit → scene coordinate conversion (`ScenePlacement`) and
+//!   the wall/light "insert row" builders (`walls_from_line_of_sight`,
 //!   `walls_from_portals`, `lights_from_uvtt`) — `geometry.rs`.
+//! - The scene's ambient light, from the file's own (`ambient_level`) —
+//!   `ambient.rs`.
 //! - T025: background image decode + save (`save_background_image`) —
 //!   `image.rs`.
 //! - T026: the `POST /api/scenes/{scene_id}/import/uvtt` REST endpoint —
@@ -44,12 +46,14 @@ use crate::state::AppState;
 use crate::world_events::{EVENT_CODE_MAP_IMPORTED, record_world_event};
 
 pub mod alignment;
+mod ambient;
 mod geometry;
 mod image;
 mod parse;
 mod types;
 mod warnings;
 
+use ambient::ambient_level;
 use geometry::*;
 use image::*;
 use parse::*;
@@ -105,7 +109,6 @@ pub async fn import_uvtt_impl(
 
     let warnings: Vec<String> = [
         freestanding_portal_warning(&parsed.file.portals),
-        ambient_light_warning(&parsed.file.environment),
         objects_line_of_sight_warning(&parsed.file.objects_line_of_sight),
     ]
     .into_iter()
@@ -195,20 +198,30 @@ pub async fn import_uvtt_impl(
     // whole import (the map itself already saved successfully above).
     let saved_preview = save_scene_preview_image(&parsed.file.image).await.ok();
 
-    let walls: Vec<WallInsert> =
-        walls_from_line_of_sight(&parsed.file.line_of_sight, target_grid_size)
-            .into_iter()
-            .chain(walls_from_line_of_sight(
-                &parsed.file.objects_line_of_sight,
-                target_grid_size,
-            ))
-            .collect();
-    let doors: Vec<WallInsert> = walls_from_portals(&parsed.file.portals, target_grid_size);
-    let lights: Vec<LightInsert> = lights_from_uvtt(&parsed.file.lights, target_grid_size);
+    // Walls, doors and lights are placed on the background as stored: centred
+    // on the origin, y up — see `ScenePlacement`.
+    let placement = ScenePlacement {
+        grid_size: target_grid_size,
+        width: f64::from(saved_background.width_px),
+        height: f64::from(saved_background.height_px),
+    };
+    let walls: Vec<WallInsert> = walls_from_line_of_sight(&parsed.file.line_of_sight, &placement)
+        .into_iter()
+        .chain(walls_from_line_of_sight(
+            &parsed.file.objects_line_of_sight,
+            &placement,
+        ))
+        .collect();
+    let doors: Vec<WallInsert> = walls_from_portals(&parsed.file.portals, &placement);
+    let lights: Vec<LightInsert> = lights_from_uvtt(&parsed.file.lights, &placement);
 
     let walls_created = walls.len();
     let doors_created = doors.len();
     let lights_created = lights.len();
+    // The light the map was drawn in, so a night map arrives dark and its
+    // walls cast shadows from the first frame. A re-import resets a level the
+    // Game Master chose, as it resets the walls: the map is being replaced.
+    let ambient_light = ambient_level(&parsed.file.environment);
 
     let result = tokio::task::spawn_blocking(move || -> Result<(), diesel::result::Error> {
         let mut conn = db_pool
@@ -308,6 +321,7 @@ pub async fn import_uvtt_impl(
                     scenes::grid_type.eq("square"),
                     scenes::width.eq(saved_background.width_px),
                     scenes::height.eq(saved_background.height_px),
+                    scenes::ambient_light.eq(ambient_light),
                     // What the file said the map is, so a later disagreement
                     // between the grid and the background is answerable at all.
                     // Without it the worst case is undetectable: 4096/128 is

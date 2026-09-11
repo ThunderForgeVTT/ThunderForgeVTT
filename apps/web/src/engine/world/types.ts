@@ -446,6 +446,18 @@ export type SetScenePlayingCommand = {
   playing: boolean;
 };
 
+/**
+ * A scene's baseline light (playtest 2026-09-10 P9) — the engine's
+ * `set_ambient_light`. Bright draws no darkness at all; dim and dark draw the
+ * darkness layer, with light pools cut out of it and wall shadows cast back
+ * into them.
+ */
+export type SetAmbientLightCommand = {
+  type: "set_ambient_light";
+  level: "bright" | "dim" | "dark";
+  color?: string;
+};
+
 /** One interactive, in the shape the engine's command boundary expects. */
 export type WorldInteractive = {
   id: string;
@@ -464,6 +476,7 @@ export type WorldCommand =
   | SetWorldCommand
   | SetSceneBackgroundCommand
   | SetSceneGridCommand
+  | SetAmbientLightCommand
   | UpsertTokenCommand
   | RemoveTokenCommand
   | SetTokenStatusCommand

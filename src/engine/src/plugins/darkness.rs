@@ -118,6 +118,18 @@ struct DarknessQuad;
 #[derive(Component)]
 struct ShadowQuad;
 
+/// How many shadow quads the last rebuild produced — what `EngineStats`
+/// reports as `shadow_quads`.
+///
+/// Counted where the quads are built. It used to be inferred as "every
+/// `Mesh2d` in the scene but one", which counted the darkness sheet itself,
+/// any drawn shape, and the single combined shadow mesh as one however many
+/// quads it held — a number that could not tell a lit room from a dark one.
+#[derive(Resource, Default, Debug, Clone, Copy)]
+pub struct ShadowStats {
+    pub quads: usize,
+}
+
 /// Solid black at the scene's ambient darkness, so a shadow is exactly as dark
 /// as the unlit ground around it.
 #[derive(Resource, Default)]
@@ -138,6 +150,7 @@ impl Plugin for DarknessPlugin {
             // nothing, and the whole lighting layer saw permanent daylight.
             .init_resource::<SceneAmbient>()
             .init_resource::<ShadowAssets>()
+            .init_resource::<ShadowStats>()
             .add_systems(Update, (sync_darkness_quad, sync_shadow_quads).chain());
     }
 }
@@ -345,16 +358,21 @@ fn sync_shadow_quads(
     mut meshes: ResMut<Assets<Mesh>>,
     mut color_materials: ResMut<Assets<ColorMaterial>>,
     mut shadow_assets: ResMut<ShadowAssets>,
+    mut shadow_stats: ResMut<ShadowStats>,
     cameras: Query<(&Projection, &GlobalTransform), With<Camera2d>>,
     existing: Query<Entity, With<ShadowQuad>>,
 ) {
+    // Read before `ambient` is consumed below. Without it, a scene turned back
+    // to daylight kept drawing its last shadows: lights and walls had not
+    // changed, a mesh existed, and the early return below kept it.
+    let ambient_changed = ambient.as_ref().is_some_and(|a| a.is_changed());
     let ambient = ambient.map_or_else(
         thunderforge_canvas_core::vision::AmbientLight::daylight,
         |a| a.0,
     );
     let strength = darkness_strength(ambient.level);
 
-    // Rebuilt wholesale when a light or wall changes. Shadows are a pure
+    // Rebuilt wholesale when a light, a wall or the ambient level changes. Shadows are a pure
     // function of (lights x walls), and diffing that product costs more than
     // regenerating a few hundred four-vertex meshes.
     //
@@ -362,12 +380,14 @@ fn sync_shadow_quads(
     // uses the view, so a fast pan can leave a shadow briefly stale at the
     // screen edge — which is why `CULL_MARGIN` is generous. Rebuilding every
     // frame the camera moves would be far worse.
-    if !light_set.is_changed() && !wall_set.is_changed() && !existing.is_empty() {
+    if !light_set.is_changed() && !wall_set.is_changed() && !ambient_changed && !existing.is_empty()
+    {
         return;
     }
     for entity in existing.iter() {
         commands.entity(entity).despawn();
     }
+    shadow_stats.quads = 0;
     if strength <= 0.0 {
         return;
     }
@@ -441,6 +461,7 @@ fn sync_shadow_quads(
     }
 
     let quads = positions.len() / 4;
+    shadow_stats.quads = quads;
     let mesh = meshes.add(combined_mesh(positions, indices));
     commands.spawn((
         Mesh2d(mesh),

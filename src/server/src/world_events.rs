@@ -108,6 +108,17 @@ pub const EVENT_CODE_WORLD_APPEARANCE_CHANGED: i32 = 23;
 /// Payload: `{"action": "changed", "gameSystemId": <id>}`.
 pub const EVENT_CODE_WORLD_SYSTEM_CHANGED: i32 = 24;
 
+/// A scene's **ambient light** changed (playtest 2026-09-10 P9).
+///
+/// Every client showing the scene draws its darkness layer from this level,
+/// so it has to reach all of them, not only the Game Master who set it. The
+/// level travels in the payload rather than behind a re-read: a scene's light
+/// is no secret, and everyone in the scene is about to see it anyway.
+///
+/// Payload: `{"action": "changed", "sceneId": <id>, "ambientLight":
+/// "bright" | "dim" | "dark"}`.
+pub const EVENT_CODE_SCENE_LIGHTING_CHANGED: i32 = 25;
+
 /// Record a world event to the audit trail and trigger NOTIFY for real-time sync.
 ///
 /// # Failures are logged here, not at the call sites

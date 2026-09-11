@@ -2,7 +2,7 @@
 //! categories that were parsed but not applied downstream (User Story 3,
 //! research.md §5-6).
 
-use super::types::{UvttEnvironment, UvttPoint, UvttPortal};
+use super::types::{UvttPoint, UvttPortal};
 
 /// T021: a `freestanding: true` portal has no attaching wall/door
 /// geometry of its own in this importer (`walls_from_portals` builds a
@@ -21,26 +21,9 @@ pub(super) fn freestanding_portal_warning(portals: &[UvttPortal]) -> Option<Stri
     ))
 }
 
-/// DungeonDraft's own exporter default (fully-opaque white, i.e. "no
-/// ambient tint") — every real-world fixture surveyed for this feature
-/// sets `ambient_light` to exactly this value except
-/// `little-fish-academy.dd2vtt`'s deliberate non-default
-/// `"fffff7e4"` (data-model.md). Warning on every file regardless of
-/// value would violate FR-014's "no new noise for the common case", so
-/// this only fires when the value differs from the exporter's default.
-const DEFAULT_AMBIENT_LIGHT: &str = "ffffffff";
-
-/// T022: a non-default `ambient_light` is parsed but not applied to
-/// scene lighting today (research.md §5-6).
-pub(super) fn ambient_light_warning(environment: &UvttEnvironment) -> Option<String> {
-    environment
-        .ambient_light
-        .as_ref()
-        .filter(|value| value.as_str() != DEFAULT_AMBIENT_LIGHT)
-        .map(|value| {
-            format!("ambient_light (\"{value}\") was present in the source file but is not yet applied to scene lighting")
-        })
-}
+// T022's `ambient_light` warning is gone: the file's ambient light is now
+// applied to the scene (playtest 2026-09-10 P9, `ambient.rs`), so there is
+// nothing left to disclose about it.
 
 /// T023: `objects_line_of_sight` (occluders attached to placeable
 /// objects, distinct from the static `line_of_sight` walls) has no

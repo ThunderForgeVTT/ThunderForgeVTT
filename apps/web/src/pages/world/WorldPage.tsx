@@ -72,6 +72,12 @@ import {
   refreshTokenStatus,
 } from "@/engine/world/sync/tokenStatus";
 import {
+  applySceneLightingWorldEvent,
+  asAmbientLevel,
+  setSceneAmbient,
+  type AmbientLevel,
+} from "@/engine/world/sync/sceneLighting";
+import {
   beginPeerAdjudication,
   beginSceneTransition,
   completeSceneTransition,
@@ -114,7 +120,7 @@ interface ReconcileReportState {
 import { useCanvasEngine } from "@/engine/bevy/useCanvasEngine";
 import { EngineLoader } from "@/components/engine/EngineLoader";
 import { getWorld } from "@/api/world";
-import { getScene, getScenes } from "@/api/scenes";
+import { getScene, getScenes, updateSceneAmbientLight } from "@/api/scenes";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import { useWorldMembers } from "@/hooks/useWorldMembers";
@@ -559,6 +565,15 @@ export default function WorldPage() {
   const sceneRecordSettledFor = sceneIsInWorldList
     ? sceneId
     : sceneRecordFetchedFor;
+  // Playtest 2026-09-10 P9: a scene's light as last heard — from a change
+  // event or this Game Master's own control — ahead of the scene list, which
+  // is fetched once and would otherwise go on holding the old level.
+  const [ambientBySceneId, setAmbientBySceneId] = useState<
+    Record<string, AmbientLevel>
+  >({});
+  const sceneAmbient: AmbientLevel =
+    (sceneId ? ambientBySceneId[sceneId] : undefined) ??
+    asAmbientLevel(selectedScene?.ambientLight);
 
   useEffect(() => {
     if (!id) {
@@ -1507,6 +1522,17 @@ export default function WorldPage() {
             applyTokenStatusWorldEvent(worldStore, sceneId, event),
             applyInteractiveWorldEvent(worldStore, sceneId, event),
           ]);
+          const ambient = applySceneLightingWorldEvent(
+            worldStore,
+            sceneId,
+            event,
+          );
+          if (ambient) {
+            setAmbientBySceneId((current) => ({
+              ...current,
+              [sceneId]: ambient,
+            }));
+          }
           // The approval queue is server state, so a nudge on the bus is all
           // this side needs — it re-reads rather than holding a copy.
           setApprovalRevision((n) => n + 1);
@@ -1521,6 +1547,30 @@ export default function WorldPage() {
       void iterator.return?.();
     };
   }, [id, sceneId, bridgeReady, worldStore]);
+
+  // Playtest 2026-09-10 P9: hand the engine the scene's light. Nothing did,
+  // so every scene rendered in daylight and no wall ever cast a shadow.
+  useEffect(() => {
+    if (!sceneId || !bridgeReady) {
+      return;
+    }
+    setSceneAmbient(worldStore, sceneAmbient);
+  }, [sceneId, bridgeReady, sceneAmbient, worldStore]);
+
+  const changeSceneAmbient = useCallback(
+    (level: AmbientLevel) => {
+      if (!sceneId) {
+        return;
+      }
+      const previous = sceneAmbient;
+      setAmbientBySceneId((current) => ({ ...current, [sceneId]: level }));
+      updateSceneAmbientLight(sceneId, level).catch((error: unknown) => {
+        console.error("Failed to change the scene's light:", error);
+        setAmbientBySceneId((current) => ({ ...current, [sceneId]: previous }));
+      });
+    },
+    [sceneId, sceneAmbient],
+  );
 
   /**
    * Spec 030: interactive elements.
@@ -2362,6 +2412,10 @@ export default function WorldPage() {
                           lights={worldState.lights}
                           selectedLightId={worldState.selectedLightId}
                           tokens={worldState.tokens}
+                          ambientLight={sceneAmbient}
+                          onAmbientLightChange={
+                            sceneId ? changeSceneAmbient : undefined
+                          }
                         />
                       ),
                     },

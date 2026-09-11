@@ -36,4 +36,6 @@ export type SceneRecord = {
   hidden: boolean;
   /** Spec 022 (FR-011/FR-012): computed URL for the scene's reduced-size preview image, null until generated. */
   previewUrl: string | null;
+  /** Playtest 2026-09-10 P9: the scene's baseline light — `bright`, `dim` or `dark`. */
+  ambientLight?: string;
 };

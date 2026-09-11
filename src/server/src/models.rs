@@ -610,6 +610,10 @@ pub struct Scene {
     /// full-resolution background used in Play. `None` until a background
     /// image has been set and a preview successfully generated.
     pub preview_asset_id: Option<uuid::Uuid>,
+    /// Playtest 2026-09-10 P9: the scene's baseline light — `bright`, `dim`
+    /// or `dark` — which the engine's darkness layer draws from. Bright
+    /// unless a Game Master or an imported map says otherwise.
+    pub ambient_light: String,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
