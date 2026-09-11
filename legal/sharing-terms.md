@@ -41,12 +41,19 @@ republished.
 
 If you are not sure you have the right to share something, take it out first.
 
-## A copy someone takes is theirs, and cannot be recalled
+## A copy someone takes is theirs, unless what you shared is taken down
 
-Anyone who copies what you share gets their own independent copy in their own
-world. It is theirs from that moment: they can edit it, keep it, and share it
-onward.
+Anyone who copies what you share gets their own copy in their own world. It is
+theirs from that moment: they can edit it, keep it, and share it onward.
 
 Revoking the link later stops anyone new from opening or copying it. It does
-**not** reach the copies already made, and nothing on this platform can take
-those back.
+**not** reach the copies already made.
+
+A copyright takedown does. If something you shared is taken down after a
+notice, the copies taken from it on this instance are disabled too, so this
+instance keeps a record of where each copy came from. A disabled copy is not
+deleted. The people who took it keep everything they built around it, are told
+what happened and that they are not accused of anything, and get it back
+without asking if the notice is withdrawn or a counter-notice succeeds.
+
+Nothing here reaches a copy that has left this instance.

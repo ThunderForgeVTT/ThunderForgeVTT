@@ -1,6 +1,6 @@
 # Contract: The reach of a takedown
 
-**Gated on ADR-094.** This contract describes behaviour that requires reversing
+**Gated on ADR-079.** This contract describes behaviour that requires reversing
 spec 026 FR-012's "no referential link back to the source". Until the
 accountable owner accepts that determination, none of it is buildable and
 FR-022 through FR-023d should be withdrawn rather than left unimplemented. See

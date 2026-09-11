@@ -37,6 +37,10 @@ fn ability_input(world_id: Uuid, name: &str) -> CreateAbilityInput {
 async fn an_unknown_version_refuses_and_mints_no_ability_link() {
     use crate::schema::world_ability_shares;
 
+    // Publishable, so the refusal below can only be the agreement's — without
+    // it, a missing notice contact refuses first and this passes for the
+    // wrong reason.
+    let _publishing = publishable_instance();
     dotenvy::dotenv().ok();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();

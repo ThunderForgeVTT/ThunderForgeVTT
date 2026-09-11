@@ -114,7 +114,7 @@ and unit tests in `src/server/src/legal/mod.rs` for the hashing.
 
 ## Scenario F — A takedown reaches the copies (US6, FR-022 / FR-023)
 
-**Requires ADR-094 to be accepted.** If it is not, this scenario does not exist
+**Requires ADR-079 to be accepted.** If it is not, this scenario does not exist
 and FR-022 through FR-023d are withdrawn.
 
 1. As `user1`, share a collection containing a lore entry and an ability.

@@ -240,6 +240,17 @@ pub async fn submit_takedown_notice_impl(
                 .map_err(|e| e.to_string())?;
             }
 
+            // Spec 039 FR-022/FR-023: the copies people took go dark with it,
+            // each in a child case that is nobody's strike, and each adopter
+            // is told they are accused of nothing.
+            crate::moderation::reach::fan_out_disable(
+                &mut conn,
+                case_id,
+                entity_type.as_db_str(),
+                entity_id,
+                account_id,
+            )?;
+
             load_case_events(&mut conn, case_id).map_err(|e| e.to_string())
         })
         .await
@@ -385,6 +396,11 @@ pub async fn submit_counter_notice_impl(
                 .execute(&mut conn)
                 .map_err(|e| e.to_string())?;
 
+            // Spec 039 FR-023d: the copies are forwarded with the same date,
+            // so they come back when the source does — through the lazy
+            // restoration that already exists, without an adopter asking.
+            crate::moderation::reach::fan_out_forward(&mut conn, case_id, restoration_due_at)?;
+
             load_case_events(&mut conn, case_id).map_err(|e| e.to_string())
         })
         .await
@@ -427,9 +443,20 @@ pub async fn resolve_moderation_case_impl(
             // Spec 039 FR-028: a resolution that upholds a case which was not
             // already counting is a new strike, and the person is told. One
             // that re-affirms a case already counting is not news.
+            // A copy is disabled by its source's takedown and never by hand:
+            // an administrator keeps it dark or restores it through the
+            // notice's case, which reaches every copy at once.
+            if resolution == ModerationActionType::ContentDisabledAsCopy {
+                return Err("A copy is disabled only by its source's takedown. \
+                     Resolve the notice's case instead."
+                    .to_string());
+            }
+
             let becomes_strike = !crate::moderation::counts_as_strike(&last.action_type)
                 && crate::moderation::counts_as_strike(resolution.as_db_str());
             let owner = last.account_id;
+            let resolved_type = last.entity_type.clone();
+            let resolved_id = last.entity_id;
 
             diesel::insert_into(content_moderation_actions::table)
                 .values(NewContentModerationAction {
@@ -461,6 +488,22 @@ pub async fn resolve_moderation_case_impl(
                     owner,
                     case_id,
                     crate::moderation::standing::Ladder::from_env(),
+                )
+                .map_err(|e| e.to_string())?;
+            }
+
+            // Spec 039 FR-023d: the resolution reaches the copies — restored
+            // with the source or kept dark with it, never the source alone.
+            crate::moderation::reach::fan_out_resolve(&mut conn, case_id, resolution.as_db_str())?;
+
+            // A copy's own case resolved directly: its adopter hears it is
+            // back. Any other case returns quietly.
+            if resolution == ModerationActionType::ContentRestored {
+                crate::moderation::reach::tell_of_restoration_sync(
+                    &mut conn,
+                    case_id,
+                    &resolved_type,
+                    resolved_id,
                 )
                 .map_err(|e| e.to_string())?;
             }

@@ -10,7 +10,9 @@ export type ModerationActionType =
   | "COUNTER_NOTICE_RECEIVED"
   | "COUNTER_NOTICE_FORWARDED"
   | "CONTENT_RESTORED"
-  | "CONTENT_REMAINS_DISABLED";
+  | "CONTENT_REMAINS_DISABLED"
+  // Spec 039 FR-023: an adopted copy, disabled with its source. Never a strike.
+  | "CONTENT_DISABLED_AS_COPY";
 
 export interface ModerationActionRecord {
   id: string;

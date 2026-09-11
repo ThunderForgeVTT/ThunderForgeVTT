@@ -91,7 +91,7 @@ names nobody.
 
 ## 3. `content_adoptions` — the link `copy.rs` deliberately refused to keep
 
-**Gated on ADR-094.** Until that determination is accepted, this table does not
+**Gated on ADR-079.** Until that determination is accepted, this table does not
 exist and FR-022/FR-023 are not buildable. See research.md § R6 and plan.md's
 guardrail section.
 
@@ -125,7 +125,7 @@ content_adoptions
 route, no admin listing, in either direction. The only reader is
 `moderation::reach`, entered from a takedown or counter-notice that already
 named an entity id. ADR-069's determination rests on non-enumerability;
-ADR-094's determination rests on preserving that, and a test asserting the SDL
+ADR-079's determination rests on preserving that, and a test asserting the SDL
 exposes no field of this shape is the mechanism that keeps it true.
 
 ---

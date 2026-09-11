@@ -496,6 +496,17 @@ pub async fn copy_shared_ability_to_world_impl(
                 cloned.push(row);
             }
 
+            // ADR-079: so a takedown of the source reaches this copy.
+            crate::moderation::reach::record_adoption_sync(
+                conn,
+                "world_ability",
+                source.id,
+                copy.id,
+                destination_world_id,
+                user_id,
+            )
+            .map_err(|e| CopyError(format!("Failed to record the copy: {e}")))?;
+
             // The copy's ownership block starts empty — the destination DM has
             // implicit full control.
             Ok((copy, cloned))

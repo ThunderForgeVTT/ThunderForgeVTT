@@ -7,11 +7,16 @@
 //!
 //! # What "independent" means here
 //!
-//! FR-012 forbids any referential link back to the source. So the copies carry
-//! no source id, and the receipt this returns is **not stored** — a row naming
-//! both the source collection and the records made from it is exactly the link
-//! the one-time-deep-copy invariant exists to prevent. The receipt is handed to
-//! the person who copied and then forgotten.
+//! A copy is independent **to its adopter**. The copied rows carry no source
+//! id, and the receipt this returns is not stored: it is handed to the person
+//! who copied and then forgotten. That much of spec 026 FR-012 still holds.
+//!
+//! A copy is traceable **to moderation** (ADR-079, accepted 2026-09-10). Each
+//! copied entity is recorded through `moderation::reach::record_adoption_sync`,
+//! inside this transaction, so a takedown of the source reaches the copy. That
+//! record is read by a takedown's walk and by nothing else — no user, no
+//! administrator, no API — and `graphql/adoption_surface_tests.rs` fails if
+//! anything but `moderation::reach` touches it.
 //!
 //! # Ownership
 //!
@@ -185,6 +190,8 @@ pub async fn copy_shared_collection_to_world_impl(
                 copy_lore(conn, &mut ctx, member.member_id)?;
             }
 
+            record_adoptions(conn, &ctx)?;
+
             Ok(CopyReceipt {
                 created: ctx.created,
                 fidelity_notes: ctx.notes,
@@ -194,6 +201,40 @@ pub async fn copy_shared_collection_to_world_impl(
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(|e| Error::new(e.0))
+}
+
+/// ADR-079: one adoption per copied entity, in the copy's transaction, so a
+/// takedown of the source reaches the copy.
+///
+/// From the maps rather than the member list, so dependents count too — an
+/// ability that came along inside an actor is as much a copy as one that was a
+/// member. A scene maps to no moderation entity type and records nothing
+/// (spec 015 T042). Not called by `rescue_actors_sync`: a character moved out
+/// of a deleted world was not adopted from anybody.
+fn record_adoptions(conn: &mut PgConnection, ctx: &CopyContext) -> Result<(), CopyError> {
+    let maps = [
+        ("ability", &ctx.ability_map),
+        ("item", &ctx.item_map),
+        ("actor", &ctx.actor_map),
+        ("lore", &ctx.lore_map),
+        ("scene", &ctx.scene_map),
+    ];
+    for (member_type, map) in maps {
+        let Some(entity_type) = crate::collections::moderation_entity_type(member_type) else {
+            continue;
+        };
+        for (source, copy) in map {
+            crate::moderation::reach::record_adoption_sync(
+                conn,
+                entity_type,
+                *source,
+                *copy,
+                ctx.destination_world_id,
+                ctx.user_id,
+            )?;
+        }
+    }
+    Ok(())
 }
 
 /// Move one player's characters into a world of theirs, on a connection the

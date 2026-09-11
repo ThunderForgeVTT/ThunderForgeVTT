@@ -51,7 +51,7 @@ takedown to reach copies already adopted into other worlds, and
 `collections/copy.rs` was built so that it cannot: "FR-012 forbids any
 referential link back to the source. So the copies carry no source id, and the
 receipt this returns is **not stored**." Reaching adopted copies means reversing
-that, and reversing it re-opens ADR-069's determination. That is ADR-094, it is
+that, and reversing it re-opens ADR-069's determination. That is ADR-079, it is
 the DMCA guardrail's business, and research.md § R6 argues it in full.
 
 ## Technical Context
@@ -70,7 +70,7 @@ the DMCA guardrail's business, and research.md § R6 argues it in full.
 
 **Performance Goals**: The gate adds one hash comparison and one insert to a publish, which happens at human speed. The termination sweep is off every hot path and ticks at 300s. Takedown fan-out is bounded by the adoption graph, which is bounded by `MAX_MEMBERS = 100` per copy
 
-**Constraints**: No new user-facing query may list adoptions, by anybody, for any reason — ADR-069's determination rests on non-enumerability and ADR-094 keeps that intact (research.md § R6). Refusals may not disclose a valid version identity (FR-013). The existing repeat-infringer threshold, lookback and counting are reused unchanged (FR-027)
+**Constraints**: No new user-facing query may list adoptions, by anybody, for any reason — ADR-069's determination rests on non-enumerability and ADR-079 keeps that intact (research.md § R6). Refusals may not disclose a valid version identity (FR-013). The existing repeat-infringer threshold, lookback and counting are reused unchanged (FR-027)
 
 **Scale/Scope**: Four publishing paths today and a structural guard for the fifth; one legal document becomes server-side and gains a version; three legal documents need a lawyer's eye for reasons this plan creates
 
@@ -83,7 +83,7 @@ the DMCA guardrail's business, and research.md § R6 argues it in full.
 | **I. ECS owns simulation, React owns chrome** | PASS | Nothing here touches the canvas. The attestation surface is a dialog over server-provided text; the standing page is a read of server-derived state. No React component holds any of it as truth — the version identity the client sends back came from the server one request earlier and is re-checked there. |
 | **II. Plugin-modular engine architecture** | PASS | No engine plugin, no engine module, no engine change. `cargo clippy --target wasm32-unknown-unknown` is run in the task plan to prove that rather than assert it. |
 | **III. Ownership & authorization at the data boundary** | PASS, and this feature is an instance of it | FR-011/FR-014 are Principle III applied to an agreement. The gate is a server-side function called inside the same transaction that mints the share code, not a component that renders a dialog. The disabled-account allowlist is a positive list at `graphql/helpers.rs`, so a mutation added later is refused by default rather than reachable by omission. New tables carry `created_by`-equivalent provenance where they have an actor (`attestations.subject_user_id`, `content_adoptions.adopted_by`, `account_terminations.closed_by`); the three that must outlive their subject carry it **without a foreign key**, following the precedent `content_moderation_actions` set and documented. |
-| **IV. Real ADRs before divergent implementation** | **ACTION REQUIRED** | Four architecturally significant decisions, all landing in the same change set. **ADR-093** — the attestation record: terms compiled into the server, versioned by content hash, archived at startup. **ADR-094** — adoption provenance and the reach of a takedown: reverses spec 026 FR-012's "no referential link", amends ADR-069, and carries the guardrail determination below. **ADR-095** — account standing and the termination window: standing derived from the existing counting, the window recorded, the sweep on the existing `spawn_*_task` shape. **ADR-096** — the operator acknowledgement: an instance attesting on the same record as a person. |
+| **IV. Real ADRs before divergent implementation** | **ACTION REQUIRED** | Four architecturally significant decisions, all landing in the same change set. **ADR-093** — the attestation record: terms compiled into the server, versioned by content hash, archived at startup. **ADR-079** — adoption provenance and the reach of a takedown: reverses spec 026 FR-012's "no referential link", amends ADR-069, and carries the guardrail determination below. **ADR-095** — account standing and the termination window: standing derived from the existing counting, the window recorded, the sweep on the existing `spawn_*_task` shape. **ADR-096** — the operator acknowledgement: an instance attesting on the same record as a person. |
 | **V. Verify before claiming done** | PASS | Per-target checks are in the task plan: native `cargo test`/`clippy` for the server, `--target wasm32-unknown-unknown` for the engine (to prove it was not disturbed), `tsc`/`vitest` for the web, and an e2e spec per user story. Every claim in this plan about existing code was read out of the file before it was written down. |
 
 **Numbering — settled 2026-09-09.** This paragraph predicted the collision and
@@ -106,7 +106,7 @@ by the table above.
 The constitution requires two things on record before implementation begins
 for any feature that makes one world's content accessible outside that world.
 This feature makes nothing newly accessible — it restricts four paths that are
-already open and adds none — but **ADR-094 creates a cross-world record of
+already open and adds none — but **ADR-079 creates a cross-world record of
 which content came from which content**, and ADR-069's determination reasoned
 partly from the absence of exactly that. So the checkpoint is engaged on its
 merits, not as a formality.
@@ -141,11 +141,11 @@ ADR-069 actually relied on rather than about the word "repository":
 
 **This is a determination this plan proposes; it is not yet accepted.** ADR-069
 was accepted by MBRound18 as accountable owner, with a stated risk accepted on
-the record. ADR-094 needs the same signature before T-numbers in Phase 2 begin,
+the record. ADR-079 needs the same signature before T-numbers in Phase 2 begin,
 and the task plan makes that a blocking task rather than a note.
 
 **The cost is real and named**: spec 026's FR-012 said a copy is independent.
-After ADR-094 a copy is independent *to its adopter* and traceable *to
+After ADR-079 a copy is independent *to its adopter* and traceable *to
 moderation*. Those are different claims and the second one is new. If the
 accountable owner declines it, FR-023 through FR-023d are not buildable and
 must be withdrawn from the spec — see research.md § R6, which states that

@@ -34,7 +34,7 @@ have.
 
 ---
 
-## Decision (proposed)
+## Decision
 
 **Keep the link, in a table no user can ever read, used by takedown fan-out and
 by nothing else.**

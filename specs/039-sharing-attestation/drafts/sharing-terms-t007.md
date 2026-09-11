@@ -1,8 +1,9 @@
 # T007 draft — the second section of `legal/sharing-terms.md`
 
-**Status:** draft for the owner's review, 2026-09-10. ADR-079 accepted.
+**Status:** landed in `legal/sharing-terms.md` with Phase 6, 2026-09-10, and
+still open to the owner's revision. ADR-079 accepted.
 
-**When it lands:** in the same commit as Phase 6 (FR-022 – FR-023d), and not
+**When it landed:** in the same commit as Phase 6 (FR-022 – FR-023d), and not
 before. Until a takedown actually reaches adopted copies, the current wording
 ("cannot be recalled") is the true one. Swapping the section mints a new
 version of the terms (ADR-076); every earlier agreement keeps resolving to the

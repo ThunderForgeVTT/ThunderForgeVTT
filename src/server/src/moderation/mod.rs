@@ -10,6 +10,7 @@
 //! complete without new scheduler infrastructure (see tasks.md's header
 //! note and research.md R3).
 
+pub mod reach;
 pub mod standing;
 pub mod validation;
 
@@ -162,6 +163,11 @@ pub mod action_type {
     pub const COUNTER_NOTICE_FORWARDED: &str = "counter_notice_forwarded";
     pub const CONTENT_RESTORED: &str = "content_restored";
     pub const CONTENT_REMAINS_DISABLED: &str = "content_remains_disabled";
+    /// Spec 039 FR-023: an adopted copy, disabled because its source was taken
+    /// down (`reach::fan_out_disable`). Hidden exactly as `content_disabled`
+    /// is, and never a strike: `counts_as_strike` does not name it, and the
+    /// child case it opens carries no account.
+    pub const CONTENT_DISABLED_AS_COPY: &str = "content_disabled_as_copy";
 }
 
 /// Whether an `action_type` means "this entity's real content should not
@@ -170,7 +176,9 @@ pub mod action_type {
 fn is_disabled_status(action_type: &str) -> bool {
     matches!(
         action_type,
-        action_type::CONTENT_DISABLED | action_type::CONTENT_REMAINS_DISABLED
+        action_type::CONTENT_DISABLED
+            | action_type::CONTENT_REMAINS_DISABLED
+            | action_type::CONTENT_DISABLED_AS_COPY
     )
 }
 
@@ -240,7 +248,7 @@ pub async fn effective_status(
                     .values(NewContentModerationAction {
                         case_id,
                         action_type: action_type::CONTENT_RESTORED.to_string(),
-                        entity_type: entity_type_for_insert,
+                        entity_type: entity_type_for_insert.clone(),
                         entity_id: entity_id_for_insert,
                         world_id,
                         account_id: None,
@@ -257,7 +265,15 @@ pub async fn effective_status(
                         restoration_due_at: None,
                         created_by: None,
                     })
-                    .execute(&mut conn)
+                    .execute(&mut conn)?;
+                // Spec 039 FR-023d: a copy that comes back with its source is
+                // announced to its adopter. Any other case returns quietly.
+                reach::tell_of_restoration_sync(
+                    &mut conn,
+                    case_id,
+                    &entity_type_for_insert,
+                    entity_id_for_insert,
+                )
             })
             .await
             .map_err(|_| Error::new("Failed to spawn blocking task"))?

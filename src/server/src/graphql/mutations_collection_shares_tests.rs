@@ -60,15 +60,16 @@ fn fixture() -> Fixture {
     }
 }
 
-/// Deliberately **not** holding `publishable_instance()`.
+/// Takes **no** `publishable_instance()` of its own.
 ///
-/// `fixture()` takes that lock itself and drops it on return, and it is a
-/// non-reentrant `std::sync::Mutex` shared with every settings test in the
-/// crate. Holding it across a whole test — a fixture, a collection, a
-/// member and a share, each with `.await` in it — serialised the entire
-/// suite behind this one test and took a 0.7-second module past a
-/// ten-minute timeout. The gate is satisfied by the seeded notice-contact
-/// rows, which is how the sibling tests below manage it too.
+/// `fixture()` already holds one, in `Fixture::_publishing`, for as long as
+/// `f` lives — which is what makes this instance publishable, so the refusal
+/// below can only be the agreement's. The lock behind it is a non-reentrant
+/// `std::sync::Mutex` shared with every settings test in the crate: taking it
+/// again here deadlocks, and every test that needs it queues behind this one
+/// for good. That happened on 2026-09-10, when a second guard was added on the
+/// belief that the fixture dropped its own on return; this comment said so,
+/// and it was wrong.
 ///
 /// Spec 039 FR-012/FR-013: a version this instance does not know refuses,
 /// and **no share row is left behind**.

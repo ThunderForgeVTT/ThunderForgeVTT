@@ -118,6 +118,19 @@ diesel::table! {
 }
 
 diesel::table! {
+    content_adoptions (id) {
+        id -> Uuid,
+        source_entity_type -> Text,
+        source_entity_id -> Uuid,
+        copy_entity_type -> Text,
+        copy_entity_id -> Uuid,
+        destination_world_id -> Uuid,
+        adopted_by -> Uuid,
+        adopted_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
     content_moderation_actions (id) {
         id -> Uuid,
         case_id -> Uuid,
@@ -139,6 +152,7 @@ diesel::table! {
         restoration_due_at -> Nullable<Timestamptz>,
         created_at -> Timestamptz,
         created_by -> Nullable<Uuid>,
+        parent_case_id -> Nullable<Uuid>,
     }
 }
 
@@ -1328,6 +1342,7 @@ diesel::table! {
 diesel::joinable!(admin_bootstrap_oauth_sessions -> oauth_providers (provider_id));
 diesel::joinable!(attestations -> terms_versions (terms_version_id));
 diesel::joinable!(canvas_image_assets -> worlds (world_id));
+diesel::joinable!(content_adoptions -> worlds (destination_world_id));
 diesel::joinable!(feedback_attachments -> feedback_submissions (submission_id));
 diesel::joinable!(feedback_delivery_attempts -> feedback_submissions (submission_id));
 diesel::joinable!(feedback_submissions -> worlds (world_id));
@@ -1449,6 +1464,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     attestations,
     auth_security_settings,
     canvas_image_assets,
+    content_adoptions,
     content_moderation_actions,
     feedback_attachments,
     feedback_delivery_attempts,

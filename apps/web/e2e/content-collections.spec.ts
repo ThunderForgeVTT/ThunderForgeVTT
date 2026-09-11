@@ -240,7 +240,9 @@ test.describe("spec 026: gather a world's content, share it, copy it", () => {
     // existing: an empty box above the button is what a broken glob or a
     // renamed file produces, and this is the coupling that notices.
     await expect(terms).toContainText("responsible for what you publish");
-    await expect(terms).toContainText("cannot be recalled");
+    // Spec 039 T007, with ADR-079: the second section stopped saying a copy
+    // "cannot be recalled" the day a takedown started reaching copies.
+    await expect(terms).toContainText("unless what you shared is taken down");
 
     await page
       .getByRole("button", { name: /I have the right to share this/ })

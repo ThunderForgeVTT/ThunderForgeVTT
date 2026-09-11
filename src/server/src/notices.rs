@@ -40,6 +40,16 @@ pub mod kind {
     /// To a player: the world their character lived in was deleted with its
     /// creator's account, and the character was moved to them first.
     pub const ACTOR_RESCUED: &str = "actor_rescued";
+    /// To a sharer: a takedown against what they shared reached the copies
+    /// people had taken of it (FR-024).
+    pub const SHARE_TAKEN_DOWN: &str = "share_taken_down";
+    /// To an adopter: a copy they took was disabled because its source was
+    /// taken down. Worded so it is plain they are accused of nothing
+    /// (FR-023b), and naming neither the claimant nor the source.
+    pub const ADOPTED_COPY_DISABLED: &str = "adopted_copy_disabled";
+    /// To an adopter: the copy came back with its source, without their
+    /// asking (FR-023d).
+    pub const ADOPTED_COPY_RESTORED: &str = "adopted_copy_restored";
 }
 
 /// Write one notice, on a connection the caller already holds — so it lands

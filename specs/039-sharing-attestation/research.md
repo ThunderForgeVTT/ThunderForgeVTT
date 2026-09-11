@@ -296,7 +296,7 @@ doing nothing, which makes FR-023 a paragraph rather than a behaviour.
 independent. After this it is independent *to its adopter* — they own it, edit
 it, share it onward, and nothing in the product tells them or anyone else where
 it came from — and traceable *to moderation*. Those are different claims, and
-only the first one has been made to users so far. ADR-094 has to say so.
+only the first one has been made to users so far. ADR-079 has to say so.
 
 **Why this is not the repository ADR-069 argued against**, in the terms ADR-069
 actually used: it is unreadable by users; it is unenumerable in both directions

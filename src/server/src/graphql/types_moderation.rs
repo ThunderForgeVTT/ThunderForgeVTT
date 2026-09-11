@@ -52,6 +52,10 @@ pub enum ModerationActionType {
     CounterNoticeForwarded,
     ContentRestored,
     ContentRemainsDisabled,
+    /// Spec 039 FR-023: a copy, disabled because what it was copied from was
+    /// taken down. The opening event of a child case, which carries no account
+    /// — so it is never anybody's strike.
+    ContentDisabledAsCopy,
 }
 
 impl ModerationActionType {
@@ -65,6 +69,7 @@ impl ModerationActionType {
             ModerationActionType::CounterNoticeForwarded => at::COUNTER_NOTICE_FORWARDED,
             ModerationActionType::ContentRestored => at::CONTENT_RESTORED,
             ModerationActionType::ContentRemainsDisabled => at::CONTENT_REMAINS_DISABLED,
+            ModerationActionType::ContentDisabledAsCopy => at::CONTENT_DISABLED_AS_COPY,
         }
     }
 
@@ -85,6 +90,9 @@ impl ModerationActionType {
             v if v == at::CONTENT_RESTORED => Some(ModerationActionType::ContentRestored),
             v if v == at::CONTENT_REMAINS_DISABLED => {
                 Some(ModerationActionType::ContentRemainsDisabled)
+            }
+            v if v == at::CONTENT_DISABLED_AS_COPY => {
+                Some(ModerationActionType::ContentDisabledAsCopy)
             }
             _ => None,
         }

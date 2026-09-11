@@ -436,6 +436,17 @@ pub async fn copy_shared_actor_to_world_impl(
                     .map_err(|e| format!("Failed to clone actor system data: {e}"))?;
             }
 
+            // ADR-079: so a takedown of the source reaches this copy.
+            crate::moderation::reach::record_adoption_sync(
+                conn,
+                "world_actor",
+                source.id,
+                created.id,
+                destination_world_id,
+                user_id,
+            )
+            .map_err(|e| format!("Failed to record the copy: {e}"))?;
+
             Ok::<_, CopyError>(created)
         })
     })

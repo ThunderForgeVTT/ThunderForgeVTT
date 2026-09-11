@@ -259,6 +259,9 @@ mod admin_surface_tests;
 // Spec 039 T067: what a disabled account can still reach — exactly the
 // allowlist, and no more.
 #[cfg(test)]
+#[path = "graphql/adoption_surface_tests.rs"]
+mod adoption_surface_tests;
+#[cfg(test)]
 mod disabled_surface_tests;
 
 /// Spec 036 FR-010: a subscription stops when the session behind it does.
