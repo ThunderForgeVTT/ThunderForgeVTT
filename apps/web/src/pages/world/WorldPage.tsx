@@ -61,7 +61,7 @@ import { ConnectionStatus } from "@/components/world/ConnectionStatus";
 import { reportSessionPeers } from "@/engine/world/sync/subscriptionClient";
 import {
   StatusPanel,
-  type PanelCorner,
+  type PanelPosition,
 } from "@/components/StatusPanel/StatusPanel";
 import {
   readTokenStatus,
@@ -164,16 +164,26 @@ export const worldPageSeo: SeoConfig = {
   noindex: true,
 };
 
-/** Where the viewer put the status panel. Per viewer, per device. */
-const PANEL_CORNER_KEY = "thunderforge.statusPanel.corner";
+/**
+ * Where the viewer last left a pinned status panel (spec 029 FR-011a). Per
+ * viewer, per device. Which token was pinned is deliberately not kept: it may
+ * be gone, or the scene changed, by the next visit.
+ */
+const PANEL_PIN_KEY = "thunderforge.statusPanel.pin";
 
-function isPanelCorner(value: string | null): value is PanelCorner {
-  return (
-    value === "top-left" ||
-    value === "top-right" ||
-    value === "bottom-left" ||
-    value === "bottom-right"
-  );
+function readSavedPin(): PanelPosition | null {
+  try {
+    const raw = localStorage.getItem(PANEL_PIN_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<PanelPosition>;
+    return typeof parsed.x === "number" && typeof parsed.y === "number"
+      ? { x: parsed.x, y: parsed.y }
+      : null;
+  } catch {
+    // Storage refused, or a value that is not ours: the panel opens where the
+    // double-click is, which is the right answer anyway.
+    return null;
+  }
 }
 
 export default function WorldPage() {
@@ -224,16 +234,15 @@ export default function WorldPage() {
     tokenId: string;
     resources: TokenStatusResource[] | null;
   } | null>(null);
-  const [panelCorner, setPanelCorner] = useState<PanelCorner>(() => {
-    try {
-      const saved = localStorage.getItem(PANEL_CORNER_KEY);
-      return isPanelCorner(saved) ? saved : "bottom-right";
-    } catch {
-      // A browser refusing storage (private window, blocked site data) is not
-      // a reason to fail to render a panel.
-      return "bottom-right";
-    }
-  });
+  // Spec 029 FR-011a (playtest 2026-09-10 P6): the pinned panel — which
+  // token, and where it sits. Selection does not open it; a double-click does.
+  const [pinned, setPinned] = useState<{
+    tokenId: string;
+    at: PanelPosition;
+  } | null>(null);
+  // Where the viewer last left one. A ref as well as storage, so the
+  // double-click handler reads the latest without re-subscribing.
+  const savedPinRef = useRef<PanelPosition | null>(readSavedPin());
   const { user } = useAuth();
   /**
    * What this client applied at its own reconnect, still eligible to be
@@ -814,7 +823,25 @@ export default function WorldPage() {
     const onDoubleClick = (event: MouseEvent) => {
       if (!(event.target instanceof HTMLCanvasElement)) return;
       const stack = facets.selection.disambiguate();
-      if (!stack) return;
+      if (!stack) {
+        // Spec 029 FR-011a (playtest 2026-09-10 P6): a double-click on one
+        // token pins its status panel — where the viewer last left one, or
+        // here if they never have. The first click of the pair has already
+        // selected the token through the engine's own hit test; should that
+        // not have reached the store yet, it is asked once more a moment
+        // later rather than guessed at.
+        const pin = () => {
+          const tokenId = worldStore.getState().selectedTokenId;
+          if (!tokenId) return false;
+          setPinned({
+            tokenId,
+            at: savedPinRef.current ?? { x: event.clientX, y: event.clientY },
+          });
+          return true;
+        };
+        if (!pin()) window.setTimeout(pin, 50);
+        return;
+      }
       setStackPicker({
         members: stack.members,
         at: { x: event.clientX, y: event.clientY },
@@ -826,7 +853,7 @@ export default function WorldPage() {
       window.removeEventListener("dblclick", onDoubleClick, { capture: true });
       facets.stop();
     };
-  }, [facets]);
+  }, [facets, worldStore]);
 
   useEffect(
     () => worldStore.subscribe((event) => setWorldState(event.state)),
@@ -1578,18 +1605,17 @@ export default function WorldPage() {
     [id],
   );
 
-  /** The selected token's name, for the panel heading. */
-  const selectedTokenLabel = useMemo(() => {
-    const id = worldState.selectedTokenId;
+  /** The pinned token's name, for the panel heading. */
+  const pinnedTokenLabel = useMemo(() => {
+    const id = pinned?.tokenId;
     if (!id) return undefined;
     return worldState.tokens[id]?.label ?? undefined;
-  }, [worldState.selectedTokenId, worldState.tokens]);
+  }, [pinned?.tokenId, worldState.tokens]);
 
-  // Follow the selection: read what the engine would draw for the selected
-  // token. Cleared on deselection so the panel never shows the previous
-  // token's numbers, which would be actively misleading mid-fight.
+  // Follow the pin, not the selection (spec 029 FR-012a): read what the
+  // engine would draw for the pinned token, whatever is selected now.
   useEffect(() => {
-    const tokenId = worldState.selectedTokenId;
+    const tokenId = pinned?.tokenId;
     if (!tokenId) {
       return;
     }
@@ -1601,14 +1627,13 @@ export default function WorldPage() {
     return () => {
       cancelled = true;
     };
-  }, [worldState.selectedTokenId, worldState.tokens]);
+  }, [pinned?.tokenId, worldState.tokens]);
 
   // Derived rather than stored: the panel shows a token's resources only while
-  // that token is the selected one, so deselection clears it with no state
-  // write at all.
+  // that token is the pinned one, so unpinning — or pinning another — can
+  // never show the previous token's numbers.
   const panelResources =
-    worldState.selectedTokenId &&
-    panelStatus?.tokenId === worldState.selectedTokenId
+    pinned && panelStatus?.tokenId === pinned.tokenId
       ? panelStatus.resources
       : null;
 
@@ -2406,23 +2431,26 @@ export default function WorldPage() {
                 overflow: "hidden",
               }}
             >
-              {/* Spec 029: the selected token's resources. Positioned over the
-               * canvas rather than beside it, so it sits in the viewer's
-               * chosen corner of the map they are actually reading. */}
+              {/* Spec 029 FR-011a: a token's resources, pinned by a double-click
+               * and dragged wherever the viewer wants them. */}
               <StatusPanel
                 resources={panelResources}
-                title={selectedTokenLabel}
-                corner={panelCorner}
-                onCornerChange={(corner) => {
-                  setPanelCorner(corner);
+                title={pinnedTokenLabel}
+                position={pinned?.at ?? { x: 0, y: 0 }}
+                onMove={(at) => {
+                  setPinned((current) =>
+                    current ? { ...current, at } : current,
+                  );
+                  savedPinRef.current = at;
                   try {
-                    localStorage.setItem(PANEL_CORNER_KEY, corner);
+                    localStorage.setItem(PANEL_PIN_KEY, JSON.stringify(at));
                   } catch {
-                    // Storage refused. The choice still applies for this
+                    // Storage refused. The position still applies for this
                     // session; only its persistence is lost, which is not
                     // worth interrupting play over.
                   }
                 }}
+                onClose={() => setPinned(null)}
               />
 
               {/* Bevy mounts canvas here */}

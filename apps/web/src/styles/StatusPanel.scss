@@ -1,8 +1,8 @@
-// Spec 029: the selected token's resources, in a screen corner.
+// Spec 029 FR-011a: a token's resources, pinned where the viewer put it.
 //
 // Fixed-position and deliberately narrow: this sits over a map somebody is
 // reading, so it earns its space by being small and legible rather than
-// prominent.
+// prominent. Its place is inline (`left`/`top`), set by whoever pinned it.
 
 .status-panel {
   position: fixed;
@@ -17,23 +17,6 @@
   font-size: 0.875rem;
   backdrop-filter: blur(3px);
   pointer-events: auto;
-
-  &--top-left {
-    top: 5rem;
-    left: 1rem;
-  }
-  &--top-right {
-    top: 5rem;
-    right: 1rem;
-  }
-  &--bottom-left {
-    bottom: 1rem;
-    left: 1rem;
-  }
-  &--bottom-right {
-    bottom: 1rem;
-    right: 1rem;
-  }
 }
 
 .status-panel__head {
@@ -44,19 +27,44 @@
   margin-bottom: 0.6rem;
 }
 
+// The header is the handle. `touch-action: none` so a touch drag moves the
+// panel rather than scrolling the page under it.
+.status-panel__drag {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+
+  &:active {
+    cursor: grabbing;
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgba(214, 178, 122, 0.7);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+}
+
 .status-panel__title {
   font-size: 0.9375rem;
   font-weight: 600;
   margin: 0;
 }
 
-.status-panel__corner select {
-  background: rgba(0, 0, 0, 0.35);
+.status-panel__close {
+  background: transparent;
+  border: 0;
   color: inherit;
-  border: 1px solid rgba(214, 178, 122, 0.3);
-  border-radius: 4px;
-  font-size: 0.75rem;
-  padding: 0.15rem 0.25rem;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0 0.2rem;
+  cursor: pointer;
+  opacity: 0.75;
+
+  &:hover,
+  &:focus-visible {
+    opacity: 1;
+  }
 }
 
 .status-panel__resources {

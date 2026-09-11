@@ -8,24 +8,25 @@ import {
 import { sceneIds } from "./fixtures/world-cache";
 
 /**
- * Spec 029, User Story 5 — the viewer decides where the panel lives, and the
- * decision outlives the page (FR-011); nothing is selected, so nothing is
- * shown (FR-012).
+ * Spec 029 FR-010a–FR-012a (playtest 2026-09-10 P6) — selecting a token opens
+ * no panel, because its bars above it are its display; double-clicking it pins
+ * one, where the double-click was; the viewer drags it, it outlives the
+ * selection, it closes, and where they left it is where the next one opens,
+ * reload or not.
  *
  * # Why this is an e2e and not a unit test
  *
- * Persistence is the whole claim, and persistence is made of things a unit
- * test has to fake: `localStorage`, a page teardown, a fresh module graph on
- * the way back. `apps/web/src/components/StatusPanel/__tests__/placement.test.ts`
- * proves the panel renders each corner and reports a change; only a real
- * reload in a real browser proves the corner is still there afterwards.
+ * A drag is a real pointer, the double-click is the browser's own event on the
+ * canvas, and persistence is `localStorage` across a page teardown — all
+ * things a unit test would have to fake. `placement.test.ts` proves the panel
+ * renders where it is told and exposes its controls; only a browser proves the
+ * gesture, the drag and the reload.
  *
- * The corner is asserted geometrically — which half of the viewport the panel
- * is actually drawn in — rather than by class name. A class is a promise; a
- * bounding box is where the thing ended up.
+ * Positions are asserted from the panel's bounding box — where it was actually
+ * drawn — rather than from its inline style.
  */
 
-const PANEL = 'aside[aria-label="Selected token status"]';
+const PANEL = 'aside[aria-label="Pinned token status"]';
 
 async function gql<T>(
   page: Page,
@@ -45,6 +46,13 @@ async function gql<T>(
   return res.data;
 }
 
+/** The canvas centre, in page pixels — where the origin token is drawn. */
+async function canvasCentre(page: Page): Promise<{ x: number; y: number }> {
+  const box = await page.locator("canvas").boundingBox();
+  if (!box) throw new Error("the canvas must be laid out before it is used");
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+}
+
 /** Click at a pixel offset from the canvas centre.
  *
  * Not `page.mouse.click()`: Bevy reads `just_pressed`/`just_released` from
@@ -57,12 +65,8 @@ async function clickCanvasAt(
   dx: number,
   dy: number,
 ): Promise<void> {
-  const box = await page.locator("canvas").boundingBox();
-  if (!box) throw new Error("the canvas must be laid out before it is clicked");
-  await page.mouse.move(
-    box.x + box.width / 2 + dx,
-    box.y + box.height / 2 + dy,
-  );
+  const centre = await canvasCentre(page);
+  await page.mouse.move(centre.x + dx, centre.y + dy);
   await page.mouse.down();
   await page.waitForTimeout(80);
   await page.mouse.up();
@@ -94,22 +98,14 @@ async function selectOriginToken(page: Page, tokenId: string): Promise<void> {
     .toBe(tokenId);
 }
 
-/** Which half of the viewport the panel's centre falls in. */
-async function panelQuadrant(page: Page): Promise<{
-  vertical: "top" | "bottom";
-  horizontal: "left" | "right";
-}> {
+/** The pinned panel's top-left corner, as drawn. */
+async function panelAt(page: Page): Promise<{ x: number; y: number }> {
   const box = await page.locator(PANEL).boundingBox();
   if (!box) throw new Error("the panel must be on screen to be located");
-  const viewport = page.viewportSize();
-  if (!viewport) throw new Error("no viewport");
-  return {
-    vertical: box.y + box.height / 2 < viewport.height / 2 ? "top" : "bottom",
-    horizontal: box.x + box.width / 2 < viewport.width / 2 ? "left" : "right",
-  };
+  return { x: Math.round(box.x), y: Math.round(box.y) };
 }
 
-test("the corner a viewer chooses for the status panel survives a reload", async ({
+test("a double-click pins the status panel, which is dragged, outlives the selection, closes, and reopens where it was left", async ({
   page,
 }) => {
   test.setTimeout(4 * 60_000);
@@ -204,61 +200,69 @@ test("the corner a viewer chooses for the status panel survives a reload", async
   await page.goto(`/world/${worldId}/play`);
   await waitForEngineReady(page);
 
-  // FR-012, before anything is selected: no panel, not an empty one.
+  // FR-010a: selecting the token is not a request for a panel — its bars
+  // above it are its display.
+  await selectOriginToken(page, tokenId);
+  await page.waitForTimeout(1_000);
   await expect(
     page.locator(PANEL),
-    "nothing is selected, so nothing should be in the corner",
+    "selecting a token must not open a panel",
   ).toHaveCount(0);
 
-  await selectOriginToken(page, tokenId);
-
+  // FR-011a: a double-click pins one, where the double-click was.
+  const centre = await canvasCentre(page);
+  await page.mouse.dblclick(centre.x, centre.y);
   const panel = page.locator(PANEL);
-  await expect(panel).toBeVisible({ timeout: 30_000 });
+  await expect(panel).toBeVisible({ timeout: 15_000 });
   await expect(panel).toContainText("7 / 12");
+  const opened = await panelAt(page);
+  expect(Math.abs(opened.x - Math.round(centre.x))).toBeLessThanOrEqual(2);
+  expect(Math.abs(opened.y - Math.round(centre.y))).toBeLessThanOrEqual(2);
 
-  // The default, and the thing the reload has to change away from.
-  expect(await panelQuadrant(page)).toEqual({
-    vertical: "bottom",
-    horizontal: "right",
+  // Dragged by its header to where it does not cover the token.
+  const handle = page.getByLabel("Move status panel");
+  const grip = await handle.boundingBox();
+  if (!grip) throw new Error("the handle must be on screen to be dragged");
+  await page.mouse.move(grip.x + 20, grip.y + grip.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip.x + 20 - 300, grip.y + grip.height / 2 - 150, {
+    steps: 10,
   });
+  await page.mouse.up();
+  const dragged = await panelAt(page);
+  expect(dragged.x).toBeLessThan(opened.x - 250);
+  expect(dragged.y).toBeLessThan(opened.y - 100);
 
-  // The viewer moves it, because the bottom right is where their initiative
-  // tracker is.
-  await page.getByLabel("Panel position").selectOption("top-left");
-  await expect
-    .poll(() => panelQuadrant(page), {
-      message: "the panel should move to the corner that was chosen",
-      timeout: 5_000,
-    })
-    .toEqual({ vertical: "top", horizontal: "left" });
+  // FR-012a: a pin outlives the selection.
+  await page.keyboard.press("Escape");
+  await clickCanvasAt(page, 320, 240);
+  await page.waitForTimeout(1_000);
+  await expect(
+    panel,
+    "deselecting must not unpin — a pin is kept until it is closed",
+  ).toBeVisible();
 
-  // The whole point: a real reload, a fresh module graph, a fresh store.
+  // Closed by the viewer.
+  await page.getByLabel("Unpin status panel").click();
+  await expect(panel).toHaveCount(0);
+
+  // A reload, and the next pin opens where the last one was left — not where
+  // this double-click is.
   await page.reload();
   await waitForEngineReady(page);
   await expect(
     page.locator(PANEL),
-    "a reload deselects, so the panel starts absent again",
+    "a reload leaves nothing pinned",
   ).toHaveCount(0);
-
   await selectOriginToken(page, tokenId);
-  await expect(page.locator(PANEL)).toBeVisible({ timeout: 30_000 });
-
-  expect(
-    await panelQuadrant(page),
-    "the corner chosen before the reload is still the corner after it",
-  ).toEqual({ vertical: "top", horizontal: "left" });
-  await expect(page.getByLabel("Panel position")).toHaveValue("top-left");
-
-  // FR-012 again, this time on the path that could actually go wrong:
-  // deselecting a token whose figures are already on screen.
-  await page.keyboard.press("Escape");
-  await clickCanvasAt(page, 320, 240);
-  await expect(
-    page.locator(PANEL),
-    "deselecting must take the previous token's figures with it",
-  ).toHaveCount(0, { timeout: 15_000 });
+  const again = await canvasCentre(page);
+  await page.mouse.dblclick(again.x, again.y);
+  await expect(page.locator(PANEL)).toBeVisible({ timeout: 15_000 });
+  const reopened = await panelAt(page);
+  expect(Math.abs(reopened.x - dragged.x)).toBeLessThanOrEqual(2);
+  expect(Math.abs(reopened.y - dragged.y)).toBeLessThanOrEqual(2);
 
   console.log(
-    `[placement] chosen=top-left survived_reload=true cleared_on_deselect=true`,
+    `[placement] pinned_on_dblclick=true dragged=true outlived_selection=true reopened_where_left=true`,
   );
 });

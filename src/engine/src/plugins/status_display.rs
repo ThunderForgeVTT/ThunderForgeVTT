@@ -16,28 +16,34 @@
 //! the server and a client is never sent a figure it may not display. Nothing
 //! here can widen what a viewer sees, because nothing here has the value.
 //!
-//! # Why bars are drawn here and the corner panel is not
+//! # Why bars are drawn here and the pinned panel is not
 //!
 //! Constitution Principle I: the ECS owns what is spatial, React owns chrome.
 //! A bar above a token tracks its position, scales with the camera and
-//! reorders with other entities, so it belongs to the engine. The
-//! selected-token panel is screen-space text and belongs in React, where it
-//! keeps screen readers, text selection and browser zoom — all of which would
-//! have to be reimplemented to draw it in WebGL. See ADR-053.
+//! reorders with other entities, so it belongs to the engine. The pinned
+//! status panel (spec 029 FR-011a) is screen-space text and belongs in React,
+//! where it keeps screen readers, text selection and browser zoom — all of
+//! which would have to be reimplemented to draw it in WebGL. See ADR-053.
+//!
+//! # Sized from the token, not from a constant
+//!
+//! Playtest 2026-09-10 P6, spec 029 FR-010a. Bars used to be `TOKEN_SIZE`
+//! wide (96) and started `TOKEN_SIZE.y / 2` above the token's centre — while
+//! the token itself is sized to its footprint on the grid
+//! (`systems::token_grid::size_tokens_to_grid`). On any grid that is not 96 a
+//! cell, the bars sat inside a large token or floated off a small one. They
+//! now take the same side length the token does, so they sit above it and span
+//! it at any grid size. The bars are the token's children, so its own scale
+//! carries them along as it does the sprite.
 
 use bevy::prelude::*;
 
 use crate::TOKEN_SIZE;
+use crate::resources::{SceneGrid, TokenGridBehaviour};
+use thunderforge_canvas_core::grid::Footprint;
 use thunderforge_canvas_core::resource_display::{
     Disclosed, DisplayAppearance, Precision, ResourceDefinition, Rgb, bar_fill, fill_for_precision,
 };
-
-/// Width of a bar, matched to the token so the two read as one object.
-///
-/// Not part of `DisplayAppearance` on purpose: it is derived from the token,
-/// so an application overriding it could only ever make bars that no longer
-/// line up with what they describe.
-const BAR_WIDTH: f32 = TOKEN_SIZE.x;
 
 /// Drawn above the token sprite, below any selection furniture.
 const BAR_Z: f32 = 5.0;
@@ -93,6 +99,16 @@ impl Plugin for StatusDisplayPlugin {
     }
 }
 
+/// A token's side length in world units — the one its sprite is sized to.
+///
+/// The same calculation `size_tokens_to_grid` makes, so the bars and the token
+/// cannot disagree about how big the token is. With no grid loaded yet, the
+/// token is the default size and so are its bars.
+fn token_side(grid: Option<&SceneGrid>, behaviour: Option<&TokenGridBehaviour>) -> f32 {
+    let footprint = behaviour.map_or_else(Footprint::default, |b| b.footprint);
+    grid.map_or(TOKEN_SIZE.x, |grid| footprint.world_size(grid.size))
+}
+
 /// The world-space rectangle the camera can see, widened enough to cover a
 /// token's bars.
 ///
@@ -126,13 +142,20 @@ fn visible_region(
 /// changes when a system's declarations change or a viewer's entitlement
 /// does, and a diffing update would be more code to get the same picture.
 ///
-/// This runs only on `Changed<TokenStatus>` and camera movement, so it is not
-/// a per-frame cost.
+/// This runs only on `Changed<TokenStatus>`, a changed footprint or grid, and
+/// camera movement, so it is not a per-frame cost.
+#[allow(clippy::type_complexity)]
 fn redraw_changed_status(
     mut commands: Commands,
-    tokens: Query<(Entity, Ref<TokenStatus>, &Transform)>,
+    tokens: Query<(
+        Entity,
+        Ref<TokenStatus>,
+        &Transform,
+        Option<Ref<TokenGridBehaviour>>,
+    )>,
     existing: Query<(Entity, &ChildOf), With<StatusGeometry>>,
     appearance: Res<Appearance>,
+    grid: Option<Res<SceneGrid>>,
     cameras: Query<(&Transform, &Projection), (With<Camera2d>, Without<TokenStatus>)>,
     mut last_view: Local<Option<Rect>>,
 ) {
@@ -170,10 +193,13 @@ fn redraw_changed_status(
         *last_view = view;
     }
 
-    let repaint_everything = appearance.is_changed() || view_moved;
+    // A new grid resizes every token, so it resizes every token's bars.
+    let grid_changed = grid.as_ref().is_some_and(|grid| grid.is_changed());
+    let repaint_everything = appearance.is_changed() || view_moved || grid_changed;
 
-    for (token_entity, status, transform) in tokens.iter() {
-        if !repaint_everything && !status.is_changed() {
+    for (token_entity, status, transform, behaviour) in tokens.iter() {
+        let footprint_changed = behaviour.as_ref().is_some_and(|b| b.is_changed());
+        if !repaint_everything && !status.is_changed() && !footprint_changed {
             continue;
         }
         // Clear what this plugin drew last time, and nothing else.
@@ -201,7 +227,10 @@ fn redraw_changed_status(
         // The system's declared order, not ours.
         ordered.sort_by_key(|r| r.definition.order);
 
-        let first_bar_offset = TOKEN_SIZE.y / 2.0 + appearance.first_bar_offset;
+        // Matched to the token so the two read as one object.
+        let side = token_side(grid.as_deref(), behaviour.as_deref());
+        let bar_width = side;
+        let first_bar_offset = side / 2.0 + appearance.first_bar_offset;
         let bar_height = appearance.bar_height;
         let track_color = rgb_to_color(appearance.track, appearance.track_alpha);
 
@@ -212,7 +241,7 @@ fn redraw_changed_status(
             // The track.
             commands.entity(token_entity).with_children(|parent| {
                 parent.spawn((
-                    Sprite::from_color(track_color, Vec2::new(BAR_WIDTH, bar_height)),
+                    Sprite::from_color(track_color, Vec2::new(bar_width, bar_height)),
                     Transform::from_xyz(0.0, y, BAR_Z),
                     StatusGeometry,
                 ));
@@ -232,10 +261,10 @@ fn redraw_changed_status(
                         1.0
                     },
                 );
-                let width = BAR_WIDTH * fraction;
+                let width = bar_width * fraction;
                 // Left-aligned inside the track: a bar that shrinks toward
                 // its centre is unreadable at a glance.
-                let x = -(BAR_WIDTH - width) / 2.0;
+                let x = -(bar_width - width) / 2.0;
 
                 parent.spawn((
                     Sprite::from_color(fill_color, Vec2::new(width, bar_height)),
@@ -244,5 +273,87 @@ fn redraw_changed_status(
                 ));
             });
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use thunderforge_canvas_core::resource_display::ResourceKind;
+
+    fn one_resource() -> TokenStatus {
+        TokenStatus {
+            resources: vec![ResolvedResource {
+                definition: ResourceDefinition {
+                    id: "hp".to_string(),
+                    label: "HP".to_string(),
+                    kind: ResourceKind::Bar,
+                    order: 0,
+                    allow_stacking: false,
+                },
+                // Withheld, so only the track is drawn: one sprite to measure.
+                disclosed: Disclosed::Greyed,
+            }],
+        }
+    }
+
+    /// The track drawn for `token`: its width and its height above the token.
+    fn track_of(app: &mut App, token: Entity) -> (f32, f32) {
+        let mut tracks = app
+            .world_mut()
+            .query_filtered::<(&Sprite, &Transform, &ChildOf), With<StatusGeometry>>();
+        let (sprite, transform, _) = tracks
+            .iter(app.world())
+            .find(|(_, _, parent)| parent.parent() == token)
+            .expect("a track above the token");
+        (
+            sprite.custom_size.expect("a sized track").x,
+            transform.translation.y,
+        )
+    }
+
+    /// Playtest 2026-09-10 P6, spec 029 FR-010a: on a 50-unit grid a
+    /// one-cell token's bars are 50 wide and start just above it — not 96
+    /// wide and starting inside it — and a two-cell token's span its 100.
+    #[test]
+    fn bars_are_sized_from_the_tokens_footprint_on_the_grid() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.add_plugins(StatusDisplayPlugin);
+        app.insert_resource(SceneGrid::from_server("square", 50.0, Vec2::ZERO));
+
+        let small = app
+            .world_mut()
+            .spawn((Transform::default(), one_resource()))
+            .id();
+        let large = app
+            .world_mut()
+            .spawn((
+                Transform::default(),
+                one_resource(),
+                TokenGridBehaviour {
+                    footprint: Footprint::new(2.0),
+                    snap: true,
+                },
+            ))
+            .id();
+        app.update();
+        app.update();
+
+        let offset = Appearance::default().first_bar_offset;
+
+        let (width, y) = track_of(&mut app, small);
+        assert!((width - 50.0).abs() < 1e-3, "one cell of 50, got {width}");
+        assert!(
+            (y - (25.0 + offset)).abs() < 1e-3,
+            "just above a 50-unit token, got {y}"
+        );
+
+        let (width, y) = track_of(&mut app, large);
+        assert!((width - 100.0).abs() < 1e-3, "two cells of 50, got {width}");
+        assert!(
+            (y - (50.0 + offset)).abs() < 1e-3,
+            "just above a 100-unit token, got {y}"
+        );
     }
 }

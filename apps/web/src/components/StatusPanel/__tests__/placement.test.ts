@@ -3,41 +3,29 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   StatusPanel,
-  type PanelCorner,
   type PanelResource,
   type StatusPanelProps,
 } from "../StatusPanel";
+import { KEEP_ON_SCREEN, keepOnScreen } from "../keepOnScreen";
 import type { Disclosed } from "@/engine/sdk/Disclosed";
 
 /**
- * Spec 029, User Story 5 — where the panel sits, and what it says when there
- * is nothing to say.
+ * Spec 029 FR-011a/FR-012a (playtest 2026-09-10 P6) — a pinned panel sits
+ * where it is put, can be moved and closed, and says nothing when there is
+ * nothing pinned.
  *
  * # Why this renders to markup rather than into a DOM
  *
  * `apps/web` has neither jsdom nor testing-library, and adding either means a
  * lockfile change shared with every other workstream for the sake of one
- * file. `StatusPanel` is a pure function of its props — no state, no effects
- * — so server-rendering it observes exactly what a viewer would see, and the
- * one interactive path is reached by finding the control by its accessible
+ * file. `StatusPanel` is a pure function of its props — no state, no effects,
+ * no hooks — so server-rendering it observes exactly what a viewer would see,
+ * and an interactive path is reached by finding the control by its accessible
  * name and invoking the handler it exposes, which is what a click does.
  *
- * The assertions are about what a person perceives: whether a panel appears
- * at all, what a screen reader is told, and which corner it is placed in. The
- * corner is the one thing named by class, because a class is the actual
- * mechanism by which CSS puts the panel top-left rather than bottom-right.
- *
- * The *durability* of that choice across a reload is not testable here — it
- * lives in `localStorage` and a real page load — and is proven in
- * `apps/web/e2e/status-placement.spec.ts` instead.
+ * A drag with a real pointer, and the position surviving a reload, are not
+ * testable here — they are proven in `apps/web/e2e/status-placement.spec.ts`.
  */
-
-const CORNERS: PanelCorner[] = [
-  "top-left",
-  "top-right",
-  "bottom-left",
-  "bottom-right",
-];
 
 function resource(disclosed: Disclosed, label = "Health"): PanelResource {
   return {
@@ -60,7 +48,7 @@ const EXACT: Disclosed = {
 function render(props: Partial<StatusPanelProps> = {}): string {
   const full: StatusPanelProps = {
     resources: [resource(EXACT)],
-    corner: "bottom-right",
+    position: { x: 120, y: 80 },
     ...props,
   };
   return renderToStaticMarkup(React.createElement(StatusPanel, full));
@@ -84,85 +72,105 @@ function findByAriaLabel(
   return findByAriaLabel(props.children as React.ReactNode, label);
 }
 
-/** The corner picker, as the viewer reaches it: by its label. */
-function cornerPicker(
-  corner: PanelCorner,
-  onCornerChange: (corner: PanelCorner) => void,
-): React.ReactElement {
-  const tree = StatusPanel({
+function tree(props: Partial<StatusPanelProps>): React.ReactNode {
+  return StatusPanel({
     resources: [resource(EXACT)],
-    corner,
-    onCornerChange,
+    position: { x: 120, y: 80 },
+    ...props,
   });
-  const select = findByAriaLabel(tree, "Panel position");
-  if (!select) {
-    throw new Error("the corner picker should be reachable by its name");
-  }
-  return select;
 }
 
-describe("StatusPanel placement (FR-011)", () => {
-  it.each(CORNERS)("puts the panel in the %s corner", (corner) => {
-    const markup = render({ corner });
-    expect(markup).toContain(`status-panel--${corner}`);
-    // And in no other, so a leftover class cannot fight the chosen one.
-    for (const other of CORNERS.filter((c) => c !== corner)) {
-      expect(markup).not.toContain(`status-panel--${other}`);
-    }
+describe("A pinned StatusPanel (FR-011a)", () => {
+  it("sits where it was put", () => {
+    const markup = render({ position: { x: 210, y: 64 } });
+    expect(markup).toContain("left:210px");
+    expect(markup).toContain("top:64px");
+    // And nowhere else: the corner classes of the old model are gone.
+    expect(markup).not.toMatch(/status-panel--(top|bottom)-(left|right)/);
   });
 
-  it("offers all four corners under a named control", () => {
-    const markup = render({ onCornerChange: () => {} });
-    expect(markup).toContain('aria-label="Panel position"');
-    for (const label of [
-      "Top left",
-      "Top right",
-      "Bottom left",
-      "Bottom right",
-    ]) {
-      expect(markup).toContain(label);
-    }
-  });
-
-  it("shows the corner the viewer is on as the control's current value", () => {
+  it("offers a close control by name, and reports it", () => {
+    const onClose = vi.fn();
+    const close = findByAriaLabel(tree({ onClose }), "Unpin status panel");
     expect(
-      (cornerPicker("top-right", () => {}).props as { value: string }).value,
-    ).toBe("top-right");
+      close,
+      "the close control should be reachable by its name",
+    ).not.toBeNull();
+    (close!.props as { onClick: () => void }).onClick();
+    expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("reports a new choice, so something above it can remember it", () => {
-    const onCornerChange = vi.fn();
-    const select = cornerPicker("bottom-right", onCornerChange);
-    const onChange = (
-      select.props as {
-        onChange: (event: { target: { value: string } }) => void;
+  it("offers no close control when it cannot be closed", () => {
+    expect(render()).not.toContain("Unpin status panel");
+  });
+
+  it("moves with the arrow keys, not only with a drag", () => {
+    const onMove = vi.fn();
+    const handle = findByAriaLabel(
+      tree({ onMove, position: { x: 100, y: 100 } }),
+      "Move status panel",
+    );
+    expect(handle, "the handle should be reachable by its name").not.toBeNull();
+    const onKeyDown = (
+      handle!.props as {
+        onKeyDown: (event: {
+          key: string;
+          shiftKey: boolean;
+          preventDefault: () => void;
+        }) => void;
       }
-    ).onChange;
+    ).onKeyDown;
 
-    onChange({ target: { value: "top-left" } });
+    onKeyDown({ key: "ArrowRight", shiftKey: false, preventDefault: () => {} });
+    expect(onMove).toHaveBeenLastCalledWith({ x: 116, y: 100 });
 
-    expect(onCornerChange).toHaveBeenCalledWith("top-left");
+    onKeyDown({ key: "ArrowUp", shiftKey: true, preventDefault: () => {} });
+    expect(onMove).toHaveBeenLastCalledWith({ x: 100, y: 36 });
+
+    onKeyDown({ key: "a", shiftKey: false, preventDefault: () => {} });
+    expect(onMove).toHaveBeenCalledTimes(2);
   });
 
-  it("omits the control entirely when the corner cannot be changed", () => {
-    expect(render()).not.toContain("Panel position");
+  it("is not a handle at all when it cannot move", () => {
+    expect(render()).not.toContain("Move status panel");
   });
 });
 
-describe("StatusPanel with nothing selected (FR-012)", () => {
-  it("shows no panel at all when no token is selected", () => {
+describe("keepOnScreen", () => {
+  const viewport = { width: 1280, height: 720 };
+
+  it("leaves a position already on screen alone", () => {
+    expect(keepOnScreen({ x: 300, y: 200 }, viewport)).toEqual({
+      x: 300,
+      y: 200,
+    });
+  });
+
+  it("never lets the header leave the top or the left", () => {
+    expect(keepOnScreen({ x: -500, y: -40 }, viewport)).toEqual({ x: 0, y: 0 });
+  });
+
+  it("keeps enough of it inside the right and bottom edges to grab", () => {
+    expect(keepOnScreen({ x: 5000, y: 5000 }, viewport)).toEqual({
+      x: viewport.width - KEEP_ON_SCREEN,
+      y: viewport.height - KEEP_ON_SCREEN,
+    });
+  });
+
+  it("changes nothing when there is no viewport to ask", () => {
+    expect(keepOnScreen({ x: -9, y: 9999 }, null)).toEqual({ x: -9, y: 9999 });
+  });
+});
+
+describe("StatusPanel with nothing pinned (FR-012a)", () => {
+  it("shows no panel at all", () => {
     expect(render({ resources: null })).toBe("");
   });
 
   it("shows no panel for a token whose system declares no resources", () => {
-    // Not an empty frame: a blank panel in the corner reads as "this token
-    // has nothing left", which is a different claim from "nothing to show".
+    // Not an empty frame: a blank panel reads as "this token has nothing
+    // left", which is a different claim from "nothing to show".
     expect(render({ resources: [] })).toBe("");
-  });
-
-  it("cannot keep the previous token's figures after deselection", () => {
-    expect(render({ resources: [resource(EXACT)] })).toContain("7 / 12");
-    expect(render({ resources: null })).not.toContain("7 / 12");
   });
 
   it("keeps no heading behind either, even one it was given", () => {

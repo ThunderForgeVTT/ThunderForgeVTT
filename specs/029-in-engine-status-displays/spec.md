@@ -243,6 +243,8 @@ two. No engine change between them.
 
 ### User Story 5 - Putting the panel where it does not cover the map (Priority: P2)
 
+> **Amended 2026-09-10** (owner's playtest decision, `specs/031-playability/playtest-2026-09-10.md` P6; FR-010a–FR-012a). The corner model below is superseded: selecting a token no longer opens a panel, since its bars above it are its display; a double-click pins a panel where it happened, which the viewer drags wherever it does not cover the map, and closes. The story's aim — the panel never covering what the viewer is reading — stands, and a free position meets it better than four corners did.
+
 As a viewer, I choose which corner the selected-token panel occupies, and my
 choice persists.
 
@@ -374,12 +376,28 @@ the engine, so that a later theming feature has something to configure.
 
 #### The selected-token panel
 
-- **FR-010**: Selecting a token MUST present its displayable resources in a
-  screen-corner panel.
-- **FR-011**: The corner MUST be viewer-configurable and MUST persist across
-  reloads.
+- ~~**FR-010**: Selecting a token MUST present its displayable resources in a
+  screen-corner panel.~~ **Superseded 2026-09-10** by FR-010a (owner's
+  playtest decision, `specs/031-playability/playtest-2026-09-10.md` P6).
+- ~~**FR-011**: The corner MUST be viewer-configurable and MUST persist across
+  reloads.~~ **Superseded 2026-09-10** by FR-011a.
 - **FR-012**: With no selection, the panel MUST NOT display stale values from
-  a previous selection.
+  a previous selection. **Refined 2026-09-10** by FR-012a: a *pinned* panel is
+  not tied to the selection.
+- **FR-010a** *(2026-09-10)*: A selected token's displayable resources MUST be
+  shown by its own token-attached display (FR-006), sized and placed from the
+  token's footprint on the grid so it sits above the token at any grid size.
+  Selecting a token MUST NOT open a screen panel.
+- **FR-011a** *(2026-09-10)*: Double-clicking a token MUST pin a screen panel
+  for it. The viewer MUST be able to drag the pinned panel and close it. Until
+  the viewer has dragged one, a pinned panel opens where the double-click
+  happened; once they have, it opens where they last left it, and that
+  position MUST persist across reloads for that viewer on that device. One
+  panel is pinned at a time: pinning another token replaces it.
+- **FR-012a** *(2026-09-10)*: A pinned panel MUST outlive the selection — it
+  stays until closed or replaced — and MUST show its token's current values,
+  never a previous token's. Disclosure (FR-013–FR-016) applies unchanged: the
+  panel shows exactly what the viewer's token-attached display may show.
 
 #### Visibility and disclosure
 
@@ -474,7 +492,11 @@ the engine, so that a later theming feature has something to configure.
   receives only what the state permits.
 - **TokenStatusDisplay**: the resolved set of values the engine draws for one
   token.
-- **PanelPlacement**: the viewer's chosen corner, persisted per viewer.
+- **PanelPlacement**: ~~the viewer's chosen corner, persisted per viewer.~~
+  **Amended 2026-09-10 (FR-011a):** where the viewer dragged the pinned panel,
+  in viewport pixels, persisted per viewer on that device. Which token is
+  pinned is not persisted: the token may be gone, or the scene changed, by the
+  next visit.
 - **DisplayAppearance**: application-supplied presentation values.
 
 ## Follow-up: clocks
