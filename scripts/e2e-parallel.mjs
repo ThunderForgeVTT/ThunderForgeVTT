@@ -127,14 +127,14 @@ const PERF_LANE_SPECS = [
   "engine-interaction-limits",
   "engine-loading",
   "canvas-authoring",
-  // These two were added from evidence rather than by reading assertions:
-  // both failed in a four-shard run and both pass alone, `status-systems` in
-  // about six seconds per ruleset and `world-cache-isolated` in 1.4 minutes.
-  // Neither asserts on a duration, so the earlier pass over the suite missed
-  // them — what they actually need is an engine that can report inside a 60s
-  // predicate, which it cannot while three other shards compete for the GPU.
-  "status-systems",
-  "world-cache-isolated",
+  // `status-systems` and `world-cache-isolated` used to be here too. Both had
+  // failed in a four-shard run and passed alone, and the explanation was GPU
+  // contention. Neither asserts on a duration, and a full run on 2026-09-11,
+  // sampled every ten seconds, never saw that contention: the sharded lane's
+  // GPU peaked at 49% (p90 35%) with 16GB of memory still free. Keeping them
+  // here cost seven minutes of a serial lane that is most of the wall clock,
+  // so they are back in the sharded lane — and if they fail there again, the
+  // evidence to look for is a saturated GPU, not their names on this list.
 ];
 
 /**
@@ -154,22 +154,40 @@ function measuredSpecsSelected(args) {
     ?.split(",")
     .map((p) => p.trim())
     .filter(Boolean);
-  return allSpecFiles()
+  return allSpecFiles(args.suite)
     .filter(
       (file) => !onlyPatterns || onlyPatterns.some((p) => file.includes(p)),
     )
     .filter(isPerfSpec);
 }
 
-/** Every spec file, relative to `apps/web`, including `e2e/torture`. */
-function allSpecFiles() {
-  const root = join(ROOT_DIR, "apps/web/e2e");
+/**
+ * The suites this runner knows. `e2e` is the default and the one every change
+ * is held to; `playtest` is run by hand (`pnpm playtest`), on one stack, under
+ * its own config — see `apps/web/playwright.playtest.config.ts` for why it is
+ * kept apart. `report` is where that config's HTML report goes, since the
+ * command line's `--reporter` otherwise replaces the config's own.
+ */
+const SUITES = {
+  e2e: { dir: "apps/web/e2e", suffix: ".spec.ts", config: null, report: null },
+  playtest: {
+    dir: "apps/web/playtest",
+    suffix: ".playtest.ts",
+    config: "playwright.playtest.config.ts",
+    report: "playtest-report",
+  },
+};
+
+/** Every spec file of `suite`, relative to `apps/web`, including `e2e/torture`. */
+function allSpecFiles(suite = "e2e") {
+  const { dir, suffix } = SUITES[suite];
+  const root = join(ROOT_DIR, dir);
   const found = [];
   const walk = (dir) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const full = join(dir, entry.name);
       if (entry.isDirectory()) walk(full);
-      else if (entry.name.endsWith(".spec.ts")) {
+      else if (entry.name.endsWith(suffix)) {
         found.push(relative(join(ROOT_DIR, "apps/web"), full));
       }
     }
@@ -193,6 +211,49 @@ function isFirstRunSpec(file) {
 function isPerfSpec(file) {
   return PERF_LANE_SPECS.some((name) => file.endsWith(`/${name}.spec.ts`));
 }
+
+/**
+ * The specs that need GitHub applications configured the *other* way round.
+ *
+ * Every other shard fixes the feedback application in its environment and
+ * leaves sync unset, and `feedback-credentials.spec.ts` is written for exactly
+ * that shape. These two need its mirror image, and no single stack can be
+ * both:
+ *
+ * - `github-apps.spec.ts` writes the global and feedback applications through
+ *   the screens. An environment-fixed feedback application refuses every
+ *   write, so three of its scenarios skipped on every run.
+ * - `lore-repository-sync.spec.ts`'s grant hand-off needs an instance that can
+ *   connect, and `instanceRepositoryIntegration` reads *only* the environment
+ *   (`repo_host::registration_from_env`) — no instance setting makes it true.
+ *
+ * So they get a stack of their own, which is the same answer the first-run
+ * lane already gives to "this spec needs a differently configured instance".
+ */
+function isGithubAppsSpec(file) {
+  return (
+    file.endsWith("/github-apps.spec.ts") ||
+    file.endsWith("/lore-repository-sync.spec.ts")
+  );
+}
+
+/**
+ * That stack's applications: feedback blank so it is writable, sync from the
+ * environment so lore sync can connect. The key is the throwaway fixture the
+ * feedback application uses elsewhere; the host behind it is the shard's
+ * GitHub stub, through `GITHUB_API_BASE` and `GITHUB_WEB_BASE`.
+ */
+const GITHUB_APPS_LANE_ENV = {
+  FEEDBACK_GITHUB_APP_CLIENT_ID: "",
+  FEEDBACK_GITHUB_APP_SLUG: "",
+  FEEDBACK_GITHUB_APP_PRIVATE_KEY_FILE: "",
+  SYNC_GITHUB_APP_CLIENT_ID: "Iv1.e2esyncstub",
+  SYNC_GITHUB_APP_SLUG: "thunderforge-sync-stub",
+  SYNC_GITHUB_APP_PRIVATE_KEY_FILE: join(
+    ROOT_DIR,
+    "crates/thunderforge-repo-host/tests/fixtures/throwaway-test-app-key.pem",
+  ),
+};
 
 /** Seconds per spec file from the last run, or `{}` on the first one. */
 function readDurations() {
@@ -640,8 +701,47 @@ function stopMailpit() {
   }
 }
 
+/**
+ * The env-configured OAuth providers `auth-providers.spec.ts` is written for.
+ *
+ * Copied from that file's header, which lists them as the stack it needs. The
+ * server reads `OAUTH_*` once at startup and materialises each group into the
+ * shard's `oauth_providers` table, and every scenario pinned to a named
+ * provider checks that table and skips when the provider is missing — so
+ * without these, four of its tests passed by not running, on every run.
+ *
+ * None of them reaches a network. The spec asserts only on the redirect a
+ * provider's *start* endpoint issues, and the Keycloak endpoints are derived
+ * from the issuer by string (`oauth_env.rs`), not discovered.
+ *
+ * `OAUTH_KEYCLOAK_LABEL` is set blank on purpose. `dotenvy` searches parent
+ * directories for a `.env`, so a worktree under a developer's checkout
+ * inherits theirs — and one that labels its Keycloak would fail the test
+ * asserting the preset's own label. Blank is unset to `oauth_env.rs`, and
+ * `dotenvy` never overwrites a variable that is already present.
+ */
+const OAUTH_PROVIDER_FIXTURE = {
+  OAUTH_DISCORD_CLIENT_ID: "test_discord_client_id",
+  OAUTH_DISCORD_CLIENT_SECRET: "test_discord_client_secret",
+  OAUTH_KEYCLOAK_ISSUER_URL: "https://idp.example.com/realms/main",
+  OAUTH_KEYCLOAK_CLIENT_ID: "test_kc_id",
+  OAUTH_KEYCLOAK_CLIENT_SECRET: "test_kc_secret",
+  OAUTH_KEYCLOAK_LABEL: "",
+  OAUTH_KEYCLOAK_WORK_ISSUER_URL: "https://work.example.com/realms/main",
+  OAUTH_KEYCLOAK_WORK_CLIENT_ID: "test_kc_work_id",
+  OAUTH_KEYCLOAK_WORK_CLIENT_SECRET: "test_kc_work_secret",
+  OAUTH_KEYCLOAK_WORK_LABEL: "Work SSO",
+  OAUTH_MYSERVICE_CLIENT_ID: "test_generic_id",
+  OAUTH_MYSERVICE_CLIENT_SECRET: "test_generic_secret",
+  OAUTH_MYSERVICE_AUTHORIZATION_URL: "https://myservice.example/auth",
+  OAUTH_MYSERVICE_TOKEN_URL: "https://myservice.example/token",
+};
+
 /** Starts one shard's backend and frontend, and resolves once both answer. */
-async function startShard(index, { firstRun = false } = {}) {
+async function startShard(
+  index,
+  { firstRun = false, githubApps = false } = {},
+) {
   const database = cloneShardDatabase(index, { firstRun });
   const backendPort = BACKEND_PORT_BASE + index;
   const webPort = WEB_PORT_BASE + index;
@@ -723,6 +823,11 @@ async function startShard(index, { firstRun = false } = {}) {
       ROOT_DIR,
       "crates/thunderforge-repo-host/tests/fixtures/throwaway-test-app-key.pem",
     ),
+    // Seeded stacks only, like the OAuth stub rewrite in `cloneShardDatabase`:
+    // the first-run lane is an instance nobody has configured yet.
+    ...(firstRun ? {} : OAUTH_PROVIDER_FIXTURE),
+    // Last, so it overrides the feedback and sync values above.
+    ...(githubApps ? GITHUB_APPS_LANE_ENV : {}),
   };
 
   spawnManaged(
@@ -819,7 +924,7 @@ async function startShard(index, { firstRun = false } = {}) {
 }
 
 /** Runs one Playwright shard against an already-started stack. */
-function runShard(shard, files, label = "parallel") {
+function runShard(shard, files, label = "parallel", suite = null) {
   // Which Playwright project this lane is. The projects are a partition of the
   // suite by *stack*, not by browser: `first-run` matches only the setup spec
   // and `chromium` ignores it, so neither lane can pick up the other's files
@@ -859,9 +964,15 @@ function runShard(shard, files, label = "parallel") {
   // No `--shard`: the split is done here, by measured duration
   // (`partitionByDuration`), because Playwright's own divides by test count and
   // cannot know that one file is a quarter of the suite.
-  const command =
-    `pnpm exec playwright test ${files.join(" ")} --project=${project}` +
-    ` --workers=1 --reporter=list,json --output=test-results/shard-${shard.index}`;
+  //
+  // A suite with a config of its own keeps that config's output directory and
+  // adds its HTML report; the JSON beside it is what `judgeLane` reads either
+  // way.
+  const command = suite?.config
+    ? `pnpm exec playwright test ${files.join(" ")} --config=${suite.config}` +
+      ` --project=${project} --workers=1 --reporter=list,json,html`
+    : `pnpm exec playwright test ${files.join(" ")} --project=${project}` +
+      ` --workers=1 --reporter=list,json --output=test-results/shard-${shard.index}`;
 
   const child = spawnManaged(command, {
     cwd: join(ROOT_DIR, "apps/web"),
@@ -892,6 +1003,12 @@ function runShard(shard, files, label = "parallel") {
       // the first. That silently dropped `token-authoring` from the recorded
       // durations, which is the file the whole partition is built around.
       PLAYWRIGHT_JSON_OUTPUT_NAME: reportPath,
+      ...(suite?.report
+        ? {
+            PLAYWRIGHT_HTML_OUTPUT_DIR: suite.report,
+            PLAYWRIGHT_HTML_OPEN: "never",
+          }
+        : {}),
     },
   });
 
@@ -945,11 +1062,19 @@ async function main() {
   // Parsed here rather than through `shared.mjs`'s `parseArgs`, which is a
   // fixed-shape parser for the dev/build scripts' three flags and rejects
   // anything else by design.
-  const args = { shards: 4, all: false, keep: false, only: null };
+  const args = {
+    shards: 4,
+    all: false,
+    keep: false,
+    only: null,
+    suite: "e2e",
+  };
   for (const argv of process.argv.slice(2)) {
     const shardMatch = /^--shards=(\d+)$/.exec(argv);
     const onlyMatch = /^--only=(.+)$/.exec(argv);
+    const suiteMatch = /^--suite=(e2e|playtest)$/.exec(argv);
     if (shardMatch) args.shards = Number(shardMatch[1]);
+    else if (suiteMatch) args.suite = suiteMatch[1];
     // A substring of the spec path, for exercising the harness itself without
     // waiting out the suite it exists to speed up.
     else if (onlyMatch) args.only = onlyMatch[1];
@@ -957,13 +1082,19 @@ async function main() {
     else if (argv === "--keep") args.keep = true;
     else throw new Error(`Unknown argument: ${argv}`);
   }
-  const total = args.shards;
+  // A playtest is one table on one stack. Each scenario already runs three
+  // browsers against an engine-heavy scene and records them, so a second
+  // shard would only compete with the recording it is making.
+  const total = args.suite === "playtest" ? 1 : args.shards;
   if (!Number.isInteger(total) || total < 1) {
     throw new Error(`--shards must be a positive integer, got ${total}`);
   }
 
   acquireLock();
-  await assertPortsFree(total);
+  // Two past the sharded stacks: the first-run lane runs on index `total` and
+  // the GitHub-applications lane on `total + 1`, and a port either finds taken
+  // is the same stale-corpse hazard as a shard's.
+  await assertPortsFree(total + 2);
   log("e2e", `Preparing ${total} shard${total === 1 ? "" : "s"}.`);
   rmSync(SHARD_DIR, { recursive: true, force: true });
   mkdirSync(SHARD_DIR, { recursive: true });
@@ -1031,7 +1162,7 @@ async function main() {
     ?.split(",")
     .map((p) => p.trim())
     .filter(Boolean);
-  const specs = allSpecFiles().filter(
+  const specs = allSpecFiles(args.suite).filter(
     (file) => !onlyPatterns || onlyPatterns.some((p) => file.includes(p)),
   );
   if (specs.length === 0) {
@@ -1045,8 +1176,16 @@ async function main() {
   // reason that has nothing to do with what it tests. `--all` shards the
   // *measured* specs; it deliberately does not move these, because the
   // distinction here is which database they need, not how they are timed.
-  const firstRunSpecs = specs.filter(isFirstRunSpec);
-  const rest = specs.filter((file) => !isFirstRunSpec(file));
+  //
+  // A playtest run has one lane of its own and none of these: its scenarios
+  // build their own worlds, and none of them is measured.
+  const playtest = args.suite === "playtest";
+  const playtestSpecs = playtest ? specs : [];
+  const firstRunSpecs = playtest ? [] : specs.filter(isFirstRunSpec);
+  const githubAppsSpecs = playtest ? [] : specs.filter(isGithubAppsSpec);
+  const rest = playtest
+    ? []
+    : specs.filter((file) => !isFirstRunSpec(file) && !isGithubAppsSpec(file));
   const parallelSpecs = args.all
     ? rest
     : rest.filter((file) => !isPerfSpec(file));
@@ -1075,7 +1214,8 @@ async function main() {
   }
   log(
     "e2e",
-    `${parallelSpecs.length} spec files sharded, ${serialSpecs.length} measured serially.`,
+    `${parallelSpecs.length} spec files sharded, ${serialSpecs.length} measured serially, ` +
+      `${githubAppsSpecs.length} on the GitHub-applications stack.`,
   );
 
   const durations = readDurations();
@@ -1091,6 +1231,16 @@ async function main() {
   const results = await Promise.all(
     shards.map((shard) => runShard(shard, bins[shard.index].files)),
   );
+
+  if (playtestSpecs.length > 0) {
+    log(
+      "e2e",
+      `Running ${playtestSpecs.length} playtest(s); the report goes to apps/web/${SUITES.playtest.report}.`,
+    );
+    results.push(
+      await runShard(shards[0], playtestSpecs, "playtest", SUITES.playtest),
+    );
+  }
 
   // The measured specs, alone, on the first shard's stack. Sequential by
   // construction: this is the lane whose numbers are only meaningful when
@@ -1128,6 +1278,30 @@ async function main() {
         `First-run stack up on :${firstRunShard.webPort} (db ${firstRunShard.database}, unseeded).`,
       );
       results.push(await runShard(firstRunShard, firstRunSpecs, "first-run"));
+    }
+  }
+
+  // The GitHub-applications lane, on its own stack for the reason
+  // `isGithubAppsSpec` gives. Index `total + 1`, one past the first-run stack.
+  if (githubAppsSpecs.length > 0) {
+    log("e2e", "Running the GitHub-applications lane on its own stack.");
+    const appsShard = await startShard(total + 1, { githubApps: true });
+    if (!appsShard) {
+      log(
+        "e2e",
+        "The GitHub-applications stack failed to start.",
+        process.stderr,
+      );
+      results.push({
+        index: total + 1,
+        label: "github-apps",
+        code: 1,
+        failed: true,
+        reasons: ["stack failed to start"],
+      });
+    } else {
+      shards.push(appsShard);
+      results.push(await runShard(appsShard, githubAppsSpecs, "github-apps"));
     }
   }
 

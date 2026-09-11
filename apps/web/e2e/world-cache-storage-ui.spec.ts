@@ -108,11 +108,27 @@ test.describe("Client world cache — seeing and reclaiming storage (US5)", () =
 
     // FR-025: a total and a per-world breakdown.
     await openStoragePanel(page);
-    const total = await page.getByTestId("storage-total").textContent();
+    // Polled, because the panel is visible before it knows the answer:
+    // `StoragePanel` starts with no usage and renders `0 B in use across 0
+    // worlds` until its estimate arrives, and `openStoragePanel` waits only
+    // for the panel itself. Read once, this was the only unpolled assertion
+    // in a file that polls everywhere else, and it failed the full run of
+    // 2026-09-11 by reading that loading state — 12.5s, against the 16.8s the
+    // same test took when it passed.
+    let total: string | null = null;
+    await expect
+      .poll(
+        async () => {
+          total = await page.getByTestId("storage-total").textContent();
+          return total ?? "";
+        },
+        {
+          timeout: 30_000,
+          message: "the panel should report a non-zero total",
+        },
+      )
+      .not.toMatch(/^0 B/);
     console.log(`[storage] total reported: ${total?.trim()}`);
-    expect(total, "the panel should report a non-zero total").not.toMatch(
-      /^0 B/,
-    );
 
     const before = await panelRows(page);
     console.log(`[storage] rows: ${JSON.stringify([...before])}`);
