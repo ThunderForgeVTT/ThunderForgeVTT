@@ -38,6 +38,8 @@ use glam::Vec2;
 
 use crate::wall::{WallSet, is_visible};
 
+pub use crate::shadow_map::{ShadowRow, shadow_map_row};
+
 /// How well-lit a point is.
 ///
 /// Ordered: `Dark < Dim < Bright`, so combining lights is a `max`.

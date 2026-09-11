@@ -10,15 +10,20 @@ pub(crate) fn render_selection_feedback(
     mut sprite_query: Query<(&TokenIdentity, &mut Sprite, &mut Transform)>,
     selected_token: Res<SelectedToken>,
 ) {
+    // On the token layer, where everything else assumes tokens are. They
+    // used to be pinned at z 1 and 2 — under shapes, walls, and (playtest
+    // 2026-09-10 P9) the darkness, which is drawn over the map and would
+    // have covered every token in a dark scene.
+    let layer = crate::resources::CanvasLayer::Tokens.z();
     for (identity, mut sprite, mut transform) in sprite_query.iter_mut() {
         if selected_token.is_selected(&identity.0) {
             // Selected token: opaque, on top
             sprite.color = sprite.color.with_alpha(1.0);
-            transform.translation.z = 2.0;
+            transform.translation.z = layer + 1.0;
         } else {
             // Unselected token: slightly transparent
             sprite.color = sprite.color.with_alpha(0.85);
-            transform.translation.z = 1.0;
+            transform.translation.z = layer;
         }
     }
 }

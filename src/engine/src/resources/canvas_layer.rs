@@ -23,15 +23,38 @@ impl CanvasLayer {
     /// Fixed render order, lowest first. Kept as a method (rather than a
     /// derived enum discriminant) so the order is one readable place, not
     /// implied by declaration order alone.
+    ///
+    /// Shapes sit below walls (playtest 2026-09-10 P9): shapes and pasted
+    /// images are part of the map, so the darkness is drawn over them
+    /// (`darkness_z`), while walls and light markers are the Game Master's
+    /// authoring aids and stay readable above it.
     pub const ORDER: [CanvasLayer; 7] = [
         CanvasLayer::Background,
         CanvasLayer::Grid,
+        CanvasLayer::Shapes,
         CanvasLayer::Walls,
         CanvasLayer::Lighting,
-        CanvasLayer::Shapes,
         CanvasLayer::Tokens,
         CanvasLayer::Fog,
     ];
+
+    /// Where the darkness layer is drawn: over everything that is the map —
+    /// its art, shapes, pasted images — and under the tokens and the Game
+    /// Master's walls and light markers. (Grid lines are gizmos, which Bevy
+    /// draws last whatever their z, so they stay readable over the dark.)
+    ///
+    /// It used to sit just above the background, so every wall, every light
+    /// marker and every pasted image was drawn at full brightness on top of a
+    /// dark scene.
+    pub fn darkness_z() -> f32 {
+        CanvasLayer::Shapes.z() + 5.0
+    }
+
+    /// Where a wall is drawn for someone who does not run the world: under the
+    /// darkness, so a dark scene does not trace its own walls for the table.
+    pub fn player_wall_z() -> f32 {
+        Self::darkness_z() - 1.0
+    }
 
     /// A z-translation for sprites/meshes on this layer. Spaced widely so
     /// each layer has room for its own internal ordering (e.g. selected
@@ -119,6 +142,27 @@ mod tests {
             assert!(z > previous, "layer z-order must strictly increase");
             previous = z;
         }
+    }
+
+    #[test]
+    fn the_darkness_covers_the_map_and_not_the_tokens() {
+        let dark = CanvasLayer::darkness_z();
+        for below in [
+            CanvasLayer::Background,
+            CanvasLayer::Grid,
+            CanvasLayer::Shapes,
+        ] {
+            assert!(below.z() < dark, "{below:?} is part of the map");
+        }
+        for above in [
+            CanvasLayer::Walls,
+            CanvasLayer::Lighting,
+            CanvasLayer::Tokens,
+        ] {
+            assert!(above.z() > dark, "{above:?} stays above the darkness");
+        }
+        assert!(CanvasLayer::player_wall_z() < dark);
+        assert!(CanvasLayer::player_wall_z() > CanvasLayer::Shapes.z());
     }
 
     #[test]

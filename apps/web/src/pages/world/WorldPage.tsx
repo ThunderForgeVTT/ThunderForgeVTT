@@ -940,6 +940,28 @@ export default function WorldPage() {
     );
   }, [engineReady, isSceneOwner]);
 
+  // Playtest 2026-09-10 P9: a player sees the board through their own token —
+  // their primary one, else any they own — so walls hide what it cannot see.
+  // A Game Master sees through none. The engine used to use its own demo
+  // token as everyone's eyes, the Game Master's included.
+  const myTokens =
+    isSceneOwner || !user?.id
+      ? []
+      : Object.values(worldState.tokens).filter(
+          (token) => token.ownerUserId === user.id,
+        );
+  const viewerTokenId =
+    (myTokens.find((token) => token.isPrimary) ?? myTokens[0])?.id ?? null;
+
+  useEffect(() => {
+    if (!engineReady) {
+      return;
+    }
+    void import("@/engine/bevy").then(({ setViewerToken }) =>
+      setViewerToken(viewerTokenId),
+    );
+  }, [engineReady, viewerTokenId]);
+
   useEffect(() => {
     if (!id || !bridgeReady) {
       return;

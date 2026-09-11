@@ -18,7 +18,7 @@ use crate::resources::{
     CanvasLayer, IsGameMaster, LightEdit, LightSet, LightSource, SceneAmbient, SelectedLight,
     TokenVision, WallSet,
 };
-use crate::{ActiveWorld, PlayerToken, TokenIdentity, emit_event};
+use crate::{ActiveWorld, TokenIdentity, emit_event};
 use thunderforge_canvas_core::vision::{
     AmbientLight, Illumination, ResolvedLight, Rgb, Visibility as Perceived, VisionProfile,
     illumination_at, visibility_of,
@@ -137,7 +137,10 @@ fn cursor_world_position(
 /// `systems/selection.rs`); otherwise the light's own stored position.
 /// Falls back to the stored position if the attached token isn't found
 /// (e.g. it was removed).
-fn effective_light_position(light: &LightSource, token_positions: &HashMap<String, Vec2>) -> Vec2 {
+pub(crate) fn effective_light_position(
+    light: &LightSource,
+    token_positions: &HashMap<String, Vec2>,
+) -> Vec2 {
     if let Some(token_id) = &light.attached_token_id
         && let Some(position) = token_positions.get(token_id)
     {
@@ -525,6 +528,16 @@ pub(crate) fn sync_light_visuals(
     }
 
     for light in light_set.lights() {
+        // A light's marker is a grab handle, and handles are the Game
+        // Master's (`CanvasLayer::Lighting.editing_is_gm_only`). Drawn for the
+        // table, it was a small amber square over every light — the "yellow
+        // dot" of two playtests, and a map of where each light is hidden.
+        if !is_gm.0 {
+            if let Some(entity) = light_entities.0.remove(&light.id) {
+                commands.entity(entity).despawn();
+            }
+            continue;
+        }
         let selected = selected_light.is_selected(&light.id);
         let color = light_color(light, selected);
         let position = effective_light_position(light, &positions);
@@ -615,37 +628,69 @@ fn resolve_light(light: &LightSource, positions: &HashMap<String, Vec2>) -> Reso
 /// - **Facing is honoured**, so a vision cone actually restricts what its
 ///   owner sees.
 ///
-/// The observer is the local `PlayerToken`. With no player token — the GM's
-/// view — there is no single point of view to occlude from, so occlusion and
-/// facing are skipped and tokens are shown according to illumination alone.
-/// That is deliberate: a GM sees the board, not one character's slice of it.
+/// The observer is the token this client sees the board through: the local
+/// player's own, as the application names it (`ViewerToken`). A Game Master
+/// has none — there is no single point of view to occlude from, so occlusion
+/// and facing are skipped — and loses no token to the dark: one a player
+/// could not see is drawn dimmed for them instead. A GM sees the board, not
+/// one character's slice of it, and a token they cannot find is one they
+/// cannot run.
+///
+/// Playtest 2026-09-10 P9: the observer used to be whichever entity carried
+/// `PlayerToken`, which is the engine's own demo token, spawned in every
+/// session. Every client — the Game Master's included — saw the board from a
+/// red square at (-180, 0), and no real player's token ever had a point of
+/// view.
 ///
 /// A scene with no lights and a bright ambient returns early untouched
 /// (FR-013: a scene using none of these capabilities still renders normally).
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn apply_light_illumination(
     light_set: Res<LightSet>,
     wall_set: Res<WallSet>,
     ambient: Option<Res<SceneAmbient>>,
-    token_positions: Query<(&Transform, &TokenIdentity)>,
-    observer_query: Query<(&Transform, Option<&TokenVision>), With<PlayerToken>>,
-    mut tokens: Query<
-        (
-            &Transform,
-            Option<&TokenVision>,
-            &mut Sprite,
-            &mut Visibility,
-        ),
-        With<TokenIdentity>,
-    >,
+    is_gm: Option<Res<IsGameMaster>>,
+    viewer: Option<Res<ViewerToken>>,
+    token_positions: Query<(&Transform, &TokenIdentity, Option<&TokenVision>)>,
+    mut tokens: Query<(
+        &Transform,
+        &TokenIdentity,
+        Option<&TokenVision>,
+        &mut Sprite,
+        &mut Visibility,
+    )>,
+    // Whether the last pass hid or dimmed anything, so the quiet path below
+    // can put it back rather than leave a token hidden from a view that no
+    // longer applies.
+    mut touched: Local<bool>,
 ) {
     let ambient = ambient.map_or_else(AmbientLight::daylight, |a| a.0);
 
-    if light_set.lights().is_empty() && ambient.level == Illumination::Bright {
+    // Nothing to resolve in a lit scene with no lights — unless someone is
+    // looking through a token, whose walls hide things in daylight too.
+    let sees_through_a_token = !is_gm.as_ref().is_some_and(|gm| gm.0)
+        && viewer.as_ref().is_some_and(|viewer| viewer.0.is_some());
+    if light_set.lights().is_empty()
+        && ambient.level == Illumination::Bright
+        && !sees_through_a_token
+    {
+        // Everything is in plain sight again. Whatever an earlier pass hid —
+        // a token behind a wall from a viewer since unset, or in a dark scene
+        // since lit — is shown, not left hidden with nobody to unhide it.
+        if *touched {
+            for (_, _, _, mut sprite, mut visibility) in tokens.iter_mut() {
+                *visibility = Visibility::Inherited;
+                undim(&mut sprite);
+            }
+            *touched = false;
+        }
+        mirror_hidden_tokens(Vec::new());
         return;
     }
+    *touched = true;
 
     let mut positions: HashMap<String, Vec2> = HashMap::new();
-    for (transform, identity) in token_positions.iter() {
+    for (transform, identity, _) in token_positions.iter() {
         positions.insert(identity.0.clone(), transform.translation.truncate());
     }
 
@@ -655,14 +700,28 @@ pub(crate) fn apply_light_illumination(
         .map(|light| resolve_light(light, &positions))
         .collect();
 
-    let observer = observer_query.single().ok().map(|(transform, vision)| {
-        (
-            transform.translation.truncate(),
-            vision.map_or_else(VisionProfile::default, |v| v.0),
-        )
-    });
+    let game_master = is_gm.is_some_and(|gm| gm.0);
+    let observer = if game_master {
+        None
+    } else {
+        viewer
+            .as_ref()
+            .and_then(|viewer| viewer.0.as_deref())
+            .and_then(|id| {
+                token_positions
+                    .iter()
+                    .find(|(_, identity, _)| identity.0 == id)
+            })
+            .map(|(transform, _, vision)| {
+                (
+                    transform.translation.truncate(),
+                    vision.map_or_else(VisionProfile::default, |v| v.0),
+                )
+            })
+    };
 
-    for (transform, token_vision, mut sprite, mut visibility) in tokens.iter_mut() {
+    let mut hidden = Vec::new();
+    for (transform, identity, token_vision, mut sprite, mut visibility) in tokens.iter_mut() {
         let target = transform.translation.truncate();
 
         let perceived = match observer {
@@ -690,7 +749,7 @@ pub(crate) fn apply_light_illumination(
                     Illumination::Bright => Perceived::Clear,
                     Illumination::Dim => Perceived::Dim,
                     Illumination::Dark => {
-                        if token_vision.map_or(0.0, |v| v.darkvision) > 0.0 {
+                        if game_master || token_vision.map_or(0.0, |v| v.darkvision) > 0.0 {
                             Perceived::Dim
                         } else {
                             Perceived::Hidden
@@ -703,7 +762,10 @@ pub(crate) fn apply_light_illumination(
         match perceived {
             Perceived::Clear => {
                 *visibility = Visibility::Inherited;
-                sprite.color = sprite.color.with_alpha(1.0);
+                // Plain sight takes whatever alpha the token already has —
+                // selection feedback's, typically — undoing only a dim this
+                // system applied. Forcing 1.0 overwrote selection's feedback.
+                undim(&mut sprite);
             }
             Perceived::Dim => {
                 *visibility = Visibility::Inherited;
@@ -711,9 +773,85 @@ pub(crate) fn apply_light_illumination(
             }
             Perceived::Hidden => {
                 *visibility = UNLIT_VISIBILITY;
+                hidden.push(identity.0.clone());
             }
         }
     }
+    mirror_hidden_tokens(hidden);
+}
+
+/// Undo a dim this system applied, and nothing else: a token's own alpha —
+/// selection feedback draws unselected tokens slightly transparent — is not
+/// illumination's to reset.
+fn undim(sprite: &mut Sprite) {
+    if (sprite.color.alpha() - DIM_ALPHA).abs() < 1e-3 {
+        sprite.color = sprite.color.with_alpha(1.0);
+    }
+}
+
+/// The token this client sees the board through — the local player's own,
+/// named by the application (`set_viewer_token`). `None` for a Game Master,
+/// and for anyone the application has not named one for.
+#[derive(Resource, Default, Debug, Clone, PartialEq)]
+pub(crate) struct ViewerToken(pub Option<String>);
+
+type ViewerRequest = Option<Option<String>>;
+
+static REQUESTED_VIEWER: std::sync::OnceLock<std::sync::Mutex<ViewerRequest>> =
+    std::sync::OnceLock::new();
+
+/// Name the token this client sees the board through; `""` for none.
+///
+/// Queued and applied on the next frame, like the engine's other web
+/// commands. Local session state, not world state: which token is "mine" is
+/// a fact about this viewer, so it is never synced or broadcast.
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn set_viewer_token(token_id: &str) -> bool {
+    let request = (!token_id.is_empty()).then(|| token_id.to_string());
+    let slot = REQUESTED_VIEWER.get_or_init(|| std::sync::Mutex::new(None));
+    if let Ok(mut pending) = slot.lock() {
+        *pending = Some(request);
+        return true;
+    }
+    false
+}
+
+pub(crate) fn apply_requested_viewer(mut viewer: ResMut<ViewerToken>) {
+    let Some(slot) = REQUESTED_VIEWER.get() else {
+        return;
+    };
+    let Ok(mut pending) = slot.lock() else {
+        return;
+    };
+    if let Some(request) = pending.take() {
+        viewer.set_if_neq(ViewerToken(request));
+    }
+}
+
+static HIDDEN_TOKENS: std::sync::OnceLock<std::sync::Mutex<Vec<String>>> =
+    std::sync::OnceLock::new();
+
+fn mirror_hidden_tokens(mut hidden: Vec<String>) {
+    hidden.sort_unstable();
+    let slot = HIDDEN_TOKENS.get_or_init(|| std::sync::Mutex::new(Vec::new()));
+    if let Ok(mut current) = slot.lock()
+        && *current != hidden
+    {
+        *current = hidden;
+    }
+}
+
+/// The ids of the tokens this client currently hides, as a JSON array.
+///
+/// Read-only, and here so a test can ask what a player's canvas withholds —
+/// a token out of their sight — rather than infer it from pixels.
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn hidden_tokens() -> String {
+    let list = HIDDEN_TOKENS
+        .get()
+        .and_then(|slot| slot.lock().ok().map(|l| l.clone()))
+        .unwrap_or_default();
+    serde_json::Value::from(list).to_string()
 }
 
 pub(crate) fn init_lighting_systems_resources(app: &mut App) {
@@ -783,216 +921,5 @@ pub(crate) fn handle_switch_effects(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::resources::DoorState;
-
-    fn source(id: &str, x: f32, y: f32, radius: f32, casts_shadows: bool) -> LightSource {
-        LightSource {
-            id: id.to_string(),
-            x,
-            y,
-            radius,
-            intensity: 1.0,
-            color: None,
-            attached_token_id: None,
-            casts_shadows,
-        }
-    }
-
-    #[test]
-    fn light_color_prioritizes_selection() {
-        let light = source("l1", 0.0, 0.0, 100.0, false);
-        assert_eq!(light_color(&light, true), SELECTED_LIGHT_COLOR);
-    }
-
-    #[test]
-    fn light_color_tints_non_shadow_casting_when_unselected() {
-        let light = source("l1", 0.0, 0.0, 100.0, false);
-        assert_eq!(light_color(&light, false), NON_SHADOW_CASTING_TINT);
-    }
-
-    #[test]
-    fn light_color_defaults_when_no_color_set() {
-        let light = source("l1", 0.0, 0.0, 100.0, true);
-        assert_eq!(light_color(&light, false), DEFAULT_LIGHT_COLOR);
-    }
-
-    #[test]
-    fn effective_position_uses_attached_token_when_present() {
-        let mut light = source("l1", 0.0, 0.0, 100.0, true);
-        light.attached_token_id = Some("token-1".to_string());
-
-        let mut positions = HashMap::new();
-        positions.insert("token-1".to_string(), Vec2::new(42.0, 7.0));
-
-        assert_eq!(
-            effective_light_position(&light, &positions),
-            Vec2::new(42.0, 7.0)
-        );
-    }
-
-    #[test]
-    fn effective_position_falls_back_to_stored_when_attached_token_missing() {
-        let mut light = source("l1", 3.0, 4.0, 100.0, true);
-        light.attached_token_id = Some("missing".to_string());
-
-        let positions = HashMap::new();
-        assert_eq!(
-            effective_light_position(&light, &positions),
-            Vec2::new(3.0, 4.0)
-        );
-    }
-
-    #[test]
-    fn effective_position_uses_stored_when_not_attached() {
-        let light = source("l1", 3.0, 4.0, 100.0, true);
-        let positions = HashMap::new();
-        assert_eq!(
-            effective_light_position(&light, &positions),
-            Vec2::new(3.0, 4.0)
-        );
-    }
-
-    #[test]
-    fn default_wall_state_never_blocks_a_zero_wall_scene() {
-        // Sanity: DoorState import above is actually used (avoids an
-        // unused-import warning while documenting that door-state-aware
-        // occlusion is exercised via `is_visible`, tested exhaustively in
-        // `thunderforge_canvas_core::wall`).
-        assert_eq!(DoorState::default(), DoorState::None);
-    }
-
-    // T065: `apply_light_illumination`'s door-state-aware occlusion itself
-    // just calls `thunderforge_canvas_core::wall::is_visible`, already
-    // exhaustively covered (open/closed door, combined scenarios) in that
-    // crate's own tests. What's untested anywhere is the branch *before*
-    // that call: `if !light.casts_shadows { return true; }` — a light with
-    // `casts_shadows == false` is defined (FR-027) to illuminate everything
-    // in radius regardless of walls, short-circuiting `is_visible` entirely.
-    // These drive the real Bevy system end to end (not just the pure
-    // geometry) to prove that short-circuit actually takes effect. Per this
-    // crate's tests now build and run on the host (spec 032 T083); they used
-    // to only compile-check under `cargo check --target
-    // wasm32-unknown-unknown --tests`. The equivalent pure-geometry coverage
-    // lives in `thunderforge_canvas_core::wall`'s tests.
-    mod apply_light_illumination_tests {
-        use super::*;
-        use crate::TokenIdentity;
-        use crate::resources::lighting::LightSet as EngineLightSet;
-        use crate::resources::wall::WallSet as EngineWallSet;
-        use thunderforge_canvas_core::wall::{DoorState as CoreDoorState, Wall as CoreWall};
-
-        fn app_with_blocking_wall_and_token(token_pos: Vec2) -> App {
-            let mut app = App::new();
-            app.add_plugins(MinimalPlugins);
-
-            let mut wall_set = EngineWallSet::default();
-            wall_set.upsert(CoreWall {
-                id: "w1".to_string(),
-                x1: 50.0,
-                y1: -10.0,
-                x2: 50.0,
-                y2: 10.0,
-                blocks_vision: true,
-                blocks_movement: false,
-                door_state: CoreDoorState::Closed,
-                locked: false,
-                secret: false,
-            });
-            app.insert_resource(wall_set);
-            app.init_resource::<EngineLightSet>();
-            // Without this the scene is in daylight — `SceneAmbient` defaults
-            // to `AmbientLight::daylight()` — and `illumination_at` reports
-            // Bright everywhere before a wall or a light is consulted. Both
-            // tests below then pass whatever the occlusion code does, which
-            // is exactly what happened while this suite could not be built:
-            // the shadow-casting case failed on its first real run, and its
-            // non-shadow-casting companion had been passing vacuously.
-            app.insert_resource(crate::resources::vision::SceneAmbient(
-                thunderforge_canvas_core::vision::AmbientLight::unlit(),
-            ));
-
-            // `Sprite` is not decoration here: `apply_light_illumination`'s
-            // token query is `(&Transform, Option<&TokenVision>, &mut Sprite,
-            // &mut Visibility)`, so an entity without one is never visited and
-            // its `Visibility` is never written. Without it both tests below
-            // read back the `Visibility::Inherited` they spawned with and drew
-            // conclusions about occlusion from it.
-            app.world_mut().spawn((
-                Sprite::default(),
-                Transform::from_translation(token_pos.extend(0.0)),
-                TokenIdentity("token-1".to_string()),
-                Visibility::Inherited,
-            ));
-
-            app.add_systems(Update, apply_light_illumination);
-            app
-        }
-
-        fn token_visibility(app: &mut App) -> Visibility {
-            let mut query = app.world_mut().query::<(&TokenIdentity, &Visibility)>();
-            let (_, visibility) = query.iter(app.world()).next().unwrap();
-            *visibility
-        }
-
-        #[test]
-        fn shadow_casting_light_is_occluded_by_closed_wall() {
-            // Light and token on opposite sides of a closed, vision-blocking
-            // wall: the light casts shadows, so `is_visible` should apply
-            // and the token should end up unlit.
-            let target = Vec2::new(100.0, 0.0);
-            let mut app = app_with_blocking_wall_and_token(target);
-
-            let mut light_set = app.world_mut().resource_mut::<EngineLightSet>();
-            light_set.0.upsert(LightSource {
-                id: "l1".to_string(),
-                x: 0.0,
-                y: 0.0,
-                radius: 500.0,
-                intensity: 1.0,
-                color: None,
-                attached_token_id: None,
-                casts_shadows: true,
-            });
-
-            app.update();
-
-            assert_eq!(
-                token_visibility(&mut app),
-                UNLIT_VISIBILITY,
-                "a shadow-casting light blocked by a closed wall must not light the token"
-            );
-        }
-
-        #[test]
-        fn non_shadow_casting_light_ignores_closed_wall() {
-            // Same geometry as above (light and token split by the same
-            // closed wall), but `casts_shadows: false` — FR-027 says this
-            // light illuminates anything within radius unconditionally,
-            // short-circuiting the `is_visible` occlusion check entirely.
-            let target = Vec2::new(100.0, 0.0);
-            let mut app = app_with_blocking_wall_and_token(target);
-
-            let mut light_set = app.world_mut().resource_mut::<EngineLightSet>();
-            light_set.0.upsert(LightSource {
-                id: "l1".to_string(),
-                x: 0.0,
-                y: 0.0,
-                radius: 500.0,
-                intensity: 1.0,
-                color: None,
-                attached_token_id: None,
-                casts_shadows: false,
-            });
-
-            app.update();
-
-            assert_eq!(
-                token_visibility(&mut app),
-                Visibility::Inherited,
-                "a non-shadow-casting light must light the token even behind a closed wall"
-            );
-        }
-    }
-}
+#[path = "lighting_tests.rs"]
+mod tests;

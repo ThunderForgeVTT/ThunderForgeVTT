@@ -32,6 +32,7 @@ pub mod resource_display;
 /// see the module's own docs for why it is a feature rather than a test.
 #[cfg(feature = "seam-probe")]
 pub mod seam_probe;
+pub mod shadow_map;
 pub mod shape;
 pub mod snapping;
 pub mod system_contribution;

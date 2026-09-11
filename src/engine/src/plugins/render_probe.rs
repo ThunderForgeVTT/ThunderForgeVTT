@@ -317,7 +317,7 @@ fn publish_engine_stats(
     stats.walls = wall_set.map_or(0, |set| set.walls().len());
     // Counted where the quads are built — see `ShadowStats` for why it is no
     // longer inferred from how many meshes exist.
-    stats.shadow_quads = shadows.map_or(0, |s| s.quads);
+    stats.shadow_quads = shadows.map_or(0, |s| s.casting_pairs);
 
     // Mirror out to the wasm-visible slot. `App::run()` owns the `World` and
     // never returns on wasm, so a static is the only way out.

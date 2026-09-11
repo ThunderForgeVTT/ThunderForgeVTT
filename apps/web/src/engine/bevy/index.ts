@@ -129,6 +129,7 @@ function installEngineProbe(wasm: BevyWasmModule): void {
   const cameraState = (wasm as { camera_state?: () => string }).camera_state;
   const tokenNameplates = (wasm as { token_nameplates?: () => string })
     .token_nameplates;
+  const hiddenTokens = (wasm as { hidden_tokens?: () => string }).hidden_tokens;
   (window as unknown as Record<string, unknown>).__engineProbe = {
     camera: (): { x: number; y: number; scale: number } | null =>
       cameraState
@@ -144,6 +145,10 @@ function installEngineProbe(wasm: BevyWasmModule): void {
             dimmed: boolean;
           }[])
         : [],
+    // Playtest 2026-09-10 P9: the tokens this canvas hides — out of a
+    // player's sight, or in the dark.
+    hiddenTokens: (): string[] =>
+      hiddenTokens ? (JSON.parse(hiddenTokens()) as string[]) : [],
   };
 }
 
@@ -1093,6 +1098,26 @@ export async function setIsGameMaster(isGameMaster: boolean): Promise<void> {
   module.apply_world_command(
     JSON.stringify({ type: "set_is_game_master", isGameMaster }),
   );
+}
+
+/**
+ * Playtest 2026-09-10 P9: name the token this client sees the board through —
+ * a player's own — or `null` for none, which is a Game Master's case. Walls
+ * then hide from a player what their token cannot see.
+ *
+ * Local session state, like `setIsGameMaster`: which token is "mine" is a
+ * fact about this viewer, never synced. Never throws; a bundle predating it
+ * simply keeps the board-wide view.
+ */
+export async function setViewerToken(tokenId: string | null): Promise<void> {
+  try {
+    const module = await getWasmModule();
+    const set = (module as { set_viewer_token?: (id: string) => boolean })
+      .set_viewer_token;
+    set?.(tokenId ?? "");
+  } catch {
+    // A viewer that could not be named leaves the board-wide view.
+  }
 }
 
 /**

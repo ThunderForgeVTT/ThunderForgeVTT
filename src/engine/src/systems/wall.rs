@@ -756,7 +756,14 @@ pub(crate) fn sync_wall_visuals(
     mut sprite_query: Query<(&mut Transform, &mut Sprite), (With<WallVisual>, Without<WallHandle>)>,
     handle_query: Query<Entity, With<WallHandle>>,
 ) {
-    let z = CanvasLayer::Walls.z();
+    // A Game Master's walls are authoring aids, drawn above the darkness so
+    // they can be edited in a dark scene. Anyone else's are drawn under it,
+    // so darkness is not traced by its own walls (playtest 2026-09-10 P9).
+    let z = if is_gm.0 {
+        CanvasLayer::Walls.z()
+    } else {
+        CanvasLayer::player_wall_z()
+    };
 
     // Despawn sprites for walls that no longer exist in `WallSet`.
     let stale_ids: Vec<String> = wall_entities

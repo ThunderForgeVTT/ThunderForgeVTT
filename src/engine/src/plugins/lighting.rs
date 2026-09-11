@@ -6,9 +6,9 @@ use crate::resources::{
     GridSnapEnabled, IsGameMaster, LightSet, SceneGrid, SelectedLight, WallSet,
 };
 use crate::systems::lighting::{
-    apply_light_illumination, handle_light_input, handle_light_keyboard_toggles,
-    handle_light_resize, handle_light_undo, handle_switch_effects, init_lighting_systems_resources,
-    sync_light_visuals,
+    ViewerToken, apply_light_illumination, apply_requested_viewer, handle_light_input,
+    handle_light_keyboard_toggles, handle_light_resize, handle_light_undo, handle_switch_effects,
+    init_lighting_systems_resources, sync_light_visuals,
 };
 
 /// Wires up light authoring (T036-T039, T041): the `LightSet` resource,
@@ -48,6 +48,8 @@ impl Plugin for LightingPlugin {
             // "Resource does not exist", while the doc comment above claimed
             // the opposite.
             .init_resource::<WallSet>()
+            // Playtest 2026-09-10 P9: whose eyes this client sees through.
+            .init_resource::<ViewerToken>()
             // Registered here as well as in `InteractionPlugin`, idempotently.
             // A contributor that could only be added after the seam would not
             // be independently addable (Principle II).
@@ -89,7 +91,14 @@ impl Plugin for LightingPlugin {
                 // shadows re-resolve in the same pass.
                 handle_switch_effects,
                 sync_light_visuals,
-                apply_light_illumination,
+                apply_requested_viewer,
+                // After selection feedback, which sets every token's base
+                // alpha each frame. The two ran in no set order, so whether a
+                // token in the dark was drawn dimmed depended on which went
+                // last that frame. Ordering against a system another plugin
+                // owns is harmless when that plugin is absent.
+                apply_light_illumination
+                    .after(crate::systems::selection::render_selection_feedback),
             )
                 .chain(),
         );
