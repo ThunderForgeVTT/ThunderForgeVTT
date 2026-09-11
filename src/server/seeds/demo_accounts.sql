@@ -136,7 +136,8 @@ VALUES (
 ON CONFLICT (scene_id) DO NOTHING;
 
 -- A PC for each of user1/user2, so there's something to select and play
--- immediately instead of an empty roster.
+-- immediately instead of an empty roster. Named for the demo heroes whose
+-- portraits and tokens `scripts/seed-demo-art.mjs` gives them.
 INSERT INTO world_actors (id, world_id, scene_id, actor_type, game_system_id, label, created_by, owned_by, is_public, is_npc, created_at, updated_at, description, available_for_claim)
 VALUES
   (
@@ -145,7 +146,7 @@ VALUES
     '00000000-0000-0000-0000-0000000000b1',
     'character',
     'genie',
-    'User1''s Character',
+    'Sir Pip',
     '00000000-0000-0000-0000-0000000000a2',
     '00000000-0000-0000-0000-0000000000a2',
     false,
@@ -161,7 +162,7 @@ VALUES
     '00000000-0000-0000-0000-0000000000b1',
     'character',
     'genie',
-    'User2''s Character',
+    'Mira Starweave',
     '00000000-0000-0000-0000-0000000000a3',
     '00000000-0000-0000-0000-0000000000a3',
     false,
@@ -201,6 +202,71 @@ VALUES
     now(),
     now()
   )
+ON CONFLICT (actor_id) DO NOTHING;
+
+-- The rest of the demo party (playtest 2026-09-10 P8): ten more heroes, as
+-- user1's NPCs, so a demo has faces to place. Their art is not here: images
+-- live in object storage, which SQL cannot write, and are drawn by
+-- `packages/heroes` — `scripts/seed-demo-art.mjs` uploads them through the
+-- real upload once the backend is up, and `make dev` runs it.
+--
+-- `…f0NN` rather than `…eN`: `e2e_demo.sql` owns `…e1`-`…e3`.
+INSERT INTO world_actors (id, world_id, scene_id, actor_type, game_system_id, label, created_by, owned_by, is_public, is_npc, created_at, updated_at, description, available_for_claim)
+SELECT
+  hero.actor_id::uuid,
+  '00000000-0000-0000-0000-0000000000b0',
+  '00000000-0000-0000-0000-0000000000b1',
+  'character',
+  'genie',
+  hero.label,
+  '00000000-0000-0000-0000-0000000000a2',
+  '00000000-0000-0000-0000-0000000000a2',
+  false,
+  true,
+  now(),
+  now(),
+  hero.description,
+  false
+FROM (VALUES
+  ('00000000-0000-0000-0000-00000000f001', 'Nettle', 'The rogue.'),
+  ('00000000-0000-0000-0000-00000000f002', 'Brother Oak', 'The cleric.'),
+  ('00000000-0000-0000-0000-00000000f003', 'Fenna Swiftbow', 'The elf ranger.'),
+  ('00000000-0000-0000-0000-00000000f004', 'Lark', 'The bard.'),
+  ('00000000-0000-0000-0000-00000000f005', 'Grom', 'The orc barbarian.'),
+  ('00000000-0000-0000-0000-00000000f006', 'Willow', 'The druid.'),
+  ('00000000-0000-0000-0000-00000000f007', 'Dame Aurora', 'The paladin.'),
+  ('00000000-0000-0000-0000-00000000f008', 'Kai', 'The monk.'),
+  ('00000000-0000-0000-0000-00000000f009', 'Ember', 'The tiefling sorcerer.'),
+  ('00000000-0000-0000-0000-00000000f010', 'Tink Cogsworth', 'The gnome artificer.')
+) AS hero(actor_id, label, description)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO world_actor_system_data (id, actor_id, game_system_id, ability_data, resource_data, proficiency_data, trait_data, created_by, updated_by, created_at, updated_at)
+SELECT
+  -- The actor's id with `f0` swapped for `f1`: fixed, so a re-run is a no-op.
+  overlay(hero.actor_id placing 'f1' from 33 for 2)::uuid,
+  hero.actor_id::uuid,
+  'genie',
+  '{"might": 3, "cunning": 3, "spirit": 3}'::jsonb,
+  '{"current_wish_points": 3, "max_wish_points": 3, "current_health": 10, "max_health": 10}'::jsonb,
+  '{"trained_skills": []}'::jsonb,
+  '{"level": 1}'::jsonb,
+  '00000000-0000-0000-0000-0000000000a2',
+  '00000000-0000-0000-0000-0000000000a2',
+  now(),
+  now()
+FROM (VALUES
+  ('00000000-0000-0000-0000-00000000f001'),
+  ('00000000-0000-0000-0000-00000000f002'),
+  ('00000000-0000-0000-0000-00000000f003'),
+  ('00000000-0000-0000-0000-00000000f004'),
+  ('00000000-0000-0000-0000-00000000f005'),
+  ('00000000-0000-0000-0000-00000000f006'),
+  ('00000000-0000-0000-0000-00000000f007'),
+  ('00000000-0000-0000-0000-00000000f008'),
+  ('00000000-0000-0000-0000-00000000f009'),
+  ('00000000-0000-0000-0000-00000000f010')
+) AS hero(actor_id)
 ON CONFLICT (actor_id) DO NOTHING;
 
 -- Spec 035 / ADR-072: a fresh install starts `invite_only`, because the

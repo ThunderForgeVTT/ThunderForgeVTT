@@ -1,0 +1,21 @@
+{
+  "name": "@thunderforge/heroes",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "description": "Little heroes, drawn from parts: a hero spec in, a portrait and a token out",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --test src/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "check": "tsc --noEmit && node --test src/*.test.ts",
+    "export": "node src/cli.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "typescript": "6.0.3"
+  }
+}

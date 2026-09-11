@@ -5,4 +5,5 @@
 pub mod backfill;
 pub mod dedupe;
 pub mod rustfs;
+pub mod svg;
 pub mod transcode;

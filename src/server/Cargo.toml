@@ -122,6 +122,10 @@ image = { version = "0.25.10", default-features = false, features = ["png", "jpe
 # Lossy WebP encoding. `image`'s WebP encoder is lossless-only, which measured
 # 2-5x larger than necessary on photographic art — see `storage::transcode`.
 webp = "0.3.1"
+# SVG uploads are drawn to pixels before they join the WebP pipeline — see
+# `storage::svg`. No text, system fonts or embedded raster images: an upload
+# must not reach the host's font directory or its disk.
+resvg = { version = "0.47.0", default-features = false }
 comrak = "0.54.0"
 ammonia = "4.1.4"
 slug = "0.1.6"

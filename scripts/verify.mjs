@@ -136,6 +136,17 @@ const steps = [
       : ["pnpm", "exec", "eslint", ".", "--ext", ".ts,.tsx", "--max-warnings=0"],
   },
   {
+    // Playtest 2026-09-10 P8. The hero factory is a package of its own, which
+    // no web check reaches: its types and its tests would otherwise run only
+    // when someone remembered to. Both together take about a second.
+    //
+    // Not affected by `--fix`: a failing hero test is a drawing to look at.
+    id: "heroes",
+    name: "heroes package",
+    cwd: "packages/heroes",
+    command: ["pnpm", "run", "check"],
+  },
+  {
     // Spec 029 T064. The TypeScript SDK types are generated from the Rust
     // types by ts-rs, and a generated file that has drifted from its source
     // is worse than no generated file: the compiler goes on cheerfully

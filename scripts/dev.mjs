@@ -334,6 +334,15 @@ async function run() {
     process.exit(1);
   }
 
+  // Playtest 2026-09-10 P8: the demo heroes' portraits and tokens, which the
+  // SQL seed cannot write. Not awaited — the frontend does not need them to
+  // start — and never fatal: a stack without the seed has nothing to dress.
+  void import("./seed-demo-art.mjs")
+    .then(({ seedDemoArt }) =>
+      seedDemoArt({ api: BACKEND_URL, log: (message) => log("demo-art", message) }),
+    )
+    .catch((error) => log("demo-art", `skipped: ${error.message}`, process.stderr));
+
   log("dev", "Starting frontend...");
   const frontend = spawnManaged("pnpm -F @thunderforge/web run dev", {
     cwd: ROOT_DIR,

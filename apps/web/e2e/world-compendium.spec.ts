@@ -1,4 +1,8 @@
 import { test, expect, type Page } from "@playwright/test";
+import {
+  PRESET_HEROES,
+  renderToken,
+} from "../../../packages/heroes/src/index.ts";
 
 /**
  * specs/011-world-compendium (Foundational + US1/US2 read paths): the
@@ -238,6 +242,55 @@ test.describe("US1: DM adds and edits an NPC from the Compendium", () => {
     await expect(page.getByTestId("actor-preview-panel")).toContainText(
       "Updated via Compendium edit flow",
     );
+  });
+});
+
+test.describe("Hero art (playtest 2026-09-10 P8)", () => {
+  test("a hero drawn as SVG uploads as a token, and is stored and served as WebP", async ({
+    page,
+  }) => {
+    // Heroes are drawn as SVG because art composed from parts is easy to
+    // make and change; the engine draws only raster images. So the server
+    // draws an uploaded SVG to pixels and stores WebP, like any other upload.
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Hero Art ${uniqueSuffix()}`,
+    );
+    await page.goto(`/world/${worldId}/compendium/npc/new`);
+    await page.getByTestId("npc-editor-name-input").fill("Grom");
+    await page.getByTestId("npc-editor-save").click();
+    await page.waitForURL(/\/compendium\/npc\/[^/]+\/edit$/, {
+      timeout: 15_000,
+    });
+
+    const grom = PRESET_HEROES.find((preset) => preset.slug === "grom")!;
+    await page.getByTestId("actor-imagery-input-token").setInputFiles({
+      name: "grom-token.svg",
+      mimeType: "image/svg+xml",
+      buffer: Buffer.from(renderToken(grom.spec)),
+    });
+
+    const preview = page.getByTestId("actor-imagery-preview-token");
+    await expect(preview).toBeVisible({ timeout: 15_000 });
+    // It drew: a browser handed bytes it cannot decode reports no width.
+    await expect
+      .poll(
+        () =>
+          preview.evaluate((img: HTMLImageElement) =>
+            img.complete ? img.naturalWidth : 0,
+          ),
+        { timeout: 10_000 },
+      )
+      .toBeGreaterThan(0);
+
+    // And what was stored is WebP, whatever was uploaded.
+    const src = await preview.getAttribute("src");
+    const response = await page.request.get(src!);
+    expect(response.status()).toBe(200);
+    expect(response.headers()["content-type"]).toBe("image/webp");
+    const bytes = await response.body();
+    expect(bytes.subarray(0, 4).toString("ascii")).toBe("RIFF");
+    expect(bytes.subarray(8, 12).toString("ascii")).toBe("WEBP");
   });
 });
 

@@ -36,9 +36,23 @@ pub struct TranscodedImage {
     pub original_format: String,
 }
 
-/// Decodes `bytes` (any of the formats enabled on the `image` crate:
-/// PNG, JPEG, WebP, GIF, BMP) and re-encodes as lossless WebP. Enforces
-/// `MAX_UPLOAD_BYTES` before doing any decode work.
+/// Decodes an upload: any raster format enabled on the `image` crate, or an
+/// SVG, drawn to pixels first (`storage::svg`). Returns the image and the
+/// source format's name.
+fn decode_upload(bytes: &[u8]) -> Result<(DynamicImage, String), TranscodeError> {
+    if super::svg::looks_like_svg(bytes) {
+        let img = super::svg::rasterise_svg(bytes).map_err(TranscodeError::Decode)?;
+        return Ok((img, "svg".to_string()));
+    }
+    let format = image::guess_format(bytes).map_err(|e| TranscodeError::Decode(e.to_string()))?;
+    let img = image::load_from_memory_with_format(bytes, format)
+        .map_err(|e| TranscodeError::Decode(e.to_string()))?;
+    Ok((img, format!("{format:?}").to_lowercase()))
+}
+
+/// Decodes `bytes` (PNG, JPEG, WebP, GIF, BMP or SVG — see `decode_upload`)
+/// and re-encodes as WebP. Enforces `MAX_UPLOAD_BYTES` before doing any
+/// decode work.
 pub fn transcode_to_webp(bytes: &[u8]) -> Result<TranscodedImage, TranscodeError> {
     if bytes.len() > MAX_UPLOAD_BYTES {
         return Err(TranscodeError::TooLarge {
@@ -47,9 +61,7 @@ pub fn transcode_to_webp(bytes: &[u8]) -> Result<TranscodedImage, TranscodeError
         });
     }
 
-    let format = image::guess_format(bytes).map_err(|e| TranscodeError::Decode(e.to_string()))?;
-    let img = image::load_from_memory_with_format(bytes, format)
-        .map_err(|e| TranscodeError::Decode(e.to_string()))?;
+    let (img, original_format) = decode_upload(bytes)?;
 
     // Capped so the result can actually be uploaded as a GPU texture on the
     // machines players use — see `MAX_CANVAS_TEXTURE_DIMENSION`.
@@ -64,7 +76,7 @@ pub fn transcode_to_webp(bytes: &[u8]) -> Result<TranscodedImage, TranscodeError
         webp_bytes,
         width,
         height,
-        original_format: format!("{format:?}").to_lowercase(),
+        original_format,
     })
 }
 
@@ -344,9 +356,7 @@ pub fn transcode_to_lore_renditions(bytes: &[u8]) -> Result<LoreImageRenditions,
         });
     }
 
-    let format = image::guess_format(bytes).map_err(|e| TranscodeError::Decode(e.to_string()))?;
-    let img = image::load_from_memory_with_format(bytes, format)
-        .map_err(|e| TranscodeError::Decode(e.to_string()))?;
+    let (img, original_format) = decode_upload(bytes)?;
 
     let full = resize_to_max_dimension(&img, LORE_IMAGE_MAX_DIMENSION);
     let full_webp_bytes = encode_webp_at(&full, LORE_WEBP_QUALITY)?;
@@ -361,7 +371,7 @@ pub fn transcode_to_lore_renditions(bytes: &[u8]) -> Result<LoreImageRenditions,
         thumbnail_width: thumbnail.width(),
         thumbnail_height: thumbnail.height(),
         thumbnail_webp_bytes,
-        original_format: format!("{format:?}").to_lowercase(),
+        original_format,
     })
 }
 
