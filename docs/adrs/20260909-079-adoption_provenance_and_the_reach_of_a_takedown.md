@@ -1,22 +1,18 @@
 # ADR-079: Adoption Provenance and the Reach of a Takedown
 
 **Date:** 2026-09-09
-**Status:** **PROPOSED — awaiting the accountable owner's acceptance.**
+**Status:** **ACCEPTED** by the accountable owner, 2026-09-10. Proposed 2026-09-09.
 **Participants:** ThunderForgeVTT Team
 **Amends:** ADR-069 (collection share DMCA repository determination)
 **Reverses:** spec 026 FR-012 ("no referential link back to the source")
 **Related:** spec 039 US6 (FR-022 … FR-023d, SC-006, SC-008), ADR-070, ADR-071
 
-> **This decision is not mine to make.** ADR-069 was accepted by the
-> accountable owner with a stated risk accepted on the record; this amends it,
-> and it is about liability. Spec 039's task plan makes acceptance a blocking
-> gate (T004), and Phase 6 does not exist until it is answered either way.
->
-> **If declined**: strike FR-022–FR-023d and SC-006/SC-008 from
-> `specs/039-sharing-attestation/spec.md`, delete Phase 6 from its task list,
-> mark this ADR REJECTED, and leave `legal/sharing-terms.md`'s "a copy someone
-> takes is theirs, and cannot be recalled" exactly as written. Phases 1–5 —
-> the attestation itself — are independent of this and do not wait.
+> **Accepted by the accountable owner on 2026-09-10**, as ADR-069 was: this
+> amends it, and it is about liability, so it was theirs to sign and not the
+> implementer's. That acceptance was spec 039's blocking gate (T004); Phase 6
+> is now unblocked. The revised wording of `legal/sharing-terms.md` (T007)
+> ships with Phase 6, not before — until a takedown reaches adopted copies,
+> "cannot be recalled" is the true sentence.
 
 ---
 

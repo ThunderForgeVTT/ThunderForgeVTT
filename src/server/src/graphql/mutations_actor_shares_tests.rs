@@ -5,8 +5,6 @@
 //! reaches its parent through `use super::*`.
 
 use super::*;
-
-use super::*;
 use crate::graphql::mutations_actors::{CreateActorInput, create_actor_impl};
 use crate::graphql::mutations_collection_shares::publishing_gate::publishable_instance;
 use crate::publishing::an_agreement;
@@ -66,6 +64,9 @@ async fn an_unknown_version_refuses_and_mints_no_actor_link() {
     .expect_err("a version this instance never archived must be refused");
 
     let message = refusal.message;
+    // The gate's own refusal, not the foreign key's: the key would also stop
+    // an unknown version, so without this the test passes with the gate gone.
+    assert!(message.contains("current sharing agreement"), "{message}");
     assert!(!message.contains(&real.terms_version_id), "{message}");
     assert!(!message.contains('@'), "{message}");
 
