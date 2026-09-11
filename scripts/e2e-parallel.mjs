@@ -831,12 +831,24 @@ function runShard(shard, files, label = "parallel") {
   // everything, on every empty shard at once. This cost a real 3-minute run
   // that looked like a hang before anyone noticed what it was doing.
   if (files.length === 0) {
-    log("e2e", `  shard ${shard.index}: no files, skipped.`);
-    return Promise.resolve({ index: shard.index, code: 0, label });
+    log("e2e", `  ${label} lane, shard ${shard.index}: no files, skipped.`);
+    return Promise.resolve({
+      index: shard.index,
+      label,
+      code: 0,
+      failed: false,
+      reasons: [],
+      skipped: true,
+    });
   }
 
   const demoDir = join(SHARD_DIR, `shard-${shard.index}`, "demo");
   mkdirSync(demoDir, { recursive: true });
+  const reportPath = join(
+    SHARD_DIR,
+    `shard-${shard.index}`,
+    `results-${label}.json`,
+  );
 
   // File paths rather than `--grep`: Playwright matches `--grep` against the
   // test *title*, so selecting by filename that way depends on titles happening
@@ -879,19 +891,54 @@ function runShard(shard, files, label = "parallel") {
       // measured lane alone — and a single name meant the second run erased
       // the first. That silently dropped `token-authoring` from the recorded
       // durations, which is the file the whole partition is built around.
-      PLAYWRIGHT_JSON_OUTPUT_NAME: join(
-        SHARD_DIR,
-        `shard-${shard.index}`,
-        `results-${label}.json`,
-      ),
+      PLAYWRIGHT_JSON_OUTPUT_NAME: reportPath,
     },
   });
 
   return new Promise((resolve) => {
     child.once("close", (code) =>
-      resolve({ index: shard.index, code: code ?? 1 }),
+      resolve(
+        judgeLane({ index: shard.index, label, code: code ?? 1, reportPath }),
+      ),
     );
   });
+}
+
+/**
+ * One lane's verdict, from what Playwright *reported* as well as how it exited.
+ *
+ * The exit code alone is not enough. Twice on 2026-09-10/11 a measured-lane
+ * run printed `1 failed` and the summary still said `shard 0: passed`, and the
+ * whole process exited 0 — a red run reported green. How the code was lost is
+ * not established: a plain assertion failure in that lane does propagate, so
+ * whatever dropped it was particular to those runs. Rather than trust one
+ * channel, the JSON report this lane already writes is read back and a
+ * failure in either source fails it: a non-zero exit, an unexpected test, a
+ * runner error (a spec that would not even load), or no report at all, since
+ * a run that left no report proved nothing.
+ *
+ * `label` travels with the result because shard 0 runs more than once — its
+ * share of the sharded lane, then the measured lane — and a summary that says
+ * `shard 0` twice cannot say which of the two failed.
+ */
+function judgeLane({ index, label, code, reportPath }) {
+  let report = null;
+  try {
+    report = JSON.parse(readFileSync(reportPath, "utf-8"));
+  } catch {
+    // Missing or unreadable, which is itself a failure below.
+  }
+  const reasons = [];
+  if (code !== 0) reasons.push(`exit ${code}`);
+  if (!report) {
+    reasons.push("no JSON report");
+  } else {
+    const unexpected = report.stats?.unexpected ?? 0;
+    const errors = report.errors?.length ?? 0;
+    if (unexpected > 0) reasons.push(`${unexpected} test(s) failed`);
+    if (errors > 0) reasons.push(`${errors} runner error(s)`);
+  }
+  return { index, label, code, failed: reasons.length > 0, reasons };
 }
 
 async function main() {
@@ -1067,7 +1114,13 @@ async function main() {
     const firstRunShard = await startShard(total, { firstRun: true });
     if (!firstRunShard) {
       log("e2e", "The first-run stack failed to start.", process.stderr);
-      results.push({ index: total, code: 1, label: "first-run" });
+      results.push({
+        index: total,
+        label: "first-run",
+        code: 1,
+        failed: true,
+        reasons: ["stack failed to start"],
+      });
     } else {
       shards.push(firstRunShard);
       log(
@@ -1084,12 +1137,22 @@ async function main() {
   );
 
   const minutes = ((Date.now() - started) / 60_000).toFixed(1);
-  const failed = results.filter((result) => result.code !== 0);
+  const failed = results.filter((result) => result.failed);
   log("e2e", `Finished in ${minutes} minutes.`);
   for (const result of results) {
+    const verdict = result.failed
+      ? `FAILED (${result.reasons.join(", ")})`
+      : result.skipped
+        ? "no files"
+        : "passed";
+    log("e2e", `  ${result.label} lane, shard ${result.index}: ${verdict}`);
+  }
+  if (failed.length > 0) {
     log(
       "e2e",
-      `  shard ${result.index}: ${result.code === 0 ? "passed" : `FAILED (${result.code})`}`,
+      `${failed.length} lane run(s) failed: ` +
+        failed.map((r) => `${r.label} lane, shard ${r.index}`).join("; "),
+      process.stderr,
     );
   }
 
