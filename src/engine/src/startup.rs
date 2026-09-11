@@ -109,6 +109,8 @@ pub fn start(canvas_selector: &str) {
         // taking this line out leaves every other plugin working, which is
         // what Constitution II asks of a plugin.
         .add_plugins(StatusDisplayPlugin)
+        // Playtest 2026-09-10 P7: names above tokens, above their bars.
+        .add_plugins(plugins::nameplate::NameplatePlugin)
         // Native canvas authoring (specs/001-bevy-canvas-authoring): shared
         // layer-ordering resource, must be added before Wall/Lighting/Shape
         // plugins so it exists when they build (Constitution Principle II)

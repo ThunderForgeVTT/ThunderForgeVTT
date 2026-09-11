@@ -174,8 +174,22 @@ fn next_turn_index(ordered: &[Combatant], active_id: Option<Uuid>) -> Option<(us
     None
 }
 
-/// Loads a combat plus its combatants, in turn order.
-fn load_combat(conn: &mut PgConnection, combat: Combat) -> Result<GraphQLCombat, String> {
+/// What a combatant is called in the tracker for someone not permitted to read
+/// its token's name.
+pub(crate) const UNKNOWN_COMBATANT: &str = "Unknown";
+
+/// Loads a combat plus its combatants, in turn order, as `user_id` may see it.
+///
+/// Playtest 2026-09-10 P7: a combatant's label is copied in when it joins, so
+/// a token whose name the Game Master hid from players would otherwise have
+/// that name printed in every player's tracker. For anyone who does not run
+/// the world, such a combatant is `UNKNOWN_COMBATANT` instead.
+fn load_combat(
+    conn: &mut PgConnection,
+    combat: Combat,
+    user_id: Uuid,
+    is_admin: bool,
+) -> Result<GraphQLCombat, String> {
     let mut combatants = world_combatants::table
         .filter(world_combatants::combat_id.eq(combat.id))
         .select(Combatant::as_select())
@@ -183,6 +197,31 @@ fn load_combat(conn: &mut PgConnection, combat: Combat) -> Result<GraphQLCombat,
         .map_err(|e| format!("Failed to load combatants: {e}"))?;
 
     sort_combatants(&mut combatants);
+
+    let runs_the_world =
+        crate::auth::world_membership::actor_in_world(conn, user_id, is_admin, combat.world_id)
+            .runs_the_world();
+    if !runs_the_world {
+        use crate::schema::tokens;
+        let token_ids: Vec<Uuid> = combatants.iter().filter_map(|c| c.token_id).collect();
+        let hidden: std::collections::HashSet<Uuid> = if token_ids.is_empty() {
+            std::collections::HashSet::new()
+        } else {
+            tokens::table
+                .filter(tokens::token_id.eq_any(&token_ids))
+                .filter(tokens::name_visible_to_players.eq(false))
+                .select(tokens::token_id)
+                .load::<Uuid>(conn)
+                .map_err(|e| format!("Failed to load token names: {e}"))?
+                .into_iter()
+                .collect()
+        };
+        for combatant in &mut combatants {
+            if combatant.token_id.is_some_and(|id| hidden.contains(&id)) {
+                combatant.label = UNKNOWN_COMBATANT.to_string();
+            }
+        }
+    }
 
     Ok(GraphQLCombat {
         id: combat.id,
@@ -298,7 +337,7 @@ pub async fn start_combat_impl(
 
     let combat = tokio::task::spawn_blocking(move || -> Result<GraphQLCombat, String> {
         if let Some(existing) = find_active_combat(&mut conn, world_id)? {
-            return load_combat(&mut conn, existing);
+            return load_combat(&mut conn, existing, user_id, is_admin);
         }
 
         let combat = diesel::insert_into(world_combats::table)
@@ -320,7 +359,7 @@ pub async fn start_combat_impl(
             user_id,
         );
 
-        load_combat(&mut conn, combat)
+        load_combat(&mut conn, combat, user_id, is_admin)
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -382,7 +421,7 @@ pub async fn add_combatant_impl(
         touch_and_broadcast(&mut conn, combat_id, world_id, user_id)?;
 
         let combat = combat_world(&mut conn, combat_id)?;
-        load_combat(&mut conn, combat)
+        load_combat(&mut conn, combat, user_id, is_admin)
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -475,7 +514,7 @@ pub async fn update_combatant_impl(
 
         touch_and_broadcast(&mut conn, combat_id, world_id, user_id)?;
         let combat = combat_world(&mut conn, combat_id)?;
-        load_combat(&mut conn, combat)
+        load_combat(&mut conn, combat, user_id, is_admin)
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -548,7 +587,7 @@ pub async fn remove_combatant_impl(
 
         touch_and_broadcast(&mut conn, combat_id, world_id, user_id)?;
         let combat = combat_world(&mut conn, combat_id)?;
-        load_combat(&mut conn, combat)
+        load_combat(&mut conn, combat, user_id, is_admin)
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -609,7 +648,7 @@ pub async fn advance_turn_impl(
 
         touch_and_broadcast(&mut conn, combat_id, world_id, user_id)?;
         let combat = combat_world(&mut conn, combat_id)?;
-        load_combat(&mut conn, combat)
+        load_combat(&mut conn, combat, user_id, is_admin)
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -651,7 +690,7 @@ pub async fn end_combat_impl(
 
         touch_and_broadcast(&mut conn, combat_id, world_id, user_id)?;
         let combat = combat_world(&mut conn, combat_id)?;
-        load_combat(&mut conn, combat)
+        load_combat(&mut conn, combat, user_id, is_admin)
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -663,6 +702,7 @@ pub async fn end_combat_impl(
 pub async fn active_combat_impl(
     state: &AppState,
     user_id: Uuid,
+    is_admin: bool,
     world_id: Uuid,
 ) -> GraphQLResult<Option<GraphQLCombat>> {
     let mut conn = state
@@ -676,7 +716,7 @@ pub async fn active_combat_impl(
 
         match find_active_combat(&mut conn, world_id)? {
             None => Ok(None),
-            Some(combat) => load_combat(&mut conn, combat).map(Some),
+            Some(combat) => load_combat(&mut conn, combat, user_id, is_admin).map(Some),
         }
     })
     .await
@@ -765,7 +805,7 @@ impl CombatQuery {
     ) -> GraphQLResult<Option<GraphQLCombat>> {
         let state = app_state(ctx)?;
         let user = authenticated_user(ctx)?;
-        active_combat_impl(state, user.user_id, world_id).await
+        active_combat_impl(state, user.user_id, user.is_admin, world_id).await
     }
 }
 

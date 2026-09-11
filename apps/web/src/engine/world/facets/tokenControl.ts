@@ -21,6 +21,7 @@
  * dispatch and a future Crucible round trip that can answer `Adjusted`.
  */
 
+import { setTokenNameVisibility } from "@/api/tokens";
 import type { WorldStore } from "../store";
 import type { WorldToken } from "../types";
 import type {
@@ -59,6 +60,12 @@ export interface TokenControlFacet {
   permissions(tokenId: string): ControllableToken | null;
   move(intent: MoveIntent): Promise<IntentResult<MoveIntent>>;
   manipulate(intent: ManipulateIntent): Promise<IntentResult<ManipulateIntent>>;
+  /** Playtest 2026-09-10 P7: hide a token's name from players, or show it
+   *  again. A Game Master's alone; they always see it themselves. */
+  setNameHidden(
+    tokenId: string,
+    hidden: boolean,
+  ): Promise<IntentResult<{ tokenId: string; hidden: boolean }>>;
 }
 
 /** What a facet operation is, for the purposes of the offline rule. */
@@ -163,6 +170,9 @@ export function resolveTokenPermissions(
     // A player may set art on their own primary token — a different
     // mutation with its own authorisation — but not on any other.
     canSetArt: isGm || (owns && token.isPrimary === true),
+    // Playtest 2026-09-10 P7: whose names the table may read is the Game
+    // Master's call — `setTokenNameVisibility` refuses anyone else.
+    canSetNameVisibility: isGm,
     canDelete: isGm,
   };
 }
@@ -264,6 +274,32 @@ export function createTokenControlFacet(
         );
       }
       return result;
+    },
+
+    async setNameHidden(tokenId, hidden) {
+      const entry = find(tokenId);
+      if (!entry) {
+        return { status: "refused", reason: "unknown-subject" };
+      }
+      if (!entry.canSetNameVisibility) {
+        return { status: "refused", reason: "gm-only" };
+      }
+      // Straight to the server rather than through the adjudicator: who may
+      // read a name is not a rules question, and the server is what enforces
+      // it — for every other client, it withholds the name from then on.
+      try {
+        await setTokenNameVisibility(tokenId, !hidden);
+      } catch (error) {
+        return {
+          status: "rejected",
+          reason: error instanceof Error ? error.message : String(error),
+        };
+      }
+      store.dispatch(
+        { type: "upsert_token", token: { ...entry.token, nameHidden: hidden } },
+        "ui",
+      );
+      return { status: "accepted", value: { tokenId, hidden } };
     },
   };
 }

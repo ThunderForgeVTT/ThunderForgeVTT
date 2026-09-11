@@ -22,6 +22,14 @@ export interface TokenRecord {
   maxHealth: number | null;
   /** What this token represents: `character`, `npc`, `vehicle` or `object`. */
   tokenType: TokenType;
+  /**
+   * Playtest 2026-09-10 P7: the name drawn above the token — its own label,
+   * else its character's. Absent when a Game Master has hidden it from this
+   * viewer: the server does not send it.
+   */
+  name?: string | null;
+  /** Whether players may read the name. A Game Master always can. */
+  nameVisibleToPlayers?: boolean;
 }
 
 /**

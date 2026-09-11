@@ -413,11 +413,31 @@ pub struct GraphQLToken {
     max_health: Option<i32>,
     /// What this token represents: `character`, `npc`, `vehicle`, `object`.
     token_type: String,
+    /// Playtest 2026-09-10 P7: the name drawn above the token — its own
+    /// `metadata.label`, else its character's name. `None` for anyone who
+    /// does not run the world when a Game Master has hidden it: they are
+    /// never sent it (`for_viewer`).
+    name: Option<String>,
+    /// Whether players may read the name. A Game Master always can.
+    name_visible_to_players: bool,
+}
+
+/// A token's own written name: its `metadata.label`, when that is non-blank.
+pub(crate) fn written_label(metadata: Option<&serde_json::Value>) -> Option<String> {
+    metadata
+        .and_then(|m| m.get("label"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|label| !label.is_empty())
+        .map(str::to_string)
 }
 
 impl From<crate::models::Token> for GraphQLToken {
     fn from(token: crate::models::Token) -> Self {
+        let name = written_label(token.metadata.as_ref());
         Self {
+            name,
+            name_visible_to_players: token.name_visible_to_players,
             token_id: token.token_id,
             scene_id: token.scene_id,
             actor_id: token.actor_id,
@@ -446,6 +466,28 @@ impl GraphQLToken {
             && let Some(url) = fallback
         {
             self.photo_url = Some(url);
+        }
+        self
+    }
+
+    /// Names the token after its character when it has no name of its own.
+    pub(crate) fn with_name_fallback(mut self, character_name: Option<String>) -> Self {
+        if self.name.is_none() {
+            self.name = character_name.filter(|n| !n.trim().is_empty());
+        }
+        self
+    }
+
+    /// What this viewer may read. A name hidden from players reaches nobody
+    /// but a Game Master — neither as `name` nor as the `metadata.label` it
+    /// was written in, which would otherwise carry it straight past this.
+    pub(crate) fn for_viewer(mut self, runs_the_world: bool) -> Self {
+        if runs_the_world || self.name_visible_to_players {
+            return self;
+        }
+        self.name = None;
+        if let Some(Json(serde_json::Value::Object(metadata))) = self.metadata.as_mut() {
+            metadata.remove("label");
         }
         self
     }

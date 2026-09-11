@@ -147,4 +147,6 @@ export interface ControllableToken {
   canResize: boolean;
   canSetArt: boolean;
   canDelete: boolean;
+  /** Playtest 2026-09-10 P7: may hide or show this token's name to players. */
+  canSetNameVisibility: boolean;
 }

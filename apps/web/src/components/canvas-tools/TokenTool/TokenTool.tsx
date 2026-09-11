@@ -401,6 +401,40 @@ export function TokenTool({
         ) : null}
       </div>
 
+      <div className="grid gap-1.5" data-testid="token-tool-name">
+        <span className="text-sm">Name</span>
+        <span className="text-xs text-muted-foreground">
+          {selectedToken?.label
+            ? selectedToken.label
+            : "No name: neither the token nor its character has one."}
+        </span>
+        <div>
+          <Button
+            type="button"
+            variant={selectedToken?.nameHidden ? "primary" : "secondary"}
+            size="sm"
+            data-testid="token-tool-name-hidden"
+            aria-pressed={selectedToken?.nameHidden === true}
+            disabled={!selected.canSetNameVisibility}
+            onClick={() => {
+              void control
+                .setNameHidden(
+                  selected.token.id,
+                  selectedToken?.nameHidden !== true,
+                )
+                .then((result) => setRefusal(explain(result)));
+            }}
+          >
+            {selectedToken?.nameHidden
+              ? "Hidden from players"
+              : "Hide from players"}
+          </Button>
+        </div>
+        <span className="text-xs text-muted-foreground">
+          You always see every name; hidden ones are drawn dimmed.
+        </span>
+      </div>
+
       {refusal ? (
         <span
           className="text-destructive text-xs"

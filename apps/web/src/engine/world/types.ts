@@ -9,6 +9,11 @@ export type WorldToken = {
   y: number;
   z: number;
   label?: string;
+  /**
+   * Playtest 2026-09-10 P7: the name is hidden from players. Only a Game
+   * Master's client is ever sent such a name; the engine draws it dimmed.
+   */
+  nameHidden?: boolean;
   // Spec 004: canvas-native resize/rotate + per-player ownership.
   rotation?: number;
   scale?: number;

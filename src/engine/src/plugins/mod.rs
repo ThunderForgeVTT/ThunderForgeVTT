@@ -14,6 +14,7 @@ pub mod item;
 pub mod lighting;
 pub mod lighting_overlay;
 pub mod lore_link;
+pub mod nameplate;
 pub mod navigation;
 pub mod placement;
 pub mod render_probe;

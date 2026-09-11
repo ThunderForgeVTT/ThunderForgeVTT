@@ -71,10 +71,14 @@ pub(crate) struct WorldTokenPayload {
     pub(crate) x: f32,
     pub(crate) y: f32,
     pub(crate) z: f32,
-    // Deserialized from the server payload but not yet read anywhere —
-    // no nameplate/tooltip rendering consumes it yet.
-    #[allow(dead_code)]
+    /// The token's name, drawn above it (`plugins/nameplate.rs`) — applied on
+    /// every update, not only when the token first appears.
     pub(crate) label: Option<String>,
+    /// Playtest 2026-09-10 P7: the name is hidden from players. Only a Game
+    /// Master's client is ever sent such a name — the server withholds it
+    /// from everyone else — and it is drawn dimmed. Absent means shown.
+    #[serde(default, rename = "nameHidden")]
+    pub(crate) name_hidden: bool,
     // Spec 004 (US2): resize/rotate. Optional so the pre-existing
     // position-only `upsert_token` events (e.g. the WASD demo token, or a
     // plain drag that doesn't touch either) keep working unchanged —

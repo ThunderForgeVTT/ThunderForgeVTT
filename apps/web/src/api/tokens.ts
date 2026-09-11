@@ -22,7 +22,30 @@ const TOKEN_FIELDS = `
   health
   maxHealth
   tokenType
+  name
+  nameVisibleToPlayers
 `;
+
+/**
+ * Show or hide a token's name from players (playtest 2026-09-10 P7). Game
+ * Masters only; the server then withholds a hidden name from everyone else,
+ * on the token and in the combat tracker.
+ */
+export function setTokenNameVisibility(
+  tokenId: string,
+  visible: boolean,
+): Promise<TokenRecord> {
+  return postGraphQL<{ setTokenNameVisibility: TokenRecord }>(
+    `
+      mutation SetTokenNameVisibility($tokenId: UUID!, $visible: Boolean!) {
+        setTokenNameVisibility(tokenId: $tokenId, visible: $visible) {
+          ${TOKEN_FIELDS}
+        }
+      }
+    `,
+    { tokenId, visible },
+  ).then((data) => data.setTokenNameVisibility);
+}
 
 type TokensQuery = {
   tokens: TokenRecord[];

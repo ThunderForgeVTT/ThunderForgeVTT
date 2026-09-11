@@ -66,10 +66,14 @@ type WorldEventLike = {
 const TOKEN_EVENT_CODE = 14;
 
 function tokenRecordToWorldToken(record: TokenRecord): WorldToken {
+  // Playtest 2026-09-10 P7: the server resolves the name — the token's own
+  // label, else its character's — and withholds one hidden from this viewer.
+  // The written label is only a fallback for a reply that did not ask.
   const label =
-    record.metadata && typeof record.metadata.label === "string"
+    record.name ??
+    (record.metadata && typeof record.metadata.label === "string"
       ? (record.metadata.label as string)
-      : undefined;
+      : undefined);
 
   return {
     id: record.tokenId,
@@ -77,6 +81,7 @@ function tokenRecordToWorldToken(record: TokenRecord): WorldToken {
     y: record.y,
     z: 0,
     label,
+    nameHidden: record.nameVisibleToPlayers === false,
     rotation: record.rotation,
     scale: record.scale,
     ownerUserId: record.ownerUserId,

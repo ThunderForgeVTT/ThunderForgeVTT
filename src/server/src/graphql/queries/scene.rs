@@ -225,6 +225,8 @@ impl SceneQuery {
             .get()
             .map_err(|_| Error::new("Failed to get DB connection"))?;
 
+        let user_id = auth_user.user_id;
+        let is_admin = auth_user.is_admin;
         let tokens = tokio::task::spawn_blocking(move || {
             use crate::schema::tokens;
             let rows = tokens::table
@@ -234,7 +236,13 @@ impl SceneQuery {
             // Playtest 2026-09-10 P1: a token with no photo of its own shows
             // its character's token art. This is the read the engine syncs
             // from, so it is the one that has to carry it.
-            crate::graphql::token_art::tokens_with_art(&mut conn, rows)
+            //
+            // P7: and the read a player's canvas draws names from, so it is
+            // the one that must not carry a name hidden from them.
+            let runs_the_world = crate::auth::world_membership::is_dm_of_scene(
+                &mut conn, user_id, is_admin, scene_id,
+            )?;
+            crate::graphql::token_art::tokens_with_art(&mut conn, rows, runs_the_world)
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?

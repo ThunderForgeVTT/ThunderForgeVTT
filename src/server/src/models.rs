@@ -961,6 +961,10 @@ pub struct Token {
     /// where its appearance is decided — a kind and how it reads on the board
     /// are one decision, not two.
     pub token_type: String,
+    /// Playtest 2026-09-10 P7: whether players may read this token's name.
+    /// A Game Master always can; `graphql::token_art` withholds it from
+    /// everyone else.
+    pub name_visible_to_players: bool,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]

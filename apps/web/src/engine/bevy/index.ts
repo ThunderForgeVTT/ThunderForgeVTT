@@ -127,11 +127,23 @@ const state: EngineState = {
 function installEngineProbe(wasm: BevyWasmModule): void {
   if (!import.meta.env.DEV || typeof window === "undefined") return;
   const cameraState = (wasm as { camera_state?: () => string }).camera_state;
+  const tokenNameplates = (wasm as { token_nameplates?: () => string })
+    .token_nameplates;
   (window as unknown as Record<string, unknown>).__engineProbe = {
     camera: (): { x: number; y: number; scale: number } | null =>
       cameraState
         ? (JSON.parse(cameraState()) as { x: number; y: number; scale: number })
         : null,
+    // Playtest 2026-09-10 P7: the names this canvas draws — what a hidden
+    // name's test has to ask a player's engine, rather than infer from pixels.
+    nameplates: (): { tokenId: string; text: string; dimmed: boolean }[] =>
+      tokenNameplates
+        ? (JSON.parse(tokenNameplates()) as {
+            tokenId: string;
+            text: string;
+            dimmed: boolean;
+          }[])
+        : [],
   };
 }
 

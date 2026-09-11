@@ -34,7 +34,20 @@ describe("resolveTokenPermissions", () => {
       canResize: true,
       canSetArt: true,
       canDelete: true,
+      canSetNameVisibility: true,
     });
+  });
+
+  it("leaves hiding a name to the GM, even on a player's own token", () => {
+    // Playtest 2026-09-10 P7. Who may read a name is the table's secret to
+    // keep, and `setTokenNameVisibility` refuses anyone else server-side.
+    const own = token({ ownerUserId: "u-p", isPrimary: true });
+    expect(resolveTokenPermissions(own, player).canSetNameVisibility).toBe(
+      false,
+    );
+    expect(resolveTokenPermissions(own, observer).canSetNameVisibility).toBe(
+      false,
+    );
   });
 
   it("lets a player move a token they own", () => {

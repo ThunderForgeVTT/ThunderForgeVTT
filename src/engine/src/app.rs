@@ -250,6 +250,16 @@ pub(crate) fn apply_external_commands(
                             }
                         }
                     }
+                    // Playtest 2026-09-10 P7: the name on every update. It was
+                    // read on spawn only, so a renamed token kept its old name
+                    // and a newly hidden one never went away. An unchanged
+                    // name redraws nothing (`nameplate::DrawnName`).
+                    commands
+                        .entity(existing_entity)
+                        .insert(crate::plugins::nameplate::TokenName {
+                            text: token.label.clone(),
+                            hidden_from_players: token.name_hidden,
+                        });
                     continue;
                 }
 
@@ -336,6 +346,13 @@ pub(crate) fn apply_external_commands(
                         DerivedStats::default(),
                     ))
                     .id();
+
+                commands
+                    .entity(entity)
+                    .insert(crate::plugins::nameplate::TokenName {
+                        text: token.label.clone(),
+                        hidden_from_players: token.name_hidden,
+                    });
 
                 // A token arriving after its status adopts it here, which is
                 // the other half of the ordering fix above.

@@ -731,6 +731,7 @@ diesel::table! {
         health -> Nullable<Int4>,
         max_health -> Nullable<Int4>,
         token_type -> Varchar,
+        name_visible_to_players -> Bool,
     }
 }
 

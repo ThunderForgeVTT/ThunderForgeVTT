@@ -1,6 +1,64 @@
 use super::*;
 use diesel::PgConnection;
 
+/// Playtest 2026-09-10 P7: only a Game Master may hide a token's name from
+/// players — and once it is hidden, no player's read of the token carries it,
+/// while the Game Master's still does.
+#[tokio::test]
+async fn a_game_master_hides_a_name_and_no_player_read_carries_it() {
+    use crate::schema::tokens;
+    use crate::test_support::*;
+
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let owner_id = insert_test_user(&mut conn);
+    let world_id = insert_test_world(&mut conn, owner_id);
+    let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+    let player_id = insert_test_user(&mut conn);
+    insert_test_world_member(&mut conn, world_id, player_id, "Player");
+    let token_id = uuid::Uuid::now_v7();
+    let now = Utc::now().naive_utc();
+    diesel::insert_into(tokens::table)
+        .values((
+            tokens::token_id.eq(token_id),
+            tokens::scene_id.eq(scene_id),
+            tokens::x.eq(0.0),
+            tokens::y.eq(0.0),
+            tokens::rotation.eq(0.0),
+            tokens::scale.eq(1.0),
+            tokens::metadata.eq(Some(serde_json::json!({ "label": "The Lich" }))),
+            tokens::created_at.eq(now),
+            tokens::updated_at.eq(now),
+        ))
+        .execute(&mut conn)
+        .expect("a token to hide the name of");
+    drop(conn);
+
+    assert!(
+        set_token_name_visibility_impl(&state, player_id, false, token_id, false)
+            .await
+            .is_err(),
+        "a Player must not be able to hide a token's name"
+    );
+    let hidden = set_token_name_visibility_impl(&state, owner_id, false, token_id, false)
+        .await
+        .expect("the Game Master may hide it");
+    assert!(!hidden.name_visible_to_players);
+
+    let player_view =
+        crate::graphql::token_art::token_with_art(&state, hidden.clone(), player_id, false)
+            .await
+            .expect("the player may read the token");
+    assert!(
+        !format!("{player_view:?}").contains("The Lich"),
+        "no part of a player's read carries the hidden name: {player_view:?}"
+    );
+    let gm_view = crate::graphql::token_art::token_with_art(&state, hidden, owner_id, false)
+        .await
+        .expect("the Game Master may read the token");
+    assert!(format!("{gm_view:?}").contains("The Lich"));
+}
+
 /// Every kind the client may send is accepted and stored verbatim.
 #[test]
 fn every_known_token_kind_is_accepted() {

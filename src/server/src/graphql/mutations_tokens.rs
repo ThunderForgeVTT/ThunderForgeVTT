@@ -111,8 +111,10 @@ impl TokenMutation {
                 );
             }
 
-            // With its character's art, as every token read now carries it.
-            let mut with_art = crate::graphql::token_art::tokens_with_art(&mut conn, vec![token])?;
+            // With its character's art, as every token read now carries it —
+            // and its name in full: only a Game Master may create a token.
+            let mut with_art =
+                crate::graphql::token_art::tokens_with_art(&mut conn, vec![token], true)?;
             Ok(with_art.remove(0))
         })
         .await
@@ -246,7 +248,7 @@ impl TokenMutation {
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
         .map_err(|_| Error::new("Failed to update token (not found or not owned by you)"))?;
 
-        crate::graphql::token_art::token_with_art(state, updated_token).await
+        crate::graphql::token_art::token_with_art(state, updated_token, user_id, is_admin).await
     }
 
     /// Delete a token (scene owner only)
@@ -414,7 +416,7 @@ impl TokenMutation {
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
         .map_err(|_| Error::new("Failed to move token (not found or not controlled by you)"))?;
 
-        crate::graphql::token_art::token_with_art(state, updated_token).await
+        crate::graphql::token_art::token_with_art(state, updated_token, user_id, is_admin).await
     }
 
     /// Change the photo/avatar of the caller's own primary token. Spec 004
@@ -469,8 +471,97 @@ impl TokenMutation {
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
         .map_err(|_| Error::new("Failed to set photo (not your primary token)"))?;
 
-        crate::graphql::token_art::token_with_art(state, updated_token).await
+        crate::graphql::token_art::token_with_art(state, updated_token, user_id, auth_user.is_admin)
+            .await
     }
+
+    /// Playtest 2026-09-10 P7: show or hide a token's name from players. A
+    /// Game Master always sees it; only a Game Master may change it.
+    async fn set_token_name_visibility(
+        &self,
+        ctx: &Context<'_>,
+        token_id: uuid::Uuid,
+        visible: bool,
+    ) -> GraphQLResult<GraphQLToken> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        let token = set_token_name_visibility_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            token_id,
+            visible,
+        )
+        .await?;
+        crate::graphql::token_art::token_with_art(
+            state,
+            token,
+            auth_user.user_id,
+            auth_user.is_admin,
+        )
+        .await
+    }
+}
+
+/// Testable core of `TokenMutation::set_token_name_visibility`.
+///
+/// The authority is the world role, as for every other token change a player
+/// cannot make. The event is the usual id-only nudge: every client re-reads
+/// its tokens through `token_art`, which decides what each may see — the
+/// broadcast itself goes to everyone alike, so it must never carry the name.
+pub(crate) async fn set_token_name_visibility_impl(
+    state: &crate::state::AppState,
+    user_id: uuid::Uuid,
+    is_admin: bool,
+    token_id: uuid::Uuid,
+    visible: bool,
+) -> GraphQLResult<crate::models::Token> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    tokio::task::spawn_blocking(move || {
+        use crate::schema::tokens;
+
+        conn.transaction(|conn| {
+            let scene_id: uuid::Uuid = tokens::table
+                .filter(tokens::token_id.eq(token_id))
+                .select(tokens::scene_id)
+                .first(conn)?;
+            if !crate::auth::world_membership::is_dm_of_scene(conn, user_id, is_admin, scene_id)? {
+                return Err(DieselError::NotFound);
+            }
+
+            let token = diesel::update(tokens::table.filter(tokens::token_id.eq(token_id)))
+                .set(tokens::name_visible_to_players.eq(visible))
+                .returning(crate::models::Token::as_returning())
+                .get_result(conn)?;
+
+            refresh_scene_fingerprint(conn, scene_id, user_id);
+            if let Ok(world_id) = world_id_for_scene(conn, scene_id) {
+                let _ = record_world_event(
+                    conn,
+                    world_id,
+                    EVENT_CODE_TOKEN_CHANGED,
+                    Some(serde_json::json!({
+                        "action": "updated",
+                        "token_id": token_id,
+                        "scene_id": scene_id,
+                    })),
+                    user_id,
+                );
+            }
+            Ok::<_, DieselError>(token)
+        })
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| {
+        Error::new(
+            "Failed to change the token's name visibility (not found or not yours to change)",
+        )
+    })
 }
 
 /// Turn a client-supplied kind into a [`TokenKind`], or refuse.
