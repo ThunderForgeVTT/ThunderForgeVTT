@@ -252,6 +252,27 @@ into another world. All six arrive with their art and their sizes.
 
 **Proof**
 
+**Importing a source book**
+
+- **FR-070**: A world MUST record the **SHA-256 of every book imported into
+  it**, with what was imported from it and when.
+- **FR-071**: Importing a book a world already has MUST say so, naming when it
+  was imported, and MUST ask whether to overwrite what came from it — rather
+  than importing a second copy of every creature in it.
+- **FR-072**: The check MUST happen **before the file is uploaded**. The
+  reading already happens in the browser (spec 048), so the hash can be taken
+  there too: a person who picks the wrong file should learn it in a moment,
+  not after sending seventy megabytes.
+- **FR-073**: The hash MUST be over the file's whole contents, not its name. A
+  book renamed is the same book, and two books named `Bestiary.pdf` are not.
+- **FR-074**: Overwriting MUST replace what that book contributed and MUST NOT
+  touch anything a Game Master has since edited by hand, or anything another
+  book contributed. A re-import is not a reset of the bestiary.
+- **FR-075**: A near-identical file — the same work re-saved, differing by a
+  few kilobytes — will not match by hash, and MUST NOT be claimed to. Telling
+  a person "you already have this" when it is a different edition is worse
+  than letting them decide.
+
 - **FR-060**: The heroes package's own tests MUST cover every creature the
   same way they cover heroes: every choice draws differently, every preset
   validates and draws, determinism holds.
@@ -362,6 +383,24 @@ into another world. All six arrive with their art and their sizes.
    That means **provenance has to be recorded at import**, because a rule
    about what may be shared is unenforceable against content that cannot say
    where it came from.
+
+4. **A world remembers which books it has read** (owner, alongside the above).
+   The SHA-256 of each imported file is kept in the world's own metadata, so
+   importing the same book twice says "you already have this, imported on that
+   date — overwrite what came from it?" rather than quietly adding a second
+   copy of every creature in it.
+
+   Two details that follow from where the parsing now happens. The hash is
+   taken **in the browser, before the upload** — the reader is already there,
+   so a person who picked the wrong file finds out in a moment rather than
+   after sending seventy megabytes. And it is over the file's contents rather
+   than its name: a book renamed is the same book, and two books called
+   `Bestiary.pdf` are not.
+
+   What it deliberately will not do is claim a *near* match. The same work
+   re-saved differs by a few kilobytes and hashes differently; telling
+   somebody "you already have this" about a different edition is worse than
+   letting them decide. FR-070 to FR-075.
 
 ## Questions for the owner
 

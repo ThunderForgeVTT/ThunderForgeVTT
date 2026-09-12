@@ -327,15 +327,40 @@ export async function buildPdf() {
   const pkg = JSON.parse(readFileSync(manifest, "utf-8"));
   pkg.name = "@thunderforge/pdf";
   writeFileSync(manifest, JSON.stringify(pkg, null, 2), "utf-8");
-  log("pdf", "Build complete.");
+  writeFileSync(join(PDF_PKG_DIR, "pkg.sum"), getPdfInputsHash(), "utf-8");
+  log("pdf", "Build complete and pkg.sum updated.");
+}
+
+/**
+ * What the PDF reader is built from.
+ *
+ * Hashed rather than merely checking the package exists, for the reason the
+ * engine's own note above records the hard way: a bundle that is present but
+ * stale does not fail, it succeeds for the wrong reason. Editing the crate and
+ * being served the previous wasm is exactly the kind of wrong nobody notices.
+ */
+function getPdfInputsHash() {
+  const hash = createHash("sha256");
+  if (existsSync(WORKSPACE_CARGO_LOCK)) {
+    hashFile(hash, WORKSPACE_CARGO_LOCK);
+  }
+  hashFile(hash, join(PDF_DIR, "Cargo.toml"));
+  hashDirectoryRecursive(hash, join(PDF_DIR, "src"));
+  return hash.digest("hex");
 }
 
 export async function ensurePdfBuild({ force = false } = {}) {
-  if (force || !existsSync(PDF_PKG_DIR)) {
+  const sumPath = join(PDF_PKG_DIR, "pkg.sum");
+  if (force || !existsSync(PDF_PKG_DIR) || !existsSync(sumPath)) {
     await buildPdf();
     return;
   }
-  log("pdf", "PDF reader present, skipping build...");
+  if (readFileSync(sumPath, "utf-8").trim() === getPdfInputsHash()) {
+    log("pdf", "PDF reader is up to date, skipping build...");
+    return;
+  }
+  log("pdf", "PDF reader is out of date, building...");
+  await buildPdf();
 }
 
 export async function ensureEngineBuild({

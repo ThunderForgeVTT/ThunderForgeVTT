@@ -3,6 +3,7 @@
 import {
   ROOT_DIR,
   ensureEngineBuild,
+  ensurePdfBuild,
   log,
   parseArgs,
   runCommand,
@@ -21,6 +22,9 @@ async function run() {
   });
 
   await ensureEngineBuild({ force: args.force });
+  // The web imports this the same way it imports the engine, so it has to
+  // exist before the frontend is built. Cheap when it already does.
+  await ensurePdfBuild({ force: args.force });
 
   if (args.onlyWasm) {
     log("build", "--only-wasm set, skipping frontend/backend builds.");

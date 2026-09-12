@@ -52,6 +52,7 @@ import { join, relative } from "node:path";
 import {
   ROOT_DIR,
   ensureEngineBuild,
+  ensurePdfBuild,
   engineProfile,
   skipWasmOpt,
   log,
@@ -1126,6 +1127,7 @@ async function main() {
       "This run includes specs that measure the engine, so it is built release.",
     );
   }
+  await ensurePdfBuild({});
   await ensureEngineBuild({
     profile,
     noOpt: skipWasmOpt() && !measuredWillRun,

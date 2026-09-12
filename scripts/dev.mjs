@@ -16,6 +16,7 @@ import path from "node:path";
 import {
   ROOT_DIR,
   ensureEngineBuild,
+  ensurePdfBuild,
   engineProfile,
   log,
   parseArgs,
@@ -313,6 +314,9 @@ async function run() {
   linkPacks(process.env.THUNDERFORGE_DATA_PATH ?? path.join(ROOT_DIR, "data"));
 
   await ensureEngineBuild({ force: args.force, profile: engineProfile("dev") });
+  // Release always, even in dev: there is no debugging value in an
+  // unoptimised PDF reader, and the difference is megabytes a person waits for.
+  await ensurePdfBuild({ force: args.force });
 
   // Started in dependency order, each gated on the next being ready — the
   // database is already waited for by the Makefile's `services-up`.
