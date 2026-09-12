@@ -983,6 +983,27 @@
       }
     }
   ],
+  "vision": {
+    "unitsPerCell": 5,
+    "unitLabel": "ft",
+    "darkvision": {
+      "slot": "traitData",
+      "source": "darkvision",
+      "unit": "feet"
+    },
+    "carriedLight": {
+      "bright": {
+        "slot": "traitData",
+        "source": "light_bright",
+        "unit": "feet"
+      },
+      "dim": {
+        "slot": "traitData",
+        "source": "light_dim",
+        "unit": "feet"
+      }
+    }
+  },
   "movement": {
     "walk": {
       "label": "Walk",

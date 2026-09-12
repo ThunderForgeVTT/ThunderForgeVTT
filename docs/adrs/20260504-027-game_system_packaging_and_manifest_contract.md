@@ -7,6 +7,9 @@
 **Amended:** 2026-08-23 (spec `016-system-pack-legal-compliance` — added the
 `legal` object, documented below; see that section's own note)
 
+**Amended:** 2026-09-11 (spec `045-token-movement-and-vision` — added the
+optional `vision` object, documented below)
+
 ## Context
 
 ThunderForgeVTT supports pluggable game systems ("system packs") — 5E
@@ -147,3 +150,31 @@ table summarizes.
   of the rest of the manifest: rejected — adds a redundant round-trip and
   cache-invalidation surface for data with the same lifecycle as the rest
   of the manifest (loaded once, cached, effectively static).
+
+
+### Amendment (2026-09-11, spec 045): the optional `vision` object
+
+The owner's decision for spec 045 was that **game systems decide how their
+tokens see**, rather than the engine knowing what darkvision is. Darkvision is
+a D&D word; building it into shared code would make one ruleset's vocabulary
+the shape every other system has to fit, and would mean editing shared code to
+support a system it had never heard of — the thing this ADR exists to prevent.
+
+So a manifest **may** carry a `vision` object naming which of an actor's own
+fields carry sight in darkness and the reach of a light the character carries.
+Each distance names a `slot` and a `source`, the pair a `sheet` entry already
+uses. The full shape is in `packs/systems/README.md`.
+
+Unlike `legal`, this block is **optional and stays optional**. A system that
+declares none gets ordinary sight, and that is a correct answer rather than a
+missing one: most rulesets have nothing to say about seeing in the dark, and an
+absent block is not evidence that nobody thought about it. That is the
+difference from the 2026-08-23 amendment, where absence genuinely was a gap.
+
+One wrinkle this amendment exposes and only half closes: `unitsPerCell` lives
+inside `vision` because **no manifest has ever recorded what a grid square is
+worth**. The `movement` block declares "30" and leaves the unit implicit, which
+works only because nothing converts it into a distance on a map. Vision has to
+be drawn, so it cannot. When `movement` needs the same answer — a route whose
+cost is quoted in feet — `unitsPerCell` should be lifted to the manifest's top
+level and shared, not declared a second time.

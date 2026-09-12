@@ -58,6 +58,22 @@ impl GridUnits {
         cells * self.safe_per_cell()
     }
 
+    /// The inverse: how many cells `distance` of this scene's units covers.
+    ///
+    /// What a game system's own numbers have to pass through to mean anything
+    /// on a board (spec 045 FR-060). "Sixty feet of darkvision" is a fact
+    /// about the ruleset; how far that reaches depends entirely on the scene,
+    /// and this is the single place the two meet.
+    ///
+    /// A negative or non-finite distance is no distance: broken data must not
+    /// become a creature that sees behind itself.
+    pub fn cells(&self, distance: f32) -> f32 {
+        if !distance.is_finite() || distance <= 0.0 {
+            return 0.0;
+        }
+        distance / self.safe_per_cell()
+    }
+
     /// Distance as a label: `"15 ft"`, `"7.5 m"`, `"3 Unit"`.
     ///
     /// Trailing zeros are dropped — a half-cell step at 5ft is `2.5 ft`, but

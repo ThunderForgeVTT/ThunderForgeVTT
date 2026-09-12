@@ -140,6 +140,38 @@ The engine holds no built-in notion of "health".
 Absent means the system has no movement budget. Four of the eight bundled
 packs declare none, and their characters are none the worse for it.
 
+### `vision`
+
+How a creature sees, in the system's own units (spec 045, owner decision 2).
+Every part optional; a system that declares none gets ordinary sight, which is
+correct rather than a fallback.
+
+```json
+"vision": {
+  "unitsPerCell": 5, "unitLabel": "ft",
+  "darkvision": { "slot": "traitData", "source": "darkvision" },
+  "carriedLight": {
+    "bright": { "slot": "traitData", "source": "light_bright" },
+    "dim":    { "slot": "traitData", "source": "light_dim" }
+  }
+}
+```
+
+Each distance names a `slot` and a `source`, the same pair a `sheet` entry
+uses; `slot` defaults to `traitData`. A `default` applies only when the sheet
+is silent, and an explicit zero is a creature that cannot see in the dark, not
+an absent value.
+
+`unitsPerCell` is what a grid square is worth — 5, for a five-foot square. It
+is declared **here** because it exists nowhere else: a scene's `grid_size` is
+pixels per cell, and `movement` declares "30" with the unit implicit, which
+works only because nothing converts it. A distance that has to be drawn cannot
+be left implicit. When `movement` needs the same answer, lift this out and
+share it rather than declaring it twice.
+
+D&D 5e declares darkvision and a carried light's reaches. Genie declares
+nothing yet, and its tokens see by the default rules until it does.
+
 ### `sheet`
 
 The rest of the character sheet: everything that is not a score or a pool.

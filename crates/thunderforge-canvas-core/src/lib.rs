@@ -42,6 +42,7 @@ pub mod token_art;
 pub mod token_kind;
 pub mod token_stack;
 pub mod vision;
+pub mod vision_declaration;
 pub mod wall;
 
 /// The vector type this crate's geometry speaks.

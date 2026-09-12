@@ -71,6 +71,61 @@ pub struct SystemManifest {
     /// system's vocabulary would make every system after it a special case.
     #[serde(default)]
     pub resources: Vec<SystemResource>,
+    /// How this system's creatures see (spec 045, owner decision 2).
+    ///
+    /// Optional, and **staying** optional, unlike `legal`. A system that
+    /// declares none gets ordinary sight, and that is a correct answer rather
+    /// than a missing one — most rulesets have nothing to say about seeing in
+    /// the dark, so an absent block is not evidence that nobody thought about
+    /// it. See ADR-027's 2026-09-11 amendment.
+    #[serde(default)]
+    pub vision: Option<SystemVision>,
+}
+
+/// A system's `vision` block, mirroring
+/// `thunderforge_canvas_core::vision_declaration::VisionDeclaration`.
+///
+/// Duplicated rather than imported, for the same reason `SystemResource` is:
+/// this crate is the manifest *schema*, published to system authors and
+/// validated against JSON they write by hand, and importing an engine type
+/// would drag the engine's dependency graph into every pack that only wants
+/// to describe itself. A test below keeps the field names honest.
+#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemVision {
+    /// What one grid square is worth in this system's units — 5, for a
+    /// five-foot square.
+    #[serde(default)]
+    pub units_per_cell: Option<f32>,
+    #[serde(default)]
+    pub unit_label: Option<String>,
+    #[serde(default)]
+    pub darkvision: Option<SystemDistanceSource>,
+    #[serde(default)]
+    pub carried_light: Option<SystemCarriedLight>,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemCarriedLight {
+    #[serde(default)]
+    pub bright: Option<SystemDistanceSource>,
+    #[serde(default)]
+    pub dim: Option<SystemDistanceSource>,
+}
+
+/// Where one distance is read from an actor: which stored blob, which key.
+#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemDistanceSource {
+    /// Defaults to `traitData` when absent.
+    #[serde(default)]
+    pub slot: Option<String>,
+    pub source: String,
+    #[serde(default)]
+    pub unit: Option<String>,
+    #[serde(default)]
+    pub default: Option<f32>,
 }
 
 /// One resource a system declares, mirroring
@@ -173,7 +228,63 @@ pub fn validate_system_manifest(json_string: &str) -> Result<(), String> {
     // a manifest with `"legal": {"licenseName": "", "attributionText": ""}`
     // would otherwise pass. Checked explicitly here so this one function
     // stays the single "is this manifest compliant" entry point.
-    validate_legal_content(&instance)
+    validate_legal_content(&instance)?;
+    validate_vision_content(&instance)
+}
+
+/// Spec 045: a `vision` block that is present must be usable.
+///
+/// The schema above already types the fields, but it cannot say that a
+/// distance must be readable from *somewhere* or that a square must have a
+/// positive size. Both failures are silent at runtime — a `source` of `""`
+/// reads nothing and a `unitsPerCell` of `0` divides a creature's sight into
+/// a fallback — so they are refused at install time, where a person is
+/// looking at the manifest they just wrote.
+fn validate_vision_content(instance: &serde_json::Value) -> Result<(), String> {
+    let Some(vision) = instance.get("vision") else {
+        return Ok(());
+    };
+    if vision.is_null() {
+        return Ok(());
+    }
+
+    if let Some(per_cell) = vision.get("unitsPerCell").and_then(|v| v.as_f64())
+        && !(per_cell.is_finite() && per_cell > 0.0)
+    {
+        return Err(format!(
+            "vision.unitsPerCell must be a positive number (got {per_cell})"
+        ));
+    }
+
+    let mut sources: Vec<(&str, &serde_json::Value)> = Vec::new();
+    if let Some(dark) = vision.get("darkvision") {
+        sources.push(("vision.darkvision", dark));
+    }
+    if let Some(carried) = vision.get("carriedLight") {
+        for reach in ["bright", "dim"] {
+            if let Some(value) = carried.get(reach) {
+                sources.push(match reach {
+                    "bright" => ("vision.carriedLight.bright", value),
+                    _ => ("vision.carriedLight.dim", value),
+                });
+            }
+        }
+    }
+
+    for (path, source) in sources {
+        if source.is_null() {
+            continue;
+        }
+        let named = source
+            .get("source")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
+        if named.trim().is_empty() {
+            return Err(format!("{path}.source must name a field to read"));
+        }
+    }
+
+    Ok(())
 }
 
 /// Spec 016 (FR-007, data-model.md's validation rules): rejects a `legal`
@@ -421,6 +532,202 @@ mod tests {
                 .and_then(|p| p.get("id"))
                 .is_some(),
             "a manifest is addressed by `id`, so the schema must declare it"
+        );
+    }
+}
+
+#[cfg(test)]
+mod vision_validation_tests {
+    use super::*;
+
+    fn manifest_with(vision: serde_json::Value) -> String {
+        serde_json::json!({
+            "id": "t", "title": "T", "authors": [], "version": "1.0.0",
+            "compatibility": { "minimum": "1.0.0" },
+            "esmodules": [], "styles": [], "packs": [],
+            "legal": { "licenseName": "n", "attributionText": "a" },
+            "vision": vision,
+        })
+        .to_string()
+    }
+
+    #[test]
+    fn a_manifest_with_no_vision_block_is_fine() {
+        let json = serde_json::json!({
+            "id": "t", "title": "T", "authors": [], "version": "1.0.0",
+            "compatibility": { "minimum": "1.0.0" },
+            "esmodules": [], "styles": [], "packs": [],
+            "legal": { "licenseName": "n", "attributionText": "a" },
+        })
+        .to_string();
+        assert!(validate_system_manifest(&json).is_ok());
+    }
+
+    #[test]
+    fn a_square_of_no_size_is_refused() {
+        // Silent at runtime otherwise: `safe_per_cell` would stand in and a
+        // creature's sight would quietly be measured against the wrong scale.
+        for bad in [0.0, -5.0] {
+            let json = manifest_with(serde_json::json!({ "unitsPerCell": bad }));
+            let error = validate_system_manifest(&json).expect_err("refused");
+            assert!(error.contains("unitsPerCell"), "{error}");
+        }
+        assert!(
+            validate_system_manifest(&manifest_with(serde_json::json!({ "unitsPerCell": 5 })))
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn a_distance_that_names_no_field_is_refused() {
+        // A `source` of "" reads nothing, for ever, without complaining.
+        for path in ["darkvision", "carriedLight.bright", "carriedLight.dim"] {
+            let vision = match path {
+                "darkvision" => serde_json::json!({ "darkvision": { "source": "  " } }),
+                "carriedLight.bright" => {
+                    serde_json::json!({ "carriedLight": { "bright": { "source": "" } } })
+                }
+                _ => serde_json::json!({ "carriedLight": { "dim": { "source": "" } } }),
+            };
+            let error = validate_system_manifest(&manifest_with(vision)).expect_err("refused");
+            assert!(error.contains(path), "expected {path} in: {error}");
+        }
+    }
+
+    #[test]
+    fn the_shipped_dnd5e_manifest_passes() {
+        // The one that has to work: this is the declaration spec 045 ships.
+        let json = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../packs/systems/dnd5e/system.json"
+        ))
+        .expect("the 5e manifest is readable");
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert!(
+            parsed.get("vision").is_some(),
+            "5e declares its vision block"
+        );
+        super::validate_vision_content(&parsed).expect("its vision block is usable");
+    }
+}
+
+#[cfg(test)]
+mod mirror_tests {
+    //! The manifest schema duplicates several engine types rather than
+    //! importing them, so that a pack author reads one definition of what they
+    //! may write. Duplication is only safe while somebody checks it, and until
+    //! spec 045 nobody did: the comment on `SystemResource` claimed "the two
+    //! are kept honest by a test asserting the field names match", and no such
+    //! test existed anywhere in the repository.
+
+    use super::*;
+    use serde_json::Value;
+
+    /// The JSON keys a type serialises to.
+    fn keys_of(value: &Value) -> Vec<String> {
+        let mut keys: Vec<String> = value
+            .as_object()
+            .expect("a struct serialises to an object")
+            .keys()
+            .cloned()
+            .collect();
+        keys.sort();
+        keys
+    }
+
+    #[test]
+    fn the_resource_schema_covers_every_field_of_the_engines_definition() {
+        // Not equality: `SystemResource` also carries `source`, which is the
+        // manifest's business and not the engine's. What must hold is that
+        // nothing the engine reads is missing from what an author may write.
+        use thunderforge_canvas_core::resource_display::{ResourceDefinition, ResourceKind};
+
+        let engine = serde_json::to_value(ResourceDefinition {
+            id: "health".into(),
+            label: "Hit Points".into(),
+            kind: ResourceKind::Bar,
+            order: 0,
+            allow_stacking: false,
+        })
+        .expect("serialises");
+        let manifest = serde_json::to_value(SystemResource {
+            id: "health".into(),
+            label: "Hit Points".into(),
+            kind: "bar".into(),
+            order: 0,
+            allow_stacking: false,
+            source: ResourceSourceSpec {
+                slot: "resourceData".into(),
+                entries: vec![EntrySourceSpec {
+                    current: "hp".into(),
+                    max: Some("hp_max".into()),
+                    max_value: None,
+                    label: None,
+                    optional: false,
+                }],
+            },
+        })
+        .expect("serialises");
+
+        let declared = keys_of(&manifest);
+        for field in keys_of(&engine) {
+            assert!(
+                declared.contains(&field),
+                "the engine reads `{field}` and a pack author has no way to \
+                 declare it: {declared:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_vision_schema_matches_the_engines_declaration_exactly() {
+        // Spec 045. This one *is* equality: the block exists only to be read
+        // by `vision_declaration`, so a key on one side and not the other is
+        // either a field nobody can declare or one nothing will ever read.
+        use thunderforge_canvas_core::vision_declaration::{
+            CarriedLightDeclaration, DistanceSource, VisionDeclaration,
+        };
+
+        let engine = serde_json::to_value(VisionDeclaration {
+            units_per_cell: Some(5.0),
+            unit_label: Some("ft".into()),
+            darkvision: Some(DistanceSource {
+                slot: Some("traitData".into()),
+                source: "darkvision".into(),
+                unit: Some("feet".into()),
+                default: None,
+            }),
+            carried_light: Some(CarriedLightDeclaration {
+                bright: None,
+                dim: None,
+            }),
+        })
+        .expect("serialises");
+        let manifest = serde_json::to_value(SystemVision {
+            units_per_cell: Some(5.0),
+            unit_label: Some("ft".into()),
+            darkvision: Some(SystemDistanceSource {
+                slot: Some("traitData".into()),
+                source: "darkvision".into(),
+                unit: Some("feet".into()),
+                default: None,
+            }),
+            carried_light: Some(SystemCarriedLight {
+                bright: None,
+                dim: None,
+            }),
+        })
+        .expect("serialises");
+
+        assert_eq!(keys_of(&manifest), keys_of(&engine));
+        assert_eq!(
+            keys_of(&manifest["darkvision"]),
+            keys_of(&engine["darkvision"]),
+            "a distance is named the same way on both sides"
+        );
+        assert_eq!(
+            keys_of(&manifest["carriedLight"]),
+            keys_of(&engine["carriedLight"])
         );
     }
 }
