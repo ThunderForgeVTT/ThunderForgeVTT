@@ -43,18 +43,25 @@ world using it — and each has an acceptance scenario stated in those terms.
 None names a storage mechanism, and the spec deliberately does not say how the
 resolution is performed.
 
-**Three questions carry stated defaults.** Q1 (what happens to deltas when
-inheritance stops), Q2 (entry identity across a re-import) and Q3 (whether the
-library later holds authored content) each have a default written into the
-requirements or assumptions, so the spec is testable as it stands. This is the
-pattern specs 046 through 049 follow.
+**No questions remain open.** All three were answered on 2026-09-12 and the
+"Questions for the owner" section was removed rather than left as a stub.
+Decisions 4 to 7 record the answers and what each one settled.
 
-**Q1 was re-scoped by decision 3, not answered.** The origin rule made its
-risky option safe: before it, keeping a world's edits after a book is switched
-off leaked provenance, and the safe variant was expensive. Now origin travels
-with each entry by construction, so the question is purely about whether work
-should survive a switch — a product question, not a safety one. The options
-table says so rather than leaving the old implications standing.
+**One answer was "measure it", and that is recorded as a gate, not a
+deferral.** Decision 6 keeps kind-plus-name as the provisional identity rule
+and puts FR-029's experiment against the real corpus in front of the delta
+model shipping, with FR-089c making it a gate. A rule invented at a desk for
+re-attaching somebody's month of work to a re-parsed book is exactly the kind
+of guess this project has been burned by, and the repository has a precedent
+for stopping at a measurement (spec 043) rather than shipping past one.
+
+**The spec grew a second kind of thing, and that is a real scope change.**
+Decision 4 puts authored collections on the same shelf as imported
+compendiums, which spec 050 had previously scoped out. The machinery is shared
+— shelf, book list, base and delta, origin — so what is genuinely new is
+sync-back (FR-100 to FR-105), download (FR-009a to FR-009c), and authoring
+into a collection at all. This is noted here so the plan sizes it honestly
+rather than treating it as a naming change.
 
 **One requirement exists to stop a claim being taken on trust.** FR-086 asks
 for evidence that switching a book off leaves no copy behind. The whole

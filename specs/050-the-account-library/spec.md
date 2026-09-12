@@ -48,12 +48,30 @@ with nothing kept behind the scenes.
 - **Spec 011** owns the world's Compendium portal, which is where the
   inherited result is browsed.
 - **Spec 026** owns collections — user-authored content, made to be shared.
-  A library compendium is not one, and mostly cannot become one.
+  Collections sit on the same shelf as imported compendiums and behave the
+  same way in a world; what separates them is origin, and everything that
+  follows from it.
 
 It also answers a direction recorded on 2026-09-10 but never specified: that a
 user should be able to hold content outside a world, transportable into future
-worlds, with game-system compatibility attached. This is that, for imported
-content.
+worlds, with game-system compatibility attached. This is that.
+
+## Two kinds of thing on one shelf
+
+| | **Compendium** | **Collection** |
+|---|---|---|
+| Where it came from | Read out of a document | Authored in ThunderForge |
+| Switched on in a world | Yes | Yes |
+| Deltaed by a world | Yes, to any extent | Yes |
+| Changes sync back to it | **No, ever** | Yes |
+| Shared, published, adopted | **No** | Yes |
+| Downloaded by its owner | **No** | Yes, as JSON |
+| Dies with the account | Yes | Yes |
+
+The owner's word for both is "compendium". This spec uses two words because
+the repository already reserves "collection" for user-authored shareable
+content, and because the difference between these two columns **is** the legal
+boundary — it is the one place in the product worth spending a second noun on.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -229,6 +247,46 @@ that any that cannot be re-applied are reported rather than dropped.
 
 ---
 
+### User Story 6 - Push an improvement back to the shelf (Priority: P6)
+
+A Game Master keeps a collection of their own homebrew on their shelf. In one
+world they improve a spell — better wording, a fixed number. They sync that
+change back to the collection, and every world they start afterwards gets the
+better version. The world stops holding it as a change, because it is not a
+change any more.
+
+They try the same thing with a monster they retuned out of the Monster Manual,
+and there is no such option. The compendium underneath is a record of what the
+book says, and it stays that however much they have changed it in their world.
+
+**Why this priority**: It is what stops the delta model becoming a trap. Work
+done in a world is otherwise stuck in that world forever, which quietly
+punishes the Game Master for using the feature.
+
+**Independent Test**: Change an entry in a world over an authored collection,
+sync it back, confirm the shelf has it and a new world gets it; attempt the
+same over an imported compendium and confirm there is no route.
+
+**Acceptance Scenarios**:
+
+1. **Given** a world's change over an authored collection, **When** the Game
+   Master syncs it back, **Then** the collection holds it and a world started
+   afterwards gets it.
+2. **Given** a sync back, **When** it is requested, **Then** what will change
+   on the shelf is shown and an explicit confirmation is required.
+3. **Given** a completed sync back, **When** the world is read, **Then** it no
+   longer holds that change as a delta.
+4. **Given** other worlds with their own deltas over the same collection,
+   **When** a sync back lands, **Then** their deltas behave exactly as they do
+   after a re-import.
+5. **Given** a world's change over an **imported** compendium, **When** the
+   Game Master looks for a sync back, **Then** there is none, and the reason
+   is stated where the absence would be noticed.
+6. **Given** a completed sync back, **When** the Game Master regrets it,
+   **Then** the collection's previous version is still recoverable.
+
+---
+
 ### Edge Cases
 
 - **A world stops inheriting a compendium whose entries it had edited.** The
@@ -288,6 +346,24 @@ that any that cannot be re-applied are reported rather than dropped.
   current base. Changing what a book says MUST be a new version of the base,
   never an edit of the existing one.
 
+**Collections on the same shelf**
+
+- **FR-007**: A library MUST hold **collections** — authored content — beside
+  imported compendiums, and MUST present them as one shelf.
+- **FR-008**: A collection MUST behave identically to a compendium everywhere
+  origin does not decide the answer: on the shelf, in the book list, in a
+  world, and under a delta.
+- **FR-009**: A collection MUST carry a system, the same way a compendium
+  does, and MUST be offered to worlds on that system only.
+- **FR-009a**: A Game Master MUST be able to download a collection they own,
+  **as JSON**. It is theirs and they made it.
+- **FR-009b**: An imported compendium MUST NOT be downloadable, by that route
+  or any other. This is spec 049 FR-052, not a new rule.
+- **FR-009c**: A download MUST contain only authored content. Where a
+  collection could contain anything derived from an import, that content MUST
+  be excluded and the exclusion MUST be reported — a silently thinner file is
+  worse than a refused one.
+
 **Inheriting into a world**
 
 - **FR-010**: A Game Master MUST be able to inherit a compendium from their
@@ -317,15 +393,44 @@ that any that cannot be re-applied are reported rather than dropped.
 - **FR-024**: A Game Master MUST be able to see what an entry was before their
   world changed it, and restore it.
 - **FR-025**: An entry's identity within a compendium MUST be its kind and its
-  name. A delta attaches to that identity. *(The consequence — a renamed entry
-  reads as a removal and an addition — is stated in Edge Cases and is Q2 for
-  the owner.)*
+  name, unless FR-029's measurement says otherwise. A delta attaches to that
+  identity.
 - **FR-026**: Deltas MUST survive a re-import that replaces the base beneath
   them.
 - **FR-027**: A delta that can no longer attach to anything MUST be reported
   by name and MUST NOT be silently discarded.
 - **FR-028**: Removing a world MUST remove its deltas and MUST NOT affect the
   base or any other world.
+- **FR-029**: The identity rule MUST be **settled by measurement before the
+  delta model ships**, not by argument. The experiment: re-parse books from
+  the existing corpus that exist in more than one file — a re-save, a later
+  printing, or the same file under an improved parser — and report how many
+  entries keep a stable kind-and-name identity, how many are renamed, and how
+  many collide. FR-025 stands if the evidence supports it and is replaced by
+  what the evidence supports if not.
+- **FR-029a**: The measurement MUST be reported as generated output, not
+  transcribed into prose, consistent with how engine and parser numbers are
+  already produced.
+
+**What a world can push back up**
+
+- **FR-100**: A Game Master MUST be able to **sync a world's changes back** to
+  the **collection** they came from, so an improvement made in one world
+  reaches the shelf and the worlds that follow.
+- **FR-101**: Syncing back MUST be available for **authored collections only**.
+  An imported compendium MUST have no path by which a world's changes reach
+  its base, at any volume of change.
+- **FR-102**: The reason MUST be stated where the absence would be noticed: an
+  imported base records what a document says, and it stays that.
+- **FR-103**: Syncing back MUST show what will change on the shelf before it
+  happens, and MUST require an explicit confirmation — it writes to something
+  every other world is reading.
+- **FR-104**: Syncing back MUST create a new version of the collection's base,
+  leaving the previous one recoverable. Other worlds' deltas over it MUST
+  behave exactly as they do after a re-import (FR-026, FR-027).
+- **FR-105**: A world that has synced back MUST no longer hold the synced
+  changes as a delta — they are in the base now, and holding both would make
+  the world's copy silently diverge on the next change.
 
 **The book list**
 
@@ -424,15 +529,29 @@ that any that cannot be re-applied are reported rather than dropped.
 - **FR-087**: An end-to-end test MUST prove the delta's origin split: a change
   to an uploaded entry cannot be shared, and a world-only addition beside it
   can.
-- **FR-088**: Unit tests alone MUST NOT be accepted as proof for any of the
+- **FR-089**: An end-to-end test MUST prove a change synced back to a
+  collection reaches a world started afterwards, and that the world that
+  synced it no longer holds it as a delta.
+- **FR-089a**: An end-to-end test MUST prove there is **no route** by which a
+  world's change reaches an imported compendium's base — attempted through
+  every surface that offers the sync for collections.
+- **FR-089b**: An end-to-end test MUST prove a collection downloads as JSON
+  and an imported compendium does not.
+- **FR-089c**: The identity measurement (FR-029) MUST be run and reported
+  before the delta model ships. It is a gate, not a report — if the evidence
+  contradicts FR-025, the rule changes before the work continues.
+- **FR-090**: Unit tests alone MUST NOT be accepted as proof for any of the
   above.
 
 ### Key Entities
 
-- **Library**: an account's shelf. Owns compendiums, belongs to exactly one
-  account, dies with it.
-- **Compendium**: everything one book produced (spec 049). Belongs to a
-  library. Carries its book's name, hash, system, provenance and counts.
+- **Library**: an account's shelf. Holds compendiums and collections, belongs
+  to exactly one account, dies with it.
+- **Compendium**: everything one book produced (spec 049). Imported, so never
+  shared, never downloaded, never written back to. Carries its book's name,
+  hash, system, origin and counts.
+- **Collection**: authored content on the same shelf (spec 026). Shareable,
+  downloadable as JSON, and the only kind a world can sync changes back to.
 - **Base**: the immutable content of a compendium at one version. Replaced
   wholesale by a re-import, never edited.
 - **Book list**: which compendiums are switched on for a world. Visible to
@@ -470,7 +589,13 @@ that any that cannot be re-applied are reported rather than dropped.
 - **SC-008**: No account can reach another account's compendium by any route
   exercised in testing.
 - **SC-009**: A Game Master can tell, for any piece of content in a world,
-  which book it came from and whether this world has changed it.
+  which book or collection it came from and whether this world has changed it.
+- **SC-010**: A change made in one world and synced back reaches every world
+  started afterwards, with no further action, in 100% of runs.
+- **SC-011**: No world's change reaches an imported compendium's base, by any
+  route exercised in testing, at any volume of change.
+- **SC-012**: A Game Master can download a collection they authored and open
+  it in something that is not ThunderForge.
 
 ## Assumptions
 
@@ -481,15 +606,18 @@ that any that cannot be re-applied are reported rather than dropped.
   the library holds. This is what makes the storage saving real rather than
   nominal, and it is why switching a book off has consequences a copy would
   not have had.
-- **Only imported content moves to the library in this spec.** World-authored
-  actors, items and lore stay where they are. The 2026-09-10 direction of
-  profile-level content organised by collections is broader than this and
-  stays a separate piece of work; this spec is the imported half of it and
-  should not foreclose the rest.
+- **The shelf holds imported compendiums and authored collections, both.**
+  Decision 4. What is *not* in scope is moving every world-authored actor,
+  item and lore entry onto the profile — that is the wider 2026-09-10
+  direction, and this spec should leave room for it rather than attempt it.
+- **A world's changes flow back only to authored content.** Decision 5. An
+  imported base is a record of what a document says and is never written to.
 - **A world inherits from its owner's library only.** Co-Game Masters use, do
   not inherit.
-- **Entry identity is kind plus name.** The simplest rule that works across a
-  re-parse. Its weakness is renames, which is Q2.
+- **Entry identity is kind plus name, provisionally.** The simplest rule that
+  works across a re-parse, and its weakness is renames. It is not being
+  settled by argument: FR-029's measurement against the real corpus decides
+  it before the delta model ships. Decision 6.
 - **Deltas are not versioned.** A Game Master can restore an entry to its base
   (FR-024), which covers the common mistake. A full history of world edits is
   a different feature.
@@ -527,46 +655,60 @@ that any that cannot be re-applied are reported rather than dropped.
    world-only entry beside it is authored content and can be (FR-052a). Origin
    is tracked per entry, not per compendium.
 
-## Questions for the owner
+4. **The shelf holds both kinds, and the authored kind is a collection**
+   (answering Q3). A library is not only imported books. It holds:
 
-### Q1 — What happens to a world's changes when it stops inheriting?
+   - **Compendiums** — imported from a document. Never shared, never
+     exported, never downloaded.
+   - **Collections** — authored through the authoring tools. Shared,
+     adopted, downloadable.
 
-**Context**: FR-013, FR-027, and the first edge case. A Game Master inherits
-the Monster Manual, spends a month tuning forty monsters for their campaign,
-then removes the inheritance. The base goes. Their month does not obviously go
-with it.
+   The owner's word for both is "compendium", and the reason this spec uses
+   two is that the repository already reserves "collection" for user-authored
+   shareable content (spec 026). Having one word for the shareable thing and
+   another for the unshareable thing is worth more here than anywhere else in
+   the product, because the difference between them **is** the legal boundary.
 
-| Option | Answer | Implications |
-|--------|--------|--------------|
-| A | The deltas go too, named first so the Game Master can change their mind | Simplest and most predictable — a changed entry is meaningless without the entry it changed. Loses real work to one confirmed click. |
-| B | Changed and added entries are kept as world content, hidden ones are forgotten | Keeps the month. Was the risky option before decision 3; now much less so, because a kept entry carries its own origin and the changed ones stay unshareable automatically. |
-| C | B, and the kept entries keep their origin and stay unshareable | This is now what B *does*, since origin is tracked per entry rather than reconstructed on the way out. The remaining difference from B is only whether the Game Master is told why they are unshareable. |
+   Both behave identically where it does not matter — both sit on the shelf,
+   both are switched on through the book list, both carry a system, both take
+   deltas. They differ only in origin, and everything that follows from it.
 
-*Decision 3 moved this question. Before it, B leaked provenance and C was
-expensive; now origin travels with each entry by construction, so the real
-choice is A versus B, and it is about whether a month of tuning should survive
-a switch being turned off — not about safety.*
+5. **A world can push its changes back up — if the content is authored**
+   (answering Q1). A Game Master who improves something in a world can **sync
+   the change back** to the collection it came from, so the next world gets
+   the improvement and the work has somewhere to live other than one world.
 
-### Q2 — How should an entry be identified across a re-import?
+   For an **imported compendium there is no sync back, at any volume**. The
+   owner: *"if uploaded pdf it doesn't matter how much delta they do."* The
+   base is a record of what a book says, and writing a Game Master's changes
+   into it would destroy the one property that makes it worth keeping — that
+   it is still what the book says. They may delta as heavily as they like; it
+   simply never flows upstream.
 
-**Context**: FR-025, FR-026, and the rename edge case. A delta has to find the
-entry it belongs to in a base that was parsed again, possibly by a better
-parser that draws the boundaries differently.
+   This answers what happens when a book is switched off, and the answer is
+   different for each of the delta's three forms, for reasons that now follow
+   from the model rather than being chosen:
 
-| Option | Answer | Implications |
-|--------|--------|--------------|
-| A | Kind plus name | Works for the overwhelming majority, is explicable to a person in one sentence, and breaks on renames and on two entries sharing a name. The spec's current default. |
-| B | Kind, name, and the page it was found on | Survives a duplicate name. Breaks on any re-flow, which a corrected file usually is — likely worse in practice than A. |
-| C | Fuzzy match on name and content, reporting anything below a confidence bar | Survives renames and re-flows. Introduces exactly the class of quiet, plausible wrongness this project has been bitten by repeatedly, into the one place where being wrong silently rewrites a Game Master's work. |
+   - **Changed** and **hidden** entries over an imported base go with it,
+     named first. They are meaningless without the entry they modified.
+   - **Added** entries stay. They are authored content that was sitting
+     beside the book rather than derived from it, and they never needed it.
+   - Over an **authored collection**, the Game Master is offered the sync
+     first, so nothing has to be lost at all.
 
-### Q3 — Does the library eventually hold more than imported books?
+6. **Entry identity across a re-import is decided by measurement, not now**
+   (answering Q2). The owner: *"we will have to test this one out until we
+   have an answer, i feel its too nuanced."* That is the right instinct and it
+   is this project's established way of settling a question of this kind.
 
-**Context**: The Assumptions entry, and the 2026-09-10 direction about
-profile-level content by collection. This spec deliberately scopes to imported
-compendiums.
+   Kind-plus-name stands as the default. Before the delta model ships, the
+   experiment in FR-029 runs against the real corpus and either confirms it or
+   replaces it with what the evidence supports. A rule invented at a desk for
+   how to re-attach somebody's month of work to a re-parsed book is exactly
+   the kind of guess this project has been burned by.
 
-| Option | Answer | Implications |
-|--------|--------|--------------|
-| A | Imported books only, forever; collections stay world-bound | Smallest scope. Leaves the original problem — a player's character with nowhere to live when a world goes — unsolved. |
-| B | Imported books now, built so authored collections can join the same shelf later | What this spec assumes. Costs a little care in naming and structure now, no extra build. |
-| C | One library holding both from the start | The whole 2026-09-10 direction at once. Much larger, and it drags collection sharing and adoption rules in with it. |
+7. **An authored collection can be downloaded as JSON** (answering Q3's second
+   half). It is theirs, they made it, and they can take it with them. Imported
+   compendiums cannot be downloaded, which is the same rule as everything else
+   in decision 3 rather than a new one. Richer formats are explicitly not the
+   point yet.
