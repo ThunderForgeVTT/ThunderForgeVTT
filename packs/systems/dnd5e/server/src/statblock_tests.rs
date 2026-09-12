@@ -151,6 +151,10 @@ fn the_labels_books_actually_use_are_all_recognised() {
         "ARMOR CLASS 15",
         "Armor Class: 15",
         "Armour Class 15",
+        // A book that emboldens its labels as a run of their own leaves the
+        // styling full stop behind: "Armor Class. 15".
+        "Armor Class. 15",
+        "ARMOR CLASS — 15",
     ] {
         assert_eq!(
             armor_class_of(&line(text, 9.0, false)),

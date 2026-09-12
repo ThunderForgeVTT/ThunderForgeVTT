@@ -1,10 +1,17 @@
 //! What a page's fonts are called, and what that tells us.
 //!
-//! Only what layout needs: a name, and whether it reads as bold or italic.
-//! Glyph metrics are deliberately out of scope — this crate measures text by
-//! where the content stream *puts* it, not by summing advance widths, because
-//! every real book positions its own text far more often than it relies on
-//! natural flow.
+//! A name, whether it reads as bold or italic, how its codes become
+//! characters, and how wide each of those characters is.
+//!
+//! # Widths were left out at first, and the corpus said no
+//!
+//! The original note here said glyph metrics were out of scope, because books
+//! position their text explicitly and half an em a character was close enough
+//! to tell a word space from a column gutter. It is not close enough to tell
+//! a word space from *nothing*: a book whose font is half a em narrower than
+//! the guess yields "Arm orC lass" where it means "Armor Class", and a reader
+//! looking for that label finds nothing in the whole book. Every simple font
+//! carries a `/Widths` array; using it costs one lookup a glyph.
 
 use lopdf::{Document, Object};
 use std::collections::HashMap;
@@ -53,6 +60,59 @@ impl FontInfo {
 /// The fonts one page can name, keyed by the name its content stream uses.
 pub type FontMap = HashMap<String, FontInfo>;
 
+/// How wide each of a font's glyphs is, in ems.
+///
+/// Keyed by *code*, and carrying how many bytes make one, because the two
+/// kinds of font disagree about both. A simple font has a `/Widths` array
+/// indexed from `/FirstChar` and addresses glyphs with one byte; a composite
+/// font keeps a `/W` array on its descendant and uses two. Getting the code
+/// width wrong halves or doubles every measurement, which is worse than
+/// having no widths at all.
+#[derive(Debug, Clone)]
+pub struct Widths {
+    by_code: HashMap<u32, f64>,
+    default: f64,
+    code_bytes: usize,
+}
+
+impl Default for Widths {
+    fn default() -> Self {
+        Self {
+            by_code: HashMap::new(),
+            // Half an em, the average of Latin text and this crate's only
+            // answer before fonts were read.
+            default: 0.5,
+            code_bytes: 1,
+        }
+    }
+}
+
+impl Widths {
+    /// How many bytes make one code in this font.
+    pub fn code_bytes(&self) -> usize {
+        self.code_bytes
+    }
+
+    /// The total advance of a string, in ems.
+    pub fn advance_of(&self, bytes: &[u8]) -> f64 {
+        bytes
+            .chunks(self.code_bytes)
+            .filter(|chunk| chunk.len() == self.code_bytes)
+            .map(|chunk| {
+                let mut code = 0u32;
+                for byte in chunk {
+                    code = (code << 8) | u32::from(*byte);
+                }
+                self.by_code.get(&code).copied().unwrap_or(self.default)
+            })
+            .sum()
+    }
+
+    fn is_usable(&self) -> bool {
+        self.by_code.values().any(|width| *width > 0.0)
+    }
+}
+
 /// A page's fonts, with the encodings needed to read text drawn in them.
 ///
 /// Borrowed from the document rather than owned, because it is used for
@@ -67,6 +127,15 @@ pub struct PageFonts<'a> {
     /// text — the worst failure available, because nothing downstream can
     /// tell that it is wrong.
     pub encodings: HashMap<String, lopdf::Encoding<'a>>,
+    /// A font's own `ToUnicode` map, parsed by this crate.
+    ///
+    /// Preferred over `lopdf`'s encoding when present, because `lopdf`'s
+    /// ToUnicode decoder reads two bytes at a time and a Type 3 font
+    /// addresses its glyphs with one — see [`crate::cmap`]. A whole bestiary
+    /// in the reference library sets its body text in such a font.
+    pub to_unicode: HashMap<String, crate::cmap::ToUnicode>,
+    /// Per-font glyph advances, for measuring a run rather than guessing it.
+    pub widths: HashMap<String, Widths>,
 }
 
 /// Read a page's font resources.
@@ -77,9 +146,13 @@ pub struct PageFonts<'a> {
 pub fn fonts_for_page(document: &Document, page_id: (u32, u16)) -> PageFonts<'_> {
     let mut map = FontMap::new();
     let mut encodings = HashMap::new();
+    let mut to_unicode = HashMap::new();
+    let mut widths = HashMap::new();
     let empty = |map: FontMap| PageFonts {
         info: map,
         encodings: HashMap::new(),
+        to_unicode: HashMap::new(),
+        widths: HashMap::new(),
     };
     let Ok(resources) = document.get_page_resources(page_id) else {
         return empty(map);
@@ -107,6 +180,12 @@ pub fn fonts_for_page(document: &Document, page_id: (u32, u16)) -> PageFonts<'_>
                 _ => None,
             })
             .unwrap_or_default();
+        if let Some(measured) = widths_of(document, font) {
+            widths.insert(name.clone(), measured);
+        }
+        if let Some(parsed) = to_unicode_of(document, font) {
+            to_unicode.insert(name.clone(), parsed);
+        }
         if let Some(encoding) = encoding_of(document, font) {
             encodings.insert(name.clone(), encoding);
         }
@@ -115,7 +194,181 @@ pub fn fonts_for_page(document: &Document, page_id: (u32, u16)) -> PageFonts<'_>
     PageFonts {
         info: map,
         encodings,
+        to_unicode,
+        widths,
     }
+}
+
+/// Read a font's advances, normalised to ems.
+///
+/// Two entirely different layouts, because there are two kinds of font:
+///
+/// - A **simple** font (Type 1, TrueType, Type 3) has `/Widths`, an array
+///   indexed from `/FirstChar`, in thousandths of an em — except Type 3,
+///   which quotes its own glyph space and carries a `/FontMatrix` to convert.
+///   Type 3 is precisely the kind that made this necessary, so ignoring the
+///   matrix would fix nothing.
+/// - A **composite** font (Type 0) has nothing of its own. Its widths live on
+///   the descendant font as `/W`, a nested array, with `/DW` for everything
+///   the array omits. This is the kind a modern book sets its statblocks in.
+fn widths_of(document: &Document, font: &lopdf::Dictionary) -> Option<Widths> {
+    let subtype = font
+        .get(b"Subtype")
+        .ok()
+        .and_then(|object| object.as_name_str().ok())
+        .unwrap_or_default()
+        .to_string();
+
+    if subtype == "Type0" {
+        return composite_widths(document, font);
+    }
+    simple_widths(document, font)
+}
+
+fn simple_widths(document: &Document, font: &lopdf::Dictionary) -> Option<Widths> {
+    let first_char = font
+        .get_deref(b"FirstChar", document)
+        .ok()
+        .and_then(|object| object.as_i64().ok())
+        .unwrap_or(0)
+        .max(0) as u32;
+
+    let array = font
+        .get_deref(b"Widths", document)
+        .ok()?
+        .as_array()
+        .ok()?
+        .clone();
+
+    let scale = type3_scale(document, font).unwrap_or(0.001);
+    let mut by_code = HashMap::new();
+    for (offset, object) in array.iter().enumerate() {
+        let Ok(offset) = u32::try_from(offset) else {
+            break;
+        };
+        if let Some(width) = number_of(document, object) {
+            by_code.insert(first_char + offset, width * scale);
+        }
+    }
+
+    let widths = Widths {
+        by_code,
+        default: 0.5,
+        code_bytes: 1,
+    };
+    widths.is_usable().then_some(widths)
+}
+
+/// A composite font's `/W` array.
+///
+/// Two forms, mixed freely in one array:
+/// `c [w1 w2 …]` gives a width each to codes `c`, `c+1`, …; `first last w`
+/// gives one width to every code in the range.
+fn composite_widths(document: &Document, font: &lopdf::Dictionary) -> Option<Widths> {
+    let descendants = font
+        .get_deref(b"DescendantFonts", document)
+        .ok()?
+        .as_array()
+        .ok()?
+        .clone();
+    let descendant = resolve(document, descendants.first()?)?.as_dict().ok()?;
+
+    // `/DW` is the width of everything `/W` does not mention. Its default is
+    // 1000 — a full em — which matters: a CJK font omits most of its array.
+    let default = descendant
+        .get_deref(b"DW", document)
+        .ok()
+        .and_then(|object| object.as_i64().ok())
+        .unwrap_or(1000) as f64
+        / 1000.0;
+
+    let mut by_code = HashMap::new();
+    if let Ok(array) = descendant
+        .get_deref(b"W", document)
+        .and_then(|o| o.as_array())
+    {
+        let values: Vec<&Object> = array.iter().collect();
+        let mut index = 0usize;
+        while index < values.len() {
+            let Some(first) = number_of(document, values[index]) else {
+                index += 1;
+                continue;
+            };
+            let first = first as u32;
+            match values.get(index + 1).and_then(|o| resolve(document, o)) {
+                Some(Object::Array(list)) => {
+                    for (offset, item) in list.iter().enumerate() {
+                        if let (Ok(offset), Some(width)) =
+                            (u32::try_from(offset), number_of(document, item))
+                        {
+                            by_code.insert(first + offset, width / 1000.0);
+                        }
+                    }
+                    index += 2;
+                }
+                _ => {
+                    let (Some(last), Some(width)) = (
+                        values.get(index + 1).and_then(|o| number_of(document, o)),
+                        values.get(index + 2).and_then(|o| number_of(document, o)),
+                    ) else {
+                        index += 1;
+                        continue;
+                    };
+                    let last = last as u32;
+                    // A range covering the whole code space would allocate a
+                    // map of it; a backwards one is nonsense.
+                    if last >= first && last - first <= 0xFFFF {
+                        for code in first..=last {
+                            by_code.insert(code, width / 1000.0);
+                        }
+                    }
+                    index += 3;
+                }
+            }
+        }
+    }
+
+    Some(Widths {
+        by_code,
+        default,
+        // Identity-H, which is what every composite font in the reference
+        // library uses. A two-byte code read one byte at a time doubles the
+        // length of every run.
+        code_bytes: 2,
+    })
+}
+
+fn number_of(document: &Document, object: &Object) -> Option<f64> {
+    match resolve(document, object)? {
+        Object::Integer(i) => Some(*i as f64),
+        Object::Real(r) => Some(*r as f64),
+        _ => None,
+    }
+}
+
+/// The horizontal scale of a Type 3 font's glyph space.
+/// The horizontal scale of a Type 3 font's glyph space.
+fn type3_scale(document: &Document, font: &lopdf::Dictionary) -> Option<f64> {
+    let matrix = font
+        .get_deref(b"FontMatrix", document)
+        .ok()?
+        .as_array()
+        .ok()?;
+    match resolve(document, matrix.first()?)? {
+        Object::Real(r) => Some(*r as f64),
+        Object::Integer(i) => Some(*i as f64),
+        _ => None,
+    }
+}
+
+/// A font's own `ToUnicode` map, if it has one this can read.
+fn to_unicode_of(document: &Document, font: &lopdf::Dictionary) -> Option<crate::cmap::ToUnicode> {
+    let stream = font
+        .get_deref(b"ToUnicode", document)
+        .ok()?
+        .as_stream()
+        .ok()?;
+    crate::cmap::parse(&stream.get_plain_content().ok()?)
 }
 
 /// Read a font's encoding, if it declares one this can use.

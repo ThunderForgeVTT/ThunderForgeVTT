@@ -116,19 +116,26 @@ fn split_at_gutters(mut group: Vec<&TextRun>) -> Vec<Line> {
     out
 }
 
-/// Where a run's text is likely to stop.
+/// Where a run's text stops.
 ///
-/// Estimated from a half-em average advance rather than measured from the
-/// font, for the reason the module docstring gives: measuring means owning
-/// every font's metrics, and a designer's override would defeat it anyway.
-/// Only gaps are decided from this, and a gap of a whole em is far outside
-/// the error of the estimate.
+/// Measured from the font's own advances (`TextRun::width`). This was an
+/// estimate of half an em a character until a book whose type is narrower
+/// than that yielded "Arm orC lass" — close enough for gutters, not close
+/// enough for spaces.
 fn estimated_end(run: &TextRun) -> f64 {
-    run.x + run.text.chars().count() as f64 * run.size * 0.5
+    run.x + run.width
 }
 
-fn assemble(mut group: Vec<&TextRun>) -> Line {
-    group.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal));
+/// How close two identical runs must be to be one run drawn twice, as a
+/// fraction of the text size.
+///
+/// Faux bold is drawn by printing the text a second time a fraction of a
+/// point to the side. A real repetition — "ha ha", a table of "1 1 1" — is a
+/// word space apart at the very least, which is a third of an em.
+const OVERPRINT: f64 = 0.12;
+
+fn assemble(group: Vec<&TextRun>) -> Line {
+    let group = without_overprints(group);
     let size = group.iter().map(|r| r.size).fold(0.0f64, f64::max);
     let x0 = group.iter().map(|r| r.x).fold(f64::INFINITY, f64::min);
     let x1 = group.iter().map(|r| r.x).fold(f64::NEG_INFINITY, f64::max);
@@ -160,6 +167,30 @@ fn assemble(mut group: Vec<&TextRun>) -> Line {
         bold: group.iter().filter(|r| !r.is_blank()).all(|r| r.bold),
         italic: group.iter().filter(|r| !r.is_blank()).all(|r| r.italic),
     }
+}
+
+/// Drop the second copy of text that was drawn twice to fake a bold weight.
+///
+/// Without this, a book that emboldens its statblock labels this way yields
+/// `AArrmmoorr CCllaassss..` — every glyph interleaved with its own shadow —
+/// and no reader looking for "Armor Class" finds anything in the whole book.
+///
+/// Compares against the last *kept* run rather than the last seen, so text
+/// printed three times (which exists, for a heavier fake weight) collapses to
+/// one rather than two.
+fn without_overprints(mut group: Vec<&TextRun>) -> Vec<&TextRun> {
+    group.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mut kept: Vec<&TextRun> = Vec::with_capacity(group.len());
+    for run in group {
+        let overprint = kept.last().is_some_and(|previous: &&TextRun| {
+            previous.text == run.text && (run.x - previous.x).abs() <= run.size * OVERPRINT
+        });
+        if !overprint {
+            kept.push(run);
+        }
+    }
+    kept
 }
 
 /// Collapse runs of whitespace. Nothing else.

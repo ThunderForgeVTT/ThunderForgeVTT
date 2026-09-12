@@ -13,10 +13,11 @@
 //! a sidebar out with a transform puts its text nowhere near where the text
 //! matrix alone would say.
 //!
-//! Not tracked: glyph advance widths. A run's extent is taken from where the
-//! *next* placement lands, because real books position almost every run
-//! explicitly. Summing widths would mean reading every font's metrics and
-//! would still be wrong wherever a designer overrode them.
+//! Also tracked: how wide each run is, summed from the font's own `/Widths`.
+//! That was left out at first and had to be added — see `font.rs`. Guessing
+//! half an em a character is close enough to tell a word space from a column
+//! gutter and not close enough to tell one from nothing, which is how a book
+//! came to read "Arm orC lass".
 
 use crate::content::{Operand, Operation, operations};
 use crate::font::{FontInfo, fonts_for_page};
@@ -74,6 +75,12 @@ pub struct TextRun {
     pub y: f64,
     /// The size this run is drawn at.
     pub size: f64,
+    /// How wide the run is, in the same units as `x`.
+    ///
+    /// Summed from the font's own advances, so `x + width` is where the text
+    /// really stops. Layout decides what a gap means from this, and a guess
+    /// here becomes a missing or invented space in a monster's name.
+    pub width: f64,
     pub font: String,
     pub bold: bool,
     pub italic: bool,
@@ -113,6 +120,10 @@ pub fn runs_on_page(document: &Document, page: &Page) -> Result<Vec<TextRun>, Pd
     let mut rise = 0.0f64;
     let mut font = FontInfo::default();
     let mut encoding: Option<&lopdf::Encoding> = None;
+    let mut to_unicode: Option<&crate::cmap::ToUnicode> = None;
+    let mut widths: Option<&crate::font::Widths> = None;
+    let mut char_spacing = 0.0f64;
+    let mut word_spacing = 0.0f64;
     let mut font_size = 0.0f64;
     let mut out = Vec::new();
 
@@ -142,11 +153,15 @@ pub fn runs_on_page(document: &Document, page: &Page) -> Result<Vec<TextRun>, Pd
             "Tf" => {
                 if let Some(Operand::Name(name)) = operands.first() {
                     font = fonts.info.get(name).cloned().unwrap_or_default();
+                    to_unicode = fonts.to_unicode.get(name);
+                    widths = fonts.widths.get(name);
                     encoding = fonts.encodings.get(name);
                 }
                 font_size = number(1).unwrap_or(font_size);
             }
             "TL" => leading = number(0).unwrap_or(leading),
+            "Tc" => char_spacing = number(0).unwrap_or(0.0),
+            "Tw" => word_spacing = number(0).unwrap_or(0.0),
             "Tz" => horizontal_scale = number(0).unwrap_or(100.0) / 100.0,
             "Ts" => rise = number(0).unwrap_or(0.0),
             "Td" => {
@@ -188,10 +203,16 @@ pub fn runs_on_page(document: &Document, page: &Page) -> Result<Vec<TextRun>, Pd
                         &text_matrix,
                         &graphics,
                         &font,
+                        to_unicode,
                         encoding,
-                        font_size,
-                        horizontal_scale,
-                        rise,
+                        Measure {
+                            widths,
+                            font_size,
+                            char_spacing,
+                            word_spacing,
+                            horizontal_scale,
+                            rise,
+                        },
                     );
                 }
             }
@@ -217,10 +238,16 @@ pub fn runs_on_page(document: &Document, page: &Page) -> Result<Vec<TextRun>, Pd
                             &text_matrix,
                             &graphics,
                             &font,
+                            to_unicode,
                             encoding,
-                            font_size,
-                            horizontal_scale,
-                            rise,
+                            Measure {
+                                widths,
+                                font_size,
+                                char_spacing,
+                                word_spacing,
+                                horizontal_scale,
+                                rise,
+                            },
                         );
                     }
                 }
@@ -232,6 +259,20 @@ pub fn runs_on_page(document: &Document, page: &Page) -> Result<Vec<TextRun>, Pd
     Ok(out)
 }
 
+/// Everything needed to decide how wide a run is.
+///
+/// Bundled because they travel together and there are six of them; a
+/// `push_run` taking them all loose was already past what anyone can read.
+#[derive(Clone, Copy)]
+struct Measure<'a> {
+    widths: Option<&'a crate::font::Widths>,
+    font_size: f64,
+    char_spacing: f64,
+    word_spacing: f64,
+    horizontal_scale: f64,
+    rise: f64,
+}
+
 #[allow(clippy::too_many_arguments)]
 fn push_run(
     out: &mut Vec<TextRun>,
@@ -239,15 +280,27 @@ fn push_run(
     text_matrix: &Matrix,
     graphics: &Graphics,
     font: &FontInfo,
+    to_unicode: Option<&crate::cmap::ToUnicode>,
     encoding: Option<&lopdf::Encoding>,
-    font_size: f64,
-    horizontal_scale: f64,
-    rise: f64,
+    measure: Measure,
 ) {
+    let Measure {
+        widths,
+        font_size,
+        char_spacing,
+        word_spacing,
+        horizontal_scale,
+        rise,
+    } = measure;
     // The font's own encoding first: a subsetted font renumbers its glyphs,
     // and reading its codes as Latin-1 produces confident gibberish.
-    let text = encoding
-        .and_then(|encoding| encoding.bytes_to_string(bytes).ok())
+    // The font's own map first: it is the font's own statement of what its
+    // codes mean, and it is the only thing that reads a one-byte Type 3 font
+    // correctly. Then lopdf's encoding, then the raw bytes.
+    let text = to_unicode
+        .map(|map| map.decode(bytes))
+        .filter(|decoded| !decoded.is_empty())
+        .or_else(|| encoding.and_then(|encoding| encoding.bytes_to_string(bytes).ok()))
         .unwrap_or_else(|| decode_text_string(bytes));
     if text.is_empty() {
         return;
@@ -255,8 +308,35 @@ fn push_run(
     let placed = text_matrix.multiply(graphics.ctm);
     let (x, y) = placed.translation();
     let size = font_size * placed.vertical_scale() * horizontal_scale.max(0.01).min(10.0);
+    // Summed from the font's own advances. `code_width` walks the *bytes*,
+    // not the decoded characters: a two-byte font maps two bytes to one
+    // character, and measuring the characters would halve every run.
+    let ems: f64 = match widths {
+        Some(widths) => widths.advance_of(bytes),
+        None => text.chars().count() as f64 * 0.5,
+    };
+    let codes = match widths {
+        Some(widths) => bytes.len() / widths.code_bytes().max(1),
+        None => text.chars().count(),
+    };
+    // Word spacing applies to the single byte 0x20, and only in a font whose
+    // codes are one byte — a composite font's 0x20 is half of something else.
+    let single_byte = widths.is_none_or(|widths| widths.code_bytes() == 1);
+    let spaces = if single_byte {
+        bytes.iter().filter(|byte| **byte == b' ').count()
+    } else {
+        0
+    };
+    let spacing = char_spacing * codes as f64 + word_spacing * spaces as f64;
+    let width = (ems * size + spacing) * horizontal_scale.clamp(0.01, 10.0);
+
     out.push(TextRun {
         text,
+        width: if width.is_finite() && width >= 0.0 {
+            width
+        } else {
+            0.0
+        },
         x,
         y: y + rise,
         // Negative or absurd sizes come from broken documents; clamp rather
@@ -305,6 +385,7 @@ mod tests {
     fn a_run_of_only_spaces_is_blank() {
         let run = TextRun {
             text: "   ".into(),
+            width: 15.0,
             x: 0.0,
             y: 0.0,
             size: 10.0,

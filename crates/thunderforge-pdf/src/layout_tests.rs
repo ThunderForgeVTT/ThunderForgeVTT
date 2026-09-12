@@ -2,6 +2,10 @@ use super::*;
 
 fn run(text: &str, x: f64, y: f64, size: f64) -> TextRun {
     TextRun {
+        // Half an em a character, which is what Latin text averages — these
+        // fixtures stand for ordinary prose, and the cases where a real
+        // font's own widths differ are what the corpus survey is for.
+        width: text.chars().count() as f64 * size * 0.5,
         text: text.to_string(),
         x,
         y,
@@ -150,6 +154,41 @@ fn blank_runs_are_dropped_rather_than_becoming_lines() {
     ]);
     assert_eq!(lines.len(), 1);
     assert_eq!(lines[0].text, "real");
+}
+
+#[test]
+fn text_drawn_twice_to_fake_bold_is_read_once() {
+    // A real bestiary emboldens its statblock labels by printing them again a
+    // third of a point to the side. Read as written it yields
+    // `AArrmmoorr CCllaassss` — every glyph interleaved with its own shadow —
+    // and nothing looking for "Armor Class" finds it.
+    let lines = lines(&[
+        bold("Armor", 72.0, 700.0, 10.0),
+        bold("Armor", 72.3, 700.0, 10.0),
+        bold("Class", 102.0, 700.0, 10.0),
+        bold("Class", 102.3, 700.0, 10.0),
+    ]);
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert_eq!(lines[0].text, "Armor Class");
+}
+
+#[test]
+fn text_printed_three_times_for_a_heavier_weight_still_reads_once() {
+    let lines = lines(&[
+        bold("Speed", 72.0, 700.0, 10.0),
+        bold("Speed", 72.2, 700.0, 10.0),
+        bold("Speed", 72.4, 700.0, 10.0),
+    ]);
+    assert_eq!(lines[0].text, "Speed");
+}
+
+#[test]
+fn a_word_genuinely_repeated_is_kept_twice() {
+    // The other direction: "ha ha" is two words, and a table of repeated
+    // values is real data. A word space apart is a third of an em, well past
+    // the overprint threshold.
+    let lines = lines(&[run("ha", 72.0, 700.0, 10.0), run("ha", 85.0, 700.0, 10.0)]);
+    assert_eq!(lines[0].text, "ha ha");
 }
 
 // ---------------------------------------------------------------------------

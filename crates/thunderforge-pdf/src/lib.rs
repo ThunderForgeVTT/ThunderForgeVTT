@@ -24,12 +24,14 @@
 //! deployment dependency of the server, and it yields plain text — the one
 //! thing this crate exists to go beyond.
 
+mod cmap;
 mod content;
 mod font;
 mod page;
 mod repair;
 mod text;
 
+pub use cmap::ToUnicode;
 pub use content::{Operand, Operation, operations};
 pub use font::{FontInfo, FontMap};
 pub use page::{Page, PageGeometry, pages};

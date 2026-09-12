@@ -317,15 +317,17 @@ fn looks_damaged(text: &str) -> bool {
 
 /// The text after a label, if the line starts with it.
 ///
-/// Case- and punctuation-insensitive, because books disagree: "Armor Class",
-/// "ARMOR CLASS", "Armor Class:".
+/// Case- and punctuation-insensitive, because books genuinely disagree:
+/// "Armor Class 15", "ARMOR CLASS 15", "Armor Class: 15", and — in a book
+/// that emboldens its labels as a run of their own — "Armor Class. 15", where
+/// the full stop is part of the label's styling rather than a sentence.
 fn after_label<'a>(text: &'a str, label: &str) -> Option<&'a str> {
     let lowered = text.to_lowercase();
     if !lowered.starts_with(label) {
         return None;
     }
     let rest = text[label.len()..].trim_start();
-    Some(rest.strip_prefix(':').unwrap_or(rest).trim())
+    Some(rest.trim_start_matches([':', '.', '-', '\u{2014}']).trim())
 }
 
 fn first_number(text: &str) -> Option<i64> {
