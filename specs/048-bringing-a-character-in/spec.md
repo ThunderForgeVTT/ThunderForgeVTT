@@ -346,6 +346,16 @@ and leaves current hit points and anything the table has changed in play alone.
   reachable only by that character's owner and the world's Game Master, and
   MUST be covered by the account-deletion and data-export paths that already
   exist.
+- **FR-044**: A Game Master MUST be able to **roll an actor back** to any
+  earlier import, or to how it stood before the first one. A version is
+  therefore something that can be restored, not only read.
+- **FR-044a**: A rollback MUST restore the sheet — scores, traits, resources —
+  and MUST leave alone what the table has changed in play since, in the same
+  way FR-051 governs a re-import.
+- **FR-044b**: A rollback MUST be the Game Master's alone. A player rolling
+  their own character back would defeat the point of it.
+- **FR-044c**: A rollback MUST itself be recorded, so the history reads as
+  what happened rather than as a version that quietly vanished.
 
 **Coming back**
 
@@ -441,12 +451,26 @@ and leaves current hit points and anything the table has changed in play alone.
    character brought in whole is a character, and what nothing reads yet is
    simply waiting for the thing that will.
 
-2. **The file is kept, and imports are versioned** (Q2: B). Not merely so a
-   bad import can be re-read, but so the *history* is legible: imported on one
-   date, imported again on another. The case that motivated it is a player
-   working off another service and re-exporting — the two versions are the
-   thing worth comparing, and a record that overwrote itself could not show
-   them. FR-043a.
+2. **The file is kept, imports are versioned, and a Game Master can roll one
+   back** (Q2: B). Three reasons, and the third is the strongest.
+
+   The history is legible: imported on one date, imported again on another.
+   The case that raised it is a player working off another service and
+   re-exporting — the two versions are the thing worth comparing, and a record
+   that overwrote itself could not show them.
+
+   But a version that can only be read is half the value. A Game Master must
+   be able to **restore** one, because the failure that matters is not a
+   confusing import, it is a dishonest one: a player who re-imports with every
+   ability score at 20 and a sword that does 99,999,999 damage. FR-044.
+
+   **This is the half that decision 3 does not cover, and the two are needed
+   together.** Adoption gates *new content* — a sword, a feat, a spell the
+   world has never seen — and refuses it in play until the Game Master says
+   otherwise. It does nothing about a player inflating the scores their
+   character already has, because those are not new content; they are the
+   sheet. Rollback is what answers that. One decision guards what arrives, the
+   other guards what changes.
 
 3. **Unadopted content is visible and unplayable** (Q3: C, and further). The
    option offered was that content stays and a Game Master may hide it from
