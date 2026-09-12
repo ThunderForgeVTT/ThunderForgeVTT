@@ -16,6 +16,7 @@
 
 pub mod attributes;
 pub mod camera;
+pub mod content_patterns;
 pub mod frame_trace;
 pub mod grid;
 pub mod interaction;

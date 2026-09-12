@@ -32,6 +32,7 @@ pub mod auth;
 pub mod auth_middleware;
 pub mod collections;
 pub mod config;
+pub mod content_patterns;
 pub mod crypto;
 pub mod db_types;
 pub mod declared_values;

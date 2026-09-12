@@ -1004,6 +1004,48 @@
       }
     }
   },
+
+  "contentPatterns": [
+    {
+      "kind": "creature",
+      "shape": "anchored",
+      "anchor": "Armor Class",
+      "name": { "position": "before", "withinLines": 6, "prefer": "largest" },
+      "fields": [
+        { "key": "armorClass", "label": "Armor Class", "as": "integer" },
+        { "key": "hitPoints", "label": "Hit Points", "as": "integer" },
+        { "key": "speed", "label": "Speed", "as": "text" },
+        { "key": "challenge", "label": "Challenge", "as": "text" }
+      ]
+    },
+    {
+      "kind": "spell",
+      "shape": "anchored",
+      "anchor": "Casting Time",
+      "name": { "position": "before", "withinLines": 3, "prefer": "largest" },
+      "fields": [
+        { "key": "castingTime", "label": "Casting Time", "as": "text" },
+        { "key": "range", "label": "Range", "as": "text" },
+        { "key": "components", "label": "Components", "as": "text" },
+        { "key": "duration", "label": "Duration", "as": "text" }
+      ]
+    },
+    {
+      "kind": "magicItem",
+      "shape": "prose",
+      "name": { "style": "heading", "endsAt": "nextName" }
+    },
+    {
+      "kind": "feat",
+      "shape": "prose",
+      "name": { "style": "heading", "endsAt": "nextName" }
+    },
+    {
+      "kind": "classFeature",
+      "shape": "prose",
+      "name": { "style": "bold", "endsAt": "nextName" }
+    }
+  ],
   "movement": {
     "walk": {
       "label": "Walk",

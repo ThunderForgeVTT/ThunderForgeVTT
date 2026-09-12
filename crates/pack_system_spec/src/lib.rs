@@ -1,3 +1,4 @@
+pub mod content_patterns;
 pub mod contrast;
 pub mod interface;
 pub mod layout;
@@ -80,6 +81,15 @@ pub struct SystemManifest {
     /// it. See ADR-027's 2026-09-11 amendment.
     #[serde(default)]
     pub vision: Option<SystemVision>,
+
+    /// What this system's content looks like in a source book (spec 049).
+    ///
+    /// Absent means a book cannot be read into a world on this system, and
+    /// the import says so before a file is opened. That is a refusal rather
+    /// than a fallback: guessing with another system's vocabulary is how a
+    /// Pathfinder book gets imported as badly-parsed D&D.
+    #[serde(default)]
+    pub content_patterns: Option<Vec<content_patterns::SystemContentPattern>>,
 }
 
 /// A system's `vision` block, mirroring
@@ -229,7 +239,8 @@ pub fn validate_system_manifest(json_string: &str) -> Result<(), String> {
     // would otherwise pass. Checked explicitly here so this one function
     // stays the single "is this manifest compliant" entry point.
     validate_legal_content(&instance)?;
-    validate_vision_content(&instance)
+    validate_vision_content(&instance)?;
+    content_patterns::validate_content_patterns(&instance)
 }
 
 /// Spec 045: a `vision` block that is present must be usable.
