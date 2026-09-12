@@ -13,7 +13,10 @@ that's a shared subsystem but has mappings for other systems — eventually we
 will support others but 5e is the most popular"; "if they import something and
 the feat or skill or etc isn't in the world it imports it and the DM maybe has
 a flag if it was character added and can choose to adopt it for everyone to see
-with a simple accept button"; "we want to build the PDF parser in rust".
+with a simple accept button"; "we want to build the PDF parser in rust"; "can
+our pdf parser be a crate and our 5e parser be based on that because I don't
+want to just parse character sheets — I eventually want to be able to parse
+source books for easy import into worlds".
 
 ## Context
 
@@ -50,6 +53,25 @@ Rust (`src/server/src/map_import/` — `parse.rs`, `types.rs`, `geometry.rs`,
 `warnings.rs`), and what it understood becomes scene content, with warnings for
 what it did not. Character import wants the same shape and the same honesty,
 which is also the owner's instruction: the parser is Rust, server-side.
+
+### Two layers, because a sheet is not the last document
+
+A character sheet is one kind of PDF, and the owner wants source books next.
+Those are the same problem underneath — getting words out of a PDF with enough
+of their position and styling to tell a heading from a table cell — and
+entirely different problems on top, where one reader looks for an ability
+score and another for a monster's statblock.
+
+So: **a crate that reads PDFs**, knowing nothing about games, and **a 5e sheet
+reader built on it**, knowing nothing about PDF internals. The crate is where
+the awkward parts live — text runs, positions, fonts, columns, reading order —
+and it can be tested against any document. Everything above it becomes a
+matter of asking what sits at a given anchor.
+
+Source-book import is **#todo**: named so the seam is built for it, and
+deliberately not specified here, because its questions — what may be taken
+from a book somebody bought, under whose licence, and what a world may do with
+it afterwards — are not this feature's to answer.
 
 ### What a flattened PDF will and will not give
 
@@ -237,6 +259,13 @@ and leaves current hit points and anything the table has changed in play alone.
 
 - **FR-001**: The parser MUST run on the server, written in Rust, alongside the
   existing map import rather than as a second kind of thing.
+- **FR-001a**: Reading a PDF MUST be a crate of its own, knowing nothing about
+  any game: it takes a document and yields text with the position and styling
+  needed to tell a heading from a value from a table cell. It MUST be testable
+  against documents that are not character sheets.
+- **FR-001b**: The 5e sheet reader MUST be built on that crate and MUST NOT
+  know how a PDF is structured. A second system's reader, and one day a source
+  book's, MUST be able to sit beside it on the same crate.
 - **FR-002**: It MUST accept a D&D Beyond PDF export, flattened, with no form
   fields.
 - **FR-003**: It MUST report, per field, whether a value was read, unread, or
@@ -356,6 +385,11 @@ and leaves current hit points and anything the table has changed in play alone.
 
 ## Out of Scope
 
+- **Source books — #todo.** Importing a rulebook or adventure to stock a world
+  is the reason the PDF reading is a crate of its own (FR-001a), and it is not
+  specified here. It needs its own spec, and its own answers about what may be
+  extracted from a book somebody bought, under whose licence, and what a world
+  is allowed to do with it afterwards.
 - Exporting a character out of ThunderForge.
 - Importing anything but a character: monsters, items, adventures, maps.
 - Reading a character straight from another service's API or account.
