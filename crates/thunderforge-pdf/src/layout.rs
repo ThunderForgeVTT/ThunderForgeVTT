@@ -53,6 +53,7 @@ pub fn lines(runs: &[TextRun]) -> Vec<Line> {
     if ordered.is_empty() {
         return Vec::new();
     }
+    let columns = column_starts(&ordered);
     // Down the page, then across: y descending because PDF's origin is at the
     // bottom.
     ordered.sort_by(|a, b| {
@@ -76,7 +77,63 @@ pub fn lines(runs: &[TextRun]) -> Vec<Line> {
         }
     }
 
-    out.into_iter().flat_map(split_at_gutters).collect()
+    out.into_iter()
+        .flat_map(|group| split_at_gutters(group, &columns))
+        .collect()
+}
+
+/// How close a run must start to a column edge to be counted as beginning it.
+const COLUMN_TOLERANCE: f64 = 3.0;
+
+/// Where this page's columns begin.
+///
+/// # Why the page is asked rather than the gap measured
+///
+/// Measuring each gap and calling anything wide enough a gutter works until a
+/// book sets its columns close together. The Player's Handbook leaves **under
+/// one em** between them — narrower than the threshold that separates a
+/// gutter from a wide word space — so every spell on the page came out with
+/// the left column's sentence welded to the right column's: "A ring is At
+/// Higher Levels. When you cast this spell".
+///
+/// A page cannot hide where its columns are, though. Hundreds of lines start
+/// at exactly the same x, and nothing else on a page does that. Finding those
+/// positions first turns a threshold that has to be right for every book into
+/// a measurement of the book in hand.
+fn column_starts(runs: &[&TextRun]) -> Vec<f64> {
+    if runs.len() < 20 {
+        return Vec::new();
+    }
+    // Counted in whole points: two runs beginning the same column agree to
+    // within rounding, never exactly.
+    let mut tally: std::collections::BTreeMap<i64, usize> = std::collections::BTreeMap::new();
+    for run in runs {
+        *tally.entry(run.x.round() as i64).or_default() += 1;
+    }
+
+    // A real column edge carries a substantial share of the page's runs. The
+    // fraction is deliberately low: a two-column page splits its lines between
+    // them, and a short column still marks its own edge.
+    let threshold = (runs.len() / 12).max(4);
+    let mut starts: Vec<f64> = tally
+        .into_iter()
+        .filter(|(_, count)| *count >= threshold)
+        .map(|(x, _)| x as f64)
+        .collect();
+    starts.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+    // Neighbouring positions are the same edge seen through rounding and
+    // hinting. Keeping both would split a line twice at the same place.
+    let mut merged: Vec<f64> = Vec::new();
+    for start in starts {
+        if merged
+            .last()
+            .is_none_or(|previous| start - previous > COLUMN_TOLERANCE * 2.0)
+        {
+            merged.push(start);
+        }
+    }
+    merged
 }
 
 /// How wide a gap must be, in ems, before it is a gutter rather than a space.
@@ -93,7 +150,7 @@ const GUTTER: f64 = 1.4;
 /// Runs sharing a baseline are only one line if nothing but spaces lies
 /// between them. On a two-column spread every body line in the left column
 /// shares its baseline with one in the right, and they are two lines.
-fn split_at_gutters(mut group: Vec<&TextRun>) -> Vec<Line> {
+fn split_at_gutters(mut group: Vec<&TextRun>, columns: &[f64]) -> Vec<Line> {
     group.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal));
 
     let mut out = Vec::new();
@@ -101,10 +158,17 @@ fn split_at_gutters(mut group: Vec<&TextRun>) -> Vec<Line> {
     let mut previous_end: Option<f64> = None;
 
     for run in group {
-        if let Some(end) = previous_end
-            && run.x - end > run.size * GUTTER
-            && !current.is_empty()
-        {
+        // A run that begins a column the page has one of is a new line,
+        // however narrow the gap in front of it. This is what a close-set book
+        // needs and what measuring the gap alone cannot give.
+        let begins_a_column = !current.is_empty()
+            && columns
+                .iter()
+                .skip(1)
+                .any(|start| (run.x - start).abs() <= COLUMN_TOLERANCE);
+        let wide_gap = previous_end.is_some_and(|end| run.x - end > run.size * GUTTER);
+
+        if !current.is_empty() && (begins_a_column || wide_gap) {
             out.push(assemble(std::mem::take(&mut current)));
         }
         previous_end = Some(estimated_end(run));
@@ -138,7 +202,12 @@ fn assemble(group: Vec<&TextRun>) -> Line {
     let group = without_overprints(group);
     let size = group.iter().map(|r| r.size).fold(0.0f64, f64::max);
     let x0 = group.iter().map(|r| r.x).fold(f64::INFINITY, f64::min);
-    let x1 = group.iter().map(|r| r.x).fold(f64::NEG_INFINITY, f64::max);
+    // Where the text stops, not where its last run starts — the difference is
+    // a whole run, and `reading_order` uses this to decide what spans a page.
+    let x1 = group
+        .iter()
+        .map(|r| r.x + r.width)
+        .fold(f64::NEG_INFINITY, f64::max);
     let y = group.first().map(|r| r.y).unwrap_or_default();
 
     // A gap wider than a space means the runs are separated words rather than
@@ -303,41 +372,91 @@ pub fn looks_unreadable(text: &str) -> bool {
 
 /// A page's text in reading order, one line per entry.
 ///
-/// Columns are found by where lines actually start, not by assuming two. A
-/// bestiary page is frequently two columns; its title is frequently one wide
-/// line across both, and that line belongs before either column.
+/// # Why not a midpoint
+///
+/// The obvious rule — anything starting left of centre is the left column —
+/// fails on the first book whose columns are not centred. The Player's
+/// Handbook begins its right column at x=317 on a page 648 wide, so the
+/// midpoint is 324 and *both* columns read as the left one. Every spell came
+/// out interleaved with its neighbour.
+///
+/// So the columns are found the same way [`lines`] finds them: by where lines
+/// actually start. A line is assigned to the nearest column edge at or before
+/// it, and a line that reaches past the next edge spans the page — a title
+/// across both columns, which belongs before either.
 pub fn reading_order(lines: Vec<Line>, geometry: PageGeometry) -> Vec<Line> {
     if lines.len() < 4 {
         return lines;
     }
 
-    let midpoint = geometry.width / 2.0;
-    // A line that starts left of centre and ends right of it spans the page.
-    let spans = |line: &Line| line.x0 < midpoint && line.x1 > midpoint;
-
-    let left: Vec<Line> = lines
-        .iter()
-        .filter(|l| !spans(l) && l.x0 < midpoint)
-        .cloned()
-        .collect();
-    let right: Vec<Line> = lines
-        .iter()
-        .filter(|l| !spans(l) && l.x0 >= midpoint)
-        .cloned()
-        .collect();
-
-    // Only treat it as two columns when both sides carry real weight.
-    // Otherwise it is a single column that happens to have a wide figure, and
-    // splitting it would interleave nonsense.
-    let smaller = left.len().min(right.len());
-    if smaller * 4 < lines.len() {
+    let columns = line_columns(&lines);
+    if columns.len() < 2 {
+        // One column, or too little evidence for two. Down the page as it is.
+        let _ = geometry;
         return lines;
     }
 
-    let mut out: Vec<Line> = lines.iter().filter(|l| spans(l)).cloned().collect();
-    out.extend(left);
-    out.extend(right);
+    let column_of = |line: &Line| -> Option<usize> {
+        let index = columns
+            .iter()
+            .rposition(|start| line.x0 + COLUMN_TOLERANCE >= *start)?;
+        // A line reaching well into the next column is not in this one — it
+        // spans, and a spanning line is ordered before the columns.
+        match columns.get(index + 1) {
+            Some(next) if line.x1 > next + COLUMN_TOLERANCE => None,
+            _ => Some(index),
+        }
+    };
+
+    let mut out: Vec<Line> = Vec::with_capacity(lines.len());
+    out.extend(
+        lines
+            .iter()
+            .filter(|line| column_of(line).is_none())
+            .cloned(),
+    );
+    for index in 0..columns.len() {
+        out.extend(
+            lines
+                .iter()
+                .filter(|line| column_of(line) == Some(index))
+                .cloned(),
+        );
+    }
     out
+}
+
+/// Where this page's columns begin, judged from assembled lines.
+///
+/// The same measurement [`column_starts`] makes over runs, over lines
+/// instead: by this point a line begins exactly where its column does, which
+/// is a cleaner signal than the runs were.
+fn line_columns(lines: &[Line]) -> Vec<f64> {
+    let mut tally: std::collections::BTreeMap<i64, usize> = std::collections::BTreeMap::new();
+    for line in lines {
+        *tally.entry(line.x0.round() as i64).or_default() += 1;
+    }
+    // A column has to hold a real share of the page. Below this it is a
+    // hanging indent or a caption, and treating it as a column would order the
+    // page around a footnote.
+    let threshold = (lines.len() / 8).max(3);
+    let mut starts: Vec<f64> = tally
+        .into_iter()
+        .filter(|(_, count)| *count >= threshold)
+        .map(|(x, _)| x as f64)
+        .collect();
+    starts.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mut merged: Vec<f64> = Vec::new();
+    for start in starts {
+        if merged
+            .last()
+            .is_none_or(|previous| start - previous > COLUMN_TOLERANCE * 2.0)
+        {
+            merged.push(start);
+        }
+    }
+    merged
 }
 
 /// How much bigger than the body a line must be to read as a heading.

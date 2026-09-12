@@ -25,7 +25,7 @@ fn main() {
                 continue;
             }
             println!(
-                "{:5.1}{}{} | {}",
+                "{:5.1}{}{} x{:6.1}-{:6.1} | {}",
                 line.size,
                 if line.bold { "B" } else { " " },
                 if layout::is_heading(&line, body) {
@@ -33,7 +33,9 @@ fn main() {
                 } else {
                     " "
                 },
-                line.text.chars().take(96).collect::<String>()
+                line.x0,
+                line.x1,
+                line.text.chars().take(72).collect::<String>()
             );
         }
     }
