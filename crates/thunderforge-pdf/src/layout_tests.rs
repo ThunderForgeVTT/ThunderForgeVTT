@@ -38,12 +38,14 @@ fn line(text: &str, y: f64, x0: f64, x1: f64, size: f64) -> Line {
 
 #[test]
 fn runs_sharing_a_baseline_become_one_line() {
+    // Positions as a real page has them: about half an em per character, so
+    // "Armor " at 10pt is roughly 30pt wide.
     let lines = lines(&[
         run("Armor", 72.0, 700.0, 10.0),
-        run("Class", 110.0, 700.0, 10.0),
-        run("15", 150.0, 700.0, 10.0),
+        run("Class", 102.0, 700.0, 10.0),
+        run("15", 132.0, 700.0, 10.0),
     ]);
-    assert_eq!(lines.len(), 1);
+    assert_eq!(lines.len(), 1, "{lines:?}");
     assert_eq!(lines[0].text, "Armor Class 15");
 }
 
@@ -78,9 +80,10 @@ fn separate_placements_do_not_run_words_together() {
     // read as `AdultRedDragon`.
     let lines = lines(&[
         run("Adult", 72.0, 700.0, 10.0),
-        run("Red", 110.0, 700.0, 10.0),
-        run("Dragon", 140.0, 700.0, 10.0),
+        run("Red", 100.0, 700.0, 10.0),
+        run("Dragon", 122.0, 700.0, 10.0),
     ]);
+    assert_eq!(lines.len(), 1, "{lines:?}");
     assert_eq!(lines[0].text, "Adult Red Dragon");
 }
 
@@ -88,15 +91,55 @@ fn separate_placements_do_not_run_words_together() {
 fn a_line_is_bold_only_when_all_of_it_is() {
     let mixed = lines(&[
         bold("Armor Class", 72.0, 700.0, 10.0),
-        run("15", 140.0, 700.0, 10.0),
+        run("15", 130.0, 700.0, 10.0),
     ]);
     assert!(!mixed[0].bold, "one bold label does not make a bold line");
 
     let wholly = lines(&[
         bold("Actions", 72.0, 700.0, 10.0),
-        bold("cont.", 120.0, 700.0, 10.0),
+        bold("cont.", 110.0, 700.0, 10.0),
     ]);
     assert!(wholly[0].bold);
+}
+
+#[test]
+fn a_baseline_crossing_a_gutter_is_two_lines_not_one() {
+    // The defect this exists for, seen on a real Monster Manual page: every
+    // body line in the left column shares a baseline with one in the right,
+    // and merging them yields "the true dragons, red dragons Red dragons lair
+    // in high mountains" — one column's sentence welded to the other's.
+    let lines = lines(&[
+        run("red dragons", 60.0, 700.0, 9.0),
+        run("Red dragons lair", 320.0, 700.0, 9.0),
+    ]);
+    assert_eq!(lines.len(), 2, "{lines:?}");
+    assert_eq!(lines[0].text, "red dragons");
+    assert_eq!(lines[1].text, "Red dragons lair");
+}
+
+#[test]
+fn an_ordinary_word_space_is_not_a_gutter() {
+    // The other direction, and the one that matters more: over-splitting
+    // would shatter every line into words.
+    let lines = lines(&[
+        run("Armor", 72.0, 700.0, 10.0),
+        run("Class", 105.0, 700.0, 10.0),
+    ]);
+    assert_eq!(lines.len(), 1);
+    assert_eq!(lines[0].text, "Armor Class");
+}
+
+#[test]
+fn a_statblock_label_and_its_value_stay_one_line() {
+    // A statblock sets its label bold and its value roman, with an ordinary
+    // space between. Splitting there would lose which value belongs to which
+    // label, which is the whole content of a statblock.
+    let lines = lines(&[
+        bold("Hit Points", 72.0, 700.0, 9.0),
+        run("256 (19d12 + 133)", 122.0, 700.0, 9.0),
+    ]);
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert_eq!(lines[0].text, "Hit Points 256 (19d12 + 133)");
 }
 
 #[test]

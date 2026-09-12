@@ -76,7 +76,55 @@ pub fn lines(runs: &[TextRun]) -> Vec<Line> {
         }
     }
 
-    out.into_iter().map(assemble).collect()
+    out.into_iter().flat_map(split_at_gutters).collect()
+}
+
+/// How wide a gap must be, in ems, before it is a gutter rather than a space.
+///
+/// A word space is about a third of an em and a wide one half. A column
+/// gutter is one to two. At 1.4 the two do not overlap, and the failure this
+/// prevents is not subtle: without it a two-column page yields lines like
+/// "the true dragons, red dragons Red dragons lair in high mountains", the
+/// left column's sentence welded to the right column's.
+const GUTTER: f64 = 1.4;
+
+/// Split one baseline's runs wherever a gutter separates them.
+///
+/// Runs sharing a baseline are only one line if nothing but spaces lies
+/// between them. On a two-column spread every body line in the left column
+/// shares its baseline with one in the right, and they are two lines.
+fn split_at_gutters(mut group: Vec<&TextRun>) -> Vec<Line> {
+    group.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mut out = Vec::new();
+    let mut current: Vec<&TextRun> = Vec::new();
+    let mut previous_end: Option<f64> = None;
+
+    for run in group {
+        if let Some(end) = previous_end
+            && run.x - end > run.size * GUTTER
+            && !current.is_empty()
+        {
+            out.push(assemble(std::mem::take(&mut current)));
+        }
+        previous_end = Some(estimated_end(run));
+        current.push(run);
+    }
+    if !current.is_empty() {
+        out.push(assemble(current));
+    }
+    out
+}
+
+/// Where a run's text is likely to stop.
+///
+/// Estimated from a half-em average advance rather than measured from the
+/// font, for the reason the module docstring gives: measuring means owning
+/// every font's metrics, and a designer's override would defeat it anyway.
+/// Only gaps are decided from this, and a gap of a whole em is far outside
+/// the error of the estimate.
+fn estimated_end(run: &TextRun) -> f64 {
+    run.x + run.text.chars().count() as f64 * run.size * 0.5
 }
 
 fn assemble(mut group: Vec<&TextRun>) -> Line {
@@ -100,7 +148,7 @@ fn assemble(mut group: Vec<&TextRun>) -> Line {
             text.push(' ');
         }
         text.push_str(&run.text);
-        previous_end = Some(run.x + run.text.chars().count() as f64 * run.size * 0.5);
+        previous_end = Some(estimated_end(run));
     }
 
     Line {
