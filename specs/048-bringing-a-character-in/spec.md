@@ -314,7 +314,21 @@ and leaves current hit points and anything the table has changed in play alone.
   thing, now the world's.
 - **FR-035**: The same unknown thing arriving from two characters MUST be one
   decision for the Game Master.
-- **FR-036**: Declining is settled by Q3.
+- **FR-036**: A piece of character-added content that the world has **not**
+  adopted MUST NOT be usable in play (decision 3). It is visible to its own
+  character, marked as awaiting the Game Master, and every play-field action
+  that would use it — rolling it, attacking with it, spending it — MUST be
+  refused.
+- **FR-036a**: Refusing MUST say why: that this came in with the character and
+  the Game Master has not adopted it. A player who cannot use their own sword
+  and is not told why will conclude the product is broken.
+- **FR-036b**: A Game Master MUST be able to revisit an undecided or declined
+  piece later and adopt it. Declining MUST NOT be final, and MUST NOT remove
+  anything from the character.
+- **FR-036c**: Content MUST therefore carry three states, not two: **adopted**
+  (the world's, playable), **pending** (the character's, visible, refused in
+  play), and **declined** (the character's, visible, refused in play, and
+  marked as already considered so it does not return to the queue).
 
 **Who may import**
 
@@ -322,7 +336,16 @@ and leaves current hit points and anything the table has changed in play alone.
 - **FR-041**: A Game Master MUST be able to import onto any actor in their
   world.
 - **FR-042**: Nobody else MUST be able to import onto an actor.
-- **FR-043**: What happens to the uploaded file afterwards is settled by Q2.
+- **FR-043**: The uploaded file MUST be kept with the import record until the
+  character is deleted (decision 2), and MUST be deleted with it.
+- **FR-043a**: Every import onto an actor MUST be **a version**, not a
+  replacement: the record MUST show what was imported and when, so a character
+  imported in March and again in June has two entries a person can read and
+  compare.
+- **FR-043b**: A kept file is somebody's personal document at rest. It MUST be
+  reachable only by that character's owner and the world's Game Master, and
+  MUST be covered by the account-deletion and data-export paths that already
+  exist.
 
 **Coming back**
 
@@ -409,9 +432,40 @@ and leaves current hit points and anything the table has changed in play alone.
 - **Map import** (`src/server/src/map_import/`): the precedent for a
   server-side Rust parser with warnings.
 
+## Decisions (owner, 2026-09-12)
+
+1. **The whole sheet** (Q1: C). The 5e pack learns to hold all of it —
+   features, equipment and money included — rather than only what something
+   already reads. The alternative was to grow the pack to exactly what spec
+   046 needs, which would mean revisiting the same sheets a third time; a
+   character brought in whole is a character, and what nothing reads yet is
+   simply waiting for the thing that will.
+
+2. **The file is kept, and imports are versioned** (Q2: B). Not merely so a
+   bad import can be re-read, but so the *history* is legible: imported on one
+   date, imported again on another. The case that motivated it is a player
+   working off another service and re-exporting — the two versions are the
+   thing worth comparing, and a record that overwrote itself could not show
+   them. FR-043a.
+
+3. **Unadopted content is visible and unplayable** (Q3: C, and further). The
+   option offered was that content stays and a Game Master may hide it from
+   the table. The owner's answer goes past hiding to **refusing**: until the
+   Game Master adopts it, the player cannot use it either.
+
+   The reasoning is the sword that does 99,999,999 damage. Hiding it from the
+   table does not stop the player swinging it; only refusing it does. So an
+   unadopted piece is flagged, stays with its character, and every play-field
+   action that would use it is refused — and the refusal says why, because a
+   player who cannot use their own sword and is not told will conclude the
+   product is broken.
+
+   Declining is not final. A Game Master may come back to it. FR-036 through
+   FR-036c.
+
 ## Questions for the owner
 
-1. **Q1 — How much of a sheet does the 5e pack learn to hold?**
+1. **Q1 — How much of a sheet does the 5e pack learn to hold?** *(answered: C)*
 
    | Option | Answer | Implications |
    |--------|--------|--------------|
@@ -419,7 +473,7 @@ and leaves current hit points and anything the table has changed in play alone.
    | B | Grow the pack for what spec 046 needs: armour class, speed, senses, attacks | The import feeds the fight. Pack work, and 046 must land alongside. |
    | C | The whole sheet, including features, equipment and money | A complete character. The largest, and much of it nothing yet reads. |
 
-2. **Q2 — What happens to the uploaded file?**
+2. **Q2 — What happens to the uploaded file?** *(answered: B, versioned)*
 
    | Option | Answer | Implications |
    |--------|--------|--------------|
@@ -427,7 +481,8 @@ and leaves current hit points and anything the table has changed in play alone.
    | B | Kept with the import record until the character is deleted | Re-importable and auditable; it is a personal document at rest. |
    | C | The player chooses when they import | Honest, and one more decision at the door. |
 
-3. **Q3 — What does declining character-added content mean?**
+3. **Q3 — What does declining character-added content mean?** *(answered:
+   C, and stronger — see decision 3)*
 
    | Option | Answer | Implications |
    |--------|--------|--------------|
