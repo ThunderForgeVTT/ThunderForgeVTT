@@ -116,11 +116,24 @@ compendium is the current state, the records are what happened.
 
 ---
 
-## What this spec deliberately does not model
+## What spec 050 adds, in the same arc
 
-- **A world's link to a compendium**, and **a world's delta over it**. Spec
-  050. Research §1 records the decision to leave the gap rather than build a
-  shape 050 would have to migrate.
-- **Collections.** They exist already (spec 026); this spec only adds the
-  invariant that one can never contain uploaded content.
-- **The uploaded file.** Never stored, so never modelled.
+Named here rather than deferred, because the owner's merge means these shapes
+are designed alongside the ones above rather than fitted to them later
+(research §1). Spec 050 holds their requirements; this is how they attach.
+
+- **Book list entry** — a world's link to a compendium in its owner's library,
+  naming the base version in force. World-owned. Nothing is copied.
+- **Delta** — a world's changes over one compendium it has switched on:
+  entries **changed**, **hidden** and **added**. World-owned, and each entry
+  carries **its own origin** — a change to an uploaded entry is uploaded, an
+  addition beside it is authored. That split is per entry, not per compendium,
+  and it is the subtlety most likely to be implemented wrong.
+- **Collection** — authored content on the same shelf, sharing the compendium's
+  shape everywhere origin does not decide the answer. The only kind a world can
+  sync a change back to, and the only kind that downloads.
+
+## What is still not modelled
+
+- **The uploaded file.** Never stored, so never modelled. It does not leave the
+  Game Master's machine at any point.

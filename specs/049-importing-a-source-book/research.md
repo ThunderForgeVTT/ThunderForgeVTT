@@ -8,60 +8,50 @@ settled and recorded in `spec.md`.
 
 ---
 
-## 1. Does 049 ship before 050, and is it worth anything on its own?
+## 1. One arc, not two releases (owner, 2026-09-12)
 
-**Decision: yes, and yes — option (a).** 049 lands the reader, the review, the
-send, and an **account-owned compendium the Game Master can browse in their own
-library**. Worlds cannot switch a book on until 050; that is 050's feature and
-it is not being half-built here.
+**Decision: 049 and 050 are planned and built as a single arc.** The owner was
+given the sequencing choice explicitly and took the merge, with its cost
+stated: one large change set, and 050's partly-legal gate sitting in the same
+body of work as 049's purely-engineering one.
 
-**Rationale.** The alternative that looked tempting — give worlds a crude
-all-or-nothing use of the library so 049 is end-to-end — buys a demo and costs
-a retrofit. 050's book list is per-world selection with a read-only player
-view, and a world that has already been taught "you get everything in the
-library" has to be untaught. Worse, the delta model (050 FR-020 to FR-029)
-decides how a world's change is *stored*; content that reached a world by some
-other route before that exists is content with no defined place to put an edit.
+**What this settles.** FR-042 — browse by compendium *in the world's Compendium
+portal* — is satisfiable as written, because the book list that makes a
+compendium reachable from a world is in scope. No requirement moves between
+specs and neither spec is amended.
 
-The honest cost, stated rather than hidden: **after 049 alone, a Game Master
-can import the Monster Manual and look at it, and cannot yet put a goblin on a
-map.** That is a real gap and it is one release long. It is acceptable because
-the thing 049 proves is the thing that is hard and risky — that a book can be
-read correctly, reviewed before it is trusted, and stored with an origin that
-cannot be edited off. Putting a goblin on a map is not the risky part.
+**What it costs, and how the cost is contained.** The named risk was that the
+ADR-069 re-determination needed for sync-back would block the parser. That risk
+is real but it is a **sequencing** problem, not a structural one, so the phase
+order contains it:
 
-**Alternatives considered.**
+- **Every gate is placed as late as it can honestly go.** The reader, the
+  review, the send, the shelf and the book list — Arcs A to C — depend on
+  neither gate and ship without them.
+- **Two gates, both in the last third.** The entry-identity measurement (spec
+  050 FR-029) precedes the delta model; the ADR-069 re-determination precedes
+  sync-back, which is the final build phase.
+- If the determination is refused or delayed, **everything up to and including
+  deltas still ships**. What is lost is pushing a world's improvement back to
+  the shelf — a real feature, and not one that anything else depends on.
 
-- *(b) A crude world-wide library* — rejected above: a retrofit, and it
-  pre-empts the delta model's storage decision.
-- *(c) Plan 049 and 050 as one arc* — rejected. It produces one very large
-  change set, and it merges two specs whose proof obligations are different:
-  049's is "the reader is right about a real book", 050's is "nothing is copied
-  and nothing crosses an account". Failing to prove one should not block the
-  other.
+**The rejected alternatives, kept because the reasoning still applies.**
 
-**Consequence for sequencing.** 049's Phase 6 must build the compendium as
-**account-owned from the first migration**, never world-owned "for now". A
-world-scoped table that 050 has to migrate is exactly the retrofit this
-decision exists to avoid.
+- *049 alone, account-level browsing only, FR-042's world half deferred* — the
+  recommendation before the owner chose otherwise. It kept each spec's proof
+  obligation separate and cost one release in which a Game Master could import
+  the Monster Manual and not put a goblin on a map. Superseded.
+- *049 plus a crude all-or-nothing world use of the library* — rejected then
+  and still rejected now, and the merge removes the temptation entirely. It
+  would have had content reaching a world before the delta model defined where
+  a per-world edit is stored, so an edit would have had nowhere defined to
+  live.
 
-**Consequence for the spec, owed plainly.** FR-042 says *"the world's
-Compendium portal MUST let a Game Master browse by compendium, beside the
-existing browse by kind."* Under this decision 049 cannot satisfy it, because a
-world cannot reach a compendium until 050 gives it the book list. So:
-
-- **049 delivers account-level browsing** — the library view, which is what
-  US3's "browse what came out of one book" actually needs and what the phase
-  table's Phase 6 builds.
-- **FR-042's world-portal integration moves to spec 050**, alongside the book
-  list it depends on.
-
-That surface already exists and is substantial — `apps/web/src/pages/world/
-compendium/` with tabs for NPCs, items, abilities and lore, reached at
-`/world/:id/compendium`. Adding a "by compendium" dimension to it is a real
-piece of work on a real page, and it belongs with the feature that makes a
-compendium reachable from a world at all. 049's library view is a **new,
-account-level surface**, not a change to that page.
+**Consequence for the build.** Because both specs are in scope from the first
+migration, there is no "account-owned for now" and no retrofit to plan around:
+the compendium is account-owned, the world's link to it and the delta table
+land in the same arc, and the shapes are designed together rather than one
+being migrated to fit the other.
 
 ---
 
@@ -234,19 +224,22 @@ being discovered at the database.
 
 ---
 
-## 7. Where the compendium lives before 050 exists
+## 7. Where the compendium lives
 
-**Decision: an account-owned compendium and its entries, written by the import
-and read by a library view, with origin recorded automatically and immutably.**
+**Decision: account-owned from the first migration, with the world's link to it
+and the world's delta over it landing in the same arc.**
 
-**Rationale.** Follows from decision 1 and from FR-040: the compendium belongs
-to the importing account, not to a world. Building it account-owned from the
-first migration is what makes 050 additive — 050 adds a link from a world and a
-delta table, and changes nothing already written.
+The compendium belongs to the importing account, not to a world (049 FR-040).
+Under the merge that is no longer a shape that has to survive a later
+migration — the world link (`book list`) and the delta table are designed
+alongside it rather than fitted to it afterwards, which is the one clear
+benefit the owner's choice buys.
 
-Origin is recorded by the write path rather than supplied by the caller
-(FR-051, FR-057). A field the client can set is a field an attacker can set,
-and this particular field is the one the sharing rules are enforced against.
+Origin is recorded by the write path rather than supplied by the caller (049
+FR-051, FR-057). A field the client can set is a field an attacker can set, and
+this particular field is the one every sharing rule is enforced against.
+
+The uploaded PDF is never stored, so it is never modelled.
 
 ---
 
@@ -269,36 +262,51 @@ implementer's", and ADR-069 before it. This one is the same kind.
 
 ---
 
-## 9. What ADR-069 already covers, and what it does not
+## 9. The DMCA guardrail is engaged, and where exactly
 
-**Finding: 049 does not re-open ADR-069's determination, and materially
-strengthens one of its conditions. 050 may re-open it, and that is 050's
-problem to solve before it is built.**
+**Finding: under the merge this arc does engage the constitution's guardrail —
+in exactly one phase — and the rest of the arc is clear of it.**
 
 ADR-069 determined that a link-shared collection is not a "centralized public
-repository" under spec 015's policy, with one accepted risk. Its "what this
-determination does not cover" section names, among others:
+repository" under spec 015's policy, with one accepted risk. Its own "what this
+determination does not cover" section names:
 
 > **Versioned collections or any update path to already-copied content.** Spec
 > 026 places these out of scope; an update path is a genuinely new distribution
 > model and re-opens this determination.
 
-- **049 is clear of it.** Uploaded content never leaves the account by any
-  route. There is no share, no adoption, no cross-world surface. FR-054a makes
-  uploaded content structurally incapable of entering the shared-collection
-  path that ADR-069 reasoned about, which narrows what that determination has
-  to carry rather than widening it.
-- **050 is not obviously clear of it.** Spec 050 FR-104 gives a collection
-  versions and an update path from a world. On the plain wording above, that is
-  the case ADR-069 says it does not cover. Whether adoption copies are reached
-  by a sync-back — spec 026 says a copy is independent, so probably not — is
-  exactly the question that has to be answered on the record rather than
-  assumed.
+Spec 050 FR-104 gives a collection versions and an update path from a world.
+On that plain wording, **sync-back is the case ADR-069 says it does not
+cover.**
 
-**Consequence.** This is a further argument for decision 1's option (a): 049's
-gate is engineering, 050's gate is partly legal, and coupling them would put
-the legal gate in front of the reader. Flagged here so 050's planning starts
-with it rather than discovering it.
+**What is clear, and why that matters.** Everything in this arc except
+sync-back involves content that is structurally incapable of leaving the
+account that imported it. 049 FR-054a makes uploaded content unable to enter
+the shared-collection path ADR-069 reasoned about at all, which **narrows**
+what that determination has to carry rather than widening it. The reader, the
+review, the send, the shelf, the book list and the deltas are all clear.
+
+**What the guardrail requires before that one phase begins**, in the
+constitution's own terms:
+
+1. **(a) The notice-and-takedown program is operational.** It was confirmed so
+   for ADR-069, and ADR-079 later extended a takedown's reach to adopted
+   copies. This needs **re-confirming as still true**, not re-establishing.
+2. **(b) An explicit, on-record determination** of whether a collection with an
+   update path constitutes a centralized public repository — as an **amendment
+   to ADR-069**, since that is the determination being re-opened.
+3. **Signed by the accountable owner, not the implementer.** ADR-069 and
+   ADR-079 were both owner-signed precisely because they are about liability.
+
+**The question that determination has to answer**, stated so it is not
+discovered late: spec 026 says an adopted copy is independent, so a sync-back
+plausibly does **not** reach copies other people took — in which case the
+"update path to already-copied content" limb is not triggered and only the
+"versioned collections" limb is. That is a reasonable reading and it is not
+mine to assert. It goes on the record or it does not.
+
+**Consequence for the phase order**: sync-back is the last build phase, so a
+refusal or a delay costs that feature and nothing before it (research §1).
 
 ---
 

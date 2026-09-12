@@ -8,6 +8,12 @@
 
 **Input**: User description: "Maybe we do per account dedupe but more explicitly move compendiums outside worlds and have worlds be able to inherit content and delta it, like change per world. That covers our bacon, and when the account's gone the compendiums are gone." Following from: "how can we reduce the size on disk too for us as the operator — if a GM has 8 worlds and they upload the book 8 times… think like a graph db but for tabletop PDFs?" And: "can a user who GMs a world have worlds and compendiums where they select a game system and can upload PDFs, allowing them to preseed their worlds with content?"
 
+> **Planned with spec 049, not separately.** The owner chose on 2026-09-12 to
+> build the import and the library as one arc, so this spec's plan, research,
+> data model, contracts and tasks live in
+> [`specs/049-importing-a-source-book/`](../049-importing-a-source-book/plan.md).
+> There is deliberately no `plan.md` here.
+
 ## The problem, in one sentence
 
 A Game Master with eight worlds and one Monster Manual should own one Monster
