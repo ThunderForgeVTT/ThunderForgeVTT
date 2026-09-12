@@ -5,11 +5,17 @@
  * renders its controls from `HERO_PARTS` and `HERO_COLORS` rather than from
  * its own copy, so a part added here appears in the builder without it
  * learning the part's name.
+ *
+ * Monsters are heroes too. A goblin is a small green person, a troll is a
+ * hunched one and a dragon is a maw, a crest and a pair of wings on the same
+ * skeleton: every creature part below joins the same list of choices rather
+ * than starting a second vocabulary, so the builder, the validator and the
+ * "no two choices draw alike" test cover monsters the day they are added.
  */
 import { HEX_COLOR, shade } from "./color.ts";
 
 export const EAR_SHAPES = ["round", "pointed"] as const;
-export const MOUTHS = ["smile", "grin", "smirk"] as const;
+export const MOUTHS = ["smile", "grin", "smirk", "snarl", "gape"] as const;
 export const HAIR_STYLES = [
   "bald",
   "short",
@@ -31,6 +37,9 @@ export const HEADGEAR = [
   "headband",
   "goggles",
   "tiefling",
+  "crest",
+  "antlers",
+  "boneCrown",
 ] as const;
 export const EMBLEMS = ["none", "sun", "cross", "gear"] as const;
 export const PROPS = [
@@ -46,7 +55,24 @@ export const PROPS = [
   "fists",
   "flame",
   "wrench",
+  "club",
+  "claws",
 ] as const;
+
+/** How the body is carried. The head parts all draw at fixed coordinates, so
+ * a build moves the whole head rather than each part knowing the pose: a
+ * troll's hunch and a dragon's raised neck are one transform and one
+ * silhouette apart. */
+export const BUILDS = ["upright", "hulking", "hunched", "sinuous"] as const;
+/** What replaces a flat face. A muzzle draws its own mouth, so `mouth` is
+ * ignored while one is worn. */
+export const MUZZLES = ["none", "snout", "maw", "beak"] as const;
+export const EYE_STYLES = ["round", "slit", "beady", "hollow"] as const;
+/** What the skin is covered in, drawn over both the face and the chest so a
+ * scaled creature is scaled all the way down. */
+export const HIDES = ["none", "scales", "fur", "bone", "warts"] as const;
+export const WINGS = ["none", "bat", "feathered"] as const;
+export const TAILS = ["none", "reptile", "spiked", "tuft"] as const;
 
 export type EarShape = (typeof EAR_SHAPES)[number];
 export type Mouth = (typeof MOUTHS)[number];
@@ -54,6 +80,12 @@ export type HairStyle = (typeof HAIR_STYLES)[number];
 export type Headgear = (typeof HEADGEAR)[number];
 export type Emblem = (typeof EMBLEMS)[number];
 export type Prop = (typeof PROPS)[number];
+export type Build = (typeof BUILDS)[number];
+export type Muzzle = (typeof MUZZLES)[number];
+export type EyeStyle = (typeof EYE_STYLES)[number];
+export type Hide = (typeof HIDES)[number];
+export type Wings = (typeof WINGS)[number];
+export type Tail = (typeof TAILS)[number];
 
 /** Every part with a fixed set of choices, keyed by the spec field it sets. */
 export const HERO_PARTS = {
@@ -63,7 +95,34 @@ export const HERO_PARTS = {
   headgear: HEADGEAR,
   emblem: EMBLEMS,
   prop: PROPS,
+  build: BUILDS,
+  muzzle: MUZZLES,
+  eyeStyle: EYE_STYLES,
+  hide: HIDES,
+  wings: WINGS,
+  tail: TAILS,
 } as const;
+
+/** How many grid cells across the creature stands, by size category.
+ *
+ * The ladder is the familiar tabletop one; the numbers are cells, not any
+ * one system's scale factor, because a system pack declares its own
+ * categories (Genie calls them diminutive to colossal) and maps them onto
+ * these. Tiny is half a cell, which is the engine's `MIN_FOOTPRINT`: nothing
+ * on the board may be smaller, so a spec that asked for less would only be
+ * clamped later and confuse whoever compared the two numbers. */
+export const SIZE_CATEGORIES = {
+  tiny: 0.5,
+  small: 1,
+  medium: 1,
+  large: 2,
+  huge: 3,
+  gargantuan: 4,
+} as const;
+
+export const SIZES = Object.keys(SIZE_CATEGORIES) as readonly SizeCategory[];
+
+export type SizeCategory = keyof typeof SIZE_CATEGORIES;
 
 /** Every spec field that is a colour. */
 export const HERO_COLORS = [
@@ -77,6 +136,8 @@ export const HERO_COLORS = [
   "trim",
   "glow",
   "ring",
+  "hideColor",
+  "wingColor",
 ] as const;
 
 /** Every spec field that is on or off. */
@@ -93,6 +154,24 @@ export const SKIN_TONES = {
   ebony: "#5e3a24",
   sage: "#8fbf6a",
   ember: "#d9574a",
+} as const;
+
+/** Hides a monster wears. Kept beside `SKIN_TONES` rather than inside the
+ * bestiary so a builder offers the same swatches for a troll that the
+ * generator reaches for. */
+export const MONSTER_TONES = {
+  goblinGreen: "#7bb04a",
+  orcMoss: "#5f8f52",
+  trollStone: "#8f9e7a",
+  ogreClay: "#c99a6a",
+  boneWhite: "#e8e2d0",
+  graveGrey: "#9aa79a",
+  dragonScarlet: "#c0392b",
+  dragonEmerald: "#2f8f5b",
+  dragonSapphire: "#3a6fb0",
+  fiendCrimson: "#8f2f3a",
+  beastBrown: "#8a6242",
+  oozeViolet: "#7a5aa8",
 } as const;
 
 /** A hero with every field decided — what the parts draw from. */
@@ -122,6 +201,19 @@ export interface ResolvedHero {
   glow: string;
   /** The token's rim. */
   ring: string;
+  build: Build;
+  muzzle: Muzzle;
+  eyeStyle: EyeStyle;
+  hide: Hide;
+  /** Scales, fur tufts, ribs — the marks drawn on top of the skin. */
+  hideColor: string;
+  wings: Wings;
+  wingColor: string;
+  tail: Tail;
+  /** How many cells the creature stands across. Carried on the spec rather
+   * than worked out by whoever places it, because a monster that is drawn
+   * huge and placed in one square is the bug spec 047 FR-020 is about. */
+  size: SizeCategory;
 }
 
 /** A hero as written: a name, and whatever else differs from the defaults. */
@@ -152,6 +244,7 @@ export function validateHero(input: unknown): HeroValidation {
   const known = new Set<string>([
     "name",
     "title",
+    "size",
     ...Object.keys(HERO_PARTS),
     ...HERO_COLORS,
     ...HERO_FLAGS,
@@ -208,10 +301,14 @@ export function validateHero(input: unknown): HeroValidation {
   const hairColor = color("hairColor", "#3b2a1f");
   const headgear = choice("headgear", HEADGEAR, "none");
   const outfit = color("outfit", "#3d6fd1");
+  // Hide and wings default off the skin so a creature given nothing but a
+  // colour still reads as one animal rather than a body with somebody else's
+  // wings attached.
+  const skin = color("skin", SKIN_TONES.peach);
   const hero: ResolvedHero = {
     name: text("name", MAX_NAME),
     title: raw.title === "" ? "" : text("title", MAX_TITLE, ""),
-    skin: color("skin", SKIN_TONES.peach),
+    skin,
     eyes: color("eyes", "#3b2a1f"),
     ears: choice("ears", EAR_SHAPES, "round"),
     mouth: choice("mouth", MOUTHS, "smile"),
@@ -229,6 +326,15 @@ export function validateHero(input: unknown): HeroValidation {
     prop: choice("prop", PROPS, "none"),
     glow: color("glow", "#c9d6e8"),
     ring: color("ring", outfit),
+    build: choice("build", BUILDS, "upright"),
+    muzzle: choice("muzzle", MUZZLES, "none"),
+    eyeStyle: choice("eyeStyle", EYE_STYLES, "round"),
+    hide: choice("hide", HIDES, "none"),
+    hideColor: color("hideColor", shade(skin, 0.3)),
+    wings: choice("wings", WINGS, "none"),
+    wingColor: color("wingColor", shade(skin, 0.15)),
+    tail: choice("tail", TAILS, "none"),
+    size: choice("size", SIZES, "medium"),
   };
   return problems.length > 0 ? { ok: false, problems } : { ok: true, hero };
 }

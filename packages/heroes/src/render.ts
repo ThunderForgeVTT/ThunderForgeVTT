@@ -6,9 +6,15 @@
  * which is why every id in them is prefixed — two heroes inlined side by side
  * must not share a gradient.
  */
-import { shade } from "./color.ts";
-import { figure, INK } from "./parts.ts";
-import { resolveHero, type HeroSpec, type ResolvedHero } from "./spec.ts";
+import { INK, shade } from "./color.ts";
+import { figure } from "./parts.ts";
+import { fnv1a } from "./seed.ts";
+import {
+  resolveHero,
+  SIZE_CATEGORIES,
+  type HeroSpec,
+  type ResolvedHero,
+} from "./spec.ts";
 
 export interface RenderOptions {
   /** Prefix for the ids inside the SVG. Defaults to one derived from the
@@ -20,6 +26,10 @@ export interface RenderOptions {
 export interface Hero {
   /** The hero with every default filled in. */
   readonly spec: ResolvedHero;
+  /** How many grid cells across it stands. Handed out beside the drawing
+   * because whoever places a token needs both, and a Large monster placed in
+   * one square is the failure spec 047 exists to prevent. */
+  readonly footprint: number;
   /** A square card: the hero on its backdrop, with a rounded frame. */
   portrait(options?: RenderOptions): string;
   /** A round token with a coloured rim, for the map. */
@@ -32,6 +42,7 @@ export function createHero(spec: HeroSpec): Hero {
   const hero = resolveHero(spec);
   return Object.freeze({
     spec: hero,
+    footprint: SIZE_CATEGORIES[hero.size],
     portrait: (options?: RenderOptions) => portraitSvg(hero, options),
     token: (options?: RenderOptions) => tokenSvg(hero, options),
   });
@@ -58,16 +69,6 @@ function idPrefix(hero: ResolvedHero, options?: RenderOptions): string {
   return prefix;
 }
 
-/** 32-bit FNV-1a, as hex: short, stable, and plenty to tell heroes apart. */
-function fnv1a(text: string): string {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < text.length; i++) {
-    hash ^= text.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(16).padStart(8, "0");
-}
-
 function escapeXml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
@@ -88,9 +89,19 @@ function backdrop(id: string, glow: string, radius: string): string {
     </radialGradient>`;
 }
 
+/** The creature's size, carried on the SVG itself.
+ *
+ * An SVG that has been through the server comes back as WebP with these
+ * gone, so nothing may depend on them; they are here so that a bestiary
+ * written to disk, or inlined in a page, still says how big the thing is
+ * instead of leaving the size in a sibling file that can be lost. */
+function sizing(hero: ResolvedHero): string {
+  return ` data-size="${hero.size}" data-footprint="${SIZE_CATEGORIES[hero.size]}"`;
+}
+
 function portraitSvg(hero: ResolvedHero, options?: RenderOptions): string {
   const id = `${idPrefix(hero, options)}-portrait`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="${label(hero)}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="${label(hero)}"${sizing(hero)}>
   <title>${label(hero)}</title>
   <defs>
     ${backdrop(`${id}-bg`, hero.glow, "75%")}
@@ -111,7 +122,7 @@ ${figure(hero)}
 function tokenSvg(hero: ResolvedHero, options?: RenderOptions): string {
   const id = `${idPrefix(hero, options)}-token`;
   const name = escapeXml(hero.name);
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="${name}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="${name}"${sizing(hero)}>
   <title>${name}</title>
   <defs>
     ${backdrop(`${id}-bg`, hero.glow, "70%")}

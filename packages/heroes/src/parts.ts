@@ -6,19 +6,63 @@
  * Only `ResolvedHero` reaches here: every colour has passed `HEX_COLOR` and
  * every choice is one of its list, so interpolating them is safe.
  */
-import { shade } from "./color.ts";
+import { INK, shade } from "./color.ts";
+import { hideBody, hideFace, muzzle, tail, wings } from "./beastly.ts";
 import type { ResolvedHero } from "./spec.ts";
 
-export const INK = "#2b2233";
+export { INK };
 
 const stroke = `stroke="${INK}" stroke-width="3" stroke-linejoin="round"`;
 
+/** Neck, torso and collar, by build. The head parts all draw at fixed
+ * coordinates, so a build changes the silhouette here and moves the head with
+ * `headShift`; nothing else has to know what shape the creature is.
+ *
+ * The collar is a garment, and only the two builds that wear clothes get one:
+ * a hunched brute's chest and a dragon's breast are body, and `outfit` is
+ * their colour rather than their tunic. */
 function body(h: ResolvedHero): string {
-  return `
+  const collar = `<path d="M104 190 L128 222 L152 190" fill="none" stroke="${h.trim}" stroke-width="6" stroke-linecap="round"/>`;
+  switch (h.build) {
+    case "hulking":
+      return `
+  <rect x="106" y="154" width="44" height="34" fill="${h.skin}" ${stroke}/>
+  <path d="M18 256 Q26 188 128 176 Q230 188 238 256 Z" fill="${h.outfit}" ${stroke}/>
+  ${collar}
+  ${emblem(h)}`;
+    case "hunched":
+      return `
+  <path d="M30 256 Q20 180 78 168 Q128 158 178 168 Q236 180 226 256 Z" fill="${h.outfit}" ${stroke}/>
+  ${emblem(h)}`;
+    case "sinuous":
+      return `
+  <path d="M110 212 Q100 150 128 122 Q156 150 146 212 Z" fill="${h.skin}" ${stroke}/>
+  <path d="M52 256 Q60 214 128 202 Q196 214 204 256 Z" fill="${h.outfit}" ${stroke}/>
+  ${emblem(h)}`;
+    default:
+      return `
   <rect x="116" y="160" width="24" height="26" fill="${h.skin}" ${stroke}/>
   <path d="M40 256 Q46 196 128 186 Q210 196 216 256 Z" fill="${h.outfit}" ${stroke}/>
-  <path d="M104 190 L128 222 L152 190" fill="none" stroke="${h.trim}" stroke-width="6" stroke-linecap="round"/>
+  ${collar}
   ${emblem(h)}`;
+  }
+}
+
+/** Where the head sits for a build, as an SVG transform attribute. A hulking
+ * creature's head is bigger and a serpent's is further up a neck; scaling
+ * about (128, 112) keeps the eyes, muzzle and headgear in register with each
+ * other whatever the head does. */
+function headShift(h: ResolvedHero): string {
+  switch (h.build) {
+    case "hulking":
+      return ` transform="translate(128 112) scale(1.08) translate(-128 -112)"`;
+    case "hunched":
+      return ` transform="translate(0 18)"`;
+    case "sinuous":
+      return ` transform="translate(0 -30) translate(128 112) scale(0.9) translate(-128 -112)"`;
+    default:
+      return "";
+  }
 }
 
 function emblem(h: ResolvedHero): string {
@@ -76,23 +120,59 @@ function mouth(h: ResolvedHero): string {
       return `<path d="M112 144 Q128 162 144 144 Z" fill="#8a3b3b" ${stroke}/>`;
     case "smirk":
       return `<path d="M116 148 Q132 154 142 142" fill="none" stroke="${INK}" stroke-width="3" stroke-linecap="round"/>`;
+    case "snarl":
+      return `<path d="M108 148 Q128 138 148 148 Q128 160 108 148 Z" fill="#6b2b2b" ${stroke}/>
+  <path d="M113 145 l4 8 l4 -8 M127 143 l4 9 l4 -9 M139 146 l4 8 l4 -8" fill="#fffbe8" stroke="${INK}" stroke-width="2"/>`;
+    case "gape":
+      return `<ellipse cx="128" cy="152" rx="18" ry="14" fill="#6b2b2b" ${stroke}/>
+  <path d="M118 142 l4 8 l5 -8 M134 142 l4 8 l5 -8" fill="#fffbe8" stroke="${INK}" stroke-width="2"/>`;
     default:
       return `<path d="M116 146 Q128 156 140 146" fill="none" stroke="${INK}" stroke-width="3" stroke-linecap="round"/>`;
   }
 }
 
-function face(h: ResolvedHero): string {
-  const eye = (x: number) => `
+function eye(h: ResolvedHero, x: number): string {
+  switch (h.eyeStyle) {
+    case "slit":
+      return `
+  <ellipse cx="${x}" cy="120" rx="12" ry="12" fill="#f7e9a0" ${stroke}/>
+  <ellipse cx="${x}" cy="120" rx="3" ry="10" fill="${h.eyes}"/>
+  <circle cx="${x + 4}" cy="115" r="2.5" fill="#ffffff"/>`;
+    case "beady":
+      return `
+  <circle cx="${x}" cy="120" r="7" fill="${h.eyes}" ${stroke}/>
+  <circle cx="${x + 2}" cy="117" r="2.5" fill="#ffffff"/>`;
+    // A hollow socket is the undead read: the skull's own dark, with a point
+    // of light in it so the thing is looking at you rather than merely dead.
+    case "hollow":
+      return `
+  <ellipse cx="${x}" cy="120" rx="12" ry="14" fill="${INK}"/>
+  <circle cx="${x}" cy="121" r="5" fill="${h.eyes}"/>`;
+    default:
+      return `
   <ellipse cx="${x}" cy="120" rx="11" ry="13" fill="#ffffff" ${stroke}/>
   <ellipse cx="${x}" cy="123" rx="7" ry="9" fill="${h.eyes}"/>
   <circle cx="${x + 3}" cy="118" r="3" fill="#ffffff"/>`;
+  }
+}
+
+function face(h: ResolvedHero): string {
   const tusks = h.tusks
     ? `<path d="M112 150 l4 -12 l4 12 z" fill="#fffbe8" ${stroke}/><path d="M136 150 l4 -12 l4 12 z" fill="#fffbe8" ${stroke}/>`
     : "";
-  return `${eye(106)}${eye(150)}
-  <ellipse cx="92" cy="140" rx="9" ry="5" fill="#ff8fa3" opacity="0.45"/>
-  <ellipse cx="164" cy="140" rx="9" ry="5" fill="#ff8fa3" opacity="0.45"/>
-  ${mouth(h)}${tusks}`;
+  // Cheeks are a blush, and a blush belongs on bare skin: on scales, fur or
+  // bone it reads as makeup on a corpse. A muzzle covers them outright.
+  const cheeks =
+    h.hide === "none" && h.muzzle === "none"
+      ? `<ellipse cx="92" cy="140" rx="9" ry="5" fill="#ff8fa3" opacity="0.45"/>
+  <ellipse cx="164" cy="140" rx="9" ry="5" fill="#ff8fa3" opacity="0.45"/>`
+      : "";
+  // A muzzle draws its own mouth; drawing the flat one too would put lips on
+  // a snout.
+  const lips = h.muzzle === "none" ? mouth(h) : "";
+  return `${eye(h, 106)}${eye(h, 150)}
+  ${cheeks}
+  ${lips}${tusks}`;
 }
 
 function beard(h: ResolvedHero): string {
@@ -129,6 +209,16 @@ function hairFront(h: ResolvedHero): string {
       return "";
   }
 }
+
+/** A draconic frill: spines rising from the crown, each as base-x, base-y and
+ * the tip it reaches, fanning outwards from the middle. */
+const CREST: readonly [number, number, string][] = [
+  [92, 88, "76 44"],
+  [110, 78, "102 34"],
+  [128, 74, "128 28"],
+  [146, 78, "154 34"],
+  [164, 88, "180 44"],
+];
 
 const LEAVES: readonly [number, number, number][] = [
   [84, 76, -30],
@@ -178,6 +268,20 @@ function headgear(h: ResolvedHero): string {
     case "tiefling":
       return `<path d="M88 66 Q74 40 84 22 Q88 44 102 58 Z" fill="#4a2b3d" ${stroke}/>
   <path d="M168 66 Q182 40 172 22 Q168 44 154 58 Z" fill="#4a2b3d" ${stroke}/>`;
+    case "crest":
+      return `<g fill="${c}" ${stroke}>${CREST.map(
+        ([x, y, tip]) =>
+          `<path d="M${x - 11} ${y} L${tip} L${x + 11} ${y} Z"/>`,
+      ).join("")}</g>
+  <path d="M76 96 Q128 78 180 96" fill="none" stroke="${shade(c)}" stroke-width="6" stroke-linecap="round"/>`;
+    case "antlers":
+      return `<g fill="none" stroke="${c}" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M96 78 Q80 44 88 18 M88 34 Q68 28 58 14 M92 52 Q70 50 56 40"/>
+    <path d="M160 78 Q176 44 168 18 M168 34 Q188 28 198 14 M164 52 Q186 50 200 40"/>
+  </g>`;
+    case "boneCrown":
+      return `<path d="M72 94 L78 58 L96 84 L110 50 L128 80 L146 50 L160 84 L178 58 L184 94 Q128 76 72 94 Z" fill="#e8e2d0" ${stroke}/>
+  <circle cx="128" cy="88" r="5" fill="${h.accent}" ${stroke}/>`;
     default:
       return "";
   }
@@ -231,6 +335,21 @@ function prop(h: ResolvedHero): string {
       return `<ellipse cx="210" cy="226" rx="20" ry="12" fill="${h.skin}" ${stroke}/>
   <path d="M210 216 Q182 190 204 160 Q204 180 214 186 Q212 168 226 152 Q238 190 210 216 Z" fill="#ff9a3c" ${stroke}/>
   <path d="M210 210 Q198 196 208 180 Q212 194 218 194 Q222 202 210 210 Z" fill="#ffe066"/>`;
+    case "club":
+      return `<g transform="rotate(14 212 170)">
+    <path d="M204 232 L216 232 L222 120 Q212 104 200 120 Z" fill="#8a5a36" ${stroke}/>
+    <path d="M206 140 l-10 -8 M218 124 l10 -6 M204 166 l-11 -7" stroke="${INK}" stroke-width="4" stroke-linecap="round"/>
+  </g>`;
+    // A clawed hand rather than a weapon: the monster equivalent of "fists",
+    // and the only prop most beasts need.
+    case "claws":
+      return `<g>
+    <path d="M186 178 l-6 -26 l16 18 z" fill="#fffbe8" ${stroke}/>
+    <path d="M208 170 l2 -28 l12 24 z" fill="#fffbe8" ${stroke}/>
+    <path d="M228 180 l18 -20 l-2 26 z" fill="#fffbe8" ${stroke}/>
+    <circle cx="208" cy="200" r="24" fill="${h.skin}" ${stroke}/>
+    <path d="M196 196 q12 10 24 0" fill="none" stroke="${shade(h.skin, 0.3)}" stroke-width="4" stroke-linecap="round"/>
+  </g>`;
     case "wrench":
       return `<g transform="rotate(25 212 180)">
     <rect x="206" y="120" width="12" height="100" rx="5" fill="#9aa4ae" ${stroke}/>
@@ -242,19 +361,32 @@ function prop(h: ResolvedHero): string {
 }
 
 /** The hero, drawn back to front, so each part's outline overlaps the one
- * behind it. A hood hangs behind the head; every other headgear sits on it. */
+ * behind it. A hood hangs behind the head; every other headgear sits on it.
+ *
+ * Wings and tail go behind everything: they are what the creature has *and*
+ * the first thing a Game Master sees at token size, so they must not be
+ * chopped by the torso they grow out of. Everything from the ears up rides in
+ * one group so a build can move the whole head at once. */
 export function figure(h: ResolvedHero): string {
   const hood = h.headgear === "hood";
+  const shift = headShift(h);
+  const behind = hood ? headgear(h) : "";
   return [
-    hairBack(h),
+    wings(h),
+    tail(h),
+    `<g${shift}>${hairBack(h)}${behind}</g>`,
     body(h),
-    hood ? headgear(h) : "",
+    hideBody(h),
+    `<g${shift}>`,
     ears(h),
     head(h),
+    hideFace(h),
+    muzzle(h),
     face(h),
     beard(h),
     hairFront(h),
     hood ? "" : headgear(h),
+    `</g>`,
     prop(h),
   ].join("\n");
 }

@@ -1,32 +1,53 @@
 /**
- * Writes every preset hero to a directory:
+ * Writes every preset hero and every bestiary creature to a directory:
  *
  *   node packages/heroes/src/cli.ts <out-dir>
  *
  * `<slug>-portrait.svg`, `<slug>-token.svg`, and `index.html`, a gallery for
- * looking at them side by side.
+ * looking at them side by side. Heroes and monsters share the page on
+ * purpose: the only way to tell whether a goblin belongs beside Sir Pip is to
+ * put them next to each other and look.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { createHero, PRESET_HEROES } from "./index.ts";
+import {
+  BESTIARY,
+  createHero,
+  createMonster,
+  PRESET_HEROES,
+  type Hero,
+} from "./index.ts";
 
-const out = process.argv[2];
-if (out === undefined) {
+const argument = process.argv[2];
+if (argument === undefined) {
   process.stderr.write("usage: node src/cli.ts <out-dir>\n");
   process.exit(2);
 }
+const out: string = argument;
 
 mkdirSync(out, { recursive: true });
 const cards: string[] = [];
-for (const { slug, spec } of PRESET_HEROES) {
-  const hero = createHero(spec);
-  writeFileSync(join(out, `${slug}-portrait.svg`), hero.portrait());
-  writeFileSync(join(out, `${slug}-token.svg`), hero.token());
+
+function write(slug: string, caption: string, drawn: Hero): void {
+  writeFileSync(join(out, `${slug}-portrait.svg`), drawn.portrait());
+  writeFileSync(join(out, `${slug}-token.svg`), drawn.token());
   cards.push(`<figure>
     <img src="${slug}-portrait.svg" width="160" height="160" alt="">
     <img src="${slug}-token.svg" width="96" height="96" alt="">
-    <figcaption>${slug}</figcaption>
+    <figcaption>${caption}</figcaption>
   </figure>`);
+}
+
+for (const { slug, spec } of PRESET_HEROES) {
+  write(slug, slug, createHero(spec));
+}
+for (const { slug, source } of BESTIARY) {
+  const monster = createMonster(source);
+  write(
+    slug,
+    `${slug} · ${monster.spec.size} · ${monster.footprint}◻`,
+    monster,
+  );
 }
 
 writeFileSync(
@@ -43,5 +64,5 @@ ${cards.join("\n")}
 `,
 );
 process.stdout.write(
-  `wrote ${PRESET_HEROES.length * 2} SVGs and index.html to ${out}\n`,
+  `wrote ${cards.length * 2} SVGs and index.html to ${out}\n`,
 );
