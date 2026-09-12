@@ -464,3 +464,148 @@ fn a_target_and_a_lock_read_back() {
     assert_eq!(requested_lock(&config), Some(true));
     assert_eq!(requested_lock(&serde_json::json!({})), None);
 }
+
+// ---------------------------------------------------------------------------
+// A wall stops a hero (spec 045 US2)
+// ---------------------------------------------------------------------------
+
+/// A wall across the board at y = 0, running east-west, that stops a token.
+fn barrier(id: &str) -> Wall {
+    let mut w = wall(id, -50.0, 0.0, 50.0, 0.0);
+    w.blocks_movement = true;
+    w
+}
+
+fn scene(walls: Vec<Wall>) -> WallSet {
+    let mut set = WallSet::default();
+    for w in walls {
+        set.upsert(w);
+    }
+    set
+}
+
+#[test]
+fn a_move_across_a_blocking_wall_is_stopped_by_it() {
+    let walls = scene(vec![barrier("w-1")]);
+    let blocked = movement_blocked_by(Vec2::new(0.0, -10.0), Vec2::new(0.0, 10.0), &walls);
+    // Named, not merely refused: the server has to say what stopped the move
+    // and the engine has to draw the stop somewhere.
+    assert_eq!(blocked.map(|w| w.id.as_str()), Some("w-1"));
+}
+
+#[test]
+fn a_move_alongside_a_wall_is_not_stopped() {
+    let walls = scene(vec![barrier("w-1")]);
+    // Parallel to it and clear of it — a corridor, which is most of a dungeon.
+    assert!(movement_blocked_by(Vec2::new(-20.0, 10.0), Vec2::new(20.0, 10.0), &walls).is_none());
+}
+
+#[test]
+fn a_move_through_an_open_door_is_not_stopped() {
+    let mut door = barrier("door-1");
+    door.door_state = DoorState::Open;
+    let walls = scene(vec![door]);
+    assert!(movement_blocked_by(Vec2::new(0.0, -10.0), Vec2::new(0.0, 10.0), &walls).is_none());
+}
+
+#[test]
+fn a_move_through_a_closed_door_is_stopped_like_any_wall() {
+    let mut door = barrier("door-1");
+    door.door_state = DoorState::Closed;
+    let walls = scene(vec![door]);
+    assert_eq!(
+        movement_blocked_by(Vec2::new(0.0, -10.0), Vec2::new(0.0, 10.0), &walls)
+            .map(|w| w.id.as_str()),
+        Some("door-1")
+    );
+}
+
+#[test]
+fn a_wall_that_does_not_block_movement_does_not_stop_one() {
+    // A window, or a low railing: it stops sight and not a body. The move is
+    // judged on `blocks_movement` alone, never on the wall's existence.
+    let mut window = barrier("window-1");
+    window.blocks_movement = false;
+    window.blocks_vision = true;
+    let walls = scene(vec![window]);
+    assert!(movement_blocked_by(Vec2::new(0.0, -10.0), Vec2::new(0.0, 10.0), &walls).is_none());
+}
+
+#[test]
+fn slipping_through_the_point_where_two_walls_meet_is_stopped() {
+    // FR-016. The two walls meet at the origin and leave a mathematical gap of
+    // exactly nothing; a diagonal aimed through the joint is the oldest way
+    // out of a locked room there is.
+    let mut north = barrier("w-north");
+    north.x1 = 0.0;
+    north.y1 = 0.0;
+    north.x2 = 0.0;
+    north.y2 = 50.0;
+    let mut east = barrier("w-east");
+    east.x1 = 0.0;
+    east.y1 = 0.0;
+    east.x2 = 50.0;
+    east.y2 = 0.0;
+    let walls = scene(vec![north, east]);
+
+    assert!(movement_blocked_by(Vec2::new(-10.0, -10.0), Vec2::new(10.0, 10.0), &walls).is_some());
+}
+
+#[test]
+fn a_move_that_goes_nowhere_is_never_stopped() {
+    // A token standing on a wall — placed there by a Game Master, or pushed
+    // there — would otherwise be unable to move at all, because the touching
+    // rule counts its own position as a crossing.
+    let walls = scene(vec![barrier("w-1")]);
+    let standing_on_it = Vec2::new(0.0, 0.0);
+    assert!(movement_blocked_by(standing_on_it, standing_on_it, &walls).is_none());
+}
+
+#[test]
+fn a_route_is_judged_leg_by_leg_not_end_to_end() {
+    let walls = scene(vec![barrier("w-1")]);
+    // Starts and ends south of the wall, so the endpoints alone say nothing —
+    // but the middle of the route is north of it, so the token crossed twice.
+    let there_and_back = [
+        Vec2::new(-10.0, -10.0),
+        Vec2::new(-10.0, 10.0),
+        Vec2::new(10.0, -10.0),
+    ];
+    assert_eq!(
+        path_blocked_by(&there_and_back, &walls).map(|w| w.id.as_str()),
+        Some("w-1")
+    );
+    assert!(
+        movement_blocked_by(there_and_back[0], there_and_back[2], &walls).is_none(),
+        "the endpoints alone read as a legal move, which is why the path is judged"
+    );
+}
+
+#[test]
+fn a_route_that_walks_around_a_wall_is_allowed() {
+    // The other half of the same point: going the long way must not be refused
+    // just because the straight line between its ends would be.
+    let mut short_wall = barrier("w-1");
+    short_wall.x1 = -10.0;
+    short_wall.x2 = 10.0;
+    let walls = scene(vec![short_wall]);
+
+    let around = [
+        Vec2::new(0.0, -10.0),
+        Vec2::new(20.0, -10.0),
+        Vec2::new(20.0, 10.0),
+        Vec2::new(0.0, 10.0),
+    ];
+    assert!(path_blocked_by(&around, &walls).is_none());
+    assert!(
+        movement_blocked_by(around[0], around[3], &walls).is_some(),
+        "the straight line between its ends does cross, which is the whole point"
+    );
+}
+
+#[test]
+fn a_path_with_nothing_to_judge_is_not_blocked() {
+    let walls = scene(vec![barrier("w-1")]);
+    assert!(path_blocked_by(&[], &walls).is_none());
+    assert!(path_blocked_by(&[Vec2::new(0.0, -10.0)], &walls).is_none());
+}

@@ -93,6 +93,12 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20260907-091](./20260907-091-instance_configuration_is_rows.md) | Accepted | Instance Configuration Is Rows — Not the Manifest File, and Emphatically Not `instance_identity` |
 | [20260907-092](./20260907-092-operator_values_in_legal_prose.md) | Accepted | Operator Values Are Substituted Into Compiled-In Legal Prose at Render Time |
 | [20260907-093](./20260907-093-setup_finishes_at_complete_not_at_the_first_administrator.md) | Accepted | Setup Finishes At `/complete`, Not At The First Administrator |
+| [20260907-094](./20260907-094-administrator_second_factor_is_a_role_property.md) | Accepted | An Administrator's Second Factor Is a Property of the Role |
+| [20260909-076](./20260909-076-the_sharing_attestation_record.md) | Accepted | The Sharing Attestation Record |
+| [20260909-077](./20260909-077-account_standing_and_the_termination_window.md) | Accepted | Account Standing and the Termination Window |
+| [20260909-078](./20260909-078-the_operator_acknowledgement.md) | Accepted | The Operator Acknowledgement |
+| [20260909-079](./20260909-079-adoption_provenance_and_the_reach_of_a_takedown.md) | Accepted | Adoption Provenance and the Reach of a Takedown |
+| [20260911-095](./20260911-095-server_side_movement_adjudication.md) | Proposed | Server-Side Movement Adjudication |
 
 > **Note (2026-08-19):** ADRs 020–024 originally collided with an unrelated "pack system" batch that reused the same day-020 through day-024 numbers. The world-domain ADRs (020–024 above) were committed first and are documented here; the colliding pack-system ADRs were renumbered to 026–030. See `docs/SYSTEM_HOOKS_API_GUIDE.md` and ADR-036's "Related Decisions" for the corrected references.
 

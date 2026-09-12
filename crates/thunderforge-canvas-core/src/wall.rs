@@ -398,6 +398,16 @@ impl WallSet {
     pub fn vision_blocking_walls(&self) -> impl Iterator<Item = &Wall> {
         self.walls.iter().filter(|w| w.currently_blocks_vision())
     }
+
+    /// The same, for passage: only walls that stop a token right now.
+    ///
+    /// Separate from [`Self::vision_blocking_walls`] because the two questions
+    /// have different answers — a window stops an arrow and not a glance, a
+    /// curtain the reverse — and [`Blocking`] is where that distinction is
+    /// decided.
+    pub fn movement_blocking_walls(&self) -> impl Iterator<Item = &Wall> {
+        self.walls.iter().filter(|w| w.currently_blocks_movement())
+    }
 }
 
 /// The four segments of an axis-aligned room drawn between two opposite
@@ -501,6 +511,53 @@ pub fn is_visible(observer: Vec2, target: Vec2, walls: &WallSet) -> bool {
         }
     }
     true
+}
+
+/// The wall in the way of a move from `from` to `to`, if there is one.
+///
+/// The movement counterpart of [`is_visible`], and deliberately the same
+/// geometry: one `segments_intersect`, one door rule, so "a wall is between
+/// these two points" cannot mean one thing to sight and another to passage.
+///
+/// Returns the wall rather than a bare `false` because both callers need to
+/// name it — the server refuses a move and says what stopped it, and the
+/// engine shows the stop at the wall it happened on.
+///
+/// # What counts as crossing
+///
+/// Touching counts. A move that ends exactly on a wall, or passes exactly
+/// through the point where two walls meet, is refused (spec 045 FR-016). A
+/// door-frame corner is the case that matters: treating it as a gap would let
+/// a token slip diagonally between two walls that meet, which is the oldest
+/// way through a locked room there is.
+///
+/// A move that goes nowhere is never blocked, whatever it is standing on. A
+/// token pushed against a wall, or placed on one by a Game Master, would
+/// otherwise be unable to move at all — every move it made would start from a
+/// point the touching rule already counts as a crossing.
+pub fn movement_blocked_by<'a>(from: Vec2, to: Vec2, walls: &'a WallSet) -> Option<&'a Wall> {
+    if from == to {
+        return None;
+    }
+    walls
+        .movement_blocking_walls()
+        .find(|wall| segments_intersect(from, to, wall.start(), wall.end()))
+}
+
+/// The first wall in the way anywhere along a route, if there is one.
+///
+/// A route is judged leg by leg, because walking around a wall and teleporting
+/// through it end in the same place: the endpoints alone cannot tell them
+/// apart, and the endpoints are all a position update carries.
+///
+/// Fewer than two points is not a route and is not blocked — there is no leg
+/// to judge. The caller decides what an empty path means; this does not
+/// silently treat it as a straight line, because a client that sent no path
+/// and a client that sent a deliberate one should not be indistinguishable
+/// here.
+pub fn path_blocked_by<'a>(path: &[Vec2], walls: &'a WallSet) -> Option<&'a Wall> {
+    path.windows(2)
+        .find_map(|leg| movement_blocked_by(leg[0], leg[1], walls))
 }
 
 #[cfg(test)]

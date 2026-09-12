@@ -20,10 +20,10 @@ every web phase runs `tsc --noEmit` of its own.
 
 ## Phase 2: Foundational (blocks Phase 5)
 
-- [ ] T003 Add a movement-blocking crossing test to `crates/thunderforge-canvas-core/src/wall.rs`, beside `is_visible`: given two points and a `WallSet`, report whether the segment properly crosses a wall with `blocks_movement` or a closed door
-- [ ] T004 [P] Unit-test that test in `crates/thunderforge-canvas-core/src/wall_tests.rs`: a crossing, a move alongside a wall, a move through an open door, a move through a `blocks_movement: false` wall, and a move through the point where two walls meet (which counts as crossing)
-- [ ] T005 [P] Write `docs/adrs/<date>-0XX-server_side_movement_adjudication.md`: the server judges a player's move, the engine shows the stop, the geometry lives in one crate, and a Game Master is never judged (spec decision 1)
-- [ ] T006 Verify the crate: `cargo test -p thunderforge-canvas-core`
+- [X] T003 `movement_blocked_by` and `path_blocked_by` in `crates/thunderforge-canvas-core/src/wall.rs`, beside `is_visible` and sharing its `segments_intersect` and door rule, plus `WallSet::movement_blocking_walls`. They return **the wall**, not a bare `false`: the server has to name what refused the move and the engine has to draw the stop somewhere
+- [X] T004 [P] Ten tests in `wall_tests.rs`, including the two that carry the design: a route is judged leg by leg (a there-and-back whose *endpoints* read as legal), and walking around a wall is allowed (whose straight line does not). Also: the joint where two walls meet, and a move that goes nowhere — a token standing on a wall would otherwise be frozen, because the touching rule counts its own position as a crossing
+- [X] T005 [P] `docs/adrs/20260911-095-server_side_movement_adjudication.md`, PROPOSED. Both sides judge from one shared test, the server's answer counts, and a Game Master is never judged (spec decision 1). Five accepted ADRs were missing from `docs/adrs/README.md`; added with it
+- [X] T006 `cargo test -p thunderforge_canvas_core`: 405 passed, 0 failed (the package id is underscored, not hyphenated)
 
 ## Phase 3 (US3): A door change reaches every board
 
