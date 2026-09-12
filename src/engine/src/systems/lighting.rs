@@ -19,7 +19,7 @@ use crate::resources::{
     TokenVision, WallSet,
 };
 use crate::systems::lighting_vision::{
-    PartyEyes, ViewerToken, mirror_hidden_tokens, mirror_marked_tokens,
+    PartyEyes, ViewerToken, mirror_hidden_tokens, mirror_marked_tokens, mirror_token_vision,
 };
 use crate::{ActiveWorld, TokenIdentity, emit_event};
 use thunderforge_canvas_core::vision::{
@@ -705,6 +705,22 @@ pub(crate) fn apply_light_illumination(
     for (transform, identity, _) in token_positions.iter() {
         positions.insert(identity.0.clone(), transform.translation.truncate());
     }
+
+    // What each token can see in the dark, mirrored for the probe. Reported
+    // from here because this is where a vision profile is actually read —
+    // a probe reading the resource directly could say a profile arrived when
+    // nothing ever consults it.
+    mirror_token_vision(
+        token_positions
+            .iter()
+            .map(|(_, identity, vision)| {
+                (
+                    identity.0.clone(),
+                    vision.map_or(0.0, |profile| profile.0.darkvision),
+                )
+            })
+            .collect(),
+    );
 
     let lights: Vec<ResolvedLight> = light_set
         .lights()

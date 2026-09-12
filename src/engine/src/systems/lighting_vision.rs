@@ -138,6 +138,48 @@ pub(crate) fn mirror_marked_tokens(mut marked: Vec<String>) {
     }
 }
 
+static TOKEN_VISION: std::sync::OnceLock<std::sync::Mutex<String>> = std::sync::OnceLock::new();
+
+pub(crate) fn mirror_token_vision(vision: Vec<(String, f32)>) {
+    let mut sorted = vision;
+    sorted.sort_by(|a, b| a.0.cmp(&b.0));
+    let json = serde_json::Value::Object(
+        sorted
+            .into_iter()
+            .map(|(id, range)| {
+                (
+                    id,
+                    serde_json::Number::from_f64(f64::from(range))
+                        .map(serde_json::Value::Number)
+                        .unwrap_or(serde_json::Value::Null),
+                )
+            })
+            .collect(),
+    )
+    .to_string();
+    let slot = TOKEN_VISION.get_or_init(|| std::sync::Mutex::new(String::from("{}")));
+    if let Ok(mut held) = slot.lock()
+        && *held != json
+    {
+        *held = json;
+    }
+}
+
+/// How far each token sees in darkness, as a JSON object of id to world units.
+///
+/// Spec 045 US6. The engine is the only thing that can answer whether the
+/// chain worked: a game system declares darkvision, the server resolves it
+/// from a character's sheet, the web hands it over, and this says what
+/// arrived. Asking the server instead would prove only that the server can
+/// still read its own manifest.
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn token_vision() -> String {
+    TOKEN_VISION
+        .get()
+        .and_then(|slot| slot.lock().ok().map(|held| held.clone()))
+        .unwrap_or_else(|| String::from("{}"))
+}
+
 /// The ids of the tokens marked on a Game Master's board, as a JSON array.
 ///
 /// FR-033's other half. `hidden_tokens` answers "what does this player's

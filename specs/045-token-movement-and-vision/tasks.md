@@ -120,15 +120,8 @@ character without it is shown neither.
 - [X] T045 [US6] `GridUnits::cells` is the one place, with 16 crate tests. The scene's `grid_size` turns out to be **pixels** per cell, which is the only thing it has ever been despite reading like a measurement; `cells_to_world` is where cells become drawable
 - [X] T046 [US6] `set_token_vision` reached from the token sync on scene load and from the event fan-out on a sheet change. Zero is sent for a token the server omitted, or a character who *lost* their darkvision would keep it until a reload
 - [X] T046a [US6] **A sheet edit announced nothing at all**, so FR-067 had no channel to arrive on. Sheet changes now carry world-event code 26 — not the token code, for the reason phase 1 learned with doors: announcing a change on a channel describing something else reaches the wrong listeners. A sheet is not a token; a character may have no token, or several
-- [ ] T047 [P] [US6] Add a playtest step to `apps/web/playtest/combat-5e.playtest.ts` for the independent test above
-- [ ] T048 [US6] Verify and prove: `cargo check -p thunderforge`, engine check, `tsc --noEmit`, `pnpm playtest --only=combat-5e`
-
-> **Phase 7 is built and unit-proven, not yet table-proven.** 12 checks green,
-> `tsc --noEmit` clean, 1378 server tests and 16 crate tests pass. But the
-> chain server → web → engine has **never been run end to end**: no test has
-> put a dwarf in a dark room and watched them see further than a human. That
-> is exactly the gap that bit phase 4, where the engine emitted an event no
-> web module handled and every unit test still passed. T047 is what closes it.
+- [X] T047 [P] [US6] `a dwarf's darkvision reaches further than a human's` in `combat-5e.playtest.ts`. Asked of the **engine**, not the server: a server answering correctly proves only that it can read its own manifest, and the point of the step is the chain — manifest, sheet, server, web, engine. Needed a new probe, `token_vision`, mirrored from the lighting pass itself so it cannot report a profile that arrived and is never consulted
+- [X] T048 [US6] Proved: 12 checks green, `tsc --noEmit` clean, and the step passes — Aria's 60 feet arrive as 12 cells of world units, Brom's silent sheet gives him zero rather than anyone else's sight, and granting him darkvision mid-session reaches the board with no reload (FR-067). The scenario still reports its 8 pre-existing FINDINGs, which is what it is for and unchanged by this
 
 ## Phase 8 (US7): A map that remembers
 

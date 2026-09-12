@@ -14,6 +14,9 @@ import {
   rosterOn,
   roundOn,
   setAbilityScores,
+  setTraits,
+  darkvisionOn,
+  gridSizeOf,
   setDisclosure,
   setHitPoints,
   settle,
@@ -187,6 +190,57 @@ test("a Game Master runs a 5e fight for two players", async ({
           .toBe(OGRE_SCALE);
       }
       await snapshot(table, "1 · the guardroom");
+    });
+
+    await test.step("a dwarf's darkvision reaches further than a human's", async () => {
+      // Spec 045 US6 and owner decision 2: the *game system* says how its
+      // creatures see. D&D 5e's manifest declares where darkvision lives on a
+      // character, the server resolves it from that character's own sheet,
+      // and the engine is handed the answer in world units.
+      //
+      // Asked of the engine rather than of the server, because the server
+      // answering correctly proves only that it can read its own manifest.
+      // The whole point of this step is the chain: manifest, sheet, server,
+      // web, engine. That chain had never been run end to end.
+      await setTraits(table, cast.Aria.actorId, {
+        class: "fighter",
+        level: 3,
+        darkvision: 60,
+      });
+      await setTraits(table, cast.Brom.actorId, { class: "wizard", level: 3 });
+
+      // A 5-foot square at this scene's grid: sixty feet is twelve squares.
+      const expected = 12 * (await gridSizeOf(table));
+      await expect
+        .poll(() => darkvisionOn(table.gm, cast.Aria.tokenId), {
+          timeout: 20_000,
+          message:
+            "Aria's sixty feet of darkvision should reach the engine as " +
+            `${expected} world units`,
+        })
+        .toBeCloseTo(expected, 0);
+
+      expect(
+        await darkvisionOn(table.gm, cast.Brom.tokenId),
+        "and a character whose sheet says nothing about darkvision sees by " +
+          "the default rules, rather than inheriting anybody else's sight",
+      ).toBe(0);
+
+      // FR-067: a sheet edit reaches every board. Nothing announced one at
+      // all before spec 045 gave sheet changes a world event of their own.
+      await setTraits(table, cast.Brom.actorId, {
+        class: "wizard",
+        level: 3,
+        darkvision: 30,
+      });
+      await expect
+        .poll(() => darkvisionOn(table.gm, cast.Brom.tokenId), {
+          timeout: 20_000,
+          message:
+            "granting Brom darkvision on his sheet reaches the board without " +
+            "a reload (FR-067)",
+        })
+        .toBeCloseTo(6 * (await gridSizeOf(table)), 0);
     });
 
     await test.step("everyone rolls for initiative", async () => {

@@ -131,6 +131,7 @@ function installEngineProbe(wasm: BevyWasmModule): void {
     .token_nameplates;
   const hiddenTokens = (wasm as { hidden_tokens?: () => string }).hidden_tokens;
   const markedTokens = (wasm as { marked_tokens?: () => string }).marked_tokens;
+  const tokenVision = (wasm as { token_vision?: () => string }).token_vision;
   const movementState = (wasm as { movement_state?: () => string })
     .movement_state;
   (window as unknown as Record<string, unknown>).__engineProbe = {
@@ -157,6 +158,17 @@ function installEngineProbe(wasm: BevyWasmModule): void {
     // empty on a player's board.
     markedTokens: (): string[] =>
       markedTokens ? (JSON.parse(markedTokens()) as string[]) : [],
+    // Spec 045 US6: how far each token sees in darkness, in world units.
+    // The only honest end of the chain — a system declares darkvision, the
+    // server resolves it from a sheet, the web hands it over, and this says
+    // what the engine actually received.
+    tokenVision: (tokenId: string): number | null => {
+      if (!tokenVision) {
+        return null;
+      }
+      const all = JSON.parse(tokenVision()) as Record<string, number>;
+      return all[tokenId] ?? null;
+    },
     // Spec 045: what this client believes about moving — which token its
     // player may move, whether the engine has found it yet, how many are
     // tagged, and whether the scene has a grid to step on. A keypress that

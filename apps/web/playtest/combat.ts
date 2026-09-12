@@ -226,6 +226,67 @@ export async function setAbilityScores(
   );
 }
 
+/**
+ * Set a character's traits — where D&D 5e keeps darkvision (spec 045 US6).
+ *
+ * The same mutation `setAbilityScores` uses, on the slot the system's own
+ * `vision` block names. Written through the product's API rather than into
+ * the database, so what the playtest proves is what a Game Master editing a
+ * sheet would get.
+ */
+export async function setTraits(
+  table: Table,
+  actorId: string,
+  traits: Record<string, unknown>,
+): Promise<void> {
+  await must(
+    table.gm,
+    `mutation ($input: GraphQLUpdateActorSystemDataInput!) {
+      updateActorSystemData(input: $input) { id }
+    }`,
+    {
+      input: {
+        actorId,
+        gameSystemId: table.system,
+        dataType: "trait_data",
+        data: traits,
+      },
+    },
+  );
+}
+
+/**
+ * The scene's grid size, in world units per cell.
+ *
+ * Read from the scene rather than assumed, because a distance a game system
+ * quotes in feet only becomes a distance on a board through this number —
+ * which is what spec 045 US6 converts through.
+ */
+export async function gridSizeOf(table: Table): Promise<number> {
+  const { scene } = await must<{ scene: { gridSize: number } }>(
+    table.gm,
+    `query ($sceneId: UUID!) { scene(sceneId: $sceneId) { gridSize } }`,
+    { sceneId: table.sceneId },
+  );
+  return scene.gridSize;
+}
+
+/** What this client's engine believes one token can see, in world units. */
+export async function darkvisionOn(
+  page: Page,
+  tokenId: string,
+): Promise<number | null> {
+  return page.evaluate(
+    (tokenId) =>
+      (
+        window as unknown as {
+          __engineProbe?: { tokenVision?: (id: string) => number | null };
+        }
+      ).__engineProbe?.tokenVision?.(tokenId) ?? null,
+    tokenId,
+  );
+}
+
 export interface ActorSystemData {
   abilityData: Record<string, unknown> | null;
   resourceData: Record<string, number> | null;
