@@ -42,13 +42,20 @@ fails the build". Removing them would make the spec shorter and the
 constraints unenforceable. This matches the house pattern in specs 045, 047
 and 048.
 
-**The three open questions carry stated defaults.** Rather than leaving
+**The open questions carry stated defaults.** Rather than leaving
 [NEEDS CLARIFICATION] markers, each undecided point has a default written into
-the requirements (FR-051 commercial-by-default, the Assumptions entry refusing
-image-only books, removal-without-versioning) and a table under "Questions for
-the owner". The spec is therefore complete and testable as written, and the
-owner's answers narrow it rather than unblock it. This is the pattern specs
-046, 047 and 048 follow.
+the requirements (the Assumptions entry refusing image-only books,
+removal-without-versioning) and a table under "Questions for the owner". The
+spec is therefore complete and testable as written, and the owner's answers
+narrow it rather than unblock it. This is the pattern specs 046, 047 and 048
+follow.
+
+**Q1 was withdrawn rather than answered, on 2026-09-12.** It asked how
+"commercial" should be determined. Decision 4 replaced the licence test with
+an origin test — uploaded content is never shareable, authored content is —
+which removes the determination entirely. A question with no answer because it
+has no question is struck, not left open; the requirement that depended on it
+(FR-051) now records origin automatically instead of asking anybody.
 
 **Numbers in Success Criteria are not yet all measured.** SC-001 and SC-003
 are stated against the 246-book library that already exists and has already

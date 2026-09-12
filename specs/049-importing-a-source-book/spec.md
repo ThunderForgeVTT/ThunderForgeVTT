@@ -162,35 +162,44 @@ book it came from, and confirm removing one leaves the other intact.
 
 ---
 
-### User Story 4 - Commercial content stays at this table (Priority: P4)
+### User Story 4 - Uploaded content stays at your tables (Priority: P4)
 
 The Game Master tries to share the Dungeon Master's Guide compendium, or to
 publish something out of it as a collection. They are refused, and the refusal
-says why: it came from a commercial work and cannot be shared.
+says why: this was read out of a book they uploaded, and uploaded content does
+not leave the account that uploaded it.
 
 **Why this priority**: The owner's rule, already recorded in specs 047 and
 048 — *"In real life I can show my book to the whole table, but I cannot have
 my book and lend it out."* The table may read it over the owner's shoulder;
-the book does not travel. Enforcing that requires provenance to exist, which
-is why the previous story records where everything came from.
+the book does not travel.
 
-**Independent Test**: Import a book marked commercial, attempt every route out
-of the world — share, publish, adopt into a collection, export — and confirm
-each is refused with a reason naming the commercial source.
+What makes it enforceable is that the test is **origin, not licence**. Nobody
+has to judge whether a work is commercial, and nobody can get that judgment
+wrong: a piece of content either came through the authoring tools or came out
+of an upload, and the system knows which with certainty.
+
+**Independent Test**: Import any book, attempt every route out of the account
+— share, publish, adopt into a collection, export — and confirm each is
+refused with a reason naming the upload. Then author content by hand and
+confirm sharing it is allowed.
 
 **Acceptance Scenarios**:
 
-1. **Given** a compendium whose source is commercial, **When** the Game Master
-   attempts to share, publish, or adopt it into a collection, **Then** each is
-   refused and the refusal names the commercial source as the reason.
-2. **Given** the same compendium, **When** it is used inside the world that
-   imported it, **Then** it works exactly as any other content does.
-3. **Given** an entry derived from commercial content, **When** it is placed
-   inside a collection by any route, **Then** that route is refused too — the
-   restriction follows the content, not just the bucket.
-4. **Given** a compendium from an openly licensed source, **When** the Game
-   Master shares it, **Then** it is allowed, and the licence's attribution is
-   carried and shown where spec 016 requires.
+1. **Given** any uploaded compendium, **When** the Game Master attempts to
+   share, publish, export, or adopt it into a collection, **Then** each is
+   refused and the refusal names its origin as the reason.
+2. **Given** the same compendium, **When** it is used in a world the importing
+   account owns, **Then** it works exactly as any other content does.
+3. **Given** a world's change to an uploaded entry, **When** it is placed into
+   a collection by any route, **Then** that route is refused too — the
+   restriction follows what the content is derived from.
+4. **Given** a document with an open licence, **When** it is uploaded, **Then**
+   what comes out of it is still unshareable, and the refusal names the two
+   routes that remain: author it, or propose it as a system pack.
+5. **Given** content authored in ThunderForge by hand, **When** the Game
+   Master shares it, **Then** it is allowed — the rule restricts an origin,
+   not a subject.
 
 ---
 
@@ -374,21 +383,37 @@ correct content, and confirm the system registry check still passes.
 
 **Provenance, and what may not be shared**
 
-- **FR-050**: Every compendium MUST record whether its source is **commercial**
-  or **openly licensed**, at import, and MUST NOT hold content whose source is
-  unrecorded.
-- **FR-051**: The determination MUST be presented to the Game Master at import
-  and MUST be recorded as an answer, not a guess. *(How it is arrived at is
-  Q1 for the owner; the default this spec assumes is that a Game Master
-  declares it, defaulting to commercial.)*
-- **FR-052**: A compendium recorded as commercial MUST have sharing,
-  publishing and collection-adoption **disabled**.
-- **FR-053**: Each refusal MUST say why: that this came from a commercial work
-  and cannot be shared.
+- **FR-050**: Whether content may be shared MUST be decided by **where it came
+  from**, not by what licence it carries. There are two origins and the line
+  between them is mechanical:
+  - **Authored** — made in ThunderForge by a person, through the authoring
+    tools. Shareable, and the raw material of a collection (spec 026).
+  - **Uploaded** — read out of a document somebody supplied. **Never**
+    shareable, published, exported, or adopted into a collection.
+- **FR-050a**: This MUST NOT require anybody to determine whether a work is
+  commercial. The system already knows with certainty which of its two paths a
+  piece of content arrived by, and that is the whole test.
+- **FR-050b**: Content shipped in a **system pack** is a third thing and is
+  unaffected. It is distributed by the platform under the pack's own `legal`
+  block (spec 016), not uploaded by a user.
+- **FR-051**: Every compendium MUST record its origin at import, automatically.
+  A compendium produced by this spec is **uploaded**, always, with no
+  question asked and no answer to get wrong.
+- **FR-052**: An uploaded compendium MUST have sharing, publishing, export and
+  collection-adoption **disabled**, regardless of the licence of the document
+  it came from.
+- **FR-053**: Each refusal MUST say why: that this content was read out of an
+  uploaded book, and uploaded content stays with the account that uploaded it.
+  Where the source is known to be commercial the refusal MAY say so as well,
+  but MUST NOT depend on knowing it.
 - **FR-054**: The restriction MUST follow individual entries, not only the
-  bucket. An entry copied, adapted or referenced out of a commercial
-  compendium MUST carry the same restriction.
-- **FR-055**: A commercial compendium MUST be fully usable in **every world the
+  bucket, and MUST follow anything **derived** from them. A world's change to
+  an uploaded entry is a change to uploaded content and is not shareable — a
+  mutation has no meaning apart from the thing it mutates.
+- **FR-054a**: A collection MUST NOT be able to contain uploaded content by
+  any route. This MUST be enforced as an invariant, not as a check on the
+  routes known today.
+- **FR-055**: An uploaded compendium MUST be fully usable in **every world the
   importing account owns** — placed on scenes, handed to players at those
   tables, used in play. One person's copy of a book serves all of that
   person's tables; that is still reading it over their shoulder, and it is
@@ -396,11 +421,19 @@ correct content, and confirm the system registry check still passes.
 - **FR-055a**: It MUST NOT become inheritable by any **other** account,
   including a co-Game Master of a world it was inherited into. Being able to
   use content at a table is not being able to take it home.
-- **FR-056**: An openly licensed compendium MUST be shareable, and the
-  licence's attribution MUST be carried with it and shown where spec 016
-  requires.
-- **FR-057**: Provenance MUST NOT be editable into "open" after the fact by
-  anybody but an instance administrator, and any such change MUST be recorded.
+- **FR-056**: An openly licensed document read in by a user is still uploaded
+  content and MUST NOT become shareable on the strength of its licence. Where
+  its attribution requirements are known they MUST still be carried and shown
+  as spec 016 requires — a licence's obligations survive even where its
+  permissions are not being exercised.
+- **FR-056a**: This spec accepts a known cost: a person who uploads a document
+  they wrote themselves, or an openly licensed one, cannot share what comes out
+  of it. The two routes that remain open MUST be named where the refusal is
+  shown — author it through the authoring tools, which produces shareable
+  content, or propose it as a system pack.
+- **FR-057**: Origin MUST NOT be editable. There is no path, for any role, that
+  turns uploaded content into authored content. A value that can be flipped is
+  a value that will be flipped.
 
 **Proof**
 
@@ -412,8 +445,10 @@ correct content, and confirm the system registry check still passes.
   — by observing the network, not by reading the code.
 - **FR-062**: An end-to-end test MUST prove an import applies completely or
   not at all, by failing one partway.
-- **FR-063**: An end-to-end test MUST prove that sharing a commercial
-  compendium is refused, and that sharing an openly licensed one is not.
+- **FR-063**: An end-to-end test MUST prove that sharing an uploaded
+  compendium is refused, that sharing a world's change to one of its entries
+  is refused, and that sharing content authored by hand is not. The licence of
+  the uploaded document MUST make no difference to any of the three.
 - **FR-064**: An end-to-end test MUST prove a second system imports through
   the same code path as the first.
 - **FR-065**: Unit tests alone MUST NOT be accepted as proof for any of the
@@ -430,9 +465,9 @@ correct content, and confirm the system registry check still passes.
   compendium it belongs to.
 - **Content pattern**: a system pack's declaration of what anchors a kind of
   content in that system and which fields to read from it.
-- **Provenance**: where a compendium's content came from, and therefore
-  whether it may leave the world. Commercial or openly licensed, recorded at
-  import, not inferred later.
+- **Origin**: which of two paths a piece of content arrived by — **authored**
+  or **uploaded** — and therefore whether it may be shared. Recorded
+  automatically, never declared, never editable.
 - **Import record**: who imported what, when, from which file, and what it
   wrote — the thing a removal or a rollback works against.
 
@@ -460,9 +495,10 @@ correct content, and confirm the system registry check still passes.
   least once every two seconds throughout.
 - **SC-007**: An import that fails partway leaves the world byte-identical to
   its state before the import, in 100% of induced-failure runs.
-- **SC-008**: Every route out of a world — share, publish, adopt, export —
-  refuses commercial content, with a reason naming the commercial source, in
-  100% of attempts.
+- **SC-008**: Every route out of an account — share, publish, adopt, export —
+  refuses uploaded content and anything derived from it, with a reason naming
+  its origin, in 100% of attempts. Authored content is refused by none of
+  them.
 - **SC-009**: Adding a second game system's book support requires changes to
   that system's pack only, and the system registry check passes unchanged.
 - **SC-010**: A Game Master can tell which book any piece of imported content
@@ -470,10 +506,10 @@ correct content, and confirm the system registry check still passes.
 
 ## Assumptions
 
-- **Provenance defaults to commercial.** Where it is not determined
-  otherwise, a book is assumed commercial and therefore unshareable. The
-  expensive mistake is the other way round, so the default takes the cheap
-  one. Q1 may replace this.
+- **Sharing is decided by origin, not licence.** Uploaded content is never
+  shareable; authored content is. Nothing needs to determine whether a work is
+  commercial, which is why there is no longer a question about how to. See
+  decision 4.
 - **Image-only books are refused, not OCR'd.** 51 of 246 measured books have
   no text layer. Optical character recognition is out of scope for this spec;
   those books are refused with that as the reason. Q2 asks whether that is
@@ -545,20 +581,42 @@ correct content, and confirm the system registry check still passes.
 3. **Account deletion takes the compendiums.** Consistent with what already
    happens to worlds, and now simply true rather than true-with-a-caveat.
 
+4. **Sharing is decided by origin, not by licence** (owner, closing Q1 by
+   removing it).
+
+   There are two kinds of content and the line between them is mechanical:
+
+   - **Authored** — made in ThunderForge through the authoring tools. May be
+     shared, and is what a collection is made of.
+   - **Uploaded** — read out of a document somebody supplied. Never shared.
+
+   The rule this replaces asked a Game Master to declare whether a book was
+   commercial, with document detection as a possible assist. That rule needed
+   a judgment, made by the person least motivated to answer strictly, against
+   PDF metadata that is often absent or wrong, and it could be got wrong in
+   the direction that costs the most. This rule needs no judgment from anyone:
+   the system already knows which of its two paths a piece of content arrived
+   by, with certainty, and cannot be told otherwise.
+
+   It is also simpler to enforce, because it becomes an invariant rather than
+   a check. A collection may not contain uploaded content **by construction**,
+   rather than because every route into one remembered to ask.
+
+   Content shipped in a **system pack** is a third thing and is untouched — it
+   is distributed by the platform under the pack's own `legal` block (spec
+   016), not uploaded by a user.
+
+   **The known cost, recorded rather than discovered**: a person who uploads a
+   document they wrote themselves, or an openly licensed one, cannot share
+   what comes out of it. Two routes remain open and the refusal names them —
+   author it through the authoring tools, or propose it as a system pack. That
+   is a real loss, and it is smaller than the cost of any rule that requires
+   somebody to correctly classify a PDF.
+
 ## Questions for the owner
 
-### Q1 — How is "commercial" determined?
-
-**Context**: FR-050 to FR-053. A rule about what may be shared is
-unenforceable against content that cannot say where it came from, and this is
-the one input to that rule with no obvious source.
-
-| Option | Answer | Implications |
-|--------|--------|--------------|
-| A | The Game Master declares it at import, defaulting to commercial | Simplest and honest — the person holding the book knows. Depends on them answering truthfully, and an unshareable default costs nothing to correct. |
-| B | Derived from the system pack's `legal` block | Automatic and already exists for SRD content. Says nothing about a third-party book read into a 5e world, which is most of them. |
-| C | Detected from the document — publisher metadata, a copyright page, an OGL/CC notice | Catches the honest majority without asking. Detection that is wrong in the permissive direction is exactly the failure that matters, and PDF metadata is frequently absent or wrong. |
-| D | A declares, with C shown as a suggestion they can accept or override | Costs one question and puts the evidence in front of the person answering it. More to build. |
+*(Q1 — how "commercial" is determined — was withdrawn on 2026-09-12. It has no
+answer because it has no question: see decision 4.)*
 
 ### Q2 — What happens to a book with no text layer?
 

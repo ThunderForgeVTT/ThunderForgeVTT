@@ -49,6 +49,18 @@ library later holds authored content) each have a default written into the
 requirements or assumptions, so the spec is testable as it stands. This is the
 pattern specs 046 through 049 follow.
 
+**Q1 was re-scoped by decision 3, not answered.** The origin rule made its
+risky option safe: before it, keeping a world's edits after a book is switched
+off leaked provenance, and the safe variant was expensive. Now origin travels
+with each entry by construction, so the question is purely about whether work
+should survive a switch — a product question, not a safety one. The options
+table says so rather than leaving the old implications standing.
+
+**One requirement exists to stop a claim being taken on trust.** FR-086 asks
+for evidence that switching a book off leaves no copy behind. The whole
+storage argument rests on nothing ever being copied into a world, and that is
+exactly the sort of property that quietly stops being true.
+
 **Q2's default is the spec's known weak point and is not hidden.** Identity by
 kind and name breaks on renames. That is stated in Edge Cases, in FR-025, and
 in the question itself, rather than being discovered during implementation.

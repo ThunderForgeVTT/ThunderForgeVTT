@@ -125,31 +125,46 @@ in one, and confirm the other is unchanged and that the base is unchanged.
 
 ---
 
-### User Story 3 - Start a world from your own shelf (Priority: P3)
+### User Story 3 - A book list on the world, like a mod list (Priority: P3)
 
-A Game Master creates a new world, chooses a game system, and is offered the
-compendiums on their shelf that match it. They tick three, and the world
-begins with content already in it — monsters to drop on a map, spells to hand
-out, items to place — rather than empty.
+A world shows its books down the left: which compendiums are switched on for
+this table. The Game Master picks from the ones on their shelf that match the
+world's system, ticks three, and the world's content is simply *there* —
+fetched from the library and shown, not copied into the world.
 
-**Why this priority**: It is the payoff the Game Master actually feels. The
-first two stories save the operator disk and save the Game Master a re-import;
-this one is the reason they would look at the feature at all.
+Players see the same list, read only. They cannot change it, and they do not
+need to: it tells them what this table is running, the way a mod list does.
 
-**Independent Test**: Create a world on a system, confirm only compendiums
-matching that system are offered, seed from two of them, and confirm the new
-world opens with their content present.
+Turning one off takes its content out of the world again. Nothing was
+duplicated going in and nothing is left behind coming out.
+
+**Why this priority**: It is the payoff the Game Master actually feels, and it
+is also what makes the first two stories coherent. There is no "seeding" step
+at world creation and no separate "inherit later" flow — there is one list,
+and it can be ticked at creation or at any point after. Two routes to the same
+state is two things to keep agreeing with each other.
+
+**Independent Test**: Create a world, confirm only compendiums matching its
+system are offered, switch two on, confirm their content is present and that
+stored content did not grow, switch one off and confirm its content is gone.
+Then open the world as a player and confirm the list is visible and read-only.
 
 **Acceptance Scenarios**:
 
-1. **Given** a Game Master is creating a world, **When** they choose a system,
-   **Then** only compendiums read as that system are offered.
-2. **Given** they select some, **When** the world is created, **Then** their
-   content is present without a further step.
-3. **Given** they select none, **When** the world is created, **Then** it is
-   empty, and inheriting later is still available.
-4. **Given** an existing world, **When** the Game Master inherits a compendium
-   into it, **Then** it behaves exactly as it would have at creation.
+1. **Given** a Game Master is in a world, **When** they open the book list,
+   **Then** it shows which of their compendiums are on for this world and
+   offers those on their shelf that match its system.
+2. **Given** they switch a compendium on, **When** the world reads content,
+   **Then** that compendium's entries are there, fetched rather than copied.
+3. **Given** a compendium is switched on in a second world, **When** stored
+   content is measured, **Then** it has not grown.
+4. **Given** a player opens the world, **When** they view the book list,
+   **Then** they see which books are on and can change nothing.
+5. **Given** a compendium is switched off, **When** the world reads content,
+   **Then** its entries are gone and no copy of them remains in the world.
+6. **Given** a world is being created, **When** the Game Master ticks
+   compendiums during creation, **Then** the result is identical to creating
+   it empty and ticking the same ones afterwards.
 
 ---
 
@@ -236,6 +251,16 @@ that any that cannot be re-applied are reported rather than dropped.
   weak point of the identity rule and is stated rather than hidden.
 - **A compendium inherited by no world at all.** It stays on the shelf. A
   library is a shelf, not a cache.
+- **A book switched off mid-session.** Because content is fetched rather than
+  copied, switching a book off takes its content out from under a live table —
+  a creature standing on a scene, an item in a player's hands. This is the
+  price of not copying, and it MUST be paid visibly: what is in use is named
+  before the switch takes effect, never discovered afterwards by a player
+  whose sword vanished.
+- **A player's client holding fetched content when it is switched off.** What
+  a client was delivered is not a second copy that outlives the decision. The
+  existing rule stands: content the world does not serve is not delivered, and
+  an attempt to use what was withdrawn is refused by the server.
 - **A delta that grows larger than the base.** Legitimate — a world can
   rewrite everything it inherited. Nothing should constrain it below the
   bounds spec 049 already sets.
@@ -302,16 +327,23 @@ that any that cannot be re-applied are reported rather than dropped.
 - **FR-028**: Removing a world MUST remove its deltas and MUST NOT affect the
   base or any other world.
 
-**Seeding a new world**
+**The book list**
 
-- **FR-030**: Creating a world MUST offer the compendiums on the creator's
-  shelf that match the world's chosen system.
-- **FR-031**: Compendiums selected at creation MUST be inherited as part of
-  creating the world, with no further step.
-- **FR-032**: Creating a world with none selected MUST be allowed and MUST
-  leave inheriting available afterwards.
-- **FR-033**: Seeding at creation and inheriting later MUST produce the same
-  state. Two routes to two different outcomes is a defect.
+- **FR-030**: A world MUST show the compendiums switched on for it, and MUST
+  offer the Game Master those on their shelf that match its system.
+- **FR-031**: Switching a compendium on MUST make its content available in the
+  world by **fetching it**, and MUST NOT copy it into the world. There is no
+  seeding step and no import-into-world step; the list is the mechanism.
+- **FR-032**: Switching one off MUST remove its content from the world and
+  MUST leave no copy behind.
+- **FR-033**: Ticking compendiums while creating a world and switching them on
+  afterwards MUST produce the same state. There MUST be one mechanism, not a
+  creation path and a separate later path.
+- **FR-034**: A world created with none switched on MUST be allowed.
+- **FR-035**: **Players MUST be able to see the list** — which books this table
+  is running — and MUST NOT be able to change it.
+- **FR-036**: The list MUST show a book's name and nothing that amounts to its
+  content. Naming a book is not reproducing it.
 
 **System compatibility**
 
@@ -324,17 +356,27 @@ that any that cannot be re-applied are reported rather than dropped.
 
 **What may not leave**
 
-- **FR-050**: Spec 049's provenance rules MUST hold at every point here. A
-  commercial compendium MUST NOT be shareable, publishable, or adoptable into
-  a collection, from the library or from any world that inherited it.
-- **FR-051**: Inheriting into the owner's own world MUST NOT count as sharing.
-  One person's copy serves all of that person's tables.
-- **FR-052**: A refusal MUST say why, naming the commercial source, as spec
-  049 FR-053 requires.
-- **FR-053**: The content agreement MUST be shown on every import and MUST
+- **FR-050**: Spec 049's origin rule MUST hold at every point here. Everything
+  in a library is **uploaded** content, and MUST NOT be shareable,
+  publishable, exportable, or adoptable into a collection — from the library
+  or from any world that switched it on.
+- **FR-051**: Switching a compendium on in the owner's own world MUST NOT
+  count as sharing. One person's copy serves all of that person's tables.
+- **FR-052**: A world's **delta** over uploaded content MUST inherit its
+  origin. A changed sword is a change to an uploaded sword; a mutation has no
+  meaning apart from the thing it mutates, and MUST NOT become shareable by
+  being edited.
+- **FR-052a**: A world-only **addition** — content authored by hand in the
+  world, sitting alongside what it inherited rather than modifying it — is
+  authored content and MUST remain shareable. The delta's three forms do not
+  all carry the same origin, and the difference MUST be tracked per entry.
+- **FR-053**: A refusal MUST say why, naming the origin, as spec 049 FR-053
+  requires.
+- **FR-054**: The content agreement MUST be shown on every import and MUST
   state what is true under this architecture: that the content is for that
-  person and their games, that it is not shared between users at any point,
-  and that deleting it deletes it.
+  person and their games, that it is never shared between users at any point,
+  and that deleting it deletes it — with no shared copy retained behind the
+  scenes, because there is none.
 
 **Deletion**
 
@@ -374,7 +416,15 @@ that any that cannot be re-applied are reported rather than dropped.
   the library.
 - **FR-084**: An end-to-end test MUST prove a co-Game Master cannot inherit
   another account's compendium into a world of their own.
-- **FR-085**: Unit tests alone MUST NOT be accepted as proof for any of the
+- **FR-085**: An end-to-end test MUST prove a player sees the book list and
+  cannot change it.
+- **FR-086**: An end-to-end test MUST prove switching a book off removes its
+  content from the world with no copy left behind — the claim that nothing was
+  copied is only worth as much as the evidence that nothing was.
+- **FR-087**: An end-to-end test MUST prove the delta's origin split: a change
+  to an uploaded entry cannot be shared, and a world-only addition beside it
+  can.
+- **FR-088**: Unit tests alone MUST NOT be accepted as proof for any of the
   above.
 
 ### Key Entities
@@ -385,10 +435,14 @@ that any that cannot be re-applied are reported rather than dropped.
   library. Carries its book's name, hash, system, provenance and counts.
 - **Base**: the immutable content of a compendium at one version. Replaced
   wholesale by a re-import, never edited.
-- **Inheritance**: a link from a world to a compendium in its owner's library,
-  naming the base version in force.
-- **Delta**: one world's changes over one inherited compendium — entries
-  changed, hidden and added. Belongs to the world.
+- **Book list**: which compendiums are switched on for a world. Visible to
+  players, changeable only by the Game Master, and the single mechanism by
+  which a world gets content from a library. Each entry on it names the base
+  version in force.
+- **Delta**: one world's changes over one compendium it has switched on —
+  entries changed, hidden and added. Belongs to the world. Each entry carries
+  its own origin: a change to an uploaded entry is uploaded, an addition
+  beside it is authored.
 - **Resolved entry**: what a world actually sees: the base entry with its
   delta applied, or a world-only addition.
 
@@ -400,8 +454,11 @@ that any that cannot be re-applied are reported rather than dropped.
   that book's content, measured on a real instance.
 - **SC-002**: Stored content for an account grows with distinct books read and
   does not grow when a compendium is inherited into an additional world.
-- **SC-003**: Creating a world seeded from three compendiums takes no longer
-  than creating an empty one plus the time to show the choice.
+- **SC-003**: Switching three compendiums on takes no longer than switching
+  none on, because nothing is copied — creating a world with books ticked is
+  not measurably slower than creating an empty one.
+- **SC-003a**: A player can see which books their table is running, and cannot
+  change them, in 100% of attempts.
 - **SC-004**: Reading an inherited entry is no slower than reading a
   world-owned one by a margin fixed by measurement before release.
 - **SC-005**: An edit in one world reaches no other world and no base, in 100%
@@ -420,6 +477,10 @@ that any that cannot be re-applied are reported rather than dropped.
 - **Compendiums do not cross accounts, at all.** Not by sharing, not by
   export, not by deduplication. This is the decision that makes the rest of
   the spec simple, and it is spec 049 decision 1.
+- **Nothing is ever copied into a world.** A world references and fetches;
+  the library holds. This is what makes the storage saving real rather than
+  nominal, and it is why switching a book off has consequences a copy would
+  not have had.
 - **Only imported content moves to the library in this spec.** World-authored
   actors, items and lore stay where they are. The 2026-09-10 direction of
   profile-level content organised by collections is broader than this and
@@ -437,6 +498,35 @@ that any that cannot be re-applied are reported rather than dropped.
 - **The world's Compendium portal is extended, not replaced** (spec 011), the
   same assumption spec 049 makes.
 
+## Decisions (owner, 2026-09-12)
+
+1. **No seeding at world creation. A book list instead.** Content is not
+   copied into a world at any point — the world shows which compendiums are
+   switched on, fetches their content, and displays it. Creating a world with
+   books ticked and ticking them afterwards are the same action through the
+   same mechanism, which removes an entire class of "the two paths disagree"
+   defect before it can exist.
+
+   The owner's framing: *a mod list, but for the Game Master* — and players
+   see it read-only, so the table knows what it is running.
+
+2. **Changes are mutations over an immutable original.** A Game Master who
+   retunes a sword's damage has that change saved in the world; the
+   compendium underneath is untouched and stays shared with every other world
+   that has the book switched on.
+
+3. **Sharing is decided by origin, not licence** (spec 049 decision 4). Two
+   kinds of content, mechanically distinguishable:
+
+   - **Authored** — made through the authoring tools. Shareable.
+   - **Uploaded** — read out of a document. Never shareable.
+
+   One consequence needs stating because it is not obvious: the three forms a
+   delta takes do **not** all carry the same origin. Changing or hiding an
+   uploaded entry is uploaded content and cannot be shared (FR-052). Adding a
+   world-only entry beside it is authored content and can be (FR-052a). Origin
+   is tracked per entry, not per compendium.
+
 ## Questions for the owner
 
 ### Q1 — What happens to a world's changes when it stops inheriting?
@@ -448,9 +538,14 @@ with it.
 
 | Option | Answer | Implications |
 |--------|--------|--------------|
-| A | The deltas go too, named first so the Game Master can change their mind | Simplest and most predictable — a delta is meaningless without its base. Loses real work to one confirmed click. |
-| B | Changed and added entries are kept as world-owned content, hidden ones are forgotten | Keeps the month. The kept entries are now derived from a commercial book and sitting in a world as ordinary content, which is exactly the provenance leak FR-050 is guarding. |
-| C | B, but the kept entries keep their provenance and stay unshareable | Keeps the month and keeps the guard. Most to build, and a Game Master ends up with unshareable content whose source they can no longer see on the shelf. |
+| A | The deltas go too, named first so the Game Master can change their mind | Simplest and most predictable — a changed entry is meaningless without the entry it changed. Loses real work to one confirmed click. |
+| B | Changed and added entries are kept as world content, hidden ones are forgotten | Keeps the month. Was the risky option before decision 3; now much less so, because a kept entry carries its own origin and the changed ones stay unshareable automatically. |
+| C | B, and the kept entries keep their origin and stay unshareable | This is now what B *does*, since origin is tracked per entry rather than reconstructed on the way out. The remaining difference from B is only whether the Game Master is told why they are unshareable. |
+
+*Decision 3 moved this question. Before it, B leaked provenance and C was
+expensive; now origin travels with each entry by construction, so the real
+choice is A versus B, and it is about whether a month of tuning should survive
+a switch being turned off — not about safety.*
 
 ### Q2 — How should an entry be identified across a re-import?
 
