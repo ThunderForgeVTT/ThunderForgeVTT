@@ -487,6 +487,55 @@ async fn a_game_masters_own_activation_does_not_queue() {
 }
 
 #[tokio::test]
+async fn opening_a_door_announces_a_wall_change_too() {
+    // Spec 045 phase 1. A client re-reads a scene's walls when it is told a
+    // *wall* changed (code 10); a door change (21) refreshes only the
+    // interactive markers. Announcing the door alone left an opened door shut
+    // on every board but the one that opened it — the playtest of 2026-09-11
+    // watched that happen on three boards at once, the opener's included.
+    //
+    // The high-water mark is taken before the activation, so this proves the
+    // *opening* announced both, not the designation that came before it.
+    let t = seat_a_table();
+    let (wall_id, interactive_id) = a_gated_door(&t).await;
+
+    use crate::schema::world_events::dsl as ev;
+    let mut conn = t.state.db_pool.get().unwrap();
+    let high_water: i64 = ev::world_events
+        .filter(ev::created_by.eq(t.gm))
+        .select(diesel::dsl::max(ev::id))
+        .first::<Option<i64>>(&mut conn)
+        .expect("the events are readable")
+        .unwrap_or(0);
+    drop(conn);
+
+    let performed = activate_interactive_impl(&t.state, t.gm, false, interactive_id)
+        .await
+        .expect("the GM opens the door");
+    assert_eq!(performed.outcome, "performed");
+    assert_eq!(door_state_of(&t, wall_id), "open");
+
+    let mut conn = t.state.db_pool.get().unwrap();
+    let codes: Vec<i32> = ev::world_events
+        .filter(ev::created_by.eq(t.gm))
+        .filter(ev::id.gt(high_water))
+        .select(ev::event_code)
+        .load(&mut conn)
+        .expect("the events are readable");
+
+    assert!(
+        codes.contains(&crate::world_events::EVENT_CODE_DOOR_CHANGED),
+        "a door change is still announced as a door change: {codes:?}"
+    );
+    assert!(
+        codes.contains(&crate::world_events::EVENT_CODE_WALL_CHANGED),
+        "and as the wall change that carries it to every board: {codes:?}"
+    );
+
+    let _ = delete_interactive_impl(&t.state, t.gm, false, interactive_id).await;
+}
+
+#[tokio::test]
 async fn a_prop_cannot_be_authored_with_an_entry_trigger() {
     let t = seat_a_table();
     let mut input = a_prop(t.scene_id, Uuid::now_v7());

@@ -72,24 +72,6 @@ const DIRECTIONS: Point[] = [
   { x: 0, y: -CELL },
 ];
 
-/**
- * Reads until `done` holds or `ms` pass, and returns the last reading — for a
- * soft check, which must record what it saw rather than throw on a timeout.
- */
-async function settle<T>(
-  read: () => Promise<T>,
-  done: (value: T) => boolean,
-  ms: number,
-): Promise<T> {
-  const deadline = Date.now() + ms;
-  let value = await read();
-  while (!done(value) && Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    value = await read();
-  }
-  return value;
-}
-
 for (const system of ["genie", "dnd5e"] as const) {
   test(`a Game Master runs a dungeon crawl for two players (${system})`, async ({
     page,
@@ -263,42 +245,19 @@ for (const system of ["genie", "dnd5e"] as const) {
           await activateAsPlayer(aria.page, door),
           "Aria opens the door",
         ).toBe("performed");
-        // Her own board first — and it does not even know the wall became a
-        // door: designating one is announced exactly like opening one.
-        const own = await settle(
-          () => doorStateOn(aria.page, doorWall),
-          (value) => value === "open",
-          5_000,
-        );
-        expect
-          .soft(
-            own,
-            "FINDING: the door Aria opened should be open on her own board. " +
-              "`none` means her board never learned the wall became a door — " +
-              "designating a door is announced as a door change (event 21), " +
-              "and the web re-reads walls only on a wall change (event 10), " +
-              "so her client had no door to open.",
-          )
-          .toBe("open");
-        // Everyone else can only learn of it from the server's announcement.
+        // Her own board, then everyone else's. A door change is announced as
+        // the wall change it is, so every board re-reads the wall and sees the
+        // door — which is what spec 045 phase 1 fixed, and this holds it.
         for (const [who, client] of [
+          ["Aria", aria.page],
           ["the Game Master", table.gm],
           ["Brom", brom.page],
         ] as const) {
-          const state = await settle(
-            () => doorStateOn(client, doorWall),
-            (value) => value === "open",
-            5_000,
-          );
-          expect
-            .soft(
-              state,
-              `FINDING: the door Aria opened should open on ${who}'s board. ` +
-                "The server announces a door change (event 21), and the web " +
-                "re-reads walls only on a wall change (event 10), so every " +
-                "other board keeps the door shut — for sight and light — " +
-                "until a reload.",
-            )
+          await expect
+            .poll(() => doorStateOn(client, doorWall), {
+              timeout: 10_000,
+              message: `the door Aria opened is open on ${who}'s board`,
+            })
             .toBe("open");
         }
         // Nothing lights the far side, so an open door alone should not show
@@ -315,21 +274,11 @@ for (const system of ["genie", "dnd5e"] as const) {
 
       await test.step("light decides what Aria sees through the door", async () => {
         await setAmbient(table, "bright");
-        // Soft, because it rests on the door above: while Aria's board still
-        // holds the doorway as a solid wall, daylight cannot show her the
-        // goblin, and that is the door's defect rather than the light's.
-        const inDaylight = await settle(
-          () => hiddenTokens(aria.page),
-          (hidden) => !hidden.includes(goblin),
-          15_000,
-        );
-        expect
-          .soft(
-            inDaylight,
-            "FINDING: in daylight the open door should show Aria the goblin. " +
-              "Blocked by the door defect above: her board still holds the " +
-              "doorway as a wall.",
-          )
+        await expect
+          .poll(() => hiddenTokens(aria.page), {
+            timeout: 15_000,
+            message: "in daylight, the open door shows Aria the goblin",
+          })
           .not.toContain(goblin);
         await snapshot(table, "6 · daylight");
 
@@ -342,19 +291,12 @@ for (const system of ["genie", "dnd5e"] as const) {
           .toContain(goblin);
 
         await addLight(table, GOBLIN, 200);
-        // Soft for the same reason as daylight: the door is in the way of the
-        // question this asks.
-        const byBrazier = await settle(
-          () => hiddenTokens(aria.page),
-          (hidden) => !hidden.includes(goblin),
-          15_000,
-        );
-        expect
-          .soft(
-            byBrazier,
-            "FINDING: a brazier by the goblin should let Aria see it through " +
-              "the open door. Blocked by the door defect above.",
-          )
+        await expect
+          .poll(() => hiddenTokens(aria.page), {
+            timeout: 15_000,
+            message:
+              "a brazier by the goblin lets Aria see it through the open door",
+          })
           .not.toContain(goblin);
         await snapshot(table, "7 · a brazier");
       });

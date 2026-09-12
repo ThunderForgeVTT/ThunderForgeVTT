@@ -603,17 +603,11 @@ pub(crate) async fn activate_interactive_impl(
                     None => crate::interaction::Performed::default(),
                 };
                 if let Some(subject) = changed_subject.door {
-                    let _ = record_world_event(
-                        &mut conn,
-                        world_id,
-                        crate::world_events::EVENT_CODE_DOOR_CHANGED,
-                        Some(serde_json::json!({
-                            "action": "changed",
-                            "wall_id": subject,
-                            "scene_id": loaded.row.scene_id,
-                        })),
-                        user_id,
-                    );
+                    // Through the one announcer, so an approved request opens
+                    // the door on every board exactly as a direct activation
+                    // does. This path was missed when the others were fixed,
+                    // and the server test for it is what noticed.
+                    announce_door(&mut conn, loaded.row.scene_id, subject, user_id);
                 }
                 if runs_the_world {
                     result.notices = changed_subject.notices.clone();

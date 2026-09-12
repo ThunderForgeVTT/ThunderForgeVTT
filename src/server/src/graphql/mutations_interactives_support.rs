@@ -23,8 +23,8 @@ use super::{
     GraphQLActivationResult, GraphQLCreateInteractiveInput, GraphQLUpdateInteractiveInput,
 };
 use crate::world_events::{
-    EVENT_CODE_INTERACTION_REQUEST, EVENT_CODE_INTERACTIVE_CHANGED, record_world_event,
-    world_id_for_scene,
+    EVENT_CODE_INTERACTION_REQUEST, EVENT_CODE_INTERACTIVE_CHANGED, EVENT_CODE_WALL_CHANGED,
+    record_world_event, world_id_for_scene,
 };
 
 /// Take the one firing a `once` interactive has, if it is still there.
@@ -325,17 +325,9 @@ pub(crate) async fn decide_request_impl(
                     .map_err(|e| Error::new(format!("Failed to perform effect: {e}")))?;
                     result.notices = performed.notices.clone();
                     if let Some(subject) = performed.door {
-                        let _ = record_world_event(
-                            &mut conn,
-                            world_id,
-                            crate::world_events::EVENT_CODE_DOOR_CHANGED,
-                            Some(serde_json::json!({
-                                "action": "changed",
-                                "wall_id": subject,
-                                "scene_id": scene_id,
-                            })),
-                            user_id,
-                        );
+                        // Through the one announcer, so an opened door reaches
+                        // every board the same way a designated one does.
+                        announce_door(&mut conn, scene_id, subject, user_id);
                     }
                     if performed.lights_changed {
                         let _ = record_world_event(
@@ -534,6 +526,25 @@ pub(crate) async fn set_door_designation_impl(
     .map_err(|_| Error::new("Failed to designate the door (not found or not yours)"))
 }
 
+/// Announce a door change — as a door, and as the wall change it also is.
+///
+/// # Why both
+///
+/// A door lives on a `walls` row: designating one, opening one, locking one
+/// and revealing one all change that row. Clients re-read a scene's walls when
+/// they are told a *wall* changed (code 10); nothing re-reads them on a door
+/// change (code 21), which only refreshes the interactive markers.
+///
+/// So announcing a door alone left every other board holding the wall as it
+/// was: a door opened by one person stayed shut for the Game Master and for
+/// every other player until they reloaded — for passage, for sight and for
+/// light alike, since all three read the same walls. Worse, a wall that had
+/// just *become* a door was still a plain wall elsewhere, so the opener's own
+/// client had no door to open and its optimistic path did nothing.
+///
+/// The playtest of 2026-09-11 recorded all of that (spec 045). Both events are
+/// recorded because both are true, and because the wall one is what carries
+/// the change to the people looking at it.
 pub(super) fn announce_door(conn: &mut PgConnection, scene_id: Uuid, wall_id: Uuid, user_id: Uuid) {
     if let Ok(world_id) = world_id_for_scene(conn, scene_id) {
         let _ = record_world_event(
@@ -542,6 +553,17 @@ pub(super) fn announce_door(conn: &mut PgConnection, scene_id: Uuid, wall_id: Uu
             crate::world_events::EVENT_CODE_DOOR_CHANGED,
             Some(serde_json::json!({
                 "action": "changed",
+                "wall_id": wall_id,
+                "scene_id": scene_id,
+            })),
+            user_id,
+        );
+        let _ = record_world_event(
+            conn,
+            world_id,
+            EVENT_CODE_WALL_CHANGED,
+            Some(serde_json::json!({
+                "action": "updated",
                 "wall_id": wall_id,
                 "scene_id": scene_id,
             })),

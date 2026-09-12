@@ -312,24 +312,31 @@ test("a door opens for the table, and a locked one does not", async ({
     { wallId: stoneId, locked: false },
   );
 
-  const seen = await playerPage.evaluate(async (scene: string) => {
-    const sync = (await import(
-      /* @vite-ignore */ "/src/engine/world/sync/walls.ts"
-    )) as typeof import("../src/engine/world/sync/walls");
-    const bevy = (await import(
-      /* @vite-ignore */ "/src/engine/bevy/index.ts"
-    )) as typeof import("../src/engine/bevy/index");
-    const store = bevy.getBoundWorldStore();
-    if (!store) return null;
-    await sync.loadWallsIntoStore(store, scene);
-    const id = (window as unknown as { __door: string }).__door;
-    return store.getState().walls[id] ?? null;
-  }, sceneId);
+  // Read only. This used to call `loadWallsIntoStore` itself — the one step
+  // the product never does — so it proved the server held the change rather
+  // than that the change reached this page. Spec 045 phase 1 made a door
+  // announce the wall change it is; this waits for that to arrive.
+  const readDoor = async () =>
+    playerPage.evaluate(async () => {
+      const bevy = (await import(
+        /* @vite-ignore */ "/src/engine/bevy/index.ts"
+      )) as typeof import("../src/engine/bevy/index");
+      const store = bevy.getBoundWorldStore();
+      if (!store) return null;
+      const id = (window as unknown as { __door: string }).__door;
+      return store.getState().walls[id] ?? null;
+    });
 
+  await expect
+    .poll(async () => (await readDoor())?.locked ?? null, {
+      timeout: 15_000,
+      message:
+        "unlocking reaches a player who never reloaded, and who re-read nothing",
+    })
+    .toBe(false);
+
+  const seen = await readDoor();
   expect(seen, "the door reached the already-open page").toBeTruthy();
-  expect(seen!.locked, "unlocking reaches a player who never reloaded").toBe(
-    false,
-  );
   expect(seen!.doorState).toBe("closed");
 
   console.log(

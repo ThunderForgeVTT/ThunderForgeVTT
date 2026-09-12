@@ -33,13 +33,13 @@ client's board within a second — for sight, for light and for passage.
 **Independent test**: Two browsers on one scene. The Game Master designates a
 wall a door and opens it; the other browser shows it open without a reload.
 
-- [ ] T007 [US3] In `src/server/src/graphql/mutations_interactives_support.rs`, record a wall-changed event (code 10) alongside the door-changed event wherever a door's state changes through an interactive
-- [ ] T008 [P] [US3] Do the same for `setDoorDesignation`, `setDoorLock` and `setDoorSecret` in `src/server/src/graphql/mutations_walls.rs` (or wherever each is implemented), so becoming a door is announced as the wall change it is
-- [ ] T009 [P] [US3] Add a server test that each door mutation records both events, in the module's existing test file
-- [ ] T010 [US3] Check the client needs no change: `apps/web/src/engine/world/sync/walls.ts` already re-reads on code 10 — confirm by reading, and note it in the ADR if it turns out otherwise
-- [ ] T011 [US3] Rewrite `apps/web/e2e/interactive-doors.spec.ts`'s "it reaches an open page without a reload" so it does **not** call `loadWallsIntoStore` itself; it must prove the product propagates the change
-- [ ] T012 [US3] Turn the playtest's door checks hard in `apps/web/playtest/dungeon-crawl.playtest.ts`: the door opens on Aria's own board, the Game Master's and Brom's
-- [ ] T013 [US3] Verify and prove: `cargo check -p thunderforge`, then `pnpm playtest --only=dungeon-crawl` clears `the door Aria opened should be open on her own board`, `... on the Game Master's board`, `... on Brom's board`, `in daylight the open door should show Aria the goblin`, and `a brazier by the goblin should let Aria see it through the open door`
+- [X] T007 [US3] `announce_door` in `src/server/src/graphql/mutations_interactives_support.rs` records a wall-changed event (code 10) as well as the door-changed one, because a door lives on a wall row and code 10 is what clients re-read walls on
+- [X] T008 [P] [US3] Every door change goes through that one announcer: designation, lock and secret already did; the direct activation path and the **approval** path now do too (`mutations_interactives.rs`). The approval path was missed at first and T009 is what caught it
+- [X] T009 [P] [US3] `opening_a_door_announces_a_wall_change_too` in `src/server/src/graphql/mutations_interactives_tests.rs` — takes a high-water mark of world events before the activation, so it proves the *opening* announced both
+- [X] T010 [US3] Confirmed: `apps/web/src/engine/world/sync/walls.ts` re-reads a scene's walls on code 10 and needed no change
+- [X] T011 [US3] `apps/web/e2e/interactive-doors.spec.ts` no longer calls `loadWallsIntoStore` itself; it polls the store and so proves the change reached the page
+- [X] T012 [US3] The playtest's door checks are hard in `apps/web/playtest/dungeon-crawl.playtest.ts`: the door is open on Aria's board, the Game Master's and Brom's
+- [X] T013 [US3] Proved: 17 interactives server tests pass, and `pnpm playtest --only=dungeon-crawl` went from 7 findings to 2 in both game systems, with no hard failures — the five door-and-light findings are gone; what remains is the keyboard (Phase 4) and the wall (Phase 5)
 
 ## Phase 4 (US1): A player's keyboard moves their own token
 
