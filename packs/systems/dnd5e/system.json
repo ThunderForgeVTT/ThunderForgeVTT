@@ -1033,17 +1033,26 @@
     {
       "kind": "magicItem",
       "shape": "prose",
-      "name": { "style": "heading", "endsAt": "nextName" }
+      "name": { "style": "heading", "endsAt": "nextName" },
+      "confirmedBy": [
+        "Wondrous item",
+        "requires attunement",
+        "Weapon (",
+        "Armor (",
+        "Potion of",
+        "Scroll of",
+        ", uncommon",
+        ", rare",
+        ", very rare",
+        ", legendary",
+        ", artifact"
+      ]
     },
     {
       "kind": "feat",
       "shape": "prose",
-      "name": { "style": "heading", "endsAt": "nextName" }
-    },
-    {
-      "kind": "classFeature",
-      "shape": "prose",
-      "name": { "style": "bold", "endsAt": "nextName" }
+      "name": { "style": "heading", "endsAt": "nextName" },
+      "confirmedBy": ["Prerequisite"]
     }
   ],
   "movement": {

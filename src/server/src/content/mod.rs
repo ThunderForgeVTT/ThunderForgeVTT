@@ -16,6 +16,10 @@
 pub mod anchored;
 #[cfg(test)]
 mod anchored_tests;
+pub mod prose;
+#[cfg(test)]
+#[path = "prose_tests.rs"]
+mod prose_tests;
 
 pub use thunderforge_canvas_core::content_entry::{Entry, NameState, ReadValue, SourceLine};
 

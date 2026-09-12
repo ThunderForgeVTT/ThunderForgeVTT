@@ -86,6 +86,25 @@ pub struct Pattern {
     /// The labels to read once an anchor is found. Anchored kinds only.
     #[serde(default)]
     pub fields: Vec<FieldSpec>,
+    /// What confirms that a prose entry is one of *these*. Prose kinds only,
+    /// and required for them.
+    ///
+    /// Measured on 2026-09-12, and the reason this field exists: a prose kind
+    /// declared as "a heading, then paragraphs" describes **every section of
+    /// every book**. Without a discriminator the reader returned 72,974 magic
+    /// items across 246 books, including `Table of Contents` and `About`, and
+    /// returned exactly the same number for feats because the two declarations
+    /// were identical.
+    ///
+    /// At least one of these phrases must appear near the name for the entry
+    /// to count. A magic item is confirmed by its type line — `Wondrous item`,
+    /// `Weapon (`, `Potion` — and a feat by `Prerequisite`.
+    #[serde(default)]
+    pub confirmed_by: Vec<String>,
+    /// How many lines after the name to look for a confirmation. Three by
+    /// default: a type line, a rarity, and one line of slack.
+    #[serde(default)]
+    pub confirm_within: Option<u32>,
 }
 
 /// Whether an entry of this kind carries labelled fields, or only prose.

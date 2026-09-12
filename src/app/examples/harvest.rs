@@ -48,7 +48,7 @@ use thunderforge_canvas_core::content_entry::SourceLine;
 use thunderforge_canvas_core::content_patterns::Shape;
 use thunderforge_canvas_core::system_contribution::contribution_for;
 use thunderforge_pdf::{Document, layout};
-use thunderforge_server::content::anchored;
+use thunderforge_server::content::{anchored, prose};
 use thunderforge_server::content_patterns::content_patterns_for_system;
 
 fn main() {
@@ -69,10 +69,6 @@ fn main() {
         );
         std::process::exit(2);
     };
-    if pattern.shape != Shape::Anchored {
-        eprintln!("'{kind}' is a prose kind; this example measures anchored kinds");
-        std::process::exit(2);
-    }
     let refine = contribution_for(&system).and_then(|c| c.refine_content);
 
     let (mut total, mut with_reach, mut uncertain) = (0usize, 0usize, 0usize);
@@ -90,12 +86,14 @@ fn main() {
                 continue;
             };
             let assembled = layout::lines(&runs);
+            let body = layout::body_size(&assembled);
             for line in layout::reading_order(assembled, page.geometry) {
                 if line.text.trim().is_empty() {
                     continue;
                 }
                 let suspect =
                     layout::looks_letter_spaced(&line.text) || layout::looks_unreadable(&line.text);
+                let heading = layout::is_heading(&line, body);
                 lines.push(SourceLine {
                     text: line.text,
                     size: line.size,
@@ -105,11 +103,15 @@ fn main() {
                     // browser (`wasm.rs`), so a measurement here and an import
                     // there agree about which text is not to be trusted.
                     suspect,
+                    heading,
                 });
             }
         }
 
-        let mut found = anchored::entries(&lines, pattern);
+        let mut found = match pattern.shape {
+            Shape::Anchored => anchored::entries(&lines, pattern),
+            Shape::Prose => prose::entries(&lines, pattern),
+        };
         if let Some(refine) = refine {
             // The refinement sees the lines the entry was built from, which is
             // what lets it read an attack's prose without the shared reader

@@ -19,13 +19,17 @@ Three pieces are already built and are not being rebuilt here:
 
 - **A reader.** `crates/thunderforge-pdf` turns a PDF into positioned, styled
   text and runs in the Game Master's own browser. Measured against a 246-book
-  library: all 246 open, 195 yield text, 51 are image scans with no text layer
-  at all.
-- **A creature reader.** `packs/systems/dnd5e/server/src/statblock.rs` reads
-  monsters — 717 creatures and 747 per-attack reach values out of six
-  bestiaries. It works for one reason: armour class is an unambiguous anchor.
-  Every 5e creature has one, it is always labelled, and that label appears
-  nowhere else.
+  library: **all 246 open**, and 51 are image scans with no text layer at all.
+- **A creature reader.** Originally `statblock.rs` in the 5e pack, **retired**
+  in this spec's phase 3 and replaced by a declaration-driven reader that names
+  no game system. It worked for one reason, and the replacement works for the
+  same one: armour class is an unambiguous anchor. Every 5e creature has one,
+  it is always labelled, and that label appears nowhere else.
+
+  Over the whole corpus the generic reader finds **2750 creatures and 3049
+  per-attack reach values**, against the old reader's 2155 and 1880. Both
+  figures are a floor on recall and say nothing about precision — see
+  [measurements.md](./measurements.md), which carries that caveat in full.
 - **A memory of what has been read.** Spec 047 FR-070 to FR-075 already
   require a world to record the SHA-256 of every book imported into it,
   hashed in the browser before the upload, so a re-import offers to overwrite
@@ -304,7 +308,22 @@ correct content, and confirm the system registry check still passes.
   contain any system's vocabulary. `scripts/check-system-registry.mjs` MUST
   continue to pass without an exemption for importer code.
 - **FR-013**: D&D 5e MUST declare patterns covering spells, magic items,
-  creatures, class features and feats in this spec.
+  creatures and feats in this spec.
+- **FR-013a**: **Class features are deferred, on evidence.** A class feature is
+  introduced by a bold run-in name — `Rage. In battle, you…` — and the layout
+  pass marks a line bold only when *every* run on it is bold, so such a line
+  reads as ordinary prose. Declaring it as a heading instead matches every
+  section of every book: measured on 2026-09-12, that produced 42,295 entries
+  across 246 books. There is no marker line under a class feature to confirm
+  it by either (FR-013b), so the kind cannot be declared honestly. Catching a
+  run-in name needs sub-line run data, which the layout pass deliberately
+  collapses; until that exists this kind ships nothing rather than garbage.
+- **FR-013b**: A **prose** pattern MUST declare what confirms an entry is one
+  of that kind, and a pattern that declares nothing MUST be refused at install.
+  A prose kind described only as "a heading, then paragraphs" describes every
+  section of every book — measured, it returned 72,974 magic items including
+  `Table of Contents`, and the identical number for feats because the two
+  declarations were indistinguishable.
 - **FR-014**: Pathfinder 2e MUST be importable by adding a declaration to its
   pack and changing no shared code.
 - **FR-015**: A world whose system declares no content patterns MUST have the

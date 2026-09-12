@@ -57,6 +57,35 @@ A prose pattern **may not declare fields**, and validation refuses one that
 tries. Spec 049 FR-001b promises prose carries no invented mechanics; a field
 list that were silently ignored would be a promise somebody thinks they have.
 
+### A prose kind must say what confirms it — added on evidence
+
+The first version of this decision let a prose pattern be nothing but "a
+heading, then paragraphs". Measured against the corpus, that description
+matches **every section of every book**: the reader returned 72,974 magic
+items across 246 books, including `Table of Contents` and `About`, and
+returned the *identical* number for feats, because two prose kinds declared
+that way are indistinguishable from each other.
+
+So a prose pattern must also declare `confirmedBy` — phrases, one of which
+must appear within a few lines of the name. A magic item is confirmed by its
+type line (`Wondrous item`, `Weapon (`, `, uncommon`); a feat by
+`Prerequisite`. Validation refuses a prose kind without one, and the reader
+refuses it again at runtime, because the failure mode is not "a few extra
+results" but the whole book, silently.
+
+### What this costs: 5e cannot declare class features
+
+`layout::Line::bold` is true only when **every** run on a line is bold, and a
+class feature is a bold run-in name followed by roman prose — `Rage. In
+battle, you…` — so such a line reads as ordinary text. Declaring the kind as a
+heading instead matches everything (42,295 entries, measured), and there is no
+marker line under a class feature to confirm it by.
+
+Catching a run-in name needs sub-line run data, which the layout pass
+deliberately collapses into a line. Until that changes the 5e pack declares no
+`classFeature` kind at all, and spec 049's FR-013 is amended to say so. Zero is
+the honest answer; 42,295 wrong ones is not.
+
 ### What measuring changed about this decision
 
 Spec 049's prose says spells, magic items and creatures "share a shape — an

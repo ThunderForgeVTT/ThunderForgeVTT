@@ -120,6 +120,7 @@ mod tests {
             bold: false,
             page: 1,
             suspect: false,
+            heading: false,
         }
     }
 

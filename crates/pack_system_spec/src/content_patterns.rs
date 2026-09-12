@@ -29,6 +29,14 @@ pub struct SystemContentPattern {
     pub name: SystemContentName,
     #[serde(default)]
     pub fields: Option<Vec<SystemContentField>>,
+    /// Prose kinds only, and required for them: at least one phrase that must
+    /// appear near the name to confirm the entry is one of these. Without it a
+    /// prose kind matches every heading in every book.
+    #[serde(default)]
+    pub confirmed_by: Option<Vec<String>>,
+    /// How many lines after the name to look. Three by default.
+    #[serde(default)]
+    pub confirm_within: Option<u32>,
 }
 
 /// How an entry's name is found. Which fields apply depends on `shape`, which
@@ -207,6 +215,27 @@ pub fn validate_content_patterns(instance: &serde_json::Value) -> Result<(), Str
                 if !matches!(ends_at, Some("nextName") | Some("nextHeading")) {
                     return Err(format!(
                         "{at}.name.endsAt must be 'nextName' or 'nextHeading' for a prose kind"
+                    ));
+                }
+
+                // Required, and measured rather than assumed. A prose kind
+                // without a discriminator is not a narrow rule that finds a
+                // few extra things: it matches every heading in every book,
+                // and two such kinds are indistinguishable from each other.
+                // Refused at install so it cannot be discovered as 72,974
+                // magic items called "Table of Contents".
+                let confirmed = pattern
+                    .get("confirmedBy")
+                    .and_then(|v| v.as_array())
+                    .map(|list| {
+                        list.iter()
+                            .all(|v| v.as_str().is_some_and(|s| !s.trim().is_empty()))
+                            && !list.is_empty()
+                    })
+                    .unwrap_or(false);
+                if !confirmed {
+                    return Err(format!(
+                        "{at}.confirmedBy must list at least one non-empty phrase for a prose kind: a heading followed by paragraphs describes every section of every book, so without one this kind matches everything"
                     ));
                 }
             }
@@ -425,6 +454,54 @@ mod content_pattern_validation_tests {
         // so neither can be read as anchored content.
         assert_eq!(shape_of("magicItem"), "prose");
         assert_eq!(shape_of("feat"), "prose");
-        assert_eq!(shape_of("classFeature"), "prose");
+
+        // FR-013 also asks for class features, and 5e deliberately does not
+        // declare them. That is a finding, not an omission: a class feature is
+        // introduced by a **bold run-in name** — `Rage. In battle, you…` — and
+        // `layout::Line::bold` is true only when every run on the line is
+        // bold, so such a line reads as ordinary prose. Declaring it as a
+        // heading instead matches every section of every book. There is no
+        // marker line under a class feature to confirm it by either, so it
+        // cannot meet the `confirmedBy` requirement below.
+        //
+        // Catching a run-in name needs sub-line run data, which the layout
+        // pass deliberately collapses. Until that changes, declaring this kind
+        // would ship 42,295 wrong entries rather than none.
+        assert!(
+            patterns.iter().all(|p| p["kind"] != "classFeature"),
+            "class features cannot yet be discriminated; declaring them ships garbage"
+        );
+    }
+
+    #[test]
+    fn a_prose_kind_must_say_what_confirms_it() {
+        let broken = serde_json::json!({
+            "kind": "feat",
+            "shape": "prose",
+            "name": { "style": "heading", "endsAt": "nextName" }
+        });
+        let error =
+            validate_system_manifest(&manifest_with(serde_json::json!([broken]))).unwrap_err();
+        assert!(error.contains("confirmedBy"), "{error}");
+    }
+
+    #[test]
+    fn every_shipped_prose_kind_says_what_confirms_it() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../packs/systems/dnd5e/system.json"
+        );
+        let manifest: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        for pattern in manifest["contentPatterns"].as_array().unwrap() {
+            if pattern["shape"] == "prose" {
+                let confirms = pattern["confirmedBy"].as_array().expect("declared");
+                assert!(
+                    !confirms.is_empty(),
+                    "{} must say what confirms it",
+                    pattern["kind"]
+                );
+            }
+        }
     }
 }

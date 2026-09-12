@@ -109,6 +109,79 @@ why.
 
 ---
 
+## Phase 4: the prose reader, per kind (T023-T025)
+
+**Date**: 2026-09-12 · Same 246 books
+
+### The design gap this measurement found
+
+The prose reader was specified as "a name, then the paragraphs under it". Run
+over real books, that description turned out to match **every section of every
+book**:
+
+| Kind | As first declared | Cause |
+|---|---|---|
+| magicItem | **72,974** | Returned every heading with prose under it — `Table of Contents`, `About` |
+| feat | **72,974** | *Identical*, because the two declarations were indistinguishable |
+| classFeature | **42,295** | Same, via bold rather than heading |
+
+Two prose kinds declared as "heading, then prose" cannot be told apart from
+each other or from ordinary book structure. This is not a threshold to tune;
+the model was incomplete.
+
+**The fix**: a prose pattern must declare `confirmedBy` — phrases, one of which
+must appear near the name. Refused at install by `pack_system_spec`, and
+refused again by the reader, because the failure mode is silent and enormous.
+
+### After the discriminator
+
+| Kind | Before | After | Uncertain before → after |
+|---|---|---|---|
+| spell *(anchored)* | 1228 | **1228** | 259 → 259 |
+| magicItem | 72,974 | **2073** | 2935 → **63** |
+| feat | 72,974 | **1674** | 2935 → **71** |
+| classFeature | 42,295 | **not declared** | — |
+
+The uncertain count collapsing by ~98% alongside the totals is the useful
+signal: the entries thrown away were overwhelmingly the ones the reader was
+already unsure of.
+
+### Class features: zero, deliberately
+
+5e declares no `classFeature` kind. A class feature is a **bold run-in name** —
+`Rage. In battle, you…` — and `layout::Line::bold` is true only when every run
+on the line is bold, so the line reads as ordinary prose. Declared as a heading
+it matches everything. There is no marker line beneath it to confirm it by.
+
+Catching run-in names needs sub-line run data, which the layout pass
+deliberately collapses. Spec 049 FR-013 is amended (FR-013a) rather than the
+code bent to it. **Zero is the honest answer; 42,295 wrong ones is not.**
+
+### Spell recall: a cross-check, *not* the hand count SC-002 asks for
+
+SC-002 wants 90% of spells found, measured against a hand count. A hand count
+means a person reading the book, which this is not. What follows is an
+independent structural check: the reader anchors on `Casting Time`, so counting
+a *different* label in the same block estimates how many blocks exist.
+
+| Book | Reader found | `Duration` lines | `Components` lines |
+|---|---|---|---|
+| Aldri's Lost Spellbook | 10 | 11 | 10 |
+| Spells That Don't Suck | 150 | 168 | 150 |
+| Codex of Cantrips Vol I | 0 | 0 | 0 |
+
+- Against `Components` the reader is **exact** in both readable books.
+- Against `Duration` it is 91% and 89% — straddling SC-002's target.
+- The third book yields nothing by any measure, which is consistent with it
+  being one of the 51 image scans rather than a miss.
+
+**Verdict: SC-002 is plausible and not established.** Two measures disagree,
+one sits either side of the bar, and neither is the hand count the criterion
+names. It stays outstanding and needs a person. Recording it as "met" on this
+evidence would be exactly the confident wrongness this spec exists to prevent.
+
+---
+
 ## Still to run
 
 - **Corpus read, per kind** (049 FR-060, T023-T025) — phase 4

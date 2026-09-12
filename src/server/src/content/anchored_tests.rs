@@ -18,6 +18,7 @@ fn line(text: &str, size: f64, bold: bool) -> SourceLine {
         bold,
         page: 1,
         suspect: false,
+        heading: false,
     }
 }
 
@@ -50,6 +51,8 @@ fn pattern() -> Pattern {
                 value_kind: FieldKind::Text,
             },
         ],
+        confirmed_by: Vec::new(),
+        confirm_within: None,
     }
 }
 

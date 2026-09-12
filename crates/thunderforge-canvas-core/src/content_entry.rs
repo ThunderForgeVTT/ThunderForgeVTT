@@ -31,6 +31,13 @@ pub struct SourceLine {
     /// The layout pass did not trust the text on this line — letter-spaced,
     /// or from a font this build cannot decode (049 FR-004).
     pub suspect: bool,
+    /// Set larger or bolder than the body around it.
+    ///
+    /// Decided by the layout pass and carried here, the same way `suspect` is.
+    /// The layer that measured the page is the one that knows what its body
+    /// size was; a reader re-deciding it from a handful of lines would reach a
+    /// different answer for the same book.
+    pub heading: bool,
 }
 
 /// What was read for one field, and how much to trust it.

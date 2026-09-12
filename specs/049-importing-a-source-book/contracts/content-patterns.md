@@ -47,9 +47,10 @@ import is refused with that as the reason before any file is read (FR-015).
     ]
   },
   {
-    "kind": "classFeature",
+    "kind": "feat",
     "shape": "prose",
-    "name": { "style": "bold", "endsAt": "nextName" }
+    "name": { "style": "heading", "endsAt": "nextName" },
+    "confirmedBy": ["Prerequisite"]
   }
 ]
 ```
@@ -63,6 +64,26 @@ import is refused with that as the reason before any file is read (FR-015).
 | `anchor` | `anchored` only | The label that unambiguously begins an entry of this kind. |
 | `name` | yes | How the entry's name is found. |
 | `fields` | `anchored` only | The labels to read, and what each one is. |
+| `confirmedBy` | `prose` only, **required** | Phrases, one of which must appear near the name. Without one, a prose kind matches every heading in every book. |
+| `confirmWithin` | `prose`, optional | How many lines after the name to look. Three by default. |
+
+### `confirmedBy`, and why it is required
+
+This field exists because the first version of this contract did not have it,
+and the result was measured rather than argued about: a prose kind declared as
+"a heading, then paragraphs" returned **72,974 magic items across 246 books**,
+including `Table of Contents` and `About` — and returned the *identical* number
+for feats, because the two declarations were indistinguishable from each other
+and from ordinary book structure.
+
+A magic item is confirmed by its type line (`Wondrous item`, `Weapon (`,
+`, uncommon`), a feat by `Prerequisite`. The phrase must appear **near the
+name**, not anywhere in the entry: one stray `Prerequisite` deep in a chapter
+would otherwise confirm the chapter's title and swallow everything under it.
+
+Validation refuses a prose pattern without one, and the reader refuses it
+again at runtime. That belt-and-braces is deliberate — the failure mode is not
+"slightly too many results", it is every heading in the book, silently.
 
 ### `name`
 
