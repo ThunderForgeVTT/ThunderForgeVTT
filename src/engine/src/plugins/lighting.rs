@@ -6,9 +6,12 @@ use crate::resources::{
     GridSnapEnabled, IsGameMaster, LightSet, SceneGrid, SelectedLight, WallSet,
 };
 use crate::systems::lighting::{
-    ViewerToken, apply_light_illumination, apply_requested_viewer, handle_light_input,
-    handle_light_keyboard_toggles, handle_light_resize, handle_light_undo, handle_switch_effects,
-    init_lighting_systems_resources, sync_light_visuals,
+    apply_light_illumination, handle_light_input, handle_light_keyboard_toggles,
+    handle_light_resize, handle_light_undo, handle_switch_effects, init_lighting_systems_resources,
+    sync_light_visuals,
+};
+use crate::systems::lighting_vision::{
+    PartyEyes, ViewerToken, apply_requested_party_eyes, apply_requested_viewer,
 };
 
 /// Wires up light authoring (T036-T039, T041): the `LightSet` resource,
@@ -50,6 +53,9 @@ impl Plugin for LightingPlugin {
             .init_resource::<WallSet>()
             // Playtest 2026-09-10 P9: whose eyes this client sees through.
             .init_resource::<ViewerToken>()
+            // Spec 045 FR-033: whose eyes the *table* sees through, so a Game
+            // Master's board can mark what the party cannot see.
+            .init_resource::<PartyEyes>()
             // Registered here as well as in `InteractionPlugin`, idempotently.
             // A contributor that could only be added after the seam would not
             // be independently addable (Principle II).
@@ -92,6 +98,7 @@ impl Plugin for LightingPlugin {
                 handle_switch_effects,
                 sync_light_visuals,
                 apply_requested_viewer,
+                apply_requested_party_eyes,
                 // After selection feedback, which sets every token's base
                 // alpha each frame. The two ran in no set order, so whether a
                 // token in the dark was drawn dimmed depended on which went

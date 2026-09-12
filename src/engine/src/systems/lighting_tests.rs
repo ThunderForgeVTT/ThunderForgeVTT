@@ -304,3 +304,164 @@ mod apply_light_illumination_tests {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// FR-033: a Game Master's board marks what the table cannot see
+// ---------------------------------------------------------------------------
+
+mod marks_for_the_game_master {
+    use super::*;
+    use crate::TokenIdentity;
+    use crate::resources::lighting::LightSet as EngineLightSet;
+    use crate::resources::wall::WallSet as EngineWallSet;
+    use thunderforge_canvas_core::wall::{DoorState as CoreDoorState, Wall as CoreWall};
+
+    /// A bright scene with a vision-blocking wall at x = 50, a hero west of
+    /// it, and a monster placed wherever the caller says.
+    ///
+    /// Bright on purpose: illumination is then `Bright` everywhere, so the old
+    /// behaviour — which marked on illumination — could not mark anything
+    /// here. Whatever these tests observe comes from line of sight.
+    fn table(monster_at: Vec2) -> App {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+
+        let mut wall_set = EngineWallSet::default();
+        wall_set.upsert(CoreWall {
+            id: "w1".to_string(),
+            x1: 50.0,
+            y1: -500.0,
+            x2: 50.0,
+            y2: 500.0,
+            blocks_vision: true,
+            blocks_movement: true,
+            door_state: CoreDoorState::None,
+            locked: false,
+            secret: false,
+        });
+        app.insert_resource(wall_set);
+        app.init_resource::<EngineLightSet>();
+        app.insert_resource(crate::resources::vision::SceneAmbient(
+            thunderforge_canvas_core::vision::AmbientLight::daylight(),
+        ));
+        app.insert_resource(IsGameMaster(true));
+        app.init_resource::<ViewerToken>();
+        app.insert_resource(PartyEyes(vec!["hero".to_string()]));
+
+        for (id, at) in [("hero", Vec2::new(-100.0, 0.0)), ("monster", monster_at)] {
+            app.world_mut().spawn((
+                Sprite::default(),
+                Transform::from_translation(at.extend(0.0)),
+                TokenIdentity(id.to_string()),
+                Visibility::Inherited,
+            ));
+        }
+
+        app.add_systems(Update, apply_light_illumination);
+        app
+    }
+
+    fn marked(app: &mut App) -> Vec<String> {
+        let mut query = app.world_mut().query::<(&TokenIdentity, &Sprite)>();
+        let mut out: Vec<String> = query
+            .iter(app.world())
+            .filter(|(_, sprite)| (sprite.color.alpha() - DIM_ALPHA).abs() < 1e-4)
+            .map(|(identity, _)| identity.0.clone())
+            .collect();
+        out.sort();
+        out
+    }
+
+    #[test]
+    fn a_token_the_party_cannot_see_is_marked_though_it_stands_in_daylight() {
+        // The case the old behaviour got wrong in the first direction: bright
+        // light, so illumination says "plainly visible", but a wall stands
+        // between the hero and it and nobody at the table can see it.
+        let mut app = table(Vec2::new(200.0, 0.0));
+        app.update();
+        assert_eq!(marked(&mut app), vec!["monster".to_string()]);
+    }
+
+    #[test]
+    fn a_token_the_party_can_see_is_not_marked() {
+        // Same side of the wall as the hero: nothing to warn about.
+        let mut app = table(Vec2::new(-200.0, 0.0));
+        app.update();
+        assert!(marked(&mut app).is_empty());
+    }
+
+    #[test]
+    fn a_game_master_still_sees_a_token_the_party_cannot() {
+        // Marked, never hidden: the Game Master runs the monster.
+        let mut app = table(Vec2::new(200.0, 0.0));
+        app.update();
+        let mut query = app.world_mut().query::<(&TokenIdentity, &Visibility)>();
+        for (identity, visibility) in query.iter(app.world()) {
+            assert_eq!(
+                *visibility,
+                Visibility::Inherited,
+                "{} must stay on a Game Master's board",
+                identity.0
+            );
+        }
+    }
+
+    #[test]
+    fn a_second_pair_of_eyes_still_marks_what_the_first_cannot_see() {
+        // FR-033 is written as *at least one* player: a token any player is
+        // missing gets the mark, even if another can see it plainly.
+        //
+        // A split party is where that reading bites, and this is that case —
+        // a scout past the wall, the hero and the monster west of it. All
+        // three are marked, because for each of them there is somebody who
+        // cannot see it. That is the requirement as written and it is what
+        // the engine does; whether a Game Master wants this much marking
+        // when their party splits up is a question for play, recorded in
+        // the spec rather than decided here.
+        let mut app = table(Vec2::new(-200.0, 0.0));
+        app.world_mut().spawn((
+            Sprite::default(),
+            Transform::from_translation(Vec2::new(200.0, 0.0).extend(0.0)),
+            TokenIdentity("scout".to_string()),
+            Visibility::Inherited,
+        ));
+        app.insert_resource(PartyEyes(vec!["hero".to_string(), "scout".to_string()]));
+        app.update();
+        assert_eq!(
+            marked(&mut app),
+            vec![
+                "hero".to_string(),
+                "monster".to_string(),
+                "scout".to_string()
+            ],
+        );
+    }
+
+    #[test]
+    fn a_token_every_pair_of_eyes_can_see_is_never_marked() {
+        // The other side of the same rule, and the one that keeps a quiet
+        // board quiet: two heroes together, and a monster in front of them.
+        let mut app = table(Vec2::new(-200.0, 0.0));
+        app.world_mut().spawn((
+            Sprite::default(),
+            Transform::from_translation(Vec2::new(-150.0, 0.0).extend(0.0)),
+            TokenIdentity("scout".to_string()),
+            Visibility::Inherited,
+        ));
+        app.insert_resource(PartyEyes(vec!["hero".to_string(), "scout".to_string()]));
+        app.update();
+        assert!(marked(&mut app).is_empty());
+    }
+
+    #[test]
+    fn with_no_party_named_nothing_is_marked_by_line_of_sight() {
+        // A Game Master whose players have no tokens yet. The board falls
+        // back to illumination, and in daylight that marks nothing — rather
+        // than marking everything on the grounds that an empty party can see
+        // nothing, which is the reading that makes a fresh scene look wrong.
+        let mut app = table(Vec2::new(200.0, 0.0));
+        app.insert_resource(PartyEyes(Vec::new()));
+        app.update();
+        assert!(marked(&mut app).is_empty());
+    }
+}

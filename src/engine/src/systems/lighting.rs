@@ -18,6 +18,9 @@ use crate::resources::{
     CanvasLayer, IsGameMaster, LightEdit, LightSet, LightSource, SceneAmbient, SelectedLight,
     TokenVision, WallSet,
 };
+use crate::systems::lighting_vision::{
+    PartyEyes, ViewerToken, mirror_hidden_tokens, mirror_marked_tokens,
+};
 use crate::{ActiveWorld, TokenIdentity, emit_event};
 use thunderforge_canvas_core::vision::{
     AmbientLight, Illumination, ResolvedLight, Rgb, Visibility as Perceived, VisionProfile,
@@ -651,6 +654,7 @@ pub(crate) fn apply_light_illumination(
     ambient: Option<Res<SceneAmbient>>,
     is_gm: Option<Res<IsGameMaster>>,
     viewer: Option<Res<ViewerToken>>,
+    party_eyes: Option<Res<PartyEyes>>,
     token_positions: Query<(&Transform, &TokenIdentity, Option<&TokenVision>)>,
     mut tokens: Query<(
         &Transform,
@@ -668,11 +672,19 @@ pub(crate) fn apply_light_illumination(
 
     // Nothing to resolve in a lit scene with no lights — unless someone is
     // looking through a token, whose walls hide things in daylight too.
-    let sees_through_a_token = !is_gm.as_ref().is_some_and(|gm| gm.0)
-        && viewer.as_ref().is_some_and(|viewer| viewer.0.is_some());
+    let game_master = is_gm.as_ref().is_some_and(|gm| gm.0);
+    let sees_through_a_token =
+        !game_master && viewer.as_ref().is_some_and(|viewer| viewer.0.is_some());
+    // Nor for a Game Master with a party to compare against: in a bright
+    // scene FR-030 still applies, so a wall still hides a token from the
+    // table, and the mark that says so is still owed (FR-033). Returning
+    // early here left a Game Master in daylight with no marks at all.
+    let marks_for_the_party =
+        game_master && party_eyes.as_ref().is_some_and(|eyes| !eyes.0.is_empty());
     if light_set.lights().is_empty()
         && ambient.level == Illumination::Bright
         && !sees_through_a_token
+        && !marks_for_the_party
     {
         // Everything is in plain sight again. Whatever an earlier pass hid —
         // a token behind a wall from a viewer since unset, or in a dark scene
@@ -700,7 +712,6 @@ pub(crate) fn apply_light_illumination(
         .map(|light| resolve_light(light, &positions))
         .collect();
 
-    let game_master = is_gm.is_some_and(|gm| gm.0);
     let observer = if game_master {
         None
     } else {
@@ -720,7 +731,32 @@ pub(crate) fn apply_light_illumination(
             })
     };
 
+    // The party's eyes, for a Game Master's marks (FR-033). Empty for
+    // everyone else, and for a Game Master whose players have no tokens yet —
+    // the branch below falls back to illumination when it is.
+    let party: Vec<(Vec2, VisionProfile)> = if game_master {
+        party_eyes
+            .map(|eyes| eyes.0.clone())
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|id| {
+                token_positions
+                    .iter()
+                    .find(|(_, identity, _)| &identity.0 == id)
+                    .map(|(transform, _, vision)| {
+                        (
+                            transform.translation.truncate(),
+                            vision.map_or_else(VisionProfile::default, |v| v.0),
+                        )
+                    })
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+
     let mut hidden = Vec::new();
+    let mut marked = Vec::new();
     for (transform, identity, token_vision, mut sprite, mut visibility) in tokens.iter_mut() {
         let target = transform.translation.truncate();
 
@@ -741,9 +777,35 @@ pub(crate) fn apply_light_illumination(
                     )
                 }
             }
+            None if game_master && !party.is_empty() => {
+                // FR-033. A Game Master sees every token; the dim marks the
+                // ones the table cannot see, which is the question a Game
+                // Master actually asks of their own board.
+                //
+                // This used to be the token's *illumination*, which is a
+                // different question that only sometimes agrees: a token in
+                // bright light behind a wall reads as plainly visible though
+                // nobody can see it, and a token in the dark that every
+                // player has darkvision on reads as unseen though everyone
+                // can. Both were wrong, in opposite directions.
+                if party.iter().all(|(eye_pos, eye_vision)| {
+                    eye_pos.distance(target) <= f32::EPSILON
+                        || visibility_of(*eye_pos, eye_vision, target, &lights, &wall_set, ambient)
+                            != Perceived::Hidden
+                }) {
+                    Perceived::Clear
+                } else {
+                    Perceived::Dim
+                }
+            }
             None => {
-                // GM view: illumination only. Darkvision on the token itself
-                // still lets it be picked out of the dark.
+                // No token to see through, and no party to compare against:
+                // a Game Master before their players have tokens, or a player
+                // with none of their own (FR-035). Illumination only, which is
+                // the board as it is lit.
+                //
+                // Darkvision on the token itself still lets it be picked out
+                // of the dark.
                 let (level, _color) = illumination_at(target, &lights, &wall_set, ambient);
                 match level {
                     Illumination::Bright => Perceived::Clear,
@@ -770,6 +832,9 @@ pub(crate) fn apply_light_illumination(
             Perceived::Dim => {
                 *visibility = Visibility::Inherited;
                 sprite.color = sprite.color.with_alpha(DIM_ALPHA);
+                if game_master && !party.is_empty() {
+                    marked.push(identity.0.clone());
+                }
             }
             Perceived::Hidden => {
                 *visibility = UNLIT_VISIBILITY;
@@ -778,6 +843,7 @@ pub(crate) fn apply_light_illumination(
         }
     }
     mirror_hidden_tokens(hidden);
+    mirror_marked_tokens(marked);
 }
 
 /// Undo a dim this system applied, and nothing else: a token's own alpha —
@@ -787,71 +853,6 @@ fn undim(sprite: &mut Sprite) {
     if (sprite.color.alpha() - DIM_ALPHA).abs() < 1e-3 {
         sprite.color = sprite.color.with_alpha(1.0);
     }
-}
-
-/// The token this client sees the board through — the local player's own,
-/// named by the application (`set_viewer_token`). `None` for a Game Master,
-/// and for anyone the application has not named one for.
-#[derive(Resource, Default, Debug, Clone, PartialEq)]
-pub(crate) struct ViewerToken(pub Option<String>);
-
-type ViewerRequest = Option<Option<String>>;
-
-static REQUESTED_VIEWER: std::sync::OnceLock<std::sync::Mutex<ViewerRequest>> =
-    std::sync::OnceLock::new();
-
-/// Name the token this client sees the board through; `""` for none.
-///
-/// Queued and applied on the next frame, like the engine's other web
-/// commands. Local session state, not world state: which token is "mine" is
-/// a fact about this viewer, so it is never synced or broadcast.
-#[wasm_bindgen::prelude::wasm_bindgen]
-pub fn set_viewer_token(token_id: &str) -> bool {
-    let request = (!token_id.is_empty()).then(|| token_id.to_string());
-    let slot = REQUESTED_VIEWER.get_or_init(|| std::sync::Mutex::new(None));
-    if let Ok(mut pending) = slot.lock() {
-        *pending = Some(request);
-        return true;
-    }
-    false
-}
-
-pub(crate) fn apply_requested_viewer(mut viewer: ResMut<ViewerToken>) {
-    let Some(slot) = REQUESTED_VIEWER.get() else {
-        return;
-    };
-    let Ok(mut pending) = slot.lock() else {
-        return;
-    };
-    if let Some(request) = pending.take() {
-        viewer.set_if_neq(ViewerToken(request));
-    }
-}
-
-static HIDDEN_TOKENS: std::sync::OnceLock<std::sync::Mutex<Vec<String>>> =
-    std::sync::OnceLock::new();
-
-fn mirror_hidden_tokens(mut hidden: Vec<String>) {
-    hidden.sort_unstable();
-    let slot = HIDDEN_TOKENS.get_or_init(|| std::sync::Mutex::new(Vec::new()));
-    if let Ok(mut current) = slot.lock()
-        && *current != hidden
-    {
-        *current = hidden;
-    }
-}
-
-/// The ids of the tokens this client currently hides, as a JSON array.
-///
-/// Read-only, and here so a test can ask what a player's canvas withholds —
-/// a token out of their sight — rather than infer it from pixels.
-#[wasm_bindgen::prelude::wasm_bindgen]
-pub fn hidden_tokens() -> String {
-    let list = HIDDEN_TOKENS
-        .get()
-        .and_then(|slot| slot.lock().ok().map(|l| l.clone()))
-        .unwrap_or_default();
-    serde_json::Value::from(list).to_string()
 }
 
 pub(crate) fn init_lighting_systems_resources(app: &mut App) {

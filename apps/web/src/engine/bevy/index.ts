@@ -130,6 +130,7 @@ function installEngineProbe(wasm: BevyWasmModule): void {
   const tokenNameplates = (wasm as { token_nameplates?: () => string })
     .token_nameplates;
   const hiddenTokens = (wasm as { hidden_tokens?: () => string }).hidden_tokens;
+  const markedTokens = (wasm as { marked_tokens?: () => string }).marked_tokens;
   const movementState = (wasm as { movement_state?: () => string })
     .movement_state;
   (window as unknown as Record<string, unknown>).__engineProbe = {
@@ -151,6 +152,11 @@ function installEngineProbe(wasm: BevyWasmModule): void {
     // player's sight, or in the dark.
     hiddenTokens: (): string[] =>
       hiddenTokens ? (JSON.parse(hiddenTokens()) as string[]) : [],
+    // Spec 045 FR-033: the same question from the Game Master's chair — which
+    // tokens are marked because at least one player cannot see them. Always
+    // empty on a player's board.
+    markedTokens: (): string[] =>
+      markedTokens ? (JSON.parse(markedTokens()) as string[]) : [],
     // Spec 045: what this client believes about moving — which token its
     // player may move, whether the engine has found it yet, how many are
     // tagged, and whether the scene has a grid to step on. A keypress that
@@ -1205,6 +1211,28 @@ export async function setControlledToken(
     set?.(tokenId ?? "");
   } catch {
     // A bundle predating this controls nothing, exactly as before.
+  }
+}
+
+/**
+ * Spec 045 FR-033: name the tokens the table's players see through, so a Game
+ * Master's board can mark what the party cannot see.
+ *
+ * Only a Game Master's client sends this. A player is never told what anyone
+ * else can see — their own board answers one question, about their own token.
+ *
+ * The engine is given ids rather than left to work them out: "whose token is
+ * this" is a question about accounts and world membership, which the engine
+ * has never known and should not learn.
+ */
+export async function setPartyEyes(tokenIds: string[]): Promise<void> {
+  try {
+    const module = await getWasmModule();
+    const set = (module as { set_party_eyes?: (json: string) => boolean })
+      .set_party_eyes;
+    set?.(JSON.stringify(tokenIds));
+  } catch {
+    // A bundle predating this marks nothing, exactly as before.
   }
 }
 

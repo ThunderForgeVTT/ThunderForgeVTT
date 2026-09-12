@@ -535,7 +535,7 @@ pub fn is_visible(observer: Vec2, target: Vec2, walls: &WallSet) -> bool {
 /// token pushed against a wall, or placed on one by a Game Master, would
 /// otherwise be unable to move at all — every move it made would start from a
 /// point the touching rule already counts as a crossing.
-pub fn movement_blocked_by<'a>(from: Vec2, to: Vec2, walls: &'a WallSet) -> Option<&'a Wall> {
+pub fn movement_blocked_by(from: Vec2, to: Vec2, walls: &WallSet) -> Option<&Wall> {
     if from == to {
         return None;
     }

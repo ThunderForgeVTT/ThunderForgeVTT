@@ -12,6 +12,8 @@ import {
   expectAgreed,
   expectEveryoneLoaded,
   hiddenTokens,
+  joinLate,
+  markedTokens,
   makeDoor,
   movementStateOn,
   openTable,
@@ -53,6 +55,10 @@ const DOOR = 80;
 const ARIA_START: Point = { x: 0, y: 0 };
 const BROM_START: Point = { x: 0, y: -250 };
 const GOBLIN: Point = { x: 700, y: 0 };
+/** Behind the wall from both heroes, and carrying a lamp of its own. */
+const SENTRY: Point = { x: 500, y: 200 };
+/** On the heroes' own side, beyond every placed light: hidden by dark alone. */
+const WRAITH: Point = { x: -430, y: 330 };
 /** Where the heroes may wander: on screen, and on both sides of the wall. */
 const BOUNDS = { minX: -450, maxX: 500, minY: -300, maxY: 300 };
 
@@ -118,6 +124,7 @@ for (const system of ["genie", "dnd5e"] as const) {
 
       let doorWall = "";
       let goblin = "";
+      let wraith = "";
       let bromToken = "";
       await test.step("the Game Master builds a dark crypt", async () => {
         for (const [from, to] of SOLID_WALLS) await addWall(table, from, to);
@@ -164,7 +171,94 @@ for (const system of ["genie", "dnd5e"] as const) {
           await hiddenTokens(table.gm),
           "the Game Master sees through no token, so the wall hides nothing",
         ).not.toContain(goblin);
+        // FR-033: and the goblin is *marked* for them, because the players
+        // cannot see it. Not the same claim as the line above — that one says
+        // the Game Master keeps the token, this one says they are told the
+        // table has lost it.
+        await expect
+          .poll(() => markedTokens(table.gm), {
+            timeout: 15_000,
+            message: "the Game Master is shown what the party cannot see",
+          })
+          .toContain(goblin);
+        expect(
+          await markedTokens(aria.page),
+          "a player is never told what anyone else can see",
+        ).toEqual([]);
         await snapshot(table, "2 · behind the wall");
+      });
+
+      await test.step("a token in darkness alone is hidden, with no wall involved", async () => {
+        // FR-031, which the crawl has never covered: everything above is
+        // about the wall. This puts a token on the players' *own* side of it,
+        // out of every light, so the only thing that can hide it is the dark.
+        // Placed beyond the torch's 450 reach — WRAITH is ~467 away from it
+        // — and nowhere near Aria's carried lantern. Inside the radius the
+        // step would pass without darkness doing anything.
+        wraith = await placeCharacter(table, {
+          label: "Wraith",
+          at: WRAITH,
+          tokenType: "npc",
+        });
+        for (const seat of [aria, brom]) {
+          await expect
+            .poll(() => hiddenTokens(seat.page), {
+              timeout: 15_000,
+              message: `darkness alone hides the wraith from ${seat.name}`,
+            })
+            .toContain(wraith);
+        }
+        await snapshot(table, "2a · out of the light");
+      });
+
+      await test.step("a player with no token of their own sees the lit board", async () => {
+        // FR-035 and decision 4: such a player sees the board *as it is lit*,
+        // with no line of sight applied. Both halves of that matter, so this
+        // needs a token that is lit *and* behind the wall.
+        //
+        // A sentry with a lamp of its own, rather than the goblin: the goblin
+        // stands in the dark on purpose, and later steps turn on its light to
+        // say so. Lighting it here would quietly delete that story.
+        //
+        // Unlit, this step would prove nothing — the token would be hidden
+        // from Carl by darkness and from the players by the wall, and two
+        // different rules reaching the same answer is not evidence about
+        // either. Lit, the wall is the only thing left that can hide it.
+        const sentry = await placeCharacter(table, {
+          label: "Sentry",
+          at: SENTRY,
+          tokenType: "npc",
+        });
+        await addLight(table, SENTRY, 200);
+        const carl = await joinLate(table, "Carl");
+        await sitDown(table, carl.page);
+        await expect
+          .poll(
+            () =>
+              carl.page.evaluate(
+                () => window.__worldProbe?.state()?.counts.tokens ?? 0,
+              ),
+            { timeout: 20_000, message: "Carl's board loads the scene" },
+          )
+          .toBeGreaterThan(0);
+
+        await expect
+          .poll(() => hiddenTokens(carl.page), {
+            timeout: 15_000,
+            message:
+              "a player with no token has no point of view, so a lit token " +
+              "behind a wall is on their board (FR-035)",
+          })
+          .not.toContain(sentry);
+        await expect
+          .poll(() => hiddenTokens(aria.page), {
+            timeout: 15_000,
+            message:
+              "and the wall still hides the same lit sentry from a player " +
+              "who does have a token",
+          })
+          .toContain(sentry);
+        await snapshot(table, "2b · a player with no token");
       });
 
       await test.step("Aria walks up to the door, and the table sees her go", async () => {
@@ -298,6 +392,37 @@ for (const system of ["genie", "dnd5e"] as const) {
           })
           .not.toContain(goblin);
         await snapshot(table, "7 · a brazier");
+      });
+
+      await test.step("Aria's lantern travels with her", async () => {
+        // FR-042. The scene is dark and the brazier is off again, so the only
+        // light near the wraith is the one Aria carries — which means the
+        // wraith is visible exactly when Aria has walked close enough, and
+        // hidden again when she leaves. A light that stayed where it was
+        // placed would never reach it at all.
+        await setAmbient(table, "dark");
+        await expect
+          .poll(() => hiddenTokens(aria.page), {
+            timeout: 15_000,
+            message: "the wraith is in the dark before Aria walks over",
+          })
+          .toContain(wraith);
+
+        const before = await expectAgreed(table, ariaToken, "Aria is at rest");
+        await drag(aria, ariaToken, {
+          x: WRAITH.x + 120 - before.x,
+          y: WRAITH.y - before.y,
+        });
+        await expectAgreed(table, ariaToken, "Aria reaches the wraith");
+        await expect
+          .poll(() => hiddenTokens(aria.page), {
+            timeout: 15_000,
+            message:
+              "Aria's lantern lights from wherever she is, so walking to the " +
+              "wraith reveals it (FR-042)",
+          })
+          .not.toContain(wraith);
+        await snapshot(table, "7a · the lantern travels");
       });
 
       await test.step(`the heroes wander for ${ROUNDS} rounds (seed ${SEED})`, async () => {

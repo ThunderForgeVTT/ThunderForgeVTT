@@ -954,6 +954,36 @@ export default function WorldPage() {
   const viewerTokenId =
     (myTokens.find((token) => token.isPrimary) ?? myTokens[0])?.id ?? null;
 
+  // Spec 045 FR-033: the party's eyes, for a Game Master's board alone.
+  //
+  // Each owner resolved to one token by the same rule FR-001 gives a player
+  // for their own — their primary, else any they own — so what the Game
+  // Master's marks are computed against is exactly what each player is
+  // looking through, rather than "every character token", which would count
+  // an unclaimed pregen as a pair of eyes.
+  //
+  // Sorted and joined into a string so the effect below re-runs when the
+  // *set* changes and not on every re-render that rebuilds the array.
+  const allTokens = worldState.tokens;
+  const partyEyesKey = useMemo(() => {
+    if (!isSceneOwner) {
+      return "";
+    }
+    const byOwner = new Map<string, (typeof allTokens)[string][]>();
+    for (const token of Object.values(allTokens)) {
+      if (!token.ownerUserId) {
+        continue;
+      }
+      const owned = byOwner.get(token.ownerUserId) ?? [];
+      owned.push(token);
+      byOwner.set(token.ownerUserId, owned);
+    }
+    return [...byOwner.values()]
+      .map((owned) => (owned.find((t) => t.isPrimary) ?? owned[0]).id)
+      .sort()
+      .join(",");
+  }, [isSceneOwner, allTokens]);
+
   useEffect(() => {
     if (!engineReady) {
       return;
@@ -969,6 +999,18 @@ export default function WorldPage() {
       },
     );
   }, [engineReady, viewerTokenId]);
+
+  useEffect(() => {
+    if (!engineReady) {
+      return;
+    }
+    void import("@/engine/bevy").then(({ setPartyEyes }) => {
+      void setPartyEyes(partyEyesKey ? partyEyesKey.split(",") : []);
+    });
+    // `partyEyesKey` rather than `partyEyes`: the array is rebuilt on every
+    // token move, and re-sending an unchanged list each time would ask the
+    // engine to re-resolve the party several times a second.
+  }, [engineReady, partyEyesKey]);
 
   // Spec 045 FR-013/FR-015: when the engine stops a move at a wall, say so.
   //

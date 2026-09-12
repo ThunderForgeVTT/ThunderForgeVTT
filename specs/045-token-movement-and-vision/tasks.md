@@ -95,10 +95,13 @@ including the cases the crawl does not cover today.
 darkness with no wall between is hidden; the Game Master sees every token, and
 one no player can see is marked for them.
 
-- [ ] T037 [P] [US3] Add playtest steps for the uncovered cases in `apps/web/playtest/dungeon-crawl.playtest.ts`: a player with no token (FR-035), and a token hidden by darkness alone (FR-031)
-- [ ] T038 [P] [US4] Add a playtest step for a carried light following its token as it moves (FR-042)
-- [ ] T039 [US3] Mark for the Game Master a token that at least one player cannot see (FR-033), in `src/engine/src/systems/lighting.rs`, if it is not already what `Perceived::Dim` means for a Game Master — read first, then change only if needed
-- [ ] T040 [US3] Verify and prove: engine check, `tsc --noEmit`, `pnpm playtest --only=dungeon-crawl` still green with the new hard checks
+- [X] T037 [P] [US3] Two steps added. **A wraith** hidden by darkness alone (FR-031), placed past the torch's reach — inside it the step would pass without darkness doing anything. **Carl** joins mid-session with no token (FR-035), and the subject is a *lit* sentry behind the wall: unlit it would be hidden from Carl by darkness and from the players by the wall, and two rules reaching the same answer is not evidence about either. `joinLate` added to the fixture
+- [X] T038 [P] [US4] Aria walks to the wraith in a dark scene and her lantern reveals it (FR-042). A light that stayed where it was placed would never reach it
+- [X] T039 [US3] **It was not what `Perceived::Dim` meant.** The Game Master's branch computed *illumination at the token*, which is a different question that only sometimes agrees: a token in bright light behind a wall read as plainly visible though nobody could see it, and a token in the dark that every player had darkvision on read as unseen though everyone could. Both wrong, in opposite directions. Now computed against the party's eyes, named by the application through `set_party_eyes` — the engine is given ids because "whose token is this" is a question about accounts and world membership it has never known
+- [X] T039a [US3] The early return had to move too: a lit scene with no lights skipped the whole pass, so a Game Master in daylight got no marks at all though walls still hid tokens from the table. Caught by the new engine test, which is why that test uses a bright scene
+- [X] T039b [US3] `lighting.rs` went past the 1000-line limit; the viewer token, the party's eyes and the two probe mirrors moved to `systems/lighting_vision.rs` — they are the inputs and outputs of the pass rather than part of it
+- [X] T039c [US3] Six engine tests, and a spec note: FR-033 says *at least one* player, so a **split party marks nearly everything**. Built as written and the test states the case plainly; whether a Game Master wants that much marking is a question for play, recorded in the spec rather than decided here
+- [X] T040 [US3] Proved: 12 checks green, `tsc --noEmit` clean, 219 engine tests pass, and `pnpm playtest --only=dungeon-crawl` passes both game systems with **0 wall crossings and no soft checks left in the scenario** — every assertion in the crawl is now hard
 
 ## Phase 7 (US6): A game system says how a hero sees
 

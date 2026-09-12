@@ -449,6 +449,12 @@ third room is shown.
 - **FR-032**: A player MUST always see their own tokens.
 - **FR-033**: A Game Master MUST see every token; a token at least one player
   cannot currently see MUST be marked for the Game Master.
+  - **Consequence, to watch in play**: "at least one" means a split party marks
+    nearly everything — with a scout through a door, each half of the party is
+    a token the other half cannot see, and so is every monster near either.
+    Built as written, and the engine tests state the case plainly. If a Game
+    Master finds the marks too noisy to read, the alternative is to mark only
+    what *no* player can see; that is a change to this requirement, not a bug.
 - **FR-034**: A change to walls, doors, lights, the scene's light or token
   positions MUST be reflected on every client's board within one second, with
   no reload.

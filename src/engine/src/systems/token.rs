@@ -147,6 +147,11 @@ fn token_half_diagonal() -> f32 {
 ///
 /// Yields entirely while a resize/rotate handle drag is in progress
 /// (`TokenDragState`) so a handle grab never also triggers a body move.
+// A Bevy system's arguments are its dependencies, and this one legitimately
+// needs the cursor, the camera, the mouse, the tokens, the selection, the
+// drag state, the grid — and, since spec 045, who is asking and where the
+// walls are.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn handle_token_drag(
     windows: Query<&Window, With<PrimaryWindow>>,
     camera_query: Query<(&Camera, &GlobalTransform)>,

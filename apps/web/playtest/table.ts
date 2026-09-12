@@ -407,6 +407,50 @@ export async function sitDown(table: Table, page: Page): Promise<void> {
   if (!table.seated.includes(page)) table.seated.push(page);
 }
 
+/**
+ * Another player arrives after the session has started, with no token.
+ *
+ * Their own browser, registered and joined like everyone else — the point is
+ * that they have nothing to see through, not that they are a stand-in. Added
+ * to `table.players` so `clients()` includes them in snapshots and
+ * `closeTable` tidies their context and recording away.
+ */
+export async function joinLate(table: Table, name: string): Promise<Seat> {
+  const { generateInviteCode } = await must<{
+    generateInviteCode: { inviteCode: string };
+  }>(
+    table.gm,
+    `mutation ($input: GenerateInviteCodeInput!) {
+      generateInviteCode(input: $input) { inviteCode }
+    }`,
+    { input: { worldId: table.worldId, maxUses: 10 } },
+  );
+
+  const context = await table.gm.context().browser()!.newContext({
+    viewport: VIEWPORT,
+    recordVideo: {
+      dir: table.testInfo.outputPath(`video-${name}`),
+      size: VIEWPORT,
+    },
+  });
+  const page = await context.newPage();
+  await register(page, freshCredentials(`pt${name.toLowerCase()}`));
+  await must(
+    page,
+    `mutation ($input: JoinWorldInput!) { joinWorld(input: $input) { id } }`,
+    { input: { inviteCode: generateInviteCode.inviteCode } },
+  );
+  const { me } = await must<{ me: { id: string } }>(
+    page,
+    `query { me { id } }`,
+    {},
+  );
+
+  const seat: Seat = { name, page, userId: me.id };
+  table.players.push(seat);
+  return seat;
+}
+
 /** Zooms a client's camera out a few notches, so a screenshot shows the room. */
 export async function overview(page: Page, notches = 4): Promise<void> {
   const canvas = page.locator("canvas");
@@ -446,6 +490,24 @@ export async function hiddenTokens(page: Page): Promise<string[]> {
           __engineProbe?: { hiddenTokens?: () => string[] };
         }
       ).__engineProbe?.hiddenTokens?.() ?? [],
+  );
+}
+
+/**
+ * The tokens a Game Master's board marks because at least one player cannot
+ * see them (spec 045 FR-033).
+ *
+ * Always empty on a player's board: a player is told what their own token can
+ * see, never what anybody else's can.
+ */
+export async function markedTokens(page: Page): Promise<string[]> {
+  return page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          __engineProbe?: { markedTokens?: () => string[] };
+        }
+      ).__engineProbe?.markedTokens?.() ?? [],
   );
 }
 
