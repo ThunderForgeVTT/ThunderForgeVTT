@@ -13,6 +13,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use ts_rs::TS;
 
 /// One line of a document, as a reader sees it.
 ///
@@ -21,7 +22,9 @@ use std::collections::BTreeMap;
 /// `thunderforge_pdf::layout::Line`: that carries the geometry the layout
 /// pass needed and a reader does not, and taking it here would tie every
 /// reader to the PDF crate's internals.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
 pub struct SourceLine {
     pub text: String,
     pub size: f64,
@@ -47,8 +50,9 @@ pub struct SourceLine {
 /// absence and no value invented to fill it; a struct with an optional value
 /// beside a state can express "unread, and here is the value anyway", and
 /// anything expressible eventually gets written.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", tag = "state", content = "value")]
+#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
 pub enum ReadValue {
     /// Found, and the reader has no reason to doubt it.
     Clear(String),
@@ -76,8 +80,13 @@ impl ReadValue {
 }
 
 /// One thing read out of a book: a spell, an item, a creature, a feat.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(
+    export,
+    export_to = "../../../apps/web/src/engine/sdk/",
+    rename = "ContentEntry"
+)]
 pub struct Entry {
     /// The system's own word for what this is. Carried, never switched on.
     pub kind: String,
@@ -103,12 +112,14 @@ pub struct Entry {
     /// which is what lets a pack own a reading only it understands without
     /// shared code learning that system's vocabulary.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(type = "unknown")]
     pub extras: Option<serde_json::Value>,
 }
 
 /// Whether an entry's name is one.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
 pub enum NameState {
     Clear,
     Uncertain,

@@ -21,6 +21,21 @@ const ENGINE_SRC_DIR = join(ENGINE_DIR, "src");
 const ENGINE_CARGO_TOML = join(ENGINE_DIR, "Cargo.toml");
 const ENGINE_PKG_DIR = join(ROOT_DIR, "dist/engine");
 const PDF_DIR = join(ROOT_DIR, "crates/thunderforge-pdf");
+/**
+ * The crates the PDF reader is built out of besides its own.
+ *
+ * `thunderforge-content` holds the readers that turn a book's text into a
+ * system's content, and `thunderforge-canvas-core` the types they speak. Both
+ * are compiled into the wasm, so both belong in the hash below — a bundle that
+ * is present but stale does not fail, it succeeds for the wrong reason, which
+ * is the whole point of hashing inputs rather than checking the package
+ * exists.
+ */
+const PDF_SOURCE_DIRS = [
+  PDF_DIR,
+  join(ROOT_DIR, "crates/thunderforge-content"),
+  join(ROOT_DIR, "crates/thunderforge-canvas-core"),
+];
 const PDF_PKG_DIR = join(ROOT_DIR, "dist/pdf");
 const ENGINE_PKG_SUM = join(ENGINE_PKG_DIR, "pkg.sum");
 const ENGINE_PKG_PACKAGE_JSON = join(ENGINE_PKG_DIR, "package.json");
@@ -344,8 +359,10 @@ function getPdfInputsHash() {
   if (existsSync(WORKSPACE_CARGO_LOCK)) {
     hashFile(hash, WORKSPACE_CARGO_LOCK);
   }
-  hashFile(hash, join(PDF_DIR, "Cargo.toml"));
-  hashDirectoryRecursive(hash, join(PDF_DIR, "src"));
+  for (const dir of PDF_SOURCE_DIRS) {
+    hashFile(hash, join(dir, "Cargo.toml"));
+    hashDirectoryRecursive(hash, join(dir, "src"));
+  }
   return hash.digest("hex");
 }
 

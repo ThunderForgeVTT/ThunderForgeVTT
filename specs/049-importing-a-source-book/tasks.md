@@ -106,14 +106,14 @@ explicit submit.
 **Independent test**: an e2e test that watches the network fails if any request
 body carries entry text before submit is pressed.
 
-- [ ] T026 [049-US1] `apps/web/src/services/bookImport.ts` — reads the world's system's `contentPatterns`, drives `services/pdfReader.ts` a chunk at a time, and applies the patterns in the browser. The readers are the same Rust compiled to wasm, never a second implementation
-- [ ] T027 [P] [049-US1] Hash the file with WebCrypto and ask the server whether **this account** already has it, before any content is read (049 FR-047, spec 047 FR-072). A hash is not content
+- [X] T026 [049-US1] `apps/web/src/services/bookImport.ts`, reading a chunk of pages at a time and yielding between chunks. Getting the readers there needed the refactor first: they moved to `crates/thunderforge-content`, which depends on neither the PDF layer nor the server so it compiles to wasm and to native, and `thunderforge-pdf` gained a `read_content` export. **The entries are built in the browser, not the lines shipped somewhere to be interpreted** — sending the lines would be sending the book
+- [X] T027 [P] [049-US1] Hash the file with WebCrypto and ask the server whether **this account** already has it, before any content is read (049 FR-047, spec 047 FR-072). A hash is not content
 - [ ] T028 [049-US1] `apps/web/src/components/import/ImportReview.tsx` — everything found, grouped by kind, counted, with a total; an entry openable to its fields and its page; and uncertain/unread fields **visibly different** from read ones (049 FR-021 to FR-023)
 - [ ] T029 [P] [049-US1] Exclusion in the review: whole kinds, and individual entries (049 FR-026)
 - [ ] T030 [P] [049-US1] Correction of an uncertain value in the review, carried into what is submitted (spec 048 FR-022, referenced by 049 FR-023)
 - [ ] T031 [049-US1] Silent-page reporting in the review: a book that yielded nothing says so, and a book that was partly scans says how many pages were silent (049 FR-005) — never an empty success
 - [ ] T032 [049-US1] Only a Game Master, only from their own panel (049 FR-028). The entry point lives with the world panel; a player has no route to it
-- [ ] T033 [049-US1] `apps/web/e2e/book-import-review.spec.ts` — **observes the network** and fails if any request body carries entry text before submit. Proving absence by inspection is not proving it (research §5, 049 FR-061)
+- [X] T033 [049-US1] `apps/web/e2e/book-import-review.spec.ts`, **2 passed in Chromium**. One test proves the declaration-driven readers run as wasm with no server involved and that an unfound field carries no value at all; the other watches every request body and fails if any carries the book's text. Absence is not provable by inspection — a telemetry call added next year would pass a code review and break FR-020
 - [ ] T034 [049-US1] Proved: that e2e green, `pnpm -F @thunderforge/web exec tsc --noEmit` clean, and by hand — open the review on a real book, close it, and confirm nothing exists anywhere
 
 ---

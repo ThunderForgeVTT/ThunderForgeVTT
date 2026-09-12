@@ -138,3 +138,89 @@ pub fn pdf_outline(bytes: &[u8]) -> Result<String, JsValue> {
     serde_json::to_string(&document.outline())
         .map_err(|error| JsValue::from_str(&error.to_string()))
 }
+
+/// Read a system's declared content out of a book, in the browser.
+///
+/// `patterns` is the system pack's `contentPatterns` block, verbatim. This
+/// function knows nothing about any game: every label it looks for arrives in
+/// that argument, which is what lets a second game system be a pack change
+/// rather than a change here (spec 049 FR-010 to FR-016, ADR-096).
+///
+/// # Why this exists at all
+///
+/// Spec 049 FR-020: nothing read leaves the Game Master's machine before they
+/// submit. That means the *entries*, not just the lines, have to be built
+/// here — a browser that shipped its lines away to be interpreted would have
+/// sent the book. And FR-036 says the server re-checks what arrives, so the
+/// same readers run there too, from `thunderforge_content`. One crate,
+/// compiled twice.
+///
+/// Paged like [`read_pdf`], and for the same reason.
+#[wasm_bindgen]
+pub fn read_content(
+    bytes: &[u8],
+    patterns: &str,
+    from: usize,
+    count: usize,
+) -> Result<String, JsValue> {
+    let declared: thunderforge_canvas_core::content_patterns::ContentPatterns =
+        serde_json::from_str(patterns)
+            .map_err(|error| JsValue::from_str(&format!("could not read the patterns: {error}")))?;
+    if declared.is_empty() {
+        // A refusal rather than an empty result. A system that declares
+        // nothing has no correct reading, and returning zero entries would be
+        // indistinguishable from a book that simply contained none.
+        return Err(JsValue::from_str(
+            "this game system declares no content patterns, so a book cannot be read into it",
+        ));
+    }
+
+    let document = Document::from_bytes(bytes)
+        .map_err(|error| JsValue::from_str(&format!("could not read the document: {error}")))?;
+
+    let mut lines: Vec<thunderforge_content::SourceLine> = Vec::new();
+    for page in document
+        .pages()
+        .into_iter()
+        .skip(from.saturating_sub(1))
+        .take(count)
+    {
+        let Ok(runs) = document.runs(&page) else {
+            continue;
+        };
+        let assembled = layout::lines(&runs);
+        let body = layout::body_size(&assembled);
+        for line in layout::reading_order(assembled, page.geometry) {
+            if line.text.trim().is_empty() {
+                continue;
+            }
+            let suspect =
+                layout::looks_letter_spaced(&line.text) || layout::looks_unreadable(&line.text);
+            let heading = layout::is_heading(&line, body);
+            lines.push(thunderforge_content::SourceLine {
+                text: line.text,
+                size: line.size,
+                bold: line.bold,
+                page: page.number,
+                suspect,
+                heading,
+            });
+        }
+    }
+
+    let mut entries: Vec<thunderforge_content::Entry> = Vec::new();
+    for pattern in &declared.patterns {
+        let found = match pattern.shape {
+            thunderforge_canvas_core::content_patterns::Shape::Anchored => {
+                thunderforge_content::anchored::entries(&lines, pattern)
+            }
+            thunderforge_canvas_core::content_patterns::Shape::Prose => {
+                thunderforge_content::prose::entries(&lines, pattern)
+            }
+        };
+        entries.extend(found);
+    }
+
+    serde_json::to_string(&entries)
+        .map_err(|error| JsValue::from_str(&format!("could not report what was read: {error}")))
+}
