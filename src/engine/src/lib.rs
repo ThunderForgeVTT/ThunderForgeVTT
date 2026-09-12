@@ -43,8 +43,9 @@ use derived_data::*;
 #[cfg(target_arch = "wasm32")]
 use plugins::{
     BackgroundPlugin, CachedAssetsPlugin, CameraPlugin, CanvasLayerPlugin, DarknessPlugin,
-    DiceRollPlugin, GridPlugin, LightingOverlayPlugin, LightingPlugin, RenderProbePlugin,
-    ScenePlugin, SelectionPlugin, ShapePlugin, StatusDisplayPlugin, TokenPlugin, WallPlugin,
+    DiceRollPlugin, ExplorationPlugin, GridPlugin, LightingOverlayPlugin, LightingPlugin,
+    RenderProbePlugin, ScenePlugin, SelectionPlugin, ShapePlugin, StatusDisplayPlugin, TokenPlugin,
+    WallPlugin,
 };
 use plugins::{RenderProbeEnabled, ResolvedResource, TokenStatus};
 use resources::{

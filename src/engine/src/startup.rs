@@ -167,6 +167,10 @@ pub fn start(canvas_selector: &str) {
         // The lighting layer itself: darkness over the map, light pools cut
         // out of it, wall shadows painted back in.
         .add_plugins(DarknessPlugin)
+        // Spec 045 US7: what a player's own token has seen, remembered and
+        // drawn faintly into the fog layer. Off until a Game Master turns it
+        // on for a scene.
+        .add_plugins(ExplorationPlugin)
         .add_systems(Startup, setup_scene)
         .add_systems(
             Update,
