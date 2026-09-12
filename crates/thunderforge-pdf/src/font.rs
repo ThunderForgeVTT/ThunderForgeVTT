@@ -20,7 +20,7 @@ pub(crate) fn resolve<'a>(document: &'a Document, object: &'a Object) -> Option<
 }
 
 /// One font, as a page refers to it.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct FontInfo {
     /// The PostScript name — `ABCDEF+Bookmania-Bold`, `Helvetica`.
     pub base_font: String,
@@ -53,24 +53,45 @@ impl FontInfo {
 /// The fonts one page can name, keyed by the name its content stream uses.
 pub type FontMap = HashMap<String, FontInfo>;
 
+/// A page's fonts, with the encodings needed to read text drawn in them.
+///
+/// Borrowed from the document rather than owned, because it is used for
+/// exactly as long as one page takes to parse — and `lopdf`'s encoding type
+/// borrows its byte table from a static it will not name.
+pub struct PageFonts<'a> {
+    pub info: FontMap,
+    /// **Not decoration.** A subsetted font renumbers its glyphs, so its
+    /// codes have no relation to ASCII: one book in the reference library
+    /// yields `* ROGGUDJRQV` where it means `Gold dragons`, every byte
+    /// shifted by 29. Read as Latin-1 that is gibberish which *looks* like
+    /// text — the worst failure available, because nothing downstream can
+    /// tell that it is wrong.
+    pub encodings: HashMap<String, lopdf::Encoding<'a>>,
+}
+
 /// Read a page's font resources.
 ///
 /// A page naming a font this cannot resolve still yields runs: the text
 /// machine falls back to a default, because losing the words to recover the
 /// typeface would be the wrong trade.
-pub fn fonts_for_page(document: &Document, page_id: (u32, u16)) -> FontMap {
+pub fn fonts_for_page(document: &Document, page_id: (u32, u16)) -> PageFonts<'_> {
     let mut map = FontMap::new();
+    let mut encodings = HashMap::new();
+    let empty = |map: FontMap| PageFonts {
+        info: map,
+        encodings: HashMap::new(),
+    };
     let Ok(resources) = document.get_page_resources(page_id) else {
-        return map;
+        return empty(map);
     };
     let Some(dictionary) = resources.0 else {
-        return map;
+        return empty(map);
     };
     let Ok(fonts) = dictionary.get(b"Font") else {
-        return map;
+        return empty(map);
     };
     let Some(fonts) = resolve(document, fonts).and_then(|o| o.as_dict().ok()) else {
-        return map;
+        return empty(map);
     };
 
     for (name, value) in fonts.iter() {
@@ -86,9 +107,31 @@ pub fn fonts_for_page(document: &Document, page_id: (u32, u16)) -> FontMap {
                 _ => None,
             })
             .unwrap_or_default();
+        if let Some(encoding) = encoding_of(document, font) {
+            encodings.insert(name.clone(), encoding);
+        }
         map.insert(name, FontInfo::from_base_font(base));
     }
-    map
+    PageFonts {
+        info: map,
+        encodings,
+    }
+}
+
+/// Read a font's encoding, if it declares one this can use.
+///
+/// `None` means "read the bytes as they are", which is right for a font with
+/// no encoding at all and is what this crate did for everything before.
+fn encoding_of<'a>(
+    document: &'a Document,
+    font: &'a lopdf::Dictionary,
+) -> Option<lopdf::Encoding<'a>> {
+    match font.get_font_encoding(document).ok()? {
+        // A named encoding this build has no table for. Falling back to the
+        // raw bytes is the same answer as before and no worse.
+        lopdf::Encoding::SimpleEncoding(_) => None,
+        known => Some(known),
+    }
 }
 
 #[cfg(test)]

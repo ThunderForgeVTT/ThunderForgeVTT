@@ -27,6 +27,8 @@ fn main() {
     let mut lines_read = 0usize;
     let mut headings = 0usize;
     let mut damaged_lines = 0usize;
+    let mut unreadable_lines = 0usize;
+    let mut books_unreadable = 0usize;
     let mut with_outline = 0usize;
     let mut failures: Vec<String> = Vec::new();
     let mut no_pages = 0usize;
@@ -57,6 +59,7 @@ fn main() {
         }
 
         let mut text_here = 0usize;
+        let mut unreadable_here = 0usize;
         for page in document.pages().into_iter().take(sample_pages) {
             let Ok(runs) = document.runs(&page) else {
                 continue;
@@ -76,10 +79,20 @@ fn main() {
                 if layout::looks_letter_spaced(&line.text) {
                     damaged_lines += 1;
                 }
+                if layout::looks_unreadable(&line.text) {
+                    unreadable_lines += 1;
+                    unreadable_here += 1;
+                }
             }
         }
         if text_here > 200 {
             with_text += 1;
+            // A book where most of what was read is not language has a font
+            // this cannot decode. Counted separately from a scan: there IS
+            // text here, and it is being read wrongly.
+            if unreadable_here * 3 > lines_read.max(1) / files.len().max(1) {
+                books_unreadable += 1;
+            }
         } else {
             silent += 1;
         }
@@ -103,6 +116,11 @@ fn main() {
         "  letter-spaced     {damaged_lines}  ({:.1}% of lines)",
         percent(damaged_lines, lines_read)
     );
+    println!(
+        "  not language      {unreadable_lines}  ({:.1}% of lines) — fonts with no usable encoding",
+        percent(unreadable_lines, lines_read)
+    );
+    let _ = books_unreadable;
     if !empties.is_empty() {
         println!("\n--- opened with no page tree (object streams?) ---");
         for name in &empties {

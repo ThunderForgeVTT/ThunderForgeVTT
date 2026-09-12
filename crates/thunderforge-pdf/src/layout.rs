@@ -227,6 +227,49 @@ pub fn looks_letter_spaced(text: &str) -> bool {
     fragments * 4 >= words.len()
 }
 
+/// Whether a line decoded into something that is not language.
+///
+/// # The failure this catches
+///
+/// A subsetted font may carry no `/ToUnicode` map and no standard encoding at
+/// all — its codes mean something only to the glyph program embedded beside
+/// it. Read as bytes, such a font yields text like:
+///
+/// ```text
+/// * ROGGUDJRQVKDYHWKHP RVWORYHRIIH\DP RQJDOOGUDJRQNLQG
+/// ```
+///
+/// which is "Gold dragons have the most love of fey among all dragonkind"
+/// with every byte shifted by 29. It is the worst kind of failure, because it
+/// *looks* like text: it has letters, capitals and punctuation, and nothing
+/// downstream can tell it is wrong. A bestiary read this way would import
+/// creatures named `* ROGGUDJRQV`.
+///
+/// # The signal
+///
+/// Average word length. The space glyph is shifted along with everything
+/// else, so real spaces vanish and what is left runs together. English
+/// averages four to five characters a word; the line above averages twelve.
+///
+/// The mean rather than the longest word, which was the first attempt and
+/// does not work: that line's longest run is eighteen characters, well inside
+/// what a real sentence can contain. It is the *whole line* being built of
+/// such runs that gives it away.
+pub fn looks_unreadable(text: &str) -> bool {
+    let words: Vec<usize> = text
+        .split_whitespace()
+        .map(|word| word.chars().count())
+        .collect();
+
+    // One very long token is a compound noun or a URL, not evidence about a
+    // line. Three is enough to have an average worth trusting.
+    if words.len() < 3 {
+        return words.first().is_some_and(|only| *only > 40);
+    }
+    let mean = words.iter().sum::<usize>() as f64 / words.len() as f64;
+    mean > 10.0
+}
+
 /// A page's text in reading order, one line per entry.
 ///
 /// Columns are found by where lines actually start, not by assuming two. A

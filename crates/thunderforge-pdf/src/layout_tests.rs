@@ -211,6 +211,42 @@ fn ordinary_whitespace_is_collapsed() {
     assert_eq!(normalise("   "), "");
 }
 
+#[test]
+fn a_font_with_no_usable_encoding_is_caught_rather_than_imported() {
+    // Straight from the corpus: "Gold dragons have the most love of fey among
+    // all dragonkind", every byte shifted by 29 and the spaces gone with
+    // them. It has letters, capitals and punctuation, and a bestiary reading
+    // it would import a creature called `* ROGGUDJRQV`.
+    assert!(looks_unreadable(
+        "* ROGGUDJRQVKDYHWKHP RVWORYHRIIHADP RQJDOOGUDJRQNLQG"
+    ));
+    // And the line under it, which runs even longer.
+    assert!(looks_unreadable(
+        "LQVSLWHRIWKHIH\\WHQGHQF\\WRZ DUGVP LVFKLHI3 L[LHVDUHRIWHQ"
+    ));
+}
+
+#[test]
+fn ordinary_text_is_readable_however_long_the_line() {
+    assert!(!looks_unreadable(
+        "The most covetous of the true dragons, red dragons tirelessly seek to \
+         increase their treasure hoards."
+    ));
+    assert!(!looks_unreadable(
+        "Bite. Melee Weapon Attack: +17 to hit, reach 15ft."
+    ));
+    assert!(!looks_unreadable("Hit Points 546 (28d20 + 252)"));
+    assert!(!looks_unreadable(""));
+}
+
+#[test]
+fn a_long_word_is_not_on_its_own_evidence_of_garbage() {
+    // German compounds and chemical names exist, and so do very long proper
+    // nouns in fantasy books. Thirty is well past any of them.
+    assert!(!looks_unreadable("Antidisestablishmentarianism"));
+    assert!(!looks_unreadable("The Sibilant Death, Merrshaulk"));
+}
+
 // ---------------------------------------------------------------------------
 // Body size and headings
 // ---------------------------------------------------------------------------

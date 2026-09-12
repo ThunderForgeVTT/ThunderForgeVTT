@@ -15,6 +15,8 @@ tokio = { version = "1.53", features = ["full"] }
 async-trait = "0.1"
 inventory = "0.3"
 thunderforge_canvas_core = { path = "../../../../crates/thunderforge-canvas-core" }
+# Spec 048: the game-agnostic PDF layer this pack reads statblocks out of.
+thunderforge-pdf = { path = "../../../../crates/thunderforge-pdf" }
 
 [lib]
 name = "dnd5e_server"

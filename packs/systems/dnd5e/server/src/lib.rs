@@ -26,6 +26,7 @@ pub mod loader;
 pub mod models;
 pub mod rules;
 pub mod srd;
+pub mod statblock;
 pub mod validators;
 
 pub use loader::register_dnd5e_mutations;

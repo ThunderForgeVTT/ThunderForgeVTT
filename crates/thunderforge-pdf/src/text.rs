@@ -19,7 +19,7 @@
 //! would still be wrong wherever a designer overrode them.
 
 use crate::content::{Operand, Operation, operations};
-use crate::font::{FontInfo, FontMap, fonts_for_page};
+use crate::font::{FontInfo, fonts_for_page};
 use crate::page::{Page, decode_text_string};
 use crate::{PdfError, page};
 use lopdf::Document;
@@ -93,7 +93,7 @@ struct Graphics {
 
 /// Run one page's content stream and collect its text.
 pub fn runs_on_page(document: &Document, page: &Page) -> Result<Vec<TextRun>, PdfError> {
-    let fonts: FontMap = fonts_for_page(document, page.id);
+    let fonts = fonts_for_page(document, page.id);
     let operations = operations(document, page.id);
     if operations.is_empty() {
         // A page that draws no text is not a failure — a full-page map, a
@@ -112,6 +112,7 @@ pub fn runs_on_page(document: &Document, page: &Page) -> Result<Vec<TextRun>, Pd
     let mut horizontal_scale = 1.0f64;
     let mut rise = 0.0f64;
     let mut font = FontInfo::default();
+    let mut encoding: Option<&lopdf::Encoding> = None;
     let mut font_size = 0.0f64;
     let mut out = Vec::new();
 
@@ -140,7 +141,8 @@ pub fn runs_on_page(document: &Document, page: &Page) -> Result<Vec<TextRun>, Pd
             "ET" => {}
             "Tf" => {
                 if let Some(Operand::Name(name)) = operands.first() {
-                    font = fonts.get(name).cloned().unwrap_or_default();
+                    font = fonts.info.get(name).cloned().unwrap_or_default();
+                    encoding = fonts.encodings.get(name);
                 }
                 font_size = number(1).unwrap_or(font_size);
             }
@@ -186,6 +188,7 @@ pub fn runs_on_page(document: &Document, page: &Page) -> Result<Vec<TextRun>, Pd
                         &text_matrix,
                         &graphics,
                         &font,
+                        encoding,
                         font_size,
                         horizontal_scale,
                         rise,
@@ -214,6 +217,7 @@ pub fn runs_on_page(document: &Document, page: &Page) -> Result<Vec<TextRun>, Pd
                             &text_matrix,
                             &graphics,
                             &font,
+                            encoding,
                             font_size,
                             horizontal_scale,
                             rise,
@@ -235,11 +239,16 @@ fn push_run(
     text_matrix: &Matrix,
     graphics: &Graphics,
     font: &FontInfo,
+    encoding: Option<&lopdf::Encoding>,
     font_size: f64,
     horizontal_scale: f64,
     rise: f64,
 ) {
-    let text = decode_text_string(bytes);
+    // The font's own encoding first: a subsetted font renumbers its glyphs,
+    // and reading its codes as Latin-1 produces confident gibberish.
+    let text = encoding
+        .and_then(|encoding| encoding.bytes_to_string(bytes).ok())
+        .unwrap_or_else(|| decode_text_string(bytes));
     if text.is_empty() {
         return;
     }
