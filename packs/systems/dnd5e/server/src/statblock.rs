@@ -213,7 +213,7 @@ fn read_one(block: &[SourceLine], named: bool) -> Option<Statblock> {
     // something that looks like words and is not — a block read from one
     // would arrive called `* ROGGUDJRQV`. Refused outright rather than
     // flagged, because there is nothing here for a person to correct.
-    if thunderforge_pdf::layout::looks_unreadable(&name) {
+    if thunderforge_pdf::layout::looks_unreadable(&name) || !is_mostly_letters(&name) {
         return None;
     }
 
@@ -299,6 +299,23 @@ fn read_one(block: &[SourceLine], named: bool) -> Option<Statblock> {
     // Without an armour class this is not a statblock, whatever else matched.
     statblock.armor_class?;
     Some(statblock)
+}
+
+/// Whether a string is made of letters rather than symbols.
+///
+/// One bestiary embeds a font with no `ToUnicode` map *and* no encoding —
+/// its codes are raw glyph indices, meaningful only to the font program
+/// beside them — and its pages decode to `. / * D D & ! ! $ * D`. That is
+/// not recoverable without reading the embedded font, and a creature named
+/// from it would be nonsense. A real monster's name is letters and spaces,
+/// with the occasional apostrophe or hyphen.
+fn is_mostly_letters(text: &str) -> bool {
+    let considered = text.chars().filter(|c| !c.is_whitespace()).count();
+    if considered == 0 {
+        return false;
+    }
+    let letters = text.chars().filter(|c| c.is_alphabetic()).count();
+    letters * 2 >= considered
 }
 
 fn read_state(text: &str) -> ReadDefault {

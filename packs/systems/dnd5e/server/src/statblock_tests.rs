@@ -234,6 +234,29 @@ fn a_creature_from_a_book_with_no_usable_font_is_refused() {
 }
 
 #[test]
+fn a_name_made_of_symbols_is_refused() {
+    // One bestiary embeds a font with no ToUnicode map and no encoding at
+    // all, and its pages decode to ". / * D D & ! ! $ * D". Nothing can
+    // recover that without reading the embedded font program, and a monster
+    // named from it would be nonsense.
+    let lines = vec![
+        line(". / * D D & ! ! $ * D", 14.6, true),
+        line("Armor Class 16", 8.5, false),
+    ];
+    assert!(statblocks(&lines).is_empty());
+}
+
+#[test]
+fn a_real_name_with_punctuation_in_it_survives() {
+    // Monsters are called things like Ba'lath and Two-Headed Troll, and a
+    // guard that rejected apostrophes and hyphens would lose them.
+    assert!(is_mostly_letters("Ba'lath"));
+    assert!(is_mostly_letters("Two-Headed Troll"));
+    assert!(is_mostly_letters("Boo's Astral Menagerie"));
+    assert!(!is_mostly_letters(". / * D D & ! !"));
+}
+
+#[test]
 fn an_action_needs_a_name_rather_than_merely_a_full_stop() {
     // Prose continuing from the line above contains full stops and is not an
     // action. Without this every sentence in a statblock becomes one.
