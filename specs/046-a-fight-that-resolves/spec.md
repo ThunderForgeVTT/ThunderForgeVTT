@@ -425,6 +425,14 @@ at the start of its own turn.
 
 ## Out of Scope
 
+- **A party-wide debt tracker — #todo.** Raised by the owner alongside
+  decision 2: a Game Master taking one player's negative balance and making it
+  the party's, so a debt becomes something the table carries together. A good
+  idea and a different feature — it is about a shared resource rather than
+  about a fight resolving, and it needs its own thinking about who may change
+  it and what happens when somebody leaves the party.
+
+
 - Conditions beyond out-of-the-fight (frightened, prone, grappled, and the
   rest), and concentration.
 - Death saves and dying.
@@ -445,9 +453,54 @@ at the start of its own turn.
   freedom, and its assumption that a move is judged by a token's centre, which
   FR-031 revisits.
 
+## Decisions (owner, 2026-09-12)
+
+1. **The product rolls, and whoever controls the target decides** (Q1: C, with
+   the choice moved). The option offered was that the *world* chooses between
+   "report the result" and "apply it automatically". The owner's answer is
+   that neither is a world setting: the product offers helpers, and the person
+   on the receiving end applies them.
+
+   So an attack rolls its damage in one click, and the result arrives at the
+   target's controller as an offer — take the hit, or do not. A heal is the
+   same mechanism with the other sign, and is offered the same way. Nobody is
+   ever told by the software that they have been hit.
+
+   **One automatic path, and it is the Game Master's to switch on**:
+   auto-applying to NPCs they run. It is gated on the attacker having properly
+   selected what they were attacking — a roll made into the air applies to
+   nothing, because "a roll in the dark is up to the table". The product's job
+   is to make the common case one click, not to adjudicate the uncommon one.
+
+2. **The economy shows and never refuses** (Q2: A). If a table lets somebody
+   overspend and the Game Master decides they are in debt for it, that is the
+   game being played, and a tracker that refused it would be wrong about who
+   is in charge.
+
+   A feature the owner raised alongside it, parked rather than specified: a
+   Game Master taking a player's negative balance and turning it into a
+   party-wide tracker. Recorded as a #todo below.
+
+3. **Line of sight by default, and a per-ability flag that can say otherwise**
+   (Q3: B, extended). Most attacks need to see their target, and spec 045
+   already shipped the answer: `is_visible`, in the crate the engine and the
+   server share, already called by both for movement. The same function, a
+   different question.
+
+   But a rule that stopped at "line of sight or nothing" would be wrong about
+   half of what a ruleset contains. Teleport goes through a wall; a sword does
+   not. So **line of sight is a property of the ability or item**, defaulting
+   to required, and an import may say otherwise. The flag is what a Game
+   Master's auto-apply consults, so an ability that ignores walls keeps
+   ignoring them when the product is doing the arithmetic.
+
+   Cover is deliberately not in this: blocked or not blocked, and the table
+   handles the rest.
+
 ## Questions for the owner
 
-1. **Q1 — How far does the product resolve an attack?**
+1. **Q1 — How far does the product resolve an attack?** *(answered: C, with
+   the choice belonging to the target's controller — see decision 1)*
 
    | Option | Answer | Implications |
    |--------|--------|--------------|
@@ -455,7 +508,7 @@ at the start of its own turn.
    | B | A hit applies its damage automatically; a miss applies nothing | The fight runs itself. Needs critical hits, resistances and the rest sooner rather than later. |
    | C | The world chooses between A and B | Tables differ; costs a setting and both paths tested. |
 
-2. **Q2 — Does the economy refuse, or only show?**
+2. **Q2 — Does the economy refuse, or only show?** *(answered: A)*
 
    | Option | Answer | Implications |
    |--------|--------|--------------|
@@ -463,7 +516,8 @@ at the start of its own turn.
    | B | Refuse an over-spend, with a Game Master override | The rules hold; the Game Master lifts them when the table decides. |
    | C | Show only this spec; refuse in a later one | Ships the visible half now. |
 
-3. **Q3 — Does a wall stop an attack?**
+3. **Q3 — Does a wall stop an attack?** *(answered: B, with a per-ability
+   flag — see decision 3)*
 
    | Option | Answer | Implications |
    |--------|--------|--------------|

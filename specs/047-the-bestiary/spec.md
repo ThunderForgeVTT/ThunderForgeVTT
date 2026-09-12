@@ -313,9 +313,60 @@ into another world. All six arrive with their art and their sizes.
 - **Spec 032 and spec 016**: the pack architecture and its legal block.
 - **ADR-051**: no generated art.
 
+## Decisions (owner, 2026-09-12)
+
+1. **Several skeletons, not one and not two** (Q1: C, widened). The option
+   offered a second skeleton "for beasts". The owner's answer is that a beast
+   is not one shape either: what is needed is a small set of body plans —
+   **four legs**, **no legs**, **many arms** (the beholder's case), and
+   **incorporeal** for ghosts — beside the humanoid one that exists.
+
+   This is already evidenced rather than theoretical. The hero builder took
+   the middle option in practice: wings, muzzles, tails and builds all draw on
+   the one bipedal skeleton, and goblins, orcs, dragons, skeletons and demons
+   read well. A beholder comes out a purple warty snake-person, because every
+   individual choice is a fair reading of "Large aberration" and the body plan
+   underneath is simply wrong. Oozes and giant spiders fail the same way.
+
+   So option B is what shipped, and it is not being undone: the humanoid
+   skeleton and its vocabulary stay exactly as they are. The additional plans
+   sit beside it.
+
+2. **The humanoid dungeon and the undead first, the menagerie as the goal**
+   (Q2: B, with C stated as the destination). A first cut that can be held to
+   a consistent style is worth more than a wide one that cannot, and the
+   undead come nearly free from palettes and a few parts.
+
+   The shipped bestiary already reaches past this — thirty entries spanning
+   beasts and dragons — which is a consequence of Q1 landing on per-creature
+   parts. B is the bar this spec holds itself to; C is where it is going.
+
+3. **Art, size, and statistics — sequenced** (Q3: C). The whole entry
+   eventually: a goblin that arrives ready to fight. Art and size now,
+   statistics once spec 046 lands and there is something to fight *with*.
+
+   **On commercial sources**, which is what made this question hard. The
+   owner's rule: importing from a book is not the problem, sharing what came
+   out of it is.
+
+   > "In real life I can show my book to the whole table, but I cannot have my
+   > book and lend it out."
+
+   So a bestiary entry whose statistics came from a commercial source may be
+   used by the world that imported it — that is the table reading the book
+   over the owner's shoulder — and MUST have sharing, publishing and
+   collection-adoption disabled. This is the same line drawn for spec 048 and
+   it is drawn in the same place: content is usable where it was brought in,
+   and does not travel.
+
+   That means **provenance has to be recorded at import**, because a rule
+   about what may be shared is unenforceable against content that cannot say
+   where it came from.
+
 ## Questions for the owner
 
-1. **Q1 — How far from a person may a creature be drawn?**
+1. **Q1 — How far from a person may a creature be drawn?** *(answered: C,
+   several body plans — see decision 1)*
 
    | Option | Answer | Implications |
    |--------|--------|--------------|
@@ -323,7 +374,7 @@ into another world. All six arrive with their art and their sizes.
    | B | Per-creature head and body parts on the same canvas and outline rules | Draws a dragon's snout and a troll's hunch. Every new creature is drawing work, and the style must be held by hand. |
    | C | A second skeleton for beasts, beside the humanoid one | The widest bestiary. Two skeletons to keep consistent, and the largest first step. |
 
-2. **Q2 — What is in the first bestiary?**
+2. **Q2 — What is in the first bestiary?** *(answered: B now, C as the goal)*
 
    | Option | Answer | Implications |
    |--------|--------|--------------|
@@ -331,7 +382,8 @@ into another world. All six arrive with their art and their sizes.
    | B | That, plus the undead: skeleton, zombie, ghoul | Still humanoid-shaped; palettes and a few parts do most of the work. |
    | C | A full low-level menagerie including beasts and a dragon | Needs Q1 = B or C, and is a much longer first cut. |
 
-3. **Q3 — Does a bestiary entry carry statistics?**
+3. **Q3 — Does a bestiary entry carry statistics?** *(answered: C, with a
+   sharing rule for commercial sources — see decision 3)*
 
    | Option | Answer | Implications |
    |--------|--------|--------------|
