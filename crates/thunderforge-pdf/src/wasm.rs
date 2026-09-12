@@ -139,6 +139,23 @@ pub fn pdf_outline(bytes: &[u8]) -> Result<String, JsValue> {
         .map_err(|error| JsValue::from_str(&error.to_string()))
 }
 
+/// What a book turned into, and what could not be read of it.
+#[derive(serde::Serialize)]
+struct WasmContent {
+    entries: Vec<thunderforge_content::Entry>,
+    /// The whole document's length, so a caller can size the work.
+    pages: usize,
+    /// Pages in the requested range that yielded no text at all.
+    ///
+    /// Counted the same way [`read_pdf`] counts it, and reported for the same
+    /// reason: a book that is entirely scans must be able to say so. An empty
+    /// result and "there was nothing here to read" are different answers and
+    /// spec 049 FR-005 forbids presenting the second as the first.
+    silent_pages: usize,
+    /// Whether the cross-reference table had to be rebuilt to open it.
+    repaired: bool,
+}
+
 /// Read a system's declared content out of a book, in the browser.
 ///
 /// `patterns` is the system pack's `contentPatterns` block, verbatim. This
@@ -160,8 +177,8 @@ pub fn pdf_outline(bytes: &[u8]) -> Result<String, JsValue> {
 pub fn read_content(
     bytes: &[u8],
     patterns: &str,
-    from: usize,
-    count: usize,
+    from: u32,
+    count: u32,
 ) -> Result<String, JsValue> {
     let declared: thunderforge_canvas_core::content_patterns::ContentPatterns =
         serde_json::from_str(patterns)
@@ -175,20 +192,33 @@ pub fn read_content(
         ));
     }
 
+    let repaired = lopdf::Document::load_mem(bytes).is_err();
     let document = Document::from_bytes(bytes)
         .map_err(|error| JsValue::from_str(&format!("could not read the document: {error}")))?;
 
+    let pages = document.pages();
     let mut lines: Vec<thunderforge_content::SourceLine> = Vec::new();
-    for page in document
-        .pages()
-        .into_iter()
-        .skip(from.saturating_sub(1))
-        .take(count)
+    let mut silent_pages = 0usize;
+
+    // Selected by page *number*, exactly as `read_pdf` does. Skipping by index
+    // instead would disagree with it on any document whose page numbering does
+    // not start at one, and two readers of the same book disagreeing about
+    // which pages they read is the kind of difference nobody notices until it
+    // matters.
+    for page in pages
+        .iter()
+        .filter(|page| page.number >= from.max(1))
+        .take(count as usize)
     {
-        let Ok(runs) = document.runs(&page) else {
+        let Ok(runs) = document.runs(page) else {
+            silent_pages += 1;
             continue;
         };
         let assembled = layout::lines(&runs);
+        if assembled.is_empty() {
+            silent_pages += 1;
+            continue;
+        }
         let body = layout::body_size(&assembled);
         for line in layout::reading_order(assembled, page.geometry) {
             if line.text.trim().is_empty() {
@@ -221,6 +251,11 @@ pub fn read_content(
         entries.extend(found);
     }
 
-    serde_json::to_string(&entries)
-        .map_err(|error| JsValue::from_str(&format!("could not report what was read: {error}")))
+    serde_json::to_string(&WasmContent {
+        entries,
+        pages: pages.len(),
+        silent_pages,
+        repaired,
+    })
+    .map_err(|error| JsValue::from_str(&format!("could not report what was read: {error}")))
 }

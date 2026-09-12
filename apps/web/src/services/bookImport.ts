@@ -53,8 +53,28 @@ async function load(): Promise<PdfModule> {
 export interface ReadBook {
   entries: ContentEntry[];
   pages: number;
-  /** Pages that yielded no text. A book that is all scans reports all of them. */
+  /**
+   * Pages that yielded no text at all.
+   *
+   * Reported because an empty result and "there was nothing here to read" are
+   * different answers, and FR-005 forbids presenting the second as the first.
+   * 51 of the 246 books measured are image scans with no text layer; a Game
+   * Master importing one must be told that, not shown a successful import of
+   * nothing.
+   */
   silentPages: number;
+  /** The cross-reference table had to be rebuilt to open it. 37% of a real
+   * library needs this, and a caller that knows can say "this file was damaged
+   * and we read it anyway". */
+  repaired: boolean;
+}
+
+/** What one chunk of pages yielded, as the wasm reports it. */
+interface ReadChunk {
+  entries: ContentEntry[];
+  pages: number;
+  silent_pages: number;
+  repaired: boolean;
 }
 
 /** How far through a read we are, for a person watching. */
@@ -105,12 +125,19 @@ export async function readBook(
   const declared = JSON.stringify(patterns);
 
   const entries: ContentEntry[] = [];
+  let silentPages = 0;
+  let repaired = false;
+
   for (let from = 1; from <= pages; from += CHUNK) {
     const count = Math.min(CHUNK, pages - from + 1);
-    const read = JSON.parse(
+    const chunk = JSON.parse(
       module.read_content(file, declared, from, count),
-    ) as ContentEntry[];
-    entries.push(...read);
+    ) as ReadChunk;
+    entries.push(...chunk.entries);
+    // Summed across chunks rather than taken from the last one: each call
+    // reports only the pages it was asked to read.
+    silentPages += chunk.silent_pages;
+    repaired = repaired || chunk.repaired;
     onProgress?.({
       page: Math.min(from + count - 1, pages),
       pages,
@@ -122,7 +149,18 @@ export async function readBook(
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 
-  return { entries, pages, silentPages: 0 };
+  return { entries, pages, silentPages, repaired };
+}
+
+/**
+ * Whether a book gave up nothing at all.
+ *
+ * The case FR-005 exists for: 51 of 246 measured books are image scans. A
+ * caller shows this as "this book is images, we cannot read it", never as an
+ * import that succeeded and found nothing.
+ */
+export function yieldedNothing(book: ReadBook): boolean {
+  return book.entries.length === 0 && book.silentPages >= book.pages;
 }
 
 /** Entries grouped by the kind their system called them, for the review. */

@@ -62,6 +62,46 @@ function bookPdf(): string {
   return pdf;
 }
 
+/**
+ * A two-page PDF whose second page carries no text at all.
+ *
+ * What an image scan looks like to the reader: the page exists, it has a
+ * content stream, and nothing in it decodes to a word. 51 of the 246 books
+ * measured are like this from cover to cover.
+ */
+function partlyScannedPdf(): string {
+  const text = [
+    "BT /F1 18 Tf 72 720 Td (GOBLIN) Tj ET",
+    "BT /F1 9 Tf 72 700 Td (Armor Class 15) Tj ET",
+    "BT /F1 9 Tf 72 686 Td (Hit Points 7) Tj ET",
+  ].join("\n");
+  const blank = "";
+
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 7 0 R >> >> >>",
+    `<< /Length ${text.length} >>\nstream\n${text}\nendstream`,
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 6 0 R /Resources << >> >>",
+    `<< /Length ${blank.length} >>\nstream\n${blank}\nendstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+
+  let pdf = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  objects.forEach((body, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets) {
+    pdf += `${offset.toString().padStart(10, "0")} 00000 n \n`;
+  }
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return pdf;
+}
+
 /** A creature pattern, exactly as a system pack declares one. */
 const PATTERNS = {
   patterns: [
@@ -131,6 +171,50 @@ test.describe("Reading a book into entries, in the browser (spec 049 US1)", () =
     // A hash is taken locally and is the one thing allowed to reach the
     // server before submit — it is not content (FR-047, spec 047 FR-072).
     expect(result.hash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  test("a page that yielded no text is reported, not quietly skipped", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    await page.goto("/");
+
+    const result = await page.evaluate(
+      async ([source, patterns]) => {
+        const reader = (await import(
+          /* @vite-ignore */ "/src/services/bookImport.ts"
+        )) as typeof import("../src/services/bookImport");
+        const bytes = Uint8Array.from(source as string, (character) =>
+          character.charCodeAt(0),
+        );
+        const book = await reader.readBook(
+          bytes,
+          JSON.parse(patterns as string),
+        );
+        return {
+          pages: book.pages,
+          silentPages: book.silentPages,
+          names: book.entries.map((entry) => entry.name),
+          nothingAtAll: reader.yieldedNothing(book),
+        };
+      },
+      [partlyScannedPdf(), JSON.stringify(PATTERNS)],
+    );
+
+    // FR-005: an empty page is counted and reported. A book that is a third
+    // scans must be able to say so afterwards, not only look thin.
+    expect(result.pages).toBe(2);
+    expect(
+      result.silentPages,
+      "the page with no text is counted as silent",
+    ).toBe(1);
+
+    // And what could be read still was. A silent page is not a failed read.
+    expect(result.names).toContain("GOBLIN");
+    expect(
+      result.nothingAtAll,
+      "a book that yielded something is not reported as unreadable",
+    ).toBe(false);
   });
 
   test("nothing carrying the book's content crosses the wire before submit", async ({

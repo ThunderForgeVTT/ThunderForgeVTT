@@ -113,7 +113,7 @@ body carries entry text before submit is pressed.
 - [ ] T030 [P] [049-US1] Correction of an uncertain value in the review, carried into what is submitted (spec 048 FR-022, referenced by 049 FR-023)
 - [ ] T031 [049-US1] Silent-page reporting in the review: a book that yielded nothing says so, and a book that was partly scans says how many pages were silent (049 FR-005) — never an empty success
 - [ ] T032 [049-US1] Only a Game Master, only from their own panel (049 FR-028). The entry point lives with the world panel; a player has no route to it
-- [X] T033 [049-US1] `apps/web/e2e/book-import-review.spec.ts`, **2 passed in Chromium**. One test proves the declaration-driven readers run as wasm with no server involved and that an unfound field carries no value at all; the other watches every request body and fails if any carries the book's text. Absence is not provable by inspection — a telemetry call added next year would pass a code review and break FR-020
+- [X] T033 [049-US1] `apps/web/e2e/book-import-review.spec.ts`, **3 passed in Chromium**. One test proves the declaration-driven readers run as wasm with no server involved and that an unfound field carries no value at all; one builds a two-page book whose second page has no text and proves the silent page is counted (`pages` 2, `silentPages` 1) while the readable page still yields its creature; and the third watches every request body and fails if any carries the book's text. Absence is not provable by inspection — a telemetry call added next year would pass a code review and break FR-020
 - [ ] T034 [049-US1] Proved: that e2e green, `pnpm -F @thunderforge/web exec tsc --noEmit` clean, and by hand — open the review on a real book, close it, and confirm nothing exists anywhere
 
 ---
