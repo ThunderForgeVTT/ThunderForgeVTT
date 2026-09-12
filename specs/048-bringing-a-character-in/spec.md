@@ -523,33 +523,36 @@ and leaves current hit points and anything the table has changed in play alone.
    who did, so the report is suppressed when the viewer's last delivery
    predates the decision that withdrew the thing. FR-038a, FR-038b.
 
-## Parsing in the browser — #todo, and closer than it sounds
+## Parsing in the browser — built
 
-The owner raised reading the PDF **on the player's machine** rather than on
-the server: it costs the instance nothing, it is faster because the file never
-moves, and a sheet that cannot be read fails before anything is uploaded.
-Filed as a possibility rather than a plan.
+Reading happens on the machine that holds the file. `crates/thunderforge-pdf`
+compiles to `wasm32-unknown-unknown`, ships as `@thunderforge/pdf`, and reads
+the Monster Manual in a browser: 354 pages counted in 63 ms, 588 KB of wasm.
 
-Worth recording that it is not speculative. `crates/thunderforge-pdf` is pure
-Rust over `lopdf`, and **it compiles to `wasm32-unknown-unknown` today,
-unmodified** — checked, not assumed. The engine is already a wasm bundle the
-web loads, so the delivery mechanism exists too.
+### The trust question, and why it is smaller than it looks
 
-What is genuinely open is not whether it can run there. It is what it means
-for the rest of this spec:
+The first draft of this section worried that "a parse on the player's machine
+produces values the player's machine chose". The owner's correction is that
+the two importers have different owners, and the worry only ever applied to
+one of them:
 
-- **Trust.** A parse that happens on the player's machine produces values the
-  player's machine chose. Everything decision 3 says about adoption and about
-  refusing what the world has not green-lit applies *more* strongly, not less
-  — a client-side parser is a client-side claim.
-- **Where the file goes.** Decision 2 keeps the file for versioning and
-  rollback, which means it is uploaded regardless. Parsing locally saves the
-  server the *parse*, not the transfer.
-- **Two parsers, or one.** Shipping the same crate to both places keeps one
-  implementation; letting them drift would be the worst of both.
+- **A source book is read into a world by its Game Master, from their own
+  world panel.** A Game Master can already put anything they like into their
+  own world through the authoring tools. Parsing on their machine hands them
+  nothing they did not already have, so there is no new trust to extend.
+- **A player importing their own character sheet** is the case the guards are
+  for, and those guards never trusted the parse. Unadopted content is withheld
+  from the play field (FR-037), a Game Master can roll an import back (FR-044),
+  and an attempt to use what was never delivered is refused server-side and
+  reported (FR-037a, FR-038). Moving the parse does not weaken any of them,
+  because none of them ever depended on where it happened.
 
-None of that is a reason against it. It is the work that has to be thought
-about before it is a plan.
+### What remains true
+
+- **The file is still uploaded.** Decision 2 keeps it for versioning and
+  rollback, so parsing locally saves the server the *parse*, not the transfer.
+- **One parser, not two.** The browser façade is a thin wrapper over the same
+  code the server runs.
 
 ## Questions for the owner
 
