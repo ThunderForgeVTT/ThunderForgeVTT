@@ -22,11 +22,11 @@
 //!   - Called on server startup
 //!   - Injects D&D 5e mutations into core router
 
+pub mod content_refine;
 pub mod loader;
 pub mod models;
 pub mod rules;
 pub mod srd;
-pub mod statblock;
 pub mod validators;
 
 pub use loader::register_dnd5e_mutations;
@@ -57,6 +57,7 @@ inventory::submit! {
         trait_data: Some(validators::validate_trait_data_for_registry),
         spell_data: Some(validators::validate_spell_data_for_registry),
         rules: Some(|manifest| Box::new(crate::rules::DnD5eRules::from_manifest(manifest))),
+        refine_content: Some(content_refine::refine),
         ..thunderforge_canvas_core::system_contribution::SystemContribution::new(SYSTEM_ID)
     }
 }

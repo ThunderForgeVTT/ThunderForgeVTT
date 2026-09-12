@@ -90,6 +90,10 @@ inventory = "0.3"
 thunderforge_authz = { path = "../../crates/thunderforge-authz" }
 thunderforge_cache_core = { path = "../../crates/thunderforge-cache-core" }
 thunderforge_canvas_core = { path = "../../crates/thunderforge-canvas-core" }
+# Reading a source book (spec 049). The same crate the browser runs compiled
+# to wasm — the readers above it must never become two implementations of
+# "what does this book say".
+thunderforge-pdf = { path = "../../crates/thunderforge-pdf" }
 thunderforge_pg = { path = "../../crates/thunderforge-pg" }
 thunderforge_pg_sockets = { path = "../../crates/thunderforge-pg-sockets" }
 thunderforge_presence = { path = "../../crates/thunderforge-presence" }

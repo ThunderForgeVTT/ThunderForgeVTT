@@ -114,10 +114,46 @@ already exists for behaviour a pack owns that data cannot express:
 `crates/thunderforge-canvas-core/src/system_contribution.rs`, collected through
 `inventory` and linked by `src/app/src/system_packs.rs`.
 
-The shape: a pack may contribute an optional **refinement** over the generic
-anchored result for a given kind — it receives what the shared reader produced
-plus the lines it came from, and returns a refined entry. Shared code still
-names no system. The 5e pack still owns the one thing only 5e knows.
+The shape, as built:
+
+```rust
+// crates/thunderforge-canvas-core/src/system_contribution.rs
+pub type ContentRefineFn = fn(&mut ContentEntry, &[ContentSourceLine]);
+
+pub struct SystemContribution {
+    // …
+    pub refine_content: Option<ContentRefineFn>,
+}
+```
+
+A refinement receives the entry the shared reader produced and the lines it
+came from, and may fill in `Entry::extras` — an opaque `serde_json::Value`
+that shared code carries and never looks inside. That opacity is the whole
+mechanism: the pack publishes a shape it agreed to, and nothing in shared code
+learns what a "reach" is.
+
+It is registered through the `inventory` collection packs already use, so
+nothing has to call it by name. Shared code still names no system; the 5e pack
+still owns the one thing only 5e knows.
+
+### Two rules implementation settled
+
+**A name search may not cross the previous anchor.** Found by a test, not by
+reasoning: with `prefer: largest`, the second entry's lookback reached back
+over the whole first entry and returned *its* name, because that name was set
+larger. The floor is the previous anchor, and everything before it belongs to
+the previous entry.
+
+**Equal sizes go to the nearest candidate.** `largest` breaks ties toward the
+anchor rather than away from it, for the same reason.
+
+### The false-positive guard
+
+An entry that matched the anchor but read **none** of its declared fields is
+not an entry — it is the anchor's label appearing in ordinary prose, as in a
+rules chapter explaining what armour class *is*. Such a block is dropped.
+Without this, every book that describes its own rules produces phantom
+entries.
 
 This is FR-016's "name what the declaration cannot express rather than quietly
 preserving it", and this section is that naming.

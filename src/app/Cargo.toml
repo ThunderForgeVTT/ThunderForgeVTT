@@ -69,6 +69,8 @@ reqwest = { version = "0.13.4", default-features = false, features = [
   "rustls",
 ] }
 thunderforge_canvas_core = { path = "../../crates/thunderforge-canvas-core" }
+# Spec 049: the `harvest` example reads real books through the generic reader.
+thunderforge-pdf = { path = "../../crates/thunderforge-pdf" }
 thunderforge_pg = { path = "../../crates/thunderforge-pg" }
 thunderforge_pg_sockets = { path = "../../crates/thunderforge-pg-sockets" }
 thunderforge_presence = { path = "../../crates/thunderforge-presence" }

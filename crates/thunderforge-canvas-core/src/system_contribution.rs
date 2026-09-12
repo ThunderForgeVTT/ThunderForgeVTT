@@ -34,6 +34,7 @@
 //! `scripts/check-system-registry.mjs` is what keeps it that way — it fails
 //! the build if a system identifier reappears in shared server code.
 
+use crate::content_entry::{Entry as ContentEntry, SourceLine as ContentSourceLine};
 use crate::system_rules::SystemRules;
 
 /// Validates one of an actor's stored data slots for one system.
@@ -45,6 +46,10 @@ pub type ValidatorFn = fn(&serde_json::Value) -> Result<(), String>;
 /// `system.json` — the manifest stays the authority on tables like Genie's
 /// by-level Wish Points ladder, instead of those numbers being copied into
 /// Rust where they would need keeping in step by hand.
+/// Refines one entry read out of a document. See
+/// [`SystemContribution::refine_content`].
+pub type ContentRefineFn = fn(&mut ContentEntry, &[ContentSourceLine]);
+
 pub type RulesFn = fn(&serde_json::Value) -> Box<dyn SystemRules>;
 
 /// Everything one game system pack contributes.
@@ -63,6 +68,20 @@ pub struct SystemContribution {
     pub spell_data: Option<ValidatorFn>,
     /// The system's derived values, when it has any.
     pub rules: Option<RulesFn>,
+    /// Refines a generically-read entry with what only this system knows
+    /// (spec 049 FR-016, ADR-096).
+    ///
+    /// A content pattern says which labelled fields to read, and that covers
+    /// most of a book. It cannot express a reading of free prose — a 5e
+    /// attack's reach in feet is not a labelled field, and spec 045
+    /// established that reach is per attack rather than per creature size, so
+    /// it matters and cannot be dropped.
+    ///
+    /// Rather than pretend such a thing into the declaration or keep a second
+    /// reader beside the generic one, a pack contributes this. It receives
+    /// what the shared reader produced and the lines it came from, and may
+    /// fill in [`ContentEntry::extras`].
+    pub refine_content: Option<ContentRefineFn>,
 }
 
 impl SystemContribution {
@@ -79,6 +98,7 @@ impl SystemContribution {
             trait_data: None,
             spell_data: None,
             rules: None,
+            refine_content: None,
         }
     }
 }
