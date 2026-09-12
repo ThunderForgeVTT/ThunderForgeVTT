@@ -25,6 +25,7 @@ import {
   startTriggerBridge,
   applyShapeWorldEvent,
   applyTokenWorldEvent,
+  applyTokenVisionWorldEvent,
   applyWallWorldEvent,
   getLiveSyncState,
   loadLightsIntoStore,
@@ -1617,6 +1618,12 @@ export default function WorldPage() {
             applyLightWorldEvent(worldStore, sceneId, event),
             applyTokenStatusWorldEvent(worldStore, sceneId, event),
             applyInteractiveWorldEvent(worldStore, sceneId, event),
+            // Spec 045 FR-067: a character's sheet moving changes what their
+            // token can see, and until spec 045 a sheet edit announced
+            // nothing at all.
+            applyTokenVisionWorldEvent(worldStore, sceneId, event, () =>
+              Object.keys(worldStore.getState().tokens),
+            ),
           ]);
           const ambient = applySceneLightingWorldEvent(
             worldStore,

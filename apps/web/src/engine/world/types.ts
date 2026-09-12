@@ -473,6 +473,20 @@ export type SetAmbientLightCommand = {
   color?: string;
 };
 
+/**
+ * How far one token sees, as its game system declares it (spec 045 US6) — the
+ * engine's `set_token_vision`.
+ *
+ * World units, resolved by the server: a client is never asked to work out
+ * what "60 feet" is worth on this scene's grid, because every client would
+ * have to reach the same answer and none of them holds the manifest.
+ */
+export type SetTokenVisionCommand = {
+  type: "set_token_vision";
+  tokenId: string;
+  darkvision: number;
+};
+
 /** One interactive, in the shape the engine's command boundary expects. */
 export type WorldInteractive = {
   id: string;
@@ -492,6 +506,7 @@ export type WorldCommand =
   | SetSceneBackgroundCommand
   | SetSceneGridCommand
   | SetAmbientLightCommand
+  | SetTokenVisionCommand
   | UpsertTokenCommand
   | RemoveTokenCommand
   | SetTokenStatusCommand

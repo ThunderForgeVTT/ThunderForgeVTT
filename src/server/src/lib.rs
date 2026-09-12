@@ -108,6 +108,7 @@ pub mod test_support;
 pub mod turn_structure;
 pub mod users;
 pub mod utils;
+pub mod vision_profiles;
 pub mod world;
 pub mod world_events;
 pub mod world_hooks;

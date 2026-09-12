@@ -29,6 +29,7 @@ pub mod scene;
 pub mod standing;
 pub mod token_attributes;
 pub mod token_status;
+pub mod token_vision;
 pub mod user;
 // The reconnect catch-up (`worldEventsSince`) — what a client missed while
 // its socket was down, read from the durable record rather than the wire.

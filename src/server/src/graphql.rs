@@ -292,6 +292,9 @@ pub struct QueryRoot(
     SceneQuery,
     queries::token_status::TokenStatusQuery,
     queries::token_attributes::TokenAttributesQuery,
+    // Spec 045 US6: `tokenVision(sceneId)` — how far each token sees, as its
+    // game system declares it.
+    queries::token_vision::TokenVisionQuery,
     // Spec 030: `effectRegistry` and `interactives(sceneId)`.
     queries::interactives::InteractiveQuery,
     // Spec 031: `authoringTools(worldId)` — which tools the caller may use.

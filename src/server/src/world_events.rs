@@ -119,6 +119,21 @@ pub const EVENT_CODE_WORLD_SYSTEM_CHANGED: i32 = 24;
 /// "bright" | "dim" | "dark"}`.
 pub const EVENT_CODE_SCENE_LIGHTING_CHANGED: i32 = 25;
 
+/// A character's own data changed — its sheet, not its token.
+///
+/// Spec 045 FR-067. Sheet edits announced nothing at all before this: a
+/// character who gained darkvision kept their old sight on every board until
+/// somebody reloaded, because nothing told anybody the sheet had moved.
+///
+/// Distinct from `EVENT_CODE_TOKEN_CHANGED` on purpose, and for the reason
+/// spec 045 phase 1 had to learn the hard way with doors: announcing a change
+/// on a channel that describes something else reaches the wrong listeners and
+/// misreports what happened. A sheet is not a token. A character may have no
+/// token at all, or several.
+///
+/// Payload: `{"action": "changed", "actorId": <id>, "dataType": <slot>}`.
+pub const EVENT_CODE_ACTOR_SHEET_CHANGED: i32 = 26;
+
 /// Record a world event to the audit trail and trigger NOTIFY for real-time sync.
 ///
 /// # Failures are logged here, not at the call sites

@@ -254,6 +254,35 @@ impl ActorSystemDataMutation {
             actor_id, game_system_id, data_type
         );
 
+        // Spec 045 FR-067: tell the world the sheet moved.
+        //
+        // Nothing announced a sheet edit before this, so a character who
+        // gained darkvision kept their old sight on every board until somebody
+        // reloaded. Best-effort, like every other announcement: the data is
+        // written, and a failed notify is a stale board rather than a lost
+        // edit.
+        if let Ok(mut conn) = state.db_pool.get() {
+            use crate::schema::world_actors;
+            if let Ok(Some(world_id)) = world_actors::table
+                .filter(world_actors::id.eq(actor_id))
+                .select(world_actors::world_id)
+                .first::<uuid::Uuid>(&mut conn)
+                .optional()
+            {
+                let _ = crate::world_events::record_world_event(
+                    &mut conn,
+                    world_id,
+                    crate::world_events::EVENT_CODE_ACTOR_SHEET_CHANGED,
+                    Some(serde_json::json!({
+                        "action": "changed",
+                        "actorId": actor_id,
+                        "dataType": data_type,
+                    })),
+                    user_id,
+                );
+            }
+        }
+
         Ok(GraphQLActorSystemData::from(upserted_data))
     }
 }

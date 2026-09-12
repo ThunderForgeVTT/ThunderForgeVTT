@@ -24,6 +24,11 @@ export {
   startTriggerBridge,
 } from "./interactives";
 export {
+  applyTokenVisionWorldEvent,
+  loadTokenVisionIntoEngine,
+  getTokenVision,
+} from "./tokenVision";
+export {
   applyTokenWorldEvent,
   startTokenEventSync,
   loadTokensIntoStore,

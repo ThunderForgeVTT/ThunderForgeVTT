@@ -52,6 +52,7 @@ import {
 } from "@/api/tokens";
 import { getTokenAttributes } from "@/api/tokenAttributes";
 import { GraphQLRequestError } from "@/api/graphqlClient";
+import { loadTokenVisionIntoEngine } from "./tokenVision";
 import { toast } from "sonner";
 import type { TokenRecord, UpdateTokenInput } from "@/types/token";
 import type { WorldStore } from "../store";
@@ -158,6 +159,16 @@ export async function applyTokenWorldEvent(
       "sync",
     );
   }
+
+  // Spec 045 US6: and how far each of them sees, which its game system
+  // decides. After the tokens, because the engine attaches a vision profile
+  // to a token it already holds — named first, it would have nothing to
+  // attach to.
+  await loadTokenVisionIntoEngine(
+    worldStore,
+    sceneId,
+    tokens.map((token) => token.tokenId),
+  );
 }
 
 /**
@@ -266,6 +277,16 @@ export async function loadTokensIntoStore(
       "sync",
     );
   }
+
+  // Spec 045 US6: and how far each of them sees, which its game system
+  // decides. After the tokens, because the engine attaches a vision profile
+  // to a token it already holds — named first, it would have nothing to
+  // attach to.
+  await loadTokenVisionIntoEngine(
+    worldStore,
+    sceneId,
+    tokens.map((token) => token.tokenId),
+  );
 }
 
 /**
