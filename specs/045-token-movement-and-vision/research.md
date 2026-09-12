@@ -52,9 +52,33 @@ control impossible to express.
   the local user is, which it currently does not, and that is a larger new
   concept than one command.
 
-**Second half of the same defect**: the gridless branch of
-`handle_token_movement_input` moves the transform and returns without emitting
-`update_token`. It must emit, like the gridded branch.
+**The rest of the same defect**, found while building this phase because the
+key still moved nothing once control was fixed:
+
+- The engine announced a keyboard move as `update_token`, which no web module
+  handles. A drag emits `upsert_token`, and that is the event the application
+  listens for. The keyboard now emits the same one, through a shared helper,
+  carrying the whole transform — the bridge forwards rotation and scale only
+  when present, so a move that omitted them would read as a move that cleared
+  them.
+- The committed route's `pathCells` went with it. The web dropped that field
+  anyway, and a route belongs in `moveOwnToken` once the server can judge it,
+  which is phase 3 of this plan.
+- The gridless branch moved the transform and returned without emitting at
+  all. It emits now, like the gridded one.
+
+**How it was found**: a probe. `movement_state()` reports what the engine
+believes — the token named, whether it was found, how many are tagged, whether
+the scene has a grid, how many times the movement system has run, how many
+movement keys it saw, and where the controlled token actually is. It read
+`runs: 223, presses: 1, x: 7.5` while every client and the server read the old
+position, which turned "the keyboard does not work" into "the move happens and
+is never announced" in one run. The probe stays; the same question will be
+asked again — `apps/web/e2e/token-keyboard-move.spec.ts` already prints it when
+the press goes nowhere, and printed `named: null, found: false, tagged: 0` when
+that test was run with control deliberately switched off, which is how we know
+the test would have caught the original defect rather than merely passing
+beside it.
 
 ## 3. Where a move is judged against walls
 

@@ -49,16 +49,17 @@ gridless scenes, and everyone sees it.
 **Independent test**: A player presses D; their token is one cell east on every
 client and on the server, and still there after a reload.
 
-- [ ] T014 [US1] Add `SetControlledToken` to `src/engine/src/payloads.rs` and `src/engine/src/sdk.rs`, per the contract
-- [ ] T015 [US1] Handle it in `src/engine/src/app.rs`: tag that entity `PlayerControlled` and clear the tag from every other; `null` clears all
-- [ ] T016 [US1] Stop `setup_scene` in `src/engine/src/app.rs` from tagging its placeholder `PlayerControlled`, so the only controlled token is the one the product names
-- [ ] T017 [US1] Emit `update_token` from the gridless branch of `handle_token_movement_input` in `src/engine/src/systems/token_move.rs`, as the gridded branch does
-- [ ] T018 [P] [US1] Engine test: a step moves only the controlled token, and a gridless step emits
-- [ ] T019 [US1] Call the new command from `apps/web/src/pages/world/WorldPage.tsx`, beside `setViewerToken`, with the player's primary owned token (a Game Master: `null`), and wrap it in `apps/web/src/engine/bevy/index.ts`
-- [ ] T020 [US1] Confirm the emitted move reaches the server as a player move in `apps/web/src/engine/world/sync/tokens.ts` (it already routes a player's own token through `moveOwnToken`)
-- [ ] T021 [US1] Turn the playtest's keyboard check hard in `apps/web/playtest/dungeon-crawl.playtest.ts`
-- [ ] T022 [P] [US1] Add `apps/web/e2e/token-keyboard-move.spec.ts`: a player's keyboard move persists and reaches a second client
-- [ ] T023 [US1] Verify and prove: `cargo check --target wasm32-unknown-unknown -p thunderforge_engine`, `pnpm -F @thunderforge/web exec tsc --noEmit`, then `pnpm playtest --only=dungeon-crawl` clears `D (east) should walk Aria's own token one cell`
+- [X] T014 [US1] `SetControlledToken` added to `payloads.rs` and `sdk.rs`, and a `set_controlled_token` wasm export in `systems/token_move.rs` — the export is what the web calls, since the web talks to the engine through exports and never through the command queue
+- [X] T015 [US1] Applied by `reconcile_controlled_token`, which keeps exactly the named token tagged. A **resource reconciled every frame**, not a one-shot: the application names a token before the engine necessarily holds it, and the first version dropped the request in exactly that case — the playtest caught it moving nothing
+- [X] T016 [US1] `setup_scene`'s placeholder no longer carries `PlayerControlled`
+- [X] T017 [US1] The gridless branch emits its move
+- [X] T018 [P] [US1] Superseded by the probe below and the playtest's hard check; an engine unit test of a `single_mut` query would not have caught either real cause
+- [X] T019 [US1] `setControlledToken` wraps it in `apps/web/src/engine/bevy/index.ts` and `WorldPage.tsx` names the player's primary owned token beside the viewer token (`null` for a Game Master)
+- [X] T020 [US1] **This is where the second cause was.** The engine announced a keyboard move as `update_token`, a shape no web module handles; a drag emits `upsert_token`. All three keyboard emissions now use one helper emitting that event with the whole transform. `pathCells` came out with it — the web dropped it anyway, and a route belongs in `moveOwnToken` in Phase 5
+- [X] T020a [US1] Added `movement_state()` to the engine and `movementState` to `__engineProbe`, reported in the playtest's failure message: the token named, found, tagged, grid, runs, presses and the token's own x. It read `runs: 223, presses: 1, x: 7.5` against a store still on 0, which is what identified the cause
+- [X] T021 [US1] The playtest's keyboard check is hard
+- [X] T022 [P] [US1] `apps/web/e2e/token-keyboard-move.spec.ts` watches the whole round trip — the press, the server's stored position, then the Game Master's board — because either half of the fix can regress on its own. Run, and run again with control disabled to prove it fails without it: it does, reporting `{"named":null,"found":false,"tagged":0,"grid":true,"runs":174,"presses":0,"x":null}`
+- [X] T023 [US1] Proved: engine checks clean, `tsc --noEmit` clean, and `pnpm playtest --only=dungeon-crawl` goes from 2 findings to **1** in both systems with no hard failures — sessions run 58s instead of stopping at 21s. Only the wall (Phase 5) remains
 
 ## Phase 5 (US2): A wall stops a hero
 

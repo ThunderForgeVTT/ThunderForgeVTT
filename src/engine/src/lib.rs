@@ -40,7 +40,6 @@ mod integration_tests;
 use components::{DerivedStats, Token, TokenAttributes};
 #[cfg(target_arch = "wasm32")]
 use derived_data::*;
-use movement::PlayerControlled;
 #[cfg(target_arch = "wasm32")]
 use plugins::{
     BackgroundPlugin, CachedAssetsPlugin, CameraPlugin, CanvasLayerPlugin, DarknessPlugin,

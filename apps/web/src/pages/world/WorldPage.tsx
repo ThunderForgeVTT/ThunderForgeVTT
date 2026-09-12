@@ -957,8 +957,15 @@ export default function WorldPage() {
     if (!engineReady) {
       return;
     }
-    void import("@/engine/bevy").then(({ setViewerToken }) =>
-      setViewerToken(viewerTokenId),
+    void import("@/engine/bevy").then(
+      ({ setViewerToken, setControlledToken }) => {
+        void setViewerToken(viewerTokenId);
+        // Spec 045: the same token is theirs to move. Sight and control are
+        // asked separately because a Game Master has no viewer token and may
+        // still move any token; moving a *selected* token is its own
+        // affordance, not this one.
+        void setControlledToken(viewerTokenId);
+      },
     );
   }, [engineReady, viewerTokenId]);
 

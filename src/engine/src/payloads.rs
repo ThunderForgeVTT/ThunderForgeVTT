@@ -417,6 +417,19 @@ pub(crate) enum ExternalCommand {
         width: f32,
         height: f32,
     },
+    /// Names the token this client's own player may move.
+    ///
+    /// Distinct from `SetViewerToken`, which is whose eyes the board is drawn
+    /// through: a Game Master sees through no token and may still move any of
+    /// them, so control and point of view cannot be the same answer.
+    ///
+    /// `None` means this client controls nothing — a Game Master, or a player
+    /// with no token of their own. Until spec 045 the only controlled entity
+    /// was the placeholder the engine spawns at startup, so a player's
+    /// keyboard moved nothing that existed.
+    SetControlledToken {
+        token_id: Option<String>,
+    },
     /// Configures a token's eyes: darkvision range, facing, cone width and
     /// sight limit. Without this a token has unaided, omnidirectional sight —
     /// which means it cannot see anything standing in darkness.

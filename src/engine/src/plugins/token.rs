@@ -31,6 +31,9 @@ impl Plugin for TokenPlugin {
             .init_resource::<GridSnapEnabled>()
             // Movement planning, and the units its cost is quoted in.
             .init_resource::<MovementPlan>()
+            // Which token this client's player may move (spec 045). A
+            // resource, so naming one before the engine holds it still works.
+            .init_resource::<crate::systems::token_move::ControlledToken>()
             .init_resource::<SceneUnits>();
 
         init_token_systems_resources(app);
@@ -46,6 +49,7 @@ impl Plugin for TokenPlugin {
                 handle_token_resize_rotate_keyboard,
                 // Before sizing/snapping, so a move resolves to its final cell
                 // in the same frame the key was pressed.
+                crate::systems::token_move::reconcile_controlled_token,
                 handle_token_movement_input,
                 // Art that failed to load becomes a swatch before sizing, so
                 // the swatch is sized in the frame it appears.

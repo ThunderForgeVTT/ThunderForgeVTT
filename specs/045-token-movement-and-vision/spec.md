@@ -35,9 +35,16 @@ player pressed D with the scene loaded and their own token on screen; the
 token stayed where it was on every client and on the server. Route planning
 is unreachable for the same reason.
 
-A second gap sits behind the first: on a gridless scene the keyboard step
-moves the token on the local canvas and sends nothing, so even a tagged token
-would not stay moved.
+Two more gaps sit behind that one, and neither was visible until it was fixed
+(found while building phase 2, 2026-09-11):
+
+- **The move was announced to nobody.** The keyboard emitted `update_token`,
+  a shape nothing in the web has ever handled; a drag emits `upsert_token`.
+  So with control fixed, a keypress moved the token on its own canvas — the
+  engine reported it at the next cell's centre — and the store, the table and
+  the server all still read the old position.
+- **On a gridless scene the step sent nothing at all**, so even a handled
+  event would not have left that canvas.
 
 ### A wall that blocks movement blocks nothing
 

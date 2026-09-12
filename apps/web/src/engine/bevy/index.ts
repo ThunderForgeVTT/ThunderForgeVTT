@@ -130,6 +130,8 @@ function installEngineProbe(wasm: BevyWasmModule): void {
   const tokenNameplates = (wasm as { token_nameplates?: () => string })
     .token_nameplates;
   const hiddenTokens = (wasm as { hidden_tokens?: () => string }).hidden_tokens;
+  const movementState = (wasm as { movement_state?: () => string })
+    .movement_state;
   (window as unknown as Record<string, unknown>).__engineProbe = {
     camera: (): { x: number; y: number; scale: number } | null =>
       cameraState
@@ -149,6 +151,12 @@ function installEngineProbe(wasm: BevyWasmModule): void {
     // player's sight, or in the dark.
     hiddenTokens: (): string[] =>
       hiddenTokens ? (JSON.parse(hiddenTokens()) as string[]) : [],
+    // Spec 045: what this client believes about moving — which token its
+    // player may move, whether the engine has found it yet, how many are
+    // tagged, and whether the scene has a grid to step on. A keypress that
+    // moves nothing has several possible causes; this says which.
+    movementState: (): unknown =>
+      movementState ? (JSON.parse(movementState()) as unknown) : null,
   };
 }
 
@@ -1117,6 +1125,31 @@ export async function setViewerToken(tokenId: string | null): Promise<void> {
     set?.(tokenId ?? "");
   } catch {
     // A viewer that could not be named leaves the board-wide view.
+  }
+}
+
+/**
+ * Spec 045: name the token this client's own player may move — their primary
+ * one, else any they own — or `null` for none.
+ *
+ * Not the same question as `setViewerToken`, and deliberately a second call:
+ * a Game Master sees through no token and may still move any of them. Until
+ * this existed, the engine's movement keys drove the one entity it tags at
+ * startup — a placeholder — so a player pressing a movement key moved
+ * nothing of theirs, on any scene, ever.
+ *
+ * Local session state, like the viewer: never synced, never broadcast.
+ */
+export async function setControlledToken(
+  tokenId: string | null,
+): Promise<void> {
+  try {
+    const module = await getWasmModule();
+    const set = (module as { set_controlled_token?: (id: string) => boolean })
+      .set_controlled_token;
+    set?.(tokenId ?? "");
+  } catch {
+    // A bundle predating this controls nothing, exactly as before.
   }
 }
 

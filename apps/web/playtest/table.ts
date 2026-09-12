@@ -419,6 +419,24 @@ export async function overview(page: Page, notches = 4): Promise<void> {
   }
 }
 
+/**
+ * What this client's engine believes about moving: the token named as its
+ * player's, whether it has been found, how many are tagged, and whether the
+ * scene has a grid. Worth naming in a failure — a key that moves nothing has
+ * several causes and they look identical from outside.
+ */
+export async function movementStateOn(page: Page): Promise<string> {
+  const state = await page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          __engineProbe?: { movementState?: () => unknown };
+        }
+      ).__engineProbe?.movementState?.() ?? null,
+  );
+  return JSON.stringify(state);
+}
+
 /** The tokens this client's canvas is hiding from its viewer. */
 export async function hiddenTokens(page: Page): Promise<string[]> {
   return page.evaluate(

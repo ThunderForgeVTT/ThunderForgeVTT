@@ -220,6 +220,13 @@ pub(crate) fn parse_command(input: &str) -> Option<ExternalCommand> {
             width: value.get("width")?.as_f64()? as f32,
             height: value.get("height")?.as_f64()? as f32,
         }),
+        "set_controlled_token" => Some(ExternalCommand::SetControlledToken {
+            // Absent or null both mean "this client controls nothing".
+            token_id: value
+                .get("tokenId")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+        }),
         "set_token_vision" => Some(ExternalCommand::SetTokenVision {
             token_id: value.get("tokenId")?.as_str()?.to_owned(),
             darkvision: value

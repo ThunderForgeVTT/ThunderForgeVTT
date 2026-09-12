@@ -25,7 +25,11 @@ pub(crate) fn setup_scene(mut commands: Commands, mut token_entities: ResMut<Tok
             Transform::from_xyz(-180.0, 0.0, 0.0),
             PlayerToken,
             TokenIdentity("player".to_string()),
-            PlayerControlled,
+            // Not `PlayerControlled`. This placeholder used to carry that tag,
+            // and was therefore the only thing a movement key could move —
+            // which is why a player's keyboard moved nothing of theirs
+            // (spec 045). Control is named by the application now, through
+            // `SetControlledToken`.
         ))
         .id();
 
@@ -592,6 +596,11 @@ pub(crate) fn apply_external_commands(
                 if let Some(grid_visible) = scene.grid_visible.as_deref_mut() {
                     grid_visible.0 = visible;
                 }
+            }
+            ExternalCommand::SetControlledToken { token_id } => {
+                // Through the same queue the web uses, so there is one way a
+                // token becomes this client's to move, not two.
+                crate::systems::token_move::set_controlled_token(token_id.as_deref().unwrap_or(""));
             }
             ExternalCommand::SetTokenGrid {
                 token_id,

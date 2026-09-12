@@ -12,6 +12,7 @@ import {
   expectEveryoneLoaded,
   hiddenTokens,
   makeDoor,
+  movementStateOn,
   openTable,
   overview,
   placeCharacter,
@@ -91,7 +92,7 @@ for (const system of ["genie", "dnd5e"] as const) {
 
     try {
       let ariaToken = "";
-      await test.step("Aria sits down and tries the keyboard", async () => {
+      await test.step("Aria sits down and walks with the keyboard", async () => {
         ariaToken = await placeCharacter(table, {
           label: "Aria",
           at: ARIA_START,
@@ -102,22 +103,15 @@ for (const system of ["genie", "dnd5e"] as const) {
         const before = await expectAgreed(table, ariaToken, "Aria is placed");
 
         await walk(aria, "east");
-        await aria.page.waitForTimeout(1_500);
         const after = await expectAgreed(
           table,
           ariaToken,
-          "whatever the key did, the table agrees on it",
+          "Aria's step reaches the Game Master and the server",
         );
-        expect
-          .soft(
-            after.x,
-            "FINDING: D (east) should walk Aria's own token one cell. The " +
-              "engine's keyboard movement drives the one entity tagged " +
-              "`PlayerControlled`, and only the placeholder `setup_scene` " +
-              "spawns at startup carries that tag (engine app.rs) — no " +
-              "token a player owns ever does.",
-          )
-          .toBeGreaterThan(before.x);
+        expect(
+          after.x,
+          `D walks Aria's own token one cell east (engine: ${await movementStateOn(aria.page)})`,
+        ).toBeGreaterThan(before.x);
         await snapshot(table, "0 · the keyboard");
       });
 
