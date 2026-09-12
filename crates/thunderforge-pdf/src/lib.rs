@@ -83,13 +83,18 @@ impl Document {
                 let Some(repaired) = repair::rebuild_xref(bytes) else {
                     return Err(PdfError::Unreadable(first.to_string()));
                 };
-                lopdf::Document::load_mem(&repaired)
-                    .map(|inner| Self { inner })
+                let mut inner = lopdf::Document::load_mem(&repaired)
                     // The original complaint, not the repaired one: "invalid
                     // file trailer" says what is wrong with the document a
                     // person has, and a second failure after repair is this
                     // crate running out of ideas rather than new information.
-                    .map_err(|_| PdfError::Unreadable(first.to_string()))
+                    .map_err(|_| PdfError::Unreadable(first.to_string()))?;
+                // A rebuilt table opens the file; it does not necessarily
+                // make it readable. A scan of the bytes cannot see objects
+                // that live compressed inside other objects, and for many
+                // books the page tree is one of them.
+                repair::absorb_object_streams(&mut inner);
+                Ok(Self { inner })
             }
         }
     }
@@ -135,4 +140,4 @@ pub struct OutlineEntry {
 }
 
 pub mod layout;
-pub use repair::rebuild_xref;
+pub use repair::{absorb_object_streams, rebuild_xref};

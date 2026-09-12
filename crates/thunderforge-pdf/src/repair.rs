@@ -146,22 +146,193 @@ fn header_before(bytes: &[u8], obj_at: usize) -> Option<(u32, u16, usize)> {
 
 /// The object id of the document catalogue.
 ///
-/// Found by looking inside each object for `/Type` … `/Catalog`, because the
+/// Found by looking inside each object for `/Type /Catalog`, because the
 /// trailer that would normally name it is the thing that is broken.
+///
+/// # Bounded at `endobj`, and the type actually checked
+///
+/// The first version searched a fixed window from each object's start for
+/// `/Type` and `/Catalog` anywhere within it. That reads past the end of
+/// small objects into whichever object follows, so the *page tree* was
+/// routinely identified as the catalogue — it sits next to the real one, and
+/// the window swallowed both. The document then opened with a root that had
+/// no `/Pages` key and reported zero pages, which is how this was found.
 fn find_catalog(bytes: &[u8], objects: &[(u32, u16, usize)]) -> Option<u32> {
     for (id, _, offset) in objects {
-        // A catalogue dictionary is small and sits at the top of its object.
-        let end = (*offset + 2048).min(bytes.len());
-        let window = &bytes[*offset..end];
-        if contains(window, b"/Catalog") && contains(window, b"/Type") {
+        let end = object_end(bytes, *offset);
+        if declares_catalog(&bytes[*offset..end]) {
             return Some(*id);
         }
     }
     None
 }
 
+/// Where one object's body stops: its own `endobj`, or the start of the next.
+fn object_end(bytes: &[u8], offset: usize) -> usize {
+    match find_from(bytes, b"endobj", offset) {
+        Some(at) => at,
+        // A truncated final object has no `endobj`. Reading to the end of the
+        // file is right for it and harmless: there is nothing after to
+        // confuse it with.
+        None => bytes.len(),
+    }
+}
+
+/// Whether this object's body says `/Type /Catalog`.
+///
+/// The two tokens together and in order, not merely both present: a page tree
+/// that mentions `/Catalog` in a name or a string is not a catalogue.
+fn declares_catalog(body: &[u8]) -> bool {
+    let mut index = 0usize;
+    while let Some(at) = find_from(body, b"/Type", index) {
+        index = at + 5;
+        let mut cursor = index;
+        while cursor < body.len() && body[cursor].is_ascii_whitespace() {
+            cursor += 1;
+        }
+        if body[cursor..].starts_with(b"/Catalog") {
+            return true;
+        }
+    }
+    false
+}
+
 fn contains(haystack: &[u8], needle: &[u8]) -> bool {
     find_from(haystack, needle, 0).is_some()
+}
+
+// ---------------------------------------------------------------------------
+// Object streams
+// ---------------------------------------------------------------------------
+
+/// Recover the objects hidden inside a document's object streams.
+///
+/// # The other two thirds of the problem
+///
+/// Rebuilding the cross-reference table opens a file, but it does not
+/// necessarily make it *readable*. PDF 1.5 introduced object streams: a
+/// stream whose payload is itself a run of objects, compressed. Seventy-one
+/// of the 246 books in the reference library open with a rebuilt table and
+/// report **no pages at all**, because their page tree lives inside one of
+/// these and a scan of the raw bytes cannot see it.
+///
+/// # How the objects get parsed
+///
+/// By writing them back out as an ordinary PDF and loading that.
+///
+/// It sounds roundabout and it is the honest option: `lopdf`'s object parser
+/// is not public, so the alternative is owning a second PDF object parser. A
+/// synthetic document costs one allocation and one parse per stream, and uses
+/// the parser that is already there and already correct.
+///
+/// Returns how many objects were recovered.
+pub fn absorb_object_streams(document: &mut lopdf::Document) -> usize {
+    let stream_ids: Vec<lopdf::ObjectId> = document
+        .objects
+        .iter()
+        .filter(|(_, object)| is_object_stream(object))
+        .map(|(id, _)| *id)
+        .collect();
+
+    let mut recovered = 0usize;
+    for id in stream_ids {
+        let Some(lopdf::Object::Stream(stream)) = document.objects.get(&id) else {
+            continue;
+        };
+        let Some(contained) = objects_within(stream) else {
+            continue;
+        };
+        for (object_id, object) in contained {
+            // Never overwrite: an object found directly in the file is the
+            // one the document's own table would have pointed at, and a
+            // stale copy inside a stream must not displace it.
+            document.objects.entry(object_id).or_insert(object);
+            recovered += 1;
+        }
+    }
+
+    if recovered > 0 {
+        document.max_id = document
+            .objects
+            .keys()
+            .map(|(number, _)| *number)
+            .max()
+            .unwrap_or(document.max_id)
+            .max(document.max_id);
+    }
+    recovered
+}
+
+fn is_object_stream(object: &lopdf::Object) -> bool {
+    let lopdf::Object::Stream(stream) = object else {
+        return false;
+    };
+    matches!(stream.dict.get(b"Type"), Ok(lopdf::Object::Name(name)) if name == b"ObjStm")
+}
+
+/// Parse one object stream's payload into the objects it carries.
+fn objects_within(stream: &lopdf::Stream) -> Option<Vec<(lopdf::ObjectId, lopdf::Object)>> {
+    let count = stream.dict.get(b"N").ok()?.as_i64().ok()? as usize;
+    let first = stream.dict.get(b"First").ok()?.as_i64().ok()? as usize;
+    let payload = stream.decompressed_content().ok()?;
+    if count == 0 || first > payload.len() {
+        return None;
+    }
+
+    // The header is `count` pairs: object number, then its offset from
+    // `first`. Whitespace-separated integers and nothing else.
+    let header = std::str::from_utf8(&payload[..first]).ok()?;
+    let numbers: Vec<usize> = header
+        .split_whitespace()
+        .filter_map(|token| token.parse().ok())
+        .collect();
+    if numbers.len() < count * 2 {
+        return None;
+    }
+
+    // Rewritten as an ordinary document, then parsed by the ordinary parser.
+    let mut synthetic = Vec::with_capacity(payload.len() + count * 24 + 128);
+    synthetic.extend_from_slice(b"%PDF-1.5\n");
+    let mut emitted: Vec<u32> = Vec::with_capacity(count);
+
+    for index in 0..count {
+        let object_number = numbers[index * 2] as u32;
+        let start = first + numbers[index * 2 + 1];
+        let end = if index + 1 < count {
+            first + numbers[(index + 1) * 2 + 1]
+        } else {
+            payload.len()
+        };
+        if start >= end || end > payload.len() {
+            continue;
+        }
+        synthetic.extend_from_slice(format!("{object_number} 0 obj\n").as_bytes());
+        synthetic.extend_from_slice(&payload[start..end]);
+        synthetic.extend_from_slice(b"\nendobj\n");
+        emitted.push(object_number);
+    }
+    if emitted.is_empty() {
+        return None;
+    }
+
+    // A catalogue of its own, so the synthetic document is well-formed. Its
+    // id is past every real one, and it is discarded with the rest of the
+    // scaffolding once the objects are out.
+    let scaffold_id = emitted.iter().copied().max().unwrap_or(0) + 1;
+    synthetic.extend_from_slice(
+        format!("{scaffold_id} 0 obj\n<< /Type /Catalog >>\nendobj\n").as_bytes(),
+    );
+
+    let repaired = rebuild_xref(&synthetic)?;
+    let parsed = lopdf::Document::load_mem(&repaired).ok()?;
+
+    Some(
+        parsed
+            .objects
+            .into_iter()
+            .filter(|((number, _), _)| *number != scaffold_id && emitted.contains(number))
+            .collect(),
+    )
 }
 
 #[cfg(test)]
@@ -236,6 +407,40 @@ mod tests {
     fn something_that_is_not_a_pdf_is_refused_rather_than_guessed_at() {
         assert!(rebuild_xref(b"this is not a pdf at all").is_none());
         assert!(rebuild_xref(b"").is_none());
+    }
+
+    #[test]
+    fn the_page_tree_next_door_is_not_mistaken_for_the_catalogue() {
+        // The bug this exists for, and it cost 71 books. Searching a fixed
+        // window from each object's start for `/Type` and `/Catalog`
+        // *anywhere* reads past small objects into the next one — and a page
+        // tree sits right beside the catalogue in most files. The document
+        // then opened with a root that had no `/Pages` key and reported zero
+        // pages, which is exactly what 71 of 246 real books did.
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(b"%PDF-1.4\n");
+        // The page tree first, so a first-match-wins scan meets it first.
+        bytes.extend_from_slice(b"1 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\n");
+        bytes.extend_from_slice(b"2 0 obj\n<< /Type /Catalog /Pages 1 0 R >>\nendobj\n");
+
+        let found = find_catalog(&bytes, &find_objects(&bytes));
+        assert_eq!(
+            found,
+            Some(2),
+            "the catalogue is object 2, not the page tree"
+        );
+    }
+
+    #[test]
+    fn an_object_merely_mentioning_a_catalogue_is_not_one() {
+        // `/Type` and `/Catalog` both present is not the same claim as
+        // `/Type /Catalog`.
+        assert!(!declares_catalog(b"<< /Type /Pages /Note (/Catalog) >>"));
+        assert!(declares_catalog(b"<< /Type /Catalog >>"));
+        assert!(
+            declares_catalog(b"<< /Type\n  /Catalog >>"),
+            "newlines are whitespace"
+        );
     }
 
     #[test]
