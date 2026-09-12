@@ -142,4 +142,8 @@ pub struct OutlineEntry {
 }
 
 pub mod layout;
+
+/// Reading a PDF in the browser — see the module for why that is safe.
+#[cfg(feature = "wasm")]
+pub mod wasm;
 pub use repair::{absorb_object_streams, rebuild_xref};

@@ -64,6 +64,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tailwindcss/postcss": "^4.2.4",
     "@thunderforge/engine": "workspace:^",
+    "@thunderforge/pdf": "workspace:^",
     "@thunderforge/genie": "workspace:^",
     "@uiw/react-codemirror": "^4.25.11",
     "class-variance-authority": "^0.7.1",

@@ -20,6 +20,8 @@ const ENGINE_DIR = join(ROOT_DIR, "src/engine");
 const ENGINE_SRC_DIR = join(ENGINE_DIR, "src");
 const ENGINE_CARGO_TOML = join(ENGINE_DIR, "Cargo.toml");
 const ENGINE_PKG_DIR = join(ROOT_DIR, "dist/engine");
+const PDF_DIR = join(ROOT_DIR, "crates/thunderforge-pdf");
+const PDF_PKG_DIR = join(ROOT_DIR, "dist/pdf");
 const ENGINE_PKG_SUM = join(ENGINE_PKG_DIR, "pkg.sum");
 const ENGINE_PKG_PACKAGE_JSON = join(ENGINE_PKG_DIR, "package.json");
 const WORKSPACE_CARGO_TOML = join(ROOT_DIR, "Cargo.toml");
@@ -295,6 +297,45 @@ export async function buildEngine({
   const currentInputsHash = getEngineInputsHash(profile);
   writeFileSync(ENGINE_PKG_SUM, currentInputsHash, "utf-8");
   log("engine", "Build complete and pkg.sum updated.");
+}
+
+/**
+ * Build the PDF reader for the browser.
+ *
+ * The same crate the server runs, compiled for a different target — never a
+ * second parser. A Game Master reads a source book into their own world from
+ * their own machine, which costs the instance nothing and means a 70 MB book
+ * never moves.
+ *
+ * Release only, and always: unlike the engine there is no debugging value in
+ * an unoptimised build here, and the difference is megabytes a person waits
+ * for.
+ */
+export async function buildPdf() {
+  log("pdf", "Building the WebAssembly PDF reader...");
+  const child = spawnManaged(
+    "wasm-pack build ./ --release --target web --out-dir ../../dist/pdf --scope thunderforge --out-name pdf -- --features wasm",
+    { cwd: PDF_DIR, prefix: "pdf" },
+  );
+  const result = await waitForProcess(child, "pdf build");
+  if (result.code !== 0) {
+    throw new Error(`PDF reader build failed with exit code ${result.code}`);
+  }
+
+  // The scoped name the web app imports, as the engine build does.
+  const manifest = join(PDF_PKG_DIR, "package.json");
+  const pkg = JSON.parse(readFileSync(manifest, "utf-8"));
+  pkg.name = "@thunderforge/pdf";
+  writeFileSync(manifest, JSON.stringify(pkg, null, 2), "utf-8");
+  log("pdf", "Build complete.");
+}
+
+export async function ensurePdfBuild({ force = false } = {}) {
+  if (force || !existsSync(PDF_PKG_DIR)) {
+    await buildPdf();
+    return;
+  }
+  log("pdf", "PDF reader present, skipping build...");
 }
 
 export async function ensureEngineBuild({

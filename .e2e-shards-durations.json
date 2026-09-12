@@ -138,5 +138,6 @@
   "e2e/takedown-reach.spec.ts": 5.948,
   "e2e/token-keyboard-move.spec.ts": 18.9,
   "e2e/token-movement-walls.spec.ts": 3.584,
-  "e2e/scene-exploration.spec.ts": 32.186
+  "e2e/scene-exploration.spec.ts": 32.186,
+  "e2e/pdf-reader.spec.ts": 1.0190000000000001
 }

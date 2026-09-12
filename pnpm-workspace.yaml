@@ -2,6 +2,9 @@ packages:
   - apps/*
   - "packages/*"
   - dist/engine
+  # Spec 047/048: the PDF reader, compiled for the browser. Built like the
+  # engine and for the same reason — it is Rust the web loads.
+  - dist/pdf
   - "crates/*"
   - "packs/*"
   - "packs/systems/*/web"

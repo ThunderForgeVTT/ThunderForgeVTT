@@ -7,12 +7,22 @@ version = "0.1.0"
 edition = "2024"
 license.workspace = true
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# The browser façade. Off by default so the server does not carry
+# `wasm-bindgen` for a target it never builds.
+wasm = ["dep:wasm-bindgen", "dep:serde_json"]
+
 [dependencies]
 # Pure Rust, and the parser sorting-hat already runs against this same corpus.
 # No Poppler: shelling out to `pdftotext` would make a native binary a server
 # dependency, and it yields plain text — this crate needs positions.
 lopdf = { version = "0.34", default-features = false, features = ["nom_parser"] }
 serde = { version = "1", features = ["derive"] }
+wasm-bindgen = { version = "0.2.127", optional = true }
+serde_json = { version = "1", optional = true }
 
 [dev-dependencies]
 serde_json = "1"
