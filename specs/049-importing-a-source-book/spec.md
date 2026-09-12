@@ -35,7 +35,7 @@ What is missing is everything that is not a monster, everything that is not
 D&D 5e, and the entire moment between "the reader has finished" and "the world
 has changed".
 
-## Three words this spec keeps apart
+## Four words this spec keeps apart
 
 The repository already uses two of these, and getting them confused would be
 expensive later.
@@ -45,14 +45,20 @@ expensive later.
 - **Collection** *(spec 026)* — user-authored content, gathered to be shared
   and adopted by other worlds. Never called a pack, never called a bundle.
 - **Compendium (of a book)** — *new here, and the owner's word*: the bucket of
-  everything one import produced. Upload the Dungeon Master's Guide, get one
-  bucket holding everything read out of it.
+  everything one import produced. Read the Dungeon Master's Guide, get one
+  bucket holding everything that came out of it.
+- **Library** *(spec 050)* — the account's shelf of compendiums. A book is
+  imported **once per account**, not once per world, and the worlds that
+  account owns inherit from it.
 
-These are compatible rather than in conflict: the world's Compendium is where
-you browse, and a book's compendium is a thing you browse **by**. The portal
-gains a dimension, not a rival. And a book's compendium is deliberately *not*
-a collection, because the whole point of the last section of this spec is that
-most of them can never be shared.
+These are compatible rather than in conflict: a compendium belongs to the
+account, a world inherits it and may delta it, and the world's Compendium
+portal is where you browse the result — by kind as it always has, and now by
+compendium too. The portal gains a dimension, not a rival.
+
+A book's compendium is deliberately *not* a collection, because the whole
+point of the last section of this spec is that most of them can never be
+shared.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -341,22 +347,30 @@ correct content, and confirm the system registry check still passes.
 **The compendium**
 
 - **FR-040**: Everything one import produced MUST be held as one **compendium**
-  belonging to the world.
+  belonging to the **account that imported it**, not to a world. A world uses
+  it by inheriting it. Where it lives, how a world inherits it, and how a
+  world's own changes sit over it are spec 050's; this spec produces the
+  compendium and stops there.
 - **FR-041**: A compendium MUST record the book's name, the file's SHA-256,
   who imported it, when, the system it was read as, and a count per kind.
 - **FR-042**: The world's Compendium portal MUST let a Game Master browse by
   compendium, beside the existing browse by kind.
 - **FR-043**: Every imported entry MUST name the compendium it belongs to and
   the page it was found on.
-- **FR-044**: A Game Master MUST be able to remove a whole compendium, and
-  removal MUST take only what that import contributed.
+- **FR-044**: A Game Master MUST be able to remove a whole compendium from
+  their library, and removal MUST take only what that import contributed.
 - **FR-045**: Removal MUST name what is in use before it is confirmed — a
-  creature on a scene, an item in an inventory — rather than leaving a
-  dangling reference.
+  creature on a scene, an item in an inventory, in **any** world that
+  inherited it — rather than leaving a dangling reference.
 - **FR-046**: An entry a Game Master has edited by hand MUST NOT be silently
   replaced by a re-import (spec 047 FR-074) and MUST be named before removal.
+  Under spec 050 such an edit is a world's delta, and a re-import replaces the
+  base beneath it rather than the edit itself.
 - **FR-047**: Re-importing the same file MUST follow spec 047 FR-070 to
-  FR-075: recognised by hash before the upload, with overwriting offered.
+  FR-075: recognised by hash before the upload, with overwriting offered. The
+  hash MUST be checked **against the account's library**, not against one
+  world — importing a book a second time for a second world is the duplication
+  this is here to prevent.
 
 **Provenance, and what may not be shared**
 
@@ -374,9 +388,14 @@ correct content, and confirm the system registry check still passes.
 - **FR-054**: The restriction MUST follow individual entries, not only the
   bucket. An entry copied, adapted or referenced out of a commercial
   compendium MUST carry the same restriction.
-- **FR-055**: A commercial compendium MUST be fully usable **inside the world
-  that imported it** — placed on scenes, handed to players at that table, used
-  in play. That is the table reading the book over the owner's shoulder.
+- **FR-055**: A commercial compendium MUST be fully usable in **every world the
+  importing account owns** — placed on scenes, handed to players at those
+  tables, used in play. One person's copy of a book serves all of that
+  person's tables; that is still reading it over their shoulder, and it is
+  still not lending it out.
+- **FR-055a**: It MUST NOT become inheritable by any **other** account,
+  including a co-Game Master of a world it was inherited into. Being able to
+  use content at a table is not being able to take it home.
 - **FR-056**: An openly licensed compendium MUST be shareable, and the
   licence's attribution MUST be carried with it and shown where spec 016
   requires.
@@ -459,9 +478,10 @@ correct content, and confirm the system registry check still passes.
   no text layer. Optical character recognition is out of scope for this spec;
   those books are refused with that as the reason. Q2 asks whether that is
   right.
-- **One file, one compendium.** A multi-volume work imported as three PDFs is
-  three compendiums. Merging them is the Game Master's business, not the
-  importer's.
+- **One file, one compendium, one account.** A multi-volume work imported as
+  three PDFs is three compendiums. Merging them is the Game Master's business,
+  not the importer's. A book imported by two different accounts is two
+  compendiums, and deliberately so — see the decision below.
 - **Deduplication is not attempted.** The same spell in two books is two
   entries. Choosing between them is a decision with no correct automatic
   answer.
@@ -476,6 +496,54 @@ correct content, and confirm the system registry check still passes.
 - **Removal is not versioned.** Spec 048's rollback covers a character's
   imports. A compendium is removed whole or kept whole; if per-import
   versioning is wanted, that is a separate decision — Q3.
+
+## Decisions (owner, 2026-09-12)
+
+1. **A compendium belongs to the account, and worlds inherit it** (decided
+   after this spec was first written, before any of it was built).
+
+   The question that prompted it was the operator's: a Game Master with eight
+   worlds who imports the same book eight times costs eight times the disk for
+   one book. The first answer considered was deduplicating **across** accounts
+   by SHA — if two Game Masters upload the identical file, serve them both the
+   one parse.
+
+   That answer was rejected, and it is worth recording why, because it looks
+   free and is not:
+
+   - **A hash is not proof of possession.** "Send the SHA, receive the book"
+     makes the SHA *be* the book, and the hashes of the popular books would
+     circulate immediately. Making it safe needs a random-range possession
+     challenge against the actual bytes — real work, and only ever as strong
+     as the assumption that nobody runs an oracle.
+   - **It walks into the constitution's DMCA guardrail.** Serving one
+     canonical store of parsed commercial books to multiple accounts is at
+     least arguably the "centralized public repository" category that
+     checkpoint exists to catch, and it would need the takedown program
+     operational and an on-record risk acceptance before any build work.
+   - **It makes the deletion promise untrue.** A shared base that survives its
+     last-but-one referrer cannot be described to a person as "deleted", and
+     no amount of careful wording fixes that.
+
+   Moving compendiums **out of worlds and onto the account** gets the entire
+   saving that motivated the question — one book, one parse, however many
+   worlds — with none of those three problems. Possession is not in question
+   because it is the same person. Nothing crosses an account boundary, so the
+   guardrail is not engaged. And when the account goes, its compendiums go,
+   with nothing kept behind the scenes and nothing to explain.
+
+   Cross-account deduplication is therefore **not being built**, and is not
+   merely deferred: it would need its own spec, an ADR for the possession
+   protocol, and the constitution's determination made by an accountable
+   owner first.
+
+2. **Worlds inherit and delta.** A world does not copy a compendium; it
+   inherits it and keeps its own changes over the top. What a Game Master
+   changes in one world does not change it in another, and the base underneath
+   stays shared. Spec 050 owns this.
+
+3. **Account deletion takes the compendiums.** Consistent with what already
+   happens to worlds, and now simply true rather than true-with-a-caveat.
 
 ## Questions for the owner
 
