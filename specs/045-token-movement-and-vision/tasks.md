@@ -112,14 +112,23 @@ declared by the pack (owner decision 2).
 darkvision is shown a token 50 feet away, dimly, and not one 70 feet away; a
 character without it is shown neither.
 
-- [ ] T041 [US6] Add the `vision` block to the manifest contract: `packs/systems/README.md` and the amendment note in `docs/adrs/20260504-027-game_system_packaging_and_manifest_contract.md`, per contracts/movement-and-vision.md §3
-- [ ] T042 [P] [US6] Declare it in `packs/systems/dnd5e/system.json`: darkvision, and a carried light's bright and dim reach
-- [ ] T043 [P] [US6] Validate the block in the pack's server crate, as its other data types are validated
-- [ ] T044 [US6] Resolve a per-token vision profile server-side from the actor's system data and the pack's declaration, and expose it where the web reads tokens
-- [ ] T045 [US6] Convert the system's units through the scene's grid (one cell is one of the system's squares), in one place, with a unit test
-- [ ] T046 [US6] Call the existing `set_token_vision` from `apps/web/src/engine/bevy/index.ts` and the token sync, whenever a token's vision changes
+- [X] T041 [US6] `packs/systems/README.md` gains a `vision` section, and ADR-027 a 2026-09-11 amendment. The amendment says plainly what this block only half closes: `unitsPerCell` lives inside `vision` because **no manifest has ever recorded what a grid square is worth** — `movement` declares "30" with the unit implicit, which works only because nothing converts it. When `movement` needs the same answer, lift it to the top level rather than declaring it twice
+- [X] T042 [P] [US6] `packs/systems/dnd5e/system.json` declares darkvision and both carried-light reaches, in five-foot squares. A test reads the shipped manifest rather than a copy
+- [X] T043 [P] [US6] Validated in `pack_system_spec`, which is where manifest validation lives — the pack server crates validate *actor data*, a different thing. Refuses what is silent at runtime: a square of no size, and a distance naming no field (a `source` of `""` reads nothing, for ever, without complaining)
+- [X] T043a [P] The comment on `SystemResource` has claimed since spec 029 that "the two are kept honest by a test asserting the field names match". **No such test existed anywhere.** There are two now, one per mirror
+- [X] T044 [US6] `src/server/src/vision_profiles.rs` resolves it, and `tokenVision(sceneId)` exposes it — a sibling query keyed by token id like `tokenAttributes`, because the inputs are one manifest and one read of every sheet in the scene. A token seeing by the default rules is omitted rather than returned as zeroes
+- [X] T045 [US6] `GridUnits::cells` is the one place, with 16 crate tests. The scene's `grid_size` turns out to be **pixels** per cell, which is the only thing it has ever been despite reading like a measurement; `cells_to_world` is where cells become drawable
+- [X] T046 [US6] `set_token_vision` reached from the token sync on scene load and from the event fan-out on a sheet change. Zero is sent for a token the server omitted, or a character who *lost* their darkvision would keep it until a reload
+- [X] T046a [US6] **A sheet edit announced nothing at all**, so FR-067 had no channel to arrive on. Sheet changes now carry world-event code 26 — not the token code, for the reason phase 1 learned with doors: announcing a change on a channel describing something else reaches the wrong listeners. A sheet is not a token; a character may have no token, or several
 - [ ] T047 [P] [US6] Add a playtest step to `apps/web/playtest/combat-5e.playtest.ts` for the independent test above
 - [ ] T048 [US6] Verify and prove: `cargo check -p thunderforge`, engine check, `tsc --noEmit`, `pnpm playtest --only=combat-5e`
+
+> **Phase 7 is built and unit-proven, not yet table-proven.** 12 checks green,
+> `tsc --noEmit` clean, 1378 server tests and 16 crate tests pass. But the
+> chain server → web → engine has **never been run end to end**: no test has
+> put a dwarf in a dark room and watched them see further than a human. That
+> is exactly the gap that bit phase 4, where the engine emitted an event no
+> web module handled and every unit test still passed. T047 is what closes it.
 
 ## Phase 8 (US7): A map that remembers
 
