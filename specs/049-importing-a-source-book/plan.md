@@ -24,50 +24,58 @@ anything is sent, a store whose origin cannot be edited off, a per-world book
 list that fetches rather than copies, and a delta model that lets one table's
 changes stay that table's.
 
-Five arcs, thirteen phases, each provable on its own. **Both gates sit in the
+Sixteen phases in five arcs, each provable on its own. **Both gates sit in the
 last third**, so the reader and the shelf ship regardless of how either
 resolves.
 
-### Arc A — reading a book
+### Arc A — reading a book (phases 2-4)
 
 | Phase | What lands | How it is proved |
 |---|---|---|
-| 1 | A system pack declares its **content patterns**; shared code reads the declaration and names no system | `check-system-registry` still passes with no exemption; the 5e pack declares five kinds |
-| 2 | The **anchored reader** on those patterns, with the existing creature reader reached through it | The 717 creatures and 747 reaches still read; what the declaration cannot express is named, not silently kept |
-| 3 | The **prose reader** — name, text, provenance, no invented mechanics | Class features and feats come out of a real book with no mechanical fields |
+| 2 | A system pack declares its **content patterns**; shared code reads the declaration and names no system | `check-system-registry` still passes with no exemption; the 5e pack declares five kinds |
+| 3 | The **anchored reader** on those patterns, with the existing creature reader reached through it | The 717 creatures and 747 reaches still read; what the declaration cannot express is named, not silently kept |
+| 4 | The **prose reader**, and the **corpus measurement** | Class features come out with no mechanical fields; `measurements.md` says what the readers actually get out of 246 real books |
 
-### Arc B — deciding, and sending
-
-| Phase | What lands | How it is proved |
-|---|---|---|
-| 4 | The **confirmation window**: everything found, per-field certainty, explicit submit | An e2e test fails if any request carries book content before submit |
-| 5 | **Sending**: real progress, all-or-nothing, abandonment, server re-checks on arrival | An induced mid-flight failure leaves the account unchanged |
-
-### Arc C — the shelf, and worlds using it
+### Arc B — deciding, and sending (phases 5-6)
 
 | Phase | What lands | How it is proved |
 |---|---|---|
-| 6 | The **compendium and library**, account-owned, browsable, removable, hash-checked against the shelf | Two books, two compendiums; a re-import is caught from a *different world* |
-| 7 | **Origin** recorded automatically and enforced as an invariant | No route puts uploaded content into a collection; authored content unaffected |
-| 8 | The **book list**: a world switches compendiums on, content fetched not copied, players see it read-only | One book in two worlds stores once; switching off leaves no copy behind |
+| 5 | The **confirmation window**: everything found, per-field certainty, explicit submit | An e2e test fails if any request carries book content before submit |
+| 6 | **Sending**: real progress, all-or-nothing, abandonment, server re-checks on arrival | An induced mid-flight failure leaves the account unchanged |
 
-### Arc D — a world's own changes
-
-| Phase | What lands | How it is proved |
-|---|---|---|
-| 9 | **The entry-identity measurement** — a gate, not a report | Corpus evidence either confirms kind-plus-name or replaces it, *before* Phase 10 |
-| 10 | **Deltas**: changed, hidden, added — with origin per entry | An edit in one world reaches no other world and no base |
-| 11 | **Re-import** replaces a base with deltas over it | Deltas survive; any that cannot re-attach are reported by name |
-
-### Arc E — authored content, and the last gate
+### Arc C — the shelf, and worlds using it (phases 7-9)
 
 | Phase | What lands | How it is proved |
 |---|---|---|
-| 12 | **Collections on the same shelf**, and JSON download for authored content | A collection downloads; an imported compendium does not |
-| 13 | **Sync-back** — a world's improvement reaches the shelf | Gated on an owner-signed amendment to ADR-069. No route from a world to an *imported* base, at any volume |
+| 7 | The **compendium and library**, account-owned, browsable, removable, hash-checked against the shelf | Two books, two compendiums; a re-import is caught from a *different world* |
+| 8 | **Origin** enforced as an invariant *(needs ADR-097, owner-signed)* | No route puts uploaded content into a collection; authored content unaffected |
+| 9 | The **book list**: a world switches compendiums on, content fetched not copied, players see it read-only | One book in two worlds stores once; switching off leaves no copy behind |
 
-Phase 13 is last on purpose. If its determination is refused or delayed,
-phases 1-12 still ship (research §1, §9).
+### Arc D — a world's own changes (phases 10-12)
+
+| Phase | What lands | How it is proved |
+|---|---|---|
+| 10 | **The entry-identity measurement** — a gate, not a report | Corpus evidence either confirms kind-plus-name or replaces it, *before* phase 11 |
+| 11 | **Deltas**: changed, hidden, added — with origin per entry | An edit in one world reaches no other world and no base |
+| 12 | **Re-import** replaces a base with deltas over it | Deltas survive; any that cannot re-attach are reported by name |
+
+### Arc E — authored content, lifecycle, and the last gate (phases 13-15)
+
+| Phase | What lands | How it is proved |
+|---|---|---|
+| 13 | **Collections on the same shelf**, and JSON download for authored content | A collection downloads; an imported compendium does not |
+| 14 | **Account deletion takes the library**, with nothing retained | Zero bytes remain, verified by inspection rather than assertion |
+| 15 | **Sync-back** — a world's improvement reaches the shelf *(needs ADR-098, owner-signed)* | No route from a world to an *imported* base, at any volume |
+
+Phase 1 is setup and phase 16 is polish. Phase 15 is last on purpose: if its
+determination is refused or delayed, phases 1-14 still ship (research §1, §9).
+
+**Two things task generation changed, recorded rather than left to drift.** The
+corpus measurement moved from the end to **phase 4**, because it is what proves
+the readers work on real books and finding that out last is finding it out too
+late. And **account deletion gained a phase of its own** — spec 050 US4 and
+FR-062 to FR-064 had requirements and an e2e but no phase, which is the kind of
+gap that gets discovered when something is already built on top of it.
 
 ## Technical Context
 
@@ -109,7 +117,7 @@ Shared code may name no game system (049 FR-012), which
 type-check the web app — `pnpm -F @thunderforge/web exec tsc --noEmit` is a
 separate per-phase check, as it was for spec 045.
 
-**Scale/Scope**: Thirteen phases across two specs. Touches `pack_system_spec`,
+**Scale/Scope**: Sixteen phases across two specs. Touches `pack_system_spec`,
 `thunderforge-canvas-core`, `thunderforge-pdf`, the 5e pack, the server
 (ingest, store, origin, book list, deltas) and the web (import flow, library,
 book list). No engine change.
@@ -121,21 +129,21 @@ book list). No engine change.
 | **I. ECS owns simulation** | Not engaged. Nothing here draws or reasons spatially; this is chrome around the engine, which is where the constitution says new UI belongs. No engine change in any phase. |
 | **II. Plugin-modular engine** | Not engaged, for the same reason — no engine plugin added or altered. |
 | **III. Ownership at the data boundary** | The binding principle. The browser reads and reviews; the server re-checks authorization, the account, the system and the entry bound **on arrival** — a review in a browser is not a permission (049 FR-036). Origin is written by the server, never accepted from the client (FR-051). A world may only switch on a compendium **its owner's account holds** (050 FR-014). New tables carry `created_by`/`updated_by` per convention. |
-| **IV. ADRs before divergent implementation** | Three, all landing with the change set. **ADR-096, content patterns as a manifest extension point** (Phase 1) — an extension point in the shape `vision` already established. **ADR-097, origin as a non-editable invariant** (Phase 7) — about liability, so **owner-signed** on the precedent of ADR-069 and ADR-079. **ADR-098, amending ADR-069 for an update path to a collection** (Phase 13) — see the guardrail below. |
+| **IV. ADRs before divergent implementation** | Three, all landing with the change set. **ADR-096, content patterns as a manifest extension point** (Phase 2) — an extension point in the shape `vision` already established. **ADR-097, origin as a non-editable invariant** (Phase 8) — about liability, so **owner-signed** on the precedent of ADR-069 and ADR-079. **ADR-098, amending ADR-069 for an update path to a collection** (Phase 15) — see the guardrail below. |
 | **V. Verify before claiming done** | Per phase: `cargo check` (server and the shared crates), `cargo check --target wasm32-unknown-unknown` where the wasm build is touched, `pnpm -F @thunderforge/web exec tsc --noEmit` (web), then the phase's own e2e. |
 
-### DMCA / Content Moderation Guardrail — **engaged, in Phase 13 only**
+### DMCA / Content Moderation Guardrail — **engaged, in Phase 15 only**
 
 Under the merge this arc does reach the guardrail, and it reaches it in exactly
 one place. ADR-069's own limits say versioned collections and update paths to
 already-copied content re-open its determination; spec 050 FR-104 is such an
 update path.
 
-Everything before Phase 13 is clear: uploaded content is structurally incapable
+Everything before Phase 15 is clear: uploaded content is structurally incapable
 of leaving the account that imported it, and 049 FR-054a **narrows** what
 ADR-069 has to carry rather than widening it.
 
-Before Phase 13 begins, the constitution requires both:
+Before Phase 15 begins, the constitution requires both:
 
 1. **(a)** the notice-and-takedown program is operational — **re-confirmed as
    still true**, not re-established; it was confirmed for ADR-069 and extended
@@ -146,7 +154,7 @@ Before Phase 13 begins, the constitution requires both:
 Research §9 states the question that determination must answer, so it is not
 discovered late.
 
-**Gate result**: PASS to begin. Phases 1-12 have no unmet gate. Phase 13 is
+**Gate result**: PASS to begin. Phases 1-14 have no unmet gate. Phase 15 is
 blocked until (a) and (b) above, and the phase order puts it last so that block
 costs one feature rather than the arc.
 
@@ -174,44 +182,44 @@ specs/050-the-account-library/
 ### Source Code (repository root)
 
 ```text
-crates/pack_system_spec/src/lib.rs   # phase 1: contentPatterns schema + validation
+crates/pack_system_spec/src/lib.rs   # ph2: contentPatterns schema + validation
 crates/thunderforge-canvas-core/src/
-├── content_patterns.rs              # phase 1: runtime declaration (mirrors vision_declaration.rs)
-└── system_contribution.rs           # phase 2: a pack contributes what data cannot express
+├── content_patterns.rs              # ph2: runtime declaration (mirrors vision_declaration.rs)
+└── system_contribution.rs           # ph3: a pack contributes what data cannot express
 crates/thunderforge-pdf/
 ├── src/                             # unchanged: the reader is built
-└── examples/survey.rs               # phase 9, 13: entries per kind; identity across re-parses
+└── examples/survey.rs               # ph4: entries per kind · ph10: identity across re-parses
 packs/systems/dnd5e/
-├── system.json                      # phase 1: the contentPatterns block
-└── server/src/statblock.rs          # phase 2: superseded; per-attack reach stays as a contribution
+├── system.json                      # ph2: the contentPatterns block
+└── server/src/statblock.rs          # ph3: superseded; per-attack reach stays as a contribution
 src/server/src/
-├── content_patterns.rs              # phase 1: the loader (mirrors vision_profiles.rs)
-├── content/{anchored,prose}.rs      # phase 2, 3: readers that name no system
-├── compendium/                      # phase 6: account-owned store
-├── auth/account_ownership.rs        # phase 6: the helper that does not exist yet
-├── collections/                     # phase 7, 12: the invariant, then the shelf
-├── library/                         # phase 8: book list; phase 10-11: deltas
-├── graphql/mutations_compendium.rs  # phase 5: ingest, one transaction
-├── graphql/mutations_library.rs     # phase 8, 10, 13: switch on, delta, sync back
-└── graphql/queries/compendium.rs    # phase 6, 8: library and resolved reads
-src/server/migrations/               # phase 6: compendium + entries; phase 8: book list; phase 10: deltas
+├── content_patterns.rs              # ph2: the loader (mirrors vision_profiles.rs)
+├── content/{anchored,prose}.rs      # ph3, ph4: readers that name no system
+├── compendium/                      # ph7: account-owned store
+├── auth/account_ownership.rs        # ph7: the helper that does not exist yet
+├── collections/                     # ph8: the invariant · ph13: collections on the shelf
+├── library/                         # ph9: book list · ph11-12: deltas
+├── graphql/mutations_compendium.rs  # ph6: ingest, one transaction
+├── graphql/mutations_library.rs     # ph9: switch on · ph11: delta · ph15: sync back
+└── graphql/queries/compendium.rs    # ph7, ph9: library and resolved reads
+src/server/migrations/               # ph7: compendium + entries · ph9: book list · ph11: deltas
 apps/web/src/
 ├── services/pdfReader.ts            # unchanged: the browser seam exists
-├── services/bookImport.ts           # phase 2-4: patterns applied in the browser
-├── components/import/               # phase 4: the confirmation window
-├── api/compendium.ts                # phase 5: submit, with progress
-├── pages/library/                   # phase 6, 12: the account shelf
-└── pages/world/compendium/          # phase 8: browse by compendium (049 FR-042)
+├── services/bookImport.ts           # ph3-5: patterns applied in the browser
+├── components/import/               # ph5: the confirmation window
+├── api/compendium.ts                # ph6: submit, with progress
+├── pages/library/                   # ph7, ph13: the account shelf
+└── pages/world/compendium/          # ph9: browse by compendium (049 FR-042)
 apps/web/e2e/
-├── book-import-review.spec.ts       # phase 4: nothing on the wire before submit
-├── book-import-commit.spec.ts       # phase 5: all-or-nothing
-├── content-origin.spec.ts           # phase 7: no route out for uploaded content
-├── library-book-list.spec.ts        # phase 8: stored once; switching off leaves nothing
-└── library-deltas.spec.ts           # phase 10, 13: isolation, and sync-back's asymmetry
+├── book-import-review.spec.ts       # ph5: nothing on the wire before submit
+├── book-import-commit.spec.ts       # ph6: all-or-nothing
+├── content-origin.spec.ts           # ph8: no route out for uploaded content
+├── library-book-list.spec.ts        # ph9: stored once; switching off leaves nothing
+└── library-deltas.spec.ts           # ph11: isolation · ph15: sync-back's asymmetry
 docs/adrs/
-├── …-096-content_patterns_as_a_manifest_extension_point.md   # phase 1
-├── …-097-origin_as_a_non_editable_invariant.md               # phase 7, owner-signed
-└── …-098-an_update_path_to_a_collection.md                   # phase 13, owner-signed, amends ADR-069
+├── …-096-content_patterns_as_a_manifest_extension_point.md   # ph2
+├── …-097-origin_as_a_non_editable_invariant.md               # ph8, owner-signed
+└── …-098-an_update_path_to_a_collection.md                   # ph15, owner-signed, amends ADR-069
 ```
 
 **Structure Decision**: The repository's existing layout, and the `vision`
@@ -233,7 +241,7 @@ complexity:
 
 | Risk | Why it is accepted | What contains it |
 |---|---|---|
-| **A large arc** — thirteen phases across two specs, the owner's choice over two sequenced releases. | It designs the compendium, the book list and the delta table together instead of migrating one to fit another. | Every phase is independently shippable and independently proved; the arc can stop after any of them. |
+| **A large arc** — sixteen phases across two specs, the owner's choice over two sequenced releases. | It designs the compendium, the book list and the delta table together instead of migrating one to fit another. | Every phase is independently shippable and independently proved; the arc can stop after any of them. |
 | **The readers run in two places** — the browser parses and reviews, the server re-checks. | A review in a browser is not a permission (Principle III). | The *reader* is one crate compiled twice, never two implementations. The server re-does authorization and bounds, not parsing. |
 | **One large transaction** on commit (research §6). | All-or-nothing is worth more than streaming; a failure partway is the expensive case. | 049 FR-035's stated entry bound, refused before sending. Staging-then-swap is the escape hatch if measurement says the bound is too small. |
-| **Two gates, one of them legal.** | The owner accepted this cost explicitly when choosing the merge. | Both sit in the last third: identity measurement before Phase 10, ADR-098 before Phase 13. Refusal or delay of either costs the phases after it, never the reader or the shelf. |
+| **Two gates, one of them legal.** | The owner accepted this cost explicitly when choosing the merge. | Both sit in the last third: identity measurement before Phase 11, ADR-098 before Phase 15. Refusal or delay of either costs the phases after it, never the reader or the shelf. |
