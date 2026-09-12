@@ -27,6 +27,19 @@ export interface LightingToolProps {
   ambientLight?: AmbientLevel;
   /** Set the scene's light; the control is hidden without it. */
   onAmbientLightChange?: (level: AmbientLevel) => void;
+  /**
+   * Spec 045 US7: whether this scene remembers where players have been.
+   *
+   * Beside the scene's light because it is the same question from the
+   * player's chair — what of this board can I see, and what do I remember
+   * seeing. Splitting them across two tools would make a Game Master hunt.
+   */
+  explorationEnabled?: boolean;
+  onExplorationChange?: (enabled: boolean) => void;
+  /** Reset the fog. `null` means everyone; a user id means one player. */
+  onExplorationReset?: (forUser: string | null) => void;
+  /** Who is at the table, for a reset aimed at one of them. */
+  players?: { userId: string; name: string }[];
 }
 
 const NO_TOKEN_VALUE = "__none__";
@@ -62,6 +75,10 @@ export function LightingTool({
   tokens,
   ambientLight = "bright",
   onAmbientLightChange,
+  explorationEnabled = false,
+  onExplorationChange,
+  onExplorationReset,
+  players = [],
 }: LightingToolProps) {
   const [placeMode, setPlaceMode] = useState(false);
 
@@ -143,6 +160,57 @@ export function LightingTool({
           <p className="text-xs text-muted-foreground">
             Walls cast shadows in dim and dark scenes.
           </p>
+        </div>
+      ) : null}
+
+      {onExplorationChange ? (
+        <div className="grid gap-1.5" data-testid="scene-exploration">
+          <p
+            id="scene-exploration-label"
+            className="text-xs font-semibold tracking-widest text-muted-foreground uppercase"
+          >
+            Explored areas
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            variant={explorationEnabled ? "primary" : "secondary"}
+            aria-pressed={explorationEnabled}
+            aria-labelledby="scene-exploration-label"
+            onClick={() => onExplorationChange(!explorationEnabled)}
+            data-testid="scene-exploration-toggle"
+          >
+            {explorationEnabled ? "Remembering" : "Not remembering"}
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Each player keeps their own map, in their own browser.
+          </p>
+
+          {explorationEnabled && onExplorationReset ? (
+            <div className="grid gap-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => onExplorationReset(null)}
+                data-testid="scene-exploration-reset-all"
+              >
+                Reset for everyone
+              </Button>
+              {players.map((player) => (
+                <Button
+                  key={player.userId}
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => onExplorationReset(player.userId)}
+                  data-testid={`scene-exploration-reset-${player.userId}`}
+                >
+                  Reset for {player.name}
+                </Button>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
 

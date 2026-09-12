@@ -3,6 +3,11 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { getMyWorlds } from "@/api/world";
 import {
+  forgetAllExploration,
+  readExplorationUsage,
+  type ExplorationUsage,
+} from "@/services/exploredAreas";
+import {
   clearAllCache,
   clearWorldCache,
   formatBytes,
@@ -71,6 +76,40 @@ export function StoragePanel() {
       cancelled = true;
     };
   }, [userId, reloadToken]);
+
+  // Spec 045 FR-076: what a player's explored maps cost, and a way to clear
+  // them. Accounted separately from the world cache because it is a different
+  // kind of thing: the cache is a copy of what the server has and can always
+  // be fetched again, while a map is the only record of where this player
+  // walked. Clearing it loses it, which the wording below says plainly.
+  const [fog, setFog] = useState<ExplorationUsage>({
+    scenes: 0,
+    cells: 0,
+    bytes: 0,
+  });
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    void readExplorationUsage(userId).then((next) => {
+      if (!cancelled) setFog(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, reloadToken]);
+
+  const clearFog = useCallback(async () => {
+    if (!userId) return;
+    setBusy("fog");
+    const scenes = await forgetAllExploration(userId);
+    setReloadToken((token) => token + 1);
+    setBusy(null);
+    setNote(
+      scenes > 0
+        ? `Forgot what you had explored in ${scenes} scene${scenes === 1 ? "" : "s"}. Your maps start dark again.`
+        : "There was nothing explored to forget.",
+    );
+  }, [userId]);
 
   useEffect(() => {
     // Names are a nicety; the panel is fully usable without them, so a failed
@@ -214,6 +253,29 @@ export function StoragePanel() {
           >
             {busy === "all" ? "Clearing…" : "Clear all stored worlds"}
           </Button>
+        </div>
+      )}
+
+      {fog.scenes > 0 && (
+        <div className="grid gap-1" data-testid="storage-exploration">
+          <h3 className="text-sm font-semibold">Explored maps</h3>
+          <p className="text-sm text-muted-foreground">
+            What you have explored in {fog.scenes} scene
+            {fog.scenes === 1 ? "" : "s"} — about {formatBytes(fog.bytes)}. This
+            is the only record of where you have been: unlike a cached world, it
+            cannot be fetched again, and clearing it starts those maps dark.
+          </p>
+          <div>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy !== null}
+              onClick={() => void clearFog()}
+              data-testid="storage-clear-exploration"
+            >
+              {busy === "fog" ? "Forgetting…" : "Forget what I have explored"}
+            </Button>
+          </div>
         </div>
       )}
 

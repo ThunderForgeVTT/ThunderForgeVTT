@@ -1013,6 +1013,51 @@ export default function WorldPage() {
     // engine to re-resolve the party several times a second.
   }, [engineReady, partyEyesKey]);
 
+  // Spec 045 US7: what this player has explored, kept in their own browser.
+  //
+  // Loaded on scene entry, saved on a timer, and re-read when a Game Master
+  // resets the fog. The timer rather than a save per change: the engine adds
+  // cells as a token walks, and writing storage at that rate would be a write
+  // per step. A session that ends unsaved loses a few seconds of walking,
+  // which a player recovers by standing still.
+  const explorationEpoch = useRef(0);
+  useEffect(() => {
+    if (!engineReady || !id || !sceneId || !user?.id) {
+      return;
+    }
+    const userId = user.id;
+    const worldId = id;
+    const scene = sceneId;
+    let stopped = false;
+
+    void import("@/engine/world/sync/exploration").then(
+      async ({ loadExploration }) => {
+        const epoch = await loadExploration(userId, worldId, scene);
+        if (!stopped) {
+          explorationEpoch.current = epoch;
+        }
+      },
+    );
+
+    const timer = window.setInterval(() => {
+      void import("@/engine/world/sync/exploration").then(
+        ({ saveExploration }) =>
+          saveExploration(userId, worldId, scene, explorationEpoch.current),
+      );
+    }, 10_000);
+
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      // One last save on the way out, so leaving a scene deliberately does
+      // not cost the walk that led to leaving it.
+      void import("@/engine/world/sync/exploration").then(
+        ({ saveExploration }) =>
+          saveExploration(userId, worldId, scene, explorationEpoch.current),
+      );
+    };
+  }, [engineReady, id, sceneId, user?.id]);
+
   // Spec 045 FR-013/FR-015: when the engine stops a move at a wall, say so.
   //
   // The engine stops it locally and sends nothing, so no server refusal
@@ -1625,6 +1670,19 @@ export default function WorldPage() {
               Object.keys(worldStore.getState().tokens),
             ),
           ]);
+          // Spec 045 US7: a Game Master reset the fog. Re-read rather than
+          // trusting the payload — a reset aimed at one player and one aimed
+          // at everyone are the same event on the bus, and only the server
+          // can say which applies to whoever is holding this browser.
+          if (user?.id) {
+            const epoch = await import("@/engine/world/sync/exploration").then(
+              ({ applyExplorationWorldEvent }) =>
+                applyExplorationWorldEvent(user.id, id, sceneId, event),
+            );
+            if (epoch !== null) {
+              explorationEpoch.current = epoch;
+            }
+          }
           const ambient = applySceneLightingWorldEvent(
             worldStore,
             sceneId,
@@ -1649,7 +1707,10 @@ export default function WorldPage() {
       cancelled = true;
       void iterator.return?.();
     };
-  }, [id, sceneId, bridgeReady, worldStore]);
+    // `user?.id` because the exploration handler above resets *this
+    // player's* fog: a subscription that outlived a change of user would
+    // carry the previous one's id and reset the wrong person's map.
+  }, [id, sceneId, bridgeReady, worldStore, user?.id]);
 
   // Playtest 2026-09-10 P9: hand the engine the scene's light. Nothing did,
   // so every scene rendered in daylight and no wall ever cast a shadow.
@@ -1673,6 +1734,84 @@ export default function WorldPage() {
       });
     },
     [sceneId, sceneAmbient],
+  );
+
+  // Spec 045 US7: the Game Master's two controls — whether this scene
+  // remembers, and resetting what it has remembered.
+  const [explorationOn, setExplorationOn] = useState(false);
+  useEffect(() => {
+    if (!sceneId || !isSceneOwner) {
+      return;
+    }
+    let stale = false;
+    void import("@/engine/world/sync/exploration")
+      .then(({ getSceneExploration }) => getSceneExploration(sceneId))
+      .then((scene) => {
+        if (!stale) {
+          setExplorationOn(scene.enabled);
+        }
+      })
+      .catch(() => {
+        // A control that cannot read its own state shows off, which is the
+        // scene's default and the safe thing to show.
+      });
+    return () => {
+      stale = true;
+    };
+  }, [sceneId, isSceneOwner]);
+
+  // Who a Game Master may reset individually.
+  //
+  // Derived from the tokens that have owners, labelled by the token's own
+  // name: it is the name on the board the Game Master is looking at, and it
+  // is what they would say out loud. A world-membership list would be more
+  // complete and less useful — it would offer players who have no token in
+  // this scene and therefore no fog to reset.
+  const explorationPlayers = useMemo(() => {
+    const byOwner = new Map<string, string>();
+    for (const token of Object.values(allTokens)) {
+      if (token.ownerUserId && !byOwner.has(token.ownerUserId)) {
+        byOwner.set(token.ownerUserId, token.label ?? "a player");
+      }
+    }
+    return [...byOwner].map(([userId, name]) => ({ userId, name }));
+  }, [allTokens]);
+
+  const changeExploration = useCallback(
+    (enabled: boolean) => {
+      if (!sceneId) {
+        return;
+      }
+      // Shown immediately and put back if the server refuses, like the
+      // scene's light above: a toggle that waits for a round trip feels
+      // broken even when it works.
+      setExplorationOn(enabled);
+      void import("@/api/exploration")
+        .then(({ setSceneExploration }) =>
+          setSceneExploration(sceneId, enabled),
+        )
+        .catch((error: unknown) => {
+          console.error("Failed to change exploration:", error);
+          setExplorationOn(!enabled);
+        });
+    },
+    [sceneId],
+  );
+
+  const resetExploration = useCallback(
+    (forUser: string | null) => {
+      if (!sceneId) {
+        return;
+      }
+      void import("@/api/exploration")
+        .then(({ resetSceneExploration }) =>
+          resetSceneExploration(sceneId, forUser),
+        )
+        .catch((error: unknown) => {
+          console.error("Failed to reset exploration:", error);
+        });
+    },
+    [sceneId],
   );
 
   /**
@@ -2519,6 +2658,14 @@ export default function WorldPage() {
                           onAmbientLightChange={
                             sceneId ? changeSceneAmbient : undefined
                           }
+                          explorationEnabled={explorationOn}
+                          onExplorationChange={
+                            sceneId ? changeExploration : undefined
+                          }
+                          onExplorationReset={
+                            sceneId ? resetExploration : undefined
+                          }
+                          players={explorationPlayers}
                         />
                       ),
                     },

@@ -133,18 +133,18 @@ decision 3).
 both rooms are shown faded, the third is not. The Game Master resets; the fog
 goes, without the player doing anything.
 
-- [ ] T049 [US7] Migration: `scenes.exploration_enabled` (default false) and `scenes.exploration_epoch` (default 0), plus `scene_exploration_resets(scene_id, user_id, epoch)` per data-model.md
-- [ ] T050 [US7] Add `setSceneExploration` and `resetSceneExploration` (Game-Master-only) in the scenes mutations, and expose `explorationEnabled`, `explorationEpoch` and `myExplorationEpoch` on the scene query
-- [ ] T051 [P] [US7] Server tests: a reset for everyone bumps the scene epoch; a reset for one player writes only their row; a player reads their own greater epoch
-- [ ] T052 [US7] Create `src/engine/src/plugins/exploration.rs`: accumulate what the viewer's token can see into a coarse cell grid, draw the remembered area into `CanvasLayer::Fog`, and expose `explored_cells()`
-- [ ] T053 [US7] Add `set_exploration` and `clear_exploration` to `src/engine/src/sdk.rs` and `payloads.rs`, per the contract
-- [ ] T054 [P] [US7] Engine tests: a seen cell stays remembered after the token moves away; a cleared exploration draws nothing; disabled exploration accumulates nothing
-- [ ] T055 [US7] Persist explored cells per `(user, world, scene)` in `apps/web/src/services/worldCacheStorage.ts`, with the epoch they were accumulated under
-- [ ] T056 [US7] Load them on scene entry and hand them to the engine; drop them when the scene's (or the player's) epoch is newer
-- [ ] T057 [P] [US7] Include explored areas in the storage panel's figures, so a player can see and clear what they hold
-- [ ] T058 [US7] Give the Game Master the controls: turn exploration on or off for a scene, and reset it for one player or everyone
-- [ ] T059 [P] [US7] Add the playtest step for the independent test above, in `apps/web/playtest/dungeon-crawl.playtest.ts`
-- [ ] T060 [US7] Verify and prove: server check, engine check, `tsc --noEmit`, `pnpm playtest`
+- [X] T049 [US7] Migration written and run; schema regenerated
+- [X] T050 [US7] `setSceneExploration` and `resetSceneExploration`, plus `sceneExploration(sceneId)` as a **query of its own** rather than fields on the scene: the answer depends on who is asking, and a `SimpleObject` built from a row has no viewer. The greater of the two epochs is resolved server-side — a client that took the wrong one would keep a map it had been told to drop
+- [X] T051 [P] [US7] Seven tests, one of which **found a real bug**: a reset for everyone reached everyone *except* the player reset most recently. Their row held 1, the scene incremented 0 to 1, they took the greater, and nothing moved. A reset for everyone now clears past the highest row and deletes the rows it subsumes
+- [X] T052 [US7] `plugins/exploration.rs`, asking the same `is_visible` the lighting pass uses — a second notion of visibility would drift, and the first thing a player would notice is remembered ground showing through a wall
+- [X] T053 [US7] `set_exploration`, `set_explored_cells` and `explored_cells` as wasm exports. A reset arrives as the **empty string**, not an absent call, so that "the Game Master cleared your map" and "the application has not spoken yet" cannot look alike
+- [X] T054 [P] [US7] Twelve tests. Two had to be restructured for a reason worth keeping: a reset clears the map and the player's surroundings return **in the same frame**, because they are looking at them. Correct on a board, and it makes a reset unobservable in a test that also accumulates — so those reconcile without accumulating, and a new test states the real behaviour
+- [X] T055 [US7] `services/exploredAreas.ts`, in a **sibling IndexedDB database** rather than the world cache's. That schema is opened and versioned from Rust; adding a store means a version bump both sides must agree on, and a disagreement makes the world cache unopenable — which costs a player far more than their fog
+- [X] T056 [US7] Loaded on scene entry, saved on a ten-second timer plus once on the way out, and dropped when the server's epoch is greater. A scene whose state cannot be read keeps exploration **on**: turning it off would show a player the whole map, the one outcome a Game Master who enabled it must never get by accident
+- [X] T057 [P] [US7] In the storage panel, accounted separately from the world cache and worded to say why: a cached world can always be fetched again, and a map is the only record of where this player walked
+- [X] T058 [US7] In the Lighting tool, beside the scene's light — the same question from the player's chair. Per-player resets are offered by token name, because that is the name on the board the Game Master is looking at
+- [X] T059 [P] [US7] Proved by e2e instead, in `apps/web/e2e/scene-exploration.spec.ts`, and deliberately: the thing under test **is the browser**. The map has to live in real IndexedDB, survive a real reload, and be dropped when the epoch says so — none of which a playtest's probes reach. Both tests pass
+- [X] T060 [US7] Proved: 12 checks green, `tsc --noEmit` clean, 231 engine tests, the exploration server tests, and both e2e tests pass against a real browser — the map survives a reload and a Game Master's reset reaches the player's own storage without the player doing anything
 
 ## Phase 9: Polish and cross-cutting
 

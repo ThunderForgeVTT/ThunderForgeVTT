@@ -1227,6 +1227,58 @@ export async function setControlledToken(
 }
 
 /**
+ * Spec 045 US7: whether this scene remembers where a player has been.
+ *
+ * The Game Master's setting, read from the server. Off is the default and the
+ * safe answer: a scene that has never been asked to remember must not start
+ * hiding its map from the table.
+ */
+export async function setExploration(enabled: boolean): Promise<void> {
+  try {
+    const module = await getWasmModule();
+    const set = (module as { set_exploration?: (on: boolean) => boolean })
+      .set_exploration;
+    set?.(enabled);
+  } catch {
+    // A bundle predating this remembers nothing, exactly as before.
+  }
+}
+
+/**
+ * Hand the engine what this player's browser remembered.
+ *
+ * An empty list is a **reset**, not a silence: the engine distinguishes the
+ * two, because "the Game Master cleared your map" has to survive a frame in
+ * which nothing else happens.
+ */
+export async function setExploredCells(
+  cells: [number, number][],
+): Promise<void> {
+  try {
+    const module = await getWasmModule();
+    const set = (module as { set_explored_cells?: (json: string) => boolean })
+      .set_explored_cells;
+    set?.(cells.length === 0 ? "" : JSON.stringify(cells));
+  } catch {
+    // As above.
+  }
+}
+
+/** What the engine has accumulated, for the browser to keep. */
+export async function exploredCells(): Promise<[number, number][]> {
+  try {
+    const module = await getWasmModule();
+    const read = (module as { explored_cells?: () => string }).explored_cells;
+    if (!read) {
+      return [];
+    }
+    return JSON.parse(read()) as [number, number][];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Spec 045 FR-033: name the tokens the table's players see through, so a Game
  * Master's board can mark what the party cannot see.
  *

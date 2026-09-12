@@ -56,6 +56,7 @@ pub use helpers::{
 };
 
 // Phase 4.9.Z Step 5: Query extraction into separate modules
+pub mod exploration;
 pub mod queries;
 pub use queries::{
     AbilityQuery, AbilityVocabularyQuery, ActorQuery, AdminQuery, HealthcheckQuery, InventoryQuery,
@@ -295,6 +296,9 @@ pub struct QueryRoot(
     // Spec 045 US6: `tokenVision(sceneId)` — how far each token sees, as its
     // game system declares it.
     queries::token_vision::TokenVisionQuery,
+    // Spec 045 US7: `sceneExploration(sceneId)` — whether a scene remembers,
+    // and the epoch this viewer's stored map must be at or above.
+    exploration::ExplorationQuery,
     // Spec 030: `effectRegistry` and `interactives(sceneId)`.
     queries::interactives::InteractiveQuery,
     // Spec 031: `authoringTools(worldId)` — which tools the caller may use.
@@ -379,6 +383,8 @@ pub struct QueryRoot(
 
 #[derive(MergedObject, Default)]
 pub struct MutationRoot(
+    // Spec 045 US7: turning a scene's memory on, and resetting it.
+    exploration::ExplorationMutation,
     queries::token_status::TokenDisclosureMutation,
     WorldMutation,
     UserDataMutation,
