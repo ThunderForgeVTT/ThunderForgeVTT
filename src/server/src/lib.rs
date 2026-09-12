@@ -37,6 +37,7 @@ pub mod db_types;
 pub mod declared_values;
 pub mod door_effects;
 pub mod errors;
+pub mod exploration;
 pub mod feedback;
 /// Spec 040 US5 / ADR-090: which GitHub application a subsystem acts as, at
 /// two scales. The resolution half of `repo_host::scoped`, generalised —

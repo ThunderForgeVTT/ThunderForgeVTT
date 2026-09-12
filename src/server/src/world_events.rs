@@ -134,6 +134,17 @@ pub const EVENT_CODE_SCENE_LIGHTING_CHANGED: i32 = 25;
 /// Payload: `{"action": "changed", "actorId": <id>, "dataType": <slot>}`.
 pub const EVENT_CODE_ACTOR_SHEET_CHANGED: i32 = 26;
 
+/// A Game Master reset what a scene remembers being explored.
+///
+/// Spec 045 US7. The **fast path**, not the mechanism: what makes a reset
+/// stick is the epoch a client compares on arrival, so a player who was
+/// offline still finds out. This is how a player who is looking at the board
+/// finds out immediately instead.
+///
+/// Payload: `{"action": "reset", "sceneId": <id>, "forUser": <id|null>,
+/// "epoch": <n>}`. `forUser` is null for a reset that reaches everyone.
+pub const EVENT_CODE_SCENE_EXPLORATION_RESET: i32 = 27;
+
 /// Record a world event to the audit trail and trigger NOTIFY for real-time sync.
 ///
 /// # Failures are logged here, not at the call sites
