@@ -144,3 +144,29 @@ fn a_backwards_or_enormous_range_is_refused_rather_than_spun_on() {
         "a range spanning everything maps nothing"
     );
 }
+
+#[test]
+fn a_symbol_font_mapping_into_the_private_use_area_is_brought_back() {
+    // A bestiary names its creatures in such a font: read literally,
+    // "Allosaurus" arrives as U+F041 U+F06C U+F06C U+F06F ... — unassigned
+    // code points that display as nothing at all.
+    let map = parse(
+        b"1 begincodespacerange\n<00> <FF>\nendcodespacerange\n\
+          1 beginbfchar\n<41> <F041>\nendbfchar",
+    )
+    .expect("parses");
+    assert_eq!(map.decode(&[0x41]), "A");
+}
+
+#[test]
+fn the_rest_of_the_private_use_area_is_left_alone() {
+    // Only the block that mirrors ASCII is a known convention. An icon
+    // font's arrows and dice live higher up and mean what they mean;
+    // inventing Latin letters for them would be worse than nothing.
+    let map = parse(
+        b"1 begincodespacerange\n<00> <FF>\nendcodespacerange\n\
+          1 beginbfchar\n<41> <E000>\nendbfchar",
+    )
+    .expect("parses");
+    assert_eq!(map.decode(&[0x41]), "\u{e000}");
+}

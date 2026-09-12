@@ -157,8 +157,29 @@ fn utf16be(hex: &str) -> String {
         .chunks(4)
         .filter(|chunk| chunk.len() == 4)
         .filter_map(|chunk| u16::from_str_radix(std::str::from_utf8(chunk).ok()?, 16).ok())
+        .map(out_of_the_private_use_area)
         .collect();
     String::from_utf16_lossy(&units)
+}
+
+/// Bring a character back out of the Private Use Area.
+///
+/// A symbol font maps its codes into U+F000–U+F0FF rather than to real
+/// characters — a long-standing convention that mirrors ASCII up there, so
+/// U+F041 is the letter A. A bestiary in the reference library names its
+/// creatures in such a font, and read literally they arrive as runs of
+/// unassigned code points: `U+F041 U+F06C U+F06C U+F06F...`, which is
+/// "Allosaurus".
+///
+/// Only that one block is touched. The rest of the Private Use Area is
+/// genuinely private — an icon font's arrows and dice — and inventing Latin
+/// letters for it would be worse than leaving it alone.
+fn out_of_the_private_use_area(unit: u16) -> u16 {
+    if (0xF000..=0xF0FF).contains(&unit) {
+        unit - 0xF000
+    } else {
+        unit
+    }
 }
 
 /// `bfrange` has two forms, and a real file uses both.
