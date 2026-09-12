@@ -322,6 +322,27 @@ and leaves current hit points and anything the table has changed in play alone.
 - **FR-036a**: Refusing MUST say why: that this came in with the character and
   the Game Master has not adopted it. A player who cannot use their own sword
   and is not told why will conclude the product is broken.
+- **FR-037**: Unadopted content MUST NOT be **delivered** to the play field at
+  all. Not greyed out, not present and refused on use — absent. The play field
+  is the server's to compose, and a client cannot swing a sword it was never
+  sent. This is the same rule spec 045 FR-033 already applies to a hidden
+  token's name: hidden means the server never sends it.
+- **FR-037a**: An attempt to use content the viewer was not sent MUST be
+  refused by the server, not only by the client. A modified client is the case
+  this exists for; a client-side check would be the only check.
+- **FR-038**: Such an attempt MUST be **reported to the Game Master**: what was
+  attempted, by which character, and when. A player who is editing requests by
+  hand or by script is something the table should know about, and the server is
+  the only party that can see it.
+- **FR-038a**: The report MUST state what happened and MUST NOT state why.
+  "Aria's client tried to use a sword this world has not adopted" is a fact;
+  "Aria is cheating" is a verdict, and the product is not in a position to
+  reach it.
+- **FR-038b**: An honest client that is merely **stale** MUST NOT be reported.
+  A player whose Game Master declined an item mid-session will have a client
+  that has not caught up, and accusing them is far worse than missing a
+  genuine attempt. The report MUST therefore be suppressed when the viewer's
+  last delivery predates the decision that withdrew the content.
 - **FR-036b**: A Game Master MUST be able to revisit an undecided or declined
   piece later and adopt it. Declining MUST NOT be final, and MUST NOT remove
   anything from the character.
@@ -486,6 +507,21 @@ and leaves current hit points and anything the table has changed in play alone.
 
    Declining is not final. A Game Master may come back to it. FR-036 through
    FR-036c.
+
+   **And it is withheld rather than refused.** The play field is the server's
+   to compose, so unadopted content is simply not delivered — not greyed out,
+   not present-and-blocked, absent. A client cannot swing a sword it was never
+   sent, which is the same rule spec 045 already applies to a hidden token's
+   name. A player may still craft the request by hand or by script; the server
+   refuses it, and tells the Game Master that somebody tried. FR-037, FR-038.
+
+   The report says what happened and not why. "Aria's client tried to use a
+   sword this world has not adopted" is a fact the table can act on; "Aria is
+   cheating" is a verdict this product is not in a position to reach — and a
+   stale client belonging to an honest player looks identical from the server.
+   Accusing somebody who did nothing is a worse failure than missing somebody
+   who did, so the report is suppressed when the viewer's last delivery
+   predates the decision that withdrew the thing. FR-038a, FR-038b.
 
 ## Questions for the owner
 
