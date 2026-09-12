@@ -65,6 +65,7 @@ pub mod map_import;
 pub mod markdown;
 pub mod models;
 pub mod moderation;
+pub mod movement;
 pub mod network;
 pub mod notices;
 pub mod peer_signaling;

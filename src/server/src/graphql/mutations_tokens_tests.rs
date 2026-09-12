@@ -570,3 +570,94 @@ fn token_photo_url_can_be_set_skipped_and_cleared() {
         Ok(())
     });
 }
+
+/// Spec 045 US2: the walls get a say in a player's move, and the rows in the
+/// database are what they get a say with.
+///
+/// The unit tests in `crate::movement` never touch a database, so nothing there
+/// exercises loading a scene's walls or narrowing the server's `f64`
+/// coordinates to the `f32` the shared geometry works in. This does.
+#[tokio::test]
+async fn a_wall_in_the_database_refuses_a_players_move_across_it() {
+    use crate::schema::{tokens, walls};
+    use crate::test_support::*;
+
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let owner_id = insert_test_user(&mut conn);
+    let world_id = insert_test_world(&mut conn, owner_id);
+    let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+    let now = Utc::now().naive_utc();
+
+    let token_id = uuid::Uuid::now_v7();
+    diesel::insert_into(tokens::table)
+        .values((
+            tokens::token_id.eq(token_id),
+            tokens::scene_id.eq(scene_id),
+            tokens::x.eq(0.0),
+            tokens::y.eq(-10.0),
+            tokens::rotation.eq(0.0),
+            tokens::scale.eq(1.0),
+            tokens::created_at.eq(now),
+            tokens::updated_at.eq(now),
+        ))
+        .execute(&mut conn)
+        .expect("a token south of the wall");
+
+    let wall_id = uuid::Uuid::now_v7();
+    diesel::insert_into(walls::table)
+        .values((
+            walls::wall_id.eq(wall_id),
+            walls::scene_id.eq(scene_id),
+            walls::x1.eq(-50.0),
+            walls::y1.eq(0.0),
+            walls::x2.eq(50.0),
+            walls::y2.eq(0.0),
+            walls::blocks_vision.eq(true),
+            walls::blocks_movement.eq(true),
+            walls::door_state.eq("none"),
+            walls::created_by.eq(owner_id),
+            walls::updated_by.eq(owner_id),
+            walls::created_at.eq(now),
+            walls::updated_at.eq(now),
+        ))
+        .execute(&mut conn)
+        .expect("a wall across the board");
+
+    let token: crate::models::Token = tokens::table
+        .filter(tokens::token_id.eq(token_id))
+        .select(crate::models::Token::as_select())
+        .first(&mut conn)
+        .expect("the token back");
+    drop(conn);
+
+    // North, straight through it.
+    let refused = judge_against_walls(&state, &token, 0.0, 10.0, None).await;
+    let message = refused.expect_err("a wall is in the way").message;
+    assert_eq!(message, crate::movement::BLOCKED_MESSAGE);
+    // FR-019: the same sentence for every wall, saying nothing about doors —
+    // a closed secret door stops a player exactly like this one.
+    assert!(!message.to_lowercase().contains("door"), "{message}");
+
+    // East, alongside it: the wall is there and is not in the way.
+    assert!(
+        judge_against_walls(&state, &token, 20.0, -10.0, None)
+            .await
+            .is_ok(),
+        "a move that crosses nothing must not be refused just because the \
+         scene has walls"
+    );
+
+    // The long way round, declared: past the wall's end and back.
+    let around = [
+        GraphQLPathPoint { x: 60.0, y: -10.0 },
+        GraphQLPathPoint { x: 60.0, y: 10.0 },
+    ];
+    assert!(
+        judge_against_walls(&state, &token, 0.0, 10.0, Some(&around))
+            .await
+            .is_ok(),
+        "walking around a wall must be allowed, though the straight line \
+         between the same two points is not"
+    );
+}

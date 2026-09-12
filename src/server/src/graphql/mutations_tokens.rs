@@ -24,6 +24,17 @@ use crate::world_events::{EVENT_CODE_TOKEN_CHANGED, record_world_event, world_id
 use async_graphql::MaybeUndefined;
 use thunderforge_canvas_core::token_kind::TokenKind;
 
+/// One point of a route a client claims to have walked (spec 045 FR-016).
+///
+/// World coordinates, in the order they were passed through. Deliberately a
+/// plain pair rather than a grid cell: a scene may have no grid, and the
+/// geometry that judges the route works in world space either way.
+#[derive(async_graphql::InputObject, Debug, Clone, Copy)]
+pub struct GraphQLPathPoint {
+    pub x: f64,
+    pub y: f64,
+}
+
 #[derive(Default)]
 
 pub struct TokenMutation;
@@ -125,6 +136,15 @@ impl TokenMutation {
     }
 
     /// Update an existing token's position/properties (scene owner only)
+    ///
+    /// **Deliberately not judged against walls** (spec 045 decision 1,
+    /// FR-017). This is the Game Master's path — scene owner only — and a
+    /// Game Master moves any token anywhere: picking a piece up and setting it
+    /// down on the far side of a wall is a normal thing to do at a table.
+    /// Refusing it would be the product being wrong about who is in charge.
+    ///
+    /// This is the rule, not a gap left to tighten later. The judged path is
+    /// `move_own_token`, which is where a *player's* move goes.
     async fn update_token(
         &self,
         ctx: &Context<'_>,
@@ -335,12 +355,25 @@ impl TokenMutation {
     /// are all independently authorized here (no locking) — whichever one
     /// most recently moves the token "wins," matching the spec's stated
     /// conflict resolution.
+    ///
+    /// Spec 045 US2 (ADR-095): this is where a player's move is judged against
+    /// the scene's walls. `path` is the route the client claims to have taken
+    /// — the cells of a committed route, in order. It is optional because a
+    /// drag has no route to send, and when it is absent the straight line from
+    /// the token's stored position is judged instead, which is what a drag
+    /// actually is.
+    ///
+    /// The path is a *claim*, never a substitute for judging: it is anchored
+    /// to the token's real position and to the requested destination, so a
+    /// short innocent route cannot be sent as cover for a move that crossed a
+    /// wall. See `crate::movement`.
     async fn move_own_token(
         &self,
         ctx: &Context<'_>,
         token_id: uuid::Uuid,
         x: f64,
         y: f64,
+        path: Option<Vec<GraphQLPathPoint>>,
     ) -> GraphQLResult<GraphQLToken> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
@@ -380,6 +413,12 @@ impl TokenMutation {
                 "Move token failed (not found or not controlled by you)",
             ));
         }
+
+        // Spec 045 US2: the walls get a say, and this is the only place they
+        // get one for a player. The engine refuses the move first so the stop
+        // looks like a wall; this is the refusal that counts, because the
+        // engine is a program on somebody else's computer (ADR-095).
+        judge_against_walls(state, &existing, x, y, path.as_deref()).await?;
 
         let mut conn = state
             .db_pool
@@ -580,6 +619,70 @@ fn parse_token_kind(raw: Option<&str>) -> GraphQLResult<TokenKind> {
                 known.join(", ")
             ))
         }),
+    }
+}
+
+/// Refuse a player's move if a wall is in the way (spec 045 FR-012, ADR-095).
+///
+/// Loads the scene's walls and asks `crate::movement` — the same geometry the
+/// engine used to stop the move before it was sent. Only reached from
+/// `move_own_token`: a Game Master's `update_token` is deliberately unjudged
+/// (FR-017, spec decision 1).
+///
+/// A scene with no walls is the common case and costs one empty query. It is
+/// not skipped on a hunch — "this scene probably has no walls" is exactly the
+/// assumption a modified client would like the server to make.
+async fn judge_against_walls(
+    state: &crate::AppState,
+    existing: &crate::models::Token,
+    x: f64,
+    y: f64,
+    path: Option<&[GraphQLPathPoint]>,
+) -> GraphQLResult<()> {
+    use crate::movement::{BLOCKED_MESSAGE, Refusal, Verdict, judge, wall_set_from_rows};
+    use thunderforge_canvas_core::Vec2;
+
+    let scene_id = existing.scene_id;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let walls = tokio::task::spawn_blocking(move || {
+        use crate::schema::walls;
+        walls::table
+            .filter(walls::scene_id.eq(scene_id))
+            .select(crate::models::Wall::as_select())
+            .load::<crate::models::Wall>(&mut conn)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to load walls"))?;
+
+    if walls.is_empty() {
+        return Ok(());
+    }
+
+    let claimed: Option<Vec<Vec2>> = path.map(|points| {
+        points
+            .iter()
+            .map(|p| Vec2::new(p.x as f32, p.y as f32))
+            .collect()
+    });
+
+    let verdict = judge(
+        Vec2::new(existing.x as f32, existing.y as f32),
+        Vec2::new(x as f32, y as f32),
+        claimed.as_deref(),
+        &wall_set_from_rows(&walls),
+    );
+
+    match verdict {
+        Verdict::Allowed => Ok(()),
+        // The player is told one thing, whatever kind of wall it was: a closed
+        // secret door stops them like any other, and this refusal must not be
+        // how they learn there is a door there (FR-019).
+        Verdict::Refused(Refusal::Wall { .. }) => Err(Error::new(BLOCKED_MESSAGE)),
+        Verdict::Refused(Refusal::MalformedPath) => Err(Error::new("That route could not be read")),
     }
 }
 

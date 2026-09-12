@@ -43,3 +43,11 @@ pub mod token_kind;
 pub mod token_stack;
 pub mod vision;
 pub mod wall;
+
+/// The vector type this crate's geometry speaks.
+///
+/// Re-exported because it is unavoidably part of the public API — `is_visible`
+/// and `movement_blocked_by` take it — so a consumer cannot call them without
+/// it. Depending on glam separately, at a version of its own, would let a
+/// caller's `Vec2` stop being this one.
+pub use glam::Vec2;
