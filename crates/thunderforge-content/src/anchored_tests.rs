@@ -5,8 +5,8 @@
 //! system is named: the labels come from the pattern, exactly as they do in
 //! production.
 
-use super::anchored::entries;
-use super::{NameState, ReadValue, SourceLine};
+use crate::anchored::entries;
+use crate::{NameState, ReadValue, SourceLine};
 use thunderforge_canvas_core::content_patterns::{
     FieldKind, FieldSpec, NamePosition, NamePreference, NameRule, Pattern, Shape,
 };

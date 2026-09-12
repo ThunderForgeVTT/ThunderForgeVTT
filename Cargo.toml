@@ -13,6 +13,7 @@ members = [
     "crates/thunderforge-cache-core",
     "crates/thunderforge-cache-browser",
     "crates/thunderforge-canvas-core",
+    "crates/thunderforge-content",
     "crates/thunderforge-crucible",
     "crates/thunderforge-dice",
     "crates/thunderforge-mapforge",

@@ -20,7 +20,7 @@ use thunderforge_canvas_core::content_patterns::{
     FieldKind, NamePosition, NamePreference, Pattern,
 };
 
-use super::{
+use crate::{
     Entry, NameState, ReadValue, SourceLine, after_label, is_mostly_letters, looks_damaged,
     looks_unreadable,
 };
@@ -168,7 +168,7 @@ fn read_one(block: &[SourceLine], named: bool, pattern: &Pattern) -> Option<Entr
         for field in &pattern.fields {
             if !values
                 .get(&field.key)
-                .is_some_and(super::ReadValue::is_unread)
+                .is_some_and(crate::ReadValue::is_unread)
             {
                 continue;
             }
@@ -184,7 +184,7 @@ fn read_one(block: &[SourceLine], named: bool, pattern: &Pattern) -> Option<Entr
 
     // An entry that matched the anchor but read none of its declared fields is
     // a false positive — the anchor's label appearing in ordinary prose.
-    if values.values().all(super::ReadValue::is_unread) {
+    if values.values().all(crate::ReadValue::is_unread) {
         return None;
     }
 

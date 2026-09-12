@@ -5,8 +5,8 @@
 //! and rarity line, then prose; a feat is a heading, then a prerequisite, then
 //! prose. Neither carries an anchor label, which is why this reader exists.
 
-use super::prose::entries;
-use super::{NameState, SourceLine};
+use crate::prose::entries;
+use crate::{NameState, SourceLine};
 use thunderforge_canvas_core::content_patterns::{NameRule, NameStyle, Pattern, ProseEnd, Shape};
 
 fn line(text: &str, heading: bool, bold: bool) -> SourceLine {

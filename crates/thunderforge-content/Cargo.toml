@@ -1,0 +1,21 @@
+[package]
+name = "thunderforge-content"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+# Finding a system's content in a document's text (spec 049).
+#
+# Its own crate, and deliberately depending on **neither** the PDF layer nor
+# the server, for one reason: the reading happens in the Game Master's own
+# browser (spec 049 FR-020) *and* the server re-checks what arrives
+# (FR-036), so this code has to compile to wasm and to native and be the same
+# code both times. Two implementations of "what does this book say" would be
+# the worst of both.
+
+[lib]
+name = "thunderforge_content"
+path = "src/lib.rs"
+
+[dependencies]
+thunderforge_canvas_core = { path = "../thunderforge-canvas-core" }

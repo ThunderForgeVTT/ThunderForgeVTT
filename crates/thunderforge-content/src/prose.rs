@@ -21,7 +21,7 @@
 
 use thunderforge_canvas_core::content_patterns::{NameStyle, Pattern, ProseEnd};
 
-use super::{Entry, NameState, SourceLine, is_mostly_letters, looks_damaged, looks_unreadable};
+use crate::{Entry, NameState, SourceLine, is_mostly_letters, looks_damaged, looks_unreadable};
 
 /// A name is short. Longer than this and it is a sentence set large.
 const LONGEST_NAME: usize = 60;

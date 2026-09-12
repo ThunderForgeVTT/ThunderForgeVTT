@@ -16,6 +16,9 @@ crate-type = ["cdylib", "rlib"]
 wasm = ["dep:wasm-bindgen", "dep:serde_json"]
 
 [dependencies]
+# Spec 049: the content readers and the text judgements they share with the
+# layout pass. This crate depends on that one, never the reverse.
+thunderforge-content = { path = "../thunderforge-content" }
 # Pure Rust, and the parser sorting-hat already runs against this same corpus.
 # No Poppler: shelling out to `pdftotext` would make a native binary a server
 # dependency, and it yields plain text — this crate needs positions.
