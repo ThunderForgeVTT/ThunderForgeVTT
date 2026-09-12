@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { Container } from "@/components/ui/container/Container";
 import { Loader } from "@/components/ui/loader/Loader";
+import { Toaster } from "@/components/ui/sonner";
 import { useSetupStatus } from "./hooks/useSetupStatus";
 import AppRoutes from "./routes/AppRoutes";
 import { pageLoaders, schedulePagePrefetch } from "./routes/pageLoaders";
@@ -89,6 +90,15 @@ export default function App() {
         setupStatus={setupStatus}
         onSetupStatusRefresh={refreshSetupStatus}
       />
+      {/*
+        Where every `toast(...)` in the application renders.
+
+        It had no mount at all until spec 045 needed one, which meant the
+        notices already being raised — `MissingPackNotice`, telling a
+        participant their world's pack is missing — went nowhere. Sonner
+        without a Toaster does not warn; it simply does not appear.
+      */}
+      <Toaster />
     </>
   );
 }

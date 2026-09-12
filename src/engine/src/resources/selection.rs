@@ -1,14 +1,27 @@
 use bevy::prelude::*;
 
-/// Tokens currently being dragged, each with its grab-point offset (token
-/// centre minus cursor world position at drag start) so nothing jumps to
-/// re-centre under the cursor on the first move frame.
+/// One token being dragged.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DraggedToken {
+    pub id: String,
+    /// Token centre minus cursor world position at drag start, so nothing
+    /// jumps to re-centre under the cursor on the first move frame.
+    pub offset: Vec2,
+    /// Where the token stood when it was picked up.
+    ///
+    /// Kept because a drag that crosses a wall has to put the token back
+    /// there (spec 045 FR-015), and by release the transform has already been
+    /// moved — the drag writes to it every frame. Nothing else remembers.
+    pub origin: Vec2,
+}
+
+/// Tokens currently being dragged.
 ///
 /// A list, not one token: clicking a stack picks up the whole stack, and
 /// dragging it has to move every member by the same delta while preserving
 /// their relative positions — which is exactly what per-token offsets do.
 #[derive(Resource, Default)]
-pub struct DraggingToken(pub Vec<(String, Vec2)>);
+pub struct DraggingToken(pub Vec<DraggedToken>);
 
 /// The current selection, topmost first.
 ///

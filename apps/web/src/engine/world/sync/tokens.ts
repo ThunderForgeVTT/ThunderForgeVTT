@@ -51,6 +51,8 @@ import {
   updateToken,
 } from "@/api/tokens";
 import { getTokenAttributes } from "@/api/tokenAttributes";
+import { GraphQLRequestError } from "@/api/graphqlClient";
+import { toast } from "sonner";
 import type { TokenRecord, UpdateTokenInput } from "@/types/token";
 import type { WorldStore } from "../store";
 import type { WorldCommand, WorldToken } from "../types";
@@ -155,6 +157,55 @@ export async function applyTokenWorldEvent(
       },
       "sync",
     );
+  }
+}
+
+/**
+ * Spec 045 FR-012: a refused move puts the token back and tells the player.
+ *
+ * "Back" is **the server's position**, re-read, not the position this client
+ * remembers. The client's memory of where the token was is exactly what the
+ * refused move overwrote, and on a fast second move it is already wrong; the
+ * server is the only thing that knows where the token actually is.
+ *
+ * Any failure to move lands here, not only a wall — a lost connection, a token
+ * that stopped being theirs. Putting the token back is right for all of them,
+ * which is why this is the catch and not a wall-specific branch.
+ *
+ * A refusal the server *considered* is shown in the server's own words: "A
+ * wall is in the way" is written to be read by a player. A transport failure
+ * is not — its message is an HTTP status — so that one is translated here
+ * rather than shown raw.
+ */
+async function applyMoveRefusal(
+  worldStore: WorldStore,
+  sceneId: string,
+  tokenId: string,
+  error: unknown,
+): Promise<void> {
+  const lostTheServer = error instanceof GraphQLRequestError && error.transport;
+  toast.warning(
+    lostTheServer
+      ? "Could not reach the table. Your token has not moved."
+      : error instanceof Error
+        ? error.message
+        : String(error),
+  );
+
+  try {
+    const tokens = await getTokens(sceneId);
+    const authoritative = tokens.find((token) => token.tokenId === tokenId);
+    if (authoritative) {
+      worldStore.dispatch(
+        { type: "upsert_token", token: tokenRecordToWorldToken(authoritative) },
+        // `sync`, so this does not read as a local edit and bounce straight
+        // back out as another move — which would refuse, re-read and dispatch
+        // again, for as long as the wall is there.
+        "sync",
+      );
+    }
+  } catch (readBack) {
+    console.error("Failed to read back a refused move:", readBack);
   }
 }
 
@@ -417,8 +468,17 @@ export function startTokenMutationBridge(
             // Spec 004 FR-009: non-GM callers only ever move a token they
             // control; the server enforces owner_user_id = requester and
             // rejects anything else with no effect.
-            void moveOwnToken(knownTokenId, token.x, token.y).catch((error) => {
-              console.error("Failed to move own token:", error);
+            //
+            // Spec 045 US2: and now the walls have a say, so this can be
+            // refused for a second reason — one the player has to see and the
+            // board has to reflect.
+            void moveOwnToken(
+              knownTokenId,
+              token.x,
+              token.y,
+              command.path,
+            ).catch((error) => {
+              void applyMoveRefusal(worldStore, sceneId, knownTokenId, error);
             });
           }
           return;

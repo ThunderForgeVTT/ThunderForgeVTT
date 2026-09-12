@@ -131,25 +131,43 @@ type SetOwnPrimaryTokenPhotoMutation = {
   setOwnPrimaryTokenPhoto: TokenRecord;
 };
 
+/** One point of a route a token walked through, in world coordinates. */
+export type PathPoint = { x: number; y: number };
+
 /**
  * Player-facing move: succeeds only when the caller is this token's
  * `ownerUserId` (their primary token, or one the GM granted them). Spec
  * 004 FR-009 — position only, no scene-ownership required.
+ *
+ * Spec 045 US2: this is judged against the scene's walls, and can be refused
+ * with "A wall is in the way". `path` is the route the token took, which the
+ * server needs to tell walking around a wall from teleporting through it —
+ * the endpoints alone cannot. Omit it for a drag: a drag *is* the straight
+ * line the server assumes when no path is given.
  */
 export function moveOwnToken(
   tokenId: string,
   x: number,
   y: number,
+  path?: PathPoint[],
 ): Promise<TokenRecord> {
   return postGraphQL<MoveOwnTokenMutation>(
     `
-      mutation MoveOwnToken($tokenId: UUID!, $x: Float!, $y: Float!) {
-        moveOwnToken(tokenId: $tokenId, x: $x, y: $y) {
+      mutation MoveOwnToken(
+        $tokenId: UUID!
+        $x: Float!
+        $y: Float!
+        $path: [GraphQLPathPoint!]
+      ) {
+        moveOwnToken(tokenId: $tokenId, x: $x, y: $y, path: $path) {
           ${TOKEN_FIELDS}
         }
       }
     `,
-    { tokenId, x, y },
+    // Undefined rather than an empty list when there is no route: an empty
+    // list is a claim ("I walked nowhere"), and absence is the honest thing
+    // to send when the client has nothing to say about how it got there.
+    { tokenId, x, y, path: path && path.length > 0 ? path : undefined },
   ).then((data) => data.moveOwnToken);
 }
 

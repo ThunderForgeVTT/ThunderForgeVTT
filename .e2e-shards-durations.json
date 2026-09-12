@@ -136,5 +136,6 @@
   "e2e/companion-offline.spec.ts": 7.602,
   "e2e/feedback-submit.spec.ts": 6.273,
   "e2e/takedown-reach.spec.ts": 5.948,
-  "e2e/token-keyboard-move.spec.ts": 18.9
+  "e2e/token-keyboard-move.spec.ts": 18.9,
+  "e2e/token-movement-walls.spec.ts": 3.584
 }

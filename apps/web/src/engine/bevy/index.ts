@@ -403,6 +403,32 @@ function asPickUpItem(event: unknown): PickUpItemEvent | null {
 }
 
 /**
+ * Spec 045 FR-013/FR-015: a move the engine refused, because a wall is in
+ * the way.
+ *
+ * Not a world command — nothing changed, which is the point. The engine has
+ * already stopped the token; this exists so the player is told *why* it did
+ * not move, since a token that simply does not move is indistinguishable from
+ * a key that did not register.
+ *
+ * Names the wall and never what kind of wall it is: a closed secret door stops
+ * a player like any other, and this must not be how they learn there is a door
+ * there (FR-019).
+ */
+export interface MovementBlockedEvent {
+  type: "movement_blocked";
+  wallId: string;
+  at: { x: number; y: number };
+}
+
+function asMovementBlocked(event: unknown): MovementBlockedEvent | null {
+  const candidate = event as { type?: unknown };
+  return candidate.type === "movement_blocked"
+    ? (event as MovementBlockedEvent)
+    : null;
+}
+
+/**
  * An interactive whose effect this build cannot perform.
  *
  * ADR-054: absence is detected *before* dispatch, by comparing the stored
@@ -545,6 +571,20 @@ export function onInteractionUnavailable(
   unavailableListeners.add(listener);
   return () => {
     unavailableListeners.delete(listener);
+  };
+}
+
+const movementBlockedListeners = new Set<
+  (event: MovementBlockedEvent) => void
+>();
+
+/** Subscribe to moves the engine stopped at a wall. Returns the unsubscribe. */
+export function onMovementBlocked(
+  listener: (event: MovementBlockedEvent) => void,
+): () => void {
+  movementBlockedListeners.add(listener);
+  return () => {
+    movementBlockedListeners.delete(listener);
   };
 }
 
@@ -718,6 +758,21 @@ export async function bindWorldStore(worldStore: WorldStore): Promise<void> {
         // engine has removed nothing. Dispatching it would put a command
         // nothing reduces into the store — the same reason lore-open and
         // trigger detection are routed out above.
+        // Nor is a move stopped at a wall. Nothing changed — that is what it
+        // reports — so there is no world state to put anywhere; it exists to
+        // tell the player why their token did not move.
+        const blocked = asMovementBlocked(parsed);
+        if (blocked) {
+          for (const listener of movementBlockedListeners) {
+            try {
+              listener(blocked);
+            } catch {
+              // One bad listener must not stop the others hearing about this.
+            }
+          }
+          return;
+        }
+
         const pickUp = asPickUpItem(parsed);
         if (pickUp) {
           for (const listener of pickUpItemListeners) {

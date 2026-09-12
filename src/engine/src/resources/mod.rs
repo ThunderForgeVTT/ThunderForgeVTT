@@ -18,7 +18,7 @@ pub use canvas_layer::{CanvasLayer, CanvasLayers};
 pub use grid::{GridVisible, SceneGrid};
 pub use lighting::{LightEdit, LightSet, LightSource, SelectedLight};
 pub use scene_data::{GridType, SceneData};
-pub use selection::{DraggingToken, SelectedToken};
+pub use selection::{DraggedToken, DraggingToken, SelectedToken};
 pub use shape::{ActiveShapeTool, SelectedShape, Shape, ShapeEdit, ShapeKind, ShapeSet};
 pub use token_grid::{GridSnapEnabled, TokenGridBehaviour};
 pub use vision::{LightingOverlay, SceneAmbient, TokenVision};

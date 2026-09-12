@@ -243,12 +243,20 @@ const AIM_OFFSETS: { dx: number; dy: number }[] = (() => {
  * documents and relies on. What that convention does not say, and what cost
  * this test its drags, is that the engine snaps tokens after the store has
  * recorded them: see `AIM_OFFSETS`.
+ *
+ * **`mayBeRefused`** (spec 045 US2): a drag across a wall that blocks movement
+ * is now *supposed* to leave the token where it started — the engine returns
+ * it there and sends nothing. Without this option such a drag looks identical
+ * to a mis-aimed press, and the retry loop below hunts for three more rounds
+ * before failing. Pass it when the point of the drag is to find out whether it
+ * is allowed; the return value says whether the token actually moved.
  */
 export async function dragToken(
   page: Page,
   tokenId: string,
   delta: { dx: number; dy: number },
-): Promise<void> {
+  { mayBeRefused = false }: { mayBeRefused?: boolean } = {},
+): Promise<boolean> {
   const box = await canvasBox(page);
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2;
@@ -295,9 +303,16 @@ export async function dragToken(
       await page.waitForTimeout(600);
 
       const moved = await tokenPosition(page, tokenId);
-      if (moved && (moved.x !== at.x || moved.y !== at.y)) return;
-      // Grabbed and still unmoved: the aim was right, so searching further out
-      // would only find the same token again. Re-read and start a new round.
+      if (moved && (moved.x !== at.x || moved.y !== at.y)) return true;
+      // Grabbed and still unmoved. The aim was right, so searching further out
+      // would only find the same token again.
+      if (mayBeRefused) {
+        // And the caller asked precisely this question: the press landed on
+        // the token, the drag happened, and the token is still here. That is
+        // a refusal, not a missed grab.
+        return false;
+      }
+      // Re-read and start a new round.
       break;
     }
 

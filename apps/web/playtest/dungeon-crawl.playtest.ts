@@ -8,6 +8,7 @@ import {
   crosses,
   doorStateOn,
   drag,
+  tryDrag,
   expectAgreed,
   expectEveryoneLoaded,
   hiddenTokens,
@@ -200,22 +201,26 @@ for (const system of ["genie", "dnd5e"] as const) {
           ariaToken,
           "Aria is at the door",
         );
-        await drag(aria, ariaToken, { x: 250, y: 2 * DOOR });
+        const moved = await tryDrag(aria, ariaToken, { x: 250, y: 2 * DOOR });
         const after = await expectAgreed(
           table,
           ariaToken,
           "the attempt reaches the whole table",
         );
-        expect
-          .soft(
-            eastWall.some(([c, d]) => crosses(from, after, c, d)),
-            "FINDING: a wall that blocks movement should stop Aria at it. " +
-              "Nothing checks walls when a token moves: the server's " +
-              "`moveOwnToken`/`updateToken` take the position as given, and " +
-              "the route the engine sends (`pathCells`) is dropped by the " +
-              "web sync.",
-          )
-          .toBe(false);
+        expect(
+          eastWall.some(([c, d]) => crosses(from, after, c, d)),
+          "a wall that blocks movement stops Aria at it — the engine returns " +
+            "her drag to where it began, and the server refuses the move if " +
+            "any client sends it anyway (spec 045 US2)",
+        ).toBe(false);
+        // Said separately from the crossing check above, because they can
+        // fail apart: a drag that moved her *somewhere* without crossing
+        // would satisfy the first and not this, and would mean the wall
+        // deflected the move rather than refusing it.
+        expect(
+          moved,
+          "the drag leaves Aria exactly where it began (FR-015)",
+        ).toBe(false);
         await snapshot(table, "4 · through the wall?");
         // Back to the door, whatever happened, so the rest is about the door.
         const now = await expectAgreed(table, ariaToken, "Aria turns back");
@@ -328,8 +333,13 @@ for (const system of ["genie", "dnd5e"] as const) {
             const to = { x: from.x + pick.x, y: from.y + pick.y };
             return inBounds(to) ? pick : { x: -pick.x, y: -pick.y };
           });
+          // `tryDrag`: a random walk aimed at the crypt wall is *meant* to be
+          // refused now, and a refused drag leaves the token exactly where it
+          // was — which `drag` treats as a missed grab and retries. Whether
+          // each move landed does not need asserting here; the crossing check
+          // below is the point, and it is stricter.
           await Promise.all(
-            heroes.map((hero, i) => drag(hero.seat, hero.token, moves[i])),
+            heroes.map((hero, i) => tryDrag(hero.seat, hero.token, moves[i])),
           );
 
           const entry: Record<string, unknown> = { round };
@@ -381,12 +391,15 @@ for (const system of ["genie", "dnd5e"] as const) {
           `[playtest] ${system}: ${ROUNDS} rounds, seed ${SEED}, ` +
             `${crossings.length} wall crossing(s)`,
         );
-        expect
-          .soft(
-            crossings,
-            "FINDING: heroes went through walls that block movement",
-          )
-          .toEqual([]);
+        // Hard, and the more demanding of the two wall checks: the aimed
+        // attempt above is one drag at a known wall, while this is however
+        // many random moves the seed produced, from wherever the heroes had
+        // wandered to. A wall that only holds when it is being aimed at is
+        // not a wall.
+        expect(
+          crossings,
+          "no hero walked through a wall that blocks movement",
+        ).toEqual([]);
       });
     } finally {
       await closeTable(table);

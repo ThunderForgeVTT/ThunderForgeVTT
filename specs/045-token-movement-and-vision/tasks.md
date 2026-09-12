@@ -70,19 +70,21 @@ door, whichever client asks, and the stop is shown before anything is sent.
 drag, and a script signed in as them sends the crossing move straight to the
 server. The token ends every attempt on its own side.
 
-- [ ] T024 [US2] Create `src/server/src/movement/mod.rs`: judge a move — `from`, `to`, optional path — against the scene's walls using the Phase 2 crossing test; return `allowed` or `refused` with the wall
-- [ ] T025 [P] [US2] Unit-test that module in `src/server/src/movement/tests.rs`, including a path longer than the 64-segment bound being refused as malformed
-- [ ] T026 [US2] Add the optional `path` argument to `moveOwnToken` in `src/server/src/graphql/mutations_tokens.rs` and judge every player move with it; refuse with "A wall is in the way"
-- [ ] T027 [US2] Leave `updateToken` unjudged for a Game Master, and say so in a comment naming spec decision 1
-- [ ] T028 [P] [US2] Send the path from `apps/web/src/engine/world/sync/tokens.ts`: the engine's committed route for a route move, and nothing for a drag, whose straight line the server infers
-- [ ] T029 [US2] Apply a refusal in the web sync: put the token back where the server says it is, and surface the reason to the player who moved
-- [ ] T030 [US2] Stop a keyboard step in `src/engine/src/systems/token_move.rs` before it is sent, using the same crossing test, and show the stop
-- [ ] T031 [US2] Stop a drag the same way in `src/engine/src/systems/token.rs`, returning the token to where the drag began
-- [ ] T032 [US2] Refuse to extend a planned route through a blocking wall in `src/engine/src/systems/token_move.rs`
-- [ ] T033 [P] [US2] Engine tests for all three: step, drag and route
-- [ ] T034 [US2] Turn the playtest's wall checks hard in `apps/web/playtest/dungeon-crawl.playtest.ts` (the aimed attempt, and the wander's crossings)
-- [ ] T035 [P] [US2] Add `apps/web/e2e/token-movement-walls.spec.ts`: a crossing move sent straight to the server from a player's session is refused, naming a wall
-- [ ] T036 [US2] Verify and prove: `cargo check -p thunderforge`, `cargo check --target wasm32-unknown-unknown -p thunderforge_engine`, `pnpm -F @thunderforge/web exec tsc --noEmit`, then `pnpm playtest --only=dungeon-crawl` clears `a wall that blocks movement should stop Aria at it` and `heroes went through walls that block movement`
+- [X] T024 [US2] `src/server/src/movement/mod.rs`: `judge(from, to, path, walls)` returning `Allowed` or `Refused`. The path is **anchored** to the token's real position and the requested destination, so a short innocent route cannot be sent as cover for a move that crossed a wall
+- [X] T025 [P] [US2] 12 tests in `src/server/src/movement/tests.rs`. Beyond the 64-point bound: a path carrying NaN or an infinity is refused, because NaN compares false against everything and would slip past the intersection test entirely rather than merely giving a strange answer
+- [X] T026 [US2] `moveOwnToken` takes an optional `path` and is judged by `judge_against_walls`; refused with "A wall is in the way" and nothing more — a closed secret door stops a player like any wall (FR-019), and one test asserts the sentence names no door
+- [X] T027 [US2] `updateToken` left unjudged, with a comment naming decision 1: it is the Game Master's path, and this is the rule rather than a gap to tighten later
+- [X] T028 [P] [US2] The engine's committed route travels as `path` on `UpsertTokenCommand` — on the **command**, not on `WorldToken`, because a token does not *have* a path, it took one. A drag and a step send nothing, and the server judges the straight line, which is what they are
+- [X] T029 [US2] `applyMoveRefusal` re-reads the server's position rather than restoring the client's memory of it — that memory is exactly what the refused move overwrote. Dispatched as `sync`, or it would bounce straight back out as another move and loop for as long as the wall is there. A transport failure is translated instead of shown raw
+- [X] T030 [US2] `refuse_at_wall` in `token_move.rs`, on the step and the gridless nudge
+- [X] T031 [US2] The drag returns the token to where it began. `DraggingToken` now remembers each token's `origin`, because by release the transform has already been written every frame of the drag and nothing else remembers. A Game Master's drag is not judged (FR-017)
+- [X] T032 [US2] A route refuses to extend through a wall — judged **before** `get_or_insert_with` creates the plan. Writing it the obvious way left an empty plan behind every time a player pressed shift into a wall: a route that exists, has no steps, and was never started. Caught by T033
+- [X] T033 [P] [US2] Six tests driving the real Bevy system in `token_move.rs`. The one that earns its place is `a_step_away_from_a_wall_still_moves` — a check wired backwards passes every "is it blocked" test and freezes the token in all four directions
+- [X] T034 [US2] Both playtest wall checks are hard. The wander's is the stricter: the aimed attempt is one drag at a known wall, this is 12 rounds of random movement from wherever the heroes had got to
+- [X] T034a [US2] Added `tryDrag` to the playtest fixture. `drag` insists the token move, because a press that grabbed nothing is the worst failure this harness can have — but a refused drag leaves the token exactly where it was, and the two are indistinguishable. The first run after the engine change failed **both scenarios** on this, and it was the wall working
+- [X] T035 [P] [US2] `apps/web/e2e/token-movement-walls.spec.ts` sends the crossing move straight to the server from the player's session — no canvas, because a test that drags proves only that the engine works. Also asserts the Game Master's `updateToken` across the same wall still succeeds
+- [X] T036 [US2] Proved: server and wasm engine check clean, `tsc --noEmit` clean, 1367 server tests and 213 engine tests pass, and `pnpm playtest --only=dungeon-crawl` reports **`0 wall crossing(s)`** in both game systems with no findings and no failures — down from 7 findings at the start of spec 045
+- [X] T036a Mounted sonner's `<Toaster />` in `apps/web/src/App.tsx`. It had never been mounted anywhere, so `MissingPackNotice`'s warning about an uninstalled interface pack had never been seen by anyone. Spec 045 needed somewhere to say "A wall is in the way"; an audit of what else shouts into a void is queued separately
 
 ## Phase 6 (US3, US4): The rules of sight and light, held
 

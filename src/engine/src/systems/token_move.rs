@@ -69,6 +69,7 @@ pub(crate) fn handle_token_movement_input(
     grid: Res<SceneGrid>,
     mut plan: ResMut<MovementPlan>,
     active_world: Res<ActiveWorld>,
+    walls: Res<crate::resources::wall::WallSet>,
     mut owned: Query<
         (&mut Transform, &TokenIdentity, Option<&TokenGridBehaviour>),
         With<PlayerControlled>,
@@ -106,9 +107,16 @@ pub(crate) fn handle_token_movement_input(
             // after the controlled token was fixed and the key *still* did
             // nothing anywhere but here).
             //
-            // The route goes back when the server can judge it — phase 3 of
-            // this feature's plan adds a path to `moveOwnToken`.
-            emit_token_move(&transform, &identity.0, &active_world.0);
+            // The route comes with it now that the server can judge one. It
+            // is the whole walk, in world points: the server needs it to tell
+            // a player who walked *around* a wall from one who claims to have
+            // (FR-016), and the endpoints alone cannot say which happened.
+            emit_token_move_along(
+                &transform,
+                &identity.0,
+                &active_world.0,
+                Some(&path.world_points(&grid)),
+            );
         }
         return;
     }
@@ -127,6 +135,10 @@ pub(crate) fn handle_token_movement_input(
             Step::East => Vec2::new(grid.size, 0.0),
             Step::West => Vec2::new(-grid.size, 0.0),
         };
+        let destination = current + nudge;
+        if refuse_at_wall(current, destination, &walls) {
+            return;
+        }
         transform.translation += nudge.extend(0.0);
         // Told, like every other move. Without this the token moved on this
         // one canvas and nowhere else: not to the server, not to the table,
@@ -136,10 +148,27 @@ pub(crate) fn handle_token_movement_input(
     }
 
     if shift_held(&keyboard) {
-        let path = plan
+        // A route may not be planned *through* a wall (FR-014). Refused at the
+        // step that would cross, so the rest of the route stays: the player
+        // keeps what they have planned and simply cannot extend it that way.
+        //
+        // Judged before the plan is created, not after. Asking
+        // `get_or_insert_with` for the head first is the obvious way to write
+        // this and leaves an empty plan behind every time a player presses
+        // shift into a wall — a route that exists, has no steps, and was never
+        // started.
+        let head = plan
             .path
-            .get_or_insert_with(|| PlannedPath::new(grid.world_to_cell(current)));
-        path.push(step, grid.kind);
+            .as_ref()
+            .map_or_else(|| grid.world_to_cell(current), |path| path.head());
+        let from = grid.cell_center(head);
+        let to = grid.cell_center(step.apply(head, grid.kind));
+        if refuse_at_wall(from, to, &walls) {
+            return;
+        }
+        plan.path
+            .get_or_insert_with(|| PlannedPath::new(grid.world_to_cell(current)))
+            .push(step, grid.kind);
         return;
     }
 
@@ -148,10 +177,42 @@ pub(crate) fn handle_token_movement_input(
     plan.path = None;
     let next = step.apply(grid.world_to_cell(current), grid.kind);
     let snapped = grid.snap_footprint(grid.cell_center(next), footprint);
+    if refuse_at_wall(current, snapped, &walls) {
+        return;
+    }
     transform.translation.x = snapped.x;
     transform.translation.y = snapped.y;
 
     emit_token_move(&transform, &identity.0, &active_world.0);
+}
+
+/// Whether a wall stands between these two points — and, if it does, say so.
+///
+/// The engine's half of ADR-095. The server refuses the move whatever this
+/// returns; this exists so the player sees their token stop *at the wall*, in
+/// the frame they pressed the key, instead of watching it walk through and
+/// snap back a round trip later. That snap reads as lag. A stop reads as a
+/// wall.
+///
+/// Same geometry as the server's, from the crate both depend on, so the two
+/// cannot disagree about where a wall is.
+pub(crate) fn refuse_at_wall(
+    from: Vec2,
+    to: Vec2,
+    walls: &crate::resources::wall::WallSet,
+) -> bool {
+    let Some(wall) = thunderforge_canvas_core::wall::movement_blocked_by(from, to, walls) else {
+        return false;
+    };
+    // The application decides how to say it; the engine says only that it
+    // happened, and where. A secret door is a wall here as everywhere — the
+    // event names the segment, never what kind of segment it is (FR-019).
+    emit_event(json!({
+        "type": "movement_blocked",
+        "wallId": wall.id,
+        "at": { "x": to.x, "y": to.y },
+    }));
+    true
 }
 
 /// Tell the application a token moved, in the one shape it listens for.
@@ -161,8 +222,22 @@ pub(crate) fn handle_token_movement_input(
 /// present, and a move that omitted them would be read as a move that
 /// cleared them.
 fn emit_token_move(transform: &Transform, token_id: &str, world_id: &str) {
+    emit_token_move_along(transform, token_id, world_id, None);
+}
+
+/// The same, carrying the route the token walked.
+///
+/// `None` for a step or a drag, which have no route to describe — the server
+/// judges the straight line, which is what they are. `Some` for a committed
+/// route, whose whole point is that it is not a straight line.
+fn emit_token_move_along(
+    transform: &Transform,
+    token_id: &str,
+    world_id: &str,
+    path: Option<&[Vec2]>,
+) {
     let rotation_radians = transform.rotation.to_euler(EulerRot::ZYX).0;
-    emit_event(json!({
+    let mut event = json!({
         "type": "upsert_token",
         "token": {
             "id": token_id,
@@ -173,7 +248,16 @@ fn emit_token_move(transform: &Transform, token_id: &str, world_id: &str) {
             "rotation": rotation_radians,
         },
         "worldId": world_id,
-    }));
+    });
+    if let Some(points) = path {
+        event["path"] = json!(
+            points
+                .iter()
+                .map(|p| json!({ "x": p.x, "y": p.y }))
+                .collect::<Vec<_>>()
+        );
+    }
+    emit_event(event);
 }
 
 type ControlRequest = Option<Option<String>>;
@@ -355,5 +439,168 @@ pub(crate) fn draw_movement_plan(
             Transform::from_translation((*end + Vec2::new(0.0, grid.size * 0.62)).extend(90.0)),
             PlanLabel,
         ));
+    }
+}
+
+#[cfg(test)]
+mod wall_stop_tests {
+    use super::*;
+    use crate::resources::wall::WallSet;
+    use thunderforge_canvas_core::wall::{DoorState, Wall};
+
+    const CELL: f32 = 32.0;
+    /// Centre of the cell at the grid origin. Cells span 0..32, so their
+    /// centres sit at 16, 48, −16 — the token starts on one, as a token
+    /// snapped to a grid always does.
+    const HOME: f32 = CELL / 2.0;
+    /// Centre of the cell east of it.
+    const EAST: f32 = CELL + HOME;
+
+    /// A wall on the grid line between the token's cell and the one east of
+    /// it, running north-south.
+    fn wall_to_the_east(blocks_movement: bool) -> Wall {
+        Wall {
+            id: "w-1".to_string(),
+            x1: CELL,
+            y1: -CELL * 4.0,
+            x2: CELL,
+            y2: CELL * 4.0,
+            blocks_vision: true,
+            blocks_movement,
+            door_state: DoorState::None,
+            locked: false,
+            secret: false,
+        }
+    }
+
+    /// An app with one controlled token in the origin cell, and the walls.
+    fn table(walls: Vec<Wall>) -> (App, Entity) {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.insert_resource(SceneGrid::from_server("square", CELL, Vec2::ZERO));
+        app.insert_resource(ActiveWorld("world-test".to_string()));
+        app.init_resource::<MovementPlan>();
+        app.init_resource::<ButtonInput<KeyCode>>();
+
+        let mut wall_set = WallSet::default();
+        for wall in walls {
+            wall_set.upsert(wall);
+        }
+        app.insert_resource(wall_set);
+        app.add_systems(Update, handle_token_movement_input);
+
+        let token = app
+            .world_mut()
+            .spawn((
+                Transform::from_xyz(HOME, HOME, 0.0),
+                TokenIdentity("token-1".to_string()),
+                PlayerControlled,
+            ))
+            .id();
+        (app, token)
+    }
+
+    fn press(app: &mut App, key: KeyCode) {
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(key);
+        app.update();
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .reset(key);
+    }
+
+    fn x_of(app: &App, token: Entity) -> f32 {
+        app.world().get::<Transform>(token).unwrap().translation.x
+    }
+
+    #[test]
+    fn a_step_into_a_blocking_wall_moves_nothing() {
+        let (mut app, token) = table(vec![wall_to_the_east(true)]);
+        press(&mut app, KeyCode::KeyD);
+        assert_eq!(
+            x_of(&app, token),
+            HOME,
+            "the token should stop at the wall, in the frame the key was \
+             pressed — not walk through and snap back a round trip later"
+        );
+    }
+
+    #[test]
+    fn a_step_away_from_a_wall_still_moves() {
+        // The other half, and the one that catches a check wired backwards:
+        // a wall on the board must not freeze the token in every direction.
+        let (mut app, token) = table(vec![wall_to_the_east(true)]);
+        press(&mut app, KeyCode::KeyA);
+        assert_eq!(x_of(&app, token), HOME - CELL);
+    }
+
+    #[test]
+    fn a_step_through_a_wall_that_does_not_block_movement_is_allowed() {
+        let (mut app, token) = table(vec![wall_to_the_east(false)]);
+        press(&mut app, KeyCode::KeyD);
+        assert_eq!(x_of(&app, token), EAST);
+    }
+
+    #[test]
+    fn a_step_through_an_open_door_is_allowed_and_a_closed_one_is_not() {
+        let mut open = wall_to_the_east(true);
+        open.door_state = DoorState::Open;
+        let (mut app, token) = table(vec![open.clone()]);
+        press(&mut app, KeyCode::KeyD);
+        assert_eq!(x_of(&app, token), EAST, "an open door is not a wall");
+
+        let mut closed = open;
+        closed.door_state = DoorState::Closed;
+        let (mut app, token) = table(vec![closed]);
+        press(&mut app, KeyCode::KeyD);
+        assert_eq!(x_of(&app, token), HOME, "a closed one is");
+    }
+
+    #[test]
+    fn a_route_cannot_be_planned_through_a_wall() {
+        let (mut app, _token) = table(vec![wall_to_the_east(true)]);
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::ShiftLeft);
+
+        press(&mut app, KeyCode::KeyD);
+        assert!(
+            app.world().resource::<MovementPlan>().path.is_none(),
+            "a route refused at its first step never starts"
+        );
+
+        // West is clear, so planning still works — the refusal is about the
+        // wall, not about planning.
+        press(&mut app, KeyCode::KeyA);
+        let plan = app.world().resource::<MovementPlan>();
+        assert_eq!(
+            plan.path.as_ref().map(|p| p.steps.len()),
+            Some(1),
+            "planning away from the wall is unaffected"
+        );
+    }
+
+    #[test]
+    fn a_planned_route_stops_extending_at_a_wall_and_keeps_what_it_had() {
+        // Two cells west of the wall, so the first planned step is legal and
+        // the second is not. What the player already planned must survive.
+        let (mut app, _token) = table(vec![wall_to_the_east(true)]);
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::ShiftLeft);
+
+        press(&mut app, KeyCode::KeyA);
+        press(&mut app, KeyCode::KeyD);
+        press(&mut app, KeyCode::KeyD);
+
+        let plan = app.world().resource::<MovementPlan>();
+        let steps = plan.path.as_ref().map(|p| p.steps.len());
+        assert_eq!(
+            steps,
+            Some(0),
+            "west then east retracts to the origin; the third step would \
+             cross the wall and is refused, leaving the route as it was"
+        );
     }
 }

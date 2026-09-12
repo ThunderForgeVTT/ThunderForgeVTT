@@ -17,7 +17,8 @@ use bevy::window::PrimaryWindow;
 use serde_json::json;
 
 use crate::resources::{
-    CanvasLayer, DraggingToken, IsGameMaster, SceneGrid, SelectedToken, TokenGridBehaviour,
+    CanvasLayer, DraggedToken, DraggingToken, IsGameMaster, SceneGrid, SelectedToken,
+    TokenGridBehaviour,
 };
 use crate::{ActiveWorld, TOKEN_SIZE, TokenIdentity, emit_event};
 use thunderforge_canvas_core::grid::Footprint;
@@ -155,6 +156,8 @@ pub(crate) fn handle_token_drag(
     mut dragging: ResMut<DraggingToken>,
     active_world: Res<ActiveWorld>,
     drag_state: Res<TokenDragState>,
+    is_gm: Res<IsGameMaster>,
+    walls: Res<crate::resources::wall::WallSet>,
     // Optional for the same reason every plugin-owned resource in the
     // command loop is: without `GridPlugin` there is no scene grid, and the
     // hit area falls back to the default token size rather than panicking.
@@ -220,10 +223,12 @@ pub(crate) fn handle_token_drag(
             .iter()
             .filter(|(_, identity, _)| stack.contains(&identity.0))
             .map(|(transform, identity, _)| {
-                (
-                    identity.0.clone(),
-                    transform.translation.truncate() - cursor_world,
-                )
+                let center = transform.translation.truncate();
+                DraggedToken {
+                    id: identity.0.clone(),
+                    offset: center - cursor_world,
+                    origin: center,
+                }
             })
             .collect();
         return;
@@ -236,8 +241,8 @@ pub(crate) fn handle_token_drag(
         // Each member keeps its own offset, so a stack that was not
         // perfectly co-located stays in the arrangement it was picked up in.
         for (mut transform, identity, _) in token_query.iter_mut() {
-            if let Some((_, offset)) = dragging.0.iter().find(|(id, _)| *id == identity.0) {
-                let new_pos = cursor_world + *offset;
+            if let Some(dragged) = dragging.0.iter().find(|d| d.id == identity.0) {
+                let new_pos = cursor_world + dragged.offset;
                 transform.translation.x = new_pos.x;
                 transform.translation.y = new_pos.y;
             }
@@ -251,8 +256,33 @@ pub(crate) fn handle_token_drag(
             return;
         }
 
-        for (transform, identity, _) in token_query.iter() {
-            if !dragged.iter().any(|(id, _)| *id == identity.0) {
+        for (mut transform, identity, _) in token_query.iter_mut() {
+            let Some(from) = dragged
+                .iter()
+                .find(|d| d.id == identity.0)
+                .map(|d| d.origin)
+            else {
+                continue;
+            };
+
+            // Spec 045 FR-015: a drag dropped across a wall puts the token
+            // back where the drag began, and sends nothing.
+            //
+            // A drag is judged as the straight line from where it was picked
+            // up to where it was dropped — which is exactly what a drag is,
+            // and the same line the server will judge when no route is sent.
+            // A Game Master is never judged (FR-017): they may put any token
+            // anywhere, and the server agrees, so refusing them here would
+            // only make the board disagree with the world.
+            if !is_gm.0
+                && crate::systems::token_move::refuse_at_wall(
+                    from,
+                    transform.translation.truncate(),
+                    &walls,
+                )
+            {
+                transform.translation.x = from.x;
+                transform.translation.y = from.y;
                 continue;
             }
             // Include scale/rotation, not just position: this event

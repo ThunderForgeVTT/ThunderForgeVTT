@@ -147,6 +147,7 @@ import {
 } from "@/components/world/GmToolRail/GmToolRail";
 import { SelectionFilterMenu } from "@/components/world/GmToolRail/SelectionFilterMenu";
 import { PlacedItemPrompt } from "@/components/world/PlacedItemPrompt";
+import { toast } from "sonner";
 import { getMyActorClaim } from "@/api/actorClaims";
 import {
   WorldDock,
@@ -968,6 +969,30 @@ export default function WorldPage() {
       },
     );
   }, [engineReady, viewerTokenId]);
+
+  // Spec 045 FR-013/FR-015: when the engine stops a move at a wall, say so.
+  //
+  // The engine stops it locally and sends nothing, so no server refusal
+  // arrives to explain it — without this the token simply does not move, which
+  // from the player's chair is indistinguishable from a key that did not
+  // register. The same sentence the server uses, and for the same reason it
+  // says no more than this: a closed secret door stops a player like any wall.
+  useEffect(() => {
+    let unsubscribed = false;
+    let stop: (() => void) | undefined;
+    void import("@/engine/bevy").then(({ onMovementBlocked }) => {
+      if (unsubscribed) {
+        return;
+      }
+      stop = onMovementBlocked(() => {
+        toast.warning("A wall is in the way");
+      });
+    });
+    return () => {
+      unsubscribed = true;
+      stop?.();
+    };
+  }, []);
 
   useEffect(() => {
     if (!id || !bridgeReady) {

@@ -20,7 +20,7 @@
 mod e2e_canvas_tests {
     use crate::resources::camera::CameraManager;
     use crate::resources::scene_data::{GridType, SceneData};
-    use crate::resources::selection::{DraggingToken, SelectedToken};
+    use crate::resources::selection::{DraggedToken, DraggingToken, SelectedToken};
     use bevy::prelude::*;
 
     #[test]
@@ -110,12 +110,17 @@ mod e2e_canvas_tests {
     /// Scenario: user presses down on a token off-centre; the drag resource
     /// should remember the grab offset so the token doesn't snap-recentre.
     ///
-    /// `DraggingToken` became a `Vec` of `(id, offset)` when clicking a stack
-    /// started picking up the whole stack — this test still spoke the
-    /// `Option` it was written against, and asserted only about the single
-    /// dragged token. It now also asserts the property the `Vec` exists for:
-    /// each member of a dragged stack keeps its *own* offset, which is what
-    /// preserves their relative positions.
+    /// `DraggingToken` became a `Vec` when clicking a stack started picking up
+    /// the whole stack — this test still spoke the `Option` it was written
+    /// against, and asserted only about the single dragged token. It now also
+    /// asserts the property the `Vec` exists for: each member of a dragged
+    /// stack keeps its *own* offset, which is what preserves their relative
+    /// positions.
+    ///
+    /// Each member also remembers where it was picked up from (spec 045
+    /// FR-015): a drag dropped across a wall has to put the token back there,
+    /// and by the time the mouse is released the transform has already been
+    /// written every frame of the drag.
     #[test]
     fn test_e2e_drag_state_tracks_grab_offset() {
         let mut dragging = DraggingToken::default();
@@ -123,17 +128,33 @@ mod e2e_canvas_tests {
 
         let grab_offset = Vec2::new(-12.0, 4.0);
         let second_offset = Vec2::new(6.0, -3.0);
+        let first_origin = Vec2::new(40.0, 40.0);
+        let second_origin = Vec2::new(58.0, 33.0);
         dragging.0 = vec![
-            ("token-1".to_string(), grab_offset),
-            ("token-2".to_string(), second_offset),
+            DraggedToken {
+                id: "token-1".to_string(),
+                offset: grab_offset,
+                origin: first_origin,
+            },
+            DraggedToken {
+                id: "token-2".to_string(),
+                offset: second_offset,
+                origin: second_origin,
+            },
         ];
 
-        assert_eq!(dragging.0[0].0, "token-1");
-        assert_eq!(dragging.0[0].1, grab_offset);
-        assert_eq!(dragging.0[1].0, "token-2");
+        assert_eq!(dragging.0[0].id, "token-1");
+        assert_eq!(dragging.0[0].offset, grab_offset);
+        assert_eq!(dragging.0[0].origin, first_origin);
+        assert_eq!(dragging.0[1].id, "token-2");
         assert_eq!(
-            dragging.0[1].1, second_offset,
+            dragging.0[1].offset, second_offset,
             "each token in a dragged stack keeps its own offset"
+        );
+        assert_eq!(
+            dragging.0[1].origin, second_origin,
+            "and its own origin, so a refused stack drag puts each one back \
+             where it came from rather than on top of its neighbour"
         );
     }
 

@@ -166,6 +166,16 @@ export type SelectTokensCommand = {
 export type UpsertTokenCommand = {
   type: "upsert_token";
   token: WorldToken;
+  /**
+   * Spec 045 US2: the route this move took, when the move had one.
+   *
+   * On the command rather than on `WorldToken` because it describes *this
+   * move*, not the token — a token does not have a path, it took one. A
+   * committed route carries its cells; a drag and a single step carry
+   * nothing, and the server judges the straight line instead, which is what
+   * they are.
+   */
+  path?: { x: number; y: number }[];
 };
 
 export type RemoveTokenCommand = {

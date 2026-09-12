@@ -499,6 +499,30 @@ export async function drag(
   await dragToken(seat.page, tokenId, { dx: by.x, dy: -by.y });
 }
 
+/**
+ * A drag that is allowed to be refused, returning whether the token moved.
+ *
+ * `drag` insists the token move, because a press that grabbed nothing is the
+ * worst failure this harness can have — every convergence check afterwards
+ * would compare a position with itself and pass. But since spec 045 a drag
+ * across a wall is *supposed* to leave the token where it was, and the two
+ * outcomes look identical from outside. Use this where the question is
+ * whether the move was allowed; use `drag` everywhere else, so a silently
+ * missed grab still fails loudly.
+ */
+export async function tryDrag(
+  seat: Seat,
+  tokenId: string,
+  by: Point,
+): Promise<boolean> {
+  return dragToken(
+    seat.page,
+    tokenId,
+    { dx: by.x, dy: -by.y },
+    { mayBeRefused: true },
+  );
+}
+
 /** A player presses a movement key, one press per cell (`token_move.rs`). */
 export async function walk(seat: Seat, step: Step, times = 1): Promise<void> {
   for (let press = 0; press < times; press += 1) {
