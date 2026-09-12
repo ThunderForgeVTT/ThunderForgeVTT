@@ -1,0 +1,18 @@
+[lints]
+workspace = true
+
+[package]
+name = "thunderforge-pdf"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+[dependencies]
+# Pure Rust, and the parser sorting-hat already runs against this same corpus.
+# No Poppler: shelling out to `pdftotext` would make a native binary a server
+# dependency, and it yields plain text — this crate needs positions.
+lopdf = { version = "0.34", default-features = false, features = ["nom_parser"] }
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = "1"

@@ -17,6 +17,7 @@ members = [
     "crates/thunderforge-dice",
     "crates/thunderforge-mapforge",
     "crates/thunderforge-opfs",
+    "crates/thunderforge-pdf",
     "crates/thunderforge-pg",
     "crates/thunderforge-presence",
     "crates/thunderforge-repo-host",
