@@ -450,6 +450,13 @@ correct content, and confirm the system registry check still passes.
 - **FR-055a**: It MUST NOT become inheritable by any **other** account,
   including a co-Game Master of a world it was inherited into. Being able to
   use content at a table is not being able to take it home.
+- **FR-055b**: Using an uploaded entry *in play* — placing a book creature on a
+  scene as an actor, handing an item to a character — MUST NOT launder its
+  origin. Any such path writes into a world table, and MUST add an origin
+  column to that table in the same change so the origin invariant can see it.
+  Until then, no path may copy uploaded content into a world table at all
+  (found by phase 8, 2026-09-13: the world tables have no origin column and
+  the invariant declares them Authored).
 - **FR-056**: An openly licensed document read in by a user is still uploaded
   content and MUST NOT become shareable on the strength of its licence. Where
   its attribution requirements are known they MUST still be carried and shown

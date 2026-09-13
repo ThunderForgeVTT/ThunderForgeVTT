@@ -165,14 +165,20 @@ refusal says why.
 allowed for authored content.
 
 - [X] T051 [049-US4] **ACCEPTED as written by the owner, 2026-09-13** — no role, instance operators included, may reclassify uploaded content. Phase 8 is unblocked. `docs/adrs/20260912-097-origin_as_a_non_editable_invariant.md` — **owner-signed, not implementer-signed**, on the precedent of ADR-069 and ADR-079 that liability decisions are the owner's. This phase does not start against an unsigned ADR
-- [ ] T052 [049-US4] Enforce the invariant at the data boundary in `src/server/src/collections/`: a collection **cannot contain uploaded content by construction** (049 FR-054a), not by a check on each route. The routes known today are today's list
-- [ ] T053 [P] [049-US4] Every refusal names the origin as the reason, and where the only remaining routes are authoring it or proposing it as a system pack, says so (049 FR-053, FR-056a)
-- [ ] T054 [P] [049-US4] The licence of the uploaded document makes no difference (049 FR-056). An openly licensed PDF still yields unshareable content — the known cost, recorded in 049 decision 4
-- [ ] T055 [049-US4] `apps/web/e2e/content-origin.spec.ts` — share, publish, export and collection-adoption each refused for uploaded content with a reason, and **each allowed for content authored by hand**. The rule restricts an origin, not a subject
-- [ ] T056 [049-US4] Proved: that e2e green; ADR-097 signed and its status ACCEPTED; `pnpm verify` green
+- [X] T052 [049-US4] Enforce the invariant at the data boundary in `src/server/src/collections/`: a collection **cannot contain uploaded content by construction** (049 FR-054a), not by a check on each route. The routes known today are today's list
+- [X] T053 [P] [049-US4] Every refusal names the origin as the reason, and where the only remaining routes are authoring it or proposing it as a system pack, says so (049 FR-053, FR-056a)
+- [X] T054 [P] [049-US4] The licence of the uploaded document makes no difference (049 FR-056). An openly licensed PDF still yields unshareable content — the known cost, recorded in 049 decision 4
+- [X] T055 [049-US4] `apps/web/e2e/content-origin.spec.ts` — share, publish, export and collection-adoption each refused for uploaded content with a reason, and **each allowed for content authored by hand**. The rule restricts an origin, not a subject
+- [X] T056 [049-US4] Proved: that e2e green; ADR-097 signed and its status ACCEPTED; `pnpm verify` green
 
 **Checkpoint**: 049 is complete. A book can be read, reviewed, sent, browsed,
 and cannot leave.
+
+> **Phase 8 notes (verified 2026-09-13, commit `082d84b`).** The invariant lives in the database: `content_origin(type, id)` and a trigger, `refuse_content_that_may_not_leave()`, on all four tables content can leave through — `world_collection_members` and the actor, item and ability share tables. Verified by hand as the Postgres superuser: inserting an uploaded entry into a collection is refused, citing FR-054a. An unknown origin is refused rather than read as authored. 1490 server tests pass with phase 11 in the tree.
+> - **T055 as written assumed each route refuses separately.** Share and publish take no argument that could name a book entry, so the refusal happens where content would enter, and the e2e proves what they carry holds nothing from the book. That is what ADR-097 asks for; the task's wording was the thing that was wrong.
+> - **The world's own tables have no origin column** and are declared Authored, which is true only while nothing writes uploaded content into them. Recorded as spec 048 FR-033d and spec 049 FR-055b: the first feature that writes uploaded content into a world table adds the column in the same change.
+> - **"Uploaded" is scoped to what the book reader produces.** ADR-097's literal wording would also cover UVTT map imports and uploaded images. **An owner decision.**
+> - Account export now lists withheld uploaded books with the reason. `docs/api/schemas/user-data-export.schema.json` was already out of date and still is.
 
 ---
 
@@ -227,14 +233,19 @@ other world.
 
 **Independent test**: an edit in one world reaches no other world and no base.
 
-- [ ] T071 [050-US2] Migration for deltas in `src/server/migrations/` — world-owned, three forms: entry **changed**, **hidden**, **added**, storing only what differs rather than a whole copy (050 FR-021, FR-023)
-- [ ] T072 [050-US2] Resolution in `src/server/src/library/` — what a world reads is the base with its delta applied (050 FR-022), keyed by the identity Phase 10 settled
-- [ ] T073 [050-US2] **Origin per entry, not per compendium** (050 FR-052, FR-052a): a change to an uploaded entry is uploaded and cannot be shared; an addition beside it is authored and can be. Same screen, same feature, different rights — the subtlety most likely to be implemented wrong
-- [ ] T074 [P] [050-US2] Restore: a Game Master can see what an entry was before their world changed it, and put it back (050 FR-024)
-- [ ] T075 [P] [050-US2] Removing a world removes its deltas and touches no base and no other world (050 FR-028)
-- [ ] T076 [050-US2] Measure resolution cost and **fix 050 SC-004 / FR-072's margin from the measurement**, which the spec deliberately left as a number to be measured rather than guessed
-- [ ] T077 [050-US2] `apps/web/e2e/library-deltas.spec.ts` — edit in one world, other world unchanged, **base byte-identical to what the import produced**; addition absent elsewhere; hidden entry present elsewhere; and the origin split provable on the changed-versus-added pair
-- [ ] T078 [050-US2] Proved: that e2e green, the latency margin recorded in `measurements.md`, `cargo test` and `tsc --noEmit` green
+- [X] T071 [050-US2] Migration for deltas in `src/server/migrations/` — world-owned, three forms: entry **changed**, **hidden**, **added**, storing only what differs rather than a whole copy (050 FR-021, FR-023)
+- [X] T072 [050-US2] Resolution in `src/server/src/library/` — what a world reads is the base with its delta applied (050 FR-022), keyed by the identity Phase 10 settled
+- [X] T073 [050-US2] **Origin per entry, not per compendium** (050 FR-052, FR-052a): a change to an uploaded entry is uploaded and cannot be shared; an addition beside it is authored and can be. Same screen, same feature, different rights — the subtlety most likely to be implemented wrong
+- [X] T074 [P] [050-US2] Restore: a Game Master can see what an entry was before their world changed it, and put it back (050 FR-024)
+- [X] T075 [P] [050-US2] Removing a world removes its deltas and touches no base and no other world (050 FR-028)
+- [X] T076 [050-US2] Measure resolution cost and **fix 050 SC-004 / FR-072's margin from the measurement**, which the spec deliberately left as a number to be measured rather than guessed
+- [X] T077 [050-US2] `apps/web/e2e/library-deltas.spec.ts` — edit in one world, other world unchanged, **base byte-identical to what the import produced**; addition absent elsewhere; hidden entry present elsewhere; and the origin split provable on the changed-versus-added pair
+- [X] T078 [050-US2] Proved: that e2e green, the latency margin recorded in `measurements.md`, `cargo test` and `tsc --noEmit` green
+
+> **Phase 11 notes (verified 2026-09-13, commit `dd0e81b`).** Deltas are one table keyed by kind and name with a per-entry origin. Changed deltas store only what differs; the "before" view is the base itself, with no copy kept. FR-025a ambiguity is refused at write time, and a delta that becomes ambiguous after a re-read is kept and reported as unattached, not dropped. Read-cost margins are measured and recorded (FR-072: at most 1.5× the plain fetch up to 10% changed, 2.5× all changed).
+> - **The first cut contradicted spec 050 decision 5.** Switching a book off cascaded every delta away, *additions included*, so a Game Master's authored homebrew was destroyed. Decision 5 says additions stay. The agent had flagged it as open because the brief omitted decision 5. **A fix is in progress**, together with the next finding.
+> - **`world_books.switched_on_by` blocked account deletion**: `NOT NULL` with no `ON DELETE`, so a Game Master or Trusted Player who switched a book on in someone else's world could not delete their account. This came from phase 9, and is being fixed in the same change.
+> - **Resolution runs over the whole book before paging**, so a page of 50 pays for all 1,500 entries. That is inside the margin at measured sizes; a much larger book will want per-page resolution.
 
 ---
 

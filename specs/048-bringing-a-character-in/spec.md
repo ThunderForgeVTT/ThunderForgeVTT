@@ -328,6 +328,13 @@ and leaves current hit points and anything the table has changed in play alone.
 - **FR-033c**: Adoption MUST NOT change a piece's origin. Adopted content read
   out of an uploaded sheet remains uploaded content and remains unshareable
   (spec 049 FR-050, ADR-097).
+- **FR-033d**: Whatever this importer writes into a world's own tables — actors,
+  items, abilities — MUST carry an **origin column** in that same change, and
+  the origin invariant's `content_origin` lookup MUST read it. Today every
+  world table answers *Authored* by definition, which is true only because
+  nothing writes uploaded content into them. This importer is the first thing
+  that would, and a table that defaults to Authored would be the permissive
+  mistake ADR-097 exists to prevent (found by spec 049 phase 8, 2026-09-13).
 - **FR-034**: Adopting MUST NOT duplicate: the character keeps using the same
   thing, now the world's.
 - **FR-035**: The same unknown thing arriving from two characters MUST be one
