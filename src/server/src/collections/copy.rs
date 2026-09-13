@@ -208,9 +208,11 @@ pub async fn copy_shared_collection_to_world_impl(
 ///
 /// From the maps rather than the member list, so dependents count too — an
 /// ability that came along inside an actor is as much a copy as one that was a
-/// member. A scene maps to no moderation entity type and records nothing
-/// (spec 015 T042). Not called by `rescue_actors_sync`: a character moved out
-/// of a deleted world was not adopted from anybody.
+/// member. Scenes included, since spec 015 T042 made a scene a moderated
+/// entity: the `let ... else` below skips nothing for a real member type, and
+/// `collections::tests` fails if one is ever added that it would. Not called
+/// by `rescue_actors_sync`: a character moved out of a deleted world was not
+/// adopted from anybody.
 fn record_adoptions(conn: &mut PgConnection, ctx: &CopyContext) -> Result<(), CopyError> {
     let maps = [
         ("ability", &ctx.ability_map),

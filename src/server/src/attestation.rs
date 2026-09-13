@@ -64,6 +64,10 @@ pub enum CoveredKind {
     Item,
     Ability,
     Lore,
+    /// Like lore, published only inside a collection. Spec 015 T042 made a
+    /// scene something a notice can name, and a notice about a scene has to
+    /// reach the agreement behind the collection that published it.
+    Scene,
 }
 
 impl CoveredKind {
@@ -77,6 +81,7 @@ impl CoveredKind {
             "item" => Some(Self::Item),
             "ability" => Some(Self::Ability),
             "lore" => Some(Self::Lore),
+            "scene" => Some(Self::Scene),
             _ => None,
         }
     }
@@ -88,7 +93,7 @@ impl CoveredKind {
             Self::Actor => Some(PublishableKind::Actor),
             Self::Item => Some(PublishableKind::Item),
             Self::Ability => Some(PublishableKind::Ability),
-            Self::Lore => None,
+            Self::Lore | Self::Scene => None,
         }
     }
 
@@ -101,6 +106,7 @@ impl CoveredKind {
             Self::Item => Some("item"),
             Self::Ability => Some("ability"),
             Self::Lore => Some("lore"),
+            Self::Scene => Some("scene"),
         }
     }
 }

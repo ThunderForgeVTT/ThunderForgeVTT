@@ -233,9 +233,9 @@ impl LegalDocumentQuery {
     ///
     /// The SC-003 surface: a person handling a notice reaches who agreed, when
     /// and the exact words in one query, without a developer. Admin-only for
-    /// the reason `moderationCase` is. `publishableKind` also accepts `lore`,
-    /// which is never published alone and so is answered entirely through its
-    /// collections.
+    /// the reason `moderationCase` is. `publishableKind` also accepts `lore`
+    /// and `scene`, which are never published alone and so are answered
+    /// entirely through their collections.
     ///
     /// Returned whether or not the share each one authorised still exists
     /// (FR-007) — there is no join to a share row and no filter on one.
@@ -248,7 +248,9 @@ impl LegalDocumentQuery {
         let state = app_state(ctx)?;
         let _ = admin_user(ctx)?;
         let kind = CoveredKind::parse(&publishable_kind).ok_or_else(|| {
-            Error::new("publishableKind must be one of collection, actor, item, ability or lore")
+            Error::new(
+                "publishableKind must be one of collection, actor, item, ability, lore or scene",
+            )
         })?;
 
         let records = crate::attestation::for_content(state, kind, publishable_id)

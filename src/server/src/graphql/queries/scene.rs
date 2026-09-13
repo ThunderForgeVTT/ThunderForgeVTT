@@ -4,6 +4,24 @@ use async_graphql::Context;
 
 use crate::graphql::*;
 
+/// Whether spec 015 has taken this scene down (T042).
+///
+/// Every read of a scene or of what is drawn on it asks, for every caller
+/// including the scene's owner and the world's DM — the enforcement contract
+/// the other moderated types keep. A scene has no detail page to put a
+/// placeholder on, so a taken-down scene is absent rather than placeholder'd;
+/// its owner reaches the counter-notice from their standing page, which lists
+/// the strike by case.
+async fn scene_taken_down(state: &AppState, scene_id: uuid::Uuid) -> GraphQLResult<bool> {
+    Ok(crate::moderation::effective_status(
+        state,
+        crate::graphql::types::ModerationEntityType::Scene.as_db_str(),
+        scene_id,
+    )
+    .await?
+    .is_some())
+}
+
 /// Testable core of `SceneQuery::scenes` (see `actor.rs`'s `_impl`
 /// convention).
 pub async fn scenes_impl(
@@ -26,7 +44,7 @@ pub async fn scenes_impl(
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
-    tokio::task::spawn_blocking(move || {
+    let rows = tokio::task::spawn_blocking(move || {
         use crate::schema::scenes;
         let mut query = scenes::table
             .filter(scenes::world_id.eq(world_id))
@@ -40,7 +58,16 @@ pub async fn scenes_impl(
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to load scenes"))
+    .map_err(|_| Error::new("Failed to load scenes"))?;
+
+    // Spec 015 T042: a list excludes a taken-down scene entirely, DM or not.
+    crate::moderation::filter_visible(
+        state,
+        crate::graphql::types::ModerationEntityType::Scene.as_db_str(),
+        rows,
+        |scene| scene.scene_id,
+    )
+    .await
 }
 
 /// Testable core of `SceneQuery::scene`.
@@ -56,6 +83,12 @@ pub async fn scene_impl(
         .await?
         .is_none()
     {
+        return Ok(None);
+    }
+
+    // Spec 015 T042: asked after access, so a stranger learns nothing new
+    // about the scene by asking; answered as absence to everyone else.
+    if scene_taken_down(state, scene_id).await? {
         return Ok(None);
     }
 
@@ -135,6 +168,11 @@ pub async fn shapes_impl(
     // 🔐 SECURITY: Get the world_id from the scene, then verify access
     let world_id = get_world_id_from_scene(state, scene_id).await?;
     require_visible_world(state, user_id, is_admin, world_id).await?;
+
+    // Spec 015 T042: drawn scenery — text included — is the scene's content.
+    if scene_taken_down(state, scene_id).await? {
+        return Ok(Vec::new());
+    }
 
     // DM-ness is resolved once, here, and moved into the blocking closure
     // below — the same shape `world_sync_plan` uses, and the reason this is
@@ -219,6 +257,9 @@ impl SceneQuery {
         // 🔐 SECURITY: Get the world_id from the scene, then verify access
         let world_id = get_world_id_from_scene(state, scene_id).await?;
         require_visible_world(state, auth_user.user_id, auth_user.is_admin, world_id).await?;
+        if scene_taken_down(state, scene_id).await? {
+            return Ok(Vec::new());
+        }
 
         let mut conn = state
             .db_pool
@@ -267,6 +308,9 @@ impl SceneQuery {
         {
             return Ok(None);
         }
+        if scene_taken_down(state, scene_id).await? {
+            return Ok(None);
+        }
 
         let mut conn = state
             .db_pool
@@ -299,6 +343,9 @@ impl SceneQuery {
         // 🔐 SECURITY: Get the world_id from the scene, then verify access
         let world_id = get_world_id_from_scene(state, scene_id).await?;
         require_visible_world(state, auth_user.user_id, auth_user.is_admin, world_id).await?;
+        if scene_taken_down(state, scene_id).await? {
+            return Ok(Vec::new());
+        }
 
         let mut conn = state
             .db_pool
@@ -333,6 +380,9 @@ impl SceneQuery {
         // 🔐 SECURITY: Get the world_id from the scene, then verify access
         let world_id = get_world_id_from_scene(state, scene_id).await?;
         require_visible_world(state, auth_user.user_id, auth_user.is_admin, world_id).await?;
+        if scene_taken_down(state, scene_id).await? {
+            return Ok(Vec::new());
+        }
 
         let mut conn = state
             .db_pool

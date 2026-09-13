@@ -115,6 +115,7 @@ export function TakedownNoticeForm() {
             <SelectItem value="WORLD_ACTOR">Actor / NPC / character</SelectItem>
             <SelectItem value="WORLD_ITEM">Item</SelectItem>
             <SelectItem value="WORLD_LORE_ENTRY">Lore entry</SelectItem>
+            <SelectItem value="SCENE">Scene</SelectItem>
           </SelectContent>
         </Select>
       </Field>

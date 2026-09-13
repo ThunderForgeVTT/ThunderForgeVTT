@@ -30,16 +30,27 @@ pub fn preview_key(asset_id: Uuid) -> String {
     format!("scenes/{asset_id}-preview.webp")
 }
 
+/// The preview's world, or `None` when there is no such preview — or when its
+/// scene has been taken down (spec 015 T042), which is answered exactly like
+/// an unknown id: a preview is a picture of the scene, and a takedown against
+/// the scene covers it without a claimant naming it separately.
 async fn load_preview_scene_world_id(state: &AppState, asset_id: Uuid) -> Option<Uuid> {
     let mut conn = state.db_pool.get().ok()?;
     tokio::task::spawn_blocking(move || {
         use crate::schema::{scene_preview_images, scenes};
-        scene_preview_images::table
+        let found = scene_preview_images::table
             .inner_join(scenes::table.on(scenes::scene_id.eq(scene_preview_images::scene_id)))
             .filter(scene_preview_images::id.eq(asset_id))
-            .select(scenes::world_id)
-            .first::<Uuid>(&mut conn)
-            .optional()
+            .select((scenes::scene_id, scenes::world_id))
+            .first::<(Uuid, Uuid)>(&mut conn)
+            .optional()?;
+        let Some((scene_id, world_id)) = found else {
+            return Ok(None);
+        };
+        if crate::auth::scene_visibility::scene_taken_down(&mut conn, scene_id)? {
+            return Ok(None);
+        }
+        Ok::<_, diesel::result::Error>(Some(world_id))
     })
     .await
     .ok()?

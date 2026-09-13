@@ -1,7 +1,9 @@
 export type ModerationEntityType =
   | "WORLD_ACTOR"
   | "WORLD_ITEM"
-  | "WORLD_LORE_ENTRY";
+  | "WORLD_LORE_ENTRY"
+  // Spec 015 T042: a scene is taken down whole, images and all.
+  | "SCENE";
 
 export type ModerationActionType =
   | "NOTICE_RECEIVED"

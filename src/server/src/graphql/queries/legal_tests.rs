@@ -199,13 +199,17 @@ async fn an_old_agreement_resolves_to_the_words_it_agreed_to() {
 /// `attestationsFor` refuses a kind it does not know rather than answering with
 /// an empty history — which would read, to a notice handler, as "nobody
 /// agreed to publish this".
+///
+/// Asked about a token, which nothing publishes. This used to ask about a
+/// scene; spec 015 T042 made a scene a kind a notice can name, so its
+/// agreements are now answered through the collections it is in.
 #[tokio::test]
 async fn an_unknown_kind_is_refused_not_answered_with_nothing() {
     let state = test_app_state();
     let response = schema(state)
         .execute(
             Request::new(
-                r#"{ attestationsFor(publishableKind: "scene", publishableId: "00000000-0000-0000-0000-000000000000") { id } }"#,
+                r#"{ attestationsFor(publishableKind: "token", publishableId: "00000000-0000-0000-0000-000000000000") { id } }"#,
             )
             .data(caller(uuid::Uuid::now_v7(), true)),
         )

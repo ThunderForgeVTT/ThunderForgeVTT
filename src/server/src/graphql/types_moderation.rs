@@ -20,6 +20,12 @@ pub enum ModerationEntityType {
     /// share link would be a moderation bypass for exactly the content type
     /// ADR-049's DMCA determination concerns.
     WorldAbility,
+    /// Spec 015 T042: a scene is taken down as a whole — its record, its drawn
+    /// scenery and the images attached to it — rather than a claimant having
+    /// to name every image on it. Without this a collection holding a scene
+    /// was the one member type a takedown could not reach (ADR-069's FR-021),
+    /// and ADR-098's sync-back was blocked on it.
+    Scene,
 }
 
 impl ModerationEntityType {
@@ -29,6 +35,9 @@ impl ModerationEntityType {
             ModerationEntityType::WorldItem => "world_item",
             ModerationEntityType::WorldLoreEntry => "world_lore_entry",
             ModerationEntityType::WorldAbility => "world_ability",
+            // No `world_` prefix, because the table has none: the string names
+            // what `scenes` holds, as the others name their tables' rows.
+            ModerationEntityType::Scene => "scene",
         }
     }
 
@@ -38,6 +47,7 @@ impl ModerationEntityType {
             "world_item" => Some(ModerationEntityType::WorldItem),
             "world_lore_entry" => Some(ModerationEntityType::WorldLoreEntry),
             "world_ability" => Some(ModerationEntityType::WorldAbility),
+            "scene" => Some(ModerationEntityType::Scene),
             _ => None,
         }
     }

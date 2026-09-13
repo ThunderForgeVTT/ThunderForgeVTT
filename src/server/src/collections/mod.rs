@@ -52,19 +52,40 @@ pub fn is_known_member_type(member_type: &str) -> bool {
 /// The moderation entity type for a member type, as
 /// `moderation::effective_status` expects it.
 ///
-/// `None` for a type spec 015's moderation does not track. A member whose type
-/// has no moderation entity is not thereby un-moderatable — it is a gap, and
-/// naming it here is what makes the gap visible rather than silent.
+/// `None` only for a string that is not a member type at all. Every entry in
+/// [`MEMBER_TYPES`] maps to a moderated entity, and the test below fails the
+/// day a sixth type is added without one — a member type a takedown cannot
+/// reach is the gap spec 015 T042 closed for scenes, and it must not reopen
+/// quietly for whatever comes next.
 pub fn moderation_entity_type(member_type: &str) -> Option<&'static str> {
     match member_type {
         "actor" => Some("world_actor"),
         "item" => Some("world_item"),
         "ability" => Some("world_ability"),
         "lore" => Some("world_lore_entry"),
-        // Scenes are not a moderated entity type in spec 015 today. A takedown
-        // against a scene is filed against its images, which are separate
-        // entities. Recorded rather than assumed away.
-        "scene" => None,
+        "scene" => Some("scene"),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::graphql::types::ModerationEntityType;
+
+    /// ADR-069's FR-021 and ADR-098's precondition: a takedown reaches every
+    /// member type a collection can hold. Asked through the GraphQL enum as
+    /// well, so the string a collection checks is one a notice can be filed
+    /// under — a mapping to a string no notice ever writes would pass a
+    /// `is_some()` check and withhold nothing.
+    #[test]
+    fn every_member_type_is_a_moderated_entity_a_notice_can_name() {
+        for member_type in MEMBER_TYPES {
+            let entity = moderation_entity_type(member_type)
+                .unwrap_or_else(|| panic!("{member_type} has no moderation entity type"));
+            let named = ModerationEntityType::from_db_str(entity)
+                .unwrap_or_else(|| panic!("no notice can be filed against {entity}"));
+            assert_eq!(named.as_db_str(), entity);
+        }
     }
 }

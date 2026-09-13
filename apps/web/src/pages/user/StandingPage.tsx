@@ -31,6 +31,7 @@ const KIND_NAMES: Record<string, string> = {
   WORLD_ITEM: "An item",
   WORLD_ABILITY: "An ability",
   WORLD_LORE_ENTRY: "A lore entry",
+  SCENE: "A scene",
 };
 
 /** The download — the same export the account settings offer (FR-032). */
@@ -264,13 +265,19 @@ export function StandingPage() {
                 account is disabled at {standing.threshold}. A strike stops
                 counting on its own after the lookback, or when a counter-notice
                 succeeds — file one from the page of the content that was taken
-                down.
+                down, or from here when it has no page of its own.
               </p>
 
               {standing.strikes.length > 0 ? (
                 <ul className="grid gap-2" data-testid="standing-strikes">
                   {standing.strikes.map((strike) => {
                     const path = standing.disabled ? null : contentPath(strike);
+                    // Spec 015 T042: a scene has no page to carry the
+                    // moderation banner, so without this its owner had no
+                    // route to the counter-notice at all. Anything without a
+                    // page gets the form here, as a disabled account's
+                    // strikes already do.
+                    const offerCounterNotice = path === null;
                     return (
                       <li
                         key={strike.caseId}
@@ -290,7 +297,7 @@ export function StandingPage() {
                             counter-notice — the statutory route back — and
                             its content pages are out of reach, so it lives
                             here. */}
-                        {standing.disabled ? (
+                        {offerCounterNotice ? (
                           counterNoticeFor === strike.caseId ? (
                             <CounterNoticeForm
                               caseId={strike.caseId}

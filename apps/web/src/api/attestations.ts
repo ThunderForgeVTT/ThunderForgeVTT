@@ -28,7 +28,13 @@ export interface Attestation {
  * Anything an agreement can be asked about. `lore` is never published on its
  * own, so its agreements are always a collection's.
  */
-export type CoveredKind = "collection" | "actor" | "item" | "ability" | "lore";
+export type CoveredKind =
+  | "collection"
+  | "actor"
+  | "item"
+  | "ability"
+  | "lore"
+  | "scene";
 
 const ATTESTATION_FIELDS = `
   id
@@ -68,6 +74,8 @@ export function coveredKindForCase(
       return "ability";
     case "WORLD_LORE_ENTRY":
       return "lore";
+    case "SCENE":
+      return "scene";
     default:
       return null;
   }

@@ -125,3 +125,6 @@ mod moderation;
 
 #[path = "copy_asset_and_link_tests.rs"]
 mod assets_and_links;
+
+#[path = "copy_scene_moderation_tests.rs"]
+mod scene_moderation;

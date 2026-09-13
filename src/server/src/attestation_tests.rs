@@ -143,7 +143,9 @@ async fn deleting_an_account_removes_the_name_and_nothing_else() {
 #[tokio::test]
 async fn a_collections_agreement_covers_what_is_inside_it() {
     use crate::schema::{world_collection_members, world_collections};
-    use crate::test_support::{insert_test_item, insert_test_lore_entry, insert_test_world};
+    use crate::test_support::{
+        insert_test_item, insert_test_lore_entry, insert_test_scene, insert_test_world,
+    };
 
     let state = test_app_state();
     let version = archived_version(&state).await;
@@ -152,6 +154,7 @@ async fn a_collections_agreement_covers_what_is_inside_it() {
     let world_id = insert_test_world(&mut conn, user_id);
     let item_id = insert_test_item(&mut conn, world_id, user_id);
     let lore_id = insert_test_lore_entry(&mut conn, world_id, user_id);
+    let scene_id = insert_test_scene(&mut conn, world_id, user_id);
 
     let now = chrono::Utc::now().naive_utc();
     let mut collection = |name: &str| {
@@ -173,7 +176,7 @@ async fn a_collections_agreement_covers_what_is_inside_it() {
     let containing = collection("holds both");
     let unrelated = collection("holds neither");
 
-    for (member_type, member_id) in [("item", item_id), ("lore", lore_id)] {
+    for (member_type, member_id) in [("item", item_id), ("lore", lore_id), ("scene", scene_id)] {
         diesel::insert_into(world_collection_members::table)
             .values((
                 world_collection_members::id.eq(uuid::Uuid::now_v7()),
@@ -229,6 +232,13 @@ async fn a_collections_agreement_covers_what_is_inside_it() {
         vec![containing],
         "lore is only ever published inside a collection, so that is its agreement",
     );
+
+    // Spec 015 T042: a scene, like lore, is published only inside a collection,
+    // and a notice naming one must find that collection's agreement.
+    let for_scene = for_content(&state, CoveredKind::Scene, scene_id)
+        .await
+        .expect("read");
+    assert_eq!(published_as(for_scene), vec![containing]);
 
     let for_collection = for_content(&state, CoveredKind::Collection, containing)
         .await

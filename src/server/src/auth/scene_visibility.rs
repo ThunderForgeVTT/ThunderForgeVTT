@@ -62,6 +62,39 @@ pub fn visible_scene_ids(
     is_dm: bool,
     world_id: Uuid,
 ) -> Result<Vec<Uuid>, diesel::result::Error> {
+    let candidates = visible_before_moderation(conn, is_dm, world_id)?;
+    let mut visible = Vec::with_capacity(candidates.len());
+    for scene_id in candidates {
+        // One indexed lookup per scene rather than a join: moderation's lazy
+        // restoration writes as it reads, and only `effective_status_sync`
+        // knows how. A world has tens of scenes, not thousands.
+        if !scene_taken_down(conn, scene_id)? {
+            visible.push(scene_id);
+        }
+    }
+    Ok(visible)
+}
+
+/// Whether spec 015 has disabled this scene, asked fresh.
+///
+/// Never cached, for the reason `collections::resolve` gives: a cached answer
+/// is wrong in both directions, and a counter-notice's restoration is
+/// materialised only by being asked.
+pub fn scene_taken_down(
+    conn: &mut PgConnection,
+    scene_id: Uuid,
+) -> Result<bool, diesel::result::Error> {
+    // Named through the enum a notice is filed under, so the string asked
+    // about here is the one `submitTakedownNotice` writes.
+    let entity = crate::graphql::types::ModerationEntityType::Scene.as_db_str();
+    Ok(crate::moderation::effective_status_sync(conn, entity, scene_id)?.is_some())
+}
+
+fn visible_before_moderation(
+    conn: &mut PgConnection,
+    is_dm: bool,
+    world_id: Uuid,
+) -> Result<Vec<Uuid>, diesel::result::Error> {
     use crate::schema::scenes;
 
     if is_dm {
@@ -114,6 +147,12 @@ pub fn asset_scene_visible(
     let Some(scene_id) = scene_id else {
         return Ok(true);
     };
+    // Before the DM short-circuit, deliberately: a takedown binds the owner
+    // too, and a DM who could still fetch the background by id would make the
+    // scene's disappearance from their list cosmetic.
+    if scene_taken_down(conn, scene_id)? {
+        return Ok(false);
+    }
     if is_dm {
         return Ok(true);
     }

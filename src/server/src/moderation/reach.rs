@@ -164,6 +164,17 @@ fn name_of(
             .select(world_lore_entries::title)
             .first(conn)
             .optional(),
+        // Spec 015 T042. Without this arm a copied scene reads as deleted, and
+        // `fan_out_disable` skips a deleted copy — so the adoption would be
+        // recorded and the takedown would still not reach it.
+        "scene" => {
+            use crate::schema::scenes;
+            scenes::table
+                .filter(scenes::scene_id.eq(entity_id))
+                .select(scenes::name)
+                .first(conn)
+                .optional()
+        }
         _ => Ok(None),
     }
 }

@@ -218,13 +218,28 @@ pub async fn effective_status(
 
     let entity_type_owned = entity_type.to_string();
 
-    let latest =
-        tokio::task::spawn_blocking(move || latest_event(&mut conn, &entity_type_owned, entity_id))
-            .await
-            .map_err(|_| Error::new("Failed to spawn blocking task"))?
-            .map_err(|_| Error::new("Failed to load moderation status"))?;
+    tokio::task::spawn_blocking(move || {
+        effective_status_sync(&mut conn, &entity_type_owned, entity_id)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to load moderation status"))
+}
 
-    let Some(event) = latest else {
+/// [`effective_status`], on a connection the caller already holds.
+///
+/// Exists for the scene paths (spec 015 T042): `auth::scene_visibility` answers
+/// on a blocking connection for both the sync plan and the canvas byte route,
+/// and taking a second pooled connection to ask one more question of the same
+/// database would be the N+1 that module was written to avoid. It is the same
+/// rule, not a copy of it — the async form is now a wrapper around this — so
+/// the lazy restoration cannot happen on one path and not the other.
+pub fn effective_status_sync(
+    conn: &mut PgConnection,
+    entity_type: &str,
+    entity_id: Uuid,
+) -> QueryResult<Option<String>> {
+    let Some(event) = latest_event(conn, entity_type, entity_id)? else {
         return Ok(None);
     };
 
@@ -234,50 +249,36 @@ pub async fn effective_status(
         if let Some(due_at) = event.restoration_due_at
             && Utc::now() >= due_at
         {
-            let case_id = event.case_id;
-            let world_id = event.world_id;
-            let entity_id_for_insert = event.entity_id;
-            let entity_type_for_insert = event.entity_type.clone();
-            let mut conn = state
-                .db_pool
-                .get()
-                .map_err(|_| Error::new("Failed to get DB connection"))?;
-
-            tokio::task::spawn_blocking(move || {
-                diesel::insert_into(content_moderation_actions::table)
-                    .values(NewContentModerationAction {
-                        case_id,
-                        action_type: action_type::CONTENT_RESTORED.to_string(),
-                        entity_type: entity_type_for_insert.clone(),
-                        entity_id: entity_id_for_insert,
-                        world_id,
-                        account_id: None,
-                        claimant_name: String::new(),
-                        claimant_contact: String::new(),
-                        copyrighted_work_description: String::new(),
-                        infringing_material_location: String::new(),
-                        good_faith_statement: false,
-                        accuracy_statement: false,
-                        signature: String::new(),
-                        validity_result: None,
-                        missing_elements: None,
-                        counter_notice_id: None,
-                        restoration_due_at: None,
-                        created_by: None,
-                    })
-                    .execute(&mut conn)?;
-                // Spec 039 FR-023d: a copy that comes back with its source is
-                // announced to its adopter. Any other case returns quietly.
-                reach::tell_of_restoration_sync(
-                    &mut conn,
-                    case_id,
-                    &entity_type_for_insert,
-                    entity_id_for_insert,
-                )
-            })
-            .await
-            .map_err(|_| Error::new("Failed to spawn blocking task"))?
-            .map_err(|_| Error::new("Failed to record auto-restoration"))?;
+            diesel::insert_into(content_moderation_actions::table)
+                .values(NewContentModerationAction {
+                    case_id: event.case_id,
+                    action_type: action_type::CONTENT_RESTORED.to_string(),
+                    entity_type: event.entity_type.clone(),
+                    entity_id: event.entity_id,
+                    world_id: event.world_id,
+                    account_id: None,
+                    claimant_name: String::new(),
+                    claimant_contact: String::new(),
+                    copyrighted_work_description: String::new(),
+                    infringing_material_location: String::new(),
+                    good_faith_statement: false,
+                    accuracy_statement: false,
+                    signature: String::new(),
+                    validity_result: None,
+                    missing_elements: None,
+                    counter_notice_id: None,
+                    restoration_due_at: None,
+                    created_by: None,
+                })
+                .execute(conn)?;
+            // Spec 039 FR-023d: a copy that comes back with its source is
+            // announced to its adopter. Any other case returns quietly.
+            reach::tell_of_restoration_sync(
+                conn,
+                event.case_id,
+                &event.entity_type,
+                event.entity_id,
+            )?;
 
             return Ok(None);
         }
@@ -349,6 +350,10 @@ pub async fn filter_visible<T>(
     }
     Ok(visible)
 }
+
+#[cfg(test)]
+#[path = "scene_tests.rs"]
+mod scene_tests;
 
 #[cfg(test)]
 mod tests {

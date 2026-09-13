@@ -80,6 +80,18 @@ fn resolve_entity_owner(
             .first::<(Uuid, Uuid)>(conn)
             .map(|(w, a)| (w, Some(a)))
             .map_err(|_| "Ability not found".to_string()),
+        // Spec 015 T042. `owner_id` is the account that made the scene — a
+        // copied scene's is its copier (`scene_copy.rs`) — so the strike falls
+        // where the others' `created_by` puts it.
+        ModerationEntityType::Scene => {
+            use crate::schema::scenes;
+            scenes::table
+                .filter(scenes::scene_id.eq(entity_id))
+                .select((scenes::world_id, scenes::owner_id))
+                .first::<(Uuid, Uuid)>(conn)
+                .map(|(w, a)| (w, Some(a)))
+                .map_err(|_| "Scene not found".to_string())
+        }
     }
 }
 
