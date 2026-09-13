@@ -77,6 +77,17 @@ export interface RemovalReport {
   entryCount: number;
   inUse: { worldId: string; worldName: string; entryNames: string[] }[];
   handEdited: string[];
+  /**
+   * Per world, what removal does to that table's own work: changes and hides
+   * are lost, additions are kept (spec 050 decision 5). Includes worlds that
+   * have switched the book off but kept an addition.
+   */
+  deltasByWorld: {
+    worldId: string;
+    worldName: string;
+    lost: string[];
+    kept: string[];
+  }[];
   removed: boolean;
 }
 
@@ -384,6 +395,7 @@ async function removeCompendium(
          entryCount
          inUse { worldId worldName entryNames }
          handEdited
+         deltasByWorld { worldId worldName lost kept }
          removed
        }
      }`,

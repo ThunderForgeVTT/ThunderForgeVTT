@@ -10,7 +10,6 @@
 
 use super::tests::{Table, a_table, clear, fields, named, read};
 use super::*;
-use crate::compendium::store;
 use crate::library::book_list::{switch_off, switch_off_report, switch_on};
 use crate::schema::worlds;
 use crate::test_support::test_app_state;
@@ -241,10 +240,9 @@ fn the_database_ties_changes_and_hides_to_the_list_and_not_additions() {
 }
 
 /// FR-028 still holds for additions whose book is off: a world that goes takes
-/// them. And FR-061 as written: a book removed from the shelf takes every
-/// delta over it, additions included — see the migration's note.
+/// them, because an addition is the world's and has nowhere else to live.
 #[test]
-fn a_kept_addition_goes_with_its_world_or_its_book() {
+fn a_kept_addition_goes_with_its_world() {
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
 
@@ -255,12 +253,6 @@ fn a_kept_addition_goes_with_its_world_or_its_book() {
         .execute(&mut conn)
         .unwrap();
     assert!(held_ids(&mut conn, t.world).is_empty());
-
-    let u = a_table(&mut conn);
-    one_of_each(&mut conn, &u);
-    switch_off(&mut conn, u.owner, u.world, u.book.id).unwrap();
-    store::remove(&mut conn, u.owner, u.book.id).unwrap();
-    assert!(held_ids(&mut conn, u.world).is_empty());
 }
 
 /// **Deltas under the origin invariant** (spec 049 FR-054a, ADR-097). No route

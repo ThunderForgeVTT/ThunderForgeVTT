@@ -135,6 +135,19 @@ pub struct GraphQLCompendiumUsage {
     pub entry_names: Vec<String>,
 }
 
+/// One world's share of a book's removal (spec 050 decision 5).
+#[derive(SimpleObject, Debug, Clone)]
+#[graphql(name = "RemovalWorldDeltas")]
+pub struct GraphQLRemovalWorldDeltas {
+    pub world_id: Uuid,
+    pub world_name: String,
+    /// Changes and hides, which go with the book.
+    pub lost: Vec<String>,
+    /// Additions, which stay in the world as its own writing, labelled with
+    /// this book's title.
+    pub kept: Vec<String>,
+}
+
 /// What removing this compendium would take with it, and what it would leave
 /// (FR-045, FR-046).
 ///
@@ -152,14 +165,19 @@ pub struct GraphQLRemovalReport {
     /// nothing was copied into a world, "in use" is not a subset to compute:
     /// a table running the book loses all of it, and that is what this says.
     pub in_use: Vec<GraphQLCompendiumUsage>,
-    /// Entries a Game Master has edited by hand, which a removal must name
-    /// before it takes them (FR-046).
+    /// Entries a table has changed or hidden over this book, which go with it
+    /// (FR-046), each prefixed with the world it is in.
     ///
-    /// Empty for the same structural reason: under spec 050 such an edit is a
-    /// world's delta sitting over this base, and there is no table for one
-    /// yet. An edit is not stored in `compendium_entries`, which is also why
-    /// a re-import cannot silently overwrite one.
+    /// Under spec 050 a hand edit is a world's delta over the base, never a
+    /// change to `compendium_entries`, which is also why a re-import cannot
+    /// silently overwrite one. `deltasByWorld` carries the same, per world,
+    /// beside what stays.
     pub hand_edited: Vec<String>,
+    /// Per world, what removing the book does to that table's own work:
+    /// changes and hides are lost, additions are **kept** (spec 050 decision
+    /// 5). Includes worlds that have switched the book off and kept an
+    /// addition, which `inUse` does not name.
+    pub deltas_by_world: Vec<GraphQLRemovalWorldDeltas>,
     /// Whether this call removed anything. False for the report, true for the
     /// confirmation — so a caller can never mistake one reply for the other.
     pub removed: bool,
@@ -273,14 +291,22 @@ fn usage_of(conn: &mut PgConnection, compendium_id: Uuid) -> Vec<GraphQLCompendi
         .collect()
 }
 
-/// Entries a Game Master has changed by hand (FR-046).
+/// What removing this book does to every world's deltas over it (FR-046,
+/// spec 050 decision 5).
 ///
-/// Empty for a structural reason worth stating: a hand edit is a world's
-/// delta over this base under spec 050, not a mutation of the base, so there
-/// is nothing in `compendium_entries` that can be "the edited version". That
-/// is the same property that makes a re-import safe.
-fn hand_edited_in(_conn: &mut PgConnection, _compendium_id: Uuid) -> Vec<String> {
-    Vec::new()
+/// A report that cannot be read names nothing rather than refusing, for the
+/// reason `usage_of` gives: the removal itself is still gated by ownership.
+fn deltas_by_world(conn: &mut PgConnection, compendium_id: Uuid) -> Vec<GraphQLRemovalWorldDeltas> {
+    crate::library::deltas::removal_consequences(conn, compendium_id)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|each| GraphQLRemovalWorldDeltas {
+            world_id: each.world_id,
+            world_name: each.world_name,
+            lost: each.lost,
+            kept: each.kept,
+        })
+        .collect()
 }
 
 /// Testable core of `createCompendiumFromImport`.
@@ -405,12 +431,22 @@ pub async fn remove_compendium_impl(
             .get_result(&mut conn)
             .map_err(|e| refusal(format!("Failed to read the book: {e}")))?;
 
+        let by_world = deltas_by_world(&mut conn, compendium_id);
         let report = GraphQLRemovalReport {
             compendium_id,
             book_title: compendium.book_title,
             entry_count: i32::try_from(entry_count).unwrap_or(i32::MAX),
             in_use: usage_of(&mut conn, compendium_id),
-            hand_edited: hand_edited_in(&mut conn, compendium_id),
+            hand_edited: by_world
+                .iter()
+                .flat_map(|world| {
+                    world
+                        .lost
+                        .iter()
+                        .map(move |lost| format!("{}: {lost}", world.world_name))
+                })
+                .collect(),
+            deltas_by_world: by_world,
             removed: false,
         };
 

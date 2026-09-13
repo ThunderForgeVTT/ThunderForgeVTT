@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button/Button";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import {
   additionsWithoutBook,
-  restoreEntry,
+  removeKeptAddition,
   type WorldBookEntry,
 } from "./worldBooks";
 
@@ -21,8 +21,10 @@ import {
  * Showing a kept addition inside a switched-off book would make the book look
  * partly on, and a player-facing list that says a table is running a book it
  * is not is worse than one more heading. So they are listed here, each naming
- * the book it was written beside, and they rejoin that book's page — as the
- * same entry, not a copy — if the book is switched back on.
+ * the book it was written beside. One whose book is only switched off rejoins
+ * that book's page — as the same entry, not a copy — if the book is switched
+ * back on. One whose book was removed from the shelf stays here for good,
+ * labelled with the title the book had: a re-import is a different book.
  *
  * Only removal is offered here. Changing a kept addition happens on its
  * book's page, which is where it was written and where it will be read again.
@@ -55,12 +57,7 @@ export function KeptAdditions({
 
   const remove = useCallback(
     (entry: WorldBookEntry) => {
-      restoreEntry({
-        worldId,
-        compendiumId: entry.compendiumId,
-        kind: entry.kind,
-        name: entry.name,
-      })
+      removeKeptAddition(worldId, entry.id)
         .then(() => setRemoved((count) => count + 1))
         .catch((cause: unknown) =>
           setError(
@@ -84,9 +81,10 @@ export function KeptAdditions({
     <section className="grid gap-2" data-testid="kept-additions">
       <h3 className="text-sm font-semibold">Written at this table</h3>
       <p className="text-sm text-muted-foreground">
-        Added beside books this world has since switched off. They stay because
-        they are this table&apos;s own writing, and they return to their
-        book&apos;s page if it is switched back on.
+        Added beside books this world has since switched off or that have left
+        the shelf. They stay because they are this table&apos;s own writing. One
+        whose book is only switched off returns to that book&apos;s page if it
+        is switched back on; one whose book was removed stays here.
       </p>
       <ul className="grid gap-2">
         {kept.map((entry) => (
@@ -102,6 +100,9 @@ export function KeptAdditions({
                 <span className="font-medium">{entry.name}</span>{" "}
                 <span className="text-muted-foreground">
                   — {entry.kind}, written beside {entry.bookTitle}
+                  {entry.compendiumId === null
+                    ? ", which has left the shelf"
+                    : ", which is switched off"}
                 </span>
               </span>
               <span

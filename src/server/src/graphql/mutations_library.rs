@@ -202,7 +202,9 @@ pub struct GraphQLWorldEntry {
     /// The book entry's id, or the addition's own for an entry the book does
     /// not have.
     pub id: Uuid,
-    pub compendium_id: Uuid,
+    /// `null` for an addition whose book has left the shelf; `bookTitle` still
+    /// names the book it was written beside (decision 5).
+    pub compendium_id: Option<Uuid>,
     pub book_title: String,
     pub kind: String,
     pub name: String,
@@ -441,6 +443,23 @@ pub async fn world_compendium_entries_impl(
         .map_err(delta_refusal)?;
 
         page_of_world(resolution, &book_title, after, limit)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+}
+
+/// Testable core of `removeKeptAddition`.
+pub async fn remove_kept_addition_impl(
+    state: &AppState,
+    caller: Uuid,
+    world_id: Uuid,
+    addition_id: Uuid,
+) -> GraphQLResult<bool> {
+    let mut conn = connection(state)?;
+    tokio::task::spawn_blocking(move || {
+        deltas::remove_kept_addition(&mut conn, caller, world_id, addition_id)
+            .map(|_| true)
+            .map_err(delta_refusal)
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -863,6 +882,20 @@ impl LibraryWorldMutation {
             },
         )
         .await
+    }
+
+    /// Remove an addition this table kept after its book was switched off or
+    /// removed from the shelf (spec 050 decision 5), by the addition's id —
+    /// the only address an addition whose book is gone still has.
+    async fn remove_kept_addition(
+        &self,
+        ctx: &Context<'_>,
+        world_id: Uuid,
+        addition_id: Uuid,
+    ) -> GraphQLResult<bool> {
+        let state = app_state(ctx)?;
+        let user = authenticated_user(ctx)?;
+        remove_kept_addition_impl(state, user.user_id, world_id, addition_id).await
     }
 
     /// Put an entry back as the book has it, or take an addition out

@@ -79,7 +79,9 @@ export type EntryOrigin = "AUTHORED" | "UPLOADED";
 export interface WorldBookEntry {
   /** The book entry's id, or the addition's own for an entry the book lacks. */
   id: string;
-  compendiumId: string;
+  /** Null for an addition whose book has left the shelf; `bookTitle` still
+   * names the book it was written beside. */
+  compendiumId: string | null;
   bookTitle: string;
   kind: string;
   name: string;
@@ -410,4 +412,21 @@ export async function additionsWithoutBook(
     { worldId },
   );
   return data.worldAdditionsWithoutBook;
+}
+
+/**
+ * Remove an addition this table kept after its book was switched off or
+ * removed (spec 050 decision 5). By the addition's id, because an addition
+ * whose book is gone has no book left to address it by.
+ */
+export async function removeKeptAddition(
+  worldId: string,
+  additionId: string,
+): Promise<void> {
+  await postGraphQL<{ removeKeptAddition: boolean }>(
+    `mutation RemoveKeptAddition($worldId: UUID!, $additionId: UUID!) {
+       removeKeptAddition(worldId: $worldId, additionId: $additionId)
+     }`,
+    { worldId, additionId },
+  );
 }

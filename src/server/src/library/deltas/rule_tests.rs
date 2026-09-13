@@ -28,7 +28,7 @@ fn delta(form: DeltaForm, kind: &str, name: &str, fields: Option<serde_json::Val
     Delta {
         id: Uuid::now_v7(),
         world_id: Uuid::nil(),
-        compendium_id: Uuid::nil(),
+        compendium_id: Some(Uuid::nil()),
         kind: kind.to_string(),
         name: name.to_string(),
         form,
@@ -38,6 +38,7 @@ fn delta(form: DeltaForm, kind: &str, name: &str, fields: Option<serde_json::Val
         changed_by: None,
         created_at: now,
         updated_at: now,
+        written_beside_title: None,
     }
 }
 

@@ -179,8 +179,10 @@ export function LibraryPage() {
               data-testid="removal-report"
             >
               <p className="text-sm">
-                Removing <strong>{removing.bookTitle}</strong> takes{" "}
-                {removing.entryCount} entries with it.
+                Removing <strong>{removing.bookTitle}</strong> deletes the book
+                itself: its {removing.entryCount} entries leave your shelf and
+                every world running it, and it cannot be switched back on
+                without reading the book in again.
               </p>
               <p className="text-sm" data-testid="removal-in-use">
                 {removing.inUse.length === 0
@@ -192,12 +194,30 @@ export function LibraryPage() {
                       )
                       .join("; ")}
               </p>
-              {removing.handEdited.length > 0 && (
-                <p className="text-sm" data-testid="removal-hand-edited">
-                  You have edited these by hand and they go too:{" "}
-                  {removing.handEdited.join(", ")}.
-                </p>
-              )}
+              {/* Spec 050 decision 5: a table's changes and hides go with the
+                  book; what it added beside the book stays, and the person
+                  removing the book is told both, per world, before they
+                  decide. */}
+              {removing.deltasByWorld.map((world) => (
+                <div
+                  key={world.worldId}
+                  className="grid gap-1 text-sm"
+                  data-testid={`removal-world-${world.worldId}`}
+                >
+                  <p className="font-medium">{world.worldName}</p>
+                  {world.lost.length > 0 && (
+                    <p data-testid="removal-deltas-lost">
+                      Its changes to this book go too: {world.lost.join(", ")}.
+                    </p>
+                  )}
+                  {world.kept.length > 0 && (
+                    <p data-testid="removal-additions-kept">
+                      What it added beside this book stays in that world, as its
+                      own writing: {world.kept.join(", ")}.
+                    </p>
+                  )}
+                </div>
+              ))}
               <div className="flex gap-2">
                 <Button
                   type="button"

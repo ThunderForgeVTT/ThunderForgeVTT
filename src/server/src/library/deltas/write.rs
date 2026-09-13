@@ -177,6 +177,19 @@ pub fn add_entry(
                 name: name.to_string(),
             });
         }
+        // A kept addition from a book that has left the shelf is this table's
+        // own writing under that kind and name. A new addition with the same
+        // identity beside a different book — a re-import of the same file
+        // included — would be two entries this table cannot tell apart, which
+        // is the ambiguity FR-025a refuses in a base. Refused, not merged: the
+        // kept one is edited or removed on purpose, never absorbed.
+        if let Some(title) = kept_from_a_removed_book(conn, world_id, kind, name)? {
+            return Err(DeltaError::AlreadyWrittenHere {
+                kind: kind.to_string(),
+                name: name.to_string(),
+                book_title: title,
+            });
+        }
 
         let (field_values, prose_text) = whole(content)?;
         let book_origin = origin_of_book(conn, compendium_id)?;
@@ -439,4 +452,49 @@ fn upsert(
         .returning(Delta::as_select())
         .get_result(conn)
         .map_err(Into::into)
+}
+
+/// The title of the removed book beside which this world kept an addition of
+/// this kind and name, if it did.
+fn kept_from_a_removed_book(
+    conn: &mut PgConnection,
+    world_id: Uuid,
+    kind: &str,
+    name: &str,
+) -> QueryResult<Option<String>> {
+    world_entry_deltas::table
+        .filter(world_entry_deltas::world_id.eq(world_id))
+        .filter(world_entry_deltas::compendium_id.is_null())
+        .filter(world_entry_deltas::kind.eq(kind))
+        .filter(world_entry_deltas::name.eq(name))
+        .select(world_entry_deltas::written_beside_title)
+        .first::<Option<String>>(conn)
+        .optional()
+        .map(Option::flatten)
+}
+
+/// Remove an addition this world kept after its book was switched off or
+/// removed (decision 5), by the addition's id.
+///
+/// By id rather than by book, kind and name, because an addition whose book
+/// was removed has no book to address it by. Only additions: a change or a
+/// hide is restored on its book's page, and an id naming one is refused as
+/// nothing to remove here rather than removed by a side door.
+pub fn remove_kept_addition(
+    conn: &mut PgConnection,
+    caller: Uuid,
+    world_id: Uuid,
+    addition_id: Uuid,
+) -> Result<Delta, DeltaError> {
+    book_list::require_book_manager(conn, caller, world_id)?;
+    diesel::delete(
+        world_entry_deltas::table
+            .filter(world_entry_deltas::id.eq(addition_id))
+            .filter(world_entry_deltas::world_id.eq(world_id))
+            .filter(world_entry_deltas::form.eq(DeltaForm::Added)),
+    )
+    .returning(Delta::as_select())
+    .get_result(conn)
+    .optional()?
+    .ok_or(DeltaError::NoSuchAddition)
 }

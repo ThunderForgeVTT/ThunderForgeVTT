@@ -667,4 +667,158 @@ test.describe("A world's changes to its books (spec 050 US2)", () => {
       await trusted.context().close();
     }
   });
+  /**
+   * Spec 050 decision 5, carried to removal (owner, 2026-09-13; FR-061 as
+   * amended): removing the book from the owner's shelf — the stronger act,
+   * the book itself goes — takes a table's changes and hides and keeps what
+   * it added. The removal preview says both, per world, before anything goes.
+   */
+  test("removing the book from the shelf keeps a table's additions", async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+
+    await register(page, freshCredentials("deltasremove"));
+    const compendiumId = await readInTheBook(page);
+    const worldId = await aWorldRunning(page, "The Fen Table", compendiumId);
+
+    const address = { w: worldId, c: compendiumId };
+    const goblin = named(
+      await worldReads(page, worldId, compendiumId),
+      "GOBLIN",
+    ) as Entry;
+    const [field] = aReadField(goblin);
+    for (const [query, variables] of [
+      [
+        `mutation C($w: UUID!, $c: UUID!, $f: JSON) {
+           changeWorldEntry(worldId: $w, compendiumId: $c, kind: "${goblin.kind}", name: "GOBLIN", fieldValues: $f) { state }
+         }`,
+        { ...address, f: { [field]: { state: "clear", value: "99" } } },
+      ],
+      [
+        `mutation H($w: UUID!, $c: UUID!) {
+           hideWorldEntry(worldId: $w, compendiumId: $c, kind: "${goblin.kind}", name: "ADULT RED DRAGON") { state }
+         }`,
+        address,
+      ],
+      [
+        `mutation A($w: UUID!, $c: UUID!) {
+           addWorldEntry(worldId: $w, compendiumId: $c, kind: "creature", name: "${ADDED}", proseText: "Lives in the fen and bargains in teeth.") { state }
+         }`,
+        address,
+      ],
+    ] as const) {
+      const done = await graphql<Gql<unknown>>(page, query, variables);
+      expect(done.errors, JSON.stringify(done.errors)).toBeUndefined();
+    }
+    expect(Object.keys(deltaOrigins(worldId)).sort()).toEqual(
+      ["ADULT RED DRAGON", "GOBLIN", ADDED].sort(),
+    );
+
+    // The preview: the book itself goes, and per world, what is lost and
+    // what is kept.
+    await page.goto("/library");
+    await page
+      .getByTestId("library-shelf")
+      .locator("li")
+      .filter({ hasText: BOOK })
+      .getByTestId("remove-book")
+      .click();
+    const report = page.getByTestId("removal-report");
+    await expect(report).toContainText("deletes the book itself");
+    const here = report.getByTestId(`removal-world-${worldId}`);
+    await expect(here).toContainText("The Fen Table");
+    await expect(here.getByTestId("removal-deltas-lost")).toContainText(
+      'changed: creature "GOBLIN"',
+    );
+    await expect(here.getByTestId("removal-deltas-lost")).toContainText(
+      'hidden: creature "ADULT RED DRAGON"',
+    );
+    await expect(here.getByTestId("removal-deltas-lost")).not.toContainText(
+      ADDED,
+    );
+    await expect(here.getByTestId("removal-additions-kept")).toContainText(
+      `added: creature "${ADDED}"`,
+    );
+    expect(deltaCount(worldId), "the preview takes nothing").toBe(3);
+
+    await page.getByTestId("remove-confirm").click();
+    await expect(page.getByTestId("removal-report")).toHaveCount(0, {
+      timeout: 30_000,
+    });
+    expect(
+      sql(
+        `SELECT count(*) FROM compendiums WHERE id = '${uuid(compendiumId)}';`,
+      ),
+    ).toBe("0");
+
+    // In the database: only the addition, authored, detached, remembering
+    // the book's title.
+    expect(deltaOrigins(worldId)).toEqual({ [ADDED]: "Added Authored" });
+    expect(
+      sql(
+        `SELECT coalesce(compendium_id::text, 'none') || '|' || written_beside_title
+           FROM world_entry_deltas WHERE world_id = '${uuid(worldId)}';`,
+      ),
+    ).toBe(`none|${BOOK}`);
+
+    // On the page: still listed, still readable, still authored and
+    // shareable, labelled with the book that left.
+    await page.goto(`/world/${worldId}/compendium?tab=books`);
+    await expect(page.getByTestId("book-list-empty")).toBeVisible({
+      timeout: 30_000,
+    });
+    const kept = page
+      .getByTestId("kept-additions")
+      .locator(`li[data-name="${ADDED}"]`);
+    await expect(kept).toHaveCount(1);
+    await expect(kept).toContainText(
+      `written beside ${BOOK}, which has left the shelf`,
+    );
+    await expect(kept).toContainText("bargains in teeth");
+    await expect(kept.getByTestId("world-entry-origin")).toHaveAttribute(
+      "data-origin",
+      "AUTHORED",
+    );
+    await expect(kept.getByTestId("world-entry-origin")).toHaveAttribute(
+      "data-may-be-shared",
+      "true",
+    );
+    const onTheWire = await graphql<
+      Gql<{
+        worldAdditionsWithoutBook: (Entry & {
+          bookTitle: string;
+          compendiumId: string | null;
+        })[];
+      }>
+    >(
+      page,
+      `
+        query K($w: UUID!) {
+          worldAdditionsWithoutBook(worldId: $w) {
+            name
+            bookTitle
+            compendiumId
+            origin
+            mayBeShared
+          }
+        }
+      `,
+      { w: worldId },
+    );
+    expect(onTheWire.data?.worldAdditionsWithoutBook).toEqual([
+      {
+        name: ADDED,
+        bookTitle: BOOK,
+        compendiumId: null,
+        origin: "AUTHORED",
+        mayBeShared: true,
+      },
+    ]);
+
+    // Removed on purpose, by the one address it still has.
+    await kept.getByTestId("remove-kept-addition").click();
+    await expect(page.getByTestId("kept-additions")).toHaveCount(0);
+    expect(deltaCount(worldId)).toBe(0);
+  });
 });

@@ -1174,7 +1174,7 @@ diesel::table! {
     world_entry_deltas (id) {
         id -> Uuid,
         world_id -> Uuid,
-        compendium_id -> Uuid,
+        compendium_id -> Nullable<Uuid>,
         #[max_length = 64]
         kind -> Varchar,
         name -> Text,
@@ -1186,6 +1186,8 @@ diesel::table! {
         created_at -> Timestamp,
         updated_at -> Timestamp,
         book_list_compendium_id -> Nullable<Uuid>,
+        #[max_length = 300]
+        written_beside_title -> Nullable<Varchar>,
     }
 }
 

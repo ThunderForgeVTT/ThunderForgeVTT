@@ -112,7 +112,10 @@ impl DeltaForm {
 pub struct Delta {
     pub id: Uuid,
     pub world_id: Uuid,
-    pub compendium_id: Uuid,
+    /// The book this delta is over, or was written beside. `None` only for an
+    /// addition whose book has since been removed from the shelf (decision 5),
+    /// in which case `written_beside_title` names it.
+    pub compendium_id: Option<Uuid>,
     pub kind: String,
     pub name: String,
     pub form: DeltaForm,
@@ -124,6 +127,10 @@ pub struct Delta {
     pub changed_by: Option<Uuid>,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// The title of the book an addition was written beside, kept when that
+    /// book left the shelf. A name and not a book: nothing can be read from
+    /// it, and nothing can attach the addition to a book again.
+    pub written_beside_title: Option<String>,
 }
 
 /// What a person asks to change an entry's content to.
@@ -173,7 +180,9 @@ pub struct WorldEntry {
     /// the same place whether or not an entry has been changed; the delta's
     /// id for an addition, which has no base entry.
     pub id: Uuid,
-    pub compendium_id: Uuid,
+    /// The book this entry is read from or was written beside; `None` for an
+    /// addition whose book has been removed from the shelf.
+    pub compendium_id: Option<Uuid>,
     pub kind: String,
     pub name: String,
     pub name_uncertain: bool,
@@ -246,6 +255,18 @@ pub enum DeltaError {
     AlreadyInTheBook { kind: String, name: String },
     #[error("this world has already added a {kind} named \"{name}\"")]
     AlreadyAdded { kind: String, name: String },
+    /// Decision 5 kept an addition of this identity when its book left the
+    /// shelf; a second would be indistinguishable from it.
+    #[error(
+        "this table already wrote a {kind} named \"{name}\" beside {book_title}, which has left the shelf; change or remove that one instead"
+    )]
+    AlreadyWrittenHere {
+        kind: String,
+        name: String,
+        book_title: String,
+    },
+    #[error("this world has no addition of its own with that id")]
+    NoSuchAddition,
     #[error("this world has not changed, hidden or added a {kind} named \"{name}\"")]
     NothingToRestore { kind: String, name: String },
     #[error("\"{name}\" is prose, and prose has no fields to change")]
@@ -312,7 +333,7 @@ pub fn resolve(
 
         let mut read = WorldEntry {
             id: entry.id,
-            compendium_id: entry.compendium_id,
+            compendium_id: Some(entry.compendium_id),
             kind: entry.kind,
             name: entry.name,
             name_uncertain: entry.name_uncertain,
@@ -519,19 +540,22 @@ pub fn deltas_named(
     Ok((named(lost), named(kept)))
 }
 
-/// What this world added beside books it no longer has switched on (spec 050
+/// What this world wrote beside books it is no longer reading (spec 050
 /// decision 5), each with the title of the book it was written beside.
 ///
-/// Additions outlive their book because they never needed it: the database
-/// ties only changes and hides to the book list. What is left is the world's
-/// own writing, still authored and still shareable (FR-052a), and it is
-/// listed on its own rather than under a book the world is not running —
-/// showing it inside a switched-off book would suggest the book is still
-/// partly on.
+/// Two ways to get here, and both keep the writing:
 ///
-/// Switching that book back on brings the addition back onto the book's page
-/// as the same row. There is no second copy to reconcile, because the unique
-/// identity (world, book, kind, name) was never released.
+/// * the book was **switched off**. The addition still names the book, and
+///   switching the book back on brings it back onto the book's page as the
+///   same row — the identity (world, book, kind, name) was never released, so
+///   there is no second copy to reconcile;
+/// * the book was **removed from the shelf**. The database detached the
+///   addition as the book went and kept the book's title in its place. It
+///   cannot rejoin anything, including a re-import of the same file, which is
+///   a different book with a different id.
+///
+/// Listed on their own rather than under a book, because showing them inside a
+/// book the world is not running would suggest the book is partly on.
 ///
 /// Not gated here; the caller decides who may read a world's book material.
 pub fn additions_without_their_book(
@@ -545,39 +569,107 @@ pub fn additions_without_their_book(
         .select(world_books::compendium_id)
         .load(conn)?;
 
-    let orphans: Vec<(Delta, String, ContentOrigin)> = world_entry_deltas::table
-        .inner_join(compendiums::table.on(compendiums::id.eq(world_entry_deltas::compendium_id)))
+    let additions: Vec<(Delta, Option<String>)> = world_entry_deltas::table
+        .left_join(
+            compendiums::table.on(world_entry_deltas::compendium_id.eq(compendiums::id.nullable())),
+        )
         .filter(world_entry_deltas::world_id.eq(world_id))
         .filter(world_entry_deltas::form.eq(DeltaForm::Added))
-        .filter(diesel::dsl::not(
-            world_entry_deltas::compendium_id.eq_any(&on_the_list),
-        ))
         .order((
             world_entry_deltas::kind.asc(),
             world_entry_deltas::name.asc(),
         ))
-        .select((
-            Delta::as_select(),
-            compendiums::book_title,
-            compendiums::origin,
-        ))
+        .select((Delta::as_select(), compendiums::book_title.nullable()))
         .load(conn)?;
 
-    Ok(orphans
+    Ok(additions
         .into_iter()
-        .flat_map(|(delta, title, book_origin)| {
-            resolve(book_origin, Vec::new(), vec![delta], false)
+        .filter(|(delta, _)| {
+            delta
+                .compendium_id
+                .is_none_or(|book| !on_the_list.contains(&book))
+        })
+        .filter_map(|(delta, current_title)| {
+            // The book's title while it is on the shelf; the title kept when
+            // it left. The constraint on the table makes one of them present.
+            let title = current_title.or_else(|| delta.written_beside_title.clone())?;
+            // An addition's origin does not depend on the book: it is
+            // authored. The book origin passed here is therefore unused by
+            // the rule, and `Authored` says so rather than inventing a read.
+            let entry = resolve(ContentOrigin::Authored, Vec::new(), vec![delta], false)
                 .entries
-                .into_iter()
-                .map(move |entry| (title.clone(), entry))
+                .pop()?;
+            Some((title, entry))
         })
         .collect())
+}
+
+/// What removing a book from the shelf would do to each world's deltas over
+/// it: what goes, and what stays (spec 050 decision 5, FR-060, FR-061).
+///
+/// Per world, for every world holding any delta over the book — including a
+/// world that has since switched the book off and kept an addition, which the
+/// book list alone would not name. The names are formatted as the switch-off
+/// report formats them, so a person reads one vocabulary in both places.
+pub fn removal_consequences(
+    conn: &mut PgConnection,
+    compendium_id: Uuid,
+) -> QueryResult<Vec<RemovalConsequence>> {
+    use crate::schema::worlds;
+
+    let held: Vec<(Delta, String)> = world_entry_deltas::table
+        .inner_join(worlds::table.on(worlds::id.eq(world_entry_deltas::world_id)))
+        .filter(world_entry_deltas::compendium_id.eq(compendium_id))
+        .order((
+            worlds::name.asc(),
+            world_entry_deltas::kind.asc(),
+            world_entry_deltas::name.asc(),
+        ))
+        .select((Delta::as_select(), worlds::name))
+        .load(conn)?;
+
+    let mut consequences: Vec<RemovalConsequence> = Vec::new();
+    for (delta, world_name) in held {
+        let named = format!("{}: {} \"{}\"", delta.form.word(), delta.kind, delta.name);
+        let at = match consequences
+            .iter()
+            .position(|each| each.world_id == delta.world_id)
+        {
+            Some(at) => at,
+            None => {
+                consequences.push(RemovalConsequence {
+                    world_id: delta.world_id,
+                    world_name,
+                    lost: Vec::new(),
+                    kept: Vec::new(),
+                });
+                consequences.len() - 1
+            }
+        };
+        if delta.form == DeltaForm::Added {
+            consequences[at].kept.push(named);
+        } else {
+            consequences[at].lost.push(named);
+        }
+    }
+    Ok(consequences)
+}
+
+/// One world's share of a book's removal.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemovalConsequence {
+    pub world_id: Uuid,
+    pub world_name: String,
+    /// Changes and hides, which go with the book.
+    pub lost: Vec<String>,
+    /// Additions, which stay in the world as its own writing.
+    pub kept: Vec<String>,
 }
 
 mod write;
 
 use write::origin_of_book;
-pub use write::{add_entry, change_entry, hide_entry, restore_entry};
+pub use write::{add_entry, change_entry, hide_entry, remove_kept_addition, restore_entry};
 
 #[cfg(test)]
 #[path = "rule_tests.rs"]
@@ -590,3 +682,7 @@ mod tests;
 #[cfg(test)]
 #[path = "lifecycle_tests.rs"]
 mod lifecycle_tests;
+
+#[cfg(test)]
+#[path = "removal_tests.rs"]
+mod removal_tests;
