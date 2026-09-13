@@ -92,6 +92,7 @@ pub mod mutations_walls;
 pub use mutations_walls::WallMutation;
 
 // Native canvas authoring: light source mutations
+pub mod mutations_library;
 pub mod mutations_lighting;
 pub use mutations_lighting::LightSourceMutation;
 
@@ -391,6 +392,10 @@ pub struct QueryRoot(
     // Spec 049 FR-047: `compendiumForFileHash` — asked with a hash and
     // nothing else, before any of a book is sent.
     mutations_compendium::CompendiumImportQuery,
+    // Spec 050 US3: `worldBookList` (which every member reads),
+    // `compendiumsOfferedToWorld` and `worldCompendiumEntries` — the book
+    // list, and the fetch that is the only way content reaches a world.
+    mutations_library::LibraryWorldQuery,
 );
 
 #[derive(MergedObject, Default)]
@@ -446,6 +451,9 @@ pub struct MutationRoot(
     // Spec 049 US2/US3: committing a reviewed book, and taking one back off
     // the shelf.
     mutations_compendium::CompendiumMutation,
+    // Spec 050 US3: switching a book on for a world and off again. The one
+    // mechanism, whether a Game Master ticks it at creation or later.
+    mutations_library::LibraryWorldMutation,
     ActorAbilityMutation,
     ItemMutation,
     ItemPermissionMutation,

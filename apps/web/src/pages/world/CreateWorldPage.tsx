@@ -6,6 +6,8 @@ import {
   type GameSystemSummary,
 } from "@/api/gameSystems";
 import { createWorld } from "@/api/world";
+import { myLibrary, type LibraryBook } from "@/pages/library/library";
+import { switchOn } from "@/pages/world/compendium/worldBooks";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { Container } from "@/components/ui/container/Container";
@@ -47,6 +49,18 @@ export default function CreateWorldPage() {
   const [gameSystemId, setGameSystemId] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  /**
+   * Books from the Game Master's shelf to switch on as the world is made
+   * (spec 050 FR-033).
+   *
+   * Not a seeding step. The world is created empty and each ticked book is
+   * then switched on through `switchOn` — the very call the world's Books tab
+   * makes a fortnight later — so "created with books" and "created, then
+   * books ticked" are one state reached one way, not two paths to keep
+   * agreeing.
+   */
+  const [shelf, setShelf] = useState<LibraryBook[]>([]);
+  const [ticked, setTicked] = useState<string[]>([]);
 
   useEffect(() => {
     let live = true;
@@ -73,6 +87,35 @@ export default function CreateWorldPage() {
     };
   }, []);
 
+  useEffect(() => {
+    let live = true;
+    myLibrary()
+      .then((books) => {
+        if (live) setShelf(books);
+      })
+      // An unreadable shelf offers nothing, and a world is still made: the
+      // books can be switched on afterwards from the world, by the same call.
+      .catch(() => {
+        if (live) setShelf([]);
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  // FR-041: only books read as the chosen system are offered. A tick for a
+  // book the chosen system no longer matches is not dropped from state but is
+  // left out of what is sent, so changing the system back restores it and a
+  // request the server would refuse is never made.
+  const matchingBooks = useMemo(
+    () => shelf.filter((book) => book.systemId === gameSystemId),
+    [shelf, gameSystemId],
+  );
+  const tickedMatching = useMemo(
+    () => ticked.filter((id) => matchingBooks.some((book) => book.id === id)),
+    [ticked, matchingBooks],
+  );
+
   const descriptionCount = useMemo(
     () => description.trim().length,
     [description],
@@ -92,6 +135,23 @@ export default function CreateWorldPage() {
         description,
         gameSystemId: gameSystemId || null,
       });
+
+      // One at a time, and after the world exists, through the same mutation
+      // as switching a book on later. A book that is refused does not undo
+      // the world: the Game Master lands on the book list instead, where what
+      // is actually on is the truth rather than this form's hope.
+      let everyBookOn = true;
+      for (const compendiumId of tickedMatching) {
+        try {
+          await switchOn(world.id, compendiumId);
+        } catch {
+          everyBookOn = false;
+        }
+      }
+      if (!everyBookOn) {
+        void navigate(`/world/${world.id}/compendium?tab=books`);
+        return;
+      }
       // Spec 010: straight to staging (not the canvas, and not the
       // dashboard) — the world now always has a default scene already
       // rendered (FR-004, FR-006), via create_world's atomic transaction
@@ -225,6 +285,40 @@ export default function CreateWorldPage() {
                   </SelectContent>
                 </Select>
               </Field>
+              {matchingBooks.length > 0 && (
+                <Field
+                  label="Books from your library"
+                  htmlFor="world-books"
+                  hint="Switched on for this world, not copied into it. You can change this later from the world's Books tab."
+                >
+                  <ul
+                    id="world-books"
+                    className="grid gap-2"
+                    data-testid="create-world-books"
+                  >
+                    {matchingBooks.map((book) => (
+                      <li key={book.id}>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            data-testid={`create-world-book-${book.id}`}
+                            checked={ticked.includes(book.id)}
+                            onChange={(event) => {
+                              const on = event.target.checked;
+                              setTicked((current) =>
+                                on
+                                  ? [...current, book.id]
+                                  : current.filter((id) => id !== book.id),
+                              );
+                            }}
+                          />
+                          {book.bookTitle}
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </Field>
+              )}
             </div>
 
             {status ? (

@@ -268,3 +268,57 @@ which would finally answer the rename question.
 - **Storage** (050 FR-071, T064) — phase 9
 - **Delta resolution latency** (050 FR-072, T076) — phase 11, which fixes
   SC-004's margin rather than guessing it
+
+---
+
+## Phase 9: one book, eight worlds, measured in bytes (T064)
+
+**Date**: 2026-09-13 · **Commit**: `05b515e`
+
+```bash
+cargo run -p thunderforge-server --features test-support \
+    --example library_storage
+```
+
+A synthetic book of 1500 entries is read onto one account's shelf and
+switched on in 8 worlds. Stored bytes are Postgres's own
+`pg_column_size` over the rows each thing owns — the compendium and its
+entries for the book, the `world_books` rows for the links — taken inside one
+transaction that is rolled back, so the numbers come from a real database and
+leave nothing in it.
+
+| Measure | Bytes |
+|---|---|
+| One book (1500 entries stored) | **744232** |
+| One world's link to it | **144** |
+| That book in 8 worlds, inherited | **745384** |
+| That book in 8 worlds, copied | 5953856 |
+| Saved | **5208472** (8.0x) |
+| A second, different book | 736232 |
+
+### Reading this honestly
+
+**SC-002 holds and is asserted, not observed.** The example fails rather than
+prints if stored content grows when a world switches a book on, so the first
+row is the size before any world and after all of them. A world costs 0.019% of a book to run it.
+
+**SC-001 is the third row against the fourth.** Eight worlds and one book cost
+745384 bytes; the same eight worlds under the copy-per-world model spec
+049 was first written with would cost 5953856. The saving is the whole
+motivation, and it is 8.0x at eight worlds. It grows with every world
+added, because the book term does not repeat and only a 144-byte link
+does.
+
+**FR-070's other half is the last row.** Stored size grows with distinct books
+read: a second book costs a second book. A measurement that showed only the
+first result would be equally consistent with nothing being stored at all.
+
+**What this is not.** It is not a measure of a real sourcebook's entries,
+which vary in size by kind, and it is not table overhead, index size or TOAST
+behaviour — `pg_column_size` measures the datum, not the page it lands on.
+Both matter to an operator's disk and neither is measured here; both apply to
+a copied entry at least as much as to a link, so neither can close the gap.
+
+**What would reopen it**: a delta table that stores anything per world beyond
+a link (Phase 11), any column added to `world_books`, or a change to what an
+entry stores.

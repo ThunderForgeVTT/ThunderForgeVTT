@@ -1065,6 +1065,20 @@ diesel::table! {
 }
 
 diesel::table! {
+    world_books (id) {
+        id -> Uuid,
+        world_id -> Uuid,
+        compendium_id -> Uuid,
+        #[max_length = 64]
+        base_source_hash -> Varchar,
+        #[max_length = 64]
+        base_parser_version -> Varchar,
+        switched_on_by -> Uuid,
+        switched_on_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     world_chat_messages (id) {
         id -> Uuid,
         world_id -> Uuid,
@@ -1476,6 +1490,9 @@ diesel::joinable!(world_actor_system_data -> world_actors (actor_id));
 diesel::joinable!(world_actors -> scenes (scene_id));
 diesel::joinable!(world_actors -> worlds (world_id));
 diesel::joinable!(world_authoring_tool_grants -> world_members (world_member_id));
+diesel::joinable!(world_books -> compendiums (compendium_id));
+diesel::joinable!(world_books -> users (switched_on_by));
+diesel::joinable!(world_books -> worlds (world_id));
 diesel::joinable!(world_chat_messages -> scenes (scene_id));
 diesel::joinable!(world_chat_messages -> users (author_user_id));
 diesel::joinable!(world_chat_messages -> worlds (world_id));
@@ -1589,6 +1606,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     world_actor_system_data,
     world_actors,
     world_authoring_tool_grants,
+    world_books,
     world_chat_messages,
     world_collection_members,
     world_collection_shares,

@@ -29,6 +29,14 @@ seam-probe = []
 # normal build; the packs enable it as a dev-dependency feature.
 test-support = []
 
+# Spec 050 T064: what a book costs when several worlds run it, measured in a
+# real Postgres. It builds its fixtures from `test_support`, so it is only
+# built when that is on — otherwise every `cargo test` would try to compile it
+# and fail on a module that is, correctly, not in a normal build.
+[[example]]
+name = "library_storage"
+required-features = ["test-support"]
+
 [dependencies]
 tokio = { version = "1.53.1", features = ["full"] }
 serde = { version = "1.0.229", features = ["derive"] }

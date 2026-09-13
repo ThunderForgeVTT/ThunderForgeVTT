@@ -5,6 +5,7 @@ import { COMPENDIUM_OVERVIEW_SLUG } from "@/api/compendiumOverview";
 import { Tabs } from "@/components/ui/tabs/Tabs";
 import { ActorPreviewPanel } from "@/pages/world/compendium/ActorPreviewPanel";
 import { AbilityCompendiumTab } from "@/pages/world/compendium/AbilityCompendiumTab";
+import { BookListTab } from "@/pages/world/compendium/BookListTab";
 import { AbilityPreviewPanel } from "@/pages/world/compendium/AbilityPreviewPanel";
 import { ItemCompendiumTab } from "@/pages/world/compendium/ItemCompendiumTab";
 import { ItemPreviewPanel } from "@/pages/world/compendium/ItemPreviewPanel";
@@ -38,7 +39,7 @@ export interface WorldCompendiumPageProps {
  * a plain array so a future tab is a one-line addition, not a
  * restructuring (research.md §4).
  */
-const COMPENDIUM_TAB_VALUES = ["npcs", "lore", "items", "abilities"];
+const COMPENDIUM_TAB_VALUES = ["npcs", "lore", "items", "abilities", "books"];
 
 export function WorldCompendiumPage({
   worldId,
@@ -207,6 +208,17 @@ export function WorldCompendiumPage({
                 />
               </div>
             ),
+          },
+          {
+            // Spec 050 US3 and spec 049 FR-042: which books this table is
+            // running, and — for a Game Master — what is in them. A tab
+            // rather than a new page because the portal already answers
+            // "what can this table use", and inherited content is that
+            // question's other half.
+            value: "books",
+            label: "Books",
+            icon: "quill",
+            content: <BookListTab worldId={worldId} isGm={isGm} />,
           },
           {
             value: "abilities",

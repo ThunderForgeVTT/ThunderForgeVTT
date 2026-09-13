@@ -231,9 +231,7 @@ impl CompendiumQuery {
     ) -> GraphQLResult<GraphQLCompendiumEntryPage> {
         let state = app_state(ctx)?;
         let caller = authenticated_user(ctx)?.user_id;
-        let limit = first
-            .unwrap_or(ENTRIES_PER_PAGE)
-            .clamp(1, MAX_ENTRIES_PER_PAGE) as usize;
+        let limit = entries_per_page(first);
         let after = after.map(|cursor| decode_cursor(&cursor)).transpose()?;
         let mut conn = connection(state)?;
 
@@ -265,43 +263,68 @@ impl CompendiumQuery {
             }
         };
 
-        // The store orders by kind then name, which two entries of the same
-        // name in the same book do not distinguish. Paging over an order with
-        // ties can repeat one entry and skip another, so the id breaks them:
-        // a total order is what makes a cursor mean the same thing twice.
-        entries.sort_by(|left, right| {
-            (&left.kind, &left.name, left.id).cmp(&(&right.kind, &right.name, right.id))
-        });
-
-        let total = i32::try_from(entries.len()).unwrap_or(i32::MAX);
-        let start = match after {
-            None => 0,
-            Some(cursor) => entries
-                .iter()
-                .position(|entry| entry.id == cursor)
-                .map(|at| at + 1)
-                .ok_or_else(|| {
-                    Error::new("That page of this book is no longer there. Open it again.")
-                })?,
-        };
-
-        let page: Vec<GraphQLCompendiumEntry> = entries
-            .iter()
-            .skip(start)
-            .take(limit)
-            .map(|entry| to_graphql_entry(entry, &book.book_title))
-            .collect();
-
-        let next_cursor = (start + page.len() < entries.len())
-            .then(|| page.last().map(|entry| encode_cursor(entry.id)))
-            .flatten();
-
-        Ok(GraphQLCompendiumEntryPage {
-            entries: page,
-            next_cursor,
-            total,
-        })
+        page_of(&mut entries, &book.book_title, after, limit)
     }
+}
+
+/// How many entries a caller asked for, bounded by what this module will send.
+///
+/// Shared so that the world's browse-by-compendium (spec 050's book list) and
+/// the library's own cannot disagree about the cap.
+pub(crate) fn entries_per_page(first: Option<i32>) -> usize {
+    first
+        .unwrap_or(ENTRIES_PER_PAGE)
+        .clamp(1, MAX_ENTRIES_PER_PAGE) as usize
+}
+
+/// One page of entries, ordered totally and cut at the cursor.
+///
+/// Shared with the world-scoped read for one reason: two paginations over the
+/// same rows are two chances to order them differently, and an order that
+/// differs between two surfaces is a cursor that means one thing on one screen
+/// and another thing on the next.
+pub(crate) fn page_of(
+    entries: &mut [StoredEntry],
+    book_title: &str,
+    after: Option<Uuid>,
+    limit: usize,
+) -> GraphQLResult<GraphQLCompendiumEntryPage> {
+    // The store orders by kind then name, which two entries of the same name
+    // in the same book do not distinguish. Paging over an order with ties can
+    // repeat one entry and skip another, so the id breaks them: a total order
+    // is what makes a cursor mean the same thing twice.
+    entries.sort_by(|left, right| {
+        (&left.kind, &left.name, left.id).cmp(&(&right.kind, &right.name, right.id))
+    });
+
+    let total = i32::try_from(entries.len()).unwrap_or(i32::MAX);
+    let start = match after {
+        None => 0,
+        Some(cursor) => entries
+            .iter()
+            .position(|entry| entry.id == cursor)
+            .map(|at| at + 1)
+            .ok_or_else(|| {
+                Error::new("That page of this book is no longer there. Open it again.")
+            })?,
+    };
+
+    let page: Vec<GraphQLCompendiumEntry> = entries
+        .iter()
+        .skip(start)
+        .take(limit)
+        .map(|entry| to_graphql_entry(entry, book_title))
+        .collect();
+
+    let next_cursor = (start + page.len() < entries.len())
+        .then(|| page.last().map(|entry| encode_cursor(entry.id)))
+        .flatten();
+
+    Ok(GraphQLCompendiumEntryPage {
+        entries: page,
+        next_cursor,
+        total,
+    })
 }
 
 fn connection(
@@ -336,7 +359,7 @@ fn to_graphql_entry(entry: &StoredEntry, book_title: &str) -> GraphQLCompendiumE
 /// the counts are bookkeeping written from the entries, and a shelf that
 /// refuses to draw because one book's tally is unreadable would hide seven
 /// books that are fine.
-fn kind_counts(stored: &serde_json::Value) -> Vec<GraphQLKindCount> {
+pub(crate) fn kind_counts(stored: &serde_json::Value) -> Vec<GraphQLKindCount> {
     let Some(object) = stored.as_object() else {
         return Vec::new();
     };
@@ -360,7 +383,7 @@ fn encode_cursor(id: Uuid) -> String {
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(id.as_bytes())
 }
 
-fn decode_cursor(cursor: &str) -> GraphQLResult<Uuid> {
+pub(crate) fn decode_cursor(cursor: &str) -> GraphQLResult<Uuid> {
     let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
         .decode(cursor)
         .map_err(|_| Error::new("That is not a page of this book."))?;

@@ -148,11 +148,9 @@ pub struct GraphQLRemovalReport {
     pub entry_count: i32,
     /// Where those entries are in use today, per world.
     ///
-    /// Empty at the time of writing, and empty as a fact rather than as a
-    /// gap: a world reaches a compendium by inheriting it, that link is spec
-    /// 050's book list, and until it exists **no world can hold a reference
-    /// to one of these entries**. [`usage_of`] is the one place to widen when
-    /// it does.
+    /// One row per world with this book switched on (050 FR-060). Because
+    /// nothing was copied into a world, "in use" is not a subset to compute:
+    /// a table running the book loses all of it, and that is what this says.
     pub in_use: Vec<GraphQLCompendiumUsage>,
     /// Entries a Game Master has edited by hand, which a removal must name
     /// before it takes them (FR-046).
@@ -238,15 +236,41 @@ fn checked_entries(
         .collect()
 }
 
-/// Where a compendium's entries are in use, per world (FR-045).
+/// Where a compendium's entries are in use, per world (FR-045, 050 FR-060).
 ///
-/// Answers "nowhere" today, and it is an answer rather than a shrug: nothing
-/// in the schema can reference a `compendium_entries` row yet, because the
-/// link by which a world inherits a compendium is spec 050's. When that
-/// arrives, this is the function it teaches, and both callers below already
-/// go through it.
-fn usage_of(_conn: &mut PgConnection, _compendium_id: Uuid) -> Vec<GraphQLCompendiumUsage> {
-    Vec::new()
+/// Spec 050's book list is what taught this function, as the note that stood
+/// here predicted. Every world with the book switched on loses the whole of
+/// it the moment the compendium goes — not some entries but all of them,
+/// because nothing was copied and what those tables were reading was this.
+///
+/// A lookup that fails names nothing rather than refusing the report, and the
+/// choice is deliberate in one direction only: a report that cannot be
+/// assembled must not block a removal a person has asked for twice, and the
+/// removal itself is still gated by ownership.
+fn usage_of(conn: &mut PgConnection, compendium_id: Uuid) -> Vec<GraphQLCompendiumUsage> {
+    let Ok(worlds) = crate::library::book_list::worlds_with_book(conn, compendium_id) else {
+        return Vec::new();
+    };
+
+    // A few entries by name, so a Game Master recognises what leaves each
+    // table rather than reading a count. The same list for every world,
+    // because the same book leaves every one of them.
+    let names: Vec<String> = compendium_entries::table
+        .filter(compendium_entries::compendium_id.eq(compendium_id))
+        .order(compendium_entries::name.asc())
+        .limit(12)
+        .select(compendium_entries::name)
+        .load::<String>(conn)
+        .unwrap_or_default();
+
+    worlds
+        .into_iter()
+        .map(|(world_id, world_name)| GraphQLCompendiumUsage {
+            world_id,
+            world_name,
+            entry_names: names.clone(),
+        })
+        .collect()
 }
 
 /// Entries a Game Master has changed by hand (FR-046).

@@ -58,6 +58,9 @@ pub mod interface_packs;
 /// words. Distinct from `legal_intake`, which is the takedown-notice surface.
 pub mod legal;
 pub mod legal_intake;
+/// Spec 050 US3: the book list — the one link by which a world gets content
+/// from an account's library, and the place account scope meets world scope.
+pub mod library;
 pub mod light_effects;
 pub mod lore_sync;
 /// Spec 040 US4: whether this instance can tell somebody something.
