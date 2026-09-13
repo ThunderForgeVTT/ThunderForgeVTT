@@ -509,10 +509,10 @@ test.describe("The book list (spec 050 US3)", () => {
       expect(own.errors?.length, JSON.stringify(own)).toBeTruthy();
       expect(linkOf(worldId, theirOwnBook)).toBeNull();
 
-      // Arranging the books is not reading them: browsing stays a Game
-      // Master's, and the Trusted Player is not offered it.
+      // A Trusted Player arranges the books and reads them: nobody can change
+      // entries they cannot read (owner, 2026-09-13; 049 FR-042).
       await expect(trusted.getByTestId("switch-off-book")).toHaveCount(1);
-      await expect(trusted.getByTestId("browse-book")).toHaveCount(0);
+      await expect(trusted.getByTestId("browse-book")).toHaveCount(1);
 
       // The Player at the same table: shown the list, given nothing to change
       // it with, and refused by the server when they ask anyway.

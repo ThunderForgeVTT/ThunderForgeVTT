@@ -223,21 +223,23 @@ pub async fn world_compendium_entries_impl(
     let mut conn = connection(state)?;
 
     tokio::task::spawn_blocking(move || {
-        // 049 FR-042 is a Game Master's browse. A player sees the list and
-        // what is handed to them in play, which is a different surface with a
-        // different rule (FR-035, FR-036). A Trusted Player is refused with
-        // them: ADR-099 trusts them to arrange the books, and says a Trusted
-        // Player is shown what a Player is shown unless a spec says
-        // otherwise. None does for reading a book's content.
+        // 049 FR-042: browsing a world's books belongs to the people who
+        // manage its book material, which includes a Trusted Player (owner,
+        // 2026-09-13). FR-020a already let them change what a world inherited,
+        // and nobody can change entries they cannot read. A Player sees the
+        // list and what is handed to them in play, which is a different
+        // surface with a different rule (FR-035, FR-036).
         let role = require_world_member(&mut conn, caller, world_id)
             .map_err(|_| Error::new("You are not at this table."))?;
         // A role string this build does not recognise resolves to no role at
         // all rather than to a default one, so an unreadable membership row
         // denies rather than grants.
         if !thunderforge_authz::Role::from_stored(&role)
-            .is_some_and(thunderforge_authz::Role::runs_the_world)
+            .is_some_and(thunderforge_authz::Role::manages_content)
         {
-            return Err(Error::new("Only a Game Master browses this world's books."));
+            return Err(Error::new(
+                "Only a Game Master or Trusted Player browses this world's books.",
+            ));
         }
 
         let (book_title, mut entries) =

@@ -48,9 +48,8 @@ import type { ReadValue } from "@/engine/sdk/ReadValue";
  */
 export interface BookListTabProps {
   worldId: string;
-  /** Owner or Game Master: may browse a book's entries. */
-  isGm: boolean;
-  /** Owner, Game Master or Trusted Player: may switch books on and off. */
+  /** Owner, Game Master or Trusted Player: may switch books on and off, and
+   * browse a book's entries — nobody can change entries they cannot read. */
   managesBooks: boolean;
   /** Whether the shelf being drawn on is the viewer's own, which is only a
    * matter of wording — the books are the owner's either way. */
@@ -63,7 +62,6 @@ function shown(value: ReadValue): string {
 
 export function BookListTab({
   worldId,
-  isGm,
   managesBooks,
   isOwner,
 }: BookListTabProps) {
@@ -205,7 +203,7 @@ export function BookListTab({
 
               {managesBooks && (
                 <div className="flex flex-wrap gap-2">
-                  {isGm && book.systemMatches && (
+                  {book.systemMatches && (
                     <Button
                       type="button"
                       size="sm"
@@ -234,7 +232,7 @@ export function BookListTab({
                 </div>
               )}
 
-              {isGm && browsing === book.compendiumId && (
+              {managesBooks && browsing === book.compendiumId && (
                 <BookEntries
                   worldId={worldId}
                   compendiumId={book.compendiumId}

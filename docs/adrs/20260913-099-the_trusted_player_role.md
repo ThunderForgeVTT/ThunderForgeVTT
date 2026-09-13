@@ -46,6 +46,7 @@ A Trusted Player **may**:
 
 - switch books on and off in a world's book list, always from the **world
   owner's** shelf (spec 050 FR-010a), never their own;
+- browse the entries of the books a world has switched on (spec 049 FR-042);
 - change what the world inherited from those books — its deltas (FR-020a);
 - see what each player has staged, and adopt it piece by piece or all at once
   (spec 048 FR-032 … FR-033a).
@@ -135,10 +136,11 @@ one of them was a hole that predates this ADR.
 - **Switching a book on means seeing the owner's shelf.** Not stated above. The
   list of books offered to a non-owner now carries each book's name and size,
   not its file hash.
-- **Browsing a book's entries stayed Game Master only**, following spec 049
-  FR-042, because this ADR didn't say otherwise. That is an open question:
-  FR-020a lets a Trusted Player change what a world inherited, and a person
-  cannot change entries they cannot read.
+- **Browsing a book's entries was first left Game Master only**, following spec
+  049 FR-042, because this ADR didn't say otherwise. The owner settled it the
+  same day: **a Trusted Player browses a world's books like a Game Master.**
+  FR-020a lets them change what a world inherited, and nobody can change
+  entries they cannot read. FR-042 is amended to match.
 
 ## Alternatives Considered
 

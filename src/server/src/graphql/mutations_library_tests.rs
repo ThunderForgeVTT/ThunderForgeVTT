@@ -360,7 +360,7 @@ async fn the_book_list_answers_to_owner_game_master_and_trusted_player_alone() {
     let table = [
         ("Owner", owner, true, true, true),
         ("Game Master", game_master, true, true, true),
-        ("Trusted Player", trusted, true, false, true),
+        ("Trusted Player", trusted, true, true, true),
         ("Player", player, false, false, true),
         ("stranger", stranger, false, false, false),
     ];

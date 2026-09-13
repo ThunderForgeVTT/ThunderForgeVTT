@@ -221,7 +221,6 @@ export function WorldCompendiumPage({
             content: (
               <BookListTab
                 worldId={worldId}
-                isGm={isGm}
                 managesBooks={managesContent}
                 isOwner={role === "Owner"}
               />

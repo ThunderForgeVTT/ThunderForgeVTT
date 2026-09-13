@@ -389,8 +389,10 @@ correct content, and confirm the system registry check still passes.
   compendium and stops there.
 - **FR-041**: A compendium MUST record the book's name, the file's SHA-256,
   who imported it, when, the system it was read as, and a count per kind.
-- **FR-042**: The world's Compendium portal MUST let a Game Master browse by
-  compendium, beside the existing browse by kind.
+- **FR-042**: The world's Compendium portal MUST let a Game Master or a Trusted
+  Player browse by compendium, beside the existing browse by kind. *(Trusted
+  Player added 2026-09-13: spec 050 FR-020a lets them change what a world
+  inherited, and nobody can change entries they cannot read.)*
 - **FR-043**: Every imported entry MUST name the compendium it belongs to and
   the page it was found on.
 - **FR-044**: A Game Master MUST be able to remove a whole compendium from
