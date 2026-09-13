@@ -405,8 +405,8 @@ same over an imported compendium and confirm there is no route.
 - **FR-022**: What a world reads MUST be the base with its delta applied.
 - **FR-023**: A delta MUST record only what differs, not a whole copy of the
   entry.
-- **FR-024**: A Game Master MUST be able to see what an entry was before their
-  world changed it, and restore it.
+- **FR-024**: A Game Master or Trusted Player MUST be able to see what an entry
+  was before their world changed it, and restore it (FR-020a).
 - **FR-025**: An entry's identity within a compendium MUST be its kind and its
   name. A delta attaches to that identity. *(Confirmed by FR-029's measurement
   on 2026-09-13: every real entry survived a genuine re-parse, 2740 of 2750
@@ -510,8 +510,14 @@ same over an imported compendium and confirm there is no route.
 
 - **FR-060**: Removing a compendium MUST name what depends on it, per world,
   before it is confirmed.
-- **FR-061**: Removing a compendium MUST remove its base and every delta over
-  it, and nothing else.
+- **FR-061**: Removing a compendium MUST remove its base and the **changed and
+  hidden** deltas over it in every world, and nothing else. A world's **added**
+  entries MUST survive the removal, still listed in that world, still Authored,
+  still naming the book they were written beside.
+  *(Amended 2026-09-13. This first said "every delta over it", which
+  contradicted decision 5 once additions were built: an addition is a table's
+  own homebrew that never needed the book, and removing the book from a shelf
+  is no more a reason to destroy it than switching the book off is.)*
 - **FR-062**: Deleting an account MUST delete its entire library, including
   bases no world referenced.
 - **FR-063**: Account deletion MUST continue to copy players' actors to their
