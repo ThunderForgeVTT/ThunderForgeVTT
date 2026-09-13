@@ -66,7 +66,7 @@ Six phases, each provable on its own.
 | **I. ECS owns simulation, React owns chrome** | Pass | No simulation changes. The notice and admin page are React chrome. On a pause the page tears the engine down as it does on leaving play. |
 | **II. Plugin-modular engine** | Pass | No new engine capability. If teardown needs an engine call it uses the existing leave-play path. |
 | **III. Authorization at the data boundary** | Pass, and it is the point of the feature | The gate is server-side at every GraphQL and REST entry point, the surface test makes the list closed, and all new tables carry `created_by`/`updated_by`. The deliberate exception (the gate ignoring the site-admin short-circuit) *narrows* authority and is recorded in ADR-100. |
-| **IV. ADRs and specs before divergent implementation** | Pass with ADR-100 drafted | Operators gaining a power no world role can override changes an authority boundary. [ADR-100](../../docs/adrs/20260913-100-an_operator_can_pause_a_worlds_play.md) was accepted by the owner on 2026-09-13. |
+| **IV. ADRs and specs before divergent implementation** | Pass, ADR-100 accepted | Operators gaining a power no world role can override changes an authority boundary. [ADR-100](../../docs/adrs/20260913-100-an_operator_can_pause_a_worlds_play.md) was accepted by the owner on 2026-09-13. |
 | **V. Verify before claiming done** | Pass | Per phase: `cargo test` for the server, `tsc --noEmit` for the web app (`pnpm verify` does not type-check it), the phase's e2e run in a real browser. No engine files are expected; if one changes, `cargo check --target wasm32-unknown-unknown`. |
 | **DMCA / Content Moderation Guardrail** | Not engaged | Nothing becomes reachable outside a world. The feature strengthens condition (a), the takedown programme being effective, by reaching a live table. |
 
@@ -97,7 +97,7 @@ specs/051-operator-playfield-shutdown/
 ### Source Code (repository root)
 
 ```text
-docs/adrs/20260913-100-an_operator_can_pause_a_worlds_play.md   # new, Proposed
+docs/adrs/20260913-100-an_operator_can_pause_a_worlds_play.md   # accepted 2026-09-13
 
 src/server/
 ├── migrations/<timestamp>_pausing_a_worlds_play/{up,down}.sql  # new
@@ -157,7 +157,7 @@ pauses" checkable by reading the imports.
 
 ## Phase notes the task list must carry
 
-- **ADR-100 accepted before Phase 2.** It is the authority change; Phase 1's
+- **ADR-100 accepted before Phase 2** (done, 2026-09-13). It is the authority change; Phase 1's
   migration and gate are reversible, Phase 2 puts the lever in an operator's
   hands.
 - **Phase 3 makes the gate list mechanical.** The surface test's second half
