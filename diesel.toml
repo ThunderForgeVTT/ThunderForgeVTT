@@ -4,6 +4,14 @@
 [print_schema]
 file = "src/server/src/schema.rs"
 custom_type_derives = ["diesel::query_builder::QueryId"]
+# Tables a system pack owns are in the dev database and deliberately absent
+# from the server's schema — the server does not know a pack exists (spec 032,
+# ADR-063). Without this filter every `diesel print_schema` re-adds them, and
+# the person regenerating after an unrelated migration has to notice and strip
+# them by hand. That was found the hard way while adding the compendium
+# tables; it is a filter rather than a note because a note only helps somebody
+# who already suspects there is a problem.
+filter = { except_tables = ["^world_genie_.*"] }
 
 [migrations_directory]
 dir = "src/server/migrations"

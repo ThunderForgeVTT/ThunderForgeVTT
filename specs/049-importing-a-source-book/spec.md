@@ -476,9 +476,10 @@ correct content, and confirm the system registry check still passes.
 
 ### Key Entities
 
-- **Compendium**: everything one import produced, belonging to one world.
-  Carries the book's name, the file's hash, who imported it and when, the
-  system it was read as, its provenance, and counts per kind.
+- **Compendium**: everything one import produced, belonging to the **account**
+  that imported it — never to a world (FR-040, decision 1). Carries the book's
+  name, the file's hash, who imported it and when, the system it was read as,
+  its origin, and counts per kind.
 - **Imported entry**: one spell, item, creature, feature or feat. Carries its
   kind, its values with per-field certainty, the page it was found on, and the
   compendium it belongs to.
