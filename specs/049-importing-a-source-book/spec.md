@@ -350,12 +350,20 @@ correct content, and confirm the system registry check still passes.
   individual entries, from what is submitted.
 - **FR-027**: What is committed MUST be what the review showed. A value
   changed between review and commit is a defect.
-- **FR-028**: Only a **Game Master** MUST be able to read a book into a world,
-  and only from that world's own panel. This is the boundary spec 048 records:
-  a Game Master can already put anything into their own world by hand, so
-  reading on their machine hands them nothing new. A player's character-sheet
-  import is a different path with different guards, and this spec does not
-  widen it.
+- **FR-028**: A person MUST be able to read a book only into **their own
+  account's library**, and MUST NOT be able to reach anybody else's.
+  *(Amended 2026-09-12. This originally said "only a Game Master, and only from
+  that world's own panel", which does not survive the merge: under FR-040 a
+  book is read onto an account, not into a world, and an account-level surface
+  has no world and therefore no Game Master role to check. The guard that
+  exists is the one that means something here — no query takes an account id,
+  `require_account_owner` has no administrator bypass, and a missing book and
+  somebody else's answer identically.)*
+- **FR-028a**: The reasoning behind the original wording still holds and is why
+  reading locally is safe at all: a Game Master can already put anything into
+  their own world by hand, so parsing on their machine hands them nothing new.
+  A player's character-sheet import is a different path with different guards,
+  and this spec does not widen it.
 
 **Sending**
 
