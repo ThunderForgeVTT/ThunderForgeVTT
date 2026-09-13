@@ -9,15 +9,15 @@
 use super::*;
 use crate::compendium::store::{self, NewBook};
 use crate::content::{Entry, NameState};
-use crate::library::book_list::{switch_off, switch_off_report, switch_on};
-use crate::schema::worlds;
+use crate::library::book_list::switch_on;
+use crate::schema::{compendium_entries, worlds};
 use crate::test_support::{
     insert_test_user, insert_test_world, insert_test_world_member, test_app_state,
 };
 
-const SYSTEM: &str = "test-system";
+pub(super) const SYSTEM: &str = "test-system";
 
-fn a_book(title: &str) -> NewBook {
+pub(super) fn a_book(title: &str) -> NewBook {
     NewBook {
         book_title: title.to_string(),
         source_hash: format!("{:0>64}", Uuid::now_v7().simple()),
@@ -28,11 +28,11 @@ fn a_book(title: &str) -> NewBook {
     }
 }
 
-fn clear(value: &str) -> ReadValue {
+pub(super) fn clear(value: &str) -> ReadValue {
     ReadValue::Clear(value.to_string())
 }
 
-fn a_creature(name: &str, armour: &str, page: u32) -> Entry {
+pub(super) fn a_creature(name: &str, armour: &str, page: u32) -> Entry {
     Entry {
         kind: "creature".to_string(),
         name: name.to_string(),
@@ -64,7 +64,7 @@ fn a_feat(name: &str, text: &str) -> Entry {
     }
 }
 
-fn fields(pairs: &[(&str, ReadValue)]) -> Content {
+pub(super) fn fields(pairs: &[(&str, ReadValue)]) -> Content {
     Content::Fields(
         pairs
             .iter()
@@ -73,13 +73,13 @@ fn fields(pairs: &[(&str, ReadValue)]) -> Content {
     )
 }
 
-struct Table {
-    owner: Uuid,
-    world: Uuid,
-    book: store::Compendium,
+pub(super) struct Table {
+    pub(super) owner: Uuid,
+    pub(super) world: Uuid,
+    pub(super) book: store::Compendium,
 }
 
-fn a_world_running(conn: &mut PgConnection, owner: Uuid) -> Uuid {
+pub(super) fn a_world_running(conn: &mut PgConnection, owner: Uuid) -> Uuid {
     let world_id = insert_test_world(conn, owner);
     diesel::update(worlds::table.filter(worlds::id.eq(world_id)))
         .set(worlds::game_system_id.eq(Some(SYSTEM.to_string())))
@@ -89,7 +89,7 @@ fn a_world_running(conn: &mut PgConnection, owner: Uuid) -> Uuid {
 }
 
 /// An owner, a world running a book with a goblin, an orc and a feat.
-fn a_table(conn: &mut PgConnection) -> Table {
+pub(super) fn a_table(conn: &mut PgConnection) -> Table {
     let owner = insert_test_user(conn);
     let world = a_world_running(conn, owner);
     let book = store::import_book(
@@ -109,7 +109,10 @@ fn a_table(conn: &mut PgConnection) -> Table {
 
 /// Every stored byte of a book's entries, in a stable order: what "the base
 /// is untouched" means, checked rather than assumed.
-fn base_bytes(conn: &mut PgConnection, compendium_id: Uuid) -> Vec<(String, String, String)> {
+pub(super) fn base_bytes(
+    conn: &mut PgConnection,
+    compendium_id: Uuid,
+) -> Vec<(String, String, String)> {
     compendium_entries::table
         .filter(compendium_entries::compendium_id.eq(compendium_id))
         .order((compendium_entries::kind, compendium_entries::name))
@@ -132,11 +135,11 @@ fn base_bytes(conn: &mut PgConnection, compendium_id: Uuid) -> Vec<(String, Stri
         .collect()
 }
 
-fn read(conn: &mut PgConnection, world: Uuid, book: Uuid) -> Resolution {
+pub(super) fn read(conn: &mut PgConnection, world: Uuid, book: Uuid) -> Resolution {
     world_reads(conn, world, book, None, false).unwrap().1
 }
 
-fn named<'a>(resolution: &'a Resolution, name: &str) -> Option<&'a WorldEntry> {
+pub(super) fn named<'a>(resolution: &'a Resolution, name: &str) -> Option<&'a WorldEntry> {
     resolution.entries.iter().find(|entry| entry.name == name)
 }
 
@@ -801,63 +804,6 @@ fn who_may_change_what_a_world_inherited() {
         "only what the three trusted roles added remains"
     );
     assert!(held.iter().all(|delta| delta.changed_by.is_some()));
-}
-
-/// 050 FR-013 and 049 FR-046, the extension point Phase 9 left: switching a
-/// book off names every delta that goes with it before anything goes, and
-/// then they go.
-#[test]
-fn switching_a_book_off_names_its_deltas_first_and_then_takes_them() {
-    let state = test_app_state();
-    let mut conn = state.db_pool.get().unwrap();
-    let t = a_table(&mut conn);
-
-    change_entry(
-        &mut conn,
-        t.owner,
-        t.world,
-        t.book.id,
-        "creature",
-        "Goblin",
-        fields(&[("hits", clear("12"))]),
-    )
-    .unwrap();
-    hide_entry(&mut conn, t.owner, t.world, t.book.id, "creature", "Orc").unwrap();
-    add_entry(
-        &mut conn,
-        t.owner,
-        t.world,
-        t.book.id,
-        "creature",
-        "Mire Hag",
-        fields(&[]),
-    )
-    .unwrap();
-
-    let report = switch_off_report(&mut conn, t.owner, t.world, t.book.id).unwrap();
-    assert_eq!(
-        report.deltas,
-        vec![
-            "changed: creature \"Goblin\"".to_string(),
-            "added: creature \"Mire Hag\"".to_string(),
-            "hidden: creature \"Orc\"".to_string(),
-        ]
-    );
-    assert_eq!(
-        deltas_over(&mut conn, t.world, t.book.id, None)
-            .unwrap()
-            .len(),
-        3,
-        "asking takes nothing"
-    );
-
-    switch_off(&mut conn, t.owner, t.world, t.book.id).unwrap();
-    let left: i64 = world_entry_deltas::table
-        .filter(world_entry_deltas::world_id.eq(t.world))
-        .count()
-        .get_result(&mut conn)
-        .unwrap();
-    assert_eq!(left, 0);
 }
 
 /// FR-042: a world that has moved to another system is not reading the book,

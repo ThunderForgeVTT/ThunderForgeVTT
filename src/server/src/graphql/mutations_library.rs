@@ -134,9 +134,13 @@ pub struct GraphQLSwitchOffReport {
     /// A few of them by name, so this reads as a warning about *things* and
     /// not about a number.
     pub entry_names: Vec<String>,
-    /// Changes this world made over the book — changed, hidden and added —
-    /// each named, because every one goes with it (050 FR-013, 049 FR-046).
+    /// Changes and hides this world made over the book, each named, because
+    /// they go with it (050 FR-013, 049 FR-046).
     pub deltas: Vec<String>,
+    /// What this world added beside the book, each named, because it
+    /// **stays** (spec 050 decision 5): the world's own writing never needed
+    /// the book.
+    pub additions_kept: Vec<String>,
     /// Whether this call switched anything off. False for the report, true
     /// for the confirmation, so a caller can never mistake one for the other.
     pub switched_off: bool,
@@ -150,6 +154,7 @@ impl GraphQLSwitchOffReport {
             entry_count: i32::try_from(report.entry_count).unwrap_or(i32::MAX),
             entry_names: report.entry_names,
             deltas: report.deltas,
+            additions_kept: report.additions_kept,
             switched_off,
         }
     }
@@ -441,6 +446,33 @@ pub async fn world_compendium_entries_impl(
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
 }
 
+/// Testable core of `worldAdditionsWithoutBook` (spec 050 decision 5).
+///
+/// Each entry's `bookTitle` is the book it was written beside, which is how it
+/// rejoins that book's page if the book is switched back on.
+pub async fn additions_without_book_impl(
+    state: &AppState,
+    caller: Uuid,
+    world_id: Uuid,
+) -> GraphQLResult<Vec<GraphQLWorldEntry>> {
+    let mut conn = connection(state)?;
+
+    tokio::task::spawn_blocking(move || {
+        // The same readers as the book pages these additions were written on.
+        require_content_manager(&mut conn, caller, world_id)?;
+        deltas::additions_without_their_book(&mut conn, world_id)
+            .map(|found| {
+                found
+                    .into_iter()
+                    .map(|(title, entry)| GraphQLWorldEntry::from(entry, &title))
+                    .collect()
+            })
+            .map_err(|_| Error::new("This world's own additions could not be read."))
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+}
+
 /// 049 FR-042: browsing a world's books belongs to the people who manage its
 /// book material, which includes a Trusted Player (owner, 2026-09-13).
 /// FR-020a already let them change what a world inherited, and nobody can
@@ -525,6 +557,7 @@ pub async fn change_world_entry_impl(
         EntryChangeRequest::Hide => EntryChange::Hide,
         EntryChangeRequest::Restore => EntryChange::Restore,
     };
+    let is_restore = matches!(change, EntryChange::Restore);
     let mut conn = connection(state)?;
 
     tokio::task::spawn_blocking(move || {
@@ -550,9 +583,13 @@ pub async fn change_world_entry_impl(
         }
         .map_err(delta_refusal)?;
 
-        let book_title = book_list::require_served(c, world_id, compendium_id)
-            .map_err(refusal)?
-            .book_title;
+        // Removing an addition whose book is switched off leaves nothing to
+        // read back (decision 5 kept it; the person has now let it go).
+        let book_title = match book_list::require_served(c, world_id, compendium_id) {
+            Ok(listed) => listed.book_title,
+            Err(BookListError::NotOnTheList) if is_restore => return Ok(None),
+            Err(e) => return Err(refusal(e)),
+        };
         deltas::world_entry(c, world_id, compendium_id, &kind, &name)
             .map(|entry| entry.map(|entry| GraphQLWorldEntry::from(entry, &book_title)))
             .map_err(delta_refusal)
@@ -694,6 +731,18 @@ impl LibraryWorldQuery {
             show_hidden.unwrap_or(false),
         )
         .await
+    }
+    /// What this world added beside books it has since switched off (spec
+    /// 050 decision 5). Kept, authored, and readable here until somebody
+    /// removes it with `restoreWorldEntry`.
+    async fn world_additions_without_book(
+        &self,
+        ctx: &Context<'_>,
+        world_id: Uuid,
+    ) -> GraphQLResult<Vec<GraphQLWorldEntry>> {
+        let state = app_state(ctx)?;
+        let user = authenticated_user(ctx)?;
+        additions_without_book_impl(state, user.user_id, world_id).await
     }
 }
 

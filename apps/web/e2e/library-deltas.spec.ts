@@ -445,10 +445,84 @@ test.describe("A world's changes to its books (spec 050 US2)", () => {
     // own changes lose, before anything is lost.
     await page.getByTestId("switch-off-book").click();
     const lost = page.getByTestId("deltas-lost");
-    await expect(lost).toContainText(`added: creature "${ADDED}"`);
     await expect(lost).toContainText('hidden: creature "ADULT RED DRAGON"');
+    await expect(lost).not.toContainText(ADDED);
     await expect(lost).not.toContainText("GOBLIN");
+    // Decision 5: the addition is named as staying, before anything goes.
+    await expect(page.getByTestId("additions-kept")).toContainText(
+      `added: creature "${ADDED}"`,
+    );
     expect(deltaCount(here)).toBe(2);
+
+    // And then: the hide goes with the book, the addition stays.
+    await page.getByTestId("switch-off-confirm").click();
+    await expect(page.getByTestId("book-list-empty")).toBeVisible();
+    expect(deltaOrigins(here)).toEqual({ [ADDED]: "Added Authored" });
+
+    // Still listed, still readable, still authored and shareable — on its
+    // own, naming the book it was written beside.
+    const kept = page
+      .getByTestId("kept-additions")
+      .locator(`li[data-name="${ADDED}"]`);
+    await expect(kept).toHaveCount(1);
+    await expect(kept).toContainText(`written beside ${BOOK}`);
+    await expect(kept).toContainText("bargains in teeth");
+    await expect(kept.getByTestId("world-entry-origin")).toHaveAttribute(
+      "data-origin",
+      "AUTHORED",
+    );
+    await expect(kept.getByTestId("world-entry-origin")).toHaveAttribute(
+      "data-may-be-shared",
+      "true",
+    );
+    const keptOnTheWire = await graphql<
+      Gql<{ worldAdditionsWithoutBook: Entry[] }>
+    >(
+      page,
+      `
+        query K($w: UUID!) {
+          worldAdditionsWithoutBook(worldId: $w) {
+            name
+            state
+            origin
+            mayBeShared
+          }
+        }
+      `,
+      { w: here },
+    );
+    expect(keptOnTheWire.data?.worldAdditionsWithoutBook).toEqual([
+      { name: ADDED, state: "ADDED", origin: "AUTHORED", mayBeShared: true },
+    ]);
+
+    // Switched back on: the addition rejoins the book's page as the same
+    // entry — one row, no copy — and the hide does not come back.
+    const keptRow = sql(
+      `SELECT id FROM world_entry_deltas WHERE world_id = '${uuid(here)}';`,
+    );
+    await page
+      .getByTestId(`offered-book-${compendiumId}`)
+      .getByTestId("switch-on-book")
+      .click();
+    await expect(page.getByTestId("book-list")).toContainText(BOOK);
+    await expect(page.getByTestId("kept-additions")).toHaveCount(0);
+    await page.getByTestId("browse-book").click();
+    const browser = page.getByTestId("world-book-browser");
+    await expect(browser.locator(`li[data-name="${ADDED}"]`)).toHaveCount(1);
+    await expect(browser.locator(`li[data-name="${ADDED}"]`)).toHaveAttribute(
+      "data-state",
+      "ADDED",
+    );
+    await expect(
+      browser.locator('li[data-name="ADULT RED DRAGON"]'),
+    ).toHaveAttribute("data-state", "INHERITED");
+    expect(deltaOrigins(here)).toEqual({ [ADDED]: "Added Authored" });
+    expect(
+      sql(
+        `SELECT id FROM world_entry_deltas WHERE world_id = '${uuid(here)}';`,
+      ),
+      "the same row, not a second copy",
+    ).toBe(keptRow);
 
     expect(baseAsStored(compendiumId)).toBe(imported);
   });

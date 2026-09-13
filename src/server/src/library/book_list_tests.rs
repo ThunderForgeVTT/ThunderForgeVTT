@@ -80,7 +80,7 @@ fn a_game_master_switches_their_own_book_on() {
     assert_eq!(on.compendium_id, book.id);
     assert_eq!(on.base_source_hash, book.source_hash);
     assert_eq!(on.base_parser_version, book.parser_version);
-    assert_eq!(on.switched_on_by, owner);
+    assert_eq!(on.switched_on_by, Some(owner));
 }
 
 /// FR-033: one mechanism, and asking for a state you already have is not an
@@ -497,7 +497,11 @@ fn who_may_arrange_the_books_and_whose_books_they_are() {
 
         let on = switched.unwrap_or_else(|e| panic!("{who}: {e}"));
         assert_eq!(on.compendium_id, owners_book.id, "{who}");
-        assert_eq!(on.switched_on_by, caller, "FR-015 records who, for {who}");
+        assert_eq!(
+            on.switched_on_by,
+            Some(caller),
+            "FR-015 records who, for {who}"
+        );
 
         if let Some(their_own) = their_own {
             assert!(
@@ -618,4 +622,40 @@ fn removing_either_end_takes_only_the_link() {
     store::remove(&mut conn, owner, book.id).unwrap();
     assert!(books_on(&mut conn, kept).unwrap().is_empty());
     assert!(worlds_with_book(&mut conn, book.id).unwrap().is_empty());
+}
+
+/// Switching a book on does not tie a person to a world for ever. A Trusted
+/// Player switches the owner's book on and changes an entry in it, then
+/// deletes their account: the deletion succeeds, the book stays switched on,
+/// the change stays made, and the records say only that somebody did it.
+#[test]
+fn a_person_who_switched_a_book_on_can_still_delete_their_account() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let owner = insert_test_user(&mut conn);
+    let world = a_world_running(&mut conn, owner, SYSTEM);
+    let book = store::import_book(
+        &mut conn,
+        owner,
+        a_book("Monster Manual", SYSTEM),
+        &[a_creature("Goblin")],
+    )
+    .unwrap();
+    let trusted = insert_test_user(&mut conn);
+    insert_test_world_member(&mut conn, world, trusted, "TrustedPlayer");
+
+    let on = switch_on(&mut conn, trusted, world, book.id).unwrap();
+    assert_eq!(on.switched_on_by, Some(trusted));
+    crate::library::deltas::hide_entry(&mut conn, trusted, world, book.id, "creature", "Goblin")
+        .unwrap();
+
+    crate::users::delete_user_data_on(&mut conn, trusted)
+        .expect("the account deletion must not be refused by a book they switched on");
+
+    let still = books_on(&mut conn, world).unwrap();
+    assert_eq!(still.len(), 1, "the book stays switched on");
+    assert_eq!(still[0].row.switched_on_by, None);
+    let held = crate::library::deltas::deltas_over(&mut conn, world, book.id, None).unwrap();
+    assert_eq!(held.len(), 1, "and the change they made stays made");
+    assert_eq!(held[0].changed_by, None);
 }

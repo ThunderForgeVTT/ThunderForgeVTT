@@ -35,7 +35,9 @@ pub struct BookOnList {
     /// pair that changes when a re-import replaces a base.
     pub base_source_hash: String,
     pub base_parser_version: String,
-    pub switched_on_by: Uuid,
+    /// `None` once the person who switched it on has deleted their account:
+    /// the book stays on, and the record says only that somebody did.
+    pub switched_on_by: Option<Uuid>,
     pub switched_on_at: chrono::NaiveDateTime,
 }
 
@@ -317,11 +319,12 @@ pub fn offerable_to(
 /// entry to enumerate, so what a Game Master loses is the book's whole
 /// contribution to this table, and that is what this counts and names.
 ///
-/// `deltas` names every change this world made over the book — changed,
-/// hidden and added alike — because every one of them goes with the link
-/// (the cascade on `world_entry_deltas`). An addition is a person's own
-/// writing, and the report is the last moment they can be told it is about
-/// to go.
+/// `deltas` names every change and hide this world made over the book,
+/// because those go with the link: they mean nothing without the entries they
+/// modify. `additions_kept` names what this world added beside the book, and
+/// says it **stays** (spec 050 decision 5) — authored writing that never
+/// needed the book, which a person switching a book off is otherwise most
+/// likely to assume they are about to lose.
 #[derive(Debug, Clone)]
 pub struct SwitchOffReport {
     pub compendium_id: Uuid,
@@ -331,11 +334,13 @@ pub struct SwitchOffReport {
     /// Some of them by name, so a person recognises what they are turning
     /// off. Capped: a Monster Manual is not a confirmation dialogue.
     pub entry_names: Vec<String>,
-    /// Changes this world made over the book, which go with it, each named
-    /// by form, kind and name (050 FR-013, 049 FR-046). Uncapped, unlike the
-    /// entry names: a Monster Manual is not a confirmation dialogue, but a
-    /// world's own work is exactly what a confirmation is for.
+    /// Changes and hides this world made over the book, which go with it,
+    /// each named by form, kind and name (050 FR-013, 049 FR-046). Uncapped,
+    /// unlike the entry names: a Monster Manual is not a confirmation
+    /// dialogue, but a world's own work is exactly what a confirmation is for.
     pub deltas: Vec<String>,
+    /// What this world added beside the book, which stays (decision 5).
+    pub additions_kept: Vec<String>,
 }
 
 /// How many entry names a confirmation may carry.
@@ -377,12 +382,15 @@ pub fn switch_off_report(
         .select(compendium_entries::name)
         .load::<String>(conn)?;
 
+    let (lost, kept) = super::deltas::deltas_named(conn, world_id, compendium_id)?;
+
     Ok(SwitchOffReport {
         compendium_id,
         book_title,
         entry_count,
         entry_names,
-        deltas: super::deltas::deltas_named(conn, world_id, compendium_id)?,
+        deltas: lost,
+        additions_kept: kept,
     })
 }
 

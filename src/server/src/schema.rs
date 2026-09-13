@@ -1077,7 +1077,7 @@ diesel::table! {
         base_source_hash -> Varchar,
         #[max_length = 64]
         base_parser_version -> Varchar,
-        switched_on_by -> Uuid,
+        switched_on_by -> Nullable<Uuid>,
         switched_on_at -> Timestamp,
     }
 }
@@ -1185,6 +1185,7 @@ diesel::table! {
         changed_by -> Nullable<Uuid>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        book_list_compendium_id -> Nullable<Uuid>,
     }
 }
 
@@ -1531,7 +1532,9 @@ diesel::joinable!(world_combatants -> world_actors (actor_id));
 diesel::joinable!(world_combats -> scenes (scene_id));
 diesel::joinable!(world_combats -> users (created_by));
 diesel::joinable!(world_combats -> worlds (world_id));
+diesel::joinable!(world_entry_deltas -> compendiums (compendium_id));
 diesel::joinable!(world_entry_deltas -> users (changed_by));
+diesel::joinable!(world_entry_deltas -> worlds (world_id));
 diesel::joinable!(world_events -> worlds (world_id));
 diesel::joinable!(world_invites -> users (created_by));
 diesel::joinable!(world_invites -> worlds (world_id));

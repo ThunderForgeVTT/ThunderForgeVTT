@@ -62,7 +62,7 @@ use uuid::Uuid;
 use crate::compendium::ContentOrigin;
 use crate::compendium::store::StoredEntry;
 use crate::content::ReadValue;
-use crate::schema::{compendium_entries, compendiums, world_entry_deltas};
+use crate::schema::{compendiums, world_entry_deltas};
 
 use super::book_list::{self, BookListError};
 
@@ -500,426 +500,93 @@ pub fn origin_of_delta_entry(
 }
 
 /// Each delta this world holds over a book, as a person would name it (050
-/// FR-013, 049 FR-046) — what switching the book off would lose.
+/// FR-013, 049 FR-046), split by what switching the book off does to it:
+/// changes and hides are lost, additions are kept (decision 5).
 pub fn deltas_named(
     conn: &mut PgConnection,
     world_id: Uuid,
     compendium_id: Uuid,
-) -> Result<Vec<String>, BookListError> {
-    Ok(deltas_over(conn, world_id, compendium_id, None)?
+) -> Result<(Vec<String>, Vec<String>), BookListError> {
+    let (kept, lost): (Vec<Delta>, Vec<Delta>) = deltas_over(conn, world_id, compendium_id, None)?
         .into_iter()
-        .map(|delta| format!("{}: {} \"{}\"", delta.form.word(), delta.kind, delta.name))
+        .partition(|delta| delta.form == DeltaForm::Added);
+    let named = |deltas: Vec<Delta>| {
+        deltas
+            .into_iter()
+            .map(|delta| format!("{}: {} \"{}\"", delta.form.word(), delta.kind, delta.name))
+            .collect()
+    };
+    Ok((named(lost), named(kept)))
+}
+
+/// What this world added beside books it no longer has switched on (spec 050
+/// decision 5), each with the title of the book it was written beside.
+///
+/// Additions outlive their book because they never needed it: the database
+/// ties only changes and hides to the book list. What is left is the world's
+/// own writing, still authored and still shareable (FR-052a), and it is
+/// listed on its own rather than under a book the world is not running —
+/// showing it inside a switched-off book would suggest the book is still
+/// partly on.
+///
+/// Switching that book back on brings the addition back onto the book's page
+/// as the same row. There is no second copy to reconcile, because the unique
+/// identity (world, book, kind, name) was never released.
+///
+/// Not gated here; the caller decides who may read a world's book material.
+pub fn additions_without_their_book(
+    conn: &mut PgConnection,
+    world_id: Uuid,
+) -> QueryResult<Vec<(String, WorldEntry)>> {
+    use crate::schema::world_books;
+
+    let on_the_list: Vec<Uuid> = world_books::table
+        .filter(world_books::world_id.eq(world_id))
+        .select(world_books::compendium_id)
+        .load(conn)?;
+
+    let orphans: Vec<(Delta, String, ContentOrigin)> = world_entry_deltas::table
+        .inner_join(compendiums::table.on(compendiums::id.eq(world_entry_deltas::compendium_id)))
+        .filter(world_entry_deltas::world_id.eq(world_id))
+        .filter(world_entry_deltas::form.eq(DeltaForm::Added))
+        .filter(diesel::dsl::not(
+            world_entry_deltas::compendium_id.eq_any(&on_the_list),
+        ))
+        .order((
+            world_entry_deltas::kind.asc(),
+            world_entry_deltas::name.asc(),
+        ))
+        .select((
+            Delta::as_select(),
+            compendiums::book_title,
+            compendiums::origin,
+        ))
+        .load(conn)?;
+
+    Ok(orphans
+        .into_iter()
+        .flat_map(|(delta, title, book_origin)| {
+            resolve(book_origin, Vec::new(), vec![delta], false)
+                .entries
+                .into_iter()
+                .map(move |entry| (title.clone(), entry))
+        })
         .collect())
 }
 
-/// Change what an entry says in this world (FR-020, FR-023).
-///
-/// Only what differs from the book is kept. Fields named here are laid over
-/// any change already held; a field set back to exactly what the book says
-/// drops out of the delta; and a change that leaves nothing different removes
-/// the delta altogether, so "changed" never marks an entry identical to its
-/// book. Changing a hidden entry shows it again, changed.
-///
-/// An addition is changed through here too — it has no book entry, so what
-/// it holds is simply replaced.
-///
-/// Returns the delta as it now stands, or `None` when nothing differs.
-pub fn change_entry(
-    conn: &mut PgConnection,
-    caller: Uuid,
-    world_id: Uuid,
-    compendium_id: Uuid,
-    kind: &str,
-    name: &str,
-    content: Content,
-) -> Result<Option<Delta>, DeltaError> {
-    may_change(conn, caller, world_id, compendium_id)?;
+mod write;
 
-    conn.transaction(|conn| {
-        let held = held_over(conn, world_id, compendium_id, kind, name)?;
-        let base = base_with_identity(conn, compendium_id, kind, name)?;
-
-        if base.is_empty()
-            && let Some(addition) = held.clone().filter(|held| held.form == DeltaForm::Added)
-        {
-            return change_addition(conn, caller, addition, content).map(Some);
-        }
-        let base = the_one(base, kind, name)?;
-
-        let (field_values, prose_text) = match content {
-            Content::Fields(fields) => {
-                if base.prose_text.is_some() {
-                    return Err(DeltaError::ProseHasNoFields {
-                        name: name.to_string(),
-                    });
-                }
-                let mut differing = match held.as_ref() {
-                    Some(held) if held.form == DeltaForm::Changed => held
-                        .field_values
-                        .as_ref()
-                        .and_then(|values| values.as_object().cloned())
-                        .unwrap_or_default(),
-                    _ => serde_json::Map::new(),
-                };
-                for (field, value) in fields {
-                    let value = serde_json::to_value(&value)
-                        .map_err(|e| DeltaError::Unstorable(e.to_string()))?;
-                    differing.insert(field, value);
-                }
-                // FR-023: what matches the book is not a difference.
-                differing.retain(|field, value| base.field_values.get(field) != Some(value));
-                (
-                    (!differing.is_empty()).then_some(serde_json::Value::Object(differing)),
-                    None,
-                )
-            }
-            Content::Prose(text) => {
-                if base.prose_text.is_none() {
-                    return Err(DeltaError::FieldsHaveNoProse {
-                        name: name.to_string(),
-                    });
-                }
-                let differs = base.prose_text.as_deref() != Some(text.as_str());
-                (None, differs.then_some(text))
-            }
-        };
-
-        if field_values.is_none() && prose_text.is_none() {
-            remove_held(conn, world_id, compendium_id, kind, name)?;
-            return Ok(None);
-        }
-
-        let book_origin = origin_of_book(conn, compendium_id)?;
-        upsert(
-            conn,
-            caller,
-            world_id,
-            compendium_id,
-            kind,
-            name,
-            DeltaForm::Changed,
-            book_origin,
-            field_values,
-            prose_text,
-        )
-        .map(Some)
-    })
-}
-
-/// Stop showing an entry in this world, leaving it in the book and in every
-/// other world (FR-021).
-///
-/// Any change already held over it goes: a hidden entry holds no content, so
-/// restoring it brings back the book's entry rather than a half-remembered
-/// edit.
-pub fn hide_entry(
-    conn: &mut PgConnection,
-    caller: Uuid,
-    world_id: Uuid,
-    compendium_id: Uuid,
-    kind: &str,
-    name: &str,
-) -> Result<Delta, DeltaError> {
-    may_change(conn, caller, world_id, compendium_id)?;
-
-    conn.transaction(|conn| {
-        let base = base_with_identity(conn, compendium_id, kind, name)?;
-        the_one(base, kind, name)?;
-        let book_origin = origin_of_book(conn, compendium_id)?;
-        upsert(
-            conn,
-            caller,
-            world_id,
-            compendium_id,
-            kind,
-            name,
-            DeltaForm::Hidden,
-            book_origin,
-            None,
-            None,
-        )
-    })
-}
-
-/// Write an entry into this world beside the book (FR-021, FR-052a).
-///
-/// Authored, always, and not because a caller said so: [`DeltaForm::Added`]
-/// has one origin and the database refuses any other.
-pub fn add_entry(
-    conn: &mut PgConnection,
-    caller: Uuid,
-    world_id: Uuid,
-    compendium_id: Uuid,
-    kind: &str,
-    name: &str,
-    content: Content,
-) -> Result<Delta, DeltaError> {
-    may_change(conn, caller, world_id, compendium_id)?;
-    if kind.trim().is_empty() || name.trim().is_empty() {
-        return Err(DeltaError::Unnamed);
-    }
-
-    conn.transaction(|conn| {
-        if !base_with_identity(conn, compendium_id, kind, name)?.is_empty() {
-            return Err(DeltaError::AlreadyInTheBook {
-                kind: kind.to_string(),
-                name: name.to_string(),
-            });
-        }
-        if held_over(conn, world_id, compendium_id, kind, name)?.is_some() {
-            return Err(DeltaError::AlreadyAdded {
-                kind: kind.to_string(),
-                name: name.to_string(),
-            });
-        }
-
-        let (field_values, prose_text) = whole(content)?;
-        let book_origin = origin_of_book(conn, compendium_id)?;
-        upsert(
-            conn,
-            caller,
-            world_id,
-            compendium_id,
-            kind,
-            name,
-            DeltaForm::Added,
-            book_origin,
-            Some(field_values),
-            prose_text,
-        )
-    })
-}
-
-/// Put an entry back as the book has it (FR-024) — or, for an addition, take
-/// it out of the world.
-///
-/// Returns the delta that was removed, so a caller can say what went.
-pub fn restore_entry(
-    conn: &mut PgConnection,
-    caller: Uuid,
-    world_id: Uuid,
-    compendium_id: Uuid,
-    kind: &str,
-    name: &str,
-) -> Result<Delta, DeltaError> {
-    may_change(conn, caller, world_id, compendium_id)?;
-    remove_held(conn, world_id, compendium_id, kind, name)?.ok_or_else(|| {
-        DeltaError::NothingToRestore {
-            kind: kind.to_string(),
-            name: name.to_string(),
-        }
-    })
-}
-
-/// Both gates a change passes: the caller is trusted with this table's books
-/// (FR-020a), and the book is one this world is reading (FR-042).
-fn may_change(
-    conn: &mut PgConnection,
-    caller: Uuid,
-    world_id: Uuid,
-    compendium_id: Uuid,
-) -> Result<(), DeltaError> {
-    book_list::require_book_manager(conn, caller, world_id)?;
-    book_list::require_served(conn, world_id, compendium_id)?;
-    Ok(())
-}
-
-fn origin_of_book(conn: &mut PgConnection, compendium_id: Uuid) -> QueryResult<ContentOrigin> {
-    compendiums::table
-        .filter(compendiums::id.eq(compendium_id))
-        .select(compendiums::origin)
-        .first(conn)
-}
-
-fn base_with_identity(
-    conn: &mut PgConnection,
-    compendium_id: Uuid,
-    kind: &str,
-    name: &str,
-) -> QueryResult<Vec<StoredEntry>> {
-    compendium_entries::table
-        .filter(compendium_entries::compendium_id.eq(compendium_id))
-        .filter(compendium_entries::kind.eq(kind))
-        .filter(compendium_entries::name.eq(name))
-        .select(StoredEntry::as_select())
-        .load(conn)
-}
-
-/// The base entry a delta may attach to, or the refusal (FR-025, FR-025a).
-fn the_one(mut base: Vec<StoredEntry>, kind: &str, name: &str) -> Result<StoredEntry, DeltaError> {
-    match base.len() {
-        0 => Err(DeltaError::NoSuchEntry {
-            kind: kind.to_string(),
-            name: name.to_string(),
-        }),
-        1 => Ok(base.remove(0)),
-        count => Err(DeltaError::Ambiguous {
-            kind: kind.to_string(),
-            name: name.to_string(),
-            count,
-        }),
-    }
-}
-
-fn held_over(
-    conn: &mut PgConnection,
-    world_id: Uuid,
-    compendium_id: Uuid,
-    kind: &str,
-    name: &str,
-) -> QueryResult<Option<Delta>> {
-    world_entry_deltas::table
-        .filter(world_entry_deltas::world_id.eq(world_id))
-        .filter(world_entry_deltas::compendium_id.eq(compendium_id))
-        .filter(world_entry_deltas::kind.eq(kind))
-        .filter(world_entry_deltas::name.eq(name))
-        .select(Delta::as_select())
-        .first(conn)
-        .optional()
-}
-
-fn remove_held(
-    conn: &mut PgConnection,
-    world_id: Uuid,
-    compendium_id: Uuid,
-    kind: &str,
-    name: &str,
-) -> QueryResult<Option<Delta>> {
-    diesel::delete(
-        world_entry_deltas::table
-            .filter(world_entry_deltas::world_id.eq(world_id))
-            .filter(world_entry_deltas::compendium_id.eq(compendium_id))
-            .filter(world_entry_deltas::kind.eq(kind))
-            .filter(world_entry_deltas::name.eq(name)),
-    )
-    .returning(Delta::as_select())
-    .get_result(conn)
-    .optional()
-}
-
-/// An addition's content, whole.
-fn whole(content: Content) -> Result<(serde_json::Value, Option<String>), DeltaError> {
-    Ok(match content {
-        Content::Fields(fields) => (
-            serde_json::to_value(&fields).map_err(|e| DeltaError::Unstorable(e.to_string()))?,
-            None,
-        ),
-        Content::Prose(text) => (serde_json::json!({}), Some(text)),
-    })
-}
-
-/// Replace what an addition holds. There is no book to differ from, so the
-/// fields named are laid over the addition's own and prose is replaced.
-fn change_addition(
-    conn: &mut PgConnection,
-    caller: Uuid,
-    addition: Delta,
-    content: Content,
-) -> Result<Delta, DeltaError> {
-    let is_prose = addition.prose_text.is_some();
-    let (field_values, prose_text) = match content {
-        Content::Fields(fields) => {
-            if is_prose {
-                return Err(DeltaError::ProseHasNoFields {
-                    name: addition.name,
-                });
-            }
-            let mut held = addition
-                .field_values
-                .as_ref()
-                .and_then(|values| values.as_object().cloned())
-                .unwrap_or_default();
-            for (field, value) in fields {
-                held.insert(
-                    field,
-                    serde_json::to_value(&value)
-                        .map_err(|e| DeltaError::Unstorable(e.to_string()))?,
-                );
-            }
-            (serde_json::Value::Object(held), None)
-        }
-        Content::Prose(text) => {
-            let has_fields = addition
-                .field_values
-                .as_ref()
-                .and_then(|values| values.as_object())
-                .is_some_and(|values| !values.is_empty());
-            if has_fields {
-                return Err(DeltaError::FieldsHaveNoProse {
-                    name: addition.name,
-                });
-            }
-            (serde_json::json!({}), Some(text))
-        }
-    };
-
-    diesel::update(world_entry_deltas::table.filter(world_entry_deltas::id.eq(addition.id)))
-        .set((
-            world_entry_deltas::field_values.eq(Some(field_values)),
-            world_entry_deltas::prose_text.eq(prose_text),
-            world_entry_deltas::changed_by.eq(Some(caller)),
-            world_entry_deltas::updated_at.eq(diesel::dsl::now),
-        ))
-        .returning(Delta::as_select())
-        .get_result(conn)
-        .map_err(Into::into)
-}
-
-/// Write a delta over an identity, replacing whatever this world held there.
-///
-/// The origin is computed here from the form, never taken from a caller; the
-/// trigger checks it again. An update never names `origin`, so a change can
-/// never become an addition in place — the trigger would refuse it, and this
-/// function gives it nothing to try with.
-#[allow(clippy::too_many_arguments)]
-fn upsert(
-    conn: &mut PgConnection,
-    caller: Uuid,
-    world_id: Uuid,
-    compendium_id: Uuid,
-    kind: &str,
-    name: &str,
-    form: DeltaForm,
-    book_origin: ContentOrigin,
-    field_values: Option<serde_json::Value>,
-    prose_text: Option<String>,
-) -> Result<Delta, DeltaError> {
-    diesel::insert_into(world_entry_deltas::table)
-        .values((
-            world_entry_deltas::id.eq(Uuid::now_v7()),
-            world_entry_deltas::world_id.eq(world_id),
-            world_entry_deltas::compendium_id.eq(compendium_id),
-            world_entry_deltas::kind.eq(kind),
-            world_entry_deltas::name.eq(name),
-            world_entry_deltas::form.eq(form),
-            world_entry_deltas::origin.eq(form.origin_over(book_origin)),
-            world_entry_deltas::field_values.eq(&field_values),
-            world_entry_deltas::prose_text.eq(&prose_text),
-            world_entry_deltas::changed_by.eq(Some(caller)),
-        ))
-        .on_conflict((
-            world_entry_deltas::world_id,
-            world_entry_deltas::compendium_id,
-            world_entry_deltas::kind,
-            world_entry_deltas::name,
-        ))
-        .do_update()
-        .set((
-            world_entry_deltas::form.eq(form),
-            world_entry_deltas::field_values.eq(&field_values),
-            world_entry_deltas::prose_text.eq(&prose_text),
-            world_entry_deltas::changed_by.eq(Some(caller)),
-            world_entry_deltas::updated_at.eq(diesel::dsl::now),
-        ))
-        .returning(Delta::as_select())
-        .get_result(conn)
-        .map_err(Into::into)
-}
+use write::origin_of_book;
+pub use write::{add_entry, change_entry, hide_entry, restore_entry};
 
 #[cfg(test)]
-#[path = "deltas_rule_tests.rs"]
+#[path = "rule_tests.rs"]
 mod rule_tests;
 
 #[cfg(test)]
-#[path = "deltas_tests.rs"]
+#[path = "tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "lifecycle_tests.rs"]
+mod lifecycle_tests;

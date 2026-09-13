@@ -19,6 +19,7 @@ import {
   type WorldBook,
   type WorldBookEntry,
 } from "./worldBooks";
+import { KeptAdditions } from "./KeptAdditions";
 import type { ReadValue } from "@/engine/sdk/ReadValue";
 
 /**
@@ -76,6 +77,9 @@ export function BookListTab({
   const [error, setError] = useState<string | null>(null);
   const [leaving, setLeaving] = useState<SwitchOffReport | null>(null);
   const [browsing, setBrowsing] = useState<string | null>(null);
+  // Bumped whenever a book goes on or off, so what the table wrote beside a
+  // book is re-read at the moment it may have been left without one.
+  const [listVersion, setListVersion] = useState(0);
 
   const readList = useCallback(() => {
     worldBookList(worldId)
@@ -112,6 +116,7 @@ export function BookListTab({
         .then((list) => {
           setBooks(list);
           readOffers();
+          setListVersion((seen) => seen + 1);
         })
         .catch((cause: unknown) =>
           setError(
@@ -147,6 +152,7 @@ export function BookListTab({
         setBrowsing((open) => (open === leaving.compendiumId ? null : open));
         readList();
         readOffers();
+        setListVersion((seen) => seen + 1);
       })
       .catch((cause: unknown) =>
         setError(
@@ -267,14 +273,26 @@ export function BookListTab({
               {leaving.entryCount > leaving.entryNames.length && ", and more"}.
             </p>
           )}
-          {/* 050 FR-013: this world's own changes go with the book, and an
-              addition is somebody's writing — so each is named, uncapped. */}
+          {/* 050 FR-013: this world's changes and hides go with the book, so
+              each is named, uncapped. */}
           {leaving.deltas.length > 0 && (
             <div className="text-sm" data-testid="deltas-lost">
-              <p>This world&apos;s own changes to it go too:</p>
+              <p>This world&apos;s changes to it go too:</p>
               <ul className="list-disc pl-5">
                 {leaving.deltas.map((delta) => (
                   <li key={delta}>{delta}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {/* Decision 5: what the table added beside the book stays, and the
+              person switching it off is told so before they decide. */}
+          {leaving.additionsKept.length > 0 && (
+            <div className="text-sm" data-testid="additions-kept">
+              <p>What this table added beside it stays, as its own writing:</p>
+              <ul className="list-disc pl-5">
+                {leaving.additionsKept.map((addition) => (
+                  <li key={addition}>{addition}</li>
                 ))}
               </ul>
             </div>
@@ -298,6 +316,10 @@ export function BookListTab({
             </Button>
           </div>
         </div>
+      )}
+
+      {managesBooks && (
+        <KeptAdditions worldId={worldId} version={listVersion} />
       )}
 
       {managesBooks && (

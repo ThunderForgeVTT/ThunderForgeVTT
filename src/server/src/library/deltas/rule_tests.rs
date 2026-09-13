@@ -3,7 +3,7 @@
 //! [`resolve`] is a function of two lists, so every edge of it is pinned here
 //! without a database — above all FR-025a, where two entries share a kind and
 //! a name and a delta must attach to neither. The same rules are attacked
-//! against a real database in `deltas_tests.rs`.
+//! against a real database in `tests.rs`.
 
 use super::*;
 

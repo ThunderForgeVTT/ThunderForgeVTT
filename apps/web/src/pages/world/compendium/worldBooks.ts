@@ -54,7 +54,10 @@ export interface SwitchOffReport {
   bookTitle: string;
   entryCount: number;
   entryNames: string[];
+  /** Changes and hides this world made over the book: these go with it. */
   deltas: string[];
+  /** What this world added beside the book: these stay (spec 050 decision 5). */
+  additionsKept: string[];
   switchedOff: boolean;
 }
 
@@ -229,6 +232,7 @@ export async function switchOff(
          entryCount
          entryNames
          deltas
+         additionsKept
          switchedOff
        }
      }`,
@@ -386,4 +390,24 @@ export async function restoreEntry(
     { ...address },
   );
   return data.restoreWorldEntry;
+}
+
+/**
+ * What this world added beside books it has since switched off (spec 050
+ * decision 5). Kept, because the world's own writing never needed the book;
+ * each names the book it was written beside in `bookTitle`, and rejoins that
+ * book's page if the book is switched back on.
+ */
+export async function additionsWithoutBook(
+  worldId: string,
+): Promise<WorldBookEntry[]> {
+  const data = await postGraphQL<{
+    worldAdditionsWithoutBook: WorldBookEntry[];
+  }>(
+    `query WorldAdditionsWithoutBook($worldId: UUID!) {
+       worldAdditionsWithoutBook(worldId: $worldId) { ${ENTRY_FIELDS} }
+     }`,
+    { worldId },
+  );
+  return data.worldAdditionsWithoutBook;
 }
