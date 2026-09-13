@@ -1,7 +1,7 @@
 # ADR-100: An Operator Can Pause a World's Play
 
 **Date:** 2026-09-13
-**Status:** **PROPOSED**. Needs the accountable owner's acceptance before spec 051's Phase 2.
+**Status:** **ACCEPTED** by the accountable owner, 2026-09-13, the day it was proposed.
 **Participants:** ThunderForgeVTT Team
 **Related:** spec 051 (decisions 1–3, FR-001 … FR-064), spec 015 T042, spec 042, ADR-077, ADR-078, ADR-099, `src/server/src/graphql/session_lifetime.rs`
 

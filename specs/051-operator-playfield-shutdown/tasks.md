@@ -35,7 +35,7 @@ description: "Task list for spec 051, pausing a world's play"
 
 **Purpose**: The authority decision, and the one new dependency.
 
-- [ ] T001 Get ADR-100 accepted by the owner in `docs/adrs/20260913-100-an_operator_can_pause_a_worlds_play.md`. Update its **Status** line and the row in `docs/adrs/README.md`. **Phase 3 (US1) must not start until this is accepted.** Phases 1–2 are reversible and may proceed meanwhile.
+- [x] T001 Get ADR-100 accepted by the owner in `docs/adrs/20260913-100-an_operator_can_pause_a_worlds_play.md`. Update its **Status** line and the row in `docs/adrs/README.md`. **Phase 3 (US1) must not start until this is accepted.** Phases 1–2 are reversible and may proceed meanwhile.
 - [ ] T002 [P] Add `@axe-core/playwright` as a dev dependency in `apps/web/package.json` (pin an exact version, `pnpm install`). Add a helper `expectNoAxeViolations(page, selector?)` in `apps/web/e2e/fixtures/axe.ts`.
 - [ ] T003 [P] Remove the unused, membership-less world socket (research R7):
   1. Confirm nothing in `apps/` or `packages/` connects to `/api/events`: `grep -rn "api/events" apps packages --include=*.ts --include=*.tsx`.
