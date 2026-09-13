@@ -34,4 +34,15 @@
 //! owner's shelf, and does it match? — in a trigger on `world_books`, so a
 //! route that never calls this module still cannot write the row.
 
+//!
+//! # What a world changes, it changes over the book
+//!
+//! [`deltas`] holds a world's own changes to what it inherited — an entry
+//! changed, hidden or added — as a difference laid over the base at read
+//! time, never as an edit of the base and never as a copy of it (FR-020 to
+//! FR-023). It attaches by kind and name, refuses where those name more than
+//! one entry (FR-025a), and records an origin per entry rather than per book
+//! (FR-052, FR-052a).
+
 pub mod book_list;
+pub mod deltas;

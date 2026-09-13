@@ -322,3 +322,98 @@ a copied entry at least as much as to a link, so neither can close the gap.
 **What would reopen it**: a delta table that stores anything per world beyond
 a link (Phase 11), any column added to `world_books`, or a change to what an
 entry stores.
+
+---
+
+## Phase 11: what a world's changes cost to read (T076)
+
+**Date**: 2026-09-13 · **Commit**: `74e2fb0`
+
+```bash
+cargo run --release -p thunderforge-server --features test-support \
+    --example library_deltas
+```
+
+One synthetic book of 1500 creatures, switched on in one world, beside
+1500 of that world's own items whose descriptions are padded to the same
+field map. Every read is the whole book at once. 5 untimed runs, then
+200 timed; median and 95th percentile in milliseconds, wall clock, against
+a local Postgres, inside one transaction that is rolled back.
+
+| Read | Median ms | p95 ms |
+|---|---|---|
+| World-owned: 1500 of a world's own items, as text | 2.13 | 2.34 |
+| World-owned: the same 1500, fields decoded as a book's are | 5.08 | 5.44 |
+| Inherited: the entries query alone, no book-list checks | 8.06 | 8.74 |
+| Inherited: Phase 9's fetch, no delta model | 8.09 | 8.93 |
+| Inherited, resolved: 0 of 1500 changed (0%) | 8.77 | 10.68 |
+| Inherited, resolved: 15 of 1500 changed (1%) | 9.96 | 11.54 |
+| Inherited, resolved: 150 of 1500 changed (10%) | 9.61 | 11.49 |
+| Inherited, resolved: 1500 of 1500 changed (100%) | 18.08 | 21.58 |
+| The resolution alone, in memory, 1500 changed | 4.64 | 5.17 |
+
+### Reading this honestly
+
+**An inherited book was already slower to read than a world's own content,
+before any delta existed**, and the reason is measurable rather than
+guessable. A world's own rows as text: 2.13 ms. The same rows with their
+fields decoded into a map, as a book entry's must be: 5.08 ms.
+The book's entries query alone: 8.06 ms, and Phase 9's fetch
+around it, with the book-list and system checks: 8.09 ms. Of the
+5.93 ms between a world's text and the entries query, decoding a field map
+accounts for 50%; the rest is the wider stored row (page, name
+certainty, suspicion, extras, JSONB rather than text). The checks add
++0.03 ms. None of it is this phase's. It is recorded because SC-004
+names world-owned content as the bar, and a bar of plain text would have
+charged the delta model for Phase 9's shape.
+
+**What the delta model adds**, over Phase 9's fetch at the median: with
+nothing changed, +0.67 ms (1.08x); at every level up to
+10% of the book changed, at most 1.23x; at every entry changed,
+2.23x. The rule itself, in memory, with every entry changed, is
+4.64 ms of that.
+
+**The margins SC-004 and FR-072 were waiting for**, fixed from the numbers
+above plus a tenth, rounded up to the next quarter:
+
+- **FR-072**: resolving a book a world has changed by hand — up to 10% of its
+  entries — MUST stay within **1.50x** the time of Phase 9's
+  unresolved fetch of the same book. A world that has changed every entry MUST
+  stay within **2.50x**.
+- **SC-004**: reading an inherited book, resolved, up to 10% changed, MUST
+  stay within **2.25x** reading the same number of world-owned rows
+  carrying the same field map (the second row above).
+
+Ratios and not milliseconds on purpose: milliseconds are a property of the
+machine, and a ratio of two reads taken in the same run on the same machine is
+a property of the code.
+
+**Threats to validity.**
+- *One machine, a local Postgres, one run.* The ordering of adjacent levels
+  (0% against 1%) is within run-to-run noise and should not be read as one
+  being faster; the 100% row is far outside it. A remote database adds a round
+  trip to every read, and this phase adds one query, so its share would grow
+  there.
+- *Synthetic entries of one shape.* Real entries vary by kind. The padded
+  world-owned row matches the book entry's field map in bytes and in decoding,
+  not the variety of a real book.
+- *The whole book per read.* The wire pages at 200 entries at most, but the
+  resolution happens before paging, so every page pays for resolving the whole
+  book. That is a real cost of this design and it is what is measured: a book
+  several times larger than 1500 entries is where resolving per page
+  would be worth its complexity.
+- *Inside a transaction*, so reads see their own uncommitted rows; every
+  compared read pays that alike.
+
+**What would reopen it**: resolving per page, any change to
+`book_list::entries_served_by` or to what an entry stores, or a book an order
+of magnitude larger.
+
+**Across runs** (added by hand, the one transcribed paragraph in this
+section, because a single generated run cannot say it): the same command on
+the same machine a few minutes earlier gave 1.00x at up to 10% changed and
+1.76x at every entry changed, against 1.23x and 2.23x above. The spread
+between two runs is as large as the delta model's whole cost at 10%, which is
+why the margins carry headroom rather than sitting on either run.
+
+---

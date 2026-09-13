@@ -14,6 +14,11 @@ use crate::test_support::{
     insert_test_user, insert_test_world, insert_test_world_member, test_app_state,
 };
 use diesel::prelude::*;
+use std::collections::BTreeMap;
+
+use async_graphql::Json;
+
+use crate::content::ReadValue;
 
 const SYSTEM: &str = "test-system";
 
@@ -99,7 +104,7 @@ async fn a_player_reads_the_list_and_cannot_change_it() {
             .is_err()
     );
     assert!(
-        world_compendium_entries_impl(&state, player, world, book.id, None, None, None)
+        world_compendium_entries_impl(&state, player, world, book.id, None, None, None, false)
             .await
             .is_err(),
         "browsing a book is a Game Master's, not a player's (049 FR-042)"
@@ -135,9 +140,10 @@ async fn a_co_game_master_uses_here_and_inherits_nowhere() {
         .await
         .unwrap();
 
-    let browsed = world_compendium_entries_impl(&state, co_gm, shared, book.id, None, None, None)
-        .await
-        .unwrap();
+    let browsed =
+        world_compendium_entries_impl(&state, co_gm, shared, book.id, None, None, None, false)
+            .await
+            .unwrap();
     assert_eq!(browsed.total, 2, "a co-GM uses what the table is running");
 
     assert!(
@@ -177,7 +183,7 @@ async fn a_stranger_reads_nothing() {
 
     assert!(world_book_list_impl(&state, stranger, world).await.is_err());
     assert!(
-        world_compendium_entries_impl(&state, stranger, world, book.id, None, None, None)
+        world_compendium_entries_impl(&state, stranger, world, book.id, None, None, None, false)
             .await
             .is_err()
     );
@@ -213,7 +219,7 @@ async fn a_changed_system_is_reported_and_not_served() {
     assert_eq!(listed.len(), 1);
     assert!(!listed[0].system_matches);
     assert!(
-        world_compendium_entries_impl(&state, owner, world, book.id, None, None, None)
+        world_compendium_entries_impl(&state, owner, world, book.id, None, None, None, false)
             .await
             .is_err(),
         "a book the world no longer matches must not go on being served"
@@ -265,7 +271,7 @@ async fn switching_off_reports_before_it_takes() {
             .is_empty()
     );
     assert!(
-        world_compendium_entries_impl(&state, owner, world, book.id, None, None, None)
+        world_compendium_entries_impl(&state, owner, world, book.id, None, None, None, false)
             .await
             .is_err(),
         "and the content goes with the link, because there was never a copy"
@@ -411,9 +417,18 @@ async fn the_book_list_answers_to_owner_game_master_and_trusted_player_alone() {
         }
 
         assert_eq!(
-            world_compendium_entries_impl(&state, caller, world, owners_book.id, None, None, None)
-                .await
-                .is_ok(),
+            world_compendium_entries_impl(
+                &state,
+                caller,
+                world,
+                owners_book.id,
+                None,
+                None,
+                None,
+                false
+            )
+            .await
+            .is_ok(),
             browses,
             "{who}: browse the book"
         );
@@ -447,4 +462,150 @@ async fn the_book_list_answers_to_owner_game_master_and_trusted_player_alone() {
                 .unwrap();
         }
     }
+}
+
+fn hits(value: &str) -> Option<Json<BTreeMap<String, ReadValue>>> {
+    Some(Json(
+        [("hits".to_string(), ReadValue::Clear(value.to_string()))]
+            .into_iter()
+            .collect(),
+    ))
+}
+
+/// 050 FR-052 and FR-052a at the wire: on one page of one uploaded book, the
+/// changed entry says it may not be shared and why, and the addition beside it
+/// says it may. A client that shows these badges never works origin out.
+#[tokio::test]
+async fn the_page_carries_origin_per_entry() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let owner = insert_test_user(&mut conn);
+    let world = a_world_running(&mut conn, owner, SYSTEM);
+    let book = store::import_book(
+        &mut conn,
+        owner,
+        a_book("Monster Manual", SYSTEM),
+        &[a_creature("Goblin")],
+    )
+    .unwrap();
+    drop(conn);
+    switch_on_impl(&state, owner, world, book.id).await.unwrap();
+
+    let changed = change_world_entry_impl(
+        &state,
+        owner,
+        world,
+        book.id,
+        "creature".to_string(),
+        "Goblin".to_string(),
+        EntryChangeRequest::Change {
+            field_values: hits("12"),
+            prose_text: None,
+        },
+    )
+    .await
+    .unwrap()
+    .expect("the changed goblin");
+    assert_eq!(changed.state, GraphQLEntryState::Changed);
+    assert_eq!(changed.origin, GraphQLContentOrigin::Uploaded);
+    assert!(!changed.may_be_shared);
+    assert!(changed.not_shareable_because.is_some());
+
+    let added = change_world_entry_impl(
+        &state,
+        owner,
+        world,
+        book.id,
+        "creature".to_string(),
+        "Mire Hag".to_string(),
+        EntryChangeRequest::Add {
+            field_values: None,
+            prose_text: Some("Lives in the fen.".to_string()),
+        },
+    )
+    .await
+    .unwrap()
+    .expect("the addition");
+    assert_eq!(added.state, GraphQLEntryState::Added);
+    assert_eq!(added.origin, GraphQLContentOrigin::Authored);
+    assert!(added.may_be_shared);
+    assert!(
+        added.page.is_none(),
+        "an addition is on no page of the book"
+    );
+
+    let page =
+        world_compendium_entries_impl(&state, owner, world, book.id, None, None, None, false)
+            .await
+            .unwrap();
+    assert_eq!(page.total, 2);
+    assert!(page.unattached.is_empty());
+}
+
+/// FR-020a at the wire: a Player is refused every change, and a request that
+/// carries both fields and prose is refused before it reaches the store.
+#[tokio::test]
+async fn a_player_cannot_change_what_the_world_inherited() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let owner = insert_test_user(&mut conn);
+    let player = insert_test_user(&mut conn);
+    let world = a_world_running(&mut conn, owner, SYSTEM);
+    insert_test_world_member(&mut conn, world, player, "Player");
+    let book = store::import_book(
+        &mut conn,
+        owner,
+        a_book("Monster Manual", SYSTEM),
+        &[a_creature("Goblin")],
+    )
+    .unwrap();
+    drop(conn);
+    switch_on_impl(&state, owner, world, book.id).await.unwrap();
+
+    for request in [
+        EntryChangeRequest::Change {
+            field_values: hits("12"),
+            prose_text: None,
+        },
+        EntryChangeRequest::Hide,
+        EntryChangeRequest::Add {
+            field_values: None,
+            prose_text: Some("Mine now.".to_string()),
+        },
+        EntryChangeRequest::Restore,
+    ] {
+        let refused = change_world_entry_impl(
+            &state,
+            player,
+            world,
+            book.id,
+            "creature".to_string(),
+            "Goblin".to_string(),
+            request,
+        )
+        .await;
+        assert!(refused.is_err());
+    }
+
+    let both = change_world_entry_impl(
+        &state,
+        owner,
+        world,
+        book.id,
+        "creature".to_string(),
+        "Goblin".to_string(),
+        EntryChangeRequest::Change {
+            field_values: hits("12"),
+            prose_text: Some("and prose".to_string()),
+        },
+    )
+    .await;
+    assert!(both.is_err(), "fields or prose, never both");
+
+    let mut conn = state.db_pool.get().unwrap();
+    assert!(
+        crate::library::deltas::deltas_over(&mut conn, world, book.id, None)
+            .unwrap()
+            .is_empty()
+    );
 }

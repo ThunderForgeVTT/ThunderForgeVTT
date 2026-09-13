@@ -37,6 +37,12 @@ test-support = []
 name = "library_storage"
 required-features = ["test-support"]
 
+# Spec 050 T076: what resolving a world's changes over a book costs to read,
+# against a world's own content. Built from `test_support` for the same reason.
+[[example]]
+name = "library_deltas"
+required-features = ["test-support"]
+
 [dependencies]
 tokio = { version = "1.53.1", features = ["full"] }
 serde = { version = "1.0.229", features = ["derive"] }

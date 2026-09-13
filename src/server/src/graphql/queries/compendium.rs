@@ -379,7 +379,7 @@ pub(crate) fn kind_counts(stored: &serde_json::Value) -> Vec<GraphQLKindCount> {
 /// Cursors are opaque on the wire so that what they encode stays this
 /// module's business — a client that learned to build one would be a client
 /// that breaks when the order changes.
-fn encode_cursor(id: Uuid) -> String {
+pub(crate) fn encode_cursor(id: Uuid) -> String {
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(id.as_bytes())
 }
 

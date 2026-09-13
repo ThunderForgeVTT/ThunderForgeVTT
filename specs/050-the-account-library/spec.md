@@ -531,6 +531,10 @@ same over an imported compendium and confirm there is no route.
 - **FR-072**: Resolving base plus delta MUST NOT make reading content
   noticeably slower than reading world-owned content is today, and "noticeably"
   MUST be given a number by measurement before this ships.
+  *(Measured on 2026-09-13, spec 049 `measurements.md` Phase 11: resolving a
+  book changed by hand — up to 10% of its entries — MUST stay within 1.5x
+  the unresolved fetch of the same book, and within 2.5x with every entry
+  changed.)*
 
 **Proof**
 
@@ -602,7 +606,11 @@ same over an imported compendium and confirm there is no route.
 - **SC-003a**: A player can see which books their table is running, and cannot
   change them, in 100% of attempts.
 - **SC-004**: Reading an inherited entry is no slower than reading a
-  world-owned one by a margin fixed by measurement before release.
+  world-owned one by a margin fixed by measurement before release. *(Fixed
+  on 2026-09-13 at 2.25x the same number of world-owned rows carrying the same
+  field map, up to 10% changed. Against world-owned plain text the inherited
+  read was already 3.8x before any delta existed — the richer row, not the
+  delta — so the bar is stated against a like-shaped row.)*
 - **SC-005**: An edit in one world reaches no other world and no base, in 100%
   of runs.
 - **SC-006**: After a re-import, 100% of deltas whose entry still exists still

@@ -10,6 +10,10 @@ pub mod sql_types {
     pub struct ContentOrigin;
 
     #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "DeltaForm"))]
+    pub struct DeltaForm;
+
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "PolicyEffect"))]
     pub struct PolicyEffect;
 }
@@ -1163,6 +1167,28 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::DeltaForm;
+    use super::sql_types::ContentOrigin;
+
+    world_entry_deltas (id) {
+        id -> Uuid,
+        world_id -> Uuid,
+        compendium_id -> Uuid,
+        #[max_length = 64]
+        kind -> Varchar,
+        name -> Text,
+        form -> DeltaForm,
+        origin -> ContentOrigin,
+        field_values -> Nullable<Jsonb>,
+        prose_text -> Nullable<Text>,
+        changed_by -> Nullable<Uuid>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     world_events (id) {
         id -> Int8,
         world_id -> Uuid,
@@ -1505,6 +1531,7 @@ diesel::joinable!(world_combatants -> world_actors (actor_id));
 diesel::joinable!(world_combats -> scenes (scene_id));
 diesel::joinable!(world_combats -> users (created_by));
 diesel::joinable!(world_combats -> worlds (world_id));
+diesel::joinable!(world_entry_deltas -> users (changed_by));
 diesel::joinable!(world_events -> worlds (world_id));
 diesel::joinable!(world_invites -> users (created_by));
 diesel::joinable!(world_invites -> worlds (world_id));
@@ -1613,6 +1640,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     world_collections,
     world_combatants,
     world_combats,
+    world_entry_deltas,
     world_events,
     world_invites,
     world_item_abilities,

@@ -126,7 +126,11 @@ impl From<diesel::result::Error> for BookListError {
 /// `require_account_owner` refuses one for exactly that reason. An operator
 /// acting against imported content has the moderation route, which is a
 /// different act from putting somebody's book on somebody's table.
-fn require_book_manager(
+///
+/// Shared with [`super::deltas`] rather than restated there: changing what a
+/// world inherited is book material too (FR-020a), and two copies of "who is
+/// trusted with this table's books" are two answers waiting to differ.
+pub(crate) fn require_book_manager(
     conn: &mut PgConnection,
     caller: Uuid,
     world_id: Uuid,
@@ -313,10 +317,11 @@ pub fn offerable_to(
 /// entry to enumerate, so what a Game Master loses is the book's whole
 /// contribution to this table, and that is what this counts and names.
 ///
-/// `deltas` is empty, and empty as a fact rather than as a gap: a world's
-/// changes over a base are spec 050's delta model, which is a later phase and
-/// has no table yet. When it arrives this is the function that learns it, and
-/// both callers already go through here.
+/// `deltas` names every change this world made over the book — changed,
+/// hidden and added alike — because every one of them goes with the link
+/// (the cascade on `world_entry_deltas`). An addition is a person's own
+/// writing, and the report is the last moment they can be told it is about
+/// to go.
 #[derive(Debug, Clone)]
 pub struct SwitchOffReport {
     pub compendium_id: Uuid,
@@ -326,8 +331,10 @@ pub struct SwitchOffReport {
     /// Some of them by name, so a person recognises what they are turning
     /// off. Capped: a Monster Manual is not a confirmation dialogue.
     pub entry_names: Vec<String>,
-    /// Changes this world made over the book, which go with it. None can
-    /// exist yet; see above.
+    /// Changes this world made over the book, which go with it, each named
+    /// by form, kind and name (050 FR-013, 049 FR-046). Uncapped, unlike the
+    /// entry names: a Monster Manual is not a confirmation dialogue, but a
+    /// world's own work is exactly what a confirmation is for.
     pub deltas: Vec<String>,
 }
 
@@ -375,7 +382,7 @@ pub fn switch_off_report(
         book_title,
         entry_count,
         entry_names,
-        deltas: Vec::new(),
+        deltas: super::deltas::deltas_named(conn, world_id, compendium_id)?,
     })
 }
 
@@ -424,18 +431,7 @@ pub fn entries_served_by(
     compendium_id: Uuid,
     kind: Option<&str>,
 ) -> Result<(String, Vec<StoredEntry>), BookListError> {
-    let listed = books_on(conn, world_id)?
-        .into_iter()
-        .find(|listed| listed.row.compendium_id == compendium_id)
-        .ok_or(BookListError::NotOnTheList)?;
-
-    if !listed.system_matches {
-        let world_system = system_of_world(conn, world_id)?;
-        return Err(BookListError::SystemMismatch {
-            book_system: listed.system_id,
-            world_system,
-        });
-    }
+    let listed = require_served(conn, world_id, compendium_id)?;
 
     let mut query = compendium_entries::table
         .filter(compendium_entries::compendium_id.eq(compendium_id))
@@ -453,6 +449,33 @@ pub fn entries_served_by(
         .load(conn)?;
 
     Ok((listed.book_title, entries))
+}
+
+/// The book, if this world has it switched on **and** still runs the system
+/// it was read as — the two conditions under which a world may read it, and
+/// therefore the two under which it may change it (FR-042).
+///
+/// A delta over a mismatched book is refused for the reason the book is not
+/// served: a world that has moved to another system is not reading this one,
+/// and an edit to something it is not reading would be invisible work.
+pub(crate) fn require_served(
+    conn: &mut PgConnection,
+    world_id: Uuid,
+    compendium_id: Uuid,
+) -> Result<ListedBook, BookListError> {
+    let listed = books_on(conn, world_id)?
+        .into_iter()
+        .find(|listed| listed.row.compendium_id == compendium_id)
+        .ok_or(BookListError::NotOnTheList)?;
+
+    if !listed.system_matches {
+        let world_system = system_of_world(conn, world_id)?;
+        return Err(BookListError::SystemMismatch {
+            book_system: listed.system_id,
+            world_system,
+        });
+    }
+    Ok(listed)
 }
 
 /// Which of this account's worlds have this book switched on (050 FR-060,

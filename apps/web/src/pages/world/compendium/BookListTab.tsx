@@ -3,13 +3,19 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button/Button";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import {
+  addEntry,
   booksOffered,
+  changeEntry,
   entriesFrom,
+  hideEntry,
+  restoreEntry,
   switchOff,
   switchOn,
   worldBookList,
+  type EntryAddress,
   type OfferedBook,
   type SwitchOffReport,
+  type UnattachedDelta,
   type WorldBook,
   type WorldBookEntry,
 } from "./worldBooks";
@@ -261,6 +267,18 @@ export function BookListTab({
               {leaving.entryCount > leaving.entryNames.length && ", and more"}.
             </p>
           )}
+          {/* 050 FR-013: this world's own changes go with the book, and an
+              addition is somebody's writing — so each is named, uncapped. */}
+          {leaving.deltas.length > 0 && (
+            <div className="text-sm" data-testid="deltas-lost">
+              <p>This world&apos;s own changes to it go too:</p>
+              <ul className="list-disc pl-5">
+                {leaving.deltas.map((delta) => (
+                  <li key={delta}>{delta}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="flex gap-2">
             <Button
               type="button"
@@ -334,12 +352,28 @@ export function BookListTab({
 }
 
 /**
- * Browse by compendium, inside the world (spec 049 FR-042).
+ * Browse by compendium, inside the world (spec 049 FR-042), as this world
+ * reads it (spec 050 FR-022).
  *
  * The thing merging the two specs bought: a Game Master reaches what a book
  * says from the table it is switched on for, rather than only from the shelf.
  * Every entry names its book and page, as it does in the library, because
  * FR-043 is a promise to whoever is reading the entry and not to a surface.
+ *
+ * # Changing what the world inherited
+ *
+ * Only the people who manage a table's books see this component at all
+ * (FR-020a), so its controls are theirs. Every change lands in this world
+ * only; the book underneath and every other world are untouched, and each
+ * changed entry shows what the book says beside what the world says (FR-024).
+ *
+ * # Two badges that look alike and mean opposite things
+ *
+ * A changed entry and an added one sit side by side here, and one may be
+ * shared while the other may not (FR-052, FR-052a). The origin is shown on
+ * every entry, in words, from what the server says — this component never
+ * works it out from the state, because working it out is how it gets worked
+ * out wrongly.
  */
 function BookEntries({
   worldId,
@@ -349,17 +383,22 @@ function BookEntries({
   compendiumId: string;
 }) {
   const [entries, setEntries] = useState<WorldBookEntry[]>([]);
+  const [unattached, setUnattached] = useState<UnattachedDelta[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [kind, setKind] = useState<string | null>(null);
+  const [showHidden, setShowHidden] = useState(false);
+  const [version, setVersion] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
-    entriesFrom(worldId, compendiumId, { kind })
+    entriesFrom(worldId, compendiumId, { kind, showHidden })
       .then((page) => {
         if (!live) return;
         setEntries(page.entries);
+        setUnattached(page.unattached);
         setCursor(page.nextCursor);
         setTotal(page.total);
       })
@@ -369,27 +408,48 @@ function BookEntries({
     return () => {
       live = false;
     };
-  }, [worldId, compendiumId, kind]);
+  }, [worldId, compendiumId, kind, showHidden, version]);
 
   const more = useCallback(() => {
     if (!cursor) return;
-    entriesFrom(worldId, compendiumId, { kind, after: cursor })
+    entriesFrom(worldId, compendiumId, { kind, after: cursor, showHidden })
       .then((page) => {
         setEntries((held) => [...held, ...page.entries]);
         setCursor(page.nextCursor);
       })
       .catch(() => setError("Those entries could not be read."));
-  }, [worldId, compendiumId, cursor, kind]);
+  }, [worldId, compendiumId, cursor, kind, showHidden]);
+
+  /** Run a change, then read the book again rather than patching the list —
+   * a client that patches its own copy is a client whose copy can be wrong. */
+  const act = useCallback((change: Promise<unknown>) => {
+    change
+      .then(() => {
+        setRefusal(null);
+        setVersion((seen) => seen + 1);
+      })
+      .catch((cause: unknown) =>
+        setRefusal(
+          cause instanceof Error ? cause.message : "That change was refused.",
+        ),
+      );
+  }, []);
 
   if (error) {
     return <StatusBadge variant="danger">{error}</StatusBadge>;
   }
 
   const kinds = Array.from(new Set(entries.map((entry) => entry.kind)));
+  const address = (entry: WorldBookEntry): EntryAddress => ({
+    worldId,
+    compendiumId,
+    kind: entry.kind,
+    name: entry.name,
+  });
 
   return (
     <div className="grid gap-2" data-testid="world-book-browser">
-      <nav className="flex flex-wrap gap-2">
+      <nav className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
           size="sm"
@@ -411,6 +471,15 @@ function BookEntries({
             {each}
           </Button>
         ))}
+        <label className="flex items-center gap-1 text-sm">
+          <input
+            type="checkbox"
+            checked={showHidden}
+            onChange={(event) => setShowHidden(event.target.checked)}
+            data-testid="world-show-hidden"
+          />
+          Show what this world hides
+        </label>
       </nav>
 
       <p
@@ -420,6 +489,31 @@ function BookEntries({
         Showing {entries.length} of {total}
       </p>
 
+      {refusal && (
+        <StatusBadge variant="danger" data-testid="entry-refusal">
+          {refusal}
+        </StatusBadge>
+      )}
+
+      {/* FR-025a, FR-027: a change this world holds and cannot apply is
+          said, not dropped. */}
+      {unattached.length > 0 && (
+        <div
+          className="grid gap-1 rounded-md border border-amber-500 p-2 text-sm"
+          data-testid="unattached-deltas"
+        >
+          <p>Changes this world holds that are not being applied:</p>
+          <ul className="list-disc pl-5">
+            {unattached.map((delta) => (
+              <li key={`${delta.kind}/${delta.name}`}>
+                {delta.form} {delta.kind} &ldquo;{delta.name}&rdquo; —{" "}
+                {delta.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <ul className="grid gap-2">
         {entries.map((entry) => (
           <li
@@ -427,30 +521,15 @@ function BookEntries({
             className="rounded-md border p-2"
             data-testid={`world-entry-${entry.id}`}
             data-kind={entry.kind}
+            data-name={entry.name}
+            data-state={entry.state}
           >
-            <details>
-              <summary className="cursor-pointer text-sm">
-                <span className="font-medium">{entry.name}</span>{" "}
-                <span className="text-muted-foreground">
-                  — {entry.kind}, {entry.bookTitle}, page {entry.page}
-                </span>
-              </summary>
-              <dl className="mt-2 grid grid-cols-2 gap-1 text-sm">
-                {Object.entries(entry.fieldValues).map(([field, value]) => (
-                  <div key={field} className="contents">
-                    <dt className="text-muted-foreground">{field}</dt>
-                    <dd data-field={field} data-read-state={value.state}>
-                      {shown(value)}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-              {entry.proseText && (
-                <p className="mt-2 text-sm whitespace-pre-wrap">
-                  {entry.proseText}
-                </p>
-              )}
-            </details>
+            <WorldEntryRow
+              entry={entry}
+              onChange={(content) => act(changeEntry(address(entry), content))}
+              onHide={() => act(hideEntry(address(entry)))}
+              onRestore={() => act(restoreEntry(address(entry)))}
+            />
           </li>
         ))}
       </ul>
@@ -468,6 +547,311 @@ function BookEntries({
           </Button>
         </div>
       )}
+
+      <AddEntryForm
+        onAdd={(kindName, name, proseText) =>
+          act(
+            addEntry(
+              { worldId, compendiumId, kind: kindName, name },
+              { proseText },
+            ),
+          )
+        }
+      />
     </div>
+  );
+}
+
+const STATE_WORDS: Record<WorldBookEntry["state"], string | null> = {
+  INHERITED: null,
+  CHANGED: "Changed in this world",
+  HIDDEN: "Hidden in this world",
+  ADDED: "Added in this world",
+};
+
+function WorldEntryRow({
+  entry,
+  onChange,
+  onHide,
+  onRestore,
+}: {
+  entry: WorldBookEntry;
+  onChange: (
+    content: { fieldValues: Record<string, ReadValue> } | { proseText: string },
+  ) => void;
+  onHide: () => void;
+  onRestore: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [prose, setProse] = useState("");
+  const stateWord = STATE_WORDS[entry.state];
+  const isProse = entry.proseText !== null;
+
+  const startEditing = () => {
+    setDraft(
+      Object.fromEntries(
+        Object.entries(entry.fieldValues).map(([field, value]) => [
+          field,
+          value.state === "unread" ? "" : value.value,
+        ]),
+      ),
+    );
+    setProse(entry.proseText ?? "");
+    setEditing(true);
+  };
+
+  const save = () => {
+    if (isProse) {
+      onChange({ proseText: prose });
+    } else {
+      // Only the fields a person actually altered are sent; the server keeps
+      // only what differs from the book either way (FR-023).
+      const altered = Object.fromEntries(
+        Object.entries(draft)
+          .filter(([field, text]) => {
+            const was = entry.fieldValues[field];
+            const wasText = was?.state === "unread" ? "" : (was?.value ?? "");
+            return text !== wasText;
+          })
+          .map(([field, text]): [string, ReadValue] => [
+            field,
+            text === "" ? { state: "unread" } : { state: "clear", value: text },
+          ]),
+      );
+      onChange({ fieldValues: altered });
+    }
+    setEditing(false);
+  };
+
+  return (
+    <details>
+      <summary className="cursor-pointer text-sm">
+        <span className="font-medium">{entry.name}</span>{" "}
+        <span className="text-muted-foreground">
+          — {entry.kind}, {entry.bookTitle}
+          {entry.page === null ? ", not in the book" : `, page ${entry.page}`}
+        </span>{" "}
+        {stateWord && (
+          <StatusBadge
+            variant={entry.state === "HIDDEN" ? "warning" : "info"}
+            data-testid="world-entry-state"
+          >
+            {stateWord}
+          </StatusBadge>
+        )}{" "}
+        <span
+          className="text-xs text-muted-foreground"
+          data-testid="world-entry-origin"
+          data-origin={entry.origin}
+          data-may-be-shared={entry.mayBeShared ? "true" : "false"}
+          title={entry.notShareableBecause ?? undefined}
+        >
+          {entry.mayBeShared
+            ? "Authored here — may be shared"
+            : "Uploaded — stays with this account"}
+        </span>
+      </summary>
+
+      {editing ? (
+        <div className="mt-2 grid gap-2">
+          {isProse ? (
+            <textarea
+              className="rounded-md border p-2 text-sm"
+              value={prose}
+              onChange={(event) => setProse(event.target.value)}
+              data-testid="edit-entry-prose"
+            />
+          ) : (
+            <div className="grid grid-cols-2 gap-1 text-sm">
+              {Object.keys(draft).map((field) => (
+                <label key={field} className="contents">
+                  <span className="text-muted-foreground">{field}</span>
+                  <input
+                    className="rounded-md border px-2"
+                    value={draft[field]}
+                    onChange={(event) =>
+                      setDraft((held) => ({
+                        ...held,
+                        [field]: event.target.value,
+                      }))
+                    }
+                    data-edit-field={field}
+                  />
+                </label>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              onClick={save}
+              data-testid="save-entry"
+            >
+              Save for this world
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => setEditing(false)}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <dl className="mt-2 grid grid-cols-2 gap-1 text-sm">
+            {Object.entries(entry.fieldValues).map(([field, value]) => (
+              <div key={field} className="contents">
+                <dt className="text-muted-foreground">{field}</dt>
+                <dd data-field={field} data-read-state={value.state}>
+                  {shown(value)}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          {entry.proseText && (
+            <p className="mt-2 text-sm whitespace-pre-wrap">
+              {entry.proseText}
+            </p>
+          )}
+        </>
+      )}
+
+      {/* FR-024: what the book says, beside what this world says. */}
+      {entry.before && (
+        <div
+          className="mt-2 rounded-md bg-muted p-2 text-sm"
+          data-testid="entry-before"
+        >
+          <p className="font-medium">Before this world changed it</p>
+          <dl className="grid grid-cols-2 gap-1">
+            {Object.entries(entry.before.fieldValues).map(([field, value]) => (
+              <div key={field} className="contents">
+                <dt className="text-muted-foreground">{field}</dt>
+                <dd data-before-field={field}>{shown(value)}</dd>
+              </div>
+            ))}
+          </dl>
+          {entry.before.proseText && (
+            <p className="whitespace-pre-wrap">{entry.before.proseText}</p>
+          )}
+        </div>
+      )}
+
+      {entry.ambiguous ? (
+        <p
+          className="mt-2 text-sm text-muted-foreground"
+          data-testid="entry-ambiguous"
+        >
+          This book has more than one {entry.kind} named &ldquo;{entry.name}
+          &rdquo;, so this world cannot tell them apart to change either.
+        </p>
+      ) : (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {!editing && entry.state !== "HIDDEN" && (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={startEditing}
+              data-testid="edit-entry"
+            >
+              Change for this world
+            </Button>
+          )}
+          {(entry.state === "INHERITED" || entry.state === "CHANGED") && (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={onHide}
+              data-testid="hide-entry"
+            >
+              Hide in this world
+            </Button>
+          )}
+          {entry.state !== "INHERITED" && (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={onRestore}
+              data-testid="restore-entry"
+            >
+              {entry.state === "ADDED"
+                ? "Remove"
+                : "Put back as the book has it"}
+            </Button>
+          )}
+        </div>
+      )}
+    </details>
+  );
+}
+
+/**
+ * Write an entry into this world beside the book (FR-021, FR-052a).
+ *
+ * Prose only here: a written note or house rule is what a table adds by hand
+ * most, and an entry with declared fields needs the system's own sheet to be
+ * written well rather than a row of free-text boxes.
+ */
+function AddEntryForm({
+  onAdd,
+}: {
+  onAdd: (kind: string, name: string, proseText: string) => void;
+}) {
+  const [kind, setKind] = useState("");
+  const [name, setName] = useState("");
+  const [text, setText] = useState("");
+
+  return (
+    <form
+      className="grid gap-1 rounded-md border p-2 text-sm"
+      data-testid="add-entry"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!kind.trim() || !name.trim()) return;
+        onAdd(kind.trim(), name.trim(), text);
+        setName("");
+        setText("");
+      }}
+    >
+      <p className="font-medium">Add an entry to this world</p>
+      <p className="text-muted-foreground">
+        It sits beside the book in this world only, and it is yours: written
+        here, so it may be shared.
+      </p>
+      <input
+        className="rounded-md border px-2"
+        placeholder="Kind"
+        value={kind}
+        onChange={(event) => setKind(event.target.value)}
+        data-testid="add-entry-kind"
+      />
+      <input
+        className="rounded-md border px-2"
+        placeholder="Name"
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        data-testid="add-entry-name"
+      />
+      <textarea
+        className="rounded-md border p-2"
+        placeholder="What it says"
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        data-testid="add-entry-text"
+      />
+      <div>
+        <Button type="submit" size="sm" data-testid="add-entry-submit">
+          Add to this world
+        </Button>
+      </div>
+    </form>
   );
 }

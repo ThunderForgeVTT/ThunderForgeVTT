@@ -58,24 +58,61 @@ export interface SwitchOffReport {
   switchedOff: boolean;
 }
 
-/** One fetched entry, naming the book it came from and the page it was on. */
+/**
+ * How an entry stands in this world (spec 050 FR-021): as the book has it,
+ * changed here, hidden here, or not in the book at all and written here.
+ */
+export type WorldEntryState = "INHERITED" | "CHANGED" | "HIDDEN" | "ADDED";
+
+/**
+ * Where an entry came from, and so whether it may leave the account.
+ *
+ * Per entry, not per book (spec 050 FR-052, FR-052a): a change to an uploaded
+ * entry is uploaded, and an addition beside it is authored.
+ */
+export type EntryOrigin = "AUTHORED" | "UPLOADED";
+
+/** One entry as this world reads it: the book with the world's changes over it. */
 export interface WorldBookEntry {
+  /** The book entry's id, or the addition's own for an entry the book lacks. */
   id: string;
   compendiumId: string;
   bookTitle: string;
   kind: string;
   name: string;
   nameUncertain: boolean;
-  page: number;
+  /** Null for an addition, which is on no page of any book. */
+  page: number | null;
   fieldValues: Record<string, ReadValue>;
   proseText: string | null;
   suspect: boolean;
+  state: WorldEntryState;
+  origin: EntryOrigin;
+  mayBeShared: boolean;
+  notShareableBecause: string | null;
+  /** What the book says, for an entry this world changed (FR-024). */
+  before: {
+    fieldValues: Record<string, ReadValue>;
+    proseText: string | null;
+  } | null;
+  /** Another entry in the book shares this kind and name, so it cannot be
+   * changed (FR-025a). */
+  ambiguous: boolean;
+}
+
+/** A change this world holds that is not being applied, and why. */
+export interface UnattachedDelta {
+  kind: string;
+  name: string;
+  form: string;
+  reason: string;
 }
 
 export interface WorldBookEntryPage {
   entries: WorldBookEntry[];
   nextCursor: string | null;
   total: number;
+  unattached: UnattachedDelta[];
 }
 
 const BOOK_FIELDS = `
@@ -87,6 +124,25 @@ const BOOK_FIELDS = `
   systemMatches
   baseParserVersion
   switchedOnAt
+`;
+
+const ENTRY_FIELDS = `
+  id
+  compendiumId
+  bookTitle
+  kind
+  name
+  nameUncertain
+  page
+  fieldValues
+  proseText
+  suspect
+  state
+  origin
+  mayBeShared
+  notShareableBecause
+  before { fieldValues proseText }
+  ambiguous
 `;
 
 /** Which books this world is running (FR-030, FR-035). */
@@ -191,7 +247,12 @@ export async function switchOff(
 export async function entriesFrom(
   worldId: string,
   compendiumId: string,
-  options: { kind?: string | null; after?: string | null; first?: number } = {},
+  options: {
+    kind?: string | null;
+    after?: string | null;
+    first?: number;
+    showHidden?: boolean;
+  } = {},
 ): Promise<WorldBookEntryPage> {
   const data = await postGraphQL<{
     worldCompendiumEntries: WorldBookEntryPage;
@@ -202,6 +263,7 @@ export async function entriesFrom(
        $kind: String
        $after: String
        $first: Int
+       $showHidden: Boolean
      ) {
        worldCompendiumEntries(
          worldId: $worldId
@@ -209,21 +271,12 @@ export async function entriesFrom(
          kind: $kind
          after: $after
          first: $first
+         showHidden: $showHidden
        ) {
          total
          nextCursor
-         entries {
-           id
-           compendiumId
-           bookTitle
-           kind
-           name
-           nameUncertain
-           page
-           fieldValues
-           proseText
-           suspect
-         }
+         entries { ${ENTRY_FIELDS} }
+         unattached { kind name form reason }
        }
      }`,
     {
@@ -232,7 +285,105 @@ export async function entriesFrom(
       kind: options.kind ?? null,
       after: options.after ?? null,
       first: options.first ?? null,
+      showHidden: options.showHidden ?? false,
     },
   );
   return data.worldCompendiumEntries;
+}
+
+/** Where in a world a change lands: one book, one entry by kind and name. */
+export interface EntryAddress {
+  worldId: string;
+  compendiumId: string;
+  kind: string;
+  name: string;
+}
+
+/** An entry's content: fields or prose, never both (049 FR-001b). */
+export type EntryContent =
+  | { fieldValues: Record<string, ReadValue> }
+  | { proseText: string };
+
+const ADDRESS_ARGS = `
+  $worldId: UUID!
+  $compendiumId: UUID!
+  $kind: String!
+  $name: String!
+`;
+const ADDRESS = `
+  worldId: $worldId
+  compendiumId: $compendiumId
+  kind: $kind
+  name: $name
+`;
+
+function contentVariables(content: EntryContent) {
+  return "fieldValues" in content
+    ? { fieldValues: content.fieldValues, proseText: null }
+    : { fieldValues: null, proseText: content.proseText };
+}
+
+/**
+ * Change what an entry says in this world, and nowhere else (spec 050 FR-020,
+ * FR-023). Only the fields named are touched, and the server keeps only what
+ * differs from the book.
+ */
+export async function changeEntry(
+  address: EntryAddress,
+  content: EntryContent,
+): Promise<WorldBookEntry | null> {
+  const data = await postGraphQL<{ changeWorldEntry: WorldBookEntry | null }>(
+    `mutation ChangeWorldEntry(${ADDRESS_ARGS} $fieldValues: JSON $proseText: String) {
+       changeWorldEntry(${ADDRESS} fieldValues: $fieldValues proseText: $proseText) {
+         ${ENTRY_FIELDS}
+       }
+     }`,
+    { ...address, ...contentVariables(content) },
+  );
+  return data.changeWorldEntry;
+}
+
+/** Stop showing a book's entry in this world. Every other world keeps it. */
+export async function hideEntry(
+  address: EntryAddress,
+): Promise<WorldBookEntry | null> {
+  const data = await postGraphQL<{ hideWorldEntry: WorldBookEntry | null }>(
+    `mutation HideWorldEntry(${ADDRESS_ARGS}) {
+       hideWorldEntry(${ADDRESS}) { ${ENTRY_FIELDS} }
+     }`,
+    { ...address },
+  );
+  return data.hideWorldEntry;
+}
+
+/**
+ * Write an entry into this world beside the book. It is authored — written
+ * here by a person — and so shareable, whatever the book is (FR-052a).
+ */
+export async function addEntry(
+  address: EntryAddress,
+  content: EntryContent,
+): Promise<WorldBookEntry | null> {
+  const data = await postGraphQL<{ addWorldEntry: WorldBookEntry | null }>(
+    `mutation AddWorldEntry(${ADDRESS_ARGS} $fieldValues: JSON $proseText: String) {
+       addWorldEntry(${ADDRESS} fieldValues: $fieldValues proseText: $proseText) {
+         ${ENTRY_FIELDS}
+       }
+     }`,
+    { ...address, ...contentVariables(content) },
+  );
+  return data.addWorldEntry;
+}
+
+/** Put an entry back as the book has it, or take an addition out (FR-024). */
+export async function restoreEntry(
+  address: EntryAddress,
+): Promise<WorldBookEntry | null> {
+  const data = await postGraphQL<{ restoreWorldEntry: WorldBookEntry | null }>(
+    `mutation RestoreWorldEntry(${ADDRESS_ARGS}) {
+       restoreWorldEntry(${ADDRESS}) { ${ENTRY_FIELDS} }
+     }`,
+    { ...address },
+  );
+  return data.restoreWorldEntry;
 }

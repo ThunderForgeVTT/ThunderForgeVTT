@@ -1,0 +1,596 @@
+import { execFileSync } from "node:child_process";
+import { expect, test, type Page } from "@playwright/test";
+import {
+  freshCredentials,
+  graphql,
+  inviteAndJoinAsPlayer,
+  register,
+} from "./fixtures/helpers";
+
+/**
+ * A world's own changes to the books it inherited, end to end (spec 050 US2,
+ * T077; FR-020 to FR-028, FR-052, FR-052a, FR-081, FR-087).
+ *
+ * The claims, each of which a unit test can only assert about code:
+ *
+ * 1. **An edit in one world reaches no other world, and not the base.** The
+ *    base is compared **byte for byte** against what the import wrote, read
+ *    straight out of Postgres, rather than trusted to be untouched because
+ *    no code path writes it.
+ * 2. **An addition is absent elsewhere; a hidden entry is present elsewhere.**
+ * 3. **Origin is per entry** (FR-087): on one screen of one uploaded book, the
+ *    entry this world changed says it stays with the account, and the entry
+ *    this world added says it may be shared — on the page, on the wire, and in
+ *    the column the sharing rules are enforced against.
+ * 4. **What an entry was, and putting it back** (FR-024).
+ * 5. **A Trusted Player may change what a world inherited, and a Player may
+ *    not** (FR-020a, ADR-099) — the Player refused by the server, not merely
+ *    shown no controls.
+ *
+ * The book is built here rather than shipped, following
+ * `library-book-list.spec.ts`: a real book is copyrighted, and a binary
+ * fixture tells nobody what it contains.
+ */
+
+function pdfOf(lines: string[]): string {
+  const content = lines.join("\n");
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+
+  let pdf = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  objects.forEach((body, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets) {
+    pdf += `${offset.toString().padStart(10, "0")} 00000 n \n`;
+  }
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return pdf;
+}
+
+/** Two creatures, as the dnd5e creature pattern declares them. */
+const MONSTERS = pdfOf([
+  "BT /F1 18 Tf 72 720 Td (ADULT RED DRAGON) Tj ET",
+  "BT /F1 9 Tf 72 700 Td (Gargantuan dragon, chaotic evil) Tj ET",
+  "BT /F1 9 Tf 72 686 Td (Armor Class 22) Tj ET",
+  "BT /F1 9 Tf 72 672 Td (Hit Points 546) Tj ET",
+  "BT /F1 9 Tf 72 658 Td (Speed 40 ft., fly 80 ft.) Tj ET",
+  "BT /F1 18 Tf 72 600 Td (GOBLIN) Tj ET",
+  "BT /F1 9 Tf 72 580 Td (Small humanoid, neutral evil) Tj ET",
+  "BT /F1 9 Tf 72 566 Td (Armor Class 15) Tj ET",
+  "BT /F1 9 Tf 72 552 Td (Hit Points 7) Tj ET",
+]);
+
+const SYSTEM = "dnd5e";
+const BOOK = "Monster Manual.pdf";
+const ADDED = "Mire Hag";
+
+type Gql<T> = { data?: T; errors?: { message: string }[] };
+
+type ReadValue = { state: string; value?: string };
+
+interface Entry {
+  id: string;
+  kind: string;
+  name: string;
+  fieldValues: Record<string, ReadValue>;
+  proseText: string | null;
+  state: string;
+  origin: string;
+  mayBeShared: boolean;
+  before: { fieldValues: Record<string, ReadValue> } | null;
+}
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function uuid(value: string): string {
+  if (!UUID_PATTERN.test(value)) {
+    throw new Error(`Refusing to put a non-UUID into SQL: ${value}`);
+  }
+  return value;
+}
+
+/**
+ * Reads this shard's database, following `library-book-list.spec.ts`.
+ *
+ * **Read-only, and only to measure.** Everything this spec changes it changes
+ * through the product. Whether the base is byte-identical is the evidence the
+ * central claim rests on, and asking the product to vouch for its own storage
+ * would be asking the thing under test to mark its own work.
+ */
+function sql(statement: string): string {
+  const container =
+    process.env.THUNDERFORGE_POSTGRES_CONTAINER ?? "thunderforge-postgres";
+  const database = process.env.THUNDERFORGE_DB_NAME ?? "thunderforge";
+  const dbUser = process.env.THUNDERFORGE_DB_USER ?? "postgres";
+  return execFileSync(
+    "docker",
+    [
+      "exec",
+      "-i",
+      container,
+      "psql",
+      "-U",
+      dbUser,
+      "-d",
+      database,
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-t",
+      "-A",
+    ],
+    { input: statement, encoding: "utf-8", stdio: ["pipe", "pipe", "inherit"] },
+  ).trim();
+}
+
+/**
+ * Every stored byte of a book's entries, in a stable order, as Postgres's own
+ * text rendering of each whole row — id, name, fields, prose, page, timestamps
+ * and all. Equal strings are the same bytes; any write to any column of any
+ * entry changes it.
+ */
+function baseAsStored(compendiumId: string): string {
+  return sql(
+    `SELECT string_agg(e::text, E'\\n' ORDER BY e.id)
+       FROM compendium_entries e
+      WHERE e.compendium_id = '${uuid(compendiumId)}';`,
+  );
+}
+
+/** The origin column of each delta a world holds, by entry name. */
+function deltaOrigins(worldId: string): Record<string, string> {
+  const rows = sql(
+    `SELECT name || '|' || form || '|' || origin FROM world_entry_deltas
+      WHERE world_id = '${uuid(worldId)}' ORDER BY name;`,
+  );
+  return Object.fromEntries(
+    rows
+      .split("\n")
+      .filter(Boolean)
+      .map((row) => {
+        const [name, form, origin] = row.split("|");
+        return [name, `${form} ${origin}`];
+      }),
+  );
+}
+
+function deltaCount(worldId: string): number {
+  return Number(
+    sql(
+      `SELECT count(*) FROM world_entry_deltas WHERE world_id = '${uuid(worldId)}';`,
+    ),
+  );
+}
+
+/** Read the book in from the shelf, and return its compendium id. */
+async function readInTheBook(page: Page): Promise<string> {
+  await page.goto("/library");
+  await page.getByTestId("import-system").selectOption(SYSTEM);
+  await page.getByTestId("import-file").setInputFiles({
+    name: BOOK,
+    mimeType: "application/pdf",
+    buffer: Buffer.from(MONSTERS, "latin1"),
+  });
+  await expect(page.getByTestId("found-total")).toBeVisible({
+    timeout: 120_000,
+  });
+  await page.getByTestId("submit-import").click();
+  await expect(page.getByTestId("library-shelf")).toContainText(BOOK, {
+    timeout: 60_000,
+  });
+
+  const href = await page
+    .getByTestId("library-shelf")
+    .getByTestId("open-book")
+    .first()
+    .getAttribute("href");
+  const id = /\/library\/([^/]+)$/.exec(href ?? "")?.[1];
+  expect(id, "the shelf should link to the book").toBeTruthy();
+  return id as string;
+}
+
+/** A world on the book's system with the book switched on. */
+async function aWorldRunning(
+  page: Page,
+  name: string,
+  compendiumId: string,
+): Promise<string> {
+  const made = await graphql<Gql<{ createWorld: { id: string } }>>(
+    page,
+    `
+      mutation CW($input: GraphQLCreateWorldInput!) {
+        createWorld(input: $input) {
+          id
+        }
+      }
+    `,
+    { input: { name, gameSystemId: SYSTEM } },
+  );
+  const worldId = made.data?.createWorld?.id;
+  expect(worldId, JSON.stringify(made.errors)).toBeTruthy();
+
+  const on = await graphql<Gql<unknown>>(
+    page,
+    `
+      mutation On($w: UUID!, $c: UUID!) {
+        switchOnCompendium(worldId: $w, compendiumId: $c) {
+          compendiumId
+        }
+      }
+    `,
+    { w: worldId, c: compendiumId },
+  );
+  expect(on.errors, JSON.stringify(on.errors)).toBeUndefined();
+  return worldId as string;
+}
+
+/** What a world reads from the book, through the product, hidden included. */
+async function worldReads(
+  page: Page,
+  worldId: string,
+  compendiumId: string,
+): Promise<Entry[]> {
+  const read = await graphql<
+    Gql<{ worldCompendiumEntries: { entries: Entry[] } }>
+  >(
+    page,
+    `
+      query E($w: UUID!, $c: UUID!) {
+        worldCompendiumEntries(
+          worldId: $w
+          compendiumId: $c
+          showHidden: true
+        ) {
+          entries {
+            id
+            kind
+            name
+            fieldValues
+            proseText
+            state
+            origin
+            mayBeShared
+            before {
+              fieldValues
+            }
+          }
+        }
+      }
+    `,
+    { w: worldId, c: compendiumId },
+  );
+  expect(read.errors, JSON.stringify(read.errors)).toBeUndefined();
+  return read.data?.worldCompendiumEntries.entries ?? [];
+}
+
+function named(entries: Entry[], name: string): Entry | undefined {
+  return entries.find((entry) => entry.name === name);
+}
+
+/** The first declared field the reader found a value for on this entry. */
+function aReadField(entry: Entry): [string, string] {
+  const found = Object.entries(entry.fieldValues).find(
+    ([, value]) => value.state !== "unread" && value.value,
+  );
+  expect(found, JSON.stringify(entry.fieldValues)).toBeTruthy();
+  const [field, value] = found as [string, ReadValue];
+  return [field, value.value as string];
+}
+
+async function browseTheBook(page: Page, worldId: string) {
+  await page.goto(`/world/${worldId}/compendium?tab=books`);
+  await expect(page.getByTestId("book-list")).toContainText(BOOK, {
+    timeout: 30_000,
+  });
+  await page.getByTestId("browse-book").click();
+  await expect(page.getByTestId("world-book-browser")).toBeVisible();
+}
+
+/** One entry's row in the browser, opened. */
+async function openEntry(page: Page, name: string) {
+  const row = page
+    .getByTestId("world-book-browser")
+    .locator(`li[data-name="${name}"]`);
+  await expect(row).toHaveCount(1, { timeout: 15_000 });
+  const details = row.locator("details");
+  if ((await details.getAttribute("open")) === null) {
+    await row.locator("summary").click();
+  }
+  return row;
+}
+
+test.describe.configure({ mode: "serial" });
+
+test.describe("A world's changes to its books (spec 050 US2)", () => {
+  test("an edit in one world reaches no other world and not the base, and origin is per entry", async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+
+    await register(page, freshCredentials("deltas"));
+    const compendiumId = await readInTheBook(page);
+    // What the import produced, before any world exists.
+    const imported = baseAsStored(compendiumId);
+    expect(imported).toContain("GOBLIN");
+
+    const here = await aWorldRunning(page, "The Changed Table", compendiumId);
+    const there = await aWorldRunning(page, "The Other Table", compendiumId);
+
+    const goblinBefore = named(
+      await worldReads(page, here, compendiumId),
+      "GOBLIN",
+    );
+    expect(goblinBefore?.state).toBe("INHERITED");
+    const [field, bookValue] = aReadField(goblinBefore as Entry);
+    const retuned = `${bookValue}9`;
+
+    await browseTheBook(page, here);
+
+    // Changed, through the page a Game Master uses.
+    let goblin = await openEntry(page, "GOBLIN");
+    await goblin.getByTestId("edit-entry").click();
+    await goblin.locator(`[data-edit-field="${field}"]`).fill(retuned);
+    await goblin.getByTestId("save-entry").click();
+    goblin = await openEntry(page, "GOBLIN");
+    await expect(goblin).toHaveAttribute("data-state", "CHANGED");
+    await expect(goblin.getByTestId("world-entry-state")).toHaveText(
+      "Changed in this world",
+    );
+    await expect(goblin.locator(`[data-field="${field}"]`)).toHaveText(retuned);
+    // FR-024: what it was, beside what it is.
+    await expect(
+      goblin
+        .getByTestId("entry-before")
+        .locator(`[data-before-field="${field}"]`),
+    ).toHaveText(bookValue);
+
+    // Hidden.
+    const dragon = await openEntry(page, "ADULT RED DRAGON");
+    await dragon.getByTestId("hide-entry").click();
+    await expect(
+      page
+        .getByTestId("world-book-browser")
+        .locator('li[data-name="ADULT RED DRAGON"]'),
+    ).toHaveCount(0);
+
+    // Added.
+    await page.getByTestId("add-entry-kind").fill("creature");
+    await page.getByTestId("add-entry-name").fill(ADDED);
+    await page
+      .getByTestId("add-entry-text")
+      .fill("Lives in the fen and bargains in teeth.");
+    await page.getByTestId("add-entry-submit").click();
+    const hag = await openEntry(page, ADDED);
+    await expect(hag).toHaveAttribute("data-state", "ADDED");
+
+    // FR-087, on the page: the changed entry and the added one, side by side,
+    // with opposite rights.
+    goblin = await openEntry(page, "GOBLIN");
+    const goblinOrigin = goblin.getByTestId("world-entry-origin");
+    await expect(goblinOrigin).toHaveAttribute("data-origin", "UPLOADED");
+    await expect(goblinOrigin).toHaveAttribute("data-may-be-shared", "false");
+    await expect(goblinOrigin).toHaveText("Uploaded — stays with this account");
+    const hagOrigin = hag.getByTestId("world-entry-origin");
+    await expect(hagOrigin).toHaveAttribute("data-origin", "AUTHORED");
+    await expect(hagOrigin).toHaveAttribute("data-may-be-shared", "true");
+    await expect(hagOrigin).toHaveText("Authored here — may be shared");
+
+    // FR-087, on the wire and in the column the sharing rules read.
+    const readHere = await worldReads(page, here, compendiumId);
+    expect(named(readHere, "GOBLIN")).toMatchObject({
+      state: "CHANGED",
+      origin: "UPLOADED",
+      mayBeShared: false,
+    });
+    expect(named(readHere, "ADULT RED DRAGON")).toMatchObject({
+      state: "HIDDEN",
+      origin: "UPLOADED",
+      mayBeShared: false,
+    });
+    expect(named(readHere, ADDED)).toMatchObject({
+      state: "ADDED",
+      origin: "AUTHORED",
+      mayBeShared: true,
+    });
+    expect(deltaOrigins(here)).toEqual({
+      "ADULT RED DRAGON": "Hidden Uploaded",
+      GOBLIN: "Changed Uploaded",
+      [ADDED]: "Added Authored",
+    });
+
+    // FR-081, SC-005: the other world reads the book as the book has it —
+    // the goblin unchanged, the dragon still there, no hag.
+    const readThere = await worldReads(page, there, compendiumId);
+    const otherGoblin = named(readThere, "GOBLIN") as Entry;
+    expect(otherGoblin.state).toBe("INHERITED");
+    expect(otherGoblin.fieldValues[field]?.value).toBe(bookValue);
+    expect(named(readThere, "ADULT RED DRAGON")?.state).toBe("INHERITED");
+    expect(named(readThere, ADDED)).toBeUndefined();
+    expect(readThere).toHaveLength(2);
+    expect(deltaCount(there)).toBe(0);
+
+    await browseTheBook(page, there);
+    const otherBrowser = page.getByTestId("world-book-browser");
+    await expect(otherBrowser).toContainText("ADULT RED DRAGON");
+    await expect(otherBrowser).not.toContainText(ADDED);
+    await expect(
+      otherBrowser.locator('li[data-name="GOBLIN"]'),
+    ).toHaveAttribute("data-state", "INHERITED");
+
+    // And the base: byte-identical to what the import wrote.
+    expect(baseAsStored(compendiumId)).toBe(imported);
+
+    // FR-024: put the goblin back, from the page.
+    await browseTheBook(page, here);
+    goblin = await openEntry(page, "GOBLIN");
+    await goblin.getByTestId("restore-entry").click();
+    goblin = await openEntry(page, "GOBLIN");
+    await expect(goblin).toHaveAttribute("data-state", "INHERITED");
+    await expect(goblin.locator(`[data-field="${field}"]`)).toHaveText(
+      bookValue,
+    );
+    await expect(goblin.getByTestId("entry-before")).toHaveCount(0);
+
+    // 050 FR-013 / 049 FR-046: switching the book off names what this world's
+    // own changes lose, before anything is lost.
+    await page.getByTestId("switch-off-book").click();
+    const lost = page.getByTestId("deltas-lost");
+    await expect(lost).toContainText(`added: creature "${ADDED}"`);
+    await expect(lost).toContainText('hidden: creature "ADULT RED DRAGON"');
+    await expect(lost).not.toContainText("GOBLIN");
+    expect(deltaCount(here)).toBe(2);
+
+    expect(baseAsStored(compendiumId)).toBe(imported);
+  });
+
+  /**
+   * FR-020a, ADR-099: a Trusted Player changes what the world inherited — and
+   * a Player at the same table is refused every change by the server, not
+   * merely given no controls.
+   */
+  test("a trusted player may change what a world inherited, and a player may not", async ({
+    browser,
+    page,
+  }) => {
+    test.setTimeout(480_000);
+
+    await register(page, freshCredentials("deltasowner"));
+    const compendiumId = await readInTheBook(page);
+    const imported = baseAsStored(compendiumId);
+    const worldId = await aWorldRunning(page, "A Trusted Table", compendiumId);
+
+    const trusted = await inviteAndJoinAsPlayer(
+      browser,
+      page,
+      worldId,
+      "deltastrusted",
+    );
+    let player: Page | null = null;
+    try {
+      await page.goto(`/world/${worldId}/players`);
+      const roleSelect = page
+        .getByTestId("players-list")
+        .locator('select[data-testid^="player-role-select-"]');
+      await expect(roleSelect).toHaveCount(1, { timeout: 30_000 });
+      await roleSelect.selectOption("TrustedPlayer");
+      await expect(roleSelect).toHaveValue("TrustedPlayer", {
+        timeout: 10_000,
+      });
+
+      player = await inviteAndJoinAsPlayer(
+        browser,
+        page,
+        worldId,
+        "deltasplayer",
+      );
+
+      // The Trusted Player, through the page.
+      const goblinBefore = named(
+        await worldReads(trusted, worldId, compendiumId),
+        "GOBLIN",
+      ) as Entry;
+      const [field, bookValue] = aReadField(goblinBefore);
+      await browseTheBook(trusted, worldId);
+      let goblin = await openEntry(trusted, "GOBLIN");
+      await goblin.getByTestId("edit-entry").click();
+      await goblin
+        .locator(`[data-edit-field="${field}"]`)
+        .fill(`${bookValue}1`);
+      await goblin.getByTestId("save-entry").click();
+      goblin = await openEntry(trusted, "GOBLIN");
+      await expect(goblin).toHaveAttribute("data-state", "CHANGED");
+      expect(deltaOrigins(worldId)).toEqual({ GOBLIN: "Changed Uploaded" });
+      expect(
+        sql(
+          `SELECT count(*) FROM world_entry_deltas d JOIN worlds w ON w.id = d.world_id
+            WHERE d.world_id = '${uuid(worldId)}' AND d.changed_by <> w.created_by;`,
+        ),
+        "the change is recorded as the Trusted Player's",
+      ).toBe("1");
+
+      // The Player: no controls to change anything with...
+      await player.goto(`/world/${worldId}/compendium?tab=books`);
+      await expect(player.getByTestId("book-list")).toContainText(BOOK, {
+        timeout: 30_000,
+      });
+      await expect(player.getByTestId("browse-book")).toHaveCount(0);
+      await expect(player.getByTestId("edit-entry")).toHaveCount(0);
+
+      // ...and every change refused when they ask the server directly.
+      const attempts: [string, string, Record<string, unknown>][] = [
+        [
+          "changeWorldEntry",
+          "$f: JSON",
+          { f: { [field]: { state: "clear", value: "999" } } },
+        ],
+        ["hideWorldEntry", "", {}],
+        ["restoreWorldEntry", "", {}],
+      ];
+      for (const [mutation, extraArgs, extraVars] of attempts) {
+        const fieldArg = extraArgs ? " fieldValues: $f" : "";
+        const tried = await graphql<Gql<unknown>>(
+          player,
+          `
+            mutation M($w: UUID!, $c: UUID!, $k: String!, $n: String! ${extraArgs}) {
+              ${mutation}(worldId: $w, compendiumId: $c, kind: $k, name: $n${fieldArg}) {
+                state
+              }
+            }
+          `,
+          {
+            w: worldId,
+            c: compendiumId,
+            k: goblinBefore.kind,
+            n: "GOBLIN",
+            ...extraVars,
+          },
+        );
+        expect(
+          tried.errors?.length,
+          `${mutation}: ${JSON.stringify(tried)}`,
+        ).toBeTruthy();
+      }
+      const added = await graphql<Gql<unknown>>(
+        player,
+        `
+          mutation A($w: UUID!, $c: UUID!) {
+            addWorldEntry(
+              worldId: $w
+              compendiumId: $c
+              kind: "creature"
+              name: "Player's Pet"
+              proseText: "Mine."
+            ) {
+              state
+            }
+          }
+        `,
+        { w: worldId, c: compendiumId },
+      );
+      expect(added.errors?.length, JSON.stringify(added)).toBeTruthy();
+
+      // Nothing the Player tried landed: the one change is still the Trusted
+      // Player's, and the base is what the import wrote.
+      expect(deltaOrigins(worldId)).toEqual({ GOBLIN: "Changed Uploaded" });
+      const now = named(
+        await worldReads(trusted, worldId, compendiumId),
+        "GOBLIN",
+      );
+      expect(now?.fieldValues[field]?.value).toBe(`${bookValue}1`);
+      expect(baseAsStored(compendiumId)).toBe(imported);
+    } finally {
+      await player?.context().close();
+      await trusted.context().close();
+    }
+  });
+});
