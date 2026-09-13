@@ -61,7 +61,7 @@ type PlayPause {
 }
 type PauseTrigger {
   kind: PauseTriggerKind!   # TAKEDOWN | OPERATOR | ABUSE_REPORT
-  moderationActionId: UUID  entityType: String  entityId: UUID  recordedAt: DateTime!
+  moderationActionId: UUID  entityType: String  entityId: UUID  note: String  recordedAt: DateTime!
 }
 type OperatorName { id: UUID!  name: String! }
 type PauseCandidateWorld { id: UUID!  name: String!  ownerName: String!  playedNow: Boolean!  paused: Boolean! }
@@ -98,8 +98,8 @@ type PauseDecisionOutcome {
 | all three | the existing admin refusal | caller is not an operator, including a world's Owner (FR-006, FR-040) |
 
 **Effects of a pause** (`pauseWorldPlay`, or approval), in one transaction:
-insert `world_play_pauses`, attach an `OPERATOR` trigger or move the request's
-triggers under it, record `EVENT_CODE_WORLD_PLAY_PAUSED`. After commit, nothing
+insert `world_play_pauses`, attach an `OPERATOR` trigger (or, on approval, set
+`request_id`, leaving the request's triggers on the request), record `EVENT_CODE_WORLD_PLAY_PAUSED`. After commit, nothing
 else is needed: streams end on their next tick.
 
 **Effects of a lift**: set the lift columns. No content, membership or moderation

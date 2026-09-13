@@ -86,6 +86,7 @@ What led to a request or a pause. Each trigger belongs to exactly one of them.
 | `moderation_action_id` | uuid NULL | the `content_moderation_actions` row, for `Takedown`; no FK, as that table has none either |
 | `entity_type` | text NULL | the taken-down content's type |
 | `entity_id` | uuid NULL | |
+| `note` | text NULL | an operator's grounds, when a second operator pause lands on an active one (FR-036, FR-051) |
 | `recorded_at` | timestamp NOT NULL DEFAULT now() | |
 | `created_by` | uuid NULL | |
 
