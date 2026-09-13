@@ -184,16 +184,25 @@ copied, and players can see the list.
 **Independent test**: one book in two worlds stores once; switching it off
 leaves no copy behind.
 
-- [ ] T057 [050-US3] Migration for the book list in `src/server/migrations/` — a world's link to a compendium in **its owner's** library, naming the base version in force (050 FR-015). World-owned; nothing is copied
-- [ ] T058 [050-US3] `src/server/src/library/` plus `graphql/mutations_library.rs` — switch on, switch off. Switching on **fetches**; there is no copy step and no seeding step, and ticking at world creation is the same action as ticking later (050 FR-031, FR-033)
-- [ ] T059 [050-US3] A world may only switch on a compendium **its owner's account holds** (050 FR-014) — through T044's helper. A co-Game Master uses; they do not inherit
-- [ ] T060 [P] [050-US3] System matching: only compendiums read as the world's system are offered, and a world that changes system reports what no longer matches rather than continuing to serve it (050 FR-041, FR-042)
-- [ ] T061 [050-US3] Switching off names what is in use first, then removes the content with no copy left behind (050 FR-013, FR-032). Because content is fetched, this reaches a live table — so it is paid visibly, never discovered by a player whose sword vanished
-- [ ] T062 [P] [050-US3] The book list UI, and **players see it read-only** (050 FR-035, FR-036) — book names, nothing that amounts to content
-- [ ] T063 [049-US3] Browse by compendium in `apps/web/src/pages/world/compendium/`, beside the existing tabs — **049 FR-042, satisfied as written**, which is what merging the two specs bought
-- [ ] T064 [050-US1] Storage measurement into `measurements.md`: one book switched on in N worlds stores once (050 SC-001, SC-002, FR-071), generated not transcribed
-- [ ] T065 [050-US3] `apps/web/e2e/library-book-list.spec.ts` — stored content does not grow when a second world switches the same book on; switching off leaves nothing; a player sees the list and cannot change it
-- [ ] T066 [050-US3] Proved: that e2e green, the storage measurement recorded, `tsc --noEmit` clean
+- [X] T057 [050-US3] Migration for the book list in `src/server/migrations/` — a world's link to a compendium in **its owner's** library, naming the base version in force (050 FR-015). World-owned; nothing is copied
+- [X] T058 [050-US3] `src/server/src/library/` plus `graphql/mutations_library.rs` — switch on, switch off. Switching on **fetches**; there is no copy step and no seeding step, and ticking at world creation is the same action as ticking later (050 FR-031, FR-033)
+- [X] T059 [050-US3] A world may only switch on a compendium **its owner's account holds** (050 FR-014) — through T044's helper. A co-Game Master uses; they do not inherit
+- [X] T060 [P] [050-US3] System matching: only compendiums read as the world's system are offered, and a world that changes system reports what no longer matches rather than continuing to serve it (050 FR-041, FR-042)
+- [X] T061 [050-US3] Switching off names what is in use first, then removes the content with no copy left behind (050 FR-013, FR-032). Because content is fetched, this reaches a live table — so it is paid visibly, never discovered by a player whose sword vanished
+- [X] T062 [P] [050-US3] The book list UI, and **players see it read-only** (050 FR-035, FR-036) — book names, nothing that amounts to content
+- [X] T063 [049-US3] Browse by compendium in `apps/web/src/pages/world/compendium/`, beside the existing tabs — **049 FR-042, satisfied as written**, which is what merging the two specs bought
+- [X] T064 [050-US1] Storage measurement into `measurements.md`: one book switched on in N worlds stores once (050 SC-001, SC-002, FR-071), generated not transcribed
+- [X] T065 [050-US3] `apps/web/e2e/library-book-list.spec.ts` — stored content does not grow when a second world switches the same book on; switching off leaves nothing; a player sees the list and cannot change it
+- [X] T066 [050-US3] Proved: that e2e green, the storage measurement recorded, `tsc --noEmit` clean
+
+---
+
+> **Phase 9 notes (verified 2026-09-13, commit `2481401`).** 1450 server tests and both book-list e2e pass on re-run, and the `world_books` trigger refusing a link to anybody else's shelf was confirmed against the live schema. Three places the spec did not survive contact:
+> - **FR-015's "base version in force" has no version to name.** A compendium carries no version counter, so the link records the file hash plus the reader version — exactly what a re-import changes. Phases 11–12 may want a real counter.
+> - **Switching off reports the book's whole contribution, not per-entry use.** Nothing in a world can reference an entry yet and there is no delta table, so `deltas` is honestly empty until phase 11.
+> - **Only the world's *owner* may change its book list, not any Game Master.** The list draws on the owner's shelf, so a co-Game Master uses it and cannot change it. **This is an open decision for the owner**, recorded in `apps/web/PRODUCT.md`.
+>
+> Storage, measured on a synthetic 1,500-entry book (row bytes only, stated in `measurements.md`): one book in eight worlds stores 745,384 bytes against 5,953,856 if copied — **8.0×** — and each world's link is 144 bytes.
 
 ---
 
