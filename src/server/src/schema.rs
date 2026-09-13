@@ -6,6 +6,10 @@ pub mod sql_types {
     pub struct CanvasImageAssetKind;
 
     #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "ContentOrigin"))]
+    pub struct ContentOrigin;
+
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "PolicyEffect"))]
     pub struct PolicyEffect;
 }
@@ -114,6 +118,49 @@ diesel::table! {
         created_at -> Timestamp,
         updated_at -> Timestamp,
         content_hash -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    compendium_entries (id) {
+        id -> Uuid,
+        compendium_id -> Uuid,
+        #[max_length = 64]
+        kind -> Varchar,
+        name -> Text,
+        name_uncertain -> Bool,
+        page -> Int4,
+        field_values -> Jsonb,
+        prose_text -> Nullable<Text>,
+        suspect -> Bool,
+        extras -> Nullable<Jsonb>,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::ContentOrigin;
+
+    compendiums (id) {
+        id -> Uuid,
+        owner_user_id -> Uuid,
+        #[max_length = 300]
+        book_title -> Varchar,
+        #[max_length = 64]
+        source_hash -> Varchar,
+        #[max_length = 64]
+        system_id -> Varchar,
+        origin -> ContentOrigin,
+        #[max_length = 64]
+        parser_version -> Varchar,
+        page_count -> Int4,
+        silent_page_count -> Int4,
+        entry_counts -> Jsonb,
+        created_by -> Uuid,
+        updated_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
     }
 }
 
@@ -1355,6 +1402,7 @@ diesel::table! {
 diesel::joinable!(admin_bootstrap_oauth_sessions -> oauth_providers (provider_id));
 diesel::joinable!(attestations -> terms_versions (terms_version_id));
 diesel::joinable!(canvas_image_assets -> worlds (world_id));
+diesel::joinable!(compendium_entries -> compendiums (compendium_id));
 diesel::joinable!(content_adoptions -> worlds (destination_world_id));
 diesel::joinable!(feedback_attachments -> feedback_submissions (submission_id));
 diesel::joinable!(feedback_delivery_attempts -> feedback_submissions (submission_id));
@@ -1479,6 +1527,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     attestations,
     auth_security_settings,
     canvas_image_assets,
+    compendium_entries,
+    compendiums,
     content_adoptions,
     content_moderation_actions,
     feedback_attachments,

@@ -31,6 +31,9 @@ pub mod attributes;
 pub mod auth;
 pub mod auth_middleware;
 pub mod collections;
+/// Spec 049 / 050: a book that has been read in, and the account shelf it
+/// sits on. Account-owned, never world-owned.
+pub mod compendium;
 pub mod config;
 pub mod content;
 pub mod content_patterns;

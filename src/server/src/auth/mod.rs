@@ -46,6 +46,10 @@ use thunderforge_core::auth::Credentials;
 use tower_cookies::cookie::SameSite;
 use tower_cookies::{Cookie, Cookies};
 
+/// Spec 049 / 050: `require_account_owner` — the account-scope counterpart to
+/// `world_membership`, for rows that belong to a person rather than to a
+/// world. Net-new; there was no account-scope guard before this arc.
+pub mod account_ownership;
 /// Spec 002: `require_world_member` — the shared world_members-based
 /// authorization guard for canvas asset reads/writes.
 /// Spec 035 / ADR-072: the instance admission policy and its audit trail.
