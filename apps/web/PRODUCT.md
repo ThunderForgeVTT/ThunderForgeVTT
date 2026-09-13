@@ -82,8 +82,11 @@ an edition change, or a paid module that stopped being maintained.
   Game-specific sheets and content come from packs. A publisher's sheet shows
   what a system tracks, never how ThunderForge should look.
 - **Sharing is decided by origin, not licence.** Content authored in
-  ThunderForge can be shared. Content read out of an uploaded document never
-  can: not shared, published, exported or adopted into a collection, and no
+  ThunderForge can be shared. Content read out of an uploaded PDF (a source
+  book or a character sheet) never can. Imported maps and uploaded images
+  count as authored and are policed by takedown instead: a scene can be taken
+  down along with its images, with gaps recorded in spec 015 T042. Uploaded
+  content is not shared, published, exported or adopted into a collection, and no
   role can change that, instance operators included. This is the owner's
   decision (spec 049, decision 4), accepted as ADR-097.
 - **Operators and takedowns.** The notice-and-takedown programme exists and

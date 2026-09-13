@@ -40,7 +40,7 @@ mechanical rather than a matter of opinion:
 | Origin | What it is | May it leave? |
 |---|---|---|
 | **Authored** | Made in ThunderForge through the authoring tools | Yes — it is what a collection is made of |
-| **Uploaded** | Read out of a document somebody supplied | **Never** |
+| **Uploaded** | Read out of a supplied document by the content readers: a source book (spec 049) or a character sheet (spec 048) | **Never** |
 
 Content shipped in a **system pack** is a third thing and is untouched by this:
 the platform distributes it under the pack's own `legal` block (spec 016), and
@@ -74,6 +74,34 @@ share an origin:
 - **added** a world-only entry beside it → authored, and shareable. Somebody's
   own homebrew does not become unshareable by sitting in a world that also has
   books switched on.
+
+### What "uploaded" does not cover (owner, 2026-09-13)
+
+The first wording, "read out of a document somebody supplied", read literally
+would also cover a UVTT map import and any uploaded image. That would make a
+scene built on an imported map impossible to put in a collection, which was
+never the intent.
+
+**Uploaded is scoped to what the PDF content readers produce**: entries read
+out of a source book, and whatever a character-sheet import stages. **Imported
+maps, scene backgrounds, token art and other uploaded images are Authored**,
+and they stay shareable. They are policed by the notice-and-takedown programme
+rather than by origin, **with limits that are real and recorded**. Since spec
+015 T042 (commit `8ce0753`), a scene can be taken down, which withholds the
+scene and every image attached to it, including from shared collections and
+from copies other people took. But no image has ever been moderated on its own
+(the belief that images were separately moderated turned out to be wrong), so
+three cases a takedown does not yet reach are named in T042's notes:
+
+- an image that belongs to no scene;
+- a legacy `background_image_path` served from the static `/assets/` route;
+- the same stored file reused by an unrelated upload, which ADR-079
+  deliberately declined to reach by hash.
+
+The reasoning is the same one behind the whole rule. A book's text is the
+product a publisher sells; the owner's rule is that the book does not travel.
+A map image placed on a scene is material the Game Master assembled into
+something of their own, and it is policed by takedown, not by origin.
 
 ## Who signs this
 
