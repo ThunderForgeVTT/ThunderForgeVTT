@@ -102,6 +102,7 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20260912-096](./20260912-096-content_patterns_as_a_manifest_extension_point.md) | Proposed | Content Patterns as a Manifest Extension Point |
 | [20260912-097](./20260912-097-origin_as_a_non_editable_invariant.md) | Proposed | Origin as a Non-Editable Invariant — **owner signature required** |
 | [20260912-098](./20260912-098-an_update_path_to_a_collection.md) | Proposed | An Update Path to a Collection — **determination not yet made**, amends ADR-069 |
+| [20260913-099](./20260913-099-the_trusted_player_role.md) | Proposed | The Trusted Player Role |
 
 > **Note (2026-08-19):** ADRs 020–024 originally collided with an unrelated "pack system" batch that reused the same day-020 through day-024 numbers. The world-domain ADRs (020–024 above) were committed first and are documented here; the colliding pack-system ADRs were renumbered to 026–030. See `docs/SYSTEM_HOOKS_API_GUIDE.md` and ADR-036's "Related Decisions" for the corrected references.
 

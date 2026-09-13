@@ -372,15 +372,21 @@ same over an imported compendium and confirm there is no route.
 
 **Inheriting into a world**
 
-- **FR-010**: A Game Master MUST be able to inherit a compendium from their
-  library into any world they own.
+- **FR-010**: The world's **Owner, a Game Master, or a Trusted Player** MUST be
+  able to switch a compendium on in a world. A **Player** MUST NOT
+  (decision 8).
+- **FR-010a**: Whoever switches a book on, it MUST come from the **world
+  owner's** library — never from the shelf of the Game Master or Trusted
+  Player doing the switching. Managing a table's book list is not bringing your
+  own books to it, and FR-014 still holds for every role.
 - **FR-011**: Inheriting MUST NOT copy the content. A second world inheriting
   the same compendium MUST NOT increase stored content.
 - **FR-012**: Inherited content MUST be usable in the world exactly as
   world-authored content is — placed on scenes, handed to players, searched,
   referenced.
-- **FR-013**: A Game Master MUST be able to stop inheriting, and stopping MUST
-  name what is in use and what deltas will be lost before it is confirmed.
+- **FR-013**: The same roles as FR-010 MUST be able to stop inheriting, and
+  stopping MUST name what is in use and what deltas will be lost before it is
+  confirmed.
 - **FR-014**: A compendium MUST NOT be inheritable by an account that does not
   own it, by any route, including through a world that account co-runs.
 - **FR-015**: Inheritance MUST be recorded — which world, which compendium,
@@ -390,6 +396,9 @@ same over an imported compendium and confirm there is no route.
 
 - **FR-020**: A world MUST be able to change what it inherited without
   changing the base or any other world.
+- **FR-020a**: Changing what a world inherited — its deltas — is book material,
+  and MUST be open to the world's Owner, Game Masters and Trusted Players, and
+  closed to Players (decision 8).
 - **FR-021**: A world's changes MUST be held as a **delta** over the base, in
   three forms: an entry **changed**, an entry **hidden**, and an entry
   **added**.
@@ -726,3 +735,22 @@ same over an imported compendium and confirm there is no route.
    compendiums cannot be downloaded, which is the same rule as everything else
    in decision 3 rather than a new one. Richer formats are explicitly not the
    point yet.
+
+8. **Book material is managed by the people who run the table** (owner,
+   2026-09-13). A world's book list, and any change a world makes to what it
+   inherited, may be managed by its **Owner, its Game Masters, and its Trusted
+   Players**. Players see the list read-only (FR-035) and change nothing.
+
+   The first implementation restricted this to the world's owner alone,
+   reasoning that the books come from the owner's shelf. The owner kept that
+   half — **the books still always come from the owner's shelf** (FR-010a) —
+   and widened who may *manage* them. The two are separate questions: whose
+   books a table uses is a question of ownership and of the origin rule;
+   who arranges them for the table is a question of trust.
+
+   **Trusted Player is a new role**, below Game Master and above Player
+   (ADR-099). It is the table's co-DM for content: book material here, and
+   adopting what players bring in spec 048. It is deliberately *not* everything
+   a Game Master can do.
+
+   FR-010, FR-010a, FR-013, FR-020a.

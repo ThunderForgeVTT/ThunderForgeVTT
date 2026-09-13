@@ -12,9 +12,15 @@ web
   tokens, actors, items, lore, and books imported into their own library) and
   then run sessions in it. They do most of the authoring and most of the
   steering during play.
+- **Trusted Players.** A table's co-DM for content. They manage a world's book
+  material (switching the owner's books on, changing what the world inherited)
+  and adopt what players bring, without the rest of a Game Master's authority.
+  In everything else they see what a Player sees.
 - **Players.** They join a world by invite, pick or bring a character, and play
   on the shared canvas. They see what the Game Master and the rules allow and
-  nothing more.
+  nothing more. A Player changes a world's content in exactly one way: bringing
+  a character sheet, which is staged under their name until someone who runs
+  the table adopts it.
 - **Instance operators.** People who self-host a ThunderForge instance. They
   run first-time setup, the admin portal, mail and storage, moderation and the
   notice-and-takedown programme, and they publish their own legal pages.
@@ -92,9 +98,12 @@ an edition change, or a paid module that stopped being maintained.
   - **Library:** an account's shelf of imported books.
   - **Pack:** a compiled directory for a game system or interface. Never a
     name for user content.
+  - **Staging compendium:** what a player brought to a world, named for them,
+    waiting to be adopted.
   - **Game Master** is written in full.
-- **Open decisions.** Whether co-Game Masters may manage a world's book list is
-  undecided; today only the world's owner can.
+- **Roles, in rank order.** Owner, Game Master, Trusted Player, Player
+  (ADR-099). Book material and adoption are open to Trusted Players and above;
+  books always come from the world owner's shelf, whoever switches them on.
 
 ## Brand Commitments
 

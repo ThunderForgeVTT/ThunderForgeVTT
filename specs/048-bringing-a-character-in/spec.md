@@ -304,12 +304,30 @@ and leaves current hit points and anything the table has changed in play alone.
 - **FR-030**: Content named by a sheet that the world does not have MUST be
   created attached to that character and marked as character-added, naming the
   character it came from.
+- **FR-030a**: Character-added content MUST be **staged in a compendium named
+  for the player who brought it**, in that world, and MUST NOT be written into
+  the world's own content until it is adopted (decision 4). A player who
+  controls several sheets has one staging compendium holding all of them.
+- **FR-030b**: The player's **account** MUST hold the characters they bring, so
+  the same character can be taken to another world without re-reading the
+  sheet. Each world's staging compendium records only what was brought to that
+  world and what that world decided.
 - **FR-031**: Content the world already has MUST be used as it is, and MUST NOT
   be duplicated.
-- **FR-032**: A Game Master MUST be able to see all character-added content of
-  their world in one place.
-- **FR-033**: A Game Master MUST be able to adopt a piece of it in one action,
-  after which it is the world's own and no longer marked.
+- **FR-032**: A Game Master or Trusted Player MUST be able to see all
+  character-added content of their world in one place, organised by the player
+  who brought it.
+- **FR-033**: A Game Master or Trusted Player MUST be able to adopt a piece of
+  it in one action, after which it is the world's own and no longer marked.
+- **FR-033a**: They MUST be able to **adopt all** of one player's staged
+  content in one action. Adopt-all MUST cover only what is staged **at that
+  moment**; content brought afterwards MUST arrive pending, with no standing
+  permission carried forward (decision 4).
+- **FR-033b**: A Player MUST NOT be able to adopt anything, including their own
+  staged content.
+- **FR-033c**: Adoption MUST NOT change a piece's origin. Adopted content read
+  out of an uploaded sheet remains uploaded content and remains unshareable
+  (spec 049 FR-050, ADR-097).
 - **FR-034**: Adopting MUST NOT duplicate: the character keeps using the same
   thing, now the world's.
 - **FR-035**: The same unknown thing arriving from two characters MUST be one
@@ -343,8 +361,8 @@ and leaves current hit points and anything the table has changed in play alone.
   that has not caught up, and accusing them is far worse than missing a
   genuine attempt. The report MUST therefore be suppressed when the viewer's
   last delivery predates the decision that withdrew the content.
-- **FR-036b**: A Game Master MUST be able to revisit an undecided or declined
-  piece later and adopt it. Declining MUST NOT be final, and MUST NOT remove
+- **FR-036b**: A Game Master or Trusted Player MUST be able to revisit an
+  undecided or declined piece later and adopt it. Declining MUST NOT be final, and MUST NOT remove
   anything from the character.
 - **FR-036c**: Content MUST therefore carry three states, not two: **adopted**
   (the world's, playable), **pending** (the character's, visible, refused in
@@ -522,6 +540,52 @@ and leaves current hit points and anything the table has changed in play alone.
    Accusing somebody who did nothing is a worse failure than missing somebody
    who did, so the report is suppressed when the viewer's last delivery
    predates the decision that withdrew the thing. FR-038a, FR-038b.
+
+4. **What a player brings is staged under their name, and adopted by the
+   people who run the table** (owner, 2026-09-13). This changes *where*
+   character-added content waits, not the rules above; decision 3's three
+   states, withholding and cheater report all stand unchanged.
+
+   A player changes a world's content in exactly one way: by bringing a
+   character sheet. Everything that arrives with it — one character, or
+   several when a player controls several sheets (a hero and a familiar, a
+   companion, a hireling) — is **staged in a compendium named for that
+   player**, in that world. Nothing a player brings lands in the world's own
+   content directly.
+
+   The people who run the table then decide, piece by piece or all at once:
+
+   - **Adopt one** — a single item, spell or character becomes the world's.
+   - **Adopt all** — everything staged **at that moment**. It is a snapshot,
+     not a standing trust: anything the player brings afterwards is staged and
+     pending again. The owner chose the snapshot deliberately — a standing
+     "adopt all" is exactly the path the 99,999,999-damage sword would take,
+     arriving after the Game Master stopped looking.
+   - **Decline**, and revisit later (FR-036b).
+
+   **Two homes, for two different questions** (owner's choice of "both"):
+
+   - The **player's account** holds their characters, the way an account's
+     library holds its books (spec 050). A character is brought once and can
+     be taken to any table.
+   - **Each world** keeps its own staging compendium for that player: what was
+     brought *to this table*, and what this table decided about it. Adopting a
+     sword in one world adopts nothing anywhere else, because each Game Master
+     answers for their own table.
+
+   **Who may adopt.** A Game Master, and a **Trusted Player** — the new role
+   below Game Master (ADR-099), which exists for exactly this and for managing
+   a world's book material. A Trusted Player is the table's co-DM for content;
+   they are not a Game Master, so rolling a character back (FR-044b) and
+   importing onto somebody else's actor (FR-041) stay the Game Master's.
+
+   **Origin does not change on adoption.** A character sheet is read out of an
+   uploaded document, so everything staged from it is *uploaded* content
+   (spec 049 decision 4, ADR-097) and stays unshareable after a world adopts
+   it. Adoption decides whether a table may *play* with something; it never
+   decides whether it may *leave*.
+
+   FR-030a to FR-033c.
 
 ## Parsing in the browser — built
 
