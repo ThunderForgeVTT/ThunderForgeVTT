@@ -32,7 +32,11 @@ pub async fn world_invites_impl(
         WorldMembershipError::Database(msg) => Error::new(format!("Database error: {}", msg)),
     })?;
 
-    if role != "Owner" && role != "GM" {
+    // A Trusted Player is refused with a Player: invites are running the
+    // table, not managing its content (ADR-099).
+    if !thunderforge_authz::Role::from_stored(&role)
+        .is_some_and(thunderforge_authz::Role::runs_the_world)
+    {
         return Err(Error::new("Only Owners and GMs can view invite codes"));
     }
 

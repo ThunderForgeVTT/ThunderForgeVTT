@@ -5,9 +5,18 @@
  * RxDB was hard cut from this layer: members are now fetched directly via
  * GraphQL (see `hooks/useWorldMembers.ts`, `api/worldMembers.ts`) rather
  * than cached/queried through a local RxDB collection. This module keeps
- * only the document shape and pure role-hierarchy helpers, which are still
- * consumed by `engine/world/sync/schemas.ts` and various components.
+ * only the document shape and pure role-hierarchy helpers.
+ *
+ * The ranking itself lives in `@/types/world`, beside the one role type, and
+ * every helper here asks it rather than keeping a table of its own.
  */
+
+import {
+  WORLD_ROLES,
+  roleRank,
+  runsTheWorld,
+  type WorldMemberRole,
+} from "@/types/world";
 
 /**
  * Type definition for a world membership record, as returned by the
@@ -18,7 +27,7 @@ export interface WorldMemberDoc {
   id: string;
   world_id: string;
   user_id: string;
-  role: "Owner" | "GM" | "Player";
+  role: WorldMemberRole;
   joined_at: string;
   created_at: string;
   updated_at: string;
@@ -31,36 +40,50 @@ export interface WorldMemberDoc {
 }
 
 /**
- * Role hierarchy helper: check if a role can manage another role.
+ * Whether a caller may change or remove a member holding `targetRole`.
  *
- * Owner can manage anyone.
- * GM can manage Players and GMs, but not Owners.
- * Player cannot manage anyone.
+ * The server's rule, mirrored: an Owner manages anyone, a Game Master manages
+ * whoever ranks below them (a Trusted Player included, so the trust can be
+ * taken back), and nobody else manages anyone. The server decides; this only
+ * decides which controls are worth rendering.
  */
 export function canManageRole(
-  callerRole: "Owner" | "GM" | "Player",
-  targetRole: "Owner" | "GM" | "Player",
+  callerRole: WorldMemberRole,
+  targetRole: WorldMemberRole,
 ): boolean {
   if (callerRole === "Owner") return true;
-  if (callerRole === "GM") return targetRole !== "Owner";
-  return false;
+  return (
+    runsTheWorld(callerRole) && roleRank(targetRole) < roleRank(callerRole)
+  );
+}
+
+/**
+ * The roles a caller may hand out: none unless they run the world, and never
+ * one above their own (ADR-099 — only an Owner or Game Master makes somebody
+ * a Trusted Player). Highest first, the order a picker reads best in.
+ */
+export function assignableRoles(
+  callerRole: WorldMemberRole,
+): WorldMemberRole[] {
+  if (!runsTheWorld(callerRole)) return [];
+  return [...WORLD_ROLES]
+    .reverse()
+    .filter((role) => roleRank(role) <= roleRank(callerRole));
 }
 
 /**
  * Role hierarchy: determine who can invite.
- * Only Owner and GM can generate invites.
+ * Only those who run the world generate invites.
  */
-export function canGenerateInvites(role: "Owner" | "GM" | "Player"): boolean {
-  return role === "Owner" || role === "GM";
+export function canGenerateInvites(role: WorldMemberRole): boolean {
+  return runsTheWorld(role);
 }
 
 /**
- * Sort members by role hierarchy for display.
- * Owner first, then GM, then Player.
+ * Sort members by role for display, highest first.
  */
 export function sortMembersByRole(members: WorldMemberDoc[]): WorldMemberDoc[] {
-  const roleOrder = { Owner: 0, GM: 1, Player: 2 };
-  return [...members].sort((a, b) => roleOrder[a.role] - roleOrder[b.role]);
+  return [...members].sort((a, b) => roleRank(b.role) - roleRank(a.role));
 }
 
 /**
@@ -68,7 +91,7 @@ export function sortMembersByRole(members: WorldMemberDoc[]): WorldMemberDoc[] {
  */
 export function filterMembersByRole(
   members: WorldMemberDoc[],
-  role: "Owner" | "GM" | "Player",
+  role: WorldMemberRole,
 ): WorldMemberDoc[] {
   return members.filter((m) => m.role === role);
 }
@@ -89,11 +112,9 @@ export function findMember(
 export function isMemberWithRole(
   members: WorldMemberDoc[],
   userId: string,
-  role: "Owner" | "GM" | "Player",
+  role: WorldMemberRole,
 ): boolean {
   const member = findMember(members, userId);
   if (!member) return false;
-
-  const roleHierarchy = { Owner: 3, GM: 2, Player: 1 };
-  return roleHierarchy[member.role] >= roleHierarchy[role];
+  return roleRank(member.role) >= roleRank(role);
 }

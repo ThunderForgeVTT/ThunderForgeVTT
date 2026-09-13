@@ -15,14 +15,24 @@
 import { useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorldMembers } from "@/hooks/useWorldMembers";
-import type { WorldRecord } from "@/types/world";
+import {
+  managesContent,
+  runsTheWorld,
+  type WorldMemberRole,
+  type WorldRecord,
+} from "@/types/world";
 
-export type WorldRole = "Owner" | "GM" | "Player" | null;
+export type WorldRole = WorldMemberRole | null;
 
 export interface UseWorldRoleResult {
   role: WorldRole;
-  /** True for "Owner" or "GM" — the shorthand most callers actually need. */
+  /** Owner or Game Master — the shorthand most callers actually need. False
+   * for a Trusted Player, who is shown what a Player is shown (ADR-099). */
   isGm: boolean;
+  /** Owner, Game Master or Trusted Player: who may arrange the world's book
+   * material. Deliberately a second flag rather than a wider `isGm`, so no
+   * existing Game Master control opens to a Trusted Player by accident. */
+  managesContent: boolean;
   loading: boolean;
 }
 
@@ -52,7 +62,8 @@ export function useWorldRole(
 
   return {
     role,
-    isGm: role === "Owner" || role === "GM",
+    isGm: runsTheWorld(role),
+    managesContent: managesContent(role),
     loading,
   };
 }

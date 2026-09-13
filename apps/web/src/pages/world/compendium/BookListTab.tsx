@@ -21,10 +21,16 @@ import type { ReadValue } from "@/engine/sdk/ReadValue";
  *
  * # A mod list, and who may edit it
  *
- * Everyone at the table sees the list. Only the Game Master changes it, and
- * a player is not shown disabled buttons — there is nothing to switch on or
- * off in what they are rendered, because a control that is present and inert
- * invites a person to wonder what they did wrong.
+ * Everyone at the table sees the list. Its Owner, Game Masters and Trusted
+ * Players change it (spec 050 decision 8), always from the **owner's** shelf
+ * (FR-010a), and a player is not shown disabled buttons — there is nothing to
+ * switch on or off in what they are rendered, because a control that is
+ * present and inert invites a person to wonder what they did wrong.
+ *
+ * Arranging the list and reading a book are two flags, not one. A Trusted
+ * Player is trusted with the first; browsing what a book says stays a Game
+ * Master's (049 FR-042), and ADR-099 shows a Trusted Player what a Player is
+ * shown wherever no spec says otherwise.
  *
  * # What a player sees
  *
@@ -42,14 +48,25 @@ import type { ReadValue } from "@/engine/sdk/ReadValue";
  */
 export interface BookListTabProps {
   worldId: string;
+  /** Owner or Game Master: may browse a book's entries. */
   isGm: boolean;
+  /** Owner, Game Master or Trusted Player: may switch books on and off. */
+  managesBooks: boolean;
+  /** Whether the shelf being drawn on is the viewer's own, which is only a
+   * matter of wording — the books are the owner's either way. */
+  isOwner: boolean;
 }
 
 function shown(value: ReadValue): string {
   return value.state === "unread" ? "not found" : value.value;
 }
 
-export function BookListTab({ worldId, isGm }: BookListTabProps) {
+export function BookListTab({
+  worldId,
+  isGm,
+  managesBooks,
+  isOwner,
+}: BookListTabProps) {
   const [books, setBooks] = useState<WorldBook[] | null>(null);
   const [offered, setOffered] = useState<OfferedBook[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -72,17 +89,15 @@ export function BookListTab({ worldId, isGm }: BookListTabProps) {
   }, [worldId]);
 
   const readOffers = useCallback(() => {
-    if (!isGm) {
+    if (!managesBooks) {
       return;
     }
     booksOffered(worldId)
       .then(setOffered)
-      // A Game Master who is not the world's owner is refused this, which is
-      // FR-014 working: the list draws on the **owner's** shelf. Their view
-      // of the list itself is unaffected, so this failure is silent rather
-      // than an error banner over a page that is otherwise correct.
+      // The list itself is unaffected by a failure here, so it is silent
+      // rather than an error banner over a page that is otherwise correct.
       .catch(() => setOffered([]));
-  }, [worldId, isGm]);
+  }, [worldId, managesBooks]);
 
   useEffect(readList, [readList]);
   useEffect(readOffers, [readOffers]);
@@ -143,9 +158,9 @@ export function BookListTab({ worldId, isGm }: BookListTabProps) {
       <header className="grid gap-1">
         <h2 className="text-lg font-semibold">Books this table is running</h2>
         <p className="text-sm text-muted-foreground">
-          {isGm
-            ? "Switched on from your library. Nothing is copied into this world — the content is read from your shelf, so switching a book off takes it back out again."
-            : "What this table is running. Only the Game Master changes this list."}
+          {managesBooks
+            ? `Switched on from ${isOwner ? "your library" : "the world owner's library"}. Nothing is copied into this world — the content is read from that shelf, so switching a book off takes it back out again.`
+            : "What this table is running. Only its Game Masters and Trusted Players change this list."}
         </p>
       </header>
 
@@ -157,7 +172,7 @@ export function BookListTab({ worldId, isGm }: BookListTabProps) {
 
       {books !== null && books.length === 0 && (
         <p className="text-muted-foreground" data-testid="book-list-empty">
-          {isGm
+          {managesBooks
             ? "No books are switched on for this world yet."
             : "This table is not running any books."}
         </p>
@@ -188,9 +203,9 @@ export function BookListTab({ worldId, isGm }: BookListTabProps) {
                 </StatusBadge>
               )}
 
-              {isGm && (
+              {managesBooks && (
                 <div className="flex flex-wrap gap-2">
-                  {book.systemMatches && (
+                  {isGm && book.systemMatches && (
                     <Button
                       type="button"
                       size="sm"
@@ -269,16 +284,24 @@ export function BookListTab({ worldId, isGm }: BookListTabProps) {
         </div>
       )}
 
-      {isGm && (
+      {managesBooks && (
         <section className="grid gap-2" data-testid="books-offered">
-          <h3 className="text-sm font-semibold">From your library</h3>
+          <h3 className="text-sm font-semibold">
+            {isOwner ? "From your library" : "From the world owner's library"}
+          </h3>
           {offered.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Nothing on your shelf matches this world&apos;s system that is not
-              already switched on.{" "}
-              <Link className="underline" to="/library">
-                Your library
-              </Link>
+              {isOwner ? (
+                <>
+                  Nothing on your shelf matches this world&apos;s system that is
+                  not already switched on.{" "}
+                  <Link className="underline" to="/library">
+                    Your library
+                  </Link>
+                </>
+              ) : (
+                "Nothing on the owner's shelf matches this world's system that is not already switched on. Only the owner can add books to it."
+              )}
             </p>
           ) : (
             <ul className="grid gap-2">

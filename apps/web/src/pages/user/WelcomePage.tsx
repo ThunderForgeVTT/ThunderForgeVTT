@@ -11,14 +11,27 @@ import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/loader/Loader";
 import { useAuth } from "@/hooks/useAuth";
 import type { SeoConfig } from "@/types/seo";
-import type { MyWorldEntry } from "@/types/world";
+import {
+  isWorldMemberRole,
+  roleLabel,
+  runsTheWorld,
+  type MyWorldEntry,
+} from "@/types/world";
 
-/** Collapses the raw world_members-style role ("Owner" | "GM" | "Player")
- * into this app's two user-facing badges — Owner and GM both run the
- * table, so both read as "Game Master" here (mirrors the DM = Owner-or-GM
- * convention already established in spec 010). */
-function roleBadgeLabel(role: string): "Game Master" | "Player" {
-  return role === "Owner" || role === "GM" ? "Game Master" : "Player";
+/** Whether the caller runs this table. A role string this build does not
+ * recognise runs nothing. */
+function runsThisTable(role: string): boolean {
+  return isWorldMemberRole(role) && runsTheWorld(role);
+}
+
+/** Collapses the raw world_members role into this page's badges — Owner and
+ * GM both run the table, so both read as "Game Master" here (the DM =
+ * Owner-or-GM convention from spec 010). A Trusted Player is named as one:
+ * the badge says what somebody is at that table, and ADR-099 made that a
+ * thing worth knowing before walking in. */
+function roleBadgeLabel(role: string): string {
+  if (runsThisTable(role)) return "Game Master";
+  return isWorldMemberRole(role) ? roleLabel(role) : "Player";
 }
 
 export const welcomePageSeo: SeoConfig = {
@@ -62,7 +75,7 @@ function useMyWorlds() {
  * rather than whatever order the backend's owned-then-member combine
  * happens to return. Stable otherwise (no secondary sort key). */
 function sortWorldsByRole(entries: MyWorldEntry[]): MyWorldEntry[] {
-  const rank = (role: string) => (role === "Owner" || role === "GM" ? 0 : 1);
+  const rank = (role: string) => (runsThisTable(role) ? 0 : 1);
   return [...entries].sort((a, b) => rank(a.role) - rank(b.role));
 }
 
@@ -130,11 +143,7 @@ export default function WelcomePage() {
                   <div className="flex items-start justify-between gap-2">
                     <h3 className="text-lg font-semibold">{world.name}</h3>
                     <Badge
-                      variant={
-                        role === "Owner" || role === "GM"
-                          ? "default"
-                          : "secondary"
-                      }
+                      variant={runsThisTable(role) ? "default" : "secondary"}
                     >
                       {roleBadgeLabel(role)}
                     </Badge>

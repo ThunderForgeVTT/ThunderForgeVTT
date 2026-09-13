@@ -16,13 +16,16 @@ import { Input } from "@/components/ui/input";
 import { filterPlayers } from "@/pages/world/players/playerFilter";
 import type { WorldActorRecord } from "@/types/actor";
 import { useAuth } from "@/hooks/useAuth";
+import {
+  assignableRoles,
+  canManageRole,
+} from "@/db/collections/worldMembersCollection";
+import { isWorldMemberRole, roleLabel } from "@/types/world";
 
 export interface PlayersPageProps {
   worldId: string;
   isGm: boolean;
 }
-
-const ROLE_HIERARCHY: Record<string, number> = { Owner: 3, GM: 2, Player: 1 };
 
 /** The picker's "nobody" option. `""` rather than a sentinel id so the
  * select's own empty value carries it and no id space is invented. */
@@ -59,8 +62,12 @@ export function PlayersPage({ worldId, isGm }: PlayersPageProps) {
   const [refreshTick, setRefreshTick] = useState(0);
   const [busyMemberId, setBusyMemberId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const currentUserRole =
+  const currentUserStoredRole =
     members?.find((member) => member.userId === user?.id)?.role ?? null;
+  const currentUserRole =
+    currentUserStoredRole !== null && isWorldMemberRole(currentUserStoredRole)
+      ? currentUserStoredRole
+      : null;
 
   // Reset during render rather than at the top of the effect below: this
   // is state derived from the arguments, and doing it in the effect commits
@@ -120,12 +127,14 @@ export function PlayersPage({ worldId, isGm }: PlayersPageProps) {
     [members, query],
   );
 
+  // The server's rule, asked of the one role module rather than a rank table
+  // kept here. A row whose role this build cannot read is not offered for
+  // management: guessing what it is would be guessing what it may become.
   const canManage = (targetMember: WorldMemberRecord): boolean => {
     if (!isGm || !currentUserRole) return false;
     if (targetMember.userId === user?.id) return false;
-    const currentLevel = ROLE_HIERARCHY[currentUserRole] ?? 0;
-    const targetLevel = ROLE_HIERARCHY[targetMember.role] ?? 0;
-    return currentLevel > targetLevel;
+    if (!isWorldMemberRole(targetMember.role)) return false;
+    return canManageRole(currentUserRole, targetMember.role);
   };
 
   const handleChangeRole = async (
@@ -256,7 +265,11 @@ export function PlayersPage({ worldId, isGm }: PlayersPageProps) {
               >
                 {member.username}
               </span>
-              <Badge variant="secondary">{member.role}</Badge>
+              <Badge variant="secondary">
+                {isWorldMemberRole(member.role)
+                  ? roleLabel(member.role)
+                  : member.role}
+              </Badge>
             </div>
 
             <div
@@ -327,9 +340,17 @@ export function PlayersPage({ worldId, isGm }: PlayersPageProps) {
                   data-testid={`player-role-select-${member.id}`}
                   className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 >
-                  <option value="Owner">Owner</option>
-                  <option value="GM">GM</option>
-                  <option value="Player">Player</option>
+                  {/* Only what the caller may hand out: the server refuses
+                      a role above their own, and offering one would be
+                      offering an error (ADR-099). */}
+                  {(currentUserRole
+                    ? assignableRoles(currentUserRole)
+                    : []
+                  ).map((role) => (
+                    <option key={role} value={role}>
+                      {roleLabel(role)}
+                    </option>
+                  ))}
                 </select>
                 <Button
                   variant="danger"

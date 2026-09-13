@@ -44,11 +44,10 @@ pub async fn update_member_role_impl(
     let target_user_id = input.user_id;
     let new_role_str = input.role.clone();
 
-    // Parse and validate new role
-    match new_role_str.as_str() {
-        "Owner" | "GM" | "Player" => {}
-        _ => return Err(Error::new("Invalid role. Must be Owner, GM, or Player")),
-    };
+    // Parsed by the same spelling the column is checked against, so a role
+    // this build does not know is refused here rather than by a constraint.
+    let new_role = WorldMemberRole::from_str(&new_role_str)
+        .map_err(|_| Error::new("Invalid role. Must be Owner, GM, TrustedPlayer, or Player"))?;
 
     // Verify caller is Owner/GM. Spec 023 (research.md §3): uses
     // `require_world_member`'s Owner-fallback (a world's creator may
@@ -64,6 +63,14 @@ pub async fn update_member_role_impl(
         return Err(Error::new(
             "You do not have permission to change member roles",
         ));
+    }
+
+    // ADR-099: a Trusted Player is made one by the Owner or a Game Master,
+    // and the check above is what keeps it theirs. This one stops the same
+    // route handing out more than the caller holds — a Game Master could
+    // otherwise make somebody an Owner.
+    if !caller_role.can_assign(new_role) {
+        return Err(Error::new("You cannot give a member a role above your own"));
     }
 
     // Get target member
@@ -149,8 +156,10 @@ pub async fn remove_member_impl(
     let caller_role =
         WorldMemberRole::from_str(&caller_role_str).unwrap_or(WorldMemberRole::Player);
 
-    // Check permission: Only Owner or GM can remove members
-    if caller_role != WorldMemberRole::Owner && caller_role != WorldMemberRole::GM {
+    // Only those who run the world remove members. Asked as a rank rather
+    // than as `== Owner || == GM`, which is the same answer today and the
+    // question a fifth role would otherwise have to remember to revisit.
+    if !caller_role.can_change_roles() {
         return Err(Error::new("You do not have permission to remove members"));
     }
 

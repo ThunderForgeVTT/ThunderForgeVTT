@@ -111,7 +111,11 @@ pub async fn generate_invite_code_impl(
         WorldMembershipError::Database(msg) => Error::new(format!("Database error: {}", msg)),
     })?;
 
-    if role != "Owner" && role != "GM" {
+    // Unrecognised strings resolve to no role and are refused. A Trusted
+    // Player is refused too: inviting people is running the table.
+    if !thunderforge_authz::Role::from_stored(&role)
+        .is_some_and(thunderforge_authz::Role::runs_the_world)
+    {
         return Err(Error::new("Only Owners and GMs can generate invite codes"));
     }
 

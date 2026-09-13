@@ -320,3 +320,131 @@ async fn removing_a_book_from_the_shelf_names_the_worlds_running_it() {
         1
     );
 }
+
+/// Spec 050 decision 8 at the wire, across every role and a stranger.
+///
+/// Each row is one caller doing the whole round — asking what is offered,
+/// switching the owner's book on, asking what switching it off would take,
+/// and taking it off — and the table says who gets through. Two things are
+/// asserted for every caller that does: the book that went on is the
+/// **owner's** (FR-010a), and the caller's own book of the same name is
+/// neither offered nor accepted.
+///
+/// Browsing what a book says is a separate column, because ADR-099 trusts a
+/// Trusted Player to arrange the books and not to read them.
+#[tokio::test]
+async fn the_book_list_answers_to_owner_game_master_and_trusted_player_alone() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let owner = insert_test_user(&mut conn);
+    let world = a_world_running(&mut conn, owner, SYSTEM);
+    let owners_book = store::import_book(
+        &mut conn,
+        owner,
+        a_book("Monster Manual", SYSTEM),
+        &[a_creature("Goblin"), a_creature("Orc")],
+    )
+    .unwrap();
+
+    let mut member = |role: &str| {
+        let user = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world, user, role);
+        user
+    };
+    let game_master = member("GM");
+    let trusted = member("TrustedPlayer");
+    let player = member("Player");
+    let stranger = insert_test_user(&mut conn);
+
+    // (who, caller, arranges the list, browses a book, reads the list)
+    let table = [
+        ("Owner", owner, true, true, true),
+        ("Game Master", game_master, true, true, true),
+        ("Trusted Player", trusted, true, false, true),
+        ("Player", player, false, false, true),
+        ("stranger", stranger, false, false, false),
+    ];
+
+    let mut their_own = std::collections::HashMap::new();
+    for (_, caller, ..) in table {
+        if caller != owner {
+            let book = store::import_book(&mut conn, caller, a_book("Monster Manual", SYSTEM), &[])
+                .unwrap();
+            their_own.insert(caller, book.id);
+        }
+    }
+    drop(conn);
+
+    for (who, caller, arranges, browses, reads) in table {
+        let offered = compendiums_offered_impl(&state, caller, world).await;
+        let on = switch_on_impl(&state, caller, world, owners_book.id).await;
+
+        assert_eq!(offered.is_ok(), arranges, "{who}: offered");
+        assert_eq!(on.is_ok(), arranges, "{who}: switch on");
+        assert_eq!(
+            world_book_list_impl(&state, caller, world).await.is_ok(),
+            reads,
+            "{who}: read the list"
+        );
+
+        if !arranges {
+            // Put it on as somebody trusted, so the refusals below are
+            // refusals to change something that is there.
+            switch_on_impl(&state, trusted, world, owners_book.id)
+                .await
+                .unwrap();
+        } else {
+            // Asked before the switch: the owner's shelf, and not the
+            // caller's own copy of the same book.
+            let offered: Vec<Uuid> = offered.unwrap().into_iter().map(|b| b.id).collect();
+            assert_eq!(
+                offered,
+                vec![owners_book.id],
+                "{who}: the owner's shelf only"
+            );
+            let listed = on.unwrap();
+            assert_eq!(listed.len(), 1, "{who}");
+            assert_eq!(
+                listed[0].compendium_id, owners_book.id,
+                "{who}: the owner's book"
+            );
+        }
+
+        assert_eq!(
+            world_compendium_entries_impl(&state, caller, world, owners_book.id, None, None, None)
+                .await
+                .is_ok(),
+            browses,
+            "{who}: browse the book"
+        );
+
+        if let Some(theirs) = their_own.get(&caller) {
+            assert!(
+                switch_on_impl(&state, caller, world, *theirs)
+                    .await
+                    .is_err(),
+                "{who} must not stock the table from their own shelf"
+            );
+        }
+
+        let report = switch_off_impl(&state, caller, world, owners_book.id, false).await;
+        assert_eq!(report.is_ok(), arranges, "{who}: switch-off report");
+        if let Ok(report) = report {
+            assert!(!report.switched_off);
+            assert_eq!(report.entry_count, 2, "{who}");
+        }
+
+        let off = switch_off_impl(&state, caller, world, owners_book.id, true).await;
+        assert_eq!(off.is_ok(), arranges, "{who}: switch off");
+
+        let still_on = world_book_list_impl(&state, owner, world).await.unwrap();
+        if arranges {
+            assert!(still_on.is_empty(), "{who} took it off");
+        } else {
+            assert_eq!(still_on.len(), 1, "{who} changed nothing");
+            switch_off_impl(&state, owner, world, owners_book.id, true)
+                .await
+                .unwrap();
+        }
+    }
+}

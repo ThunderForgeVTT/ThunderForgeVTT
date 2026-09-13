@@ -197,3 +197,170 @@ async fn owner_with_no_membership_row_can_change_roles_and_remove_members() {
         .unwrap();
     assert!(remaining.is_none(), "removed member's row must be gone");
 }
+
+// ===== ADR-099: who makes somebody a Trusted Player =====
+
+fn stored_role(conn: &mut PgConnection, world_id: Uuid, user_id: Uuid) -> String {
+    world_members::table
+        .filter(world_members::world_id.eq(world_id))
+        .filter(world_members::user_id.eq(user_id))
+        .select(world_members::role)
+        .first(conn)
+        .unwrap()
+}
+
+fn change_to(world_id: Uuid, user_id: Uuid, role: &str) -> UpdateMemberRoleInput {
+    UpdateMemberRoleInput {
+        world_id,
+        user_id,
+        role: role.to_string(),
+    }
+}
+
+/// Only the Owner or a Game Master may grant Trusted Player, and only they
+/// may take it away. Asked of every caller who might try — the Owner (with
+/// no membership row, as `create_world` leaves them), a Game Master, a
+/// Trusted Player, a Player and a stranger — and checked against the stored
+/// row rather than the reply, since a refusal that still wrote would pass a
+/// test that only read the error.
+#[tokio::test]
+async fn only_an_owner_or_game_master_grants_or_revokes_trusted_player() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let owner = insert_test_user(&mut conn);
+    let world = insert_test_world(&mut conn, owner);
+    let game_master = insert_test_user(&mut conn);
+    insert_test_world_member(&mut conn, world, game_master, "GM");
+    let trusted = insert_test_user(&mut conn);
+    insert_test_world_member(&mut conn, world, trusted, "TrustedPlayer");
+    let player = insert_test_user(&mut conn);
+    insert_test_world_member(&mut conn, world, player, "Player");
+    let target = insert_test_user(&mut conn);
+    insert_test_world_member(&mut conn, world, target, "Player");
+    let stranger = insert_test_user(&mut conn);
+    drop(conn);
+
+    for (who, caller, may) in [
+        ("Owner", owner, true),
+        ("Game Master", game_master, true),
+        ("Trusted Player", trusted, false),
+        ("Player", player, false),
+        ("stranger", stranger, false),
+    ] {
+        let granted =
+            update_member_role_impl(&state, caller, change_to(world, target, "TrustedPlayer"))
+                .await;
+        assert_eq!(granted.is_ok(), may, "{who} granting: {:?}", granted.err());
+        let mut conn = state.db_pool.get().unwrap();
+        assert_eq!(
+            stored_role(&mut conn, world, target),
+            if may { "TrustedPlayer" } else { "Player" },
+            "{who} granting"
+        );
+        if !may {
+            // Make the target trusted by somebody who may, so the refusal
+            // below is a refusal to take something away.
+            diesel::update(
+                world_members::table
+                    .filter(world_members::world_id.eq(world))
+                    .filter(world_members::user_id.eq(target)),
+            )
+            .set(world_members::role.eq("TrustedPlayer"))
+            .execute(&mut conn)
+            .unwrap();
+        }
+        drop(conn);
+
+        let revoked =
+            update_member_role_impl(&state, caller, change_to(world, target, "Player")).await;
+        assert_eq!(revoked.is_ok(), may, "{who} revoking: {:?}", revoked.err());
+        let mut conn = state.db_pool.get().unwrap();
+        assert_eq!(
+            stored_role(&mut conn, world, target),
+            if may { "Player" } else { "TrustedPlayer" },
+            "{who} revoking"
+        );
+        // Back to a plain Player for the next caller.
+        diesel::update(
+            world_members::table
+                .filter(world_members::world_id.eq(world))
+                .filter(world_members::user_id.eq(target)),
+        )
+        .set(world_members::role.eq("Player"))
+        .execute(&mut conn)
+        .unwrap();
+    }
+
+    // A Trusted Player cannot promote themselves either, in either direction
+    // of trust: not to Game Master, and not by removing somebody else.
+    assert!(
+        update_member_role_impl(&state, trusted, change_to(world, trusted, "GM"))
+            .await
+            .is_err()
+    );
+    assert!(
+        remove_member_impl(&state, trusted, world, player)
+            .await
+            .is_err()
+    );
+    let mut conn = state.db_pool.get().unwrap();
+    assert_eq!(stored_role(&mut conn, world, trusted), "TrustedPlayer");
+    assert_eq!(stored_role(&mut conn, world, player), "Player");
+}
+
+/// Nobody hands out more than they hold. A Game Master making a Player the
+/// Owner was accepted before this — `can_manage` asked only about the
+/// target's current role — and it is a transfer of the world by another name.
+#[tokio::test]
+async fn a_game_master_cannot_make_anybody_an_owner() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let owner = insert_test_user(&mut conn);
+    let world = insert_test_world(&mut conn, owner);
+    let game_master = insert_test_user(&mut conn);
+    insert_test_world_member(&mut conn, world, game_master, "GM");
+    let player = insert_test_user(&mut conn);
+    insert_test_world_member(&mut conn, world, player, "Player");
+    drop(conn);
+
+    assert!(
+        update_member_role_impl(&state, game_master, change_to(world, player, "Owner"))
+            .await
+            .is_err()
+    );
+    let mut conn = state.db_pool.get().unwrap();
+    assert_eq!(stored_role(&mut conn, world, player), "Player");
+    drop(conn);
+
+    // What a Game Master may still do is unchanged: make a co-GM.
+    update_member_role_impl(&state, game_master, change_to(world, player, "GM"))
+        .await
+        .expect("a Game Master may still make a co-GM");
+    // And a role the column does not know is refused before it reaches it.
+    assert!(
+        update_member_role_impl(&state, owner, change_to(world, player, "trustedplayer"))
+            .await
+            .is_err()
+    );
+}
+
+/// A Game Master removes a Trusted Player as they would a Player: the role
+/// ranks below them.
+#[tokio::test]
+async fn a_game_master_may_remove_a_trusted_player() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let owner = insert_test_user(&mut conn);
+    let world = insert_test_world(&mut conn, owner);
+    let game_master = insert_test_user(&mut conn);
+    insert_test_world_member(&mut conn, world, game_master, "GM");
+    let trusted = insert_test_user(&mut conn);
+    insert_test_world_member(&mut conn, world, trusted, "TrustedPlayer");
+    drop(conn);
+
+    assert!(
+        remove_member_impl(&state, game_master, world, trusted)
+            .await
+            .unwrap()
+    );
+}

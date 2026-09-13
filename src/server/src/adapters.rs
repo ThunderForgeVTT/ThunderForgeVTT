@@ -297,12 +297,15 @@ impl From<thunderforge_core::models::invites::WorldInvite> for crate::models::Wo
 /// Convert Diesel WorldMember to Core WorldMembership
 impl From<crate::models::WorldMember> for thunderforge_core::models::invites::WorldMembership {
     fn from(db: crate::models::WorldMember) -> Self {
-        // Parse role string to enum
-        let role = match db.role.as_str() {
-            "Owner" => thunderforge_core::models::invites::WorldMemberRole::Owner,
-            "GM" => thunderforge_core::models::invites::WorldMemberRole::GM,
-            _ => thunderforge_core::models::invites::WorldMemberRole::Player, // Default to Player
-        };
+        // An unreadable role becomes the lowest one, Player, rather than an
+        // error: this struct has to hold *a* role, and the lowest grants the
+        // least. It used to be a hand-written match with the same default,
+        // which would have read a Trusted Player as a Player and demoted them
+        // the first time the row was written back.
+        let role = db
+            .role
+            .parse()
+            .unwrap_or(thunderforge_core::models::invites::WorldMemberRole::Player);
 
         thunderforge_core::models::invites::WorldMembership {
             id: db.id,
@@ -319,12 +322,7 @@ impl From<crate::models::WorldMember> for thunderforge_core::models::invites::Wo
 /// Convert Core WorldMembership to Diesel WorldMember
 impl From<thunderforge_core::models::invites::WorldMembership> for crate::models::WorldMember {
     fn from(core: thunderforge_core::models::invites::WorldMembership) -> Self {
-        // Convert role enum to string
-        let role = match core.role {
-            thunderforge_core::models::invites::WorldMemberRole::Owner => "Owner".to_string(),
-            thunderforge_core::models::invites::WorldMemberRole::GM => "GM".to_string(),
-            thunderforge_core::models::invites::WorldMemberRole::Player => "Player".to_string(),
-        };
+        let role = core.role.to_string();
 
         crate::models::WorldMember {
             id: core.id,
@@ -364,5 +362,29 @@ mod tests {
         assert_eq!(core_user.id, user_id);
         assert_eq!(core_user.username, "testuser");
         assert_eq!(core_user.email, "test@example.com");
+    }
+
+    /// Every stored role survives a trip through the core membership model
+    /// and back. The Trusted Player is the case that matters: the conversion
+    /// this replaced defaulted anything it did not name to Player, so a
+    /// Trusted Player read and written back came out demoted.
+    #[test]
+    fn every_world_role_survives_the_core_membership_round_trip() {
+        let now = chrono::Utc::now().naive_utc();
+        for role in thunderforge_authz::Role::ALL {
+            let db = crate::models::WorldMember {
+                id: Uuid::now_v7(),
+                world_id: Uuid::now_v7(),
+                user_id: Uuid::now_v7(),
+                role: role.as_stored().to_string(),
+                joined_at: now,
+                created_at: now,
+                updated_at: now,
+            };
+            let core: thunderforge_core::models::invites::WorldMembership = db.clone().into();
+            assert_eq!(thunderforge_authz::Role::from(core.role), role);
+            let back: crate::models::WorldMember = core.into();
+            assert_eq!(back.role, db.role, "{role:?}");
+        }
     }
 }

@@ -71,7 +71,7 @@ export function WorldCompendiumPage({
   // is total, so there is no loading state and no blank label (SC-013).
   const [vocabulary, setVocabulary] =
     useState<AbilityVocabulary>(DEFAULT_VOCABULARY);
-  const { isGm } = useWorldRole(worldId, world);
+  const { isGm, role, managesContent } = useWorldRole(worldId, world);
 
   // Spec 021: the header blurb is GM-authored Markdown (a reserved lore
   // entry, edited from System settings), not a hardcoded sentence — `null`
@@ -218,7 +218,14 @@ export function WorldCompendiumPage({
             value: "books",
             label: "Books",
             icon: "quill",
-            content: <BookListTab worldId={worldId} isGm={isGm} />,
+            content: (
+              <BookListTab
+                worldId={worldId}
+                isGm={isGm}
+                managesBooks={managesContent}
+                isOwner={role === "Owner"}
+              />
+            ),
           },
           {
             value: "abilities",

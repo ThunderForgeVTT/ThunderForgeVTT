@@ -12,6 +12,7 @@ import {
   type GmToolId,
 } from "@/components/world/GmToolRail/GmToolRail";
 import { useResetOnChange } from "@/hooks/useResetOnChange";
+import { isWorldMemberRole, runsTheWorld } from "@/types/world";
 
 export interface AuthoringToolGrantsCardProps {
   worldId: string;
@@ -83,7 +84,15 @@ export function AuthoringToolGrantsCard({
         if (!active) {
           return;
         }
-        setPlayers(members.filter((member) => member.role === "Player"));
+        // Everyone who plays rather than runs the table, a Trusted Player
+        // included: authoring tools are a Game Master's to hand out, and
+        // being trusted with the books gives nobody the map (ADR-099).
+        setPlayers(
+          members.filter(
+            (member) =>
+              isWorldMemberRole(member.role) && !runsTheWorld(member.role),
+          ),
+        );
         setGranted(
           Object.fromEntries(
             grants.map((entry) => [entry.worldMemberId, entry.tools]),

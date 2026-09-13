@@ -867,3 +867,74 @@ async fn update_world_default_scene_grid_type_requires_dm_role_and_valid_value()
 // `_impl` by this feature) whose GraphQL context is impractical to
 // construct in a focused unit test without also duplicating the
 // full `MutationRoot`/`QueryRoot` wiring.
+
+/// ADR-099: a Trusted Player is refused what makes a Game Master a Game
+/// Master, and a Game Master in the same world is not.
+///
+/// Each gate below is an existing one that was written as "at least a Game
+/// Master" and left untouched by the new role. That is the claim rank was
+/// meant to make true, so it is asserted against the real gates rather than
+/// against the ordering: hiding a scene, authoring walls on one, and issuing
+/// or listing the world's invites.
+#[tokio::test]
+async fn a_trusted_player_is_refused_what_a_game_master_may_do() {
+    use super::update_scene_hidden_impl;
+    use crate::graphql::mutations_invites::{GenerateInviteCodeInput, generate_invite_code_impl};
+    use crate::graphql::queries::invite::world_invites_impl;
+    use crate::test_support::*;
+
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let owner_id = insert_test_user(&mut conn);
+    let world_id = insert_test_world(&mut conn, owner_id);
+    let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+    let gm_id = insert_test_user(&mut conn);
+    insert_test_world_member(&mut conn, world_id, gm_id, "GM");
+    let trusted_id = insert_test_user(&mut conn);
+    insert_test_world_member(&mut conn, world_id, trusted_id, "TrustedPlayer");
+
+    // Walls, lights and shapes all ask this one question.
+    assert!(
+        !crate::auth::world_membership::is_dm_of_scene(&mut conn, trusted_id, false, scene_id)
+            .unwrap(),
+        "a Trusted Player must not author walls"
+    );
+    assert!(
+        crate::auth::world_membership::is_dm_of_scene(&mut conn, gm_id, false, scene_id).unwrap()
+    );
+    drop(conn);
+
+    assert!(
+        update_scene_hidden_impl(&state, trusted_id, false, scene_id, true)
+            .await
+            .is_err(),
+        "a Trusted Player must not hide a scene"
+    );
+    let hidden = update_scene_hidden_impl(&state, gm_id, false, scene_id, true)
+        .await
+        .expect("a Game Master hides a scene");
+    assert!(hidden.hidden);
+
+    let invite = |user_id| {
+        generate_invite_code_impl(
+            &state,
+            user_id,
+            GenerateInviteCodeInput {
+                world_id,
+                max_uses: 1,
+                expires_at: None,
+            },
+        )
+    };
+    assert!(
+        invite(trusted_id).await.is_err(),
+        "a Trusted Player must not invite people"
+    );
+    assert!(invite(gm_id).await.is_ok());
+    assert!(
+        world_invites_impl(&state, trusted_id, world_id)
+            .await
+            .is_err()
+    );
+    assert!(world_invites_impl(&state, gm_id, world_id).await.is_ok());
+}

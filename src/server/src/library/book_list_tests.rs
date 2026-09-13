@@ -147,8 +147,9 @@ fn a_second_world_stores_no_second_copy() {
     );
 }
 
-/// FR-014, side one: a co-Game Master may not put their own book on somebody
-/// else's table. The world is not theirs, and that is the end of it.
+/// FR-014 and FR-010a, side one: a co-Game Master may arrange somebody
+/// else's table and still may not put their own book on it. Trust to manage
+/// the list is not a licence to stock it from another shelf.
 #[test]
 fn a_co_game_master_cannot_switch_their_own_book_on() {
     let state = test_app_state();
@@ -161,7 +162,10 @@ fn a_co_game_master_cannot_switch_their_own_book_on() {
 
     let refused = switch_on(&mut conn, co_gm, world, theirs.id);
 
-    assert!(matches!(refused, Err(BookListError::NotYourWorld)));
+    assert!(
+        matches!(refused, Err(BookListError::NotOnTheOwnersShelf)),
+        "got {refused:?}"
+    );
     assert!(books_on(&mut conn, world).unwrap().is_empty());
 }
 
@@ -184,7 +188,7 @@ fn a_co_game_master_cannot_take_the_owners_book_home() {
     let refused = switch_on(&mut conn, co_gm, theirs, owners_book.id);
 
     assert!(
-        matches!(refused, Err(BookListError::NotYourBook(_))),
+        matches!(refused, Err(BookListError::NotOnTheOwnersShelf)),
         "a book used at somebody's table must not be inheritable, got {refused:?}"
     );
     assert!(books_on(&mut conn, theirs).unwrap().is_empty());
@@ -390,8 +394,8 @@ fn a_co_game_master_reads_what_the_table_is_running_and_no_more() {
     assert!(store::library_for(&mut conn, co_gm).unwrap().is_empty());
 }
 
-/// A player at the table is not a Game Master. They may see the list — every
-/// member may — and they have no route to change it.
+/// A player at the table is not trusted with its books. They may see the list
+/// — every member may — and they have no route to change it.
 #[test]
 fn a_player_cannot_change_the_list() {
     let state = test_app_state();
@@ -405,21 +409,157 @@ fn a_player_cannot_change_the_list() {
 
     assert!(matches!(
         switch_off(&mut conn, player, world, book.id),
-        Err(BookListError::NotYourWorld)
+        Err(BookListError::MayNotManageBooks)
     ));
     assert!(matches!(
         switch_off_report(&mut conn, player, world, book.id),
-        Err(BookListError::NotYourWorld)
+        Err(BookListError::MayNotManageBooks)
     ));
     assert!(matches!(
         offerable_to(&mut conn, player, world),
-        Err(BookListError::NotYourWorld)
+        Err(BookListError::MayNotManageBooks)
     ));
     assert_eq!(
         books_on(&mut conn, world).unwrap().len(),
         1,
         "and the list a player reads is the real one"
     );
+}
+
+/// Spec 050 decision 8 and FR-010a, one role at a time: the Owner, a Game
+/// Master and a Trusted Player may each switch a book on and off, a Player
+/// and a stranger may not, and whoever switches, the book that goes on is the
+/// **owner's** — each manager also holds a book of their own with the same
+/// title and system, and it is never the one offered or accepted.
+#[test]
+fn who_may_arrange_the_books_and_whose_books_they_are() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let owner = insert_test_user(&mut conn);
+    let world = a_world_running(&mut conn, owner, SYSTEM);
+    let owners_book = store::import_book(
+        &mut conn,
+        owner,
+        a_book("Monster Manual", SYSTEM),
+        &[a_creature("Goblin")],
+    )
+    .unwrap();
+
+    let member = |conn: &mut PgConnection, role: &str| {
+        let user = insert_test_user(conn);
+        insert_test_world_member(conn, world, user, role);
+        user
+    };
+    let game_master = member(&mut conn, "GM");
+    let trusted = member(&mut conn, "TrustedPlayer");
+    let player = member(&mut conn, "Player");
+    let stranger = insert_test_user(&mut conn);
+
+    for (who, caller, may) in [
+        ("Owner", owner, true),
+        ("Game Master", game_master, true),
+        ("Trusted Player", trusted, true),
+        ("Player", player, false),
+        ("stranger", stranger, false),
+    ] {
+        // Their own copy of the same book, so a wrong shelf cannot pass by
+        // coincidence of title or system.
+        let their_own = (caller != owner).then(|| {
+            store::import_book(&mut conn, caller, a_book("Monster Manual", SYSTEM), &[]).unwrap()
+        });
+
+        let offered = offerable_to(&mut conn, caller, world);
+        let switched = switch_on(&mut conn, caller, world, owners_book.id);
+
+        if !may {
+            assert!(
+                matches!(offered, Err(BookListError::MayNotManageBooks)),
+                "{who}: {offered:?}"
+            );
+            assert!(
+                matches!(switched, Err(BookListError::MayNotManageBooks)),
+                "{who}: {switched:?}"
+            );
+            assert!(books_on(&mut conn, world).unwrap().is_empty(), "{who}");
+            continue;
+        }
+
+        let offered: Vec<Uuid> = offered
+            .unwrap_or_else(|e| panic!("{who}: {e}"))
+            .into_iter()
+            .map(|book| book.id)
+            .collect();
+        assert_eq!(
+            offered,
+            vec![owners_book.id],
+            "{who} is offered the owner's shelf"
+        );
+
+        let on = switched.unwrap_or_else(|e| panic!("{who}: {e}"));
+        assert_eq!(on.compendium_id, owners_book.id, "{who}");
+        assert_eq!(on.switched_on_by, caller, "FR-015 records who, for {who}");
+
+        if let Some(their_own) = their_own {
+            assert!(
+                matches!(
+                    switch_on(&mut conn, caller, world, their_own.id),
+                    Err(BookListError::NotOnTheOwnersShelf)
+                ),
+                "{who} must not stock the table from their own shelf"
+            );
+        }
+
+        let report = switch_off_report(&mut conn, caller, world, owners_book.id)
+            .unwrap_or_else(|e| panic!("{who}: {e}"));
+        assert_eq!(report.entry_count, 1, "{who}");
+        switch_off(&mut conn, caller, world, owners_book.id)
+            .unwrap_or_else(|e| panic!("{who}: {e}"));
+        assert!(books_on(&mut conn, world).unwrap().is_empty(), "{who}");
+    }
+
+    // And a refused caller cannot take off what somebody trusted put on.
+    switch_on(&mut conn, trusted, world, owners_book.id).unwrap();
+    for refused in [player, stranger] {
+        assert!(matches!(
+            switch_off_report(&mut conn, refused, world, owners_book.id),
+            Err(BookListError::MayNotManageBooks)
+        ));
+        assert!(matches!(
+            switch_off(&mut conn, refused, world, owners_book.id),
+            Err(BookListError::MayNotManageBooks)
+        ));
+    }
+    assert_eq!(books_on(&mut conn, world).unwrap().len(), 1);
+}
+
+/// The migration's half of ADR-099: the column accepts `TrustedPlayer` and
+/// still refuses the spellings a person would plausibly type instead, so a
+/// seed script cannot write a role that the code would then read as nobody.
+#[test]
+fn a_misspelt_trusted_player_is_refused_by_the_column() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let owner = insert_test_user(&mut conn);
+    let world = a_world_running(&mut conn, owner, SYSTEM);
+    let someone = insert_test_user(&mut conn);
+
+    let written = diesel::sql_query(format!(
+        "INSERT INTO world_members (id, world_id, user_id, role) \
+         VALUES ('{}', '{}', '{}', 'trustedplayer')",
+        Uuid::now_v7(),
+        world,
+        someone,
+    ))
+    .execute(&mut conn);
+
+    assert!(
+        written.is_err(),
+        "the column must refuse a spelling the code does not recognise"
+    );
+    assert!(matches!(
+        offerable_to(&mut conn, someone, world),
+        Err(BookListError::MayNotManageBooks)
+    ));
 }
 
 /// 050 FR-060: removing a book from the library must name the worlds it is on

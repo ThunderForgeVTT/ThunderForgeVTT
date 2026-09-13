@@ -1,63 +1,105 @@
 //! Campaign invitation and membership models for multiplayer gameplay
 
 use serde::{Deserialize, Serialize};
+use thunderforge_authz::Role;
 use uuid::Uuid;
 
-/// World membership roles with permission hierarchy
+/// World membership roles, as the invite and membership models carry them.
+///
+/// A second enum beside [`thunderforge_authz::Role`], kept because this one is
+/// serialised under these variant names and the other is not serialised at
+/// all. What it must not be is a second *model*: every rule below asks the
+/// authz role, through the conversions at the bottom of this block, so the
+/// ranking is written down once. When ADR-099 added a role between Player and
+/// Game Master, the hand-written `match` this replaced would have let a Game
+/// Master manage a Trusted Player only by somebody remembering to add an arm.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum WorldMemberRole {
-    /// Full control: invite players, change roles, delete world, delete members
+    /// Holds the world: invites, changes any role, removes anyone.
     Owner,
-    /// Game master: invite players, change roles for Player-level members, manage scene content
+    /// Runs the world: invites, and manages members ranked below them.
     GM,
-    /// Regular player: can join world and interact with scenes
+    /// Trusted with the table's content (ADR-099). Manages nobody.
+    TrustedPlayer,
+    /// Plays. Manages nobody.
     Player,
 }
 
 impl WorldMemberRole {
-    /// Check if this role can perform an action on a target role
+    fn rank(self) -> Role {
+        self.into()
+    }
+
+    /// Whether this role may change or remove a member holding `target`.
+    ///
+    /// An Owner may manage anyone. A Game Master may manage whoever ranks
+    /// below them — Trusted Players included, which is what lets a Game
+    /// Master take the trust back — and not a fellow Game Master, because two
+    /// people running a table should not be able to demote each other.
     pub fn can_manage(&self, target: WorldMemberRole) -> bool {
-        match (self, target) {
-            // Owners can manage anyone
-            (WorldMemberRole::Owner, _) => true,
-            // GMs can manage Players but not Owners or other GMs
-            (WorldMemberRole::GM, WorldMemberRole::Player) => true,
-            // Players cannot manage anyone
-            (WorldMemberRole::Player, _) => false,
+        match self.rank() {
+            Role::Owner => true,
+            caller if caller.runs_the_world() => target.rank() < caller,
             _ => false,
         }
     }
 
+    /// Whether this role may give a member `new_role`.
+    ///
+    /// Nobody may hand out more than they hold. Without this a Game Master
+    /// could make a Player an Owner, which is a transfer of the world by
+    /// another name and is not theirs to make.
+    pub fn can_assign(&self, new_role: WorldMemberRole) -> bool {
+        self.can_change_roles() && new_role.rank() <= self.rank()
+    }
+
     /// Check if this role can generate invite codes
     pub fn can_invite(&self) -> bool {
-        matches!(self, WorldMemberRole::Owner | WorldMemberRole::GM)
+        self.rank().runs_the_world()
     }
 
     /// Check if this role can change member roles
     pub fn can_change_roles(&self) -> bool {
-        matches!(self, WorldMemberRole::Owner | WorldMemberRole::GM)
+        self.rank().runs_the_world()
     }
 }
 
 impl std::fmt::Display for WorldMemberRole {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            WorldMemberRole::Owner => write!(f, "Owner"),
-            WorldMemberRole::GM => write!(f, "GM"),
-            WorldMemberRole::Player => write!(f, "Player"),
-        }
+        f.write_str(self.rank().as_stored())
     }
 }
 
 impl std::str::FromStr for WorldMemberRole {
     type Err = String;
 
+    /// The stored spelling, parsed by the authz crate so the two enums cannot
+    /// disagree about what `world_members.role` contains.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "Owner" => Ok(WorldMemberRole::Owner),
-            "GM" => Ok(WorldMemberRole::GM),
-            "Player" => Ok(WorldMemberRole::Player),
-            _ => Err(format!("Invalid role: {}", s)),
+        Role::from_stored(s)
+            .map(Into::into)
+            .ok_or_else(|| format!("Invalid role: {}", s))
+    }
+}
+
+impl From<WorldMemberRole> for Role {
+    fn from(role: WorldMemberRole) -> Self {
+        match role {
+            WorldMemberRole::Owner => Role::Owner,
+            WorldMemberRole::GM => Role::GameMaster,
+            WorldMemberRole::TrustedPlayer => Role::TrustedPlayer,
+            WorldMemberRole::Player => Role::Player,
+        }
+    }
+}
+
+impl From<Role> for WorldMemberRole {
+    fn from(role: Role) -> Self {
+        match role {
+            Role::Owner => WorldMemberRole::Owner,
+            Role::GameMaster => WorldMemberRole::GM,
+            Role::TrustedPlayer => WorldMemberRole::TrustedPlayer,
+            Role::Player => WorldMemberRole::Player,
         }
     }
 }
@@ -217,24 +259,84 @@ mod tests {
     fn test_role_hierarchy() {
         // Owner can manage anyone
         assert!(WorldMemberRole::Owner.can_manage(WorldMemberRole::GM));
+        assert!(WorldMemberRole::Owner.can_manage(WorldMemberRole::TrustedPlayer));
         assert!(WorldMemberRole::Owner.can_manage(WorldMemberRole::Player));
 
-        // GM can only manage Players
+        // GM manages whoever ranks below them
         assert!(!WorldMemberRole::GM.can_manage(WorldMemberRole::Owner));
         assert!(!WorldMemberRole::GM.can_manage(WorldMemberRole::GM));
+        assert!(WorldMemberRole::GM.can_manage(WorldMemberRole::TrustedPlayer));
         assert!(WorldMemberRole::GM.can_manage(WorldMemberRole::Player));
 
-        // Player can't manage anyone
-        assert!(!WorldMemberRole::Player.can_manage(WorldMemberRole::Owner));
-        assert!(!WorldMemberRole::Player.can_manage(WorldMemberRole::GM));
-        assert!(!WorldMemberRole::Player.can_manage(WorldMemberRole::Player));
+        // Neither kind of player manages anyone
+        for caller in [WorldMemberRole::TrustedPlayer, WorldMemberRole::Player] {
+            for target in ALL {
+                assert!(!caller.can_manage(target), "{caller:?} -> {target:?}");
+            }
+        }
     }
 
     #[test]
     fn test_invite_permissions() {
         assert!(WorldMemberRole::Owner.can_invite());
         assert!(WorldMemberRole::GM.can_invite());
+        assert!(!WorldMemberRole::TrustedPlayer.can_invite());
         assert!(!WorldMemberRole::Player.can_invite());
+    }
+
+    const ALL: [WorldMemberRole; 4] = [
+        WorldMemberRole::Owner,
+        WorldMemberRole::GM,
+        WorldMemberRole::TrustedPlayer,
+        WorldMemberRole::Player,
+    ];
+
+    /// ADR-099: only an Owner or a Game Master makes somebody a Trusted
+    /// Player, and nobody hands out more than they hold.
+    #[test]
+    fn only_those_who_run_the_world_assign_roles_and_never_above_their_own() {
+        use WorldMemberRole::*;
+        let expected = [
+            (Owner, [true, true, true, true]),
+            (GM, [false, true, true, true]),
+            (TrustedPlayer, [false, false, false, false]),
+            (Player, [false, false, false, false]),
+        ];
+        for (caller, answers) in expected {
+            for (new_role, answer) in ALL.into_iter().zip(answers) {
+                assert_eq!(
+                    caller.can_assign(new_role),
+                    answer,
+                    "{caller:?} assigning {new_role:?}"
+                );
+            }
+        }
+    }
+
+    /// The two enums, both ways, and through the stored string. Each
+    /// conversion is an exhaustive `match`, so a new variant fails to compile
+    /// until it is placed; this is what catches it being placed wrongly.
+    #[test]
+    fn both_role_enums_round_trip_through_each_other_and_the_column() {
+        for role in Role::ALL {
+            let member: WorldMemberRole = role.into();
+            assert_eq!(Role::from(member), role);
+            assert_eq!(member.to_string(), role.as_stored());
+            assert_eq!(role.as_stored().parse::<WorldMemberRole>(), Ok(member));
+        }
+        assert_eq!(ALL.len(), Role::ALL.len());
+        assert_eq!(
+            serde_json::to_string(&WorldMemberRole::TrustedPlayer).unwrap(),
+            "\"TrustedPlayer\"",
+            "the serialised name must be the stored one"
+        );
+    }
+
+    #[test]
+    fn an_unrecognised_role_string_is_refused_rather_than_defaulted() {
+        for wrong in ["trustedplayer", "Trusted Player", "gm", ""] {
+            assert!(wrong.parse::<WorldMemberRole>().is_err(), "{wrong:?}");
+        }
     }
 
     #[test]

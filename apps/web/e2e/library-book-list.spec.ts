@@ -22,6 +22,9 @@ import {
  *    page.
  * 3. **A player sees the list and cannot change it** — not by the page, which
  *    renders them no controls, and not by asking the server directly.
+ * 4. **A Trusted Player can** (spec 050 decision 8, ADR-099), and what they
+ *    switch on comes from the **owner's** shelf, not their own (FR-010a) —
+ *    shown with a Trusted Player who holds a book of their own.
  *
  * Ticking a book while creating a world and switching one on afterwards are
  * both exercised, one per world, and the two rows they leave are compared: FR-033
@@ -198,9 +201,13 @@ async function readInTheBook(page: Page): Promise<string> {
 async function aWorld(page: Page, name: string): Promise<string> {
   const made = await graphql<Gql<{ createWorld: { id: string } }>>(
     page,
-    `mutation CW($input: GraphQLCreateWorldInput!) {
-       createWorld(input: $input) { id }
-     }`,
+    `
+      mutation CW($input: GraphQLCreateWorldInput!) {
+        createWorld(input: $input) {
+          id
+        }
+      }
+    `,
     { input: { name, gameSystemId: SYSTEM } },
   );
   const id = made.data?.createWorld?.id;
@@ -232,14 +239,12 @@ test.describe("The book list (spec 050 US3)", () => {
     // creation path of FR-033.
     await page.goto("/worlds/create");
     await page.locator("#world-name").fill("The First Table");
-    const offered = await page.request
-      .get("/api/systems")
-      .then(
-        (response) =>
-          response.json() as Promise<{
-            systems: { id: string; title: string }[];
-          }>,
-      );
+    const offered = await page.request.get("/api/systems").then(
+      (response) =>
+        response.json() as Promise<{
+          systems: { id: string; title: string }[];
+        }>,
+    );
     const title = offered.systems.find((system) => system.id === SYSTEM)?.title;
     expect(title, "the book's system must be installed").toBeTruthy();
     await page.getByRole("combobox", { name: "Game system" }).click();
@@ -292,7 +297,9 @@ test.describe("The book list (spec 050 US3)", () => {
 
     // FR-013: what goes is named before it goes, and asking takes nothing.
     await page.getByTestId("switch-off-book").click();
-    await expect(page.getByTestId("switch-off-report")).toContainText("2 entries");
+    await expect(page.getByTestId("switch-off-report")).toContainText(
+      "2 entries",
+    );
     await expect(page.getByTestId("in-use")).toContainText("GOBLIN");
     expect(linkOf(secondWorld, compendiumId)).not.toBeNull();
 
@@ -308,9 +315,13 @@ test.describe("The book list (spec 050 US3)", () => {
 
     const refetch = await graphql<Gql<unknown>>(
       page,
-      `query E($w: UUID!, $c: UUID!) {
-         worldCompendiumEntries(worldId: $w, compendiumId: $c) { total }
-       }`,
+      `
+        query E($w: UUID!, $c: UUID!) {
+          worldCompendiumEntries(worldId: $w, compendiumId: $c) {
+            total
+          }
+        }
+      `,
       { w: secondWorld, c: compendiumId },
     );
     expect(
@@ -356,7 +367,7 @@ test.describe("The book list (spec 050 US3)", () => {
       // They see it.
       await expect(player.getByTestId("book-list")).toContainText(BOOK);
       await expect(player.getByTestId("world-book-list")).toContainText(
-        "Only the Game Master changes this list",
+        "Only its Game Masters and Trusted Players change this list",
       );
 
       // They are given nothing to change it with, and nothing of its content.
@@ -373,22 +384,28 @@ test.describe("The book list (spec 050 US3)", () => {
       // is merely hidden is not a permission.
       const off = await graphql<Gql<unknown>>(
         player,
-        `mutation Off($w: UUID!, $c: UUID!) {
-           switchOffCompendium(worldId: $w, compendiumId: $c, confirm: true) {
-             switchedOff
-           }
-         }`,
+        `
+          mutation Off($w: UUID!, $c: UUID!) {
+            switchOffCompendium(worldId: $w, compendiumId: $c, confirm: true) {
+              switchedOff
+            }
+          }
+        `,
         { w: worldId, c: compendiumId },
       );
       expect(off.errors?.length, JSON.stringify(off)).toBeTruthy();
 
       const read = await graphql<Gql<unknown>>(
         player,
-        `query E($w: UUID!, $c: UUID!) {
-           worldCompendiumEntries(worldId: $w, compendiumId: $c) {
-             entries { name }
-           }
-         }`,
+        `
+          query E($w: UUID!, $c: UUID!) {
+            worldCompendiumEntries(worldId: $w, compendiumId: $c) {
+              entries {
+                name
+              }
+            }
+          }
+        `,
         { w: worldId, c: compendiumId },
       );
       expect(read.errors?.length, JSON.stringify(read)).toBeTruthy();
@@ -400,6 +417,148 @@ test.describe("The book list (spec 050 US3)", () => {
       });
     } finally {
       await player.context().close();
+    }
+  });
+
+  /**
+   * Spec 050 decision 8, FR-010a, ADR-099: the Owner makes somebody a Trusted
+   * Player from the Players page, and that person switches a book on — the
+   * owner's book, offered from the owner's shelf, while a book on their own
+   * shelf is never offered. A Player at the same table still cannot.
+   */
+  test("a trusted player switches the owner's book on, and a player still cannot", async ({
+    browser,
+    page,
+  }) => {
+    test.setTimeout(480_000);
+
+    await register(page, freshCredentials("booklistowner"));
+    const ownersBook = await readInTheBook(page);
+    const worldId = await aWorld(page, "A Table With A Trusted Friend");
+
+    const trusted = await inviteAndJoinAsPlayer(
+      browser,
+      page,
+      worldId,
+      "booklisttrusted",
+    );
+    let player: Page | null = null;
+    try {
+      // Granted through the page an Owner actually uses. The trusted friend
+      // is the only other member, so theirs is the only role control.
+      await page.goto(`/world/${worldId}/players`);
+      const roleSelect = page
+        .getByTestId("players-list")
+        .locator('select[data-testid^="player-role-select-"]');
+      await expect(roleSelect).toHaveCount(1, { timeout: 30_000 });
+      await roleSelect.selectOption("TrustedPlayer");
+      await expect(roleSelect).toHaveValue("TrustedPlayer", {
+        timeout: 10_000,
+      });
+
+      // A book of their own, of the same system, so that "the owner's shelf"
+      // is a claim with something to be wrong about.
+      const theirOwnBook = await readInTheBook(trusted);
+      expect(theirOwnBook).not.toBe(ownersBook);
+
+      player = await inviteAndJoinAsPlayer(
+        browser,
+        page,
+        worldId,
+        "booklistplain",
+      );
+
+      await openBooks(trusted, worldId);
+      await expect(trusted.getByTestId("book-list-empty")).toBeVisible();
+      await expect(trusted.getByTestId("books-offered")).toContainText(
+        "From the world owner's library",
+      );
+      await expect(
+        trusted.getByTestId(`offered-book-${theirOwnBook}`),
+      ).toHaveCount(0);
+      await trusted
+        .getByTestId(`offered-book-${ownersBook}`)
+        .getByTestId("switch-on-book")
+        .click();
+      await expect(trusted.getByTestId("book-list")).toContainText(BOOK);
+
+      // In the database: the owner's book is on, switched on by somebody who
+      // is not the owner, and the Trusted Player's own book is not.
+      expect(linkOf(worldId, ownersBook)).not.toBeNull();
+      expect(linkOf(worldId, theirOwnBook)).toBeNull();
+      expect(
+        sql(
+          `SELECT count(*) FROM world_books wb JOIN worlds w ON w.id = wb.world_id
+            WHERE wb.world_id = '${uuid(worldId)}'
+              AND wb.switched_on_by <> w.created_by;`,
+        ),
+      ).toBe("1");
+
+      // Asking the server for their own book directly is refused too.
+      const own = await graphql<Gql<unknown>>(
+        trusted,
+        `
+          mutation On($w: UUID!, $c: UUID!) {
+            switchOnCompendium(worldId: $w, compendiumId: $c) {
+              compendiumId
+            }
+          }
+        `,
+        { w: worldId, c: theirOwnBook },
+      );
+      expect(own.errors?.length, JSON.stringify(own)).toBeTruthy();
+      expect(linkOf(worldId, theirOwnBook)).toBeNull();
+
+      // Arranging the books is not reading them: browsing stays a Game
+      // Master's, and the Trusted Player is not offered it.
+      await expect(trusted.getByTestId("switch-off-book")).toHaveCount(1);
+      await expect(trusted.getByTestId("browse-book")).toHaveCount(0);
+
+      // The Player at the same table: shown the list, given nothing to change
+      // it with, and refused by the server when they ask anyway.
+      await openBooks(player, worldId);
+      await expect(player.getByTestId("book-list")).toContainText(BOOK);
+      await expect(player.getByTestId("switch-off-book")).toHaveCount(0);
+      await expect(player.getByTestId("switch-on-book")).toHaveCount(0);
+      await expect(player.getByTestId("books-offered")).toHaveCount(0);
+
+      const offered = await graphql<Gql<unknown>>(
+        player,
+        `
+          query O($w: UUID!) {
+            compendiumsOfferedToWorld(worldId: $w) {
+              id
+            }
+          }
+        `,
+        { w: worldId },
+      );
+      expect(offered.errors?.length, JSON.stringify(offered)).toBeTruthy();
+      const off = await graphql<Gql<unknown>>(
+        player,
+        `
+          mutation Off($w: UUID!, $c: UUID!) {
+            switchOffCompendium(worldId: $w, compendiumId: $c, confirm: true) {
+              switchedOff
+            }
+          }
+        `,
+        { w: worldId, c: ownersBook },
+      );
+      expect(off.errors?.length, JSON.stringify(off)).toBeTruthy();
+      expect(linkOf(worldId, ownersBook)).not.toBeNull();
+
+      // And the Trusted Player can take it off again, report first.
+      await trusted.getByTestId("switch-off-book").click();
+      await expect(trusted.getByTestId("switch-off-report")).toContainText(
+        "2 entries",
+      );
+      await trusted.getByTestId("switch-off-confirm").click();
+      await expect(trusted.getByTestId("book-list-empty")).toBeVisible();
+      expect(linkOf(worldId, ownersBook)).toBeNull();
+    } finally {
+      await player?.context().close();
+      await trusted.context().close();
     }
   });
 });

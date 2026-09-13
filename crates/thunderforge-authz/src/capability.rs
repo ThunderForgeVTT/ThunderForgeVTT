@@ -3,7 +3,7 @@
 //! # The split this encodes
 //!
 //! Authority over a world divides in two, and the division is the whole
-//! point of having three roles rather than two:
+//! point of having more than one role that is not a Player:
 //!
 //! - A **Game Master** carries every power over a world's *content* —
 //!   scenes, tokens, walls, lights, fog. A co-GM invited to help run a
@@ -13,6 +13,11 @@
 //!
 //! Every caller of an owner-only capability is a door that cannot be reopened
 //! once somebody walks through it.
+//!
+//! A **Trusted Player** (ADR-099) sits below both and takes one slice of the
+//! Game Master's content authority — a world's book material — and nothing
+//! else. The friend who helps with the books should not also be able to
+//! redraw the walls.
 //!
 //! # Why a matrix and not a boolean per call site
 //!
@@ -47,6 +52,13 @@ pub enum Capability {
     /// Create, change or remove the world's content — scenes, tokens, walls,
     /// lights, actors, items.
     EditContent,
+    /// Change which books a world is running and what it changed about them
+    /// (spec 050 decision 8). Separate from [`Capability::EditContent`]
+    /// because it is the one piece of content authority a Trusted Player is
+    /// given, and folding it in would hand them the walls as well. The books
+    /// themselves still come from the world owner's shelf whoever does this
+    /// (FR-010a); that is an ownership rule, and not decided here.
+    ManageBookMaterial,
     /// Change what the players can see of a map. Called out separately from
     /// [`Capability::EditContent`] because concealment is the point of fog:
     /// revealing it is not an ordinary content edit, and it was one of the
@@ -64,9 +76,10 @@ pub enum Capability {
 
 impl Capability {
     /// Every capability, so a test can enumerate the matrix exhaustively.
-    pub const ALL: [Capability; 7] = [
+    pub const ALL: [Capability; 8] = [
         Capability::ViewWorld,
         Capability::EditContent,
+        Capability::ManageBookMaterial,
         Capability::ChangeFogOfWar,
         Capability::SeeHiddenContent,
         Capability::ManageMembers,
@@ -96,6 +109,9 @@ pub fn role_allows(role: Role, capability: Capability) -> bool {
     match capability {
         // Everyone who is in the world at all can see it.
         Capability::ViewWorld => true,
+
+        // The slice of content authority a Trusted Player is trusted with.
+        Capability::ManageBookMaterial => role.manages_content(),
 
         // Running the world means authority over its content.
         Capability::EditContent
@@ -168,6 +184,13 @@ impl Actor {
         self.is_site_admin || self.role.is_some_and(Role::runs_the_world)
     }
 
+    /// Whether this actor may manage the world's content material — Owner,
+    /// Game Master, Trusted Player, or admin. See [`Role::manages_content`]
+    /// for how little that covers.
+    pub fn manages_content(self) -> bool {
+        self.is_site_admin || self.role.is_some_and(Role::manages_content)
+    }
+
     /// Whether this actor owns the world, as distinct from running it.
     pub fn owns_the_world(self) -> bool {
         self.is_site_admin || self.role == Some(Role::Owner)
@@ -193,13 +216,25 @@ mod tests {
         let matrix = [
             (Player, ViewWorld, true),
             (Player, EditContent, false),
+            (Player, ManageBookMaterial, false),
             (Player, ChangeFogOfWar, false),
             (Player, SeeHiddenContent, false),
             (Player, ManageMembers, false),
             (Player, DeleteWorld, false),
             (Player, TransferOwnership, false),
+            // The Trusted Player line: the book list, and a Player in every
+            // other cell.
+            (TrustedPlayer, ViewWorld, true),
+            (TrustedPlayer, EditContent, false),
+            (TrustedPlayer, ManageBookMaterial, true),
+            (TrustedPlayer, ChangeFogOfWar, false),
+            (TrustedPlayer, SeeHiddenContent, false),
+            (TrustedPlayer, ManageMembers, false),
+            (TrustedPlayer, DeleteWorld, false),
+            (TrustedPlayer, TransferOwnership, false),
             (GameMaster, ViewWorld, true),
             (GameMaster, EditContent, true),
+            (GameMaster, ManageBookMaterial, true),
             (GameMaster, ChangeFogOfWar, true),
             (GameMaster, SeeHiddenContent, true),
             (GameMaster, ManageMembers, true),
@@ -209,6 +244,7 @@ mod tests {
             (GameMaster, TransferOwnership, false),
             (Owner, ViewWorld, true),
             (Owner, EditContent, true),
+            (Owner, ManageBookMaterial, true),
             (Owner, ChangeFogOfWar, true),
             (Owner, SeeHiddenContent, true),
             (Owner, ManageMembers, true),
@@ -296,6 +332,30 @@ mod tests {
         let player = Actor::member(Role::Player);
         assert!(!player.runs_the_world());
         assert!(!player.owns_the_world());
+    }
+
+    /// ADR-099: the only thing a Trusted Player holds over a Player is the
+    /// book material. Stated as a difference rather than a list, so a new
+    /// capability that quietly lands on the wrong side of the line fails here.
+    #[test]
+    fn a_trusted_player_differs_from_a_player_in_book_material_alone() {
+        for capability in Capability::ALL {
+            let differs = role_allows(Role::TrustedPlayer, capability)
+                != role_allows(Role::Player, capability);
+            assert_eq!(
+                differs,
+                capability == Capability::ManageBookMaterial,
+                "{capability:?}"
+            );
+        }
+
+        let trusted = Actor::member(Role::TrustedPlayer);
+        assert!(trusted.manages_content());
+        assert!(!trusted.runs_the_world());
+        assert!(!trusted.owns_the_world());
+        assert!(!Actor::member(Role::Player).manages_content());
+        assert!(!Actor::stranger().manages_content());
+        assert!(Actor::site_admin().manages_content());
     }
 
     #[test]

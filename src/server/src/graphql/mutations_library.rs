@@ -3,10 +3,10 @@
 //!
 //! Four reads and two writes, and the split between them is the whole of
 //! FR-035. **Every member of a world may read the list** — players included,
-//! because knowing what the table is running is the point of it — and only
-//! the world's owner may write it. A player is not refused a mutation by a
-//! check inside it; there is simply no mutation here that answers to anybody
-//! but the owner, and `library::book_list` refuses again underneath.
+//! because knowing what the table is running is the point of it — and its
+//! Owner, Game Masters and Trusted Players may write it (spec 050 decision 8).
+//! The rule lives in `library::book_list`, not here, so there is one place
+//! it can be got wrong rather than one per resolver.
 //!
 //! # What crosses to a player, and what does not
 //!
@@ -24,14 +24,20 @@
 //! switched on for**, and that is the entire difference between using a book
 //! and holding one. A co-Game Master reaches the owner's book here and
 //! nowhere else, and cannot switch it on for a world of their own (FR-014).
+//!
+//! A Game Master or Trusted Player arranging the list is shown the owner's
+//! shelf, narrowed to what fits — as [`GraphQLOfferedBook`], which carries a
+//! book's name and size and not the file hash the shelf itself shows its
+//! owner. Knowing which books a table could run is arranging it; knowing the
+//! owner's files is not.
 
 use async_graphql::{Context, Object, SimpleObject};
 use uuid::Uuid;
 
 use crate::auth::world_membership::require_world_member;
 use crate::graphql::queries::compendium::{
-    GraphQLCompendium, GraphQLCompendiumEntryPage, GraphQLKindCount, decode_cursor,
-    entries_per_page, kind_counts, page_of,
+    GraphQLCompendiumEntryPage, GraphQLKindCount, decode_cursor, entries_per_page, kind_counts,
+    page_of,
 };
 use crate::graphql::{Error, GraphQLResult, app_state, authenticated_user};
 use crate::library::book_list::{self, BookListError, ListedBook, SwitchOffReport};
@@ -75,6 +81,37 @@ impl From<ListedBook> for GraphQLWorldBook {
             system_matches: listed.system_matches,
             base_parser_version: listed.row.base_parser_version,
             switched_on_at: listed.row.switched_on_at.and_utc().to_rfc3339(),
+        }
+    }
+}
+
+/// A book on the world owner's shelf that this table could switch on
+/// (FR-030, FR-010a).
+///
+/// Narrower than `Compendium` on purpose. The shelf view carries the file's
+/// hash and page counts because it is shown to the account that holds them;
+/// this is shown to whoever arranges the table, who may be somebody else.
+#[derive(SimpleObject, Debug, Clone)]
+#[graphql(name = "OfferedBook")]
+pub struct GraphQLOfferedBook {
+    pub id: Uuid,
+    pub book_title: String,
+    pub system_id: String,
+    pub entry_total: i32,
+    pub imported_at: String,
+}
+
+impl From<crate::compendium::store::Compendium> for GraphQLOfferedBook {
+    fn from(book: crate::compendium::store::Compendium) -> Self {
+        Self {
+            id: book.id,
+            book_title: book.book_title,
+            system_id: book.system_id,
+            entry_total: kind_counts(&book.entry_counts)
+                .iter()
+                .map(|count| count.count)
+                .sum(),
+            imported_at: book.created_at.and_utc().to_rfc3339(),
         }
     }
 }
@@ -159,12 +196,12 @@ pub async fn compendiums_offered_impl(
     state: &AppState,
     caller: Uuid,
     world_id: Uuid,
-) -> GraphQLResult<Vec<GraphQLCompendium>> {
+) -> GraphQLResult<Vec<GraphQLOfferedBook>> {
     let mut conn = connection(state)?;
 
     tokio::task::spawn_blocking(move || {
         book_list::offerable_to(&mut conn, caller, world_id)
-            .map(|books| books.into_iter().map(GraphQLCompendium::from).collect())
+            .map(|books| books.into_iter().map(GraphQLOfferedBook::from).collect())
             .map_err(refusal)
     })
     .await
@@ -188,7 +225,10 @@ pub async fn world_compendium_entries_impl(
     tokio::task::spawn_blocking(move || {
         // 049 FR-042 is a Game Master's browse. A player sees the list and
         // what is handed to them in play, which is a different surface with a
-        // different rule (FR-035, FR-036).
+        // different rule (FR-035, FR-036). A Trusted Player is refused with
+        // them: ADR-099 trusts them to arrange the books, and says a Trusted
+        // Player is shown what a Player is shown unless a spec says
+        // otherwise. None does for reading a book's content.
         let role = require_world_member(&mut conn, caller, world_id)
             .map_err(|_| Error::new("You are not at this table."))?;
         // A role string this build does not recognise resolves to no role at
@@ -282,16 +322,17 @@ impl LibraryWorldQuery {
     }
 
     /// What the owner of this world could switch on and has not (FR-030,
-    /// FR-041): their own shelf, narrowed to this world's system.
+    /// FR-041): the owner's shelf, narrowed to this world's system.
     ///
-    /// Answers to the world's owner alone. A co-Game Master asking gets the
-    /// refusal, not an empty list — an empty list would read as "you have no
-    /// books" and they may have plenty.
+    /// Answers to the Owner, Game Masters and Trusted Players, and it is the
+    /// **owner's** shelf for all of them (FR-010a). A Player asking gets the
+    /// refusal, not an empty list — an empty list would read as "the owner
+    /// has no books" when it means "this is not yours to ask".
     async fn compendiums_offered_to_world(
         &self,
         ctx: &Context<'_>,
         world_id: Uuid,
-    ) -> GraphQLResult<Vec<GraphQLCompendium>> {
+    ) -> GraphQLResult<Vec<GraphQLOfferedBook>> {
         let state = app_state(ctx)?;
         let user = authenticated_user(ctx)?;
         compendiums_offered_impl(state, user.user_id, world_id).await

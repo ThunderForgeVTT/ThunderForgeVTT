@@ -20,3 +20,6 @@ base64 = "0.23.1"
 regex = "1.13.1"
 uuid = { version = "1.26.0", features = ["serde", "v4", "v7"] }
 chrono = { version = "0.4.45", features = ["serde"] }
+# The one ranking of world roles. `models::invites::WorldMemberRole` converts
+# to it rather than re-deriving who outranks whom.
+thunderforge_authz = { path = "../../crates/thunderforge-authz" }

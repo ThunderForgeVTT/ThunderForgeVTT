@@ -458,12 +458,24 @@ fn detect_discrepancy(
 
 /// A world membership role, as `conflict` sees it.
 ///
-/// Owner and GM both run the table, which is the same convention
-/// `roleBadgeLabel` uses in the client and `ability_impl` uses server-side.
+/// `conflict` knows two sides of a table, and whoever runs the world is on
+/// the Game Master's. A Trusted Player is on the Player's (ADR-099): being
+/// trusted with the book list is not authority over somebody else's token,
+/// and it must not win a conflict a Player would lose.
+///
+/// Asked through the authz rank rather than by matching strings, because the
+/// string match this replaced sent every unnamed role to `Player` — right for
+/// a Trusted Player by luck, and silently wrong for any role above one.
+/// A spelling nobody recognises is also a Player here, not a refusal: the
+/// caller has already been admitted by `require_world_member`, and the
+/// lowest side of a table is the least this can grant.
 pub fn role_from_membership(member_role: &str) -> Role {
-    match member_role {
-        "Owner" | "GM" => Role::GameMaster,
-        _ => Role::Player,
+    if thunderforge_authz::Role::from_stored(member_role)
+        .is_some_and(thunderforge_authz::Role::runs_the_world)
+    {
+        Role::GameMaster
+    } else {
+        Role::Player
     }
 }
 

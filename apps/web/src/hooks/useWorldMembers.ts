@@ -24,16 +24,13 @@ import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { getWorldMembers } from "@/api/worldMembers";
 import type { WorldMemberDoc } from "../db/collections/worldMembersCollection";
 import { sortMembersByRole } from "../db/collections/worldMembersCollection";
+import { isWorldMemberRole } from "@/types/world";
 
 export interface UseWorldMembersResult {
   members: WorldMemberDoc[];
   loading: boolean;
   error: Error | null;
   refetch: () => Promise<void>;
-}
-
-function isMemberRole(role: string): role is "Owner" | "GM" | "Player" {
-  return role === "Owner" || role === "GM" || role === "Player";
 }
 
 export function useWorldMembers(worldId: string): UseWorldMembersResult {
@@ -48,20 +45,27 @@ export function useWorldMembers(worldId: string): UseWorldMembersResult {
   const fetchMembers = useCallback(async (): Promise<WorldMemberDoc[]> => {
     const records = await getWorldMembers(worldId);
 
-    const docs: WorldMemberDoc[] = records
-      .filter((record) => isMemberRole(record.role))
-      .map((record) => ({
-        id: record.id,
-        world_id: record.worldId ?? worldId,
-        user_id: record.userId,
-        role: record.role as "Owner" | "GM" | "Player",
-        joined_at: record.joinedAt,
-        created_at: record.createdAt ?? record.joinedAt,
-        updated_at: record.updatedAt ?? record.joinedAt,
-        claimed_actor: record.claimedActor,
-      }));
+    // A role this build does not recognise is left out rather than guessed
+    // at, as the server reads it as nobody. Narrowing in one step keeps the
+    // type honest without a cast.
+    const docs: WorldMemberDoc[] = records.flatMap((record) => {
+      const role = record.role;
+      if (!isWorldMemberRole(role)) return [];
+      return [
+        {
+          id: record.id,
+          world_id: record.worldId ?? worldId,
+          user_id: record.userId,
+          role,
+          joined_at: record.joinedAt,
+          created_at: record.createdAt ?? record.joinedAt,
+          updated_at: record.updatedAt ?? record.joinedAt,
+          claimed_actor: record.claimedActor,
+        },
+      ];
+    });
 
-    // Sort by role hierarchy: Owner, GM, Player
+    // Sort by role hierarchy, highest first
     return sortMembersByRole(docs);
   }, [worldId]);
 

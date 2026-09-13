@@ -114,7 +114,9 @@ pub async fn my_dm_worlds_impl(
 
         let gm_world_ids = world_members::table
             .filter(world_members::user_id.eq(user_id))
-            .filter(world_members::role.eq("GM"))
+            // Exactly GM, not "at least a Trusted Player": this is the list
+            // of worlds the caller runs, and owned worlds were loaded above.
+            .filter(world_members::role.eq(thunderforge_authz::Role::GameMaster.as_stored()))
             .select(world_members::world_id)
             .load::<uuid::Uuid>(&mut conn)?;
 

@@ -68,6 +68,11 @@ fn owner_and_gm_are_both_game_masters() {
     assert_eq!(role_from_membership("Owner"), Role::GameMaster);
     assert_eq!(role_from_membership("GM"), Role::GameMaster);
     assert_eq!(role_from_membership("Player"), Role::Player);
+    assert_eq!(
+        role_from_membership("TrustedPlayer"),
+        Role::Player,
+        "a Trusted Player is on the Player side of every reconcile rule (ADR-099)"
+    );
     assert_eq!(role_from_membership("something-new"), Role::Player);
 }
 
@@ -196,6 +201,51 @@ fn every_change_gets_exactly_one_outcome_including_the_bad_ones() {
         Some(GraphQLRejectionReason::Invalid),
         "a command outside FR-035a is rejected, never skipped"
     );
+}
+
+/// ADR-099: a Trusted Player's queued move of somebody else's token is
+/// refused, as a Player's is — resolved from a real membership row, the way
+/// the mutation resolves it, rather than by handing `apply_one` a role.
+#[test]
+fn a_trusted_player_replays_moves_as_a_player_does() {
+    let state = crate::test_support::test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let owner = crate::test_support::insert_test_user(&mut conn);
+    let trusted = crate::test_support::insert_test_user(&mut conn);
+    let world = crate::test_support::insert_test_world(&mut conn, owner);
+    crate::test_support::insert_test_world_member(&mut conn, world, trusted, "TrustedPlayer");
+    let scene = crate::test_support::insert_test_scene(&mut conn, world, owner);
+    let theirs = insert_token(&mut conn, scene, Some(trusted));
+    let the_owners = insert_token(&mut conn, scene, Some(owner));
+
+    let stored = crate::auth::world_membership::require_world_member(&mut conn, trusted, world)
+        .expect("a Trusted Player is a member");
+    let role = role_from_membership(&stored);
+    assert_eq!(role, Role::Player);
+
+    let mine = apply_one(
+        &mut conn,
+        world,
+        trusted,
+        role,
+        take_reconnect_seq(world),
+        move_command(theirs, 3.0),
+    );
+    let not_mine = apply_one(
+        &mut conn,
+        world,
+        trusted,
+        role,
+        take_reconnect_seq(world),
+        move_command(the_owners, 3.0),
+    );
+
+    assert!(mine.applied);
+    assert_eq!(
+        not_mine.reason,
+        Some(GraphQLRejectionReason::PermissionDenied)
+    );
+    assert_eq!(token_x(&mut conn, the_owners), 0.0);
 }
 
 /// FR-042: a player may replay a move of their own token, and not of

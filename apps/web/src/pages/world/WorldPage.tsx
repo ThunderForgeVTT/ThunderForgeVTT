@@ -161,7 +161,7 @@ import { ClocksPanel } from "@/components/world/PlayDock/ClocksPanel";
 import { SettingsPanel } from "@/components/world/PlayDock/SettingsPanel";
 import { HelpPanel } from "@/components/world/PlayDock/HelpPanel";
 import type { CanvasImageAsset } from "@/api/assets";
-import type { WorldRecord } from "@/types/world";
+import { runsTheWorld, type WorldRecord } from "@/types/world";
 import type { SceneRecord } from "@/types/scene";
 
 export const worldPageSeo: SeoConfig = {
@@ -2078,9 +2078,7 @@ export default function WorldPage() {
    */
   const { members } = useWorldMembers(id);
   const gmUserId = useMemo(() => {
-    const gm = members.find(
-      (member) => member.role === "Owner" || member.role === "GM",
-    );
+    const gm = members.find((member) => runsTheWorld(member.role));
     return gm?.user_id ?? null;
   }, [members]);
 

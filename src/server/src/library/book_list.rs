@@ -16,7 +16,10 @@
 use diesel::prelude::*;
 use uuid::Uuid;
 
+use thunderforge_authz::Role;
+
 use crate::auth::account_ownership::{AccountOwned, AccountOwnershipError, require_account_owner};
+use crate::auth::world_membership::require_world_member;
 use crate::compendium::store::{self, Compendium, StoredEntry};
 use crate::schema::{compendium_entries, compendiums, world_books, worlds};
 
@@ -70,18 +73,23 @@ pub struct ListedBook {
 /// survivable.
 #[derive(Debug, thiserror::Error)]
 pub enum BookListError {
-    /// The caller does not own this world.
+    /// The caller may not change this world's book list: a Player, a
+    /// stranger, or no such world.
     ///
-    /// Co-running a world is not owning it: a co-Game Master uses what is
-    /// switched on and does not change the list, because the list draws on
-    /// the **owner's** shelf and a co-Game Master cannot see it. Being able
-    /// to use a book is not being able to take it home (FR-014).
-    #[error("this world is not yours to change the book list of")]
-    NotYourWorld,
-    /// Somebody else's book. Carried through rather than flattened so a
-    /// refusal still reads as a refusal at the call site.
-    #[error("{0}")]
-    NotYourBook(#[from] AccountOwnershipError),
+    /// Who *arranges* a table's books is a question of trust, and the Owner,
+    /// Game Masters and Trusted Players are trusted with it (spec 050
+    /// decision 8). Whose books they are is a separate question — see
+    /// [`BookListError::NotOnTheOwnersShelf`].
+    #[error("only this table's Owner, Game Masters and Trusted Players change its book list")]
+    MayNotManageBooks,
+    /// The book is not on the **world owner's** shelf (FR-010a, FR-014).
+    ///
+    /// Said in terms of the owner rather than "not yours", because the person
+    /// most likely to see it is a Game Master or Trusted Player offering a
+    /// book of their own, and "not yours" would be false. Managing a table's
+    /// list is not bringing your own books to it.
+    #[error("that book is not on this world owner's shelf")]
+    NotOnTheOwnersShelf,
     /// FR-041: a book read as one system cannot be switched on in a world
     /// running another. Both are named because a person seeing this needs to
     /// know which end is wrong.
@@ -103,7 +111,13 @@ impl From<diesel::result::Error> for BookListError {
     }
 }
 
-/// Which account owns this world, fail-closed.
+/// Whether the caller may arrange this world's books, and whose shelf they
+/// are arranging from. Fail-closed.
+///
+/// Returns the **world owner's** id, and every caller uses that rather than
+/// its own for the shelf, which is the whole of FR-010a: a Game Master or
+/// Trusted Player switching a book on draws from the owner's library, and
+/// there is no variable in reach that would let them draw from theirs.
 ///
 /// `worlds.created_by` is this codebase's ownership source of truth, as
 /// `require_world_member` records at length. Deliberately **no admin
@@ -112,24 +126,50 @@ impl From<diesel::result::Error> for BookListError {
 /// `require_account_owner` refuses one for exactly that reason. An operator
 /// acting against imported content has the moderation route, which is a
 /// different act from putting somebody's book on somebody's table.
-fn require_world_owner(
+fn require_book_manager(
     conn: &mut PgConnection,
     caller: Uuid,
     world_id: Uuid,
-) -> Result<(), BookListError> {
+) -> Result<Uuid, BookListError> {
     let owner = worlds::table
         .filter(worlds::id.eq(world_id))
         .select(worlds::created_by)
         .first::<Uuid>(conn)
-        .optional()?;
+        .optional()?
+        // No such world is refused exactly as somebody else's world is, for
+        // the reason `require_account_owner` gives: a caller who can tell the
+        // two apart can walk an id space.
+        .ok_or(BookListError::MayNotManageBooks)?;
 
-    match owner {
-        Some(owner) if owner == caller => Ok(()),
-        // Somebody else's world, or no such world. The same refusal, for the
-        // reason `require_account_owner` gives: a caller who can tell the two
-        // apart can walk an id space.
-        _ => Err(BookListError::NotYourWorld),
+    // An unreadable membership, or a role string this build does not
+    // recognise, is nobody.
+    let manages = require_world_member(conn, caller, world_id)
+        .ok()
+        .and_then(|stored| Role::from_stored(&stored))
+        .is_some_and(Role::manages_content);
+
+    if manages {
+        Ok(owner)
+    } else {
+        Err(BookListError::MayNotManageBooks)
     }
+}
+
+/// The owner's book, or the refusal that says so.
+fn from_the_owners_shelf(
+    conn: &mut PgConnection,
+    owner: Uuid,
+    compendium_id: Uuid,
+) -> Result<Compendium, BookListError> {
+    let own = |e| match e {
+        AccountOwnershipError::NotTheOwner => BookListError::NotOnTheOwnersShelf,
+        AccountOwnershipError::Database(message) => BookListError::Database(message),
+    };
+    // The account gate, through the one helper rather than by comparing the
+    // owner column here. The lookup is the part that gets written differently
+    // at each site, not the `==`.
+    require_account_owner(conn, owner, AccountOwned::Compendium(compendium_id)).map_err(own)?;
+    store::load(conn, owner, compendium_id).map_err(own)
 }
 
 /// What system this world runs, if it has said (FR-041).
@@ -146,7 +186,11 @@ fn system_of_world(
         .map_err(Into::into)
 }
 
-/// Switch a book on for a world (FR-010, FR-031).
+/// Switch a book on for a world (FR-010, FR-010a, FR-031).
+///
+/// The caller may be the Owner, a Game Master or a Trusted Player; the book
+/// must be the Owner's in every case. `switched_on_by` records the caller,
+/// because FR-015 asks who did it, not whose book it was.
 ///
 /// **This is the only way content reaches a world from a library**, and it is
 /// the same call whether a Game Master ticks a book while creating the world
@@ -164,13 +208,8 @@ pub fn switch_on(
     world_id: Uuid,
     compendium_id: Uuid,
 ) -> Result<BookOnList, BookListError> {
-    require_world_owner(conn, caller, world_id)?;
-    // The account gate, through the one helper rather than by comparing the
-    // owner column here. The lookup is the part that gets written differently
-    // at each site, not the `==`.
-    require_account_owner(conn, caller, AccountOwned::Compendium(compendium_id))?;
-
-    let book: Compendium = store::load(conn, caller, compendium_id)?;
+    let owner = require_book_manager(conn, caller, world_id)?;
+    let book = from_the_owners_shelf(conn, owner, compendium_id)?;
     let world_system = system_of_world(conn, world_id)?;
     if world_system.as_deref() != Some(book.system_id.as_str()) {
         return Err(BookListError::SystemMismatch {
@@ -239,7 +278,7 @@ pub fn books_on(conn: &mut PgConnection, world_id: Uuid) -> Result<Vec<ListedBoo
 
 /// What this world's owner could switch on and has not (FR-030, FR-041).
 ///
-/// Their own shelf, narrowed to the system this world runs and to books that
+/// The **owner's** shelf whoever asks (FR-010a), narrowed to the system this world runs and to books that
 /// are not already on. A world with no system chosen is offered nothing,
 /// because a book read as one system says nothing intelligible to a world
 /// that has not said what it is.
@@ -248,7 +287,7 @@ pub fn offerable_to(
     caller: Uuid,
     world_id: Uuid,
 ) -> Result<Vec<Compendium>, BookListError> {
-    require_world_owner(conn, caller, world_id)?;
+    let owner = require_book_manager(conn, caller, world_id)?;
 
     let Some(world_system) = system_of_world(conn, world_id)? else {
         return Ok(Vec::new());
@@ -259,7 +298,7 @@ pub fn offerable_to(
         .select(world_books::compendium_id)
         .load(conn)?;
 
-    Ok(store::library_for(conn, caller)?
+    Ok(store::library_for(conn, owner)?
         .into_iter()
         .filter(|book| book.system_id == world_system)
         .filter(|book| !already_on.contains(&book.id))
@@ -302,7 +341,7 @@ pub fn switch_off_report(
     world_id: Uuid,
     compendium_id: Uuid,
 ) -> Result<SwitchOffReport, BookListError> {
-    require_world_owner(conn, caller, world_id)?;
+    require_book_manager(conn, caller, world_id)?;
 
     let on_the_list = world_books::table
         .filter(world_books::world_id.eq(world_id))
@@ -353,7 +392,7 @@ pub fn switch_off(
     world_id: Uuid,
     compendium_id: Uuid,
 ) -> Result<(), BookListError> {
-    require_world_owner(conn, caller, world_id)?;
+    require_book_manager(conn, caller, world_id)?;
 
     let removed = diesel::delete(
         world_books::table

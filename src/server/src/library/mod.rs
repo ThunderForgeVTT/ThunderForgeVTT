@@ -19,13 +19,19 @@
 //! on is the single place in the arc where one reaches the other, so both
 //! gates run, in this order:
 //!
-//! 1. the world is the **caller's own** — not a world they co-run;
-//! 2. the compendium is the **caller's own**, through
-//!    [`crate::auth::account_ownership::require_account_owner`];
+//! 1. the caller is **trusted with this table's books** — its Owner, a Game
+//!    Master or a Trusted Player (spec 050 decision 8, ADR-099);
+//! 2. the compendium is the **world owner's**, through
+//!    [`crate::auth::account_ownership::require_account_owner`] — never the
+//!    caller's, whoever the caller is (FR-010a);
 //! 3. the book was read as the world's system (FR-041).
 //!
-//! The database asks the first two again as one question — is this book on
-//! the world owner's shelf? — in a trigger on `world_books`, so a route that
-//! never calls this module still cannot write the row.
+//! The two ownership questions are kept apart on purpose. Who arranges a
+//! table's books is a matter of trust; whose books they are is a matter of
+//! ownership, and widening the first did not widen the second.
+//!
+//! The database asks the second and third again — is this book on the world
+//! owner's shelf, and does it match? — in a trigger on `world_books`, so a
+//! route that never calls this module still cannot write the row.
 
 pub mod book_list;

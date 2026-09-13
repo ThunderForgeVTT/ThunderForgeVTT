@@ -23,7 +23,11 @@ import { useNavigate } from "react-router-dom";
 import { getMyActorClaim } from "@/api/actorClaims";
 import { getMyWorldMemberRole } from "@/api/world";
 import { useAuth } from "@/hooks/useAuth";
-import type { WorldRecord } from "@/types/world";
+import {
+  isWorldMemberRole,
+  runsTheWorld,
+  type WorldRecord,
+} from "@/types/world";
 
 export interface UseActorClaimGateResult {
   /** True once the gate has decided this page may render (either the
@@ -61,7 +65,9 @@ export function useActorClaimGate(
         if (!active) {
           return;
         }
-        if (role === "Owner" || role === "GM") {
+        // Exempt only those who run the world. A Trusted Player plays a
+        // character like any Player (ADR-099), so they are sent to choose one.
+        if (role !== null && isWorldMemberRole(role) && runsTheWorld(role)) {
           setExempt(true);
           return;
         }
