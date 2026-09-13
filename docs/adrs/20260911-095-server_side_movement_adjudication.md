@@ -1,7 +1,7 @@
 # ADR-095: Server-Side Movement Adjudication
 
 **Date:** 2026-09-11
-**Status:** PROPOSED
+**Status:** **ACCEPTED** by the accountable owner, 2026-09-13. Proposed 2026-09-11; built and proven in spec 045.
 **Participants:** ThunderForgeVTT Team
 **Related:** spec 045 US2 (FR-011 … FR-020), spec 003 FR-001 (the passability
 toggle), spec 004 (which deferred this), constitution principles I and III

@@ -1,7 +1,7 @@
 # ADR-099: The Trusted Player Role
 
 **Date:** 2026-09-13
-**Status:** **PROPOSED** — the owner took the decision on 2026-09-13; this records it and its consequences ahead of implementation.
+**Status:** **ACCEPTED** by the accountable owner, 2026-09-13, the day it was proposed.
 **Participants:** ThunderForgeVTT Team
 **Related:** spec 048 (decision 4, FR-030a … FR-033c), spec 050 (decision 8, FR-010 … FR-020a), `crates/thunderforge-authz/src/role.rs`, ADR-097
 
@@ -107,6 +107,38 @@ at one table carries nothing to another.
 Owner's description ("Holds the world…"), and `Owner` carries a one-line stub.
 This is corrected in the same change, since that change touches every variant
 anyway.
+
+## Found in implementation (commit `16e3a1f`)
+
+The four hazards above were not the whole list. Building it found more, and
+one of them was a hole that predates this ADR.
+
+- **A Game Master could make anybody an Owner.** `update_member_role` checked
+  whether the caller could manage the target's *current* role, and never
+  compared the *new* role with the caller's own rank. A Game Master could
+  therefore promote any Player (including an account of their own) to Owner,
+  and that new Owner could then demote the real one: a world seized by
+  somebody trusted only to run it. Closed by `can_assign`: a caller may
+  assign a role at or below their own rank and never above it. Tested
+  (`a_game_master_cannot_make_anybody_an_owner`).
+- **The reconcile hazard was not where this ADR said.** Its `Role` is a
+  separate two-value enum in `thunderforge_cache_core`, so the compiler never
+  flags it. The real danger was a string match whose `_ => Player` arm gave a
+  Trusted Player the right answer only by luck. It now uses the ranking.
+- **A silent demotion in `adapters.rs`.** Anything unrecognised defaulted to
+  Player, so a Trusted Player written back through it would have been quietly
+  demoted. Fixed, with round-trip tests.
+- **The web app disagreed with the server.** `worldMembersCollection`'s
+  `canManageRole` let a Game Master manage other Game Masters, which the server
+  refused. The authoring-tool grants card and the claim gate compared role
+  strings directly. All of them now follow the ranking.
+- **Switching a book on means seeing the owner's shelf.** Not stated above. The
+  list of books offered to a non-owner now carries each book's name and size,
+  not its file hash.
+- **Browsing a book's entries stayed Game Master only**, following spec 049
+  FR-042, because this ADR didn't say otherwise. That is an open question:
+  FR-020a lets a Trusted Player change what a world inherited, and a person
+  cannot change entries they cannot read.
 
 ## Alternatives Considered
 

@@ -1,7 +1,7 @@
 # ADR-096: Content Patterns as a Manifest Extension Point
 
 **Date:** 2026-09-12
-**Status:** **PROPOSED**
+**Status:** **ACCEPTED** by the accountable owner, 2026-09-13. Proposed 2026-09-12; built across spec 049 phases 2–4.
 **Participants:** ThunderForgeVTT Team
 **Related:** spec 049 (FR-010 … FR-016), spec 050, ADR-027 (the pack manifest contract), spec 045's `vision` block, spec 016 (`legal`)
 

@@ -1,7 +1,7 @@
 # ADR-097: Origin as a Non-Editable Invariant
 
 **Date:** 2026-09-12
-**Status:** **PROPOSED** — requires acceptance by the accountable owner, not the implementer. See "Who signs this" below.
+**Status:** **ACCEPTED as written** by the accountable owner, 2026-09-13. Proposed 2026-09-12. No role — instance operators included — may reclassify uploaded content as shareable. Unblocks spec 049 phase 8.
 **Participants:** ThunderForgeVTT Team
 **Related:** spec 049 (FR-050 … FR-057, decision 4), spec 050 (FR-050 … FR-054), spec 026 (collections), spec 016 (pack legal blocks), ADR-069, ADR-079
 **Blocks:** spec 049 phase 8

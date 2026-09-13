@@ -84,8 +84,8 @@ an edition change, or a paid module that stopped being maintained.
 - **Sharing is decided by origin, not licence.** Content authored in
   ThunderForge can be shared. Content read out of an uploaded document never
   can: not shared, published, exported or adopted into a collection, and no
-  role can change that. This is the owner's decision (spec 049, decision 4).
-  The formal ADR (ADR-097) is still awaiting sign-off.
+  role can change that, instance operators included. This is the owner's
+  decision (spec 049, decision 4), accepted as ADR-097.
 - **Operators and takedowns.** The notice-and-takedown programme exists and
   gates any feature that exposes one world's content outside that world.
 - **Terminology.** Keep these apart; they are not interchangeable:

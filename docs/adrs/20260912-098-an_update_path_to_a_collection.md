@@ -1,7 +1,7 @@
 # ADR-098: An Update Path to a Collection
 
 **Date:** 2026-09-12
-**Status:** **PROPOSED — determination NOT yet made.** This document sets out the question and the evidence; the determination itself is the accountable owner's to make and sign. See "What this ADR is asking for".
+**Status:** **ACCEPTED, with conditions**, by the accountable owner, 2026-09-13. A versioned collection with no path to adopted copies is **not** a centralized public repository. Sync-back ships only after spec 015 T042 closes, and only while the three conditions below hold.
 **Participants:** ThunderForgeVTT Team
 **Amends:** ADR-069 (a link-shared collection is not a centralized public repository)
 **Related:** spec 050 (FR-100 … FR-105, decision 5), spec 026, spec 015 (notice and takedown), ADR-079, ADR-097, the constitution's DMCA / Content Moderation Guardrail
@@ -94,6 +94,66 @@ assert, which is why this document stops here.
 If any of ADR-069's standing conditions have since stopped holding, that ADR
 says plainly that it "needs revisiting rather than the requirement being
 relaxed". The same applies here.
+
+## Determination (owner, 2026-09-13)
+
+**Not a centralized public repository.** Accepted, on the following
+reasoning, and on three conditions.
+
+### Why
+
+1. **A share link already serves live content.** Verified in the code:
+   `shared_collection_impl` (`graphql/mutations_collection_shares.rs`) loads a
+   shared collection's members at read time, on every request, and resolves
+   each through moderation. A link has never served a snapshot, and a
+   collection's owner can already change what it shows by editing it. ADR-069
+   assessed and accepted exactly that model. Sync-back is one more route to
+   editing a thing that is already live, not a new way to distribute it.
+2. **The limb that carries the concern is not engaged.** ADR-069's limit names
+   "versioned collections **or** any update path to already-copied content".
+   The substance is the second: pushing changes to people who took copies.
+   Adopted copies are independent (`collections/copy.rs`), and sync-back never
+   reaches them. Only the "versioned" wording is literally met.
+3. **Versions are the owner's history, not distribution.** Nobody but the owner
+   can read an earlier version.
+4. **Versions make it safer, not riskier.** A bad sync can be undone, and with
+   T042 closed a takedown reaches every member type a collection can hold.
+
+Also considered: S3 object versioning as a "native" mechanism. Rejected,
+because collection content lives in Postgres rows and the object store holds
+only files, and because a versioned bucket keeps every noncurrent version after
+a delete. That would break spec 050's promise that nothing is retained on
+deletion, and it would let a takedown leave earlier versions retrievable, the
+problem ADR-079 had to fix for copies.
+
+### Conditions — breaking any one of them re-opens this determination
+
+1. **An earlier version is readable by the owner alone.** No share link may
+   pin a version, and nothing may expose history to a link viewer or an
+   adopter.
+2. **Sync-back never reaches an adopted copy.** Copies stay independent.
+3. **A takedown withholds content from every version**, not only the current
+   one, resolved through `moderation::effective_status` like everything else.
+
+These are not decoration. As ADR-069 says of its own conditions: if any fails
+to ship, this ADR needs revisiting rather than the requirement being relaxed.
+
+A determination is not legal advice, and this one has not been reviewed by a
+lawyer. It is a product and policy decision by the project's owner, as ADR-069
+was.
+
+## Condition (a), answered by the owner (2026-09-13)
+
+Re-confirmed rather than re-established: spec 015 is 41 of 42 tasks done and its
+end-to-end tests (`dmca-takedown.spec.ts`, `dmca-counter-notice.spec.ts`) are
+in the suite.
+
+The one open task matters here. **Spec 015 T042**: a scene is not a moderated
+entity type, so a takedown cannot reach a scene inside a collection, and an
+adopted scene records no adoption for a takedown to follow. The owner chose to
+**close T042 before sync-back ships** rather than ship with the gap recorded or
+keep scenes out of syncable collections. Sync-back therefore waits on both this
+determination and T042.
 
 ## Consequences if accepted
 
