@@ -86,11 +86,13 @@ Four answers folded in; all checklist items still pass. What changed:
   so the distinction is a requirement rather than a plan's private judgement.
 
 - **FR-026c is the one that will be forgotten if it is not insisted on.**
-  `collections::moderation_entity_type` returns `None` for `"scene"` today,
-  so a takedown against a scene lands on its images instead — documented at
-  the callsite, and still a gap. Audio must not ship the same way. Being a
-  moderated entity from day one costs almost nothing now and is awkward to
-  retrofit.
+  When this was written `collections::moderation_entity_type` returned `None`
+  for `"scene"`, and the note said a takedown against a scene landed on its
+  images instead. That was wrong: no image was separately moderated either.
+  Spec 015 T042 (2026-09-13) made scenes moderated, and the lesson is the one
+  this bullet was already making. The gap was believed covered for months, and
+  it was not. Audio must be a moderated entity from day one, not reached
+  through something else.
 
 - **The constitution's DMCA guardrail is engaged, and half of it is
   outstanding.** Condition (a) — the notice-and-takedown program is

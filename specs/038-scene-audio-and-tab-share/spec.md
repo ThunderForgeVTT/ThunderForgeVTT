@@ -416,8 +416,13 @@ came from the device rather than the network.
   and deletion MUST remove it from the world and stop it being served.
 - **FR-026c**: Audio MUST be a moderated entity type from the day it exists —
   a notice filed against a piece of uploaded audio MUST land on that audio.
-  (Scenes are not moderated today and a takedown against one lands on its
-  images instead; audio MUST NOT ship with the same gap.)
+  *(Corrected 2026-09-13. This originally said scenes were not moderated and
+  that a takedown against one "lands on its images instead". Both halves
+  turned out wrong: no image was ever separately moderated, so a takedown
+  could reach neither. Spec 015 T042, commit `8ce0753`, made a scene a
+  moderated entity type, which withholds the scene and every image attached
+  to it. The requirement stands unchanged: audio MUST be moderated from the
+  day it exists, and MUST NOT depend on the scene it plays in to be reached.)*
 - **FR-026d**: Where uploaded audio travels beyond its world by any existing
   mechanism — a collection, a share link — the notice-and-takedown program
   MUST apply to it on the same terms as every other content type.
