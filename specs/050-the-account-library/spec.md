@@ -399,8 +399,16 @@ same over an imported compendium and confirm there is no route.
 - **FR-024**: A Game Master MUST be able to see what an entry was before their
   world changed it, and restore it.
 - **FR-025**: An entry's identity within a compendium MUST be its kind and its
-  name, unless FR-029's measurement says otherwise. A delta attaches to that
-  identity.
+  name. A delta attaches to that identity. *(Confirmed by FR-029's measurement
+  on 2026-09-13: every real entry survived a genuine re-parse, 2740 of 2750
+  identities stable, and all ten differences were misparses rather than
+  content.)*
+- **FR-025a**: Where two entries in a compendium share a kind and a name, a
+  delta MUST NOT be attached to either, and the ambiguity MUST be reported.
+  **Measured at 3.9%** — 107 of 2750 creatures across the corpus, 22 of them in
+  the Monster Manual alone. A rule that cannot always identify an entry must
+  refuse rather than guess, because guessing wrong rewrites the wrong entry and
+  says nothing.
 - **FR-026**: Deltas MUST survive a re-import that replaces the base beneath
   them.
 - **FR-027**: A delta that can no longer attach to anything MUST be reported

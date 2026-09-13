@@ -202,10 +202,12 @@ leaves no copy behind.
 **Purpose**: Decide by evidence how a delta re-attaches after a re-import,
 **before** the delta model is built. Blocks Phase 11.
 
-- [ ] T067 Extend `crates/thunderforge-pdf/examples/survey.rs` with an identity mode: re-parse corpus books that exist in more than one file — a re-save, a later printing, or the same file under an improved parser
-- [ ] T068 Report how many entries keep a stable kind-and-name identity, how many are renamed, how many collide, into `measurements.md`
-- [ ] T069 **Decide**: 050 FR-025 stands if the evidence supports it, and is replaced by what the evidence supports if not. Amend `specs/050-the-account-library/spec.md` if it changes. A rule invented at a desk for re-attaching somebody's month of work to a re-parsed book is exactly the guess this project keeps getting burned by (050 decision 6)
-- [ ] T070 Proved: the measurement is in `measurements.md` and FR-025 either stands with evidence or has been amended. **Do not begin Phase 11 on an unrun measurement**
+- [X] T067 `src/app/examples/identity.rs` rather than a survey mode — it needs the declaration, the readers and the pack's contribution, and `src/app` is the only crate that links all three. **The experiment as specified could not be run**: the corpus has no book in more than one file (246 books, no repeated hash, no repeated title), so the re-parse measured instead is the chunked-versus-whole read that actually ships in `bookImport.ts`
+- [X] T068 Reported: **2740 of 2750 identities stable** across a genuine re-parse, **107 (3.9%) collide** within their own book, and **renames not measured** — that needs two editions of one work and the corpus has none, so it is left unanswered rather than approximated
+- [X] T069 **Decided: FR-025 stands, amended.** Stability is excellent where it matters — every *real* entry survived, and a hypothesis that the ten differences would fall on chunk seams was tested and proved wrong: they sit mid-chunk and are all misparses (`hit: 14 (2d8 + 5) bludgeoning damage.` read as a creature name). A false positive depends on incidental context and so moves; a real creature does not.
+
+      But 3.9% ambiguity is not zero, so **FR-025a is new**: where two entries share a kind and a name, a delta MUST NOT attach to either and the ambiguity is reported. A rule that cannot always identify an entry must refuse rather than guess, because guessing wrong rewrites the wrong entry and says nothing
+- [X] T070 Proved: the measurement is in `measurements.md` with its method, its numbers, the hypothesis it falsified, and the question it could not answer. FR-025 stands with evidence and FR-025a is added. **Phase 11 is unblocked**
 
 ---
 

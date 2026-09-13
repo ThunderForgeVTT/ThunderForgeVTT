@@ -182,6 +182,84 @@ evidence would be exactly the confident wrongness this spec exists to prevent.
 
 ---
 
+## Phase 10: entry identity — the gate on the delta model (T067-T070)
+
+**Date**: 2026-09-13 · 246 books, 71 of which yield creatures
+**Command**: `cargo run --release -p thunderforge --example identity -- dnd5e creature <files>`
+
+### The experiment the spec asked for cannot be run
+
+Spec 050 FR-029 names it: re-parse books "that exist in more than one file — a
+re-save, a later printing, or the same file under an improved parser". **The
+corpus contains no such pair.** 246 books, no repeated content hash, no title
+appearing twice. The experiment presupposes a property of the library that the
+library does not have, and no amount of care makes it runnable.
+
+Two of its three questions can still be answered honestly. The third cannot,
+and is left unanswered rather than approximated.
+
+### 1. Collisions — can kind-and-name identify an entry at all?
+
+| Measure | Value |
+|---|---|
+| Creatures read | 2750 |
+| **Sharing a kind and name with another entry in the same book** | **107 (3.9%)** |
+
+Worst cases: *Limitless Monsters* 24, *Monster Manual* 22, *Ghosts of
+Saltmarsh* 2. So roughly **one entry in twenty-six cannot be told from another
+in its own book** by the rule spec 050 FR-025 uses to re-attach a delta.
+
+### 2. Stability — does identity survive a genuine re-parse?
+
+Not the spec's re-parse, but a better one: the browser reads a book in chunks
+of 25 pages (`bookImport.ts`) and the same file read whole is a different
+traversal of the same document. This exercises code that actually ships.
+
+| Measure | Value |
+|---|---|
+| Identities found reading whole but not in chunks | 7 |
+| Found only when read in chunks | 3 |
+| **Stable across both readings** | **2740 of 2750 (99.6%)** |
+
+**And all ten differences are misparses.** A hypothesis that they would fall on
+chunk seams was tested and is wrong — they sit mid-chunk (p125 against a seam
+at p101, p200 against a seam at p176). What they actually are:
+
+```
+lost   p125   hit: 14 (2d8 + 5) bludgeoning damage.
+lost   p200   one target. hit: 8 (1d8 + 4) piercing damage.
+gained p201   m edium humanoid (human). lawful neutral
+```
+
+Fragments of attack prose read as creature names. A false positive depends on
+incidental surrounding context, so it appears or vanishes as the window moves;
+a real creature does not. **Every real entry was stable.**
+
+That is a second, unlooked-for result: it puts visible faces on the misparses
+this file's precision caveat has been warning about since the baseline.
+
+### 3. Renames — not measured
+
+Needs two editions of one work. The corpus has none. Stated rather than
+approximated, because a number invented here would be used.
+
+### Verdict on FR-025
+
+**Kind-and-name stands, with an amendment.** It is stable where it matters —
+every real entry survived a genuine re-parse — and the alternatives are worse:
+page number breaks on any reflow, and fuzzy matching introduces silent
+wrongness into the one place where being wrong rewrites a Game Master's work.
+
+But 3.9% is not zero, and a rule that cannot always identify an entry must not
+guess. **Spec 050 FR-025 is amended**: where two entries in a compendium share
+a kind and a name, a delta MUST NOT be attached to either. Ambiguity is
+reported, not resolved.
+
+**What would reopen it**: a corpus that does contain two editions of one work,
+which would finally answer the rename question.
+
+---
+
 ## Still to run
 
 - **Corpus read, per kind** (049 FR-060, T023-T025) — phase 4
