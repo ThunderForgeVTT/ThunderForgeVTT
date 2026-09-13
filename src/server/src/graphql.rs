@@ -379,6 +379,11 @@ pub struct QueryRoot(
     WorldEventsSinceQuery,
     // Spec 028 (T086): `peerSessions` — who else is reachable right now.
     crate::peer_signaling::PeerSignalingQuery,
+    // Spec 049 US3 / spec 050 US1: `myLibrary`, `compendium`,
+    // `compendiumEntries` — an account's own shelf. No world-scoped read
+    // exists, deliberately: a world reaches a compendium through the book
+    // list spec 050 adds, not through this.
+    queries::CompendiumQuery,
 );
 
 #[derive(MergedObject, Default)]

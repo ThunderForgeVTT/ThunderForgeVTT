@@ -59,6 +59,13 @@ const StorageSettingsPage = lazy(pageLoaders.storageSettings);
 const FeedbackSettingsPage = lazy(
   () => import("@/pages/user/FeedbackSettingsPage"),
 );
+/*
+  Spec 049 US3 / spec 050 US1: the account's own shelf. Declared here rather
+  than in `pageLoaders` for the reason the compendium editors are — nothing
+  prefetches it, because it is reached by a deliberate visit rather than by
+  hovering a nav item.
+*/
+const LibraryPage = lazy(() => import("@/pages/library/LibraryPage"));
 const SecuritySettingsPage = lazy(pageLoaders.securitySettings);
 const StandingPage = lazy(pageLoaders.standing);
 const JoinWorldPage = lazy(pageLoaders.joinWorld);
@@ -572,6 +579,28 @@ export default function AppRoutes({
           element={
             <RequireAuthenticated>
               {renderLazyPage(<WorldListPage />, "Loading world archive")}
+            </RequireAuthenticated>
+          }
+        />
+        {/*
+          Spec 050 US1: a person's library, and only their own. There is no
+          account id in the path and none in anything the page asks for — the
+          shelf is whoever is signed in, which is what makes 049 FR-028's
+          "from their own panel" true on an account-level surface.
+        */}
+        <Route
+          path="/library"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<LibraryPage />, "Loading your library")}
+            </RequireAuthenticated>
+          }
+        />
+        <Route
+          path="/library/:compendiumId"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<LibraryPage />, "Loading your library")}
             </RequireAuthenticated>
           }
         />

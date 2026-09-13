@@ -9,6 +9,9 @@ pub mod ability_vocabulary;
 pub mod actor;
 pub mod admin;
 pub mod authoring_tools;
+/// Spec 049 / 050: `myLibrary`, `compendium`, `compendiumEntries` — one
+/// account's shelf. Account-scoped throughout; there is no world-scoped read.
+pub mod compendium;
 pub mod healthcheck;
 pub mod interactives;
 pub mod inventory;
@@ -43,6 +46,7 @@ pub use ability_vocabulary::AbilityVocabularyQuery;
 pub use actor::ActorQuery;
 pub use admin::AdminQuery;
 pub use authoring_tools::AuthoringToolsQuery;
+pub use compendium::CompendiumQuery;
 pub use healthcheck::HealthcheckQuery;
 pub use inventory::InventoryQuery;
 pub use invite::InviteQuery;
