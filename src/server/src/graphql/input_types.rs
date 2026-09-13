@@ -304,8 +304,20 @@ pub struct GraphQLExportMyDataPayload {
     pub abilities: Vec<async_graphql::Json<serde_json::Value>>,
     pub lore_entries: Vec<async_graphql::Json<serde_json::Value>>,
     pub collections: Vec<async_graphql::Json<serde_json::Value>>,
+    /// What the export does not carry, and why (spec 049 FR-052, FR-053).
+    pub withheld: Vec<GraphQLWithheldFromExport>,
     pub asset_packs: Vec<GraphQLPlaceholderDomainObject>,
     pub game_systems: Vec<GraphQLPlaceholderDomainObject>,
+}
+
+/// One thing withheld from an export, named so the person can recognise it,
+/// with the reason every route out gives for it.
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLWithheldFromExport {
+    pub kind: String,
+    pub id: Uuid,
+    pub title: String,
+    pub reason: String,
 }
 
 /// Result of deleting user data (GDPR deleteMe request)

@@ -410,3 +410,160 @@ fn the_collection_surface_is_reachable_under_the_names_the_client_uses() {
             .unwrap_or("<not found>")
     );
 }
+
+/// A book read onto `owner`'s shelf as `system`, and the id of its one entry.
+fn an_uploaded_entry(conn: &mut PgConnection, owner: Uuid, system: &str) -> (Uuid, Uuid) {
+    use crate::compendium::store::{NewBook, import_book};
+    use crate::content::{Entry, NameState};
+    use crate::schema::compendium_entries;
+
+    let book = import_book(
+        conn,
+        owner,
+        NewBook {
+            book_title: "Monster Manual".to_string(),
+            source_hash: format!("{:0>64}", Uuid::now_v7().simple()),
+            system_id: system.to_string(),
+            parser_version: "reader-test".to_string(),
+            page_count: 1,
+            silent_page_count: 0,
+        },
+        &[Entry {
+            kind: "prose".to_string(),
+            name: "Goblin".to_string(),
+            name_state: NameState::Clear,
+            page: 1,
+            values: Default::default(),
+            text: Some("Small and cruel.".to_string()),
+            suspect: false,
+            extras: None,
+        }],
+    )
+    .expect("import");
+    let entry = compendium_entries::table
+        .filter(compendium_entries::compendium_id.eq(book.id))
+        .select(compendium_entries::id)
+        .first::<Uuid>(conn)
+        .expect("entry");
+    (book.id, entry)
+}
+
+/// The book list row, written directly: this is about what a collection will
+/// accept from a world that reads a book, not about how the book got there.
+fn switch_on_directly(conn: &mut PgConnection, world: Uuid, book: Uuid, owner: Uuid) {
+    diesel::sql_query(format!(
+        "UPDATE worlds SET game_system_id = 'test-system' WHERE id = '{world}'"
+    ))
+    .execute(conn)
+    .expect("give the world the book's system");
+    diesel::sql_query(format!(
+        "INSERT INTO world_books (id, world_id, compendium_id, base_source_hash, \
+             base_parser_version, switched_on_by) \
+         SELECT '{}', '{world}', id, source_hash, parser_version, '{owner}' \
+           FROM compendiums WHERE id = '{book}'",
+        Uuid::now_v7()
+    ))
+    .execute(conn)
+    .expect("switch the book on");
+}
+
+/// 049 FR-053, FR-056a: an entry from a book this world reads is refused
+/// **as uploaded**, in words that name the two routes left — not as a member
+/// type a collection happens not to hold. And nothing is added.
+#[tokio::test]
+async fn uploaded_content_is_refused_by_origin_with_the_routes_that_remain() {
+    let f = fixture();
+    let collection = a_collection(&f, "The Haunted Manor").await;
+    let (book, entry) = {
+        let mut conn = f.state.db_pool.get().unwrap();
+        let (book, entry) = an_uploaded_entry(&mut conn, f.owner_id, "test-system");
+        switch_on_directly(&mut conn, f.world_id, book, f.owner_id);
+        (book, entry)
+    };
+
+    for (member_type, member_id) in [
+        (
+            crate::compendium::origin::content_type::COMPENDIUM_ENTRY,
+            entry,
+        ),
+        (crate::compendium::origin::content_type::COMPENDIUM, book),
+    ] {
+        let refusal = add_collection_member_impl(
+            &f.state,
+            f.owner_id,
+            false,
+            AddCollectionMemberInput {
+                collection_id: collection.id,
+                member_type: member_type.to_string(),
+                member_id,
+            },
+        )
+        .await
+        .expect_err("uploaded content must not enter a collection")
+        .message;
+
+        assert!(refusal.contains("uploaded"), "{member_type}: {refusal}");
+        assert!(refusal.contains("author it"), "{member_type}: {refusal}");
+        assert!(refusal.contains("system pack"), "{member_type}: {refusal}");
+    }
+
+    // The rule restricts an origin, not a subject: authored content beside it
+    // goes in, through the same call, into the same collection.
+    add_collection_member_impl(
+        &f.state,
+        f.owner_id,
+        false,
+        AddCollectionMemberInput {
+            collection_id: collection.id,
+            member_type: "lore".to_string(),
+            member_id: f.lore_id,
+        },
+    )
+    .await
+    .expect("authored content is unaffected");
+
+    let members = collection_members_impl(&f.state, f.owner_id, false, collection.id)
+        .await
+        .expect("members");
+    assert_eq!(members.len(), 1);
+    assert_eq!(members[0].member_type, "lore");
+}
+
+/// 049 FR-055a: somebody else's book reads as no book at all. An entry from a
+/// shelf this world does not read gets exactly the answer an id that names
+/// nothing gets, so the refusal's wording cannot be used to learn what is on
+/// another person's shelf.
+#[tokio::test]
+async fn an_entry_this_world_does_not_read_is_simply_not_found() {
+    let f = fixture();
+    let collection = a_collection(&f, "The Haunted Manor").await;
+    let strangers_entry = {
+        let mut conn = f.state.db_pool.get().unwrap();
+        let stranger = insert_test_user(&mut conn);
+        an_uploaded_entry(&mut conn, stranger, "test-system").1
+    };
+
+    let attempt = |member_id| {
+        add_collection_member_impl(
+            &f.state,
+            f.owner_id,
+            false,
+            AddCollectionMemberInput {
+                collection_id: collection.id,
+                member_type: crate::compendium::origin::content_type::COMPENDIUM_ENTRY.to_string(),
+                member_id,
+            },
+        )
+    };
+
+    let theirs = attempt(strangers_entry).await.expect_err("refused").message;
+    let nothing = attempt(Uuid::now_v7()).await.expect_err("refused").message;
+    assert_eq!(
+        theirs, nothing,
+        "somebody else's entry must be refused exactly as an id naming nothing is"
+    );
+    assert!(
+        !theirs.contains("uploaded"),
+        "a stranger's book must not be described, got: {theirs}"
+    );
+}

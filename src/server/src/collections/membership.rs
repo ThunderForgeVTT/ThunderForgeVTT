@@ -61,11 +61,22 @@
 //! that collection are both deliberate acts by someone with authority over the
 //! world. The owner is choosing to publish it. That is the same standard every
 //! other member type is held to.
+//!
+//! # Origin is not a restriction, and is not decided here
+//!
+//! A restriction is something an owner can lift. Uploaded content (spec 049
+//! FR-050, ADR-097) is refused whoever asks and whatever they clear first, so
+//! it is not an arm of [`restriction_reason`]. It is refused by the database,
+//! on `world_collection_members` itself (migration
+//! `2026-09-13-120000-0000_origin_invariant`), where a route added next year
+//! cannot forget to ask. What this module adds is only the wording, and the
+//! care not to reveal somebody else's shelf while giving it.
 
 use async_graphql::{Error, Result as GraphQLResult};
 use diesel::prelude::*;
 use uuid::Uuid;
 
+use crate::compendium::origin::ContentOrigin;
 use crate::state::AppState;
 
 /// Why this artifact may not be shared, in the words shown to the person
@@ -127,6 +138,81 @@ pub async fn restriction_reason(
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(Error::new)
+}
+
+/// Where the content a caller named came from (049 FR-050), asked through the
+/// one lookup every sharing rule uses.
+///
+/// `None` for content that does not exist or a type nobody has given an
+/// origin — which the caller reads as "not found", never as authored.
+pub async fn origin_of(
+    state: &AppState,
+    content_type: &str,
+    content_id: Uuid,
+) -> GraphQLResult<Option<ContentOrigin>> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let content_type = content_type.to_string();
+
+    tokio::task::spawn_blocking(move || {
+        crate::compendium::origin::origin_of(&mut conn, &content_type, content_id)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to establish where that content came from"))
+}
+
+/// Whether this world already reads the uploaded content a caller named.
+///
+/// Asked only so that a refusal can be phrased without telling anybody what
+/// is on a shelf that is not theirs to see (049 FR-055a): a reason for a book
+/// the world reads, and "not found" for everything else, including a real
+/// entry from somebody else's book. A world reads a book it has switched on
+/// (050 FR-010), and nothing else.
+///
+/// Answers `false` for a type it does not know, which yields "not found" —
+/// the safe answer, since the refusal itself is the database's either way.
+pub async fn read_by_world(
+    state: &AppState,
+    world_id: Uuid,
+    content_type: &str,
+    content_id: Uuid,
+) -> GraphQLResult<bool> {
+    use crate::compendium::origin::content_type as kinds;
+    use crate::schema::{compendium_entries, world_books};
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let content_type = content_type.to_string();
+
+    tokio::task::spawn_blocking(move || -> QueryResult<bool> {
+        match content_type.as_str() {
+            kinds::COMPENDIUM_ENTRY => diesel::select(diesel::dsl::exists(
+                compendium_entries::table
+                    .inner_join(
+                        world_books::table
+                            .on(world_books::compendium_id.eq(compendium_entries::compendium_id)),
+                    )
+                    .filter(compendium_entries::id.eq(content_id))
+                    .filter(world_books::world_id.eq(world_id)),
+            ))
+            .get_result(&mut conn),
+            kinds::COMPENDIUM => diesel::select(diesel::dsl::exists(
+                world_books::table
+                    .filter(world_books::compendium_id.eq(content_id))
+                    .filter(world_books::world_id.eq(world_id)),
+            ))
+            .get_result(&mut conn),
+            _ => Ok(false),
+        }
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to load that content"))
 }
 
 #[cfg(test)]

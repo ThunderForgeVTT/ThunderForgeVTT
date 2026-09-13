@@ -20,6 +20,7 @@ use uuid::Uuid;
 
 use crate::auth::world_membership::is_dm_of_world;
 use crate::collections::{MAX_MEMBERS, is_known_member_type, membership};
+use crate::compendium::origin::{ContentOrigin, LeaveRefusal, refusal_from_database};
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{Collection, CollectionMember, NewCollection, NewCollectionMember};
 use crate::schema::{world_collection_members, world_collections};
@@ -242,6 +243,26 @@ pub async fn add_collection_member_impl(
     let world_id =
         require_collection_authority(state, user_id, is_admin, input.collection_id).await?;
 
+    // 049 FR-053: uploaded content is refused *as* uploaded, before its type
+    // is asked about. Otherwise a book entry would meet "a collection cannot
+    // hold a compendium_entry" — true, and useless to somebody who needs to
+    // know why and what they can do instead.
+    //
+    // This is the phrasing, not the rule. The rule is the database guard on
+    // `world_collection_members`, which refuses the insert below whether or
+    // not anything here asked first.
+    //
+    // Somebody else's book must read as no book at all (049 FR-055a), so the
+    // reason is given only for content this world already reads. Anything
+    // else falls through to the checks below and is refused exactly as an id
+    // naming nothing would be.
+    if membership::origin_of(state, &input.member_type, input.member_id).await?
+        == Some(ContentOrigin::Uploaded)
+        && membership::read_by_world(state, world_id, &input.member_type, input.member_id).await?
+    {
+        return Err(Error::new(LeaveRefusal::Uploaded.message()));
+    }
+
     if !is_known_member_type(&input.member_type) {
         return Err(Error::new(format!(
             "A collection cannot hold a {}",
@@ -319,7 +340,13 @@ pub async fn add_collection_member_impl(
             diesel::result::DatabaseErrorKind::UniqueViolation,
             _,
         ) => Error::new("That content is already in this collection"),
-        other => Error::new(format!("Failed to add to collection: {other}")),
+        // The guard's own refusal. Reached when something moved between the
+        // questions above and this write — the artifact deleted, say — and
+        // phrased for a person all the same.
+        other => match refusal_from_database(&other) {
+            Some(refusal) => Error::new(refusal.message()),
+            None => Error::new(format!("Failed to add to collection: {other}")),
+        },
     })
 }
 

@@ -32,11 +32,12 @@ use diesel::prelude::*;
 use serde::Serialize;
 use uuid::Uuid;
 
+use crate::compendium::ContentOrigin;
 use crate::models::{Collection, LoreEntry, Scene, WorldAbility, WorldActor, WorldItem};
 use crate::schema::{
-    scenes, world_abilities, world_actor_abilities, world_actor_images, world_actor_inventory,
-    world_actor_system_data, world_actors, world_collection_members, world_collections,
-    world_items, world_lore_entries,
+    compendiums, scenes, world_abilities, world_actor_abilities, world_actor_images,
+    world_actor_inventory, world_actor_system_data, world_actors, world_collection_members,
+    world_collections, world_items, world_lore_entries,
 };
 
 /// A character, whole: its sheet and everything it carries.
@@ -153,6 +154,22 @@ pub struct ExportedCollectionMember {
     pub member_id: Uuid,
 }
 
+/// Something this person holds that the export deliberately does not carry,
+/// and why (spec 049 FR-052, spec 050 FR-009c).
+///
+/// Named rather than left out, because a download that is silently thinner
+/// than the shelf it came from reads as lost data. The reason is the one every
+/// other route out gives, in the same words.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct WithheldFromExport {
+    /// What kind of thing was withheld — `compendium` today.
+    pub kind: &'static str,
+    pub id: Uuid,
+    /// What the person calls it, so they can recognise what is missing.
+    pub title: String,
+    pub reason: &'static str,
+}
+
 /// Everything above, for one person.
 #[derive(Debug, Clone, Default, Serialize, PartialEq)]
 pub struct ExportedContent {
@@ -162,6 +179,7 @@ pub struct ExportedContent {
     pub lore_entries: Vec<ExportedLoreEntry>,
     pub scenes: Vec<ExportedScene>,
     pub collections: Vec<ExportedCollection>,
+    pub withheld: Vec<WithheldFromExport>,
 }
 
 /// Group `(key, value)` pairs by key, keeping order.
@@ -395,6 +413,34 @@ pub fn load_content_sync(conn: &mut PgConnection, user_id: Uuid) -> QueryResult<
         })
         .collect();
 
+    // The books on this person's shelf, which the export does not carry.
+    //
+    // Decided by each book's origin rather than by its being a compendium:
+    // export is one of the routes out that uploaded content may not take
+    // (049 FR-052), and asking the origin is what keeps this answer the same
+    // as the collection's and the share link's. There is no shape here for an
+    // authored book because no path writes one — the only writer of this
+    // table sets `Uploaded` itself, and a trigger keeps it so.
+    let withheld = compendiums::table
+        .filter(compendiums::owner_user_id.eq(user_id))
+        .order(compendiums::created_at.asc())
+        .select((
+            compendiums::id,
+            compendiums::book_title,
+            compendiums::origin,
+        ))
+        .load::<(Uuid, String, ContentOrigin)>(conn)?
+        .into_iter()
+        .filter_map(|(id, title, origin)| {
+            origin.refusal_reason().map(|reason| WithheldFromExport {
+                kind: "compendium",
+                id,
+                title,
+                reason,
+            })
+        })
+        .collect();
+
     Ok(ExportedContent {
         actors,
         items,
@@ -402,5 +448,6 @@ pub fn load_content_sync(conn: &mut PgConnection, user_id: Uuid) -> QueryResult<
         lore_entries,
         scenes,
         collections,
+        withheld,
     })
 }

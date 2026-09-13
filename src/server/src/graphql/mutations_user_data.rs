@@ -79,6 +79,18 @@ impl From<UserDataExport> for GraphQLExportMyDataPayload {
             abilities: as_json(export.abilities),
             lore_entries: as_json(export.lore_entries),
             collections: as_json(export.collections),
+            withheld: export
+                .withheld
+                .into_iter()
+                .map(
+                    |item| crate::graphql::input_types::GraphQLWithheldFromExport {
+                        kind: item.kind.to_string(),
+                        id: item.id,
+                        title: item.title,
+                        reason: item.reason.to_string(),
+                    },
+                )
+                .collect(),
             asset_packs: export
                 .asset_packs
                 .into_iter()

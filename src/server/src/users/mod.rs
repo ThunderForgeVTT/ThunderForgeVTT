@@ -43,7 +43,7 @@ pub mod export_content;
 
 pub use export_content::{
     ExportedAbility, ExportedActor, ExportedCollection, ExportedItem, ExportedLoreEntry,
-    ExportedScene,
+    ExportedScene, WithheldFromExport,
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -89,6 +89,9 @@ pub struct UserDataExport {
     pub abilities: Vec<ExportedAbility>,
     pub lore_entries: Vec<ExportedLoreEntry>,
     pub collections: Vec<ExportedCollection>,
+    /// What this person holds that the export does not carry, each with the
+    /// reason (spec 049 FR-052, FR-053). Their uploaded books today.
+    pub withheld: Vec<WithheldFromExport>,
     /// Still reserved: neither is something a person makes.
     pub asset_packs: Vec<PlaceholderDomainExport>,
     pub game_systems: Vec<PlaceholderDomainExport>,
@@ -261,6 +264,7 @@ pub async fn export_user_data_payload(
         abilities: content.abilities,
         lore_entries: content.lore_entries,
         collections: content.collections,
+        withheld: content.withheld,
         asset_packs: Vec::new(),
         game_systems: Vec::new(),
     })
@@ -820,6 +824,72 @@ mod tests {
         assert!(export.collections.iter().any(|c| c.id == collection));
         assert!(export.scenes.iter().any(|s| s.id == scene));
         assert_eq!(export.manifest.counts.actors, export.actors.len());
+    }
+
+    /// Spec 049 FR-052, FR-053: a person's uploaded books do not leave in
+    /// their export — and are **named** as not leaving, with the reason every
+    /// other route gives, so the download is not silently thinner than the
+    /// shelf. What they made by hand beside the book still comes along.
+    #[tokio::test]
+    async fn an_uploaded_book_is_withheld_from_the_export_by_name_and_reason() {
+        use crate::compendium::ContentOrigin;
+        use crate::compendium::store::{NewBook, import_book};
+        use crate::test_support::{
+            insert_test_item, insert_test_user, insert_test_world, test_app_state,
+        };
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().expect("conn");
+        let reader = insert_test_user(&mut conn);
+        let world = insert_test_world(&mut conn, reader);
+        let homebrew = insert_test_item(&mut conn, world, reader);
+        let book = import_book(
+            &mut conn,
+            reader,
+            NewBook {
+                book_title: "Monster Manual".to_string(),
+                source_hash: format!("{:0>64}", uuid::Uuid::now_v7().simple()),
+                system_id: "test-system".to_string(),
+                parser_version: "reader-test".to_string(),
+                page_count: 1,
+                silent_page_count: 0,
+            },
+            &[crate::content::Entry {
+                kind: "prose".to_string(),
+                name: "Tarrasque".to_string(),
+                name_state: crate::content::NameState::Clear,
+                page: 1,
+                values: Default::default(),
+                text: Some("It does not stop.".to_string()),
+                suspect: false,
+                extras: None,
+            }],
+        )
+        .expect("import");
+        drop(conn);
+
+        let export = super::export_user_data_payload(&state, reader)
+            .await
+            .expect("export");
+
+        assert!(export.items.iter().any(|i| i.id == homebrew));
+        let withheld = export
+            .withheld
+            .iter()
+            .find(|w| w.id == book.id)
+            .expect("the book must be named as withheld, not silently absent");
+        assert_eq!(withheld.kind, "compendium");
+        assert_eq!(withheld.title, "Monster Manual");
+        assert_eq!(
+            Some(withheld.reason),
+            ContentOrigin::Uploaded.refusal_reason(),
+            "the export gives the same reason as every other route out"
+        );
+        let serialised = serde_json::to_string(&export).expect("serialise");
+        assert!(
+            !serialised.contains("Tarrasque") && !serialised.contains("It does not stop."),
+            "nothing of the book's contents travels in the download"
+        );
     }
 
     /// A player who already has a world on the same system gets the character
