@@ -69,6 +69,10 @@ pub use queries::{
 pub mod anonymous;
 pub mod mutations_collection_shares;
 pub mod mutations_collections;
+// Spec 049 US2/US3: `createCompendiumFromImport`, `removeCompendium` and the
+// pre-upload hash check. Everything a browser review decided is decided again
+// here, because a review that happened in a browser is not a permission.
+pub mod mutations_compendium;
 // Spec 040 US5: `githubApplications`, `setGithubApplication` and
 // `checkGithubApplication` — one application for everything, or one per
 // subsystem, and which acts for what. Resolution itself is `crate::github_apps`.
@@ -384,6 +388,9 @@ pub struct QueryRoot(
     // exists, deliberately: a world reaches a compendium through the book
     // list spec 050 adds, not through this.
     queries::CompendiumQuery,
+    // Spec 049 FR-047: `compendiumForFileHash` — asked with a hash and
+    // nothing else, before any of a book is sent.
+    mutations_compendium::CompendiumImportQuery,
 );
 
 #[derive(MergedObject, Default)]
@@ -436,6 +443,9 @@ pub struct MutationRoot(
     // Spec 026: gather artifacts into a named collection.
     mutations_collections::CollectionMutation,
     mutations_collection_shares::CollectionShareMutation,
+    // Spec 049 US2/US3: committing a reviewed book, and taking one back off
+    // the shelf.
+    mutations_compendium::CompendiumMutation,
     ActorAbilityMutation,
     ItemMutation,
     ItemPermissionMutation,
