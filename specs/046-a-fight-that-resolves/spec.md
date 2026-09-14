@@ -4,8 +4,8 @@
 
 **Created**: 2026-09-11
 
-**Status**: Draft. Three owner questions are open (see
-[Questions for the owner](#questions-for-the-owner)).
+**Status**: Draft. The owner's three questions were answered on 2026-09-12
+(see [Decisions](#decisions-owner-2026-09-12)); clarified 2026-09-14.
 
 **Input**: Project owner, after watching the combat playtest: "can we do combat
 tracking and turn tracking and attack / damage for 5e as a playtest scenario",
@@ -98,6 +98,16 @@ what anyone has spent, and there is nowhere for a legendary action to live.
 Nothing checks whose turn it is before a move, a roll or an ability, either:
 in the playtest it was the ogre's turn and Aria moved anyway.
 
+## Clarifications
+
+### Session 2026-09-14
+
+- Q: When a player tries something the rules don't allow — attacking beyond an attack's reach or range, or acting when it isn't their turn — does the product refuse it or allow it and tell the table? → A: Turn order is refused for players (reactions excepted); reach and range are flagged to the table, never refused.
+- Q: When a hit's damage is offered to a player whose character was struck and they are offline or haven't answered, what happens to the offer? → A: It waits, survives reconnects, and the Game Master may take or decline it on the controller's behalf at any time.
+- Q: When a creature players can't see, or whose name the Game Master has hidden, makes an attack, what do players see of that roll? → A: Every seat sees the roll, but the server redacts the attacker to "Unknown" for any viewer who cannot see the token or from whom its name is hidden.
+- Q: Which hit-point record is the real one — the actor's game-system data or the token's own health? → A: A linked token reads and writes its actor's system data; a token placed as an unlinked copy holds its own hit points. The owner added: a Game Master may drop two hundred goblins that need no actors of their own, while a named NPC such as "Boblin the goblin" is placed linked to a real actor.
+- Q: Where does the Game Master switch on auto-apply for their NPCs — the whole world, per encounter, or per NPC? → A: A world default, off, which the Game Master can override for a single encounter in the combat tracker.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - An attack is aimed at something (Priority: P1)
@@ -122,26 +132,31 @@ screen shows it without being asked.
    Game Master, the other players, and the roller.
 3. **Given** a creature with a defence, **When** an attack is rolled against
    it, **Then** the table is told whether the attack beat that defence.
-4. **Given** an attack that misses, **Then** nothing is applied to the target.
+4. **Given** an attack that misses, **Then** nothing is offered to the target.
+5. **Given** an attack that hits, **Then** its damage is rolled in the same
+   click and offered to whoever controls the target, who takes it or does not
+   (decision 1).
 
 ---
 
 ### User Story 2 - Damage lands, and every board shows it (Priority: P1)
 
-A hit's damage is applied to the creature, and every screen's bars shorten
-within a second, without a reload.
+A hit's damage is offered to whoever controls the creature; once it is taken,
+every screen's bars shorten within a second, without a reload.
 
 **Why this priority**: It is the point of a fight, and today it is a private
 blob-write nobody sees.
 
-**Independent Test**: The goblin has 7 hit points. A hit for 5 leaves it on 2
-on the Game Master's board, on both players' boards and on the server, within a
-second and with nobody reloading.
+**Independent Test**: The goblin has 7 hit points. A hit for 5 is offered to
+the Game Master, who takes it; the goblin is left on 2 on the Game Master's
+board, on both players' boards and on the server, within a second and with
+nobody reloading.
 
 **Acceptance Scenarios**:
 
-1. **Given** a hit, **When** its damage is applied, **Then** the target's
-   current hit points fall by that amount, bounded at zero.
+1. **Given** a hit, **When** the target's controller takes the offered damage,
+   **Then** the target's current hit points fall by that amount, bounded at
+   zero. **When** they decline it, **Then** nothing changes.
 2. **Given** that change, **Then** every client showing the scene reflects it
    within one second, with no reload, subject to what each viewer may see.
 3. **Given** temporary hit points, **Then** they absorb damage before the
@@ -150,6 +165,10 @@ second and with nobody reloading.
    maximum.
 5. **Given** a Game Master, **Then** they may apply damage or healing to any
    creature by hand, including one nobody rolled against.
+6. **Given** a Game Master who has switched on auto-apply for the NPCs they
+   run, **When** an attack that properly selected one of those NPCs hits,
+   **Then** its damage is applied without an offer. A roll made with no target
+   applies to nothing.
 
 ---
 
@@ -185,8 +204,8 @@ only five feet.
 
 **Independent Test**: An ogre is placed on a five-foot grid. It fills two
 squares by two, on every board and for the grid's own purposes. A hero one
-square away may swing at it; a hero four squares away is told the target is out
-of reach.
+square away may swing at it; a hero four squares away may still swing, and the
+table is told the target was out of reach.
 
 **Acceptance Scenarios**:
 
@@ -194,10 +213,12 @@ of reach.
    every client, and the grid treats it as filling them — snapping,
    hit-testing and movement alike, not only the drawing.
 2. **Given** an attack with a reach, **When** its target is beyond that reach,
-   **Then** the table is told so before anything is rolled.
+   **Then** the attacker is warned before rolling, the attack is not refused,
+   and if it is made the table is told it was out of reach.
 3. **Given** a ranged attack with a normal and a long range, **When** the
    target is beyond normal range, **Then** the table is told the shot is a long
-   one; beyond long range, that it cannot be made.
+   one; beyond long range, the attacker is warned and the table is told the
+   shot was beyond range, but it is not refused.
 4. **Given** a Large creature, **Then** its reach is whatever its attacks say
    — not ten feet by virtue of being Large.
 5. **Given** a game system that declares size categories, **Then** a creature's
@@ -225,7 +246,8 @@ until her next turn begins.
    movement are unspent, and every seat can see what remains.
 2. **Given** an attack taken as an action, **Then** the action is spent.
 3. **Given** a creature that has spent its action, **When** it attempts
-   another, **Then** the table is told (see Q2 on whether it is refused).
+   another, **Then** it is not refused, and the table is shown the overspend
+   (decision 2).
 4. **Given** a reaction, **Then** it is spendable between turns and returns at
    the start of the creature's own turn.
 5. **Given** movement, **Then** what a creature has moved this turn is counted
@@ -269,20 +291,29 @@ at the start of its own turn.
 - **A big creature on hexes.** A Large creature on a hex grid is a seven-hex
   flower, which the canvas core records as unmodelled. Hex footprints stay as
   they are until that is solved.
-- **Cover and walls.** An attack across a wall that blocks vision — see Q3.
+- **Cover and walls.** An attack needs line of sight to its target unless the
+  ability or item says otherwise (decision 3). Cover is not modelled: blocked
+  or not blocked.
 - **A target that moves before the roll resolves.** The roll is judged against
   where the target was when it was made.
-- **Two attacks at once.** Two players resolving attacks on the same creature
-  are applied in the order the server accepts them; neither is lost.
+- **Two attacks at once.** Two offers against the same creature, taken close
+  together, are applied in the order the server accepts them; neither is lost,
+  and each is bounded by the hit points left when it lands.
+- **Several copies of one NPC.** Five goblins placed from one NPC are five
+  unlinked copies; a hit on one changes only that one (FR-015).
+- **Relinking a copy.** Changing an unlinked copy to linked replaces its own hit
+  points with the actor's; the table is not asked to merge them.
 - **Damage beyond zero.** Current hit points stop at zero; the excess is not
   carried anywhere unless a later spec models dying.
 - **A creature removed mid-fight.** Removing a combatant whose turn it is
   passes the turn on.
 - **An unconscious creature's reaction.** A creature out of the fight spends
   nothing and takes no reaction.
+- **The controller is away.** An offer to an offline or silent player waits
+  for them, and the Game Master may resolve it for them (FR-008, FR-009).
 - **Offline.** An attack made while a client is offline is resolved when it
-  reaches the server, against the state the server then holds; a refusal
-  returns the spender's budget.
+  reaches the server, against the state the server then holds. If it is
+  refused there because the turn has passed (FR-060), nothing is spent.
 
 ## Requirements *(mandatory)*
 
@@ -294,11 +325,38 @@ at the start of its own turn.
   its record MUST carry attacker, target, the formula and the result.
 - **FR-002**: Every member of the world MUST be shown the result of an attack
   made in a scene they are in, within one second, without a reload.
+- **FR-002a**: The server MUST redact an attack's attacker, per viewer, to
+  "Unknown" wherever that viewer cannot see the attacker's token (spec 045) or
+  the Game Master has hidden its name (the token-name rule of 2026-09-10). The
+  attacker's identity MUST NOT reach that viewer's client in any field. The
+  target's controller receives the roll and the offer under the same rule.
+  The same applies to the target: a viewer who cannot see it is not told what
+  was attacked.
 - **FR-003**: A creature MUST carry a defence its game system declares (for
   D&D 5e, an armour class), and the table MUST be told whether an attack beat
   it.
 - **FR-004**: A miss MUST apply nothing.
-- **FR-005**: How far the product goes in resolving an attack is settled by Q1.
+- **FR-005**: A hit MUST roll its damage in the same action, and MUST offer it
+  to whoever controls the target, who takes or declines it. The product MUST
+  NOT apply damage or healing to a creature without its controller's
+  acceptance, except under FR-006 (decision 1).
+- **FR-008**: An offer MUST persist until it is taken or declined: it MUST
+  survive the controller going offline, reloading or reconnecting, and MUST be
+  shown to them when they return. It MUST NOT expire and MUST NOT resolve
+  itself.
+- **FR-009**: A Game Master MUST be able to take or decline any pending offer
+  on its controller's behalf, at any time, and the table MUST be told who
+  resolved it.
+- **FR-006**: A Game Master MUST be able to switch on auto-apply for the NPCs
+  they run. Auto-apply MUST act only on an attack made against a selected
+  target; a roll with no target applies to nothing. It MUST be a world setting,
+  off by default, which the Game Master MAY override for a single encounter
+  from the combat tracker; the override MUST end with that encounter. Damage
+  to a player character MUST always be an offer, whatever the setting.
+- **FR-007**: An ability or item MUST carry whether it needs line of sight,
+  defaulting to required, and an import MAY set it. Line of sight MUST be
+  judged with the same visibility function spec 045 uses for movement, and
+  auto-apply MUST consult the flag (decision 3).
 
 **Damage and hit points**
 
@@ -312,8 +370,23 @@ at the start of its own turn.
   each viewer is allowed to see.
 - **FR-014**: A Game Master MUST be able to apply damage or healing to any
   creature directly.
-- **FR-015**: The two hit-point pools MUST be reconciled: `tokens.health` and
-  the system's own resource MUST NOT disagree about how hurt a creature is.
+- **FR-015**: Every token MUST be either **linked** to its actor or an
+  **unlinked copy** of it. A linked token's hit points MUST be its actor's
+  system resource: damage and healing write there, and its bars read from
+  there. An unlinked copy MUST hold its own hit points, starting from the
+  actor's values when placed, and damage to it MUST NOT change the actor or
+  any other copy. No creature may have two records of its hit points that can
+  disagree.
+- **FR-016**: A token placed for a player character MUST default to linked. A
+  token placed for an NPC MUST default to an unlinked copy, unless the NPC is
+  marked **unique** (a named individual, such as "Boblin the goblin"), in which
+  case it MUST default to linked. A Game Master MUST be able to mark an NPC
+  unique or not, to choose otherwise when placing a token, and to change a
+  token's link later.
+- **FR-017**: Unlinked copies MUST NOT require an actor each. Placing many
+  copies of one NPC (for example two hundred goblins) MUST create no new
+  actors, and each copy MUST still take damage, drop at zero and appear in the
+  turn order on its own.
 
 **Out of the fight**
 
@@ -331,8 +404,9 @@ at the start of its own turn.
   footprint MUST follow it.
 - **FR-032**: An attack MUST carry its own reach, or its normal and long
   range. Reach MUST NOT be derived from size.
-- **FR-033**: An attack whose target is beyond its reach or long range MUST be
-  refused, and the reason given, before anything is rolled.
+- **FR-033**: An attack whose target is beyond its reach or long range MUST NOT
+  be refused. The attacker MUST be warned before rolling, and the attack's
+  record, as shown to the table, MUST flag it as out of reach or beyond range.
 - **FR-034**: A ranged attack beyond its normal range MUST be marked a long
   shot.
 - **FR-035**: Distance MUST be measured from the squares a creature fills.
@@ -348,8 +422,8 @@ at the start of its own turn.
 - **FR-043**: Movement spent MUST be counted against the creature's speed.
 - **FR-044**: An attack that names several attacks (multiattack) MUST make them
   all for one action.
-- **FR-045**: Whether the product refuses an over-spend or merely shows it is
-  settled by Q2.
+- **FR-045**: The product MUST show an over-spend and MUST NOT refuse it
+  (decision 2).
 
 **Legendary and lair**
 
@@ -363,8 +437,11 @@ at the start of its own turn.
 **Turn order**
 
 - **FR-060**: An action, an attack or a move by a player MUST be refused when
-  it is not that player's creature's turn, with the reason given — except what
-  a reaction allows (FR-041).
+  it is not that player's creature's turn, with the reason given naming whose
+  turn it is — except what a reaction allows (FR-041). The refusal MUST be
+  enforced by the server, not only the screens. This is the one refusal in
+  this spec; everything else a player does is shown, not blocked (FR-033,
+  decision 2).
 - **FR-061**: A Game Master MUST NOT be held to the turn order (consistent with
   spec 045's decision 1).
 
@@ -372,7 +449,9 @@ at the start of its own turn.
 
 - **FR-070**: `combat-5e.playtest.ts` MUST exercise every story above in a D&D
   5e world, and its checks currently marked FINDING MUST pass.
-- **FR-071**: The e2e suite MUST cover: an attack refused for reach; damage
+- **FR-071**: The e2e suite MUST cover: an attack flagged for reach; a player
+  refused for acting out of turn; an unseen attacker shown as "Unknown", with
+  its identity absent from the player's network traffic; damage
   reaching another client's bars within a second; a creature dropping at zero;
   an action spent and refilled; and a legendary action spent between turns.
 
@@ -389,6 +468,11 @@ at the start of its own turn.
   each round.
 - **Roll record**: attacker, target, formula, result, and whether it beat the
   defence.
+- **Token link**: whether a token is its actor (linked, sharing the actor's hit
+  points) or a copy of it (unlinked, with hit points of its own).
+- **Offer**: damage or healing from one roll, addressed to the target's
+  controller. Pending until taken or declined, by the controller or a Game
+  Master; records who resolved it and how.
 
 ## Success Criteria *(mandatory)*
 
@@ -399,14 +483,16 @@ at the start of its own turn.
 - **SC-003**: A creature reduced to zero is skipped by the turn order in 100%
   of runs, with no Game Master intervention.
 - **SC-004**: An ogre placed on a five-foot grid fills four squares on every
-  board, and a hero four squares away is refused a sword swing with a reason
-  naming reach.
+  board, and a hero four squares away who swings a sword is warned first and
+  the table sees the swing flagged as out of reach.
 - **SC-005**: Across a played round, every seat can say what each creature has
   left to spend.
 - **SC-006**: A legendary creature spends three legendary actions across other
   creatures' turns and has three again at the start of its own.
 - **SC-007**: A player acting out of turn is refused, and the refusal names
   whose turn it is.
+- **SC-008**: A scene holding two hundred unlinked goblin copies creates no new
+  actors, and a hit on one goblin changes that goblin's bars alone.
 
 ## Assumptions
 
@@ -416,10 +502,11 @@ at the start of its own turn.
   is the existing shape for this.
 - **Distances are in the system's units**, converted through the scene's grid:
   one square is one of the system's cells (five feet for D&D 5e).
-- **The Game Master can always overrule.** Every refusal in this spec is a
-  refusal to a player; a Game Master may do it anyway.
+- **The Game Master can always overrule.** The one refusal in this spec, turn
+  order (FR-060), is a refusal to a player; a Game Master may act anyway.
 - **A creature's own visibility rules still apply** (spec 045): being told
-  about an attack does not reveal a token a player cannot see.
+  about an attack does not reveal a token a player cannot see, or a name the
+  Game Master has hidden (FR-002a).
 - **An ADR records where resolution happens.** Attacks resolving server-side
   is a decision about an ownership boundary and is recorded at planning time.
 
@@ -437,7 +524,8 @@ at the start of its own turn.
   rest), and concentration.
 - Death saves and dying.
 - Cover, advantage and disadvantage, critical hits and fumbles, resistances
-  and immunities — unless Q1's answer draws them in.
+  and immunities. Decision 1 keeps the target's controller as the judge, so
+  none of these is needed for a fight to resolve.
 - Spell slots, and any resource other than hit points.
 - Automating a whole monster's turn.
 
