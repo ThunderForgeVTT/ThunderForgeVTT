@@ -71,7 +71,7 @@ impl ExploredCells {
 
 /// Marks a sprite drawn for a remembered cell.
 #[derive(Component)]
-struct RememberedCell;
+pub(crate) struct RememberedCell;
 
 /// Accumulate what the viewer's token can see.
 ///
