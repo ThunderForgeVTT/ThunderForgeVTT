@@ -369,7 +369,7 @@ These journeys go through the product the way people do: UI only, no GraphQL sho
 
 ### Tests for User Story 5
 
-- [ ] T055 [P] [US5] Add server tests in `src/server/src/play_pause/record_tests.rs`:
+- [x] T055 [P] [US5] Add server tests in `src/server/src/play_pause/record_tests.rs`:
   - `worldPlayState` returns only `paused`, `pausedAt` and `history` spans for a member, and refuses a non-member;
   - a declined request never affects `worldPlayState`;
   - the operator `playPauses`/`playPauseRequests` return who, when, grounds, triggers and lift;

@@ -200,25 +200,43 @@ pub struct GraphQLPauseCandidateWorld {
     pub paused: bool,
 }
 
-/// Every stored pause in `rows`, with its triggers and whether its world is
-/// still there — three queries however many rows, not three per row.
+/// Every stored pause in `rows`, with its triggers — its own and its approved
+/// request's — and whether its world is still there: four queries however
+/// many rows, not four per row.
 pub(crate) fn play_pauses_for_graphql(
     conn: &mut PgConnection,
     rows: Vec<PlayPause>,
 ) -> QueryResult<Vec<GraphQLPlayPause>> {
     let pause_ids: Vec<Uuid> = rows.iter().map(|row| row.id).collect();
     let world_ids: Vec<Uuid> = rows.iter().map(|row| row.world_id).collect();
+    // A pause approved from a request leaves the request's triggers on the
+    // request (data-model.md), and reaches them through `request_id`. The
+    // record reads them as the pause's own, or an approved pause would show
+    // no trigger at all (FR-051).
+    let pause_of_request: HashMap<Uuid, Uuid> = rows
+        .iter()
+        .filter_map(|row| row.request_id.map(|request| (request, row.id)))
+        .collect();
+    let request_ids: Vec<Uuid> = pause_of_request.keys().copied().collect();
 
     let mut triggers: HashMap<Uuid, Vec<GraphQLPauseTrigger>> = HashMap::new();
     let rows_of_triggers = world_play_pause_triggers::table
-        .filter(world_play_pause_triggers::pause_id.eq_any(&pause_ids))
+        .filter(
+            world_play_pause_triggers::pause_id
+                .eq_any(&pause_ids)
+                .or(world_play_pause_triggers::request_id.eq_any(&request_ids)),
+        )
         .order((
             world_play_pause_triggers::recorded_at.asc(),
             world_play_pause_triggers::id.asc(),
         ))
         .select(PauseTrigger::as_select())
         .load(conn)?;
-    for (owner, trigger) in with_case_ids(conn, rows_of_triggers, |t| t.pause_id)? {
+    let owner = |t: &PauseTrigger| {
+        t.pause_id
+            .or_else(|| t.request_id.and_then(|r| pause_of_request.get(&r).copied()))
+    };
+    for (owner, trigger) in with_case_ids(conn, rows_of_triggers, owner)? {
         triggers.entry(owner).or_default().push(trigger);
     }
 

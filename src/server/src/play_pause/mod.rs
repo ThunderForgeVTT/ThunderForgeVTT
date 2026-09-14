@@ -476,3 +476,7 @@ mod pause_tests;
 #[cfg(test)]
 #[path = "requests_tests.rs"]
 mod requests_tests;
+
+#[cfg(test)]
+#[path = "record_tests.rs"]
+mod record_tests;
