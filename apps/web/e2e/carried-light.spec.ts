@@ -53,6 +53,9 @@ async function addFloor(table: VisionTable): Promise<void> {
         sceneId: table.sceneId,
         kind: "RECT",
         geometry: { x: -1200, y: -800, w: 2400, h: 1600 },
+        // A shape is the Game Master's until shown; Aria has to see the floor
+        // for her pixels to say anything about the light on it.
+        visibleToPlayers: true,
       },
     },
   );
@@ -190,7 +193,22 @@ test.describe("A carried light (spec 045 T065)", () => {
                 bromCast.tokenId,
               )
             )?.x ?? null,
-          { timeout: 20_000, message: `Brom's step ${step} west persists` },
+          {
+            timeout: 20_000,
+            message:
+              `Brom's step ${step} west persists (Brom's board has him at ` +
+              `${JSON.stringify(await tokenPosition(brom.page, bromCast.tokenId))}; ` +
+              `engine: ${JSON.stringify(
+                await brom.page.evaluate(
+                  () =>
+                    (
+                      window as unknown as {
+                        __engineProbe?: { movementState?: () => unknown };
+                      }
+                    ).__engineProbe?.movementState?.() ?? null,
+                ),
+              )})`,
+          },
         )
         .toBeLessThan(before.x);
     }
