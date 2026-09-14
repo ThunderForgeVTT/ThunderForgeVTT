@@ -1,5 +1,5 @@
 import { writeFileSync } from "node:fs";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import {
   activateAsPlayer,
   addLight,
@@ -18,6 +18,7 @@ import {
   movementStateOn,
   openTable,
   overview,
+  placeCast,
   placeCharacter,
   seededRandom,
   setAmbient,
@@ -26,6 +27,7 @@ import {
   walk,
   type Point,
 } from "./table";
+import { setTraits } from "./combat";
 
 /**
  * A Game Master runs a short dungeon crawl for two players, once in Genie and
@@ -67,6 +69,19 @@ const GOBLIN: Point = { x: 700, y: 0 };
 const SENTRY: Point = { x: 500, y: 200 };
 /** On the heroes' own side, beyond every placed light: hidden by dark alone. */
 const WRAITH: Point = { x: -430, y: 330 };
+/**
+ * Near Brom, and beyond every light the Game Master places: more than 450 from
+ * the torch at (-100, 0), and far from the brazier, the sentry's lamp and
+ * Aria's lantern. Only a light Brom carries can reach it.
+ */
+const BAT: Point = { x: 150, y: -450 };
+/**
+ * The light on Brom's sheet (D&D 5e `traitData`, spec 045 T065). Sized to the
+ * crypt rather than the rulebook: this scene keeps the server's default grid
+ * of 5 units a square, so a foot is one world unit and a real torch's forty
+ * feet would not reach past Brom's own token.
+ */
+const BROM_TORCH = { light_bright: 200, light_dim: 400 };
 /** Where the heroes may wander: on screen, and on both sides of the wall. */
 const BOUNDS = { minX: -450, maxX: 500, minY: -300, maxY: 300 };
 
@@ -134,6 +149,7 @@ for (const system of ["genie", "dnd5e"] as const) {
       let goblin = "";
       let wraith = "";
       let bromToken = "";
+      let bromActor = "";
       await test.step("the Game Master builds a dark crypt", async () => {
         for (const [from, to] of SOLID_WALLS) await addWall(table, from, to);
         doorWall = await addWall(
@@ -150,11 +166,13 @@ for (const system of ["genie", "dnd5e"] as const) {
         await addLight(table, ARIA_START, 200, { attachedTokenId: ariaToken });
         await setAmbient(table, "dark");
 
-        bromToken = await placeCharacter(table, {
+        const bromCast = await placeCast(table, {
           label: "Brom",
           at: BROM_START,
           seat: brom,
         });
+        bromToken = bromCast.tokenId;
+        bromActor = bromCast.actorId;
         await sitDown(table, brom.page);
         await expectEveryoneLoaded(table, { tokens: 3, walls: 3, lights: 2 });
         // Only the Game Master zooms out; players drag at 1:1.
@@ -433,6 +451,56 @@ for (const system of ["genie", "dnd5e"] as const) {
         await snapshot(table, "7a · the lantern travels");
       });
 
+      await test.step("Brom's torch, from his sheet, lights the board for Aria", async () => {
+        // Spec 045 FR-061 and FR-064, and the owner's decision of 2026-09-14:
+        // a light a game system says a character carries is a light attached
+        // to that character's token. So it lights the board for every seat —
+        // this watches Aria's, not Brom's — and nobody placed it: the sheet
+        // did. Genie declares no carried light, so its crawl has nothing to
+        // light here and says so.
+        if (system !== "dnd5e") {
+          testInfo.annotations.push({
+            type: "carried light",
+            description: `${system} declares no carried light`,
+          });
+          return;
+        }
+        const bat = await placeCharacter(table, {
+          label: "Bat",
+          at: BAT,
+          tokenType: "npc",
+        });
+        await expect
+          .poll(() => hiddenTokens(aria.page), {
+            timeout: 15_000,
+            message: "the bat is in the dark before Brom lights his torch",
+          })
+          .toContain(bat);
+
+        await setTraits(table, bromActor, {
+          class: "fighter",
+          level: 3,
+          ...BROM_TORCH,
+        });
+        await expect
+          .poll(() => carriedLightOn(aria.page, bromToken), {
+            timeout: 20_000,
+            message:
+              "the torch on Brom's sheet reaches Aria's engine as a light on " +
+              "Brom's token (T065)",
+          })
+          .toMatchObject({ bright: 200, dim: 400 });
+        await expect
+          .poll(() => hiddenTokens(aria.page), {
+            timeout: 15_000,
+            message:
+              "Brom's torch lights the bat on Aria's board — a carried light " +
+              "is the table's light, not only its bearer's (T065)",
+          })
+          .not.toContain(bat);
+        await snapshot(table, "7b · Brom's torch");
+      });
+
       await test.step(`the heroes wander for ${ROUNDS} rounds (seed ${SEED})`, async () => {
         const random = seededRandom(SEED);
         const heroes = [
@@ -538,4 +606,30 @@ for (const system of ["genie", "dnd5e"] as const) {
       await closeTable(table);
     }
   });
+}
+
+/** The light `tokenId` carries on this board's engine, or `null` (T065). */
+async function carriedLightOn(
+  page: Page,
+  tokenId: string,
+): Promise<{ x: number; y: number; bright: number; dim: number } | null> {
+  return page.evaluate(
+    (id) =>
+      (
+        window as unknown as {
+          __engineProbe?: {
+            carriedLights?: () => {
+              tokenId: string;
+              x: number;
+              y: number;
+              bright: number;
+              dim: number;
+            }[];
+          };
+        }
+      ).__engineProbe
+        ?.carriedLights?.()
+        .find((light) => light.tokenId === id) ?? null,
+    tokenId,
+  );
 }

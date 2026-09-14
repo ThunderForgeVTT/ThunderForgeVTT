@@ -1,6 +1,7 @@
 import path from "node:path";
 import { expect, test, type Page } from "./fixtures/test";
 import {
+  graphql,
   registerAndCreateWorld,
   uniqueSuffix,
   waitForEngineReady,
@@ -320,4 +321,189 @@ test("engine sweep: shadow-casting lights against walls, in a dim scene", async 
     ordinary.fps,
     "an ordinary lit map must stay interactive",
   ).toBeGreaterThan(20);
+});
+
+/**
+ * Carried lights, moving (spec 045 T065).
+ *
+ * The sweep above holds every light still, so each shadow-map row is built
+ * once and cached. A light a character carries moves whenever its token does,
+ * and a moved light's row is rebuilt against the walls near it and the shadow
+ * texture uploaded again. That is the cost a party of torch-bearers walking a
+ * dungeon adds, and no level above can see it.
+ *
+ * D&D 5e, because it declares a carried light on a character's sheet; the same
+ * imported map, for the same reasons as above — its walls, and a darkness
+ * sheet with a size. The Game Master moves each token through `updateToken`,
+ * one cell out and back, all of them every quarter second, so this board sees
+ * remote moves, and every one re-places its light.
+ */
+const CARRIED_LEVELS = [1, 4, 8];
+
+type Gql = {
+  data?: Record<string, { id?: string; tokenId?: string; gridSize?: number }>;
+  errors?: unknown;
+};
+
+async function must(
+  page: Page,
+  query: string,
+  variables: Record<string, unknown>,
+): Promise<NonNullable<Gql["data"]>> {
+  const result = await graphql<Gql>(page, query, variables);
+  expect(result.errors, JSON.stringify(result.errors)).toBeUndefined();
+  return result.data!;
+}
+
+async function carriedLightCount(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          __engineProbe?: { carriedLights?: () => unknown[] };
+        }
+      ).__engineProbe?.carriedLights?.().length ?? 0,
+  );
+}
+
+test("engine sweep: carried lights moving through a dark map", async ({
+  page,
+}) => {
+  test.setTimeout(20 * 60_000);
+
+  const worldId = await registerAndCreateWorld(
+    page,
+    `Engine Carried Lights ${uniqueSuffix()}`,
+  );
+  await must(
+    page,
+    `mutation ($input: UpdateWorldGameSystemInput!) {
+      updateWorldGameSystem(input: $input) { id }
+    }`,
+    { input: { worldId, gameSystemId: "dnd5e" } },
+  );
+  const [sceneId] = await sceneIds(page, worldId);
+  await page.goto(`/world/${worldId}/play`);
+  await waitForEngineReady(page);
+  await importMapBackground(page, CHAMBER_MAP);
+  await must(
+    page,
+    `mutation ($sceneId: UUID!) {
+      updateSceneAmbientLight(sceneId: $sceneId, ambientLight: "dark") { sceneId }
+    }`,
+    { sceneId },
+  );
+  const { scene } = await must(
+    page,
+    `query ($sceneId: UUID!) { scene(sceneId: $sceneId) { gridSize } }`,
+    { sceneId },
+  );
+  const cell = scene.gridSize!;
+
+  const tokens: { tokenId: string; x: number; y: number }[] = [];
+  const rows: { carriedLights: number; still: Sample; moving: Sample }[] = [];
+
+  for (const count of CARRIED_LEVELS) {
+    while (tokens.length < count) {
+      const n = tokens.length;
+      const { createActor } = await must(
+        page,
+        `mutation ($input: CreateActorInput!) { createActor(input: $input) { id } }`,
+        {
+          input: {
+            worldId,
+            label: `Torchbearer ${n + 1}`,
+            isNpc: true,
+            gameSystemId: "dnd5e",
+          },
+        },
+      );
+      await must(
+        page,
+        `mutation ($input: GraphQLUpdateActorSystemDataInput!) {
+          updateActorSystemData(input: $input) { id }
+        }`,
+        {
+          input: {
+            actorId: createActor.id,
+            gameSystemId: "dnd5e",
+            dataType: "trait_data",
+            // A torch, as the rulebook has it: 20 feet bright, 40 dim.
+            data: { light_bright: 20, light_dim: 40 },
+          },
+        },
+      );
+      // A ring three cells out from the map's middle.
+      const angle = (n / 8) * Math.PI * 2;
+      const x = Math.round(Math.cos(angle) * 3) * cell;
+      const y = Math.round(Math.sin(angle) * 3) * cell;
+      const { createToken } = await must(
+        page,
+        `mutation ($input: GraphQLCreateTokenInput!) {
+          createToken(input: $input) { tokenId }
+        }`,
+        { input: { sceneId, actorId: createActor.id, x, y, tokenType: "npc" } },
+      );
+      tokens.push({ tokenId: createToken.tokenId!, x, y });
+    }
+
+    await page.goto(`/world/${worldId}/play`);
+    await waitForEngineReady(page);
+    await expect
+      .poll(() => carriedLightCount(page), {
+        timeout: 30_000,
+        message: `all ${count} carried lights reach the engine`,
+      })
+      .toBe(count);
+    await page.waitForTimeout(6_000);
+    const still = await sampleSteadyState(page, count, 0);
+
+    // Walk them: one cell out and back, every token, every quarter second.
+    let walking = true;
+    let strides = 0;
+    const walker = (async () => {
+      while (walking) {
+        strides += 1;
+        const offset = strides % 2 === 1 ? cell : 0;
+        await Promise.all(
+          tokens.slice(0, count).map((token) =>
+            must(
+              page,
+              `mutation ($tokenId: UUID!, $input: GraphQLUpdateTokenInput!) {
+                updateToken(tokenId: $tokenId, input: $input) { tokenId }
+              }`,
+              {
+                tokenId: token.tokenId,
+                input: { x: token.x + offset, y: token.y },
+              },
+            ),
+          ),
+        );
+        await page.waitForTimeout(250);
+      }
+    })();
+    await page.waitForTimeout(2_000);
+    const moving = await sampleSteadyState(page, count, 0);
+    walking = false;
+    await walker;
+
+    rows.push({ carriedLights: count, still, moving });
+    console.log(
+      `[engine] carriedLights=${count} cell=${cell} ` +
+        `still fps=${still.fps} frame=${still.frameTimeMs}ms ` +
+        `moving fps=${moving.fps} frame=${moving.frameTimeMs}ms ` +
+        `shadowQuads=${moving.shadowQuads} strides=${strides}`,
+    );
+  }
+
+  console.log(`[engine] carriedLightSweep=${JSON.stringify(rows)}`);
+
+  expect(
+    rows.filter((row) => row.still.fps <= 0 || row.moving.fps <= 0),
+    "every level must yield a real frame-rate reading, still and moving",
+  ).toEqual([]);
+  expect(
+    rows.filter((row) => row.moving.shadowQuads <= 0),
+    "carried lights on an imported map must cast shadows while they move",
+  ).toEqual([]);
 });
