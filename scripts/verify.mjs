@@ -223,6 +223,34 @@ const steps = [
     command: ["node", "./scripts/check-ability-vocabulary.mjs"],
   },
   {
+    // The web speaks to the server in hand-written query strings, so a field
+    // renamed in Rust compiled, passed every Rust test and broke a button.
+    // This half prints the merged schema and holds `src/app/schema.graphql`
+    // to it, so the operations check below reads the server as it is and a
+    // schema change is a line in the review diff.
+    //
+    // Compiled, so it belongs with clippy on push, not on commit. `--fix`
+    // rewrites the file — it is generated, like the sdk bindings.
+    id: "graphql-schema",
+    name: "graphql schema",
+    cwd: ".",
+    command: fix
+      ? ["node", "./scripts/check-graphql-contract.mjs", "--schema", "--fix"]
+      : ["node", "./scripts/check-graphql-contract.mjs", "--schema"],
+  },
+  {
+    // Every operation `apps/web` and the packs' web code send, validated
+    // against that schema with graphql-js. Reads files and exits, so it runs
+    // on commit too.
+    //
+    // Not affected by `--fix`: an invalid call site is a choice between
+    // changing the caller and changing the server.
+    id: "graphql-ops",
+    name: "graphql operations",
+    cwd: ".",
+    command: ["node", "./scripts/check-graphql-contract.mjs"],
+  },
+  {
     // The file-level counterpart to clippy's per-function length cap. Wired
     // in on 2026-09-05, once the backlog it would otherwise have failed on
     // reached zero — a gate that is red on `main` the day it lands teaches

@@ -1,0 +1,6525 @@
+input AbilityEffectInput {
+	effectType: AbilityEffectType!
+	formula: String!
+	target: String!
+	triggerKind: AbilityEffectTrigger
+	sortOrder: Int
+}
+
+"""
+Spec 025 (FR-020): scaffolded, never evaluated in this pass — exists so a
+future resolution spec can add real triggering without redesigning the table.
+"""
+enum AbilityEffectTrigger {
+	ON_USE
+	PASSIVE
+}
+
+"""
+Spec 025 (FR-016): effect types, matching `ItemEffectType`'s set exactly so
+a future resolution engine can consume item and ability effects through one
+code path.
+"""
+enum AbilityEffectType {
+	HEAL
+	DAMAGE
+	MODIFIER
+	ATTACK_ROLL
+}
+
+"""
+One type of ability, built in or declared by a system. A GM cannot tell
+which is which, and that is the point.
+"""
+type AbilityTypeDeclaration {
+	"""
+	Stable identity. Matches what is stored in
+	`world_abilities.classification`.
+	"""
+	id: String!
+	"""
+	What a person reads. Never empty — falls back to the id.
+	"""
+	label: String!
+	pluralLabel: String!
+	order: Int!
+	"""
+	True for the four the application ships. Carried for the presence rule
+	(FR-011a) and for diagnostics, never to decide what a GM may author.
+	"""
+	builtin: Boolean!
+	binds: Binds!
+	grade: GradeFacet
+}
+
+"""
+Everything a world needs to name and group its abilities.
+"""
+type AbilityVocabulary {
+	umbrella: UmbrellaTerm!
+	"""
+	In display order. Built-ins first, then declared types.
+	"""
+	types: [AbilityTypeDeclaration!]!
+}
+
+"""
+What a person was told. The words are the client's to render from `kind`
+and `payload`; they are not stored, so a wording fix reaches every notice.
+"""
+type AccountNotice {
+	id: UUID!
+	kind: String!
+	subjectRef: JSON
+	payload: JSON
+	createdAt: String!
+	readAt: String
+}
+
+"""
+Effective permission level a caller holds on one actor. `Owner` is
+always implicit for the world's DM (Owner/GM role) regardless of any
+explicit `world_actor_permissions` row (spec 010 FR-017).
+"""
+enum ActorPermissionLevel {
+	VIEWER
+	EDITOR
+	OWNER
+}
+
+input AddCollectionMemberInput {
+	collectionId: UUID!
+	memberType: String!
+	memberId: UUID!
+}
+
+input AddCombatantInput {
+	combatId: UUID!
+	label: String!
+	actorId: UUID
+	tokenId: UUID
+	initiative: Int
+	tiebreak: Int
+	isNpc: Boolean
+}
+
+input AddItemToInventoryInput {
+	actorId: UUID!
+	itemId: UUID!
+	quantity: Int!
+}
+
+input AdjustInventoryQuantityInput {
+	inventoryEntryId: UUID!
+	quantity: Int!
+}
+
+"""
+Spec 041 US6/US7: one account, as an operator needs to see it to act on
+its second factor.
+
+Carries no password hash, no secret, no recovery code and no session.
+There is nothing here an operator could sign in with — which is the
+property that makes an operator surface for other people's second factors
+safe to have at all.
+"""
+type AdminAccount {
+	id: ID!
+	username: String!
+	email: String!
+	"""
+	FR-027: an administrator must hold a second factor because of the role,
+	so the control that requires one of them has nothing to offer.
+	"""
+	isAdmin: Boolean!
+	twoFactorEnabled: Boolean!
+	twoFactorConfirmedAt: NaiveDateTime
+	twoFactorAdminRequired: Boolean!
+}
+
+"""
+Everything mutable, same shape.
+"""
+type AppMutationRoot {
+	"""
+	Turn a scene's memory on or off (FR-070, Game Master only).
+	"""
+	setSceneExploration(sceneId: UUID!, enabled: Boolean!): Boolean!
+	"""
+	Reset what has been explored, for one player or for everyone.
+	
+	`forUser` absent means everyone. Returns the epoch a client must now
+	be at or above.
+	"""
+	resetSceneExploration(sceneId: UUID!, forUser: UUID): Int!
+	"""
+	Set how much one token discloses about one resource.
+	
+	Per **token**, not per actor: two tokens of the same creature can
+	legitimately differ, and the Game Master sets this on the one standing
+	in front of the players.
+	
+	Returns the caller's own resolved view, which is always exact — a Game
+	Master sees the truth regardless of what they have just hidden, because
+	they still have to run the fight. The response must therefore not be
+	mistaken for what a player will now see.
+	"""
+	setTokenDisclosure(input: SetTokenDisclosureInput!): GraphQLTokenStatus!
+	createWorld(input: GraphQLCreateWorldInput!): GraphQLWorld!
+	updateWorldSessionNotes(input: UpdateWorldSessionNotesInput!): GraphQLWorld!
+	updateWorldGameSystem(input: UpdateWorldGameSystemInput!): GraphQLWorld!
+	"""
+	Spec 032 (FR-010). `null` clears the binding, returning the world to
+	the base pack.
+	"""
+	updateWorldInterfacePack(input: UpdateWorldInterfacePackInput!): GraphQLWorld!
+	updateWorldAllowPlayerCreatedActors(input: UpdateWorldAllowPlayerCreatedActorsInput!): GraphQLWorld!
+	updateWorldGenieResourceCarryover(input: UpdateWorldGenieResourceCarryoverInput!): GraphQLWorld!
+	updateWorldDefaultSceneGridType(input: UpdateWorldDefaultSceneGridTypeInput!): GraphQLWorld!
+	renameWorld(worldId: UUID!, worldName: String!): GraphQLWorld!
+	deleteWorld(id: UUID!): GraphQLDeleteWorldPayload!
+	deleteMyData: GraphQLDeleteMyDataPayload!
+	updateOauthProvider(providerId: UUID!, config: GraphQLOAuthProviderConfigInput!): GraphQLOAuthProvider!
+	updateManifestKey(key: String!, value: String!): GraphQLSystemManifest!
+	recalculateDiskUsage: GraphQLAdminStats!
+	updateTwoFactorPolicy(requiredForAllUsers: Boolean!): GraphQLAuthSecuritySettings!
+	createScene(input: GraphQLCreateSceneInput!): GraphQLScene!
+	updateScene(sceneId: UUID!, input: GraphQLUpdateSceneInput!): GraphQLScene!
+	"""
+	Spec 022 (FR-007, FR-019). See `update_scene_hidden_impl`.
+	"""
+	updateSceneHidden(sceneId: UUID!, hidden: Boolean!): GraphQLScene!
+	"""
+	Playtest 2026-09-10 P9: set a scene bright, dim or dark. See
+	`update_scene_ambient_light_impl`.
+	"""
+	updateSceneAmbientLight(sceneId: UUID!, ambientLight: String!): GraphQLScene!
+	"""
+	Spec 022 (FR-002a/FR-002b/FR-002c, ADR-046). See `launch_scene_impl`.
+	"""
+	launchScene(worldId: UUID!, sceneId: UUID!): GraphQLWorld!
+	deleteScene(sceneId: UUID!): Boolean!
+	updateFogMask(input: GraphQLUpdateFogMaskInput!): GraphQLFogMask!
+	createWorldToken(input: GraphQLCreateWorldTokenInput!): GraphQLWorldToken!
+	upsertWorldToken(input: GraphQLUpsertWorldTokenInput!): GraphQLWorldToken!
+	moveToken(input: GraphQLMoveTokenInput!): GraphQLWorldToken!
+	deleteWorldToken(tokenId: String!): Boolean!
+	"""
+	Generic mutation for updating system-specific actor data
+	Validates against manifest schema for the system
+	🎮📤 Phase 4.8.1: Client sends mutation to update game-specific stats
+	"""
+	updateActorSystemData(input: GraphQLUpdateActorSystemDataInput!): GraphQLActorSystemData!
+	"""
+	Attach an ability to an item, if its type binds to items (FR-019).
+	"""
+	attachAbilityToItem(input: AttachAbilityToItemInput!): GraphQLItemAbilityEntry!
+	"""
+	Generate a new invite code for a world (Owner/GM only)
+	"""
+	generateInviteCode(input: GenerateInviteCodeInput!): WorldInvitePayload!
+	"""
+	Spec 027 (FR-002): permanently retire an invite link, with no
+	replacement. Owner/GM only. Idempotent.
+	"""
+	revokeInviteCode(inviteId: UUID!): WorldInvitePayload!
+	"""
+	Spec 027 (FR-003): retire an invite link and issue its replacement in
+	one atomic action — the old code stops working immediately. Owner/GM
+	only. Returns the **new** link.
+	"""
+	rotateInviteCode(inviteId: UUID!): WorldInvitePayload!
+	"""
+	Join a world using an invite code
+	"""
+	joinWorld(input: JoinWorldInput!): WorldMembershipPayload!
+	"""
+	Update a member's role in a world (Owner/GM only, with permission checks)
+	"""
+	updateMemberRole(input: UpdateMemberRoleInput!): WorldMembershipPayload!
+	"""
+	Remove a member from a world (Owner/GM only)
+	"""
+	removeMember(worldId: UUID!, userId: UUID!): Boolean!
+	"""
+	Create a new wall on a scene (scene owner only)
+	"""
+	createWall(input: GraphQLCreateWallInput!): GraphQLWall!
+	"""
+	Update an existing wall (scene owner only)
+	"""
+	updateWall(wallId: UUID!, input: GraphQLUpdateWallInput!): GraphQLWall!
+	"""
+	Delete a wall (scene owner only)
+	"""
+	deleteWall(wallId: UUID!): Boolean!
+	"""
+	Create a new light source on a scene (scene owner only)
+	"""
+	createLightSource(input: GraphQLCreateLightSourceInput!): GraphQLLightSource!
+	"""
+	Update an existing light source (scene owner only)
+	"""
+	updateLightSource(lightId: UUID!, input: GraphQLUpdateLightSourceInput!): GraphQLLightSource!
+	"""
+	Delete a light source (scene owner only)
+	"""
+	deleteLightSource(lightId: UUID!): Boolean!
+	"""
+	Create a new shape on a scene (scene owner only)
+	"""
+	createShape(input: GraphQLCreateShapeInput!): GraphQLShape!
+	"""
+	Update an existing shape (scene owner only)
+	"""
+	updateShape(shapeId: UUID!, input: GraphQLUpdateShapeInput!): GraphQLShape!
+	"""
+	Delete a shape (scene owner only)
+	"""
+	deleteShape(shapeId: UUID!): Boolean!
+	"""
+	Author an interactive. Game Master only (FR-005).
+	"""
+	createInteractive(input: GraphQLCreateInteractiveInput!): GraphQLInteractive!
+	"""
+	Edit an interactive. Game Master only.
+	"""
+	updateInteractive(interactiveId: UUID!, input: GraphQLUpdateInteractiveInput!): GraphQLInteractive!
+	"""
+	Remove an interactive. Game Master only.
+	"""
+	deleteInteractive(interactiveId: UUID!): Boolean!
+	"""
+	Let a `once` interactive fire again (FR-031). Game Master only.
+	"""
+	resetInteractive(interactiveId: UUID!): GraphQLInteractive!
+	"""
+	Run a request the Game Master has approved.
+	
+	The effect runs **now**, with the permission it has **now** — not the
+	permission it had when the player asked. A GM who locked the door after
+	the request was raised has contradicted themselves, and the lock wins.
+	"""
+	approveRequest(requestId: UUID!): GraphQLActivationResult!
+	"""
+	Turn a request down. The requester is told (FR-028).
+	"""
+	refuseRequest(requestId: UUID!): GraphQLActivationResult!
+	"""
+	Make a wall a door, or stop it being one (FR-007). Game Master only.
+	
+	Designating also gives the door an interactive, so it can be opened by
+	clicking it without the Game Master having to author one — a door
+	nobody can touch is not what "designate a door" means to anybody.
+	"""
+	setDoorDesignation(wallId: UUID!, isDoor: Boolean!): Boolean!
+	"""
+	Lock or unlock a door (FR-013). Game Master only.
+	"""
+	setDoorLock(wallId: UUID!, locked: Boolean!): Boolean!
+	"""
+	Hide or reveal a secret door. Game Master only.
+	"""
+	setDoorSecret(wallId: UUID!, secret: Boolean!): Boolean!
+	"""
+	The one mutation a player calls.
+	
+	Every refusal is decided at the server, from stored state. A client
+	that draws the button anyway is told no.
+	"""
+	activateInteractive(interactiveId: UUID!): GraphQLActivationResult!
+	"""
+	Create a new token on a scene (scene owner only)
+	"""
+	createToken(input: GraphQLCreateTokenInput!): GraphQLToken!
+	"""
+	Update an existing token's position/properties (scene owner only)
+	
+	**Deliberately not judged against walls** (spec 045 decision 1,
+	FR-017). This is the Game Master's path — scene owner only — and a
+	Game Master moves any token anywhere: picking a piece up and setting it
+	down on the far side of a wall is a normal thing to do at a table.
+	Refusing it would be the product being wrong about who is in charge.
+	
+	This is the rule, not a gap left to tighten later. The judged path is
+	`move_own_token`, which is where a *player's* move goes.
+	"""
+	updateToken(tokenId: UUID!, input: GraphQLUpdateTokenInput!): GraphQLToken!
+	"""
+	Delete a token (scene owner only)
+	"""
+	deleteToken(tokenId: UUID!): Boolean!
+	"""
+	Move a token the caller controls (their primary token, or one the GM
+	granted them) — position only, no scene-ownership required. Spec 004
+	FR-009: a player may drag any token whose `owner_user_id` is them.
+	Spec 010 (research.md §5, FR-018): additionally, if the token is
+	linked to an actor (`tokens.actor_id`), a caller holding effective
+	`Owner` permission on that actor (or the DM, always) may also move
+	it — this is the live-play enforcement point for the actor
+	ownership block, extending rather than replacing the existing
+	`owner_user_id` check. Multiple simultaneous Owner-level members
+	are all independently authorized here (no locking) — whichever one
+	most recently moves the token "wins," matching the spec's stated
+	conflict resolution.
+	
+	Spec 045 US2 (ADR-095): this is where a player's move is judged against
+	the scene's walls. `path` is the route the client claims to have taken
+	— the cells of a committed route, in order. It is optional because a
+	drag has no route to send, and when it is absent the straight line from
+	the token's stored position is judged instead, which is what a drag
+	actually is.
+	
+	The path is a *claim*, never a substitute for judging: it is anchored
+	to the token's real position and to the requested destination, so a
+	short innocent route cannot be sent as cover for a move that crossed a
+	wall. See `crate::movement`.
+	"""
+	moveOwnToken(tokenId: UUID!, x: Float!, y: Float!, path: [GraphQLPathPoint!]): GraphQLToken!
+	"""
+	Change the photo/avatar of the caller's own primary token. Spec 004
+	FR-009a: only the token marked `is_primary` for this caller may have
+	its photo set this way — not any other token they control.
+	"""
+	setOwnPrimaryTokenPhoto(tokenId: UUID!, photoUrl: String!): GraphQLToken!
+	"""
+	Playtest 2026-09-10 P7: show or hide a token's name from players. A
+	Game Master always sees it; only a Game Master may change it.
+	"""
+	setTokenNameVisibility(tokenId: UUID!, visible: Boolean!): GraphQLToken!
+	uploadCanvasImage(worldId: UUID!, sceneId: UUID!, kind: GraphQLCanvasImageAssetKind!, file: Upload!): GraphQLCanvasImageAsset!
+	createActor(input: CreateActorInput!): GraphQLWorldActor!
+	updateActor(input: UpdateActorInput!): GraphQLWorldActor!
+	"""
+	DM-only. Grants an actor-level permission to one world member.
+	"""
+	setActorPermission(input: SetActorPermissionInput!): GraphQLActorPermission!
+	"""
+	DM-only. Clears a member's explicit grant, returning them to the implicit `Viewer` default. `false` means there was no grant to clear.
+	"""
+	removeActorPermission(actorId: UUID!, userId: UUID!): Boolean!
+	"""
+	Spec 039 FR-001/FR-002: `attestation` is **non-null**. Until this
+	argument existed, this path published a character sheet — readable
+	without an account since ADR-071 — having asked the person nothing.
+	"""
+	createActorShareLink(actorId: UUID!, attestation: AttestationInput!): GraphQLActorShareLink!
+	revokeActorShareLink(shareId: UUID!): Boolean!
+	copySharedActorToWorld(input: CopySharedActorInput!): GraphQLWorldActor!
+	"""
+	FR-002: takes effect for every subsequent admission attempt, with no
+	restart — the gate reads the row per attempt.
+	"""
+	setInstanceAccessPolicy(policy: InstanceAccessPolicy!): InstanceAccessSettings!
+	createInstanceInvitation(input: CreateInstanceInvitationInput!): InstanceInvitation!
+	revokeInstanceInvitation(invitationId: UUID!): Boolean!
+	"""
+	Set or clear one field of one scope's application.
+	
+	The private key is parsed on save, by the parser resolution uses
+	(FR-022). A value that is not a key is refused now, naming the field,
+	and is **never stored** — an application is not "configured" because a
+	presence check found a string.
+	
+	The `_FILE` and `_BASE64` forms are environment forms and stay that
+	way; see the note in `.env.example`. A key pasted here in its base64
+	form is still accepted, because `normalise_pem` accepts base64 *whose
+	result is a PEM* and an operator who has that string in their clipboard
+	should not have to decode it by hand.
+	"""
+	setGithubApplication(scope: String!, field: String!, value: String): GithubApplication!
+	"""
+	Ask the host whether the application this scope resolves to actually
+	works, and record the answer.
+	
+	One app-authenticated call — the assertion this application would sign
+	anyway — against the installations endpoint. Nothing is written
+	anywhere and no installation is touched; a 200 means the registration
+	and its key are genuinely accepted, which is the one thing a parse
+	cannot tell an operator.
+	"""
+	checkGithubApplication(scope: String!): GithubApplication!
+	"""
+	Write one setting.
+	
+	`value: null` clears the stored value; the setting then resolves from
+	its default, and the change record shows the transition.
+	
+	Refused with a named reason when the environment has fixed it, when the
+	value fails the declaration's validators, or when the caller is not an
+	administrator. A refusal on an environment-fixed key names the
+	variable rather than silently doing nothing — ADR-041 records what the
+	silent no-op cost the OAuth surface.
+	
+	There is deliberately no bulk form and no delete. One key, one change
+	record, one refusal reason.
+	"""
+	updateInstanceSetting(key: String!, value: String): ResolvedSetting!
+	"""
+	Send a message to the address given, using the settings as they resolve
+	now, and report the outcome. The proof FR-013 asks for, before anything
+	depends on delivery.
+	
+	It goes through the outbox like everything else, so its failure is
+	recorded where every other failure is and the code path under test is
+	the code path in production. A test that exercises a shortcut proves
+	the shortcut.
+	"""
+	sendTestMail(to: String!): TestMailResult!
+	"""
+	Try a blocked or failed message again now, rather than waiting for the
+	backoff curve. Refused for a message that already went.
+	"""
+	retryOutboxMessage(id: UUID!): OutboxEntry!
+	"""
+	Record a submission.
+	
+	Returns after the database write and **before any delivery attempt**
+	(FR-018), so this never fails because the destination is down,
+	unreachable or unconfigured.
+	"""
+	submitFeedback(input: SubmitFeedbackInput!): FeedbackSubmission!
+	"""
+	Stop retrying an item that will never succeed. Administrators only,
+	and reversible.
+	"""
+	abandonFeedbackDelivery(submissionId: UUID!): Boolean!
+	"""
+	Return an abandoned item to the queue, after fixing what was wrong.
+	"""
+	resumeFeedbackDelivery(submissionId: UUID!): Boolean!
+	"""
+	File a terms dispute or a privacy request. **Deliberately does not
+	require an account** — see the module header.
+	"""
+	submitLegalEnquiry(kind: LegalEnquiryKind!, submitterName: String!, submitterContact: String!, subject: String!, body: String!): LegalEnquiryReceipt!
+	"""
+	Move an enquiry along, with a note. Administrators only.
+	
+	One mutation for both transitions rather than `acknowledge` and
+	`close`: they differ only in the status written, and two mutations
+	would be two places for the provenance to be forgotten.
+	"""
+	setLegalEnquiryStatus(id: UUID!, status: LegalEnquiryStatus!, resolutionNote: String): LegalEnquiry!
+	"""
+	End one of the caller's own sessions. Ending the current one signs it
+	out; ending any other leaves this one working.
+	
+	Returns `true` whether or not a row was ended. A session id belonging
+	to somebody else and one that never existed are the same answer on
+	purpose — see the module header.
+	"""
+	endSession(sessionId: UUID!): Boolean!
+	"""
+	End every session for the calling account, including this one. The
+	control a person uses after losing a device.
+	"""
+	endAllSessions: Int!
+	uploadActorImage(actorId: UUID!, role: String!, file: Upload!): GraphQLActorImage!
+	removeActorImage(actorId: UUID!, role: String!): Boolean!
+	createLoreEntry(input: CreateLoreEntryInput!): GraphQLLoreEntry!
+	updateLoreEntry(input: UpdateLoreEntryInput!): GraphQLLoreEntry!
+	deleteLoreEntry(loreEntryId: UUID!): Boolean!
+	restoreLoreRevision(revisionId: UUID!): GraphQLLoreEntry!
+	"""
+	DM-only. Grants a lore entry-level permission to one world member.
+	"""
+	setLorePermission(input: SetLorePermissionInput!): GraphQLLorePermission!
+	"""
+	DM-only. Clears a member's explicit grant, returning them to the implicit `Viewer` default. `false` means there was no grant to clear.
+	"""
+	removeLorePermission(loreEntryId: UUID!, userId: UUID!): Boolean!
+	uploadLoreImage(loreEntryId: UUID!, file: Upload!): GraphQLLoreImageAsset!
+	"""
+	Move an entry under another, or to the top level with a null parent.
+	"""
+	moveLoreEntry(input: MoveLoreEntryInput!): GraphQLLoreEntry!
+	"""
+	Tag an entry. Returns the entry's full tag set, so a client never has
+	to guess what the normalisation did to what it sent.
+	"""
+	addLoreTag(input: LoreTagInput!): [String!]!
+	"""
+	Remove a tag. Idempotent — a tag that is not there is already gone.
+	"""
+	removeLoreTag(input: LoreTagInput!): [String!]!
+	"""
+	Begin the grant. Returns where to send the user and what they must be
+	shown before going (FR-036, FR-036e).
+	"""
+	beginLoreRepositoryConnection(worldId: UUID!): ConnectionGrantHandoff!
+	"""
+	Finish the grant and create the connection.
+	
+	Creates nothing when the world already has a connection (FR-001), when
+	the repository directory is claimed by another world (FR-033), or when
+	the grant covers more than the one repository being connected
+	(FR-036a).
+	"""
+	completeLoreRepositoryConnection(input: CompleteConnectionInput!): LoreRepositoryConnection!
+	"""
+	Record that the Game Master has read FR-037's notice.
+	
+	Synchronisation does not begin until this succeeds: a connection whose
+	`noticeAcknowledgedAt` is null is never picked up (FR-038). The
+	notice's wording is a client concern; the gate is here, because a
+	client-side-only gate is not a gate.
+	"""
+	acknowledgeLoreSyncNotice(worldId: UUID!): LoreRepositoryConnection!
+	"""
+	FR-031. Answer a divergence: overwrite the remote, or abandon the
+	connection. There is deliberately no third option that reconciles,
+	because reconciling would mean merging prose (FR-024).
+	"""
+	resolveLoreSyncDivergence(worldId: UUID!, resolution: DivergenceResolution!): Boolean!
+	"""
+	FR-023. Apply one pending change, as an ordinary attributed revision.
+	"""
+	acceptLoreIncomingChange(worldId: UUID!, changeId: UUID!): Boolean!
+	"""
+	FR-026. Decline one. A declined deletion is restored by the next pass.
+	"""
+	declineLoreIncomingChange(worldId: UUID!, changeId: UUID!): Boolean!
+	"""
+	FR-041a. Deactivate a connection against its owner's wishes.
+	
+	Administrator-only. Exposed as a mutation rather than left to a database
+	console because a commitment made to a rights holder that requires
+	someone to hand-edit a table is a commitment that will not be kept under
+	time pressure.
+	"""
+	deactivateLoreSync(worldId: UUID!, reason: String!): Boolean!
+	"""
+	Remove the connection. Leaves the world's lore and the repository's
+	contents entirely intact (FR-005).
+	"""
+	removeLoreRepositoryConnection(worldId: UUID!): Boolean!
+	createAbility(input: CreateAbilityInput!): GraphQLAbility!
+	updateAbility(input: UpdateAbilityInput!): GraphQLAbility!
+	deleteAbility(abilityId: UUID!): Boolean!
+	addAbilityEffect(abilityId: UUID!, effect: AbilityEffectInput!): GraphQLAbilityEffect!
+	updateAbilityEffect(effectId: UUID!, effect: AbilityEffectInput!): GraphQLAbilityEffect!
+	removeAbilityEffect(effectId: UUID!): Boolean!
+	setAbilityGmOnly(abilityId: UUID!, gmOnly: Boolean!): GraphQLAbility!
+	"""
+	DM-only. Grants an ability-level permission to one world member.
+	"""
+	setAbilityPermission(input: SetAbilityPermissionInput!): GraphQLAbilityPermission!
+	"""
+	DM-only. Clears a member's explicit grant, returning them to the implicit `Viewer` default. `false` means there was no grant to clear.
+	"""
+	removeAbilityPermission(abilityId: UUID!, userId: UUID!): Boolean!
+	"""
+	Spec 039 FR-001/FR-002: `attestation` is **non-null**.
+	"""
+	createAbilityShareLink(abilityId: UUID!, attestation: AttestationInput!): GraphQLAbilityShareLink!
+	revokeAbilityShareLink(shareId: UUID!): Boolean!
+	copySharedAbilityToWorld(input: CopySharedAbilityInput!): GraphQLAbility!
+	createCollection(input: CreateCollectionInput!): GraphQLCollection!
+	updateCollection(input: UpdateCollectionInput!): GraphQLCollection!
+	deleteCollection(collectionId: UUID!): Boolean!
+	addCollectionMember(input: AddCollectionMemberInput!): GraphQLCollectionMember!
+	removeCollectionMember(collectionId: UUID!, memberId: UUID!): Boolean!
+	"""
+	Spec 039 FR-001/FR-002: `attestation` is **non-null**. A nullable
+	argument is a requirement satisfied by omission, which is the shape this
+	feature exists to remove.
+	"""
+	createCollectionShareLink(collectionId: UUID!, attestation: AttestationInput!): GraphQLCollectionShareLink!
+	revokeCollectionShareLink(shareId: UUID!): Boolean!
+	"""
+	**Authenticated**, unlike `sharedCollection`. Viewing and copying are
+	different acts with different requirements (FR-009b), and this is
+	exactly where they diverge.
+	"""
+	copySharedCollectionToWorld(shareCode: String!, destinationWorldId: UUID!): CopyReceipt!
+	"""
+	Record a reviewed book as a compendium on the caller's own shelf.
+	"""
+	createCompendiumFromImport(input: CreateCompendiumFromImportInput!): Compendium!
+	"""
+	Take a book off the shelf, or ask first what that would take with it.
+	
+	With `confirm: false` this reports and changes nothing; with
+	`confirm: true` it removes that import's contribution and nothing
+	else (FR-044, FR-045).
+	"""
+	removeCompendium(id: UUID!, confirm: Boolean!): GraphQLRemovalReport!
+	"""
+	Switch a book on for a world (FR-010, FR-031, FR-033).
+	
+	The same call at world creation and a fortnight later. Nothing is
+	copied: what this writes is a row saying the world reads that book.
+	"""
+	switchOnCompendium(worldId: UUID!, compendiumId: UUID!): [WorldBook!]!
+	"""
+	Switch a book off, or ask first what that takes (FR-013, FR-032).
+	
+	With `confirm: false` nothing changes and the reply is the warning.
+	"""
+	switchOffCompendium(worldId: UUID!, compendiumId: UUID!, confirm: Boolean!): BookSwitchOffReport!
+	"""
+	Change what an entry says in this world, and in no other world and not
+	in the book (050 FR-020, FR-023). Send `fieldValues` for an entry read
+	as fields — only the ones named are touched — or `proseText` for prose.
+	"""
+	changeWorldEntry(worldId: UUID!, compendiumId: UUID!, kind: String!, name: String!, fieldValues: JSON, proseText: String): WorldEntry
+	"""
+	Stop showing an entry in this world. Every other world still has it.
+	"""
+	hideWorldEntry(worldId: UUID!, compendiumId: UUID!, kind: String!, name: String!): WorldEntry
+	"""
+	Write an entry into this world beside the book. Authored, and so
+	shareable, however uploaded the book beside it is (050 FR-052a).
+	"""
+	addWorldEntry(worldId: UUID!, compendiumId: UUID!, kind: String!, name: String!, fieldValues: JSON, proseText: String): WorldEntry
+	"""
+	Remove an addition this table kept after its book was switched off or
+	removed from the shelf (spec 050 decision 5), by the addition's id —
+	the only address an addition whose book is gone still has.
+	"""
+	removeKeptAddition(worldId: UUID!, additionId: UUID!): Boolean!
+	"""
+	Put an entry back as the book has it, or take an addition out
+	(050 FR-024).
+	"""
+	restoreWorldEntry(worldId: UUID!, compendiumId: UUID!, kind: String!, name: String!): WorldEntry
+	attachAbilityToActor(input: AttachAbilityToActorInput!): GraphQLActorAbilityEntry!
+	detachAbilityFromActor(entryId: UUID!): Boolean!
+	createItem(input: CreateItemInput!): GraphQLItem!
+	updateItem(input: UpdateItemInput!): GraphQLItem!
+	deleteItem(itemId: UUID!): Boolean!
+	addItemEffect(itemId: UUID!, effect: ItemEffectInput!): GraphQLItemEffect!
+	updateItemEffect(effectId: UUID!, effect: ItemEffectInput!): GraphQLItemEffect!
+	removeItemEffect(effectId: UUID!): Boolean!
+	"""
+	DM-only. Grants an item-level permission to one world member.
+	"""
+	setItemPermission(input: SetItemPermissionInput!): GraphQLItemPermission!
+	"""
+	DM-only. Clears a member's explicit grant, returning them to the implicit `Viewer` default. `false` means there was no grant to clear.
+	"""
+	removeItemPermission(itemId: UUID!, userId: UUID!): Boolean!
+	"""
+	Spec 039 FR-001/FR-002: `attestation` is **non-null**.
+	"""
+	createItemShareLink(itemId: UUID!, attestation: AttestationInput!): GraphQLItemShareLink!
+	revokeItemShareLink(shareId: UUID!): Boolean!
+	copySharedItemToWorld(input: CopySharedItemInput!): GraphQLItem!
+	setItemPrice(input: SetItemPriceInput!): GraphQLItemPrice!
+	clearItemPrice(itemId: UUID!): Boolean!
+	addItemToInventory(input: AddItemToInventoryInput!): GraphQLInventoryEntry!
+	adjustInventoryQuantity(input: AdjustInventoryQuantityInput!): GraphQLInventoryEntry
+	removeInventoryEntry(inventoryEntryId: UUID!): Boolean!
+	"""
+	Take a placed item off the map and into a character's inventory.
+	
+	All-or-nothing, and exactly one caller wins a contested item.
+	"""
+	pickUpPlacedItem(input: PickUpPlacedItemInput!): GraphQLInventoryEntry!
+	"""
+	Bring the party's characters to a scene, creating a token for each one
+	that does not already have one there.
+	
+	Idempotent per character: calling it twice leaves the same tokens
+	standing as calling it once.
+	"""
+	bringPartyToScene(input: BringPartyToSceneInput!): GraphQLPartyArrival!
+	submitTakedownNotice(input: SubmitTakedownNoticeInput!): GraphQLModerationCase!
+	submitCounterNotice(input: SubmitCounterNoticeInput!): GraphQLModerationCase!
+	resolveModerationCase(caseId: UUID!, resolution: ModerationActionType!): GraphQLModerationCase!
+	"""
+	File an appeal against a disablement (FR-031). One per decision.
+	
+	**Callable by a disabled account** — it is one of the two remedies.
+	Filing it pauses the deletion if it is still open when the window ends
+	(FR-034), and writes nothing to the download (FR-032).
+	"""
+	fileAppeal(statement: String!): Termination!
+	"""
+	Decide an appeal. Admin only.
+	
+	`overturnedCaseId` names the strike the appeal overturned; omitted, it
+	is the most recent — the one that crossed the threshold.
+	"""
+	resolveAppeal(accountId: UUID!, upheld: Boolean!, note: String, overturnedCaseId: UUID): Termination!
+	"""
+	Carry out a window that waits for a person (FR-040's default). Admin
+	only; refused before the date, while an appeal is open, and for the
+	instance's last administrator.
+	"""
+	executeTermination(accountId: UUID!): Boolean!
+	"""
+	Acknowledge the operator statement this build ships (FR-044). Admin
+	only.
+	
+	Only the **current** version is accepted — acknowledging words that are
+	no longer in force would be a record of nothing. Acknowledging the
+	current version twice is not an error; the instance already holds it.
+	"""
+	acknowledgeOperatorStatement(attestation: AttestationInput!): OperatorAcknowledgementState!
+	rollDice(input: RollDiceInput!): GraphQLRollResolution!
+	"""
+	Roll a check the world's system declares, against one actor's values.
+	
+	Resolved server-side and recorded exactly as `rollDice` is. There is
+	deliberately no formula argument, no value argument and no outcome
+	argument: the dice, the numbers and the result are the system's and the
+	server's, never the sheet's (FR-035).
+	"""
+	rollCheck(worldId: UUID!, actorId: UUID!, checkId: String!): GraphQLRollResolution!
+	claimActor(worldId: UUID!, actorId: UUID!): GraphQLActorClaim!
+	createAndClaimActor(worldId: UUID!, name: String!, description: String): GraphQLActorClaim!
+	setActorAvailability(actorId: UUID!, available: Boolean!): GraphQLWorldActor!
+	"""
+	Free a claimed character. `expected_world_member_id` names the claim
+	the caller was looking at, so a release cannot land on one it never
+	saw (spec 031 FR-034).
+	"""
+	unclaimActor(actorId: UUID!, expectedWorldMemberId: UUID): GraphQLWorldActor!
+	"""
+	Set (or clear, with a null `actor_id`) which character a player is
+	playing — the players section's writer of the claim relation.
+	"""
+	setPlayerCharacterBinding(worldId: UUID!, worldMemberId: UUID!, actorId: UUID): GraphQLWorldActor
+	"""
+	Grant (`granted: true`) or revoke a single authoring tool for a single
+	member of a world. Owner/GM only. Returns that member's grants after
+	the write.
+	"""
+	setAuthoringToolGrant(worldId: UUID!, worldMemberId: UUID!, tool: String!, granted: Boolean!): [String!]!
+	sendChatMessage(input: SendChatMessageInput!): GraphQLChatMessage!
+	startCombat(input: StartCombatInput!): GraphQLCombat!
+	addCombatant(input: AddCombatantInput!): GraphQLCombat!
+	updateCombatant(input: UpdateCombatantInput!): GraphQLCombat!
+	removeCombatant(combatantId: UUID!): GraphQLCombat!
+	advanceTurn(combatId: UUID!): GraphQLCombat!
+	endCombat(combatId: UUID!): GraphQLCombat!
+	"""
+	Replay changes made while disconnected, and report what became of
+	each (US7).
+	
+	Applied in submitted order, so a client's own sequential edits do not
+	reorder against each other — replaying "move right, then move up"
+	backwards lands the token somewhere the user never put it.
+	"""
+	reconcileQueuedChanges(worldId: UUID!, changes: [QueuedChangeInput!]!): [GraphQLReconcileOutcome!]!
+	"""
+	Report that this client is still present in a world.
+	
+	Membership is checked on every beat rather than once at connect: a
+	heartbeat is exactly the moment to notice that someone's access was
+	revoked while they sat idle, and refusing it is how their client finds
+	out.
+	"""
+	heartbeat(worldId: UUID!, sceneId: UUID): Boolean!
+	"""
+	Relay one opaque signaling payload to one session in one world.
+	
+	`false` means it was not delivered — the addressed session has ended,
+	or is no longer a member. Neither is retried and neither is queued.
+	"""
+	sendPeerSignal(input: PeerSignalInput!): Boolean!
+	"""
+	Pause `worldId`'s play, on `grounds`.
+	
+	Refuses blank grounds with `GROUNDS_REQUIRED` and a world that does not
+	exist with `WORLD_NOT_FOUND`. Nothing else is needed after it returns:
+	the event it records moves honest clients within a moment, and every
+	open stream into the world ends on its next tick.
+	"""
+	pauseWorldPlay(worldId: UUID!, grounds: String!): PauseOutcome!
+	"""
+	Approve or decline a request to pause a world, with a `note`.
+	
+	Approving pauses the world exactly as `pauseWorldPlay` does, the note
+	as its grounds. Declining changes nothing any member of the world can
+	see (FR-034). Refuses a blank note with `GROUNDS_REQUIRED` and an
+	unknown request with `REQUEST_NOT_FOUND`. A request somebody already
+	decided is not an error: `decidedHere` is false and the request says
+	who decided it, and how (FR-035).
+	"""
+	decidePlayPauseRequest(requestId: UUID!, decision: PauseDecision!, note: String!): PauseDecisionOutcome!
+	"""
+	Lift `pauseId`, on `grounds`, so the world's live play can start again.
+	
+	Sets the lift and nothing else: a scene taken down while the world was
+	paused stays withheld, and no membership changes (FR-041, FR-042).
+	Refuses blank grounds with `GROUNDS_REQUIRED` and an unknown pause with
+	`PAUSE_NOT_FOUND`. A pause somebody already lifted is refused with
+	`PAUSE_ALREADY_LIFTED`, whose extensions say who (`liftedBy`) and when
+	(`liftedAt`), so the second operator knows the world is already free.
+	"""
+	liftWorldPlayPause(pauseId: UUID!, grounds: String!): PlayPause!
+	startGenieSession(input: StartGenieSessionInput!): GraphQLGenieSession!
+	spendWish(sessionId: UUID!, narrativeEffect: String!): GraphQLGenieSession!
+	advanceDoomClock(sessionId: UUID!, delta: Int!): GraphQLGenieSession!
+	createPuzzleClock(sessionId: UUID!, label: String!, segmentsMax: Int!): GraphQLGeniePuzzleClock!
+	advancePuzzleClock(clockId: UUID!, delta: Int!, actorId: UUID): GraphQLGeniePuzzleClock!
+	grantSessionResource(sessionId: UUID!, actorId: UUID!, resourceType: String!, amount: Int!): GraphQLGenieResourceHolding!
+	createShopListing(actorId: UUID!, itemId: UUID!, priceKind: GenieShopPriceKind!, priceResourceType: String, priceResourceAmount: Int, priceItemId: UUID, priceItemQuantity: Int): GraphQLGenieShopListing!
+	purchaseFromShop(listingId: UUID!, buyerActorId: UUID!): GraphQLGenieShopListing!
+	configurePuzzleClockReward(clockId: UUID!, triggerSegment: Int!, rewardResourceType: String, rewardResourceAmount: Int, rewardItemId: UUID, rewardItemQuantity: Int, recipientMode: GenieRewardRecipientMode!): GraphQLGeniePuzzleClockReward!
+	proposeResourceTrade(sessionId: UUID!, fromActorId: UUID!, fromResourceType: String!, fromQuantity: Int!, toActorId: UUID!, toResourceType: String!, toQuantity: Int!): GraphQLGenieTradeProposal!
+	acceptResourceTrade(proposalId: UUID!): [GraphQLGenieResourceHolding!]!
+	declineResourceTrade(proposalId: UUID!): GraphQLGenieTradeProposal!
+	spendResourceOnPuzzleClock(clockId: UUID!, actorId: UUID!, resourceType: String!, quantity: Int!): GraphQLGeniePuzzleClock!
+}
+
+"""
+Everything queryable: the product's own roots, then each pack's.
+"""
+type AppQueryRoot {
+	"""
+	Who is present in a world, and who has gone quiet.
+	
+	Returns everyone with a presence row, including those past the
+	timeout, with `connected: false`. Filtering them out here would make a
+	player who dropped simply vanish from the Game Master's list, which is
+	indistinguishable from them never having been there — and "they were
+	here and stopped" is the whole thing worth reporting.
+	"""
+	worldPresence(worldId: UUID!): [GraphQLPresence!]!
+	healthcheck: Boolean!
+	me: GraphQLUser
+	myWorlds: [GraphQLWorld!]!
+	"""
+	Every world the caller owns or is an accepted member of (any role),
+	paired with their role — powers the Welcome page hub, which should
+	show a user's full roster (owned AND joined-as-player worlds), not
+	just `myWorlds`' owned-only list.
+	"""
+	myWorldsWithRole: [GraphQLMyWorldEntry!]!
+	"""
+	Spec 010 (research.md §8): worlds where the caller holds DM-level
+	access — Owner (`created_by`) OR an accepted `GM` `world_members`
+	row. Deliberately additive alongside `myWorlds` (which only covers
+	`created_by`) rather than changing that query's existing behavior;
+	used by the "Copy to World" destination picker.
+	"""
+	myDmWorlds: [GraphQLWorld!]!
+	world(id: UUID!): GraphQLWorld
+	myWorldTokens: [GraphQLWorldToken!]!
+	worldToken(tokenId: String!): GraphQLWorldToken
+	myWorldEvents: [GraphQLWorldEvent!]!
+	worldEvent(eventId: Int!): GraphQLWorldEvent
+	exportMyData: GraphQLExportMyDataPayload!
+	allWorlds: [GraphQLWorld!]!
+	adminWelcomeSummary: GraphQLAdminWelcomeSummary!
+	adminStats: GraphQLAdminStats!
+	systemManifest: GraphQLSystemManifest!
+	oauthProviders: [GraphQLOAuthProvider!]!
+	authSecuritySettings: GraphQLAuthSecuritySettings!
+	"""
+	Spec 041 FR-021. Counts, never a list of accounts — see
+	[`GraphQLTwoFactorCoverage`].
+	"""
+	twoFactorCoverage: TwoFactorCoverage!
+	"""
+	Spec 041 US6/US7: find the one account an operator has been asked to
+	help, by exact username or email.
+	
+	Not a roster and not a prefix search. An operator with a real reason to
+	act on somebody's second factor already knows which account it is,
+	because that person has just asked them; a browsable list of who has no
+	second factor is a target list for whoever takes over this session.
+	"""
+	adminAccount(identifier: String!): AdminAccount
+	adminBootstrapSettings: GraphQLAdminBootstrapSettings
+	scenes(worldId: UUID!): [GraphQLScene!]!
+	scene(sceneId: UUID!): GraphQLScene
+	tokens(sceneId: UUID!): [GraphQLToken!]!
+	fogMask(sceneId: UUID!): GraphQLFogMask
+	walls(sceneId: UUID!): [GraphQLWall!]!
+	"""
+	Returns all light sources for the scene. Light effects are
+	player-visible by nature (FR-005) — there is no GM-only light data,
+	so any authenticated scene participant may read this list.
+	"""
+	lightSources(sceneId: UUID!): [GraphQLLightSource!]!
+	"""
+	Shapes drawn on a scene's canvas (native canvas authoring). Returns
+	every shape to the scene owner/GM; returns only
+	`visible_to_players = true` shapes to any other authenticated
+	scene participant (FR-009: players never see GM-only shapes).
+	"""
+	shapes(sceneId: UUID!): [GraphQLShape!]!
+	"""
+	Every token on a scene, with each one's resources reduced to what this
+	viewer is entitled to see.
+	"""
+	tokenStatus(sceneId: UUID!): [GraphQLTokenStatus!]!
+	"""
+	Attribute scores for every token in a scene that has any.
+	
+	A token with no actor, or an actor whose sheet is unfilled, is omitted
+	rather than returned empty — an empty list would say "this character
+	has no attributes", which is a claim about the ruleset rather than
+	about the sheet.
+	"""
+	tokenAttributes(sceneId: UUID!): [GraphQLTokenAttributes!]!
+	"""
+	Vision for every token in a scene whose system declares any and whose
+	character has some.
+	
+	A token that resolves to ordinary sight is **omitted**, not returned as
+	zeroes. The list is "who sees unusually", and an entry saying "this
+	creature sees nothing special" is the same claim as no entry, with more
+	rows.
+	"""
+	tokenVision(sceneId: UUID!): [GraphQLTokenVision!]!
+	sceneExploration(sceneId: UUID!): GraphQLSceneExploration!
+	"""
+	What this build can perform.
+	
+	Drives the authoring form, so a Game Master is offered exactly what
+	exists and never an option that would silently do nothing (FR-038).
+	"""
+	effectRegistry: [GraphQLEffectDeclaration!]!
+	"""
+	What is waiting on a decision in this scene. Game Master only.
+	
+	A player is not shown the queue. Their own outcome reaches them
+	directly, and the rest of it is a list of what other people asked for —
+	which is the Game Master's business and, at some tables, information
+	the GM is deliberately not sharing yet.
+	"""
+	pendingInteractionRequests(sceneId: UUID!): [GraphQLInteractionRequest!]!
+	"""
+	Every interactive on a scene, as this viewer may know it.
+	"""
+	interactives(sceneId: UUID!): [GraphQLInteractive!]!
+	"""
+	The tool ids the caller may author with in this world.
+	
+	About the caller and nobody else. A Game Master configuring another
+	member's tools needs a different question — one that names a subject
+	and is DM-gated — and answering both from one field would make it easy
+	to ship the second without the gate.
+	
+	An empty list is the honest answer for a player in a world whose Game
+	Master has granted nothing, which today is every world (FR-045).
+	"""
+	authoringTools(worldId: UUID!): [String!]!
+	"""
+	Every grant handed out in this world, for the Game Master configuring
+	them (FR-046).
+	
+	DM-gated, which is the reason it is a second field rather than an
+	argument on the first: a query that answers both "what may I use" and
+	"what may they use" would have one of its two answers guarded and the
+	other not, and the guard is easy to leave off the day the argument is
+	added.
+	
+	Members with no grants are simply absent. The settings page has the
+	roster already and reads an absent member as "nothing", which is the
+	same default the resolver applies.
+	"""
+	authoringToolGrants(worldId: UUID!): [GraphQLMemberAuthoringTools!]!
+	"""
+	Get all invites for a world (Owner/GM only)
+	"""
+	worldInvites(worldId: UUID!): [WorldInvitePayload!]!
+	"""
+	Get all members of a world
+	"""
+	worldMembers(worldId: UUID!): [WorldMembershipPayload!]!
+	"""
+	Get a specific member's info
+	"""
+	worldMember(worldId: UUID!, userId: UUID!): WorldMembershipPayload
+	"""
+	Get world info by invite code (for /join/:code landing page)
+	"""
+	worldByInviteCode(code: String!): WorldPreviewPayload
+	"""
+	Check if current user is already a member of world via invite code
+	"""
+	alreadyMember(code: String!): Boolean!
+	"""
+	The sharing terms in force right now, and the identity to attest to.
+	
+	Requires a session — you cannot publish without one — and is cheap: the
+	body is a compiled-in constant and the hash is computed from it.
+	"""
+	sharingTerms: VersionedLegalDocument!
+	"""
+	What an operator takes on (US8).
+	
+	**Readable without a session** (FR-045), unlike the sharing terms: the
+	person it is shown to is setting an instance up and does not have an
+	account yet, and it is a statement about responsibility rather than
+	anything about this instance's contents.
+	"""
+	operatorStatement: VersionedLegalDocument!
+	"""
+	One archived version, by id — what an old attestation actually said.
+	
+	Admin-only, for the reason `moderationCase` is: this is the
+	notice-handling surface, not a public archive. Resolved from
+	`terms_versions` and **never** from the compiled-in constant, which is
+	the failure FR-008 exists to prevent and the easiest one to write by
+	accident.
+	
+	`None` for an identity that was never archived, rather than an error: an
+	operator pasting an id from an email should be told there is no such
+	version, not handed a stack trace.
+	"""
+	legalDocumentVersion(versionId: String!): VersionedLegalDocument
+	"""
+	Every agreement under which one thing has been published, newest first
+	— its own, and those of every collection it is currently in.
+	
+	The SC-003 surface: a person handling a notice reaches who agreed, when
+	and the exact words in one query, without a developer. Admin-only for
+	the reason `moderationCase` is. `publishableKind` also accepts `lore`
+	and `scene`, which are never published alone and so are answered
+	entirely through their collections.
+	
+	Returned whether or not the share each one authorised still exists
+	(FR-007) — there is no join to a share row and no filter on one.
+	"""
+	attestationsFor(publishableKind: String!, publishableId: UUID!): [Attestation!]!
+	"""
+	The caller's own attestations, newest first. Reachable by a
+	**disabled** account (`standing-and-termination.md`).
+	"""
+	myAttestations(limit: Int): [Attestation!]!
+	"""
+	The caller's own standing (FR-029). Reachable by a **disabled** account:
+	the person has to be able to see the window and the date.
+	"""
+	myStanding: Standing!
+	"""
+	Anyone's standing. Admin-only, for the reason `moderationCase` is.
+	"""
+	accountStanding(accountId: UUID!): Standing!
+	"""
+	What the caller has been told about their own account, newest first
+	(FR-028).
+	"""
+	myNotices(limit: Int): [AccountNotice!]!
+	"""
+	The acknowledgement this instance holds, and whether it is of the words
+	this build ships. Admin only.
+	"""
+	instanceOperatorAcknowledgement: OperatorAcknowledgementState!
+	canvasImageAssetsForScene(sceneId: UUID!): [GraphQLCanvasImageAsset!]!
+	"""
+	All actors (NPCs and player characters, distinguished by `isNpc`)
+	belonging to a world, across every scene. World-scoped (not
+	scene-scoped) to match how a GM staging page shows one roster for
+	the whole world (research.md §2).
+	"""
+	worldActors(worldId: UUID!): [GraphQLWorldActor!]!
+	"""
+	Read an actor's system-specific data (ability/resource/proficiency/
+	trait/spell_data) — the read counterpart to `updateActorSystemData`.
+	Returns `null` if the actor has no system data row yet.
+	"""
+	actorSystemData(actorId: UUID!): GraphQLActorSystemData
+	"""
+	Everything this actor's system publishes about it — the read a
+	character sheet needs, where `tokenAttributes` answers for a scene.
+	"""
+	actorDeclaredValues(actorId: UUID!): [GraphQLDeclaredValue!]!
+	"""
+	The same values, already in the sets a sheet lays out.
+	
+	`actorDeclaredValues` sends one flat list, which left a renderer with
+	six sets to fill and nothing to fill them from: everything a system
+	published landed in `other`, so Forge's Attributes and Resources
+	sections were empty for every system that has them.
+	
+	A value's set is a fact about which block of the manifest declared it,
+	and the server is the side that reads the manifest. Producing the named
+	sets and `all` in one pass is also what stops them disagreeing (T019h).
+	"""
+	actorSheet(actorId: UUID!): GraphQLActorSheet!
+	"""
+	Server-side search pairing for the client's FlexSearch index —
+	see `search_actors_impl`.
+	"""
+	searchActors(worldId: UUID!, query: String!): [GraphQLWorldActor!]!
+	"""
+	FR-014: only the DM may view or change the ownership block. Returns only explicit rows — members with no row default to Viewer, which the client renders itself by combining this with the full `worldMembers` roster (contracts/actor-permissions.md).
+	"""
+	actorPermissions(actorId: UUID!): [GraphQLActorPermission!]!
+	"""
+	ADR-071: the active share link for a actor the caller owns, or null.
+	**Authenticated**, and scoped to one actor the caller already has
+	authority over — see `actor_share_link_impl` for why this is not
+	enumeration.
+	"""
+	actorShareLink(actorId: UUID!): GraphQLActorShareLink
+	"""
+	**Deliberately unauthenticated** — ADR-071. Do not add
+	`authenticated_user(ctx)?` here; it was removed on purpose, and all four
+	share reads now agree. The caller is identified only to rate-limit them.
+	"""
+	sharedActor(shareCode: String!): SharedActorPreview!
+	"""
+	Admin-only. The unauthenticated surface reads the policy from
+	`/authentication/setup/status` instead (FR-003).
+	"""
+	instanceAccessSettings: InstanceAccessSettings!
+	"""
+	Admin-only. FR-004 and FR-012's record, newest first.
+	"""
+	instanceAccessEvents(limit: Int): [InstanceAccessEvent!]!
+	"""
+	Admin-only. Note there is no `instanceInvitation(code:)` counterpart,
+	and none may be added — see this module's header.
+	"""
+	instanceInvitations: [InstanceInvitation!]!
+	"""
+	Every scope, plus how each subsystem currently resolves. Administrators
+	only — a client ID is not a secret, but which applications an instance
+	holds is not a stranger's business either.
+	"""
+	githubApplications: [GithubApplication!]!
+	"""
+	Every declared setting, resolved, with its source. Administrators only.
+	"""
+	instanceSettings: [ResolvedSetting!]!
+	"""
+	The change history for one setting, newest first. Administrators only.
+	"""
+	instanceSettingChanges(key: String!, limit: Int): [SettingChange!]!
+	"""
+	What this instance can and cannot do, given how it is configured.
+	Derived on every read, never stored. Administrators only.
+	"""
+	instanceReadiness: InstanceReadiness!
+	"""
+	Whether this instance can send mail, and what to set if it cannot.
+	Administrators only.
+	"""
+	mailAvailability: MailAvailability!
+	"""
+	The outbox, newest first. Administrators only.
+	"""
+	mailOutbox(state: OutboxState, limit: Int): [OutboxEntry!]!
+	"""
+	What this build is, for a report to name.
+	
+	Spec 037 T015. The client stamps its own version onto a submission and
+	the server stamps this one — two numbers, because a bug reported
+	against a client that has since been redeployed is a bug against a
+	build nobody can identify afterwards.
+	
+	Authenticated but not administrator-only: the feedback dialog is open
+	to every signed-in person and this is what it puts in the report.
+	`option_env!` rather than a runtime lookup, so a build with no git SHA
+	says "unknown build" rather than carrying a field that is sometimes
+	missing.
+	"""
+	serverVersion: String!
+	"""
+	Everything the calling account has submitted, newest first.
+	
+	**Only the caller's own** (FR-022). There is no argument here by which
+	another account's rows could be reached, and that absence is the
+	enforcement.
+	"""
+	mySubmissions: [FeedbackSubmission!]!
+	"""
+	The pre-submission notice. Requires a session; discloses no credential
+	— the destination row has no credential column by design.
+	"""
+	feedbackDestinationNotice: FeedbackDestinationNotice!
+	"""
+	Everything pending or abandoned, oldest first. Administrators only.
+	
+	FR-021: the reason for each, in a vocabulary that cannot carry a
+	credential or a fragment of one.
+	"""
+	undeliveredFeedback: [UndeliveredFeedback!]!
+	"""
+	The intake queue, oldest first, narrowable by kind and status.
+	Administrators only.
+	"""
+	legalEnquiries(kind: LegalEnquiryKind, status: LegalEnquiryStatus, limit: Int): [LegalEnquiry!]!
+	"""
+	How many are open, per kind, so the admin nav can carry a count without
+	loading the bodies.
+	"""
+	openLegalEnquiryCounts: [LegalEnquiryCount!]!
+	"""
+	The checks this world's system declares, for a sheet to offer.
+	
+	Empty for a system that declares none (FR-037), which is a real answer
+	and not a failure: seven of the eight bundled packs are that case, and
+	their sheets show no check button rather than an invented one.
+	"""
+	systemChecks(worldId: UUID!): [GraphQLSystemCheck!]!
+	"""
+	Who currently holds the calling account's play field, if anybody.
+	
+	A companion surface asks this to know whether offering "take the table
+	back" would take it from another window or simply claim an empty one.
+	"""
+	playFieldClaim(clientId: String!): GraphQLPlayFieldClaim
+	"""
+	Every live session for the calling account, most recently used first.
+	"""
+	mySessions: [GraphQLUserSession!]!
+	"""
+	This account's own second-factor history (spec 041 FR-015, FR-025).
+	
+	Scoped to the caller by `events_for`, which filters on the subject, so
+	one account cannot read another's. The acting account's *identity* is
+	deliberately absent: "somebody else did this" is what the account
+	holder needs and can act on, and which administrator it was is an
+	operator's question asked of an operator's surface.
+	
+	The data model calls this the durable half of FR-015's notification —
+	there is no mail subsystem this may depend on (FR-001b), so where
+	nothing can be sent, a person still sees what happened here.
+	"""
+	myTwoFactorEvents: [GraphQLTwoFactorEvent!]!
+	"""
+	Every lore entry in the world, visible to any member (FR-001).
+	"""
+	worldLoreEntries(worldId: UUID!): [GraphQLLoreEntry!]!
+	"""
+	The canonical detail-page lookup by `(worldId, slug)` — `null` for
+	a stale/nonexistent slug (FR-014).
+	"""
+	loreEntry(worldId: UUID!, slug: String!): GraphQLLoreEntry
+	"""
+	Autocomplete candidates for the editor's `[[`-trigger popover
+	(FR-007a).
+	"""
+	loreLinkTargets(worldId: UUID!, prefix: String!): [GraphQLLoreLinkTarget!]!
+	"""
+	Full revision history for a lore entry, newest first (FR-017).
+	"""
+	loreEntryRevisions(loreEntryId: UUID!): [GraphQLLoreRevision!]!
+	"""
+	FR-003: only the DM may view or change the ownership block. Returns only explicit rows — members with no row default to Viewer, which the client renders itself by combining this with the full world-member roster (contracts/lore-permissions.md).
+	"""
+	loreEntryPermissions(loreEntryId: UUID!): [GraphQLLorePermission!]!
+	"""
+	The world's connection, or null when it has none.
+	
+	Any world member, not just the owner. The fields here describe *state*,
+	and hiding a broken connection from the players who can already read
+	the lore it mirrors helps nobody — while `loreSyncRuns`, which can name
+	repository details, stays owner-only.
+	"""
+	loreRepositoryConnection(worldId: UUID!): LoreRepositoryConnection
+	"""
+	Recent synchronisation attempts, newest first.
+	
+	Owner-level (FR-002): a run's failure reason is the one place a
+	repository's own words reach the API, and they can name a repository,
+	a branch or a permission that is the owner's business alone.
+	
+	A world with no connection answers with an empty list rather than an
+	error — "no connection" and "a connection that has never run" look the
+	same to someone reading a settings page, and both mean "nothing has
+	happened yet".
+	"""
+	loreSyncRuns(worldId: UUID!, limit: Int): [LoreSyncRun!]!
+	"""
+	Whether this instance can offer repository synchronisation at all.
+	
+	Asked before the connection UI is rendered, not after a connection
+	fails (FR-036b). Instance-wide and world-independent, so it takes no
+	argument and reveals nothing about any world — but it does require a
+	signed-in caller, because the operator guidance names this
+	deployment's configuration and an anonymous visitor has no reason to
+	read it.
+	FR-023. What the repository proposes, and nothing applied until a
+	person with authority says so.
+	"""
+	lorePendingChanges(worldId: UUID!): [GraphQLLorePendingChange!]!
+	instanceRepositoryIntegration: RepositoryIntegrationStatus!
+	worldAbilities(worldId: UUID!, search: String): [GraphQLAbility!]!
+	ability(abilityId: UUID!): GraphQLAbility!
+	suggestAbilityName(worldId: UUID!, name: String!): [GraphQLAbility!]!
+	"""
+	The umbrella term and the ability types this world presents.
+	
+	Assembled per world rather than per system, because FR-011a makes
+	*presence* depend on what the world holds: a built-in the active system
+	never mentions still gets a tab if the world has one of them, so no
+	ability is ever hidden by the rule that stops a 5e world carrying empty
+	"Powers" and "Talents".
+	"""
+	abilityVocabulary(worldId: UUID!): AbilityVocabulary!
+	"""
+	What changing this world's system would affect.
+	
+	**DM-only.** The counts describe content a player may not be able to
+	see, and a total is a disclosure even when the rows are not.
+	"""
+	worldContentInventory(worldId: UUID!, targetSystemId: String): GraphQLContentInventory!
+	"""
+	The abilities this item carries.
+	"""
+	itemAbilities(itemId: UUID!): [GraphQLItemAbilityEntry!]!
+	"""
+	FR-026: the ownership block is DM-only to read *and* write. This governs EDIT RIGHTS ONLY — visibility is `world_abilities.gm_only`, changed through its own DM-gated mutation, because the ladder's lowest level (`Viewer`) is also its default and so cannot express "hidden".
+	"""
+	abilityPermissions(abilityId: UUID!): [GraphQLAbilityPermission!]!
+	"""
+	ADR-071: the active share link for a ability the caller owns, or null.
+	**Authenticated**, and scoped to one ability the caller already has
+	authority over — see `ability_share_link_impl` for why this is not
+	enumeration.
+	"""
+	abilityShareLink(abilityId: UUID!): GraphQLAbilityShareLink
+	"""
+	**Deliberately unauthenticated** — ADR-071. Do not add
+	`authenticated_user(ctx)?` here; it was removed on purpose, and all four
+	share reads now agree. The caller is identified only to rate-limit them.
+	"""
+	sharedAbility(shareCode: String!): SharedAbilityPreview!
+	worldCollections(worldId: UUID!): [GraphQLCollection!]!
+	collectionMembers(collectionId: UUID!): [GraphQLCollectionMember!]!
+	"""
+	FR-010a: the active share link for a collection the caller owns, or
+	null. **Authenticated**, and scoped to one collection the caller
+	already has authority over — see `collection_share_link_impl` for why
+	this is not the enumeration FR-020 forbids.
+	"""
+	collectionShareLink(collectionId: UUID!): GraphQLCollectionShareLink
+	"""
+	**Deliberately unauthenticated** — ADR-070. Do not add
+	`authenticated_user(ctx)?` here.
+	"""
+	sharedCollection(shareCode: String!): SharedCollectionPreview!
+	"""
+	**Deliberately unauthenticated** — spec 039 FR-056. Do not add
+	`authenticated_user(ctx)?` here.
+	
+	Unlike the four anonymous share reads above, this one is **not** rate
+	limited, and the difference is the reason those are: a share code is
+	unguessable only while the number of guesses is bounded, and this query
+	takes no argument to guess. It returns the same six values to everybody,
+	which is exactly what the published legal pages already show.
+	"""
+	publishedOperatorValues: PublishedOperatorValues!
+	actorAbilities(actorId: UUID!): [GraphQLActorAbilityEntry!]!
+	worldItems(worldId: UUID!, search: String): [GraphQLItem!]!
+	item(itemId: UUID!): GraphQLItem!
+	suggestItemName(worldId: UUID!, name: String!): [GraphQLItem!]!
+	"""
+	FR-003: only the DM may view or change the ownership block. Returns only explicit rows — members with no row default to Viewer.
+	"""
+	itemPermissions(itemId: UUID!): [GraphQLItemPermission!]!
+	"""
+	ADR-071: the active share link for a item the caller owns, or null.
+	**Authenticated**, and scoped to one item the caller already has
+	authority over — see `item_share_link_impl` for why this is not
+	enumeration.
+	"""
+	itemShareLink(itemId: UUID!): GraphQLItemShareLink
+	"""
+	**Deliberately unauthenticated** — ADR-071. Do not add
+	`authenticated_user(ctx)?` here; it was removed on purpose, and all four
+	share reads now agree. The caller is identified only to rate-limit them.
+	"""
+	sharedItem(shareCode: String!): SharedItemPreview!
+	actorInventory(actorId: UUID!): [GraphQLInventoryEntry!]!
+	moderationStatus(entityType: ModerationEntityType!, entityId: UUID!): ModerationActionType
+	moderationCase(caseId: UUID!): GraphQLModerationCase
+	moderationHistoryForAccount(accountId: UUID!): [GraphQLModerationCase!]!
+	repeatInfringerFlags: [UUID!]!
+	worldRollRecords(worldId: UUID!, limit: Int): [GraphQLRollRecord!]!
+	validateDiceFormula(formula: String!): Boolean!
+	myActorClaim(worldId: UUID!): GraphQLActorClaim
+	availableActors(worldId: UUID!): [GraphQLWorldActor!]!
+	"""
+	This world's chat backscroll, oldest-first. GM-only messages are
+	omitted entirely for non-GM callers.
+	"""
+	worldChatMessages(worldId: UUID!, limit: Int): [GraphQLChatMessage!]!
+	"""
+	This world's running combat, or null when none is in progress.
+	"""
+	activeCombat(worldId: UUID!): GraphQLCombat
+	worldSyncPlan(worldId: UUID!, held: [HeldItemInput!]!): SyncPlan!
+	"""
+	Every event in this world newer than `after_id`.
+	
+	Authorized by world membership on every call, like every other
+	world-scoped resolver: a disconnection is not a reason to trust a
+	client's claim about what it used to be allowed to see, and a member
+	removed during the outage must not be handed the events they missed
+	while being removed.
+	"""
+	worldEventsSince(worldId: UUID!, afterId: Int!): WorldEventCatchUp!
+	"""
+	Who else is reachable in this world right now.
+	
+	Advisory and instantly stale by nature — a session may end between
+	this answer and the first signal sent to it, which is why a signal to
+	a departed session is a no-op rather than an error.
+	"""
+	peerSessions(worldId: UUID!): [String!]!
+	"""
+	This account's shelf, newest first (050 FR-002).
+	
+	There is no argument that could widen it to another account, and the
+	store offers no listing that spans owners, so "whose library?" is
+	answered by who is calling and by nothing else.
+	"""
+	myLibrary: [Compendium!]!
+	"""
+	One book, if it is the caller's — and `null` if it is not, whether
+	because there is no such compendium or because it is somebody else's.
+	"""
+	compendium(id: UUID!): Compendium
+	"""
+	What came out of one book, a page at a time, optionally of one kind
+	(FR-042).
+	
+	`after` is the `nextCursor` of the previous page and nothing else; a
+	cursor naming an entry that is no longer there — a re-import replaced
+	the base underneath a browsing session — is refused rather than
+	silently answered from the beginning, because a page of somebody's
+	place in a book quietly becoming page one reads as lost data.
+	"""
+	compendiumEntries(compendiumId: UUID!, kind: String, after: String, first: Int): CompendiumEntryPage!
+	"""
+	Does this account already hold the book in this file? (FR-047.)
+	
+	Asked **before** the upload, with a hash and nothing else: a hash is
+	not content, and catching a book the account already has is worth far
+	more before some megabytes of entries are sent than after.
+	
+	Scoped to the caller's own library, never across accounts — importing
+	a book a second time for a second world is the duplication this arc
+	exists to prevent, and matching across accounts would be a different
+	product with a different consent story.
+	"""
+	compendiumForFileHash(sourceHash: String!): Compendium
+	"""
+	Which books this table is running (FR-030, FR-035).
+	
+	Readable by every member, and it carries no content — see
+	[`GraphQLWorldBook`].
+	"""
+	worldBookList(worldId: UUID!): [WorldBook!]!
+	"""
+	What the owner of this world could switch on and has not (FR-030,
+	FR-041): the owner's shelf, narrowed to this world's system.
+	
+	Answers to the Owner, Game Masters and Trusted Players, and it is the
+	**owner's** shelf for all of them (FR-010a). A Player asking gets the
+	refusal, not an empty list — an empty list would read as "the owner
+	has no books" when it means "this is not yours to ask".
+	"""
+	compendiumsOfferedToWorld(worldId: UUID!): [OfferedBook!]!
+	"""
+	Browse one switched-on book from inside the world (049 FR-042), as
+	this world reads it (050 FR-022).
+	
+	This is the fetch: the entries come from the account's shelf every
+	time they are asked for, with this world's changes laid over them, and
+	no copy of either exists in this world to read instead. `showHidden`
+	includes what this world hides, marked, so it can be put back.
+	"""
+	worldCompendiumEntries(worldId: UUID!, compendiumId: UUID!, kind: String, after: String, first: Int, showHidden: Boolean): WorldEntryPage!
+	"""
+	What this world added beside books it has since switched off (spec
+	050 decision 5). Kept, authored, and readable here until somebody
+	removes it with `restoreWorldEntry`.
+	"""
+	worldAdditionsWithoutBook(worldId: UUID!): [WorldEntry!]!
+	"""
+	Worlds whose name contains `search`, or whose id it is, for an
+	operator deciding what to pause.
+	"""
+	playPauseCandidates(search: String!, first: Int = 20): [PauseCandidateWorld!]!
+	"""
+	The pause record, newest first. `active` narrows it to pauses in force
+	(`true`) or lifted (`false`); `worldId` to one world.
+	"""
+	playPauses(active: Boolean, worldId: UUID, first: Int, after: String): PlayPauseConnection!
+	"""
+	Requests to pause a world, newest first: the pending ones an operator
+	has to decide, unless `state` asks for decided ones.
+	"""
+	playPauseRequests(state: PauseRequestState = PENDING, first: Int, after: String): PauseRequestConnection!
+	"""
+	Whether this world's play is paused, since when, and when it was
+	before (FR-024, FR-050).
+	
+	Guarded by membership and **not** by the pause gate, because the
+	notice a paused table is sent to is what asks it. A site admin who is
+	not a member is refused like anyone else who is not.
+	"""
+	worldPlayState(worldId: UUID!): WorldPlayState!
+	genieSession(worldId: UUID!): GraphQLGenieSession
+	genieResourceHoldings(sessionId: UUID!, actorId: UUID): [GraphQLGenieResourceHolding!]!
+	genieTradeProposals(actorId: UUID!): [GraphQLGenieTradeProposal!]!
+	genieShopListings(actorId: UUID!): [GraphQLGenieShopListing!]!
+	geniePuzzleClockRewards(clockId: UUID!): [GraphQLGeniePuzzleClockReward!]!
+}
+
+input AttachAbilityToActorInput {
+	actorId: UUID!
+	abilityId: UUID!
+}
+
+input AttachAbilityToItemInput {
+	itemId: UUID!
+	abilityId: UUID!
+}
+
+"""
+What somebody agreed to, when, and in order to publish what.
+
+`terms` is filled from `terms_versions` by [`with_archived_terms`] and from
+nowhere else. There is deliberately no constructor that takes a
+[`crate::legal::VersionedDocument`]: the compiled-in document is the words
+as they are *now*, and an old agreement answered with those is the failure
+FR-008 exists to prevent.
+"""
+type Attestation {
+	id: UUID!
+	"""
+	`"share"` or `"operator"`.
+	"""
+	purpose: String!
+	"""
+	Null once the account has been deleted (FR-010, FR-037).
+	"""
+	subjectUsername: String
+	subjectUserId: UUID!
+	attestedAt: String!
+	termsVersionId: String!
+	"""
+	The words as they were. Resolved from the archive, never from the
+	constant.
+	"""
+	terms: VersionedLegalDocument!
+	publishableKind: String
+	publishableId: UUID
+	worldId: UUID
+}
+
+"""
+The whole of what a publishing mutation accepts, and its smallness is the
+point.
+"""
+input AttestationInput {
+	"""
+	The `versionId` from `sharingTerms`, echoed back unmodified.
+	"""
+	termsVersionId: String!
+}
+
+"""
+What an ability of a type may be attached to.
+
+**Exactly one**, never a set. A type binds to characters or to items or to
+nothing, so FR-019's refusal is a comparison rather than a set membership
+test, and a Spell stays a thing characters have while an Enchantment stays
+a thing items carry.
+"""
+enum Binds {
+	CHARACTER
+	ITEM
+	NOTHING
+}
+
+"""
+What switching a book off takes out of this world, said before it happens
+(FR-013, FR-032).
+"""
+type BookSwitchOffReport {
+	compendiumId: UUID!
+	bookTitle: String!
+	"""
+	How many entries stop being served the moment this is confirmed.
+	"""
+	entryCount: Int!
+	"""
+	A few of them by name, so this reads as a warning about *things* and
+	not about a number.
+	"""
+	entryNames: [String!]!
+	"""
+	Changes and hides this world made over the book, each named, because
+	they go with it (050 FR-013, 049 FR-046).
+	"""
+	deltas: [String!]!
+	"""
+	What this world added beside the book, each named, because it
+	**stays** (spec 050 decision 5): the world's own writing never needed
+	the book.
+	"""
+	additionsKept: [String!]!
+	"""
+	Whether this call switched anything off. False for the report, true
+	for the confirmation, so a caller can never mistake one for the other.
+	"""
+	switchedOff: Boolean!
+}
+
+input BringPartyToSceneInput {
+	"""
+	Where the party is arriving.
+	"""
+	sceneId: UUID!
+	"""
+	The characters to bring, in the order they should be laid out.
+	
+	Omitted or empty means the whole party — every non-NPC character in
+	the world, which is the same definition `whole_party` rewards use in
+	`mutations_genie_session.rs`. A Game Master who says "bring the party"
+	without listing anybody should not have to enumerate a table they
+	already own.
+	"""
+	actorIds: [UUID!]
+}
+
+type CollectionTypeCount {
+	memberType: String!
+	count: Int!
+}
+
+"""
+One book on an account's shelf (049 FR-041, 050 FR-002).
+"""
+type Compendium {
+	id: UUID!
+	bookTitle: String!
+	"""
+	The file's SHA-256. Readable only by the account that holds it, and
+	what lets a client recognise a file it already has before reading a
+	second copy of it (FR-047). A hash is not content.
+	"""
+	sourceHash: String!
+	systemId: String!
+	origin: ContentOrigin!
+	parserVersion: String!
+	pageCount: Int!
+	"""
+	Pages that yielded no text (FR-005). A book that was a third scans
+	says so on the shelf, months later.
+	"""
+	silentPageCount: Int!
+	entryCounts: [CompendiumKindCount!]!
+	"""
+	Everything the counts add up to, so a shelf need not sum them itself.
+	"""
+	entryTotal: Int!
+	importedAt: String!
+	updatedAt: String!
+}
+
+"""
+One entry, with the book it came from and the page it was found on
+(FR-043).
+
+`compendiumId` and `bookTitle` both travel with every entry deliberately:
+FR-043 is a promise to the person reading an entry, and an entry that can
+only say which book it came from by being looked up somewhere else is an
+entry that will be shown without saying it.
+"""
+type CompendiumEntry {
+	id: UUID!
+	compendiumId: UUID!
+	bookTitle: String!
+	kind: String!
+	name: String!
+	"""
+	The reader was unsure it had the name right. Shown, not hidden.
+	"""
+	nameUncertain: Boolean!
+	page: Int!
+	"""
+	Each declared field with the certainty it was read at. A field looked
+	for and not found carries no value at all, which is why this crosses
+	as it was stored rather than being flattened into strings.
+	"""
+	fieldValues: JSON!
+	proseText: String
+	"""
+	The reader distrusted this one (FR-023's third state, kept after the
+	review so a suspect entry stays visibly suspect on the shelf).
+	"""
+	suspect: Boolean!
+}
+
+"""
+One page of entries, and where the next one starts.
+"""
+type CompendiumEntryPage {
+	entries: [CompendiumEntry!]!
+	"""
+	`null` when this page is the last one. A client that keeps asking
+	until this is null cannot loop, because the cursor is the id of the
+	last entry handed out and the order it indexes is total.
+	"""
+	nextCursor: String
+	"""
+	How many entries match the filter in total, so a shelf can say "20 of
+	1,431" without fetching 1,431 of them.
+	"""
+	total: Int!
+}
+
+"""
+How many of one kind a book produced.
+
+A list of pairs rather than the stored JSON object, so the shelf renders
+counts without a client parsing an untyped blob and inventing its own
+ordering. The stored object is bookkeeping; the entries remain the truth.
+"""
+type CompendiumKindCount {
+	kind: String!
+	count: Int!
+}
+
+input CompleteConnectionInput {
+	worldId: UUID!
+	"""
+	Whatever the host handed back when the user finished granting access,
+	verbatim and uninterpreted.
+	
+	A string rather than a structured type on purpose: this module does not
+	know what is inside it and must not learn. The adapter validates it,
+	and refuses a grant covering more than the single repository being
+	connected (FR-036a) — narrowing a too-broad grant after the fact is not
+	an option, because a grant we hold and promise not to use is still a
+	grant we hold.
+	"""
+	grantResponse: String!
+	"""
+	Which repository this world binds to, as `owner/name` (FR-036f).
+	
+	Required in practice, and `Option` only so that a client which omits it
+	gets told *which repositories it may choose from* rather than a schema
+	error naming a field. An installation routinely covers several — the
+	grant is broad, the binding is not — and picking for the user is how a
+	world ends up mirroring into a repository nobody chose. That is not
+	hypothetical: the first live run of this flow connected a world to this
+	project's own public source repository, because it took whichever the
+	host listed first.
+	"""
+	repositoryRef: String
+	"""
+	Defaults to `main`.
+	"""
+	branch: String
+	"""
+	Defaults to `lore`. Repository-relative, no leading slash.
+	"""
+	directory: String
+}
+
+"""
+Where the user is sent to grant access, and what they will be asked for.
+
+**This is the one place a host-specific concept legitimately appears**
+(FR-004b) — and it appears as an opaque URL plus a list of sentences, which
+is as much as a client needs and as little as FR-004c permits. Nothing
+downstream of the grant sees any of it again.
+"""
+type ConnectionGrantHandoff {
+	url: String!
+	"""
+	Must be shown before the user is sent to `url` (FR-036), both entries
+	of it (FR-036e).
+	"""
+	permissions: [GrantedPermission!]!
+}
+
+"""
+Where a compendium came from, on the wire.
+
+Mirrors [`ContentOrigin`] rather than re-deriving it, and is read-only
+here: origin is written by the server on import (FR-051) and has no update
+path anywhere (FR-057). It is on the shelf because FR-002 asks the library
+to show provenance, and because it is the field every later refusal will
+name as its reason.
+"""
+enum ContentOrigin {
+	AUTHORED
+	UPLOADED
+}
+
+type CopiedRecord {
+	memberType: String!
+	id: UUID!
+	name: String!
+}
+
+"""
+What arrived, and what did not.
+
+Returned to the recipient, never stored — see the module documentation.
+"""
+type CopyReceipt {
+	created: [CopiedRecord!]!
+	"""
+	FR-015: references that could not be brought across, and members that
+	were withheld. Declared losses, not silent ones.
+	"""
+	fidelityNotes: [String!]!
+}
+
+input CopySharedAbilityInput {
+	shareCode: String!
+	destinationWorldId: UUID!
+}
+
+input CopySharedActorInput {
+	shareCode: String!
+	destinationWorldId: UUID!
+}
+
+input CopySharedItemInput {
+	shareCode: String!
+	destinationWorldId: UUID!
+}
+
+input CreateAbilityInput {
+	worldId: UUID!
+	name: String!
+	description: String
+	classification: String!
+	"""
+	The value on this type's declared grade, where it declares one
+	(spec 033 FR-021). Refused for an ungraded type, and refused outside
+	the declared range (FR-023).
+	"""
+	grade: Int
+	"""
+	FR-024a: optional, defaults false. Settable at create time so a GM can
+	author a secret ability without a visible window between insert and
+	hide.
+	"""
+	gmOnly: Boolean
+}
+
+input CreateActorInput {
+	worldId: UUID!
+	label: String!
+	isNpc: Boolean!
+	actorType: String
+	gameSystemId: String
+	description: String
+}
+
+input CreateCollectionInput {
+	worldId: UUID!
+	name: String!
+	description: String
+}
+
+"""
+What a reviewed book asks the server to record.
+
+**There is no origin field, and no owner field.** The first is written by
+the store (FR-051); the second is the authenticated caller, so a payload
+has no way to name somebody else's shelf. Both absences are the check
+rather than a comment about one.
+"""
+input CreateCompendiumFromImportInput {
+	bookTitle: String!
+	"""
+	SHA-256 of the file, hex, taken in the browser before anything was
+	sent (spec 047 FR-072).
+	"""
+	sourceHash: String!
+	"""
+	The system the book was read as. Re-read from the manifest here; what
+	the payload says is only which manifest to open.
+	"""
+	systemId: String!
+	"""
+	Which build of the reader produced this, so a later read can tell "the
+	book changed" from "the reader improved".
+	"""
+	parserVersion: String!
+	pageCount: Int!
+	silentPageCount: Int!
+	"""
+	FR-047's overwrite: the compendium this re-read replaces. Absent for a
+	first import, which is the ordinary case.
+	"""
+	replacesCompendiumId: UUID
+	entries: [ImportedEntryInput!]!
+}
+
+input CreateInstanceInvitationInput {
+	maxUses: Int
+	expiresInHours: Int
+	note: String
+}
+
+input CreateItemInput {
+	worldId: UUID!
+	name: String!
+	description: String
+}
+
+input CreateLoreEntryInput {
+	worldId: UUID!
+	title: String!
+	content: String
+}
+
+"""
+Implement the DateTime<Utc> scalar
+
+The input/output is a string in RFC3339 format.
+"""
+scalar DateTime
+
+enum DieSidesKind {
+	NUMERIC
+	FATE
+	COIN
+}
+
+"""
+Testable core of `removeLoreRepositoryConnection`.
+
+Deletes the connection row and nothing else. FR-005: the world's lore is
+untouched, and the repository's contents are untouched — a removal is the
+platform forgetting, not a retraction. Nothing is deleted at the host, ever.
+
+The server-side working clone is a rebuildable cache. Discarding it is
+`lore_sync::workspace::discard(root, connection_id)`, and this function does
+not call it because nothing yet configures `root` — T023 owns where clones
+live, and that call belongs here the moment it does. Nothing depends on the
+clone's removal for correctness: deleting the row is what stops
+synchronisation, because the background task iterates rows, and a clone left
+behind is disk, not behaviour.
+
+Returns `false` when there was nothing to remove, so a client that asks
+twice sees "already gone" rather than an error.
+How a Game Master answers FR-031's divergence.
+
+Two options, and the absence of a third is the point. Reconciling would mean
+merging prose, which FR-024 forbids everywhere in this spec — and a
+synchronisation that silently merged someone's repository edits with their
+world's would be the one failure mode this feature exists to avoid.
+"""
+enum DivergenceResolution {
+	"""
+	Make the repository match the world again, discarding the divergent
+	history. The world is authoritative (FR-021), and this is the Game
+	Master saying so on purpose.
+	"""
+	OVERWRITE_REMOTE
+	"""
+	Stop. The connection is removed and the repository is left exactly as
+	it is, including whatever diverged.
+	"""
+	ABANDON_CONNECTION
+}
+
+"""
+An attachment the person approved.
+
+The bytes are inline because the review step showed exactly these bytes and
+nothing may re-derive them server-side (research § R6).
+"""
+input FeedbackAttachmentInput {
+	kind: FeedbackAttachmentKind!
+	"""
+	Base64. Logs are UTF-8 text; a screenshot is a PNG the client encoded.
+	"""
+	content: String!
+	entriesKept: Int
+	entriesDropped: Int
+	redactionCount: Int
+}
+
+enum FeedbackAttachmentKind {
+	LOGS
+	SCREENSHOT
+}
+
+type FeedbackAttachmentSummary {
+	id: UUID!
+	kind: FeedbackAttachmentKind!
+	byteSize: Int!
+	entriesKept: Int
+	entriesDropped: Int
+	redactionCount: Int!
+	"""
+	Set once this instance's copy has been removed. The row outlives its
+	bytes.
+	"""
+	purgedAt: String
+}
+
+enum FeedbackDeliveryState {
+	PENDING
+	DELIVERED
+	ABANDONED
+}
+
+"""
+What the person must be told **before** they submit (FR-014).
+"""
+type FeedbackDestinationNotice {
+	"""
+	False when nothing is configured. Submission still works (FR-030).
+	"""
+	configured: Boolean!
+	repository: String
+	"""
+	Determined from the host, never assumed. Null means never successfully
+	checked, and the safe rendering of an unknown destination is to warn
+	rather than to reassure.
+	"""
+	isPublic: Boolean
+	visibilityCheckedAt: String
+}
+
+"""
+The closed vocabulary FR-021 requires, as an enum and not a string.
+
+**That is the point of it.** A free-text field carrying a host's response
+body is one 401 payload away from disclosing a credential, and the failure
+would be invisible in review because the string looked fine on the day it
+was written. A closed vocabulary cannot leak.
+"""
+enum FeedbackFailureReason {
+	NOT_CONFIGURED
+	CREDENTIALS_REJECTED
+	DESTINATION_NOT_FOUND
+	PERMISSION_REFUSED
+	HOST_UNAVAILABLE
+	HOST_RATE_LIMITED
+	REJECTED_BY_HOST
+	ATTACHMENTS_EXPIRED
+}
+
+enum FeedbackIssueState {
+	OPEN
+	CLOSED
+}
+
+enum FeedbackKind {
+	FEATURE_REQUEST
+	ISSUE
+	GENERAL
+}
+
+"""
+One submission, as the person who sent it sees it.
+
+**No attachment bytes.** A summary carries sizes and counts; the bytes are
+fetched over an asset route with a content type, matching every other asset
+in this product.
+"""
+type FeedbackSubmission {
+	id: UUID!
+	kind: FeedbackKind!
+	message: String!
+	summary: String
+	createdAt: String!
+	"""
+	`PENDING` until delivered. The person is never shown a failure: at the
+	instance, which FR-018 makes the record, it did arrive.
+	"""
+	deliveryState: FeedbackDeliveryState!
+	issueUrl: String
+	issueState: FeedbackIssueState
+	"""
+	Shown with the state, never without it — a maintainer closes an issue
+	without telling us.
+	"""
+	issueStateCheckedAt: String
+	attachments: [FeedbackAttachmentSummary!]!
+	"""
+	When this instance's copies expire. The destination's copy is
+	unaffected, which is what the person was told before they submitted.
+	"""
+	attachmentsExpireAt: String!
+}
+
+input GenerateInviteCodeInput {
+	"""
+	World ID for the campaign
+	"""
+	worldId: UUID!
+	"""
+	Maximum number of times this invite can be used (0 = unlimited)
+	"""
+	maxUses: Int!
+	"""
+	Optional expiry time (ISO 8601 format)
+	"""
+	expiresAt: String
+}
+
+enum GenieRewardRecipientMode {
+	TRIGGERING_ACTOR
+	WHOLE_PARTY
+}
+
+enum GenieSessionStatus {
+	ACTIVE
+	WON
+	LOST
+}
+
+enum GenieShopPriceKind {
+	RESOURCE
+	ITEM
+}
+
+"""
+One scope's application, as an operator needs to understand it.
+"""
+type GithubApplication {
+	"""
+	`global`, `sync` or `feedback`.
+	"""
+	scope: String!
+	"""
+	What this application is used for, in a sentence. FR-020: the global
+	application's scope is an explanation, not a field.
+	"""
+	serves: String!
+	"""
+	True when at least one of the three fields is set.
+	"""
+	configured: Boolean!
+	"""
+	True when all three are set **and the key parses**. A key that is
+	present and is not a key is the case a presence check calls
+	"configured", and this is not that check.
+	"""
+	complete: Boolean!
+	"""
+	The source of the application as a whole: ENVIRONMENT when any field is
+	fixed by a variable, otherwise where its values are stored. Null when
+	nothing is set. Per-field detail is in `fields`.
+	"""
+	source: SettingSource
+	"""
+	Not a secret — GitHub publishes it.
+	"""
+	clientId: String
+	slug: String
+	"""
+	**Never the key, never a fragment, never a length.**
+	"""
+	hasPrivateKey: Boolean!
+	fields: [GithubApplicationField!]!
+	"""
+	Settings this application is missing, by name.
+	"""
+	missing: [String!]!
+	"""
+	Every problem, not the first — the shape `registration_from_env` already
+	returns, so an operator fixes their configuration in one pass instead of
+	discovering the next gap after each restart.
+	"""
+	guidance: [String!]!
+	"""
+	Which subsystems this application will act for, as it currently
+	resolves (FR-020). Computed from the resolution delivery will get, not
+	from a rule written twice.
+	"""
+	actsFor: [String!]!
+	"""
+	For a subsystem: the scope whose application it will actually use —
+	its own, or `global`. Null when nothing resolves at all.
+	"""
+	resolvesTo: String
+	"""
+	Non-empty when this subsystem is **partly** configured and was
+	therefore stepped over whole (FR-021). An application is never
+	completed from another.
+	"""
+	steppedOver: [String!]!
+	"""
+	The same fact as a sentence, for the screen.
+	"""
+	steppedOverGuidance: String
+	lastCheckedAt: String
+	"""
+	The outcome of the last live check. A status code and a verdict; never
+	a response body, because a 401 payload is one field away from carrying
+	a credential.
+	"""
+	lastCheckOutcome: String
+}
+
+"""
+One field of one application, and where its value actually came from.
+
+FR-021 at the granularity that exists after research.md § R10: an
+application resolves whole, so the *scope* is the same for all three, but
+the *source* need not be — an operator may hold a client ID in the
+environment and a key in the instance store, and a field greyed out with no
+stated reason is what this feature exists to stop.
+"""
+type GithubApplicationField {
+	"""
+	`client_id`, `slug` or `private_key` — the argument `setGithubApplication` takes.
+	"""
+	field: String!
+	"""
+	The declared setting key, which is what every diagnostic names.
+	"""
+	key: String!
+	set: Boolean!
+	source: SettingSource!
+	"""
+	The environment variable that fixed it, when one did. Never a value.
+	"""
+	fixedBy: String
+	"""
+	False when the environment has fixed it. Do not offer a field (FR-009).
+	"""
+	editable: Boolean!
+}
+
+"""
+An ordered value a type's abilities carry — 5e's spell Level, another
+system's Rank or Circle. One shape, many words.
+"""
+type GradeFacet {
+	"""
+	The system's word for it. Never empty.
+	"""
+	label: String!
+	min: Int!
+	max: Int!
+}
+
+"""
+One permission the user is being asked for, and why they are being asked.
+
+The reason travels with the permission rather than being looked up beside
+it, so a consent screen physically cannot render the list without it —
+FR-036e's issue-opening permission is wider than "write the files we
+mirror", and a user not told why would be right to refuse.
+"""
+type GrantedPermission {
+	"""
+	The host's own name for it, for an operator reading an audit log.
+	"""
+	id: String!
+	"""
+	What it allows, in the user's words.
+	"""
+	summary: String!
+	"""
+	Why this feature asks for it.
+	"""
+	reason: String!
+}
+
+"""
+An Ability's GraphQL projection. Mirrors `GraphQLItem`, including its
+`#[graphql(complex)]` backlink field.
+"""
+type GraphQLAbility {
+	id: UUID!
+	worldId: UUID!
+	name: String!
+	description: String
+	classification: String!
+	"""
+	The value on this type's declared grade, where it declares one
+	(spec 033 FR-021). `null` for an ungraded type, so a surface can show
+	nothing rather than a zero that means something (FR-022).
+	"""
+	grade: Int
+	"""
+	Spec 025 (FR-024a): visibility, deliberately separate from
+	`my_permission_level`. Only ever `true` in a response to a DM — every
+	non-DM read path filters GM-only abilities out entirely (FR-024b), so a
+	player can never receive a row with this set.
+	"""
+	gmOnly: Boolean!
+	effects: [GraphQLAbilityEffect!]!
+	"""
+	Edit rights only — NOT visibility. See `auth::ability_permissions`.
+	"""
+	myPermissionLevel: ActorPermissionLevel!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+	"""
+	Spec 015: true when disabled by a DMCA takedown; the content fields are
+	then a placeholder for every caller including the owner.
+	"""
+	moderated: Boolean!
+	moderationCaseId: UUID
+	"""
+	Spec 025 (FR-029): every lore entry whose body currently contains a
+	resolved in-text link to this ability. Named `linkedFromLore` to match
+	`GraphQLItem` (the newer convention; actors use the older
+	`loreLinkedFrom`).
+	"""
+	linkedFromLore: [GraphQLLoreEntry!]!
+}
+
+"""
+One authored effect on an ability. Inert data (FR-019) — nothing in this
+spec resolves, rolls, or applies it.
+"""
+type GraphQLAbilityEffect {
+	id: UUID!
+	abilityId: UUID!
+	effectType: AbilityEffectType!
+	formula: String!
+	target: String!
+	triggerKind: AbilityEffectTrigger
+	sortOrder: Int!
+}
+
+"""
+Spec 025 (FR-024): an ability's ownership-block entry. Governs edit rights;
+visibility is `GraphQLAbility::gm_only`.
+"""
+type GraphQLAbilityPermission {
+	abilityId: UUID!
+	userId: UUID!
+	level: ActorPermissionLevel!
+	updatedAt: NaiveDateTime!
+}
+
+"""
+Spec 025 (FR-032): an ability share link.
+"""
+type GraphQLAbilityShareLink {
+	id: UUID!
+	abilityId: UUID!
+	shareCode: String!
+	revoked: Boolean!
+	createdAt: NaiveDateTime!
+}
+
+"""
+What happened, as a tagged outcome rather than a boolean.
+
+"It did not run" covers four genuinely different situations, and a player
+told only "no" cannot tell a locked door from a broken product.
+"""
+type GraphQLActivationResult {
+	"""
+	`performed`, `requested`, `refused`, `unavailable` or `noEffect`.
+	"""
+	outcome: String!
+	"""
+	`gmOnly`, `locked` or `alreadyFired`. Present only when refused.
+	"""
+	reason: String
+	"""
+	Present only when a request was raised.
+	"""
+	requestId: UUID
+	"""
+	The effect to run and its configuration, for the client to apply
+	optimistically. Present only when the effect actually ran.
+	"""
+	effectId: String
+	effectConfig: JSON
+	"""
+	Things the Game Master should know about what just ran.
+	
+	Empty for a player, always. These are notes about the *authoring* — a
+	switch naming a lamp that has been deleted — and a player has no use
+	for one and no way to act on it.
+	"""
+	notices: [String!]!
+}
+
+"""
+Spec 025 (FR-021): an actor's known-ability entry.
+
+`ability_id`/`classification` are null for a tombstoned row — the ability
+was deleted — while `ability_name` always survives so the entry stays
+identifiable (FR-023).
+"""
+type GraphQLActorAbilityEntry {
+	id: UUID!
+	actorId: UUID!
+	abilityId: UUID
+	abilityName: String!
+	classification: String
+	gmOnly: Boolean!
+}
+
+type GraphQLActorClaim {
+	actorId: UUID!
+	worldMemberId: UUID!
+	claimedByUserId: UUID!
+	claimedAt: DateTime!
+	actor: GraphQLWorldActor!
+}
+
+"""
+One of an actor's images, named by what it is for (FR-036).
+
+`role` is carried through as the stored string rather than mapped to an
+enum: the column is open by decision (ADR-057/ADR-054), so a client that
+does not recognise a role should be able to skip it, which requires being
+told what it was. `assetId` is exposed alongside the URLs because the
+engine's asset pipeline addresses images by id.
+"""
+type GraphQLActorImage {
+	id: UUID!
+	actorId: UUID!
+	role: String!
+	assetId: UUID!
+	url: String!
+	thumbnailUrl: String!
+}
+
+type GraphQLActorPermission {
+	actorId: UUID!
+	userId: UUID!
+	level: ActorPermissionLevel!
+	updatedAt: NaiveDateTime!
+}
+
+type GraphQLActorShareLink {
+	id: UUID!
+	actorId: UUID!
+	shareCode: String!
+	revoked: Boolean!
+	createdAt: NaiveDateTime!
+}
+
+"""
+Everything one actor's system publishes about it, stored and derived.
+
+One actor's values, in the sets a sheet lays out.
+
+Mirrors `SheetDeclarations` in `apps/web/src/layout/types.ts` field for
+field, deliberately: the renderer takes exactly this shape, and a wire type
+that needed reshaping on arrival would be a place for the two to drift.
+"""
+type GraphQLActorSheet {
+	attributes: [GraphQLDeclaredValue!]!
+	resources: [GraphQLDeclaredValue!]!
+	skills: [GraphQLDeclaredValue!]!
+	movement: [GraphQLDeclaredValue!]!
+	derived: [GraphQLDeclaredValue!]!
+	"""
+	Everything a named set did not claim.
+	"""
+	other: [GraphQLDeclaredValue!]!
+	"""
+	Every value, in the system's own declaration order.
+	"""
+	all: [GraphQLDeclaredValue!]!
+}
+
+type GraphQLActorSystemData {
+	id: UUID!
+	actorId: UUID!
+	gameSystemId: String!
+	abilityData: JSON
+	resourceData: JSON
+	proficiencyData: JSON
+	traitData: JSON
+	spellData: JSON
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+}
+
+"""
+GraphQL event for actor system data changes (used in subscriptions)
+Emitted from pg_notify backplane via PostgreSQL trigger
+"""
+type GraphQLActorSystemDataEvent {
+	id: UUID!
+	actorId: UUID!
+	gameSystemId: String!
+	eventType: String!
+	abilityData: JSON
+	resourceData: JSON
+	proficiencyData: JSON
+	traitData: JSON
+	spellData: JSON
+	updatedAt: NaiveDateTime!
+}
+
+"""
+Admin bootstrap/setup configuration
+"""
+type GraphQLAdminBootstrapSettings {
+	setupCompleted: Boolean!
+	adminCodeGeneratedAt: NaiveDateTime
+	setupCompletedAt: NaiveDateTime
+	updatedAt: NaiveDateTime!
+}
+
+"""
+Comprehensive admin statistics snapshot
+"""
+type GraphQLAdminStats {
+	totalUsers: Int!
+	totalWorlds: Int!
+	totalWorldTokens: Int!
+	totalWorldEvents: Int!
+	totalPolicies: Int!
+	diskUsageBytes: Int!
+	diskUsage: GraphQLDiskUsageBreakdown!
+}
+
+"""
+Admin welcome dashboard summary
+"""
+type GraphQLAdminWelcomeSummary {
+	totalUsers: Int!
+	totalWorlds: Int!
+	totalTokens: Int!
+	totalEvents: Int!
+	diskUsage: Int!
+}
+
+"""
+One attribute score.
+"""
+type GraphQLAttribute {
+	"""
+	The system's own identifier — `might`, `strength`, `prowess`.
+	"""
+	id: String!
+	label: String!
+	"""
+	Short form where the system offers one; systems differ.
+	"""
+	abbreviation: String
+	value: Int!
+}
+
+"""
+Authentication security settings
+"""
+type GraphQLAuthSecuritySettings {
+	twoFactorRequiredForAllUsers: Boolean!
+	updatedAt: NaiveDateTime!
+}
+
+type GraphQLCanvasImageAsset {
+	id: UUID!
+	worldId: UUID!
+	sceneId: UUID
+	ownerUserId: UUID!
+	storagePath: String!
+	kind: GraphQLCanvasImageAssetKind!
+	widthPx: Int!
+	heightPx: Int!
+	byteSize: Int!
+	createdAt: NaiveDateTime!
+}
+
+enum GraphQLCanvasImageAssetKind {
+	BACKGROUND
+	PASTED
+}
+
+type GraphQLChatMessage {
+	id: UUID!
+	worldId: UUID!
+	sceneId: UUID
+	authorUserId: UUID!
+	authorLabel: String!
+	body: String!
+	gmOnly: Boolean!
+	createdAt: NaiveDateTime!
+}
+
+type GraphQLChoiceOption {
+	value: String!
+	label: String!
+}
+
+type GraphQLCollection {
+	id: UUID!
+	worldId: UUID!
+	name: String!
+	description: String
+	memberCount: Int!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+}
+
+type GraphQLCollectionMember {
+	id: UUID!
+	collectionId: UUID!
+	memberType: String!
+	memberId: UUID!
+	sortOrder: Int!
+}
+
+type GraphQLCollectionShareLink {
+	id: UUID!
+	collectionId: UUID!
+	shareCode: String!
+	revoked: Boolean!
+}
+
+type GraphQLCombat {
+	id: UUID!
+	worldId: UUID!
+	sceneId: UUID
+	round: Int!
+	activeCombatantId: UUID
+	endedAt: NaiveDateTime
+	"""
+	Already in turn order — clients render this as given and never
+	re-sort, so there is one ordering rule in the system, not two.
+	"""
+	combatants: [GraphQLCombatant!]!
+	"""
+	What this ruleset calls a round, or `null` when it does not count them.
+	
+	Spec 031 FR-031: turn structure is the *system's* to determine and must
+	not be imposed on rulesets that do not use it. A client renders this
+	label beside `round` and shows nothing at all when it is absent, which
+	is SC-011 — Blades in the Dark has no turn order, so it gets no counter.
+	
+	A computed field rather than a column on the row: it is a fact about
+	the world's *system*, not about this combat, and stamping it at each of
+	the nine places a combat is loaded would be nine chances to forget.
+	"""
+	roundLabel: String
+}
+
+type GraphQLCombatant {
+	id: UUID!
+	combatId: UUID!
+	actorId: UUID
+	tokenId: UUID
+	label: String!
+	initiative: Int!
+	tiebreak: Int!
+	isNpc: Boolean!
+	active: Boolean!
+}
+
+"""
+A world that is using something this compendium contributed (FR-045).
+"""
+type GraphQLCompendiumUsage {
+	worldId: UUID!
+	worldName: String!
+	"""
+	What is in use there, named so a person recognises it — a creature on
+	a scene, an item in an inventory.
+	"""
+	entryNames: [String!]!
+}
+
+"""
+One field the authoring form renders.
+
+Flattened rather than expressed as a GraphQL union because the shapes
+differ only in which single extra field they carry, and a four-member union
+would cost every client an inline fragment to read one string.
+"""
+type GraphQLConfigField {
+	key: String!
+	label: String!
+	"""
+	`boolean`, `choice`, `reference` or `referenceList`.
+	"""
+	kind: String!
+	"""
+	What a reference points at — `wall`, `light`, `loreEntry`, `scene`.
+	Present for `reference` and `referenceList`.
+	"""
+	referenceOf: String
+	"""
+	Present for `choice`.
+	"""
+	options: [GraphQLChoiceOption!]
+	required: Boolean!
+}
+
+"""
+One kind of content, and the system it was authored under.
+"""
+type GraphQLContentCount {
+	"""
+	`actors`, `abilities`, `items`.
+	"""
+	kind: String!
+	"""
+	The system this content was authored for, where the content records
+	one. `null` for content that carries no system tag of its own — items
+	and abilities belong to the world rather than to a ruleset, and saying
+	otherwise in a warning would be inventing provenance.
+	"""
+	systemId: String
+	count: Int!
+}
+
+"""
+What a system change puts at stake in one world.
+"""
+type GraphQLContentInventory {
+	counts: [GraphQLContentCount!]!
+	"""
+	Abilities whose type the **target** system would not recognise
+	(FR-037). `0` when no target was named — that means "not asked", not
+	"none".
+	"""
+	becomingUnrecognised: Int!
+	"""
+	Whether this world is switchable without ceremony (FR-029).
+	
+	Actors, abilities and items only. **Scenes and lore do not count**, and
+	that is load-bearing rather than an oversight: every world is created
+	with a default scene already made (spec 010), so counting scenes would
+	mean no world is ever empty, the one-step path would be unreachable,
+	and a Game Master would meet the red warning on a world they made a
+	minute earlier.
+	"""
+	isEmpty: Boolean!
+	"""
+	What an acknowledgement acknowledges. See `digest_of`.
+	"""
+	digest: String!
+}
+
+input GraphQLCreateInteractiveInput {
+	sceneId: UUID!
+	"""
+	`prop`, `door` or `region`.
+	"""
+	subjectKind: String!
+	"""
+	The token for a prop, the wall for a door. Omitted for a region.
+	"""
+	subjectRef: UUID
+	"""
+	The area, for a region. Omitted otherwise.
+	"""
+	geometry: JSON
+	"""
+	Omitted for scenery, which is legitimate.
+	"""
+	effectId: String
+	effectConfig: JSON
+	"""
+	`click` or `enter`.
+	"""
+	trigger: String!
+	"""
+	`anyone`, `gm_only` or `requires_approval`.
+	"""
+	activation: String!
+	"""
+	`always` or `once`.
+	"""
+	fireMode: String
+}
+
+"""
+Input for creating a new light source
+"""
+input GraphQLCreateLightSourceInput {
+	sceneId: UUID!
+	x: Float!
+	y: Float!
+	radius: Float!
+	intensity: Float
+	color: String
+	attachedTokenId: UUID
+	castsShadows: Boolean
+	metadata: JSON
+}
+
+"""
+Input for creating a new scene
+"""
+input GraphQLCreateSceneInput {
+	worldId: UUID!
+	name: String!
+	description: String
+	type: String
+	gridSize: Int
+	gridType: String
+	width: Int
+	height: Int
+	metadata: JSON
+}
+
+"""
+Input for creating a new shape
+"""
+input GraphQLCreateShapeInput {
+	sceneId: UUID!
+	kind: GraphQLShapeKind!
+	geometry: JSON!
+	text: String
+	style: JSON
+	visibleToPlayers: Boolean
+	metadata: JSON
+}
+
+"""
+Input for creating a new token on a scene
+"""
+input GraphQLCreateTokenInput {
+	sceneId: UUID!
+	actorId: UUID
+	x: Float!
+	y: Float!
+	rotation: Float
+	scale: Float
+	metadata: JSON
+	"""
+	`character`, `npc`, `vehicle` or `object`. Omitted means `character`.
+	
+	An unrecognised value is rejected rather than stored: the column feeds
+	the renderer, and a kind nothing can draw would put an invisible or
+	mislabelled token on somebody's battle map.
+	"""
+	tokenType: String
+}
+
+"""
+Input for creating a new wall
+"""
+input GraphQLCreateWallInput {
+	sceneId: UUID!
+	x1: Float!
+	y1: Float!
+	x2: Float!
+	y2: Float!
+	blocksVision: Boolean
+	blocksMovement: Boolean
+	doorState: GraphQLDoorState
+	metadata: JSON
+}
+
+"""
+Input for creating a new world
+"""
+input GraphQLCreateWorldInput {
+	name: String!
+	description: String
+	gameSystemId: String
+	interfacePackId: String
+}
+
+"""
+Input for creating a new world token
+"""
+input GraphQLCreateWorldTokenInput {
+	worldId: UUID!
+	label: String
+	x: Float
+	y: Float
+	z: Float
+	health: Int
+	maxHealth: Int
+}
+
+"""
+One value a system publishes about an actor.
+
+Superset of [`GraphQLAttribute`]: it carries derived values too, and says
+which is which. The older field stays because it is what the canvas and
+the existing panels read, and moving them is not this increment's job.
+"""
+type GraphQLDeclaredValue {
+	"""
+	The system's own identifier — `might`, `strength`, `wishPointsForLevel`.
+	"""
+	id: String!
+	label: String!
+	abbreviation: String
+	"""
+	Rendered as text, because systems do not agree on the type of a value:
+	a score is an integer, a Fate ladder rung is a word, a proficiency is
+	a flag. Sending each as itself would need a union the layout layer
+	would have to branch on, and branching on a value's type is the first
+	step towards knowing what it means.
+	"""
+	value: String!
+	"""
+	Present only for a pool. A consumer drawing a bar reads this and never
+	parses `value`.
+	"""
+	fraction: GraphQLValueFraction
+	"""
+	Present only for a track. Marks to tick, not a bar to fill.
+	"""
+	track: GraphQLValueTrack
+	"""
+	Present only for a state ladder.
+	"""
+	state: GraphQLValueState
+	"""
+	The group this belongs to, when it is part of one — a Fate consequence
+	and its aspect, a Cypher stat's current value, pool and edge.
+	"""
+	group: String
+	"""
+	The group's own name, when its system gave it one (T019g). Without it a
+	renderer names a group after whichever member came first, which is a
+	guess that declaration order should not get to make.
+	"""
+	groupLabel: String
+	"""
+	This is the member to show when there is room for one (T019g).
+	"""
+	headline: Boolean!
+	origin: GraphQLValueOrigin!
+}
+
+"""
+Result of deleting user data (GDPR deleteMe request)
+"""
+type GraphQLDeleteMyDataPayload {
+	status: String!
+	message: String!
+	worldsDeleted: Int!
+	worldTokensDeleted: Int!
+	worldEventsDeleted: Int!
+	policiesDeleted: Int!
+	oauthLinksDeleted: Int!
+	sessionsDeleted: Int!
+	loginChallengesDeleted: Int!
+	oauthLinkChallengesDeleted: Int!
+	usersDeleted: Int!
+}
+
+"""
+Result of deleting a world
+"""
+type GraphQLDeleteWorldPayload {
+	id: UUID!
+	status: String!
+	message: String!
+}
+
+type GraphQLDieOutcome {
+	sidesKind: DieSidesKind!
+	"""
+	Set iff `sides_kind == NUMERIC` (e.g. 20 for a d20).
+	"""
+	numericSides: Int
+	"""
+	Full chain: original roll + every reroll/explosion of this die.
+	"""
+	rolls: [Int!]!
+	kept: Boolean!
+	finalValue: Int!
+}
+
+"""
+Which state a Game Master is setting.
+"""
+enum GraphQLDisclosureState {
+	VISIBLE
+	GREYED
+	PERCENTAGE
+	CHUNKED
+}
+
+"""
+A client reported one value; the server determined another (FR-065).
+
+Disclosure and nothing more: it accompanies an outcome that was applied,
+carries both numbers so the GM can inspect them, and has no field for a
+verdict because there is no verdict to render (FR-065a, FR-066).
+"""
+type GraphQLDiscrepancy {
+	"""
+	Whose outcome this was — the attributed originator, not the submitter,
+	since the GM relaying a player's change is the ordinary case.
+	"""
+	userId: UUID!
+	"""
+	The server record the two values are about, so the GM can go and look.
+	"""
+	recordId: UUID!
+	"""
+	What the client said.
+	"""
+	reportedValue: Float!
+	"""
+	What the server determined.
+	"""
+	determinedValue: Float!
+}
+
+"""
+Disk usage breakdown for admin statistics
+"""
+type GraphQLDiskUsageBreakdown {
+	totalBytes: Int!
+	worldsBytes: Int!
+	assetsBytes: Int!
+	clientBytes: Int!
+	databasesBytes: Int!
+	modulesBytes: Int!
+}
+
+"""
+Door state for a wall segment. "None" means the wall is not a door at
+all (its blocks_vision/blocks_movement flags always apply). "Open"
+means the door does not block vision/movement regardless of those
+flags. "Closed" means the flags apply as stored.
+"""
+enum GraphQLDoorState {
+	NONE
+	OPEN
+	CLOSED
+}
+
+type GraphQLEffectDeclaration {
+	id: String!
+	label: String!
+	description: String!
+	"""
+	`prop`, `door`, `region`.
+	"""
+	subjectKinds: [String!]!
+	config: [GraphQLConfigField!]!
+}
+
+"""
+Manifest for exported user data
+"""
+type GraphQLExportManifest {
+	schemaVersion: String!
+	exportedAt: DateTime!
+	worlds: Int!
+	worldTokens: Int!
+	worldEvents: Int!
+	policies: Int!
+	scenes: Int!
+	actors: Int!
+	items: Int!
+	abilities: Int!
+	loreEntries: Int!
+	collections: Int!
+}
+
+"""
+Complete user data export payload
+
+Spec 039 T076 (ADR-011 as amended, schema `v2`): the person's own content
+comes as JSON in the export's shapes — the same objects the download
+carries — rather than as a GraphQL type per table, which would be the raw
+dump ADR-011 rejected wearing a schema.
+"""
+type GraphQLExportMyDataPayload {
+	manifest: GraphQLExportManifest!
+	user: GraphQLUser!
+	worlds: [GraphQLWorld!]!
+	worldTokens: [GraphQLWorldToken!]!
+	worldEvents: [GraphQLWorldEvent!]!
+	policies: [GraphQLPolicy!]!
+	scenes: [JSON!]!
+	actors: [JSON!]!
+	items: [JSON!]!
+	abilities: [JSON!]!
+	loreEntries: [JSON!]!
+	collections: [JSON!]!
+	"""
+	What the export does not carry, and why (spec 049 FR-052, FR-053).
+	"""
+	withheld: [GraphQLWithheldFromExport!]!
+	assetPacks: [GraphQLPlaceholderDomainObject!]!
+	gameSystems: [GraphQLPlaceholderDomainObject!]!
+}
+
+type GraphQLFogMask {
+	fogId: UUID!
+	sceneId: UUID!
+	bitmapDataBase64: String!
+	version: Int!
+	width: Int!
+	height: Int!
+	updatedBy: UUID!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+}
+
+type GraphQLGeniePuzzleClock {
+	id: UUID!
+	sessionId: UUID!
+	label: String!
+	segmentsCurrent: Int!
+	segmentsMax: Int!
+	resolvedAt: NaiveDateTime
+}
+
+type GraphQLGeniePuzzleClockReward {
+	id: UUID!
+	clockId: UUID!
+	triggerSegment: Int!
+	rewardResourceType: String
+	rewardResourceAmount: Int
+	rewardItemId: UUID
+	rewardItemQuantity: Int
+	recipientMode: String!
+	grantedAt: NaiveDateTime
+}
+
+type GraphQLGenieResourceHolding {
+	actorId: UUID!
+	resourceType: String!
+	quantity: Int!
+}
+
+type GraphQLGenieSession {
+	id: UUID!
+	worldId: UUID!
+	wishesRemaining: Int!
+	doomClockCurrent: Int!
+	doomClockMax: Int!
+	status: GenieSessionStatus!
+	puzzleClocks: [GraphQLGeniePuzzleClock!]!
+}
+
+type GraphQLGenieShopListing {
+	id: UUID!
+	actorId: UUID!
+	itemId: UUID!
+	priceKind: String!
+	priceResourceType: String
+	priceResourceAmount: Int
+	priceItemId: UUID
+	priceItemQuantity: Int
+	"""
+	Derived, not stored: `world_actor_inventory.quantity` for
+	`(actor_id, item_id)` (contracts/genie-economy.md).
+	"""
+	stockQuantity: Int!
+}
+
+type GraphQLGenieTradeProposal {
+	id: UUID!
+	sessionId: UUID!
+	fromActorId: UUID!
+	fromResourceType: String!
+	fromQuantity: Int!
+	toActorId: UUID!
+	toResourceType: String!
+	toQuantity: Int!
+	status: String!
+}
+
+"""
+One request awaiting a Game Master's decision.
+"""
+type GraphQLInteractionRequest {
+	requestId: UUID!
+	interactiveId: UUID!
+	sceneId: UUID!
+	requestedBy: UUID!
+	"""
+	The player's display name, so the queue reads as people rather than ids.
+	"""
+	requestedByName: String
+	"""
+	What would run if it were approved, in the GM's language.
+	"""
+	proposed: String
+	createdAt: NaiveDateTime!
+}
+
+"""
+One authored interactive, reduced to what this viewer has a use for.
+"""
+type GraphQLInteractive {
+	interactiveId: UUID!
+	sceneId: UUID!
+	subjectKind: String!
+	subjectRef: UUID
+	"""
+	The region's area. Game Master only — a region is not an annotation and
+	players are never shown one.
+	"""
+	geometry: JSON
+	trigger: String!
+	"""
+	Game Master only.
+	"""
+	effectId: String
+	"""
+	Game Master only.
+	"""
+	effectConfig: JSON
+	"""
+	Game Master only.
+	"""
+	activation: String
+	"""
+	Game Master only.
+	"""
+	fireMode: String
+	"""
+	Game Master only.
+	"""
+	firedAt: NaiveDateTime
+	"""
+	Whether this build still has the subsystem that performs the effect.
+	
+	Game Master only, and shown as a state rather than repaired (FR-041).
+	A player is told nothing, because to them it is simply not interactive.
+	"""
+	available: Boolean
+	"""
+	Whether *this* viewer's activation would do anything.
+	
+	The client uses it to decide whether to offer a cursor. It is a hint,
+	not a permission: the server refuses on its own account when the
+	mutation is called, because a client that draws the button anyway must
+	still be told no.
+	"""
+	canActivate: Boolean!
+}
+
+type GraphQLInventoryEntry {
+	id: UUID!
+	actorId: UUID!
+	itemId: UUID
+	itemName: String!
+	quantity: Int!
+}
+
+"""
+An Item's own GraphQL projection. `effects` is resolved separately by
+the owning query/mutation (not a field resolver here) since every
+current call site already has both rows in hand after a join/second
+query. `linkedFromLore` (spec 013 US3) IS a per-request field
+resolver — hence `#[graphql(complex)]`, mirroring `GraphQLWorldActor`'s
+existing `lore_linked_from` pattern (`src/server/src/graphql.rs`).
+"""
+type GraphQLItem {
+	id: UUID!
+	worldId: UUID!
+	name: String!
+	description: String
+	iconAssetId: UUID
+	effects: [GraphQLItemEffect!]!
+	myPermissionLevel: ActorPermissionLevel!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+	"""
+	Spec 015: true when this item is currently disabled by a DMCA
+	takedown — when true, `name`/`description`/`effects` are a
+	placeholder, never the real content, for every caller including
+	the owner (contracts/graphql-moderation.md's enforcement contract).
+	"""
+	moderated: Boolean!
+	"""
+	Spec 015: the disabling case's id, present only on a moderation
+	placeholder — lets the owner's client jump straight into
+	`submitCounterNotice` (FR-005) without a staff-only case lookup.
+	"""
+	moderationCaseId: UUID
+	"""
+	Spec 013 (US3, FR-016): every lore entry whose body currently
+	contains a resolved in-text link to this item — mirrors
+	`GraphQLWorldActor::lore_linked_from` (`src/server/src/graphql.rs`)
+	and `GraphQLLoreEntry::linked_from` verbatim, extended to items.
+	"""
+	linkedFromLore: [GraphQLLoreEntry!]!
+	"""
+	Spec 031 (FR-037): the Game Master's price note, or `null` where none
+	was written.
+	
+	A field resolver rather than a column carried on the row, because a
+	price is a separate table by ADR-058's decision — and because a
+	moderation placeholder must not carry one: `moderated_placeholder`
+	builds an item with no real content, and a price left attached to it
+	would be the one true thing on an otherwise blanked entry.
+	"""
+	price: GraphQLItemPrice
+}
+
+"""
+One ability an item carries, as a sheet needs it.
+"""
+type GraphQLItemAbilityEntry {
+	id: UUID!
+	"""
+	`null` once the ability itself is deleted — the row survives as a
+	tombstone so the item does not silently lose a line.
+	"""
+	abilityId: UUID
+	abilityName: String!
+	"""
+	The stored type identity, or `null` for a tombstone.
+	"""
+	classification: String
+	grade: Int
+}
+
+type GraphQLItemEffect {
+	id: UUID!
+	itemId: UUID!
+	effectType: ItemEffectType!
+	formula: String!
+	target: String!
+	triggerKind: ItemEffectTrigger
+	sortOrder: Int!
+}
+
+type GraphQLItemPermission {
+	itemId: UUID!
+	userId: UUID!
+	level: ActorPermissionLevel!
+	updatedAt: NaiveDateTime!
+}
+
+"""
+What a Game Master says an item costs (FR-037).
+
+Presentational (ADR-058) — the fields are a number, a free-text label and
+the author's intent, and there is deliberately nothing here to compute
+with. A system that models its own economy keeps it in its own type.
+"""
+type GraphQLItemPrice {
+	itemId: UUID!
+	amount: Int!
+	currencyLabel: String
+	isSuggested: Boolean!
+	updatedAt: NaiveDateTime!
+}
+
+type GraphQLItemShareLink {
+	id: UUID!
+	itemId: UUID!
+	shareCode: String!
+	revoked: Boolean!
+	createdAt: NaiveDateTime!
+}
+
+type GraphQLLightSource {
+	lightId: UUID!
+	sceneId: UUID!
+	x: Float!
+	y: Float!
+	radius: Float!
+	intensity: Float!
+	color: String
+	attachedTokenId: UUID
+	castsShadows: Boolean!
+	metadata: JSON
+	createdBy: UUID!
+	updatedBy: UUID!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+}
+
+"""
+A world-scoped wiki page (FR-001..FR-021). `myPermissionLevel` and
+`renderedHtml` are per-request-computed complex fields: `content` is
+re-rendered (GFM parse + link resolution + sanitize) on every read
+rather than cached, keeping `renderedHtml` always consistent with the
+current `content`/live `world_lore_links` state (research.md 1, 2).
+"""
+type GraphQLLoreEntry {
+	id: UUID!
+	worldId: UUID!
+	title: String!
+	slug: String!
+	content: String!
+	currentRevisionId: UUID
+	createdBy: UUID!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+	"""
+	Spec 031 (FR-038): the entry this one sits under, `null` for a root.
+	A plain column rather than a nested `parent` object — the client
+	already loads the world's entries to draw the tree, and an object
+	here would be the same rows fetched twice.
+	"""
+	parentId: UUID
+	"""
+	Spec 015: true when this entry is currently disabled in response to
+	a DMCA takedown notice — `title`/`content` are a placeholder, not
+	the real content (contracts/graphql-moderation.md).
+	"""
+	moderated: Boolean!
+	"""
+	The disabling case's id, present only on a moderation placeholder.
+	"""
+	moderationCaseId: UUID
+	"""
+	Effective Viewer/Editor/Owner level the calling user holds on this
+	entry: DM of the entry's world always resolves to Owner;
+	otherwise the caller's explicit `world_lore_permissions` row, else
+	Viewer (FR-003).
+	"""
+	myPermissionLevel: ActorPermissionLevel!
+	"""
+	Server-rendered, sanitized GFM HTML for `content`, with resolved
+	in-text links substituted in as real anchors/broken-link spans
+	(FR-004, FR-005, FR-007).
+	"""
+	renderedHtml: String!
+	"""
+	Every lore entry whose body currently contains a resolved in-text
+	link to this entry (FR-006).
+	"""
+	linkedFrom: [GraphQLLoreEntry!]!
+	"""
+	Spec 031 (FR-038): this entry's tags, normalised and alphabetical.
+	
+	A resolver rather than a column, for the same reason `price` is one on
+	an item: tags live in their own table, and a moderation placeholder
+	must not carry any — a blanked entry still labelled "ancient ruins"
+	would be the one piece of real content left on it.
+	"""
+	tags: [String!]!
+}
+
+"""
+An uploaded/pasted image attached to a lore entry (FR-008/009).
+"""
+type GraphQLLoreImageAsset {
+	id: UUID!
+	loreEntryId: UUID!
+	url: String!
+	thumbnailUrl: String!
+	byteSize: Int!
+	createdAt: NaiveDateTime!
+}
+
+"""
+One autocomplete candidate for the editor's `[[`-trigger popover
+(T034, FR-007a).
+"""
+type GraphQLLoreLinkTarget {
+	id: UUID!
+	title: String!
+	kind: GraphQLLoreLinkTargetKind!
+}
+
+enum GraphQLLoreLinkTargetKind {
+	LORE_ENTRY
+	ACTOR
+	ITEM
+	ABILITY
+}
+
+"""
+One change the repository proposes, awaiting a decision.
+
+Carries both texts where an entry changed on both sides, because FR-024
+requires them to be *presented* rather than reconciled — and a client that
+only received the incoming text could not show a person what they would be
+giving up.
+"""
+type GraphQLLorePendingChange {
+	id: UUID!
+	kind: LoreIncomingKind!
+	repositoryPath: String!
+	proposedTitle: String
+	incomingBody: String
+	"""
+	FR-024's conflict flag. True means the same entry changed in the app
+	too, and the client must present both and merge neither.
+	"""
+	alsoChangedInApp: Boolean!
+	detectedAt: DateTime!
+	"""
+	`None` for a proposed new entry — a file with no recognised identifier
+	is never matched to an existing entry (FR-027), and a null here is how
+	that is visible to a client rather than something it has to infer.
+	"""
+	loreEntryId: UUID
+	currentTitle: String
+	currentBody: String
+}
+
+"""
+A lore entry's ownership-block entry: one explicit (lore entry,
+world member, permission level) grant. Direct structural mirror of
+`GraphQLActorPermission` (spec 010), generalized to lore entries.
+"""
+type GraphQLLorePermission {
+	loreEntryId: UUID!
+	userId: UUID!
+	level: ActorPermissionLevel!
+	updatedAt: NaiveDateTime!
+}
+
+"""
+An immutable snapshot of a lore entry's Markdown content at one point
+in save time (FR-016/017/018).
+"""
+type GraphQLLoreRevision {
+	id: UUID!
+	loreEntryId: UUID!
+	contentMarkdown: String!
+	authorId: UUID!
+	restoredFromRevisionId: UUID
+	createdAt: NaiveDateTime!
+	"""
+	Re-rendered on read for this specific historical revision
+	(contracts/lore-revisions.md) - resolves in-text links against
+	the world's current entries/actors (a past revision's links are
+	not themselves versioned; only its Markdown text is).
+	"""
+	renderedHtml: String!
+}
+
+"""
+System manifest entry
+
+Spec 040 FR-009: a key the environment has fixed is not offered for
+editing **and says which variable fixed it**. A field greyed out with no
+stated reason is the thing that feature exists to stop, so `editable` and
+`fixed_by` are answered together and by the same resolver the settings
+surface uses — not by a rule restated here.
+"""
+type GraphQLManifestEntry {
+	key: String!
+	value: String!
+	editable: Boolean!
+	"""
+	The environment variable that fixed this value, when one has.
+	"""
+	fixedBy: String
+	"""
+	Where the value came from, in the vocabulary every other surface uses.
+	"""
+	source: SettingSource!
+}
+
+"""
+What one member of a world has been *granted*, as the settings page needs
+it: keyed by membership, one entry per member holding anything.
+
+Deliberately not "what this member may use". A Game Master holds every
+tool implicitly, and rendering that as six lit toggles would invite
+somebody to turn one off and find that nothing happened.
+"""
+type GraphQLMemberAuthoringTools {
+	worldMemberId: UUID!
+	userId: UUID!
+	tools: [String!]!
+}
+
+type GraphQLModerationAction {
+	id: UUID!
+	caseId: UUID!
+	actionType: ModerationActionType!
+	entityType: ModerationEntityType!
+	entityId: UUID!
+	worldId: UUID!
+	validityResult: String
+	missingElements: [String!]
+	restorationDueAt: String
+	createdAt: String!
+}
+
+"""
+One takedown case's full event thread (data-model.md's `case_id`
+grouping), plus its currently-effective status.
+"""
+type GraphQLModerationCase {
+	caseId: UUID!
+	entityType: ModerationEntityType!
+	entityId: UUID!
+	worldId: UUID!
+	currentStatus: ModerationActionType!
+	events: [GraphQLModerationAction!]!
+}
+
+"""
+Input for moving a token to new coordinates
+"""
+input GraphQLMoveTokenInput {
+	tokenId: String!
+	x: Float!
+	y: Float!
+	z: Float
+}
+
+"""
+One entry in `myWorldsWithRole` (Welcome page hub): a world the caller
+owns or is an accepted member of, paired with their role in it. `role`
+is the raw `world_members` string (see `thunderforge_authz::Role::as_stored`)
+— the frontend collapses Owner/GM to a single "Game Master" badge,
+matching this app's DM = Owner-or-GM convention (spec 010), and names a
+Trusted Player and a Player as what they are.
+"""
+type GraphQLMyWorldEntry {
+	world: GraphQLWorld!
+	role: String!
+}
+
+"""
+Where an OAuth provider instance's configuration comes from (ADR-041).
+`Env` rows are materialized and kept in sync by the server's startup
+env-var scan; only `enabled` is writable on them through
+`updateOauthProvider` (see that mutation's source-aware write guard).
+"""
+enum GraphQLOAuthConfigSource {
+	ADMIN
+	ENV
+}
+
+"""
+OAuth provider configuration
+"""
+type GraphQLOAuthProvider {
+	id: UUID!
+	providerKey: String!
+	displayName: String!
+	authorizationUrl: String!
+	tokenUrl: String!
+	userinfoUrl: String
+	scopes: [String!]!
+	oauthClientId: String
+	configured: Boolean!
+	enabled: Boolean!
+	hasClientSecret: Boolean!
+	updatedAt: NaiveDateTime!
+	configSource: GraphQLOAuthConfigSource!
+	"""
+	The same vocabulary every other setting reports (spec 040 FR-011,
+	T027). `config_source` predates it and is kept because clients read it;
+	this is the field a client should use when it wants to say "where did
+	this value come from" in the words the rest of the product uses.
+	
+	There is deliberately **no `fixedBy`** here. A provider is fixed by a
+	*set* of variables — `OAUTH_<segment>_<key>_CLIENT_ID`, `_CLIENT_SECRET`
+	and possibly an issuer field — so naming one of them would be picking a
+	representative and calling it the answer. A settings key has exactly one
+	variable and can honestly name it; this cannot.
+	"""
+	source: SettingSource!
+}
+
+"""
+Input object for OAuth provider configuration
+"""
+input GraphQLOAuthProviderConfigInput {
+	displayName: String
+	oauthClientId: String
+	oauthClientSecret: String
+	enabled: Boolean
+	userinfoUrl: String
+	scopes: [String!]
+}
+
+"""
+What the destination looks like now, in the terms the caller asked in.
+
+Deliberately character ids and not tokens. ADR-056 is explicit that token
+ids do not survive a scene change, so handing them back would invite a
+client to keep one; every consequence a caller can legitimately want —
+what arrived, what was already standing there — is expressible about
+characters.
+"""
+type GraphQLPartyArrival {
+	sceneId: UUID!
+	"""
+	Characters that gained a token in this call.
+	"""
+	arrivedActorIds: [UUID!]!
+	"""
+	Characters that already had one, left exactly as they were.
+	"""
+	alreadyPresentActorIds: [UUID!]!
+}
+
+"""
+One point of a route a client claims to have walked (spec 045 FR-016).
+
+World coordinates, in the order they were passed through. Deliberately a
+plain pair rather than a grid cell: a scene may have no grid, and the
+geometry that judges the route works in world space either way.
+"""
+input GraphQLPathPoint {
+	x: Float!
+	y: Float!
+}
+
+"""
+Placeholder for domain objects with minimal metadata
+"""
+type GraphQLPlaceholderDomainObject {
+	schemaVersion: String!
+	status: String!
+}
+
+"""
+Who holds an account's play field.
+"""
+type GraphQLPlayFieldClaim {
+	"""
+	The page-load id currently at the table for this account.
+	"""
+	clientId: String!
+	worldId: UUID!
+	claimedAt: String!
+	"""
+	True when the client asking is the one holding it.
+	"""
+	isMine: Boolean!
+}
+
+"""
+Player presence data in world/scene
+"""
+type GraphQLPlayerPresence {
+	playerId: UUID!
+	worldId: UUID!
+	sceneId: UUID
+	idleDurationSecs: Int!
+}
+
+"""
+List of players online in a world
+"""
+type GraphQLPlayersOnlineList {
+	worldId: UUID!
+	players: [GraphQLPlayerPresence!]!
+}
+
+"""
+Access control policy
+"""
+type GraphQLPolicy {
+	id: UUID!
+	effect: GraphQLPolicyEffect!
+	resources: [String!]!
+	createdBy: UUID!
+	updatedBy: UUID!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+}
+
+"""
+Policy effect (Allow or Deny)
+"""
+enum GraphQLPolicyEffect {
+	ALLOW
+	DENY
+}
+
+"""
+One participant's presence, as everyone else sees it.
+"""
+type GraphQLPresence {
+	userId: UUID!
+	"""
+	Which scene they are looking at, when they have said.
+	"""
+	sceneId: UUID
+	"""
+	Seconds since their last heartbeat.
+	"""
+	secondsSinceSeen: Int!
+	"""
+	Whether that silence has passed
+	[`thunderforge_presence::PRESENCE_TIMEOUT`].
+	
+	Three missed beats at the client's five-second interval. One missed
+	beat is a garbage collection pause or a train tunnel; three is someone
+	who stopped being there. Erring long is right because the cost of
+	being wrong is asymmetric: announcing a player has dropped when they
+	have not is visible to the whole table and momentarily wrong in
+	public, while noticing fifteen seconds late costs nothing anyone can
+	see.
+	"""
+	connected: Boolean!
+}
+
+"""
+What became of one queued change.
+"""
+type GraphQLReconcileOutcome {
+	localId: String!
+	applied: Boolean!
+	reason: GraphQLRejectionReason
+	"""
+	Set when `reason` is `SUPERSEDED`: who won, so the UI can say so
+	rather than reporting an anonymous failure.
+	"""
+	supersededByRole: String
+	"""
+	Set only when the server determined a different value than the client
+	reported, and only for a Game Master submitter (FR-067). It never
+	changes what happened to the change — `applied` above says that.
+	"""
+	discrepancy: GraphQLDiscrepancy
+}
+
+"""
+Why a queued change did not stand. Mirrors
+`thunderforge_cache_core::queue::RejectionReason`.
+"""
+enum GraphQLRejectionReason {
+	"""
+	The user may no longer make this change (FR-042).
+	"""
+	PERMISSION_DENIED
+	"""
+	A conflicting change took precedence. Deliberately distinct from a
+	generic failure: it is a working rule, not an error, and the UI has to
+	be able to say which.
+	"""
+	SUPERSEDED
+	"""
+	The thing being changed no longer exists.
+	"""
+	GONE_AWAY
+	"""
+	Malformed, or outside what may be edited offline (FR-035a).
+	"""
+	INVALID
+	"""
+	An operator paused play in this world (spec 051 FR-023). Nothing in the
+	batch is applied, and the client discards it rather than retrying.
+	"""
+	PLAY_PAUSED
+}
+
+"""
+What removing this compendium would take with it, and what it would leave
+(FR-045, FR-046).
+
+Returned by both calls. With `confirm: false` it is the whole answer and
+nothing has changed; with `confirm: true` it describes what was removed.
+"""
+type GraphQLRemovalReport {
+	compendiumId: UUID!
+	bookTitle: String!
+	"""
+	How many entries this import contributed, all of which go.
+	"""
+	entryCount: Int!
+	"""
+	Where those entries are in use today, per world.
+	
+	One row per world with this book switched on (050 FR-060). Because
+	nothing was copied into a world, "in use" is not a subset to compute:
+	a table running the book loses all of it, and that is what this says.
+	"""
+	inUse: [GraphQLCompendiumUsage!]!
+	"""
+	Entries a table has changed or hidden over this book, which go with it
+	(FR-046), each prefixed with the world it is in.
+	
+	Under spec 050 a hand edit is a world's delta over the base, never a
+	change to `compendium_entries`, which is also why a re-import cannot
+	silently overwrite one. `deltasByWorld` carries the same, per world,
+	beside what stays.
+	"""
+	handEdited: [String!]!
+	"""
+	Per world, what removing the book does to that table's own work:
+	changes and hides are lost, additions are **kept** (spec 050 decision
+	5). Includes worlds that have switched the book off and kept an
+	addition, which `inUse` does not name.
+	"""
+	deltasByWorld: [RemovalWorldDeltas!]!
+	"""
+	Whether this call removed anything. False for the report, true for the
+	confirmation — so a caller can never mistake one reply for the other.
+	"""
+	removed: Boolean!
+}
+
+"""
+One resource, as one viewer receives it.
+
+The three payload fields are mutually exclusive and only one is ever
+populated. GraphQL cannot express a discriminated union over scalars, so
+the exclusivity is enforced where the value is produced (`disclose`) rather
+than by the schema — and the type it comes from *can* express it, which is
+why the coarsening happens there and not here.
+"""
+type GraphQLResolvedResource {
+	definitionId: String!
+	label: String!
+	"""
+	`bar` or `counter`.
+	"""
+	kind: String!
+	"""
+	`visible`, `greyed`, `percentage` or `chunked`.
+	"""
+	disclosure: String!
+	"""
+	Populated only when `disclosure` is `visible`.
+	"""
+	entries: [GraphQLResourceEntry!]
+	"""
+	Populated only when `disclosure` is `percentage`. No maximum is sent.
+	"""
+	proportion: Float
+	"""
+	Populated only when `disclosure` is `chunked`. 0-4.
+	"""
+	quarter: Int
+	"""
+	What everyone who does not run the world sees for this resource.
+	
+	Present only for a viewer who *does* run it. A Game Master's own
+	`disclosure` is always `visible`, so it cannot tell them what the table
+	is under — and a control that guessed would show a setting nobody is
+	actually playing with. Absent for a player, who has no business knowing
+	which of the four states they are being shown through.
+	"""
+	configured: String
+}
+
+type GraphQLResourceEntry {
+	current: Int!
+	max: Int
+	label: String
+}
+
+type GraphQLRollRecord {
+	id: UUID!
+	worldId: UUID!
+	triggeredBy: UUID!
+	resolution: GraphQLRollResolution!
+	createdAt: String!
+}
+
+type GraphQLRollResolution {
+	"""
+	The resolved formula (original source; see `RollResolution::formula`
+	doc comment — placeholder substitutions are recorded separately).
+	"""
+	formula: String!
+	dice: [GraphQLDieOutcome!]!
+	resultKind: RollResultKind!
+	"""
+	The total, or the success count, per `result_kind`.
+	"""
+	resultValue: Float!
+}
+
+type GraphQLScene {
+	sceneId: UUID!
+	worldId: UUID!
+	name: String!
+	description: String
+	type: String!
+	gridSize: Int!
+	gridType: String!
+	width: Int!
+	height: Int!
+	metadata: JSON
+	ownerId: UUID!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+	"""
+	Native canvas authoring: set by map import (data-model.md's Scene
+	section); resolves against the existing `/assets/<path>` static
+	route. `None` = no background art. Superseded by
+	`background_asset_id` (spec 002, FR-018).
+	"""
+	backgroundImagePath: String
+	"""
+	Spec 002 (FR-018): the RustFS-backed `canvas_image_assets` row
+	for this scene's background, when migrated.
+	"""
+	backgroundAssetId: UUID
+	"""
+	Bug fix (found while investigating "map import doesn't take the
+	image"): `background_asset_id` alone is a bare UUID with no
+	fetchable URL — the frontend's canvas-loading path
+	(`WorldPage.tsx`) only ever read `background_image_path`, which
+	dd2vtt import (spec 022/002, `save_background_image`) never sets,
+	since it writes to RustFS via `background_asset_id` instead. This
+	computed field is the fetchable URL for whichever mechanism is
+	actually populated (`background_asset_id` preferred — RustFS via
+	`assets_serve/canvas.rs`'s existing `GET /canvas-assets/{id}`
+	route, already used by `AssetPasteTool`; falls back to the legacy
+	`background_image_path` static-file route for scenes never
+	migrated to RustFS), mirroring `preview_url`'s existing pattern.
+	"""
+	backgroundUrl: String
+	"""
+	Spec 022: GM-authored Markdown source for the scene's player-facing
+	summary.
+	"""
+	summaryMarkdown: String
+	"""
+	Spec 022: sanitized HTML rendered from `summary_markdown` — render
+	this, never `summary_markdown` directly.
+	"""
+	summaryRenderedHtml: String
+	"""
+	Spec 022 (FR-003, Clarifications): player-facing visibility, hidden
+	by default on creation.
+	"""
+	hidden: Boolean!
+	"""
+	Spec 022 (FR-011): computed URL for the scene's reduced-size
+	preview image, `None` until one has been generated.
+	"""
+	previewUrl: String
+	"""
+	Why this scene's grid does not match the background under it, or
+	`None` when they agree.
+	
+	A sentence rather than a flag, because the useful thing to show is the
+	two numbers that differ — and computed here rather than in the client
+	so the rule has one home. See `map_import::alignment`.
+	"""
+	backgroundGridMismatch: String
+	"""
+	Playtest 2026-09-10 P9: `bright`, `dim` or `dark` — the light every
+	client showing this scene hands its engine.
+	"""
+	ambientLight: String!
+}
+
+"""
+What a client needs to decide whether the map it has stored is still good.
+"""
+type GraphQLSceneExploration {
+	"""
+	Whether this scene remembers where players have been at all.
+	"""
+	enabled: Boolean!
+	"""
+	The scene's own epoch — the last reset that reached everyone.
+	"""
+	epoch: Int!
+	"""
+	The epoch **this viewer** must compare against: the greater of the
+	scene's and their own reset.
+	
+	Resolved here rather than handing a client both numbers and asking it
+	to take the greater. A client that took the wrong one would keep a map
+	it had been told to drop, and nothing would ever say so.
+	"""
+	mine: Int!
+}
+
+type GraphQLShape {
+	shapeId: UUID!
+	sceneId: UUID!
+	kind: GraphQLShapeKind!
+	geometry: JSON!
+	text: String
+	style: JSON
+	visibleToPlayers: Boolean!
+	metadata: JSON
+	createdBy: UUID!
+	updatedBy: UUID!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+}
+
+"""
+Kind of freehand/drawn shape on a scene's canvas (native canvas
+authoring: stroke, rect, ellipse, line, text).
+"""
+enum GraphQLShapeKind {
+	STROKE
+	RECT
+	ELLIPSE
+	LINE
+	TEXT
+}
+
+"""
+One movement speed, in the scene's spoken units.
+"""
+type GraphQLSpeed {
+	"""
+	The system's own identifier — `walk`, `fly`, `stride`.
+	"""
+	id: String!
+	"""
+	Systems disagree even where ids match: Pathfinder calls its ground
+	speed simply "Speed".
+	"""
+	label: String!
+	value: Float!
+}
+
+"""
+What a sheet is told about a check: enough to draw a button, and no more.
+
+Deliberately not the formula and not the bindings. Those are in the pack's
+manifest and no secret, but publishing them *through this API* would invite
+a client to compute the roll it is about to ask for, and then to notice
+that it need not ask.
+"""
+type GraphQLSystemCheck {
+	"""
+	The id to pass back to `rollCheck`.
+	"""
+	id: String!
+	"""
+	What a person is shown.
+	"""
+	label: String!
+	"""
+	The set it belongs to — a sheet groups by this and does not read it.
+	"""
+	group: String
+}
+
+"""
+System manifest configuration document
+"""
+type GraphQLSystemManifest {
+	path: String!
+	schemaVersion: String!
+	updatedAt: DateTime!
+	entries: [GraphQLManifestEntry!]!
+}
+
+type GraphQLToken {
+	tokenId: UUID!
+	sceneId: UUID!
+	actorId: UUID
+	x: Float!
+	y: Float!
+	rotation: Float!
+	scale: Float!
+	metadata: JSON
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+	ownerUserId: UUID
+	isPrimary: Boolean!
+	photoUrl: String
+	health: Int
+	maxHealth: Int
+	"""
+	What this token represents: `character`, `npc`, `vehicle`, `object`.
+	"""
+	tokenType: String!
+	"""
+	Playtest 2026-09-10 P7: the name drawn above the token — its own
+	`metadata.label`, else its character's name. `None` for anyone who
+	does not run the world when a Game Master has hidden it: they are
+	never sent it (`for_viewer`).
+	"""
+	name: String
+	"""
+	Whether players may read the name. A Game Master always can.
+	"""
+	nameVisibleToPlayers: Boolean!
+}
+
+"""
+What a token's sheet says about it.
+"""
+type GraphQLTokenAttributes {
+	tokenId: UUID!
+	attributes: [GraphQLAttribute!]!
+	"""
+	Everything the system publishes — the attributes above plus whatever
+	it derives — each saying where it came from.
+	"""
+	values: [GraphQLDeclaredValue!]!
+	"""
+	Only the movement types this creature actually has.
+	
+	An absent type means it cannot move that way at all, which is a
+	different claim from a speed of zero (it can, but is currently
+	prevented) — so absent types are omitted rather than sent as zeroes.
+	"""
+	speeds: [GraphQLSpeed!]!
+}
+
+type GraphQLTokenStatus {
+	tokenId: UUID!
+	resources: [GraphQLResolvedResource!]!
+}
+
+"""
+One token's sight, in world units — what the engine's `set_token_vision`
+takes, so no client has to know what a cell is worth.
+"""
+type GraphQLTokenVision {
+	tokenId: UUID!
+	"""
+	How far this token sees in darkness. Zero means ordinary sight.
+	"""
+	darkvision: Float!
+	"""
+	The bright reach of a light this character carries. Zero means none.
+	"""
+	carriedBright: Float!
+	"""
+	Its dim reach.
+	"""
+	carriedDim: Float!
+}
+
+"""
+One thing that happened to this account's second factor.
+"""
+type GraphQLTwoFactorEvent {
+	occurredAt: String!
+	"""
+	One of the values the spec-041 migration's CHECK constraint permits.
+	"""
+	eventType: String!
+	"""
+	True when somebody other than the account holder did this.
+	"""
+	bySomeoneElse: Boolean!
+}
+
+input GraphQLUpdateActorSystemDataInput {
+	actorId: UUID!
+	gameSystemId: String!
+	dataType: String!
+	data: JSON!
+}
+
+"""
+Input for updating fog of war mask
+"""
+input GraphQLUpdateFogMaskInput {
+	sceneId: UUID!
+	bitmapDataBase64: String!
+	width: Int!
+	height: Int!
+}
+
+input GraphQLUpdateInteractiveInput {
+	geometry: JSON
+	effectId: String
+	effectConfig: JSON
+	trigger: String
+	activation: String
+	fireMode: String
+	"""
+	Explicitly clear the effect, turning an interactive back into scenery.
+	
+	Needed because an absent `effectId` means "leave it alone" in a partial
+	update, and there would otherwise be no way to say "remove it".
+	"""
+	clearEffect: Boolean
+}
+
+"""
+Input for updating light source properties
+"""
+input GraphQLUpdateLightSourceInput {
+	x: Float
+	y: Float
+	radius: Float
+	intensity: Float
+	color: String
+	attachedTokenId: UUID
+	castsShadows: Boolean
+	metadata: JSON
+}
+
+"""
+Input for updating scene properties
+"""
+input GraphQLUpdateSceneInput {
+	name: String
+	description: String
+	gridSize: Int
+	gridType: String
+	width: Int
+	height: Int
+	metadata: JSON
+	"""
+	Spec 022 (FR-005/FR-006): GM-authored Markdown source for the
+	scene's player-facing summary. `Some(_)` (including `Some("")`)
+	re-renders `summaryRenderedHtml`; `None` leaves the summary
+	untouched.
+	"""
+	summaryMarkdown: String
+}
+
+"""
+Input for updating shape properties
+"""
+input GraphQLUpdateShapeInput {
+	geometry: JSON
+	text: String
+	style: JSON
+	visibleToPlayers: Boolean
+	metadata: JSON
+}
+
+"""
+Input for updating an existing token's position/properties
+"""
+input GraphQLUpdateTokenInput {
+	actorId: UUID
+	x: Float
+	y: Float
+	rotation: Float
+	scale: Float
+	metadata: JSON
+	ownerUserId: UUID
+	isPrimary: Boolean
+	"""
+	`MaybeUndefined` rather than `Option`, because omitting the field
+	and sending an explicit `null` have to mean different things here:
+	"leave the art alone" and "remove the art". A plain `Option`
+	collapses both to `None`, which made a GM's only way to undo token
+	art be replacing it with different art.
+	"""
+	photoUrl: String
+	health: Int
+	maxHealth: Int
+	"""
+	Reclassify a placed token. Omitted leaves the kind alone.
+	"""
+	tokenType: String
+}
+
+"""
+Input for updating wall properties
+"""
+input GraphQLUpdateWallInput {
+	x1: Float
+	y1: Float
+	x2: Float
+	y2: Float
+	blocksVision: Boolean
+	blocksMovement: Boolean
+	doorState: GraphQLDoorState
+	metadata: JSON
+}
+
+"""
+Input for upserting (create or update) a world token
+"""
+input GraphQLUpsertWorldTokenInput {
+	worldId: UUID!
+	tokenId: String
+	label: String
+	x: Float
+	y: Float
+	z: Float
+	health: Int
+	maxHealth: Int
+}
+
+type GraphQLUser {
+	id: UUID!
+	username: String!
+	email: String!
+	role: String!
+	isAdmin: Boolean!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+}
+
+"""
+One live session, as its owner sees it.
+"""
+type GraphQLUserSession {
+	id: UUID!
+	createdAt: String!
+	lastSeenAt: String!
+	expiresAt: String!
+	"""
+	Coarse origin — a browser and a platform, never an address.
+	"""
+	clientDescription: String
+	"""
+	True for the session making this request.
+	"""
+	isCurrent: Boolean!
+}
+
+"""
+A pool's current value and, where the system gives one, its maximum.
+"""
+type GraphQLValueFraction {
+	current: Int!
+	"""
+	Absent for a counter, which has no maximum to be a proportion of.
+	"""
+	max: Int
+}
+
+"""
+Whether a value was stored or computed.
+
+Sent because a surface has to know which numbers a player may edit. A 5e
+Strength score is typed in; its modifier is not, and a text box over a
+computed value invites the two to disagree.
+"""
+enum GraphQLValueOrigin {
+	STORED
+	DERIVED
+}
+
+"""
+An ordered ladder of named states, and which one a character is on.
+"""
+type GraphQLValueState {
+	"""
+	Absent means none of them — an uninjured character is at no position.
+	"""
+	current: String
+	"""
+	In the system's own order.
+	"""
+	options: [String!]!
+}
+
+"""
+A run of marks, and how many are filled.
+"""
+type GraphQLValueTrack {
+	filled: Int!
+	of: Int!
+}
+
+type GraphQLWall {
+	wallId: UUID!
+	sceneId: UUID!
+	x1: Float!
+	y1: Float!
+	x2: Float!
+	y2: Float!
+	blocksVision: Boolean!
+	blocksMovement: Boolean!
+	doorState: GraphQLDoorState!
+	"""
+	Spec 030: who may change the door's state, not the state itself.
+	"""
+	locked: Boolean!
+	"""
+	Spec 030: not drawn for players until revealed. Presentation only —
+	the geometry reaches every client, because a door that did not arrive
+	would also stop blocking vision and movement.
+	"""
+	secret: Boolean!
+	metadata: JSON
+	createdBy: UUID!
+	updatedBy: UUID!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+}
+
+"""
+One thing withheld from an export, named so the person can recognise it,
+with the reason every route out gives for it.
+"""
+type GraphQLWithheldFromExport {
+	kind: String!
+	id: UUID!
+	title: String!
+	reason: String!
+}
+
+type GraphQLWorld {
+	id: UUID!
+	name: String!
+	description: String
+	gameSystemId: String
+	interfacePackId: String
+	scenes: [String!]!
+	actors: [String!]!
+	tokens: [String!]!
+	events: [String!]!
+	gameSystem: String
+	interfacePack: String
+	createdBy: UUID!
+	updatedBy: UUID!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+	sessionNotes: String
+	"""
+	Spec 017 (FR-007): gates the Actor Selection screen's "create your
+	own character" option. GM-controlled, defaults to false.
+	"""
+	allowPlayerCreatedActors: Boolean!
+	"""
+	Spec 020 (FR-003): when true, Genie Session Resource holdings
+	carry over into the next session instead of resetting to 0.
+	"""
+	genieResourceCarryoverEnabled: Boolean!
+	"""
+	Spec 022 (FR-014/FR-015): GM-controlled default grid type
+	("square" | "hex" | "gridless") applied to a newly created scene
+	when its own `gridType` isn't explicitly set.
+	"""
+	defaultSceneGridType: String!
+	"""
+	Spec 022 (FR-002a/FR-002b, ADR-046): the world's server-authoritative
+	currently-launched scene for Play. `None` = nothing launched yet.
+	"""
+	activeSceneId: UUID
+}
+
+type GraphQLWorldActor {
+	id: UUID!
+	worldId: UUID!
+	sceneId: UUID!
+	actorType: String!
+	gameSystemId: String
+	label: String!
+	description: String
+	isPublic: Boolean!
+	isNpc: Boolean!
+	createdBy: UUID!
+	ownedBy: UUID!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+	"""
+	Spec 017 (FR-004): GM-set flag offering this (PC-only) actor to a
+	joining player on the Actor Selection screen.
+	"""
+	availableForClaim: Boolean!
+	"""
+	Effective Viewer/Editor/Owner level the calling user holds on this
+	actor (data-model.md's "effective actor permission") — DM of the
+	actor's world always resolves to `Owner` (FR-017); otherwise the
+	caller's explicit `world_actor_permissions` row, else `Viewer`
+	(FR-016).
+	"""
+	myPermissionLevel: ActorPermissionLevel!
+	"""
+	Spec 012 (FR-006): every lore entry whose body currently contains
+	a resolved in-text link to this actor.
+	"""
+	loreLinkedFrom: [GraphQLLoreEntry!]!
+	"""
+	Spec 031 (FR-036): every image this actor has, keyed by role.
+	
+	One list rather than a `portrait`/`token` pair of fields: ADR-057 keeps
+	the role set open so the deferred presentation images are additive, and
+	a client that renders a role it knows and skips one it does not needs
+	no schema change when a new role appears.
+	"""
+	images: [GraphQLActorImage!]!
+	"""
+	Spec 017 (FR-012): who currently has this actor claimed, if anyone.
+	`None` if unclaimed — independent of `available_for_claim`, since an
+	actor can be un-flagged without losing its claim (data-model.md).
+	"""
+	claimedBy: GraphQLWorldMember
+}
+
+type GraphQLWorldEvent {
+	id: Int!
+	worldId: UUID!
+	eventCode: Int!
+	tokenEvent: JSON
+	createdBy: UUID!
+	updatedBy: UUID!
+	schemaVersion: Int!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+}
+
+type GraphQLWorldMember {
+	id: UUID!
+	worldId: UUID!
+	userId: UUID!
+	username: String!
+}
+
+type GraphQLWorldToken {
+	id: String!
+	worldId: UUID!
+	x: Float!
+	y: Float!
+	z: Float!
+	label: String
+	health: Int
+	maxHealth: Int
+	createdBy: UUID!
+	updatedBy: UUID!
+	schemaVersion: Int!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+}
+
+"""
+One item the client claims to hold.
+
+Named `HeldItemInput` on the wire to match the contract; the `GraphQL`
+prefix on the Rust type follows this module's neighbours instead.
+"""
+input HeldItemInput {
+	"""
+	`"scene:<uuid>"` or `"asset:<uuid>"`.
+	"""
+	id: String!
+	"""
+	Lowercase hex SHA-256 the client believes it holds.
+	"""
+	fingerprint: String!
+}
+
+"""
+One entry, as the review approved it.
+"""
+input ImportedEntryInput {
+	"""
+	The system's own word for what this is. Checked against the manifest,
+	never switched on.
+	"""
+	kind: String!
+	name: String!
+	nameUncertain: Boolean!
+	"""
+	One-based, as a person would cite it.
+	"""
+	page: Int!
+	"""
+	The declared fields, each carrying its own certainty.
+	
+	Carried in the shared [`ReadValue`] shape rather than re-described as
+	GraphQL input objects, and that is what keeps FR-002 true across the
+	wire: `unread` is a variant with nowhere to put a value, so a payload
+	claiming a field was not found *and* supplying its value does not
+	deserialise at all. A pair of `{ state, value }` fields would have
+	admitted exactly that, and anything admissible eventually arrives.
+	"""
+	values: JSON
+	"""
+	Prose kinds only: what the entry says.
+	"""
+	text: String
+	"""
+	The reader distrusted the lines this was built from (FR-004).
+	"""
+	suspect: Boolean!
+	"""
+	Whatever the system's own pack read that a declaration could not
+	express. Opaque here exactly as it is everywhere else.
+	"""
+	extras: JSON
+}
+
+type InstanceAccessEvent {
+	id: UUID!
+	eventType: String!
+	occurredAt: String!
+	actorUserId: UUID
+	previousPolicy: String
+	newPolicy: String
+	attemptedRoute: String
+	policyAtAttempt: String
+}
+
+enum InstanceAccessPolicy {
+	OPEN
+	INVITE_ONLY
+	CLOSED
+}
+
+type InstanceAccessSettings {
+	policy: InstanceAccessPolicy!
+	updatedAt: String!
+	updatedBy: UUID
+}
+
+type InstanceCapability {
+	key: String!
+	label: String!
+	available: Boolean!
+	gaps: [ReadinessGap!]!
+}
+
+"""
+An invitation as the operator sees it.
+
+`invite_code` appears **only here**, on an admin-only query. It is not in
+the public status response, not in an access event, and not in a log line
+(FR-019).
+"""
+type InstanceInvitation {
+	id: UUID!
+	inviteCode: String!
+	maxUses: Int!
+	usedCount: Int!
+	remainingUses: Int!
+	state: String!
+	expiresAt: String
+	note: String
+	createdBy: UUID!
+	createdAt: String!
+	redemptions: [InstanceInvitationRedemption!]!
+}
+
+type InstanceInvitationRedemption {
+	userId: UUID!
+	username: String!
+	redeemedAt: String!
+	route: String!
+}
+
+type InstanceReadiness {
+	capabilities: [InstanceCapability!]!
+	"""
+	True only when every capability is available. Not an absence of
+	complaints.
+	"""
+	fullyConfigured: Boolean!
+	"""
+	Rows in `instance_settings` the registry no longer declares. Reported,
+	never deleted.
+	"""
+	unrecognisedSettings: [String!]!
+	"""
+	A value whose source changed since the last start — an environment
+	variable that appeared or vanished.
+	"""
+	sourceFlips: [SourceFlip!]!
+}
+
+input ItemEffectInput {
+	effectType: ItemEffectType!
+	formula: String!
+	target: String!
+	triggerKind: ItemEffectTrigger
+	sortOrder: Int
+}
+
+"""
+Scaffolded per FR-004a — not evaluated/enforced by any code path in
+this pass; exists so a future dice-roller spec can add real triggering
+without redesigning `world_item_effects`.
+"""
+enum ItemEffectTrigger {
+	ON_USE
+	PASSIVE
+}
+
+"""
+Kind of an Item Effect. `Modifier` covers both stat boosts and
+detriments via a signed formula (e.g. `-1d4`) — no separate buff/debuff
+variant (research.md §1). Extensible by adding new variants only.
+"""
+enum ItemEffectType {
+	HEAL
+	DAMAGE
+	MODIFIER
+	ATTACK_ROLL
+}
+
+"""
+A scalar that can represent any JSON value.
+"""
+scalar JSON
+
+input JoinWorldInput {
+	"""
+	The invite code from the URL
+	"""
+	inviteCode: String!
+}
+
+"""
+One enquiry, as an administrator sees it.
+"""
+type LegalEnquiry {
+	id: UUID!
+	kind: String!
+	submitterName: String!
+	submitterContact: String!
+	subject: String!
+	body: String!
+	status: String!
+	submittedBy: String
+	createdAt: String!
+	handledBy: String
+	handledAt: String
+	resolutionNote: String
+}
+
+type LegalEnquiryCount {
+	kind: String!
+	open: Int!
+}
+
+enum LegalEnquiryKind {
+	TERMS
+	PRIVACY
+}
+
+"""
+What the form is told after a submission.
+
+Deliberately carries no id and no row: the person who filed it has no
+account and no way to read it back, so handing them an identifier would
+imply a status page that does not exist. What they get is the acknowledgement
+and the reassurance that a reply goes to the address they gave.
+"""
+type LegalEnquiryReceipt {
+	accepted: Boolean!
+	message: String!
+}
+
+enum LegalEnquiryStatus {
+	OPEN
+	ACKNOWLEDGED
+	CLOSED
+}
+
+"""
+One block of prose under one heading. `heading` is null for the text before
+the first one.
+"""
+type LegalSection {
+	heading: String
+	body: String!
+}
+
+"""
+Something the mirror could not represent (FR-013, FR-037).
+
+Enumerated rather than logged, because SC-008 requires a Game Master to be
+*shown* every fidelity loss rather than to discover it by reading a clone.
+"""
+type LoreFidelityNote {
+	id: UUID!
+	"""
+	`null` for a note about the whole connection — permission flattening,
+	or that the mirror is publicly visible.
+	"""
+	loreEntryId: UUID
+	kind: String!
+	detail: String!
+	firstSeenAt: NaiveDateTime!
+	lastSeenAt: NaiveDateTime!
+}
+
+"""
+What a proposal would do.
+"""
+enum LoreIncomingKind {
+	UPDATE
+	NEW_ENTRY
+	DELETION
+}
+
+"""
+A world's connection, as a client may see it.
+
+Constructed only by [`From<LoreRepositoryConnection>`], which drops
+`host_kind` and `installation_ref` on the floor. That conversion is the
+single door between the row and the wire, so FR-004c and FR-035 are
+satisfied in one place rather than at every call site.
+"""
+type LoreRepositoryConnection {
+	id: UUID!
+	worldId: UUID!
+	"""
+	`owner/name`. Host-neutral by construction — it is how every
+	repository host this feature could reach names a repository.
+	"""
+	repositoryRef: String!
+	branch: String!
+	directory: String!
+	incomingEnabled: Boolean!
+	state: LoreSyncState!
+	"""
+	Why the connection is in that state, in language that names the
+	remedy (FR-029).
+	"""
+	stateReason: String
+	"""
+	FR-038's gate. While this is null the background task never picks the
+	connection up, so a client rendering "waiting for you" here is
+	describing the actual behaviour rather than mirroring it.
+	"""
+	noticeAcknowledgedAt: NaiveDateTime
+	lastSyncedAt: NaiveDateTime
+	"""
+	Whether the repository was **observed** to be publicly visible at
+	`visibilityCheckedAt` (FR-040a).
+	
+	An observation, never a guarantee: visibility is changed at the host,
+	which does not tell us when it happens, so a repository recorded as
+	private may be public right now. Anywhere this is shown must show
+	`visibilityCheckedAt` beside it and say when it was last seen — the
+	difference between "everyone you invited" and "everyone on the
+	internet" is the largest consequence of this feature (FR-037a), and a
+	stale reassurance about it is worse than no answer.
+	
+	`null` means never checked, which must not be read as "private".
+	"""
+	repositoryIsPublic: Boolean
+	visibilityCheckedAt: NaiveDateTime
+	"""
+	Everything the mirror could not carry, for this connection.
+	
+	A field on the connection rather than a top-level query, so there is
+	no path to a note except through a world the caller already reached
+	(FR-039). Readable by any member for the same reason the connection is:
+	a note says what the mirror loses, not what the repository contains.
+	"""
+	fidelityNotes: [LoreFidelityNote!]!
+}
+
+"""
+One attempt to bring the repository into agreement with the world.
+
+Owner-only, wherever it is reached from: `failureReason` is written from
+the remote's own refusal and can name a repository, a branch, or a
+permission a player has no business knowing about.
+"""
+type LoreSyncRun {
+	id: UUID!
+	connectionId: UUID!
+	startedAt: NaiveDateTime!
+	finishedAt: NaiveDateTime
+	outcome: String
+	fromCommit: String
+	toCommit: String
+	entriesWritten: Int!
+	"""
+	Plain language naming the remedy (FR-029), never a raw host error.
+	"""
+	failureReason: String
+	attempt: Int!
+}
+
+"""
+A connection's current state, in FR-029's own words.
+
+`Deactivated` is the fourth (`data-model.md`'s state table; the contract
+document lists only the first three, which predates FR-041c). It is
+deliberately not folded into `NeedsAttention`: a Game Master told to
+"check the connection" for an enforcement action they cannot undo will
+keep trying to fix it, which is the failure FR-041c exists to prevent.
+"""
+enum LoreSyncState {
+	WORKING
+	NEEDS_ATTENTION
+	NEVER_CONFIGURED
+	DEACTIVATED
+}
+
+input LoreTagInput {
+	loreEntryId: UUID!
+	tag: String!
+}
+
+type MailAvailability {
+	ready: Boolean!
+	"""
+	Setting keys that are unset, by name. Never a value.
+	"""
+	missing: [String!]!
+	"""
+	What is limited while mail is unavailable, in sentences.
+	"""
+	limitedFeatures: [String!]!
+}
+
+enum ModerationActionType {
+	NOTICE_RECEIVED
+	NOTICE_REJECTED_INCOMPLETE
+	CONTENT_DISABLED
+	COUNTER_NOTICE_RECEIVED
+	COUNTER_NOTICE_FORWARDED
+	CONTENT_RESTORED
+	CONTENT_REMAINS_DISABLED
+	"""
+	Spec 039 FR-023: a copy, disabled because what it was copied from was
+	taken down. The opening event of a child case, which carries no account
+	— so it is never anybody's strike.
+	"""
+	CONTENT_DISABLED_AS_COPY
+}
+
+enum ModerationEntityType {
+	WORLD_ACTOR
+	WORLD_ITEM
+	WORLD_LORE_ENTRY
+	"""
+	Spec 025: abilities are moderatable per spec 015 FR-010's
+	individual-compendium-entry granularity requirement. Without this a
+	share link would be a moderation bypass for exactly the content type
+	ADR-049's DMCA determination concerns.
+	"""
+	WORLD_ABILITY
+	"""
+	Spec 015 T042: a scene is taken down as a whole — its record, its drawn
+	scenery and the images attached to it — rather than a claimant having
+	to name every image on it. Without this a collection holding a scene
+	was the one member type a takedown could not reach (ADR-069's FR-021),
+	and ADR-098's sync-back was blocked on it.
+	"""
+	SCENE
+}
+
+input MoveLoreEntryInput {
+	loreEntryId: UUID!
+	"""
+	The entry to sit under. `None` makes this a root — the same value a
+	root already holds, so "move to top level" needs no separate verb.
+	"""
+	parentId: UUID
+}
+
+"""
+ISO 8601 combined date and time without timezone.
+
+# Examples
+
+* `2015-07-01T08:59:60.123`,
+"""
+scalar NaiveDateTime
+
+"""
+A book on the world owner's shelf that this table could switch on
+(FR-030, FR-010a).
+
+Narrower than `Compendium` on purpose. The shelf view carries the file's
+hash and page counts because it is shown to the account that holds them;
+this is shown to whoever arranges the table, who may be somebody else.
+"""
+type OfferedBook {
+	id: UUID!
+	bookTitle: String!
+	systemId: String!
+	entryTotal: Int!
+	importedAt: String!
+}
+
+"""
+Where this instance's acknowledgement stands against the words it ships.
+"""
+type OperatorAcknowledgementState {
+	"""
+	The most recent acknowledgement, of any version, in the words it was
+	made to. Null only on an instance whose setup predates acknowledgement.
+	"""
+	acknowledgement: Attestation
+	"""
+	The operator statement this build ships — what to acknowledge now.
+	"""
+	currentVersionId: String!
+	"""
+	False after an upgrade that changed the words, until acknowledged.
+	"""
+	isCurrent: Boolean!
+}
+
+"""
+An operator, by the name recorded when they acted. The record keeps it
+when the account is renamed or gone.
+"""
+type OperatorName {
+	id: UUID!
+	name: String!
+}
+
+"""
+One message, as an operator may see it.
+
+Recipient, purpose, state, attempts, timestamps and the failure reason —
+and nothing else. `subject` is present only for the instance's own test
+message, because a subject about a person is content.
+"""
+type OutboxEntry {
+	id: UUID!
+	purpose: String!
+	toAddress: String!
+	subject: String
+	state: OutboxState!
+	attempts: Int!
+	lastAttemptAt: String
+	nextAttemptAt: String
+	lastFailureReason: String
+	sentAt: String
+	createdAt: String!
+}
+
+enum OutboxState {
+	QUEUED
+	BLOCKED
+	SENDING
+	SENT
+	FAILED
+}
+
+"""
+A world an operator might pause.
+"""
+type PauseCandidateWorld {
+	id: UUID!
+	name: String!
+	ownerName: String!
+	playedNow: Boolean!
+	paused: Boolean!
+}
+
+enum PauseDecision {
+	APPROVE
+	DECLINE
+}
+
+"""
+What `decidePlayPauseRequest` did.
+"""
+type PauseDecisionOutcome {
+	"""
+	The request as decided, here or by the operator who got there first.
+	"""
+	request: PauseRequest!
+	"""
+	False when another operator decided first (FR-035); `request` then
+	carries their decision, their name and when.
+	"""
+	decidedHere: Boolean!
+	"""
+	The pause, when the request was approved, here or by the other
+	operator.
+	"""
+	pause: PlayPause
+}
+
+"""
+What `pauseWorldPlay` did.
+"""
+type PauseOutcome {
+	"""
+	The world's active pause: the one just made, or the one already there.
+	"""
+	pause: PlayPause!
+	"""
+	True when the world was already paused, and these grounds were added
+	to that pause as an `OPERATOR` trigger (FR-036).
+	"""
+	alreadyPaused: Boolean!
+}
+
+"""
+A request to pause a world, as an operator reads it (FR-031).
+"""
+type PauseRequest {
+	id: UUID!
+	worldId: UUID!
+	"""
+	The name when it was raised, which outlives the world.
+	"""
+	worldName: String!
+	worldExists: Boolean!
+	raisedAt: DateTime!
+	state: PauseRequestState!
+	"""
+	Whether the world is being played as the operator reads this, not
+	when the request was raised (FR-031).
+	"""
+	playedNow: Boolean!
+	"""
+	Oldest first.
+	"""
+	triggers: [PauseTrigger!]!
+	decidedBy: OperatorName
+	decidedAt: DateTime
+	decisionNote: String
+}
+
+"""
+One page of `playPauseRequests`, newest first, in the shape
+`PlayPauseConnection` pages with.
+"""
+type PauseRequestConnection {
+	nodes: [PauseRequest!]!
+	nextCursor: String
+}
+
+enum PauseRequestState {
+	PENDING
+	APPROVED
+	DECLINED
+}
+
+"""
+What led to a pause (FR-037).
+"""
+type PauseTrigger {
+	kind: PauseTriggerKind!
+	moderationActionId: UUID
+	"""
+	The moderation case `moderation_action_id` belongs to, so an operator
+	can open it: cases are opened by case, not by action.
+	"""
+	caseId: UUID
+	entityType: String
+	entityId: UUID
+	note: String
+	recordedAt: DateTime!
+}
+
+enum PauseTriggerKind {
+	TAKEDOWN
+	OPERATOR
+	ABUSE_REPORT
+}
+
+"""
+One relayed signal, exactly as the contract defines it.
+"""
+type PeerSignal {
+	"""
+	The session that sent it. Server-populated: it comes from the
+	registry, never from a field the sender could set freely.
+	"""
+	fromSessionId: String!
+	"""
+	Opaque SDP offer/answer or ICE candidate. Never interpreted, never
+	stored, never logged.
+	"""
+	payload: String!
+}
+
+input PeerSignalInput {
+	worldId: UUID!
+	"""
+	The sender's own session id.
+	
+	Not in the contract's SDL, and required for the same reason
+	`peerSignals` takes one: `PeerSignal.fromSessionId` is
+	server-populated, so the server has to know which of the caller's
+	connections is speaking — a user may have several. It is verified
+	against the registry below, so it is an assertion the server checks,
+	not a field the sender is trusted on.
+	"""
+	fromSessionId: String!
+	toSessionId: String!
+	"""
+	Opaque. The server is a post box.
+	"""
+	payload: String!
+}
+
+input PickUpPlacedItemInput {
+	"""
+	The token lying on the scene.
+	"""
+	tokenId: UUID!
+	"""
+	The character receiving it.
+	"""
+	actorId: UUID!
+}
+
+input PlaceholderBindingInput {
+	name: String!
+	value: Float!
+}
+
+type PlanItem {
+	id: String!
+	fingerprint: String!
+	byteSize: Int!
+	"""
+	Whether any peer is *reachable* for this world right now (FR-044) —
+	not whether any peer holds this item.
+	
+	The distinction is deliberate (T087). The server does not track which
+	bytes each client caches and must not start: nothing in the spec asks
+	for it, and a standing map of who-has-what would be a real privacy
+	cost paid for an advisory hint. So this is `true` when at least one
+	other live session is registered for the world, and `false` otherwise.
+	Its usefulness is letting a client skip peer attempts entirely when it
+	is alone at the table, which is the common case.
+	
+	Advisory either way: a client must behave identically whether it is
+	true, false, or ignored, because peer transfer is a strict
+	optimization with a mandatory server fallback (FR-048). That asymmetry
+	is why reachability is the safe thing to report — a `false` can only
+	cost a server fetch the client was going to be able to make anyway,
+	whereas a wrong `true` costs a stall before the same fallback.
+	"""
+	peerAvailable: Boolean!
+}
+
+"""
+A pause, as an operator reads it.
+"""
+type PlayPause {
+	id: UUID!
+	worldId: UUID!
+	"""
+	The name when it was paused, which outlives the world (FR-053).
+	"""
+	worldName: String!
+	worldExists: Boolean!
+	pausedBy: OperatorName!
+	pausedAt: DateTime!
+	grounds: String!
+	requestId: UUID
+	"""
+	Oldest first.
+	"""
+	triggers: [PauseTrigger!]!
+	liftedBy: OperatorName
+	liftedAt: DateTime
+	liftGrounds: String
+	playedNow: Boolean!
+}
+
+"""
+One page of `playPauses`, newest first.
+
+The contract names the type and leaves its shape open. It is the shape
+`compendiumEntries` pages with: the rows, and the cursor for the next page,
+`null` on the last.
+"""
+type PlayPauseConnection {
+	nodes: [PlayPause!]!
+	nextCursor: String
+}
+
+"""
+One stretch of paused play: *when*, and nothing else.
+"""
+type PlayPauseSpan {
+	pausedAt: DateTime!
+	liftedAt: DateTime
+}
+
+"""
+The six operator values the published legal pages render.
+
+**Deliberately unauthenticated**, per spec 039's FR-056 and
+`contracts/legal-rendering.md` rule 4: somebody who needs to serve a
+copyright notice on this instance has no account here, and a notice contact
+that can only be read from inside is not a notice contact.
+
+Six values and nothing else. The type is a closed struct rather than a
+lookup by key, so "expose one more setting" is a code change with a
+reviewer, not a string a caller supplies. The test at the bottom of this
+module asserts the field list against `contracts/legal-rendering.md`'s
+token set rather than against the ones somebody remembered.
+
+Null for an unset value: the page then renders its visible
+`[OPERATOR — …]` marker, which `legalDocuments.test.ts` has always
+required. A page with a blank is better than one that reads as complete and
+names nobody.
+"""
+type PublishedOperatorValues {
+	operatorName: String
+	operatorContactEmail: String
+	operatorJurisdiction: String
+	noticeContactName: String
+	noticeContactEmail: String
+	noticeContactPostalAddress: String
+}
+
+"""
+One change made while disconnected.
+"""
+input QueuedChangeInput {
+	"""
+	Client-generated correlation id. Echoed back so a client can match an
+	outcome to the edit it made, without the server needing to understand
+	the edit.
+	"""
+	localId: String!
+	"""
+	The emitted world-store command, verbatim.
+	"""
+	command: JSON!
+	"""
+	Who originated this change, when that is not the submitter — a
+	peer-adjudicated change relayed by the GM's client (FR-061). Absent, or
+	naming the submitter, is an ordinary self-submitted replay.
+	"""
+	attributedToUserId: UUID
+	"""
+	What the client says the outcome of this change was, where the server
+	can determine that for itself (FR-064). Absent for everything the
+	server has no independent basis for — an ordinary token move, for
+	instance, which is most of what this mutation carries (FR-068).
+	"""
+	reportedOutcome: ReportedOutcomeInput
+}
+
+type ReadinessGap {
+	settingKey: String!
+	"""
+	The variable that would also set it. Null when there is no environment
+	form.
+	"""
+	envVar: String
+	"""
+	What to set, in a sentence. Never a value, never a fragment, never a
+	length.
+	"""
+	whatToSet: String!
+	"""
+	What is limited while this is unset.
+	"""
+	whatIsLimited: String!
+}
+
+"""
+One world's share of a book's removal (spec 050 decision 5).
+"""
+type RemovalWorldDeltas {
+	worldId: UUID!
+	worldName: String!
+	"""
+	Changes and hides, which go with the book.
+	"""
+	lost: [String!]!
+	"""
+	Additions, which stay in the world as its own writing, labelled with
+	this book's title.
+	"""
+	kept: [String!]!
+}
+
+"""
+An outcome a client reports for a change it made while server-isolated.
+"""
+input ReportedOutcomeInput {
+	"""
+	Which kind of outcome this is. Only `dice` is independently
+	determinable today; anything else the server cannot check and does not
+	guess at.
+	"""
+	kind: String!
+	"""
+	Format version. Deliberately explicit so a client one release ahead
+	produces silence rather than a fabricated mismatch.
+	"""
+	version: Int!
+	"""
+	The server-side record this outcome claims to be reporting on — a
+	`world_roll_records` id for `dice`.
+	"""
+	recordId: UUID
+	"""
+	The value the client says the outcome was.
+	"""
+	value: Float
+}
+
+"""
+Whether this instance can offer the feature at all, and what the operator
+must do if it cannot.
+
+The point of this type is `configured: false` (FR-036b). An instance whose
+operator has registered nothing is not broken, it simply does not have the
+feature, and the world settings surface renders nothing connectable. It is
+asked *before* the connection flow is offered rather than after it fails,
+because a Game Master must never be shown a flow that cannot complete.
+"""
+type RepositoryIntegrationStatus {
+	configured: Boolean!
+	"""
+	What the operator must do, in their words. Never a stack trace, and
+	never the value of anything it names.
+	"""
+	operatorGuidance: String
+}
+
+type ResolvedSetting {
+	key: String!
+	"""
+	The shape of the value, so an editor offers the right field.
+	"""
+	kind: SettingKind!
+	"""
+	The permitted values, for `ENUM`. Empty for every other kind.
+	"""
+	enumOptions: [String!]!
+	"""
+	Absent for a secret. Present and literal for everything else.
+	"""
+	value: String
+	"""
+	Set / not set, for a secret. Null for everything else.
+	"""
+	secretState: SecretState
+	source: SettingSource!
+	"""
+	The environment variable that fixed this value, when the source is
+	ENVIRONMENT.
+	"""
+	fixedBy: String
+	"""
+	False when the environment has fixed it, or when the value is written
+	through another surface that keeps its own audit trail. Do not offer a
+	field (FR-009).
+	"""
+	editable: Boolean!
+	requirement: SettingRequirement!
+	"""
+	What this setting enables, in a sentence a person can act on.
+	"""
+	capability: String
+	"""
+	What to set, in a sentence. Never a value.
+	"""
+	whatToSet: String!
+	"""
+	Which group an editor should file this under, so a person setting "who
+	a copyright notice is served on" is not doing it in a list of thirty.
+	"""
+	group: String!
+	"""
+	True when the stored value could not be read back — the instance secret
+	was rotated. The setting resolves as unset, and this says why.
+	"""
+	undecryptable: Boolean!
+}
+
+input RollDiceInput {
+	worldId: UUID!
+	formula: String!
+	bindings: [PlaceholderBindingInput!]
+}
+
+enum RollResultKind {
+	TOTAL
+	SUCCESS_COUNT
+}
+
+"""
+The only two things a secret is ever said to be.
+"""
+enum SecretState {
+	SET
+	NOT_SET
+}
+
+input SendChatMessageInput {
+	worldId: UUID!
+	sceneId: UUID
+	body: String!
+	"""
+	GM-only whisper. Requested by the client but *verified* server-side:
+	a non-GM asking for `gmOnly: true` is rejected rather than silently
+	downgraded, so a confused client never quietly posts to everyone
+	something the sender believed was private.
+	"""
+	gmOnly: Boolean
+}
+
+input SetAbilityPermissionInput {
+	abilityId: UUID!
+	userId: UUID!
+	level: ActorPermissionLevel!
+}
+
+input SetActorPermissionInput {
+	actorId: UUID!
+	userId: UUID!
+	level: ActorPermissionLevel!
+}
+
+input SetItemPermissionInput {
+	itemId: UUID!
+	userId: UUID!
+	level: ActorPermissionLevel!
+}
+
+input SetItemPriceInput {
+	itemId: UUID!
+	amount: Int!
+	"""
+	Free text — this layer names no currency system.
+	"""
+	currencyLabel: String
+	"""
+	"Roughly what it goes for" versus "this is the price". Intent, not
+	behaviour: neither is enforced anywhere.
+	"""
+	isSuggested: Boolean
+}
+
+input SetLorePermissionInput {
+	loreEntryId: UUID!
+	userId: UUID!
+	level: ActorPermissionLevel!
+}
+
+input SetTokenDisclosureInput {
+	tokenId: UUID!
+	resourceId: String!
+	state: GraphQLDisclosureState!
+}
+
+type SettingChange {
+	key: String!
+	previousValue: String
+	newValue: String
+	"""
+	True when the values above are `set`/`not set` rather than the real
+	ones. Stored on the row, not recomputed, so the record stays truthful
+	if a declaration's secrecy ever changes.
+	"""
+	redacted: Boolean!
+	changedBy: String
+	changedAt: String!
+	source: String!
+}
+
+"""
+The shape of a value, so an editor renders the field the declaration
+describes rather than one inferred from the key's name. `Enum` carries its
+choices in `enum_options`; every other kind leaves that empty.
+"""
+enum SettingKind {
+	TEXT
+	EMAIL
+	URL
+	PORT
+	BOOL
+	ENUM
+	PROSE
+}
+
+enum SettingRequirement {
+	OPTIONAL
+	REQUIRED_AT_SETUP
+	REQUIRED_FOR_CAPABILITY
+}
+
+enum SettingSource {
+	ENVIRONMENT
+	INSTANCE
+	DEFAULT
+}
+
+"""
+Spec 025 (FR-033): what a share-link viewer sees.
+
+Deliberately carries **no** `id`, `world_id`, `created_by`, or ownership
+block: a viewer must not be able to identify the source world or its
+members. Mirrors `SharedItemPreview`.
+"""
+type SharedAbilityPreview {
+	name: String!
+	description: String
+	classification: String!
+	"""
+	The word the *owning world's* system uses for this ability's type.
+	
+	Spec 033 FR-006: every surface naming an ability type uses the system's
+	vocabulary, and a share view is such a surface. It cannot resolve one
+	itself — the viewer is deliberately not a member of that world (that is
+	what a share link is for), so they cannot read its vocabulary. The
+	server, which knows the world, resolves it here.
+	
+	Falls back to the stored type identity for a type no system recognises,
+	never to another type's name (FR-034, FR-035).
+	"""
+	classificationLabel: String!
+	effects: [GraphQLAbilityEffect!]!
+}
+
+"""
+Read-only, world-identity-scrubbed projection of a shared actor
+(research.md §9) — deliberately excludes id/worldId/sceneId/createdBy/
+ownedBy so an arbitrary logged-in viewer can't learn the source world.
+"""
+type SharedActorPreview {
+	label: String!
+	actorType: String!
+	isNpc: Boolean!
+	gameSystemId: String
+	systemData: GraphQLActorSystemData
+}
+
+type SharedCollectionMemberPreview {
+	memberType: String!
+	name: String!
+}
+
+type SharedCollectionPreview {
+	name: String!
+	description: String
+	members: [SharedCollectionMemberPreview!]!
+	"""
+	US4 scenario 1: how many of each kind, before copying.
+	"""
+	countsByType: [CollectionTypeCount!]!
+	"""
+	FR-022: **a number, never a name.** Reproducing the title of a
+	taken-down artifact in the sentence explaining that it was taken down
+	would defeat the takedown.
+	"""
+	withheldCount: Int!
+}
+
+"""
+Read-only, world-identity-scrubbed projection of a shared item
+(mirrors `SharedActorPreview` — excludes id/worldId/createdBy/
+ownership block so an arbitrary logged-in viewer can't learn the
+source world, per contracts/item-share.md).
+"""
+type SharedItemPreview {
+	name: String!
+	description: String
+	iconAssetId: UUID
+	effects: [GraphQLItemEffect!]!
+}
+
+type SourceFlip {
+	settingKey: String!
+	was: SettingSource!
+	now: SettingSource!
+}
+
+"""
+Everything here is derived on read — there is no stored count to go stale.
+"""
+type Standing {
+	"""
+	Oldest first.
+	"""
+	strikes: [Strike!]!
+	strikeCount: Int!
+	"""
+	The rungs in force on this instance, so a person can see how many
+	remain before each consequence.
+	"""
+	warnAt: Int!
+	suspendPublishingAt: Int!
+	threshold: Int!
+	warned: Boolean!
+	mayPublish: Boolean!
+	disabled: Boolean!
+	"""
+	The open window, if any (US7).
+	"""
+	termination: Termination
+}
+
+input StartCombatInput {
+	worldId: UUID!
+	sceneId: UUID
+}
+
+input StartGenieSessionInput {
+	worldId: UUID!
+	doomClockMax: Int!
+}
+
+"""
+One strike: what it was, and when it stops counting.
+"""
+type Strike {
+	caseId: UUID!
+	entityType: ModerationEntityType!
+	entityId: UUID!
+	worldId: UUID!
+	recordedAt: String!
+	"""
+	When this strike stops counting, from the existing lookback.
+	"""
+	agesOutAt: String!
+}
+
+input SubmitCounterNoticeInput {
+	caseId: UUID!
+	removedMaterialDescription: String!
+	goodFaithMistakeStatement: Boolean!
+	consentToJurisdiction: Boolean!
+	contactInformation: String!
+	signature: String!
+}
+
+input SubmitFeedbackInput {
+	kind: FeedbackKind!
+	"""
+	What the person typed; never redacted, never rewritten.
+	"""
+	message: String!
+	summary: String
+	screenPath: String
+	"""
+	The game system is **not** accepted here — the server resolves it from
+	the world, because a client that could name the system could name a
+	different world's.
+	"""
+	worldId: UUID
+	clientVersion: String!
+	"""
+	Coarse browser family and platform. Never the full User-Agent.
+	"""
+	browser: String!
+	attachments: [FeedbackAttachmentInput!]!
+}
+
+input SubmitTakedownNoticeInput {
+	entityType: ModerationEntityType!
+	entityId: UUID!
+	claimantName: String!
+	claimantContact: String!
+	copyrightedWorkDescription: String!
+	infringingMaterialLocation: String!
+	goodFaithStatement: Boolean!
+	accuracyStatement: Boolean!
+	signature: String!
+}
+
+type SubscriptionRoot {
+	tick: Int!
+	"""
+	Subscribe to world events (tokens, actors, scenes, etc.)
+	
+	Phase 4.9.A.2: Real-time event streaming via PostgreSQL pub/sub backplane
+	Phase 4.9.A.3: Backpressure handling for lagged subscribers
+	
+	All subscribers receive events broadcast from the database listener task.
+	Events are sent immediately as they are recorded in world_events table.
+	
+	If a client falls behind (buffer fills), the subscription will stop receiving
+	events until it catches up. This is graceful degradation under load.
+	"""
+	worldEventsCreated(worldId: String!): GraphQLWorldEvent!
+	"""
+	Spec 028 (T086): receive WebRTC signaling addressed to this session.
+	
+	The stream **is** the registration. It begins when this subscription
+	is established and ends when it drops, which is what confines peer
+	connections to the session (FR-050) without a cleanup job that could
+	be skipped on a crash.
+	
+	`sessionId` is a deliberate, minimal extension to the contract's SDL:
+	a client cannot be reachable without naming the address it wants to be
+	reachable at, and `PeerSignal` carries no field that could tell it one.
+	The server treats the value as opaque and forgets it on disconnect.
+	"""
+	peerSignals(worldId: UUID!, sessionId: String!): PeerSignal!
+	"""
+	Spec 036 US3a: take this account's play field, and hold it for as long
+	as this stream is open.
+	
+	Subscribing *is* claiming, the way `peer_signals` registration is
+	itself the grant of reachability — see `mutations_play_field.rs` for
+	why a mutation could not do this. Yields the claim as it stands after
+	taking it, then every time it moves, including `null` for nobody.
+	"""
+	playField(worldId: UUID!, clientId: String!): GraphQLPlayFieldClaim
+	"""
+	Subscribe to player presence changes (Phase 4.9.B.3)
+	
+	Streams updates when players connect, disconnect, or change scenes.
+	Returns current list of all online players in the world.
+	"""
+	playersOnline(worldId: String!): GraphQLPlayersOnlineList!
+	"""
+	Subscribe to actor system data changes (D&D 5e, Pathfinder, CoC, etc.)
+	
+	PHASE D.2 STUB: This subscription will stream actor system data updates
+	from the pg_notify backplane when client subscribes.
+	Full implementation pending async database driver integration.
+	
+	For now, returns a tick stream that can be tested.
+	"""
+	worldActorSystemDataUpdated(worldId: String!, gameSystemId: String!): GraphQLActorSystemDataEvent!
+}
+
+type SyncPlan {
+	fetch: [PlanItem!]!
+	evict: [String!]!
+	"""
+	Server's view of the caller's budget ceiling, bytes. Advisory, and
+	currently always null: the client measures its own storage quota
+	(R8), and the server has no better number to offer. Present in the
+	schema so supplying one later is not a breaking change.
+	"""
+	budgetHint: Int
+	"""
+	A mismatch invalidates every scene-state fingerprint the client
+	holds, because the bytes those hashes were taken over are no longer
+	produced the same way.
+	"""
+	canonicalVersion: Int!
+}
+
+"""
+A termination window, as the person and an administrator see it.
+"""
+type Termination {
+	openedAt: String!
+	deletionDueAt: String!
+	strikeCountAtOpen: Int!
+	"""
+	`"none"` | `"open"` | `"upheld"` | `"rejected"`.
+	"""
+	appealState: String!
+	"""
+	True when this instance requires a person to decide, not a timer.
+	"""
+	requiresHuman: Boolean!
+	"""
+	False only for the instance's last administrator (FR-039): the window
+	exists, a person must decide, and the account is not disabled.
+	"""
+	disablesAccount: Boolean!
+	appealStatement: String
+	appealFiledAt: String
+	appealResolvedAt: String
+	appealNote: String
+	"""
+	Past its date with no appeal open — ready for the end the instance is
+	set to give it.
+	"""
+	due: Boolean!
+}
+
+type TestMailResult {
+	delivered: Boolean!
+	"""
+	On failure: what to fix. Never a password or any fragment of one
+	(FR-014).
+	"""
+	reason: String
+	"""
+	The row this attempt left behind, so an operator can find it later
+	whether it worked or not.
+	"""
+	outboxId: UUID!
+}
+
+"""
+Spec 041 FR-021: how much of the instance holds a second factor.
+
+# Counts, never a roster
+
+SC-007 asks an operator to tell "at a glance, how much of their instance
+has a second factor". A list of who has not enrolled would answer that and
+also hand whoever reads it — or whoever takes over the account that reads
+it — a target list: the accounts on it are exactly the ones a stolen
+password is sufficient for. Three integers answer the question the operator
+actually has and cannot be turned into that list.
+
+It sits beside `authSecuritySettings` because the switch it explains lives
+there: the point of `requiredNotEnrolled` is to say, before the switch is
+thrown, how many people it is about to ask something of.
+
+Named `TwoFactorCoverage` on the wire, as `contracts/requirement-policy.md`
+specifies, rather than carrying the crate's `GraphQL` prefix into the
+schema a client reads.
+"""
+type TwoFactorCoverage {
+	"""
+	Accounts holding a confirmed second factor.
+	"""
+	enrolled: Int!
+	"""
+	Accounts without one.
+	"""
+	notEnrolled: Int!
+	"""
+	Of those, how many are required to have one and have not — which
+	includes every administrator, because the role requires it (FR-027).
+	"""
+	requiredNotEnrolled: Int!
+}
+
+"""
+A UUID is a unique 128-bit number, stored as 16 octets. UUIDs are parsed as
+Strings within GraphQL. UUIDs are used to assign unique identifiers to
+entities without requiring a central allocating authority.
+
+# References
+
+* [Wikipedia: Universally Unique Identifier](http://en.wikipedia.org/wiki/Universally_unique_identifier)
+* [RFC4122: A Universally Unique Identifier (UUID) URN Namespace](http://tools.ietf.org/html/rfc4122)
+"""
+scalar UUID
+
+"""
+The system's word for the concept itself, replacing "Ability"/"Abilities".
+"""
+type UmbrellaTerm {
+	label: String!
+	pluralLabel: String!
+}
+
+"""
+A change this world holds and is not applying (FR-025a, FR-027).
+"""
+type UnattachedWorldDelta {
+	kind: String!
+	name: String!
+	"""
+	`changed`, `hidden` or `added`.
+	"""
+	form: String!
+	"""
+	Said for a person, because the person reading it has to decide
+	whether to restore it or wait for a better reading of the book.
+	"""
+	reason: String!
+}
+
+"""
+One undelivered submission, as an operator sees it.
+
+Carries **no message, no attachment, and no host text** — this is a
+diagnostic surface, and what a person wrote is theirs.
+"""
+type UndeliveredFeedback {
+	id: UUID!
+	kind: FeedbackKind!
+	createdAt: String!
+	deliveryState: FeedbackDeliveryState!
+	attemptCount: Int!
+	lastAttemptAt: String
+	lastFailureReason: FeedbackFailureReason
+	nextAttemptAfter: String
+	"""
+	The instance's copies expire here, delivered or not.
+	"""
+	attachmentsExpireAt: String!
+}
+
+"""
+FR-024c: `gm_only` is deliberately ABSENT here. `updateAbility` requires
+only `Editor`, so folding visibility into it would let any Editor un-hide a
+GM's secret ability. Visibility has its own DM-gated mutation
+(`setAbilityGmOnly`), following the existing `updateSceneHidden` precedent.
+"""
+input UpdateAbilityInput {
+	abilityId: UUID!
+	name: String
+	description: String
+	classification: String
+	grade: Int
+	"""
+	Explicit clear, because `Option<String>` alone cannot distinguish
+	"set to null" from "field omitted".
+	
+	`updateItem` (spec 013) applies `description.or(existing.description)`,
+	which makes clearing a description **impossible** once set — a real
+	defect this deliberately does not inherit (research.md §3, defect 1).
+	"""
+	clearDescription: Boolean
+}
+
+input UpdateActorInput {
+	actorId: UUID!
+	label: String
+	isNpc: Boolean
+	actorType: String
+	description: String
+}
+
+input UpdateCollectionInput {
+	collectionId: UUID!
+	name: String
+	description: String
+}
+
+input UpdateCombatantInput {
+	combatantId: UUID!
+	initiative: Int
+	tiebreak: Int
+	active: Boolean
+	label: String
+}
+
+input UpdateItemInput {
+	itemId: UUID!
+	name: String
+	description: String
+}
+
+input UpdateLoreEntryInput {
+	loreEntryId: UUID!
+	title: String
+	content: String
+	"""
+	REQUIRED whenever `content` is provided (FR-019) — the revision
+	the author was editing against, compared to the entry's actual
+	`current_revision_id` at write time to detect a conflicting
+	concurrent save.
+	"""
+	expectedCurrentRevisionId: UUID
+}
+
+input UpdateMemberRoleInput {
+	"""
+	World ID where the member belongs
+	"""
+	worldId: UUID!
+	"""
+	User ID of the member to update
+	"""
+	userId: UUID!
+	"""
+	New role: Owner, GM, or Player
+	"""
+	role: String!
+}
+
+"""
+Spec 017 (FR-007): the GM-controlled world setting gating whether the
+Actor Selection screen's "create your own character" option is shown.
+"""
+input UpdateWorldAllowPlayerCreatedActorsInput {
+	worldId: UUID!
+	allow: Boolean!
+}
+
+"""
+Spec 022 (FR-014): the GM-controlled per-world default grid type
+applied to newly created scenes.
+"""
+input UpdateWorldDefaultSceneGridTypeInput {
+	worldId: UUID!
+	gridType: String!
+}
+
+"""
+Spec 016 (FR-004, T009): assigns/changes a world's active system pack.
+No such mutation existed before this spec — `game_system_id` could
+previously only be set at `createWorld` time (and spec 008 removed the
+UI for that), leaving no way to assign or change it afterward. This is
+the write half of the new System Settings surface
+(`WorldSystemSettingsPage.tsx`) that also renders the target system's
+`legal` notice, per this feature's scope-correction note in tasks.md.
+"""
+input UpdateWorldGameSystemInput {
+	worldId: UUID!
+	gameSystemId: String!
+	"""
+	What the caller is acknowledging, from `worldContentInventory`.
+	
+	Required when the world holds authored content (FR-028). A digest
+	rather than a boolean because a boolean can be passed by a caller who
+	never saw a count — which is the bypass the requirement exists to
+	prevent — and stays true if the world changed while the dialog was
+	open. See ADR-065.
+	"""
+	acknowledgedDigest: String
+}
+
+"""
+Spec 020 (FR-003, research.md R1): the GM-controlled per-world setting
+gating whether Genie Session Resource holdings carry over into the
+next session.
+"""
+input UpdateWorldGenieResourceCarryoverInput {
+	worldId: UUID!
+	enabled: Boolean!
+}
+
+"""
+Spec 032 (FR-010): a world's chosen interface pack.
+
+`interfacePackId` is **nullable**, unlike `UpdateWorldGameSystemInput`'s
+required id. Clearing the binding is a real thing a Game Master may want:
+it means "the default", and after this feature the default has a name to
+show for it rather than reading as an empty value.
+"""
+input UpdateWorldInterfacePackInput {
+	worldId: UUID!
+	interfacePackId: String
+}
+
+"""
+Spec 011: "Last Session Notes" — a single per-world freeform recap,
+DM/GM-only to write (contracts/session-notes.md), read by any world
+member via the existing `world(id)` query's `sessionNotes` field.
+"""
+input UpdateWorldSessionNotesInput {
+	worldId: UUID!
+	notes: String!
+}
+
+"""
+A multipart file upload
+"""
+scalar Upload
+
+"""
+A document, its sections, and the identity to attest to.
+"""
+type VersionedLegalDocument {
+	"""
+	Opaque, e.g. `"sharing-terms@4f2a9c1e77b03d58"`. **Never parse it.**
+	"""
+	versionId: String!
+	slug: String!
+	sections: [LegalSection!]!
+}
+
+"""
+Spec 027 (T010, FR-010): whether a link works right now, and if not, why.
+
+**Derived, never stored.** Computing this from the row means it cannot
+drift from the facts that produce it — there is no column to forget to
+update when a link expires or its last use is consumed.
+"""
+enum WorldAccessLinkState {
+	"""
+	Usable right now.
+	"""
+	ACTIVE
+	"""
+	Past its expiry time.
+	"""
+	EXPIRED
+	"""
+	Its use cap is spent.
+	"""
+	EXHAUSTED
+	"""
+	Explicitly retired by a GM, by revocation or by rotation.
+	"""
+	REVOKED
+}
+
+"""
+One book this world is running (FR-030, FR-036).
+
+Note what is absent, since this is the object a player is shown: no entry,
+no prose, no field value, and not the file's hash either. Counts say how
+big a book is; they do not say what is in it.
+"""
+type WorldBook {
+	compendiumId: UUID!
+	bookTitle: String!
+	"""
+	The system the book was read as — not necessarily the one this world
+	runs today. See `system_matches`.
+	"""
+	systemId: String!
+	entryCounts: [CompendiumKindCount!]!
+	entryTotal: Int!
+	"""
+	FR-042: `false` means the world changed system underneath this book.
+	It is still listed, and it is no longer served.
+	"""
+	systemMatches: Boolean!
+	"""
+	Which build of the reader produced the base in force when this was
+	switched on (FR-015). The other half of that record, the file's hash,
+	stays on the shelf: it is the owner's to see and a player has no use
+	for it.
+	"""
+	baseParserVersion: String!
+	switchedOnAt: String!
+}
+
+"""
+One entry as this world reads it: the book with this world's delta applied
+(FR-022).
+
+Carries the same fields a shelf entry does, so the browser that showed a
+book before deltas existed reads this without learning a second shape, and
+four more that only a world has: how the entry stands here, where it came
+from, what it was, and whether it can be changed at all.
+"""
+type WorldEntry {
+	"""
+	The book entry's id, or the addition's own for an entry the book does
+	not have.
+	"""
+	id: UUID!
+	"""
+	`null` for an addition whose book has left the shelf; `bookTitle` still
+	names the book it was written beside (decision 5).
+	"""
+	compendiumId: UUID
+	bookTitle: String!
+	kind: String!
+	name: String!
+	nameUncertain: Boolean!
+	"""
+	`null` for an addition: it is on no page of the book (049 FR-043
+	promises a page a person can look up, and there is none to look up).
+	"""
+	page: Int
+	fieldValues: JSON!
+	proseText: String
+	suspect: Boolean!
+	state: WorldEntryState!
+	"""
+	Per entry, not per book (FR-052, FR-052a). A changed entry of an
+	uploaded book says `UPLOADED`; an addition beside it says `AUTHORED`.
+	"""
+	origin: ContentOrigin!
+	"""
+	`origin`, answered as the sharing rule answers it — so no client
+	re-derives "may this leave?" and gets it subtly different.
+	"""
+	mayBeShared: Boolean!
+	"""
+	Why not, in the words the refusal uses (049 FR-053). `null` when it
+	may.
+	"""
+	notShareableBecause: String
+	"""
+	What the book says, for a changed entry (FR-024).
+	"""
+	before: WorldEntryBefore
+	"""
+	Another entry in this book has the same kind and name, so no change
+	can attach to this one (FR-025a).
+	"""
+	ambiguous: Boolean!
+}
+
+"""
+What an entry said before this world changed it (FR-024).
+"""
+type WorldEntryBefore {
+	fieldValues: JSON!
+	proseText: String
+}
+
+"""
+One page of what a world reads from a book.
+"""
+type WorldEntryPage {
+	entries: [WorldEntry!]!
+	nextCursor: String
+	total: Int!
+	"""
+	Every held change that could not be applied, on every page — it is
+	about the book, not about the entries this page happens to show.
+	"""
+	unattached: [UnattachedWorldDelta!]!
+}
+
+"""
+How an entry stands in this world (FR-021, SC-009).
+"""
+enum WorldEntryState {
+	INHERITED
+	CHANGED
+	HIDDEN
+	ADDED
+}
+
+"""
+What one client missed.
+"""
+type WorldEventCatchUp {
+	"""
+	Missed events, oldest first, so a client can apply them in order and
+	finish holding the newest id.
+	"""
+	events: [GraphQLWorldEvent!]!
+	"""
+	The gap was larger than this query will return.
+	
+	`events` is then the *oldest* slice of the gap and is deliberately not
+	the whole of it: a client that applied it would still be behind, and
+	would have no way to know. The contract is that `true` means "discard
+	this and resynchronise the world", not "ask again for the rest".
+	"""
+	truncated: Boolean!
+	"""
+	The newest event id this world has, whether or not it is in `events`.
+	
+	Lets a client that resynchronises set its cursor to the right place in
+	one step, instead of inferring it from a batch it just threw away.
+	Zero for a world that has never recorded an event.
+	"""
+	latestId: Int!
+}
+
+type WorldInvitePayload {
+	id: UUID!
+	worldId: UUID!
+	inviteCode: String!
+	maxUses: Int!
+	usedCount: Int!
+	expiresAt: String
+	createdBy: UUID!
+	createdAt: String!
+	updatedAt: String!
+	"""
+	Spec 027 (FR-010): whether this link currently works, and why not.
+	"""
+	state: WorldAccessLinkState!
+	"""
+	Spec 027 (FR-010): uses left, or `null` when uncapped.
+	"""
+	remainingUses: Int
+	"""
+	Spec 027 (FR-003): the link this one replaced, if created by rotation.
+	"""
+	rotatedFrom: UUID
+	"""
+	**Deprecated** — retained for one release. A free-form string like
+	`"3/10 uses"` cannot express revocation, so a revoked link rendered
+	identically to a working one. Prefer `state` and `remainingUses`.
+	"""
+	status: String! @deprecated(reason: "Use `state` and `remainingUses`; this cannot express revocation.")
+}
+
+type WorldMembershipPayload {
+	id: UUID!
+	worldId: UUID!
+	userId: UUID!
+	role: String!
+	joinedAt: String!
+	createdAt: String!
+	updatedAt: String!
+	"""
+	Spec 023 (FR-004/FR-005): the character this member has claimed,
+	if any — `None` when they haven't claimed one yet.
+	"""
+	claimedActor: GraphQLWorldActor
+	"""
+	Spec 031 (FR-033): the name to put on a player's card.
+	
+	Computed here rather than stored on the payload for the same reason
+	`claimed_actor` is: it lives in `users`, not in `world_members`, and
+	every existing caller of this type builds it from a membership row
+	alone. A card headed by a UUID is not a roster anyone can search.
+	"""
+	username: String!
+}
+
+"""
+Whether a world's play is paused, as its members may know it (FR-050).
+"""
+type WorldPlayState {
+	paused: Boolean!
+	"""
+	`null` when not paused.
+	"""
+	pausedAt: DateTime
+	"""
+	Newest first.
+	"""
+	history: [PlayPauseSpan!]!
+}
+
+type WorldPreviewPayload {
+	id: String!
+	name: String!
+	description: String
+}
+
+"""
+Marks an element of a GraphQL schema as no longer supported.
+"""
+directive @deprecated(reason: String = "No longer supported") on FIELD_DEFINITION | ARGUMENT_DEFINITION | INPUT_FIELD_DEFINITION | ENUM_VALUE
+"""
+Directs the executor to include this field or fragment only when the `if` argument is true.
+"""
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Directs the executor to skip this field or fragment when the `if` argument is true.
+"""
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Provides a scalar specification URL for specifying the behavior of custom scalar types.
+"""
+directive @specifiedBy(url: String!) on SCALAR
+schema {
+	query: AppQueryRoot
+	mutation: AppMutationRoot
+	subscription: SubscriptionRoot
+}

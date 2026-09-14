@@ -8,6 +8,8 @@ authors = ["mbround18 <michael.bruno1337@gmail.com>"]
 edition = "2024"
 repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
 license.workspace = true
+# Two binaries now, so `cargo run -p thunderforge` needs telling which.
+default-run = "thunderforge"
 
 # The composition root, and deliberately nothing else.
 #
@@ -20,10 +22,20 @@ license.workspace = true
 name = "thunderforge"
 path = "src/main.rs"
 
+# The merged GraphQL schema as SDL, for `scripts/check-graphql-contract.mjs`.
+# Behind a feature so the builds that run the server do not link it; see the
+# file's own header.
+[[bin]]
+name = "thunderforge-schema"
+path = "src/bin/print_schema.rs"
+required-features = ["schema-sdl"]
+
 [features]
 default = ["seam-probe"]
 # Forwarded to the library, whose `seam_probe` contributor this gates.
 seam-probe = ["thunderforge-server/seam-probe"]
+# Builds `thunderforge-schema`. Enables nothing in any dependency.
+schema-sdl = []
 
 [dependencies]
 thunderforge-server = { path = "../server", default-features = false }
