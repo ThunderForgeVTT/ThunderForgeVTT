@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   addCombatant,
   advanceTurn,
+  changeHitPoints,
   endCombat,
   getActiveCombat,
   removeCombatant,
@@ -16,7 +17,7 @@ import {
   startPlayPanelEventSync,
 } from "@/engine/world/sync";
 import { cn } from "@/lib/utils";
-import type { CombatRecord } from "@/types/combat";
+import type { CombatRecord, HitPointChange } from "@/types/combat";
 import type { WorldActorRecord } from "@/types/actor";
 import type { TokenRecord } from "@/types/token";
 import {
@@ -24,6 +25,7 @@ import {
   unattemptedIds,
   type RosterCandidate,
 } from "./combatRoster";
+import { CombatantHitPoints, CombatantOutMark } from "./CombatantHitPoints";
 import { useSelectedTokenIds } from "./useSelectedTokenIds";
 
 export interface CombatPanelProps {
@@ -142,6 +144,32 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
       setCombat(await action());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Combat action failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * Spec 046: the Game Master's Damage and Heal.
+   *
+   * The answer is hit points, not a combat, so it is not adopted here: the
+   * tracker is re-read, which picks up a creature marked out at zero, and the
+   * bars move on every board from world event 26.
+   */
+  const changeHp = async (
+    tokenId: string,
+    kind: HitPointChange,
+    amount: number,
+  ) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await changeHitPoints(tokenId, kind, amount);
+      await refresh();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Changing hit points failed",
+      );
     } finally {
       setBusy(false);
     }
@@ -274,13 +302,15 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
         <ul className="grid gap-1" data-testid="combatant-list">
           {combat.combatants.map((combatant) => {
             const isTurn = combatant.id === combat.activeCombatantId;
+            const tokenId = combatant.tokenId;
             return (
               <li
                 key={combatant.id}
                 data-testid="combatant-row"
                 data-active-turn={isTurn ? "true" : "false"}
+                data-downed-by={combatant.downedBy ?? ""}
                 className={cn(
-                  "flex items-center gap-2 rounded-lg border px-2 py-1.5",
+                  "flex flex-wrap items-center gap-2 rounded-lg border px-2 py-1.5",
                   isTurn ? "border-primary bg-primary/10" : "border-border",
                   !combatant.active && "opacity-50",
                 )}
@@ -319,6 +349,17 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
                     </span>
                   ) : null}
                 </span>
+                <CombatantOutMark combatant={combatant} />
+
+                {isGm && tokenId ? (
+                  <CombatantHitPoints
+                    combatant={combatant}
+                    busy={busy}
+                    onChange={(kind, amount) =>
+                      void changeHp(tokenId, kind, amount)
+                    }
+                  />
+                ) : null}
 
                 {isGm ? (
                   <>

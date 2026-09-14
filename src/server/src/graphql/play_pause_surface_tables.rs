@@ -230,6 +230,10 @@ pub const GATED: &[(&str, &str)] = &[
         r#"mutation { removeCombatant(combatantId: "{combatant}") { __typename } }"#,
     ),
     (
+        "changeHitPoints",
+        r#"mutation { changeHitPoints(tokenId: "{token}", kind: DAMAGE, amount: 1) { __typename } }"#,
+    ),
+    (
         "advanceTurn",
         r#"mutation { advanceTurn(combatId: "{combat}") { __typename } }"#,
     ),

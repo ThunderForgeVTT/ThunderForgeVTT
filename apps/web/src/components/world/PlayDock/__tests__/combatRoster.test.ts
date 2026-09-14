@@ -76,6 +76,7 @@ function combatant(over: Partial<CombatantRecord> = {}): CombatantRecord {
     tiebreak: 0,
     isNpc: false,
     active: true,
+    downedBy: null,
     ...over,
   };
 }

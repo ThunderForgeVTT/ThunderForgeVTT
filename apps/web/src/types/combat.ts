@@ -13,6 +13,25 @@ export interface CombatantRecord {
   isNpc: boolean;
   /** False for downed/removed combatants, which stay in the list greyed out. */
   active: boolean;
+  /**
+   * Spec 046: why an inactive combatant is out. `HIT_POINTS` when its
+   * creature reached zero (healing brings it back), `GAME_MASTER` when the
+   * tracker's Down was pressed (healing does not), null when in the fight.
+   */
+  downedBy: CombatantDownedBy | null;
+}
+
+export type CombatantDownedBy = "HIT_POINTS" | "GAME_MASTER";
+
+/** Which way `changeHitPoints` moves a creature's hit points. */
+export type HitPointChange = "DAMAGE" | "HEALING";
+
+/** A creature's hit points after a change (`TokenHitPoints`). */
+export interface TokenHitPointsRecord {
+  tokenId: string;
+  current: number;
+  max: number;
+  temporary: number;
 }
 
 /** A shared, persisted encounter (`world_combats`). */

@@ -23,6 +23,8 @@ export interface Combatant {
   actorId: string | null;
   tokenId: string | null;
   isNpc: boolean;
+  /** Spec 046: `HIT_POINTS` or `GAME_MASTER` while out of the fight. */
+  downedBy: "HIT_POINTS" | "GAME_MASTER" | null;
 }
 
 export interface Combat {
@@ -35,7 +37,7 @@ export interface Combat {
 
 const COMBAT_FIELDS = `
   id round activeCombatantId endedAt
-  combatants { id label initiative tiebreak active actorId tokenId isNpc }
+  combatants { id label initiative tiebreak active actorId tokenId isNpc downedBy }
 `;
 
 export async function startCombat(table: Table): Promise<Combat> {
@@ -176,7 +178,69 @@ export async function rollShown(page: Page): Promise<string | null> {
   return (await result.textContent())?.trim() ?? null;
 }
 
-/** Write a whole `resource_data` blob — the only way hit points change. */
+/**
+ * Spec 046 FR-014: the Game Master damages or heals a creature, through the
+ * same mutation the tracker's Damage and Heal buttons call.
+ */
+export async function changeHitPoints(
+  page: Page,
+  tokenId: string,
+  kind: "DAMAGE" | "HEALING",
+  amount: number,
+): Promise<{ current: number; max: number; temporary: number }> {
+  const { changeHitPoints: after } = await must<{
+    changeHitPoints: { current: number; max: number; temporary: number };
+  }>(
+    page,
+    `mutation ($tokenId: UUID!, $kind: HitPointChange!, $amount: Int!) {
+      changeHitPoints(tokenId: $tokenId, kind: $kind, amount: $amount) {
+        current max temporary
+      }
+    }`,
+    { tokenId, kind, amount },
+  );
+  return after;
+}
+
+/** What the server says when this client asks to change hit points. */
+export async function refusalOfChangeHitPoints(
+  page: Page,
+  tokenId: string,
+): Promise<string[]> {
+  const result = await graphql<{ errors?: { message: string }[] }>(
+    page,
+    `
+      mutation ($tokenId: UUID!) {
+        changeHitPoints(tokenId: $tokenId, kind: DAMAGE, amount: 1) {
+          current
+        }
+      }
+    `,
+    { tokenId },
+  );
+  return (result.errors ?? []).map((error) => error.message);
+}
+
+/**
+ * The current figure of a token's first `resourceId` bar, as this client's
+ * engine holds it, or null when the engine draws no exact figure for it.
+ */
+export async function barCurrentOn(
+  page: Page,
+  tokenId: string,
+  resourceId = "hitPoints",
+): Promise<number | null> {
+  const json = await statusOn(page, tokenId);
+  if (!json) return null;
+  const resources = JSON.parse(json) as {
+    definition: { id: string };
+    disclosed: { disclosure: string; entries?: { current: number }[] };
+  }[];
+  const bar = resources.find((r) => r.definition.id === resourceId);
+  return bar?.disclosed.entries?.[0]?.current ?? null;
+}
+
+/** Write a whole `resource_data` blob, as a sheet does. */
 export async function setHitPoints(
   table: Table,
   actorId: string,

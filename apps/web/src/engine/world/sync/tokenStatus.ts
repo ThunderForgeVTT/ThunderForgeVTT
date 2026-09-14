@@ -37,6 +37,16 @@ const EVENT_CODE_TOKEN_CHANGED = 14;
 const EVENT_CODE_TOKEN_DISCLOSURE_CHANGED = 19;
 
 /**
+ * A creature's own data changed — its sheet, not its token (spec 045 FR-067).
+ *
+ * Spec 046: this is what a hit announces. Hit points live on the actor, not
+ * the token, so a change to them arrives as a sheet change; before this was
+ * listened for, the server held the new figure and every board kept drawing
+ * the old one until something else happened to re-read it.
+ */
+const EVENT_CODE_ACTOR_SHEET_CHANGED = 26;
+
+/**
  * Re-read a scene's status and push it to the engine.
  *
  * Exported so a caller can prime the canvas on load without waiting for an
@@ -79,7 +89,8 @@ export async function applyTokenStatusWorldEvent(
   const eventCode = event.event_code ?? event.eventCode;
   if (
     eventCode !== EVENT_CODE_TOKEN_CHANGED &&
-    eventCode !== EVENT_CODE_TOKEN_DISCLOSURE_CHANGED
+    eventCode !== EVENT_CODE_TOKEN_DISCLOSURE_CHANGED &&
+    eventCode !== EVENT_CODE_ACTOR_SHEET_CHANGED
   ) {
     return;
   }

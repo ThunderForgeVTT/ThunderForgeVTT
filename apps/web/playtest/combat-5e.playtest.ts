@@ -4,6 +4,8 @@ import {
   activeRowOn,
   addCombatant,
   advanceTurn,
+  barCurrentOn,
+  changeHitPoints,
   grantAbility,
   combatSeenBy,
   endCombat,
@@ -19,19 +21,17 @@ import {
   gridSizeOf,
   setDisclosure,
   setHitPoints,
-  settle,
   startCombat,
   statusOn,
   systemDataOf,
-  updateCombatant,
   type Combat,
 } from "./combat";
 import {
   closeTable,
-  drag,
   openTable,
   placeCast,
   sitDown,
+  drag,
   snapshot,
 } from "./table";
 
@@ -39,12 +39,14 @@ import {
  * A D&D 5e fight, played: two heroes and a goblin, initiative, turns, an
  * attack, damage, a creature at zero, and the Game Master calling it.
  *
- * Initiative and turn order are real, and are checked hard. The fight itself
- * is not: there is no armour class to beat, no target on a roll, no operation
- * that deals damage, and nothing that notices a creature at zero hit points.
- * Those are recorded as FINDINGs (soft, so the session plays to the end)
- * rather than faked with a test-only path — a scenario that writes the
- * outcome itself is a scenario proving nothing.
+ * Initiative and turn order are real, and are checked hard. Since spec 046 so
+ * are damage (the Game Master's hit-point change reaches every board), a
+ * creature at zero (out of the fight, and skipped), and whose turn it is (a
+ * player is refused a move on somebody else's). The rest of the fight is not
+ * yet: there is no armour class to beat and no target on a roll. Those are
+ * recorded as FINDINGs (soft, so the session plays to the end) rather than
+ * faked with a test-only path — a scenario that writes the outcome itself is
+ * a scenario proving nothing.
  */
 
 /** The scores a 5e actor needs before the pack will accept anything else. */
@@ -498,65 +500,70 @@ test("a Game Master runs a 5e fight for two players", async ({
       await snapshot(table, "7 · reach");
     });
 
-    await test.step("damage, written by hand", async () => {
-      const before = await statusOn(table.gm, cast.Goblin.tokenId);
-      await setHitPoints(table, cast.Goblin.actorId, {
-        current: 0,
-        max: GOBLIN_HP,
-      });
+    await test.step("damage lands, and the board shows it", async () => {
+      // Spec 046 FR-014: the Game Master's Damage, the same mutation the
+      // tracker's button calls. It spends temporary hit points first and stops
+      // at zero, and announces itself as a sheet change (event 26) — which
+      // every board now re-reads its bars on.
+      const before = await barCurrentOn(table.gm, cast.Goblin.tokenId);
+      expect(before, "the Game Master's board draws the goblin whole").toBe(
+        GOBLIN_HP,
+      );
+      const after = await changeHitPoints(
+        table.gm,
+        cast.Goblin.tokenId,
+        "DAMAGE",
+        GOBLIN_HP,
+      );
+      expect(after.current, "the goblin is at zero").toBe(0);
       const stored = await systemDataOf(table.gm, cast.Goblin.actorId);
       expect(
         stored.resourceData?.current_hp,
         "the server holds the goblin at zero",
       ).toBe(0);
 
-      // Nobody's bar moves: writing system data announces nothing.
-      const after = await settle(
-        () => statusOn(table.gm, cast.Goblin.tokenId),
-        (value) => value !== before,
-        8_000,
-      );
-      expect
-        .soft(
-          after,
-          "FINDING: the goblin's bar should shorten on every board when its " +
-            "hit points change — spec 029 US1's own test. `updateActorSystemData` " +
-            "emits no world event, so no client re-reads the status until a " +
-            "token event or a reload.",
-        )
-        .not.toBe(before);
-
-      // It is the announcement that is missing, not the value: a reload
-      // shows the new figure.
-      await sitDown(table, table.gm);
-      await openCombatPanel(table.gm);
+      // Was FINDING 522 ("the goblin's bar should shorten on every board").
+      // Its wording blamed a missing event; `updateActorSystemData` had
+      // announced sheet changes since spec 045, and the bars ignored it.
+      // Hard now, with no reload.
       await expect
-        .poll(() => statusOn(table.gm, cast.Goblin.tokenId), {
-          timeout: 30_000,
-          message: "after a reload the Game Master's board has the new figure",
+        .poll(() => barCurrentOn(table.gm, cast.Goblin.tokenId), {
+          timeout: 5_000,
+          message:
+            "the goblin's bar shortens on the Game Master's board without a " +
+            "reload (spec 029 US1, spec 046 US2)",
         })
-        .not.toBe(before);
+        .toBe(0);
       await snapshot(table, "6 · zero hit points");
     });
 
-    await test.step("a goblin at zero is just a number", async () => {
-      const seen = await combatSeenBy(table.gm, table.worldId);
-      const goblinRow = seen!.combatants.find((c) => c.label === "Goblin")!;
-      expect
-        .soft(
-          goblinRow.active,
-          "FINDING: a creature at zero hit points should be out of the fight. " +
-            "Nothing connects hit points to anything: 5e has no downed or " +
-            "dying state, and the tracker's own 'Down' is a button the Game " +
-            "Master presses by hand.",
+    await test.step("a goblin at zero is out of the fight", async () => {
+      // Was FINDING 548. Spec 046 C8: reaching zero marks the combatant out,
+      // by hit points, which healing would undo and a Game Master's Down
+      // would not.
+      await expect
+        .poll(
+          async () => {
+            const seen = await combatSeenBy(brom.page, table.worldId);
+            const row = seen?.combatants.find((c) => c.label === "Goblin");
+            return row ? `${row.active}/${row.downedBy}` : "missing";
+          },
+          {
+            timeout: 10_000,
+            message: "a creature at zero hit points is out of the fight",
+          },
         )
-        .toBe(false);
+        .toBe("false/HIT_POINTS");
+      await expect(
+        table.gm
+          .getByTestId("combatant-row")
+          .filter({ hasText: "Goblin" })
+          .getByTestId("combatant-out"),
+        "and the Game Master's tracker says why",
+      ).toHaveText("Out: 0 hit points", { timeout: 10_000 });
 
-      // So the Game Master presses it, and the turn order obeys that.
-      combat = await updateCombatant(table, {
-        combatantId: goblinRow.id,
-        active: false,
-      });
+      // Nobody pressed Down, and the turn order obeys it anyway.
+      combat = (await combatSeenBy(table.gm, table.worldId))!;
       for (let turn = 0; turn < 3; turn += 1) {
         combat = await advanceTurn(table, combat!.id);
         const active = combat!.combatants.find(
@@ -564,10 +571,10 @@ test("a Game Master runs a 5e fight for two players", async ({
         );
         expect(
           active?.label,
-          "a combatant marked down is skipped by the turn",
+          "a combatant out of the fight is skipped by the turn",
         ).not.toBe("Goblin");
       }
-      await snapshot(table, "7 · marked down");
+      await snapshot(table, "7 · out of the fight");
     });
 
     await test.step("the one status the table does see", async () => {

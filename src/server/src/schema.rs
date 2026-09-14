@@ -1157,6 +1157,7 @@ diesel::table! {
         active -> Bool,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        downed_by -> Nullable<Text>,
     }
 }
 

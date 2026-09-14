@@ -224,6 +224,8 @@ pub mod mutations_chat;
 pub use mutations_chat::{ChatMutation, ChatQuery};
 pub mod mutations_combat;
 pub use mutations_combat::{CombatMutation, CombatQuery};
+// Spec 046: the Game Master's Damage and Heal.
+pub mod mutations_combat_hit_points;
 
 // Spec 017: actor "available for claiming" flag, atomic claiming,
 // player-created characters, and GM un-claim.
@@ -498,6 +500,8 @@ pub struct MutationRoot(
     AuthoringToolMutation,
     ChatMutation,
     CombatMutation,
+    // Spec 046 FR-014: `changeHitPoints`.
+    mutations_combat_hit_points::CombatHitPointsMutation,
     ReconcileMutation,
     HeartbeatMutation,
     // Spec 028 (T086): `sendPeerSignal` — the post box.

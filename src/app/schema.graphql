@@ -796,6 +796,15 @@ type AppMutationRoot {
 	advanceTurn(combatId: UUID!): GraphQLCombat!
 	endCombat(combatId: UUID!): GraphQLCombat!
 	"""
+	Damage or heal a creature by hand. Game Master only.
+	
+	Temporary hit points absorb damage first, current stops at zero, and
+	healing stops at the maximum. A creature taken to zero is marked out of
+	the running combat; healed above zero, it is back in — unless the Game
+	Master took it out by hand.
+	"""
+	changeHitPoints(tokenId: UUID!, kind: HitPointChange!, amount: Int!): TokenHitPoints!
+	"""
 	Replay changes made while disconnected, and report what became of
 	each (US7).
 	
@@ -2020,6 +2029,14 @@ enum DivergenceResolution {
 }
 
 """
+Why a combatant is out of the fight (spec 046 C8).
+"""
+enum DownedBy {
+	HIT_POINTS
+	GAME_MASTER
+}
+
+"""
 An attachment the person approved.
 
 The bytes are inline because the review step showed exactly these bytes and
@@ -2700,6 +2717,13 @@ type GraphQLCombatant {
 	tiebreak: Int!
 	isNpc: Boolean!
 	active: Boolean!
+	"""
+	Spec 046: why an inactive combatant is out — `HIT_POINTS` when its
+	creature reached zero, `GAME_MASTER` when the tracker's Down was
+	pressed, null when it is in the fight (or went out before this was
+	recorded).
+	"""
+	downedBy: DownedBy
 }
 
 """
@@ -4660,6 +4684,14 @@ input HeldItemInput {
 }
 
 """
+Which way a change goes.
+"""
+enum HitPointChange {
+	DAMAGE
+	HEALING
+}
+
+"""
 One entry, as the review approved it.
 """
 input ImportedEntryInput {
@@ -5983,6 +6015,16 @@ type TestMailResult {
 	whether it worked or not.
 	"""
 	outboxId: UUID!
+}
+
+"""
+A creature's hit points after a change.
+"""
+type TokenHitPoints {
+	tokenId: UUID!
+	current: Int!
+	max: Int!
+	temporary: Int!
 }
 
 """

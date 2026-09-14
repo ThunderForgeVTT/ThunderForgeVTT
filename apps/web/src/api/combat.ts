@@ -6,7 +6,11 @@
 // walk the same sequence.
 
 import { postGraphQL } from "@/api/graphqlClient";
-import type { CombatRecord } from "@/types/combat";
+import type {
+  CombatRecord,
+  HitPointChange,
+  TokenHitPointsRecord,
+} from "@/types/combat";
 
 const COMBAT_FIELDS = `
   id
@@ -26,6 +30,7 @@ const COMBAT_FIELDS = `
     tiebreak
     isNpc
     active
+    downedBy
   }
 `;
 
@@ -137,4 +142,36 @@ export function endCombat(combatId: string): Promise<CombatRecord> {
     `,
     { combatId },
   ).then((data) => data.endCombat);
+}
+
+/**
+ * Game Master only (spec 046 FR-014). Damage or heal a creature by hand.
+ *
+ * The server spends temporary hit points first, stops at zero and at the
+ * maximum, and marks the creature out of the running combat at zero. Every
+ * board learns of it from world event 26 (and 18 when the tracker changed);
+ * the answer here is the caller's own confirmation, not the broadcast.
+ */
+export function changeHitPoints(
+  tokenId: string,
+  kind: HitPointChange,
+  amount: number,
+): Promise<TokenHitPointsRecord> {
+  return postGraphQL<{ changeHitPoints: TokenHitPointsRecord }>(
+    `
+      mutation ChangeHitPoints(
+        $tokenId: UUID!
+        $kind: HitPointChange!
+        $amount: Int!
+      ) {
+        changeHitPoints(tokenId: $tokenId, kind: $kind, amount: $amount) {
+          tokenId
+          current
+          max
+          temporary
+        }
+      }
+    `,
+    { tokenId, kind, amount },
+  ).then((data) => data.changeHitPoints);
 }

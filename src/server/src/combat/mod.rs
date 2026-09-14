@@ -9,4 +9,5 @@
 //! to know about a system it reads from the pack's `combat` block through
 //! [`manifest`].
 
+pub mod hit_points;
 pub mod manifest;

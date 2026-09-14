@@ -1805,6 +1805,8 @@ pub struct Combatant {
     pub active: bool,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// Spec 046: `hit_points` or `game_master` while out of the fight.
+    pub downed_by: Option<String>,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
