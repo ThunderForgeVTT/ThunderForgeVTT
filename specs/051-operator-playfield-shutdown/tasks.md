@@ -240,7 +240,7 @@ These journeys go through the product the way people do: UI only, no GraphQL sho
   - **Wiring:** add `"journeys"` to the root `package.json`, and exclude `e2e/journeys` from `apps/web/playwright.config.ts` so ordinary runs never pick journeys up.
   - **Proof:** run one trivial journey while an `e2e-parallel.mjs` run is in progress; both pass. Also prove that teardown leaves no containers (`docker ps -a --filter label=com.docker.compose.project=<project>`).
 
-- [ ] T067 [US1] Write `apps/web/e2e/journeys/operator-pauses-through-the-portal.journey.spec.ts`:
+- [x] T067 [US1] Write `apps/web/e2e/journeys/operator-pauses-through-the-portal.journey.spec.ts`:
   - **Pause flow:** the operator signs in with 2FA through the login page, opens `/admin/play-pauses` from the admin nav, and searches for the world by name. The pause dialog refuses blank or whitespace grounds, and cancelling changes nothing (server state checked). Confirming shows the world under *Active pauses*, and the two playing tables land on the notice.
   - **Keyboard-only:** repeat the flow using only Tab, Enter, Escape and arrows, with focus visible at every step. `expectNoAxeViolations` runs on the admin page and the dialog.
   - **Non-operators:** a Game Master, and a player, navigating to `/admin/play-pauses` get the product's normal refusal and see no world list.

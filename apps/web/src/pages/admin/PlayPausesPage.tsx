@@ -1,4 +1,10 @@
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   listPlayPauses,
   pauseWorldPlay,
@@ -73,6 +79,13 @@ export default function PlayPausesPage() {
   const [pausing, setPausing] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
 
+  // Where focus goes when the dialog closes. Radix returns it to a
+  // `DialogTrigger`, and this dialog has none — it is opened from a button in
+  // a list — so without these, closing it dropped focus onto the page body and
+  // a keyboard user started again from the top (found by the T067 journey).
+  const openerRef = useRef<HTMLElement | null>(null);
+  const outcomeRef = useRef<HTMLParagraphElement>(null);
+
   const loadActive = useCallback(async () => {
     try {
       setActive((await listPlayPauses({ active: true })).nodes);
@@ -117,6 +130,10 @@ export default function PlayPausesPage() {
   };
 
   const openConfirm = (world: PauseCandidateWorld) => {
+    openerRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
     setTarget(world);
     setGrounds("");
     setDialogError(null);
@@ -171,7 +188,9 @@ export default function PlayPausesPage() {
           {error ? <StatusBadge variant="danger">{error}</StatusBadge> : null}
           {outcome ? (
             <p
+              ref={outcomeRef}
               role="status"
+              tabIndex={-1}
               className="text-sm"
               data-testid="play-pause-outcome"
             >
@@ -290,7 +309,18 @@ export default function PlayPausesPage() {
           if (!open && !pausing) setTarget(null);
         }}
       >
-        <DialogContent data-testid="play-pause-confirm">
+        <DialogContent
+          data-testid="play-pause-confirm"
+          onCloseAutoFocus={(event) => {
+            // After a pause, to the sentence saying what happened: the list
+            // the dialog was opened from is re-fetched and re-rendered, so the
+            // button that opened it may no longer exist. After a cancel,
+            // nothing changed, so back to that button.
+            event.preventDefault();
+            const back = outcomeRef.current ?? openerRef.current;
+            if (back?.isConnected) back.focus();
+          }}
+        >
           <form className="grid gap-4" onSubmit={(e) => void confirmPause(e)}>
             <DialogHeader>
               <DialogTitle>Pause play in {target?.name}?</DialogTitle>
