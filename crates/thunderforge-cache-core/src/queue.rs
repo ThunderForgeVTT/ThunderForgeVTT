@@ -44,6 +44,14 @@ pub enum RejectionReason {
     GoneAway,
     /// Malformed or inapplicable.
     Invalid,
+    /// An operator paused play in this world (spec 051 FR-023, research R5).
+    ///
+    /// Every change in the batch gets it, and the client discards them rather
+    /// than holding them for a lift: applying days later edits made against a
+    /// world an operator stopped is the path a compromised account would use
+    /// to carry on. Distinct from `PermissionDenied` so the person is told what
+    /// happened rather than that they lost a permission they still have.
+    PlayPaused,
 }
 
 /// What became of one queued change.

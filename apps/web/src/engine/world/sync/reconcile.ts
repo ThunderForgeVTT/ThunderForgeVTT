@@ -32,7 +32,9 @@ export type RejectionReason =
   | "PERMISSION_DENIED"
   | "SUPERSEDED"
   | "GONE_AWAY"
-  | "INVALID";
+  | "INVALID"
+  /** Spec 051: an operator paused play in this world; nothing was applied. */
+  | "PLAY_PAUSED";
 
 /** One change's fate, as the server reported it. */
 export interface ReconcileOutcome {

@@ -80,6 +80,9 @@ pub mod notices;
 pub mod peer_signaling;
 /// Spec 036: which client of an account is at the table.
 pub mod play_field;
+/// Spec 051, ADR-100: an operator pauses a world's play, and no world role
+/// can undo it.
+pub mod play_pause;
 /// Spec 039 US1/US3: the gate every publishing path passes before it mints a
 /// share code. In the impl rather than the resolver — a policy enforced only in
 /// a UI is a policy with a hole in it.

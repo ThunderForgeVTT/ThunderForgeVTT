@@ -145,6 +145,23 @@ pub const EVENT_CODE_ACTOR_SHEET_CHANGED: i32 = 26;
 /// "epoch": <n>}`. `forUser` is null for a reset that reaches everyone.
 pub const EVENT_CODE_SCENE_EXPLORATION_RESET: i32 = 27;
 
+/// An operator paused this world's play.
+///
+/// Spec 051 FR-020, research R1. The **fast path**, not the lock: every open
+/// `worldEventsCreated` stream delivers it within the listener's 100 ms poll,
+/// and an honest client leaves the playfield on receipt. What makes the pause
+/// hold is `play_pause::gate` and the stream poll in `session_lifetime`, which
+/// end every stream for the world within five seconds whether or not the
+/// client listened.
+///
+/// There is no event for a lift. Nothing is streaming a paused world to hear
+/// one; the notice asks `worldPlayState` instead (research R6).
+///
+/// Payload: `{"pausedAt": <iso8601>}` and nothing else. Every member of the
+/// world receives this, so it never carries grounds, a trigger or who paused it
+/// (FR-011).
+pub const EVENT_CODE_WORLD_PLAY_PAUSED: i32 = 28;
+
 /// Record a world event to the audit trail and trigger NOTIFY for real-time sync.
 ///
 /// # Failures are logged here, not at the call sites

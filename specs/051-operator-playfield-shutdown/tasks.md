@@ -51,15 +51,15 @@ description: "Task list for spec 051, pausing a world's play"
 
 **⚠️ No user story work begins until this phase's checkpoint passes.**
 
-- [ ] T004 Create the migration `src/server/migrations/<timestamp>_pausing_a_worlds_play/up.sql` and `down.sql` exactly per `data-model.md`. Take the timestamp after the newest directory in `src/server/migrations/`.
+- [x] T004 Create the migration `src/server/migrations/<timestamp>_pausing_a_worlds_play/up.sql` and `down.sql` exactly per `data-model.md`. Take the timestamp after the newest directory in `src/server/migrations/`.
   - **Enums:** `"PauseRequestState"` (`Pending`, `Approved`, `Declined`) and `"PauseTriggerKind"` (`Takedown`, `Operator`, `AbuseReport`).
   - **Tables:** `world_play_pauses`, `world_play_pause_requests`, `world_play_pause_triggers` and `world_live_play`, with every CHECK and partial unique index listed.
   - **Guard triggers:** a pause may only be lifted, once; a decided request may not change; neither may be deleted.
   - No FK to `worlds`/`users` except `world_live_play.world_id … ON DELETE CASCADE`.
   - `down.sql` drops exactly what `up.sql` created.
   - Run `diesel migration run` and `diesel migration redo` in `src/server`.
-- [ ] T005 Regenerate `src/server/src/schema.rs` (`diesel print-schema`). Check that print-schema did not re-add removed pack tables (see commit `a9c7542`), and hand-correct if it did.
-- [ ] T006 [P] Add the migration test `src/server/src/play_pause/migration_tests.rs`. It must prove:
+- [x] T005 Regenerate `src/server/src/schema.rs` (`diesel print-schema`). Check that print-schema did not re-add removed pack tables (see commit `a9c7542`), and hand-correct if it did.
+- [x] T006 [P] Add the migration test `src/server/src/play_pause/migration_tests.rs`. It must prove:
   - the second active pause for a world is refused;
   - a second pending request is refused;
   - blank grounds are refused;
@@ -69,18 +69,18 @@ description: "Task list for spec 051, pausing a world's play"
   - a trigger with both or neither owner is refused;
   - deleting a world leaves its pause rows and removes its `world_live_play` row;
   - `down.sql` leaves nothing behind.
-- [ ] T007 Create the module `src/server/src/play_pause/mod.rs` and register it in `src/server/src/lib.rs`. Add Diesel models for the four tables in `src/server/src/play_pause/models.rs`, with `PauseRequestState` and `PauseTriggerKind` as Diesel enums.
-- [ ] T008 Implement the gate in `src/server/src/play_pause/gate.rs`:
+- [x] T007 Create the module `src/server/src/play_pause/mod.rs` and register it in `src/server/src/lib.rs`. Add Diesel models for the four tables in `src/server/src/play_pause/models.rs`, with `PauseRequestState` and `PauseTriggerKind` as Diesel enums.
+- [x] T008 Implement the gate in `src/server/src/play_pause/gate.rs`:
   - `refuse_if_paused(conn, world_id)`, which reads only the active-pause partial index.
   - `refuse_scene_if_paused(conn, scene_id)`, which resolves the scene's world first.
   - A `PlayPaused { world_id, paused_at }` error with `impl From<PlayPaused> for async_graphql::Error`. It sets extensions `code = "WORLD_PLAY_PAUSED"`, `worldId` and `pausedAt`, and the message "Play in this world has been paused by an operator." It never includes grounds or who paused it.
   - It fails closed when the database cannot be read.
-- [ ] T009 [P] Add gate tests in `src/server/src/play_pause/gate_tests.rs`:
+- [x] T009 [P] Add gate tests in `src/server/src/play_pause/gate_tests.rs`:
   - it refuses on an active pause and passes on a lifted one or none;
   - the scene variant resolves correctly;
   - it refuses a site admin who is a member (it is blind to `is_admin`, per ADR-100 decision 2);
   - the error's extensions carry no grounds.
-- [ ] T010 Implement `pause_world(conn, operator, world_id, grounds, trigger)` in `src/server/src/play_pause/mod.rs`. In one transaction it:
+- [x] T010 Implement `pause_world(conn, operator, world_id, grounds, trigger)` in `src/server/src/play_pause/mod.rs`. In one transaction it:
   - validates non-blank grounds (`GROUNDS_REQUIRED`) and that the world exists (`WORLD_NOT_FOUND`);
   - snapshots the world name and the operator's display name;
   - inserts the pause with `created_by`/`updated_by`;
@@ -88,21 +88,21 @@ description: "Task list for spec 051, pausing a world's play"
   - records the world event with code 28 carrying `pausedAt` only.
 
   If the partial unique index refuses because a pause already exists, it records an `Operator` trigger, with the grounds as its `note`, on the existing pause and returns `alreadyPaused: true` (FR-036).
-- [ ] T011 Implement `lift_pause(conn, operator, pause_id, grounds)` in `src/server/src/play_pause/mod.rs`. It is a conditional update `WHERE id = $1 AND lifted_at IS NULL RETURNING`. Zero rows returns `PAUSE_ALREADY_LIFTED`, carrying `liftedBy`/`liftedAt` read back. It touches no content, membership or moderation table (FR-041, FR-042).
-- [ ] T012 [P] Add `EVENT_CODE_WORLD_PLAY_PAUSED: i32 = 28` with a doc comment in `src/server/src/world_events.rs`. Mirror it wherever the web app lists event codes (find with `grep -rn "EXPLORATION_RESET\|= 27" apps/web/src`).
-- [ ] T013 [P] Add `RejectionReason::PlayPaused` with a doc comment in `crates/thunderforge-cache-core/src/queue.rs`. Add the matching variant to the server's reason enum in `src/server/src/graphql/mutations_reconcile.rs`, and to the web mirror (find with `grep -rn "GoneAway" apps/web/src`). Regenerate ts-rs bindings if the enum is exported.
-- [ ] T014 Add `until_stream_must_end(state, session_id, world_id, inner)` in `src/server/src/graphql/session_lifetime.rs`, per `contracts/live-play-lock.md`.
+- [x] T011 Implement `lift_pause(conn, operator, pause_id, grounds)` in `src/server/src/play_pause/mod.rs`. It is a conditional update `WHERE id = $1 AND lifted_at IS NULL RETURNING`. Zero rows returns `PAUSE_ALREADY_LIFTED`, carrying `liftedBy`/`liftedAt` read back. It touches no content, membership or moderation table (FR-041, FR-042).
+- [x] T012 [P] Add `EVENT_CODE_WORLD_PLAY_PAUSED: i32 = 28` with a doc comment in `src/server/src/world_events.rs`. Mirror it wherever the web app lists event codes (find with `grep -rn "EXPLORATION_RESET\|= 27" apps/web/src`). *Done server-side. The web app keeps no list: each consumer declares its own code beside its handler (`exploration.ts`, `sceneLighting.ts`), so the constant lands with its consumer, T023's event-28 handler in `WorldPage.tsx`, not as an unused export now.*
+- [x] T013 [P] Add `RejectionReason::PlayPaused` with a doc comment in `crates/thunderforge-cache-core/src/queue.rs`. Add the matching variant to the server's reason enum in `src/server/src/graphql/mutations_reconcile.rs`, and to the web mirror (find with `grep -rn "GoneAway" apps/web/src`). Regenerate ts-rs bindings if the enum is exported.
+- [x] T014 Add `until_stream_must_end(state, session_id, world_id, inner)` in `src/server/src/graphql/session_lifetime.rs`, per `contracts/live-play-lock.md`.
   - One query per `LIVENESS_POLL` tick: session live AND no active pause for the world.
   - Session gone: the stream completes.
   - Paused: it yields exactly one `Err` with code `WORLD_PLAY_PAUSED`, then completes.
   - Unreadable: it carries on.
 
   Keep `until_session_ends` for streams that are not world-scoped. Extend the module doc to say why the pause shares the session's poll (research R1).
-- [ ] T015 [P] Add stream tests in `src/server/src/graphql/session_lifetime.rs` `mod tests`, modelled on the revoked-session test:
+- [x] T015 [P] Add stream tests in `src/server/src/graphql/session_lifetime.rs` `mod tests`, modelled on the revoked-session test:
   - a wrapped stream yields one pause error and completes within one tick after `pause_world`;
   - a lifted pause does not end a stream;
   - a revoked session still completes without an error item.
-- [ ] T016 [P] Add service tests in `src/server/src/play_pause/pause_tests.rs`:
+- [x] T016 [P] Add service tests in `src/server/src/play_pause/pause_tests.rs`:
   - pause writes the event and trigger;
   - blank grounds are refused;
   - pausing a paused world returns `alreadyPaused` and adds a trigger rather than a pause;

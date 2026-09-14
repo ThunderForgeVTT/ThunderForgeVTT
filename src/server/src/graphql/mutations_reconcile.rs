@@ -101,6 +101,9 @@ pub enum GraphQLRejectionReason {
     GoneAway,
     /// Malformed, or outside what may be edited offline (FR-035a).
     Invalid,
+    /// An operator paused play in this world (spec 051 FR-023). Nothing in the
+    /// batch is applied, and the client discards it rather than retrying.
+    PlayPaused,
 }
 
 /// One change made while disconnected.

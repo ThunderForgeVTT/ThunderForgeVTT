@@ -14,6 +14,14 @@ pub mod sql_types {
     pub struct DeltaForm;
 
     #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "PauseRequestState"))]
+    pub struct PauseRequestState;
+
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "PauseTriggerKind"))]
+    pub struct PauseTriggerKind;
+
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "PolicyEffect"))]
     pub struct PolicyEffect;
 }
@@ -1304,6 +1312,13 @@ diesel::table! {
 }
 
 diesel::table! {
+    world_live_play (world_id) {
+        world_id -> Uuid,
+        last_beat_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     world_lore_entries (id) {
         id -> Uuid,
         world_id -> Uuid,
@@ -1387,6 +1402,64 @@ diesel::table! {
         role -> Varchar,
         joined_at -> Timestamp,
         created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::PauseRequestState;
+
+    world_play_pause_requests (id) {
+        id -> Uuid,
+        world_id -> Uuid,
+        world_name -> Text,
+        raised_at -> Timestamp,
+        state -> PauseRequestState,
+        decided_by -> Nullable<Uuid>,
+        decided_by_name -> Nullable<Text>,
+        decided_at -> Nullable<Timestamp>,
+        decision_note -> Nullable<Text>,
+        created_by -> Nullable<Uuid>,
+        updated_by -> Nullable<Uuid>,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::PauseTriggerKind;
+
+    world_play_pause_triggers (id) {
+        id -> Uuid,
+        request_id -> Nullable<Uuid>,
+        pause_id -> Nullable<Uuid>,
+        kind -> PauseTriggerKind,
+        moderation_action_id -> Nullable<Uuid>,
+        entity_type -> Nullable<Text>,
+        entity_id -> Nullable<Uuid>,
+        note -> Nullable<Text>,
+        recorded_at -> Timestamp,
+        created_by -> Nullable<Uuid>,
+    }
+}
+
+diesel::table! {
+    world_play_pauses (id) {
+        id -> Uuid,
+        world_id -> Uuid,
+        world_name -> Text,
+        paused_by -> Uuid,
+        paused_by_name -> Text,
+        paused_at -> Timestamp,
+        grounds -> Text,
+        request_id -> Nullable<Uuid>,
+        lifted_by -> Nullable<Uuid>,
+        lifted_by_name -> Nullable<Text>,
+        lifted_at -> Nullable<Timestamp>,
+        lift_grounds -> Nullable<Text>,
+        created_by -> Uuid,
+        updated_by -> Uuid,
         updated_at -> Timestamp,
     }
 }
@@ -1550,6 +1623,7 @@ diesel::joinable!(world_item_shares -> users (created_by));
 diesel::joinable!(world_item_shares -> world_items (item_id));
 diesel::joinable!(world_items -> users (created_by));
 diesel::joinable!(world_items -> worlds (world_id));
+diesel::joinable!(world_live_play -> worlds (world_id));
 diesel::joinable!(world_lore_entries -> users (created_by));
 diesel::joinable!(world_lore_entries -> worlds (world_id));
 diesel::joinable!(world_lore_image_assets -> users (uploaded_by));
@@ -1564,6 +1638,9 @@ diesel::joinable!(world_lore_tags -> users (created_by));
 diesel::joinable!(world_lore_tags -> world_lore_entries (lore_entry_id));
 diesel::joinable!(world_members -> users (user_id));
 diesel::joinable!(world_members -> worlds (world_id));
+diesel::joinable!(world_play_pause_triggers -> world_play_pause_requests (request_id));
+diesel::joinable!(world_play_pause_triggers -> world_play_pauses (pause_id));
+diesel::joinable!(world_play_pauses -> world_play_pause_requests (request_id));
 diesel::joinable!(world_roll_records -> users (triggered_by));
 diesel::joinable!(world_roll_records -> worlds (world_id));
 diesel::joinable!(world_tokens -> worlds (world_id));
@@ -1654,6 +1731,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     world_item_prices,
     world_item_shares,
     world_items,
+    world_live_play,
     world_lore_entries,
     world_lore_image_assets,
     world_lore_links,
@@ -1661,6 +1739,9 @@ diesel::allow_tables_to_appear_in_same_query!(
     world_lore_revisions,
     world_lore_tags,
     world_members,
+    world_play_pause_requests,
+    world_play_pause_triggers,
+    world_play_pauses,
     world_roll_records,
     world_tokens,
     worlds,
