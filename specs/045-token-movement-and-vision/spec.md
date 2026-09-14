@@ -4,9 +4,11 @@
 
 **Created**: 2026-09-11
 
-**Status**: Built, 2026-09-11 to 2026-09-12, with one gap and two claims not
-yet proven at the table (checked 2026-09-14; phases as numbered in
-[tasks.md](./tasks.md)). The owner's decisions of 2026-09-11 are recorded under
+**Status**: Built, 2026-09-11 to 2026-09-14 (checked 2026-09-14; phases as
+numbered in [tasks.md](./tasks.md)). The carried-light gap closed and SC-007
+was watched on a board on 2026-09-14. Not yet proven at the table: the gridless
+keyboard step, and a Game Master's separate bright reach on a placed light. The
+owner's decisions are recorded under
 [Decisions](#decisions-owner-2026-09-11); nothing is open.
 
 - **Phase 2 — one crossing test for both sides.** Shipped: `movement_blocked_by`
@@ -28,11 +30,13 @@ yet proven at the table (checked 2026-09-14; phases as numbered in
 - **Phase 7 (US6) — a game system says how a hero sees.** Darkvision shipped:
   D&D 5e declares it, and `combat-5e.playtest.ts` proves a sheet's sixty feet
   reach the engine as twelve cells, and a sheet edit reaches the board with no
-  reload. **Not proven:** SC-007 as written — a token at 50 feet shown dimly,
-  one at 70 feet hidden — is unit-tested in `thunderforge-canvas-core` and has
-  not been watched on a board. **Not met:** a carried light's reach from the
-  character's data is resolved by the server and never reaches the engine
-  (FR-061, FR-064; tasks.md T065).
+  reload. SC-007 is watched on a board by `e2e/darkvision-range.spec.ts`
+  (T066). A carried light from the character's data reaches the engine as a
+  light attached to its token (decision 6, T065): it lights every seat's
+  board, a wall shadows it, and it follows its token, by
+  `e2e/carried-light.spec.ts` and the dnd5e crawl. A Game Master setting a
+  placed light's bright reach apart from its dim reach (FR-061's other half)
+  is not built: a stored light still has one radius.
 - **Phase 8 (US7) — a map that remembers.** Shipped and proven in a real
   browser by `e2e/scene-exploration.spec.ts`: the map survives a reload and a
   Game Master's reset reaches the player's storage. Not played in a playtest.
