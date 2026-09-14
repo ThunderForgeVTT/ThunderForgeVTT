@@ -296,6 +296,14 @@ them.
    world is unchanged.
 5. **Given** a player whose claim is released, **When** they next try to change
    that character's imagery, **Then** they are refused.
+6. **Given** a world whose GM has turned off "Players may change their
+   character's art", **When** a player opens their own character, **Then** the
+   imagery panel shows the art without "Build a hero" or an upload control, and
+   a direct call to the mutation is refused.
+7. **Given** a character whose look the GM has locked, **When** the player who
+   holds it tries to change its imagery by any route, **Then** they are refused
+   and told the GM has locked it. Every other character they hold in a world
+   that allows it is unaffected.
 
 ---
 
@@ -307,7 +315,8 @@ rebuilding the hero from scratch.
 
 **Why this priority**: without it, the builder writes pictures and forgets how
 it made them, so every edit is a redraw. It is P2 because phases (b) and (c)
-are useful without it, and it is the one phase that changes the data model.
+are useful without it. It changes the data model, as the art lock of phase (c)
+does (FR-030a, FR-030b).
 
 **Independent Test**: build and save a hero for an NPC, reload, and re-open
 the builder. Confirm every control shows the saved choice and the previews
@@ -504,7 +513,8 @@ Confirm it is the same hero.
   create NPCs there. It MUST make a named NPC with a random portrait and token
   from a name and one confirming action. Rerolling MUST be available before
   confirming, and "Open in builder" MUST hand the current hero to the full
-  builder.
+  builder. The dialog MUST leave room for a template choice below the
+  name, so a later spec can add one without redesigning it (Decisions, 2).
 - **FR-028**: Where quick NPC creates the NPC but cannot store its art, the NPC
   MUST remain. It MUST be shown as lacking art, with a way to add it. It MUST
   NOT be deleted to hide the failure.
@@ -519,8 +529,20 @@ Confirm it is the same hero.
   the rest of the actor.
 - **FR-031**: That right MUST end when the claim ends. It MUST NOT extend to any
   actor the player does not hold.
+- **FR-030a**: Each world MUST have a setting, "Players may change their
+  character's art", which only its GM can change. It MUST default to on. While
+  it is off, FR-030's grant MUST NOT apply to any actor in that world.
+- **FR-030b**: The GM MUST be able to lock the look of any one character, and to
+  unlock it. While a character is locked, FR-030's grant MUST NOT apply to it,
+  whatever the world setting. A player refused by a lock MUST be told that the
+  GM has locked the character's look. Locking MUST NOT change the character's
+  current art.
+- **FR-030c**: There is no approval queue. A player's change takes effect when
+  it is stored, and a GM who disagrees replaces it (FR-032) or locks the
+  character (FR-030b).
 - **FR-032**: The GM's existing authority over every actor in their world MUST be
-  unchanged, including the authority to replace a player's art.
+  unchanged, including the authority to replace a player's art. Neither the
+  world setting nor a lock constrains the GM.
 - **FR-033**: The imagery panel, with "Build a hero", MUST be available on a
   character's own page to anyone permitted to change that character's imagery.
 - **FR-034**: "Create your own character" MUST allow a hero to be built as part
@@ -590,8 +612,9 @@ Confirm it is the same hero.
 - **SC-009** (b, c): Everything a built hero stores is WebP, and the engine
   draws the token on the map as it draws any uploaded token.
 - **SC-010** (c): A player can change the imagery of the character they hold and
-  of no other actor. This is shown by attempting both in the e2e, including
-  through a direct mutation call.
+  of no other actor, and cannot change it while the world setting is off or the
+  character is locked. This is shown by attempting each case in the e2e,
+  including through a direct mutation call.
 - **SC-011** (d): Re-opening a saved hero shows every choice exactly as saved,
   in the world it was made in and in a world it was copied to.
 - **SC-012**: The builder adds nothing to the initial load of any `apps/web`
@@ -619,7 +642,8 @@ Confirm it is the same hero.
   is the single rasteriser, at a fixed 1024 px edge, for every client. Research
   R3 records the alternative.
 - **The standalone builder is a developer tool** and is not deployed with a
-  release, like the engine sandbox.
+  release, like the engine sandbox. It is not published as a public page in
+  this spec (see Decisions, 3).
 - **Twelve presets are enough to start.** Growing the catalogue is ongoing work
   that FR-001 and US2 make cheap. It is not a phase of this spec.
 
@@ -651,7 +675,10 @@ Confirm it is the same hero.
 - **Extra image roles** (talking, not-talking, background, from ADR-057). They
   are additive later, and the builder would draw them from the same spec.
 - **A stat block for quick NPC.** Quick NPC makes a named NPC with a face, and
-  the sheet is filled in the way it is today.
+  the sheet is filled in the way it is today. Applying a game system's NPC
+  template is a later spec (see Decisions, 2).
+- **A public "make your hero" page.** See Decisions, 3.
+- **An approval queue for players' art.** See FR-030c.
 - **Name suggestions.** The GM types the name.
 - **Animated or layered tokens.**
 - **Items and scenes.** The builder draws heroes only.
@@ -664,21 +691,30 @@ Confirm it is the same hero.
 - Spec 017 (player onboarding: claiming and player-created characters), for
   phase (c).
 - Spec 026 (content collections), FR-018 in particular, for phase (d).
-- Phase (d) changes the data model. Under Constitution Principle IV it needs an
-  ADR, landed with it, recording R4's decision.
+- Phases (c) and (d) change the data model: (c) adds the world setting and the
+  per-character lock (FR-030a, FR-030b), and (d) stores specs. Under
+  Constitution Principle IV each needs an ADR landed with it; (d)'s records
+  R4's decision.
 
-## Questions for the owner
+## Decisions
 
-1. **Does a player's art need a GM's say-so?** As specified, a player can change
-   the portrait and token of the character they hold at any time, and the GM can
-   always replace them (FR-030 to FR-032). Some tables will want the GM to be
-   able to lock a character's look, or to approve it. Is either wanted, and if so,
-   is it a per-world setting?
-2. **Should quick NPC ever do more than a face and a name?** It currently stops
-   there, and the sheet is filled in as it is today. If you want it to also apply
-   a game system's NPC template, that is a second spec touching the system packs,
-   and it is worth knowing now so the dialog leaves room for it.
-3. **Should the standalone builder ever be public?** It is currently a
-   developer tool, like the engine sandbox, and users get the builder inside the
-   product. A public "make your hero" page on the site would need hosting and a
-   privacy note, but no server work, since phase (a) needs none.
+Decided on 2026-09-14, at the owner's request. They replace the three
+questions this section held.
+
+1. **A player's art does not need the GM's approval, and the GM can lock it.**
+   A player changes the portrait and token of the character they hold whenever
+   they like, and the GM can always replace them (FR-030 to FR-032). Two
+   controls are added for tables that want more: a per-world setting that turns
+   the player's grant off (FR-030a), and a per-character lock (FR-030b). There
+   is no approval queue (FR-030c). A queue makes the player wait on the GM for
+   something the GM can already undo in one action, and it is a moderation
+   workflow this spec has no reason to build.
+2. **Quick NPC stays a face and a name in this spec.** Applying a game system's
+   NPC template is wanted later, as its own spec touching the system packs.
+   FR-027 keeps room for it in the dialog. A template is
+   content from a system pack, chosen by the GM; nothing is generated.
+3. **The standalone builder is not public in this spec.** It stays a developer
+   tool, and users meet the builder inside the product. Phase (a) keeps it free
+   of any server, so publishing it later is a static deploy plus a privacy
+   note, not a redesign. That is reconsidered with the profile-content spec,
+   where a hero can exist outside a world.
