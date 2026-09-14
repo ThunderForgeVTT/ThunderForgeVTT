@@ -146,8 +146,14 @@ export default defineConfig({
     // ran beside the sharded e2e runner: pages in the middle of a test were
     // reloaded, and `play-pause.spec.ts` failed on a navigation type of
     // "reload" that no product code had caused.
+    //
+    // The specs themselves too: the browser never loads a file under `e2e/`,
+    // yet an edit to one reloaded a journey's playfield mid-test (spec 051
+    // T070, 2026-09-13: a reload at the very millisecond another agent saved
+    // `every-way-back-in.journey.spec.ts`).
     watch: {
       ignored: [
+        "**/e2e/**",
         "**/journeys-results/**",
         "**/playtest-results/**",
         "**/playtest-report/**",

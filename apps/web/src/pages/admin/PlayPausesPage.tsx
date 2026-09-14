@@ -415,28 +415,36 @@ export default function PlayPausesPage() {
                           data-kind={trigger.kind}
                           data-entity-id={trigger.entityId ?? undefined}
                         >
+                          {/* Spaces written out: flex gaps separate the
+                              parts on screen, not in the text a screen
+                              reader or a copy reads. */}
                           <span className="font-medium">
                             {TRIGGER_KIND_LABEL[trigger.kind]}
-                          </span>
+                          </span>{" "}
                           {entityLabel(trigger.entityType) ? (
-                            <span className="text-muted-foreground">
-                              on {entityLabel(trigger.entityType)}
-                            </span>
+                            <>
+                              <span className="text-muted-foreground">
+                                on {entityLabel(trigger.entityType)}
+                              </span>{" "}
+                            </>
                           ) : null}
                           <span className="text-xs text-muted-foreground">
+                            recorded{" "}
                             <time dateTime={trigger.recordedAt}>
                               {formatMoment(trigger.recordedAt)}
                             </time>
-                          </span>
+                          </span>{" "}
                           {trigger.caseId ? (
-                            <Link
-                              to={`/admin/moderation?case=${trigger.caseId}`}
-                              className="text-xs underline underline-offset-2"
-                              data-testid="play-pause-request-case-link"
-                            >
-                              Moderation case{" "}
-                              <code>{trigger.caseId.slice(0, 8)}</code>
-                            </Link>
+                            <>
+                              <Link
+                                to={`/admin/moderation?case=${trigger.caseId}`}
+                                className="text-xs underline underline-offset-2"
+                                data-testid="play-pause-request-case-link"
+                              >
+                                Moderation case{" "}
+                                <code>{trigger.caseId.slice(0, 8)}</code>
+                              </Link>{" "}
+                            </>
                           ) : null}
                           {trigger.note ? (
                             <span className="basis-full whitespace-pre-line text-muted-foreground">
