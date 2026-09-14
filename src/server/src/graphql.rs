@@ -291,6 +291,12 @@ pub use subscriptions::*;
 #[path = "graphql/play_pause_stream_tests.rs"]
 mod play_pause_stream_tests;
 
+/// Spec 051 T027: every root mutation and subscription is gated against a
+/// paused world, or says why it is not.
+#[cfg(test)]
+#[path = "graphql/play_pause_surface_tests.rs"]
+mod play_pause_surface_tests;
+
 // Empty placeholder in the mutation root — the world_collaborators-based
 // RBAC mutations this was meant to hold were never built; world/scene
 // authorization instead runs through world_members (see
