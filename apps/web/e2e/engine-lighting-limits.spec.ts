@@ -428,8 +428,9 @@ test("engine sweep: carried lights moving through a dark map", async ({
             actorId: createActor.id,
             gameSystemId: "dnd5e",
             dataType: "trait_data",
-            // A torch, as the rulebook has it: 20 feet bright, 40 dim.
-            data: { light_bright: 20, light_dim: 40 },
+            // A torch, as the rulebook has it: 20 feet bright, 40 dim. The
+            // 5e sheet requires a class and a level beside it.
+            data: { class: "fighter", level: 1, light_bright: 20, light_dim: 40 },
           },
         },
       );
