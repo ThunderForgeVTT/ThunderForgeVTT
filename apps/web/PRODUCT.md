@@ -91,6 +91,12 @@ an edition change, or a paid module that stopped being maintained.
   decision (spec 049, decision 4), accepted as ADR-097.
 - **Operators and takedowns.** The notice-and-takedown programme exists and
   gates any feature that exposes one world's content outside that world.
+- **Operators can pause a world's play.** An operator, and nobody in the
+  world, can pause a world's live play: everyone at the table leaves the
+  canvas, nobody can start playing it again until an operator lifts the pause,
+  and nothing else about the world changes. A takedown that lands on a table
+  playing it asks an operator to decide; it never pauses on its own (spec 051,
+  ADR-100).
 - **Terminology.** Keep these apart; they are not interchangeable:
   - **World:** a persistent campaign.
   - **Scene:** a map inside a world.
@@ -120,6 +126,12 @@ an edition change, or a paid module that stopped being maintained.
   untested and would "rather say so than let a guess pass for a requirement."
   Product copy should hold that standard: no inflated claims, and limits stated
   where a person will run into them.
+- **A pause is told calmly, and never explained.** Most people at a paused
+  table have done nothing wrong, and a reason shown to the table can tip off
+  whoever is being looked into. So the notice and every member-facing trace of
+  a pause say *that* play was paused by an operator and *when*, in plain,
+  unaccusing words, with what a person can still do. They never say why, who,
+  what triggered it, or "takedown", "report" or "violation".
 
 ## Evidence on Hand
 
