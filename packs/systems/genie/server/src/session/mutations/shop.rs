@@ -89,6 +89,7 @@ pub async fn create_shop_listing_impl(
     if !is_dm_of_world(state, user_id, is_admin, world_id).await? {
         return Err(Error::new("Only the GM may create a shop listing"));
     }
+    refuse_world_if_paused(state, world_id).await?;
 
     let mut conn = state
         .db_pool
@@ -143,6 +144,7 @@ pub async fn purchase_from_shop_impl(
     buyer_actor_id: Uuid,
 ) -> GraphQLResult<GraphQLGenieShopListing> {
     require_caller_controls_actor(state, user_id, is_admin, buyer_actor_id).await?;
+    refuse_world_if_paused(state, actor_world_id(state, buyer_actor_id).await?).await?;
 
     let mut conn = state
         .db_pool
@@ -200,10 +202,6 @@ pub async fn purchase_from_shop_impl(
         None
     };
 
-    let mut conn = state
-        .db_pool
-        .get()
-        .map_err(|_| Error::new("Failed to get DB connection"))?;
     let world_id_for_event = {
         let seller_actor_id = listing.actor_id;
         let mut lookup_conn = state
@@ -221,6 +219,14 @@ pub async fn purchase_from_shop_impl(
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
         .map_err(Error::new)?
     };
+    // The seller's world is the one written to. A buyer from another world
+    // was gated on theirs above.
+    refuse_world_if_paused(state, world_id_for_event).await?;
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
 
     let updated_listing =
         tokio::task::spawn_blocking(move || -> Result<GenieShopListing, String> {

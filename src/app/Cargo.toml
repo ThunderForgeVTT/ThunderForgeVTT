@@ -76,6 +76,17 @@ thunderforge_pg_sockets = { path = "../../crates/thunderforge-pg-sockets" }
 thunderforge_presence = { path = "../../crates/thunderforge-presence" }
 thunderforge_crucible = { path = "../../crates/thunderforge-crucible" }
 
+[dev-dependencies]
+# `play_pause_surface_tests` holds the merged schema to the server's own
+# play-pause tables and seeds a world through `test_support`, both behind this
+# feature so a normal build never compiles them.
+thunderforge-server = { path = "../server", default-features = false, features = [
+  "test-support",
+] }
+chrono = "0.4.45"
+futures-util = "0.3.34"
+serde_json = "1.0.151"
+
 # Linked for their `inventory::submit!` blocks alone — see `system_packs.rs`.
 [dependencies.dnd5e_server]
 path = "../../packs/systems/dnd5e/server"

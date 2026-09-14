@@ -223,6 +223,11 @@ Commit.
   - `live-sync.spec.ts`, `world-event-catchup.spec.ts`, `world-cache-offline.spec.ts`, `world-cache-isolated.spec.ts`, `companion-offline.spec.ts`;
   - the interactives and library e2e.
 
+- [x] T074 [US2] Close the gap T036 found: system packs merge their own root fields only in the app crate (`src/app/src/schema_roots.rs`), so the lib surface test cannot see them. The Genie pack's 13 session mutations (`packs/systems/genie/server/src/session/`) are ungated.
+  - Gate each world-scoped pack mutation with `play_pause::gate`.
+  - Add an app-crate surface test over the **merged** schema. It must use the same three tables plus a pack-supplied table, so that any pack root field left unclassified fails the build, and every gated pack field is called against a paused world.
+  - Document for pack authors, in the pack server contract, that world-scoped root fields must be classified. *Genie was the only pack contributing roots (5 queries, 13 mutations, no subscriptions). A pack classifies its own fields in a `PackSurface` it submits through `inventory` (`thunderforge_server::play_pause::surface`), so the app test names no pack; the server's tables are exported under `test-support`. Accepting and declining a trade now gate before the not-your-own-proposal check, so both parties are refused alike. The contract is `packs/systems/README.md`.*
+
 ### Journeys: real operator and player flows, on an isolated instance
 
 These journeys go through the product the way people do: UI only, no GraphQL shortcuts except to *check* server state. They run on a throwaway dockerized instance, following the `compose.torture.yml` / `scripts/torture.mjs` precedent, so they never share the dev database or the `e2e-parallel` lock, and can mutate instance-wide state such as operators and 2FA freely. They are added under the story they prove, and built once that story has landed. The IDs are appended rather than renumbered, because tasks already in flight cite the existing numbers.

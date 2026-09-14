@@ -50,9 +50,7 @@ use crate::play_pause::{TriggerDetail, pause_world};
 use crate::state::AppState;
 use crate::test_support::{insert_test_user, insert_test_world, insert_test_world_member};
 
-#[path = "play_pause_surface_tables.rs"]
-mod tables;
-use tables::*;
+use crate::graphql::play_pause_surface_tables::*;
 
 fn sdl() -> String {
     async_graphql::Schema::build(

@@ -33,6 +33,7 @@ pub mod gate;
 pub mod live_play;
 pub mod models;
 pub mod requests;
+pub mod surface;
 
 use async_graphql::{Error, ErrorExtensions as _};
 use chrono::NaiveDateTime;

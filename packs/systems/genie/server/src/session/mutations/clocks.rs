@@ -23,6 +23,7 @@ pub async fn start_genie_session_impl(
     if !is_dm_of_world(state, user_id, is_admin, input.world_id).await? {
         return Err(Error::new("Only the GM may start a Genie session"));
     }
+    refuse_world_if_paused(state, input.world_id).await?;
     if input.doom_clock_max <= 0 {
         return Err(Error::new("doomClockMax must be greater than zero"));
     }
@@ -175,6 +176,7 @@ pub async fn grant_session_resource_impl(
     if !is_dm_of_world(state, user_id, is_admin, session.world_id).await? {
         return Err(Error::new("Only the GM may grant Session Resources"));
     }
+    refuse_world_if_paused(state, session.world_id).await?;
     if session.status != "active" {
         return Err(Error::new(
             "Start a session first — there is no active Genie session for this world",
@@ -244,6 +246,7 @@ pub async fn spend_wish_impl(
     if !is_dm_of_world(state, user_id, is_admin, session.world_id).await? {
         return Err(Error::new("Only the GM may spend a wish"));
     }
+    refuse_world_if_paused(state, session.world_id).await?;
     if session.wishes_remaining <= 0 {
         return Err(Error::new("No wishes remaining in the Session Wish Pool"));
     }
@@ -320,6 +323,7 @@ pub async fn advance_doom_clock_impl(
     if !is_dm_of_world(state, user_id, is_admin, session.world_id).await? {
         return Err(Error::new("Only the GM may advance the Doom Clock"));
     }
+    refuse_world_if_paused(state, session.world_id).await?;
     if session.status != "active" {
         return Err(Error::new("This Genie session has already concluded"));
     }
@@ -409,6 +413,7 @@ pub async fn create_puzzle_clock_impl(
     if !is_dm_of_world(state, user_id, is_admin, session.world_id).await? {
         return Err(Error::new("Only the GM may create a Puzzle Clock"));
     }
+    refuse_world_if_paused(state, session.world_id).await?;
 
     let mut conn = state
         .db_pool
@@ -641,6 +646,7 @@ pub async fn advance_puzzle_clock_impl(
     if !is_dm_of_world(state, user_id, is_admin, session.world_id).await? {
         return Err(Error::new("Only the GM may advance a Puzzle Clock"));
     }
+    refuse_world_if_paused(state, session.world_id).await?;
     if session.status != "active" {
         return Err(Error::new("This Genie session has already concluded"));
     }
@@ -798,6 +804,7 @@ pub async fn configure_puzzle_clock_reward_impl(
     if !is_dm_of_world(state, user_id, is_admin, session.world_id).await? {
         return Err(Error::new("Only the GM may configure Puzzle Clock rewards"));
     }
+    refuse_world_if_paused(state, session.world_id).await?;
     let _ = clock;
 
     let mut conn = state

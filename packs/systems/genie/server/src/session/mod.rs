@@ -19,6 +19,7 @@
 
 pub mod models;
 pub mod mutations;
+mod play_pause_surface;
 pub mod queries;
 pub mod schema;
 

@@ -27,7 +27,7 @@ pub async fn propose_resource_trade_impl(
         return Err(Error::new("Trade quantities must be greater than zero"));
     }
 
-    require_member_of_session_world(state, user_id, session_id).await?;
+    let world_id = require_member_of_session_world(state, user_id, session_id).await?;
 
     // Callable by either named party (research.md R8).
     let controls_from = caller_controls_actor(state, user_id, is_admin, from_actor_id).await?;
@@ -37,12 +37,12 @@ pub async fn propose_resource_trade_impl(
             "You must control one of the two parties to propose this trade",
         ));
     }
+    refuse_world_if_paused(state, world_id).await?;
 
     let mut conn = state
         .db_pool
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
-    let world_id = require_member_of_session_world(state, user_id, session_id).await?;
 
     let proposal = tokio::task::spawn_blocking(move || -> Result<GenieTradeProposal, String> {
         let new_proposal = NewGenieTradeProposal {
@@ -95,35 +95,46 @@ pub async fn accept_resource_trade_impl(
         .db_pool
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
-    let proposal = tokio::task::spawn_blocking(move || -> Result<GenieTradeProposal, String> {
-        world_genie_trade_proposals::table
-            .filter(world_genie_trade_proposals::id.eq(proposal_id))
-            .select(GenieTradeProposal::as_select())
-            .first::<GenieTradeProposal>(&mut conn)
-            .map_err(|_| "Trade proposal not found".to_string())
-    })
-    .await
-    .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(Error::new)?;
+    let (proposal, world_id) =
+        tokio::task::spawn_blocking(move || -> Result<(GenieTradeProposal, Uuid), String> {
+            world_genie_trade_proposals::table
+                .inner_join(
+                    world_genie_sessions::table
+                        .on(world_genie_sessions::id.eq(world_genie_trade_proposals::session_id)),
+                )
+                .filter(world_genie_trade_proposals::id.eq(proposal_id))
+                .select((
+                    GenieTradeProposal::as_select(),
+                    world_genie_sessions::world_id,
+                ))
+                .first::<(GenieTradeProposal, Uuid)>(&mut conn)
+                .map_err(|_| "Trade proposal not found".to_string())
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(Error::new)?;
 
     if proposal.status != "pending" {
         return Err(Error::new("This trade proposal is no longer pending"));
-    }
-    // The proposer can never accept their own proposal (research.md R8).
-    if proposal.created_by == user_id {
-        return Err(Error::new("You cannot accept your own trade proposal"));
     }
     // Caller must control the counterpart actor — either side, since
     // `proposeResourceTrade` doesn't record which side literally clicked
     // "propose", only who authored it (`created_by`); requiring the
     // accepter to control one of the two named actors (and not be the
-    // proposer, checked above) enforces "the OTHER party" from
+    // proposer, checked below) enforces "the OTHER party" from
     // contracts/genie-session-loop.md.
     let controls_from =
         caller_controls_actor(state, user_id, is_admin, proposal.from_actor_id).await?;
     let controls_to = caller_controls_actor(state, user_id, is_admin, proposal.to_actor_id).await?;
     if !controls_from && !controls_to {
         return Err(Error::new("You are not a party to this trade"));
+    }
+    // Between the two checks, so a paused world refuses both parties alike:
+    // the proposer is a party too, and learns only that play is paused.
+    refuse_world_if_paused(state, world_id).await?;
+    // The proposer can never accept their own proposal (research.md R8).
+    if proposal.created_by == user_id {
+        return Err(Error::new("You cannot accept your own trade proposal"));
     }
 
     let mut conn = state
@@ -271,28 +282,37 @@ pub async fn decline_resource_trade_impl(
         .db_pool
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
-    let proposal = tokio::task::spawn_blocking(move || -> Result<GenieTradeProposal, String> {
-        world_genie_trade_proposals::table
-            .filter(world_genie_trade_proposals::id.eq(proposal_id))
-            .select(GenieTradeProposal::as_select())
-            .first::<GenieTradeProposal>(&mut conn)
-            .map_err(|_| "Trade proposal not found".to_string())
-    })
-    .await
-    .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(Error::new)?;
+    let (proposal, world_id) =
+        tokio::task::spawn_blocking(move || -> Result<(GenieTradeProposal, Uuid), String> {
+            world_genie_trade_proposals::table
+                .inner_join(
+                    world_genie_sessions::table
+                        .on(world_genie_sessions::id.eq(world_genie_trade_proposals::session_id)),
+                )
+                .filter(world_genie_trade_proposals::id.eq(proposal_id))
+                .select((
+                    GenieTradeProposal::as_select(),
+                    world_genie_sessions::world_id,
+                ))
+                .first::<(GenieTradeProposal, Uuid)>(&mut conn)
+                .map_err(|_| "Trade proposal not found".to_string())
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(Error::new)?;
 
     if proposal.status != "pending" {
         return Err(Error::new("This trade proposal is no longer pending"));
-    }
-    if proposal.created_by == user_id {
-        return Err(Error::new("You cannot decline your own trade proposal"));
     }
     let controls_from =
         caller_controls_actor(state, user_id, is_admin, proposal.from_actor_id).await?;
     let controls_to = caller_controls_actor(state, user_id, is_admin, proposal.to_actor_id).await?;
     if !controls_from && !controls_to {
         return Err(Error::new("You are not a party to this trade"));
+    }
+    refuse_world_if_paused(state, world_id).await?;
+    if proposal.created_by == user_id {
+        return Err(Error::new("You cannot decline your own trade proposal"));
     }
 
     let mut conn = state
@@ -378,6 +398,7 @@ pub async fn spend_resource_on_puzzle_clock_impl(
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(Error::new)?;
+    refuse_world_if_paused(state, session.world_id).await?;
 
     if session.status != "active" {
         return Err(Error::new("This Genie session has already concluded"));

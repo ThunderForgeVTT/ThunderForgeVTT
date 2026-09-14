@@ -9,6 +9,10 @@
 // query/mutation module will need this headroom too.
 #![recursion_limit = "512"]
 
+/// Spec 051 T074: the merged schema's root fields, packs' included, are each
+/// gated against a paused world or say why not.
+#[cfg(test)]
+mod play_pause_surface_tests;
 mod schema_roots;
 mod system_packs; // Spec 032 FR-029: which packs are linked, and nothing more
 

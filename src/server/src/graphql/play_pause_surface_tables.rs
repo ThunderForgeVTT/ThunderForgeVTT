@@ -1,10 +1,11 @@
 //! The three tables of `play_pause_surface_tests`, and who calls each gated
-//! field. Apart from the tests only so neither file passes the length limit;
-//! read that file's module comment first.
+//! field. Apart from the tests so neither file passes the length limit, and
+//! public under `test-support` so the app crate's merged-schema test reads the
+//! same tables rather than a copy; read `play_pause_surface_tests` first.
 
 /// World-scoped: each calls the gate, and each is run below against a paused
 /// world. `{name}` placeholders are the rows `seed` makes before the pause.
-pub(super) const GATED: &[(&str, &str)] = &[
+pub const GATED: &[(&str, &str)] = &[
     // --- play itself (T029, T030) ---------------------------------------
     ("heartbeat", r#"mutation { heartbeat(worldId: "{world}") }"#),
     (
@@ -619,7 +620,7 @@ pub(super) const GATED: &[(&str, &str)] = &[
 
 /// Who calls a gated field.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Who {
+pub enum Who {
     /// The world's Owner, who runs it.
     GameMaster,
     /// A site admin who is a member with the Player role, so every role check
@@ -634,14 +635,14 @@ pub(super) enum Who {
 }
 
 /// Unless [`CALLED_AS`] says otherwise, every gated field is called by both.
-pub(super) const DEFAULT_CALLERS: &[Who] = &[Who::GameMaster, Who::SiteAdmin];
+pub const DEFAULT_CALLERS: &[Who] = &[Who::GameMaster, Who::SiteAdmin];
 
 /// Gated fields that one of the default callers cannot reach at all, for a
 /// reason that has nothing to do with a pause, and who calls them instead.
 ///
 /// A default caller left out is still called, and must be refused too — so an
 /// entry here can narrow who reaches the gate, never who gets through.
-pub(super) const CALLED_AS: &[(&str, &[Who], &str)] = &[
+pub const CALLED_AS: &[(&str, &[Who], &str)] = &[
     (
         "joinWorld",
         &[Who::Newcomer, Who::NewcomerSiteAdmin],
@@ -702,11 +703,11 @@ pub(super) const CALLED_AS: &[(&str, &[Who], &str)] = &[
 /// Answered with a per-change report rather than an error (research R5): an
 /// error would leave the changes queued and replayed forever. Refused means
 /// every change comes back `PLAY_PAUSED`.
-pub(super) const REPORTS_INSTEAD: &[&str] = &["reconcileQueuedChanges"];
+pub const REPORTS_INSTEAD: &[&str] = &["reconcileQueuedChanges"];
 
 /// Touches no single world's play, each with the reason. The last group
 /// touches a world and is deliberately left open; read it twice.
-pub(super) const NOT_WORLD_SCOPED: &[&str] = &[
+pub const NOT_WORLD_SCOPED: &[&str] = &[
     // A subscription that counts. No world, no data.
     "tick",
     // Makes a world that did not exist; nothing to be paused.
@@ -750,7 +751,7 @@ pub(super) const NOT_WORLD_SCOPED: &[&str] = &[
 /// The operator's surface, and none of it gated: acting on paused worlds is
 /// what an operator is for. Every one is in `admin_surface_tests::ADMIN_ONLY`
 /// or guarded by `admin_user`.
-pub(super) const OPERATOR: &[&str] = &[
+pub const OPERATOR: &[&str] = &[
     "pauseWorldPlay",
     // Approving pauses a world, and deciding a request for a world already
     // paused is exactly the case it must not be refused in (FR-036).
@@ -781,4 +782,4 @@ pub(super) const OPERATOR: &[&str] = &[
 
 /// The queries that start play, and so must be gated though they write
 /// nothing (contract: *The closed list*).
-pub(super) const PLAY_STARTING_QUERIES: &[&str] = &["worldSyncPlan", "worldEventsSince"];
+pub const PLAY_STARTING_QUERIES: &[&str] = &["worldSyncPlan", "worldEventsSince"];

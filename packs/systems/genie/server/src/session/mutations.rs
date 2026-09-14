@@ -23,6 +23,11 @@
 //! - `spendResourceOnPuzzleClock` is callable only by the actor spending
 //!   its own holdings.
 //!
+//! Every mutation also calls `play_pause::gate::refuse_world_if_paused`
+//! beside its role check and before any write (spec 051, ADR-100): a paused
+//! world's session does not move, for its GM or a site admin either. The
+//! app crate's merged-schema surface test holds every field here to that.
+//!
 //! Every mutation broadcasts a `world_events` row with
 //! `event_code = EVENT_CODE_GENIE_SESSION_STATE` (15) on success via the
 //! existing `record_world_event` function (research.md R7) — no new
@@ -56,6 +61,7 @@ use super::schema::{
 use thunderforge_server::auth::world_membership::is_dm_of_world;
 use thunderforge_server::auth::world_membership::require_world_member;
 use thunderforge_server::graphql::{app_state, authenticated_user};
+use thunderforge_server::play_pause::gate::refuse_world_if_paused;
 use thunderforge_server::schema::{world_actor_inventory, world_actors, world_items, worlds};
 use thunderforge_server::state::AppState;
 use thunderforge_server::world_events::record_world_event;

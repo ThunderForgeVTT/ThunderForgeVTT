@@ -297,6 +297,13 @@ mod play_pause_stream_tests;
 #[path = "graphql/play_pause_surface_tests.rs"]
 mod play_pause_surface_tests;
 
+/// The tables that test reads, public to dependent crates' tests so the app
+/// crate can hold the schema merged with the packs' fields to the same list
+/// (spec 051 T074).
+#[cfg(any(test, feature = "test-support"))]
+#[path = "graphql/play_pause_surface_tables.rs"]
+pub mod play_pause_surface_tables;
+
 // Empty placeholder in the mutation root — the world_collaborators-based
 // RBAC mutations this was meant to hold were never built; world/scene
 // authorization instead runs through world_members (see

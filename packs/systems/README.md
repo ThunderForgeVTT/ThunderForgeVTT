@@ -321,6 +321,26 @@ ruleset rather than an omission.** Genie has no spellcasting and therefore no
 `spell_data`; Fate Core declares no abilities at all; a pack that computes
 nothing has no `rules`.
 
+### Root GraphQL fields, and a paused world
+
+A pack that merges its own query, mutation or subscription types into the
+schema must say, for **every root field** it adds, whether a paused world
+refuses it (spec 051). Submit one `PackSurface`
+(`thunderforge_server::play_pause::surface`) listing each field once:
+
+- `gated` — world-scoped. The resolver calls
+  `play_pause::gate::refuse_world_if_paused` beside its role check, never
+  inside it, and before any write. Each entry carries a request document.
+- `not_world_scoped` — touches no single world.
+- `reads` — a read-only query, answered while paused. A query that starts
+  play is `gated`.
+
+`seed` makes, through the schema, the rows the gated documents name. The app
+crate's `play_pause_surface_tests` fails on any pack root field left
+unclassified, and calls every `gated` document against a paused world as its
+Game Master and as a site admin, expecting `WORLD_PLAY_PAUSED`. Genie's
+`server/src/session/play_pause_surface.rs` is a worked example.
+
 ### Derived values
 
 `rules` builds a `SystemRules` implementation from the pack's own manifest —

@@ -104,6 +104,24 @@ pub(crate) fn set_holding_quantity(
         .map_err(|e| format!("Failed to update holding: {e}"))
 }
 
+/// The world an actor belongs to.
+pub(crate) async fn actor_world_id(state: &AppState, actor_id: Uuid) -> GraphQLResult<Uuid> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    tokio::task::spawn_blocking(move || -> Result<Uuid, String> {
+        world_actors::table
+            .filter(world_actors::id.eq(actor_id))
+            .select(world_actors::world_id)
+            .first::<Uuid>(&mut conn)
+            .map_err(|_| "Actor not found".to_string())
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(Error::new)
+}
+
 pub(crate) async fn require_member_of_session_world(
     state: &AppState,
     user_id: Uuid,
