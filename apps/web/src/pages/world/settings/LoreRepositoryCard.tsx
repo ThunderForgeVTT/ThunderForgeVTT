@@ -516,11 +516,11 @@ function ConnectionState({
           {/* No "try again" control yet, deliberately.
            *
            * `retryLoreSync` is in the contract and is Story 2's work
-           * (T040/T043); the server does not implement it. A button calling a
-           * mutation that does not exist is worse than no button — it fails
-           * with a schema error a Game Master cannot act on, and it fails
-           * only in the state where they are already being told something is
-           * wrong.
+           * (T040/T043); neither the server nor the web client implements
+           * it. A button calling a mutation that does not exist is worse than
+           * no button — it fails with a schema error a Game Master cannot act
+           * on, and it fails only in the state where they are already being
+           * told something is wrong.
            *
            * Nothing is lost by waiting: retries back off on their own
            * (FR-030), so the honest thing to say here is what the remedy is,

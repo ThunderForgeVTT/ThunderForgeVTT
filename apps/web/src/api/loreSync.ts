@@ -306,22 +306,6 @@ export function removeLoreRepositoryConnection(
   ).then((data) => data.removeLoreRepositoryConnection);
 }
 
-/** Asks for a run now rather than at the next scheduled pass. Rate-limited
- * server-side: this is a convenience for someone who has just fixed a
- * credential, not a way to drive synchronisation by hand. */
-export function retryLoreSync(worldId: string): Promise<LoreSyncRun> {
-  return postGraphQL<{ retryLoreSync: LoreSyncRun }>(
-    `
-      mutation RetryLoreSync($worldId: UUID!) {
-        retryLoreSync(worldId: $worldId) {
-          ${RUN_FIELDS}
-        }
-      }
-    `,
-    { worldId },
-  ).then((data) => data.retryLoreSync);
-}
-
 /** FR-031: an explicit choice between overwriting the divergent remote and
  * abandoning the connection, required before the platform writes again.
  *
