@@ -22,7 +22,7 @@ type-check the web app, so every web phase also runs
 `make lint-wasm` only.
 
 **Phases follow plan.md, offset by two** (tasks Phase 3 is plan phase 1, and so on to tasks Phase 9 = plan phase 7; research, data-model and quickstart use plan numbering). Each is labelled with the user story it primarily
-delivers. Phase 3 (turn order) serves US1's "a player on their turn". Phase 4
+delivers. Phase 4 (turn order) serves US1's "a player on their turn". Phase 5
 (links) is the hit-point record US2 writes to.
 
 ## Format: `[ID] [P?] [Story] Description`
@@ -65,7 +65,7 @@ delivers. Phase 3 (turn order) serves US1's "a player on their turn". Phase 4
 **Independent test**: the goblin has 7; the GM applies 5; both players' bars read 2 within a second, no reload. 2 more: marked out, skipped. Heal 3: back in. Manual Down then heal: stays down.
 
 - [ ] T009 [US3] Migration `src/server/migrations/<date>-046-combatant-downed-by/` (up/down): `world_combatants.downed_by TEXT NULL CHECK (downed_by IN ('hit_points','game_master'))`; regenerate `src/server/src/schema.rs`
-- [ ] T010 [US2] Implement `apply_hit_point_change` in `src/server/src/combat/hit_points.rs` per research R5: lock the row it writes (`SELECT … FOR UPDATE` on `world_actor_system_data` for now; phase 4 adds copies), spend temporary first, bound at 0 and max, validate with the pack validator, write, record event 26 with the existing payload shape
+- [ ] T010 [US2] Implement `apply_hit_point_change` in `src/server/src/combat/hit_points.rs` per research R5: lock the row it writes (`SELECT … FOR UPDATE` on `world_actor_system_data` for now; Phase 5 adds copies), spend temporary first, bound at 0 and max, validate with the pack validator, write, record event 26 with the existing payload shape
 - [ ] T011 [US3] In `hit_points.rs`, after a write that crosses zero, update the creature's combatant in the running combat (match `token_id`, else `actor_id`): to 0 → `active = false, downed_by = 'hit_points'`; above 0 → `active = true, downed_by = NULL` only when `downed_by = 'hit_points'`; record event 18
 - [ ] T012 [US2] GraphQL mutation `changeHitPoints(tokenId, kind, amount)` → `TokenHitPoints`, Game Master only (`is_dm_of_world`), `refuse_if_paused`, in `src/server/src/graphql/mutations_combat_hit_points.rs`; register in `src/server/src/graphql.rs`
 - [ ] T013 [US3] Make the tracker's Down/Up write `downed_by = 'game_master'` / `NULL` in `update_combatant` in `src/server/src/graphql/mutations_combat.rs`; expose `downedBy` on `GraphQLCombatant`
