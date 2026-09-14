@@ -39,10 +39,10 @@ import {
 const REMOVAL_BUDGET_MS = 5_000;
 
 /**
- * The stream road's budget: one server liveness tick (`LIVENESS_POLL`, five
- * seconds in `session_lifetime.rs`) plus the round trip and a route change.
- * It is the fallback for a browser that missed the event, not the road SC-001
- * is normally met by.
+ * The budget for a browser that missed the event: one server liveness tick
+ * (`LIVENESS_POLL`, five seconds in `session_lifetime.rs`) plus the round trip
+ * and a route change. That is the slowest road left to such a browser, so it
+ * bounds whichever road actually gets there first.
  */
 const STREAM_ROAD_BUDGET_MS = 6_500;
 
@@ -454,7 +454,7 @@ test.describe("spec 051 US1: pausing a world's play reaches the table", () => {
     }
   });
 
-  test("a browser that never receives the pause event still leaves when its stream is ended", async ({
+  test("a browser that never receives the pause event still leaves, by a refused request", async ({
     browser,
   }) => {
     test.setTimeout(300_000);
@@ -470,11 +470,22 @@ test.describe("spec 051 US1: pausing a world's play reaches the table", () => {
     );
 
     // Drop world event 28 on its way to this page, and pass everything else.
-    // What is left is the stream road: a gated subscription ended on the
-    // server's next tick, or refused as it opens, with one `WORLD_PLAY_PAUSED`
-    // error. The page has to treat that as a pause rather than as a quiet end
-    // or a failure. The heartbeat is not gated yet (T029-T035), so no other
-    // road is open to it.
+    // What is left is every road that answers `WORLD_PLAY_PAUSED`: a gated
+    // HTTP request refused, a subscription refused as it opens, or a stream
+    // ended on the server's next tick. The page has to treat each as a pause
+    // rather than as a quiet end or a failure.
+    //
+    // Which road wins here is **not** the stream tick. Logged against a run
+    // (2026-09-13, every request and frame timed from the pause): the page
+    // has only just reached the playfield, and the world-cache sync it makes
+    // on opening a world, `worldSyncPlan`, is answered `WORLD_PLAY_PAUSED`
+    // (T039). `WorldPage` reads that out of the sync summary and the page is
+    // on `/paused` 46 ms after the pause, before event 28 has even reached
+    // the proxy (hence "0 withheld"), and seconds before any tick. That is
+    // the 47-77 ms this logs. What this test proves is that a browser denied
+    // the event still leaves, promptly, on a refusal. The tick itself — a
+    // stream ended by the server with nothing else to go on — is proven in
+    // `play-pause-stream-poll.spec.ts`, with a client that has no page logic.
     let droppedPauseEvents = 0;
     await gmPage.routeWebSocket(/\/api\/ws/, (socket) => {
       const server = socket.connectToServer();
@@ -505,7 +516,7 @@ test.describe("spec 051 US1: pausing a world's play reaches the table", () => {
       );
       const ms = (await arrival) - pausedAt;
       console.log(
-        `[play-pause] removal by the stream road alone: ${ms} ms ` +
+        `[play-pause] removal with event 28 withheld: ${ms} ms ` +
           `(${droppedPauseEvents} pause event(s) withheld from the page)`,
       );
       test.info().annotations.push({
@@ -513,9 +524,9 @@ test.describe("spec 051 US1: pausing a world's play reaches the table", () => {
         description: `stream-road=${ms}`,
       });
       // Not asserted on the count. The page may have left, and closed its
-      // streams, before the event reached the proxy at all; that is the road
-      // under test winning outright, not the filter missing. The filter's
-      // match against the real frame (`{"type":"next",...,"eventCode":28,...}`)
+      // streams, before the event reached the proxy at all; that is the
+      // refused sync winning outright (see above), not the filter missing.
+      // The filter's match against the real frame (`{"type":"next",...,"eventCode":28,...}`)
       // was checked by hand against a logged run.
       expect(ms).toBeLessThanOrEqual(STREAM_ROAD_BUDGET_MS);
       await expectPausedNotice(gmPage, worldName, { marked: true });
