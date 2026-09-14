@@ -249,14 +249,14 @@ These journeys go through the product the way people do: UI only, no GraphQL sho
   - **Pause flow:** the operator signs in with 2FA through the login page, opens `/admin/play-pauses` from the admin nav, and searches for the world by name. The pause dialog refuses blank or whitespace grounds, and cancelling changes nothing (server state checked). Confirming shows the world under *Active pauses*, and the two playing tables land on the notice.
   - **Keyboard-only:** repeat the flow using only Tab, Enter, Escape and arrows, with focus visible at every step. `expectNoAxeViolations` runs on the admin page and the dialog.
   - **Non-operators:** a Game Master, and a player, navigating to `/admin/play-pauses` get the product's normal refusal and see no world list.
-- [ ] T068 [US2] Write `apps/web/e2e/journeys/caught-in-the-middle.journey.spec.ts`. A pause lands while:
+- [x] T068 [US2] Write `apps/web/e2e/journeys/caught-in-the-middle.journey.spec.ts`. A pause lands while:
   - a token is mid-drag;
   - a character sheet dialog is open with an unsaved edit;
   - the Game Master is advancing a combat turn;
   - a player has typed but not sent a chat message.
 
   Each time the notice replaces the playfield cleanly: no stacked dialogs, no console errors, focus on the notice heading. Server state proves no half-finished change landed: token position, sheet values, combat turn and chat log unchanged.
-- [ ] T069 [US2] Write `apps/web/e2e/journeys/every-way-back-in.journey.spec.ts`:
+- [x] T069 [US2] Write `apps/web/e2e/journeys/every-way-back-in.journey.spec.ts`:
   - **Ways back in**, each ending on the notice and never on a broken or blank playfield:
     - refresh;
     - the browser back button;
