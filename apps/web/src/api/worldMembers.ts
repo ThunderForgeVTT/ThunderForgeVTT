@@ -36,7 +36,7 @@ type WorldMembersQuery = {
 export function getWorldMembers(worldId: string): Promise<WorldMemberRecord[]> {
   return postGraphQL<WorldMembersQuery>(
     `
-      query WorldMembers($worldId: ID!) {
+      query WorldMembers($worldId: UUID!) {
         worldMembers(worldId: $worldId) {
           id
           worldId
@@ -101,7 +101,7 @@ export function removeMember(
 ): Promise<boolean> {
   return postGraphQL<RemoveMemberMutation>(
     `
-      mutation RemoveMember($worldId: ID!, $userId: ID!) {
+      mutation RemoveMember($worldId: UUID!, $userId: UUID!) {
         removeMember(worldId: $worldId, userId: $userId)
       }
     `,

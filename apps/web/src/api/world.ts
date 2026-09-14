@@ -194,7 +194,7 @@ export function getMyWorldMemberRole(
 ): Promise<string | null> {
   return postGraphQL<WorldMemberQuery>(
     `
-      query MyWorldMemberRole($worldId: ID!, $userId: ID!) {
+      query MyWorldMemberRole($worldId: UUID!, $userId: UUID!) {
         worldMember(worldId: $worldId, userId: $userId) {
           role
         }
@@ -270,7 +270,7 @@ type WorldInvitesQuery = {
 export function getWorldInvites(worldId: string): Promise<WorldInviteRecord[]> {
   return postGraphQL<WorldInvitesQuery>(
     `
-      query WorldInvites($worldId: ID!) {
+      query WorldInvites($worldId: UUID!) {
         worldInvites(worldId: $worldId) {
           ${INVITE_FIELDS}
         }
