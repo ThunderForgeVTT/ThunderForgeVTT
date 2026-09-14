@@ -107,8 +107,16 @@ const TEMPLATE_DB = "thunderforge_e2e_template";
  */
 const FIRST_RUN_TEMPLATE_DB = "thunderforge_e2e_firstrun_template";
 const SHARD_DIR = join(ROOT_DIR, ".e2e-shards");
-/** Measured seconds per spec file, so each run balances better than the last. */
+/**
+ * Measured seconds per spec file, so each run balances better than the last.
+ *
+ * Two files. The tracked one is a baseline that keeps the first run on a new
+ * machine balanced, and changes only when someone asks (`--record-durations`)
+ * and commits it. The local one is rewritten by every run and preferred when
+ * present, so this machine's own measurements still steer its next run.
+ */
 const DURATIONS_PATH = join(ROOT_DIR, ".e2e-shards-durations.json");
+const LOCAL_DURATIONS_PATH = join(ROOT_DIR, ".e2e-shards-durations.local.json");
 
 /**
  * The specs that measure this machine rather than the product.
@@ -267,13 +275,19 @@ const GITHUB_APPS_LANE_ENV = {
   ),
 };
 
-/** Seconds per spec file from the last run, or `{}` on the first one. */
+/**
+ * Seconds per spec file: this machine's last run if it has one, else the
+ * committed baseline, else `{}`.
+ */
 function readDurations() {
-  try {
-    return JSON.parse(readFileSync(DURATIONS_PATH, "utf-8"));
-  } catch {
-    return {};
+  for (const path of [LOCAL_DURATIONS_PATH, DURATIONS_PATH]) {
+    try {
+      return JSON.parse(readFileSync(path, "utf-8"));
+    } catch {
+      // Absent or unreadable; try the next.
+    }
   }
+  return {};
 }
 
 /**
@@ -319,8 +333,13 @@ function partitionByDuration(files, shardCount, durations) {
  * Written from Playwright's own JSON report rather than hand-timed, and only
  * for shards that produced one — a crashed shard must not zero out the
  * estimate that keeps the next run balanced.
+ *
+ * Always to the gitignored local file; to the tracked baseline only under
+ * `--record-durations`. Every run used to rewrite the tracked file, so every
+ * checkout that had run e2e had a modified file in git, and on 2026-09-14 that
+ * local rewrite blocked a fast-forward merge.
  */
-function recordDurations(shardDirs, previous) {
+function recordDurations(shardDirs, previous, { baseline = false } = {}) {
   const totals = { ...previous };
   const reports = shardDirs.flatMap((dir) => [
     join(dir, "results-parallel.json"),
@@ -354,7 +373,12 @@ function recordDurations(shardDirs, previous) {
     }
     for (const suite of report.suites ?? []) walk(suite, suite.file);
   }
-  writeFileSync(DURATIONS_PATH, JSON.stringify(totals, null, 2));
+  const text = JSON.stringify(totals, null, 2);
+  writeFileSync(LOCAL_DURATIONS_PATH, text);
+  if (baseline) {
+    writeFileSync(DURATIONS_PATH, text);
+    log("e2e", `Recorded durations to ${relative(ROOT_DIR, DURATIONS_PATH)}.`);
+  }
 }
 
 /**
@@ -970,6 +994,7 @@ async function main() {
     shards: 4,
     all: false,
     keep: false,
+    recordDurations: false,
     only: null,
     suite: "e2e",
   };
@@ -984,6 +1009,8 @@ async function main() {
     else if (onlyMatch) args.only = onlyMatch[1];
     else if (argv === "--all") args.all = true;
     else if (argv === "--keep") args.keep = true;
+    // Also write the tracked `.e2e-shards-durations.json` baseline.
+    else if (argv === "--record-durations") args.recordDurations = true;
     else throw new Error(`Unknown argument: ${argv}`);
   }
   run.args = args;
@@ -1273,6 +1300,7 @@ async function finish(exitCode = null) {
       recordDurations(
         run.shards.map((shard) => join(SHARD_DIR, `shard-${shard.index}`)),
         run.durations,
+        { baseline: Boolean(run.args?.recordDurations) },
       );
     } catch (error) {
       log(

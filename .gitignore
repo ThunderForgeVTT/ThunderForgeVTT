@@ -178,9 +178,11 @@ apps/web/e2e/.demo/
 
 # Working state for `scripts/e2e-parallel.mjs`: one data path, demo dir and
 # JSON report per shard, rebuilt from scratch on every run. The measured
-# durations beside it (`.e2e-shards-durations.json`) are *not* ignored — they
-# are what keeps the first run on a new machine balanced.
+# durations baseline (`.e2e-shards-durations.json`) is *not* ignored — it keeps
+# the first run on a new machine balanced, and changes only through
+# `--record-durations`. Every run's own measurements go to the local file.
 .e2e-shards/
+.e2e-shards-durations.local.json
 .e2e-shards.lock
 # The live-run marker (pid, start, args); the hooks refuse while it is live.
 .e2e-running
