@@ -202,6 +202,12 @@ apps/web/torture-results/
 apps/web/playtest-results/
 apps/web/playtest-report/
 
+# `pnpm journeys` (spec 051 T066): per-run backend and Vite logs and the
+# symlinked data path under `.journeys/<run>/`, and the report, traces and
+# screenshots under `journeys-results/<run>/`. Disposable, like the above.
+.journeys/
+apps/web/journeys-results/
+
 ### OS cruft ###
 .DS_Store
 Thumbs.db

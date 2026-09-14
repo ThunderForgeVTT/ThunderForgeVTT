@@ -179,16 +179,25 @@ const SUITES = {
   },
 };
 
-/** Every spec file of `suite`, relative to `apps/web`, including `e2e/torture`. */
+/**
+ * Every spec file of `suite`, relative to `apps/web`, including `e2e/torture`.
+ *
+ * Not `e2e/journeys`. A `.journey.spec.ts` ends in `.spec.ts`, but journeys
+ * run on an instance of their own (`scripts/journeys.mjs`) and
+ * `playwright.config.ts` ignores them — so naming one to a shard selects
+ * nothing, and a shard that drew only journeys would fail on "No tests found".
+ */
 function allSpecFiles(suite = "e2e") {
   const { dir, suffix } = SUITES[suite];
   const root = join(ROOT_DIR, dir);
+  const journeys = join(ROOT_DIR, "apps/web/e2e/journeys");
   const found = [];
   const walk = (dir) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const full = join(dir, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else if (entry.name.endsWith(suffix)) {
+      if (entry.isDirectory()) {
+        if (full !== journeys) walk(full);
+      } else if (entry.name.endsWith(suffix)) {
         found.push(relative(join(ROOT_DIR, "apps/web"), full));
       }
     }

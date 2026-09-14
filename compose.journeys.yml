@@ -1,0 +1,80 @@
+# Ephemeral stack for journeys (spec 051 T066). Never share this with
+# `compose.yml`, and never with `compose.torture.yml` either.
+#
+# A journey goes through the product the way a person does, and some of what a
+# person does is instance-wide: an operator signs in with a second factor,
+# pauses a world, and later stories lift pauses and decide requests. None of
+# that belongs in the dev database, and none of it belongs in an e2e shard's
+# database while that shard is halfway through its own suite. So a journey run
+# gets a whole instance of its own, and throws it away afterwards.
+#
+# The same three deliberate differences from the dev stack as the torture
+# stack, for the same reasons:
+#
+# 1. No `container_name`. That field is global, so the dev stack, an
+#    `e2e-parallel` run (which uses the dev stack's Postgres and RustFS) and a
+#    journey run could not coexist — and coexisting with them is the point.
+# 2. `tmpfs` instead of named volumes. Nothing reaches disk, so teardown is
+#    stopping the containers. No orphaned volumes after a week of runs.
+# 3. Non-default ports, so a journey cannot accidentally point at — or be
+#    pointed at by — the dev stack on 5432/9000/1025/8025. The defaults below
+#    are also clear of torture's 55000-55399 and 59000-59399 and of
+#    e2e-parallel's per-shard 31025+/38025+ Mailpits, but they are only
+#    defaults: `scripts/journeys.mjs` asks the kernel for free ports on every
+#    run and passes them in, so two journey runs can overlap.
+#
+# Driven by scripts/journeys.mjs; not intended to be run by hand.
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=thunderforge
+    ports:
+      - "${JOURNEYS_PG_PORT:-56432}:5432"
+    tmpfs:
+      # In RAM on purpose: a journey writes a handful of accounts and worlds
+      # and keeps none of them.
+      #
+      # Mounted at /var/lib/postgresql, NOT /var/lib/postgresql/data.
+      # postgres:18 moved PGDATA into a versioned subdirectory and refuses to
+      # start if it finds a mount at the old path — it reads that as a
+      # half-finished major-version upgrade. `compose.torture.yml` and the dev
+      # `compose.yml` mount the parent for the same reason.
+      - /var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d thunderforge"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+  rustfs:
+    image: rustfs/rustfs:1.0.0-rc.2
+    environment:
+      - RUSTFS_ACCESS_KEY=${RUSTFS_ROOT_ACCESS_KEY:-thunderforge-rustfs-root}
+      - RUSTFS_SECRET_KEY=${RUSTFS_ROOT_SECRET_KEY:-thunderforge-rustfs-root-secret}
+    ports:
+      - "${JOURNEYS_RUSTFS_PORT:-56900}:9000"
+    tmpfs:
+      # `mode=1777`, and `/logs` as well as `/data`, are both load-bearing —
+      # see `compose.torture.yml`. The image runs as the non-root `rustfs`
+      # user, and a bare `tmpfs: - /data` is mounted root-owned, so the server
+      # dies on startup with `Permission denied (os error 13)` and `up -d`
+      # still reports success.
+      - /data:mode=1777
+      - /logs:mode=1777
+
+  mailpit:
+    # The dev stack's image and settings (`compose.yml`), minus its
+    # `container_name` and `restart: always`. Mailpit's SMTP listener is
+    # plaintext, which is what the `none` security option exists for, and it
+    # accepts any credentials. Its own store is in memory by default, so it
+    # needs no tmpfs to keep the promise above.
+    image: axllent/mailpit:v1.21
+    environment:
+      - MP_SMTP_AUTH_ACCEPT_ANY=1
+      - MP_SMTP_AUTH_ALLOW_INSECURE=1
+    ports:
+      - "${JOURNEYS_MAILPIT_SMTP_PORT:-56025}:1025"
+      - "${JOURNEYS_MAILPIT_API_PORT:-56825}:8025"

@@ -23,6 +23,7 @@
     "torture:50": "./scripts/torture.mjs 50",
     "torture:100": "./scripts/torture.mjs 100",
     "playtest": "node ./scripts/e2e-parallel.mjs --suite=playtest",
+    "journeys": "node ./scripts/journeys.mjs",
     "prepare": "node ./scripts/install-hooks.mjs",
     "hooks:install": "node ./scripts/install-hooks.mjs"
   },

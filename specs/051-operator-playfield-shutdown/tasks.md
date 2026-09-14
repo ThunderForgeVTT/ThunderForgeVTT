@@ -227,7 +227,7 @@ Commit.
 
 These journeys go through the product the way people do: UI only, no GraphQL shortcuts except to *check* server state. They run on a throwaway dockerized instance, following the `compose.torture.yml` / `scripts/torture.mjs` precedent, so they never share the dev database or the `e2e-parallel` lock, and can mutate instance-wide state such as operators and 2FA freely. They are added under the story they prove, and built once that story has landed. The IDs are appended rather than renumbered, because tasks already in flight cite the existing numbers.
 
-- [ ] T066 Build the journey lane:
+- [x] T066 Build the journey lane:
   - **`compose.journeys.yml`**: Postgres, RustFS and Mailpit on tmpfs, with no `container_name` and non-default ports, modelled on `compose.torture.yml` and its comments.
   - **`scripts/journeys.mjs`**: it
     1. starts a unique compose project per run;

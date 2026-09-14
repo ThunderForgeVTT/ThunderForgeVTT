@@ -15,6 +15,9 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:5173";
 // defaults rather than to this shard's database and bucket.
 const stackIsExternal = process.env.THUNDERFORGE_E2E_EXTERNAL_STACK === "1";
 
+/** `e2e/journeys/**`: see the projects below, and `scripts/journeys.mjs`. */
+const JOURNEYS = /[\\/]e2e[\\/]journeys[\\/]/;
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
@@ -88,15 +91,23 @@ export default defineConfig({
   // names them positionally. Both use the same browser; what differs is the
   // database behind `PLAYWRIGHT_BASE_URL`.
   projects: [
+    //
+    // Journeys (`e2e/journeys`) are in neither. They run on a throwaway
+    // instance of their own through `pnpm journeys` and
+    // `playwright.journeys.config.ts`, and a `.journey.spec.ts` would
+    // otherwise match the default `.spec.ts` pattern and run here, against a
+    // shard's database. Ignored per project, because a project's `testIgnore`
+    // replaces the top-level one rather than adding to it.
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
-      testIgnore: /instance-setup\.spec\.ts$/,
+      testIgnore: [/instance-setup\.spec\.ts$/, JOURNEYS],
     },
     {
       name: "first-run",
       use: { ...devices["Desktop Chrome"] },
       testMatch: /instance-setup\.spec\.ts$/,
+      testIgnore: JOURNEYS,
     },
   ],
   webServer: stackIsExternal
