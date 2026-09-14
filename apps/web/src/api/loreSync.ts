@@ -121,11 +121,6 @@ export interface CompleteConnectionInput {
  * silently, because reconciling would mean merging prose (FR-024). */
 export type DivergenceResolution = "OVERWRITE_REMOTE" | "ABANDON_CONNECTION";
 
-export interface ResolveDivergenceInput {
-  worldId: string;
-  resolution: DivergenceResolution;
-}
-
 const FIDELITY_NOTE_FIELDS = `
   id
   kind
@@ -328,19 +323,25 @@ export function retryLoreSync(worldId: string): Promise<LoreSyncRun> {
 }
 
 /** FR-031: an explicit choice between overwriting the divergent remote and
- * abandoning the connection, required before the platform writes again. */
+ * abandoning the connection, required before the platform writes again.
+ *
+ * The server answers only whether the choice was recorded, not with a run:
+ * what the connection looks like afterwards is read with
+ * `getLoreRepositoryConnection`, as everything else that changes it is. */
 export function resolveLoreSyncDivergence(
-  input: ResolveDivergenceInput,
-): Promise<LoreSyncRun> {
-  return postGraphQL<{ resolveLoreSyncDivergence: LoreSyncRun }>(
+  worldId: string,
+  resolution: DivergenceResolution,
+): Promise<boolean> {
+  return postGraphQL<{ resolveLoreSyncDivergence: boolean }>(
     `
-      mutation ResolveLoreSyncDivergence($input: ResolveDivergenceInput!) {
-        resolveLoreSyncDivergence(input: $input) {
-          ${RUN_FIELDS}
-        }
+      mutation ResolveLoreSyncDivergence(
+        $worldId: UUID!
+        $resolution: DivergenceResolution!
+      ) {
+        resolveLoreSyncDivergence(worldId: $worldId, resolution: $resolution)
       }
     `,
-    { input },
+    { worldId, resolution },
   ).then((data) => data.resolveLoreSyncDivergence);
 }
 
