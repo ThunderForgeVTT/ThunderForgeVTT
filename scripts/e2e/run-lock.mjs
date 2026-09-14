@@ -8,9 +8,10 @@
  * talking to a Postgres every checkout on the machine shares. Things that
  * look harmless break it from the side:
  *
- * - committing or pushing: the hooks run `pnpm verify`, and some of its steps
- *   rewrite files under `apps/web/src`, so every Vite server reloads under the
- *   test that was running;
+ * - committing or pushing: the hooks run `pnpm verify`, whose formatters and
+ *   generators can write into the tree the shards' Vite servers watch (the
+ *   bindings step once rewrote `apps/web/src` and reloaded every page), and a
+ *   push runs clippy, which competes with the suite for every core;
  * - `cargo test`: server tests write the same global settings rows the shards'
  *   backends read, in the shared Postgres — from *any* worktree;
  * - a second e2e run: it deletes the shard directory and drops the template
@@ -188,7 +189,7 @@ function check(root, { allWorktrees, purpose }) {
     `  ${purpose[0].toUpperCase()}${purpose.slice(1)} now would break it: ` +
     (allWorktrees
       ? "server tests share the e2e stacks' Postgres and write the same settings rows.\n"
-      : "`pnpm verify` rewrites files under apps/web/src and every shard's Vite reloads.\n") +
+      : "the hooks' `pnpm verify` can write into the tree every shard's Vite is watching, and competes for CPU.\n") +
     `  Wait for the run to finish, or set ${OVERRIDE_ENV}=1 to proceed anyway.\n`;
 
   if (process.env[OVERRIDE_ENV] === "1") {
