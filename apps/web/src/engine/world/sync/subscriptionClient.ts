@@ -576,6 +576,22 @@ const WORLD_EVENTS_SUBSCRIPTION = `
   }
 `;
 
+export interface WorldEventsOptions {
+  /**
+   * Whether a `WORLD_PLAY_PAUSED` ending this stream sends the page to the
+   * pause notice. On by default: a stream opened for play is play, and its
+   * table has to leave.
+   *
+   * Off for a listener on the pages *around* play — a world's hub, its
+   * settings — which are not live play and must stay open to members while
+   * play is paused (spec 051 FR-024). Without this, merely opening a paused
+   * world's staging page opened the appearance listener, which was refused,
+   * which took the person to the notice: the world was unreachable, not just
+   * its play. Such a stream still ends; it just ends quietly.
+   */
+  announcePause?: boolean;
+}
+
 /**
  * Adapts `graphql-ws`'s callback-based `Client.subscribe` into an async
  * iterable — the pattern documented in `graphql-ws`'s own README for
@@ -584,7 +600,9 @@ const WORLD_EVENTS_SUBSCRIPTION = `
  */
 export function subscribeToWorldEvents(
   worldId: string,
+  options: WorldEventsOptions = {},
 ): AsyncIterable<WorldEventLike> {
+  const announcePause = options.announcePause ?? true;
   type Pending = {
     resolve: (done: boolean) => void;
     reject: (err: unknown) => void;
@@ -640,7 +658,7 @@ export function subscribeToWorldEvents(
         // so a table learned of the pause only if something else told it.
         // Announced rather than thrown: it is not a failure of this stream,
         // and every consumer's loop would otherwise log it as one.
-        reportPlayPausedIn(result.errors);
+        if (announcePause) reportPlayPausedIn(result.errors);
         pending?.resolve(false);
         pending = null;
       },

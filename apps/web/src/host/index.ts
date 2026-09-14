@@ -149,9 +149,31 @@ export { useResetOnChange } from "@/hooks/useResetOnChange";
  * looking, and a pack that could ask would be a pack that could ask on a page
  * where the answer is nobody's business.
  */
+import {
+  subscribeToWorldEvents as subscribeToWorldEventsWithOptions,
+  type WorldEventLike,
+} from "@/engine/world/sync";
+
 export { postGraphQL, GraphQLRequestError } from "@/api/graphqlClient";
-export { subscribeToWorldEvents } from "@/engine/world/sync";
-export type { WorldEventLike } from "@/engine/world/sync";
+export type { WorldEventLike };
+
+/**
+ * A world's event stream, for a pack: one that never routes the page.
+ *
+ * A pack's panels sit on the pages *around* play as well as in it — Genie's
+ * session panel is on the staging page — and those pages stay open to a
+ * world's members while an operator has paused its play (spec 051 FR-024).
+ * A pack stream that announced the pause took anyone who merely opened a
+ * paused world's staging page to the notice. So a pack's stream ends quietly
+ * on a pause. On the playfield nothing is lost: its own streams, heartbeat
+ * and play-field claim announce the pause, and routing was never a pack's to
+ * do (see "What is still absent" above).
+ */
+export function subscribeToWorldEvents(
+  worldId: string,
+): AsyncIterable<WorldEventLike> {
+  return subscribeToWorldEventsWithOptions(worldId, { announcePause: false });
+}
 
 /**
  * The props every pack-contributed actor sheet receives.

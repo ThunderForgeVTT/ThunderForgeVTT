@@ -53,7 +53,11 @@ export function WorldAppearance({ worldId, children }: WorldAppearanceProps) {
           setRevision((n) => n + 1);
         },
       },
-      subscribeToWorldEvents(worldId),
+      // Not play: this wraps a world's hub pages, which stay open to its
+      // members while an operator has paused its play (spec 051 FR-024).
+      // The stream still ends on a pause; it does not send anyone to the
+      // notice. The playfield's own streams do that.
+      subscribeToWorldEvents(worldId, { announcePause: false }),
     );
     return stop;
   }, [worldId]);
