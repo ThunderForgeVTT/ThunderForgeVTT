@@ -231,9 +231,13 @@ export function listPlayPauses(
   ).then((data) => data.playPauses);
 }
 
+/**
+ * Pause requests, newest first. `state` defaults to pending; `null` asks for
+ * every state, which the record uses and then drops the pending ones from.
+ */
 export function listPlayPauseRequests(
   options: {
-    state?: PauseRequestState;
+    state?: PauseRequestState | null;
     first?: number;
     after?: string;
   } = {},
@@ -248,7 +252,7 @@ export function listPlayPauseRequests(
       }
     `,
     {
-      state: options.state ?? "PENDING",
+      state: options.state === undefined ? "PENDING" : options.state,
       first: options.first ?? null,
       after: options.after ?? null,
     },
@@ -290,6 +294,36 @@ export function decidePlayPauseRequest(
     `,
     { requestId, decision, note },
   ).then((data) => data.decidePlayPauseRequest);
+}
+
+/** The refusal code for lifting a pause somebody already lifted. */
+export const PAUSE_ALREADY_LIFTED = "PAUSE_ALREADY_LIFTED";
+
+/**
+ * Who lifted a pause and when, from a `PAUSE_ALREADY_LIFTED` refusal, or
+ * `null` when `error` is anything else.
+ *
+ * Losing that race is an outcome, not a failure (FR-040): the world is free
+ * either way, and the operator who arrived second is told by whom.
+ */
+export function alreadyLiftedBy(
+  error: unknown,
+): { liftedBy: OperatorName | null; liftedAt: string | null } | null {
+  if (
+    !(error instanceof GraphQLRequestError) ||
+    !error.hasCode(PAUSE_ALREADY_LIFTED)
+  ) {
+    return null;
+  }
+  const extensions = error.extensionsFor(PAUSE_ALREADY_LIFTED) ?? {};
+  const by = extensions.liftedBy as { id?: unknown; name?: unknown } | null;
+  const liftedBy =
+    by && typeof by.id === "string" && typeof by.name === "string"
+      ? { id: by.id, name: by.name }
+      : null;
+  const liftedAt =
+    typeof extensions.liftedAt === "string" ? extensions.liftedAt : null;
+  return { liftedBy, liftedAt };
 }
 
 export function liftWorldPlayPause(

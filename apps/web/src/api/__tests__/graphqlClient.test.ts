@@ -5,6 +5,7 @@ import {
   postGraphQL,
   postGraphQLMultipart,
 } from "@/api/graphqlClient";
+import { alreadyLiftedBy } from "@/api/playPause";
 
 /**
  * Covers the failure modes the 23 duplicated `postGraphQL` copies handled
@@ -114,6 +115,45 @@ describe("postGraphQL — GraphQL errors", () => {
     expect(err.message).toContain("first problem");
     expect(err.message).toContain("second problem");
     expect(err.errors).toEqual(["first problem", "second problem"]);
+  });
+
+  it("keeps each error's extensions, so a refusal can say more than its code", async () => {
+    // Spec 051 FR-040: a pause somebody already lifted is refused with who
+    // lifted it and when, and the portal tells the second operator exactly
+    // that rather than showing an error.
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        errors: [
+          { message: "no code" },
+          {
+            message: "This pause was already lifted.",
+            extensions: {
+              code: "PAUSE_ALREADY_LIFTED",
+              liftedBy: { id: "op-1", name: "Ops Person" },
+              liftedAt: "2026-09-13T10:00:00+00:00",
+            },
+          },
+        ],
+      }),
+    );
+    const err = (await postGraphQL(QUERY).catch(
+      (e: unknown) => e,
+    )) as GraphQLRequestError;
+    expect(err.extensions).toHaveLength(1);
+    expect(err.extensionsFor("PAUSE_ALREADY_LIFTED")?.liftedBy).toEqual({
+      id: "op-1",
+      name: "Ops Person",
+    });
+    expect(err.extensionsFor("WORLD_PLAY_PAUSED")).toBeUndefined();
+
+    expect(alreadyLiftedBy(err)).toEqual({
+      liftedBy: { id: "op-1", name: "Ops Person" },
+      liftedAt: "2026-09-13T10:00:00+00:00",
+    });
+    expect(alreadyLiftedBy(new Error("nope"))).toBeNull();
+    expect(
+      alreadyLiftedBy(new GraphQLRequestError("x", { codes: ["OTHER"] })),
+    ).toBeNull();
   });
 
   it("attaches the operation name and status for diagnosis", async () => {

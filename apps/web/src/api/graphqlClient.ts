@@ -49,7 +49,7 @@ type GraphQLErrorEntry = {
    * caller has to be able to tell that from a genuine error, and matching on
    * the human-readable message would break the first time it is reworded.
    */
-  extensions?: { code?: unknown; worldId?: unknown };
+  extensions?: Record<string, unknown>;
 };
 
 type GraphQLResponse<TData> = {
@@ -81,6 +81,13 @@ export class GraphQLRequestError extends Error {
    */
   readonly codes: string[];
   /**
+   * Every error's `extensions`, in the order the server returned them, for a
+   * refusal that says more than its code. `PAUSE_ALREADY_LIFTED` carries who
+   * lifted the pause and when (spec 051 FR-040), and the operator who lost
+   * the race is told exactly that.
+   */
+  readonly extensions: Record<string, unknown>[];
+  /**
    * True when the request never reached the server — offline, DNS, a reset
    * connection, or a timeout — as opposed to a server that answered and
    * refused.
@@ -101,6 +108,7 @@ export class GraphQLRequestError extends Error {
       status?: number;
       errors?: string[];
       codes?: string[];
+      extensions?: Record<string, unknown>[];
       transport?: boolean;
     } = {},
   ) {
@@ -110,12 +118,18 @@ export class GraphQLRequestError extends Error {
     this.status = details.status;
     this.errors = details.errors ?? [];
     this.codes = details.codes ?? [];
+    this.extensions = details.extensions ?? [];
     this.transport = details.transport ?? false;
   }
 
   /** Whether the server classified this refusal as `code`. */
   hasCode(code: string): boolean {
     return this.codes.includes(code);
+  }
+
+  /** The extensions of the first error the server classified as `code`. */
+  extensionsFor(code: string): Record<string, unknown> | undefined {
+    return this.extensions.find((entry) => entry.code === code);
   }
 }
 
@@ -168,6 +182,18 @@ async function readPayload<TData>(
   }
 }
 
+/** Every error's `extensions` object, skipping errors that carry none. */
+function collectExtensions(
+  errors: GraphQLErrorEntry[] | undefined,
+): Record<string, unknown>[] {
+  return (errors ?? [])
+    .map((e) => e?.extensions)
+    .filter(
+      (x): x is Record<string, unknown> =>
+        typeof x === "object" && x !== null && !Array.isArray(x),
+    );
+}
+
 /** Shared result handling for both the JSON and multipart paths. */
 function unwrap<TData>(
   payload: GraphQLResponse<TData> | null,
@@ -213,7 +239,13 @@ function unwrap<TData>(
       messages.length > 0
         ? messages.join("; ")
         : `${notOkFallback} (HTTP ${response.status})`,
-      { operation, status: response.status, errors: messages, codes },
+      {
+        operation,
+        status: response.status,
+        errors: messages,
+        codes,
+        extensions: collectExtensions(payload.errors),
+      },
     );
   }
 

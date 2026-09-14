@@ -341,7 +341,7 @@ These journeys go through the product the way people do: UI only, no GraphQL sho
 
 ### Tests for User Story 4
 
-- [ ] T050 [US4] Write `apps/web/e2e/play-pause-lift.spec.ts`:
+- [x] T050 [US4] Write `apps/web/e2e/play-pause-lift.spec.ts`:
   1. Take down a scene of a world through `/legal/dmca`, pause the world, then lift it from `/admin/play-pauses`.
   2. Expect the notice to offer "Return to the world" within 30 s, play to start, and the taken-down scene to be still withheld.
   3. Pause again, then resolve a takedown by counter-notice using the helpers in `dmca-counter-notice.spec.ts`, moved to `fixtures/playPause.ts` if shared. Expect the pause still active and the notice still shown.
@@ -350,10 +350,10 @@ These journeys go through the product the way people do: UI only, no GraphQL sho
 ### Implementation for User Story 4
 
 - [x] T051 [US4] Add `liftWorldPlayPause(pauseId, grounds): PlayPause!` in `src/server/src/graphql/mutations_play_pause.rs`, calling `play_pause::lift_pause`. Add it to `ADMIN_ONLY` and `OPERATOR`.
-- [ ] T052 [US4] Add a "Lift pause" action to each active pause on `apps/web/src/pages/admin/PlayPausesPage.tsx`, with a dialog requiring grounds. An already-lifted refusal shows who lifted it and when.
+- [x] T052 [US4] Add a "Lift pause" action to each active pause on `apps/web/src/pages/admin/PlayPausesPage.tsx`, with a dialog requiring grounds. An already-lifted refusal shows who lifted it and when.
 - [ ] T053 [US4] Add a "Return to the world" action on `apps/web/src/pages/world/PlayPausedPage.tsx`, shown when `worldPlayState.paused` is false. It navigates to the world page, which rejoins through the normal path. Depends on T057.
-- [ ] T054 [US4] Run `play-pause-lift.spec.ts` and the earlier pause e2e until they pass, then `tsc --noEmit`. Commit.
-- [ ] T071 [US4] Write `apps/web/e2e/journeys/play-resumes-as-it-was.journey.spec.ts`:
+- [x] T054 [US4] Run `play-pause-lift.spec.ts` and the earlier pause e2e until they pass, then `tsc --noEmit`. Commit. *2026-09-14: `play-pause-lift`, `play-pause-holds`, `play-pause-request` (4/4) and `dmca-counter-notice` (its helpers moved to `fixtures/playPause.ts`) green; `play-pause.spec.ts`'s first test failed only on the uncommitted T056/T059 banner assertion being written alongside, its other two green. `tsc --noEmit` clean, vitest 619 passed.*
+- [x] T071 [US4] Write `apps/web/e2e/journeys/play-resumes-as-it-was.journey.spec.ts`:
   - **Before pausing:** record token positions, the active scene, explored fog and an open combat's turn.
   - **Lift in the UI:** a blank-grounds lift is refused. Two operator tabs lift at once, and the second is told who lifted.
   - **On the notice:** *Return to the world* appears within 30 s, with no reload needed.
@@ -383,7 +383,7 @@ These journeys go through the product the way people do: UI only, no GraphQL sho
 ### Implementation for User Story 5
 
 - [x] T057 [US5] Add `worldPlayState(worldId): WorldPlayState!` in `src/server/src/graphql/queries/play_pause.rs`. Guard with `require_world_member`, not the gate. Select only `paused_at` and `lifted_at` from `world_play_pauses`. Classify it as a read in the surface test notes. Replace the T024 stub in `PlayPausedPage.tsx`.
-- [ ] T058 [P] [US5] Add a *Record* section to `apps/web/src/pages/admin/PlayPausesPage.tsx`: all pauses and decided requests, newest first, paginated. Each shows world (marked if it no longer exists), who, when, grounds or note, triggers, and lift.
+- [x] T058 [P] [US5] Add a *Record* section to `apps/web/src/pages/admin/PlayPausesPage.tsx`: all pauses and decided requests, newest first, paginated. Each shows world (marked if it no longer exists), who, when, grounds or note, triggers, and lift.
 - [ ] T059 [P] [US5] Show *that and when* to members:
   - a quiet banner on the world page in `apps/web/src/pages/world/WorldPage.tsx`;
   - a status on the world's card in the world list (find the card component with `grep -rn "clickPlay\|Play</" apps/web/src/pages`);

@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { expect, type Page } from "@playwright/test";
 import type { GqlResult } from "./admin";
 import { graphql } from "./helpers";
@@ -310,4 +311,98 @@ export async function fileSceneTakedown(
   sceneName: string,
 ): Promise<string> {
   return fileTakedown(claimant, "Scene", sceneId, sceneName);
+}
+
+/**
+ * Moves a forwarded counter-notice's recorded restoration date one day into
+ * the past: the waiting period, elapsed.
+ *
+ * Moved here from `dmca-counter-notice.spec.ts`, whose header says why this
+ * one `UPDATE` is the only honest way to let fourteen days pass, for spec
+ * 051's lift e2e (T050), which proves a restoration leaves a pause in force.
+ */
+export function elapseWaitingPeriod(caseId: string): void {
+  if (!CASE_ID_PATTERN.test(caseId)) {
+    throw new Error(`Refusing to run SQL for a non-UUID case id: ${caseId}`);
+  }
+  // Same connection convention as e2e/fixtures/global-setup.ts, so this
+  // reaches the per-shard database under scripts/e2e-parallel.mjs.
+  const container =
+    process.env.THUNDERFORGE_POSTGRES_CONTAINER ?? "thunderforge-postgres";
+  const database = process.env.THUNDERFORGE_DB_NAME ?? "thunderforge";
+  const dbUser = process.env.THUNDERFORGE_DB_USER ?? "postgres";
+
+  const output = execFileSync(
+    "docker",
+    [
+      "exec",
+      "-i",
+      container,
+      "psql",
+      "-U",
+      dbUser,
+      "-d",
+      database,
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-t",
+      "-A",
+    ],
+    {
+      input:
+        "UPDATE content_moderation_actions " +
+        "SET restoration_due_at = NOW() - INTERVAL '1 day' " +
+        `WHERE case_id = '${caseId}' AND action_type = 'counter_notice_forwarded' ` +
+        "RETURNING id;",
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "inherit"],
+    },
+  );
+
+  const updatedIds = output
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => CASE_ID_PATTERN.test(line));
+  if (updatedIds.length !== 1) {
+    throw new Error(
+      `Expected exactly one forwarded counter-notice for case ${caseId}, ` +
+        `psql reported: ${JSON.stringify(output)}`,
+    );
+  }
+}
+
+/**
+ * Files a counter-notice at the resolver, as the content's owner, for the
+ * cases whose subject is the bookkeeping rather than the form. Moved here from
+ * `dmca-counter-notice.spec.ts`, which drives the form itself in its first
+ * test.
+ */
+export async function fileCounterNoticeViaApi(
+  owner: Page,
+  caseId: string,
+): Promise<
+  GqlAnswer<{ submitCounterNotice: { caseId: string; currentStatus: string } }>
+> {
+  return graphql(
+    owner,
+    `
+      mutation CounterNotice($input: SubmitCounterNoticeInput!) {
+        submitCounterNotice(input: $input) {
+          caseId
+          currentStatus
+        }
+      }
+    `,
+    {
+      input: {
+        caseId,
+        removedMaterialDescription:
+          "The item this notice named, which is my own original work.",
+        goodFaithMistakeStatement: true,
+        consentToJurisdiction: true,
+        contactInformation: "owner@example.test",
+        signature: "Owen Owner",
+      },
+    },
+  );
 }

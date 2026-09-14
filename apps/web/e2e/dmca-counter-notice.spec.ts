@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { DEMO_USER } from "./fixtures/global-setup";
 import {
@@ -9,6 +8,10 @@ import {
   registerAndCreateWorld,
   uniqueSuffix,
 } from "./fixtures/helpers";
+import {
+  elapseWaitingPeriod,
+  fileCounterNoticeViaApi,
+} from "./fixtures/playPause";
 
 /**
  * specs/015-dmca-notice-takedown, the second half of the statutory flow.
@@ -43,7 +46,7 @@ import {
  * (`content_moderation_actions.restoration_due_at`) compared against `now()`
  * on every read. The Rust test `forwarded_counter_notice_past_due_auto_restores`
  * simulates elapsed time by writing a due date in the past; `elapseWaitingPeriod`
- * below does exactly the same thing to a case this test already created through
+ * (in `fixtures/playPause.ts`) does exactly the same thing to a case this test already created through
  * the real UI — one `UPDATE` moving one already-recorded timestamp backwards.
  *
  * It deliberately does not create, delete or reclassify any moderation event:
@@ -60,61 +63,6 @@ import {
 
 const CASE_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/**
- * Moves a forwarded counter-notice's recorded restoration date one day into
- * the past — the waiting period, elapsed. See the file header for why this
- * is done here rather than through a product surface.
- */
-function elapseWaitingPeriod(caseId: string): void {
-  if (!CASE_ID_PATTERN.test(caseId)) {
-    throw new Error(`Refusing to run SQL for a non-UUID case id: ${caseId}`);
-  }
-  // Same connection convention as e2e/fixtures/global-setup.ts, so this
-  // reaches the per-shard database under scripts/e2e-parallel.mjs.
-  const container =
-    process.env.THUNDERFORGE_POSTGRES_CONTAINER ?? "thunderforge-postgres";
-  const database = process.env.THUNDERFORGE_DB_NAME ?? "thunderforge";
-  const dbUser = process.env.THUNDERFORGE_DB_USER ?? "postgres";
-
-  const output = execFileSync(
-    "docker",
-    [
-      "exec",
-      "-i",
-      container,
-      "psql",
-      "-U",
-      dbUser,
-      "-d",
-      database,
-      "-v",
-      "ON_ERROR_STOP=1",
-      "-t",
-      "-A",
-    ],
-    {
-      input:
-        "UPDATE content_moderation_actions " +
-        "SET restoration_due_at = NOW() - INTERVAL '1 day' " +
-        `WHERE case_id = '${caseId}' AND action_type = 'counter_notice_forwarded' ` +
-        "RETURNING id;",
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "inherit"],
-    },
-  );
-
-  const updatedIds = output
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => CASE_ID_PATTERN.test(line));
-  if (updatedIds.length !== 1) {
-    throw new Error(
-      `Expected exactly one forwarded counter-notice for case ${caseId}, ` +
-        `psql reported: ${JSON.stringify(output)}`,
-    );
-  }
-}
 
 interface GraphQLResponse<T> {
   data?: T;
@@ -256,41 +204,6 @@ async function repeatInfringerFlags(admin: Page): Promise<string[]> {
     {},
   );
   return unwrap(response).repeatInfringerFlags;
-}
-
-/** Files a counter-notice at the resolver, for the cases whose subject is the
- * bookkeeping rather than the form — the form itself is driven through the UI
- * in the first test. */
-async function fileCounterNoticeViaApi(
-  owner: Page,
-  caseId: string,
-): Promise<
-  GraphQLResponse<{ submitCounterNotice: { currentStatus: string } }>
-> {
-  return graphql<
-    GraphQLResponse<{ submitCounterNotice: { currentStatus: string } }>
-  >(
-    owner,
-    `
-      mutation CounterNotice($input: SubmitCounterNoticeInput!) {
-        submitCounterNotice(input: $input) {
-          caseId
-          currentStatus
-        }
-      }
-    `,
-    {
-      input: {
-        caseId,
-        removedMaterialDescription:
-          "The item this notice named, which is my own original work.",
-        goodFaithMistakeStatement: true,
-        consentToJurisdiction: true,
-        contactInformation: "owner@example.test",
-        signature: "Owen Owner",
-      },
-    },
-  );
 }
 
 async function openAdminPage(browser: Browser): Promise<Page> {
