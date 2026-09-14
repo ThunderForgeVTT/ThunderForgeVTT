@@ -210,7 +210,7 @@ export async function dragCanvas(
  * the smaller of the two hit areas, so neither client's token can hide between
  * two aim points.
  */
-const AIM_OFFSETS: { dx: number; dy: number }[] = (() => {
+export const AIM_OFFSETS: { dx: number; dy: number }[] = (() => {
   const step = 32;
   const reach = 128;
   const points: { dx: number; dy: number }[] = [];
