@@ -4,8 +4,41 @@
 
 **Created**: 2026-09-11
 
-**Status**: Draft. Specification only. The owner's decisions of 2026-09-11 are
-recorded under [Decisions](#decisions-owner-2026-09-11); nothing is open.
+**Status**: Built, 2026-09-11 to 2026-09-12, with one gap and two claims not
+yet proven at the table (checked 2026-09-14; phases as numbered in
+[tasks.md](./tasks.md)). The owner's decisions of 2026-09-11 are recorded under
+[Decisions](#decisions-owner-2026-09-11); nothing is open.
+
+- **Phase 2 — one crossing test for both sides.** Shipped: `movement_blocked_by`
+  and `path_blocked_by` in `thunderforge-canvas-core`, and ADR-095 (PROPOSED).
+- **Phase 3 (US3) — a door reaches every board.** Shipped and table-proven:
+  the dungeon crawl checks the opened door on all three boards, hard.
+- **Phase 4 (US1) — a player's keyboard walks their token.** Shipped and
+  table-proven on a gridded scene, by the crawl and
+  `e2e/token-keyboard-move.spec.ts`. The gridless step is built and not
+  exercised by either.
+- **Phase 5 (US2) — a wall stops a hero.** Shipped and table-proven: the
+  engine refuses first and says so, the server refuses a crossing move sent
+  straight to it (`e2e/token-movement-walls.spec.ts`), and the crawl's aimed
+  drag and twelve-round wander cross no wall in either game system.
+- **Phase 6 (US3, US4) — the rules of sight and light, held.** Shipped and
+  table-proven: darkness alone hides a token, a player with no token sees the
+  lit board, a carried light travels, and the Game Master is shown what the
+  party cannot see.
+- **Phase 7 (US6) — a game system says how a hero sees.** Darkvision shipped:
+  D&D 5e declares it, and `combat-5e.playtest.ts` proves a sheet's sixty feet
+  reach the engine as twelve cells, and a sheet edit reaches the board with no
+  reload. **Not proven:** SC-007 as written — a token at 50 feet shown dimly,
+  one at 70 feet hidden — is unit-tested in `thunderforge-canvas-core` and has
+  not been watched on a board. **Not met:** a carried light's reach from the
+  character's data is resolved by the server and never reaches the engine
+  (FR-061, FR-064; tasks.md T065).
+- **Phase 8 (US7) — a map that remembers.** Shipped and proven in a real
+  browser by `e2e/scene-exploration.spec.ts`: the map survives a reload and a
+  Game Master's reset reaches the player's storage. Not played in a playtest.
+- **Phase 9 — polish.** The contract was checked against the code and amended
+  where the shape changed (contracts §5). The full e2e re-measure (T063) is
+  left to the next full run on `main`.
 
 **Input**: Project owner: "file a spec for the WASD movement bug and shading
 and how the token interacts with the environment"

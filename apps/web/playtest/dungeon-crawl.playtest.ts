@@ -34,9 +34,17 @@ import {
  *
  * What it is for is watching. Every step attaches what each seated client
  * showed, and the report carries a recording of each. The checks keep the run
- * honest about what it saw — hard where the product promises something, soft
- * (`expect.soft`, messages starting FINDING) where the run is looking for a
- * gap, so one finding does not end the session before the rest is seen.
+ * honest about what it saw.
+ *
+ * This scenario has no FINDINGs left. Its first run (2026-09-11) recorded
+ * seven, as soft checks: a movement key moved nothing, a drag went through a
+ * wall, the opened door stayed shut on all three boards, and so daylight and a
+ * brazier showed nothing through it. Spec 045 fixed each, and each is now a
+ * hard check. Two checks are still `expect.soft` — the goblin staying dark
+ * beyond the lantern, and the Game Master's board hiding nothing on each
+ * wandering round — only so one miss does not end the session before the rest
+ * is seen; a soft miss still fails the run. A new gap goes in as a soft check
+ * whose message starts FINDING, as `combat-5e.playtest.ts` still does.
  *
  * Laid out in world units around the origin, because players move by dragging
  * and `dragToken` aims at the default 1:1 camera: everything a player drags
