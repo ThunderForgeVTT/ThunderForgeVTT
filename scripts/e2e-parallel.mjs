@@ -63,6 +63,8 @@ import {
 import { checkDependencies, describeProblems } from "./e2e/deps.mjs";
 import { acquireRunLock, releaseRunLock } from "./e2e/run-lock.mjs";
 import { removeContainers, startMailpitContainer } from "./e2e/mailpit.mjs";
+import { startLoadMonitor } from "./e2e/load.mjs";
+import { digestLines, writeRunSummary } from "./e2e/report.mjs";
 
 /** Away from 5173/30000 on purpose, so a `pnpm dev` can stay up while this runs. */
 const WEB_PORT_BASE = 5200;
@@ -983,7 +985,14 @@ function judgeLane({ index, label, code, reportPath }) {
     if (unexpected > 0) reasons.push(`${unexpected} test(s) failed`);
     if (errors > 0) reasons.push(`${errors} runner error(s)`);
   }
-  return { index, label, code, failed: reasons.length > 0, reasons };
+  return {
+    index,
+    label,
+    code,
+    failed: reasons.length > 0,
+    reasons,
+    reportPath: report ? reportPath : null,
+  };
 }
 
 async function main() {
@@ -1033,6 +1042,8 @@ async function main() {
 
   acquireRunLock(ROOT_DIR, process.argv.slice(2));
   releaseOnSignals();
+  run.load = startLoadMonitor();
+  logLoadAtStart(run.load.snapshot());
   // Two past the sharded stacks: the first-run lane runs on index `total` and
   // the GitHub-applications lane on `total + 1`, and a port either finds taken
   // is the same stale-corpse hazard as a shard's.
@@ -1173,6 +1184,7 @@ async function main() {
   }
 
   run.started = Date.now();
+  run.load.setPhase("tests");
   run.results.push(
     ...(await Promise.all(
       shards.map((shard) => runShard(shard, bins[shard.index].files)),
@@ -1250,7 +1262,30 @@ const run = {
   durations: null,
   started: Date.now(),
   finishing: false,
+  startedAt: new Date().toISOString(),
+  load: null,
 };
+
+/**
+ * One line about the machine before anything is built, so a run started on
+ * top of someone else's build says so at the top of the log as well as in the
+ * summary at the bottom.
+ */
+function logLoadAtStart(load) {
+  const { load1, load5 } = load.atStart;
+  log(
+    "e2e",
+    `Load at start: ${load1} (5 min ${load5}) on ${load.cpus} CPUs, ` +
+      `${load.atStart.freeMemGiB} GiB free.`,
+  );
+  for (const f of load.foreign) {
+    log(
+      "e2e",
+      `  Also running, not started by this run: ${f.kind} in ${f.cwd}.`,
+      process.stderr,
+    );
+  }
+}
 
 /** The first line of an error, for a one-line reason. */
 function firstLine(error) {
@@ -1334,6 +1369,28 @@ async function finish(exitCode = null) {
     );
   }
 
+  // Before teardown, so the load samples describe the run rather than the
+  // teardown; printed after it, so the digest is the last thing in the log.
+  let digest = [];
+  if (run.load) {
+    try {
+      const summary = writeRunSummary({
+        root: ROOT_DIR,
+        results: run.results,
+        load: run.load.stop(),
+        args: process.argv.slice(2),
+        startedAt: run.startedAt,
+      });
+      digest = digestLines(summary, ROOT_DIR);
+    } catch (error) {
+      log(
+        "e2e",
+        `Could not write the run summary: ${String(error?.stack ?? error)}`,
+        process.stderr,
+      );
+    }
+  }
+
   await terminateChildren("SIGTERM");
   // Containers are not children of this process, so `terminateChildren` does
   // not reach them. Removed even under `--keep`, which preserves *databases*
@@ -1353,6 +1410,7 @@ async function finish(exitCode = null) {
     }
   }
 
+  for (const line of digest) log("e2e", line);
   releaseRunLock(ROOT_DIR);
   process.exit(
     exitCode ?? (failed.length > 0 || run.results.length === 0 ? 1 : 0),

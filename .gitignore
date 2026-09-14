@@ -186,6 +186,9 @@ apps/web/e2e/.demo/
 .e2e-shards.lock
 # The live-run marker (pid, start, args); the hooks refuse while it is live.
 .e2e-running
+# The last run's summary, and every run's failures (scripts/e2e-flakes.mjs).
+e2e-summary.json
+.e2e-history.jsonl
 apps/web/.playwright/
 
 ### graphify ###
