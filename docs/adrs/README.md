@@ -104,6 +104,7 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20260912-098](./20260912-098-an_update_path_to_a_collection.md) | Accepted | An Update Path to a Collection — not a repository, on three conditions; amends ADR-069; waits on spec 015 T042 |
 | [20260913-099](./20260913-099-the_trusted_player_role.md) | Accepted | The Trusted Player Role |
 | [20260913-100](./20260913-100-an_operator_can_pause_a_worlds_play.md) | Accepted | An Operator Can Pause a World's Play |
+| [20260914-102](./20260914-102-a_token_is_its_actor_or_a_copy.md) | Proposed | A Token Is Its Actor, or a Copy of It |
 
 > **Note (2026-08-19):** ADRs 020–024 originally collided with an unrelated "pack system" batch that reused the same day-020 through day-024 numbers. The world-domain ADRs (020–024 above) were committed first and are documented here; the colliding pack-system ADRs were renumbered to 026–030. See `docs/SYSTEM_HOOKS_API_GUIDE.md` and ADR-036's "Related Decisions" for the corrected references.
 
