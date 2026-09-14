@@ -35,6 +35,7 @@ use crate::graphql::mutations_inventory::upsert_inventory_entry;
 use crate::graphql::types::{ActorPermissionLevel, GraphQLInventoryEntry};
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::ActorInventoryEntry;
+use crate::play_pause::gate::{GateError, refuse_if_paused};
 use crate::schema::{interactives, tokens, world_actors};
 use crate::state::AppState;
 use crate::world_events::{EVENT_CODE_TOKEN_CHANGED, record_world_event, world_id_for_scene};
@@ -157,6 +158,7 @@ fn claim_token(conn: &mut PgConnection, token_id: Uuid) -> Result<bool, DieselEr
 enum PickupError {
     /// The token was gone by the time this transaction reached it.
     Gone,
+    Paused(GateError),
     Other(String),
 }
 
@@ -253,6 +255,7 @@ pub async fn pick_up_placed_item_impl(
             if actor_world != world_id {
                 return Err("That character is not in this world".to_string().into());
             }
+            refuse_if_paused(conn, world_id).map_err(PickupError::Paused)?;
 
             // The arbiter. Everything after this line runs only for the one
             // caller who actually removed the token.
@@ -299,6 +302,7 @@ pub async fn pick_up_placed_item_impl(
     match result {
         Ok((entry, _)) => Ok(entry),
         Err(PickupError::Gone) => Err(gone()),
+        Err(PickupError::Paused(refusal)) => Err(refusal.into()),
         Err(PickupError::Other(message)) => Err(Error::new(message)),
     }
 }

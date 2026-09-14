@@ -3,6 +3,7 @@
 use async_graphql::{Context, Error, Result as GraphQLResult};
 
 use super::*;
+use crate::play_pause::gate::{carried, refusal_or, refuse_if_paused};
 
 // World token input types moved to input_types.rs (Phase 4.9.Z Step 3)
 
@@ -38,6 +39,7 @@ impl WorldTokenMutation {
             use crate::schema::world_tokens;
             use diesel::prelude::*;
 
+            refuse_if_paused(&mut conn, world_id)?;
             diesel::insert_into(world_tokens::table)
                 .values((
                     world_tokens::id.eq(&token_id),
@@ -59,7 +61,7 @@ impl WorldTokenMutation {
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to create world token"))?;
+        .map_err(|e| refusal_or(e, "Failed to create world token"))?;
 
         // Phase 4.9.B.2: Touch last_seen on mutation
         if let Err(e) =
@@ -107,6 +109,8 @@ impl WorldTokenMutation {
         let (upserted_token, event_id) = tokio::task::spawn_blocking(move || {
             use crate::schema::{world_events, world_tokens};
             use diesel::prelude::*;
+
+            refuse_if_paused(&mut conn, world_id)?;
 
             // 1. UPSERT token
             let upserted = diesel::insert_into(world_tokens::table)
@@ -176,7 +180,10 @@ impl WorldTokenMutation {
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|e| Error::new(format!("Database operation failed: {}", e)))?;
+        .map_err(|e| match carried(&e) {
+            Some(refusal) => refusal.into(),
+            None => Error::new(format!("Database operation failed: {}", e)),
+        })?;
 
         eprintln!(
             "[Phase4.6✅] upsertToken complete: token_id={}, event_id={}, broadcasted",
@@ -216,6 +223,16 @@ impl WorldTokenMutation {
             use crate::schema::world_tokens;
             use diesel::prelude::*;
 
+            // Gated before the creator filter below, so every caller meets
+            // the pause, not only the token's creator.
+            if let Some(world_id) = world_tokens::table
+                .filter(world_tokens::id.eq(&token_id))
+                .select(world_tokens::world_id)
+                .first::<uuid::Uuid>(&mut conn)
+                .optional()?
+            {
+                refuse_if_paused(&mut conn, world_id)?;
+            }
             diesel::update(
                 world_tokens::table
                     .filter(world_tokens::id.eq(&token_id))
@@ -233,7 +250,7 @@ impl WorldTokenMutation {
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to move token"))?;
+        .map_err(|e| refusal_or(e, "Failed to move token"))?;
 
         // Phase 4.9.B.2: Touch last_seen on mutation
         if let Err(e) =
@@ -258,6 +275,16 @@ impl WorldTokenMutation {
         let deleted = tokio::task::spawn_blocking(move || {
             use crate::schema::world_tokens;
             use diesel::prelude::*;
+            // Gated before the creator filter below, so every caller meets
+            // the pause, not only the token's creator.
+            if let Some(world_id) = world_tokens::table
+                .filter(world_tokens::id.eq(&token_id))
+                .select(world_tokens::world_id)
+                .first::<uuid::Uuid>(&mut conn)
+                .optional()?
+            {
+                refuse_if_paused(&mut conn, world_id)?;
+            }
             diesel::delete(
                 world_tokens::table
                     .filter(world_tokens::id.eq(&token_id))
@@ -267,7 +294,7 @@ impl WorldTokenMutation {
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to delete token"))?;
+        .map_err(|e| refusal_or(e, "Failed to delete token"))?;
 
         Ok(deleted > 0)
     }

@@ -22,6 +22,7 @@ use thunderforge_canvas_core::interaction::{
 use super::{
     GraphQLActivationResult, GraphQLCreateInteractiveInput, GraphQLUpdateInteractiveInput,
 };
+use crate::play_pause::gate::{refusal_or, refuse_scene_if_paused};
 use crate::world_events::{
     EVENT_CODE_INTERACTION_REQUEST, EVENT_CODE_INTERACTIVE_CHANGED, EVENT_CODE_WALL_CHANGED,
     record_world_event, world_id_for_scene,
@@ -241,6 +242,7 @@ pub(crate) async fn decide_request_impl(
         {
             return Err(Error::new("Only the Game Master decides a request"));
         }
+        refuse_scene_if_paused(&mut conn, scene_id)?;
 
         // The requester does not decide their own request, even when the
         // requester runs the world — a Game Master's own activation never
@@ -408,6 +410,7 @@ pub(crate) async fn set_door_flag_impl(
         if !crate::auth::world_membership::is_dm_of_scene(&mut conn, user_id, is_admin, scene_id)? {
             return Err(DieselError::NotFound);
         }
+        refuse_scene_if_paused(&mut conn, scene_id)?;
 
         let now = Utc::now().naive_utc();
         match flag {
@@ -436,7 +439,7 @@ pub(crate) async fn set_door_flag_impl(
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to change the door (not found or not yours)"))
+    .map_err(|e| refusal_or(e, "Failed to change the door (not found or not yours)"))
 }
 
 pub(crate) async fn set_door_designation_impl(
@@ -463,6 +466,7 @@ pub(crate) async fn set_door_designation_impl(
         if !crate::auth::world_membership::is_dm_of_scene(&mut conn, user_id, is_admin, scene_id)? {
             return Err(DieselError::NotFound);
         }
+        refuse_scene_if_paused(&mut conn, scene_id)?;
 
         let now = Utc::now().naive_utc();
         // A newly designated door starts closed, because a door drawn on a map
@@ -523,7 +527,7 @@ pub(crate) async fn set_door_designation_impl(
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to designate the door (not found or not yours)"))
+    .map_err(|e| refusal_or(e, "Failed to designate the door (not found or not yours)"))
 }
 
 /// Announce a door change — as a door, and as the wall change it also is.

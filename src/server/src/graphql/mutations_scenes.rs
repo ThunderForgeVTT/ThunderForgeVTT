@@ -3,6 +3,7 @@
 use async_graphql::{Context, Error, Result as GraphQLResult};
 
 use super::*;
+use crate::play_pause::gate::{refusal_or, refuse_if_paused, refuse_scene_if_paused};
 use crate::state::AppState;
 
 /// Testable core of `SceneMutation::update_scene_hidden` (spec 022,
@@ -44,6 +45,7 @@ pub async fn update_scene_hidden_impl(
         .db_pool
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
+    refuse_if_paused(&mut conn, world_id)?;
     let updated_scene = tokio::task::spawn_blocking(move || {
         diesel::update(scenes::table.filter(scenes::scene_id.eq(scene_id)))
             .set(scenes::hidden.eq(hidden))
@@ -109,6 +111,7 @@ pub async fn update_scene_ambient_light_impl(
         .db_pool
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
+    refuse_if_paused(&mut conn, world_id)?;
     let updated_scene = tokio::task::spawn_blocking(move || {
         conn.transaction::<_, diesel::result::Error, _>(|conn| {
             let scene = diesel::update(scenes::table.filter(scenes::scene_id.eq(scene_id)))
@@ -160,6 +163,8 @@ pub async fn launch_scene_impl(
         .db_pool
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
+    // Spec 051: launching a scene is play.
+    crate::play_pause::gate::refuse_if_paused(&mut conn, world_id)?;
 
     let updated_world = tokio::task::spawn_blocking(move || {
         // The scene must belong to this world — a GM of world A must
@@ -230,6 +235,7 @@ impl SceneMutation {
             .db_pool
             .get()
             .map_err(|_| Error::new("Failed to get DB connection"))?;
+        refuse_if_paused(&mut conn, input.world_id)?;
         let now = Utc::now().naive_utc();
 
         let scene_id = uuid::Uuid::now_v7();
@@ -347,6 +353,7 @@ impl SceneMutation {
             )? {
                 return Err(diesel::result::Error::NotFound);
             }
+            refuse_scene_if_paused(&mut conn, scene_id)?;
 
             // Spec 022 (FR-006): summaryRenderedHtml is derived from
             // summaryMarkdown at write time (not on read, unlike lore
@@ -378,7 +385,7 @@ impl SceneMutation {
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to update scene"))?;
+        .map_err(|e| refusal_or(e, "Failed to update scene"))?;
 
         Ok(GraphQLScene::from(updated_scene))
     }
@@ -467,12 +474,13 @@ impl SceneMutation {
                 // was deleted.
                 return Ok(0);
             }
+            refuse_scene_if_paused(&mut conn, scene_id)?;
 
             diesel::delete(scenes::table.filter(scenes::scene_id.eq(scene_id))).execute(&mut conn)
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to delete scene"))?;
+        .map_err(|e| refusal_or(e, "Failed to delete scene"))?;
 
         Ok(deleted > 0)
     }
@@ -521,6 +529,7 @@ impl SceneMutation {
             .db_pool
             .get()
             .map_err(|_| Error::new("Failed to get DB connection"))?;
+        refuse_scene_if_paused(&mut conn, scene_id)?;
         let now = Utc::now().naive_utc();
 
         let scene_id = input.scene_id;

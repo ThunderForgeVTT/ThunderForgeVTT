@@ -20,6 +20,7 @@ use crate::auth::world_membership::{WorldMembershipError, require_world_member};
 use crate::db_types::CanvasImageAssetKindEnum;
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{CanvasImageAsset, NewCanvasImageAsset};
+use crate::play_pause::gate::{GateError, refuse_if_paused};
 use crate::state::AppState;
 use crate::storage::rustfs::{RustFsConfig, object_key, write_object};
 use crate::storage::transcode::transcode_to_webp;
@@ -85,6 +86,8 @@ pub enum UploadCanvasImageError {
     Storage(String),
     #[error("database error: {0}")]
     Database(String),
+    #[error("play paused")]
+    Paused(GateError),
 }
 
 /// Not a `From<UploadCanvasImageError> for Error` impl — async-graphql
@@ -93,6 +96,9 @@ pub enum UploadCanvasImageError {
 /// GraphQL resolver call site instead, to attach the `FORBIDDEN`
 /// extension code (FR-016) that a bare `?`-conversion would drop.
 fn to_graphql_error(e: UploadCanvasImageError) -> Error {
+    if let UploadCanvasImageError::Paused(refusal) = e {
+        return refusal.into();
+    }
     let msg = e.to_string();
     if matches!(e, UploadCanvasImageError::Forbidden) {
         Error::new(msg).extend_with(|_, ext| ext.set("code", "FORBIDDEN"))
@@ -124,6 +130,7 @@ pub async fn upload_canvas_image_impl(
             WorldMembershipError::NotAMember => UploadCanvasImageError::Forbidden,
             WorldMembershipError::Database(msg) => UploadCanvasImageError::Database(msg),
         })?;
+        refuse_if_paused(&mut conn, world_id).map_err(UploadCanvasImageError::Paused)?;
     }
 
     // 2. Decode + transcode to WebP, enforcing MAX_UPLOAD_BYTES (FR-012, FR-013).

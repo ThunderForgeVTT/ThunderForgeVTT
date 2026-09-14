@@ -23,6 +23,7 @@ use uuid::Uuid;
 use crate::auth::ability_permissions::effective_ability_permission;
 use crate::auth::world_membership::is_dm_of_world;
 use crate::graphql::anonymous::caller_id;
+use crate::graphql::permissioned_entity_resolvers::{PausableContent, refuse_content_if_paused};
 use crate::graphql::share_codes::generate_link_code;
 use crate::graphql::share_rate_limit as rate_limit;
 use crate::graphql::types::{
@@ -33,6 +34,7 @@ use crate::graphql::{app_state, authenticated_user};
 use crate::models::{
     AbilityEffect, AbilityShare, NewAbilityEffect, NewAbilityShare, NewWorldAbility, WorldAbility,
 };
+use crate::play_pause::gate::refuse_world_if_paused;
 use crate::schema::{world_abilities, world_ability_effects, world_ability_shares};
 use crate::state::AppState;
 
@@ -275,6 +277,7 @@ pub async fn create_ability_share_link_impl(
     {
         return Err(Error::new("Ability not found"));
     }
+    refuse_content_if_paused(state, PausableContent::Ability(ability_id)).await?;
 
     // Spec 039 FR-011/FR-014. Last of the refusals, and the gate writes
     // nothing — what it returns is written in the transaction below.
@@ -384,6 +387,7 @@ pub async fn revoke_ability_share_link_impl(
     if created_by != user_id && !is_dm_of_world(state, user_id, is_admin, world_id).await? {
         return Err(Error::new("You may not revoke this share link"));
     }
+    refuse_world_if_paused(state, world_id).await?;
 
     let mut conn = state
         .db_pool
@@ -427,6 +431,7 @@ pub async fn copy_shared_ability_to_world_impl(
             "You must be the DM (Owner or GM) of the destination world to copy into it",
         ));
     }
+    refuse_world_if_paused(state, input.destination_world_id).await?;
 
     let mut conn = state
         .db_pool

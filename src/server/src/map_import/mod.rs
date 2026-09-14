@@ -78,7 +78,17 @@ pub fn router() -> Router<AppState> {
 }
 
 fn error_response(err: &MapImportError) -> (StatusCode, Json<serde_json::Value>) {
+    use crate::play_pause::gate::{GateError, WORLD_PLAY_PAUSED};
     let status = match err {
+        // Spec 051 (contracts/live-play-lock.md): the one REST refusal with a
+        // code, because the client routes on it as it does on the GraphQL one.
+        MapImportError::Paused(GateError::Paused(_)) => {
+            return (
+                StatusCode::LOCKED,
+                Json(json!({ "code": WORLD_PLAY_PAUSED })),
+            );
+        }
+        MapImportError::Paused(GateError::Unreadable(_)) => StatusCode::SERVICE_UNAVAILABLE,
         MapImportError::InvalidJson(_)
         | MapImportError::UnsupportedFormat { .. }
         | MapImportError::InvalidImageBase64(_)
@@ -134,12 +144,16 @@ pub async fn import_uvtt_impl(
         if !crate::auth::world_membership::is_dm_of_scene(&mut conn, user_id, is_admin, scene_id)? {
             return Err(MapImportError::SceneNotOwned);
         }
-        scenes::table
+        let world_id = scenes::table
             .filter(scenes::scene_id.eq(scene_id))
             .select(scenes::world_id)
             .first::<Uuid>(&mut conn)
             .optional()?
-            .ok_or(MapImportError::SceneNotOwned)
+            .ok_or(MapImportError::SceneNotOwned)?;
+        // Spec 051: before the background is stored or a wall is written.
+        crate::play_pause::gate::refuse_if_paused(&mut conn, world_id)
+            .map_err(MapImportError::Paused)?;
+        Ok(world_id)
     })
     .await
     .map_err(|_| MapImportError::Io("Failed to spawn blocking task".to_string()))??;

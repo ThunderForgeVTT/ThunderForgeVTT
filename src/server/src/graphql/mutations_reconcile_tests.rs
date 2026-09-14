@@ -685,3 +685,79 @@ fn no_determination_and_agreement_are_the_same_silence() {
         "and a genuine mismatch still gets reported, or none of this is worth having"
     );
 }
+
+/// Spec 051 T030 (R5, FR-023): offline changes queued against a world whose
+/// play was paused are rejected with `PLAY_PAUSED`, each with an outcome and
+/// none with an error, and none of them is applied.
+#[tokio::test]
+async fn a_paused_world_rejects_every_queued_change_and_applies_none() {
+    let state = crate::test_support::test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let operator = crate::test_support::insert_test_user(&mut conn);
+    let owner = crate::test_support::insert_test_user(&mut conn);
+    let world = crate::test_support::insert_test_world(&mut conn, owner);
+    let scene = crate::test_support::insert_test_scene(&mut conn, world, owner);
+    let token = insert_token(&mut conn, scene, Some(owner));
+    crate::play_pause::pause_world(
+        &mut conn,
+        operator,
+        world,
+        "Stopping play.",
+        crate::play_pause::TriggerDetail::operator(),
+    )
+    .expect("paused");
+    drop(conn);
+
+    let changes = [move_command(token, 5.0), move_command(token, 9.0)];
+    let submitted: Vec<String> = changes.iter().map(|c| c.local_id.clone()).collect();
+    let request = async_graphql::Request::new(
+        "mutation($w: UUID!, $c: [QueuedChangeInput!]!) {
+            reconcileQueuedChanges(worldId: $w, changes: $c) { localId applied reason }
+        }",
+    )
+    .variables(async_graphql::Variables::from_json(serde_json::json!({
+        "w": world,
+        "c": changes.iter().map(|c| serde_json::json!({
+            "localId": c.local_id,
+            "command": c.command.0,
+        })).collect::<Vec<_>>(),
+    })))
+    .data(crate::auth_middleware::AuthenticatedUser {
+        user_id: owner,
+        session_id: Uuid::now_v7(),
+        expires_at: chrono::Utc::now().naive_utc() + chrono::Duration::hours(1),
+        is_admin: false,
+        role: "User".to_string(),
+        disabled: false,
+    });
+
+    let response = async_graphql::Schema::build(
+        crate::graphql::QueryRoot::default(),
+        crate::graphql::MutationRoot::default(),
+        crate::graphql::SubscriptionRoot,
+    )
+    .data(state.clone())
+    .finish()
+    .execute(request)
+    .await;
+
+    assert!(
+        response.errors.is_empty(),
+        "a pause is a report, never an error: {:?}",
+        response.errors
+    );
+    let data = response.data.into_json().unwrap();
+    let outcomes = data["reconcileQueuedChanges"].as_array().unwrap();
+    let answered: Vec<&str> = outcomes
+        .iter()
+        .map(|o| o["localId"].as_str().unwrap())
+        .collect();
+    assert_eq!(answered, submitted, "one outcome per change, in order");
+    for outcome in outcomes {
+        assert_eq!(outcome["applied"], false);
+        assert_eq!(outcome["reason"], "PLAY_PAUSED");
+    }
+
+    let mut conn = state.db_pool.get().unwrap();
+    assert_eq!(token_x(&mut conn, token), 0.0, "nothing was applied");
+}

@@ -9,6 +9,7 @@ use crate::auth::world_membership::{WorldMembershipError, require_world_member};
 use crate::auth_middleware::AuthenticatedUser;
 use crate::graphql::share_codes::generate_link_code;
 use crate::models::{NewWorldInvite, NewWorldMember, WorldInvite};
+use crate::play_pause::gate::{refusal_or, refuse_if_paused};
 use crate::schema::world_events;
 use crate::schema::world_invites;
 use crate::schema::world_members;
@@ -110,6 +111,7 @@ pub async fn generate_invite_code_impl(
         WorldMembershipError::NotAMember => Error::new("User is not a member of this world"),
         WorldMembershipError::Database(msg) => Error::new(format!("Database error: {}", msg)),
     })?;
+    refuse_if_paused(&mut conn, world_id)?;
 
     // Unrecognised strings resolve to no role and are refused. A Trusted
     // Player is refused too: inviting people is running the table.
@@ -289,6 +291,8 @@ pub async fn join_world_impl(
             // with NotFound keeps the caller from learning which condition
             // applied.
             let (_invite_id, world_id) = consumed.ok_or(diesel::result::Error::NotFound)?;
+            // Rolls the use back with it.
+            refuse_if_paused(conn, world_id)?;
 
             let new_member = NewWorldMember {
                 id: Uuid::now_v7(),
@@ -310,7 +314,7 @@ pub async fn join_world_impl(
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new(LINK_UNAVAILABLE_MESSAGE))?;
+    .map_err(|e| refusal_or(e, LINK_UNAVAILABLE_MESSAGE))?;
 
     let world_id = new_member.world_id;
 
@@ -377,6 +381,7 @@ pub async fn revoke_invite_code_impl(
         .db_pool
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
+    refuse_if_paused(&mut conn, world_id)?;
 
     let updated = tokio::task::spawn_blocking(move || {
         diesel::update(world_invites::table.find(invite_id))
@@ -420,6 +425,7 @@ pub async fn rotate_invite_code_impl(
         .db_pool
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
+    refuse_if_paused(&mut conn, world_id)?;
     let new_code = generate_link_code();
 
     let replacement = tokio::task::spawn_blocking(move || {

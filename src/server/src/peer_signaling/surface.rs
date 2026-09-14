@@ -17,6 +17,7 @@ use async_graphql::{Context, Error, InputObject, Result as GraphQLResult};
 use uuid::Uuid;
 
 use crate::graphql::{app_state, authenticated_user};
+use crate::play_pause::gate::refuse_world_if_paused;
 use crate::state::AppState;
 
 use super::admission::{
@@ -64,6 +65,10 @@ pub async fn send_peer_signal_impl(
     if !is_member(state, user_id, input.world_id).await? {
         return Err(PeerSignalingError::Forbidden);
     }
+    // Spec 051: a paused world carries no signals.
+    refuse_world_if_paused(state, input.world_id)
+        .await
+        .map_err(PeerSignalingError::Paused)?;
 
     // `fromSessionId` is an assertion, so check it. A caller may only speak as
     // a session that is registered, in this world, to them — otherwise a

@@ -428,6 +428,7 @@ impl TokenDisclosureMutation {
                     "Only the Owner or a Game Master may change what a token discloses",
                 ));
             }
+            crate::play_pause::gate::refuse_scene_if_paused(&mut conn, scene_id)?;
 
             let now = chrono::Utc::now().naive_utc();
             diesel::insert_into(trd::table)

@@ -172,3 +172,26 @@ fn the_error_carries_no_grounds() {
         Ok(())
     });
 }
+
+/// A refusal that crossed a diesel-typed closure keeps its code.
+#[test]
+fn a_refusal_carried_through_diesel_keeps_its_code() {
+    let paused = PlayPaused {
+        world_id: Uuid::now_v7(),
+        paused_at: chrono::Utc::now().naive_utc(),
+    };
+    let through: diesel::result::Error = GateError::Paused(paused).into();
+    assert_eq!(
+        super::gate::carried(&through),
+        Some(GateError::Paused(paused))
+    );
+
+    let error = super::gate::refusal_or(through, "Failed to delete wall");
+    let extensions = serde_json::to_value(error.extensions.as_ref().expect("extensions"))
+        .expect("extensions serialise");
+    assert_eq!(extensions["code"], WORLD_PLAY_PAUSED);
+
+    let plain = super::gate::refusal_or(diesel::result::Error::NotFound, "Failed to delete wall");
+    assert_eq!(plain.message, "Failed to delete wall");
+    assert!(plain.extensions.is_none());
+}

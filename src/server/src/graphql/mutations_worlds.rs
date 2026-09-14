@@ -7,6 +7,7 @@
 use async_graphql::{Context, Error, InputObject, Result as GraphQLResult};
 
 use super::*;
+use crate::play_pause::gate::{carried, refusal_or, refuse_if_paused};
 use crate::state::AppState;
 
 /// Spec 008 (US1, FR-004/FR-006): creates a world and its one default
@@ -207,6 +208,7 @@ pub async fn update_world_session_notes_impl(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
     let updated = tokio::task::spawn_blocking(move || {
+        refuse_if_paused(&mut conn, world_id)?;
         diesel::update(worlds::table.filter(worlds::id.eq(world_id)))
             .set(worlds::session_notes.eq(notes))
             .returning(World::as_returning())
@@ -214,7 +216,7 @@ pub async fn update_world_session_notes_impl(
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to update session notes"))?;
+    .map_err(|e| refusal_or(e, "Failed to update session notes"))?;
 
     Ok(GraphQLWorld::from(updated))
 }
@@ -291,6 +293,7 @@ pub async fn update_world_interface_pack_impl(
 
     let stored = requested.clone();
     let updated = tokio::task::spawn_blocking(move || {
+        refuse_if_paused(&mut conn, world_id)?;
         diesel::update(worlds::table.filter(worlds::id.eq(world_id)))
             .set(worlds::interface_pack_id.eq(stored))
             .returning(World::as_returning())
@@ -298,7 +301,7 @@ pub async fn update_world_interface_pack_impl(
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to update world"))?;
+    .map_err(|e| refusal_or(e, "Failed to update world"))?;
 
     // Everyone in the world re-resolves on receipt, so the table sees the
     // change without reloading (SC-001).
@@ -350,6 +353,7 @@ pub async fn update_world_game_system_impl(
     let target_for_counting = game_system_id.clone();
 
     let updated = tokio::task::spawn_blocking(move || {
+        refuse_if_paused(&mut conn, world_id)?;
         // FR-030: selecting the system already in force changes nothing and
         // asks nothing. Checked before the counts, so a no-op never presents a
         // warning about content it is not going to affect.
@@ -433,7 +437,7 @@ pub async fn update_world_game_system_impl(
         diesel::result::Error::NotFound => Error::new(
             "This world holds authored content. Confirm what the change affects before applying it.",
         ),
-        _ => Error::new("Failed to update game system"),
+        error => refusal_or(error, "Failed to update game system"),
     })?;
 
     Ok(GraphQLWorld::from(updated))
@@ -472,6 +476,7 @@ pub async fn update_world_allow_player_created_actors_impl(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
     let updated = tokio::task::spawn_blocking(move || {
+        refuse_if_paused(&mut conn, world_id)?;
         diesel::update(worlds::table.filter(worlds::id.eq(world_id)))
             .set(worlds::allow_player_created_actors.eq(allow))
             .returning(World::as_returning())
@@ -479,7 +484,7 @@ pub async fn update_world_allow_player_created_actors_impl(
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to update allow_player_created_actors"))?;
+    .map_err(|e| refusal_or(e, "Failed to update allow_player_created_actors"))?;
 
     Ok(GraphQLWorld::from(updated))
 }
@@ -518,6 +523,7 @@ pub async fn update_world_genie_resource_carryover_impl(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
     let updated = tokio::task::spawn_blocking(move || {
+        refuse_if_paused(&mut conn, world_id)?;
         diesel::update(worlds::table.filter(worlds::id.eq(world_id)))
             .set(worlds::genie_resource_carryover_enabled.eq(enabled))
             .returning(World::as_returning())
@@ -525,7 +531,7 @@ pub async fn update_world_genie_resource_carryover_impl(
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to update genie_resource_carryover_enabled"))?;
+    .map_err(|e| refusal_or(e, "Failed to update genie_resource_carryover_enabled"))?;
 
     Ok(GraphQLWorld::from(updated))
 }
@@ -572,6 +578,7 @@ pub async fn update_world_default_scene_grid_type_impl(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
     let updated = tokio::task::spawn_blocking(move || {
+        refuse_if_paused(&mut conn, world_id)?;
         diesel::update(worlds::table.filter(worlds::id.eq(world_id)))
             .set(worlds::default_scene_grid_type.eq(grid_type))
             .returning(World::as_returning())
@@ -579,7 +586,7 @@ pub async fn update_world_default_scene_grid_type_impl(
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to update default_scene_grid_type"))?;
+    .map_err(|e| refusal_or(e, "Failed to update default_scene_grid_type"))?;
 
     Ok(GraphQLWorld::from(updated))
 }
@@ -698,6 +705,19 @@ impl WorldMutation {
             .map_err(|_| Error::new("Failed to get DB connection"))?;
 
         let updated = tokio::task::spawn_blocking(move || {
+            // Ownership is asked first, so only the owner learns the world is
+            // paused. A non-owner is refused here rather than handed the
+            // unrenamed world, which the read below used to do for anyone.
+            let owns = diesel::select(diesel::dsl::exists(
+                worlds::table
+                    .filter(worlds::id.eq(world_id))
+                    .filter(worlds::created_by.eq(user_id)),
+            ))
+            .get_result::<bool>(&mut conn)?;
+            if !owns {
+                return Ok(None);
+            }
+            refuse_if_paused(&mut conn, world_id)?;
             diesel::update(
                 worlds::table
                     .filter(worlds::id.eq(world_id))
@@ -718,7 +738,10 @@ impl WorldMutation {
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|error| world_write_error(error, "Failed to rename world"))?;
+        .map_err(|error| match carried(&error) {
+            Some(refused) => Error::from(refused),
+            None => world_write_error(error, "Failed to rename world"),
+        })?;
 
         match updated {
             Some(world) => Ok(GraphQLWorld::from(world)),

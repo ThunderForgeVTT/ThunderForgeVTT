@@ -13,6 +13,7 @@ use crate::graphql::GraphQLShapeKind;
 use crate::graphql::{
     GraphQLCreateShapeInput, GraphQLShape, GraphQLUpdateShapeInput, app_state, authenticated_user,
 };
+use crate::play_pause::gate::{refusal_or, refuse_scene_if_paused};
 use crate::world_events::{EVENT_CODE_SHAPE_CHANGED, record_world_event, world_id_for_scene};
 
 #[derive(Default)]
@@ -56,6 +57,7 @@ impl ShapeMutation {
             )? {
                 return Err(DieselError::NotFound);
             }
+            refuse_scene_if_paused(&mut conn, scene_id)?;
 
             let shape = diesel::insert_into(shapes::table)
                 .values((
@@ -93,7 +95,12 @@ impl ShapeMutation {
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to create shape (scene not found or not owned by you)"))?;
+        .map_err(|e| {
+            refusal_or(
+                e,
+                "Failed to create shape (scene not found or not owned by you)",
+            )
+        })?;
 
         Ok(GraphQLShape::from(inserted_shape))
     }
@@ -143,6 +150,9 @@ impl ShapeMutation {
             if !authorized {
                 return Err(DieselError::NotFound);
             }
+            if let Some(scene_id) = scene_id {
+                refuse_scene_if_paused(&mut conn, scene_id)?;
+            }
 
             let shape = diesel::update(shapes::table.filter(shapes::shape_id.eq(shape_id)))
                 .set(update_data)
@@ -167,7 +177,7 @@ impl ShapeMutation {
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to update shape (not found or not owned by you)"))?;
+        .map_err(|e| refusal_or(e, "Failed to update shape (not found or not owned by you)"))?;
 
         Ok(GraphQLShape::from(updated_shape))
     }
@@ -208,6 +218,9 @@ impl ShapeMutation {
                 // same as "no such shape" and leaks nothing either way.
                 return Ok(0);
             }
+            if let Some(scene_id) = scene_id {
+                refuse_scene_if_paused(&mut conn, scene_id)?;
+            }
 
             let deleted_count = diesel::delete(shapes::table.filter(shapes::shape_id.eq(shape_id)))
                 .execute(&mut conn)?;
@@ -233,7 +246,7 @@ impl ShapeMutation {
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to delete shape"))?;
+        .map_err(|e| refusal_or(e, "Failed to delete shape"))?;
 
         Ok(deleted > 0)
     }

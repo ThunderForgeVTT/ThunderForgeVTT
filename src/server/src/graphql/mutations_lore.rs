@@ -14,6 +14,7 @@ use crate::graphql::types::{ActorPermissionLevel, GraphQLLoreEntry};
 use crate::graphql::{app_state, authenticated_user};
 use crate::markdown::links::PreparedLink;
 use crate::models::{LoreEntry, NewLoreLink, NewLoreRevision};
+use crate::play_pause::gate::{GateError, carried, refuse_if_paused};
 use crate::schema::{world_lore_entries, world_lore_links, world_lore_revisions};
 use crate::state::AppState;
 
@@ -51,17 +52,23 @@ pub enum LoreWriteError {
     TooLarge,
     #[error("someone else saved this entry first; reload the current content and try again")]
     Conflict,
+    #[error("play paused")]
+    Paused(GateError),
 }
 
 impl From<diesel::result::Error> for LoreWriteError {
     fn from(e: diesel::result::Error) -> Self {
-        LoreWriteError::Database(e.to_string())
+        match carried(&e) {
+            Some(refused) => LoreWriteError::Paused(refused),
+            None => LoreWriteError::Database(e.to_string()),
+        }
     }
 }
 
 fn to_graphql_error(e: LoreWriteError) -> Error {
     let msg = e.to_string();
     match e {
+        LoreWriteError::Paused(refused) => refused.into(),
         LoreWriteError::Conflict => {
             Error::new(msg).extend_with(|_, ext| ext.set("code", "CONFLICT"))
         }
@@ -134,6 +141,7 @@ pub async fn create_lore_entry_impl(
 
     tokio::task::spawn_blocking(move || {
         conn.transaction::<LoreEntry, LoreWriteError, _>(|conn| {
+            refuse_if_paused(conn, world_id).map_err(LoreWriteError::Paused)?;
             let slug = crate::markdown::slug::unique_slug_for_world(conn, world_id, &title, None)?;
             let entry_id = Uuid::now_v7();
             let now = Utc::now().naive_utc();
@@ -226,6 +234,7 @@ pub async fn update_lore_entry_impl(
                 .first::<LoreEntry>(conn)
                 .optional()?
                 .ok_or(LoreWriteError::NotFound)?;
+            refuse_if_paused(conn, existing.world_id).map_err(LoreWriteError::Paused)?;
 
             let now = Utc::now().naive_utc();
             let new_title = input
@@ -345,6 +354,7 @@ pub async fn delete_lore_entry_impl(
             let Some((world_id, grandparent_id)) = existing else {
                 return Ok(0);
             };
+            refuse_if_paused(conn, world_id)?;
 
             // The same lock a move takes, so a move that would have parented
             // something under this entry either lands before the children are
@@ -425,6 +435,7 @@ pub async fn restore_lore_revision_impl(
                 .filter(world_lore_entries::id.eq(lore_entry_id))
                 .select(LoreEntry::as_select())
                 .first::<LoreEntry>(conn)?;
+            refuse_if_paused(conn, entry.world_id).map_err(LoreWriteError::Paused)?;
 
             let now = Utc::now().naive_utc();
             let new_revision_id = Uuid::now_v7();

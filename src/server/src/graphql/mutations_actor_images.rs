@@ -35,6 +35,7 @@ use uuid::Uuid;
 
 use crate::assets_serve::actor::{actor_image_full_key, actor_image_thumb_key};
 use crate::auth::actor_permissions::require_actor_permission;
+use crate::graphql::permissioned_entity_resolvers::{PausableContent, refuse_content_if_paused};
 use crate::graphql::types::{ActorPermissionLevel, GraphQLActorImage};
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{NewWorldActorImage, WorldActorImage};
@@ -69,9 +70,15 @@ pub enum UploadActorImageError {
     Storage(String),
     #[error("database error: {0}")]
     Database(String),
+    /// The world's play is paused; carries the gate's refusal as-is.
+    #[error("play paused")]
+    Paused(Error),
 }
 
 fn to_graphql_error(e: UploadActorImageError) -> Error {
+    if let UploadActorImageError::Paused(refusal) = e {
+        return refusal;
+    }
     let msg = e.to_string();
     if matches!(e, UploadActorImageError::Forbidden) {
         Error::new(msg).extend_with(|_, ext| ext.set("code", "FORBIDDEN"))
@@ -112,6 +119,9 @@ pub async fn upload_actor_image_impl(
     )
     .await
     .map_err(|_| UploadActorImageError::Forbidden)?;
+    refuse_content_if_paused(state, PausableContent::Actor(actor_id))
+        .await
+        .map_err(UploadActorImageError::Paused)?;
 
     let renditions = transcode_to_lore_renditions(&file_bytes).map_err(|e| match e {
         TranscodeError::TooLarge { max, actual } => UploadActorImageError::TooLarge { max, actual },
@@ -214,6 +224,7 @@ pub async fn remove_actor_image_impl(
         ActorPermissionLevel::Editor,
     )
     .await?;
+    refuse_content_if_paused(state, PausableContent::Actor(actor_id)).await?;
 
     let mut conn = state
         .db_pool

@@ -4,6 +4,7 @@
 use async_graphql::{Context, Error, InputObject, Result as GraphQLResult, SimpleObject};
 
 use super::*;
+use crate::graphql::permissioned_entity_resolvers::{PausableContent, refuse_content_if_paused};
 
 // ============================================================================
 // Phase 4.8.1: Actor System Data Mutations (Generic for all systems)
@@ -102,6 +103,7 @@ impl ActorSystemDataMutation {
             crate::graphql::types::ActorPermissionLevel::Editor,
         )
         .await?;
+        refuse_content_if_paused(state, PausableContent::Actor(actor_id)).await?;
 
         let mut conn = state
             .db_pool

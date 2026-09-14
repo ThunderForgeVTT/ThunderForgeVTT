@@ -890,3 +890,78 @@ fn objects_line_of_sight_warning_fires_only_when_non_empty() {
         .is_some()
     );
 }
+
+/// Spec 051 T035: importing onto a scene of a paused world answers 423 with
+/// the pause's code, as the Owner and as a site admin who is a member, and
+/// writes nothing.
+#[tokio::test]
+async fn importing_onto_a_paused_world_is_locked() {
+    use axum::body::{Body, to_bytes};
+    use axum::http::Request;
+    use tower::ServiceExt as _;
+
+    use crate::test_support::{
+        insert_test_scene, insert_test_user, insert_test_world, insert_test_world_member,
+        test_app_state,
+    };
+
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let owner = insert_test_user(&mut conn);
+    let operator = insert_test_user(&mut conn);
+    let world = insert_test_world(&mut conn, owner);
+    insert_test_world_member(&mut conn, world, operator, "Player");
+    let scene = insert_test_scene(&mut conn, world, owner);
+    crate::play_pause::pause_world(
+        &mut conn,
+        operator,
+        world,
+        "Stopping play.",
+        crate::play_pause::TriggerDetail::operator(),
+    )
+    .expect("paused");
+
+    let boundary = "thunderforge-test-boundary";
+    let mut body = format!(
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; \
+         filename=\"map.dd2vtt\"\r\nContent-Type: application/octet-stream\r\n\r\n"
+    )
+    .into_bytes();
+    body.extend(read_fixture("chamber-of-echoing-grief.dd2vtt"));
+    body.extend(format!("\r\n--{boundary}--\r\n").into_bytes());
+
+    for (caller, is_admin) in [(owner, false), (operator, true)] {
+        let app = super::router().with_state(state.clone());
+        let request = Request::builder()
+            .method("POST")
+            .uri(format!("/scenes/{scene}/import/uvtt"))
+            .header(
+                "content-type",
+                format!("multipart/form-data; boundary={boundary}"),
+            )
+            .extension(AuthenticatedUser {
+                user_id: caller,
+                session_id: Uuid::now_v7(),
+                expires_at: Utc::now().naive_utc() + chrono::Duration::hours(1),
+                is_admin,
+                role: "User".to_string(),
+                disabled: false,
+            })
+            .body(Body::from(body.clone()))
+            .unwrap();
+
+        let response = app.oneshot(request).await.expect("router answers");
+        assert_eq!(response.status(), StatusCode::LOCKED);
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json, serde_json::json!({ "code": "WORLD_PLAY_PAUSED" }));
+    }
+
+    use crate::schema::walls;
+    let walls: i64 = walls::table
+        .filter(walls::scene_id.eq(scene))
+        .count()
+        .get_result(&mut conn)
+        .unwrap();
+    assert_eq!(walls, 0, "nothing was imported");
+}

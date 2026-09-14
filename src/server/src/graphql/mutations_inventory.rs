@@ -8,6 +8,7 @@ use diesel::prelude::*;
 use uuid::Uuid;
 
 use crate::auth::actor_permissions::require_actor_permission;
+use crate::graphql::permissioned_entity_resolvers::{PausableContent, refuse_content_if_paused};
 use crate::graphql::types::{ActorPermissionLevel, GraphQLInventoryEntry};
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::ActorInventoryEntry;
@@ -52,6 +53,7 @@ pub async fn add_item_to_inventory_impl(
         ActorPermissionLevel::Editor,
     )
     .await?;
+    refuse_content_if_paused(state, PausableContent::Actor(input.actor_id)).await?;
 
     let mut conn = state
         .db_pool
@@ -161,6 +163,7 @@ pub async fn adjust_inventory_quantity_impl(
         ActorPermissionLevel::Editor,
     )
     .await?;
+    refuse_content_if_paused(state, PausableContent::Actor(actor_id)).await?;
 
     let mut conn = state
         .db_pool
@@ -231,6 +234,7 @@ pub async fn remove_inventory_entry_impl(
         ActorPermissionLevel::Editor,
     )
     .await?;
+    refuse_content_if_paused(state, PausableContent::Actor(actor_id)).await?;
 
     let mut conn = state
         .db_pool

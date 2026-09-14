@@ -8,11 +8,13 @@ use uuid::Uuid;
 
 use crate::auth::item_permissions::require_item_permission;
 use crate::auth::world_membership::is_dm_of_world;
+use crate::graphql::permissioned_entity_resolvers::{PausableContent, refuse_content_if_paused};
 use crate::graphql::types::{
     ActorPermissionLevel, GraphQLItem, GraphQLItemEffect, ItemEffectTrigger, ItemEffectType,
 };
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{ItemEffect, NewItemEffect, NewWorldItem, WorldItem};
+use crate::play_pause::gate::refuse_world_if_paused;
 use crate::schema::{world_item_effects, world_items};
 use crate::state::AppState;
 
@@ -76,6 +78,7 @@ pub async fn create_item_impl(
     if !is_dm_of_world(state, user_id, is_admin, input.world_id).await? {
         return Err(Error::new("Only the DM (Owner or GM) may create items"));
     }
+    refuse_world_if_paused(state, input.world_id).await?;
 
     let mut conn = state
         .db_pool
@@ -117,6 +120,7 @@ pub async fn update_item_impl(
         ActorPermissionLevel::Editor,
     )
     .await?;
+    refuse_content_if_paused(state, PausableContent::Item(input.item_id)).await?;
 
     let item_id = input.item_id;
     let mut conn = state
@@ -166,6 +170,7 @@ pub async fn delete_item_impl(
         ActorPermissionLevel::Owner,
     )
     .await?;
+    refuse_content_if_paused(state, PausableContent::Item(item_id)).await?;
 
     let mut conn = state
         .db_pool
@@ -199,6 +204,7 @@ pub async fn add_item_effect_impl(
         ActorPermissionLevel::Editor,
     )
     .await?;
+    refuse_content_if_paused(state, PausableContent::Item(item_id)).await?;
     validate_formula(&effect.formula)?;
     validate_target(&effect.target)?;
 
@@ -263,6 +269,7 @@ pub async fn update_item_effect_impl(
         ActorPermissionLevel::Editor,
     )
     .await?;
+    refuse_content_if_paused(state, PausableContent::Item(parent_item_id)).await?;
 
     let mut conn = state
         .db_pool
@@ -331,6 +338,7 @@ pub async fn remove_item_effect_impl(
         ActorPermissionLevel::Editor,
     )
     .await?;
+    refuse_content_if_paused(state, PausableContent::Item(parent_item_id)).await?;
 
     let mut conn = state
         .db_pool

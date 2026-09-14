@@ -18,6 +18,7 @@ use crate::auth::world_membership::require_world_member;
 use crate::graphql::types::GraphQLRollResolution;
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::NewRollRecord;
+use crate::play_pause::gate::refuse_if_paused;
 use crate::schema::world_roll_records;
 use crate::state::AppState;
 use thunderforge_dice::{DiceFormula, FormulaError, ResolutionKind};
@@ -56,10 +57,14 @@ pub async fn roll_dice_impl<R: rand::Rng>(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
     let world_id = input.world_id;
-    tokio::task::spawn_blocking(move || require_world_member(&mut conn, user_id, world_id))
-        .await
-        .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("You must be a member of this world to roll dice"))?;
+    tokio::task::spawn_blocking(move || -> GraphQLResult<()> {
+        require_world_member(&mut conn, user_id, world_id)
+            .map_err(|_| Error::new("You must be a member of this world to roll dice"))?;
+        refuse_if_paused(&mut conn, world_id)?;
+        Ok(())
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))??;
 
     let formula =
         DiceFormula::parse(&input.formula).map_err(|e| Error::new(formula_error_message(&e)))?;

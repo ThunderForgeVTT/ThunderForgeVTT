@@ -10,6 +10,7 @@ use crate::graphql::{
     GraphQLCreateWallInput, GraphQLDoorState, GraphQLUpdateWallInput, GraphQLWall, app_state,
     authenticated_user,
 };
+use crate::play_pause::gate::{refusal_or, refuse_scene_if_paused};
 use crate::world_events::{EVENT_CODE_WALL_CHANGED, record_world_event, world_id_for_scene};
 
 #[derive(Default)]
@@ -59,6 +60,7 @@ impl WallMutation {
             )? {
                 return Err(DieselError::NotFound);
             }
+            refuse_scene_if_paused(&mut conn, scene_id)?;
 
             let wall = diesel::insert_into(walls::table)
                 .values((
@@ -98,7 +100,12 @@ impl WallMutation {
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to create wall (scene not found or not owned by you)"))?;
+        .map_err(|e| {
+            refusal_or(
+                e,
+                "Failed to create wall (scene not found or not owned by you)",
+            )
+        })?;
 
         Ok(GraphQLWall::from(inserted_wall))
     }
@@ -156,6 +163,9 @@ impl WallMutation {
             if !authorized {
                 return Err(DieselError::NotFound);
             }
+            if let Some(scene_id) = scene_id {
+                refuse_scene_if_paused(&mut conn, scene_id)?;
+            }
 
             let wall = diesel::update(walls::table.filter(walls::wall_id.eq(wall_id)))
                 .set(update_data)
@@ -180,7 +190,7 @@ impl WallMutation {
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to update wall (not found or not owned by you)"))?;
+        .map_err(|e| refusal_or(e, "Failed to update wall (not found or not owned by you)"))?;
 
         Ok(GraphQLWall::from(updated_wall))
     }
@@ -221,6 +231,9 @@ impl WallMutation {
                 // same as "no such wall" and leaks nothing either way.
                 return Ok(0);
             }
+            if let Some(scene_id) = scene_id {
+                refuse_scene_if_paused(&mut conn, scene_id)?;
+            }
 
             let deleted_count = diesel::delete(walls::table.filter(walls::wall_id.eq(wall_id)))
                 .execute(&mut conn)?;
@@ -246,7 +259,7 @@ impl WallMutation {
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to delete wall"))?;
+        .map_err(|e| refusal_or(e, "Failed to delete wall"))?;
 
         Ok(deleted > 0)
     }

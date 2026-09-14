@@ -85,6 +85,7 @@ use uuid::Uuid;
 
 use crate::auth::world_membership::require_world_member;
 use crate::graphql::{GraphQLResult, app_state, authenticated_user};
+use crate::play_pause::gate::{GateError, refuse_if_paused};
 use crate::world_events::{EVENT_CODE_TOKEN_CHANGED, record_world_event};
 
 /// Why a queued change did not stand. Mirrors
@@ -528,6 +529,27 @@ impl ReconcileMutation {
                     .collect());
             }
         };
+        // Spec 051 R5: a paused world rejects the whole batch, as outcomes
+        // rather than an error — an error would leave the changes queued and
+        // replayed on every reconnect, and eventually applied after a lift.
+        // Before the reconnect mark is taken, so nothing about this batch
+        // outlives it. A pause that cannot be read is an error: those changes
+        // should be retried.
+        match refuse_if_paused(&mut conn, world_id) {
+            Ok(()) => {}
+            Err(GateError::Paused(_)) => {
+                return Ok(changes
+                    .into_iter()
+                    .map(|change| {
+                        GraphQLReconcileOutcome::rejected(
+                            change.local_id,
+                            GraphQLRejectionReason::PlayPaused,
+                        )
+                    })
+                    .collect());
+            }
+            Err(unreadable) => return Err(unreadable.into()),
+        }
         let role = role_from_membership(&member_role);
         let reconnect_seq = take_reconnect_seq(world_id);
 

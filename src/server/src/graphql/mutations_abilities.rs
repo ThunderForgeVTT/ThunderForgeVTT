@@ -10,12 +10,14 @@ use uuid::Uuid;
 
 use crate::auth::ability_permissions::require_ability_permission;
 use crate::auth::world_membership::is_dm_of_world;
+use crate::graphql::permissioned_entity_resolvers::{PausableContent, refuse_content_if_paused};
 use crate::graphql::types::{
     AbilityEffectTrigger, AbilityEffectType, ActorPermissionLevel, GraphQLAbility,
     GraphQLAbilityEffect,
 };
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{AbilityEffect, NewAbilityEffect, NewWorldAbility, WorldAbility};
+use crate::play_pause::gate::refuse_world_if_paused;
 use crate::schema::{world_abilities, world_ability_effects};
 use crate::state::AppState;
 
@@ -149,6 +151,7 @@ pub async fn add_ability_effect_impl(
         ActorPermissionLevel::Editor,
     )
     .await?;
+    refuse_content_if_paused(state, PausableContent::Ability(ability_id)).await?;
 
     validate_formula(&effect.formula)?;
     validate_target(&effect.target)?;
@@ -199,6 +202,7 @@ pub async fn update_ability_effect_impl(
         ActorPermissionLevel::Editor,
     )
     .await?;
+    refuse_content_if_paused(state, PausableContent::Ability(ability_id)).await?;
 
     let mut conn = state
         .db_pool
@@ -241,6 +245,7 @@ pub async fn remove_ability_effect_impl(
         ActorPermissionLevel::Editor,
     )
     .await?;
+    refuse_content_if_paused(state, PausableContent::Ability(ability_id)).await?;
 
     let mut conn = state
         .db_pool
@@ -356,6 +361,7 @@ pub async fn create_ability_impl(
     if !is_dm_of_world(state, user_id, is_admin, input.world_id).await? {
         return Err(Error::new("Only the DM (Owner or GM) may create abilities"));
     }
+    refuse_world_if_paused(state, input.world_id).await?;
 
     let (classification, grade) = require_authorable_type_and_grade(
         state,
@@ -408,6 +414,7 @@ pub async fn update_ability_impl(
         ActorPermissionLevel::Editor,
     )
     .await?;
+    refuse_content_if_paused(state, PausableContent::Ability(input.ability_id)).await?;
 
     let mut conn = state
         .db_pool
@@ -490,6 +497,7 @@ pub async fn delete_ability_impl(
         ActorPermissionLevel::Owner,
     )
     .await?;
+    refuse_content_if_paused(state, PausableContent::Ability(ability_id)).await?;
 
     let mut conn = state
         .db_pool
@@ -541,6 +549,7 @@ pub async fn set_ability_gm_only_impl(
             "Only the DM (Owner or GM) may change an ability's GM-only visibility",
         ));
     }
+    refuse_world_if_paused(state, world_id).await?;
 
     let mut conn = state
         .db_pool

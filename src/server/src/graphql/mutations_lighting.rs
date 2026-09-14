@@ -9,6 +9,7 @@ use crate::graphql::{
     GraphQLCreateLightSourceInput, GraphQLLightSource, GraphQLUpdateLightSourceInput, app_state,
     authenticated_user,
 };
+use crate::play_pause::gate::{refusal_or, refuse_scene_if_paused};
 use crate::world_events::{
     EVENT_CODE_LIGHT_SOURCE_CHANGED, record_world_event, world_id_for_scene,
 };
@@ -56,6 +57,7 @@ impl LightSourceMutation {
             )? {
                 return Err(DieselError::NotFound);
             }
+            refuse_scene_if_paused(&mut conn, scene_id)?;
 
             let light = diesel::insert_into(light_sources::table)
                 .values((
@@ -95,8 +97,11 @@ impl LightSourceMutation {
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| {
-            Error::new("Failed to create light source (scene not found or not owned by you)")
+        .map_err(|e| {
+            refusal_or(
+                e,
+                "Failed to create light source (scene not found or not owned by you)",
+            )
         })?;
 
         Ok(GraphQLLightSource::from(inserted_light))
@@ -150,6 +155,9 @@ impl LightSourceMutation {
             if !authorized {
                 return Err(DieselError::NotFound);
             }
+            if let Some(scene_id) = scene_id {
+                refuse_scene_if_paused(&mut conn, scene_id)?;
+            }
 
             let light =
                 diesel::update(light_sources::table.filter(light_sources::light_id.eq(light_id)))
@@ -175,7 +183,12 @@ impl LightSourceMutation {
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to update light source (not found or not owned by you)"))?;
+        .map_err(|e| {
+            refusal_or(
+                e,
+                "Failed to update light source (not found or not owned by you)",
+            )
+        })?;
 
         Ok(GraphQLLightSource::from(updated_light))
     }
@@ -220,6 +233,9 @@ impl LightSourceMutation {
                 // same as "no such light source" and leaks nothing either way.
                 return Ok(0);
             }
+            if let Some(scene_id) = scene_id {
+                refuse_scene_if_paused(&mut conn, scene_id)?;
+            }
 
             let deleted_count =
                 diesel::delete(light_sources::table.filter(light_sources::light_id.eq(light_id)))
@@ -246,7 +262,7 @@ impl LightSourceMutation {
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to delete light source"))?;
+        .map_err(|e| refusal_or(e, "Failed to delete light source"))?;
 
         Ok(deleted > 0)
     }

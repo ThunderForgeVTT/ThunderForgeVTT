@@ -9,11 +9,13 @@ use diesel::result::Error as DieselError;
 use uuid::Uuid;
 
 use crate::auth::actor_permissions::require_actor_permission;
+use crate::graphql::permissioned_entity_resolvers::{PausableContent, refuse_content_if_paused};
 use crate::graphql::types::ActorPermissionLevel;
 use crate::graphql::{
     GraphQLActorClaim, GraphQLWorldActor, GraphQLWorldMember, app_state, authenticated_user,
 };
 use crate::models::{ActorClaim, NewActorClaim, NewWorldActor, WorldActor, WorldMember};
+use crate::play_pause::gate::{GateError, refuse_if_paused, refuse_world_if_paused};
 use crate::schema::{users, world_actor_claims, world_actors, world_members, worlds};
 use crate::state::AppState;
 
@@ -46,7 +48,14 @@ pub const CLAIM_CHANGED: &str = "CLAIM_CHANGED";
 enum ClaimError {
     AlreadyClaimed,
     ClaimChanged,
+    Paused(GateError),
     Message(String),
+}
+
+impl From<GateError> for ClaimError {
+    fn from(e: GateError) -> Self {
+        ClaimError::Paused(e)
+    }
 }
 
 impl From<diesel::result::Error> for ClaimError {
@@ -69,6 +78,7 @@ impl From<ClaimError> for Error {
                 Error::new("That character's player has changed since this page was loaded")
                     .extend_with(|_, ext| ext.set("code", CLAIM_CHANGED))
             }
+            ClaimError::Paused(refusal) => refusal.into(),
             ClaimError::Message(message) => Error::new(message),
         }
     }
@@ -352,6 +362,7 @@ pub async fn claim_actor_impl(
     let result = tokio::task::spawn_blocking(move || {
         conn.transaction(|conn| -> Result<ActorClaim, ClaimError> {
             let member = require_no_existing_claim(conn, world_id, user_id)?;
+            refuse_if_paused(conn, world_id)?;
 
             let actor = world_actors::table
                 .filter(world_actors::id.eq(actor_id))
@@ -402,6 +413,7 @@ pub async fn create_and_claim_actor_impl(
     let result = tokio::task::spawn_blocking(move || {
         conn.transaction(|conn| -> Result<ActorClaim, ClaimError> {
             let member = require_no_existing_claim(conn, world_id, user_id)?;
+            refuse_if_paused(conn, world_id)?;
 
             let allow: bool = worlds::table
                 .filter(worlds::id.eq(world_id))
@@ -487,6 +499,7 @@ pub async fn set_actor_availability_impl(
         ActorPermissionLevel::Owner,
     )
     .await?;
+    refuse_content_if_paused(state, PausableContent::Actor(actor_id)).await?;
 
     let mut conn = state
         .db_pool
@@ -543,6 +556,7 @@ pub async fn unclaim_actor_impl(
         ActorPermissionLevel::Owner,
     )
     .await?;
+    refuse_content_if_paused(state, PausableContent::Actor(actor_id)).await?;
 
     let mut conn = state
         .db_pool
@@ -623,6 +637,7 @@ pub async fn set_player_character_binding_impl(
                 .extend_with(|_, ext| ext.set("code", "FORBIDDEN")),
         );
     }
+    refuse_world_if_paused(state, world_id).await?;
 
     let mut conn = state
         .db_pool

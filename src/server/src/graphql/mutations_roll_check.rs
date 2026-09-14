@@ -44,6 +44,7 @@ use crate::declared_values::{ActorSlots, declared_values_for_actor};
 use crate::graphql::mutations_roll::{PlaceholderBindingInput, RollDiceInput, roll_dice_impl};
 use crate::graphql::types::{ActorPermissionLevel, GraphQLRollResolution};
 use crate::graphql::{app_state, authenticated_user};
+use crate::play_pause::gate::refuse_world_if_paused;
 use crate::schema::{world_actor_system_data, world_actors, worlds};
 use crate::state::AppState;
 use thunderforge_canvas_core::system_rules::{
@@ -236,6 +237,8 @@ pub async fn roll_check_impl<R: rand::Rng>(
         ActorPermissionLevel::Editor,
     )
     .await?;
+    // Also gated inside `roll_dice_impl`; refused here before any check is resolved.
+    refuse_world_if_paused(state, world_id).await?;
 
     // The id is matched against what the system declared. It is never parsed,
     // never interpolated and never reaches the dice crate — a caller who

@@ -40,6 +40,7 @@ use crate::auth::world_membership::{WorldMembershipError, require_world_member};
 use crate::graphql::types::GraphQLWorldEvent;
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::WorldEvent;
+use crate::play_pause::gate::refuse_if_paused;
 
 /// The most events one catch-up will return.
 ///
@@ -109,6 +110,12 @@ impl WorldEventsSinceQuery {
 
         let result = tokio::task::spawn_blocking(move || {
             require_world_member(&mut conn, user_id, world_id)?;
+            // Spec 051: catching up is how a table rejoins play, so a paused
+            // world refuses it. Asked after membership, so a non-member learns
+            // nothing about whether it is paused.
+            if let Err(refusal) = refuse_if_paused(&mut conn, world_id) {
+                return Ok(Err(refusal));
+            }
 
             // One more than the limit, so "there is more" is answered by the
             // same query rather than by a second count.
@@ -130,7 +137,7 @@ impl WorldEventsSinceQuery {
                 .map_err(|e| WorldMembershipError::Database(e.to_string()))?
                 .unwrap_or(0);
 
-            Ok::<_, WorldMembershipError>((rows, truncated, latest_id))
+            Ok::<_, WorldMembershipError>(Ok((rows, truncated, latest_id)))
         })
         .await
         .map_err(|_| async_graphql::Error::new("catch-up task failed"))?;
@@ -143,7 +150,7 @@ impl WorldEventsSinceQuery {
                     .extend_with(|_, e| e.set("code", "FORBIDDEN"))
             }
             WorldMembershipError::Database(msg) => async_graphql::Error::new(msg),
-        })?;
+        })??;
 
         Ok(GraphQLWorldEventCatchUp {
             events: rows.into_iter().map(GraphQLWorldEvent::from).collect(),

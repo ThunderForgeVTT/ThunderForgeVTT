@@ -33,6 +33,7 @@ use crate::auth::authoring_tools::AUTHORING_TOOLS;
 use crate::auth::world_membership::is_dm_of_world;
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::NewWorldAuthoringToolGrant;
+use crate::play_pause::gate::refuse_if_paused;
 use crate::schema::{world_authoring_tool_grants, world_members};
 use crate::state::AppState;
 
@@ -94,6 +95,7 @@ pub async fn set_authoring_tool_grant_impl(
         .db_pool
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
+    refuse_if_paused(&mut conn, world_id)?;
 
     let tools = tokio::task::spawn_blocking(move || {
         conn.transaction(|conn| -> QueryResult<Vec<String>> {

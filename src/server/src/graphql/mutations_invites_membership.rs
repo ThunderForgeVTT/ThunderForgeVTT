@@ -22,6 +22,7 @@ use super::{
 };
 use crate::auth::world_membership::require_world_member;
 use crate::models::WorldMember;
+use crate::play_pause::gate::refuse_if_paused;
 use crate::schema::world_members;
 use crate::state::AppState;
 use thunderforge_core::models::invites::WorldMemberRole;
@@ -56,6 +57,7 @@ pub async fn update_member_role_impl(
     // world's actual Owner isn't wrongly rejected here.
     let caller_role_str = require_world_member(&mut conn, user_id, world_id)
         .map_err(|_| Error::new("You are not a member of this world"))?;
+    refuse_if_paused(&mut conn, world_id)?;
     let caller_role =
         WorldMemberRole::from_str(&caller_role_str).unwrap_or(WorldMemberRole::Player);
 
@@ -153,6 +155,7 @@ pub async fn remove_member_impl(
     // fix as `update_member_role_impl` above.
     let caller_role_str = require_world_member(&mut conn, caller_id, world_id)
         .map_err(|_| Error::new("You are not a member of this world"))?;
+    refuse_if_paused(&mut conn, world_id)?;
     let caller_role =
         WorldMemberRole::from_str(&caller_role_str).unwrap_or(WorldMemberRole::Player);
 

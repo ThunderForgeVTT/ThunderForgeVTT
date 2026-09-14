@@ -22,6 +22,7 @@ use uuid::Uuid;
 use thunderforge_canvas_core::interaction::{ActivationOutcome, FireMode, validate_draft};
 
 use crate::graphql::{app_state, authenticated_user};
+use crate::play_pause::gate::{refusal_or, refuse_if_paused, refuse_scene_if_paused};
 use crate::world_events::{
     EVENT_CODE_INTERACTION_REQUEST, EVENT_CODE_INTERACTIVE_CHANGED, record_world_event,
     world_id_for_scene,
@@ -336,6 +337,7 @@ pub(crate) async fn create_interactive_impl(
         if !crate::auth::world_membership::is_dm_of_scene(&mut conn, user_id, is_admin, scene_id)? {
             return Err(DieselError::NotFound);
         }
+        refuse_scene_if_paused(&mut conn, scene_id)?;
 
         let row: crate::models::Interactive = diesel::insert_into(interactives::table)
             .values((
@@ -362,7 +364,12 @@ pub(crate) async fn create_interactive_impl(
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to create interactive (scene not found or not yours)"))?;
+    .map_err(|e| {
+        refusal_or(
+            e,
+            "Failed to create interactive (scene not found or not yours)",
+        )
+    })?;
 
     Ok(gm_view(row))
 }
@@ -395,6 +402,7 @@ pub(crate) async fn update_interactive_impl(
         )? {
             return Err(DieselError::NotFound);
         }
+        refuse_scene_if_paused(&mut conn, existing.scene_id)?;
 
         // Validate the *result*, not the patch. A partial edit that leaves
         // an interactive in a shape authoring would have refused is the
@@ -435,7 +443,12 @@ pub(crate) async fn update_interactive_impl(
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to update interactive (not found, not yours, or invalid)"))?;
+    .map_err(|e| {
+        refusal_or(
+            e,
+            "Failed to update interactive (not found, not yours, or invalid)",
+        )
+    })?;
 
     Ok(gm_view(row))
 }
@@ -462,6 +475,7 @@ pub(crate) async fn delete_interactive_impl(
         if !crate::auth::world_membership::is_dm_of_scene(&mut conn, user_id, is_admin, scene_id)? {
             return Err(DieselError::NotFound);
         }
+        refuse_scene_if_paused(&mut conn, scene_id)?;
 
         diesel::delete(interactives::table.filter(interactives::interactive_id.eq(interactive_id)))
             .execute(&mut conn)?;
@@ -471,7 +485,7 @@ pub(crate) async fn delete_interactive_impl(
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to delete interactive (not found or not yours)"))
+    .map_err(|e| refusal_or(e, "Failed to delete interactive (not found or not yours)"))
 }
 
 pub(crate) async fn reset_interactive_impl(
@@ -496,6 +510,7 @@ pub(crate) async fn reset_interactive_impl(
         if !crate::auth::world_membership::is_dm_of_scene(&mut conn, user_id, is_admin, scene_id)? {
             return Err(DieselError::NotFound);
         }
+        refuse_scene_if_paused(&mut conn, scene_id)?;
 
         let now = Utc::now().naive_utc();
         let row: crate::models::Interactive = diesel::update(
@@ -514,7 +529,7 @@ pub(crate) async fn reset_interactive_impl(
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to reset interactive (not found or not yours)"))?;
+    .map_err(|e| refusal_or(e, "Failed to reset interactive (not found or not yours)"))?;
 
     Ok(gm_view(row))
 }
@@ -540,6 +555,7 @@ pub(crate) async fn activate_interactive_impl(
         if actor.role.is_none() && !actor.is_site_admin {
             return Err(Error::new("Not a member of this world"));
         }
+        refuse_if_paused(&mut conn, world_id)?;
         let runs_the_world = actor.runs_the_world();
 
         let outcome = loaded.outcome(runs_the_world);

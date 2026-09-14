@@ -16,6 +16,7 @@ use crate::schema::{compendium_entries, compendiums, world_entry_deltas};
 
 use super::{Content, Delta, DeltaError, DeltaForm, book_list};
 use crate::library::book_list::BookListError;
+use crate::play_pause::gate::refuse_if_paused;
 
 /// Change what an entry says in this world (FR-020, FR-023).
 ///
@@ -227,6 +228,7 @@ pub fn restore_entry(
     name: &str,
 ) -> Result<Delta, DeltaError> {
     book_list::require_book_manager(conn, caller, world_id)?;
+    refuse_if_paused(conn, world_id).map_err(BookListError::Paused)?;
     let held = held_over(conn, world_id, compendium_id, kind, name)?;
     let orphaned_addition = held
         .as_ref()
@@ -255,6 +257,7 @@ fn may_change(
     compendium_id: Uuid,
 ) -> Result<(), DeltaError> {
     book_list::require_book_manager(conn, caller, world_id)?;
+    refuse_if_paused(conn, world_id).map_err(BookListError::Paused)?;
     book_list::require_served(conn, world_id, compendium_id)?;
     Ok(())
 }
@@ -487,6 +490,7 @@ pub fn remove_kept_addition(
     addition_id: Uuid,
 ) -> Result<Delta, DeltaError> {
     book_list::require_book_manager(conn, caller, world_id)?;
+    refuse_if_paused(conn, world_id).map_err(BookListError::Paused)?;
     diesel::delete(
         world_entry_deltas::table
             .filter(world_entry_deltas::id.eq(addition_id))

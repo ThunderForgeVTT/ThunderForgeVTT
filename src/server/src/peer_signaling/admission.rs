@@ -61,6 +61,7 @@ use uuid::Uuid;
 
 use crate::auth::world_membership::{WorldMembershipError, require_world_member};
 use crate::play_field::PlayFieldRegistry;
+use crate::play_pause::gate::GateError;
 use crate::state::AppState;
 
 use super::registry::{
@@ -117,12 +118,19 @@ pub enum PeerSignalingError {
     NotThePlayField,
     #[error("database error: {0}")]
     Database(String),
+    /// Spec 051: the world's play is paused, or whether it is could not be
+    /// read. Carries the gate's own error, so the code reaches the client.
+    #[error("play in this world is paused, or could not be confirmed open")]
+    Paused(GateError),
 }
 
 /// Mirrors `world_sync_plan::to_graphql_error`: async-graphql's blanket
 /// `From<T: Display>` rules out a second `From` impl, so the `FORBIDDEN`
 /// extension is attached here instead.
 pub fn to_graphql_error(e: PeerSignalingError) -> Error {
+    if let PeerSignalingError::Paused(refusal) = e {
+        return refusal.into();
+    }
     let msg = e.to_string();
     if matches!(e, PeerSignalingError::Forbidden) {
         Error::new(msg).extend_with(|_, ext| ext.set("code", "FORBIDDEN"))

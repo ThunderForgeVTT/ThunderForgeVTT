@@ -37,6 +37,7 @@ use crate::graphql::queries::lore_sync::{
 };
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::LoreRepositoryConnection;
+use crate::play_pause::gate::refuse_world_if_paused;
 use crate::schema::lore_repository_connections;
 use crate::state::AppState;
 
@@ -63,6 +64,7 @@ pub async fn begin_lore_repository_connection_impl(
     world_id: Uuid,
 ) -> GraphQLResult<ConnectionGrantHandoff> {
     require_world_owner(state, user_id, is_admin, world_id).await?;
+    refuse_world_if_paused(state, world_id).await?;
 
     // FR-001, checked before the user is sent anywhere. The database enforces
     // it too, but discovering a duplicate *after* someone has installed an
@@ -104,6 +106,7 @@ pub async fn complete_lore_repository_connection_impl(
 ) -> GraphQLResult<GraphQLLoreRepositoryConnection> {
     let world_id = input.world_id;
     require_world_owner(state, user_id, is_admin, world_id).await?;
+    refuse_world_if_paused(state, world_id).await?;
 
     let branch = normalize_branch(input.branch.as_deref())?;
     let directory = normalize_directory(input.directory.as_deref().unwrap_or(DEFAULT_DIRECTORY))?;
@@ -250,6 +253,7 @@ pub async fn acknowledge_lore_sync_notice_impl(
     world_id: Uuid,
 ) -> GraphQLResult<GraphQLLoreRepositoryConnection> {
     require_world_owner(state, user_id, is_admin, world_id).await?;
+    refuse_world_if_paused(state, world_id).await?;
 
     let existing = load_connection(state, world_id)
         .await?
@@ -337,6 +341,7 @@ pub async fn resolve_lore_sync_divergence_impl(
     resolution: DivergenceResolution,
 ) -> GraphQLResult<bool> {
     require_world_owner(state, user_id, is_admin, world_id).await?;
+    refuse_world_if_paused(state, world_id).await?;
 
     let existing = load_connection(state, world_id)
         .await?
@@ -404,6 +409,7 @@ pub async fn accept_lore_incoming_change_impl(
     change_id: Uuid,
 ) -> GraphQLResult<bool> {
     require_world_owner(state, user_id, is_admin, world_id).await?;
+    refuse_world_if_paused(state, world_id).await?;
 
     let connection = load_connection(state, world_id)
         .await?
@@ -442,6 +448,7 @@ pub async fn decline_lore_incoming_change_impl(
     change_id: Uuid,
 ) -> GraphQLResult<bool> {
     require_world_owner(state, user_id, is_admin, world_id).await?;
+    refuse_world_if_paused(state, world_id).await?;
 
     let connection = load_connection(state, world_id)
         .await?
@@ -519,6 +526,7 @@ pub async fn remove_lore_repository_connection_impl(
     world_id: Uuid,
 ) -> GraphQLResult<bool> {
     require_world_owner(state, user_id, is_admin, world_id).await?;
+    refuse_world_if_paused(state, world_id).await?;
 
     let mut conn = state
         .db_pool

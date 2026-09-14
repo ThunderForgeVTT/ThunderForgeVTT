@@ -28,6 +28,7 @@ use uuid::Uuid;
 use crate::auth::world_membership::{is_dm_of_world, require_world_member};
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{Combat, Combatant, NewCombat, NewCombatant};
+use crate::play_pause::gate::refuse_if_paused;
 use crate::schema::{world_combatants, world_combats};
 use crate::state::AppState;
 use crate::world_events::{EVENT_CODE_COMBAT_CHANGED, record_world_event};
@@ -334,6 +335,7 @@ pub async fn start_combat_impl(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
     let world_id = input.world_id;
     let scene_id = input.scene_id;
+    refuse_if_paused(&mut conn, world_id)?;
 
     let combat = tokio::task::spawn_blocking(move || -> Result<GraphQLCombat, String> {
         if let Some(existing) = find_active_combat(&mut conn, world_id)? {
@@ -402,6 +404,7 @@ pub async fn add_combatant_impl(
     if !is_dm_of_world(state, user_id, is_admin, world_id).await? {
         return Err(Error::new("Only the GM may change combat"));
     }
+    refuse_if_paused(&mut conn, world_id)?;
 
     let combat = tokio::task::spawn_blocking(move || -> Result<GraphQLCombat, String> {
         diesel::insert_into(world_combatants::table)
@@ -464,6 +467,7 @@ pub async fn update_combatant_impl(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
     let combat_id = combat.id;
     let world_id = combat.world_id;
+    refuse_if_paused(&mut conn, world_id)?;
 
     let updated = tokio::task::spawn_blocking(move || -> Result<GraphQLCombat, String> {
         let now = Utc::now().naive_utc();
@@ -555,6 +559,7 @@ pub async fn remove_combatant_impl(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
     let combat_id = combat.id;
     let world_id = combat.world_id;
+    refuse_if_paused(&mut conn, world_id)?;
     let was_active_turn = combat.active_combatant_id == Some(combatant_id);
 
     let updated = tokio::task::spawn_blocking(move || -> Result<GraphQLCombat, String> {
@@ -623,6 +628,7 @@ pub async fn advance_turn_impl(
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
     let world_id = combat.world_id;
+    refuse_if_paused(&mut conn, world_id)?;
     let active_id = combat.active_combatant_id;
     let round = combat.round;
 
@@ -681,6 +687,7 @@ pub async fn end_combat_impl(
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
     let world_id = combat.world_id;
+    refuse_if_paused(&mut conn, world_id)?;
 
     let updated = tokio::task::spawn_blocking(move || -> Result<GraphQLCombat, String> {
         diesel::update(world_combats::table.filter(world_combats::id.eq(combat_id)))

@@ -21,6 +21,7 @@ use thunderforge_authz::Role;
 use crate::auth::account_ownership::{AccountOwned, AccountOwnershipError, require_account_owner};
 use crate::auth::world_membership::require_world_member;
 use crate::compendium::store::{self, Compendium, StoredEntry};
+use crate::play_pause::gate::{GateError, refuse_if_paused};
 use crate::schema::{compendium_entries, compendiums, world_books, worlds};
 
 /// One row of the list, as it is stored.
@@ -103,6 +104,10 @@ pub enum BookListError {
     /// The book is not on this world's list at all.
     #[error("that book is not switched on for this world")]
     NotOnTheList,
+    /// The world's play is paused (spec 051); carried whole so the code
+    /// reaches the client.
+    #[error("play paused")]
+    Paused(GateError),
     #[error("database error: {0}")]
     Database(String),
 }
@@ -215,6 +220,7 @@ pub fn switch_on(
     compendium_id: Uuid,
 ) -> Result<BookOnList, BookListError> {
     let owner = require_book_manager(conn, caller, world_id)?;
+    refuse_if_paused(conn, world_id).map_err(BookListError::Paused)?;
     let book = from_the_owners_shelf(conn, owner, compendium_id)?;
     let world_system = system_of_world(conn, world_id)?;
     if world_system.as_deref() != Some(book.system_id.as_str()) {
@@ -408,6 +414,7 @@ pub fn switch_off(
     compendium_id: Uuid,
 ) -> Result<(), BookListError> {
     require_book_manager(conn, caller, world_id)?;
+    refuse_if_paused(conn, world_id).map_err(BookListError::Paused)?;
 
     let removed = diesel::delete(
         world_books::table

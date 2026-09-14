@@ -53,6 +53,7 @@ use thunderforge_canvas_core::party::characters_to_create;
 use uuid::Uuid;
 
 use crate::graphql::{app_state, authenticated_user};
+use crate::play_pause::gate::{GateError, refuse_if_paused};
 use crate::schema::{scenes, tokens, world_actors};
 use crate::state::AppState;
 use crate::world_events::{EVENT_CODE_TOKEN_CHANGED, record_world_event};
@@ -92,6 +93,7 @@ pub struct GraphQLPartyArrival {
 /// because BEGIN and COMMIT can fail on their own.
 #[derive(Debug)]
 enum PartyError {
+    Paused(GateError),
     Other(String),
 }
 
@@ -234,6 +236,7 @@ pub async fn bring_party_to_scene_impl(
                     .to_string()
                     .into());
             }
+            refuse_if_paused(conn, world_id).map_err(PartyError::Paused)?;
 
             let selection = if requested.is_empty() {
                 whole_party(conn, world_id)?
@@ -340,6 +343,7 @@ pub async fn bring_party_to_scene_impl(
 
     match outcome {
         Ok(arrival) => Ok(arrival),
+        Err(PartyError::Paused(refusal)) => Err(refusal.into()),
         Err(PartyError::Other(message)) => Err(Error::new(message)),
     }
 }

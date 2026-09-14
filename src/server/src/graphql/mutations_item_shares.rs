@@ -12,6 +12,7 @@ use uuid::Uuid;
 use crate::auth::item_permissions::effective_item_permission;
 use crate::auth::world_membership::is_dm_of_world;
 use crate::graphql::anonymous::caller_id;
+use crate::graphql::permissioned_entity_resolvers::{PausableContent, refuse_content_if_paused};
 use crate::graphql::share_codes::generate_link_code;
 use crate::graphql::share_rate_limit as rate_limit;
 use crate::graphql::types::{
@@ -19,6 +20,7 @@ use crate::graphql::types::{
 };
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{ItemEffect, ItemShare, NewItemEffect, NewItemShare, NewWorldItem, WorldItem};
+use crate::play_pause::gate::refuse_world_if_paused;
 use crate::schema::{world_item_effects, world_item_shares, world_items};
 use crate::state::AppState;
 
@@ -215,6 +217,7 @@ pub async fn create_item_share_link_impl(
     if level.rank() < ActorPermissionLevel::Owner.rank() {
         return Err(Error::new("Only an Owner-level member may share this item"));
     }
+    refuse_content_if_paused(state, PausableContent::Item(item_id)).await?;
 
     // Spec 039 FR-011/FR-014. Last of the refusals: its message tells the
     // caller to reload, which is only useful once everything else about the
@@ -321,6 +324,7 @@ pub async fn revoke_item_share_link_impl(
             "Only the link's creator or the world's DM may revoke it",
         ));
     }
+    refuse_world_if_paused(state, world_id).await?;
 
     let mut conn = state
         .db_pool
@@ -358,6 +362,7 @@ pub async fn copy_shared_item_to_world_impl(
             "You must hold DM-level access on the destination world to copy an item into it",
         ));
     }
+    refuse_world_if_paused(state, destination_world_id).await?;
 
     let mut conn = state
         .db_pool

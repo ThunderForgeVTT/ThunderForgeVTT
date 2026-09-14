@@ -30,6 +30,7 @@ use uuid::Uuid;
 use crate::auth::world_membership::{is_dm_of_world, require_world_member};
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{ChatMessage, NewChatMessage};
+use crate::play_pause::gate::refuse_if_paused;
 use crate::schema::{users, world_chat_messages};
 use crate::state::AppState;
 use crate::world_events::{EVENT_CODE_CHAT_MESSAGE, record_world_event};
@@ -130,9 +131,10 @@ pub async fn send_chat_message_impl(
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
-    let message = tokio::task::spawn_blocking(move || -> Result<ChatMessage, String> {
+    let message = tokio::task::spawn_blocking(move || -> GraphQLResult<ChatMessage> {
         require_world_member(&mut conn, user_id, world_id)
-            .map_err(|_| "You are not a member of this world".to_string())?;
+            .map_err(|_| Error::new("You are not a member of this world"))?;
+        refuse_if_paused(&mut conn, world_id)?;
 
         // Captured once, at send time — `author_label` is denormalized so
         // history keeps reading correctly after a rename.
@@ -140,7 +142,7 @@ pub async fn send_chat_message_impl(
             .filter(users::id.eq(user_id))
             .select(users::username)
             .first::<String>(&mut conn)
-            .map_err(|e| format!("Failed to load author: {e}"))?;
+            .map_err(|e| Error::new(format!("Failed to load author: {e}")))?;
 
         let new_message = NewChatMessage {
             id: Uuid::now_v7(),
@@ -156,7 +158,7 @@ pub async fn send_chat_message_impl(
             .values(&new_message)
             .returning(ChatMessage::as_returning())
             .get_result::<ChatMessage>(&mut conn)
-            .map_err(|e| format!("Failed to send message: {e}"))?;
+            .map_err(|e| Error::new(format!("Failed to send message: {e}")))?;
 
         // Id only — see this module's doc comment on why the body never
         // rides the bus.
@@ -171,8 +173,7 @@ pub async fn send_chat_message_impl(
         Ok(message)
     })
     .await
-    .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(Error::new)?;
+    .map_err(|_| Error::new("Failed to spawn blocking task"))??;
 
     Ok(message.into())
 }

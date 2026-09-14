@@ -57,6 +57,7 @@ use uuid::Uuid;
 use crate::auth::scene_visibility::visible_scene_ids;
 use crate::auth::world_membership::{WorldMembershipError, require_world_member};
 use crate::graphql::{app_state, authenticated_user};
+use crate::play_pause::gate::{GateError, refuse_if_paused};
 use crate::state::AppState;
 
 /// Upper bound on a single manifest, per the contract's "`held` exceeds a
@@ -147,12 +148,19 @@ pub enum WorldSyncPlanError {
     MalformedFingerprint { id: String, reason: String },
     #[error("database error: {0}")]
     Database(String),
+    /// Spec 051: the world's play is paused, or whether it is could not be
+    /// read. Carries the gate's own error so its code reaches the client.
+    #[error("play in this world is paused, or could not be confirmed open")]
+    Paused(GateError),
 }
 
 /// Mirrors `mutations_assets::to_graphql_error`: async-graphql's blanket
 /// `From<T: Display>` means a second `From` impl would conflict (E0119), so
 /// the `FORBIDDEN` extension is attached at the call site instead.
 pub fn to_graphql_error(e: WorldSyncPlanError) -> Error {
+    if let WorldSyncPlanError::Paused(refusal) = e {
+        return refusal.into();
+    }
     let msg = e.to_string();
     if matches!(e, WorldSyncPlanError::Forbidden) {
         Error::new(msg).extend_with(|_, ext| ext.set("code", "FORBIDDEN"))
@@ -212,6 +220,8 @@ fn authorized_current(
         WorldMembershipError::NotAMember => WorldSyncPlanError::Forbidden,
         WorldMembershipError::Database(msg) => WorldSyncPlanError::Database(msg),
     })?;
+    // Spec 051: a plan is the first thing a table asks on its way into play.
+    refuse_if_paused(conn, world_id).map_err(WorldSyncPlanError::Paused)?;
     let is_dm = thunderforge_authz::Actor {
         role: thunderforge_authz::Role::from_stored(&role),
         is_site_admin: is_admin,

@@ -46,6 +46,7 @@ use crate::auth::lore_permissions::require_lore_permission;
 use crate::graphql::types::{ActorPermissionLevel, GraphQLLoreEntry};
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::LoreEntry;
+use crate::play_pause::gate::{GateError, carried, refuse_if_paused};
 use crate::schema::{world_lore_entries, world_lore_tags};
 use crate::state::AppState;
 
@@ -97,17 +98,23 @@ pub enum LoreTreeError {
     OtherWorld,
     #[error("a tag needs at least one character and at most {MAX_TAG_LENGTH}")]
     BadTag,
+    #[error("play paused")]
+    Paused(GateError),
 }
 
 impl From<DieselError> for LoreTreeError {
     fn from(e: DieselError) -> Self {
-        LoreTreeError::Database(e.to_string())
+        match carried(&e) {
+            Some(refused) => LoreTreeError::Paused(refused),
+            None => LoreTreeError::Database(e.to_string()),
+        }
     }
 }
 
 pub fn to_graphql_error(e: LoreTreeError) -> Error {
     let msg = e.to_string();
     match e {
+        LoreTreeError::Paused(refused) => refused.into(),
         LoreTreeError::Cycle => Error::new(msg).extend_with(|_, ext| ext.set("code", LORE_CYCLE)),
         LoreTreeError::NotFound => {
             Error::new(msg).extend_with(|_, ext| ext.set("code", "NOT_FOUND"))
@@ -210,6 +217,7 @@ pub async fn move_lore_entry_impl(
                 .first::<LoreEntry>(conn)
                 .optional()?
                 .ok_or(LoreTreeError::NotFound)?;
+            refuse_if_paused(conn, entry.world_id).map_err(LoreTreeError::Paused)?;
 
             // Before the check, not after: everything read below has to be
             // read while no competing move can be writing it.
@@ -283,6 +291,11 @@ pub async fn add_lore_tag_impl(
         .map_err(|e| LoreTreeError::Database(e.to_string()))?;
 
     tokio::task::spawn_blocking(move || {
+        let world_id = world_lore_entries::table
+            .filter(world_lore_entries::id.eq(entry_id))
+            .select(world_lore_entries::world_id)
+            .first::<Uuid>(&mut conn)?;
+        refuse_if_paused(&mut conn, world_id)?;
         // `DO NOTHING` rather than a read-then-insert: tagging something that
         // is already tagged is not an error a person should be shown, and the
         // unique constraint is what makes the second attempt harmless without
@@ -331,6 +344,11 @@ pub async fn remove_lore_tag_impl(
         .map_err(|e| LoreTreeError::Database(e.to_string()))?;
 
     tokio::task::spawn_blocking(move || {
+        let world_id = world_lore_entries::table
+            .filter(world_lore_entries::id.eq(entry_id))
+            .select(world_lore_entries::world_id)
+            .first::<Uuid>(&mut conn)?;
+        refuse_if_paused(&mut conn, world_id)?;
         diesel::delete(
             world_lore_tags::table
                 .filter(world_lore_tags::lore_entry_id.eq(entry_id))

@@ -405,14 +405,34 @@ impl SubscriptionRoot {
     /// For now, returns a tick stream that can be tested.
     async fn world_actor_system_data_updated(
         &self,
-        _ctx: &Context<'_>,
-        _world_id: String,
+        ctx: &Context<'_>,
+        world_id: String,
         game_system_id: String,
     ) -> impl Stream<Item = GraphQLResult<GraphQLActorSystemDataEvent>> {
+        use std::pin::Pin;
+        type Boxed = Pin<Box<dyn Stream<Item = GraphQLResult<GraphQLActorSystemDataEvent>> + Send>>;
+
+        // Spec 051: world-scoped by its argument, so it opens only for a
+        // member of a world that is not paused, and ends with a pause, like
+        // the other four. It had no membership check at all before.
+        let app_state = ctx.data::<AppState>().ok().cloned();
+        let world_uuid = uuid::Uuid::parse_str(&world_id).ok();
+        let membership_ok = may_watch_world(ctx, &app_state, &world_uuid).await;
+        if let Some(refusal) = opening_refused(&app_state, &world_uuid, membership_ok).await {
+            return Box::pin(tokio_stream::iter(vec![Err(refusal)])) as Boxed;
+        }
+        let session_id = authenticated_user(ctx).ok().map(|user| user.session_id);
+        let (Some(state), Some(world_uuid), Some(session_id), true) =
+            (app_state, world_uuid, session_id, membership_ok)
+        else {
+            let refusal = Error::new("You must be a member of this world");
+            return Box::pin(tokio_stream::iter(vec![Err(refusal)])) as Boxed;
+        };
+
         // STUB: Return a placeholder stream
         // In production, this would listen to pg_notify and stream real events
         let game_system_id = game_system_id.clone();
-        tokio_stream::StreamExt::map(
+        let stub = tokio_stream::StreamExt::map(
             IntervalStream::new(tokio::time::interval(Duration::from_secs(10))),
             move |_| {
                 Ok(GraphQLActorSystemDataEvent {
@@ -432,6 +452,7 @@ impl SubscriptionRoot {
                     updated_at: chrono::Local::now().naive_utc(),
                 })
             },
-        )
+        );
+        Box::pin(until_stream_must_end(state, session_id, world_uuid, stub)) as Boxed
     }
 }

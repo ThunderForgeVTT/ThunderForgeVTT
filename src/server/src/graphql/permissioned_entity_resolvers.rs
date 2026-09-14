@@ -49,7 +49,54 @@ use uuid::Uuid;
 use crate::auth::world_membership::is_dm_of_world;
 use crate::graphql::types::ActorPermissionLevel;
 use crate::graphql::{app_state, authenticated_user};
+use crate::play_pause::gate::{GateError, refuse_if_paused, refuse_world_if_paused};
+use crate::schema::{world_abilities, world_actors, world_items};
 use crate::state::AppState;
+
+/// World content whose world the gate has to look up.
+pub(crate) enum PausableContent {
+    Actor(Uuid),
+    Item(Uuid),
+    Ability(Uuid),
+}
+
+/// [`refuse_world_if_paused`], for a resolver whose authorization resolved the
+/// content's world without handing it back. Content that does not exist
+/// passes, as a missing scene does: the resolver says "not found".
+pub(crate) async fn refuse_content_if_paused(
+    state: &AppState,
+    content: PausableContent,
+) -> GraphQLResult<()> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    tokio::task::spawn_blocking(move || {
+        let world_id = match content {
+            PausableContent::Actor(id) => world_actors::table
+                .filter(world_actors::id.eq(id))
+                .select(world_actors::world_id)
+                .first::<Uuid>(&mut conn),
+            PausableContent::Item(id) => world_items::table
+                .filter(world_items::id.eq(id))
+                .select(world_items::world_id)
+                .first::<Uuid>(&mut conn),
+            PausableContent::Ability(id) => world_abilities::table
+                .filter(world_abilities::id.eq(id))
+                .select(world_abilities::world_id)
+                .first::<Uuid>(&mut conn),
+        }
+        .optional()
+        .map_err(|e| GateError::Unreadable(e.to_string()))?;
+        match world_id {
+            Some(world_id) => refuse_if_paused(&mut conn, world_id),
+            None => Ok(()),
+        }
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(Error::from)
+}
 
 /// Generates, per declared entity: the input object, the DM gate, the three
 /// testable `*_impl` cores, and the `Query`/`Mutation` resolver pair.
@@ -97,7 +144,7 @@ macro_rules! permissioned_entity_resolvers {
             }
 
             #[doc = concat!(
-                "DM-only. Reading *and* writing ", $article, " ", $noun,
+                "DM-only, returning the content's world. Reading *and* writing ", $article, " ", $noun,
                 "'s ownership block requires DM status — Editor, and even \
                  content-level Owner, is deliberately not sufficient, because \
                  the block is what confers those levels in the first place."
@@ -107,7 +154,7 @@ macro_rules! permissioned_entity_resolvers {
                 caller_id: Uuid,
                 is_admin: bool,
                 content_id: Uuid,
-            ) -> GraphQLResult<()> {
+            ) -> GraphQLResult<Uuid> {
                 let mut conn = state
                     .db_pool
                     .get()
@@ -126,7 +173,7 @@ macro_rules! permissioned_entity_resolvers {
                 .ok_or_else(|| Error::new(concat!($noun_capitalized, " not found")))?;
 
                 if is_dm_of_world(state, caller_id, is_admin, world_id).await? {
-                    Ok(())
+                    Ok(world_id)
                 } else {
                     Err(Error::new(concat!(
                         "Only the DM (Owner or GM) may view or change ",
@@ -177,7 +224,8 @@ macro_rules! permissioned_entity_resolvers {
                 is_admin: bool,
                 input: $input,
             ) -> GraphQLResult<$row> {
-                $gate(state, caller_id, is_admin, input.$input_field).await?;
+                let world_id = $gate(state, caller_id, is_admin, input.$input_field).await?;
+                refuse_world_if_paused(state, world_id).await?;
 
                 let mut conn = state
                     .db_pool
@@ -235,7 +283,8 @@ macro_rules! permissioned_entity_resolvers {
                 content_id: Uuid,
                 user_id: Uuid,
             ) -> GraphQLResult<bool> {
-                $gate(state, caller_id, is_admin, content_id).await?;
+                let world_id = $gate(state, caller_id, is_admin, content_id).await?;
+                refuse_world_if_paused(state, world_id).await?;
 
                 let mut conn = state
                     .db_pool

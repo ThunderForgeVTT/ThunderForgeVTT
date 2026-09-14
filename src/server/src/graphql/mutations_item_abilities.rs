@@ -20,6 +20,7 @@ use crate::ability_vocabulary::{Binds, for_system};
 use crate::auth::world_membership::{is_dm_of_world, require_world_member};
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{NewItemAbility, WorldAbility};
+use crate::play_pause::gate::refuse_world_if_paused;
 use crate::schema::{world_abilities, world_item_abilities, world_items, worlds};
 
 /// One ability an item carries, as a sheet needs it.
@@ -96,6 +97,7 @@ pub async fn attach_ability_to_item_impl(
             "Only the DM (Owner or GM) may attach abilities to items",
         ));
     }
+    refuse_world_if_paused(state, world_id).await?;
 
     // FR-019: the binding facet decides, server-side. A type that binds to a
     // character is refused here even when the caller skipped the interface

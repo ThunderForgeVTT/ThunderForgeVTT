@@ -33,6 +33,7 @@ use crate::graphql::share_codes::generate_link_code;
 use crate::graphql::share_rate_limit as rate_limit;
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{Collection, CollectionMember, CollectionShare, NewCollectionShare};
+use crate::play_pause::gate::refuse_if_paused;
 use crate::schema::{world_collection_members, world_collection_shares, world_collections};
 use crate::state::AppState;
 
@@ -186,6 +187,13 @@ pub async fn create_collection_share_link_impl(
     if created_by != user_id && !is_dm_of_world(state, user_id, is_admin, world_id).await? {
         return Err(Error::new("Collection not found"));
     }
+    {
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+        refuse_if_paused(&mut conn, world_id)?;
+    }
 
     let members = load_members(state, collection_id).await?;
     if members.is_empty() {
@@ -298,6 +306,7 @@ pub async fn revoke_collection_share_link_impl(
         .db_pool
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
+    refuse_if_paused(&mut conn, world_id)?;
 
     tokio::task::spawn_blocking(move || {
         diesel::update(
@@ -531,6 +540,15 @@ impl CollectionShareMutation {
     ) -> GraphQLResult<crate::collections::copy::CopyReceipt> {
         let state = app_state(ctx)?;
         let user = authenticated_user(ctx)?;
+        // The impl asks this membership again; the gate needs it first so a
+        // non-DM learns nothing about the destination.
+        if is_dm_of_world(state, user.user_id, user.is_admin, destination_world_id).await? {
+            let mut conn = state
+                .db_pool
+                .get()
+                .map_err(|_| Error::new("Failed to get DB connection"))?;
+            refuse_if_paused(&mut conn, destination_world_id)?;
+        }
         crate::collections::copy::copy_shared_collection_to_world_impl(
             state,
             user.user_id,

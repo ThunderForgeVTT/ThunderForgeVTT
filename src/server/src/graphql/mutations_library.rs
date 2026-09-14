@@ -361,7 +361,10 @@ fn page_of_world(
 /// book was read as pathfinder2e and this world runs dnd5e" can act on it,
 /// and one told "that failed" cannot.
 fn refusal(e: BookListError) -> Error {
-    Error::new(e.to_string())
+    match e {
+        BookListError::Paused(refused) => refused.into(),
+        e => Error::new(e.to_string()),
+    }
 }
 
 fn connection(
@@ -519,7 +522,10 @@ fn require_content_manager(
 }
 
 fn delta_refusal(e: DeltaError) -> Error {
-    Error::new(e.to_string())
+    match e {
+        DeltaError::Book(e) => refusal(e),
+        e => Error::new(e.to_string()),
+    }
 }
 
 /// What a person sent as an entry's content: fields or prose, and exactly one.

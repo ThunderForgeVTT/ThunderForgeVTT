@@ -24,6 +24,7 @@
 use diesel::prelude::*;
 
 use crate::AppState;
+use crate::play_pause::gate::refuse_world_if_paused;
 use async_graphql::{Error, Result as GraphQLResult};
 use uuid::Uuid;
 
@@ -76,7 +77,8 @@ pub async fn set_enabled(
     scene_id: Uuid,
     enabled: bool,
 ) -> GraphQLResult<bool> {
-    require_game_master(state, user_id, is_admin, scene_id).await?;
+    let world_id = require_game_master(state, user_id, is_admin, scene_id).await?;
+    refuse_world_if_paused(state, world_id).await?;
 
     let mut conn = state
         .db_pool
@@ -105,7 +107,8 @@ pub async fn reset(
     scene_id: Uuid,
     for_user: Option<Uuid>,
 ) -> GraphQLResult<i32> {
-    require_game_master(state, user_id, is_admin, scene_id).await?;
+    let world_id = require_game_master(state, user_id, is_admin, scene_id).await?;
+    refuse_world_if_paused(state, world_id).await?;
 
     let mut conn = state
         .db_pool

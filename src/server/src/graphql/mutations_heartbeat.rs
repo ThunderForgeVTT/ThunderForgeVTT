@@ -33,6 +33,7 @@ use uuid::Uuid;
 
 use crate::auth::world_membership::require_world_member;
 use crate::graphql::{GraphQLResult, app_state, authenticated_user};
+use crate::play_pause::gate::refuse_if_paused;
 
 /// One participant's presence, as everyone else sees it.
 #[derive(SimpleObject, Clone, Debug, PartialEq, Eq)]
@@ -83,6 +84,10 @@ impl HeartbeatMutation {
 
         require_world_member(&mut conn, user_id, world_id)
             .map_err(|_| async_graphql::Error::new("Not a member of this world"))?;
+        // Spec 051 R5: refused with WORLD_PLAY_PAUSED, which the client reads
+        // as *paused* and never as a failed beat that would start offline
+        // queueing.
+        refuse_if_paused(&mut conn, world_id)?;
 
         // In memory, not in a row. A beat is a statement about *now*, and
         // its answer is worthless one beat later — writing it to Postgres

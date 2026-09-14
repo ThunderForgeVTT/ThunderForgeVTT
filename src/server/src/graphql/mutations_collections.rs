@@ -23,6 +23,7 @@ use crate::collections::{MAX_MEMBERS, is_known_member_type, membership};
 use crate::compendium::origin::{ContentOrigin, LeaveRefusal, refusal_from_database};
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{Collection, CollectionMember, NewCollection, NewCollectionMember};
+use crate::play_pause::gate::refuse_if_paused;
 use crate::schema::{world_collection_members, world_collections};
 use crate::state::AppState;
 
@@ -138,6 +139,7 @@ pub async fn create_collection_impl(
         .db_pool
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
+    refuse_if_paused(&mut conn, input.world_id)?;
 
     let new_collection = NewCollection {
         id: Uuid::now_v7(),
@@ -167,7 +169,8 @@ pub async fn update_collection_impl(
     is_admin: bool,
     input: UpdateCollectionInput,
 ) -> GraphQLResult<Collection> {
-    require_collection_authority(state, user_id, is_admin, input.collection_id).await?;
+    let world_id =
+        require_collection_authority(state, user_id, is_admin, input.collection_id).await?;
 
     if let Some(name) = &input.name
         && name.trim().is_empty()
@@ -179,6 +182,7 @@ pub async fn update_collection_impl(
         .db_pool
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
+    refuse_if_paused(&mut conn, world_id)?;
 
     tokio::task::spawn_blocking(move || {
         diesel::update(
@@ -215,12 +219,13 @@ pub async fn delete_collection_impl(
     is_admin: bool,
     collection_id: Uuid,
 ) -> GraphQLResult<bool> {
-    require_collection_authority(state, user_id, is_admin, collection_id).await?;
+    let world_id = require_collection_authority(state, user_id, is_admin, collection_id).await?;
 
     let mut conn = state
         .db_pool
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
+    refuse_if_paused(&mut conn, world_id)?;
 
     tokio::task::spawn_blocking(move || {
         diesel::delete(world_collections::table.filter(world_collections::id.eq(collection_id)))
@@ -294,6 +299,7 @@ pub async fn add_collection_member_impl(
         .db_pool
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
+    refuse_if_paused(&mut conn, world_id)?;
 
     let collection_id = input.collection_id;
     let member_type = input.member_type.clone();
@@ -360,12 +366,13 @@ pub async fn remove_collection_member_impl(
     collection_id: Uuid,
     member_id: Uuid,
 ) -> GraphQLResult<bool> {
-    require_collection_authority(state, user_id, is_admin, collection_id).await?;
+    let world_id = require_collection_authority(state, user_id, is_admin, collection_id).await?;
 
     let mut conn = state
         .db_pool
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
+    refuse_if_paused(&mut conn, world_id)?;
 
     tokio::task::spawn_blocking(move || {
         diesel::delete(

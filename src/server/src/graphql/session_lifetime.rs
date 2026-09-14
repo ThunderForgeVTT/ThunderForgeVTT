@@ -49,7 +49,7 @@ use std::task::Poll;
 use std::time::Duration;
 
 use crate::AppState;
-use crate::play_pause::gate::{GateError, PlayPaused, refuse_if_paused};
+use crate::play_pause::gate::{PlayPaused, refuse_world_if_paused};
 use crate::schema::user_sessions;
 
 /// How long a revoked session's stream may keep running.
@@ -166,12 +166,8 @@ pub async fn refuse_opening_if_paused(
     state: &AppState,
     world_id: uuid::Uuid,
 ) -> Result<(), async_graphql::Error> {
-    let Ok(mut conn) = state.db_pool.get() else {
-        return Err(GateError::Unreadable("no database connection".into()).into());
-    };
-    tokio::task::spawn_blocking(move || refuse_if_paused(&mut conn, world_id))
+    refuse_world_if_paused(state, world_id)
         .await
-        .map_err(|e| GateError::Unreadable(e.to_string()))?
         .map_err(Into::into)
 }
 

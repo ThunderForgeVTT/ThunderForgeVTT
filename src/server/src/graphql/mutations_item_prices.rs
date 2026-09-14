@@ -23,6 +23,7 @@ use diesel::prelude::*;
 use uuid::Uuid;
 
 use crate::auth::item_permissions::require_item_permission;
+use crate::graphql::permissioned_entity_resolvers::{PausableContent, refuse_content_if_paused};
 use crate::graphql::types::{ActorPermissionLevel, GraphQLItemPrice};
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{NewWorldItemPrice, WorldItemPrice};
@@ -62,6 +63,7 @@ pub async fn set_item_price_impl(
         ActorPermissionLevel::Editor,
     )
     .await?;
+    refuse_content_if_paused(state, PausableContent::Item(input.item_id)).await?;
 
     let mut conn = state
         .db_pool
@@ -122,6 +124,7 @@ pub async fn clear_item_price_impl(
         ActorPermissionLevel::Editor,
     )
     .await?;
+    refuse_content_if_paused(state, PausableContent::Item(item_id)).await?;
 
     let mut conn = state
         .db_pool

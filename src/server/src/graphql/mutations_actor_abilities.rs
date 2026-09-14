@@ -15,9 +15,11 @@ use uuid::Uuid;
 
 use crate::auth::actor_permissions::require_actor_permission;
 use crate::auth::world_membership::is_dm_of_world;
+use crate::graphql::permissioned_entity_resolvers::{PausableContent, refuse_content_if_paused};
 use crate::graphql::types::{ActorPermissionLevel, GraphQLActorAbilityEntry};
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{ActorAbilityEntry, NewActorAbilityEntry};
+use crate::play_pause::gate::refuse_world_if_paused;
 use crate::schema::{world_abilities, world_actor_abilities, world_actors};
 use crate::state::AppState;
 
@@ -164,6 +166,7 @@ pub async fn attach_ability_to_actor_impl(
     .await?;
 
     let actor_world = actor_world_id(state, input.actor_id).await?;
+    refuse_world_if_paused(state, actor_world).await?;
 
     let mut conn = state
         .db_pool
@@ -279,6 +282,7 @@ pub async fn detach_ability_from_actor_impl(
         ActorPermissionLevel::Editor,
     )
     .await?;
+    refuse_content_if_paused(state, PausableContent::Actor(actor_id)).await?;
 
     let mut conn = state
         .db_pool

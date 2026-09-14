@@ -143,6 +143,10 @@ pub enum MapImportError {
     MissingFileField,
     #[error("storage error: {0}")]
     Storage(String),
+    /// Spec 051: the scene's world is paused, or whether it is could not be
+    /// read.
+    #[error("play in this world is paused, or could not be confirmed open")]
+    Paused(crate::play_pause::gate::GateError),
 }
 
 /// T020 (User Story 3): the shape of a successful import's response.

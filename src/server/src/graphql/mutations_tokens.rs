@@ -19,6 +19,7 @@ use diesel::result::Error as DieselError;
 use crate::graphql::{
     GraphQLCreateTokenInput, GraphQLToken, GraphQLUpdateTokenInput, app_state, authenticated_user,
 };
+use crate::play_pause::gate::{refusal_or, refuse_scene_if_paused};
 use crate::scene_fingerprint::refresh_scene_fingerprint;
 use crate::world_events::{EVENT_CODE_TOKEN_CHANGED, record_world_event, world_id_for_scene};
 use async_graphql::MaybeUndefined;
@@ -84,6 +85,7 @@ impl TokenMutation {
             )? {
                 return Err(DieselError::NotFound);
             }
+            refuse_scene_if_paused(&mut conn, scene_id)?;
 
             let token = diesel::insert_into(tokens::table)
                 .values((
@@ -130,7 +132,12 @@ impl TokenMutation {
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to create token (scene not found or not owned by you)"))?;
+        .map_err(|e| {
+            refusal_or(
+                e,
+                "Failed to create token (scene not found or not owned by you)",
+            )
+        })?;
 
         Ok(inserted_token)
     }
@@ -216,6 +223,7 @@ impl TokenMutation {
                 )? {
                     return Err(DieselError::NotFound);
                 }
+                refuse_scene_if_paused(conn, existing_scene)?;
 
                 if setting_primary {
                     // Determine the owner this update will apply to: the
@@ -266,7 +274,7 @@ impl TokenMutation {
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to update token (not found or not owned by you)"))?;
+        .map_err(|e| refusal_or(e, "Failed to update token (not found or not owned by you)"))?;
 
         crate::graphql::token_art::token_with_art(state, updated_token, user_id, is_admin).await
     }
@@ -307,6 +315,9 @@ impl TokenMutation {
                 // "no such token" and leaks nothing either way.
                 return Ok(0);
             }
+            if let Some(scene_id) = scene_id {
+                refuse_scene_if_paused(&mut conn, scene_id)?;
+            }
 
             let deleted_count = diesel::delete(tokens::table.filter(tokens::token_id.eq(token_id)))
                 .execute(&mut conn)?;
@@ -338,7 +349,7 @@ impl TokenMutation {
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to delete token"))?;
+        .map_err(|e| refusal_or(e, "Failed to delete token"))?;
 
         Ok(deleted > 0)
     }
@@ -386,15 +397,21 @@ impl TokenMutation {
             .map_err(|_| Error::new("Failed to get DB connection"))?;
         let existing = tokio::task::spawn_blocking(move || {
             use crate::schema::tokens;
-            tokens::table
+            let token = tokens::table
                 .filter(tokens::token_id.eq(token_id))
                 .select(crate::models::Token::as_select())
                 .first::<crate::models::Token>(&mut conn)
-                .optional()
+                .optional()?;
+            // Before the control check, so a Game Master or admin moving a
+            // token they do not control still meets the pause.
+            if let Some(token) = &token {
+                refuse_scene_if_paused(&mut conn, token.scene_id)?;
+            }
+            Ok::<_, DieselError>(token)
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to load token"))?
+        .map_err(|e| refusal_or(e, "Failed to load token"))?
         .ok_or_else(|| Error::new("Move token failed (not found or not controlled by you)"))?;
 
         let is_direct_owner = existing.owner_user_id == Some(user_id);
@@ -478,6 +495,17 @@ impl TokenMutation {
         let updated_token = tokio::task::spawn_blocking(move || {
             use crate::schema::tokens;
 
+            // Gated before the ownership filter below, so every caller meets
+            // the pause, not only the token's owner.
+            if let Some(scene_id) = tokens::table
+                .filter(tokens::token_id.eq(token_id))
+                .select(tokens::scene_id)
+                .first::<uuid::Uuid>(&mut conn)
+                .optional()?
+            {
+                refuse_scene_if_paused(&mut conn, scene_id)?;
+            }
+
             let token = diesel::update(
                 tokens::table
                     .filter(tokens::token_id.eq(token_id))
@@ -508,7 +536,7 @@ impl TokenMutation {
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to set photo (not your primary token)"))?;
+        .map_err(|e| refusal_or(e, "Failed to set photo (not your primary token)"))?;
 
         crate::graphql::token_art::token_with_art(state, updated_token, user_id, auth_user.is_admin)
             .await
@@ -571,6 +599,7 @@ pub(crate) async fn set_token_name_visibility_impl(
             if !crate::auth::world_membership::is_dm_of_scene(conn, user_id, is_admin, scene_id)? {
                 return Err(DieselError::NotFound);
             }
+            refuse_scene_if_paused(conn, scene_id)?;
 
             let token = diesel::update(tokens::table.filter(tokens::token_id.eq(token_id)))
                 .set(tokens::name_visible_to_players.eq(visible))
@@ -596,8 +625,9 @@ pub(crate) async fn set_token_name_visibility_impl(
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| {
-        Error::new(
+    .map_err(|e| {
+        refusal_or(
+            e,
             "Failed to change the token's name visibility (not found or not yours to change)",
         )
     })

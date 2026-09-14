@@ -27,6 +27,7 @@ use diesel::prelude::*;
 use uuid::Uuid;
 
 use crate::schema::{scenes, world_play_pauses};
+use crate::state::AppState;
 
 /// The extension code every refusal because a world is paused carries.
 pub const WORLD_PLAY_PAUSED: &str = "WORLD_PLAY_PAUSED";
@@ -78,6 +79,51 @@ impl From<GateError> for Error {
     }
 }
 
+/// A refusal carried out of a closure whose error type is diesel's.
+///
+/// Most resolvers authorise inside a `spawn_blocking` closure that returns
+/// `QueryResult`, and the entity lookup that says which world a wall or a
+/// token is in happens there too. Converting a [`GateError`] into a diesel
+/// error lets the gate be one `?` beside that lookup, and aborts a surrounding
+/// transaction as any other error would. [`refusal_or`] takes it back out on
+/// the far side, where the resolver would otherwise have flattened every
+/// error into one message and lost the code.
+#[derive(Debug)]
+pub struct CarriedRefusal(pub GateError);
+
+impl std::fmt::Display for CarriedRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("refused by the play-pause gate")
+    }
+}
+
+impl std::error::Error for CarriedRefusal {}
+
+impl From<GateError> for diesel::result::Error {
+    fn from(e: GateError) -> Self {
+        diesel::result::Error::QueryBuilderError(Box::new(CarriedRefusal(e)))
+    }
+}
+
+/// The gate's refusal, if `e` carries one.
+pub fn carried(e: &diesel::result::Error) -> Option<GateError> {
+    match e {
+        diesel::result::Error::QueryBuilderError(inner) => inner
+            .downcast_ref::<CarriedRefusal>()
+            .map(|carried| carried.0.clone()),
+        _ => None,
+    }
+}
+
+/// The gate's refusal if `e` carries one, and `message` otherwise: the
+/// `map_err` a resolver that flattens its errors uses instead of `|_|`.
+pub fn refusal_or(e: diesel::result::Error, message: &str) -> Error {
+    match carried(&e) {
+        Some(refusal) => refusal.into(),
+        None => Error::new(message),
+    }
+}
+
 /// Refuse if `world_id`'s play is paused.
 ///
 /// Reads the active pause's partial unique index and nothing else.
@@ -91,6 +137,18 @@ pub fn refuse_if_paused(conn: &mut PgConnection, world_id: Uuid) -> Result<(), G
         .into()),
         Err(e) => Err(GateError::Unreadable(e.to_string())),
     }
+}
+
+/// [`refuse_if_paused`], for async code that holds a world id but no
+/// connection. Takes one from the pool; a pool that gives none refuses, as an
+/// unreadable answer does.
+pub async fn refuse_world_if_paused(state: &AppState, world_id: Uuid) -> Result<(), GateError> {
+    let Ok(mut conn) = state.db_pool.get() else {
+        return Err(GateError::Unreadable("no database connection".into()));
+    };
+    tokio::task::spawn_blocking(move || refuse_if_paused(&mut conn, world_id))
+        .await
+        .map_err(|e| GateError::Unreadable(e.to_string()))?
 }
 
 /// [`refuse_if_paused`], for calls that carry a scene rather than a world.

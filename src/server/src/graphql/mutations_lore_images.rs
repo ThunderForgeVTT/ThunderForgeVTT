@@ -16,7 +16,8 @@ use crate::auth::lore_permissions::require_lore_permission;
 use crate::graphql::types::{ActorPermissionLevel, GraphQLLoreImageAsset};
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{LoreImageAsset, NewLoreImageAsset};
-use crate::schema::world_lore_image_assets;
+use crate::play_pause::gate::{GateError, refuse_if_paused};
+use crate::schema::{world_lore_entries, world_lore_image_assets};
 use crate::state::AppState;
 use crate::storage::rustfs::{RustFsConfig, write_object};
 use crate::storage::transcode::{TranscodeError, transcode_to_lore_renditions};
@@ -33,9 +34,14 @@ pub enum UploadLoreImageError {
     Storage(String),
     #[error("database error: {0}")]
     Database(String),
+    #[error("play paused")]
+    Paused(GateError),
 }
 
 fn to_graphql_error(e: UploadLoreImageError) -> Error {
+    if let UploadLoreImageError::Paused(refused) = e {
+        return refused.into();
+    }
     let msg = e.to_string();
     if matches!(e, UploadLoreImageError::Forbidden) {
         Error::new(msg).extend_with(|_, ext| ext.set("code", "FORBIDDEN"))
@@ -70,6 +76,22 @@ pub async fn upload_lore_image_impl(
     )
     .await
     .map_err(|_| UploadLoreImageError::Forbidden)?;
+
+    // Before the object store is written: the entry's world, then the gate.
+    let mut gate_conn = state
+        .db_pool
+        .get()
+        .map_err(|e| UploadLoreImageError::Database(e.to_string()))?;
+    tokio::task::spawn_blocking(move || {
+        let world_id = world_lore_entries::table
+            .filter(world_lore_entries::id.eq(lore_entry_id))
+            .select(world_lore_entries::world_id)
+            .first::<Uuid>(&mut gate_conn)
+            .map_err(|e| UploadLoreImageError::Database(e.to_string()))?;
+        refuse_if_paused(&mut gate_conn, world_id).map_err(UploadLoreImageError::Paused)
+    })
+    .await
+    .map_err(|e| UploadLoreImageError::Database(e.to_string()))??;
 
     // 2. Decode + produce both WebP renditions, enforcing
     //    MAX_LORE_IMAGE_UPLOAD_BYTES (FR-010).
