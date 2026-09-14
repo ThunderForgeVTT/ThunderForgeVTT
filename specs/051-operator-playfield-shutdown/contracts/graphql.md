@@ -61,8 +61,8 @@ type PlayPause {
 }
 type PauseTrigger {
   kind: PauseTriggerKind!   # TAKEDOWN | OPERATOR | ABUSE_REPORT
-  moderationActionId: UUID  entityType: String  entityId: UUID  note: String  recordedAt: DateTime!
-}
+  moderationActionId: UUID  caseId: UUID  entityType: String  entityId: UUID  note: String  recordedAt: DateTime!
+}  # caseId: the moderation case the action belongs to, which the portal links to
 type OperatorName { id: UUID!  name: String! }
 type PauseCandidateWorld { id: UUID!  name: String!  ownerName: String!  playedNow: Boolean!  paused: Boolean! }
 ```

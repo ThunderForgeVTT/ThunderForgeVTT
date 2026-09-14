@@ -243,3 +243,66 @@ async fn an_operator_decides_a_request_and_a_second_is_told_who_did() {
         .await;
     assert_eq!(code(&missing), "REQUEST_NOT_FOUND");
 }
+
+/// T048: a takedown's trigger names its moderation case, which is what the
+/// portal opens a case by; the action id alone does not reach it.
+#[tokio::test]
+#[allow(clippy::await_holding_lock)]
+async fn a_takedown_trigger_names_the_case_an_operator_can_open() {
+    use crate::graphql::mutations_moderation::{
+        SubmitTakedownNoticeInput, submit_takedown_notice_impl,
+    };
+    use crate::graphql::types::ModerationEntityType;
+
+    let _lock = crate::play_pause::test_lock();
+    let state = test_app_state();
+    let (operator, world, scene) = {
+        let mut conn = state.db_pool.get().unwrap();
+        let operator = insert_test_user(&mut conn);
+        let owner = insert_test_user(&mut conn);
+        let world = insert_test_world(&mut conn, owner);
+        let scene = crate::test_support::insert_test_scene(&mut conn, world, owner);
+        crate::play_pause::live_play::mark_live(&mut conn, world).unwrap();
+        (operator, world, scene)
+    };
+    let case = submit_takedown_notice_impl(
+        &state,
+        SubmitTakedownNoticeInput {
+            entity_type: ModerationEntityType::Scene,
+            entity_id: scene,
+            claimant_name: "Case Link Claimant".into(),
+            claimant_contact: "claimant@example.test".into(),
+            copyrighted_work_description: "A map the claimant drew".into(),
+            infringing_material_location: "A scene being played".into(),
+            good_faith_statement: true,
+            accuracy_statement: true,
+            signature: "Case Link Claimant".into(),
+        },
+    )
+    .await
+    .expect("the takedown is filed");
+
+    let listed = schema(state.clone())
+        .execute(
+            Request::new(
+                "{ playPauseRequests(first: 200) { nodes { worldId \
+                 triggers { kind moderationActionId caseId entityId } } } }",
+            )
+            .data(caller(operator, true)),
+        )
+        .await;
+    assert!(listed.errors.is_empty(), "{:?}", listed.errors);
+    let listed = listed.data.into_json().unwrap();
+    let request = listed["playPauseRequests"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["worldId"] == world.to_string())
+        .expect("the takedown raised a request")
+        .clone();
+    let trigger = &request["triggers"][0];
+    assert_eq!(trigger["kind"], "TAKEDOWN");
+    assert_eq!(trigger["entityId"], scene.to_string());
+    assert_eq!(trigger["caseId"], case.case_id.to_string());
+    assert_ne!(trigger["caseId"], trigger["moderationActionId"]);
+}

@@ -27,7 +27,8 @@ use crate::play_pause::models::{
     PauseRequest, PauseRequestState, PauseTrigger, PauseTriggerKind, PlayPause,
 };
 use crate::schema::{
-    users, world_play_pause_requests, world_play_pause_triggers, world_play_pauses, worlds,
+    content_moderation_actions, users, world_play_pause_requests, world_play_pause_triggers,
+    world_play_pauses, worlds,
 };
 
 /// A page of `playPauses` when the caller names none.
@@ -74,6 +75,9 @@ impl From<PauseTriggerKind> for GraphQLPauseTriggerKind {
 pub struct GraphQLPauseTrigger {
     pub kind: GraphQLPauseTriggerKind,
     pub moderation_action_id: Option<Uuid>,
+    /// The moderation case `moderation_action_id` belongs to, so an operator
+    /// can open it: cases are opened by case, not by action.
+    pub case_id: Option<Uuid>,
     pub entity_type: Option<String>,
     pub entity_id: Option<Uuid>,
     pub note: Option<String>,
@@ -85,6 +89,7 @@ impl From<PauseTrigger> for GraphQLPauseTrigger {
         Self {
             kind: trigger.kind.into(),
             moderation_action_id: trigger.moderation_action_id,
+            case_id: None,
             entity_type: trigger.entity_type,
             entity_id: trigger.entity_id,
             note: trigger.note,
@@ -205,18 +210,16 @@ pub(crate) fn play_pauses_for_graphql(
     let world_ids: Vec<Uuid> = rows.iter().map(|row| row.world_id).collect();
 
     let mut triggers: HashMap<Uuid, Vec<GraphQLPauseTrigger>> = HashMap::new();
-    for trigger in world_play_pause_triggers::table
+    let rows_of_triggers = world_play_pause_triggers::table
         .filter(world_play_pause_triggers::pause_id.eq_any(&pause_ids))
         .order((
             world_play_pause_triggers::recorded_at.asc(),
             world_play_pause_triggers::id.asc(),
         ))
         .select(PauseTrigger::as_select())
-        .load(conn)?
-    {
-        if let Some(pause_id) = trigger.pause_id {
-            triggers.entry(pause_id).or_default().push(trigger.into());
-        }
+        .load(conn)?;
+    for (owner, trigger) in with_case_ids(conn, rows_of_triggers, |t| t.pause_id)? {
+        triggers.entry(owner).or_default().push(trigger);
     }
 
     let existing = existing_worlds(conn, &world_ids)?;
@@ -248,6 +251,42 @@ pub(crate) fn play_pauses_for_graphql(
         .collect())
 }
 
+/// `rows` as an operator reads them, each paired with the pause or request
+/// `owner` says it belongs to, and each takedown's moderation case filled in
+/// from its action — one query however many triggers.
+fn with_case_ids(
+    conn: &mut PgConnection,
+    rows: Vec<PauseTrigger>,
+    owner: impl Fn(&PauseTrigger) -> Option<Uuid>,
+) -> QueryResult<Vec<(Uuid, GraphQLPauseTrigger)>> {
+    let action_ids: Vec<Uuid> = rows.iter().filter_map(|t| t.moderation_action_id).collect();
+    let cases: HashMap<Uuid, Uuid> = if action_ids.is_empty() {
+        HashMap::new()
+    } else {
+        content_moderation_actions::table
+            .filter(content_moderation_actions::id.eq_any(&action_ids))
+            .select((
+                content_moderation_actions::id,
+                content_moderation_actions::case_id,
+            ))
+            .load::<(Uuid, Uuid)>(conn)?
+            .into_iter()
+            .collect()
+    };
+    Ok(rows
+        .into_iter()
+        .filter_map(|row| {
+            let owner = owner(&row)?;
+            let case_id = row
+                .moderation_action_id
+                .and_then(|action| cases.get(&action).copied());
+            let mut trigger = GraphQLPauseTrigger::from(row);
+            trigger.case_id = case_id;
+            Some((owner, trigger))
+        })
+        .collect())
+}
+
 fn existing_worlds(conn: &mut PgConnection, world_ids: &[Uuid]) -> QueryResult<HashSet<Uuid>> {
     Ok(worlds::table
         .filter(worlds::id.eq_any(world_ids))
@@ -267,18 +306,16 @@ pub(crate) fn pause_requests_for_graphql(
     let world_ids: Vec<Uuid> = rows.iter().map(|row| row.world_id).collect();
 
     let mut triggers: HashMap<Uuid, Vec<GraphQLPauseTrigger>> = HashMap::new();
-    for trigger in world_play_pause_triggers::table
+    let rows_of_triggers = world_play_pause_triggers::table
         .filter(world_play_pause_triggers::request_id.eq_any(&request_ids))
         .order((
             world_play_pause_triggers::recorded_at.asc(),
             world_play_pause_triggers::id.asc(),
         ))
         .select(PauseTrigger::as_select())
-        .load(conn)?
-    {
-        if let Some(request_id) = trigger.request_id {
-            triggers.entry(request_id).or_default().push(trigger.into());
-        }
+        .load(conn)?;
+    for (owner, trigger) in with_case_ids(conn, rows_of_triggers, |t| t.request_id)? {
+        triggers.entry(owner).or_default().push(trigger);
     }
 
     let existing = existing_worlds(conn, &world_ids)?;
