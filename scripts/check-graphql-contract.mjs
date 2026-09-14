@@ -164,6 +164,15 @@ if (schemaMode) {
     warnBreakingChanges(printed);
     done(false);
   }
+  // What changed, so the failure says which field without a second command.
+  const diff = spawnSync("diff", ["-u", sdlFile, "-"], {
+    input: printed,
+    encoding: "utf8",
+  });
+  const lines = (diff.stdout ?? "").split("\n").slice(2);
+  process.stdout.write(
+    `${lines.slice(0, 40).join("\n")}${lines.length > 40 ? "\n…" : ""}\n`,
+  );
   process.stdout.write(
     `${SDL_PATH} is stale: the server's schema has changed since it was written.\n` +
       "Run `pnpm verify:fix` (or this script with --schema --fix) and commit the result.\n",
