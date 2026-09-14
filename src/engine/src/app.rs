@@ -327,8 +327,6 @@ pub(crate) fn apply_external_commands(
                             size_y: 1,
                             color: Color::srgb(r, g, b),
                             is_visible: true,
-                            health: token.health,
-                            max_health: token.max_health,
                             // Populated from the payload where the server
                             // sent them, empty where it did not. Empty means
                             // "this sheet is not filled in", which is a

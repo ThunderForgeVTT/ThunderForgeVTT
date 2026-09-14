@@ -59,12 +59,6 @@ pub struct Token {
     /// Visibility flag (for fog of war, Phase 4.7.1)
     pub is_visible: bool,
 
-    /// Base health value
-    pub health: Option<i32>,
-
-    /// Maximum health
-    pub max_health: Option<i32>,
-
     /// The actor's attribute scores, as the active game system declares them.
     ///
     /// Keyed by the system's own identifiers, because the engine has no
@@ -138,9 +132,6 @@ pub struct RollbackCache {
     /// Last server-approved position
     pub last_server_position: GridPosition,
 
-    /// Last server-approved health
-    pub last_server_health: Option<i32>,
-
     /// Whether we're waiting for server confirmation
     pub is_pending: bool,
 
@@ -149,10 +140,9 @@ pub struct RollbackCache {
 }
 
 impl RollbackCache {
-    pub fn new(position: GridPosition, health: Option<i32>) -> Self {
+    pub fn new(position: GridPosition) -> Self {
         Self {
             last_server_position: position,
-            last_server_health: health,
             is_pending: false,
             pending_mutation_id: None,
         }
@@ -161,17 +151,13 @@ impl RollbackCache {
 
 /// Derived stats computed from base token data
 /// Never transmitted over network; calculated locally to save bandwidth
+///
+/// Hit points are not here. They were (`health_percentage`, `is_dead`,
+/// `is_full_health`, from `Token.health`), and nothing read them: a creature's
+/// hit points are its actor's system data or a copy's own record, resolved on
+/// the server and drawn from `tokenStatus` (spec 029, spec 046 ADR-102).
 #[derive(Component, Clone, Debug, Default)]
 pub struct DerivedStats {
-    /// Health as percentage (0-100)
-    pub health_percentage: Option<f32>,
-
-    /// Is token dead/unconscious
-    pub is_dead: bool,
-
-    /// Is token at full health
-    pub is_full_health: bool,
-
     /// Movement speed, once something declares it.
     ///
     /// Left unset rather than defaulted: it was a hard-coded 30 for every
@@ -187,17 +173,8 @@ pub struct DerivedStats {
 impl DerivedStats {
     /// Calculate derived stats from base token data
     /// This is called after receiving token data from server
-    pub fn calculate(token: &Token) -> Self {
-        let mut stats = DerivedStats::default();
-
-        // Health percentage
-        if let (Some(health), Some(max_health)) = (token.health, token.max_health) {
-            if max_health > 0 {
-                stats.health_percentage = Some((health as f32 / max_health as f32) * 100.0);
-            }
-            stats.is_dead = health <= 0;
-            stats.is_full_health = health >= max_health;
-        }
+    pub fn calculate(_token: &Token) -> Self {
+        let stats = DerivedStats::default();
 
         // Nothing ability-derived is computed here any more.
         //
@@ -249,7 +226,7 @@ impl TokenBundle {
         let token_id = TokenId(token.id.clone());
 
         // Create rollback cache from current state
-        let rollback_cache = RollbackCache::new(position, token.health);
+        let rollback_cache = RollbackCache::new(position);
 
         // Calculate initial derived stats
         let derived_stats = DerivedStats::calculate(&token);
@@ -293,68 +270,12 @@ mod tests {
         assert_eq!(pos1.distance_to(pos2), 5.0);
     }
 
-    /// Health is the only thing `DerivedStats::calculate` still derives.
-    ///
-    /// This test used to build a `TokenAbilities { dexterity: 14 }` and assert
-    /// an armour class of 12 and an initiative of 2. Both fields, and the
-    /// abilities struct itself, were deleted when D&D 5e's rules were taken
-    /// out of the renderer (see the comment inside `calculate`, and ADR-060) —
-    /// so those three assertions described a concept the engine no longer has,
-    /// and are gone rather than disabled. What remains is what is still true.
-    #[test]
-    fn test_derived_stats_calculation() {
-        let token = Token {
-            id: "test".to_string(),
-            world_id: "world".to_string(),
-            label: Some("Test Token".to_string()),
-            health: Some(50),
-            max_health: Some(100),
-            schema_version: 1,
-            ..Default::default()
-        };
-
-        let stats = DerivedStats::calculate(&token);
-
-        assert_eq!(stats.health_percentage, Some(50.0));
-        assert!(!stats.is_dead);
-        assert!(!stats.is_full_health);
-    }
-
-    /// The boundaries `test_derived_stats_calculation` steps over: dead at
-    /// zero and below, full at max and above.
-    #[test]
-    fn derived_stats_mark_the_health_boundaries() {
-        let at_zero = DerivedStats::calculate(&Token {
-            health: Some(0),
-            max_health: Some(100),
-            ..Default::default()
-        });
-        assert!(at_zero.is_dead);
-        assert_eq!(at_zero.health_percentage, Some(0.0));
-
-        let at_max = DerivedStats::calculate(&Token {
-            health: Some(100),
-            max_health: Some(100),
-            ..Default::default()
-        });
-        assert!(at_max.is_full_health);
-        assert!(!at_max.is_dead);
-        assert_eq!(at_max.health_percentage, Some(100.0));
-
-        // No health declared at all: nothing is derived, and in particular the
-        // token is not reported dead for want of a number.
-        let unknown = DerivedStats::calculate(&Token::default());
-        assert_eq!(unknown.health_percentage, None);
-        assert!(!unknown.is_dead);
-    }
-
     #[test]
     fn test_rollback_cache() {
         let pos = GridPosition::new(10.0, 20.0, 0.0);
-        let cache = RollbackCache::new(pos, Some(100));
+        let cache = RollbackCache::new(pos);
 
         assert_eq!(cache.last_server_position, pos);
-        assert_eq!(cache.last_server_health, Some(100));
         assert!(!cache.is_pending);
     }
 }

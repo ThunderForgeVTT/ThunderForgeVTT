@@ -163,7 +163,7 @@ mod e2e_canvas_tests {
         // Scenario: User moves an actor optimistically, server rejects,
         // should rollback via RollbackCache's last-known-good state.
         let initial = crate::components::GridPosition::new(5.0, 5.0, 0.0);
-        let cache = crate::components::RollbackCache::new(initial, Some(10));
+        let cache = crate::components::RollbackCache::new(initial);
         assert!(!cache.is_pending);
         assert_eq!(cache.last_server_position, initial);
 

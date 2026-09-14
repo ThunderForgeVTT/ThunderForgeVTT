@@ -112,20 +112,6 @@ pub(crate) struct WorldTokenPayload {
     /// that worked before changes.
     #[serde(default, rename = "tokenType")]
     pub(crate) token_type: Option<String>,
-    /// Current and maximum for the token's primary pool.
-    ///
-    /// The web client has been sending these since spec 004
-    /// (`WorldToken.health` / `.maxHealth`) and this struct did not
-    /// deserialize them, so they were dropped at the boundary — the same
-    /// shape of gap as `photo_url` before it was wired, and as the `Token`
-    /// component that was never attached.
-    ///
-    /// Spec 029 gives them a consumer: they populate `Token`, which
-    /// `calculate_derived_stats` finally has input from.
-    #[serde(default)]
-    pub(crate) health: Option<i32>,
-    #[serde(default, rename = "maxHealth")]
-    pub(crate) max_health: Option<i32>,
     /// The actor's attribute scores, keyed by the system's own identifiers.
     ///
     /// Optional because most `upsert_token` events are positional and carry
