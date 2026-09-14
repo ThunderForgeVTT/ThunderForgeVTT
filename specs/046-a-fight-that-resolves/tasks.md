@@ -36,7 +36,7 @@ delivers. Phase 4 (turn order) serves US1's "a player on their turn". Phase 5
 
 **Purpose**: a baseline and the working set.
 
-- [ ] T001 Run `pnpm playtest --only=combat-5e` on `main` and keep its report as the before-state; list its FINDING lines (263, 380, 416, 439, 481, 522, 548, 606 on 2026-09-14) in a comment at the top of `specs/046-a-fight-that-resolves/tasks.md`'s Notes section
+- [X] T001 Run `pnpm playtest --only=combat-5e` on `main` and keep its report as the before-state; list its FINDING lines (263, 380, 416, 439, 481, 522, 548, 606 on 2026-09-14) in a comment at the top of `specs/046-a-fight-that-resolves/tasks.md`'s Notes section
 - [X] T002 [P] Read `specs/046-a-fight-that-resolves/contracts/fight.md` and `research.md` into the working set; every task below is measured against contract clauses C1–C10, the redaction rule in §3, and manifest clauses M1–M5
 
 ---
@@ -64,20 +64,20 @@ delivers. Phase 4 (turn order) serves US1's "a player on their turn". Phase 5
 
 **Independent test**: the goblin has 7; the GM applies 5; both players' bars read 2 within a second, no reload. 2 more: marked out, skipped. Heal 3: back in. Manual Down then heal: stays down.
 
-- [ ] T009 [US3] Migration `src/server/migrations/<date>-046-combatant-downed-by/` (up/down): `world_combatants.downed_by TEXT NULL CHECK (downed_by IN ('hit_points','game_master'))`; regenerate `src/server/src/schema.rs`
-- [ ] T010 [US2] Implement `apply_hit_point_change` in `src/server/src/combat/hit_points.rs` per research R5: lock the row it writes (`SELECT … FOR UPDATE` on `world_actor_system_data` for now; Phase 5 adds copies), spend temporary first, bound at 0 and max, validate with the pack validator, write, record event 26 with the existing payload shape
-- [ ] T011 [US3] In `hit_points.rs`, after a write that crosses zero, update the creature's combatant in the running combat (match `token_id`, else `actor_id`): to 0 → `active = false, downed_by = 'hit_points'`; above 0 → `active = true, downed_by = NULL` only when `downed_by = 'hit_points'`; record event 18
-- [ ] T012 [US2] GraphQL mutation `changeHitPoints(tokenId, kind, amount)` → `TokenHitPoints`, Game Master only (`is_dm_of_world`), `refuse_if_paused`, in `src/server/src/graphql/mutations_combat_hit_points.rs`; register in `src/server/src/graphql.rs`
-- [ ] T013 [US3] Make the tracker's Down/Up write `downed_by = 'game_master'` / `NULL` in `update_combatant` in `src/server/src/graphql/mutations_combat.rs`; expose `downedBy` on `GraphQLCombatant`
-- [ ] T014 [P] [US2] Server tests in `src/server/src/combat/hit_points_tests.rs`: temporary absorbs first (C7); current never below 0; healing never above max; two concurrent changes both land; a pack without `combat.hitPoints` refuses with a clear message (M1)
-- [ ] T015 [P] [US3] Server tests in `src/server/src/combat/hit_points_tests.rs` for C8: to zero marks out; heal reactivates only `hit_points`; a GM Down is not undone by healing
-- [ ] T016 [P] [US2] Re-read token status on event 26 as well as 14 and 19 in `apps/web/src/engine/world/sync/tokenStatus.ts` (research, correction 1)
-- [ ] T017 [US2] Add `changeHitPoints` to `apps/web/src/api/combat.ts`, and Damage / Heal controls on each combatant row, for Game Masters only, in `apps/web/src/components/world/PlayDock/CombatPanel.tsx` (number input + two buttons, keyboard operable, labelled)
-- [ ] T018 [US3] Show a combatant marked out by hit points distinctly from a GM Down in `CombatPanel.tsx`, with an accessible label ("Out: 0 hit points" / "Down")
-- [ ] T019 [US2] Regenerate `src/app/schema.graphql` (`node scripts/check-graphql-contract.mjs --schema --fix`); `pnpm verify` green including `graphql-ops`
-- [ ] T020 [US2] e2e `apps/web/e2e/combat-hit-points.spec.ts` covering the independent test above across a GM and two player pages
-- [ ] T021 [US2] In `apps/web/playtest/combat-5e.playtest.ts`, turn FINDINGs 522 (bar doesn't move, and correct its stale "emits no event" wording) and 548 (zero doesn't mark down) into hard checks using `changeHitPoints`
-- [ ] T022 [US2] Prove: T020 through the harness (`✘` grep), the playtest, `tsc --noEmit`; record results here
+- [X] T009 [US3] Migration `src/server/migrations/<date>-046-combatant-downed-by/` (up/down): `world_combatants.downed_by TEXT NULL CHECK (downed_by IN ('hit_points','game_master'))`; regenerate `src/server/src/schema.rs`
+- [X] T010 [US2] Implement `apply_hit_point_change` in `src/server/src/combat/hit_points.rs` per research R5: lock the row it writes (`SELECT … FOR UPDATE` on `world_actor_system_data` for now; Phase 5 adds copies), spend temporary first, bound at 0 and max, validate with the pack validator, write, record event 26 with the existing payload shape
+- [X] T011 [US3] In `hit_points.rs`, after a write that crosses zero, update the creature's combatant in the running combat (match `token_id`, else `actor_id`): to 0 → `active = false, downed_by = 'hit_points'`; above 0 → `active = true, downed_by = NULL` only when `downed_by = 'hit_points'`; record event 18
+- [X] T012 [US2] GraphQL mutation `changeHitPoints(tokenId, kind, amount)` → `TokenHitPoints`, Game Master only (`is_dm_of_world`), `refuse_if_paused`, in `src/server/src/graphql/mutations_combat_hit_points.rs`; register in `src/server/src/graphql.rs`
+- [X] T013 [US3] Make the tracker's Down/Up write `downed_by = 'game_master'` / `NULL` in `update_combatant` in `src/server/src/graphql/mutations_combat.rs`; expose `downedBy` on `GraphQLCombatant`
+- [X] T014 [P] [US2] Server tests in `src/server/src/combat/hit_points_tests.rs`: temporary absorbs first (C7); current never below 0; healing never above max; two concurrent changes both land; a pack without `combat.hitPoints` refuses with a clear message (M1)
+- [X] T015 [P] [US3] Server tests in `src/server/src/combat/hit_points_tests.rs` for C8: to zero marks out; heal reactivates only `hit_points`; a GM Down is not undone by healing
+- [X] T016 [P] [US2] Re-read token status on event 26 as well as 14 and 19 in `apps/web/src/engine/world/sync/tokenStatus.ts` (research, correction 1)
+- [X] T017 [US2] Add `changeHitPoints` to `apps/web/src/api/combat.ts`, and Damage / Heal controls on each combatant row, for Game Masters only, in `apps/web/src/components/world/PlayDock/CombatPanel.tsx` (number input + two buttons, keyboard operable, labelled)
+- [X] T018 [US3] Show a combatant marked out by hit points distinctly from a GM Down in `CombatPanel.tsx`, with an accessible label ("Out: 0 hit points" / "Down")
+- [X] T019 [US2] Regenerate `src/app/schema.graphql` (`node scripts/check-graphql-contract.mjs --schema --fix`); `pnpm verify` green including `graphql-ops`. *Result 2026-09-14: `pnpm verify` 13 of 14 green on first run (graphql schema and operations included); web lint caught the two new e2e specs importing `test` from `@playwright/test` instead of `e2e/fixtures/test` (a rule that landed on main during this phase), fixed, and both specs re-run through the harness: 2 passed, no `✘`.*
+- [X] T020 [US2] e2e `apps/web/e2e/combat-hit-points.spec.ts` covering the independent test above across a GM and two player pages
+- [X] T021 [US2] In `apps/web/playtest/combat-5e.playtest.ts`, turn FINDINGs 522 (bar doesn't move, and correct its stale "emits no event" wording) and 548 (zero doesn't mark down) into hard checks using `changeHitPoints`
+- [X] T022 [US2] Prove: T020 through the harness (`✘` grep), the playtest, `tsc --noEmit`; record results here. *Result 2026-09-14: `node scripts/e2e-parallel.mjs --shards=1 --only=combat-hit-points,combat-turn-order,combat-panel,token-movement-walls,status-display,world-cache-offline`: `combat-hit-points` passed (38 s; all three boards drew 2 without a reload, polled with a 5 s budget — the one-second figure is annotated per run, not asserted), and `combat-panel`, `status-display`, `token-movement-walls` passed; the log's only `✘` were two `world-cache-offline` tests failing at registration with a 502 while the machine was loaded (load 54), which passed 3/3 when re-run alone. Playtest: FINDINGs 522 and 548 now hard and passing. `cargo test` for `combat::` (hit points C7, C8, M1, concurrency) passed; `tsc --noEmit` and the web vitest suites for PlayDock and sync clean.*
 
 **Checkpoint**: a fight can end.
 
@@ -89,14 +89,14 @@ delivers. Phase 4 (turn order) serves US1's "a player on their turn". Phase 5
 
 **Independent test**: on the ogre's turn, a player's move is refused with "It is Ogre's turn" on every path, and the token doesn't move on any board; hidden name reads "Unknown".
 
-- [ ] T023 [US1] Implement `turn_check(conn, scene_id, acting_token_id, user) -> TurnCheck` in `src/server/src/combat/turn.rs` per research R12 and C1: running combat in the scene, acting token is a combatant, not active, user not GM → refused with the active combatant's label under `load_combat`'s "Unknown" rule
-- [ ] T024 [US1] Call `turn_check` in `move_own_token` in `src/server/src/graphql/mutations_tokens.rs` before `judge_against_walls`
-- [ ] T025 [US1] Call `turn_check` for queued token moves in `src/server/src/graphql/mutations_reconcile.rs` (token write ~688-712), reporting a refusal the way a queued conflict is reported today. *Note (implement): a queued outcome carries an enum reason and no text, so this adds `NOT_YOUR_TURN` to `GraphQLRejectionReason` (and `thunderforge_cache_core::queue::RejectionReason`) and a `refusal: String` field on the outcome with the same sentence; `ReconcileReport.tsx` shows it.*
-- [ ] T026 [P] [US1] Server tests in `src/server/src/combat/turn_tests.rs`: refused off-turn; allowed on-turn; GM never refused; non-combatant token free; hidden active name → "Unknown"; offline replay refused
-- [ ] T027 [US1] Show the refusal text where a refused move is shown today in `apps/web/src/engine/world/sync/tokens.ts` (the move snaps back, and the message names whose turn it is). *Note (implement): already true of `applyMoveRefusal` since spec 045 — it re-reads the server's position and toasts the server's own message — so this is a comment, not code; `combat-turn-order.spec.ts` proves the text appears.*
-- [ ] T028 [US1] e2e `apps/web/e2e/combat-turn-order.spec.ts` covering the independent test, including the GM moving the ogre freely
-- [ ] T029 [US1] Turn FINDING 606 (a player moved out of turn) in `apps/web/playtest/combat-5e.playtest.ts` into a hard check
-- [ ] T030 [US1] Prove: T028 through the harness, `cargo test` for T026, the playtest; record results here
+- [X] T023 [US1] Implement `turn_check(conn, scene_id, acting_token_id, user) -> TurnCheck` in `src/server/src/combat/turn.rs` per research R12 and C1: running combat in the scene, acting token is a combatant, not active, user not GM → refused with the active combatant's label under `load_combat`'s "Unknown" rule
+- [X] T024 [US1] Call `turn_check` in `move_own_token` in `src/server/src/graphql/mutations_tokens.rs` before `judge_against_walls`
+- [X] T025 [US1] Call `turn_check` for queued token moves in `src/server/src/graphql/mutations_reconcile.rs` (token write ~688-712), reporting a refusal the way a queued conflict is reported today. *Note (implement): a queued outcome carries an enum reason and no text, so this adds `NOT_YOUR_TURN` to `GraphQLRejectionReason` (and `thunderforge_cache_core::queue::RejectionReason`) and a `refusal: String` field on the outcome with the same sentence; `ReconcileReport.tsx` shows it.*
+- [X] T026 [P] [US1] Server tests in `src/server/src/combat/turn_tests.rs`: refused off-turn; allowed on-turn; GM never refused; non-combatant token free; hidden active name → "Unknown"; offline replay refused
+- [X] T027 [US1] Show the refusal text where a refused move is shown today in `apps/web/src/engine/world/sync/tokens.ts` (the move snaps back, and the message names whose turn it is). *Note (implement): already true of `applyMoveRefusal` since spec 045 — it re-reads the server's position and toasts the server's own message — so this is a comment, not code; `combat-turn-order.spec.ts` proves the text appears.*
+- [X] T028 [US1] e2e `apps/web/e2e/combat-turn-order.spec.ts` covering the independent test, including the GM moving the ogre freely
+- [X] T029 [US1] Turn FINDING 606 (a player moved out of turn) in `apps/web/playtest/combat-5e.playtest.ts` into a hard check
+- [X] T030 [US1] Prove: T028 through the harness, `cargo test` for T026, the playtest; record results here. *Result 2026-09-14: `combat-turn-order` passed in the same harness run as T022 (46 s: drag, direct `moveOwnToken` and queued replay each refused with "It is Ogre's turn", "Unknown" with the name hidden, the Game Master and a non-combatant free, Aria's move landing on her turn). `cargo test` `combat::turn` 6 passed and `mutations_reconcile::…somebody_elses_turn…` passed, alongside the play-pause surface test covering `changeHitPoints`. Playtest: FINDING 606 hard and passing.*
 
 **Checkpoint**: a round has an order that means something.
 
@@ -285,6 +285,20 @@ SC-002, SC-003, SC-007 and SC-008.
 SC-005) and **Phase 9** (US6: legendary, SC-006), each shippable alone.
 
 ## Notes
+
+<!-- T001 baseline, 2026-09-14, `pnpm playtest --only=combat-5e` on main at 0e8b3ac
+     (before any spec 046 code): the scenario played to the end (reached Round 3)
+     with no hard failure and eight soft FINDINGs:
+       263 a roll is not shown to the table
+       380 a round is not an economy
+       416 no armour class or target
+       439 the longsword is not rollable from Aria's sheet
+       481 no size or reach
+       522 the goblin's bar does not move on a hit-point write
+       548 zero hit points does not mark a combatant out
+       606 a player moved on somebody else's turn
+     After Phases 3 and 4 (same command, this branch): 522, 548 and 606 are hard
+     checks and pass; 263, 380, 416, 439 and 481 remain. -->
 
 - Commits are signed, stage explicit paths, and each names the phase and task ids.
 - `.e2e-shards-durations.json` is rewritten by the harness; don't commit it with feature work.
