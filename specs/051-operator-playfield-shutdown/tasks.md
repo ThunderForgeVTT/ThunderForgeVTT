@@ -181,7 +181,7 @@ Commit.
 
 ### Tests for User Story 2
 
-- [ ] T027 [US2] Write the closed-list test `src/server/src/graphql/play_pause_surface_tests.rs`, following `admin_surface_tests.rs`.
+- [x] T027 [US2] Write the closed-list test `src/server/src/graphql/play_pause_surface_tests.rs`, following `admin_surface_tests.rs`.
   - **Tables:** `GATED`, `NOT_WORLD_SCOPED` and `OPERATOR`, keyed by root field name.
   - **Half one:** introspect the schema's root `Mutation` and `Subscription` fields and fail on any field in no table or in two. Also require `worldSyncPlan` and `worldEventsSince` in `GATED`.
   - **Half two:** a `FIXTURES` map from each `GATED` name to a minimal valid request against a seeded paused world. Fail if any `GATED` name lacks a fixture. Run each as the world's Game Master and as a member site admin, and assert `WORLD_PLAY_PAUSED`.
@@ -198,30 +198,68 @@ Commit.
 
 ### Implementation for User Story 2
 
-- [ ] T029 [US2] Gate the play entry points, adding the `play_pause::refuse_if_paused` call after the existing membership check in each:
+- [x] T029 [US2] Gate the play entry points, adding the `play_pause::refuse_if_paused` call after the existing membership check in each:
   - `heartbeat` in `src/server/src/graphql/mutations_heartbeat.rs`;
   - `worldEventsSince` in `src/server/src/graphql/queries/world_events_since.rs`;
   - `worldSyncPlan` in `src/server/src/graphql/queries/world_sync_plan.rs`;
   - `launchScene` in `src/server/src/graphql/mutations_scenes.rs`.
-- [ ] T030 [US2] Gate `reconcileQueuedChanges` in `src/server/src/graphql/mutations_reconcile.rs`. On a paused world, return a report rejecting every change with `PlayPaused`, never an error, and apply nothing. Add a test beside the existing reconcile tests.
-- [ ] T031 [P] [US2] Gate the token, wall, light and door mutations with `refuse_if_paused` or `refuse_scene_if_paused`, called beside, not inside, `actor_in_world`/`is_dm_*`. Find them under `src/server/src/graphql/` with `grep -ln "fn .*token\|wall\|light" src/server/src/graphql/mutations_*.rs`.
-- [ ] T032 [P] [US2] Gate the interactives mutations in `src/server/src/graphql/mutations_interactives.rs`: create, update, delete, reset, approve and refuse a request, set door designation/lock/secret, and `activateInteractive`.
-- [ ] T033 [P] [US2] Gate the combat, chat, roll and scene mutations. Locate them with `grep -ln "is_dm_of_world\|is_dm_of_scene\|actor_in_world\|require_world_member" src/server/src/graphql/mutations_*.rs`, excluding files T031, T032 and T034 own.
-- [ ] T034 [P] [US2] Gate world-content writes:
+- [x] T030 [US2] Gate `reconcileQueuedChanges` in `src/server/src/graphql/mutations_reconcile.rs`. On a paused world, return a report rejecting every change with `PlayPaused`, never an error, and apply nothing. Add a test beside the existing reconcile tests.
+- [x] T031 [P] [US2] Gate the token, wall, light and door mutations with `refuse_if_paused` or `refuse_scene_if_paused`, called beside, not inside, `actor_in_world`/`is_dm_*`. Find them under `src/server/src/graphql/` with `grep -ln "fn .*token\|wall\|light" src/server/src/graphql/mutations_*.rs`.
+- [x] T032 [P] [US2] Gate the interactives mutations in `src/server/src/graphql/mutations_interactives.rs`: create, update, delete, reset, approve and refuse a request, set door designation/lock/secret, and `activateInteractive`.
+- [x] T033 [P] [US2] Gate the combat, chat, roll and scene mutations. Locate them with `grep -ln "is_dm_of_world\|is_dm_of_scene\|actor_in_world\|require_world_member" src/server/src/graphql/mutations_*.rs`, excluding files T031, T032 and T034 own.
+- [x] T034 [P] [US2] Gate world-content writes:
   - compendium: `src/server/src/graphql/mutations_compendium.rs`;
   - the library's per-world book list and deltas: `src/server/src/graphql/mutations_library.rs`;
   - lore, staging and world settings;
   - invitations and membership changes.
 
   The spec's default is *readable, not editable*. Leave read-only queries ungated.
-- [ ] T035 [P] [US2] Gate the world-scoped REST writes: scene and asset uploads, and map import. Find them in `src/app/src/main.rs` routes and their handlers under `src/server/src/`. Answer `423 Locked` with body `{"code":"WORLD_PLAY_PAUSED"}`, and add a handler test per route.
-- [ ] T036 [US2] Fill the three tables and every `FIXTURES` entry in `play_pause_surface_tests.rs` until both halves pass. Every root field not gated must be justified by its table.
+- [x] T035 [P] [US2] Gate the world-scoped REST writes: scene and asset uploads, and map import. Find them in `src/app/src/main.rs` routes and their handlers under `src/server/src/`. Answer `423 Locked` with body `{"code":"WORLD_PLAY_PAUSED"}`, and add a handler test per route. *Map import is the only world-scoped REST write: scene, actor and lore image uploads are GraphQL mutations (`uploadCanvasImage`, `uploadActorImage`, `uploadLoreImage`) and are gated and executed in the surface test. Its test is `map_import::tests::importing_onto_a_paused_world_is_locked`.*
+- [x] T036 [US2] Fill the three tables and every `FIXTURES` entry in `play_pause_surface_tests.rs` until both halves pass. Every root field not gated must be justified by its table. *There is no separate `FIXTURES` map: each `GATED` entry carries its request, so a name cannot be gated without one, and a test checks each request calls its own field. `CALLED_AS` names the eleven fields one default caller cannot reach by design (a Game Master does not claim; book management and renaming have no site-admin bypass; only a non-member joins); a default caller left out is still called and must be refused. The tables live in `play_pause_surface_tables.rs` for the file-length limit.*
 - [ ] T037 [P] [US2] Tell a pause apart from being offline in `apps/web/src/engine/world/sync/heartbeat.ts`. A refusal carrying `WORLD_PLAY_PAUSED` dispatches the pause signal. It never counts toward the three failures that switch to offline queueing (`offlineQueue.ts` `shouldQueue`). Add a vitest case beside the existing heartbeat tests.
 - [ ] T038 [P] [US2] Handle `PlayPaused` in `apps/web/src/engine/world/sync/offlineQueue.ts` `reconcileWorld`. Revert the rejected changes through the existing `revert` path, keep the count, and hand it to the notice (for example via navigation state) so `PlayPausedPage.tsx` shows "{n} change(s) you made while offline weren't kept". Add a vitest case.
 - [ ] T039 [US2] Make sure the page refuses at entry: opening `/world/:id/play` on a paused world surfaces the `WORLD_PLAY_PAUSED` from `worldSyncPlan` as the notice, not a generic load error, in `apps/web/src/pages/world/WorldPage.tsx`.
 - [ ] T040 [US2] Run `play-pause-holds.spec.ts` and `play-pause.spec.ts` until both pass. Run `cargo test -q --lib` (surface test included) and `tsc --noEmit`. Re-run the existing e2e that touch the changed paths:
   - `live-sync.spec.ts`, `world-event-catchup.spec.ts`, `world-cache-offline.spec.ts`, `world-cache-isolated.spec.ts`, `companion-offline.spec.ts`;
   - the interactives and library e2e.
+
+### Journeys: real operator and player flows, on an isolated instance
+
+These journeys go through the product the way people do: UI only, no GraphQL shortcuts except to *check* server state. They run on a throwaway dockerized instance, following the `compose.torture.yml` / `scripts/torture.mjs` precedent, so they never share the dev database or the `e2e-parallel` lock, and can mutate instance-wide state such as operators and 2FA freely. They are added under the story they prove, and built once that story has landed. The IDs are appended rather than renumbered, because tasks already in flight cite the existing numbers.
+
+- [ ] T066 Build the journey lane:
+  - **`compose.journeys.yml`**: Postgres, RustFS and Mailpit on tmpfs, with no `container_name` and non-default ports, modelled on `compose.torture.yml` and its comments.
+  - **`scripts/journeys.mjs`**: it
+    1. starts a unique compose project per run;
+    2. waits for health;
+    3. runs migrations;
+    4. starts the backend and Vite natively on free ports against it;
+    5. runs the existing global setup (seeded operator plus TOTP);
+    6. runs `apps/web/playwright.journeys.config.ts` (`testDir: ./e2e/journeys`, `testMatch: /.*\.journey\.spec\.ts/`, `workers: 1`, `retries: 0`, traces and screenshots on failure);
+    7. always tears down, including on Ctrl-C.
+  - **Wiring:** add `"journeys"` to the root `package.json`, and exclude `e2e/journeys` from `apps/web/playwright.config.ts` so ordinary runs never pick journeys up.
+  - **Proof:** run one trivial journey while an `e2e-parallel.mjs` run is in progress; both pass. Also prove that teardown leaves no containers (`docker ps -a --filter label=com.docker.compose.project=<project>`).
+
+- [ ] T067 [US1] Write `apps/web/e2e/journeys/operator-pauses-through-the-portal.journey.spec.ts`:
+  - **Pause flow:** the operator signs in with 2FA through the login page, opens `/admin/play-pauses` from the admin nav, and searches for the world by name. The pause dialog refuses blank or whitespace grounds, and cancelling changes nothing (server state checked). Confirming shows the world under *Active pauses*, and the two playing tables land on the notice.
+  - **Keyboard-only:** repeat the flow using only Tab, Enter, Escape and arrows, with focus visible at every step. `expectNoAxeViolations` runs on the admin page and the dialog.
+  - **Non-operators:** a Game Master, and a player, navigating to `/admin/play-pauses` get the product's normal refusal and see no world list.
+- [ ] T068 [US2] Write `apps/web/e2e/journeys/caught-in-the-middle.journey.spec.ts`. A pause lands while:
+  - a token is mid-drag;
+  - a character sheet dialog is open with an unsaved edit;
+  - the Game Master is advancing a combat turn;
+  - a player has typed but not sent a chat message.
+
+  Each time the notice replaces the playfield cleanly: no stacked dialogs, no console errors, focus on the notice heading. Server state proves no half-finished change landed: token position, sheet values, combat turn and chat log unchanged.
+- [ ] T069 [US2] Write `apps/web/e2e/journeys/every-way-back-in.journey.spec.ts`:
+  - **Ways back in**, each ending on the notice and never on a broken or blank playfield:
+    - refresh;
+    - the browser back button;
+    - opening a bookmarked `/world/:id/play` in a new tab;
+    - a second tab that was already open on the playfield;
+    - the same account in a second browser context, standing in for a second device;
+    - navigating from the world list.
+  - **Screen sizes:** the notice is readable and nothing overlaps at 375×812 and at 1920×1080 (room screen). Attach screenshots to the report.
 
   Ungated worlds must behave as before. Commit.
 
@@ -279,6 +317,12 @@ Commit.
   Add the new fields to `ADMIN_ONLY` and to `OPERATOR` in `play_pause_surface_tests.rs`.
 - [ ] T048 [US3] Add a *Requests* section to `apps/web/src/pages/admin/PlayPausesPage.tsx`. It lists pending requests with world, raised time, *played now* and each trigger (kind, a link to the moderation case for takedowns). Approve and Decline each open a dialog requiring a note. A lost race shows "Already decided by {name} at {time}" and refreshes.
 - [ ] T049 [US3] Run `play-pause-request.spec.ts`, the Phase 3–4 e2e, and the existing moderation e2e (`dmca-takedown`, `dmca-scene-takedown`, `dmca-counter-notice`, `takedown-reach`, `collection-moderation`, `account-standing`) until they pass. Run `cargo test -q --lib` and `tsc --noEmit`. Commit.
+- [ ] T070 [US3] Write `apps/web/e2e/journeys/a-notice-becomes-a-decision.journey.spec.ts`:
+  1. A claimant files through the real `/legal/dmca` form against a scene a table is playing.
+  2. The operator sees the request appear at `/admin/play-pauses` without reloading beyond the page's own refresh. It shows *played now* and a link to the moderation case, which opens.
+  3. The operator approves in the UI with a note, and the table lands on the notice.
+  4. In a second world the operator declines in the UI. The table's page never changes, and the Game Master's surfaces show nothing.
+  5. Two operator tabs act on one request at once (approve against decline). One wins, and the other tab shows who decided and when, with no error state.
 
 **Checkpoint**: the gap T042 found is closed for the normal case, through an operator's decision.
 
@@ -304,6 +348,11 @@ Commit.
 - [ ] T052 [US4] Add a "Lift pause" action to each active pause on `apps/web/src/pages/admin/PlayPausesPage.tsx`, with a dialog requiring grounds. An already-lifted refusal shows who lifted it and when.
 - [ ] T053 [US4] Add a "Return to the world" action on `apps/web/src/pages/world/PlayPausedPage.tsx`, shown when `worldPlayState.paused` is false. It navigates to the world page, which rejoins through the normal path. Depends on T057.
 - [ ] T054 [US4] Run `play-pause-lift.spec.ts` and the earlier pause e2e until they pass, then `tsc --noEmit`. Commit.
+- [ ] T071 [US4] Write `apps/web/e2e/journeys/play-resumes-as-it-was.journey.spec.ts`:
+  - **Before pausing:** record token positions, the active scene, explored fog and an open combat's turn.
+  - **Lift in the UI:** a blank-grounds lift is refused. Two operator tabs lift at once, and the second is told who lifted.
+  - **On the notice:** *Return to the world* appears within 30 s, with no reload needed.
+  - **Back in play:** everything recorded is identical. A scene taken down separately while paused is still withheld, and the table is told so the way spec 015 already tells it.
 
 ---
 
@@ -335,6 +384,7 @@ Commit.
   - a status on the world's card in the world list (find the card component with `grep -rn "clickPlay\|Play</" apps/web/src/pages`);
   - the pause history in the world's settings, with times only.
 - [ ] T060 [US5] Run the four pause e2e until they pass, then `cargo test -q --lib` and `tsc --noEmit`. Commit.
+- [ ] T072 [US5] Write `apps/web/e2e/journeys/what-the-table-is-told.journey.spec.ts`. As the Game Master, the world list card and the world page show *paused since {time}* while paused. After the lift, the world's settings show the pause history with times only. As a Trusted Player and a Player, the same. As the operator, `/admin/play-pauses` *Record* shows who, when, grounds, triggers and the lift. On every non-operator page visited, the page's full text never contains the grounds string, the trigger kind, the operator's name or the word "takedown".
 
 ---
 
@@ -345,6 +395,18 @@ Commit.
 - [ ] T063 [P] Update `apps/web/PRODUCT.md` with the pause as an operator lever, and the notice's tone rule. Update spec 015's tasks and notes (`specs/015-dmca-notice-takedown/`) to point the withdrawn "takedowns reach live tables" item at spec 051.
 - [ ] T064 [P] Add "Found in implementation" to ADR-100 in `docs/adrs/20260913-100-an_operator_can_pause_a_worlds_play.md`: anything the surface test caught, any gated field that surprised, and whether the trigger backstop is still unneeded.
 - [ ] T065 Run the full e2e suite for regressions (sharded as usual), the full server test suite, clippy for host and wasm (`make lint`) and `pnpm verify`. Fix what this feature broke, and record pre-existing flakes as such. Then tick this ledger and commit.
+- [ ] T073 Write the capstone `apps/web/e2e/journeys/the-whole-story.journey.spec.ts`, as one long, deliberately sequential journey with no GraphQL shortcuts:
+  1. A table plays two scenes.
+  2. A DMCA notice is filed through the form.
+  3. The operator reviews and approves the request.
+  4. The table sees the notice.
+  5. A player tries refresh and a new tab.
+  6. The operator lifts the pause.
+  7. The table returns, and play continues with a token move that syncs to the other browser.
+  8. The Game Master reads the history.
+  9. The operator reads the record.
+
+  Run it three times green. Then add `pnpm journeys` to T065's full run.
 
 ---
 
@@ -360,6 +422,7 @@ Commit.
 - **US4 (T050–T054)**: needs US1. T053 needs T057.
 - **US5 (T055–T060)**: T057 can be built right after Foundational, and it unblocks T024's poll and T053. The rest follows US1, US3 and US4 for the e2e assertions.
 - **Polish (T061–T065)**: after all stories.
+- **Journeys (T066–T073)**: T066 (the lane) needs nothing but the stack. T067 needs US1; T068/T069 need US2; T070 needs US3; T071 needs US4; T072 needs US5; T073 needs all, then joins T065's full run. Journeys run in their own dockerized instance and never contend with the `e2e-parallel` lock.
 
 ### Within a story
 
