@@ -24,4 +24,7 @@ cd "$(git rev-parse --show-toplevel)"
 # not being committed. Deliberately not fixed by stashing: a hook that stashes
 # is a hook that can lose work when it is interrupted, and formatting is not
 # worth that risk.
-exec node ./scripts/verify.mjs --only=rust-fmt,web-fmt,registry,seam,filelength
+# `graphql-ops` belongs here and `graphql-schema` does not: the first reads
+# the web sources and the committed SDL and exits in about a second, the
+# second compiles the server to print the schema, so it waits for push.
+exec node ./scripts/verify.mjs --only=rust-fmt,web-fmt,registry,seam,graphql-ops,filelength
