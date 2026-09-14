@@ -131,3 +131,37 @@ manifest's existing style (compare Genie's `sizeCategories`):
   nothing else.
 - Exploration is per browser. Nothing a player explores is readable by the
   server, by another player, or by the same player in another browser.
+
+## 5. As built (checked 2026-09-14, T002)
+
+Sections 1 to 4 are the contract as planned. Where what shipped differs, this
+section is what callers may rely on. Every difference below is a shape change
+with the same behaviour, except the last, which is a gap.
+
+- **Scene exploration is a query of its own, not fields on `Scene`.**
+  `sceneExploration(sceneId): { enabled, epoch, mine }`, where `mine` is what
+  the contract called `myExplorationEpoch`
+  (`src/server/src/graphql/exploration.rs:34`). The answer depends on who is
+  asking, and a `Scene` built from a row has no viewer to resolve against.
+  `setSceneExploration` returns `Boolean!`, and `resetSceneExploration` takes
+  `forUser` rather than `userId` and returns the new epoch as `Int!`
+  (`exploration.rs:87`, `:102`). Both are Game-Master-only, as contracted.
+- **Exploration reaches the engine through wasm exports, not
+  `external_command`.** `set_exploration(enabled)`,
+  `set_explored_cells(json)` and `explored_cells()`
+  (`src/engine/src/plugins/exploration.rs:172-207`). There is no
+  `clear_exploration`: a reset is `set_explored_cells("")`, so "your map was
+  cleared" and "nothing said yet" cannot look alike. The engine is never
+  given an epoch; the web compares epochs and decides what to hand it.
+- **The manifest's `vision` block names a `slot` and a `source`**, the pair a
+  `sheet` entry already uses, instead of `source` and `field`, and declares
+  `unitsPerCell` and `unitLabel` (`packs/systems/README.md`, `vision`;
+  `packs/systems/dnd5e/system.json`). No manifest recorded what a grid square
+  was worth, so the block has to.
+- **Gap: a carried light's reach stops at the web.** The server resolves
+  `carriedBright` and `carriedDim` and `tokenVision` returns them
+  (`src/server/src/graphql/queries/token_vision.rs:156-157`), and the web
+  reads both and sends the engine only `darkvision`
+  (`apps/web/src/engine/world/sync/tokenVision.ts:69-77`). A game system
+  cannot yet set the light a character carries (FR-061, FR-064). Open as a
+  task in `tasks.md`.
