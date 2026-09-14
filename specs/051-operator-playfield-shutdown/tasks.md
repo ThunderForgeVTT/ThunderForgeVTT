@@ -351,7 +351,7 @@ These journeys go through the product the way people do: UI only, no GraphQL sho
 
 - [x] T051 [US4] Add `liftWorldPlayPause(pauseId, grounds): PlayPause!` in `src/server/src/graphql/mutations_play_pause.rs`, calling `play_pause::lift_pause`. Add it to `ADMIN_ONLY` and `OPERATOR`.
 - [x] T052 [US4] Add a "Lift pause" action to each active pause on `apps/web/src/pages/admin/PlayPausesPage.tsx`, with a dialog requiring grounds. An already-lifted refusal shows who lifted it and when.
-- [ ] T053 [US4] Add a "Return to the world" action on `apps/web/src/pages/world/PlayPausedPage.tsx`, shown when `worldPlayState.paused` is false. It navigates to the world page, which rejoins through the normal path. Depends on T057.
+- [x] T053 [US4] Add a "Return to the world" action on `apps/web/src/pages/world/PlayPausedPage.tsx`, shown when `worldPlayState.paused` is false. It navigates to the world page, which rejoins through the normal path. Depends on T057.
 - [x] T054 [US4] Run `play-pause-lift.spec.ts` and the earlier pause e2e until they pass, then `tsc --noEmit`. Commit. *2026-09-14: `play-pause-lift`, `play-pause-holds`, `play-pause-request` (4/4) and `dmca-counter-notice` (its helpers moved to `fixtures/playPause.ts`) green; `play-pause.spec.ts`'s first test failed only on the uncommitted T056/T059 banner assertion being written alongside, its other two green. `tsc --noEmit` clean, vitest 619 passed.*
 - [x] T071 [US4] Write `apps/web/e2e/journeys/play-resumes-as-it-was.journey.spec.ts`:
   - **Before pausing:** record token positions, the active scene, explored fog and an open combat's turn.
@@ -384,7 +384,7 @@ These journeys go through the product the way people do: UI only, no GraphQL sho
 
 - [x] T057 [US5] Add `worldPlayState(worldId): WorldPlayState!` in `src/server/src/graphql/queries/play_pause.rs`. Guard with `require_world_member`, not the gate. Select only `paused_at` and `lifted_at` from `world_play_pauses`. Classify it as a read in the surface test notes. Replace the T024 stub in `PlayPausedPage.tsx`.
 - [x] T058 [P] [US5] Add a *Record* section to `apps/web/src/pages/admin/PlayPausesPage.tsx`: all pauses and decided requests, newest first, paginated. Each shows world (marked if it no longer exists), who, when, grounds or note, triggers, and lift.
-- [ ] T059 [P] [US5] Show *that and when* to members:
+- [x] T059 [P] [US5] Show *that and when* to members:
   - a quiet banner on the world page in `apps/web/src/pages/world/WorldPage.tsx`;
   - a status on the world's card in the world list (find the card component with `grep -rn "clickPlay\|Play</" apps/web/src/pages`);
   - the pause history in the world's settings, with times only.
@@ -397,7 +397,7 @@ These journeys go through the product the way people do: UI only, no GraphQL sho
 
 - [ ] T061 [P] Run `expectNoAxeViolations` on `/admin/play-pauses` in `apps/web/e2e/play-pause.spec.ts`. Check the notice at 200% zoom and at a 1920×1080 viewport viewed as a room screen: take screenshots and record them in the commit (SC-008).
 - [ ] T062 Measure SC-001 across 5 runs of `play-pause.spec.ts`: the event path and, with the world event suppressed in a test-only way, the poll-only path. Record both in `specs/051-operator-playfield-shutdown/quickstart.md` under a *Measured* heading. If the poll-only path exceeds 5 s, correct SC-001 or `LIVENESS_POLL` and say which.
-- [ ] T063 [P] Update `apps/web/PRODUCT.md` with the pause as an operator lever, and the notice's tone rule. Update spec 015's tasks and notes (`specs/015-dmca-notice-takedown/`) to point the withdrawn "takedowns reach live tables" item at spec 051.
+- [x] T063 [P] Update `apps/web/PRODUCT.md` with the pause as an operator lever, and the notice's tone rule. Update spec 015's tasks and notes (`specs/015-dmca-notice-takedown/`) to point the withdrawn "takedowns reach live tables" item at spec 051.
 - [ ] T064 [P] Add "Found in implementation" to ADR-100 in `docs/adrs/20260913-100-an_operator_can_pause_a_worlds_play.md`: anything the surface test caught, any gated field that surprised, and whether the trigger backstop is still unneeded.
 - [ ] T065 Run the full e2e suite for regressions (sharded as usual), the full server test suite, clippy for host and wasm (`make lint`) and `pnpm verify`. Fix what this feature broke, and record pre-existing flakes as such. Then tick this ledger and commit.
 - [ ] T073 Write the capstone `apps/web/e2e/journeys/the-whole-story.journey.spec.ts`, as one long, deliberately sequential journey with no GraphQL shortcuts:

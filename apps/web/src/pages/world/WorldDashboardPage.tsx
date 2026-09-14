@@ -13,6 +13,7 @@ import { Container } from "@/components/ui/container/Container";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
 import { Loader } from "@/components/ui/loader/Loader";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
+import { PlayPausedBanner } from "@/components/world/PlayPausedBanner";
 import { useAuth } from "@/hooks/useAuth";
 import { useActorClaimGate } from "@/hooks/useActorClaimGate";
 import { CampaignSettingsPanel } from "@/components/campaign/CampaignSettingsPanel";
@@ -178,6 +179,7 @@ export default function WorldDashboardPage() {
             </Card>
           ) : (
             <>
+              <PlayPausedBanner worldId={world.id} />
               <section className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">

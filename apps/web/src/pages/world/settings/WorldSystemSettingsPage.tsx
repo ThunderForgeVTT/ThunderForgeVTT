@@ -38,6 +38,7 @@ import { WorldSectionShell } from "@/layouts/world-layout/WorldSectionShell";
 import { AuthoringToolGrantsCard } from "@/pages/world/settings/AuthoringToolGrantsCard";
 import { CompendiumOverviewSettingsCard } from "@/pages/world/settings/CompendiumOverviewSettingsCard";
 import { LoreRepositoryCard } from "@/pages/world/settings/LoreRepositoryCard";
+import { PlayPauseHistoryCard } from "@/pages/world/settings/PlayPauseHistoryCard";
 import { WorldAppearanceSettingsCard } from "@/pages/world/settings/WorldAppearanceSettingsCard";
 import type { WorldRecord } from "@/types/world";
 
@@ -290,6 +291,10 @@ export default function WorldSystemSettingsPage() {
               )
             }
           />
+
+          {/* Spec 051 US5 (FR-050). For every member: that play was paused
+              and when, never why. Renders nothing for a world never paused. */}
+          <PlayPauseHistoryCard worldId={worldId} />
 
           {/* Spec 031 (FR-046). GM-only chrome over a GM-only mutation: a
               player who reached this markup would still be refused by

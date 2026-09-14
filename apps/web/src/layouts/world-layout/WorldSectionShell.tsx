@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button/Button";
 import { WorldAppearance } from "@/appearance/WorldAppearance";
+import { PlayPausedBanner } from "@/components/world/PlayPausedBanner";
 import { WorldSidebarNav } from "@/layouts/world-layout/WorldSidebarNav";
 
 export interface WorldSectionShellProps {
@@ -46,6 +47,9 @@ export function WorldSectionShell({
             <Link to={`/world/${worldId}/play`}>Play</Link>
           </Button>
         </div>
+        {/* Spec 051 US5: here rather than on one page, so every hub screen a
+            member lands on says that play is paused, and since when. */}
+        <PlayPausedBanner worldId={worldId} />
         <div className="flex items-start gap-6">
           <WorldSidebarNav worldId={worldId} isGm={isGm} />
           <div className="min-w-0 flex-1">{children}</div>

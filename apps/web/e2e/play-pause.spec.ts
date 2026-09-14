@@ -9,6 +9,7 @@ import {
 } from "./fixtures/helpers";
 import {
   expectPausedNotice,
+  liftPauseAsOperator,
   markDocument,
   pauseWorldAsOperator,
   pauseWorldPlayRaw,
@@ -213,6 +214,111 @@ function arrivalAtNotice(page: Page): Promise<number> {
   return arrival;
 }
 
+/**
+ * Words no member-facing surface about a pause may carry (FR-011, FR-050).
+ * Checked against the pause's own elements, not the whole page, because the
+ * app's chrome has other honest uses for some of them.
+ */
+const BLAME_WORDS = /takedown|report|violation|reason|grounds|abuse|infring/i;
+
+/**
+ * Spec 051 US5 (T056, T059): what the Game Master sees of a pause outside
+ * the notice — that and when, and no reason — then the lift (T053) and the
+ * history it leaves in the world's settings.
+ */
+async function expectMembersToldThatAndWhen(
+  gmPage: Page,
+  adminPage: Page,
+  worldId: string,
+  grounds: string,
+): Promise<void> {
+  // The world list: a status on the world's card.
+  await gmPage.goto("/worlds");
+  const card = gmPage.getByTestId("world-card-play-paused");
+  await expect(card).toContainText(/paused by an operator since \S/, {
+    timeout: 20_000,
+  });
+  await expect(card).not.toContainText(BLAME_WORDS);
+  await expect(gmPage.locator("body")).not.toContainText(grounds);
+
+  // The world page a member lands on: a quiet banner.
+  await gmPage.goto(`/world/${worldId}/staging`);
+  const banner = gmPage.getByTestId("world-play-paused-banner");
+  await expect(banner).toContainText(
+    /Play in this world has been paused by an operator since \S/,
+    { timeout: 20_000 },
+  );
+  await expect(banner).toHaveAttribute("role", "status");
+  await expect(banner).not.toContainText(BLAME_WORDS);
+  await expect(gmPage.locator("body")).not.toContainText(grounds);
+
+  // The lift reaches the notice without a reload (T053): the page asks again
+  // on focus, and offers the way back.
+  await gmPage.goto(`/world/${worldId}/paused`);
+  await expect(
+    gmPage.getByRole("heading", { name: "Play is paused" }),
+  ).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(
+    gmPage.getByRole("link", { name: "Return to the world" }),
+  ).toHaveCount(0);
+  const active = await graphql<{
+    data?: { playPauses?: { nodes: { id: string }[] } };
+    errors?: unknown;
+  }>(
+    adminPage,
+    `
+      query ActivePause($worldId: UUID!) {
+        playPauses(active: true, worldId: $worldId, first: 10) {
+          nodes {
+            id
+          }
+        }
+      }
+    `,
+    { worldId },
+  );
+  const pauseId = active.data?.playPauses?.nodes[0]?.id;
+  if (!pauseId) {
+    throw new Error(`no active pause: ${JSON.stringify(active.errors)}`);
+  }
+  await liftPauseAsOperator(adminPage, pauseId, "Dealt with; play may resume.");
+  await markDocument(gmPage);
+  await gmPage.evaluate(() => window.dispatchEvent(new Event("focus")));
+  const back = gmPage.getByRole("link", { name: "Return to the world" });
+  await expect(back).toBeVisible({ timeout: 15_000 });
+  await expect(
+    gmPage.getByRole("heading", { name: "Play has resumed" }),
+  ).toBeVisible();
+  const sameDocument = await gmPage.evaluate(
+    () =>
+      (window as unknown as { __e2eSameDocument?: boolean })
+        .__e2eSameDocument === true,
+  );
+  expect(sameDocument, "the lift must reach the notice without a reload").toBe(
+    true,
+  );
+  await back.click();
+  await expect(gmPage).toHaveURL(new RegExp(`/world/${worldId}/play$`));
+  await expect(gmPage.locator("canvas")).toBeVisible({ timeout: 60_000 });
+  // Back in play, and staying there: not sent back to the notice.
+  await gmPage.waitForTimeout(6_000);
+  await expect(gmPage).toHaveURL(new RegExp(`/world/${worldId}/play$`));
+
+  // The world's settings: the history, times only.
+  await gmPage.goto(`/world/${worldId}/settings/system`);
+  const history = gmPage.getByTestId("play-pause-history-card");
+  await expect(history).toBeVisible({ timeout: 20_000 });
+  const rows = history.getByTestId("play-pause-history-row");
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first().locator("time")).toHaveCount(2);
+  await expect(history).not.toContainText("Still paused");
+  await expect(history).not.toContainText(BLAME_WORDS);
+  await expect(gmPage.locator("body")).not.toContainText(grounds);
+  await expect(gmPage.getByTestId("world-play-paused-banner")).toHaveCount(0);
+}
+
 test.describe("spec 051 US1: pausing a world's play reaches the table", () => {
   test("two browsers on different scenes leave within 5 s; another world plays on; a non-operator is refused", async ({
     browser,
@@ -351,6 +457,8 @@ test.describe("spec 051 US1: pausing a world's play reaches the table", () => {
 
       expect(gmScenes.length).toBe(gmBeatsAtNotice);
       expect(playerScenes.length).toBe(playerBeatsAtNotice);
+
+      await expectMembersToldThatAndWhen(gmPage, adminPage, worldId, grounds);
     } finally {
       await adminPage.context().close();
       await bystanderContext.close();

@@ -6,6 +6,8 @@ import {
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
+import { useWorldPlayState } from "@/hooks/useWorldPlayState";
+import { formatPauseMoment, pausedSince } from "@/pages/world/playPauseStatus";
 import type { WorldRecord } from "@/types/world";
 
 interface WorldCardProps {
@@ -23,6 +25,9 @@ function shortenId(value: string) {
 
 export function WorldCard({ world, showOwner = false }: WorldCardProps) {
   const packs = useInterfacePacks();
+  // Spec 051 US5: that and when, never why. Refused (and so absent) for an
+  // operator browsing worlds they are not a member of.
+  const pausedAt = pausedSince(useWorldPlayState(world.id));
 
   return (
     <Card surface="parchment" className="grid gap-4 p-5">
@@ -42,6 +47,18 @@ export function WorldCard({ world, showOwner = false }: WorldCardProps) {
           Updated {formatTimestamp(world.updatedAt)}
         </span>
       </div>
+
+      {pausedAt ? (
+        <p
+          data-testid="world-card-play-paused"
+          className="rounded-md border border-border bg-muted px-3 py-2 text-sm font-medium text-foreground"
+        >
+          Play paused by an operator since{" "}
+          <time dateTime={pausedAt} className="tabular-nums">
+            {formatPauseMoment(pausedAt, "short")}
+          </time>
+        </p>
+      ) : null}
 
       <p className="text-sm text-muted-foreground">
         {world.description ??
