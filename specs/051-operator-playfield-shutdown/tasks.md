@@ -349,7 +349,7 @@ These journeys go through the product the way people do: UI only, no GraphQL sho
 
 ### Implementation for User Story 4
 
-- [ ] T051 [US4] Add `liftWorldPlayPause(pauseId, grounds): PlayPause!` in `src/server/src/graphql/mutations_play_pause.rs`, calling `play_pause::lift_pause`. Add it to `ADMIN_ONLY` and `OPERATOR`.
+- [x] T051 [US4] Add `liftWorldPlayPause(pauseId, grounds): PlayPause!` in `src/server/src/graphql/mutations_play_pause.rs`, calling `play_pause::lift_pause`. Add it to `ADMIN_ONLY` and `OPERATOR`.
 - [ ] T052 [US4] Add a "Lift pause" action to each active pause on `apps/web/src/pages/admin/PlayPausesPage.tsx`, with a dialog requiring grounds. An already-lifted refusal shows who lifted it and when.
 - [ ] T053 [US4] Add a "Return to the world" action on `apps/web/src/pages/world/PlayPausedPage.tsx`, shown when `worldPlayState.paused` is false. It navigates to the world page, which rejoins through the normal path. Depends on T057.
 - [ ] T054 [US4] Run `play-pause-lift.spec.ts` and the earlier pause e2e until they pass, then `tsc --noEmit`. Commit.

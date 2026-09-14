@@ -756,6 +756,8 @@ pub const OPERATOR: &[&str] = &[
     // Approving pauses a world, and deciding a request for a world already
     // paused is exactly the case it must not be refused in (FR-036).
     "decidePlayPauseRequest",
+    // Lifting is only ever done to a paused world (FR-040).
+    "liftWorldPlayPause",
     // Refuses anyone but a site admin: the operator's way to stop a world's
     // repository sync, which a pause should never stand in the way of.
     "deactivateLoreSync",

@@ -142,8 +142,44 @@ impl PlayPauseMutation {
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
         .map_err(|e: PauseError| e.into())
     }
+
+    /// Lift `pauseId`, on `grounds`, so the world's live play can start again.
+    ///
+    /// Sets the lift and nothing else: a scene taken down while the world was
+    /// paused stays withheld, and no membership changes (FR-041, FR-042).
+    /// Refuses blank grounds with `GROUNDS_REQUIRED` and an unknown pause with
+    /// `PAUSE_NOT_FOUND`. A pause somebody already lifted is refused with
+    /// `PAUSE_ALREADY_LIFTED`, whose extensions say who (`liftedBy`) and when
+    /// (`liftedAt`), so the second operator knows the world is already free.
+    async fn lift_world_play_pause(
+        &self,
+        ctx: &Context<'_>,
+        pause_id: Uuid,
+        grounds: String,
+    ) -> GraphQLResult<GraphQLPlayPause> {
+        let operator = admin_user(ctx)?.user_id;
+        let mut conn = app_state(ctx)?
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        tokio::task::spawn_blocking(move || {
+            let lifted = play_pause::lift_pause(&mut conn, operator, pause_id, &grounds)?;
+            play_pauses_for_graphql(&mut conn, vec![lifted])
+                .map_err(PauseError::from)?
+                .pop()
+                .ok_or_else(|| PauseError::Database("the pause did not read back".into()))
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|e: PauseError| e.into())
+    }
 }
 
 #[cfg(test)]
 #[path = "mutations_play_pause_tests.rs"]
 mod mutations_play_pause_tests;
+
+#[cfg(test)]
+#[path = "mutations_play_pause_lift_tests.rs"]
+mod mutations_play_pause_lift_tests;

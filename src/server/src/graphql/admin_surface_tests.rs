@@ -225,6 +225,12 @@ const ADMIN_ONLY: &[(&str, &str)] = &[
         "decidePlayPauseRequest",
         r#"mutation { decidePlayPauseRequest(requestId: "00000000-0000-0000-0000-000000000001", decision: APPROVE, note: "x") { __typename } }"#,
     ),
+    // Spec 051 US4: lifting a pause. No world role lifts one, the Owner's
+    // included (FR-040).
+    (
+        "liftWorldPlayPause",
+        r#"mutation { liftWorldPlayPause(pauseId: "00000000-0000-0000-0000-000000000001", grounds: "x") { __typename } }"#,
+    ),
     (
         "updateOauthProvider",
         r#"mutation { updateOauthProvider(providerId: "00000000-0000-0000-0000-000000000001", config: {}) { __typename } }"#,

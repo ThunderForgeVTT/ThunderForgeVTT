@@ -236,6 +236,7 @@ fn the_play_pause_surface_matches_the_contract() {
         "playPauses(active: Boolean, worldId: UUID, first: Int, after: String): PlayPauseConnection!",
         "playPauseCandidates(search: String!, first: Int = 20): [PauseCandidateWorld!]!",
         "pauseWorldPlay(worldId: UUID!, grounds: String!): PauseOutcome!",
+        "liftWorldPlayPause(pauseId: UUID!, grounds: String!): PlayPause!",
         "enum PauseTriggerKind {",
     ] {
         assert!(sdl.contains(expected), "`{expected}` missing from:\n{sdl}");
