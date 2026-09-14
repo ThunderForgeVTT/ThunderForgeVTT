@@ -4,6 +4,7 @@ import { Loader } from "@/components/ui/loader/Loader";
 import { EngineLoader } from "@/components/engine/EngineLoader";
 import type { HeaderNavItem } from "@/components/navigation/AppHeader";
 import { useAuth } from "@/hooks/useAuth";
+import { usePlayPauseRedirect } from "@/hooks/usePlayPauseRedirect";
 import { MainLayout } from "@/layouts/main-layout/MainLayout";
 import type { SetupStatus } from "@/types/auth";
 import { pageLoaders } from "./pageLoaders";
@@ -39,6 +40,13 @@ const NpcEditorPage = lazy(
 const ItemEditorPage = lazy(
   () => import("@/pages/world/compendium/ItemEditorPage"),
 );
+/*
+  Spec 051: where a paused world's table is sent, and where an operator pauses
+  one. Not in `pageLoaders` for the same reason as the editors above: nothing
+  prefetches them. The notice is reached by a pause, not by a nav item.
+*/
+const PlayPausedPage = lazy(() => import("@/pages/world/PlayPausedPage"));
+const AdminPlayPausesPage = lazy(() => import("@/pages/admin/PlayPausesPage"));
 const ScenesRoutePage = lazy(pageLoaders.worldScenes);
 const SceneDetailRoutePage = lazy(pageLoaders.worldSceneDetail);
 const PlayersRoutePage = lazy(pageLoaders.worldPlayers);
@@ -192,6 +200,8 @@ export default function AppRoutes({
 }: AppRoutesProps) {
   const { isAdmin, isAuthenticated, isLoading, redirectAfterLogin } = useAuth();
   const location = useLocation();
+  // Spec 051: a pause from any page lands on the notice.
+  usePlayPauseRedirect();
   const setupRequired = setupStatus.setup_required;
 
   if (!setupRequired && isLoading) {
@@ -555,6 +565,14 @@ export default function AppRoutes({
           }
         />
         <Route
+          path="/admin/play-pauses"
+          element={
+            <RequireAdmin>
+              {renderLazyPage(<AdminPlayPausesPage />, "Loading play pauses")}
+            </RequireAdmin>
+          }
+        />
+        <Route
           path="/welcome"
           element={
             <RequireAuthenticated>
@@ -620,6 +638,18 @@ export default function AppRoutes({
                 <WorldDashboardPage />,
                 "Loading world dashboard",
               )}
+            </RequireAuthenticated>
+          }
+        />
+        {/*
+          Spec 051 US1: outside the playfield, inside the ordinary layout. A
+          table sent here has left play; the header is how it goes elsewhere.
+        */}
+        <Route
+          path="/world/:id/paused"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<PlayPausedPage />, "Loading play status")}
             </RequireAuthenticated>
           }
         />

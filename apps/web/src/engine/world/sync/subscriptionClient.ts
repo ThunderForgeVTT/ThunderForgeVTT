@@ -27,6 +27,8 @@
 
 import { createClient, type Client } from "graphql-ws";
 
+import { reportPlayPausedIn } from "@/api/playPauseSignal";
+
 import { isHeartbeatOffline, subscribeToHeartbeat } from "./heartbeat";
 
 export interface WorldEventLike {
@@ -631,6 +633,14 @@ export function subscribeToWorldEvents(
           deliver(result.data.worldEventsCreated);
           return;
         }
+        // Spec 051: a paused world's stream ends with one error item carrying
+        // `WORLD_PLAY_PAUSED`, then completes — and a paused world refuses to
+        // open one the same way. Before this, an error item fell through to
+        // the silent wake-up below and the completion read as an orderly end,
+        // so a table learned of the pause only if something else told it.
+        // Announced rather than thrown: it is not a failure of this stream,
+        // and every consumer's loop would otherwise log it as one.
+        reportPlayPausedIn(result.errors);
         pending?.resolve(false);
         pending = null;
       },
@@ -827,6 +837,8 @@ export function subscribeToPlayField(
     { query: PLAY_FIELD_SUBSCRIPTION, variables: { worldId, clientId } },
     {
       next: (result) => {
+        // Spec 051: the claim ends with the world's play, and says why.
+        reportPlayPausedIn(result.errors);
         handlers.next(result.data?.playField ?? null);
       },
       error: (err) => {

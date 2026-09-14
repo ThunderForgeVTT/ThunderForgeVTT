@@ -6,6 +6,7 @@ import {
 import { createClient, type Client } from "graphql-ws";
 
 import { postGraphQL } from "../../api/graphqlClient";
+import { reportPlayPausedIn } from "../../api/playPauseSignal";
 import {
   isPeerTransferEnabled,
   reportPeerTransferActivity,
@@ -1648,6 +1649,9 @@ export async function startPeerTransfer(worldId: string): Promise<boolean> {
       { query: PEER_SIGNALS_SUBSCRIPTION, variables: { worldId, sessionId } },
       {
         next: (result) => {
+          // Spec 051: signalling ends with the world's play. The page that
+          // owns play closes the channels; this only says why.
+          reportPlayPausedIn(result.errors);
           const signal = result.data?.peerSignals;
           if (!signal) return;
           void module.receive_peer_signal?.(

@@ -47,8 +47,10 @@ import {
 } from "@/engine/world/sync/offlineQueue";
 import {
   startHeartbeat,
+  stopHeartbeat,
   subscribeToHeartbeat,
 } from "@/engine/world/sync/heartbeat";
+import { onPlayPaused, reportPlayPaused } from "@/api/playPauseSignal";
 import {
   parseReconciledEvent,
   pruneApplied,
@@ -88,6 +90,7 @@ import {
   peerAdjudicationActive,
   setAuthoringMode,
   onAuthoringToolRevoked,
+  stopPeerTransfer,
 } from "@/engine/bevy";
 import { useAuthoringTools } from "@/hooks/useAuthoringTools";
 import { permittedTools, reconcileOpenTool } from "@/lib/authoringTools";
@@ -1560,6 +1563,16 @@ export default function WorldPage() {
       return;
     }
 
+    /**
+     * Spec 051: `EVENT_CODE_WORLD_PLAY_PAUSED` in `world_events.rs`. An
+     * operator paused this world's play. Declared beside its only handler, as
+     * every event code in this app is.
+     *
+     * The event carries `pausedAt` and nothing else, and nothing here reads
+     * even that: the notice asks `worldPlayState` for itself.
+     */
+    const EVENT_CODE_WORLD_PLAY_PAUSED = 28;
+
     const iterator = subscribeToWorldEvents(id)[Symbol.asyncIterator]();
     let cancelled = false;
 
@@ -1568,6 +1581,16 @@ export default function WorldPage() {
         while (!cancelled) {
           const { value: event, done } = await iterator.next();
           if (done || cancelled || !event) break;
+          // This subscription, and not the scene's content one below, because
+          // it is open from the moment the world is: a table that has not
+          // launched a scene yet is still a table that has to leave.
+          if (
+            (event.event_code ?? event.eventCode) ===
+            EVENT_CODE_WORLD_PLAY_PAUSED
+          ) {
+            reportPlayPaused(id);
+            break;
+          }
           const launchedSceneId = parseSceneLaunchedEvent(event);
           if (launchedSceneId) {
             setSelectedSceneId(launchedSceneId);
@@ -2016,6 +2039,29 @@ export default function WorldPage() {
   // not the catch-up, and not the scene refetch this ref was written for.
   // Being already `live` when we start listening is exactly what "has been
   // live once" means.
+
+  /**
+   * Spec 051 US1: leave play when an operator pauses this world.
+   *
+   * The signal is routed centrally (`api/playPauseSignal`), and the app's
+   * router is what goes to `/world/:id/paused`. This page does the half only
+   * it can: stop what outlives an unmount. The heartbeat is module-level and
+   * the peer channels belong to the engine, which persists across route
+   * changes, so neither would close with the page. The world subscriptions
+   * are each effect's own and are disposed as the page unmounts behind the
+   * navigation.
+   *
+   * Nothing is announced here and no error is shown. The person has done
+   * nothing wrong, and the notice says what happened.
+   */
+  useEffect(() => {
+    if (!id) return;
+    return onPlayPaused((worldId) => {
+      if (worldId !== id) return;
+      stopHeartbeat();
+      stopPeerTransfer();
+    });
+  }, [id]);
 
   /**
    * The session heartbeat (spec 028 US7).

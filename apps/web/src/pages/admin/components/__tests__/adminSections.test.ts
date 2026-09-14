@@ -23,6 +23,7 @@ describe("admin sections", () => {
       "/admin/access",
       "/admin/legal",
       "/admin/moderation",
+      "/admin/play-pauses",
     ]);
   });
 

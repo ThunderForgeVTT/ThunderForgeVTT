@@ -128,13 +128,13 @@ Commit.
 
 ### Tests for User Story 1
 
-- [ ] T017 [P] [US1] Write the shared e2e fixture `apps/web/e2e/fixtures/playPause.ts`:
+- [x] T017 [P] [US1] Write the shared e2e fixture `apps/web/e2e/fixtures/playPause.ts`:
   - `pauseWorldAsOperator(adminPage, worldId, grounds)` through GraphQL on the admin session;
   - `liftPauseAsOperator`, `decideRequestAsOperator` and `pendingRequestFor(worldId)`;
   - `expectPausedNotice(page, worldName)`, which asserts the heading, that no grounds text is present, and that no `reload` navigation happened.
 
   Reuse `openAdminPage` from `fixtures/admin.ts`.
-- [ ] T018 [US1] Write `apps/web/e2e/play-pause.spec.ts`:
+- [x] T018 [US1] Write `apps/web/e2e/play-pause.spec.ts`:
   1. A Game Master and an invited player join one world in two browser contexts on **different scenes**, using `inviteAndJoinAsPlayer`, `clickPlay` and `launchSceneByName` from `fixtures/helpers.ts`.
   2. A third context plays a second world.
   3. The operator pauses the first world from the `/admin/play-pauses` UI.
@@ -153,21 +153,21 @@ Commit.
   - `peerSignals` in `src/server/src/peer_signaling/surface.rs`, which is newly wrapped since it had no lifetime check before.
 
   Add one test per subscription asserting refusal to open on a paused world.
-- [ ] T022 [P] [US1] Add `apps/web/src/api/playPause.ts`, with GraphQL documents and typed calls for every field in `contracts/graphql.md`, and an `isPlayPaused(error)` predicate on the extension code.
-- [ ] T023 [US1] Route the pause signal centrally so each source sends the page to `/world/:id/paused`:
+- [x] T022 [P] [US1] Add `apps/web/src/api/playPause.ts`, with GraphQL documents and typed calls for every field in `contracts/graphql.md`, and an `isPlayPaused(error)` predicate on the extension code.
+- [x] T023 [US1] Route the pause signal centrally so each source sends the page to `/world/:id/paused`:
   - `apps/web/src/api/graphqlClient.ts`: any error with `WORLD_PLAY_PAUSED` dispatches a single `play-paused` event carrying `worldId`, deduplicated per world.
   - `apps/web/src/engine/world/sync/subscriptionClient.ts`: a stream error item with that code is surfaced as a pause, not as a thrown failure or a silent `done`.
   - `apps/web/src/pages/world/WorldPage.tsx`: world event code 28 does the same.
   - On receipt, tear down the play session through the existing leave-play path: close peer connections, dispose world subscriptions, and stop the heartbeat. Then navigate with `replace`.
-- [ ] T024 [P] [US1] Build the notice page `apps/web/src/pages/world/PlayPausedPage.tsx` and its route in `apps/web/src/routes/AppRoutes.tsx`, per the contract's *The notice*:
+- [x] T024 [P] [US1] Build the notice page `apps/web/src/pages/world/PlayPausedPage.tsx` and its route in `apps/web/src/routes/AppRoutes.tsx`, per the contract's *The notice*:
   - **Wording:** "Play in {world} has been paused by an operator of this instance, since {time}." Give the actions "Go to your worlds" and a statement that this page will notice when play resumes. Never mention a reason, takedown, report, violation or blame.
   - **Accessibility:** heading focus on arrival, and a polite live region.
   - **Styling:** the existing fantasy design system components in `apps/web/src/components/ui/`, sized to read across a room.
   - **Polling:** `worldPlayState` every 30 s and on focus, stubbed to `paused: true` until T057 lands, with a `// T057` marker.
-- [ ] T025 [US1] Build the operator page `apps/web/src/pages/admin/PlayPausesPage.tsx` with a route under `RequireAdmin` in `AppRoutes.tsx`, and add an entry to `apps/web/src/pages/admin/components/adminSections.ts`.
+- [x] T025 [US1] Build the operator page `apps/web/src/pages/admin/PlayPausesPage.tsx` with a route under `RequireAdmin` in `AppRoutes.tsx`, and add an entry to `apps/web/src/pages/admin/components/adminSections.ts`.
   - **This phase:** a world search (`playPauseCandidates`), a "Pause play" action opening a confirm dialog with required grounds, and an *Active pauses* list (`playPauses(active: true)`).
   - **Later phases** add requests (US3), lift (US4) and the record (US5) as sections of this page.
-- [ ] T026 [US1] Run `play-pause.spec.ts` against the stack until it passes. Record the measured removal times in the commit message. Then run `cargo test -q --lib` for the server (re-run flakes at `--test-threads=1`) and `pnpm exec tsc --noEmit`. Commit.
+- [x] T026 [US1] Run `play-pause.spec.ts` against the stack until it passes. Record the measured removal times in the commit message. Then run `cargo test -q --lib` for the server (re-run flakes at `--test-threads=1`) and `pnpm exec tsc --noEmit`. Commit.
 
 **Checkpoint**: US1 works on its own. An operator can stop a live table.
 

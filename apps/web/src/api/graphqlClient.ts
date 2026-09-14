@@ -1,4 +1,5 @@
 import { withCsrf } from "@/api/auth";
+import { reportPlayPausedIn } from "@/api/playPauseSignal";
 import { reportSessionRefused } from "@/api/sessionExpiry";
 
 /**
@@ -48,7 +49,7 @@ type GraphQLErrorEntry = {
    * caller has to be able to tell that from a genuine error, and matching on
    * the human-readable message would break the first time it is reworded.
    */
-  extensions?: { code?: unknown };
+  extensions?: { code?: unknown; worldId?: unknown };
 };
 
 type GraphQLResponse<TData> = {
@@ -197,6 +198,12 @@ function unwrap<TData>(
       { operation, status: response.status },
     );
   }
+
+  // Spec 051: a refusal because an operator paused the world is announced
+  // once, here, for every request in the app, exactly as a 401 is above. The
+  // caller still throws and still says whatever it says; the page that owns
+  // play is what leaves for the notice (`api/playPauseSignal`).
+  reportPlayPausedIn(payload.errors);
 
   const messages = collectMessages(payload.errors);
   const codes = collectCodes(payload.errors);

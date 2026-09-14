@@ -100,6 +100,16 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     icon: "quill",
     testId: "admin-nav-moderation",
   },
+  /* Spec 051: pausing a world's play. Its own section rather than a card under
+     Moderation because it acts on a live table, not on content, and an
+     operator reaching for it may have seconds rather than a case to read. */
+  {
+    label: "Play pauses",
+    description: "Pause a world's live play, and the pauses in force",
+    to: "/admin/play-pauses",
+    icon: "shield",
+    testId: "admin-nav-play-pauses",
+  },
 ];
 
 /**
