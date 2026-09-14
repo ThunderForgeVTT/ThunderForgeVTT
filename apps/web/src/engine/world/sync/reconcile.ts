@@ -34,7 +34,9 @@ export type RejectionReason =
   | "GONE_AWAY"
   | "INVALID"
   /** Spec 051: an operator paused play in this world; nothing was applied. */
-  | "PLAY_PAUSED";
+  | "PLAY_PAUSED"
+  /** Spec 046: a combat is running and it was somebody else's turn. */
+  | "NOT_YOUR_TURN";
 
 /** One change's fate, as the server reported it. */
 export interface ReconcileOutcome {
@@ -43,6 +45,11 @@ export interface ReconcileOutcome {
   reason?: RejectionReason | null;
   /** Set when `reason` is `SUPERSEDED`: who won. */
   supersededByRole?: string | null;
+  /**
+   * The server's own sentence for a refusal, where it has one — "It is
+   * Ogre's turn" for `NOT_YOUR_TURN`.
+   */
+  refusal?: string | null;
   /**
    * Present only when the server independently determined this outcome and
    * got a different answer (FR-064). It is disclosure, never a refusal —

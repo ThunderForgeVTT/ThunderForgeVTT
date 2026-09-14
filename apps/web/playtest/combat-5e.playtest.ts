@@ -31,8 +31,8 @@ import {
   openTable,
   placeCast,
   sitDown,
-  drag,
   snapshot,
+  tryDrag,
 } from "./table";
 
 /**
@@ -590,31 +590,57 @@ test("a Game Master runs a 5e fight for two players", async ({
       await snapshot(table, "8 · disclosed");
     });
 
-    await test.step("nothing holds a player to their turn", async () => {
-      const active = combat!.combatants.find(
+    await test.step("a player is held to the turn", async () => {
+      // Was FINDING 606. Spec 046 C1: while it is somebody else's turn, a
+      // player's move is refused by the server, the token goes back, and the
+      // refusal names whose turn it is.
+      let active = combat!.combatants.find(
         (c) => c.id === combat!.activeCombatantId,
       );
-      const waiting = active?.label === "Aria" ? brom : aria;
-      const token = waiting === brom ? cast.Brom : cast.Aria;
+      if (active?.label === "Aria" || active?.label === "Brom") {
+        // Make it the ogre's turn, so both players are waiting.
+        for (let turn = 0; turn < 4 && active?.label !== "Ogre"; turn += 1) {
+          combat = await advanceTurn(table, combat!.id);
+          active = combat!.combatants.find(
+            (c) => c.id === combat!.activeCombatantId,
+          );
+        }
+      }
+      const waiting = aria;
+      const token = cast.Aria;
       const from = await waiting.page.evaluate(
         (id) =>
           window.__worldProbe?.state()?.tokens.find((t) => t.id === id) ?? null,
         token.tokenId,
       );
-      await drag(waiting, token.tokenId, { x: 128, y: 0 });
-      const to = await waiting.page.evaluate(
-        (id) =>
-          window.__worldProbe?.state()?.tokens.find((t) => t.id === id) ?? null,
-        token.tokenId,
-      );
-      expect
-        .soft(
-          to?.x === from?.x,
-          `FINDING: it is ${active?.label}'s turn, and ${waiting.name} moved ` +
-            "anyway. Nothing checks whose turn it is before a move, a roll or " +
-            "an ability — the tracker is bookkeeping the product never reads.",
+      const moved = await tryDrag(waiting, token.tokenId, { x: 128, y: 0 });
+      await expect(
+        waiting.page.getByText(`It is ${active?.label}'s turn`).first(),
+        "the player is told whose turn it is",
+      ).toBeVisible({ timeout: 10_000 });
+      await expect
+        .poll(
+          () =>
+            waiting.page.evaluate(
+              (id) =>
+                window.__worldProbe?.state()?.tokens.find((t) => t.id === id)
+                  ?.x ?? null,
+              token.tokenId,
+            ),
+          {
+            timeout: 10_000,
+            message:
+              `it is ${active?.label}'s turn, so ${waiting.name}'s token ` +
+              "goes back where it was",
+          },
         )
-        .toBe(true);
+        .toBe(from?.x);
+      testInfo.annotations.push({
+        type: "turn order",
+        description:
+          `on ${active?.label}'s turn ${waiting.name}'s drag ` +
+          `${moved ? "moved and was put back" : "was refused"}`,
+      });
       await snapshot(table, "9 · out of turn");
     });
 

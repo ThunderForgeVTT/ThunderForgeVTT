@@ -761,3 +761,59 @@ async fn a_paused_world_rejects_every_queued_change_and_applies_none() {
     let mut conn = state.db_pool.get().unwrap();
     assert_eq!(token_x(&mut conn, token), 0.0, "nothing was applied");
 }
+
+/// Spec 046 C1: a move queued offline meets the turn at replay, against the
+/// combat the server holds then. Refused with the same sentence a live move
+/// gets, and nothing written. A token not in the fight is not held, the
+/// player is not held on their own turn, and the Game Master never is.
+#[test]
+fn a_queued_move_on_somebody_elses_turn_is_refused_and_says_whose() {
+    let state = crate::test_support::test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let fight = crate::combat::turn::tests::fight(&mut conn);
+
+    let refused = apply_one(
+        &mut conn,
+        fight.world_id,
+        fight.player,
+        Role::Player,
+        take_reconnect_seq(fight.world_id),
+        move_command(fight.hero, 7.0),
+    );
+    assert!(!refused.applied);
+    assert_eq!(refused.reason, Some(GraphQLRejectionReason::NotYourTurn));
+    assert_eq!(refused.refusal.as_deref(), Some("It is Ogre's turn"));
+    assert_eq!(token_x(&mut conn, fight.hero), 0.0, "nothing was applied");
+
+    let exploring = apply_one(
+        &mut conn,
+        fight.world_id,
+        fight.player,
+        Role::Player,
+        take_reconnect_seq(fight.world_id),
+        move_command(fight.bystander, 4.0),
+    );
+    assert!(exploring.applied, "{:?}", exploring.reason);
+
+    crate::combat::turn::tests::set_turn(&mut conn, fight.combat_id, fight.hero_combatant);
+    let on_turn = apply_one(
+        &mut conn,
+        fight.world_id,
+        fight.player,
+        Role::Player,
+        take_reconnect_seq(fight.world_id),
+        move_command(fight.hero, 7.0),
+    );
+    assert!(on_turn.applied, "{:?}", on_turn.reason);
+
+    crate::combat::turn::tests::set_turn(&mut conn, fight.combat_id, fight.ogre_combatant);
+    let gm = apply_one(
+        &mut conn,
+        fight.world_id,
+        fight.gm,
+        Role::GameMaster,
+        take_reconnect_seq(fight.world_id),
+        move_command(fight.hero, 9.0),
+    );
+    assert!(gm.applied, "a Game Master is never held: {:?}", gm.reason);
+}

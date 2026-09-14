@@ -52,6 +52,10 @@ pub enum RejectionReason {
     /// to carry on. Distinct from `PermissionDenied` so the person is told what
     /// happened rather than that they lost a permission they still have.
     PlayPaused,
+    /// A combat is running and it is somebody else's turn (spec 046 C1). The
+    /// change is not applied and nothing is spent; the outcome says whose
+    /// turn it is.
+    NotYourTurn,
 }
 
 /// What became of one queued change.

@@ -105,6 +105,9 @@ pub enum GraphQLRejectionReason {
     /// An operator paused play in this world (spec 051 FR-023). Nothing in the
     /// batch is applied, and the client discards it rather than retrying.
     PlayPaused,
+    /// A combat is running in the scene and it is somebody else's turn
+    /// (spec 046 C1). `refusal` on the outcome says whose.
+    NotYourTurn,
 }
 
 /// One change made while disconnected.
@@ -209,6 +212,10 @@ pub struct GraphQLReconcileOutcome {
     /// reported, and only for a Game Master submitter (FR-067). It never
     /// changes what happened to the change — `applied` above says that.
     pub discrepancy: Option<GraphQLDiscrepancy>,
+    /// The sentence a refusal is given in, where the server has one to give —
+    /// "It is Ogre's turn" for `NOT_YOUR_TURN`. The same words the live move
+    /// is refused with, so a queued move and a dragged one say the same thing.
+    pub refusal: Option<String>,
 }
 
 impl GraphQLReconcileOutcome {
@@ -222,6 +229,7 @@ impl GraphQLReconcileOutcome {
             reason: None,
             superseded_by_role: None,
             discrepancy: None,
+            refusal: None,
         }
     }
 
@@ -232,6 +240,14 @@ impl GraphQLReconcileOutcome {
             reason: Some(reason),
             superseded_by_role: None,
             discrepancy: None,
+            refusal: None,
+        }
+    }
+
+    fn not_your_turn(local_id: String, refusal: String) -> Self {
+        Self {
+            refusal: Some(refusal),
+            ..Self::rejected(local_id, GraphQLRejectionReason::NotYourTurn)
         }
     }
 
@@ -242,6 +258,7 @@ impl GraphQLReconcileOutcome {
             reason: Some(GraphQLRejectionReason::Superseded),
             superseded_by_role: Some(role_name(by).to_string()),
             discrepancy: None,
+            refusal: None,
         }
     }
 
@@ -666,6 +683,35 @@ fn apply_one(
             GraphQLRejectionReason::PermissionDenied,
         )
         .disclosing(discrepancy);
+    }
+
+    // Spec 046 C1: a queued move meets the turn the way a live one does — at
+    // replay, against the combat the server holds now, not the one there was
+    // when the move was made. Position only: rotation and scale are not a
+    // move. A Game Master is never held (`turn_check` asks).
+    if edit.x.is_some() || edit.y.is_some() {
+        let is_admin = false;
+        match crate::combat::turn::turn_check(
+            conn,
+            existing.scene_id,
+            edit.token_id,
+            subject_user,
+            is_admin,
+        ) {
+            Ok(check) => {
+                if let Some(refusal) = check.refusal() {
+                    return GraphQLReconcileOutcome::not_your_turn(local_id, refusal)
+                        .disclosing(discrepancy);
+                }
+            }
+            Err(_) => {
+                return GraphQLReconcileOutcome::rejected(
+                    local_id,
+                    GraphQLRejectionReason::Invalid,
+                )
+                .disclosing(discrepancy);
+            }
+        }
     }
 
     // FR-040: who wins. `conflict::resolve` is shared with the client, which

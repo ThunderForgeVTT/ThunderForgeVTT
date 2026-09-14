@@ -16,6 +16,7 @@ const RECONCILE_MUTATION = `
       applied
       reason
       supersededByRole
+      refusal
       discrepancy {
         userId
         recordId

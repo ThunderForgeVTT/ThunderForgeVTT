@@ -63,8 +63,13 @@ export interface ReconcileReportProps {
 function reasonSentence(
   reason: RejectionReason | null | undefined,
   byRole?: string | null,
+  refusal?: string | null,
 ): string {
   switch (reason) {
+    case "NOT_YOUR_TURN":
+      // The server's words, so a queued move and a dragged one are refused
+      // with the same sentence.
+      return `${refusal ?? "It was not your turn"}, so this move didn't apply.`;
     case "SUPERSEDED":
       return `${byRole === "GameMaster" ? "The Game Master" : "Someone else"} changed this while you were offline, and their change takes precedence.`;
     case "PERMISSION_DENIED":
@@ -156,8 +161,12 @@ export function ReconcileReport({
                     server has now refused it — so the map no longer shows it,
                     and the person it belonged to should be told. */}
                 A move you adjudicated for another player was not accepted.{" "}
-                {reasonSentence(outcome.reason, outcome.supersededByRole)} Their
-                token is back to where the server has it.
+                {reasonSentence(
+                  outcome.reason,
+                  outcome.supersededByRole,
+                  outcome.refusal,
+                )}{" "}
+                Their token is back to where the server has it.
               </li>
             ))}
           </ul>
@@ -174,7 +183,11 @@ export function ReconcileReport({
                 className="text-xs text-muted-foreground"
                 data-reason={outcome.reason ?? "UNKNOWN"}
               >
-                {reasonSentence(outcome.reason, outcome.supersededByRole)}
+                {reasonSentence(
+                  outcome.reason,
+                  outcome.supersededByRole,
+                  outcome.refusal,
+                )}
               </li>
             ))}
           </ul>

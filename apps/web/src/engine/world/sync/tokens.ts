@@ -184,7 +184,8 @@ export async function applyTokenWorldEvent(
  * which is why this is the catch and not a wall-specific branch.
  *
  * A refusal the server *considered* is shown in the server's own words: "A
- * wall is in the way" is written to be read by a player. A transport failure
+ * wall is in the way", or since spec 046 "It is Ogre's turn" (with the
+ * tracker's "Unknown" for a hidden name), is written to be read by a player. A transport failure
  * is not — its message is an HTTP status — so that one is translated here
  * rather than shown raw.
  */
@@ -492,7 +493,8 @@ export function startTokenMutationBridge(
             //
             // Spec 045 US2: and now the walls have a say, so this can be
             // refused for a second reason — one the player has to see and the
-            // board has to reflect.
+            // board has to reflect. Spec 046 C1 adds a third: somebody else's
+            // turn, refused before the walls are asked.
             void moveOwnToken(
               knownTokenId,
               token.x,

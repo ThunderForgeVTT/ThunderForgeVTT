@@ -3877,6 +3877,12 @@ type GraphQLReconcileOutcome {
 	changes what happened to the change — `applied` above says that.
 	"""
 	discrepancy: GraphQLDiscrepancy
+	"""
+	The sentence a refusal is given in, where the server has one to give —
+	"It is Ogre's turn" for `NOT_YOUR_TURN`. The same words the live move
+	is refused with, so a queued move and a dragged one say the same thing.
+	"""
+	refusal: String
 }
 
 """
@@ -3907,6 +3913,11 @@ enum GraphQLRejectionReason {
 	batch is applied, and the client discards it rather than retrying.
 	"""
 	PLAY_PAUSED
+	"""
+	A combat is running in the scene and it is somebody else's turn
+	(spec 046 C1). `refusal` on the outcome says whose.
+	"""
+	NOT_YOUR_TURN
 }
 
 """

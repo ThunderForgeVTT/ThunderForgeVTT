@@ -431,6 +431,26 @@ impl TokenMutation {
             ));
         }
 
+        // Spec 046 C1: the turn gets a say before the walls do. A move made on
+        // somebody else's turn is refused whatever route it took, so there is
+        // no point judging the route.
+        {
+            let mut conn = state
+                .db_pool
+                .get()
+                .map_err(|_| Error::new("Failed to get DB connection"))?;
+            let scene_id = existing.scene_id;
+            let check = tokio::task::spawn_blocking(move || {
+                crate::combat::turn::turn_check(&mut conn, scene_id, token_id, user_id, is_admin)
+            })
+            .await
+            .map_err(|_| Error::new("Failed to spawn blocking task"))?
+            .map_err(|_| Error::new("Failed to check whose turn it is"))?;
+            if let Some(refusal) = check.refusal() {
+                return Err(Error::new(refusal));
+            }
+        }
+
         // Spec 045 US2: the walls get a say, and this is the only place they
         // get one for a player. The engine refuses the move first so the stop
         // looks like a wall; this is the refusal that counts, because the
