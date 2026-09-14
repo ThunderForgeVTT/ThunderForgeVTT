@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   getModerationCase,
   getModerationHistoryForAccount,
@@ -41,10 +42,34 @@ export default function ModerationReviewPage() {
   // Spec 039 SC-003: a person handling a notice has its case reference in
   // hand, and must reach the case — and from it the agreement — without the
   // account first being flagged three times.
-  const [caseReference, setCaseReference] = useState("");
+  //
+  // Spec 051 T048: a pause request links to the case behind each takedown as
+  // `/admin/moderation?case=<id>`, and the case opens on arrival.
+  const [searchParams] = useSearchParams();
+  const linkedCase = searchParams.get("case")?.trim() ?? "";
+  const [caseReference, setCaseReference] = useState(linkedCase);
   const [openedCase, setOpenedCase] = useState<
     ModerationCaseRecord | "missing" | null
   >(null);
+
+  useEffect(() => {
+    if (!linkedCase) return;
+    let active = true;
+    getModerationCase(linkedCase)
+      .then((found) => {
+        if (active) setOpenedCase(found ?? "missing");
+      })
+      .catch((err: unknown) => {
+        if (active) {
+          setError(
+            err instanceof Error ? err.message : "Failed to open the case",
+          );
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [linkedCase]);
 
   const openCase = async (event: FormEvent) => {
     event.preventDefault();

@@ -78,6 +78,8 @@ export interface OperatorName {
 export interface PauseTrigger {
   kind: PauseTriggerKind;
   moderationActionId: string | null;
+  /** The moderation case the action belongs to; cases open by this id. */
+  caseId: string | null;
   entityType: string | null;
   entityId: string | null;
   note: string | null;
@@ -145,6 +147,7 @@ export interface PauseDecisionOutcome {
 const TRIGGER_FIELDS = `
   kind
   moderationActionId
+  caseId
   entityType
   entityId
   note

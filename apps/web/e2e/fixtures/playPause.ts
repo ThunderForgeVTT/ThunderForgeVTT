@@ -25,7 +25,11 @@ export interface PauseRequestRow {
   id: string;
   worldId: string;
   state: "PENDING" | "APPROVED" | "DECLINED";
-  triggers: { kind: string }[];
+  triggers: {
+    kind: string;
+    entityId: string | null;
+    caseId: string | null;
+  }[];
   playedNow: boolean;
 }
 
@@ -130,7 +134,7 @@ export async function decideRequestAsOperator(
       mutation DecidePlayPauseRequest($requestId: UUID!, $decision: PauseDecision!, $note: String!) {
         decidePlayPauseRequest(requestId: $requestId, decision: $decision, note: $note) {
           decidedHere
-          request { id worldId state playedNow triggers { kind } }
+          request { id worldId state playedNow triggers { kind entityId caseId } }
           pause { ${PAUSE_FIELDS} }
         }
       }
@@ -162,6 +166,8 @@ export async function pendingRequestFor(
             playedNow
             triggers {
               kind
+              entityId
+              caseId
             }
           }
         }
@@ -244,4 +250,64 @@ export async function expectPausedNotice(
       )?.type ?? "none",
   );
   expect(navigationType).not.toBe("reload");
+}
+
+const CASE_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** What the claimant picks under "Content type" on `/legal/dmca`. */
+export type TakedownContentType =
+  | "Scene"
+  | "Actor / NPC / character"
+  | "Item"
+  | "Lore entry";
+
+/**
+ * File a statutorily complete takedown notice through the real `/legal/dmca`
+ * form, as a claimant, and return the case reference the page gives back.
+ *
+ * `claimant` should be a signed-out page: the intake needs no account.
+ */
+export async function fileTakedown(
+  claimant: Page,
+  contentType: TakedownContentType,
+  entityId: string,
+  entityName: string,
+): Promise<string> {
+  await claimant.goto("/legal/dmca");
+  await expect(claimant.getByTestId("takedown-notice-form")).toBeVisible();
+
+  await claimant.getByLabel("Content type").click();
+  await claimant.getByRole("option", { name: contentType }).click();
+  await claimant.locator("#dmca-entity-id").fill(entityId);
+  await claimant.locator("#dmca-claimant-name").fill("Map Publisher");
+  await claimant.locator("#dmca-claimant-contact").fill("rights@example.test");
+  await claimant
+    .locator("#dmca-work-description")
+    .fill("A published battle map, registered copyright.");
+  await claimant
+    .locator("#dmca-infringing-location")
+    .fill(`"${entityName}" in a ThunderForge world.`);
+  await claimant.locator("#dmca-good-faith").click();
+  await claimant.locator("#dmca-accuracy").click();
+  await claimant.locator("#dmca-signature").fill("Map Publisher");
+
+  await claimant.getByTestId("takedown-notice-submit").click();
+  const accepted = claimant.getByTestId("takedown-notice-accepted");
+  await expect(accepted).toBeVisible({ timeout: 15_000 });
+  const caseId = (await accepted.locator("code").innerText()).trim();
+  expect(caseId).toMatch(CASE_ID_PATTERN);
+  return caseId;
+}
+
+/**
+ * A takedown on a scene, filed through `/legal/dmca`. Moved here from
+ * `dmca-scene-takedown.spec.ts` for spec 051's request e2e (T043).
+ */
+export async function fileSceneTakedown(
+  claimant: Page,
+  sceneId: string,
+  sceneName: string,
+): Promise<string> {
+  return fileTakedown(claimant, "Scene", sceneId, sceneName);
 }

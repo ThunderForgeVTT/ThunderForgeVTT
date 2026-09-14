@@ -1,11 +1,12 @@
 import { execFileSync } from "node:child_process";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import {
   currentSharingTermsVersion,
   graphql,
   registerAndCreateWorld,
   uniqueSuffix,
 } from "./fixtures/helpers";
+import { fileSceneTakedown } from "./fixtures/playPause";
 
 /**
  * specs/015-dmca-notice-takedown T042: a scene is a moderated entity type.
@@ -78,37 +79,6 @@ function elapseWaitingPeriod(caseId: string): void {
         `psql reported: ${JSON.stringify(output)}`,
     );
   }
-}
-
-async function fileSceneTakedown(
-  claimant: Page,
-  sceneId: string,
-  sceneName: string,
-): Promise<string> {
-  await claimant.goto("/legal/dmca");
-  await expect(claimant.getByTestId("takedown-notice-form")).toBeVisible();
-
-  await claimant.getByLabel("Content type").click();
-  await claimant.getByRole("option", { name: "Scene" }).click();
-  await claimant.locator("#dmca-entity-id").fill(sceneId);
-  await claimant.locator("#dmca-claimant-name").fill("Map Publisher");
-  await claimant.locator("#dmca-claimant-contact").fill("rights@example.test");
-  await claimant
-    .locator("#dmca-work-description")
-    .fill("A published battle map, registered copyright.");
-  await claimant
-    .locator("#dmca-infringing-location")
-    .fill(`Scene "${sceneName}" in a shared ThunderForge collection.`);
-  await claimant.locator("#dmca-good-faith").click();
-  await claimant.locator("#dmca-accuracy").click();
-  await claimant.locator("#dmca-signature").fill("Map Publisher");
-
-  await claimant.getByTestId("takedown-notice-submit").click();
-  const accepted = claimant.getByTestId("takedown-notice-accepted");
-  await expect(accepted).toBeVisible({ timeout: 15_000 });
-  const caseId = (await accepted.locator("code").innerText()).trim();
-  expect(caseId).toMatch(CASE_ID_PATTERN);
-  return caseId;
 }
 
 test.describe("spec 015 T042: a takedown reaches a scene in a shared collection", () => {
