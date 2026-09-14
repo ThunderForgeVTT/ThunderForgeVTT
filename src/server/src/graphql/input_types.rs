@@ -398,6 +398,11 @@ pub struct GraphQLCreateTokenInput {
     /// the renderer, and a kind nothing can draw would put an invisible or
     /// mislabelled token on somebody's battle map.
     pub token_type: Option<String>,
+    /// Spec 046 FR-016: whether the token is its actor (`true`) or an
+    /// unlinked copy holding its own hit points (`false`). Omitted, the
+    /// server decides from the actor: a character or a unique NPC is linked,
+    /// any other NPC is a copy, and a token with no actor is a marker.
+    pub linked: Option<bool>,
 }
 
 /// Input for updating an existing token's position/properties
@@ -417,8 +422,6 @@ pub struct GraphQLUpdateTokenInput {
     /// collapses both to `None`, which made a GM's only way to undo token
     /// art be replacing it with different art.
     pub photo_url: MaybeUndefined<String>,
-    pub health: Option<i32>,
-    pub max_health: Option<i32>,
     /// Reclassify a placed token. Omitted leaves the kind alone.
     pub token_type: Option<String>,
 }

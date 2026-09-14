@@ -25,6 +25,11 @@ export type WorldActorRecord = {
   loreLinkedFrom: LoreLinkSourceRecord[];
   /** Spec 017 (FR-004): offered on the Actor Selection screen. */
   availableForClaim: boolean;
+  /**
+   * Spec 046 FR-016: a named individual. Its tokens are placed linked; any
+   * other NPC's are placed as unlinked copies with their own hit points.
+   */
+  isUnique: boolean;
   /** Spec 017 (FR-012): who currently has this actor claimed, if anyone. */
   claimedBy: ActorClaimMemberRecord | null;
 };

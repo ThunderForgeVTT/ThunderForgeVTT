@@ -35,9 +35,8 @@ function token(over: Partial<TokenRecord> = {}): TokenRecord {
     ownerUserId: null,
     isPrimary: false,
     photoUrl: null,
-    health: null,
-    maxHealth: null,
     tokenType: "character",
+    linked: false,
     ...over,
   };
 }
@@ -60,6 +59,7 @@ function actor(over: Partial<WorldActorRecord> = {}): WorldActorRecord {
     updatedAt: "2026-09-01T00:00:00Z",
     loreLinkedFrom: [],
     availableForClaim: false,
+    isUnique: false,
     claimedBy: null,
     ...over,
   };

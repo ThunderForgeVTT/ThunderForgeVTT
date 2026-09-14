@@ -330,6 +330,10 @@ type AppMutationRoot {
 	activateInteractive(interactiveId: UUID!): GraphQLActivationResult!
 	"""
 	Create a new token on a scene (scene owner only)
+	
+	Spec 046 FR-016: the token is linked to its actor or an unlinked copy
+	of it, as `input.linked` says or, when it says nothing, as the actor
+	decides — see `mutations_token_links::placement_for`.
 	"""
 	createToken(input: GraphQLCreateTokenInput!): GraphQLToken!
 	"""
@@ -387,6 +391,19 @@ type AppMutationRoot {
 	Game Master always sees it; only a Game Master may change it.
 	"""
 	setTokenNameVisibility(tokenId: UUID!, visible: Boolean!): GraphQLToken!
+	"""
+	Make a token its actor (`linked: true`) or an unlinked copy of it.
+	Game Master only (spec 046 FR-016, ADR-102).
+	
+	Linking a copy discards the copy's own hit points: it takes its
+	actor's. Unlinking starts the copy from the actor's current values.
+	"""
+	setTokenLink(tokenId: UUID!, linked: Boolean!): GraphQLToken!
+	"""
+	Mark an NPC as a named individual, whose tokens are placed linked, or
+	not. Game Master only. Tokens already placed are unchanged.
+	"""
+	setActorUnique(actorId: UUID!, unique: Boolean!): GraphQLWorldActor!
 	uploadCanvasImage(worldId: UUID!, sceneId: UUID!, kind: GraphQLCanvasImageAssetKind!, file: Upload!): GraphQLCanvasImageAsset!
 	createActor(input: CreateActorInput!): GraphQLWorldActor!
 	updateActor(input: UpdateActorInput!): GraphQLWorldActor!
@@ -2906,6 +2923,13 @@ input GraphQLCreateTokenInput {
 	mislabelled token on somebody's battle map.
 	"""
 	tokenType: String
+	"""
+	Spec 046 FR-016: whether the token is its actor (`true`) or an
+	unlinked copy holding its own hit points (`false`). Omitted, the
+	server decides from the actor: a character or a unique NPC is linked,
+	any other NPC is a copy, and a token with no actor is a marker.
+	"""
+	linked: Boolean
 }
 
 """
@@ -4228,8 +4252,6 @@ type GraphQLToken {
 	ownerUserId: UUID
 	isPrimary: Boolean!
 	photoUrl: String
-	health: Int
-	maxHealth: Int
 	"""
 	What this token represents: `character`, `npc`, `vehicle`, `object`.
 	"""
@@ -4245,6 +4267,13 @@ type GraphQLToken {
 	Whether players may read the name. A Game Master always can.
 	"""
 	nameVisibleToPlayers: Boolean!
+	"""
+	Spec 046 (ADR-102): `true` when this token is its actor — its hit
+	points are the actor's — and `false` for an unlinked copy holding its
+	own. A copy's record itself is not sent: bars come from `tokenStatus`,
+	which decides what each viewer may know.
+	"""
+	linked: Boolean!
 }
 
 """
@@ -4406,8 +4435,6 @@ input GraphQLUpdateTokenInput {
 	art be replacing it with different art.
 	"""
 	photoUrl: String
-	health: Int
-	maxHealth: Int
 	"""
 	Reclassify a placed token. Omitted leaves the kind alone.
 	"""
@@ -4612,6 +4639,11 @@ type GraphQLWorldActor {
 	joining player on the Actor Selection screen.
 	"""
 	availableForClaim: Boolean!
+	"""
+	Spec 046 FR-016: a named individual. Its tokens are placed linked;
+	any other NPC's tokens are placed as unlinked copies.
+	"""
+	isUnique: Boolean!
 	"""
 	Effective Viewer/Editor/Owner level the calling user holds on this
 	actor (data-model.md's "effective actor permission") — DM of the

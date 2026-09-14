@@ -226,6 +226,8 @@ pub mod mutations_combat;
 pub use mutations_combat::{CombatMutation, CombatQuery};
 // Spec 046: the Game Master's Damage and Heal.
 pub mod mutations_combat_hit_points;
+// Spec 046 (ADR-102): linked tokens, unlinked copies, unique NPCs.
+pub mod mutations_token_links;
 
 // Spec 017: actor "available for claiming" flag, atomic claiming,
 // player-created characters, and GM un-claim.

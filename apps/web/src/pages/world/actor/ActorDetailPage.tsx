@@ -7,6 +7,7 @@ import { createActorShareLink, revokeActorShareLink } from "@/api/actorShares";
 import {
   getActor,
   setActorAvailability,
+  setActorUnique,
   unclaimActor,
   updateActor,
 } from "@/api/actors";
@@ -68,6 +69,7 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
   const [askingToShare, setAskingToShare] = useState(false);
   const [isRevoking, setIsRevoking] = useState(false);
   const [isUpdatingClaim, setIsUpdatingClaim] = useState(false);
+  const [isUpdatingUnique, setIsUpdatingUnique] = useState(false);
   const { isGm: isDm } = useWorldRole(worldId, world);
   const { user } = useAuth();
 
@@ -204,6 +206,21 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
       );
     } finally {
       setIsUpdatingClaim(false);
+    }
+  };
+
+  const handleToggleUnique = async (unique: boolean) => {
+    setIsUpdatingUnique(true);
+    setStatus(null);
+    try {
+      const updated = await setActorUnique(actorId, unique);
+      setActor(updated);
+    } catch (err) {
+      setStatus(
+        err instanceof Error ? err.message : "Failed to mark the NPC unique",
+      );
+    } finally {
+      setIsUpdatingUnique(false);
     }
   };
 
@@ -520,6 +537,33 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
                 : null;
             })()
           : null}
+
+        {/* Spec 046 FR-016: GM-only, NPC-only. A unique NPC is one creature
+            wherever it stands, so its tokens are placed linked to it; any
+            other NPC's tokens are copies with hit points of their own. */}
+        {isDm && actor.isNpc ? (
+          <Card className="grid gap-3 p-4" data-testid="actor-unique-block">
+            <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+              On the board
+            </h2>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                data-testid="actor-unique-toggle"
+                checked={actor.isUnique}
+                disabled={isUpdatingUnique}
+                onChange={(e) => void handleToggleUnique(e.target.checked)}
+              />
+              Unique — a named individual, placed linked to this sheet
+            </label>
+            <p className="text-sm text-muted-foreground">
+              {actor.isUnique
+                ? "New tokens share this NPC's hit points."
+                : "New tokens are copies, each with hit points of its own."}{" "}
+              Tokens already placed keep what they are.
+            </p>
+          </Card>
+        ) : null}
 
         {/* Spec 017 (T028, US3): GM-only, PC-only "available for claiming"
             control plus who currently has this character claimed. */}

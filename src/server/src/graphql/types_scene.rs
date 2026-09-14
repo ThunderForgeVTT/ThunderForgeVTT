@@ -157,6 +157,9 @@ pub struct GraphQLWorldActor {
     /// Spec 017 (FR-004): GM-set flag offering this (PC-only) actor to a
     /// joining player on the Actor Selection screen.
     pub available_for_claim: bool,
+    /// Spec 046 FR-016: a named individual. Its tokens are placed linked;
+    /// any other NPC's tokens are placed as unlinked copies.
+    pub is_unique: bool,
 }
 
 #[async_graphql::ComplexObject]
@@ -236,6 +239,7 @@ impl From<WorldActor> for GraphQLWorldActor {
             created_at: actor.created_at,
             updated_at: actor.updated_at,
             available_for_claim: actor.available_for_claim,
+            is_unique: actor.is_unique,
         }
     }
 }
@@ -409,8 +413,6 @@ pub struct GraphQLToken {
     owner_user_id: Option<uuid::Uuid>,
     is_primary: bool,
     photo_url: Option<String>,
-    health: Option<i32>,
-    max_health: Option<i32>,
     /// What this token represents: `character`, `npc`, `vehicle`, `object`.
     token_type: String,
     /// Playtest 2026-09-10 P7: the name drawn above the token — its own
@@ -420,6 +422,11 @@ pub struct GraphQLToken {
     name: Option<String>,
     /// Whether players may read the name. A Game Master always can.
     name_visible_to_players: bool,
+    /// Spec 046 (ADR-102): `true` when this token is its actor — its hit
+    /// points are the actor's — and `false` for an unlinked copy holding its
+    /// own. A copy's record itself is not sent: bars come from `tokenStatus`,
+    /// which decides what each viewer may know.
+    linked: bool,
 }
 
 /// A token's own written name: its `metadata.label`, when that is non-blank.
@@ -451,14 +458,19 @@ impl From<crate::models::Token> for GraphQLToken {
             owner_user_id: token.owner_user_id,
             is_primary: token.is_primary,
             photo_url: token.photo_url,
-            health: token.health,
-            max_health: token.max_health,
             token_type: token.token_type,
+            linked: token.linked,
         }
     }
 }
 
 impl GraphQLToken {
+    /// The token's id, for tests holding a resolved token.
+    #[cfg(test)]
+    pub(crate) fn id(&self) -> uuid::Uuid {
+        self.token_id
+    }
+
     /// Fills `photo_url` when the token has none of its own — its character's
     /// token art, from `graphql::token_art`. A photo set on the token wins.
     pub(crate) fn with_photo_fallback(mut self, fallback: Option<String>) -> Self {

@@ -26,6 +26,7 @@ const WORLD_ACTOR_FIELDS = `
     slug
   }
   availableForClaim
+  isUnique
   claimedBy {
     id
     worldId
@@ -244,6 +245,27 @@ export function setActorAvailability(
     `,
     { actorId, available },
   ).then((data) => data.setActorAvailability);
+}
+
+/**
+ * Spec 046 FR-016: GM-only. Marks an NPC as a named individual ("Boblin the
+ * goblin"), whose tokens are then placed linked to it rather than as copies.
+ * Tokens already on a board are unchanged.
+ */
+export function setActorUnique(
+  actorId: string,
+  unique: boolean,
+): Promise<WorldActorRecord> {
+  return postGraphQL<{ setActorUnique: WorldActorRecord }>(
+    `
+      mutation SetActorUnique($actorId: UUID!, $unique: Boolean!) {
+        setActorUnique(actorId: $actorId, unique: $unique) {
+          ${WORLD_ACTOR_FIELDS}
+        }
+      }
+    `,
+    { actorId, unique },
+  ).then((data) => data.setActorUnique);
 }
 
 type UnclaimActorMutation = {

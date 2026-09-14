@@ -147,6 +147,32 @@ fn arrival_position(index: usize, grid_size: f64) -> (f64, f64) {
     (step * (column + 1.0), step * (row + 1.0))
 }
 
+/// Who a character's arriving token belongs to: the player who claimed the
+/// character, when somebody has, else whoever owns the actor.
+///
+/// Spec 046 research R7's known gap. A character the Game Master created and a
+/// player claimed is owned by the Game Master (`owned_by`), so reading only
+/// that put the player's character on the board as the Game Master's token —
+/// its moves and, from spec 046 on, its offers of damage went to the wrong
+/// person. A claim is the statement of who plays a character, so it wins.
+fn arrival_owner(conn: &mut PgConnection, actor_id: Uuid) -> Result<Uuid, DieselError> {
+    use crate::schema::{world_actor_claims, world_members};
+    let claimant = world_actor_claims::table
+        .inner_join(world_members::table)
+        .filter(world_actor_claims::actor_id.eq(actor_id))
+        .order(world_actor_claims::claimed_at.desc())
+        .select(world_members::user_id)
+        .first::<Uuid>(conn)
+        .optional()?;
+    match claimant {
+        Some(user_id) => Ok(user_id),
+        None => world_actors::table
+            .filter(world_actors::id.eq(actor_id))
+            .select(world_actors::owned_by)
+            .first::<Uuid>(conn),
+    }
+}
+
 /// Create one arrival's token, unless that character already has one here.
 ///
 /// The `WHERE NOT EXISTS` is the arbiter, and its row count is the whole
@@ -156,11 +182,13 @@ fn arrival_position(index: usize, grid_size: f64) -> (f64, f64) {
 /// version is decided by whatever this transaction happened to read a moment
 /// earlier, which is exactly the thing under contention.
 ///
-/// `owner_user_id` comes from the actor, never from the caller: a Game Master
+/// `owner_user_id` comes from the character (its claim, else its owner —
+/// `arrival_owner`), never from the caller: a Game Master
 /// bringing the party must not end up owning the players' tokens. Art is left
 /// off deliberately — ADR-056 rule 1 hangs imagery on the actor, so copying a
 /// URL onto the token here would freeze today's portrait onto a body that
-/// outlives it.
+/// outlives it. A character's token is always linked (spec 046 FR-016): it is
+/// the character, and its sheet is its hit points.
 fn create_arrival(
     conn: &mut PgConnection,
     scene_id: Uuid,
@@ -172,8 +200,8 @@ fn create_arrival(
     let inserted = diesel::sql_query(
         "INSERT INTO tokens \
          (token_id, scene_id, actor_id, x, y, rotation, scale, token_type, \
-          owner_user_id, created_at, updated_at) \
-         SELECT $1, $2, $3, $4, $5, 0, 1, 'character', $6, $7, $7 \
+          owner_user_id, linked, created_at, updated_at) \
+         SELECT $1, $2, $3, $4, $5, 0, 1, 'character', $6, true, $7, $7 \
          WHERE NOT EXISTS ( \
              SELECT 1 FROM tokens WHERE scene_id = $2 AND actor_id = $3 \
          )",
@@ -289,10 +317,7 @@ pub async fn bring_party_to_scene_impl(
             }
 
             for (index, actor_id) in to_create.iter().enumerate() {
-                let owner_user_id: Uuid = world_actors::table
-                    .filter(world_actors::id.eq(actor_id))
-                    .select(world_actors::owned_by)
-                    .first::<Uuid>(conn)?;
+                let owner_user_id = arrival_owner(conn, *actor_id)?;
 
                 if create_arrival(
                     conn,

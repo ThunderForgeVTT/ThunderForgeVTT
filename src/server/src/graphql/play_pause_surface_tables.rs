@@ -234,6 +234,14 @@ pub const GATED: &[(&str, &str)] = &[
         r#"mutation { changeHitPoints(tokenId: "{token}", kind: DAMAGE, amount: 1) { __typename } }"#,
     ),
     (
+        "setTokenLink",
+        r#"mutation { setTokenLink(tokenId: "{token}", linked: false) { __typename } }"#,
+    ),
+    (
+        "setActorUnique",
+        r#"mutation { setActorUnique(actorId: "{actor}", unique: true) { __typename } }"#,
+    ),
+    (
         "advanceTurn",
         r#"mutation { advanceTurn(combatId: "{combat}") { __typename } }"#,
     ),

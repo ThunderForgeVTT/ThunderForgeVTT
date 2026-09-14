@@ -952,8 +952,6 @@ pub struct Token {
     pub owner_user_id: Option<uuid::Uuid>,
     pub is_primary: bool,
     pub photo_url: Option<String>,
-    pub health: Option<i32>,
-    pub max_health: Option<i32>,
     /// What this token represents: `character`, `npc`, `vehicle`, `object`.
     ///
     /// Parsed through `thunderforge_canvas_core::TokenKind`, which is also
@@ -964,6 +962,13 @@ pub struct Token {
     /// A Game Master always can; `graphql::token_art` withholds it from
     /// everyone else.
     pub name_visible_to_players: bool,
+    /// Spec 046 (ADR-102): whether this token *is* its actor. A linked token
+    /// has no hit points of its own and reads and writes its actor's system
+    /// data; an unlinked copy holds `system_data`.
+    pub linked: bool,
+    /// An unlinked copy's own `resource_data`-shaped record, seeded from its
+    /// actor when placed. Always `None` on a linked token (a CHECK says so).
+    pub system_data: Option<serde_json::Value>,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
@@ -979,8 +984,6 @@ pub struct NewToken {
     pub owner_user_id: Option<uuid::Uuid>,
     pub is_primary: Option<bool>,
     pub photo_url: Option<String>,
-    pub health: Option<i32>,
-    pub max_health: Option<i32>,
     /// `None` takes the column default, which is `character`.
     pub token_type: Option<String>,
 }
@@ -1004,8 +1007,6 @@ pub struct TokenUpdate {
     /// NULL". Diesel reads the nested form as: outer `None` skips the
     /// column, `Some(None)` writes NULL, `Some(Some(v))` writes `v`.
     pub photo_url: Option<Option<String>>,
-    pub health: Option<i32>,
-    pub max_health: Option<i32>,
     /// `None` leaves the kind alone; `Some` reclassifies the token.
     pub token_type: Option<String>,
 }
@@ -1106,6 +1107,9 @@ pub struct WorldActor {
     /// player on the Actor Selection screen. Independent of claim state —
     /// see `world_actor_claims` for who currently has it claimed.
     pub available_for_claim: bool,
+    /// Spec 046 FR-016: a named individual ("Boblin the goblin"). Its tokens
+    /// are placed linked; any other NPC's are placed as copies.
+    pub is_unique: bool,
 }
 
 /// New actor for insertion

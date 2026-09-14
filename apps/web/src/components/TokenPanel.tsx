@@ -6,6 +6,7 @@ import {
   deleteToken,
   getTokens,
   setOwnPrimaryTokenPhoto,
+  setTokenLink,
   updateToken,
 } from "../api/tokens";
 import { getWorldActors } from "../api/actors";
@@ -45,7 +46,7 @@ interface TokenPanelProps {
  * table onto the same `tokens` table the canvas engine renders/drags
  * (src/server/src/graphql/mutations_tokens.rs) — moving a token here and
  * dragging it on the canvas are now the same row, not two disconnected
- * ones. Bulk create/delete and health-bar editing remain GM-only; a
+ * ones. Bulk create/delete and linking remain GM-only; a
  * non-GM player only ever sees/edits their own primary token's photo.
  */
 export const TokenPanel: React.FC<TokenPanelProps> = ({
@@ -58,10 +59,6 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
 }) => {
   const [tokens, setTokens] = useState<TokenRecord[]>([]);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [newTokenHealth, setNewTokenHealth] = useState<number | undefined>();
-  const [newTokenMaxHealth, setNewTokenMaxHealth] = useState<
-    number | undefined
-  >();
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -214,8 +211,6 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
         sceneId,
         x: 0,
         y: 0,
-        health: newTokenHealth,
-        maxHealth: newTokenMaxHealth,
         // Spec 018 T047: a token created for a selected NPC defaults to
         // that NPC's size-category scale (resolveSizeScale, ../utils/
         // sizeCategory.ts) rather than the server's plain default.
@@ -223,8 +218,6 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
         scale: resolvedNewTokenScale,
         tokenType: effectiveTokenType,
       });
-      setNewTokenHealth(undefined);
-      setNewTokenMaxHealth(undefined);
       setNewTokenActorId("");
       setNewTokenTypeChoice(null);
       setCreateDialogOpen(false);
@@ -238,8 +231,6 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
     }
   }, [
     sceneId,
-    newTokenHealth,
-    newTokenMaxHealth,
     newTokenActorId,
     resolvedNewTokenScale,
     effectiveTokenType,
@@ -338,13 +329,24 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
     token.photoUrl ??
     `https://api.dicebear.com/9.x/adventurer-neutral/svg?seed=${token.tokenId}`;
 
-  const getHealthPercentage = (
-    health?: number | null,
-    maxHealth?: number | null,
-  ): number => {
-    if (health == null || maxHealth == null || maxHealth <= 0) return 0;
-    return (health / maxHealth) * 100;
-  };
+  /** GM-only (spec 046 FR-016): make a token its actor, or a copy of it. */
+  const handleSetLink = useCallback(
+    async (tokenId: string, linked: boolean) => {
+      setLoading(true);
+      setError(null);
+      try {
+        await setTokenLink(tokenId, linked);
+        refresh();
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Unknown error changing link",
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [refresh],
+  );
 
   return (
     <Dialog.Root open={isOpen} onOpenChange={onOpenChange}>
@@ -395,21 +397,6 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
                             {token.isPrimary ? "Primary — " : ""}
                             Token {token.tokenId.slice(0, 8)}
                           </div>
-                          {token.health != null && (
-                            <div className="token-health">
-                              <div className="health-bar-container">
-                                <div
-                                  className="health-bar"
-                                  style={{
-                                    width: `${getHealthPercentage(token.health, token.maxHealth)}%`,
-                                  }}
-                                />
-                              </div>
-                              <span className="health-text">
-                                {token.health}/{token.maxHealth}
-                              </span>
-                            </div>
-                          )}
                         </div>
                       </div>
                     </Popover.Trigger>
@@ -443,6 +430,44 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
                               }}
                             />
                           </div>
+                        )}
+
+                        {/* Spec 046 FR-016 (ADR-102): a linked token is its
+                         * actor and shares its hit points; a copy holds its
+                         * own. Only a token with an actor can be linked. */}
+                        {isSceneOwner && token.actorId && (
+                          <fieldset
+                            className="form-group token-link-control"
+                            data-testid={`token-link-control-${token.tokenId}`}
+                          >
+                            <legend>Hit points</legend>
+                            <label>
+                              <input
+                                type="radio"
+                                name={`link-${token.tokenId}`}
+                                data-testid={`token-link-linked-${token.tokenId}`}
+                                checked={token.linked}
+                                disabled={loading}
+                                onChange={() =>
+                                  void handleSetLink(token.tokenId, true)
+                                }
+                              />
+                              Linked — shares its actor&apos;s
+                            </label>
+                            <label>
+                              <input
+                                type="radio"
+                                name={`link-${token.tokenId}`}
+                                data-testid={`token-link-copy-${token.tokenId}`}
+                                checked={!token.linked}
+                                disabled={loading}
+                                onChange={() =>
+                                  void handleSetLink(token.tokenId, false)
+                                }
+                              />
+                              Copy — its own
+                            </label>
+                          </fieldset>
                         )}
 
                         {isSceneOwner && (
@@ -602,40 +627,6 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
                         Tokens without art are drawn in a distinct colour per
                         type, so a crowded map can be read at a glance.
                       </p>
-                    </div>
-
-                    <div className="form-group">
-                      <label htmlFor="token-health">Current Health</label>
-                      <input
-                        id="token-health"
-                        type="number"
-                        value={newTokenHealth ?? ""}
-                        onChange={(e) =>
-                          setNewTokenHealth(
-                            e.target.value
-                              ? parseInt(e.target.value, 10)
-                              : undefined,
-                          )
-                        }
-                        placeholder="e.g., 50"
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label htmlFor="token-max-health">Max Health</label>
-                      <input
-                        id="token-max-health"
-                        type="number"
-                        value={newTokenMaxHealth ?? ""}
-                        onChange={(e) =>
-                          setNewTokenMaxHealth(
-                            e.target.value
-                              ? parseInt(e.target.value, 10)
-                              : undefined,
-                          )
-                        }
-                        placeholder="e.g., 100"
-                      />
                     </div>
                   </div>
 

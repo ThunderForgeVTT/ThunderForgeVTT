@@ -742,14 +742,10 @@ fn apply_one(
         owner_user_id: None,
         is_primary: None,
         photo_url: None,
-        // Not offline-editable (FR-035a), and explicitly `None` rather than
-        // carried from the command: health is adjudicated by the ruleset, and
-        // a client that queued a stale value while disconnected must not be
-        // able to write it back hours later.
-        health: None,
-        max_health: None,
-        // Same reasoning as health: what a token *is* is not something an
-        // offline client reclassifies. Only position and pose replay.
+        // Not offline-editable (FR-035a): what a token *is* is not something
+        // an offline client reclassifies. Only position and pose replay. Hit
+        // points are not in this changeset at all — they are written only by
+        // `combat::hit_points`, never by a replayed edit (spec 046).
         token_type: None,
     };
 

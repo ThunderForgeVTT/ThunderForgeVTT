@@ -181,10 +181,10 @@ mod tests {
             owner_user_id: None,
             is_primary: false,
             photo_url: None,
-            health: None,
-            max_health: None,
             token_type: "npc".to_string(),
             name_visible_to_players: visible,
+            linked: false,
+            system_data: None,
         }
     }
 

@@ -20,11 +20,15 @@
 //! 4. Validates the result with the pack's own validator, and writes it.
 //! 5. Updates the creature's combatant when it reaches zero, or is healed from
 //!    it (C8), in the same transaction.
-//! 6. After the commit, records event 26 (the sheet moved), and 18 when a
-//!    combatant changed.
+//! 6. After the commit, records event 26 (the sheet moved) for a linked token
+//!    or 14 (the token changed) for a copy, and 18 when a combatant changed.
 //!
-//! The record is the actor's `world_actor_system_data` row. Spec 046 phase 3
-//! (tasks Phase 5) adds unlinked copies, which hold their own.
+//! # Which record (ADR-102)
+//!
+//! A **linked** token's record is its actor's `world_actor_system_data` row,
+//! and that row is what is locked and written. An **unlinked copy**'s record
+//! is its own `tokens.system_data`, and the token row is locked instead; the
+//! actor it was copied from, and every other copy of it, are left alone.
 
 use diesel::PgConnection;
 use diesel::prelude::*;
@@ -35,7 +39,8 @@ use crate::schema::{
     scenes, tokens, world_actor_system_data, world_actors, world_combatants, world_combats, worlds,
 };
 use crate::world_events::{
-    EVENT_CODE_ACTOR_SHEET_CHANGED, EVENT_CODE_COMBAT_CHANGED, record_world_event,
+    EVENT_CODE_ACTOR_SHEET_CHANGED, EVENT_CODE_COMBAT_CHANGED, EVENT_CODE_TOKEN_CHANGED,
+    record_world_event,
 };
 
 /// Which way a change goes.
@@ -94,7 +99,9 @@ pub fn apply_to(before: HitPoints, kind: HitPointChangeKind, amount: i32) -> Hit
 #[derive(Clone, Debug)]
 pub struct HitPointChangeOutcome {
     pub token_id: Uuid,
-    pub actor_id: Uuid,
+    pub scene_id: Uuid,
+    /// The actor whose sheet was written; `None` when a copy's own record was.
+    pub actor_id: Option<Uuid>,
     pub world_id: Uuid,
     pub before: HitPoints,
     pub after: HitPoints,
@@ -193,14 +200,17 @@ fn write_slot_column(
 
 /// Mark the creature's combatants out at zero, or back in above it (C8).
 ///
-/// Matched through `token_id`, or through `actor_id` for a combatant that has
-/// no token. Only the world's running combat is touched. Returns that combat's
-/// id when any combatant changed.
+/// Matched through `token_id`, or — for a **linked** token only — through
+/// `actor_id` for a combatant that has no token. A copy passes `None`: its hit
+/// points are its own, so a combatant that shares only its actor is a
+/// different creature, and falling back to the actor would mark out every
+/// goblin in the fight when one of them dropped. Only the world's running
+/// combat is touched. Returns that combat's id when any combatant changed.
 fn follow_zero(
     conn: &mut PgConnection,
     world_id: Uuid,
     token_id: Uuid,
-    actor_id: Uuid,
+    linked_actor_id: Option<Uuid>,
     after: HitPoints,
 ) -> Result<Option<Uuid>, String> {
     let Some(combat_id) = world_combats::table
@@ -214,11 +224,13 @@ fn follow_zero(
         return Ok(None);
     };
 
+    // `actor_id = NULL` matches nothing, which is how a copy opts out of the
+    // fallback without a second query shape.
     let is_this_creature = world_combatants::token_id
         .eq(token_id)
         .or(world_combatants::token_id
             .is_null()
-            .and(world_combatants::actor_id.eq(actor_id)));
+            .and(world_combatants::actor_id.eq(linked_actor_id)));
     let now = chrono::Utc::now().naive_utc();
 
     let changed = if after.current <= 0 {
@@ -298,24 +310,32 @@ pub fn apply_hit_point_change(
     }
 
     let outcome = conn.transaction::<_, Refusal, _>(|conn| {
-        let (actor_id, world_id) = tokens::table
+        let (scene_id, actor_id, linked, world_id) = tokens::table
             .inner_join(scenes::table.on(scenes::scene_id.eq(tokens::scene_id)))
             .filter(tokens::token_id.eq(token_id))
-            .select((tokens::actor_id, scenes::world_id))
-            .first::<(Option<Uuid>, Uuid)>(conn)
+            .select((
+                tokens::scene_id,
+                tokens::actor_id,
+                tokens::linked,
+                scenes::world_id,
+            ))
+            .first::<(Uuid, Option<Uuid>, bool, Uuid)>(conn)
             .optional()
             .map_err(|e| format!("Failed to load token: {e}"))?
             .ok_or_else(|| "Token not found".to_string())?;
-        let actor_id = actor_id
-            .ok_or_else(|| "That token is not a creature with hit points".to_string())?;
 
-        let actor_system = world_actors::table
-            .filter(world_actors::id.eq(actor_id))
-            .select(world_actors::game_system_id)
-            .first::<Option<String>>(conn)
-            .optional()
-            .map_err(|e| format!("Failed to load actor: {e}"))?
-            .ok_or_else(|| "That token's creature no longer exists".to_string())?;
+        // The system is the actor's, else the world's. A copy whose actor
+        // was deleted still has a world.
+        let actor_system = match actor_id {
+            Some(actor_id) => world_actors::table
+                .filter(world_actors::id.eq(actor_id))
+                .select(world_actors::game_system_id)
+                .first::<Option<String>>(conn)
+                .optional()
+                .map_err(|e| format!("Failed to load actor: {e}"))?
+                .flatten(),
+            None => None,
+        };
         let system_id = match actor_system {
             Some(id) => id,
             None => worlds::table
@@ -332,33 +352,71 @@ pub fn apply_hit_point_change(
         })?;
         let key = slot_key(&declared.slot);
 
-        // The lock. A second change to the same creature waits here until the
-        // first commits, then reads what the first left.
-        let row = world_actor_system_data::table
-            .filter(world_actor_system_data::actor_id.eq(actor_id))
-            .select(crate::models::ActorSystemData::as_select())
-            .for_update()
-            .first::<crate::models::ActorSystemData>(conn)
-            .optional()
-            .map_err(|e| format!("Failed to load hit points: {e}"))?
-            .ok_or_else(|| "That creature has no hit points recorded".to_string())?;
-        let slot = slot_column(&row, &key)
-            .ok_or_else(|| "That creature has no hit points recorded".to_string())?;
+        let (before, after, written_actor) = if linked {
+            let actor_id = actor_id
+                .ok_or_else(|| "That token is not a creature with hit points".to_string())?;
+            // The lock. A second change to the same creature waits here until
+            // the first commits, then reads what the first left.
+            let row = world_actor_system_data::table
+                .filter(world_actor_system_data::actor_id.eq(actor_id))
+                .select(crate::models::ActorSystemData::as_select())
+                .for_update()
+                .first::<crate::models::ActorSystemData>(conn)
+                .optional()
+                .map_err(|e| format!("Failed to load hit points: {e}"))?
+                .ok_or_else(|| "That creature has no hit points recorded".to_string())?;
+            let slot = slot_column(&row, &key)
+                .ok_or_else(|| "That creature has no hit points recorded".to_string())?;
 
-        let before = read_hit_points(&slot, &declared)?;
-        let after = apply_to(before, kind, amount);
-        let written = write_hit_points(&slot, &declared, after);
+            let before = read_hit_points(&slot, &declared)?;
+            let after = apply_to(before, kind, amount);
+            let written = write_hit_points(&slot, &declared, after);
 
-        crate::systems::validate_actor_system_data(&row.game_system_id, &key, &written)
-            .map_err(|e| format!("Validation failed: {e}"))?;
-        write_slot_column(conn, row.id, &key, &written, user_id)
-            .map_err(|e| format!("Failed to write hit points: {e}"))?;
+            crate::systems::validate_actor_system_data(&row.game_system_id, &key, &written)
+                .map_err(|e| format!("Validation failed: {e}"))?;
+            write_slot_column(conn, row.id, &key, &written, user_id)
+                .map_err(|e| format!("Failed to write hit points: {e}"))?;
+            (before, after, Some(actor_id))
+        } else {
+            // A copy holds a `resource_data`-shaped record and nothing else.
+            if key != "resource_data" {
+                return Err(format!(
+                    "The {system_id} game system keeps hit points outside a creature's resources, which a copy does not hold"
+                )
+                .into());
+            }
+            // The lock is the token row: copies of one NPC never wait on
+            // each other, and never on the NPC.
+            let slot = tokens::table
+                .filter(tokens::token_id.eq(token_id))
+                .select(tokens::system_data)
+                .for_update()
+                .first::<Option<serde_json::Value>>(conn)
+                .map_err(|e| format!("Failed to load hit points: {e}"))?
+                .ok_or_else(|| "That creature has no hit points recorded".to_string())?;
 
-        let combat_changed = follow_zero(conn, world_id, token_id, actor_id, after)?;
+            let before = read_hit_points(&slot, &declared)?;
+            let after = apply_to(before, kind, amount);
+            let written = write_hit_points(&slot, &declared, after);
+
+            crate::systems::validate_actor_system_data(&system_id, &key, &written)
+                .map_err(|e| format!("Validation failed: {e}"))?;
+            diesel::update(tokens::table.filter(tokens::token_id.eq(token_id)))
+                .set((
+                    tokens::system_data.eq(Some(&written)),
+                    tokens::updated_at.eq(chrono::Utc::now().naive_utc()),
+                ))
+                .execute(conn)
+                .map_err(|e| format!("Failed to write hit points: {e}"))?;
+            (before, after, None)
+        };
+
+        let combat_changed = follow_zero(conn, world_id, token_id, written_actor, after)?;
 
         Ok(HitPointChangeOutcome {
             token_id,
-            actor_id,
+            scene_id,
+            actor_id: written_actor,
             world_id,
             before,
             after,
@@ -370,19 +428,38 @@ pub fn apply_hit_point_change(
 
     // After the commit: an event is a nudge to other clients about work that
     // is done, and must never describe a change that rolled back.
-    // The payload `updateActorSystemData` has sent since spec 045, so every
-    // listener that re-reads on a sheet change re-reads on a hit.
-    let _ = record_world_event(
-        conn,
-        outcome.world_id,
-        EVENT_CODE_ACTOR_SHEET_CHANGED,
-        Some(serde_json::json!({
-            "action": "changed",
-            "actorId": outcome.actor_id,
-            "dataType": outcome.data_type,
-        })),
-        user_id,
-    );
+    match outcome.actor_id {
+        // The payload `updateActorSystemData` has sent since spec 045, so
+        // every listener that re-reads on a sheet change re-reads on a hit.
+        Some(actor_id) => {
+            let _ = record_world_event(
+                conn,
+                outcome.world_id,
+                EVENT_CODE_ACTOR_SHEET_CHANGED,
+                Some(serde_json::json!({
+                    "action": "changed",
+                    "actorId": actor_id,
+                    "dataType": outcome.data_type,
+                })),
+                user_id,
+            );
+        }
+        // A copy is a token, not a sheet: the token-changed payload
+        // `updateToken` sends, which every board re-reads status on.
+        None => {
+            let _ = record_world_event(
+                conn,
+                outcome.world_id,
+                EVENT_CODE_TOKEN_CHANGED,
+                Some(serde_json::json!({
+                    "action": "updated",
+                    "token_id": outcome.token_id,
+                    "scene_id": outcome.scene_id,
+                })),
+                user_id,
+            );
+        }
+    }
     if let Some(combat_id) = outcome.combat_changed {
         let _ = record_world_event(
             conn,

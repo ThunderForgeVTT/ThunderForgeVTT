@@ -689,6 +689,20 @@ diesel::table! {
 }
 
 diesel::table! {
+    retired_token_health (token_id) {
+        token_id -> Uuid,
+        health -> Nullable<Int4>,
+        max_health -> Nullable<Int4>,
+        game_system_id -> Nullable<Varchar>,
+        copied_to_system_data -> Bool,
+        created_by -> Uuid,
+        updated_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     scene_exploration_resets (scene_id, user_id) {
         scene_id -> Uuid,
         user_id -> Uuid,
@@ -798,10 +812,10 @@ diesel::table! {
         owner_user_id -> Nullable<Uuid>,
         is_primary -> Bool,
         photo_url -> Nullable<Text>,
-        health -> Nullable<Int4>,
-        max_health -> Nullable<Int4>,
         token_type -> Varchar,
         name_visible_to_players -> Bool,
+        linked -> Bool,
+        system_data -> Nullable<Jsonb>,
     }
 }
 
@@ -1061,6 +1075,7 @@ diesel::table! {
         updated_at -> Timestamp,
         description -> Nullable<Text>,
         available_for_claim -> Bool,
+        is_unique -> Bool,
     }
 }
 
@@ -1558,6 +1573,7 @@ diesel::joinable!(players_online -> scenes (scene_id));
 diesel::joinable!(players_online -> users (player_id));
 diesel::joinable!(players_online -> worlds (world_id));
 diesel::joinable!(policies -> worlds (world_id));
+diesel::joinable!(retired_token_health -> tokens (token_id));
 diesel::joinable!(scene_exploration_resets -> scenes (scene_id));
 diesel::joinable!(scene_exploration_resets -> users (user_id));
 diesel::joinable!(scene_state_fingerprints -> scenes (scene_id));
@@ -1567,6 +1583,7 @@ diesel::joinable!(shapes -> scenes (scene_id));
 diesel::joinable!(token_resource_disclosure -> tokens (token_id));
 diesel::joinable!(tokens -> scenes (scene_id));
 diesel::joinable!(tokens -> users (owner_user_id));
+diesel::joinable!(tokens -> world_actors (actor_id));
 diesel::joinable!(user_oauth_accounts -> oauth_providers (provider_id));
 diesel::joinable!(user_oauth_accounts -> users (user_id));
 diesel::joinable!(user_recovery_codes -> users (user_id));
@@ -1689,6 +1706,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     oauth_providers,
     players_online,
     policies,
+    retired_token_health,
     scene_exploration_resets,
     scene_preview_images,
     scene_state_fingerprints,

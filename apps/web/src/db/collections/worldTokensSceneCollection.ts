@@ -34,6 +34,6 @@ export interface WorldSceneTokenDoc {
   ownerUserId?: string | null;
   isPrimary?: boolean;
   photoUrl?: string | null;
-  health?: number | null;
-  maxHealth?: number | null;
+  /** Spec 046 (ADR-102): the token is its actor, or an unlinked copy. */
+  linked?: boolean;
 }

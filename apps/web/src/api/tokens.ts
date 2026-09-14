@@ -19,9 +19,8 @@ const TOKEN_FIELDS = `
   ownerUserId
   isPrimary
   photoUrl
-  health
-  maxHealth
   tokenType
+  linked
   name
   nameVisibleToPlayers
 `;
@@ -189,4 +188,25 @@ export function setOwnPrimaryTokenPhoto(
     `,
     { tokenId, photoUrl },
   ).then((data) => data.setOwnPrimaryTokenPhoto);
+}
+
+/**
+ * Spec 046 FR-016 (ADR-102): make a token its actor (`linked`) or an
+ * unlinked copy holding its own hit points. Game Master only. Linking a copy
+ * discards its own hit points; unlinking starts them from the actor's.
+ */
+export function setTokenLink(
+  tokenId: string,
+  linked: boolean,
+): Promise<TokenRecord> {
+  return postGraphQL<{ setTokenLink: TokenRecord }>(
+    `
+      mutation SetTokenLink($tokenId: UUID!, $linked: Boolean!) {
+        setTokenLink(tokenId: $tokenId, linked: $linked) {
+          ${TOKEN_FIELDS}
+        }
+      }
+    `,
+    { tokenId, linked },
+  ).then((data) => data.setTokenLink);
 }

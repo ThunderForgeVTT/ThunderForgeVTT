@@ -87,20 +87,22 @@ test("a Game Master's damage moves every board's bars, and zero takes a creature
       at: { x: -200, y: -150 },
       seat: brom,
     });
+    // An NPC's token is a copy of its sheet as placed (spec 046 ADR-102), so
+    // the goblin is written before it is put on the board.
     const goblin = await placeCast(table, {
       label: "Goblin",
       at: { x: 200, y: 0 },
       tokenType: "npc",
+      sheet: {
+        scores: SCORES,
+        hitPoints: { current: GOBLIN_HP, max: GOBLIN_HP },
+      },
     });
-    for (const cast of [hero, caster, goblin]) {
+    for (const cast of [hero, caster]) {
       await setAbilityScores(table, cast.actorId, SCORES);
     }
     await setHitPoints(table, hero.actorId, { current: 12, max: 12 });
     await setHitPoints(table, caster.actorId, { current: 9, max: 9 });
-    await setHitPoints(table, goblin.actorId, {
-      current: GOBLIN_HP,
-      max: GOBLIN_HP,
-    });
     // The players are shown the goblin's own figures, so "their bar reads 2"
     // is a number on their board and not an estimate.
     await setDisclosure(table, goblin.tokenId, "hitPoints", "VISIBLE");

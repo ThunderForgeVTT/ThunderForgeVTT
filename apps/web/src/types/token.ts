@@ -18,10 +18,13 @@ export interface TokenRecord {
   ownerUserId: string | null;
   isPrimary: boolean;
   photoUrl: string | null;
-  health: number | null;
-  maxHealth: number | null;
   /** What this token represents: `character`, `npc`, `vehicle` or `object`. */
   tokenType: TokenType;
+  /**
+   * Spec 046 (ADR-102): `true` when the token is its actor, so its hit points
+   * are the actor's; `false` for an unlinked copy holding its own.
+   */
+  linked: boolean;
   /**
    * Playtest 2026-09-10 P7: the name drawn above the token — its own label,
    * else its character's. Absent when a Game Master has hidden it from this
@@ -60,10 +63,13 @@ export interface CreateTokenInput {
   ownerUserId?: string;
   isPrimary?: boolean;
   photoUrl?: string;
-  health?: number;
-  maxHealth?: number;
-  /** Omitted means `character`, matching the column default. */
+  /** Omitted means the actor's kind, or `character` for a token with none. */
   tokenType?: TokenType;
+  /**
+   * Omitted means the server decides from the actor: a character or unique
+   * NPC is linked, any other NPC is an unlinked copy.
+   */
+  linked?: boolean;
 }
 
 export interface UpdateTokenInput {
@@ -81,6 +87,4 @@ export interface UpdateTokenInput {
    * different requests rather than both meaning "unchanged".
    */
   photoUrl?: string | null;
-  health?: number;
-  maxHealth?: number;
 }

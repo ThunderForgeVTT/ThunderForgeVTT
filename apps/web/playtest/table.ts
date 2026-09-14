@@ -201,6 +201,19 @@ export async function placeCast(
     tokenType?: "character" | "npc";
     /** Sizes the piece: 2 is an ogre, filling four squares of the grid. */
     scale?: number;
+    /**
+     * The creature's sheet, written before its token is placed.
+     *
+     * Spec 046 (ADR-102): an NPC's token is an unlinked copy, and a copy
+     * starts from its NPC's sheet *as it is when placed* — so a goblin whose
+     * hit points are written after it is on the board is a goblin with none.
+     * That is the rule, not a harness quirk: a Game Master fills in the
+     * goblin, then drops goblins.
+     */
+    sheet?: {
+      scores: Record<string, number>;
+      hitPoints: { current: number; max: number };
+    };
   },
 ): Promise<{ actorId: string; tokenId: string }> {
   const { createActor } = await must<{ createActor: { id: string } }>(
@@ -215,22 +228,40 @@ export async function placeCast(
       },
     },
   );
-  const { createToken } = await must<{ createToken: { tokenId: string } }>(
-    table.gm,
-    `mutation ($input: GraphQLCreateTokenInput!) {
-      createToken(input: $input) { tokenId }
-    }`,
-    {
-      input: {
-        sceneId: table.sceneId,
-        actorId: createActor.id,
-        x: options.at.x,
-        y: options.at.y,
-        tokenType: options.tokenType ?? (options.seat ? "character" : "npc"),
-        ...(options.scale === undefined ? {} : { scale: options.scale }),
-      },
-    },
-  );
+  if (options.sheet) {
+    // Scores first: the 5e pack refuses anything else on a sheet without them.
+    for (const [dataType, data] of [
+      ["ability_data", options.sheet.scores],
+      [
+        "resource_data",
+        {
+          current_hp: options.sheet.hitPoints.current,
+          max_hp: options.sheet.hitPoints.max,
+          temporary_hp: 0,
+        },
+      ],
+    ] as const) {
+      await must(
+        table.gm,
+        `mutation ($input: GraphQLUpdateActorSystemDataInput!) {
+          updateActorSystemData(input: $input) { id }
+        }`,
+        {
+          input: {
+            actorId: createActor.id,
+            gameSystemId: table.system,
+            dataType,
+            data,
+          },
+        },
+      );
+    }
+  }
+  const { tokenId } = await placeToken(table, createActor.id, {
+    at: options.at,
+    tokenType: options.tokenType ?? (options.seat ? "character" : "npc"),
+    scale: options.scale,
+  });
   if (options.seat) {
     await must(
       table.gm,
@@ -238,12 +269,55 @@ export async function placeCast(
         updateToken(tokenId: $tokenId, input: $input) { tokenId }
       }`,
       {
-        tokenId: createToken.tokenId,
+        tokenId,
         input: { ownerUserId: options.seat.userId, isPrimary: true },
       },
     );
   }
-  return { actorId: createActor.id, tokenId: createToken.tokenId };
+  return { actorId: createActor.id, tokenId };
+}
+
+/**
+ * Place another token of an actor already in the world — another goblin of the
+ * goblin NPC. The server decides whether it is linked or a copy (spec 046
+ * FR-016) unless `linked` says otherwise.
+ */
+export async function placeToken(
+  table: Table,
+  actorId: string,
+  options: {
+    at: Point;
+    tokenType?: "character" | "npc";
+    scale?: number;
+    label?: string;
+    linked?: boolean;
+  },
+): Promise<{ tokenId: string; linked: boolean }> {
+  const { createToken } = await must<{
+    createToken: { tokenId: string; linked: boolean };
+  }>(
+    table.gm,
+    `mutation ($input: GraphQLCreateTokenInput!) {
+      createToken(input: $input) { tokenId linked }
+    }`,
+    {
+      input: {
+        sceneId: table.sceneId,
+        actorId,
+        x: options.at.x,
+        y: options.at.y,
+        ...(options.tokenType === undefined
+          ? {}
+          : { tokenType: options.tokenType }),
+        ...(options.scale === undefined ? {} : { scale: options.scale }),
+        ...(options.label === undefined
+          ? {}
+          : { metadata: { label: options.label } }),
+        ...(options.linked === undefined ? {} : { linked: options.linked }),
+      },
+    },
+  );
+  return createToken;
 }
 
 export async function addWall(
@@ -426,13 +500,16 @@ export async function joinLate(table: Table, name: string): Promise<Seat> {
     { input: { worldId: table.worldId, maxUses: 10 } },
   );
 
-  const context = await table.gm.context().browser()!.newContext({
-    viewport: VIEWPORT,
-    recordVideo: {
-      dir: table.testInfo.outputPath(`video-${name}`),
-      size: VIEWPORT,
-    },
-  });
+  const context = await table.gm
+    .context()
+    .browser()!
+    .newContext({
+      viewport: VIEWPORT,
+      recordVideo: {
+        dir: table.testInfo.outputPath(`video-${name}`),
+        size: VIEWPORT,
+      },
+    });
   const page = await context.newPage();
   await register(page, freshCredentials(`pt${name.toLowerCase()}`));
   await must(

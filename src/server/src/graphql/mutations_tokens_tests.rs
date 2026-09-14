@@ -533,8 +533,6 @@ fn token_photo_url_can_be_set_skipped_and_cleared() {
                     owner_user_id: None,
                     is_primary: None,
                     photo_url,
-                    health: None,
-                    max_health: None,
                     token_type: None,
                 })
                 .execute(conn)

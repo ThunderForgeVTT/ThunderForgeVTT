@@ -16,6 +16,9 @@ use chrono::Utc;
 use diesel::prelude::*;
 use diesel::result::Error as DieselError;
 
+use crate::graphql::mutations_token_links::{
+    actor_resource_data, load_placement_actor, placement_for, token_kind_for_actor,
+};
 use crate::graphql::{
     GraphQLCreateTokenInput, GraphQLToken, GraphQLUpdateTokenInput, app_state, authenticated_user,
 };
@@ -43,6 +46,10 @@ pub struct TokenMutation;
 #[async_graphql::Object]
 impl TokenMutation {
     /// Create a new token on a scene (scene owner only)
+    ///
+    /// Spec 046 FR-016: the token is linked to its actor or an unlinked copy
+    /// of it, as `input.linked` says or, when it says nothing, as the actor
+    /// decides — see `mutations_token_links::placement_for`.
     async fn create_token(
         &self,
         ctx: &Context<'_>,
@@ -50,96 +57,7 @@ impl TokenMutation {
     ) -> GraphQLResult<GraphQLToken> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        let user_id = auth_user.user_id;
-        let is_admin = auth_user.is_admin;
-        let mut conn = state
-            .db_pool
-            .get()
-            .map_err(|_| Error::new("Failed to get DB connection"))?;
-        let now = Utc::now().naive_utc();
-
-        let token_id = uuid::Uuid::now_v7();
-        let scene_id = input.scene_id;
-        let actor_id = input.actor_id;
-        let x = input.x;
-        let y = input.y;
-        let rotation = input.rotation.unwrap_or(0.0);
-        let scale = input.scale.unwrap_or(1.0);
-        let metadata = input.metadata.map(|j| j.0);
-
-        // Validated here rather than stored as given. This column feeds the
-        // renderer, so a kind nothing can draw is a token that appears
-        // mislabelled — or, in the fallback, silently identical to a player
-        // character. Rejecting an unknown value is the only point at which
-        // that is cheap to say.
-        let token_type = parse_token_kind(input.token_type.as_deref())?;
-
-        let inserted_token = tokio::task::spawn_blocking(move || {
-            use crate::schema::tokens;
-
-            // 🔐 Authority to author content on a scene follows the world
-            // role — the Owner and any GM, never a Player — not who happened
-            // to create the scene. See `world_membership::is_dm_of_scene`.
-            if !crate::auth::world_membership::is_dm_of_scene(
-                &mut conn, user_id, is_admin, scene_id,
-            )? {
-                return Err(DieselError::NotFound);
-            }
-            refuse_scene_if_paused(&mut conn, scene_id)?;
-
-            let token = diesel::insert_into(tokens::table)
-                .values((
-                    tokens::token_id.eq(token_id),
-                    tokens::scene_id.eq(scene_id),
-                    tokens::actor_id.eq(actor_id),
-                    tokens::x.eq(x),
-                    tokens::y.eq(y),
-                    tokens::rotation.eq(rotation),
-                    tokens::scale.eq(scale),
-                    tokens::metadata.eq(&metadata),
-                    tokens::token_type.eq(token_type.as_stored()),
-                    tokens::created_at.eq(now),
-                    tokens::updated_at.eq(now),
-                ))
-                .returning(crate::models::Token::as_returning())
-                .get_result(&mut conn)?;
-
-            // Spec 028 FR-006: the scene's fingerprint must move with the
-            // change that caused it. A stale one would tell a client its copy
-            // is current when it is not — the one failure this feature must
-            // never produce.
-            refresh_scene_fingerprint(&mut conn, scene_id, user_id);
-
-            if let Ok(world_id) = world_id_for_scene(&mut conn, scene_id) {
-                let _ = record_world_event(
-                    &mut conn,
-                    world_id,
-                    EVENT_CODE_TOKEN_CHANGED,
-                    Some(serde_json::json!({
-                        "action": "created",
-                        "token_id": token_id,
-                        "scene_id": scene_id,
-                    })),
-                    user_id,
-                );
-            }
-
-            // With its character's art, as every token read now carries it —
-            // and its name in full: only a Game Master may create a token.
-            let mut with_art =
-                crate::graphql::token_art::tokens_with_art(&mut conn, vec![token], true)?;
-            Ok(with_art.remove(0))
-        })
-        .await
-        .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|e| {
-            refusal_or(
-                e,
-                "Failed to create token (scene not found or not owned by you)",
-            )
-        })?;
-
-        Ok(inserted_token)
+        create_token_impl(state, auth_user.user_id, auth_user.is_admin, input).await
     }
 
     /// Update an existing token's position/properties (scene owner only)
@@ -184,8 +102,6 @@ impl TokenMutation {
                 MaybeUndefined::Null => Some(None),
                 MaybeUndefined::Value(url) => Some(Some(url)),
             },
-            health: input.health,
-            max_health: input.max_health,
             // Validated on the way in, exactly as on create: an unknown kind
             // is refused rather than written, because the column decides how
             // the token is drawn.
@@ -588,6 +504,49 @@ impl TokenMutation {
         )
         .await
     }
+
+    /// Make a token its actor (`linked: true`) or an unlinked copy of it.
+    /// Game Master only (spec 046 FR-016, ADR-102).
+    ///
+    /// Linking a copy discards the copy's own hit points: it takes its
+    /// actor's. Unlinking starts the copy from the actor's current values.
+    async fn set_token_link(
+        &self,
+        ctx: &Context<'_>,
+        token_id: uuid::Uuid,
+        linked: bool,
+    ) -> GraphQLResult<GraphQLToken> {
+        let state = app_state(ctx)?;
+        let user = authenticated_user(ctx)?;
+        crate::graphql::mutations_token_links::set_token_link_impl(
+            state,
+            user.user_id,
+            user.is_admin,
+            token_id,
+            linked,
+        )
+        .await
+    }
+
+    /// Mark an NPC as a named individual, whose tokens are placed linked, or
+    /// not. Game Master only. Tokens already placed are unchanged.
+    async fn set_actor_unique(
+        &self,
+        ctx: &Context<'_>,
+        actor_id: uuid::Uuid,
+        unique: bool,
+    ) -> GraphQLResult<crate::graphql::types_scene::GraphQLWorldActor> {
+        let state = app_state(ctx)?;
+        let user = authenticated_user(ctx)?;
+        crate::graphql::mutations_token_links::set_actor_unique_impl(
+            state,
+            user.user_id,
+            user.is_admin,
+            actor_id,
+            unique,
+        )
+        .await
+    }
 }
 
 /// Testable core of `TokenMutation::set_token_name_visibility`.
@@ -651,6 +610,140 @@ pub(crate) async fn set_token_name_visibility_impl(
             "Failed to change the token's name visibility (not found or not yours to change)",
         )
     })
+}
+
+/// Testable core of `TokenMutation::create_token`.
+pub(crate) async fn create_token_impl(
+    state: &crate::AppState,
+    user_id: uuid::Uuid,
+    is_admin: bool,
+    input: GraphQLCreateTokenInput,
+) -> GraphQLResult<GraphQLToken> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let now = Utc::now().naive_utc();
+
+    let token_id = uuid::Uuid::now_v7();
+    let scene_id = input.scene_id;
+    let actor_id = input.actor_id;
+    let x = input.x;
+    let y = input.y;
+    let rotation = input.rotation.unwrap_or(0.0);
+    let scale = input.scale.unwrap_or(1.0);
+    let metadata = input.metadata.map(|j| j.0);
+
+    // Validated here rather than stored as given. This column feeds the
+    // renderer, so a kind nothing can draw is a token that appears
+    // mislabelled — or, in the fallback, silently identical to a player
+    // character. Rejecting an unknown value is the only point at which
+    // that is cheap to say. `None` here means the caller named no kind,
+    // and the actor's kind is used below (spec 046 research R4).
+    let requested_type = match input.token_type.as_deref() {
+        None => None,
+        Some(raw) => Some(parse_token_kind(Some(raw))?),
+    };
+    let requested_link = input.linked;
+    if requested_link == Some(true) && actor_id.is_none() {
+        return Err(Error::new("A token with no actor cannot be linked"));
+    }
+
+    let inserted_token = tokio::task::spawn_blocking(move || {
+        use crate::schema::tokens;
+
+        // 🔐 Authority to author content on a scene follows the world
+        // role — the Owner and any GM, never a Player — not who happened
+        // to create the scene. See `world_membership::is_dm_of_scene`.
+        if !crate::auth::world_membership::is_dm_of_scene(&mut conn, user_id, is_admin, scene_id)? {
+            return Err(DieselError::NotFound);
+        }
+        refuse_scene_if_paused(&mut conn, scene_id)?;
+
+        // Spec 046 FR-016 (ADR-102): linked or a copy, decided here from
+        // the actor so every client that places a token gets the same
+        // answer. The actor must be of this scene's world: a copy is
+        // seeded from its sheet, and an actor from elsewhere would carry
+        // another world's data onto this board.
+        let placement_actor = match actor_id {
+            None => None,
+            Some(id) => {
+                let actor = load_placement_actor(&mut conn, id)?.ok_or(DieselError::NotFound)?;
+                let scene_world: uuid::Uuid = crate::schema::scenes::table
+                    .filter(crate::schema::scenes::scene_id.eq(scene_id))
+                    .select(crate::schema::scenes::world_id)
+                    .first(&mut conn)?;
+                if scene_world != actor.world_id {
+                    return Err(DieselError::NotFound);
+                }
+                Some(actor)
+            }
+        };
+        let placement = placement_for(placement_actor.as_ref(), requested_link)
+            .map_err(|_| DieselError::NotFound)?;
+        let system_data = match (placement.seeds_from_actor, actor_id) {
+            (true, Some(id)) => actor_resource_data(&mut conn, id)?,
+            _ => None,
+        };
+        let token_type = requested_type
+            .or_else(|| placement_actor.as_ref().map(token_kind_for_actor))
+            .unwrap_or_default();
+
+        let token = diesel::insert_into(tokens::table)
+            .values((
+                tokens::token_id.eq(token_id),
+                tokens::scene_id.eq(scene_id),
+                tokens::actor_id.eq(actor_id),
+                tokens::x.eq(x),
+                tokens::y.eq(y),
+                tokens::rotation.eq(rotation),
+                tokens::scale.eq(scale),
+                tokens::metadata.eq(&metadata),
+                tokens::token_type.eq(token_type.as_stored()),
+                tokens::linked.eq(placement.linked),
+                tokens::system_data.eq(&system_data),
+                tokens::created_at.eq(now),
+                tokens::updated_at.eq(now),
+            ))
+            .returning(crate::models::Token::as_returning())
+            .get_result(&mut conn)?;
+
+        // Spec 028 FR-006: the scene's fingerprint must move with the
+        // change that caused it. A stale one would tell a client its copy
+        // is current when it is not — the one failure this feature must
+        // never produce.
+        refresh_scene_fingerprint(&mut conn, scene_id, user_id);
+
+        if let Ok(world_id) = world_id_for_scene(&mut conn, scene_id) {
+            let _ = record_world_event(
+                &mut conn,
+                world_id,
+                EVENT_CODE_TOKEN_CHANGED,
+                Some(serde_json::json!({
+                    "action": "created",
+                    "token_id": token_id,
+                    "scene_id": scene_id,
+                })),
+                user_id,
+            );
+        }
+
+        // With its character's art, as every token read now carries it —
+        // and its name in full: only a Game Master may create a token.
+        let mut with_art =
+            crate::graphql::token_art::tokens_with_art(&mut conn, vec![token], true)?;
+        Ok(with_art.remove(0))
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|e| {
+        refusal_or(
+            e,
+            "Failed to create token (scene not found or not owned by you)",
+        )
+    })?;
+
+    Ok(inserted_token)
 }
 
 /// Turn a client-supplied kind into a [`TokenKind`], or refuse.

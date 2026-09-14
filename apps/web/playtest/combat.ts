@@ -240,6 +240,70 @@ export async function barCurrentOn(
   return bar?.disclosed.entries?.[0]?.current ?? null;
 }
 
+/**
+ * A token's hit points as the server resolves them for this viewer: its
+ * actor's for a linked token, its own for a copy (spec 046 ADR-102). `null`
+ * when the viewer is not shown the figure.
+ */
+export async function tokenHitPointsOf(
+  page: Page,
+  sceneId: string,
+  tokenId: string,
+): Promise<number | null> {
+  const { tokenStatus } = await must<{
+    tokenStatus: {
+      tokenId: string;
+      resources: {
+        definitionId: string;
+        entries: { current: number }[] | null;
+      }[];
+    }[];
+  }>(
+    page,
+    `query ($sceneId: UUID!) {
+      tokenStatus(sceneId: $sceneId) {
+        tokenId
+        resources { definitionId entries { current } }
+      }
+    }`,
+    { sceneId },
+  );
+  const bar = tokenStatus
+    .find((t) => t.tokenId === tokenId)
+    ?.resources.find((r) => r.definitionId === "hitPoints");
+  return bar?.entries?.[0]?.current ?? null;
+}
+
+/** Make a token its actor, or a copy of it (spec 046 FR-016). */
+export async function setTokenLink(
+  table: Table,
+  tokenId: string,
+  linked: boolean,
+): Promise<void> {
+  await must(
+    table.gm,
+    `mutation ($tokenId: UUID!, $linked: Boolean!) {
+      setTokenLink(tokenId: $tokenId, linked: $linked) { tokenId }
+    }`,
+    { tokenId, linked },
+  );
+}
+
+/** Mark an NPC a named individual, or not (spec 046 FR-016). */
+export async function setActorUnique(
+  table: Table,
+  actorId: string,
+  unique: boolean,
+): Promise<void> {
+  await must(
+    table.gm,
+    `mutation ($actorId: UUID!, $unique: Boolean!) {
+      setActorUnique(actorId: $actorId, unique: $unique) { id }
+    }`,
+    { actorId, unique },
+  );
+}
+
 /** Write a whole `resource_data` blob, as a sheet does. */
 export async function setHitPoints(
   table: Table,

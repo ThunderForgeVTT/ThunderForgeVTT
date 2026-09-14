@@ -134,18 +134,41 @@ impl TokenStatusQuery {
                 return Ok(Vec::new());
             }
 
-            let rows: Vec<(Uuid, Option<Uuid>, Option<Uuid>)> = tokens::table
+            // Spec 046 (ADR-102): a copy's own record comes with the token, so
+            // two hundred copies are this one read and no sheet reads at all.
+            type Row = (
+                Uuid,
+                Option<Uuid>,
+                Option<Uuid>,
+                bool,
+                Option<serde_json::Value>,
+            );
+            let rows: Vec<Row> = tokens::table
                 .filter(tokens::scene_id.eq(scene_id))
-                .select((tokens::token_id, tokens::actor_id, tokens::owner_user_id))
+                .select((
+                    tokens::token_id,
+                    tokens::actor_id,
+                    tokens::owner_user_id,
+                    tokens::linked,
+                    tokens::system_data,
+                ))
                 .load(&mut conn)
                 .map_err(|e| Error::new(format!("Failed to load tokens: {e}")))?;
 
-            let token_ids: Vec<Uuid> = rows.iter().map(|(id, _, _)| *id).collect();
+            let token_ids: Vec<Uuid> = rows.iter().map(|row| row.0).collect();
             let overrides = overrides_for_tokens(&mut conn, &token_ids)
                 .map_err(|e| Error::new(format!("Failed to load disclosure: {e}")))?;
 
-            // Actor facts, in one read rather than per token.
-            let actor_ids: Vec<Uuid> = rows.iter().filter_map(|(_, a, _)| *a).collect();
+            // Actor facts, in one read rather than per token. Deduplicated:
+            // two hundred copies of one goblin name one actor.
+            let mut actor_ids: Vec<Uuid> = rows.iter().filter_map(|row| row.1).collect();
+            actor_ids.sort_unstable();
+            actor_ids.dedup();
+            let linked_actor_ids: Vec<Uuid> = rows
+                .iter()
+                .filter(|row| row.3)
+                .filter_map(|row| row.1)
+                .collect();
             let npc_flags: HashMap<Uuid, bool> = world_actors::table
                 .filter(world_actors::id.eq_any(&actor_ids))
                 .select((world_actors::id, world_actors::is_npc))
@@ -155,7 +178,7 @@ impl TokenStatusQuery {
                 .collect();
 
             let stored: HashMap<Uuid, serde_json::Value> = world_actor_system_data::table
-                .filter(world_actor_system_data::actor_id.eq_any(&actor_ids))
+                .filter(world_actor_system_data::actor_id.eq_any(&linked_actor_ids))
                 .select((
                     world_actor_system_data::actor_id,
                     world_actor_system_data::resource_data,
@@ -169,15 +192,24 @@ impl TokenStatusQuery {
             let empty = serde_json::json!({});
             let mut out = Vec::new();
 
-            for (token_id, actor_id, owner) in rows {
-                // A token bound to no actor has no resources. It is a marker,
-                // not a creature.
-                let Some(actor_id) = actor_id else {
-                    continue;
+            for (token_id, actor_id, owner, linked, system_data) in rows {
+                // A linked token reads its actor; a copy reads its own record.
+                // A token with neither — no actor and no record of its own —
+                // is a marker, not a creature, and has no resources.
+                let data = if linked {
+                    match actor_id {
+                        Some(actor_id) => stored.get(&actor_id).unwrap_or(&empty),
+                        None => continue,
+                    }
+                } else {
+                    match system_data.as_ref() {
+                        Some(own) => own,
+                        None => continue,
+                    }
                 };
-
-                let is_npc = npc_flags.get(&actor_id).copied().unwrap_or(true);
-                let data = stored.get(&actor_id).unwrap_or(&empty);
+                let is_npc = actor_id
+                    .and_then(|id| npc_flags.get(&id).copied())
+                    .unwrap_or(true);
                 let token_overrides = overrides.get(&token_id).cloned().unwrap_or_default();
 
                 let resolved = resolve_token(
@@ -241,9 +273,19 @@ fn resolve_one_token(
         None => Vec::new(),
     };
 
-    let (actor_id, owner): (Option<Uuid>, Option<Uuid>) = tokens::table
+    let (actor_id, owner, linked, own_record): (
+        Option<Uuid>,
+        Option<Uuid>,
+        bool,
+        Option<serde_json::Value>,
+    ) = tokens::table
         .filter(tokens::token_id.eq(token_id))
-        .select((tokens::actor_id, tokens::owner_user_id))
+        .select((
+            tokens::actor_id,
+            tokens::owner_user_id,
+            tokens::linked,
+            tokens::system_data,
+        ))
         .first(conn)
         .map_err(|_| Error::new("Token not found"))?;
 
@@ -256,7 +298,8 @@ fn resolve_one_token(
         None => true,
     };
 
-    let stored: serde_json::Value = match actor_id {
+    let stored: serde_json::Value = match actor_id.filter(|_| linked) {
+        None if !linked => own_record.unwrap_or_else(|| serde_json::json!({})),
         Some(id) => world_actor_system_data::table
             .filter(world_actor_system_data::actor_id.eq(id))
             .select(world_actor_system_data::resource_data)
