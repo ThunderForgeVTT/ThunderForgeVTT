@@ -144,6 +144,24 @@ established. This is wiring an existing capability, not building one.
 - *Let the web compute it.* Would make the web a second source of truth for
   simulation state (Principle I).
 
+**Amended 2026-09-14 (owner, spec decision 6; tasks.md T065).** The carried
+light half of the declaration does not travel in `set_token_vision`. As built
+first, the server resolved `carriedBright`/`carriedDim` and the web dropped
+them, because a vision profile has no field for a light — rightly, as it turned
+out. A carried light is a light attached to its token: the web sends it as
+`set_carried_light { tokenId, bright, dim }`, and the engine keeps it in the
+scene's `LightSet` with `attached_token_id` set — the mechanism a Game Master's
+token-attached light already used, so it gets its own shadow map row, lights
+every seat's board, and follows its token without a second path. Its id is
+`carried:<tokenId>`, which no server id can be, and that is what keeps it out of
+the Game Master's light editing. It carries its own bright reach
+(`LightSource::bright_radius`); a stored light keeps bright at half its radius
+(FR-062).
+
+*Rejected: a light inside `VisionProfile`.* It would light the dark only for
+the bearer's own board, and would need its own shadowing and its own drawing in
+the darkness layer — a second light system beside the first.
+
 ## 6. Where explored areas live, and how a reset reaches them
 
 **Decision**: The engine accumulates what a player's token has seen, as a

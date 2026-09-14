@@ -194,3 +194,73 @@ pub fn marked_tokens() -> String {
         .unwrap_or_default();
     serde_json::Value::from(list).to_string()
 }
+
+static CARRIED_LIGHTS: std::sync::OnceLock<std::sync::Mutex<String>> = std::sync::OnceLock::new();
+
+/// Record where each carried light is: token id, position, bright and dim.
+pub(crate) fn mirror_carried_lights(mut lights: Vec<(String, Vec2, f32, f32)>) {
+    lights.sort_by(|a, b| a.0.cmp(&b.0));
+    let json = serde_json::Value::from(
+        lights
+            .into_iter()
+            .map(|(token_id, at, bright, dim)| {
+                serde_json::json!({
+                    "tokenId": token_id,
+                    "x": at.x,
+                    "y": at.y,
+                    "bright": bright,
+                    "dim": dim,
+                })
+            })
+            .collect::<Vec<_>>(),
+    )
+    .to_string();
+    let slot = CARRIED_LIGHTS.get_or_init(|| std::sync::Mutex::new(String::from("[]")));
+    if let Ok(mut held) = slot.lock()
+        && *held != json
+    {
+        *held = json;
+    }
+}
+
+/// The lights tokens carry, where this client's engine is lighting them from,
+/// as a JSON array of `{ tokenId, x, y, bright, dim }` in world units.
+///
+/// Spec 045 T065. A game system's carried light is a light attached to its
+/// token, and this says where the engine put it this frame — so a test can
+/// tell "the light never arrived" from "the light arrived and stayed behind
+/// when its token walked on".
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn carried_lights() -> String {
+    CARRIED_LIGHTS
+        .get()
+        .and_then(|slot| slot.lock().ok().map(|held| held.clone()))
+        .unwrap_or_else(|| String::from("[]"))
+}
+
+static DIM_TOKENS: std::sync::OnceLock<std::sync::Mutex<Vec<String>>> = std::sync::OnceLock::new();
+
+pub(crate) fn mirror_dim_tokens(mut dim: Vec<String>) {
+    dim.sort_unstable();
+    let slot = DIM_TOKENS.get_or_init(|| std::sync::Mutex::new(Vec::new()));
+    if let Ok(mut current) = slot.lock()
+        && *current != dim
+    {
+        *current = dim;
+    }
+}
+
+/// The ids of the tokens this canvas draws dimly, as a JSON array.
+///
+/// Spec 045 T066. Hidden and shown are not the only answers: a token in dim
+/// light, or seen in the dark by darkvision, is drawn as a suggestion. SC-007
+/// says a token fifty feet away in the dark is shown *dimly*, and this is the
+/// only place that claim can be read back from.
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn dim_tokens() -> String {
+    let list = DIM_TOKENS
+        .get()
+        .and_then(|slot| slot.lock().ok().map(|l| l.clone()))
+        .unwrap_or_default();
+    serde_json::Value::from(list).to_string()
+}

@@ -132,7 +132,10 @@ function installEngineProbe(wasm: BevyWasmModule): void {
     .token_nameplates;
   const hiddenTokens = (wasm as { hidden_tokens?: () => string }).hidden_tokens;
   const markedTokens = (wasm as { marked_tokens?: () => string }).marked_tokens;
+  const dimTokens = (wasm as { dim_tokens?: () => string }).dim_tokens;
   const tokenVision = (wasm as { token_vision?: () => string }).token_vision;
+  const carriedLights = (wasm as { carried_lights?: () => string })
+    .carried_lights;
   const movementState = (wasm as { movement_state?: () => string })
     .movement_state;
   (window as unknown as Record<string, unknown>).__engineProbe = {
@@ -154,6 +157,10 @@ function installEngineProbe(wasm: BevyWasmModule): void {
     // player's sight, or in the dark.
     hiddenTokens: (): string[] =>
       hiddenTokens ? (JSON.parse(hiddenTokens()) as string[]) : [],
+    // Spec 045 T066: the tokens this canvas draws dimly — in dim light, or
+    // made out in the dark by darkvision. Shown, but only as a suggestion.
+    dimTokens: (): string[] =>
+      dimTokens ? (JSON.parse(dimTokens()) as string[]) : [],
     // Spec 045 FR-033: the same question from the Game Master's chair — which
     // tokens are marked because at least one player cannot see them. Always
     // empty on a player's board.
@@ -170,6 +177,24 @@ function installEngineProbe(wasm: BevyWasmModule): void {
       const all = JSON.parse(tokenVision()) as Record<string, number>;
       return all[tokenId] ?? null;
     },
+    // Spec 045 T065: the lights tokens carry, and where this engine is
+    // lighting each from this frame — its token's position, if it has one.
+    carriedLights: (): {
+      tokenId: string;
+      x: number;
+      y: number;
+      bright: number;
+      dim: number;
+    }[] =>
+      carriedLights
+        ? (JSON.parse(carriedLights()) as {
+            tokenId: string;
+            x: number;
+            y: number;
+            bright: number;
+            dim: number;
+          }[])
+        : [],
     // Spec 045: what this client believes about moving — which token its
     // player may move, whether the engine has found it yet, how many are
     // tagged, and whether the scene has a grid to step on. A keypress that

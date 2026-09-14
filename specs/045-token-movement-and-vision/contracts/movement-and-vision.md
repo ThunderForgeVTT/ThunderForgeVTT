@@ -74,6 +74,22 @@ board is drawn through.
 Already implemented and already inserting a `TokenVision`. The web begins
 calling it with what the server resolved from the pack's declaration.
 
+### `set_carried_light` (new, 2026-09-14, T065)
+
+```json
+{ "type": "set_carried_light", "tokenId": "<uuid>", "bright": 200.0, "dim": 400.0 }
+```
+
+The light a token carries, in world units, as `tokenVision`'s `carriedBright`
+and `carriedDim` resolve it. A light attached to the token, not part of its
+vision (spec decision 6): the engine keeps it in the scene's lights as
+`carried:<tokenId>` with `attached_token_id` set, so it lights every board,
+is shadowed by its own walls and follows its token. Zero for both removes it,
+and so does `remove_token`. Sent for every token on scene load and on a sheet
+change (event 26), zeros included, beside `set_token_vision`. The Game
+Master's light tools do not select, move, resize or delete it, and no light
+mutation is ever sent for it.
+
 ### Exploration (new)
 
 ```json
@@ -128,7 +144,8 @@ manifest's existing style (compare Genie's `sizeCategories`):
 - A door change reaches every client within a second, without a reload, for
   sight, for light and for passage.
 - A vision profile reaching the engine changes what that client hides, and
-  nothing else.
+  nothing else. A carried light reaching the engine lights that client's board
+  as any light does.
 - Exploration is per browser. Nothing a player explores is readable by the
   server, by another player, or by the same player in another browser.
 
@@ -136,7 +153,7 @@ manifest's existing style (compare Genie's `sizeCategories`):
 
 Sections 1 to 4 are the contract as planned. Where what shipped differs, this
 section is what callers may rely on. Every difference below is a shape change
-with the same behaviour, except the last, which is a gap.
+with the same behaviour, except the last, which was a gap and is closed.
 
 - **Scene exploration is a query of its own, not fields on `Scene`.**
   `sceneExploration(sceneId): { enabled, epoch, mine }`, where `mine` is what
@@ -158,10 +175,12 @@ with the same behaviour, except the last, which is a gap.
   `unitsPerCell` and `unitLabel` (`packs/systems/README.md`, `vision`;
   `packs/systems/dnd5e/system.json`). No manifest recorded what a grid square
   was worth, so the block has to.
-- **Gap: a carried light's reach stops at the web.** The server resolves
-  `carriedBright` and `carriedDim` and `tokenVision` returns them
-  (`src/server/src/graphql/queries/token_vision.rs:156-157`), and the web
-  reads both and sends the engine only `darkvision`
-  (`apps/web/src/engine/world/sync/tokenVision.ts:69-77`). A game system
-  cannot yet set the light a character carries (FR-061, FR-064). Open as a
-  task in `tasks.md`.
+- **Closed 2026-09-14 (T065): a carried light reaches the engine.** It was a
+  gap — the server resolved `carriedBright` and `carriedDim` and the web sent
+  the engine only `darkvision`. The web now sends both as `set_carried_light`
+  (§2), and the engine lights them as a light attached to the token
+  (`apps/web/src/engine/world/sync/tokenVision.ts`,
+  `src/engine/src/app.rs` `SetCarriedLight`,
+  `crates/thunderforge-canvas-core/src/lighting.rs` `LightSource::carried`).
+  Probed by `__engineProbe.carriedLights()` (where each is lit from) and
+  `__engineProbe.dimTokens()` (what a board draws dimly, for SC-007).

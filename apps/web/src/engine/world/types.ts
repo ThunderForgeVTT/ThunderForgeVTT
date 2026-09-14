@@ -487,6 +487,23 @@ export type SetTokenVisionCommand = {
   darkvision: number;
 };
 
+/**
+ * The light one token carries, as its game system declares it (spec 045
+ * FR-061, FR-064) — the engine's `set_carried_light`.
+ *
+ * Owner decision 2026-09-14: a carried light is a light attached to its
+ * token, not part of how the token sees. The engine keeps it among the
+ * scene's lights, so a torch lights the room for everyone at the table, casts
+ * shadows like any other light and moves with its token. World units, resolved
+ * by the server, like `darkvision`. Zero for both takes the light away.
+ */
+export type SetCarriedLightCommand = {
+  type: "set_carried_light";
+  tokenId: string;
+  bright: number;
+  dim: number;
+};
+
 /** One interactive, in the shape the engine's command boundary expects. */
 export type WorldInteractive = {
   id: string;
@@ -507,6 +524,7 @@ export type WorldCommand =
   | SetSceneGridCommand
   | SetAmbientLightCommand
   | SetTokenVisionCommand
+  | SetCarriedLightCommand
   | UpsertTokenCommand
   | RemoveTokenCommand
   | SetTokenStatusCommand

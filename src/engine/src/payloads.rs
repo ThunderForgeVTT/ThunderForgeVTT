@@ -442,6 +442,16 @@ pub(crate) enum ExternalCommand {
         fov: f32,
         max_range: Option<f32>,
     },
+    /// The light a token carries, as its game system declares it (spec 045
+    /// FR-061, FR-064), in world units. A light attached to the token — the
+    /// owner's decision of 2026-09-14 — so it lights the board for every
+    /// seat, is shadowed by its own walls and follows its token. Zero for
+    /// both reaches takes the light away.
+    SetCarriedLight {
+        token_id: String,
+        bright: f32,
+        dim: f32,
+    },
     /// Sets the scene's baseline illumination — daylight outdoors, dark in an
     /// unlit dungeon. This is the floor every light builds on, and what
     /// darkvision is measured against.

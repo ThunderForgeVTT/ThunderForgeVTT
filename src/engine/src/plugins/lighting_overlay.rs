@@ -49,6 +49,11 @@ fn draw_light_radii(overlay: Res<LightingOverlay>, light_set: Res<LightSet>, mut
             continue;
         }
 
+        // A carried light's stored position is never where it is — it is
+        // wherever its token stands, which this overlay does not look up.
+        if light.is_carried() {
+            continue;
+        }
         let position = light.position();
         let color = light
             .color
@@ -56,10 +61,9 @@ fn draw_light_radii(overlay: Res<LightingOverlay>, light_set: Res<LightSet>, mut
             .and_then(Rgb::parse_hex)
             .unwrap_or(Rgb::WHITE);
 
-        // Mirrors `systems::lighting::resolve_light`'s mapping of the stored
-        // single radius onto a bright core and dim edge.
+        // Mirrors `systems::lighting::resolve_light`'s bright core and dim edge.
         let dim = light.radius;
-        let bright = light.radius * 0.5;
+        let bright = light.bright();
 
         gizmos
             .circle_2d(position, bright, to_color(color, 0.55))

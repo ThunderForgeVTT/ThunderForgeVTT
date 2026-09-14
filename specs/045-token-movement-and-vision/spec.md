@@ -585,7 +585,9 @@ third room is shown.
 - **Viewer**: whose eyes a board is drawn through — a player's own token, or,
   for a Game Master, none.
 - **Vision profile**: how a token sees — the range within which it sees
-  darkness as dim — declared by its game system from its actor's data.
+  darkness as dim — declared by its game system from its actor's data. A light
+  the character carries is declared beside it, and is a light, not part of the
+  profile (decision 6).
 - **Explored area**: for one player in one scene, everything their token has
   seen while exploration was on. Kept in that player's own browser, until a
   Game Master resets it or the player clears their storage.
@@ -695,3 +697,14 @@ Defaults this spec takes, to revisit if play shows otherwise:
 5. **Each player sees, and explores, only from their own token.** The
    alternative is shared party sight, where a player sees what any of their
    allies' tokens can see.
+
+Decided since:
+
+6. **A carried light is a light attached to its token** (owner, 2026-09-14).
+   It is not part of the token's vision profile. A torch on a character's
+   sheet lights the room for everyone at the table, casts shadows like any
+   other light, and moves with its token. The alternative — the light as part
+   of how its bearer sees — would light the dark for the bearer alone, which is
+   not what a torch does. The engine keeps it among the scene's lights, placed
+   where its token is; the sheet, not a Game Master, owns it, so nobody drags,
+   resizes or deletes it on the board (FR-061, FR-064; tasks.md T065).

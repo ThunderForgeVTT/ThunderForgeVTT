@@ -48,7 +48,9 @@ use bevy::sprite_render::{AlphaMode2d, Material2d, Material2dPlugin};
 
 use crate::TokenIdentity;
 use crate::resources::{CanvasLayer, LightSet, SceneAmbient, WallSet};
+#[cfg(test)]
 use crate::systems::lighting::effective_light_position;
+use crate::systems::lighting::live_light_position;
 use thunderforge_canvas_core::lighting::LightSource;
 use thunderforge_canvas_core::vision::{Illumination, Rgb, shadow_map_row};
 
@@ -416,9 +418,11 @@ fn sync_darkness(
     let placed: Vec<Placed> = light_set
         .lights()
         .iter()
-        .map(|light| Placed {
-            light,
-            position: effective_light_position(light, &positions),
+        .filter_map(|light| {
+            Some(Placed {
+                light,
+                position: live_light_position(light, &positions)?,
+            })
         })
         .collect();
 
@@ -451,8 +455,8 @@ fn sync_darkness(
     for (index, placed) in in_view.iter().enumerate() {
         let light = placed.light;
         let p = placed.position;
-        // Same single-radius-to-bright/dim mapping as `resolve_light`.
-        uniform.lights[index] = Vec4::new(p.x, p.y, light.radius * 0.5, light.radius);
+        // Same bright/dim mapping as `resolve_light`.
+        uniform.lights[index] = Vec4::new(p.x, p.y, light.bright(), light.radius);
         let color = light
             .color
             .as_deref()
@@ -609,6 +613,7 @@ mod tests {
             color: None,
             attached_token_id: Some("hero".into()),
             casts_shadows: true,
+            bright_radius: None,
         };
         let positions: HashMap<String, Vec2> =
             [("hero".to_string(), Vec2::new(5000.0, 0.0))].into();

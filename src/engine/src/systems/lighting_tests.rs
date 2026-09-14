@@ -14,6 +14,7 @@ fn source(id: &str, x: f32, y: f32, radius: f32, casts_shadows: bool) -> LightSo
         color: None,
         attached_token_id: None,
         casts_shadows,
+        bright_radius: None,
     }
 }
 
@@ -59,6 +60,26 @@ fn effective_position_falls_back_to_stored_when_attached_token_missing() {
         effective_light_position(&light, &positions),
         Vec2::new(3.0, 4.0)
     );
+}
+
+#[test]
+fn a_carried_light_with_no_token_yet_is_nowhere() {
+    let torch = LightSource::carried("brom", 20.0, 40.0).expect("a torch");
+    assert_eq!(live_light_position(&torch, &HashMap::new()), None);
+
+    let positions = HashMap::from([("brom".to_string(), Vec2::new(9.0, 2.0))]);
+    assert_eq!(
+        live_light_position(&torch, &positions),
+        Some(Vec2::new(9.0, 2.0))
+    );
+}
+
+#[test]
+fn a_carried_light_resolves_to_its_declared_bright_reach() {
+    let torch = LightSource::carried("brom", 30.0, 40.0).expect("a torch");
+    let positions = HashMap::from([("brom".to_string(), Vec2::ZERO)]);
+    let resolved = resolve_light(&torch, &positions).expect("placed");
+    assert_eq!((resolved.bright_radius, resolved.dim_radius), (30.0, 40.0));
 }
 
 #[test]
@@ -171,6 +192,7 @@ mod apply_light_illumination_tests {
             color: None,
             attached_token_id: None,
             casts_shadows: true,
+            bright_radius: None,
         });
 
         app.update();
@@ -293,6 +315,7 @@ mod apply_light_illumination_tests {
             color: None,
             attached_token_id: None,
             casts_shadows: false,
+            bright_radius: None,
         });
 
         app.update();

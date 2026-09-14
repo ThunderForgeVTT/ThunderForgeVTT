@@ -6,6 +6,11 @@
  * each answer to the engine through `set_token_vision`, which has existed
  * since spec 001 and which nothing in the product has ever called.
  *
+ * A carried light goes to the engine as a light attached to its token
+ * (`set_carried_light`, owner decision 2026-09-14), not as part of the token's
+ * eyes: a torch lights the room for every seat, not only for the one holding
+ * it.
+ *
  * Read rather than pushed. A token's sight changes when its *sheet* changes —
  * a pair of goggles, a level, a race — which is an actor edit, not a scene
  * event. Sheet edits announced nothing at all until spec 045 gave them a code
@@ -73,6 +78,18 @@ export async function loadTokenVisionIntoEngine(
         type: "set_token_vision",
         tokenId,
         darkvision: vision?.darkvision ?? 0,
+      },
+      "sync",
+    );
+    // Zeros for a token that carries nothing, for the same reason as the
+    // darkvision above: a character who puts their torch away must go dark
+    // on every board, not only after a reload.
+    worldStore.dispatch(
+      {
+        type: "set_carried_light",
+        tokenId,
+        bright: vision?.carriedBright ?? 0,
+        dim: vision?.carriedDim ?? 0,
       },
       "sync",
     );

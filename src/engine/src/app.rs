@@ -380,6 +380,11 @@ pub(crate) fn apply_external_commands(
                 if let Some(entity) = token_entities.0.remove(&token_id) {
                     commands.entity(entity).despawn();
                 }
+                // A torch goes with the hero holding it. Left behind, it
+                // would light the board from wherever it was last stored.
+                if let Some(light_set) = light_set.as_deref_mut() {
+                    light_set.remove(&carried_light_id(&token_id));
+                }
             }
             ExternalCommand::SetTokenStatus {
                 token_id,
@@ -505,6 +510,8 @@ pub(crate) fn apply_external_commands(
                         color: light.color,
                         attached_token_id: light.attached_token_id,
                         casts_shadows: light.casts_shadows,
+                        // A stored light has one radius (FR-062).
+                        bright_radius: None,
                     });
                 }
             }
@@ -697,6 +704,31 @@ pub(crate) fn apply_external_commands(
                     // otherwise look like the vision setting simply had no
                     // effect.
                     warn!(target: "lighting", "set_token_vision: no token {token_id}");
+                }
+            }
+            ExternalCommand::SetCarriedLight {
+                token_id,
+                bright,
+                dim,
+            } => {
+                // Kept whether or not the token has arrived yet: the light is
+                // placed where its token is each frame, and drawn only once
+                // there is a token to place it on.
+                if let Some(light_set) = light_set.as_deref_mut() {
+                    match EngineLight::carried(&token_id, bright, dim) {
+                        Some(light) => {
+                            if light_set.get(&light.id) != Some(&light) {
+                                info!(
+                                    target: "lighting",
+                                    "carried light: {token_id} bright={bright} dim={dim}",
+                                );
+                                light_set.upsert(light);
+                            }
+                        }
+                        None => {
+                            light_set.remove(&carried_light_id(&token_id));
+                        }
+                    }
                 }
             }
             ExternalCommand::SetAmbientLight { level, color } => {

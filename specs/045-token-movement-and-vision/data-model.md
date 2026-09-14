@@ -56,12 +56,15 @@ as crossing; a Game Master is never judged (decision 1).
 ### Vision profile (per token, resolved)
 
 Resolved by the server from the actor's system data, using the pack's
-declaration, and handed to the engine by the existing `set_token_vision`.
+declaration. Darkvision is handed to the engine by the existing
+`set_token_vision`; the carried light by `set_carried_light`, as a light
+attached to the token rather than part of its profile (spec decision 6,
+2026-09-14).
 
 | Field | Meaning | Today |
 |---|---|---|
 | `darkvision` | how far darkness is seen as dim light | exists in the engine (`VisionProfile`), set by nothing |
-| `light_bright` / `light_dim` | the reach of a light the character carries | lights carry a single radius today |
+| `light_bright` / `light_dim` | the reach of a light the character carries | an engine light attached to the token, id `carried:<tokenId>`, with its own bright reach (T065) |
 | `facing` / `fov` / `max_range` | a vision cone and a hard limit | exist in the engine; not used by this feature |
 
 ### Explored area (browser only)

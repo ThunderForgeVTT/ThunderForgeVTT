@@ -246,6 +246,11 @@ pub(crate) fn parse_command(input: &str) -> Option<ExternalCommand> {
                 .and_then(Value::as_f64)
                 .map(|f| f as f32),
         }),
+        "set_carried_light" => Some(ExternalCommand::SetCarriedLight {
+            token_id: value.get("tokenId")?.as_str()?.to_owned(),
+            bright: value.get("bright").and_then(Value::as_f64).unwrap_or(0.0) as f32,
+            dim: value.get("dim").and_then(Value::as_f64).unwrap_or(0.0) as f32,
+        }),
         "set_ambient_light" => Some(ExternalCommand::SetAmbientLight {
             level: value
                 .get("level")

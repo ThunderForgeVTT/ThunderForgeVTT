@@ -59,6 +59,7 @@ use sync_test::*;
 #[cfg(target_arch = "wasm32")]
 use systems::*;
 use thunderforge_canvas_core::grid::Footprint;
+use thunderforge_canvas_core::lighting::carried_light_id;
 use thunderforge_canvas_core::measure::GridUnits;
 use thunderforge_canvas_core::resource_display::{
     AppearanceOverride, Disclosed, ResourceDefinition,

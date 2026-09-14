@@ -19,7 +19,8 @@ use crate::resources::{
     TokenVision, WallSet,
 };
 use crate::systems::lighting_vision::{
-    PartyEyes, ViewerToken, mirror_hidden_tokens, mirror_marked_tokens, mirror_token_vision,
+    PartyEyes, ViewerToken, mirror_carried_lights, mirror_dim_tokens, mirror_hidden_tokens,
+    mirror_marked_tokens, mirror_token_vision,
 };
 use crate::{ActiveWorld, TokenIdentity, emit_event};
 use thunderforge_canvas_core::vision::{
@@ -152,6 +153,23 @@ pub(crate) fn effective_light_position(
     light.position()
 }
 
+/// Where a light is this frame, or `None` if it is nowhere yet.
+///
+/// Differs from [`effective_light_position`] only for a game system's carried
+/// light (spec 045 T065): its stored position means nothing, so a carried light
+/// whose token has not arrived — or has gone — lights nothing, rather than
+/// lighting the board from the origin.
+pub(crate) fn live_light_position(
+    light: &LightSource,
+    token_positions: &HashMap<String, Vec2>,
+) -> Option<Vec2> {
+    if light.is_carried() {
+        let token_id = light.attached_token_id.as_ref()?;
+        return token_positions.get(token_id).copied();
+    }
+    Some(effective_light_position(light, token_positions))
+}
+
 fn light_color(light: &LightSource, selected: bool) -> Color {
     if selected {
         return SELECTED_LIGHT_COLOR;
@@ -201,7 +219,9 @@ pub(crate) fn handle_light_input(
     let snap_rule = SnapRule::new(scene_grid.0, snap_enabled.0);
 
     if mouse_button.just_pressed(MouseButton::Left) {
-        for light in light_set.lights() {
+        // A carried light is its character's sheet's, not the Game Master's to
+        // drag (spec 045 T065): it has no server row a move could be saved to.
+        for light in light_set.lights().iter().filter(|l| !l.is_carried()) {
             if cursor.distance(light.position()) <= LIGHT_GRAB_RADIUS {
                 selected_light.select(light.id.clone());
                 drag.mode = LightDragMode::Moving {
@@ -532,10 +552,12 @@ pub(crate) fn sync_light_visuals(
 
     for light in light_set.lights() {
         // A light's marker is a grab handle, and handles are the Game
-        // Master's (`CanvasLayer::Lighting.editing_is_gm_only`). Drawn for the
+        // Master's (`CanvasLayer::Lighting.editing_is_gm_only`). A carried
+        // light has none: nobody at the table can grab it, and the token it
+        // hangs from already marks where it is. Drawn for the
         // table, it was a small amber square over every light — the "yellow
         // dot" of two playtests, and a map of where each light is hidden.
-        if !is_gm.0 {
+        if !is_gm.0 || light.is_carried() {
             if let Some(entity) = light_entities.0.remove(&light.id) {
                 commands.entity(entity).despawn();
             }
@@ -588,18 +610,20 @@ pub(crate) fn sync_light_visuals(
     }
 }
 
-/// Converts a stored light into the form the vision core consumes.
+/// Converts a stored light into the form the vision core consumes, or `None`
+/// for a carried light with no token to be carried by.
 ///
 /// The stored model has a single `radius`; the illumination model has a bright
 /// core and a dim ring. The stored radius is taken as the **outer, dim** edge
 /// and bright as half of it — the 1:2 ratio a torch has (20ft bright / 40ft
 /// total). Mapping it this way keeps every existing light's outer footprint
 /// exactly where it is today while giving it a bright centre, so no scene
-/// changes shape when this lands.
-fn resolve_light(light: &LightSource, positions: &HashMap<String, Vec2>) -> ResolvedLight {
-    ResolvedLight {
-        position: effective_light_position(light, positions),
-        bright_radius: light.radius * 0.5,
+/// changes shape when this lands. A game system's carried light names its own
+/// bright reach (`LightSource::bright`).
+fn resolve_light(light: &LightSource, positions: &HashMap<String, Vec2>) -> Option<ResolvedLight> {
+    Some(ResolvedLight {
+        position: live_light_position(light, positions)?,
+        bright_radius: light.bright(),
         dim_radius: light.radius,
         color: light
             .color
@@ -608,7 +632,7 @@ fn resolve_light(light: &LightSource, positions: &HashMap<String, Vec2>) -> Reso
             .unwrap_or(Rgb::WHITE),
         intensity: light.intensity,
         casts_shadows: light.casts_shadows,
-    }
+    })
 }
 
 /// Resolves token visibility: occlusion, facing and illumination, in one pass.
@@ -697,6 +721,8 @@ pub(crate) fn apply_light_illumination(
             *touched = false;
         }
         mirror_hidden_tokens(Vec::new());
+        mirror_dim_tokens(Vec::new());
+        mirror_carried_lights(Vec::new());
         return;
     }
     *touched = true;
@@ -725,8 +751,26 @@ pub(crate) fn apply_light_illumination(
     let lights: Vec<ResolvedLight> = light_set
         .lights()
         .iter()
-        .map(|light| resolve_light(light, &positions))
+        .filter_map(|light| resolve_light(light, &positions))
         .collect();
+    // Where each carried light is this frame (spec 045 T065), from the same
+    // resolution the pass below lights the board with.
+    mirror_carried_lights(
+        light_set
+            .lights()
+            .iter()
+            .filter(|light| light.is_carried())
+            .filter_map(|light| {
+                let at = live_light_position(light, &positions)?;
+                Some((
+                    light.attached_token_id.clone()?,
+                    at,
+                    light.bright(),
+                    light.radius,
+                ))
+            })
+            .collect(),
+    );
 
     let observer = if game_master {
         None
@@ -771,8 +815,7 @@ pub(crate) fn apply_light_illumination(
         Vec::new()
     };
 
-    let mut hidden = Vec::new();
-    let mut marked = Vec::new();
+    let (mut hidden, mut marked, mut dim) = (Vec::new(), Vec::new(), Vec::new());
     for (transform, identity, token_vision, mut sprite, mut visibility) in tokens.iter_mut() {
         let target = transform.translation.truncate();
 
@@ -848,6 +891,7 @@ pub(crate) fn apply_light_illumination(
             Perceived::Dim => {
                 *visibility = Visibility::Inherited;
                 sprite.color = sprite.color.with_alpha(DIM_ALPHA);
+                dim.push(identity.0.clone());
                 if game_master && !party.is_empty() {
                     marked.push(identity.0.clone());
                 }
@@ -860,6 +904,7 @@ pub(crate) fn apply_light_illumination(
     }
     mirror_hidden_tokens(hidden);
     mirror_marked_tokens(marked);
+    mirror_dim_tokens(dim);
 }
 
 /// Undo a dim this system applied, and nothing else: a token's own alpha —

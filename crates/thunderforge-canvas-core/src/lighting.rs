@@ -16,9 +16,69 @@ pub struct LightSource {
     pub color: Option<String>,
     pub attached_token_id: Option<String>,
     pub casts_shadows: bool,
+    /// How far this light is bright. `None` is a light with a single radius,
+    /// saved before bright and dim were separate: bright to half of it
+    /// (spec 045 FR-062). A game system's carried light sets it (FR-061).
+    pub bright_radius: Option<f32>,
+}
+
+/// The id prefix of a light a game system says a token carries.
+///
+/// Spec 045, owner decision 2026-09-14: a carried light is a light attached to
+/// its token, not part of the token's eyes. It lives in the same `LightSet` as
+/// a light a Game Master placed, so it lights the board for every seat and is
+/// shadowed by its own walls, and it follows its token the way any attached
+/// light does. What sets it apart is who owns it: the character's sheet, as
+/// the server resolves it, not a stored row. So it has no server id, and this
+/// prefix — which no server id (a UUID) can begin with — is what marks it as
+/// not the Game Master's to drag, resize or delete.
+pub const CARRIED_LIGHT_ID_PREFIX: &str = "carried:";
+
+/// The one id a token's carried light goes by. One light per token: a sheet
+/// declares one bright reach and one dim reach.
+pub fn carried_light_id(token_id: &str) -> String {
+    format!("{CARRIED_LIGHT_ID_PREFIX}{token_id}")
 }
 
 impl LightSource {
+    /// The light `token_id` carries, reaching `bright` and `dim` world units.
+    ///
+    /// `None` when neither reach is positive: a character carrying nothing
+    /// has no light, rather than a light of no size. A dim reach below the
+    /// bright one is read as equal to it — a light is not dim closer in than
+    /// it is bright.
+    pub fn carried(token_id: &str, bright: f32, dim: f32) -> Option<Self> {
+        let bright = bright.max(0.0);
+        let dim = dim.max(bright);
+        if dim <= 0.0 {
+            return None;
+        }
+        Some(Self {
+            id: carried_light_id(token_id),
+            // Never read: an attached light is where its token is.
+            x: 0.0,
+            y: 0.0,
+            radius: dim,
+            intensity: 1.0,
+            color: None,
+            attached_token_id: Some(token_id.to_owned()),
+            casts_shadows: true,
+            bright_radius: Some(bright),
+        })
+    }
+
+    /// Whether a game system, not a Game Master, owns this light.
+    pub fn is_carried(&self) -> bool {
+        self.id.starts_with(CARRIED_LIGHT_ID_PREFIX)
+    }
+
+    /// How far this light is bright, never beyond its dim edge.
+    pub fn bright(&self) -> f32 {
+        self.bright_radius
+            .unwrap_or(self.radius * 0.5)
+            .clamp(0.0, self.radius.max(0.0))
+    }
+
     /// Static position, ignoring any `attached_token_id`. Callers that care
     /// about token-attached lights resolve the live position from the
     /// attached entity's `Transform` instead (data-model.md: "x/y are
@@ -278,6 +338,7 @@ mod tests {
             color: None,
             attached_token_id: None,
             casts_shadows: true,
+            bright_radius: None,
         }
     }
 
@@ -286,6 +347,33 @@ mod tests {
         let l = light("l1", 5.0, 10.0, 100.0);
         assert_eq!(l.position(), Vec2::new(5.0, 10.0));
         assert!(l.is_on());
+    }
+
+    #[test]
+    fn a_single_radius_light_is_bright_to_half_of_it() {
+        assert_eq!(light("l1", 0.0, 0.0, 100.0).bright(), 50.0);
+    }
+
+    #[test]
+    fn a_carried_light_keeps_the_reaches_its_system_declared() {
+        let torch = LightSource::carried("brom", 100.0, 200.0).expect("a torch");
+        assert_eq!(torch.id, "carried:brom");
+        assert!(torch.is_carried());
+        assert_eq!(torch.attached_token_id.as_deref(), Some("brom"));
+        assert_eq!((torch.bright(), torch.radius), (100.0, 200.0));
+        assert!(torch.casts_shadows);
+        assert!(!light("0b0e5a6c-uuid", 0.0, 0.0, 10.0).is_carried());
+    }
+
+    #[test]
+    fn carrying_nothing_is_no_light() {
+        assert!(LightSource::carried("brom", 0.0, 0.0).is_none());
+    }
+
+    #[test]
+    fn a_carried_dim_reach_short_of_its_bright_reach_is_the_bright_reach() {
+        let odd = LightSource::carried("brom", 60.0, 0.0).expect("a light");
+        assert_eq!((odd.bright(), odd.radius), (60.0, 60.0));
     }
 
     #[test]
@@ -454,6 +542,7 @@ mod clear_tests {
             color: None,
             attached_token_id: None,
             casts_shadows: true,
+            bright_radius: None,
         });
         set.push_undo(LightEdit::Move {
             light_id: "l1".to_string(),
