@@ -127,7 +127,6 @@ export function copySharedAbilityToWorld(
           worldId
           name
           classification
-          classificationLabel
           gmOnly
         }
       }
