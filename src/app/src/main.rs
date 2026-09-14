@@ -643,18 +643,6 @@ async fn run() {
             thunderforge_server::auth_middleware::require_authenticated_user_even_if_disabled,
         ));
 
-    // The world event stream is not a remedy, so it refuses a disabled account
-    // like every other signed-in route.
-    let events_router = Router::new()
-        .route(
-            "/events/{world_id}",
-            get(thunderforge_server::network::websocket_handler),
-        ) // Phase 4.9.B.2: Event WebSocket with session tracking
-        .route_layer(from_fn_with_state(
-            app_state.clone(),
-            thunderforge_server::auth_middleware::require_authenticated_user,
-        ));
-
     // Spec 015 (FR-002): deliberately NOT wrapped in
     // `require_authenticated_user` — see `graphql_public_handler`'s docs.
     let public_graphql_router =
@@ -665,7 +653,6 @@ async fn run() {
         .route("/readyz", get(readiness_handler))
         .route("/status", get(status_handler))
         .merge(graphql_router)
-        .merge(events_router)
         .merge(public_graphql_router)
         .merge(thunderforge_server::auth::router())
         // Spec 041 FR-024, and the shape the whole admin surface should have.

@@ -1,11 +1,15 @@
 //! Phase 4.9.B.2: Session Lifecycle Management
 //!
-//! Handles player presence tracking, session updates, and cleanup:
-//! 1. Record player in players_online on WebSocket connect
-//! 2. Touch last_seen on every mutation (via middleware)
-//! 3. Clean up stale sessions (idle > 30 min)
+//! What remains of the `players_online` bookkeeping:
+//! 1. Touch last_seen on token mutations
+//! 2. Clean up stale sessions (idle > 30 min)
+//!
+//! Rows were inserted only by the `/api/events/{world_id}` socket, which
+//! nothing connected to and which was removed in spec 051 (research R7). Live
+//! presence is held in memory (`AppState::presence`); nothing inserts into
+//! this table now, so both functions below find nothing new to act on. They stay while
+//! they have callers, and go with the table when it is dropped.
 
-use crate::models::{NewPlayersOnline, PlayersOnline};
 use crate::schema::players_online;
 use crate::state::DbPool;
 use chrono::{Duration, Utc};
@@ -13,79 +17,6 @@ use diesel::prelude::*;
 use uuid::Uuid;
 
 const IDLE_THRESHOLD_SECS: i32 = 30 * 60; // 30 minutes
-
-/// Record a player's connection to a world/scene
-///
-/// Called when WebSocket connects. If player is already in players_online
-/// for this world, updates last_seen and scene_id.
-pub async fn connect_player(
-    pool: DbPool,
-    player_id: Uuid,
-    world_id: Uuid,
-    scene_id: Option<Uuid>,
-) -> Result<PlayersOnline, String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {}", e))?;
-
-    let now = Utc::now().naive_utc();
-
-    // Try to upsert: if player already connected to this world, update; otherwise insert
-    let result = diesel::insert_into(players_online::table)
-        .values(&NewPlayersOnline {
-            player_id,
-            world_id,
-            scene_id,
-            connected_at: now,
-            last_seen: now,
-            idle_duration_secs: 0,
-            created_at: now,
-            updated_at: now,
-        })
-        .on_conflict((players_online::player_id, players_online::world_id))
-        .do_update()
-        .set((
-            players_online::last_seen.eq(now),
-            players_online::scene_id.eq(scene_id),
-            players_online::idle_duration_secs.eq(0),
-            players_online::updated_at.eq(now),
-        ))
-        .get_result::<PlayersOnline>(&mut conn)
-        .map_err(|e| format!("Failed to upsert player: {}", e))?;
-
-    eprintln!(
-        "🎮 Player {} connected to world {} (scene: {:?})",
-        player_id, world_id, scene_id
-    );
-
-    Ok(result)
-}
-
-/// Disconnect a player from a world
-///
-/// Called when WebSocket closes. Removes the player from players_online.
-pub async fn disconnect_player(
-    pool: DbPool,
-    player_id: Uuid,
-    world_id: Uuid,
-) -> Result<(), String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {}", e))?;
-
-    diesel::delete(
-        players_online::table.filter(
-            players_online::player_id
-                .eq(player_id)
-                .and(players_online::world_id.eq(world_id)),
-        ),
-    )
-    .execute(&mut conn)
-    .map_err(|e| format!("Failed to delete player: {}", e))?;
-
-    eprintln!(
-        "🔌 Player {} disconnected from world {}",
-        player_id, world_id
-    );
-
-    Ok(())
-}
 
 /// Touch last_seen for a player in a world
 ///
