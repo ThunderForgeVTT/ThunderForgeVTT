@@ -139,6 +139,22 @@ export default defineConfig({
       ".trycloudflare.com",
       ...(process.env.TUNNEL_HOSTNAME ? [process.env.TUNNEL_HOSTNAME] : []),
     ],
+    // Test and recording output written under this directory while a dev
+    // server is running. Vite already ignores Playwright's `test-results`,
+    // but not these, and a trace resource (`*.html`) landing in one of them
+    // makes Vite reload every page it serves. Observed while `pnpm journeys`
+    // ran beside the sharded e2e runner: pages in the middle of a test were
+    // reloaded, and `play-pause.spec.ts` failed on a navigation type of
+    // "reload" that no product code had caused.
+    watch: {
+      ignored: [
+        "**/journeys-results/**",
+        "**/playtest-results/**",
+        "**/playtest-report/**",
+        "**/torture-results/**",
+        "**/playwright-report/**",
+      ],
+    },
     proxy: {
       "/api": {
         target: backendOrigin,

@@ -84,8 +84,89 @@ export function reportPlayPausedIn(errors: unknown): boolean {
   return found;
 }
 
+/**
+ * Read the world cache's sync summary for a pause, and report it if there is
+ * one (spec 051 US2, T039).
+ *
+ * `worldSyncPlan` is asked by the engine's own fetch in wasm, not through
+ * `graphqlClient`, so its refusal never passes the central check above. The
+ * engine resolves every failure to a `"degraded"` summary whose `reason` ends
+ * in the server's first error as JSON (`server rejected sync: {...}`). The
+ * code is read out of that JSON, never matched in the prose around it.
+ *
+ * `worldId` is the world the sync was asked about, used only when the error
+ * does not name one.
+ */
+export function reportPlayPausedInSyncReason(
+  worldId: string,
+  reason: unknown,
+): boolean {
+  if (typeof reason !== "string") return false;
+  const start = reason.indexOf("{");
+  if (start < 0) return false;
+  let error: unknown;
+  try {
+    error = JSON.parse(reason.slice(start));
+  } catch {
+    return false;
+  }
+  const extensions = (error as { extensions?: Record<string, unknown> } | null)
+    ?.extensions;
+  if (extensions?.code !== WORLD_PLAY_PAUSED) return false;
+  reportPlayPaused(
+    typeof extensions.worldId === "string" ? extensions.worldId : worldId,
+  );
+  return true;
+}
+
+type NotKeptListener = (worldId: string) => void;
+
+const notKeptListeners = new Set<NotKeptListener>();
+
+/** Offline changes refused because of a pause, not yet shown, per world. */
+const notKept = new Map<string, number>();
+
+/**
+ * Record that `count` changes this browser queued offline for `worldId` were
+ * refused because its play is paused, and discarded (spec 051 US2, T038).
+ *
+ * Kept here rather than handed over in navigation state because the order is
+ * not fixed: a reconnecting browser is usually sent to the notice by its
+ * first refused heartbeat, and the reconcile that learns what was dropped
+ * answers after that. The notice takes whatever has arrived when it mounts
+ * and listens for the rest.
+ */
+export function reportChangesNotKept(worldId: string, count: number): void {
+  if (!worldId || count <= 0) return;
+  notKept.set(worldId, (notKept.get(worldId) ?? 0) + count);
+  for (const listener of [...notKeptListeners]) {
+    try {
+      listener(worldId);
+    } catch {
+      // As above: one listener must not stop the others.
+    }
+  }
+}
+
+/** Take the count recorded for `worldId`, leaving none behind. */
+export function takeChangesNotKept(worldId: string): number {
+  const count = notKept.get(worldId) ?? 0;
+  notKept.delete(worldId);
+  return count;
+}
+
+/** Hear when a count is recorded. Returns an unsubscribe function. */
+export function onChangesNotKept(listener: NotKeptListener): () => void {
+  notKeptListeners.add(listener);
+  return () => {
+    notKeptListeners.delete(listener);
+  };
+}
+
 /** Tests only: forget every announcement and listener. */
 export function resetPlayPausedForTests(): void {
   announced.clear();
   listeners.clear();
+  notKept.clear();
+  notKeptListeners.clear();
 }

@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { rearmPlayPaused } from "@/api/playPauseSignal";
+import {
+  onChangesNotKept,
+  rearmPlayPaused,
+  takeChangesNotKept,
+} from "@/api/playPauseSignal";
 import { getWorldPlayState, type WorldPlayState } from "@/api/playPause";
 import { getWorld } from "@/api/world";
 import { SEO } from "@/components/seo/SEO";
@@ -32,6 +36,19 @@ function formatMoment(iso: string): string {
 }
 
 /**
+ * The sentence for offline changes a pause refused (spec 051 US2, T038).
+ *
+ * Plain, not alarming: nothing the person did was wrong, and there is nothing
+ * for them to do about it. `null` when nothing was dropped, so the page says
+ * nothing at all rather than "0 changes".
+ */
+export function changesNotKeptSentence(count: number): string | null {
+  if (count <= 0) return null;
+  if (count === 1) return "1 change you made while offline wasn't kept.";
+  return `${count} changes you made while offline weren't kept.`;
+}
+
+/**
  * Spec 051 US1: where a table goes when an operator pauses its world's play
  * (FR-010 to FR-013, contracts/live-play-lock.md "The notice").
  *
@@ -57,6 +74,7 @@ export default function PlayPausedPage() {
   const [worldName, setWorldName] = useState<string | null>(null);
   const [playState, setPlayState] = useState<WorldPlayState | null>(null);
   const [unreadable, setUnreadable] = useState(false);
+  const [notKept, setNotKept] = useState(0);
 
   useEffect(() => {
     headingRef.current?.focus();
@@ -67,6 +85,22 @@ export default function PlayPausedPage() {
   useEffect(() => {
     if (!id) return;
     return () => rearmPlayPaused(id);
+  }, [id]);
+
+  // Offline changes the pause refused (US2). The reconcile that learns of
+  // them often answers after this page is already showing, so take what has
+  // arrived and listen for the rest.
+  useEffect(() => {
+    if (!id) return;
+    const take = () => {
+      const added = takeChangesNotKept(id);
+      if (added > 0) setNotKept((current) => current + added);
+    };
+    const unsubscribe = onChangesNotKept((worldId) => {
+      if (worldId === id) take();
+    });
+    take();
+    return unsubscribe;
   }, [id]);
 
   useEffect(() => {
@@ -111,6 +145,7 @@ export default function PlayPausedPage() {
   }, [id]);
 
   const resumed = playState !== null && !playState.paused;
+  const notKeptSentence = changesNotKeptSentence(notKept);
   const world = worldName ?? "this world";
 
   return (
@@ -158,6 +193,9 @@ export default function PlayPausedPage() {
                 .
               </p>
             )}
+            {notKeptSentence ? (
+              <p data-testid="play-paused-not-kept">{notKeptSentence}</p>
+            ) : null}
           </div>
 
           <div className="grid gap-4">

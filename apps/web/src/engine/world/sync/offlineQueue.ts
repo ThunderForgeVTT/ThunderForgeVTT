@@ -15,6 +15,7 @@
  */
 
 import { submitQueuedChanges } from "@/api/reconcile";
+import { reportChangesNotKept, reportPlayPaused } from "@/api/playPauseSignal";
 import { noteDiscrepancy } from "./discrepancies";
 import {
   forgetReconciledChanges,
@@ -159,6 +160,13 @@ export interface ReconcileReport {
    * refused, and empty when no revert was wired in.
    */
   reverted: string[];
+  /**
+   * How many of `rejected` were refused because an operator paused play in
+   * this world (spec 051 FR-023, reason `PLAY_PAUSED`). Counted apart from
+   * the rest because they are not told on the playfield: the table has left
+   * it for the notice, which says how many were not kept.
+   */
+  notKeptForPause: number;
 }
 
 /** What a caller can hand the reconcile to let it clean up after a refusal. */
@@ -251,6 +259,7 @@ async function drainQueue(
     stillQueued: [],
     onBehalf: [],
     reverted: [],
+    notKeptForPause: 0,
   };
   const submittedAlready = new Set<string>();
   let sentAnything = false;
@@ -364,6 +373,20 @@ async function drainQueue(
         options.selfUserId,
       ).onBehalf;
     }
+  }
+
+  // Spec 051 (research R5): a paused world refuses the whole batch with
+  // `PLAY_PAUSED`, and the changes are discarded, not held. The outbox has
+  // already forgotten them above (they were answered, and not applied), and
+  // the revert above has taken them off the map like any other refusal. What
+  // is left is to tell the person, which the notice does, and to make sure
+  // they are on it: a report like this is itself a signal of the pause.
+  report.notKeptForPause = report.rejected.filter(
+    (entry) => entry.outcome.reason === "PLAY_PAUSED",
+  ).length;
+  if (report.notKeptForPause > 0) {
+    reportChangesNotKept(worldId, report.notKeptForPause);
+    reportPlayPaused(worldId);
   }
 
   return report;

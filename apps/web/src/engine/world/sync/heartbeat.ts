@@ -25,6 +25,8 @@
  */
 
 import { postGraphQL } from "@/api/graphqlClient";
+import { isPlayPaused } from "@/api/playPause";
+import { reportPlayPaused } from "@/api/playPauseSignal";
 
 /** How often to say "still here". Matches the server's timeout of 3 beats. */
 export const HEARTBEAT_INTERVAL_MS = 5_000;
@@ -110,11 +112,26 @@ export async function beatOnce(
     consecutiveFailures = 0;
     publish(false);
     return true;
-  } catch {
-    // Deliberately not distinguishing a network failure from a rejection. A
-    // heartbeat refused because membership was revoked is every bit as much
-    // "this client can no longer act on this world" as a dead network, and
-    // the client's response — stop sending, start queueing — is the same.
+  } catch (error) {
+    // Spec 051 (research R5): a beat refused because an operator paused the
+    // world is the one refusal that must never read as "offline". It reached
+    // the server, and the server answered. Counting it would switch a paused
+    // table to offline queueing after three beats, and play would carry on
+    // locally against a world that has stopped. So it resets the count, says
+    // "connected" (which lets a reconnecting page submit its queue and learn
+    // the queue was refused), and announces the pause.
+    if (isPlayPaused(error)) {
+      latencyMs = null;
+      consecutiveFailures = 0;
+      publish(false);
+      reportPlayPaused(worldId);
+      return false;
+    }
+    // Any other refusal is deliberately not told apart from a network
+    // failure. A heartbeat refused because membership was revoked is every
+    // bit as much "this client can no longer act on this world" as a dead
+    // network, and the client's response — stop sending, start queueing — is
+    // the same.
     latencyMs = null;
     consecutiveFailures += 1;
     publish(isOfflineAfter(consecutiveFailures));

@@ -50,7 +50,11 @@ import {
   stopHeartbeat,
   subscribeToHeartbeat,
 } from "@/engine/world/sync/heartbeat";
-import { onPlayPaused, reportPlayPaused } from "@/api/playPauseSignal";
+import {
+  onPlayPaused,
+  reportPlayPaused,
+  reportPlayPausedInSyncReason,
+} from "@/api/playPauseSignal";
 import {
   parseReconciledEvent,
   pruneApplied,
@@ -925,6 +929,15 @@ export default function WorldPage() {
         // open; a panel opened later would otherwise have nothing to show
         // and no way to get it without re-running the sync.
         reportWorldCacheSync(summary);
+        // Spec 051 US2 (T039): the sync plan is the first thing opening a
+        // world asks for, and a paused world refuses it. The engine's fetch
+        // does not pass through `graphqlClient`, so the refusal is read out
+        // of the summary here and sent down the same road as every other
+        // pause, to the notice. Without it, a table opening a paused world
+        // would sit on a playfield whose other requests fail one by one.
+        if (summary?.status === "degraded") {
+          reportPlayPausedInSyncReason(id, summary.reason);
+        }
       }),
     );
   }, [id, user?.id]);
@@ -2060,6 +2073,15 @@ export default function WorldPage() {
       if (worldId !== id) return;
       stopHeartbeat();
       stopPeerTransfer();
+      // US2 (FR-023): submit anything queued offline now, while the page and
+      // its revert still exist. A paused world refuses it all, and the
+      // reconcile hands the count to the notice. Usually already running:
+      // stopping the heartbeat of a page that was offline reads as
+      // recovering, which reconciles, and this call joins that one. Nothing
+      // queued is the common case, and costs one read of an empty outbox.
+      void reconcileWorld(id, reconcileOptionsRef.current).catch(
+        () => undefined,
+      );
     });
   }, [id]);
 

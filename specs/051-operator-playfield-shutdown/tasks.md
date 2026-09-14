@@ -187,7 +187,7 @@ Commit.
   - **Half two:** a `FIXTURES` map from each `GATED` name to a minimal valid request against a seeded paused world. Fail if any `GATED` name lacks a fixture. Run each as the world's Game Master and as a member site admin, and assert `WORLD_PLAY_PAUSED`.
 
   Register it in `src/server/src/graphql.rs` `#[cfg(test)]`. It is expected to fail until T029–T035 land.
-- [ ] T028 [US2] Write `apps/web/e2e/play-pause-holds.spec.ts`:
+- [x] T028 [US2] Write `apps/web/e2e/play-pause-holds.spec.ts`:
   1. A player's context is severed with `severableLink`, and a token move is queued offline while severed.
   2. The operator pauses the world.
   3. A connected context opens `/world/:id/play`: expect the notice.
@@ -216,9 +216,9 @@ Commit.
   The spec's default is *readable, not editable*. Leave read-only queries ungated.
 - [x] T035 [P] [US2] Gate the world-scoped REST writes: scene and asset uploads, and map import. Find them in `src/app/src/main.rs` routes and their handlers under `src/server/src/`. Answer `423 Locked` with body `{"code":"WORLD_PLAY_PAUSED"}`, and add a handler test per route. *Map import is the only world-scoped REST write: scene, actor and lore image uploads are GraphQL mutations (`uploadCanvasImage`, `uploadActorImage`, `uploadLoreImage`) and are gated and executed in the surface test. Its test is `map_import::tests::importing_onto_a_paused_world_is_locked`.*
 - [x] T036 [US2] Fill the three tables and every `FIXTURES` entry in `play_pause_surface_tests.rs` until both halves pass. Every root field not gated must be justified by its table. *There is no separate `FIXTURES` map: each `GATED` entry carries its request, so a name cannot be gated without one, and a test checks each request calls its own field. `CALLED_AS` names the eleven fields one default caller cannot reach by design (a Game Master does not claim; book management and renaming have no site-admin bypass; only a non-member joins); a default caller left out is still called and must be refused. The tables live in `play_pause_surface_tables.rs` for the file-length limit.*
-- [ ] T037 [P] [US2] Tell a pause apart from being offline in `apps/web/src/engine/world/sync/heartbeat.ts`. A refusal carrying `WORLD_PLAY_PAUSED` dispatches the pause signal. It never counts toward the three failures that switch to offline queueing (`offlineQueue.ts` `shouldQueue`). Add a vitest case beside the existing heartbeat tests.
-- [ ] T038 [P] [US2] Handle `PlayPaused` in `apps/web/src/engine/world/sync/offlineQueue.ts` `reconcileWorld`. Revert the rejected changes through the existing `revert` path, keep the count, and hand it to the notice (for example via navigation state) so `PlayPausedPage.tsx` shows "{n} change(s) you made while offline weren't kept". Add a vitest case.
-- [ ] T039 [US2] Make sure the page refuses at entry: opening `/world/:id/play` on a paused world surfaces the `WORLD_PLAY_PAUSED` from `worldSyncPlan` as the notice, not a generic load error, in `apps/web/src/pages/world/WorldPage.tsx`.
+- [x] T037 [P] [US2] Tell a pause apart from being offline in `apps/web/src/engine/world/sync/heartbeat.ts`. A refusal carrying `WORLD_PLAY_PAUSED` dispatches the pause signal. It never counts toward the three failures that switch to offline queueing (`offlineQueue.ts` `shouldQueue`). Add a vitest case beside the existing heartbeat tests.
+- [x] T038 [P] [US2] Handle `PlayPaused` in `apps/web/src/engine/world/sync/offlineQueue.ts` `reconcileWorld`. Revert the rejected changes through the existing `revert` path, keep the count, and hand it to the notice (for example via navigation state) so `PlayPausedPage.tsx` shows "{n} change(s) you made while offline weren't kept". Add a vitest case.
+- [x] T039 [US2] Make sure the page refuses at entry: opening `/world/:id/play` on a paused world surfaces the `WORLD_PLAY_PAUSED` from `worldSyncPlan` as the notice, not a generic load error, in `apps/web/src/pages/world/WorldPage.tsx`.
 - [ ] T040 [US2] Run `play-pause-holds.spec.ts` and `play-pause.spec.ts` until both pass. Run `cargo test -q --lib` (surface test included) and `tsc --noEmit`. Re-run the existing e2e that touch the changed paths:
   - `live-sync.spec.ts`, `world-event-catchup.spec.ts`, `world-cache-offline.spec.ts`, `world-cache-isolated.spec.ts`, `companion-offline.spec.ts`;
   - the interactives and library e2e.

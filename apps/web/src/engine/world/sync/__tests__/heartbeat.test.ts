@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as graphqlClient from "@/api/graphqlClient";
+import { onPlayPaused, resetPlayPausedForTests } from "@/api/playPauseSignal";
 import {
   HEARTBEAT_FAILURES_BEFORE_OFFLINE,
   HEARTBEAT_INTERVAL_MS,
   beatOnce,
   getHeartbeatLatencyMs,
+  isHeartbeatOffline,
   isOfflineAfter,
   resetHeartbeatForTests,
 } from "../heartbeat";
@@ -95,5 +97,69 @@ describe("heartbeat latency", () => {
     await beatOnce("world", null);
 
     expect(getHeartbeatLatencyMs()).toBeNull();
+  });
+});
+
+/**
+ * Spec 051 US2 (T037, research R5): a beat refused because an operator paused
+ * the world is not a lost connection.
+ *
+ * Three failed beats switch the client to offline queueing, so a refusal
+ * counted as a failure would quietly turn a paused world into offline play:
+ * the table keeps moving tokens locally against a world that has stopped.
+ */
+describe("a heartbeat refused because play is paused", () => {
+  const paused = () =>
+    new graphqlClient.GraphQLRequestError(
+      "Play in this world has been paused by an operator.",
+      { operation: "Heartbeat", status: 200, codes: ["WORLD_PLAY_PAUSED"] },
+    );
+
+  beforeEach(() => {
+    resetHeartbeatForTests();
+    resetPlayPausedForTests();
+    vi.restoreAllMocks();
+  });
+
+  it("announces the pause, and never counts toward going offline", async () => {
+    const heard: string[] = [];
+    onPlayPaused((worldId) => heard.push(worldId));
+    vi.spyOn(graphqlClient, "postGraphQL").mockRejectedValue(paused());
+
+    for (
+      let beat = 0;
+      beat < HEARTBEAT_FAILURES_BEFORE_OFFLINE * 3;
+      beat += 1
+    ) {
+      expect(await beatOnce("world", null)).toBe(false);
+    }
+
+    expect(isHeartbeatOffline()).toBe(false);
+    expect(heard).toEqual(["world"]);
+  });
+
+  /**
+   * The reconnect: a browser offline when the pause landed comes back, and
+   * its first beat through is refused. That is the server answering, so the
+   * client is connected again, which is what lets it submit its queue and
+   * learn the queue was refused too.
+   */
+  it("brings a client that was offline back online, and clears its failures", async () => {
+    const post = vi.spyOn(graphqlClient, "postGraphQL");
+    post.mockRejectedValue(new Error("offline"));
+    for (let beat = 0; beat < HEARTBEAT_FAILURES_BEFORE_OFFLINE; beat += 1) {
+      await beatOnce("world", null);
+    }
+    expect(isHeartbeatOffline()).toBe(true);
+
+    post.mockRejectedValueOnce(paused());
+    await beatOnce("world", null);
+    expect(isHeartbeatOffline()).toBe(false);
+
+    // The count started again from nothing: one more network failure is
+    // incidental, not the third in a row.
+    post.mockRejectedValueOnce(new Error("offline"));
+    await beatOnce("world", null);
+    expect(isHeartbeatOffline()).toBe(false);
   });
 });

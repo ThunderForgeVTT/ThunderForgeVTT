@@ -87,9 +87,25 @@ export function createPlaybackFacet(
   let sequence = 0;
   let stopped = false;
 
+  // Held directly, not through `for await`, so `stop` can close it. A
+  // `for await` loop only notices a flag between events, so a quiet world
+  // (or a paused one, whose events have ended) left the subscription open on
+  // the server long after the page had gone: until the next event, or until
+  // the server's own liveness tick ended it (spec 051 T023). `WorldPage`
+  // rebuilds its facets whenever the scene or the viewer's role changes, so
+  // each rebuild left one more behind.
+  const iterator = subscribeToWorldEvents(worldId)[Symbol.asyncIterator]();
+
   void (async () => {
-    for await (const event of subscribeToWorldEvents(worldId)) {
-      if (stopped) return;
+    while (!stopped) {
+      let next: IteratorResult<WorldEventLike>;
+      try {
+        next = await iterator.next();
+      } catch {
+        return;
+      }
+      if (next.done || stopped) return;
+      const event = next.value;
 
       sequence += 1;
       const entry: PlaybackEntry = {
@@ -130,8 +146,10 @@ export function createPlaybackFacet(
       }
     },
     stop() {
+      if (stopped) return;
       stopped = true;
       listeners.clear();
+      void iterator.return?.();
     },
   };
 }
