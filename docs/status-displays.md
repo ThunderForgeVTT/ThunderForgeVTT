@@ -285,8 +285,8 @@ are defined once in `crates/thunderforge-canvas-core/src/resource_display.rs`
 and emitted to `apps/web/src/engine/sdk/` by `ts-rs`.
 
 ```bash
-pnpm sdk:bindings     # regenerate
-pnpm sdk:check        # regenerate and fail if the committed output differs
+pnpm sdk:bindings     # regenerate (writes only the files that changed)
+pnpm sdk:check        # export to a temp dir and fail if the committed output differs
 ```
 
 The generated files are committed so the web application builds without a Rust
@@ -295,6 +295,9 @@ a step of `pnpm verify` — this repo has no separate CI workflow, so `verify` i
 the gate. It is scoped by the `ts-rs` marker to the files ts-rs actually owns,
 because the same directory holds hand-written wrappers, and failing those with
 the advice "run `pnpm sdk:bindings`" would be a gate nobody could satisfy.
+The check never writes into `apps/web/src` — it runs from the pre-push hook,
+often beside a live e2e run, and a write there makes Vite full-reload every
+page — and a plain `cargo test` exports into `target/ts-rs/` for the same reason.
 
 The shapes are generated; the typed wrappers application code actually calls
 are hand-written beside them, together with a compile-fail fixture whose value

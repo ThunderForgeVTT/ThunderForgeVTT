@@ -32,7 +32,7 @@ use ts_rs::TS;
 
 /// How a resource is presented.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub enum ResourceKind {
     /// Has a maximum, and is drawn as a proportion of it.
@@ -47,7 +47,7 @@ pub enum ResourceKind {
 /// points, another health/stamina/mana, a third health/energy. Hard-coding the
 /// first would make every system after it a special case.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceDefinition {
     pub id: String,
@@ -61,7 +61,7 @@ pub struct ResourceDefinition {
 
 /// One layer of a resource: a pool with its own maximum.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceEntry {
     pub current: i32,
@@ -81,7 +81,7 @@ pub struct ResourceEntry {
 /// system would need server changes to be displayed, and the engine would
 /// accumulate one special case per ruleset.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct EntrySource {
     /// Field holding this entry's current value.
@@ -112,7 +112,7 @@ pub struct EntrySource {
 
 /// Where a whole resource's entries come from.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceSource {
     /// Which stored slot to read: `resourceData`, `traitData`, and so on.
@@ -222,7 +222,7 @@ pub fn total_max(entries: &[ResourceEntry]) -> i32 {
 
 /// What a viewer other than the Game Master is permitted to learn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub enum DisclosureState {
     /// The exact entries.
@@ -252,7 +252,7 @@ pub enum DisclosureState {
 /// rather than forbidden by a rule somebody has to remember — and on the
 /// TypeScript side this generates a discriminated union that narrows.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 #[serde(tag = "disclosure", rename_all = "camelCase")]
 pub enum Disclosed {
     Visible { entries: Vec<ResourceEntry> },

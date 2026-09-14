@@ -34,7 +34,7 @@ use crate::vision::VisionProfile;
 /// this field", not two.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 pub struct DistanceSource {
     /// Which of the actor's stored blobs to read — `traitData`,
     /// `abilityData`, and so on. Absent means `traitData`, where a creature's
@@ -61,7 +61,7 @@ pub struct DistanceSource {
 /// The bright and dim reach of a light a character carries.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 pub struct CarriedLightDeclaration {
     pub bright: Option<DistanceSource>,
     pub dim: Option<DistanceSource>,
@@ -71,7 +71,7 @@ pub struct CarriedLightDeclaration {
 /// ordinary sight.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 pub struct VisionDeclaration {
     /// How many of the system's own units one grid square is worth — 5, for
     /// D&D 5e's five-foot square.

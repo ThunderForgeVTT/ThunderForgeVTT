@@ -34,7 +34,7 @@ use ts_rs::TS;
 /// One attribute a game system declares.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 pub struct AttributeDeclaration {
     /// The system's own identifier — `might`, `strength`, `prowess`.
     pub id: String,
@@ -58,7 +58,7 @@ pub struct AttributeDeclaration {
 /// An attribute resolved for one actor.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 pub struct ResolvedAttribute {
     pub id: String,
     pub label: String,

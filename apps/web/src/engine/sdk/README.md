@@ -7,9 +7,15 @@ They are produced from the Rust definitions in
 hand-edit is silently overwritten the next time somebody regenerates.
 
 ```bash
-pnpm sdk:bindings     # regenerate
-pnpm sdk:check        # regenerate and fail if the committed output differs
+pnpm sdk:bindings     # regenerate (writes only the files that changed)
+pnpm sdk:check        # export to a temp dir and fail if the committed output differs
 ```
+
+Only `sdk:bindings` writes here. `sdk:check` — a step of `pnpm verify`, which
+the pre-push hook runs — compares a temporary export against these files, and
+a plain `cargo test` exports into `target/ts-rs/` (set in `.cargo/config.toml`).
+A write into `apps/web/src` makes a running Vite dev server full-reload every
+page, which kills a live e2e run.
 
 ## Why these are committed rather than built
 

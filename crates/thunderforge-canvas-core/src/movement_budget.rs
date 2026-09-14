@@ -45,7 +45,7 @@ use crate::measure::GridUnits;
 /// What a cell costs to enter, and to whom.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 pub struct TerrainCost {
     /// Multiplier applied to a step entering this cell. 2.0 is the usual
     /// "difficult terrain".
@@ -105,7 +105,7 @@ impl TerrainCost {
 /// types in. Converting to cells is the grid's business, not the sheet's.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, TS)]
 #[serde(transparent)]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 pub struct MovementSpeeds(pub BTreeMap<String, f32>);
 
 /// The movement type used when a creature has exactly one, and the
@@ -140,7 +140,7 @@ impl MovementSpeeds {
 /// One movement type a system declares.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 pub struct MovementDeclaration {
     /// The system's own identifier — `walk`, `fly`, `stride`.
     pub id: String,

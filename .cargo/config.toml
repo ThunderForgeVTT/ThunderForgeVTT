@@ -1,0 +1,14 @@
+[env]
+# Where ts-rs writes the TypeScript bindings that a `cargo test` exports.
+#
+# Every `#[ts(export)]` type in thunderforge-canvas-core carries an
+# `export_bindings_*` test, so any test run of that crate writes its bindings
+# somewhere. That used to be `apps/web/src/engine/sdk/` — the committed files
+# themselves — and a live Vite dev server saw each write and full-reloaded
+# every page, killing whatever e2e run was driving them.
+#
+# So an ordinary test run exports into the ignored target directory, and only
+# `pnpm sdk:bindings` writes the committed files. That script sets
+# `TS_RS_EXPORT_DIR` itself, and it wins: `[env]` never overrides a variable
+# already present in the environment.
+TS_RS_EXPORT_DIR = { value = "target/ts-rs", relative = true }

@@ -24,7 +24,7 @@ use ts_rs::TS;
 /// reader to the PDF crate's internals.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 pub struct SourceLine {
     pub text: String,
     pub size: f64,
@@ -52,7 +52,7 @@ pub struct SourceLine {
 /// anything expressible eventually gets written.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", tag = "state", content = "value")]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 pub enum ReadValue {
     /// Found, and the reader has no reason to doubt it.
     Clear(String),
@@ -82,11 +82,7 @@ impl ReadValue {
 /// One thing read out of a book: a spell, an item, a creature, a feat.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(
-    export,
-    export_to = "../../../apps/web/src/engine/sdk/",
-    rename = "ContentEntry"
-)]
+#[ts(export, rename = "ContentEntry")]
 pub struct Entry {
     /// The system's own word for what this is. Carried, never switched on.
     pub kind: String,
@@ -119,7 +115,7 @@ pub struct Entry {
 /// Whether an entry's name is one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 pub enum NameState {
     Clear,
     Uncertain,

@@ -46,7 +46,7 @@ use ts_rs::TS;
 /// book as badly-parsed D&D.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 pub struct ContentPatterns {
     #[serde(default)]
     pub patterns: Vec<Pattern>,
@@ -67,7 +67,7 @@ impl ContentPatterns {
 /// One kind of content, and how to find it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 pub struct Pattern {
     /// What this finds — `spell`, `creature`, `feat`. Open on purpose: shared
     /// code never switches on the value, it only carries it through, so a
@@ -110,7 +110,7 @@ pub struct Pattern {
 /// Whether an entry of this kind carries labelled fields, or only prose.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 pub enum Shape {
     Anchored,
     Prose,
@@ -125,7 +125,7 @@ pub enum Shape {
 /// author gets told they wrote something that cannot work.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 pub struct NameRule {
     /// Anchored: which side of the anchor the name sits on.
     #[serde(default)]
@@ -148,7 +148,7 @@ pub struct NameRule {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 pub enum NamePosition {
     Before,
     After,
@@ -156,7 +156,7 @@ pub enum NamePosition {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 pub enum NamePreference {
     /// The largest text in range — a statblock's title is set bigger.
     Largest,
@@ -167,7 +167,7 @@ pub enum NamePreference {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 pub enum NameStyle {
     Bold,
     Heading,
@@ -175,7 +175,7 @@ pub enum NameStyle {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 pub enum ProseEnd {
     NextName,
     NextHeading,
@@ -184,7 +184,7 @@ pub enum ProseEnd {
 /// One labelled field to read out of an anchored entry.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 pub struct FieldSpec {
     /// What the read value is called on the entry.
     pub key: String,
@@ -204,7 +204,7 @@ pub struct FieldSpec {
 /// would buy is the ability to be confidently wrong about more fields.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 pub enum FieldKind {
     Integer,
     Number,

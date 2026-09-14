@@ -44,7 +44,7 @@ use ts_rs::TS;
 
 /// What an interactive is attached to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub enum SubjectKind {
     /// A token with no actor — a book, a chest, a lever.
@@ -76,7 +76,7 @@ impl SubjectKind {
 
 /// What makes an interactive fire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub enum Trigger {
     /// Somebody clicked the subject.
@@ -105,7 +105,7 @@ impl Trigger {
 
 /// Who may set it off, and whether the Game Master gets a say first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub enum Activation {
     /// Any world member.
@@ -137,7 +137,7 @@ impl Activation {
 
 /// How many times it may fire before a Game Master resets it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub enum FireMode {
     #[default]
@@ -168,7 +168,7 @@ impl FireMode {
 
 /// One option in a [`ConfigFieldKind::Choice`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct ChoiceOption {
     pub value: String,
@@ -190,7 +190,7 @@ pub struct ChoiceOption {
 /// about where the link came from). Adding a text kind here would quietly
 /// bring all of that back.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 #[serde(rename_all = "camelCase", tag = "kind")]
 pub enum ConfigFieldKind {
     /// A yes/no.
@@ -210,7 +210,7 @@ pub enum ConfigFieldKind {
 
 /// One field a Game Master fills in when authoring an effect.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigField {
     pub key: String,
@@ -227,7 +227,7 @@ pub struct ConfigField {
 /// Data, not behaviour — its three consumers need it in three places. The
 /// handler lives in the plugin that owns the subsystem and never here.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct EffectDeclaration {
     /// Stable, namespaced by contributor — `door.set_state`, `light.toggle`.
@@ -382,7 +382,7 @@ impl EffectRegistry {
 /// crossed. Storing them together would make every shape query filter out
 /// regions and `visible_to_players` do two unrelated jobs.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 #[serde(rename_all = "camelCase", tag = "shape")]
 pub enum RegionGeometry {
     Rect {
@@ -711,7 +711,7 @@ pub struct ActivationContext {
 
 /// Why an activation was refused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub enum RefusalReason {
     /// Reserved to whoever runs the world.
@@ -738,7 +738,7 @@ impl RefusalReason {
 /// four genuinely different situations and a player told only "no" cannot tell
 /// a locked door from a broken product.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 #[serde(rename_all = "camelCase", tag = "outcome")]
 pub enum ActivationOutcome {
     /// The effect runs.

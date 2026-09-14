@@ -48,7 +48,7 @@ use crate::attributes::AttributeDeclaration;
 /// the two to disagree, and the stored one is the one that goes stale.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 pub enum Origin {
     /// Read from the actor's stored slot, against the system's manifest.
     Stored,
@@ -65,7 +65,7 @@ pub enum Origin {
 /// without knowing what it means is a value this contract should not carry.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", tag = "kind", content = "value")]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 pub enum DeclaredValueKind {
     Integer(i32),
     Number(f64),
@@ -153,7 +153,7 @@ impl DeclaredValueKind {
 /// neither knows what any of them mean.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[ts(export)]
 pub struct DeclaredValue {
     /// The system's own identifier — `strength`, `strengthMod`, `wishPoints`.
     pub id: String,

@@ -154,7 +154,10 @@ const steps = [
     // is precisely the silent-drift failure the typed SDK exists to retire.
     //
     // `--fix` regenerates; a plain run only reports, so the gate cannot
-    // quietly rewrite the tree it is meant to be checking.
+    // quietly rewrite the tree it is meant to be checking. The check exports
+    // into a temporary directory and compares, never into `apps/web/src`:
+    // this runs from the pre-push hook, often beside a live e2e run, and a
+    // write there makes Vite full-reload every page under test.
     id: "sdk",
     name: "sdk bindings",
     cwd: ".",
