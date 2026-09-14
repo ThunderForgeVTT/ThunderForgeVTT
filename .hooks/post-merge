@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+#
+# Say so when a merge or pull changed the lockfile.
+#
+# Nothing re-installs dependencies after a merge, and the first thing to notice
+# is usually a test run minutes later dying on "Cannot find module" — which on
+# 2026-09-14 cost an e2e run and a misleading blank-page failure. A warning
+# here names the fix at the moment the cause arrives.
+#
+# Warns, never fails: a post-merge hook cannot undo the merge, and a non-zero
+# exit would only make git print a confusing error beside the real message.
+cd "$(git rev-parse --show-toplevel)" || exit 0
+
+if git diff --quiet ORIG_HEAD HEAD -- pnpm-lock.yaml 2>/dev/null; then
+  exit 0
+fi
+node ./scripts/e2e/deps.mjs --warn
+exit 0

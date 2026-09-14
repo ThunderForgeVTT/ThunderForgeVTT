@@ -60,6 +60,7 @@ import {
   spawnManaged,
   terminateChildren,
 } from "./shared.mjs";
+import { checkDependencies, describeProblems } from "./e2e/deps.mjs";
 
 /** Away from 5173/30000 on purpose, so a `pnpm dev` can stay up while this runs. */
 const WEB_PORT_BASE = 5200;
@@ -1098,6 +1099,15 @@ async function main() {
   const total = args.suite === "playtest" ? 1 : args.shards;
   if (!Number.isInteger(total) || total < 1) {
     throw new Error(`--shards must be a positive integer, got ${total}`);
+  }
+
+  // Before anything that costs time. A stale `node_modules` otherwise costs
+  // the whole Rust build and then fails as "Cannot find module" in every
+  // shard, or as a blank page in a lane whose spec never mentions a package.
+  const dependencyProblems = checkDependencies(ROOT_DIR);
+  if (dependencyProblems.length > 0) {
+    log("e2e", describeProblems(dependencyProblems), process.stderr);
+    process.exit(1);
   }
 
   acquireLock();

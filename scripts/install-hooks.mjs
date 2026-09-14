@@ -25,11 +25,14 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { chmodSync, existsSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const repoRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
 const HOOKS_PATH = ".hooks";
 
 const git = (...args) =>
@@ -47,6 +50,22 @@ if (!existsSync(path.join(repoRoot, HOOKS_PATH))) {
   process.exit(0);
 }
 
+// Git silently skips a hook that is not executable. The bit is tracked, but a
+// checkout with `core.fileMode=false` or an archive extraction can drop it,
+// and a hook that does not run looks exactly like a hook that passed.
+for (const name of readdirSync(path.join(repoRoot, HOOKS_PATH))) {
+  const file = path.join(repoRoot, HOOKS_PATH, name);
+  const mode = statSync(file).mode;
+  if ((mode & 0o111) === 0) chmodSync(file, mode | 0o755);
+}
+
+const LISTING =
+  "  pre-commit     formatters and the two static checks (~4s)\n" +
+  "  pre-push       the full `pnpm verify`\n" +
+  "  post-merge     warns when pnpm-lock.yaml changed and node_modules is stale\n" +
+  "  post-checkout  the same, after a branch switch\n" +
+  "  bypass         --no-verify on commit and push\n";
+
 const current = git("config", "--local", "core.hooksPath").stdout.trim();
 if (current === HOOKS_PATH) {
   process.stdout.write(`hooks: already pointed at ${HOOKS_PATH}/.\n`);
@@ -56,12 +75,14 @@ if (current === HOOKS_PATH) {
 const set = git("config", "--local", "core.hooksPath", HOOKS_PATH);
 if (set.status !== 0) {
   // Worth reporting, not worth failing an install over.
-  process.stdout.write(`hooks: could not set core.hooksPath (${set.stderr.trim()}).\n`);
+  process.stdout.write(
+    `hooks: could not set core.hooksPath (${set.stderr.trim()}).\n`,
+  );
   process.exit(0);
 }
 
 process.stdout.write(
   `hooks: core.hooksPath → ${HOOKS_PATH}/${
     current ? ` (was "${current}")` : ""
-  }\n  pre-commit  formatters and the two static checks (~4s)\n  pre-push    the full \`pnpm verify\`\n  bypass      --no-verify on either\n`,
+  }\n${LISTING}`,
 );

@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+#
+# Say so when switching branches changed the lockfile.
+#
+# The same warning as `post-merge`, for `git checkout`/`git switch` (and
+# `git pull --rebase`, which checks out). Only branch checkouts ($3 == 1);
+# restoring a file with `git checkout -- path` passes 0 and is not a switch.
+cd "$(git rev-parse --show-toplevel)" || exit 0
+
+[ "${3:-0}" = "1" ] || exit 0
+[ "$1" = "$2" ] && exit 0
+# A fresh clone or worktree checks out from the null revision, and has no
+# node_modules to compare yet — `pnpm install` is the next step anyway.
+[ "$1" = "0000000000000000000000000000000000000000" ] && exit 0
+
+if git diff --quiet "$1" "$2" -- pnpm-lock.yaml 2>/dev/null; then
+  exit 0
+fi
+node ./scripts/e2e/deps.mjs --warn
+exit 0
