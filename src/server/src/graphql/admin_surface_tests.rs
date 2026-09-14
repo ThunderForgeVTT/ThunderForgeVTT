@@ -149,6 +149,17 @@ const ADMIN_ONLY: &[(&str, &str)] = &[
         "{ undeliveredFeedback { __typename } }",
     ),
     ("legalEnquiries", "{ legalEnquiries { __typename } }"),
+    // Spec 051 US1: the pause record, with its grounds and who paused, and
+    // the world search an operator pauses from. `worldPlayState` is not here:
+    // it is a member's read of *that and when*, guarded by membership.
+    (
+        "playPauseCandidates",
+        r#"{ playPauseCandidates(search: "x") { __typename } }"#,
+    ),
+    (
+        "playPauses",
+        "{ playPauses(active: true, first: 1) { __typename } }",
+    ),
     (
         "openLegalEnquiryCounts",
         "{ openLegalEnquiryCounts { __typename } }",
@@ -197,6 +208,12 @@ const ADMIN_ONLY: &[(&str, &str)] = &[
     (
         "resolveModerationCase",
         r#"mutation { resolveModerationCase(caseId: "00000000-0000-0000-0000-000000000001", resolution: CONTENT_RESTORED) { __typename } }"#,
+    ),
+    // Spec 051 US1: stopping a world's play. A world's Owner is refused like
+    // any other non-operator (FR-006, FR-040).
+    (
+        "pauseWorldPlay",
+        r#"mutation { pauseWorldPlay(worldId: "00000000-0000-0000-0000-000000000001", grounds: "x") { __typename } }"#,
     ),
     (
         "updateOauthProvider",
@@ -410,6 +427,9 @@ fn is_operator_shaped(field: &str) -> bool {
         "readiness",
         "setting",
         "operator",
+        // Spec 051: every field of the pause surface carries it, and every one
+        // but the member's `worldPlayState` is an operator's.
+        "pause",
     ];
     let lowered = field.to_ascii_lowercase();
     MARKERS

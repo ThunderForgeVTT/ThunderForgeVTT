@@ -186,6 +186,13 @@ pub async fn peer_signals_stream(
         Ok(false) => return failure("You must be a member of this world"),
         Err(_) => return failure("You must be a member of this world"),
     }
+    // Spec 051: a paused world has no one to reach. Before registering, so a
+    // refused session is never addressable, even for a moment.
+    if let Err(paused) =
+        crate::graphql::session_lifetime::refuse_opening_if_paused(state, world_id).await
+    {
+        return Box::pin(tokio_stream::iter(vec![Err(paused)]).boxed());
+    }
 
     // And spec 036 FR-038: reachability belongs to the play field. A companion
     // surface never enters the registry, so it is never addressable.
@@ -203,9 +210,16 @@ pub async fn peer_signals_stream(
         Err(e) => return failure(&e.to_string()),
     };
 
-    Box::pin(futures_util::stream::unfold(
-        (rx, guard),
-        |(mut rx, guard)| async move { rx.recv().await.map(|signal| (Ok(signal), (rx, guard))) },
+    // Newly wrapped by spec 051: this stream had no lifetime check at all, so
+    // a revoked session stayed reachable for as long as its socket did. Ending
+    // the stream drops the guard, which unregisters the session.
+    Box::pin(crate::graphql::session_lifetime::until_stream_must_end(
+        state.clone(),
+        auth_user.session_id,
+        world_id,
+        futures_util::stream::unfold((rx, guard), |(mut rx, guard)| async move {
+            rx.recv().await.map(|signal| (Ok(signal), (rx, guard)))
+        }),
     ))
 }
 

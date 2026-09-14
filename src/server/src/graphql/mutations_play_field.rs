@@ -112,6 +112,14 @@ pub async fn play_field_stream(
     if !matches!(membership, Ok(Ok(_))) {
         return failure("You must be a member of this world");
     }
+    // Spec 051: and not while an operator has paused the world's play. Before
+    // the claim, not after: taking the table would displace this account's
+    // other window from a world it is about to be refused.
+    if let Err(paused) =
+        crate::graphql::session_lifetime::refuse_opening_if_paused(state, world_id).await
+    {
+        return Box::pin(tokio_stream::iter(vec![Err(paused)]).boxed());
+    }
 
     // Watch before claiming, so the client cannot miss a takeover that
     // happens between the two.
@@ -123,13 +131,15 @@ pub async fn play_field_stream(
     // FR-010. Ending the stream drops `guard`, and dropping the guard
     // releases the claim — so the same wrapper that stops a revoked client
     // receiving events also stops it holding the play field, which is the
-    // half of T036 that would otherwise need its own mechanism.
+    // half of T036 that would otherwise need its own mechanism. Spec 051: a
+    // pause ends it the same way, so a paused world holds no claim either.
     let session_id = auth_user.session_id;
     let state = state.clone();
 
-    Box::pin(crate::graphql::session_lifetime::until_session_ends(
+    Box::pin(crate::graphql::session_lifetime::until_stream_must_end(
         state,
         session_id,
+        world_id,
         tokio_stream::iter(vec![Ok(Some(first))]).chain(futures_util::stream::unfold(
             (changes, guard, asking),
             |(mut changes, guard, asking)| async move {

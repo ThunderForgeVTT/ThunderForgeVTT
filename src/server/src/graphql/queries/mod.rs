@@ -26,6 +26,9 @@ pub mod lore;
 // `instanceRepositoryIntegration`.
 pub mod lore_sync;
 pub mod moderation;
+// Spec 051: `playPauseCandidates`, `playPauses` (operators) and
+// `worldPlayState` (members), kept apart by what each selects.
+pub mod play_pause;
 pub mod roll;
 pub mod scene;
 // Spec 039 US5: `myStanding`, `accountStanding`, `myNotices`.
@@ -55,6 +58,7 @@ pub use legal::LegalDocumentQuery;
 pub use lore::LoreQuery;
 pub use lore_sync::LoreSyncQuery;
 pub use moderation::ModerationQuery;
+pub use play_pause::PlayPauseQuery;
 pub use roll::RollQuery;
 pub use scene::SceneQuery;
 pub use standing::StandingQuery;

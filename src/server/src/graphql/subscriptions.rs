@@ -3,6 +3,10 @@
 //! `may_watch_world` is the gate every world-scoped stream passes through. It
 //! is checked once when the subscription opens, which is the thing to keep in
 //! mind when changing it — a stream already running does not re-ask.
+//!
+//! Spec 051: whether the world's play is paused is asked at both ends. Opening
+//! calls `refuse_opening_if_paused` after membership, and every world-scoped
+//! stream is wrapped in `until_stream_must_end`, whose tick does re-ask.
 
 use async_graphql::{Context, Result as GraphQLResult, Subscription};
 use futures_util::Stream;
@@ -12,7 +16,7 @@ use tokio_stream::wrappers::IntervalStream;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
 use super::*;
-use crate::graphql::session_lifetime::until_session_ends;
+use crate::graphql::session_lifetime::{refuse_opening_if_paused, until_stream_must_end};
 use crate::state::AppState;
 
 #[derive(Default)]
@@ -58,6 +62,27 @@ async fn may_watch_world(
     }
 }
 
+/// What the refusal log says when the gate refused. Either the world is paused
+/// or whether it is could not be read; the error the client receives says
+/// which.
+const PAUSED_OR_UNCONFIRMED: &str = "play in this world is paused, or could not be confirmed open";
+
+/// Spec 051: the gate's refusal, if it refuses — asked only of a member, so
+/// that someone who is not at the table learns nothing about whether it is
+/// paused.
+async fn opening_refused(
+    app_state: &Option<AppState>,
+    world_uuid: &Option<uuid::Uuid>,
+    membership_ok: bool,
+) -> Option<Error> {
+    match (app_state, world_uuid) {
+        (Some(state), Some(world_id)) if membership_ok => {
+            refuse_opening_if_paused(state, *world_id).await.err()
+        }
+        _ => None,
+    }
+}
+
 #[Subscription]
 impl SubscriptionRoot {
     async fn tick(&self) -> impl Stream<Item = i32> {
@@ -95,12 +120,14 @@ impl SubscriptionRoot {
         // user could subscribe to any world's events by guessing a world_id,
         // bypassing per-world membership entirely.
         let membership_ok = may_watch_world(ctx, &app_state, &world_uuid).await;
+        let paused = opening_refused(&app_state, &world_uuid, membership_ok).await;
 
         // Collect all validation to happen upfront
         let (has_error, error_msg, rx_opt) = match (&app_state, &world_uuid) {
             (None, _) => (true, "Failed to get app state", None),
             (_, None) => (true, "Invalid world_id format", None),
             (_, _) if !membership_ok => (true, "You must be a member of this world", None),
+            (_, _) if paused.is_some() => (true, PAUSED_OR_UNCONFIRMED, None),
             (Some(app_state), Some(world_uuid)) => {
                 // This world's channel, not the whole process's. The stream
                 // below no longer filters, because nothing else can arrive.
@@ -200,20 +227,23 @@ impl SubscriptionRoot {
                         }
                     }
                 });
-            // A stream whose session ends, ends. See `session_lifetime`: the
-            // membership check above runs once, which is right for
-            // membership and was wrong for revocation.
+            // A stream whose session ends, ends — and so does one whose world
+            // an operator pauses. See `session_lifetime`: the membership check
+            // above runs once, which is right for membership and was wrong for
+            // revocation.
             match (app_state, session_id) {
-                (Some(state), Some(session_id)) => {
-                    Pin::new(Box::new(until_session_ends(state, session_id, stream)))
-                        as Pin<Box<dyn Stream<Item = Result<GraphQLWorldEvent, Error>> + Send>>
-                }
+                (Some(state), Some(session_id)) => Pin::new(Box::new(until_stream_must_end(
+                    state, session_id, world_uuid, stream,
+                )))
+                    as Pin<Box<dyn Stream<Item = Result<GraphQLWorldEvent, Error>> + Send>>,
                 _ => Pin::new(Box::new(stream))
                     as Pin<Box<dyn Stream<Item = Result<GraphQLWorldEvent, Error>> + Send>>,
             }
         } else {
-            // Error case: single error item
-            let stream = tokio_stream::iter(vec![Err(Error::new(error_msg))]).filter_map(Some);
+            // Error case: single error item. A pause keeps its own error, so
+            // the client reads `WORLD_PLAY_PAUSED` rather than a sentence.
+            let error = paused.unwrap_or_else(|| Error::new(error_msg));
+            let stream = tokio_stream::iter(vec![Err(error)]).filter_map(Some);
             Pin::new(Box::new(stream))
                 as Pin<Box<dyn Stream<Item = Result<GraphQLWorldEvent, Error>> + Send>>
         }
@@ -277,11 +307,13 @@ impl SubscriptionRoot {
         // the kind of "safe because unfinished" that stops being true the day
         // someone finishes it.
         let membership_ok = may_watch_world(ctx, &app_state, &world_uuid).await;
+        let paused = opening_refused(&app_state, &world_uuid, membership_ok).await;
 
         let (has_error, error_msg, rx_opt) = match (&app_state, &world_uuid) {
             (None, _) => (true, "Failed to get app state", None),
             (_, None) => (true, "Invalid world_id format", None),
             (_, _) if !membership_ok => (true, "You must be a member of this world", None),
+            (_, _) if paused.is_some() => (true, PAUSED_OR_UNCONFIRMED, None),
             (Some(app_state), Some(_)) => (false, "", Some(app_state.presence_sender.subscribe())),
         };
 
@@ -345,18 +377,20 @@ impl SubscriptionRoot {
                     }
                 });
             match (app_state, session_id) {
-                (Some(state), Some(session_id)) => {
-                    Pin::new(Box::new(until_session_ends(state, session_id, stream)))
-                        as Pin<
-                            Box<dyn Stream<Item = Result<GraphQLPlayersOnlineList, Error>> + Send>,
-                        >
-                }
+                (Some(state), Some(session_id)) => Pin::new(Box::new(until_stream_must_end(
+                    state,
+                    session_id,
+                    world_id_uuid,
+                    stream,
+                )))
+                    as Pin<Box<dyn Stream<Item = Result<GraphQLPlayersOnlineList, Error>> + Send>>,
                 _ => Pin::new(Box::new(stream))
                     as Pin<Box<dyn Stream<Item = Result<GraphQLPlayersOnlineList, Error>> + Send>>,
             }
         } else {
-            // Error case: single error item
-            let stream = tokio_stream::iter(vec![Err(Error::new(error_msg))]).filter_map(Some);
+            // Error case: single error item, a pause keeping its own.
+            let error = paused.unwrap_or_else(|| Error::new(error_msg));
+            let stream = tokio_stream::iter(vec![Err(error)]).filter_map(Some);
             Pin::new(Box::new(stream))
                 as Pin<Box<dyn Stream<Item = Result<GraphQLPlayersOnlineList, Error>> + Send>>
         }

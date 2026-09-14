@@ -49,7 +49,7 @@ use std::task::Poll;
 use std::time::Duration;
 
 use crate::AppState;
-use crate::play_pause::gate::PlayPaused;
+use crate::play_pause::gate::{GateError, PlayPaused, refuse_if_paused};
 use crate::schema::user_sessions;
 
 /// How long a revoked session's stream may keep running.
@@ -150,6 +150,29 @@ where
     });
 
     ended.chain(tail)
+}
+
+/// Refuse to open a stream into `world_id` while its play is paused.
+///
+/// The opening half of [`until_stream_must_end`]: every world-scoped
+/// subscription calls this after its membership check and before it takes
+/// anything — a channel, a claim, a place in the peer registry — so a paused
+/// world never has a stream to end. Membership first, so that someone who is
+/// not at the table learns nothing about whether it is paused.
+///
+/// Fails closed, as the gate does: a pool that hands out no connection
+/// refuses too, without the pause code.
+pub async fn refuse_opening_if_paused(
+    state: &AppState,
+    world_id: uuid::Uuid,
+) -> Result<(), async_graphql::Error> {
+    let Ok(mut conn) = state.db_pool.get() else {
+        return Err(GateError::Unreadable("no database connection".into()).into());
+    };
+    tokio::task::spawn_blocking(move || refuse_if_paused(&mut conn, world_id))
+        .await
+        .map_err(|e| GateError::Unreadable(e.to_string()))?
+        .map_err(Into::into)
 }
 
 /// What one tick found.

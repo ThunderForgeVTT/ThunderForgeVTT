@@ -80,6 +80,9 @@ pub mod mutations_github_apps;
 pub mod mutations_instance_access;
 pub mod mutations_invites;
 pub mod mutations_play_field;
+// Spec 051 US1: `pauseWorldPlay` — an operator stopping a world's live play.
+// Operator-only, and never gated: acting on a paused world is its purpose.
+pub mod mutations_play_pause;
 pub mod mutations_sessions;
 pub mod permissioned_entity_resolvers;
 pub mod share_codes;
@@ -282,6 +285,12 @@ pub mod session_lifetime;
 pub mod subscriptions;
 pub use subscriptions::*;
 
+/// Spec 051 T021: every world-scoped subscription refuses a paused world, and
+/// one already open ends with the pause.
+#[cfg(test)]
+#[path = "graphql/play_pause_stream_tests.rs"]
+mod play_pause_stream_tests;
+
 // Empty placeholder in the mutation root — the world_collaborators-based
 // RBAC mutations this was meant to hold were never built; world/scene
 // authorization instead runs through world_members (see
@@ -396,6 +405,9 @@ pub struct QueryRoot(
     // `compendiumsOfferedToWorld` and `worldCompendiumEntries` — the book
     // list, and the fetch that is the only way content reaches a world.
     mutations_library::LibraryWorldQuery,
+    // Spec 051: the pause record and the worlds an operator might pause
+    // (operators), and `worldPlayState` — *that and when* (members).
+    queries::PlayPauseQuery,
 );
 
 #[derive(MergedObject, Default)]
@@ -477,6 +489,8 @@ pub struct MutationRoot(
     HeartbeatMutation,
     // Spec 028 (T086): `sendPeerSignal` — the post box.
     crate::peer_signaling::PeerSignalingMutation,
+    // Spec 051 US1: `pauseWorldPlay`.
+    mutations_play_pause::PlayPauseMutation,
 );
 
 pub type AppSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;

@@ -145,9 +145,9 @@ Commit.
 
 ### Implementation for User Story 1
 
-- [ ] T019 [US1] Add the operator mutation `pauseWorldPlay(worldId, grounds): PauseOutcome!` in the new file `src/server/src/graphql/mutations_play_pause.rs`. Guard with `helpers::admin_user`, call `play_pause::pause_world`, and use types from `contracts/graphql.md`. Merge it into the root mutation in `src/server/src/graphql.rs`, and add it to `ADMIN_ONLY` in `src/server/src/graphql/admin_surface_tests.rs`.
-- [ ] T020 [P] [US1] Add the operator queries `playPauseCandidates(search, first)` and `playPauses(active, worldId, first, after)` in the new file `src/server/src/graphql/queries/play_pause.rs`. `playedNow` may return `false` until T047 lands; leave a `// T047` marker. Merge them into the root query and add them to `ADMIN_ONLY`.
-- [ ] T021 [US1] Wrap the world-scoped subscriptions in `until_stream_must_end` and call `play_pause::refuse_if_paused` before opening each:
+- [x] T019 [US1] Add the operator mutation `pauseWorldPlay(worldId, grounds): PauseOutcome!` in the new file `src/server/src/graphql/mutations_play_pause.rs`. Guard with `helpers::admin_user`, call `play_pause::pause_world`, and use types from `contracts/graphql.md`. Merge it into the root mutation in `src/server/src/graphql.rs`, and add it to `ADMIN_ONLY` in `src/server/src/graphql/admin_surface_tests.rs`.
+- [x] T020 [P] [US1] Add the operator queries `playPauseCandidates(search, first)` and `playPauses(active, worldId, first, after)` in the new file `src/server/src/graphql/queries/play_pause.rs`. `playedNow` may return `false` until T047 lands; leave a `// T047` marker. Merge them into the root query and add them to `ADMIN_ONLY`.
+- [x] T021 [US1] Wrap the world-scoped subscriptions in `until_stream_must_end` and call `play_pause::refuse_if_paused` before opening each:
   - `worldEventsCreated` and `playersOnline` in `src/server/src/graphql/subscriptions.rs`;
   - `playField` in `src/server/src/graphql/mutations_play_field.rs`;
   - `peerSignals` in `src/server/src/peer_signaling/surface.rs`, which is newly wrapped since it had no lifetime check before.
@@ -328,7 +328,7 @@ Commit.
 
 ### Implementation for User Story 5
 
-- [ ] T057 [US5] Add `worldPlayState(worldId): WorldPlayState!` in `src/server/src/graphql/queries/play_pause.rs`. Guard with `require_world_member`, not the gate. Select only `paused_at` and `lifted_at` from `world_play_pauses`. Classify it as a read in the surface test notes. Replace the T024 stub in `PlayPausedPage.tsx`.
+- [x] T057 [US5] Add `worldPlayState(worldId): WorldPlayState!` in `src/server/src/graphql/queries/play_pause.rs`. Guard with `require_world_member`, not the gate. Select only `paused_at` and `lifted_at` from `world_play_pauses`. Classify it as a read in the surface test notes. Replace the T024 stub in `PlayPausedPage.tsx`.
 - [ ] T058 [P] [US5] Add a *Record* section to `apps/web/src/pages/admin/PlayPausesPage.tsx`: all pauses and decided requests, newest first, paginated. Each shows world (marked if it no longer exists), who, when, grounds or note, triggers, and lift.
 - [ ] T059 [P] [US5] Show *that and when* to members:
   - a quiet banner on the world page in `apps/web/src/pages/world/WorldPage.tsx`;
