@@ -61,6 +61,7 @@ import {
   terminateChildren,
 } from "./shared.mjs";
 import { checkDependencies, describeProblems } from "./e2e/deps.mjs";
+import { acquireRunLock, releaseRunLock } from "./e2e/run-lock.mjs";
 
 /** Away from 5173/30000 on purpose, so a `pnpm dev` can stay up while this runs. */
 const WEB_PORT_BASE = 5200;
@@ -107,7 +108,6 @@ const FIRST_RUN_TEMPLATE_DB = "thunderforge_e2e_firstrun_template";
 const SHARD_DIR = join(ROOT_DIR, ".e2e-shards");
 /** Measured seconds per spec file, so each run balances better than the last. */
 const DURATIONS_PATH = join(ROOT_DIR, ".e2e-shards-durations.json");
-const LOCK_PATH = join(ROOT_DIR, ".e2e-shards.lock");
 
 /**
  * The specs that measure this machine rather than the product.
@@ -357,49 +357,6 @@ function recordDurations(shardDirs, previous) {
 }
 
 /**
- * Refuse to start on top of a run that is already going.
- *
- * This script begins by deleting the shard directory and dropping the template
- * database, so a second invocation does not merely contend — it removes the
- * demo sessions, JSON reports and databases the live run is in the middle of
- * using, and the failures surface inside whatever tests happened to be running
- * as bugs of their own.
- *
- * A stale lock is reclaimed rather than fatal: `process.kill(pid, 0)` throws if
- * nothing is there, and a run killed with Ctrl-C leaves one behind every time.
- */
-function acquireLock() {
-  try {
-    const previous = Number(readFileSync(LOCK_PATH, "utf-8").trim());
-    if (Number.isInteger(previous) && previous > 0) {
-      try {
-        process.kill(previous, 0);
-        throw new Error(
-          `another e2e-parallel run is active (pid ${previous}). ` +
-            `Wait for it, or remove ${LOCK_PATH} if you are sure it is gone.`,
-        );
-      } catch (error) {
-        // ESRCH: the pid is gone, so the lock is stale and ours to take.
-        if (
-          error instanceof Error &&
-          !/^another e2e-parallel/.test(error.message)
-        ) {
-          log("e2e", `Reclaiming a stale lock from pid ${previous}.`);
-        } else {
-          throw error;
-        }
-      }
-    }
-  } catch (error) {
-    if (error instanceof Error && /^another e2e-parallel/.test(error.message)) {
-      throw error;
-    }
-    // No lock file at all, which is the ordinary case.
-  }
-  writeFileSync(LOCK_PATH, String(process.pid));
-}
-
-/**
  * Fail loudly if anything already holds a port this run needs.
  *
  * The lock above stops a *second run* starting while a first is alive. It
@@ -443,31 +400,6 @@ async function assertPortsFree(total) {
         "otherwise test against it rather than against this build. Find it " +
         "with `ss -ltnp` and kill it, then run again.",
     );
-  }
-}
-
-/**
- * Release the lock, but **only if it is still ours**.
- *
- * The unconditional `rmSync` here cost two false results in one afternoon.
- * Teardown outlives the moment the process is judged finished, so a run that
- * has been reported as over is still dropping its shard databases and killing
- * its servers while the *next* run starts. That next run writes its own pid
- * into the lock — and then the previous run reaches this function and deletes
- * it, leaving the new run unprotected. What follows is not a crash: the old
- * teardown drops `thunderforge_e2e_0` out from under the new run's backend,
- * and the whole suite fails with a database that "does not exist".
- *
- * Reading the pid back before removing it makes the release belong to the run
- * that took it.
- */
-function releaseLock() {
-  try {
-    const holder = Number(readFileSync(LOCK_PATH, "utf-8").trim());
-    if (holder !== process.pid) return;
-    rmSync(LOCK_PATH, { force: true });
-  } catch {
-    // Nothing to release.
   }
 }
 
@@ -1110,7 +1042,8 @@ async function main() {
     process.exit(1);
   }
 
-  acquireLock();
+  acquireRunLock(ROOT_DIR, process.argv.slice(2));
+  releaseOnSignals();
   // Two past the sharded stacks: the first-run lane runs on index `total` and
   // the GitHub-applications lane on `total + 1`, and a port either finds taken
   // is the same stale-corpse hazard as a shard's.
@@ -1365,13 +1298,35 @@ async function main() {
     }
   }
 
-  releaseLock();
+  releaseRunLock(ROOT_DIR);
   process.exit(failed.length > 0 ? 1 : 0);
+}
+
+/**
+ * Ctrl-C, `kill`, a closed terminal: release the lock and take the stacks down.
+ *
+ * Without this a signal killed the runner outright and left everything it
+ * started behind — the servers are spawned detached, in process groups of
+ * their own, so the terminal's SIGINT never reached them — and the lock stayed
+ * behind to refuse the next commit. `exit` covers the paths that call
+ * `process.exit` directly. A `kill -9` reaches none of this; the lock then
+ * names a dead pid, which `run-lock.mjs` treats as stale.
+ */
+function releaseOnSignals() {
+  process.once("exit", () => releaseRunLock(ROOT_DIR));
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+    process.once(signal, () => {
+      log("e2e", `Received ${signal}; stopping.`, process.stderr);
+      releaseRunLock(ROOT_DIR);
+      stopMailpit();
+      void terminateChildren("SIGTERM").finally(() => process.exit(130));
+    });
+  }
 }
 
 main().catch((error) => {
   log("e2e", String(error?.stack ?? error), process.stderr);
-  releaseLock();
+  releaseRunLock(ROOT_DIR);
   stopMailpit();
   void terminateChildren("SIGTERM").finally(() => process.exit(1));
 });

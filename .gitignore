@@ -182,6 +182,8 @@ apps/web/e2e/.demo/
 # are what keeps the first run on a new machine balanced.
 .e2e-shards/
 .e2e-shards.lock
+# The live-run marker (pid, start, args); the hooks refuse while it is live.
+.e2e-running
 apps/web/.playwright/
 
 ### graphify ###

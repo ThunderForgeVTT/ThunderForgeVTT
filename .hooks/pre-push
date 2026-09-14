@@ -16,6 +16,10 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
+# Not during this checkout's e2e run: see scripts/e2e/run-lock.mjs.
+# Override with THUNDERFORGE_IGNORE_E2E_LOCK=1.
+node ./scripts/e2e/run-lock.mjs check --purpose="a push"
+
 # Not the test suites. Those need a database and a dev server and take
 # minutes — `scripts/e2e-parallel.mjs` is a deliberate, separate act.
 exec node ./scripts/verify.mjs

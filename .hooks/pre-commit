@@ -19,6 +19,10 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
+# Not during this checkout's e2e run: see scripts/e2e/run-lock.mjs.
+# Override with THUNDERFORGE_IGNORE_E2E_LOCK=1.
+node ./scripts/e2e/run-lock.mjs check --purpose="a commit"
+
 # Checks the working tree, not the index. With a partial stage — `git add -p`,
 # or staging one of several changed files — this reports on content that is
 # not being committed. Deliberately not fixed by stashing: a hook that stashes
