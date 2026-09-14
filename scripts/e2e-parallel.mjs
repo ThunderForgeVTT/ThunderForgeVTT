@@ -62,6 +62,7 @@ import {
 } from "./shared.mjs";
 import { checkDependencies, describeProblems } from "./e2e/deps.mjs";
 import { acquireRunLock, releaseRunLock } from "./e2e/run-lock.mjs";
+import { removeContainers, startMailpitContainer } from "./e2e/mailpit.mjs";
 
 /** Away from 5173/30000 on purpose, so a `pnpm dev` can stay up while this runs. */
 const WEB_PORT_BASE = 5200;
@@ -489,11 +490,18 @@ async function provisionFirstRunTemplate() {
   log("e2e", "First-run template ready (migrated, unseeded).");
 }
 
+/**
+ * Every shard database this run created, whether or not its stack came up, so
+ * teardown drops the ones a failed start left behind too.
+ */
+const clonedDatabases = new Set();
+
 function cloneShardDatabase(index, { firstRun = false } = {}) {
   const name = shardDbName(index);
   const template = firstRun ? FIRST_RUN_TEMPLATE_DB : TEMPLATE_DB;
   psql("postgres", `DROP DATABASE IF EXISTS ${name} WITH (FORCE);`);
   psql("postgres", `CREATE DATABASE ${name} TEMPLATE ${template};`);
+  clonedDatabases.add(name);
 
   // Spec 036 US6 (T064). The seed writes the base port because a `.sql` file
   // cannot know which shard it is being applied to; this is where it finds
@@ -563,67 +571,27 @@ async function waitForUrl(url, name, timeoutMs = 180_000) {
 }
 
 /**
- * This shard's mail sink: a real SMTP server, in a container of its own.
- *
- * # Why a container per shard rather than the compose one
- *
- * `compose.yml` runs a single Mailpit for `make dev`. Pointing four shards at
- * it would mean every shard's assertions read every other shard's messages,
- * and `clearInbox` — which the fixtures contract requires between tests —
- * would delete a neighbour's evidence mid-assertion. The failures would be
- * intermittent and would look like delivery bugs.
- *
- * # Why `--rm` and a name derived from the index
- *
- * A run killed with Ctrl-C never reaches teardown, and a leftover container
- * holds the port the next run needs. The name is deterministic so the next run
- * can remove the corpse before starting; `--rm` handles the ordinary exit.
+ * This shard's mail sink. The container handling — unique names, waiting out
+ * leftovers, one retry on a conflict — is in `e2e/mailpit.mjs`, which says why.
  *
  * Returns null if it never becomes ready, which fails the shard rather than
- * leaving mail specs to time out one by one against nothing.
+ * leaving mail specs to time out one by one against nothing. Throws when the
+ * container cannot be started at all; `startStack` turns that into a failed
+ * lane with the reason, not a crashed harness.
  */
 const startedMailpits = [];
 
 async function startMailpit(index) {
-  const name = `thunderforge-e2e-mailpit-${index}`;
   const smtpPort = MAILPIT_SMTP_PORT_BASE + index;
   const apiPort = MAILPIT_API_PORT_BASE + index;
-
-  // A previous run that was killed rather than stopped.
-  try {
-    execFileSync("docker", ["rm", "-f", name], { stdio: "ignore" });
-  } catch {
-    // Nothing to remove, which is the ordinary case.
-  }
-
-  execFileSync(
-    "docker",
-    [
-      "run",
-      "--rm",
-      "-d",
-      "--name",
-      name,
-      "-p",
-      `${smtpPort}:1025`,
-      "-p",
-      `${apiPort}:8025`,
-      // The dev stack's settings: Mailpit's SMTP listener is plaintext, which
-      // is what the `none` security option exists for, and it accepts any
-      // credentials so a spec can prove the username/password path is wired
-      // without a real account.
-      "-e",
-      "MP_SMTP_AUTH_ACCEPT_ANY=1",
-      "-e",
-      "MP_SMTP_AUTH_ALLOW_INSECURE=1",
-      MAILPIT_IMAGE,
-    ],
-    { stdio: "ignore" },
-  );
-
-  // Recorded before the readiness wait, not after: a container that started
-  // and never answered is exactly the one that must still be torn down.
-  startedMailpits.push(name);
+  const name = await startMailpitContainer({
+    index,
+    smtpPort,
+    apiPort,
+    image: MAILPIT_IMAGE,
+    onCreated: (created) => startedMailpits.push(created),
+    log: (message) => log("e2e", message, process.stderr),
+  });
 
   const api = `http://127.0.0.1:${apiPort}`;
   if (!(await waitForUrl(`${api}/api/v1/info`, `mailpit ${index}`, 60_000))) {
@@ -634,14 +602,7 @@ async function startMailpit(index) {
 
 /** Remove every sink this run started, including ones that never came up. */
 function stopMailpit() {
-  while (startedMailpits.length) {
-    const name = startedMailpits.pop();
-    try {
-      execFileSync("docker", ["rm", "-f", name], { stdio: "ignore" });
-    } catch {
-      // Already gone.
-    }
-  }
+  removeContainers(startedMailpits.splice(0));
 }
 
 /**
@@ -1025,6 +986,7 @@ async function main() {
     else if (argv === "--keep") args.keep = true;
     else throw new Error(`Unknown argument: ${argv}`);
   }
+  run.args = args;
   // A playtest is one table on one stack. Each scenario already runs three
   // browsers against an engine-heavy scene and records them, so a second
   // shard would only compete with the recording it is making.
@@ -1094,20 +1056,21 @@ async function main() {
 
   await provisionTemplate();
 
-  const shards = [];
   for (let index = 0; index < total; index += 1) {
-    const shard = await startShard(index);
+    const { shard, reason } = await startStack(index);
     if (!shard) {
-      log("e2e", `Shard ${index} failed to start; aborting.`, process.stderr);
-      await terminateChildren("SIGTERM");
-      process.exit(1);
+      // Every sharded stack is needed before any shard can run, because the
+      // partition below assigns files to all of them. Say which one failed
+      // and why, in the summary as well as the log, then stop.
+      run.results.push(stackFailure(index, "parallel", reason));
+      return finish();
     }
-    shards.push(shard);
     log(
       "e2e",
       `Shard ${index} up on :${shard.webPort} (db ${shard.database}).`,
     );
   }
+  const shards = run.shards;
 
   // `--only` takes a comma-separated list, so a triage run can name exactly
   // the handful of specs under suspicion rather than a prefix that drags in
@@ -1173,6 +1136,7 @@ async function main() {
   );
 
   const durations = readDurations();
+  run.durations = durations;
   const bins = partitionByDuration(parallelSpecs, total, durations);
   for (const [index, bin] of bins.entries()) {
     log(
@@ -1181,9 +1145,11 @@ async function main() {
     );
   }
 
-  const started = Date.now();
-  const results = await Promise.all(
-    shards.map((shard) => runShard(shard, bins[shard.index].files)),
+  run.started = Date.now();
+  run.results.push(
+    ...(await Promise.all(
+      shards.map((shard) => runShard(shard, bins[shard.index].files)),
+    )),
   );
 
   if (playtestSpecs.length > 0) {
@@ -1191,7 +1157,7 @@ async function main() {
       "e2e",
       `Running ${playtestSpecs.length} playtest(s); the report goes to apps/web/${SUITES.playtest.report}.`,
     );
-    results.push(
+    run.results.push(
       await runShard(shards[0], playtestSpecs, "playtest", SUITES.playtest),
     );
   }
@@ -1201,7 +1167,7 @@ async function main() {
   // nothing else is competing for the GPU.
   if (serialSpecs.length > 0) {
     log("e2e", "Sharded lane done; running the measured specs alone.");
-    results.push(await runShard(shards[0], serialSpecs, "serial"));
+    run.results.push(await runShard(shards[0], serialSpecs, "serial"));
   }
 
   // First run, on a stack of its own, after everything else.
@@ -1215,23 +1181,15 @@ async function main() {
   if (firstRunSpecs.length > 0) {
     log("e2e", "Running the first-run lane on an unseeded stack.");
     await provisionFirstRunTemplate();
-    const firstRunShard = await startShard(total, { firstRun: true });
-    if (!firstRunShard) {
-      log("e2e", "The first-run stack failed to start.", process.stderr);
-      results.push({
-        index: total,
-        label: "first-run",
-        code: 1,
-        failed: true,
-        reasons: ["stack failed to start"],
-      });
+    const { shard, reason } = await startStack(total, { firstRun: true });
+    if (!shard) {
+      run.results.push(stackFailure(total, "first-run", reason));
     } else {
-      shards.push(firstRunShard);
       log(
         "e2e",
-        `First-run stack up on :${firstRunShard.webPort} (db ${firstRunShard.database}, unseeded).`,
+        `First-run stack up on :${shard.webPort} (db ${shard.database}, unseeded).`,
       );
-      results.push(await runShard(firstRunShard, firstRunSpecs, "first-run"));
+      run.results.push(await runShard(shard, firstRunSpecs, "first-run"));
     }
   }
 
@@ -1239,35 +1197,99 @@ async function main() {
   // `isGithubAppsSpec` gives. Index `total + 1`, one past the first-run stack.
   if (githubAppsSpecs.length > 0) {
     log("e2e", "Running the GitHub-applications lane on its own stack.");
-    const appsShard = await startShard(total + 1, { githubApps: true });
-    if (!appsShard) {
-      log(
-        "e2e",
-        "The GitHub-applications stack failed to start.",
-        process.stderr,
-      );
-      results.push({
-        index: total + 1,
-        label: "github-apps",
-        code: 1,
-        failed: true,
-        reasons: ["stack failed to start"],
-      });
+    const { shard, reason } = await startStack(total + 1, {
+      githubApps: true,
+    });
+    if (!shard) {
+      run.results.push(stackFailure(total + 1, "github-apps", reason));
     } else {
-      shards.push(appsShard);
-      results.push(await runShard(appsShard, githubAppsSpecs, "github-apps"));
+      run.results.push(await runShard(shard, githubAppsSpecs, "github-apps"));
     }
   }
 
-  recordDurations(
-    shards.map((shard) => join(SHARD_DIR, `shard-${shard.index}`)),
-    durations,
-  );
+  return finish();
+}
 
-  const minutes = ((Date.now() - started) / 60_000).toFixed(1);
-  const failed = results.filter((result) => result.failed);
+/**
+ * Everything this run has done so far, kept outside `main` so that a crash, a
+ * signal or a stack that would not start still ends in a summary. On
+ * 2026-09-14 a `docker run` error escaped `startMailpit`, the harness died on
+ * the stack trace, and the lane it was starting never appeared in any summary.
+ */
+const run = {
+  args: null,
+  results: [],
+  shards: [],
+  durations: null,
+  started: Date.now(),
+  finishing: false,
+};
+
+/** The first line of an error, for a one-line reason. */
+function firstLine(error) {
+  return String(error?.message ?? error).split("\n")[0];
+}
+
+/**
+ * Start a stack and say why not, instead of throwing or returning a bare null.
+ *
+ * A thrown error (docker refused a container, `psql` failed to clone) and a
+ * service that never became ready both become a reason the summary can print.
+ */
+async function startStack(index, options = {}) {
+  try {
+    const shard = await startShard(index, options);
+    if (shard) {
+      run.shards.push(shard);
+      return { shard };
+    }
+    return {
+      reason:
+        "stack failed to start: a service never became ready (see the log above)",
+    };
+  } catch (error) {
+    log("e2e", String(error?.stack ?? error), process.stderr);
+    return { reason: `stack failed to start: ${firstLine(error)}` };
+  }
+}
+
+function stackFailure(index, label, reason) {
+  log("e2e", `The ${label} stack (${index}): ${reason}`, process.stderr);
+  return { index, label, code: 1, failed: true, reasons: [reason] };
+}
+
+/**
+ * Summarise, tear down, release, exit — once, from whichever path got here.
+ *
+ * `exitCode` forces the code (a signal); otherwise it is 1 when any lane
+ * failed or nothing ran at all.
+ */
+async function finish(exitCode = null) {
+  if (run.finishing) return;
+  run.finishing = true;
+
+  if (run.durations) {
+    try {
+      recordDurations(
+        run.shards.map((shard) => join(SHARD_DIR, `shard-${shard.index}`)),
+        run.durations,
+      );
+    } catch (error) {
+      log(
+        "e2e",
+        `Could not record durations: ${firstLine(error)}`,
+        process.stderr,
+      );
+    }
+  }
+
+  const failed = run.results.filter((result) => result.failed);
+  const minutes = ((Date.now() - run.started) / 60_000).toFixed(1);
   log("e2e", `Finished in ${minutes} minutes.`);
-  for (const result of results) {
+  if (run.results.length === 0) {
+    log("e2e", "  No lane ran.", process.stderr);
+  }
+  for (const result of run.results) {
     const verdict = result.failed
       ? `FAILED (${result.reasons.join(", ")})`
       : result.skipped
@@ -1289,21 +1311,29 @@ async function main() {
   // not reach them. Removed even under `--keep`, which preserves *databases*
   // for inspection; a held port is nobody's idea of a useful artefact.
   stopMailpit();
-  if (!args.keep) {
-    for (const shard of shards) {
-      psql(
-        "postgres",
-        `DROP DATABASE IF EXISTS ${shard.database} WITH (FORCE);`,
-      );
+  if (!run.args?.keep) {
+    for (const database of clonedDatabases) {
+      try {
+        psql("postgres", `DROP DATABASE IF EXISTS ${database} WITH (FORCE);`);
+      } catch (error) {
+        log(
+          "e2e",
+          `Could not drop ${database}: ${firstLine(error)}`,
+          process.stderr,
+        );
+      }
     }
   }
 
   releaseRunLock(ROOT_DIR);
-  process.exit(failed.length > 0 ? 1 : 0);
+  process.exit(
+    exitCode ?? (failed.length > 0 || run.results.length === 0 ? 1 : 0),
+  );
 }
 
 /**
- * Ctrl-C, `kill`, a closed terminal: release the lock and take the stacks down.
+ * Ctrl-C, `kill`, a closed terminal: summarise what ran, take the stacks down
+ * and release the lock.
  *
  * Without this a signal killed the runner outright and left everything it
  * started behind — the servers are spawned detached, in process groups of
@@ -1317,16 +1347,26 @@ function releaseOnSignals() {
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
     process.once(signal, () => {
       log("e2e", `Received ${signal}; stopping.`, process.stderr);
-      releaseRunLock(ROOT_DIR);
-      stopMailpit();
-      void terminateChildren("SIGTERM").finally(() => process.exit(130));
+      run.results.push({
+        index: "-",
+        label: "harness",
+        code: 130,
+        failed: true,
+        reasons: [`interrupted by ${signal}`],
+      });
+      void finish(130);
     });
   }
 }
 
 main().catch((error) => {
   log("e2e", String(error?.stack ?? error), process.stderr);
-  releaseRunLock(ROOT_DIR);
-  stopMailpit();
-  void terminateChildren("SIGTERM").finally(() => process.exit(1));
+  run.results.push({
+    index: "-",
+    label: "harness",
+    code: 1,
+    failed: true,
+    reasons: [`crashed: ${firstLine(error)}`],
+  });
+  void finish(1);
 });
