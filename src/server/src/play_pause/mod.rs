@@ -30,7 +30,9 @@
 //! triggers are read by operator-only queries and by nothing a member reaches.
 
 pub mod gate;
+pub mod live_play;
 pub mod models;
+pub mod requests;
 
 use async_graphql::{Error, ErrorExtensions as _};
 use chrono::NaiveDateTime;
@@ -39,7 +41,7 @@ use uuid::Uuid;
 
 use crate::schema::{users, world_play_pause_triggers, world_play_pauses, worlds};
 use crate::world_events::{EVENT_CODE_WORLD_PLAY_PAUSED, record_world_event};
-use models::{NewPauseTrigger, NewPlayPause, PauseTriggerKind, PlayPause};
+use models::{NewPauseTrigger, NewPlayPause, PauseTrigger, PauseTriggerKind, PlayPause};
 
 /// Why a pause or a lift was refused. Each carries the extension code the
 /// GraphQL contract fixes.
@@ -53,6 +55,7 @@ pub enum PauseError {
     GroundsRequired,
     WorldNotFound,
     PauseNotFound,
+    RequestNotFound,
     /// Another operator lifted it first. Says who and when, so the second
     /// operator is not left wondering whether their lift did anything.
     AlreadyLifted {
@@ -69,6 +72,7 @@ impl PauseError {
             PauseError::GroundsRequired => "Grounds are required.".to_string(),
             PauseError::WorldNotFound => "No such world.".to_string(),
             PauseError::PauseNotFound => "No such pause.".to_string(),
+            PauseError::RequestNotFound => "No such request.".to_string(),
             PauseError::AlreadyLifted { lifted_by_name, .. } => {
                 format!("This pause was already lifted by {lifted_by_name}.")
             }
@@ -101,6 +105,9 @@ impl From<PauseError> for Error {
             }
             PauseError::PauseNotFound => {
                 Error::new(message).extend_with(|_, ext| ext.set("code", "PAUSE_NOT_FOUND"))
+            }
+            PauseError::RequestNotFound => {
+                Error::new(message).extend_with(|_, ext| ext.set("code", "REQUEST_NOT_FOUND"))
             }
             PauseError::AlreadyLifted {
                 lifted_by,
@@ -172,7 +179,7 @@ pub struct PauseOutcome {
 /// Grounds with their surrounding whitespace removed, or refused if nothing
 /// is left. The table's CHECK says the same; saying it here first gives the
 /// operator a code rather than a constraint name.
-fn grounds_of(grounds: &str) -> Result<&str, PauseError> {
+pub(crate) fn grounds_of(grounds: &str) -> Result<&str, PauseError> {
     let trimmed = grounds.trim();
     if trimmed.is_empty() {
         Err(PauseError::GroundsRequired)
@@ -183,7 +190,7 @@ fn grounds_of(grounds: &str) -> Result<&str, PauseError> {
 
 /// The name an operator is recorded under. A snapshot: the record keeps it
 /// when the account is renamed or gone.
-fn operator_name(conn: &mut PgConnection, operator: Uuid) -> Result<String, PauseError> {
+pub(crate) fn operator_name(conn: &mut PgConnection, operator: Uuid) -> Result<String, PauseError> {
     users::table
         .filter(users::id.eq(operator))
         .select(users::username)
@@ -211,8 +218,26 @@ fn attach_trigger(
             note,
             created_by: Some(operator),
         })
+        // `world_play_pause_triggers_once_per_pause`: the same takedown
+        // reaching this pause twice records once. Operator triggers name no
+        // action, and NULLs never conflict.
+        .on_conflict_do_nothing()
         .execute(conn)?;
     Ok(())
+}
+
+/// Where a pause came from, for [`pause_in`].
+pub(crate) enum PauseOrigin<'a> {
+    /// An operator acting directly, with what led them to.
+    Direct(&'a TriggerDetail),
+    /// An operator approving a request. The request's triggers stay on the
+    /// request, and the pause reaches them through `request_id` — unless the
+    /// world turns out to be paused already, when they are added to that
+    /// pause instead (FR-036).
+    Request {
+        id: Uuid,
+        triggers: &'a [PauseTrigger],
+    },
 }
 
 /// Pause `world_id`'s play, on `grounds`, as `operator`.
@@ -237,78 +262,127 @@ pub fn pause_world(
     trigger: TriggerDetail,
 ) -> Result<PauseOutcome, PauseError> {
     let grounds = grounds_of(grounds)?;
-
     conn.transaction(|conn| {
-        let world_name: String = worlds::table
-            .filter(worlds::id.eq(world_id))
-            .select(worlds::name)
-            .first(conn)
-            .optional()?
-            .ok_or(PauseError::WorldNotFound)?;
-        let operator_name = operator_name(conn, operator)?;
+        pause_in(
+            conn,
+            operator,
+            world_id,
+            grounds,
+            PauseOrigin::Direct(&trigger),
+        )
+    })
+}
 
-        // Twice at most. An insert that loses to an active pause finds that
-        // pause on the next statement — unless it was lifted in the moment
-        // between, in which case the world is not paused and the second insert
-        // will stand.
-        for _ in 0..2 {
-            let inserted: Option<PlayPause> = diesel::insert_into(world_play_pauses::table)
-                .values(NewPlayPause {
-                    id: Uuid::now_v7(),
-                    world_id,
-                    world_name: &world_name,
-                    paused_by: operator,
-                    paused_by_name: &operator_name,
-                    grounds,
-                    request_id: None,
-                    created_by: operator,
-                    updated_by: operator,
-                })
-                // The only unique constraint a fresh v7 id can meet is
-                // `world_play_pauses_one_active`.
-                .on_conflict_do_nothing()
-                .returning(PlayPause::as_returning())
-                .get_result(conn)
-                .optional()?;
+/// The body of [`pause_world`], for a caller already inside a transaction —
+/// the approval of a request, which must pause in the same transaction that
+/// decides it. `grounds` has been through [`grounds_of`].
+pub(crate) fn pause_in(
+    conn: &mut PgConnection,
+    operator: Uuid,
+    world_id: Uuid,
+    grounds: &str,
+    origin: PauseOrigin<'_>,
+) -> Result<PauseOutcome, PauseError> {
+    let world_name: String = worlds::table
+        .filter(worlds::id.eq(world_id))
+        .select(worlds::name)
+        .first(conn)
+        .optional()?
+        .ok_or(PauseError::WorldNotFound)?;
+    let operator_name = operator_name(conn, operator)?;
+    let request_id = match &origin {
+        PauseOrigin::Direct(_) => None,
+        PauseOrigin::Request { id, .. } => Some(*id),
+    };
 
-            if let Some(pause) = inserted {
-                attach_trigger(conn, operator, pause.id, &trigger, trigger.note.as_deref())?;
-                record_world_event(
-                    conn,
-                    world_id,
-                    EVENT_CODE_WORLD_PLAY_PAUSED,
-                    Some(serde_json::json!({
-                        "pausedAt": pause.paused_at.and_utc().to_rfc3339(),
-                    })),
-                    operator,
-                )?;
-                return Ok(PauseOutcome {
-                    pause,
-                    already_paused: false,
-                });
+    // Twice at most. An insert that loses to an active pause finds that
+    // pause on the next statement — unless it was lifted in the moment
+    // between, in which case the world is not paused and the second insert
+    // will stand.
+    for _ in 0..2 {
+        let inserted: Option<PlayPause> = diesel::insert_into(world_play_pauses::table)
+            .values(NewPlayPause {
+                id: Uuid::now_v7(),
+                world_id,
+                world_name: &world_name,
+                paused_by: operator,
+                paused_by_name: &operator_name,
+                grounds,
+                request_id,
+                created_by: operator,
+                updated_by: operator,
+            })
+            // The only unique constraint a fresh v7 id can meet is
+            // `world_play_pauses_one_active`.
+            .on_conflict_do_nothing()
+            .returning(PlayPause::as_returning())
+            .get_result(conn)
+            .optional()?;
+
+        if let Some(pause) = inserted {
+            if let PauseOrigin::Direct(trigger) = &origin {
+                attach_trigger(conn, operator, pause.id, trigger, trigger.note.as_deref())?;
             }
-
-            let existing: Option<PlayPause> = world_play_pauses::table
-                .filter(world_play_pauses::world_id.eq(world_id))
-                .filter(world_play_pauses::lifted_at.is_null())
-                .select(PlayPause::as_select())
-                .first(conn)
-                .optional()?;
-
-            if let Some(pause) = existing {
-                let note = trigger.note.as_deref().unwrap_or(grounds);
-                attach_trigger(conn, operator, pause.id, &trigger, Some(note))?;
-                return Ok(PauseOutcome {
-                    pause,
-                    already_paused: true,
-                });
-            }
+            record_world_event(
+                conn,
+                world_id,
+                EVENT_CODE_WORLD_PLAY_PAUSED,
+                Some(serde_json::json!({
+                    "pausedAt": pause.paused_at.and_utc().to_rfc3339(),
+                })),
+                operator,
+            )?;
+            return Ok(PauseOutcome {
+                pause,
+                already_paused: false,
+            });
         }
 
-        Err(PauseError::Database(format!(
-            "world {world_id} was neither paused nor pausable; another operator is pausing and lifting it at once"
-        )))
-    })
+        let existing: Option<PlayPause> = world_play_pauses::table
+            .filter(world_play_pauses::world_id.eq(world_id))
+            .filter(world_play_pauses::lifted_at.is_null())
+            .select(PlayPause::as_select())
+            .first(conn)
+            .optional()?;
+
+        if let Some(pause) = existing {
+            match &origin {
+                PauseOrigin::Direct(trigger) => {
+                    let note = trigger.note.as_deref().unwrap_or(grounds);
+                    attach_trigger(conn, operator, pause.id, trigger, Some(note))?;
+                }
+                PauseOrigin::Request { triggers, .. } => {
+                    // The approver's grounds, as a second operator's would be,
+                    // and then what the request gathered.
+                    attach_trigger(
+                        conn,
+                        operator,
+                        pause.id,
+                        &TriggerDetail::operator(),
+                        Some(grounds),
+                    )?;
+                    for trigger in triggers.iter() {
+                        let detail = TriggerDetail {
+                            kind: trigger.kind,
+                            moderation_action_id: trigger.moderation_action_id,
+                            entity_type: trigger.entity_type.clone(),
+                            entity_id: trigger.entity_id,
+                            note: trigger.note.clone(),
+                        };
+                        attach_trigger(conn, operator, pause.id, &detail, detail.note.as_deref())?;
+                    }
+                }
+            }
+            return Ok(PauseOutcome {
+                pause,
+                already_paused: true,
+            });
+        }
+    }
+
+    Err(PauseError::Database(format!(
+        "world {world_id} was neither paused nor pausable; another operator is pausing and lifting it at once"
+    )))
 }
 
 /// Lift `pause_id`, on `grounds`, as `operator`.
@@ -397,3 +471,7 @@ mod gate_tests;
 #[cfg(test)]
 #[path = "pause_tests.rs"]
 mod pause_tests;
+
+#[cfg(test)]
+#[path = "requests_tests.rs"]
+mod requests_tests;

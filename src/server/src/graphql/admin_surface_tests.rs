@@ -160,6 +160,11 @@ const ADMIN_ONLY: &[(&str, &str)] = &[
         "playPauses",
         "{ playPauses(active: true, first: 1) { __typename } }",
     ),
+    // Spec 051 US3: requests to pause, with what raised them.
+    (
+        "playPauseRequests",
+        "{ playPauseRequests(first: 1) { __typename } }",
+    ),
     (
         "openLegalEnquiryCounts",
         "{ openLegalEnquiryCounts { __typename } }",
@@ -214,6 +219,11 @@ const ADMIN_ONLY: &[(&str, &str)] = &[
     (
         "pauseWorldPlay",
         r#"mutation { pauseWorldPlay(worldId: "00000000-0000-0000-0000-000000000001", grounds: "x") { __typename } }"#,
+    ),
+    // Spec 051 US3: deciding a request, which may pause a world.
+    (
+        "decidePlayPauseRequest",
+        r#"mutation { decidePlayPauseRequest(requestId: "00000000-0000-0000-0000-000000000001", decision: APPROVE, note: "x") { __typename } }"#,
     ),
     (
         "updateOauthProvider",

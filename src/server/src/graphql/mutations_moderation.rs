@@ -11,6 +11,7 @@ use crate::graphql::types::{
 };
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{ContentModerationAction, NewContentModerationAction};
+use crate::moderation::reach::DisabledCopy;
 use crate::moderation::validation::{
     CounterNoticeFields, TakedownNoticeFields, validate_counter_notice, validate_takedown_notice,
 };
@@ -159,8 +160,8 @@ pub async fn submit_takedown_notice_impl(
     let entity_id = input.entity_id;
     let case_id = Uuid::now_v7();
 
-    let events =
-        tokio::task::spawn_blocking(move || -> Result<Vec<ContentModerationAction>, String> {
+    let (events, copies) = tokio::task::spawn_blocking(
+        move || -> Result<(Vec<ContentModerationAction>, Vec<DisabledCopy>), String> {
             let (world_id, account_id) = resolve_entity_owner(&mut conn, entity_type, entity_id)?;
 
             if !missing.is_empty() {
@@ -187,7 +188,9 @@ pub async fn submit_takedown_notice_impl(
                     })
                     .execute(&mut conn)
                     .map_err(|e| e.to_string())?;
-                return load_case_events(&mut conn, case_id).map_err(|e| e.to_string());
+                return load_case_events(&mut conn, case_id)
+                    .map(|events| (events, Vec::new()))
+                    .map_err(|e| e.to_string());
             }
 
             diesel::insert_into(content_moderation_actions::table)
@@ -255,7 +258,7 @@ pub async fn submit_takedown_notice_impl(
             // Spec 039 FR-022/FR-023: the copies people took go dark with it,
             // each in a child case that is nobody's strike, and each adopter
             // is told they are accused of nothing.
-            crate::moderation::reach::fan_out_disable(
+            let copies = crate::moderation::reach::fan_out_disable(
                 &mut conn,
                 case_id,
                 entity_type.as_db_str(),
@@ -263,11 +266,19 @@ pub async fn submit_takedown_notice_impl(
                 account_id,
             )?;
 
-            load_case_events(&mut conn, case_id).map_err(|e| e.to_string())
-        })
-        .await
-        .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(Error::new)?;
+            load_case_events(&mut conn, case_id)
+                .map(|events| (events, copies))
+                .map_err(|e| e.to_string())
+        },
+    )
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(Error::new)?;
+
+    // Spec 051 FR-030: and if a table is playing that world, an operator is
+    // asked whether to pause it. Like the lore hook below, it cannot fail
+    // this call.
+    crate::play_pause::requests::ask_for_pauses(state, &events, &copies).await;
 
     // Spec 034 FR-040: the content is disabled and that is done. What follows
     // is about a mirror the platform does not control, and **it cannot fail

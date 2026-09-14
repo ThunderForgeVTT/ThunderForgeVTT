@@ -275,7 +275,7 @@ These journeys go through the product the way people do: UI only, no GraphQL sho
 
 ### Tests for User Story 3
 
-- [ ] T041 [P] [US3] Add request service tests in `src/server/src/play_pause/requests_tests.rs`:
+- [x] T041 [P] [US3] Add request service tests in `src/server/src/play_pause/requests_tests.rs`:
   - a raise creates one pending request with its trigger;
   - a second raise for the same world attaches to it (FR-033);
   - a raise for a paused world attaches to the pause and creates no request (FR-036);
@@ -284,7 +284,7 @@ These journeys go through the product the way people do: UI only, no GraphQL sho
   - approving creates a pause with `request_id`, moves nothing else and records event 28;
   - declining records no event;
   - two concurrent decisions on two connections produce exactly one pause, and the loser gets `decidedHere: false` with the winner's name.
-- [ ] T042 [P] [US3] Add takedown hook tests in `src/server/src/moderation/` (beside `scene_tests.rs`, new file `play_pause_hook_tests.rs`):
+- [x] T042 [P] [US3] Add takedown hook tests in `src/server/src/moderation/` (beside `scene_tests.rs`, new file `play_pause_hook_tests.rs`):
   - a takedown on a scene, an actor and a lore entry of a live world each raise;
   - a takedown on an adopted copy reached by `fan_out_disable` raises for that copy's world when it is live;
   - a forced hook failure leaves the takedown in effect and logs the action id;
@@ -299,17 +299,17 @@ These journeys go through the product the way people do: UI only, no GraphQL sho
 
 ### Implementation for User Story 3
 
-- [ ] T044 [US3] Implement the live-play mark in `src/server/src/play_pause/live_play.rs`:
+- [x] T044 [US3] Implement the live-play mark in `src/server/src/play_pause/live_play.rs`:
   - `mark_live(state, world_id)`, throttled in-process with a `DashMap<Uuid, Instant>` on `AppState` or a module static. It skips when this process marked the world under 30 s ago, otherwise runs the conditional upsert from `data-model.md`.
   - `in_live_play(conn, world_id) -> bool` (a beat within 45 s).
 
   Call `mark_live` from `heartbeat` in `src/server/src/graphql/mutations_heartbeat.rs` after the membership and pause checks. Amend that resolver's "in memory, not in a row" comment to say what is now written and why (research R3).
-- [ ] T045 [US3] Implement `src/server/src/play_pause/requests.rs`:
+- [x] T045 [US3] Implement `src/server/src/play_pause/requests.rs`:
   - `raise(conn, world_id, trigger)`, per research R4: paused → attach to the pause; else `INSERT … ON CONFLICT DO NOTHING` the pending request, then attach the trigger to the pending one; idempotent per `(moderation_action_id, owner)`.
   - `raise_for_takedown(conn, world_id, action)`, which returns early unless `in_live_play`.
   - `decide(conn, operator, request_id, decision, note)`, a single conditional update `WHERE state = 'Pending'`. On `Approve`, in the same transaction, insert the pause via the internal form of `pause_world`, with the note as grounds, `request_id` set and event 28. If an active pause already exists, attach the request's triggers to it instead. Zero rows reads back the winner.
-- [ ] T046 [US3] Call the hook from `submit_takedown_notice_impl` in `src/server/src/graphql/mutations_moderation.rs`. Call it after the blocking takedown work returns, beside the lore hook (~line 280), for the target's world from the `CONTENT_DISABLED` event row. Also call it for every world `reach::fan_out_disable` disabled a copy in: return those world ids from `src/server/src/moderation/reach.rs` if it does not already. It is non-fatal: log at `error` with the moderation action id, and never fail the takedown.
-- [ ] T047 [US3] Add the operator fields in `src/server/src/graphql/mutations_play_pause.rs` and `src/server/src/graphql/queries/play_pause.rs`:
+- [x] T046 [US3] Call the hook from `submit_takedown_notice_impl` in `src/server/src/graphql/mutations_moderation.rs`. Call it after the blocking takedown work returns, beside the lore hook (~line 280), for the target's world from the `CONTENT_DISABLED` event row. Also call it for every world `reach::fan_out_disable` disabled a copy in: return those world ids from `src/server/src/moderation/reach.rs` if it does not already. It is non-fatal: log at `error` with the moderation action id, and never fail the takedown.
+- [x] T047 [US3] Add the operator fields in `src/server/src/graphql/mutations_play_pause.rs` and `src/server/src/graphql/queries/play_pause.rs`:
   - `decidePlayPauseRequest(requestId, decision, note): PauseDecisionOutcome!`;
   - `playPauseRequests(state, first, after)`;
   - `playedNow` computed with `in_live_play` on `PauseRequest`, `PlayPause` and `PauseCandidateWorld`, replacing the T020 marker.

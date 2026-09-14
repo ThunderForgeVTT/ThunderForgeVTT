@@ -752,6 +752,9 @@ pub(super) const NOT_WORLD_SCOPED: &[&str] = &[
 /// or guarded by `admin_user`.
 pub(super) const OPERATOR: &[&str] = &[
     "pauseWorldPlay",
+    // Approving pauses a world, and deciding a request for a world already
+    // paused is exactly the case it must not be refused in (FR-036).
+    "decidePlayPauseRequest",
     // Refuses anyone but a site admin: the operator's way to stop a world's
     // repository sync, which a pause should never stand in the way of.
     "deactivateLoreSync",

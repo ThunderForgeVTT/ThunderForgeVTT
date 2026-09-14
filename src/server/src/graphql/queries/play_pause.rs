@@ -3,8 +3,8 @@
 //! Two audiences, kept apart by what each query *selects*, not by what each
 //! response leaves out (research R8):
 //!
-//! - **Operators** (`admin_user`): `playPauseCandidates` and `playPauses`,
-//!   which carry grounds, names and triggers.
+//! - **Operators** (`admin_user`): `playPauseCandidates`, `playPauses` and
+//!   `playPauseRequests`, which carry grounds, names and triggers.
 //! - **Members** (`require_world_member`): `worldPlayState`, which reads
 //!   `paused_at` and `lifted_at` and nothing else. Its types have no field a
 //!   reason could be put in, so a client cannot ask for one (FR-011).
@@ -22,8 +22,13 @@ use uuid::Uuid;
 
 use crate::auth::world_membership::require_world_member;
 use crate::graphql::{Error, GraphQLResult, admin_user, app_state, authenticated_user};
-use crate::play_pause::models::{PauseTrigger, PauseTriggerKind, PlayPause};
-use crate::schema::{users, world_play_pause_triggers, world_play_pauses, worlds};
+use crate::play_pause::live_play::live_among;
+use crate::play_pause::models::{
+    PauseRequest, PauseRequestState, PauseTrigger, PauseTriggerKind, PlayPause,
+};
+use crate::schema::{
+    users, world_play_pause_requests, world_play_pause_triggers, world_play_pauses, worlds,
+};
 
 /// A page of `playPauses` when the caller names none.
 const PAUSES_PER_PAGE: i32 = 50;
@@ -86,6 +91,64 @@ impl From<PauseTrigger> for GraphQLPauseTrigger {
             recorded_at: utc(trigger.recorded_at),
         }
     }
+}
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
+#[graphql(name = "PauseRequestState")]
+pub enum GraphQLPauseRequestState {
+    Pending,
+    Approved,
+    Declined,
+}
+
+impl From<PauseRequestState> for GraphQLPauseRequestState {
+    fn from(state: PauseRequestState) -> Self {
+        match state {
+            PauseRequestState::Pending => Self::Pending,
+            PauseRequestState::Approved => Self::Approved,
+            PauseRequestState::Declined => Self::Declined,
+        }
+    }
+}
+
+impl From<GraphQLPauseRequestState> for PauseRequestState {
+    fn from(state: GraphQLPauseRequestState) -> Self {
+        match state {
+            GraphQLPauseRequestState::Pending => Self::Pending,
+            GraphQLPauseRequestState::Approved => Self::Approved,
+            GraphQLPauseRequestState::Declined => Self::Declined,
+        }
+    }
+}
+
+/// A request to pause a world, as an operator reads it (FR-031).
+#[derive(SimpleObject, Debug, Clone)]
+#[graphql(name = "PauseRequest")]
+pub struct GraphQLPauseRequest {
+    pub id: Uuid,
+    pub world_id: Uuid,
+    /// The name when it was raised, which outlives the world.
+    pub world_name: String,
+    pub world_exists: bool,
+    pub raised_at: DateTime<Utc>,
+    pub state: GraphQLPauseRequestState,
+    /// Whether the world is being played as the operator reads this, not
+    /// when the request was raised (FR-031).
+    pub played_now: bool,
+    /// Oldest first.
+    pub triggers: Vec<GraphQLPauseTrigger>,
+    pub decided_by: Option<GraphQLOperatorName>,
+    pub decided_at: Option<DateTime<Utc>>,
+    pub decision_note: Option<String>,
+}
+
+/// One page of `playPauseRequests`, newest first, in the shape
+/// `PlayPauseConnection` pages with.
+#[derive(SimpleObject, Debug, Clone)]
+#[graphql(name = "PauseRequestConnection")]
+pub struct GraphQLPauseRequestConnection {
+    pub nodes: Vec<GraphQLPauseRequest>,
+    pub next_cursor: Option<String>,
 }
 
 /// A pause, as an operator reads it.
@@ -156,12 +219,8 @@ pub(crate) fn play_pauses_for_graphql(
         }
     }
 
-    let existing: HashSet<Uuid> = worlds::table
-        .filter(worlds::id.eq_any(&world_ids))
-        .select(worlds::id)
-        .load::<Uuid>(conn)?
-        .into_iter()
-        .collect();
+    let existing = existing_worlds(conn, &world_ids)?;
+    let live = live_among(conn, &world_ids)?;
 
     Ok(rows
         .into_iter()
@@ -184,8 +243,64 @@ pub(crate) fn play_pauses_for_graphql(
                 .map(|(id, name)| GraphQLOperatorName { id, name }),
             lifted_at: row.lifted_at.map(utc),
             lift_grounds: row.lift_grounds,
-            // T047: `in_live_play`, once the heartbeat writes the mark.
-            played_now: false,
+            played_now: live.contains(&row.world_id),
+        })
+        .collect())
+}
+
+fn existing_worlds(conn: &mut PgConnection, world_ids: &[Uuid]) -> QueryResult<HashSet<Uuid>> {
+    Ok(worlds::table
+        .filter(worlds::id.eq_any(world_ids))
+        .select(worlds::id)
+        .load::<Uuid>(conn)?
+        .into_iter()
+        .collect())
+}
+
+/// Every stored request in `rows`, with its triggers, whether its world is
+/// still there and whether it is played now — four queries however many rows.
+pub(crate) fn pause_requests_for_graphql(
+    conn: &mut PgConnection,
+    rows: Vec<PauseRequest>,
+) -> QueryResult<Vec<GraphQLPauseRequest>> {
+    let request_ids: Vec<Uuid> = rows.iter().map(|row| row.id).collect();
+    let world_ids: Vec<Uuid> = rows.iter().map(|row| row.world_id).collect();
+
+    let mut triggers: HashMap<Uuid, Vec<GraphQLPauseTrigger>> = HashMap::new();
+    for trigger in world_play_pause_triggers::table
+        .filter(world_play_pause_triggers::request_id.eq_any(&request_ids))
+        .order((
+            world_play_pause_triggers::recorded_at.asc(),
+            world_play_pause_triggers::id.asc(),
+        ))
+        .select(PauseTrigger::as_select())
+        .load(conn)?
+    {
+        if let Some(request_id) = trigger.request_id {
+            triggers.entry(request_id).or_default().push(trigger.into());
+        }
+    }
+
+    let existing = existing_worlds(conn, &world_ids)?;
+    let live = live_among(conn, &world_ids)?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| GraphQLPauseRequest {
+            id: row.id,
+            world_id: row.world_id,
+            world_name: row.world_name,
+            world_exists: existing.contains(&row.world_id),
+            raised_at: utc(row.raised_at),
+            state: row.state.into(),
+            played_now: live.contains(&row.world_id),
+            triggers: triggers.remove(&row.id).unwrap_or_default(),
+            decided_by: row
+                .decided_by
+                .zip(row.decided_by_name)
+                .map(|(id, name)| GraphQLOperatorName { id, name }),
+            decided_at: row.decided_at.map(utc),
+            decision_note: row.decision_note,
         })
         .collect())
 }
@@ -319,6 +434,7 @@ impl PlayPauseQuery {
                 .load::<Uuid>(&mut conn)?
                 .into_iter()
                 .collect();
+            let live = live_among(&mut conn, &ids)?;
 
             QueryResult::Ok(
                 found
@@ -327,9 +443,8 @@ impl PlayPauseQuery {
                         paused: paused.contains(&id),
                         id,
                         name,
+                        played_now: live.contains(&id),
                         owner_name,
-                        // T047: `in_live_play`, once the heartbeat writes the mark.
-                        played_now: false,
                     })
                     .collect(),
             )
@@ -396,6 +511,58 @@ impl PlayPauseQuery {
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
         .map_err(|_: diesel::result::Error| Error::new("Failed to read the pause record"))
+    }
+
+    /// Requests to pause a world, newest first: the pending ones an operator
+    /// has to decide, unless `state` asks for decided ones.
+    async fn play_pause_requests(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(default_with = "Some(GraphQLPauseRequestState::Pending)")] state: Option<
+            GraphQLPauseRequestState,
+        >,
+        first: Option<i32>,
+        after: Option<String>,
+    ) -> GraphQLResult<GraphQLPauseRequestConnection> {
+        admin_user(ctx)?;
+        let after = after.as_deref().map(decode_cursor).transpose()?;
+        let limit = first
+            .unwrap_or(PAUSES_PER_PAGE)
+            .clamp(1, MAX_PAUSES_PER_PAGE) as usize;
+        let mut conn = connection(ctx)?;
+
+        tokio::task::spawn_blocking(move || {
+            let mut query = world_play_pause_requests::table
+                .select(PauseRequest::as_select())
+                // v7 ids, minted as the request is raised: id order is time
+                // order, and the cursor is the last id.
+                .order(world_play_pause_requests::id.desc())
+                .limit(limit as i64 + 1)
+                .into_boxed();
+            if let Some(state) = state {
+                query = query
+                    .filter(world_play_pause_requests::state.eq(PauseRequestState::from(state)));
+            }
+            if let Some(after) = after {
+                query = query.filter(world_play_pause_requests::id.lt(after));
+            }
+
+            let mut rows: Vec<PauseRequest> = query.load(&mut conn)?;
+            let next_cursor = if rows.len() > limit {
+                rows.truncate(limit);
+                rows.last().map(|row| encode_cursor(row.id))
+            } else {
+                None
+            };
+
+            Ok(GraphQLPauseRequestConnection {
+                nodes: pause_requests_for_graphql(&mut conn, rows)?,
+                next_cursor,
+            })
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_: diesel::result::Error| Error::new("Failed to read the pause requests"))
     }
 
     /// Whether this world's play is paused, since when, and when it was

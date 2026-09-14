@@ -128,3 +128,118 @@ async fn a_worlds_owner_cannot_pause_it() {
     assert!(!refused.errors.is_empty());
     assert_eq!(pauses_of(&state, world), 0, "and nothing was written");
 }
+
+/// T047, FR-031, FR-035: an operator lists a pending request, played now and
+/// with its trigger; approves it; and a second operator deciding the same
+/// request is told who decided it rather than refused.
+#[tokio::test]
+async fn an_operator_decides_a_request_and_a_second_is_told_who_did() {
+    let state = test_app_state();
+    let (first, second, world, action) = {
+        let mut conn = state.db_pool.get().unwrap();
+        let first = insert_test_user(&mut conn);
+        let second = insert_test_user(&mut conn);
+        let owner = insert_test_user(&mut conn);
+        let world = insert_test_world(&mut conn, owner);
+        let action = Uuid::now_v7();
+        crate::play_pause::live_play::mark_live(&mut conn, world).unwrap();
+        crate::play_pause::requests::raise_for_takedown(
+            &mut conn,
+            &crate::play_pause::requests::TakedownReach {
+                world_id: world,
+                moderation_action_id: action,
+                entity_type: "scene".into(),
+                entity_id: Uuid::now_v7(),
+            },
+        )
+        .unwrap();
+        (first, second, world, action)
+    };
+    let schema = schema(state.clone());
+
+    let listed = schema
+        .execute(
+            Request::new(
+                "{ playPauseRequests(first: 200) { nodes { id worldId state playedNow \
+                 triggers { kind moderationActionId } } } }",
+            )
+            .data(caller(first, true)),
+        )
+        .await;
+    assert!(listed.errors.is_empty(), "{:?}", listed.errors);
+    let listed = listed.data.into_json().unwrap();
+    let request = listed["playPauseRequests"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["worldId"] == world.to_string())
+        .expect("the pending request is listed")
+        .clone();
+    assert_eq!(request["state"], "PENDING");
+    assert_eq!(request["playedNow"], true);
+    assert_eq!(request["triggers"][0]["kind"], "TAKEDOWN");
+    assert_eq!(
+        request["triggers"][0]["moderationActionId"],
+        action.to_string()
+    );
+    let request_id = request["id"].as_str().unwrap().to_string();
+
+    let decide = |decision: &str, note: &str| {
+        format!(
+            r#"mutation {{ decidePlayPauseRequest(requestId: "{request_id}", decision: {decision}, note: "{note}") {{
+                decidedHere
+                request {{ state decidedBy {{ id name }} decisionNote }}
+                pause {{ id requestId grounds playedNow }}
+            }} }}"#
+        )
+    };
+
+    let blank = schema
+        .execute(Request::new(decide("APPROVE", " ")).data(caller(first, true)))
+        .await;
+    assert_eq!(code(&blank), "GROUNDS_REQUIRED");
+
+    let approved = schema
+        .execute(Request::new(decide("APPROVE", "Live table.")).data(caller(first, true)))
+        .await;
+    assert!(approved.errors.is_empty(), "{:?}", approved.errors);
+    let approved = approved.data.into_json().unwrap()["decidePlayPauseRequest"].clone();
+    assert_eq!(approved["decidedHere"], true);
+    assert_eq!(approved["request"]["state"], "APPROVED");
+    assert_eq!(approved["pause"]["requestId"], request_id);
+    assert_eq!(approved["pause"]["grounds"], "Live table.");
+    assert_eq!(pauses_of(&state, world), 1);
+
+    let late = schema
+        .execute(Request::new(decide("DECLINE", "Not needed.")).data(caller(second, true)))
+        .await;
+    assert!(
+        late.errors.is_empty(),
+        "a lost race is not an error: {:?}",
+        late.errors
+    );
+    let late = late.data.into_json().unwrap()["decidePlayPauseRequest"].clone();
+    assert_eq!(late["decidedHere"], false);
+    assert_eq!(
+        late["request"]["state"], "APPROVED",
+        "the winner's decision"
+    );
+    assert_eq!(
+        late["request"]["decidedBy"],
+        approved["request"]["decidedBy"]
+    );
+    assert_eq!(late["request"]["decidedBy"]["id"], first.to_string());
+    assert_eq!(late["pause"]["id"], approved["pause"]["id"]);
+    assert_eq!(pauses_of(&state, world), 1);
+
+    let missing = schema
+        .execute(
+            Request::new(format!(
+                r#"mutation {{ decidePlayPauseRequest(requestId: "{}", decision: APPROVE, note: "x") {{ decidedHere }} }}"#,
+                Uuid::now_v7()
+            ))
+            .data(caller(first, true)),
+        )
+        .await;
+    assert_eq!(code(&missing), "REQUEST_NOT_FOUND");
+}

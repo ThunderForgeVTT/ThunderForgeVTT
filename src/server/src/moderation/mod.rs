@@ -356,6 +356,10 @@ pub async fn filter_visible<T>(
 mod scene_tests;
 
 #[cfg(test)]
+#[path = "play_pause_hook_tests.rs"]
+mod play_pause_hook_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_support::test_app_state;

@@ -89,10 +89,25 @@ impl HeartbeatMutation {
         // queueing.
         refuse_if_paused(&mut conn, world_id)?;
 
-        // In memory, not in a row. A beat is a statement about *now*, and
-        // its answer is worthless one beat later — writing it to Postgres
-        // cost a WAL record, an index update and a dead tuple every five
-        // seconds per connected client, for a fact nothing durable needs.
+        // Who is here lives in memory, not in a row. A beat is a statement
+        // about *now*, and its answer is worthless one beat later — writing
+        // it to Postgres cost a WAL record, an index update and a dead tuple
+        // every five seconds per connected client.
+        //
+        // One fact does go to a row, and it is not who: *that this world is
+        // being played* (spec 051, research R3). A takedown decides from it
+        // whether to ask an operator to pause the world, and that decision
+        // must not depend on which process filed the notice, which the
+        // in-memory registry would make it. So it is written once per world
+        // every 30 seconds at most — throttled in this process and
+        // conditional in the database — not once per client per beat.
+        //
+        // A failed mark does not fail the beat: refusing a beat reads to the
+        // client as a connection that is down, and a table would start
+        // queueing edits over a bookkeeping write. It is logged instead.
+        if let Err(error) = crate::play_pause::live_play::mark_live(&mut conn, world_id) {
+            tracing::error!(%world_id, "could not mark the world as in live play: {error}");
+        }
         //
         // The membership check above deliberately still runs on every beat.
         // Caching it would be the obvious next saving and is the wrong one:

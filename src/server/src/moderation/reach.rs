@@ -212,7 +212,22 @@ fn child_cases(conn: &mut PgConnection, parent_case_id: Uuid) -> QueryResult<Vec
         .collect())
 }
 
-/// One event in a child case. No `account_id`, ever, and none of the
+/// One copy [`fan_out_disable`] disabled: its child case, the event that
+/// disabled it, and where it sits.
+///
+/// The world is what spec 051's takedown hook needs — a copy in a world being
+/// played asks for that world to be paused, as the source does for its own.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DisabledCopy {
+    pub case_id: Uuid,
+    /// The `content_disabled_as_copy` row.
+    pub action_id: Uuid,
+    pub entity_type: String,
+    pub entity_id: Uuid,
+    pub world_id: Uuid,
+}
+
+/// One event in a child case, returning its id. No `account_id`, ever, and none of the
 /// claimant's columns: the claimant made no claim about this copy, and the
 /// adopter is not a party to the notice.
 #[allow(clippy::too_many_arguments)]
@@ -225,7 +240,7 @@ fn insert_child_event(
     entity_id: Uuid,
     world_id: Uuid,
     restoration_due_at: Option<DateTime<Utc>>,
-) -> QueryResult<()> {
+) -> QueryResult<Uuid> {
     diesel::insert_into(content_moderation_actions::table)
         .values((
             content_moderation_actions::case_id.eq(case_id),
@@ -244,13 +259,13 @@ fn insert_child_event(
             content_moderation_actions::signature.eq(""),
             content_moderation_actions::restoration_due_at.eq(restoration_due_at),
         ))
-        .execute(conn)
-        .map(|_| ())
+        .returning(content_moderation_actions::id)
+        .get_result(conn)
 }
 
 /// A takedown was upheld against `(entity_type, entity_id)`: disable every
 /// copy taken of it, each in a child case of `parent_case_id`, and tell each
-/// adopter and the sharer. Returns the child case ids.
+/// adopter and the sharer. Returns each copy disabled, with its child case.
 ///
 /// One transaction of its own, so a takedown never reaches half the copies. A
 /// copy its adopter has since deleted is skipped — there is nothing to disable
@@ -261,7 +276,7 @@ pub fn fan_out_disable(
     entity_type: &str,
     entity_id: Uuid,
     sharer: Option<Uuid>,
-) -> Result<Vec<Uuid>, String> {
+) -> Result<Vec<DisabledCopy>, String> {
     conn.transaction::<_, diesel::result::Error, _>(|conn| {
         let mut children = Vec::new();
         let mut by_adopter: BTreeMap<Uuid, (Vec<Uuid>, Vec<String>)> = BTreeMap::new();
@@ -271,7 +286,7 @@ pub fn fan_out_disable(
                 continue;
             };
             let child = Uuid::now_v7();
-            insert_child_event(
+            let action_id = insert_child_event(
                 conn,
                 child,
                 parent_case_id,
@@ -281,7 +296,13 @@ pub fn fan_out_disable(
                 copy.world_id,
                 None,
             )?;
-            children.push(child);
+            children.push(DisabledCopy {
+                case_id: child,
+                action_id,
+                entity_type: copy.entity_type.clone(),
+                entity_id: copy.entity_id,
+                world_id: copy.world_id,
+            });
             let (cases, names) = by_adopter.entry(copy.adopted_by).or_default();
             cases.push(child);
             names.push(name);
