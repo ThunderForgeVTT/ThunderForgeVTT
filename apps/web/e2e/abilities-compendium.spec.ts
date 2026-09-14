@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures/test";
 
 /**
  * specs/025-world-abilities-compendium, User Story 1 (T020): the Compendium's

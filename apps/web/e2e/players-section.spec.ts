@@ -1,5 +1,5 @@
 import { createNpcViaCompendium } from "./fixtures/content";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/test";
 import { freshCredentials, register, uniqueSuffix } from "./fixtures/helpers";
 
 /**

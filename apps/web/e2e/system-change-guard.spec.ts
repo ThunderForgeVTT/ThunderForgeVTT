@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures/test";
 
 /**
  * specs/033-abilities-vocabulary, User Story 2 — changing a world's system

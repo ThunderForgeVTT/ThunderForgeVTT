@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures/test";
 
 /**
  * specs/005-live-canvas-sync, User Story 4 (folded in post-planning):

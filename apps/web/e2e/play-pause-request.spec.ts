@@ -5,7 +5,7 @@ import {
   type BrowserContext,
   type Locator,
   type Page,
-} from "@playwright/test";
+} from "./fixtures/test";
 import { openAdminPage } from "./fixtures/admin";
 import { expectNoAxeViolations } from "./fixtures/axe";
 import {

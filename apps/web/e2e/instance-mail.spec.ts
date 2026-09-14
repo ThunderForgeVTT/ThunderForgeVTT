@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./fixtures/test";
 import { openAdminPage, type GqlResult } from "./fixtures/admin";
 import { freshCredentials, graphql, register } from "./fixtures/helpers";
 

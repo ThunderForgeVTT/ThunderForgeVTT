@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures/test";
 
 /**
  * Spec 049 US1: a book is read on the Game Master's own machine, and nothing

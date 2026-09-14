@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/test";
 import { freshCredentials, login, register } from "./fixtures/helpers";
 import { codeForConfirmingAnEnrolment, totpAt } from "./fixtures/totp";
 

@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures/test";
 
 /**
  * specs/027-unified-access-links (US1, US3, US4): a GM can kill a leaked

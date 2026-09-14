@@ -105,7 +105,16 @@ export function readLane(result, root) {
           screenshot: attachment("screenshot"),
           trace: attachment("trace"),
           errorContext: attachment("error-context"),
-          loadDiagnostics: attachment("load-diagnostics"),
+          // Inline in the report (base64), not a file: the fixture attaches a
+          // body. Kept short; the whole thing is in the lane's JSON report.
+          loadDiagnostics: (() => {
+            const body = (last.attachments ?? []).find(
+              (a) => a.name === "load-diagnostics" && a.body,
+            )?.body;
+            return body
+              ? Buffer.from(body, "base64").toString("utf-8").slice(0, 2000)
+              : null;
+          })(),
         });
       }
     }

@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures/test";
 import { freshCredentials, graphql, register } from "./fixtures/helpers";
 import { openAnotherClient } from "./fixtures/clients";
 

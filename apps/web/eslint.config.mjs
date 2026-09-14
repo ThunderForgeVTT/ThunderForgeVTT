@@ -98,4 +98,27 @@ export default tseslint.config(
       "react-refresh/only-export-components": "off",
     },
   },
+  {
+    // `e2e/fixtures/test.ts` is `@playwright/test` plus the fixture that
+    // reports "frontend failed to load" instead of a bare timeout on a blank
+    // page. A spec importing `test` from Playwright directly silently loses
+    // that. Journeys run under their own config and are left alone.
+    files: ["e2e/**/*.spec.ts"],
+    ignores: ["e2e/journeys/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@playwright/test",
+              importNames: ["test"],
+              message:
+                "Import `test` (and `expect`) from e2e/fixtures/test instead.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 );

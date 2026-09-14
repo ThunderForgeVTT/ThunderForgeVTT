@@ -1,4 +1,4 @@
-import { expect, test, type BrowserContext } from "@playwright/test";
+import { expect, test, type BrowserContext } from "../fixtures/test";
 
 /**
  * Many tables, many real users: the topology an actual deployment has.

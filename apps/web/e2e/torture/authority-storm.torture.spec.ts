@@ -3,7 +3,7 @@ import {
   test,
   type Browser,
   type BrowserContext,
-} from "@playwright/test";
+} from "../fixtures/test";
 
 /**
  * Concurrent authority: a Game Master and their players all writing at once.

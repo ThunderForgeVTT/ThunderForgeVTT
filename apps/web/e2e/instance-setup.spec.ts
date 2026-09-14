@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures/test";
 import { readFileSync } from "node:fs";
 import { graphql } from "./fixtures/helpers";
 import { totpNow } from "./fixtures/totp";

@@ -1,4 +1,4 @@
-import { test, expect, type Page, type Browser } from "@playwright/test";
+import { test, expect, type Page, type Browser } from "./fixtures/test";
 import type { WorldProbe } from "../src/engine/world/probe";
 import { inviteAndJoinAsPlayer, launchSceneByName } from "./fixtures/helpers";
 

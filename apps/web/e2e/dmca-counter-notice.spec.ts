@@ -1,4 +1,4 @@
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Page } from "./fixtures/test";
 import { DEMO_USER } from "./fixtures/global-setup";
 import {
   graphql,

@@ -1,4 +1,4 @@
-import { test, expect, type Browser, type Page } from "@playwright/test";
+import { test, expect, type Browser, type Page } from "./fixtures/test";
 import { STARTER_SCENE_NAME } from "./fixtures/helpers";
 
 /**

@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures/test";
 import type { WorldProbe } from "../src/engine/world/probe";
 import path from "node:path";
 import { readFileSync } from "node:fs";

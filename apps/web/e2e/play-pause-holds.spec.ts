@@ -1,4 +1,4 @@
-import { expect, test, type Page, type WebSocketRoute } from "@playwright/test";
+import { expect, test, type Page, type WebSocketRoute } from "./fixtures/test";
 import { openAdminPage } from "./fixtures/admin";
 import { expectNoAxeViolations } from "./fixtures/axe";
 import {

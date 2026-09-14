@@ -1,5 +1,5 @@
 import path from "path";
-import { expect, test, type Page, type Request } from "@playwright/test";
+import { expect, test, type Page, type Request } from "./fixtures/test";
 import { registerAndCreateWorld, uniqueSuffix } from "./fixtures/helpers";
 import {
   assetFingerprint,

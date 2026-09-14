@@ -1,4 +1,4 @@
-import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { expect, test, type BrowserContext, type Page } from "./fixtures/test";
 import { openAdminPage } from "./fixtures/admin";
 import {
   graphql,

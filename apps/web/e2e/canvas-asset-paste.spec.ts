@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures/test";
 
 /**
  * T023/T024 (specs/002-canvas-authoring-asset-storage, User Story 3):
