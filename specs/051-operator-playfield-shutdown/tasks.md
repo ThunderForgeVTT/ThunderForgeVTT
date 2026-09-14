@@ -294,7 +294,7 @@ These journeys go through the product the way people do: UI only, no GraphQL sho
   - a takedown on an adopted copy reached by `fan_out_disable` raises for that copy's world when it is live;
   - a forced hook failure leaves the takedown in effect and logs the action id;
   - counter-notice restoration, an upheld appeal (`restore_case_sync`) and the lazy elapse in `effective_status_sync` each leave an active pause active (FR-042).
-- [ ] T043 [US3] Write `apps/web/e2e/play-pause-request.spec.ts`:
+- [x] T043 [US3] Write `apps/web/e2e/play-pause-request.spec.ts`:
   1. A table plays a scene. File a takedown on the scene through `/legal/dmca`, then one on an actor of the same world. Move the local `fileSceneTakedown` helper from `dmca-scene-takedown.spec.ts` into `fixtures/playPause.ts` and import it back there.
   2. Expect one pending request at `/admin/play-pauses` with two triggers, marked *played now*.
   3. Approve it: the table lands on the notice.
@@ -320,9 +320,9 @@ These journeys go through the product the way people do: UI only, no GraphQL sho
   - `playedNow` computed with `in_live_play` on `PauseRequest`, `PlayPause` and `PauseCandidateWorld`, replacing the T020 marker.
 
   Add the new fields to `ADMIN_ONLY` and to `OPERATOR` in `play_pause_surface_tests.rs`.
-- [ ] T048 [US3] Add a *Requests* section to `apps/web/src/pages/admin/PlayPausesPage.tsx`. It lists pending requests with world, raised time, *played now* and each trigger (kind, a link to the moderation case for takedowns). Approve and Decline each open a dialog requiring a note. A lost race shows "Already decided by {name} at {time}" and refreshes.
-- [ ] T049 [US3] Run `play-pause-request.spec.ts`, the Phase 3–4 e2e, and the existing moderation e2e (`dmca-takedown`, `dmca-scene-takedown`, `dmca-counter-notice`, `takedown-reach`, `collection-moderation`, `account-standing`) until they pass. Run `cargo test -q --lib` and `tsc --noEmit`. Commit.
-- [ ] T070 [US3] Write `apps/web/e2e/journeys/a-notice-becomes-a-decision.journey.spec.ts`:
+- [x] T048 [US3] Add a *Requests* section to `apps/web/src/pages/admin/PlayPausesPage.tsx`. It lists pending requests with world, raised time, *played now* and each trigger (kind, a link to the moderation case for takedowns). Approve and Decline each open a dialog requiring a note. A lost race shows "Already decided by {name} at {time}" and refreshes.
+- [x] T049 [US3] Run `play-pause-request.spec.ts`, the Phase 3–4 e2e, and the existing moderation e2e (`dmca-takedown`, `dmca-scene-takedown`, `dmca-counter-notice`, `takedown-reach`, `collection-moderation`, `account-standing`) until they pass. Run `cargo test -q --lib` and `tsc --noEmit`. Commit.
+- [x] T070 [US3] Write `apps/web/e2e/journeys/a-notice-becomes-a-decision.journey.spec.ts`:
   1. A claimant files through the real `/legal/dmca` form against a scene a table is playing.
   2. The operator sees the request appear at `/admin/play-pauses` without reloading beyond the page's own refresh. It shows *played now* and a link to the moderation case, which opens.
   3. The operator approves in the UI with a note, and the table lands on the notice.
