@@ -31,6 +31,9 @@ pub mod attributes;
 pub mod auth;
 pub mod auth_middleware;
 pub mod collections;
+/// Spec 046: what a fight's turns do — hit points that change, and a turn
+/// that holds a player to it.
+pub mod combat;
 /// Spec 049 / 050: a book that has been read in, and the account shelf it
 /// sits on. Account-owned, never world-owned.
 pub mod compendium;

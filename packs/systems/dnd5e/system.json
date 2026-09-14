@@ -1096,6 +1096,14 @@
     "rounds": true,
     "roundLabel": "Round"
   },
+  "combat": {
+    "hitPoints": {
+      "slot": "resourceData",
+      "current": "current_hp",
+      "max": "max_hp",
+      "temporary": "temporary_hp"
+    }
+  },
   "abilityVocabulary": {
     "umbrella": {
       "label": "Ability",

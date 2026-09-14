@@ -231,6 +231,62 @@ Whether the system counts rounds, and what it calls one. Fate counts
 — the product declines to assume that every ruleset has them, and a system
 with no rounds shows no round counter (SC-011).
 
+A system may also declare what one turn affords (spec 046):
+
+```json
+"turnStructure": { "rounds": true, "roundLabel": "Round",
+  "budget": { "action": 1, "bonusAction": 1, "reaction": 1,
+              "movement": { "speed": "walk" } } }
+```
+
+`movement.speed` names a key of your `movement` block, and a manifest that
+names one it does not declare is refused at install. A budget is shown and
+spent; it never refuses anybody — a table that lets somebody overspend is
+playing the game, not breaking it.
+
+### `combat`
+
+What a fight means in your system (spec 046). Every part is optional, and a
+system that declares none of it still has initiative and turns.
+
+```json
+"combat": {
+  "hitPoints": { "slot": "resourceData", "current": "current_hp",
+                 "max": "max_hp", "temporary": "temporary_hp" },
+  "defence":   { "slot": "abilityData", "field": "armor_class",
+                 "label": "Armour Class", "abbrev": "AC" },
+  "sizes": {
+    "source": { "slot": "traitData", "field": "size" },
+    "categories": [ { "id": "medium", "label": "Medium", "footprint": 1 },
+                    { "id": "large",  "label": "Large",  "footprint": 2 } ]
+  },
+  "legendary": { "slot": "traitData", "field": "legendary_actions" }
+}
+```
+
+- **`hitPoints`** is what damage and healing write. Temporary hit points are
+  spent first, current stops at zero, and healing stops at the maximum. A
+  creature taken to zero leaves the turn order until it is healed.
+- **`defence`** is the number an attack's total must reach to hit.
+- **`sizes`** says how many cells a creature of each size fills, per side.
+- **`legendary`** is where a creature's legendary actions per round are read.
+
+These are the rules the product enforces on a declaration, at install time:
+
+| # | Rule |
+|---|---|
+| M1 | Every block is optional. A system without `hitPoints` has no damage operation; its attacks still roll, and a hit's damage is shown as a number nobody can take. |
+| M2 | `hitPoints`, `defence`, `sizes.source` and `legendary` name a `slot` and a field your `data_types` declares. A name it does not declare is refused, and the error names it. |
+| M3 | Every `sizes.categories[].footprint` is at least 0.5, and every `id` is unique. |
+| M4 | `turnStructure.budget.movement.speed` names a key of your `movement` block. |
+| M5 | Shared code names no system's fields. The product reads `current_hp` because 5e's manifest says so, never because the platform knows what 5e calls it. |
+
+`slot` uses the manifest's own vocabulary (`resourceData`, `traitData`), as
+`resources` and `vision` do.
+
+D&D 5e declares `hitPoints` today. The rest of its block arrives with the
+spec 046 phases that read it.
+
 ### `checks`
 
 ```json

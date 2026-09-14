@@ -37,7 +37,7 @@ delivers. Phase 4 (turn order) serves US1's "a player on their turn". Phase 5
 **Purpose**: a baseline and the working set.
 
 - [ ] T001 Run `pnpm playtest --only=combat-5e` on `main` and keep its report as the before-state; list its FINDING lines (263, 380, 416, 439, 481, 522, 548, 606 on 2026-09-14) in a comment at the top of `specs/046-a-fight-that-resolves/tasks.md`'s Notes section
-- [ ] T002 [P] Read `specs/046-a-fight-that-resolves/contracts/fight.md` and `research.md` into the working set; every task below is measured against contract clauses C1–C10, the redaction rule in §3, and manifest clauses M1–M5
+- [X] T002 [P] Read `specs/046-a-fight-that-resolves/contracts/fight.md` and `research.md` into the working set; every task below is measured against contract clauses C1–C10, the redaction rule in §3, and manifest clauses M1–M5
 
 ---
 
@@ -47,12 +47,12 @@ delivers. Phase 4 (turn order) serves US1's "a player on their turn". Phase 5
 
 **⚠️ No story phase starts before T003–T008 are done.**
 
-- [ ] T003 Add the optional typed `combat` block (`hitPoints`, `defence`, `sizes`, `legendary`) and `turnStructure.budget` to `SystemManifest` in `crates/pack_system_spec/src/lib.rs`, following the `vision` precedent; `validate_system_manifest` enforces M2 (named slot and field exist in `data_types`), M3 (footprint ≥ 0.5, unique ids) and M4 (budget movement speed names a `movement` key)
-- [ ] T004 [P] Tests for T003 in `crates/pack_system_spec/src/` (the crate's existing test file): each of M2, M3 and M4 refused with a named field; a manifest with no `combat` block accepted (M1)
-- [ ] T005 Create module `src/server/src/combat/mod.rs` with `manifest.rs`, which reads a world's system `combat` block from `system.json` under `systems_dir` (the way `vision_profiles.rs` and `attributes.rs::movement_declarations_for_system` read theirs), cached per system id; register the module in `src/server/src/lib.rs`
-- [ ] T006 [P] Add `"combat": {"hitPoints": {"slot": "resourceData", "current": "current_hp", "max": "max_hp", "temporary": "temporary_hp"}}` to `packs/systems/dnd5e/system.json`; the rest of the block lands with its phase
-- [ ] T007 [P] Document the `combat` block and `turnStructure.budget` in `packs/systems/README.md`: shape, M1–M5, and that shared code never names a system's fields; keep `pnpm verify`'s pack-contracts link check green
-- [ ] T008 `cargo test -p thunderforge-server combat::manifest` and `pnpm verify`; record results in this file
+- [X] T003 Add the optional typed `combat` block (`hitPoints`, `defence`, `sizes`, `legendary`) and `turnStructure.budget` to `SystemManifest` in `crates/pack_system_spec/src/lib.rs`, following the `vision` precedent; `validate_system_manifest` enforces M2 (named slot and field exist in `data_types`), M3 (footprint ≥ 0.5, unique ids) and M4 (budget movement speed names a `movement` key)
+- [X] T004 [P] Tests for T003 in `crates/pack_system_spec/src/` (the crate's existing test file): each of M2, M3 and M4 refused with a named field; a manifest with no `combat` block accepted (M1). *Note (implement): the crate has no single test file; these live in a new sibling `combat_tests.rs`, beside `combat.rs`, since `lib.rs` sits near the 1000-line check. `turnStructure` and `data_types` are read from the untyped manifest, because bundled packs do not carry the typed schema's other fields.*
+- [X] T005 Create module `src/server/src/combat/mod.rs` with `manifest.rs`, which reads a world's system `combat` block from `system.json` under `systems_dir` (the way `vision_profiles.rs` and `attributes.rs::movement_declarations_for_system` read theirs), cached per system id; register the module in `src/server/src/lib.rs`
+- [X] T006 [P] Add `"combat": {"hitPoints": {"slot": "resourceData", "current": "current_hp", "max": "max_hp", "temporary": "temporary_hp"}}` to `packs/systems/dnd5e/system.json`; the rest of the block lands with its phase
+- [X] T007 [P] Document the `combat` block and `turnStructure.budget` in `packs/systems/README.md`: shape, M1–M5, and that shared code never names a system's fields; keep `pnpm verify`'s pack-contracts link check green
+- [X] T008 `cargo test -p thunderforge-server combat::manifest` and `pnpm verify`; record results in this file. *Result 2026-09-14: `cargo test -p pack_system_spec` 82 passed (10 new in `combat::tests`); `combat::manifest` 6 passed; `cargo clippy` clean on both crates; verify's rust-fmt, web-fmt, registry, seam, graphql-ops, filelength and `check-pack-docs` green.*
 
 **Checkpoint**: a pack can declare combat; the server can read it.
 
@@ -91,9 +91,9 @@ delivers. Phase 4 (turn order) serves US1's "a player on their turn". Phase 5
 
 - [ ] T023 [US1] Implement `turn_check(conn, scene_id, acting_token_id, user) -> TurnCheck` in `src/server/src/combat/turn.rs` per research R12 and C1: running combat in the scene, acting token is a combatant, not active, user not GM → refused with the active combatant's label under `load_combat`'s "Unknown" rule
 - [ ] T024 [US1] Call `turn_check` in `move_own_token` in `src/server/src/graphql/mutations_tokens.rs` before `judge_against_walls`
-- [ ] T025 [US1] Call `turn_check` for queued token moves in `src/server/src/graphql/mutations_reconcile.rs` (token write ~688-712), reporting a refusal the way a queued conflict is reported today
+- [ ] T025 [US1] Call `turn_check` for queued token moves in `src/server/src/graphql/mutations_reconcile.rs` (token write ~688-712), reporting a refusal the way a queued conflict is reported today. *Note (implement): a queued outcome carries an enum reason and no text, so this adds `NOT_YOUR_TURN` to `GraphQLRejectionReason` (and `thunderforge_cache_core::queue::RejectionReason`) and a `refusal: String` field on the outcome with the same sentence; `ReconcileReport.tsx` shows it.*
 - [ ] T026 [P] [US1] Server tests in `src/server/src/combat/turn_tests.rs`: refused off-turn; allowed on-turn; GM never refused; non-combatant token free; hidden active name → "Unknown"; offline replay refused
-- [ ] T027 [US1] Show the refusal text where a refused move is shown today in `apps/web/src/engine/world/sync/tokens.ts` (the move snaps back, and the message names whose turn it is)
+- [ ] T027 [US1] Show the refusal text where a refused move is shown today in `apps/web/src/engine/world/sync/tokens.ts` (the move snaps back, and the message names whose turn it is). *Note (implement): already true of `applyMoveRefusal` since spec 045 — it re-reads the server's position and toasts the server's own message — so this is a comment, not code; `combat-turn-order.spec.ts` proves the text appears.*
 - [ ] T028 [US1] e2e `apps/web/e2e/combat-turn-order.spec.ts` covering the independent test, including the GM moving the ogre freely
 - [ ] T029 [US1] Turn FINDING 606 (a player moved out of turn) in `apps/web/playtest/combat-5e.playtest.ts` into a hard check
 - [ ] T030 [US1] Prove: T028 through the harness, `cargo test` for T026, the playtest; record results here

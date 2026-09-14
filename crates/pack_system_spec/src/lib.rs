@@ -1,3 +1,4 @@
+pub mod combat;
 pub mod content_patterns;
 pub mod contrast;
 pub mod interface;
@@ -90,6 +91,16 @@ pub struct SystemManifest {
     /// Pathfinder book gets imported as badly-parsed D&D.
     #[serde(default)]
     pub content_patterns: Option<Vec<content_patterns::SystemContentPattern>>,
+
+    /// What a fight means in this system (spec 046): which fields are hit
+    /// points, what an attack is rolled against, how big a creature is.
+    /// Optional, block by block (M1); see `combat.rs`.
+    #[serde(default)]
+    pub combat: Option<combat::SystemCombat>,
+
+    /// Whether the system counts rounds, and what one turn affords.
+    #[serde(default)]
+    pub turn_structure: Option<combat::SystemTurnStructure>,
 }
 
 /// A system's `vision` block, mirroring
@@ -240,6 +251,7 @@ pub fn validate_system_manifest(json_string: &str) -> Result<(), String> {
     // stays the single "is this manifest compliant" entry point.
     validate_legal_content(&instance)?;
     validate_vision_content(&instance)?;
+    combat::validate_combat_content(&instance)?;
     content_patterns::validate_content_patterns(&instance)
 }
 
