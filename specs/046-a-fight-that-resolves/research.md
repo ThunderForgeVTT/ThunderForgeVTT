@@ -381,6 +381,32 @@ queued action, the way queued conflicts are shown today.
 - Measured by extending `engine-status-limits.spec.ts` with a 200-copy level
   that places copies through `createToken` (not one shared actor, as today).
 
+## R18. An offer, and a token relinked after it was made
+
+*Added during implementation (tasks Phase 6), from the risk Phase 5 named.*
+
+**Decision**: An offer is bound to its token **and to the token's link state
+when the offer was made** (`world_offers.target_linked`). Taking an offer
+whose token has been relinked or unlinked since is **refused**, with "That
+creature was relinked after this offer was made, so its hit points are a
+different record now. Decline the offer, and change its hit points by hand if
+the hit should stand." Declining it still works. `resolveOffer` locks the
+offer row, then the token row, before comparing, as damage to a copy locks
+it (R5), so a relink cannot land between the check and the write.
+
+**Rationale**: a goblin copy hit for 5 and then relinked to its NPC would
+otherwise land those 5 on the NPC's own sheet — the starting hit points of
+every future copy — though the attack was rolled against a goblin with its
+own. Applying to "the current record and telling the table" was the other
+option; it was rejected because the table being told does not undo a change
+to a sheet nobody attacked, and the Game Master who relinked is the one person
+who can say whether the hit should stand, which they can do by hand in one
+click (FR-014).
+
+**Correction to R8**: event 30's payload is `{offerId}` only, as contract §4
+says, not `{offerId, tokenId}`. The target's token id is exactly what a viewer
+who cannot see the target must not be sent.
+
 ## Loose ends found, not taken into this spec
 
 - **`create_world_token` / `upsert_world_token` check no world membership**

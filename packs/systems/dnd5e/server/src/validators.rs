@@ -55,6 +55,22 @@ pub fn validate_ability_data(data: &serde_json::Value) -> Result<(), ValidationE
         }
     }
 
+    // Armour class (spec 046 T050): optional, and this system's declared
+    // defence (`combat.defence`). A creature with none recorded has no
+    // defence to beat, which the attack says rather than guessing at 10.
+    if let Some(armor_class) = obj.get("armor_class") {
+        let value = armor_class.as_i64().ok_or(ValidationError {
+            field: "ability_data.armor_class".to_string(),
+            message: "must be an integer".to_string(),
+        })?;
+        if value < 0 {
+            return Err(ValidationError {
+                field: "ability_data.armor_class".to_string(),
+                message: "cannot be negative".to_string(),
+            });
+        }
+    }
+
     Ok(())
 }
 
@@ -521,6 +537,23 @@ pub fn validate_spell_data_for_registry(data: &serde_json::Value) -> Result<(), 
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn armor_class_is_optional_a_whole_number_and_never_negative() {
+        let with = |armor_class: serde_json::Value| {
+            json!({
+                "strength": 10, "dexterity": 12, "constitution": 14,
+                "intelligence": 9, "wisdom": 16, "charisma": 11,
+                "armor_class": armor_class
+            })
+        };
+        assert!(validate_ability_data(&with(json!(15))).is_ok());
+        assert!(validate_ability_data(&with(json!(0))).is_ok());
+        let negative = validate_ability_data(&with(json!(-1))).unwrap_err();
+        assert_eq!(negative.field, "ability_data.armor_class");
+        assert!(validate_ability_data(&with(json!("15"))).is_err());
+        assert!(validate_ability_data(&with(json!(12.5))).is_err());
+    }
 
     #[test]
     fn test_validate_ability_data_valid() {

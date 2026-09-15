@@ -142,6 +142,7 @@ pub async fn create_world_impl(
         genie_resource_carryover_enabled: false,
         default_scene_grid_type: "square".to_string(),
         active_scene_id: None,
+        auto_apply_npc_damage: false,
     };
 
     let inserted_world = new_world.clone();

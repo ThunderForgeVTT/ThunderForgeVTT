@@ -156,7 +156,10 @@ pub fn write_hit_points(
 }
 
 /// The system data column a slot names.
-fn slot_column(row: &crate::models::ActorSystemData, key: &str) -> Option<serde_json::Value> {
+pub(crate) fn slot_column(
+    row: &crate::models::ActorSystemData,
+    key: &str,
+) -> Option<serde_json::Value> {
     match key {
         "ability_data" => row.ability_data.clone(),
         "resource_data" => row.resource_data.clone(),

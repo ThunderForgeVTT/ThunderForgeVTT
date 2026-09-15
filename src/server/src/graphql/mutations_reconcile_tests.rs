@@ -817,3 +817,75 @@ fn a_queued_move_on_somebody_elses_turn_is_refused_and_says_whose() {
     );
     assert!(gm.applied, "a Game Master is never held: {:?}", gm.reason);
 }
+
+/// Spec 046 T057 (research R16): an attack queued offline is resolved at
+/// replay by the same rules as a live one. On somebody else's turn it is
+/// refused with the live sentence and nothing is rolled, recorded or offered;
+/// on the attacker's own turn it is made.
+#[test]
+fn a_queued_attack_is_resolved_at_replay_and_refused_off_turn_spending_nothing() {
+    use crate::combat::fixtures::*;
+    let state = crate::test_support::test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let t = table(&mut conn);
+    let combat = fight(&mut conn, &t, &[(t.aria, "Aria"), (t.ogre, "Ogre")], t.ogre);
+
+    let queued = |local: &str| QueuedChangeInput {
+        local_id: local.to_string(),
+        command: async_graphql::Json(serde_json::json!({
+            "type": thunderforge_cache_core::queue::ATTACK_INTENT_TYPE,
+            "token": { "id": t.aria },
+            "attack": { "abilityId": t.longsword, "targetTokenId": t.goblin },
+        })),
+        attributed_to_user_id: None,
+        reported_outcome: None,
+    };
+    let intent = parse_attack_intent(&queued("x").command.0).expect("an attack intent");
+    assert_eq!(intent.attacker_token_id, t.aria);
+    assert!(
+        parse_token_edit(&queued("x").command.0).is_none(),
+        "not a token edit"
+    );
+
+    let refused = apply_attack_intent(
+        &mut conn,
+        SYSTEMS_DIR,
+        t.world_id,
+        t.player,
+        Role::Player,
+        queued("off-turn"),
+        intent.clone(),
+    );
+    assert!(!refused.applied);
+    assert_eq!(refused.reason, Some(GraphQLRejectionReason::NotYourTurn));
+    assert_eq!(refused.refusal.as_deref(), Some("It is Ogre's turn"));
+    assert_eq!(attacks_in(&mut conn, t.scene_id), 0, "nothing recorded");
+    assert_eq!(offers_in(&mut conn, t.world_id), 0, "nothing offered");
+    let rolls: i64 = crate::schema::world_roll_records::table
+        .filter(crate::schema::world_roll_records::world_id.eq(t.world_id))
+        .count()
+        .get_result(&mut conn)
+        .unwrap();
+    assert_eq!(rolls, 0, "nothing rolled");
+
+    // Aria's turn: the same intent is made.
+    let aria_combatant: Uuid = crate::schema::world_combatants::table
+        .filter(crate::schema::world_combatants::combat_id.eq(combat))
+        .filter(crate::schema::world_combatants::token_id.eq(t.aria))
+        .select(crate::schema::world_combatants::id)
+        .first(&mut conn)
+        .unwrap();
+    crate::combat::turn::tests::set_turn(&mut conn, combat, aria_combatant);
+    let made = apply_attack_intent(
+        &mut conn,
+        SYSTEMS_DIR,
+        t.world_id,
+        t.player,
+        Role::Player,
+        queued("on-turn"),
+        intent,
+    );
+    assert!(made.applied, "{:?}", made.reason);
+    assert_eq!(attacks_in(&mut conn, t.scene_id), 1);
+    assert_eq!(offers_in(&mut conn, t.world_id), 1);
+}

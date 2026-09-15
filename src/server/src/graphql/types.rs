@@ -81,6 +81,9 @@ pub struct GraphQLWorld {
     /// Spec 022 (FR-002a/FR-002b, ADR-046): the world's server-authoritative
     /// currently-launched scene for Play. `None` = nothing launched yet.
     pub active_scene_id: Option<uuid::Uuid>,
+    /// Spec 046 FR-006: a hit on an NPC the Game Master runs is applied
+    /// without an offer. Off by default; an encounter may override it.
+    pub auto_apply_npc_damage: bool,
 }
 
 impl From<World> for GraphQLWorld {
@@ -106,6 +109,7 @@ impl From<World> for GraphQLWorld {
             genie_resource_carryover_enabled: world.genie_resource_carryover_enabled,
             default_scene_grid_type: world.default_scene_grid_type,
             active_scene_id: world.active_scene_id,
+            auto_apply_npc_damage: world.auto_apply_npc_damage,
         }
     }
 }
@@ -266,3 +270,7 @@ pub use types_dice::*;
 #[path = "types_abilities.rs"]
 pub mod types_abilities;
 pub use types_abilities::*;
+
+// Spec 046: attacks, offers and what an ability or item is as an attack.
+#[path = "types_attacks.rs"]
+pub mod types_attacks;

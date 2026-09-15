@@ -97,10 +97,31 @@ pub struct GraphQLCombat {
     /// Already in turn order — clients render this as given and never
     /// re-sort, so there is one ordering rule in the system, not two.
     pub combatants: Vec<GraphQLCombatant>,
+    /// Spec 046 FR-006: this encounter's auto-apply override; null uses the
+    /// world's setting. Ends with the encounter.
+    pub auto_apply: Option<bool>,
 }
 
 #[ComplexObject]
 impl GraphQLCombat {
+    /// Whether a hit on an NPC the Game Master runs is applied without an
+    /// offer in this encounter: its override, else the world's setting.
+    async fn effective_auto_apply(&self, ctx: &Context<'_>) -> GraphQLResult<bool> {
+        if let Some(value) = self.auto_apply {
+            return Ok(value);
+        }
+        let state = app_state(ctx)?;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+        crate::schema::worlds::table
+            .filter(crate::schema::worlds::id.eq(self.world_id))
+            .select(crate::schema::worlds::auto_apply_npc_damage)
+            .first::<bool>(&mut conn)
+            .map_err(|_| Error::new("Failed to load world"))
+    }
+
     /// What this ruleset calls a round, or `null` when it does not count them.
     ///
     /// Spec 031 FR-031: turn structure is the *system's* to determine and must
@@ -208,7 +229,7 @@ pub(crate) const UNKNOWN_COMBATANT: &str = "Unknown";
 /// a token whose name the Game Master hid from players would otherwise have
 /// that name printed in every player's tracker. For anyone who does not run
 /// the world, such a combatant is `UNKNOWN_COMBATANT` instead.
-fn load_combat(
+pub(crate) fn load_combat(
     conn: &mut PgConnection,
     combat: Combat,
     user_id: Uuid,
@@ -255,6 +276,7 @@ fn load_combat(
         active_combatant_id: combat.active_combatant_id,
         ended_at: combat.ended_at,
         combatants: combatants.into_iter().map(GraphQLCombatant::from).collect(),
+        auto_apply: combat.auto_apply,
     })
 }
 
@@ -273,7 +295,7 @@ fn find_active_combat(conn: &mut PgConnection, world_id: Uuid) -> Result<Option<
 /// Loads a combat by id and returns it with the world it belongs to, so
 /// callers can authorize against the world without trusting a
 /// client-supplied world id.
-fn combat_world(conn: &mut PgConnection, combat_id: Uuid) -> Result<Combat, String> {
+pub(crate) fn combat_world(conn: &mut PgConnection, combat_id: Uuid) -> Result<Combat, String> {
     world_combats::table
         .filter(world_combats::id.eq(combat_id))
         .select(Combat::as_select())
@@ -281,7 +303,7 @@ fn combat_world(conn: &mut PgConnection, combat_id: Uuid) -> Result<Combat, Stri
         .map_err(|_| "Combat not found".to_string())
 }
 
-fn touch_and_broadcast(
+pub(crate) fn touch_and_broadcast(
     conn: &mut PgConnection,
     combat_id: Uuid,
     world_id: Uuid,

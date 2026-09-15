@@ -493,6 +493,10 @@ pub struct World {
     /// "currently launched" scene for Play. `None` = nothing launched yet
     /// (Play shows an empty/unloaded canvas). Set only via `launchScene`.
     pub active_scene_id: Option<uuid::Uuid>,
+    /// Spec 046 FR-006, research R15: whether a hit on an NPC the Game Master
+    /// runs is applied without an offer. Off by default; an encounter may
+    /// override it (`world_combats.auto_apply`).
+    pub auto_apply_npc_damage: bool,
 }
 
 // Policy struct disabled - table not implemented
@@ -1510,6 +1514,20 @@ pub struct WorldItem {
     pub created_by: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// Spec 046 research R2: what this is as an attack. Melee reach, in the
+    /// system's units; `None` when it declares none.
+    pub reach: Option<f64>,
+    /// Ranged distances, in the system's units.
+    pub range_normal: Option<f64>,
+    pub range_long: Option<f64>,
+    /// Decision 3: whether it needs to see its target. Defaults to true.
+    pub needs_line_of_sight: bool,
+    /// `action`, `bonus_action`, `reaction`, `legendary` or `free`.
+    pub action_cost: String,
+    /// How many legendary actions a use spends.
+    pub legendary_cost: i32,
+    /// Abilities one use makes, in order (FR-044). Empty for a single attack.
+    pub multiattack: Vec<Option<uuid::Uuid>>,
 }
 
 /// New item for insertion.
@@ -1783,6 +1801,9 @@ pub struct Combat {
     pub created_by: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// Spec 046 FR-006: this encounter's auto-apply override. `None` uses the
+    /// world's `auto_apply_npc_damage`.
+    pub auto_apply: Option<bool>,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
@@ -1868,6 +1889,20 @@ pub struct WorldAbility {
     pub updated_by: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// Spec 046 research R2: what this is as an attack. Melee reach, in the
+    /// system's units; `None` when it declares none.
+    pub reach: Option<f64>,
+    /// Ranged distances, in the system's units.
+    pub range_normal: Option<f64>,
+    pub range_long: Option<f64>,
+    /// Decision 3: whether it needs to see its target. Defaults to true.
+    pub needs_line_of_sight: bool,
+    /// `action`, `bonus_action`, `reaction`, `legendary` or `free`.
+    pub action_cost: String,
+    /// How many legendary actions a use spends.
+    pub legendary_cost: i32,
+    /// Abilities one use makes, in order (FR-044). Empty for a single attack.
+    pub multiattack: Vec<Option<uuid::Uuid>>,
 }
 
 /// New ability for insertion. `id`/timestamps come from DB defaults.

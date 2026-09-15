@@ -162,6 +162,29 @@ pub const EVENT_CODE_SCENE_EXPLORATION_RESET: i32 = 27;
 /// (FR-011).
 pub const EVENT_CODE_WORLD_PLAY_PAUSED: i32 = 28;
 
+/// Somebody made an attack (spec 046 FR-002, contract §4).
+///
+/// Every member of the world receives every event, and an attack is exactly
+/// the kind of thing a viewer may not be allowed to know all of: who made it,
+/// when the attacker is out of their sight or its name is hidden (FR-002a).
+/// So the payload is the attack's id and **nothing else** — no attacker, no
+/// target, no ability, no number — and each client asks `attack(id)`, which
+/// the server answers per viewer (`combat::redaction`).
+///
+/// Payload: `{"attackId": <id>}`.
+pub const EVENT_CODE_ATTACK_MADE: i32 = 29;
+
+/// An offer of damage or healing was made, taken, declined or applied
+/// (spec 046 FR-005, FR-008, FR-009).
+///
+/// Ids only, for the same reason as `EVENT_CODE_ATTACK_MADE`: the offer's
+/// target is a token a viewer may not be able to see, so even the target's id
+/// stays out of the payload. A client re-reads `pendingOffers`, and
+/// `attack(id)` for an attack it has on screen.
+///
+/// Payload: `{"offerId": <id>}`.
+pub const EVENT_CODE_OFFER_CHANGED: i32 = 30;
+
 /// Record a world event to the audit trail and trigger NOTIFY for real-time sync.
 ///
 /// # Failures are logged here, not at the call sites

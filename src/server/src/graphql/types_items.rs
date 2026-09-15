@@ -127,6 +127,9 @@ pub struct GraphQLItem {
     /// placeholder — lets the owner's client jump straight into
     /// `submitCounterNotice` (FR-005) without a staff-only case lookup.
     pub moderation_case_id: Option<uuid::Uuid>,
+    /// Spec 046 research R2: what this item is as an attack.
+    #[graphql(flatten)]
+    pub attack: super::types_attacks::GraphQLAttackFields,
 }
 
 impl GraphQLItem {
@@ -141,6 +144,15 @@ impl GraphQLItem {
             name: row.name,
             description: row.description,
             icon_asset_id: row.icon_asset_id,
+            attack: super::types_attacks::GraphQLAttackFields::from_columns(
+                row.reach,
+                row.range_normal,
+                row.range_long,
+                row.needs_line_of_sight,
+                &row.action_cost,
+                row.legendary_cost,
+                &row.multiattack,
+            ),
             effects: effects.into_iter().map(GraphQLItemEffect::from).collect(),
             my_permission_level,
             created_at: row.created_at,
@@ -171,6 +183,7 @@ impl GraphQLItem {
             updated_at: now,
             moderated: true,
             moderation_case_id,
+            attack: Default::default(),
         }
     }
 }

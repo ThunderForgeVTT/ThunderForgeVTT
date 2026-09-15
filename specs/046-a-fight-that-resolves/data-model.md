@@ -87,8 +87,10 @@ row per attack in a multiattack.
 | `world_id`, `scene_id`, `combat_id` | `UUID` (`combat_id` nullable) | |
 | `attacker_token_id` | `UUID NULL` | Null only for a lair action. |
 | `target_token_id` | `UUID NULL` | Null = "a roll into the air": nothing is offered or applied. |
-| `ability_id` / `item_id` | `UUID NULL` (exactly one set) | |
-| `multiattack_of` | `UUID NULL REFERENCES world_attacks` | The parent attack for a multiattack's parts. |
+| `ability_id` / `item_id` | `UUID NULL` (at most one set) | `ON DELETE SET NULL`, so "exactly one" holds at creation and "at most one" after a deletion. |
+| `attacker_label`, `target_label` | `TEXT` (`target_label` nullable) | *Added in implementation.* The names when the attack was made, so a deleted token still reads in the Game Master's log. Server-side only: sent to a viewer only when that party is not redacted. |
+| `ability_name` | `TEXT NOT NULL` | *Added in implementation.* The ability's or item's name when made; withheld when the attacker is redacted. |
+| `multiattack_of` | `UUID NULL REFERENCES world_attacks` | The parent attack for a multiattack's parts: the first part. |
 | `to_hit_roll_id`, `damage_roll_id` | `UUID NULL REFERENCES world_roll_records` | Damage roll only on a hit. |
 | `defence` | `INT NULL` | The value the total was compared with; null when the target has none. |
 | `outcome` | `TEXT NOT NULL CHECK IN ('hit','miss','no_defence','no_target')` | |
@@ -107,7 +109,8 @@ linked from here.
 | `id` | `UUID PK` | |
 | `world_id`, `scene_id` | `UUID` | |
 | `attack_id` | `UUID NULL REFERENCES world_attacks` | Null for a Game Master's direct offer of healing. |
-| `target_token_id` | `UUID NOT NULL` | Controllers are resolved at read and resolve time (research R7), not stored. |
+| `target_token_id` | `UUID NOT NULL REFERENCES tokens ON DELETE CASCADE` | Controllers are resolved at read and resolve time (research R7), not stored. |
+| `target_linked` | `BOOLEAN NOT NULL` | *Added in implementation.* The token's link state when the offer was made; taking the offer after a relink is refused (research R18, C6a). |
 | `kind` | `TEXT NOT NULL CHECK IN ('damage','healing')` | |
 | `amount` | `INT NOT NULL CHECK (amount >= 0)` | |
 | `status` | `TEXT NOT NULL DEFAULT 'pending' CHECK IN ('pending','taken','declined','applied')` | `applied` = auto-apply, never pending. |

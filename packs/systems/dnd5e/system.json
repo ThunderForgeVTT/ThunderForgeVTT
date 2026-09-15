@@ -694,6 +694,12 @@
           "min": 1,
           "max": 20,
           "label": "Charisma"
+        },
+        "armor_class": {
+          "type": "integer",
+          "min": 0,
+          "label": "Armor Class",
+          "description": "What an attack roll must meet or beat to hit. Declared as this system's defence in combat.defence."
         }
       },
       "required": [
@@ -1102,6 +1108,12 @@
       "current": "current_hp",
       "max": "max_hp",
       "temporary": "temporary_hp"
+    },
+    "defence": {
+      "slot": "abilityData",
+      "field": "armor_class",
+      "label": "Armor Class",
+      "abbrev": "AC"
     }
   },
   "abilityVocabulary": {

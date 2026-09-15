@@ -378,6 +378,129 @@ fn parse_token_edit(command: &serde_json::Value) -> Option<TokenEdit> {
     })
 }
 
+/// An attack queued while disconnected (spec 046 research R16).
+///
+/// `{"type": "make_attack", "token": {"id": <attacker>}, "attack": {…}}`: the
+/// attacker where a move keeps its token, so a client matches the outcome to
+/// its subject the same way. Nothing in it is a result — the server rolls.
+#[derive(Debug, Deserialize)]
+struct AttackIntentCommand {
+    #[serde(rename = "type")]
+    kind: String,
+    token: AttackIntentToken,
+    attack: AttackIntentBody,
+}
+
+#[derive(Debug, Deserialize)]
+struct AttackIntentToken {
+    id: Uuid,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AttackIntentBody {
+    ability_id: Option<Uuid>,
+    item_id: Option<Uuid>,
+    target_token_id: Option<Uuid>,
+    targets: Option<Vec<Uuid>>,
+    /// `"REACTION"` and the rest, as GraphQL spells them.
+    action_cost: Option<String>,
+}
+
+fn parse_attack_intent(
+    command: &serde_json::Value,
+) -> Option<crate::combat::attack::AttackRequest> {
+    use crate::combat::attack::{ActionCost, AttackRequest};
+    let parsed: AttackIntentCommand = serde_json::from_value(command.clone()).ok()?;
+    if parsed.kind != thunderforge_cache_core::queue::ATTACK_INTENT_TYPE {
+        return None;
+    }
+    let action_cost = match parsed.attack.action_cost.as_deref() {
+        None => None,
+        Some(spelled) => Some(match spelled.to_ascii_uppercase().as_str() {
+            "ACTION" => ActionCost::Action,
+            "BONUS_ACTION" => ActionCost::BonusAction,
+            "REACTION" => ActionCost::Reaction,
+            "LEGENDARY" => ActionCost::Legendary,
+            "FREE" => ActionCost::Free,
+            _ => return None,
+        }),
+    };
+    Some(AttackRequest {
+        attacker_token_id: parsed.token.id,
+        ability_id: parsed.attack.ability_id,
+        item_id: parsed.attack.item_id,
+        target_token_id: parsed.attack.target_token_id,
+        targets: parsed.attack.targets,
+        action_cost,
+        bindings: Vec::new(),
+    })
+}
+
+/// Resolve a queued attack at replay, always answering with an outcome.
+///
+/// Made as the person who queued it (a Game Master may relay a player's, as
+/// with any change; a player may relay nobody's), against the combat the
+/// server holds now. A turn refusal is `NOT_YOUR_TURN` with the sentence a
+/// live attack is refused with, and — because `make_attack` refuses before
+/// its transaction opens — nothing is rolled, recorded or spent.
+fn apply_attack_intent(
+    conn: &mut PgConnection,
+    systems_dir: &str,
+    world_id: Uuid,
+    user_id: Uuid,
+    role: Role,
+    change: QueuedChangeInput,
+    intent: crate::combat::attack::AttackRequest,
+) -> GraphQLReconcileOutcome {
+    use crate::combat::attack::FightRefusal;
+    let local_id = change.local_id;
+    let subject_user = change.attributed_to_user_id.unwrap_or(user_id);
+    if subject_user != user_id && !matches!(role, Role::GameMaster) {
+        return GraphQLReconcileOutcome::rejected(
+            local_id,
+            GraphQLRejectionReason::PermissionDenied,
+        );
+    }
+    // The attacker must be in the world this batch is for.
+    match crate::combat::controllers::token_control(conn, intent.attacker_token_id) {
+        Ok(Some(control)) if control.world_id == world_id => {}
+        Ok(_) => {
+            return GraphQLReconcileOutcome::rejected(local_id, GraphQLRejectionReason::GoneAway);
+        }
+        Err(_) => {
+            return GraphQLReconcileOutcome::rejected(local_id, GraphQLRejectionReason::Invalid);
+        }
+    }
+    let mut rng = <rand::rngs::StdRng as rand::SeedableRng>::from_rng(&mut rand::rng());
+    let is_admin = false;
+    match crate::combat::attack::make_attack(
+        conn,
+        systems_dir,
+        subject_user,
+        is_admin,
+        &intent,
+        &mut rng,
+    ) {
+        Ok(_) => GraphQLReconcileOutcome::accepted(local_id),
+        Err(FightRefusal::NotYourTurn(sentence)) => {
+            GraphQLReconcileOutcome::not_your_turn(local_id, sentence)
+        }
+        Err(FightRefusal::NotControlled) => {
+            GraphQLReconcileOutcome::rejected(local_id, GraphQLRejectionReason::PermissionDenied)
+        }
+        Err(FightRefusal::Paused(_)) => {
+            GraphQLReconcileOutcome::rejected(local_id, GraphQLRejectionReason::PlayPaused)
+        }
+        Err(FightRefusal::NotFound(_)) => {
+            GraphQLReconcileOutcome::rejected(local_id, GraphQLRejectionReason::GoneAway)
+        }
+        Err(FightRefusal::Invalid(_)) | Err(FightRefusal::Failed(_)) => {
+            GraphQLReconcileOutcome::rejected(local_id, GraphQLRejectionReason::Invalid)
+        }
+    }
+}
+
 /// Make sense of a reported outcome, or decline to.
 ///
 /// Returns `None` for every shape this server cannot read with confidence: an
@@ -569,9 +692,24 @@ impl ReconcileMutation {
         }
         let role = role_from_membership(&member_role);
         let reconnect_seq = take_reconnect_seq(world_id);
+        let systems_dir = state.directories.systems_dir.clone();
 
         let mut outcomes = Vec::with_capacity(changes.len());
         for change in changes {
+            // Spec 046 R16: an attack queued offline is resolved here, by the
+            // same rules as a live one. Everything else is a token edit.
+            if let Some(intent) = parse_attack_intent(&change.command.0) {
+                outcomes.push(apply_attack_intent(
+                    &mut conn,
+                    &systems_dir,
+                    world_id,
+                    user_id,
+                    role,
+                    change,
+                    intent,
+                ));
+                continue;
+            }
             outcomes.push(apply_one(
                 &mut conn,
                 world_id,

@@ -148,6 +148,9 @@ pub struct GraphQLAbility {
     /// then a placeholder for every caller including the owner.
     pub moderated: bool,
     pub moderation_case_id: Option<uuid::Uuid>,
+    /// Spec 046 research R2: what this ability is as an attack.
+    #[graphql(flatten)]
+    pub attack: super::types_attacks::GraphQLAttackFields,
 }
 
 impl GraphQLAbility {
@@ -177,6 +180,15 @@ impl GraphQLAbility {
             classification: normalise_classification(&row.classification),
             grade: row.grade,
             gm_only: row.gm_only,
+            attack: super::types_attacks::GraphQLAttackFields::from_columns(
+                row.reach,
+                row.range_normal,
+                row.range_long,
+                row.needs_line_of_sight,
+                &row.action_cost,
+                row.legendary_cost,
+                &row.multiattack,
+            ),
             effects,
             my_permission_level,
             created_at: row.created_at,
@@ -211,6 +223,7 @@ impl GraphQLAbility {
             updated_at: now,
             moderated: true,
             moderation_case_id,
+            attack: Default::default(),
         }
     }
 }

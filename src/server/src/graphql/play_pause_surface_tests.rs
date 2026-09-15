@@ -522,6 +522,32 @@ async fn seed(
     }
     ids.insert("request", request.to_string());
 
+    // Spec 046: a pending offer against the seeded token. Made by an attack
+    // in play; a test world has no system that declares a defence to hit.
+    let offer = Uuid::now_v7();
+    {
+        use crate::schema::world_offers as o;
+        let now = chrono::Utc::now().naive_utc();
+        let token: Uuid = ids["token"].parse().unwrap();
+        diesel::insert_into(o::table)
+            .values((
+                o::id.eq(offer),
+                o::world_id.eq(world),
+                o::scene_id.eq(scene),
+                o::target_token_id.eq(token),
+                o::target_linked.eq(true),
+                o::kind.eq("damage"),
+                o::amount.eq(1),
+                o::created_by.eq(owner),
+                o::updated_by.eq(owner),
+                o::created_at.eq(now),
+                o::updated_at.eq(now),
+            ))
+            .execute(&mut conn)
+            .expect("a pending offer");
+    }
+    ids.insert("offer", offer.to_string());
+
     macro_rules! share {
         ($key:literal, $table:ident, $column:ident, $of:literal) => {{
             use crate::schema::$table as t;

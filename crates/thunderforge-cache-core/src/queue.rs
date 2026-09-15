@@ -58,6 +58,18 @@ pub enum RejectionReason {
     NotYourTurn,
 }
 
+/// The `type` of a queued attack (spec 046 research R16).
+///
+/// An attack made while disconnected is queued like any other change: its
+/// command stored verbatim, `{"type": "make_attack", "token": {"id": <attacker>},
+/// "attack": {...}}`, with the attacker in `token.id` so it is matched to its
+/// subject the way a move is. It is **not** a result: nothing is rolled on the
+/// client. The server resolves it at replay through the same rules a live
+/// attack meets, against the state it then holds, so an attack queued on
+/// Aria's turn and replayed on the ogre's is refused with
+/// [`RejectionReason::NotYourTurn`] and spends nothing.
+pub const ATTACK_INTENT_TYPE: &str = "make_attack";
+
 /// What became of one queued change.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct ReconcileOutcome {

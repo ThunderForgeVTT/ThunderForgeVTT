@@ -926,6 +926,13 @@ diesel::table! {
         created_at -> Timestamp,
         updated_at -> Timestamp,
         grade -> Nullable<Int4>,
+        reach -> Nullable<Float8>,
+        range_normal -> Nullable<Float8>,
+        range_long -> Nullable<Float8>,
+        needs_line_of_sight -> Bool,
+        action_cost -> Text,
+        legendary_cost -> Int4,
+        multiattack -> Array<Nullable<Uuid>>,
     }
 }
 
@@ -1080,6 +1087,34 @@ diesel::table! {
 }
 
 diesel::table! {
+    world_attacks (id) {
+        id -> Uuid,
+        world_id -> Uuid,
+        scene_id -> Uuid,
+        combat_id -> Nullable<Uuid>,
+        attacker_token_id -> Nullable<Uuid>,
+        target_token_id -> Nullable<Uuid>,
+        attacker_label -> Text,
+        target_label -> Nullable<Text>,
+        ability_id -> Nullable<Uuid>,
+        item_id -> Nullable<Uuid>,
+        ability_name -> Text,
+        multiattack_of -> Nullable<Uuid>,
+        to_hit_roll_id -> Nullable<Uuid>,
+        damage_roll_id -> Nullable<Uuid>,
+        defence -> Nullable<Int4>,
+        outcome -> Text,
+        distance -> Nullable<Float8>,
+        flags -> Array<Nullable<Text>>,
+        action_cost -> Text,
+        created_by -> Uuid,
+        updated_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     world_authoring_tool_grants (id) {
         id -> Uuid,
         world_member_id -> Uuid,
@@ -1187,6 +1222,7 @@ diesel::table! {
         created_by -> Uuid,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        auto_apply -> Nullable<Bool>,
     }
 }
 
@@ -1324,6 +1360,13 @@ diesel::table! {
         created_by -> Uuid,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        reach -> Nullable<Float8>,
+        range_normal -> Nullable<Float8>,
+        range_long -> Nullable<Float8>,
+        needs_line_of_sight -> Bool,
+        action_cost -> Text,
+        legendary_cost -> Int4,
+        multiattack -> Array<Nullable<Uuid>>,
     }
 }
 
@@ -1417,6 +1460,27 @@ diesel::table! {
         #[max_length = 32]
         role -> Varchar,
         joined_at -> Timestamp,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    world_offers (id) {
+        id -> Uuid,
+        world_id -> Uuid,
+        scene_id -> Uuid,
+        attack_id -> Nullable<Uuid>,
+        target_token_id -> Uuid,
+        target_linked -> Bool,
+        kind -> Text,
+        amount -> Int4,
+        status -> Text,
+        resolved_by -> Nullable<Uuid>,
+        resolved_on_behalf -> Bool,
+        resolved_at -> Nullable<Timestamp>,
+        created_by -> Uuid,
+        updated_by -> Uuid,
         created_at -> Timestamp,
         updated_at -> Timestamp,
     }
@@ -1528,6 +1592,7 @@ diesel::table! {
         genie_resource_carryover_enabled -> Bool,
         default_scene_grid_type -> Text,
         active_scene_id -> Nullable<Uuid>,
+        auto_apply_npc_damage -> Bool,
     }
 }
 
@@ -1609,6 +1674,11 @@ diesel::joinable!(world_actor_shares -> world_actors (actor_id));
 diesel::joinable!(world_actor_system_data -> world_actors (actor_id));
 diesel::joinable!(world_actors -> scenes (scene_id));
 diesel::joinable!(world_actors -> worlds (world_id));
+diesel::joinable!(world_attacks -> scenes (scene_id));
+diesel::joinable!(world_attacks -> world_abilities (ability_id));
+diesel::joinable!(world_attacks -> world_combats (combat_id));
+diesel::joinable!(world_attacks -> world_items (item_id));
+diesel::joinable!(world_attacks -> worlds (world_id));
 diesel::joinable!(world_authoring_tool_grants -> world_members (world_member_id));
 diesel::joinable!(world_books -> compendiums (compendium_id));
 diesel::joinable!(world_books -> users (switched_on_by));
@@ -1656,6 +1726,10 @@ diesel::joinable!(world_lore_tags -> users (created_by));
 diesel::joinable!(world_lore_tags -> world_lore_entries (lore_entry_id));
 diesel::joinable!(world_members -> users (user_id));
 diesel::joinable!(world_members -> worlds (world_id));
+diesel::joinable!(world_offers -> scenes (scene_id));
+diesel::joinable!(world_offers -> tokens (target_token_id));
+diesel::joinable!(world_offers -> world_attacks (attack_id));
+diesel::joinable!(world_offers -> worlds (world_id));
 diesel::joinable!(world_play_pause_triggers -> world_play_pause_requests (request_id));
 diesel::joinable!(world_play_pause_triggers -> world_play_pauses (pause_id));
 diesel::joinable!(world_play_pauses -> world_play_pause_requests (request_id));
@@ -1733,6 +1807,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     world_actor_shares,
     world_actor_system_data,
     world_actors,
+    world_attacks,
     world_authoring_tool_grants,
     world_books,
     world_chat_messages,
@@ -1758,6 +1833,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     world_lore_revisions,
     world_lore_tags,
     world_members,
+    world_offers,
     world_play_pause_requests,
     world_play_pause_triggers,
     world_play_pauses,

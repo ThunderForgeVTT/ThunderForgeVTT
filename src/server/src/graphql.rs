@@ -228,6 +228,8 @@ pub use mutations_combat::{CombatMutation, CombatQuery};
 pub mod mutations_combat_hit_points;
 // Spec 046 (ADR-102): linked tokens, unlinked copies, unique NPCs.
 pub mod mutations_token_links;
+// Spec 046 (ADR-101): an attack aimed at something, and its offer.
+pub mod mutations_attacks;
 
 // Spec 017: actor "available for claiming" flag, atomic claiming,
 // player-created characters, and GM un-claim.
@@ -401,6 +403,9 @@ pub struct QueryRoot(
     ActorClaimQuery,
     ChatQuery,
     CombatQuery,
+    // Spec 046: `attack`, `sceneAttacks`, `pendingOffers`, `previewAttack`,
+    // each answered per viewer.
+    queries::attacks::AttackQuery,
     // Spec 028: `worldSyncPlan` — what a returning client must fetch and
     // discard for one world.
     WorldSyncPlanQuery,
@@ -504,6 +509,9 @@ pub struct MutationRoot(
     CombatMutation,
     // Spec 046 FR-014: `changeHitPoints`.
     mutations_combat_hit_points::CombatHitPointsMutation,
+    // Spec 046 US1/US2: `makeAttack`, `resolveOffer`, auto-apply, and what an
+    // ability or item is as an attack.
+    mutations_attacks::AttackMutation,
     ReconcileMutation,
     HeartbeatMutation,
     // Spec 028 (T086): `sendPeerSignal` — the post box.

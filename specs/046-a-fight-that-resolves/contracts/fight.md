@@ -66,13 +66,29 @@ setCombatAutoApply(combatId: UUID!, enabled: Boolean): Combat!   # null = world'
 
 # Phase 7. Game Master only.
 addLairCombatant(combatId: UUID!, label: String!): Combat!
+
+# Phase 4 (implemented in tasks Phase 6). Editor on the ability or item.
+# What it is as an attack; every field is written, a null clears it.
+setAbilityAttack(abilityId: UUID!, attack: AttackFieldsInput!): Boolean!
+setItemAttack(itemId: UUID!, attack: AttackFieldsInput!): Boolean!
+input AttackFieldsInput { reach: Float  rangeNormal: Float  rangeLong: Float
+  needsLineOfSight: Boolean!  actionCost: ActionCost!  legendaryCost: Int!
+  multiattack: [UUID!]! }
 ```
+
+*Implementation note (tasks T056):* the attack fields are set through their
+own two mutations rather than added to `updateAbility`/`updateItem`'s inputs:
+those inputs are "omitted means unchanged", and a reach or range must be
+clearable. `Offer` and `Attack` carry `sceneId`, and `Offer` its `attackId`
+and `createdAt`, so a client can place an offer on screen without a second
+read; none of them identifies a party.
 
 ### Types
 
 ```graphql
 type Attack {
   id: UUID!
+  sceneId: UUID!
   attacker: AttackParty!     # redacted per viewer (section 3)
   target: AttackParty        # null: no target; redacted per viewer
   abilityName: String        # null when the attacker is redacted
@@ -93,7 +109,8 @@ enum AttackFlag { OUT_OF_REACH LONG_RANGE BEYOND_RANGE NO_LINE_OF_SIGHT
 enum ActionCost { ACTION BONUS_ACTION REACTION LEGENDARY FREE }
 
 type Offer {
-  id: UUID!  kind: HitPointChange!  amount: Int!
+  id: UUID!  sceneId: UUID!  attackId: UUID  createdAt: DateTime!
+  kind: HitPointChange!  amount: Int!
   target: AttackParty!
   status: OfferStatus!             # PENDING TAKEN DECLINED APPLIED
   resolvedBy: String               # a display name; "Game Master" when on behalf
@@ -132,6 +149,7 @@ type BudgetLine { allowed: Float!  spent: Float!  remaining: Float! }  # remaini
 | C4 | A miss, or no target, creates no offer. | server | — |
 | C5 | A hit creates a `pending` offer, unless auto-apply holds (research R15), in which case the offer is `applied` and hit points change in the same transaction. Damage to a creature any player controls is always `pending`. | server | — |
 | C6 | `resolveOffer` succeeds once. A second call, by anyone, is refused. | server | `That offer has already been resolved` |
+| C6a | Taking an offer whose token was relinked or unlinked after the offer was made is refused; declining it is not (research R18). | server | `That creature was relinked after this offer was made, so its hit points are a different record now. …` |
 | C7 | Taking damage spends temporary hit points first, bounds current at 0; healing bounds at max. | server | — |
 | C8 | A hit-point change to 0 marks the combatant `active = false, downed_by = hit_points`; above 0 reactivates only `downed_by = hit_points`. | server | — |
 | C9 | Overspending a budget is recorded and shown, never refused. | server | — |

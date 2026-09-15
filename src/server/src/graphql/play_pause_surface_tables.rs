@@ -234,6 +234,30 @@ pub const GATED: &[(&str, &str)] = &[
         r#"mutation { changeHitPoints(tokenId: "{token}", kind: DAMAGE, amount: 1) { __typename } }"#,
     ),
     (
+        "makeAttack",
+        r#"mutation { makeAttack(input: { attackerTokenId: "{token}", abilityId: "{ability}", targetTokenId: "{token}" }) { __typename } }"#,
+    ),
+    (
+        "resolveOffer",
+        r#"mutation { resolveOffer(offerId: "{offer}", take: true) { __typename } }"#,
+    ),
+    (
+        "updateWorldAutoApplyNpcDamage",
+        r#"mutation { updateWorldAutoApplyNpcDamage(input: { worldId: "{world}", enabled: true }) { __typename } }"#,
+    ),
+    (
+        "setCombatAutoApply",
+        r#"mutation { setCombatAutoApply(combatId: "{combat}", enabled: true) { __typename } }"#,
+    ),
+    (
+        "setAbilityAttack",
+        r#"mutation { setAbilityAttack(abilityId: "{ability}", attack: { reach: 5, needsLineOfSight: true, actionCost: ACTION, legendaryCost: 1, multiattack: [] }) }"#,
+    ),
+    (
+        "setItemAttack",
+        r#"mutation { setItemAttack(itemId: "{item}", attack: { reach: 5, needsLineOfSight: true, actionCost: ACTION, legendaryCost: 1, multiattack: [] }) }"#,
+    ),
+    (
         "setTokenLink",
         r#"mutation { setTokenLink(tokenId: "{token}", linked: false) { __typename } }"#,
     ),

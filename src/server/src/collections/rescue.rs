@@ -162,6 +162,7 @@ fn personal_world_sync(
         genie_resource_carryover_enabled: false,
         default_scene_grid_type: "square".to_string(),
         active_scene_id: None,
+        auto_apply_npc_damage: false,
     };
     crate::graphql::mutations_worlds::insert_world_sync(conn, &world, Uuid::now_v7(), now)?;
     Ok(world.id)

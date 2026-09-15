@@ -330,18 +330,29 @@ impl TokenMutation {
         .map_err(|e| refusal_or(e, "Failed to load token"))?
         .ok_or_else(|| Error::new("Move token failed (not found or not controlled by you)"))?;
 
-        let is_direct_owner = existing.owner_user_id == Some(user_id);
-        let is_actor_owner = match existing.actor_id {
-            Some(actor_id) => crate::auth::actor_permissions::effective_actor_permission(
-                state, user_id, is_admin, actor_id,
-            )
+        // Spec 046 research R7: the controllers of a token are the users this
+        // has always let move it, and `combat::controllers` is where that rule
+        // now lives, so the player who moves a token is the one who swings its
+        // sword and takes its hits.
+        let may_move = {
+            let mut conn = state
+                .db_pool
+                .get()
+                .map_err(|_| Error::new("Failed to get DB connection"))?;
+            tokio::task::spawn_blocking(move || {
+                match crate::combat::controllers::token_control(&mut conn, token_id)? {
+                    Some(control) => {
+                        crate::combat::controllers::may_move(&mut conn, user_id, is_admin, &control)
+                    }
+                    None => Ok(false),
+                }
+            })
             .await
-            .map(|level| level.rank() >= crate::graphql::types::ActorPermissionLevel::Owner.rank())
-            .unwrap_or(false),
-            None => false,
+            .map_err(|_| Error::new("Failed to spawn blocking task"))?
+            .unwrap_or(false)
         };
 
-        if !is_direct_owner && !is_actor_owner {
+        if !may_move {
             return Err(Error::new(
                 "Move token failed (not found or not controlled by you)",
             ));

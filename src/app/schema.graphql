@@ -77,6 +77,17 @@ type AccountNotice {
 }
 
 """
+What an attack costs (`world_attacks.action_cost`, research R13).
+"""
+enum ActionCost {
+	ACTION
+	BONUS_ACTION
+	REACTION
+	LEGENDARY
+	FREE
+}
+
+"""
 Effective permission level a caller holds on one actor. `Owner` is
 always implicit for the world's DM (Owner/GM role) regardless of any
 explicit `world_actor_permissions` row (spec 010 FR-017).
@@ -822,6 +833,37 @@ type AppMutationRoot {
 	"""
 	changeHitPoints(tokenId: UUID!, kind: HitPointChange!, amount: Int!): TokenHitPoints!
 	"""
+	Make an attack against a target, or at nothing (spec 046 US1).
+	
+	Rolled and judged on the server. A player is refused on somebody
+	else's turn unless it is a reaction; a hit's damage is offered to
+	whoever controls the target. Several attacks for a multiattack.
+	"""
+	makeAttack(input: AttackInput!): [Attack!]!
+	"""
+	Take or decline an offer, once. By a controller of its creature, or a
+	Game Master on their behalf.
+	"""
+	resolveOffer(offerId: UUID!, take: Boolean!): Offer!
+	"""
+	Whether hits on NPCs the Game Master runs are applied without an
+	offer, by default, in this world. Off unless switched on.
+	"""
+	updateWorldAutoApplyNpcDamage(input: UpdateWorldAutoApplyNpcDamageInput!): GraphQLWorld!
+	"""
+	Override auto-apply for one encounter; null returns to the world's.
+	"""
+	setCombatAutoApply(combatId: UUID!, enabled: Boolean): GraphQLCombat!
+	"""
+	What an ability is as an attack: reach, range, line of sight, cost and
+	multiattack.
+	"""
+	setAbilityAttack(abilityId: UUID!, attack: AttackFieldsInput!): Boolean!
+	"""
+	What an item is as an attack.
+	"""
+	setItemAttack(itemId: UUID!, attack: AttackFieldsInput!): Boolean!
+	"""
 	Replay changes made while disconnected, and report what became of
 	each (US7).
 	
@@ -1467,6 +1509,27 @@ type AppQueryRoot {
 	This world's running combat, or null when none is in progress.
 	"""
 	activeCombat(worldId: UUID!): GraphQLCombat
+	"""
+	One attack, as the caller may see it: the attacker and target read
+	"Unknown" to a player who cannot see them (FR-002a).
+	"""
+	attack(id: UUID!): Attack
+	"""
+	A scene's attacks, newest first, fifty at a time. `before` is the last
+	attack of the previous page.
+	"""
+	sceneAttacks(sceneId: UUID!, before: UUID): [Attack!]!
+	"""
+	The caller's pending offers, for a reconnect (FR-008). A Game Master
+	receives every pending offer in the world.
+	"""
+	pendingOffers(worldId: UUID!): [Offer!]!
+	"""
+	What `makeAttack` would record, and whether the turn would refuse it.
+	A warning before rolling (FR-033): it refuses nothing and writes
+	nothing.
+	"""
+	previewAttack(input: AttackInput!): AttackPreview!
 	worldSyncPlan(worldId: UUID!, held: [HeldItemInput!]!): SyncPlan!
 	"""
 	Every event in this world newer than `after_id`.
@@ -1595,6 +1658,115 @@ input AttachAbilityToActorInput {
 input AttachAbilityToItemInput {
 	itemId: UUID!
 	abilityId: UUID!
+}
+
+type Attack {
+	id: UUID!
+	sceneId: UUID!
+	attacker: AttackParty!
+	"""
+	Null when the attack was made at nothing.
+	"""
+	target: AttackParty
+	"""
+	Null when the attacker is redacted.
+	"""
+	abilityName: String
+	toHit: GraphQLRollResolution!
+	"""
+	A hit's damage.
+	"""
+	damage: GraphQLRollResolution
+	"""
+	Null when the target has none, or is redacted.
+	"""
+	defence: Int
+	outcome: AttackOutcome!
+	"""
+	System units, footprint to footprint (Phase 7).
+	"""
+	distance: Float
+	flags: [AttackFlag!]!
+	actionCost: ActionCost!
+	"""
+	Null on a miss, with no target, or when the system has no hit points.
+	"""
+	offer: Offer
+	multiattackOf: UUID
+	createdAt: NaiveDateTime!
+}
+
+"""
+Setting what an ability or item is as an attack. Every field is written:
+a null reach clears it.
+"""
+input AttackFieldsInput {
+	reach: Float
+	rangeNormal: Float
+	rangeLong: Float
+	needsLineOfSight: Boolean!
+	actionCost: ActionCost!
+	legendaryCost: Int!
+	multiattack: [UUID!]!
+}
+
+"""
+What an attack is recorded as having done that the table should know
+(C3: never a refusal). Phase 7 sets reach, range and sight; Phases 8 and 9
+the budget flags.
+"""
+enum AttackFlag {
+	OUT_OF_REACH
+	LONG_RANGE
+	BEYOND_RANGE
+	NO_LINE_OF_SIGHT
+	NO_REACH_DECLARED
+	OVERSPENT
+	LEGENDARY_ON_OWN_TURN
+}
+
+input AttackInput {
+	attackerTokenId: UUID!
+	"""
+	Exactly one of `abilityId` and `itemId`.
+	"""
+	abilityId: UUID
+	itemId: UUID
+	"""
+	Null: a roll into the air, which offers and applies nothing.
+	"""
+	targetTokenId: UUID
+	"""
+	Per part of a multiattack; overrides `targetTokenId` for that part.
+	"""
+	targets: [UUID!]
+	"""
+	Defaults to the ability's. `REACTION` is not held to the turn.
+	"""
+	actionCost: ActionCost
+	bindings: [PlaceholderBindingInput!]
+}
+
+enum AttackOutcome {
+	HIT
+	MISS
+	NO_DEFENCE
+	NO_TARGET
+}
+
+"""
+One side of an attack. `tokenId` null and `label` "Unknown" when this
+viewer may not know it (contract §3).
+"""
+type AttackParty {
+	tokenId: UUID
+	label: String!
+}
+
+type AttackPreview {
+	distance: Float
+	flags: [AttackFlag!]!
+	turn: TurnCheck!
 }
 
 """
@@ -2388,6 +2560,13 @@ type GraphQLAbility {
 	"""
 	moderated: Boolean!
 	moderationCaseId: UUID
+	reach: Float
+	rangeNormal: Float
+	rangeLong: Float
+	needsLineOfSight: Boolean!
+	actionCost: ActionCost!
+	legendaryCost: Int!
+	multiattack: [UUID!]!
 	"""
 	Spec 025 (FR-029): every lore entry whose body currently contains a
 	resolved in-text link to this ability. Named `linkedFromLore` to match
@@ -2709,6 +2888,16 @@ type GraphQLCombat {
 	re-sort, so there is one ordering rule in the system, not two.
 	"""
 	combatants: [GraphQLCombatant!]!
+	"""
+	Spec 046 FR-006: this encounter's auto-apply override; null uses the
+	world's setting. Ends with the encounter.
+	"""
+	autoApply: Boolean
+	"""
+	Whether a hit on an NPC the Game Master runs is applied without an
+	offer in this encounter: its override, else the world's setting.
+	"""
+	effectiveAutoApply: Boolean!
 	"""
 	What this ruleset calls a round, or `null` when it does not count them.
 	
@@ -3369,6 +3558,13 @@ type GraphQLItem {
 	`submitCounterNotice` (FR-005) without a staff-only case lookup.
 	"""
 	moderationCaseId: UUID
+	reach: Float
+	rangeNormal: Float
+	rangeLong: Float
+	needsLineOfSight: Boolean!
+	actionCost: ActionCost!
+	legendaryCost: Int!
+	multiattack: [UUID!]!
 	"""
 	Spec 013 (US3, FR-016): every lore entry whose body currently
 	contains a resolved in-text link to this item — mirrors
@@ -4618,6 +4814,11 @@ type GraphQLWorld {
 	currently-launched scene for Play. `None` = nothing launched yet.
 	"""
 	activeSceneId: UUID
+	"""
+	Spec 046 FR-006: a hit on an NPC the Game Master runs is applied
+	without an offer. Off by default; an encounter may override it.
+	"""
+	autoApplyNpcDamage: Boolean!
 }
 
 type GraphQLWorldActor {
@@ -5147,6 +5348,37 @@ ISO 8601 combined date and time without timezone.
 * `2015-07-01T08:59:60.123`,
 """
 scalar NaiveDateTime
+
+type Offer {
+	id: UUID!
+	sceneId: UUID!
+	"""
+	The attack it came from; null for a direct offer.
+	"""
+	attackId: UUID
+	kind: HitPointChange!
+	amount: Int!
+	target: AttackParty!
+	status: OfferStatus!
+	"""
+	Who resolved it: their name, or "Game Master" when a Game Master
+	resolved a player's offer on their behalf (FR-009).
+	"""
+	resolvedBy: String
+	resolvedOnBehalf: Boolean!
+	"""
+	Whether this viewer may take or decline it.
+	"""
+	mayResolve: Boolean!
+	createdAt: NaiveDateTime!
+}
+
+enum OfferStatus {
+	PENDING
+	TAKEN
+	DECLINED
+	APPLIED
+}
 
 """
 A book on the world owner's shelf that this table could switch on
@@ -6070,6 +6302,11 @@ type TokenHitPoints {
 	temporary: Int!
 }
 
+type TurnCheck {
+	allowed: Boolean!
+	activeLabel: String
+}
+
 """
 Spec 041 FR-021: how much of the instance holds a second factor.
 
@@ -6250,6 +6487,11 @@ Actor Selection screen's "create your own character" option is shown.
 input UpdateWorldAllowPlayerCreatedActorsInput {
 	worldId: UUID!
 	allow: Boolean!
+}
+
+input UpdateWorldAutoApplyNpcDamageInput {
+	worldId: UUID!
+	enabled: Boolean!
 }
 
 """

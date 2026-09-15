@@ -5,6 +5,8 @@
 
 pub mod ability;
 pub mod ability_vocabulary;
+// Spec 046: attacks and offers, read per viewer.
+pub mod attacks;
 // Spec 031: `authoringTools(worldId)` — which tools the caller may use.
 pub mod actor;
 pub mod admin;
