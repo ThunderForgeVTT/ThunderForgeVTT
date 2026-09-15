@@ -94,8 +94,9 @@ pub(crate) fn handle_token_movement_input(
         if let Some(path) = plan.path.take()
             && !path.is_empty()
         {
-            let destination = grid.cell_center(path.head());
-            let snapped = grid.snap_footprint(destination, footprint);
+            // Carried by the route, footprint and all (spec 046): a Large
+            // token's centre is a vertex, not its origin cell's centre.
+            let snapped = path.destination(&grid, current, footprint);
             transform.translation.x = snapped.x;
             transform.translation.y = snapped.y;
 
@@ -115,7 +116,7 @@ pub(crate) fn handle_token_movement_input(
                 &transform,
                 &identity.0,
                 &active_world.0,
-                Some(&path.world_points(&grid)),
+                Some(&path.world_points_from(&grid, current)),
             );
         }
         return;
@@ -175,8 +176,9 @@ pub(crate) fn handle_token_movement_input(
     // Unmodified: move now, and abandon any plan — the player has clearly
     // stopped planning.
     plan.path = None;
-    let next = step.apply(grid.world_to_cell(current), grid.kind);
-    let snapped = grid.snap_footprint(grid.cell_center(next), footprint);
+    // The whole footprint steps one square (spec 046 FR-031). Snapping the
+    // next cell's centre left a Large token unable to step west or south.
+    let snapped = thunderforge_canvas_core::movement::step_token(&grid, current, footprint, step);
     if refuse_at_wall(current, snapped, &walls) {
         return;
     }
