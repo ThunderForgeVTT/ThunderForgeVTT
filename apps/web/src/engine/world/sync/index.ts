@@ -29,6 +29,11 @@ export {
   getTokenVision,
 } from "./tokenVision";
 export {
+  applyTokenGridWorldEvent,
+  loadTokenGridIntoEngine,
+  getTokenGrid,
+} from "./tokenGrid";
+export {
   applyTokenWorldEvent,
   startTokenEventSync,
   loadTokensIntoStore,

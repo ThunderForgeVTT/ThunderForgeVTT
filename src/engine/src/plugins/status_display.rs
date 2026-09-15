@@ -88,7 +88,7 @@ pub struct ResolvedResource {
 /// Marks geometry this plugin owns, so it can be cleared without disturbing
 /// anything else parented to a token.
 #[derive(Component)]
-struct StatusGeometry;
+pub(crate) struct StatusGeometry;
 
 pub struct StatusDisplayPlugin;
 

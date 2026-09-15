@@ -9,7 +9,7 @@ import type {
   AttackRecord,
 } from "@/types/attack";
 import type { TokenRecord } from "@/types/token";
-import { attackSummary, flagText } from "../AttackLog/attackText";
+import { attackSummary, warningTexts } from "../AttackLog/attackText";
 import { useSelectedTokenIds } from "../useSelectedTokenIds";
 
 /** The value of the "no target" choice. */
@@ -191,14 +191,20 @@ export function AttackFlow({
           attack will be refused unless it is a reaction.
         </p>
       ) : null}
+      {/* After the turn: reach and range warn, and never stand in front of
+          the one thing that refuses (spec 046 C1, FR-033). */}
       {preview && preview.flags.length > 0 ? (
-        <p
+        <ul
           role="alert"
-          className="text-amber-600"
+          className="grid gap-0.5 text-amber-600"
           data-testid="attack-flow-flags"
         >
-          {preview.flags.map(flagText).join(", ")}
-        </p>
+          {warningTexts(preview).map((warning) => (
+            <li key={warning} data-testid="attack-flow-flag">
+              {warning}
+            </li>
+          ))}
+        </ul>
       ) : null}
 
       <div className="flex gap-2">

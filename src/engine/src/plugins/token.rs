@@ -64,6 +64,11 @@ impl Plugin for TokenPlugin {
             )
                 .chain(),
         );
+        // Spec 046: what each token fills as drawn, for the engine probe.
+        app.add_systems(
+            PostUpdate,
+            crate::systems::token_grid::mirror_token_footprints,
+        );
     }
 }
 

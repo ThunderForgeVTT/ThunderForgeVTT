@@ -78,6 +78,10 @@ export function previewAttack(
           distance
           flags
           turn { allowed activeLabel }
+          reach
+          rangeNormal
+          rangeLong
+          unit
         }
       }
     `,

@@ -78,18 +78,26 @@ pub(crate) fn fall_back_when_token_art_fails(
     }
 }
 
+/// A token whose position or footprint changed this frame.
+type MovedOrResized = (
+    With<TokenIdentity>,
+    Or<(Changed<Transform>, Changed<TokenGridBehaviour>)>,
+);
+
 /// Snaps tokens to the grid.
 ///
-/// Runs only on tokens whose transform changed, so a settled board costs
-/// nothing. Snapping is skipped entirely on a gridless scene and whenever the
-/// scene-wide switch is off.
+/// Runs only on tokens whose transform or footprint changed, so a settled
+/// board costs nothing. Snapping is skipped entirely on a gridless scene and
+/// whenever the scene-wide switch is off.
+///
+/// A changed footprint re-snaps (spec 046 T076): a token arrives, is snapped
+/// as one square, and is told a moment later by `set_token_grid` that it is a
+/// Large ogre. Keyed on the transform alone, it would stay centred in one cell
+/// — straddling half of each neighbour — until somebody moved it.
 pub(crate) fn snap_tokens_to_grid(
     grid: Res<SceneGrid>,
     enabled: Res<GridSnapEnabled>,
-    mut tokens: Query<
-        (&mut Transform, Option<&TokenGridBehaviour>),
-        (With<TokenIdentity>, Changed<Transform>),
-    >,
+    mut tokens: Query<(&mut Transform, Option<&TokenGridBehaviour>), MovedOrResized>,
 ) {
     if !enabled.0 || grid.kind == GridKind::Gridless {
         return;
@@ -113,4 +121,82 @@ pub(crate) fn snap_tokens_to_grid(
             transform.translation.y = snapped.y;
         }
     }
+}
+
+/// What each token fills on this board, for [`token_footprints`].
+type FootprintList = Vec<serde_json::Value>;
+
+static TOKEN_FOOTPRINTS: std::sync::OnceLock<std::sync::Mutex<FootprintList>> =
+    std::sync::OnceLock::new();
+
+/// Mirrors, a few times a second, what every token fills as drawn: its
+/// footprint, its centre, its sprite's size, where its name sits and how wide
+/// its bars are. For [`token_footprints`], so a test can ask a player's engine
+/// whether the ogre is two squares by two in every respect the board shows —
+/// not only whether the command arrived.
+#[allow(clippy::type_complexity)]
+pub(crate) fn mirror_token_footprints(
+    mut frame: Local<u32>,
+    tokens: Query<(
+        &TokenIdentity,
+        &Transform,
+        &Sprite,
+        Option<&TokenGridBehaviour>,
+        Option<&Children>,
+    )>,
+    names: Query<(&Transform, &crate::plugins::nameplate::Nameplate)>,
+    bars: Query<&Sprite, With<crate::plugins::status_display::StatusGeometry>>,
+) {
+    *frame = frame.wrapping_add(1);
+    if *frame % 10 != 1 {
+        return;
+    }
+    let list: FootprintList = tokens
+        .iter()
+        .map(|(identity, transform, sprite, behaviour, children)| {
+            let footprint = behaviour.map_or_else(Footprint::default, |b| b.footprint);
+            let size = sprite.custom_size.unwrap_or(Vec2::ZERO);
+            let children = children
+                .map(|c| c.iter().collect::<Vec<_>>())
+                .unwrap_or_default();
+            let name_y = children
+                .iter()
+                .filter_map(|child| names.get(*child).ok())
+                .find(|(_, plate)| !plate.shadow)
+                .map(|(t, _)| t.translation.y * transform.scale.y);
+            let bar_width = children
+                .iter()
+                .filter_map(|child| bars.get(*child).ok())
+                .filter_map(|bar| bar.custom_size.map(|s| s.x))
+                .fold(None, |widest: Option<f32>, w| {
+                    Some(widest.map_or(w, |x| x.max(w)))
+                });
+            serde_json::json!({
+                "tokenId": identity.0,
+                "footprint": footprint.cells(),
+                "x": transform.translation.x,
+                "y": transform.translation.y,
+                "width": size.x * transform.scale.x,
+                "height": size.y * transform.scale.y,
+                "nameY": name_y,
+                "barWidth": bar_width.map(|w| w * transform.scale.x),
+            })
+        })
+        .collect();
+    let slot = TOKEN_FOOTPRINTS.get_or_init(|| std::sync::Mutex::new(Vec::new()));
+    if let Ok(mut current) = slot.lock() {
+        *current = list;
+    }
+}
+
+/// Every token this engine draws and what it fills, as
+/// `[{"tokenId","footprint","x","y","width","height","nameY","barWidth"}]`
+/// in world units. Read-only, for tests (spec 046 US4).
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn token_footprints() -> String {
+    let list = TOKEN_FOOTPRINTS
+        .get()
+        .and_then(|slot| slot.lock().ok().map(|l| l.clone()))
+        .unwrap_or_default();
+    serde_json::Value::from(list).to_string()
 }

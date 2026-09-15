@@ -138,6 +138,8 @@ function installEngineProbe(wasm: BevyWasmModule): void {
     .carried_lights;
   const movementState = (wasm as { movement_state?: () => string })
     .movement_state;
+  const tokenFootprints = (wasm as { token_footprints?: () => string })
+    .token_footprints;
   (window as unknown as Record<string, unknown>).__engineProbe = {
     camera: (): { x: number; y: number; scale: number } | null =>
       cameraState
@@ -201,6 +203,32 @@ function installEngineProbe(wasm: BevyWasmModule): void {
     // moves nothing has several possible causes; this says which.
     movementState: (): unknown =>
       movementState ? (JSON.parse(movementState()) as unknown) : null,
+    // Spec 046 US4: what each token fills as this board draws it — footprint
+    // in squares, centre, sprite size, the name's height above the centre and
+    // the bars' width, all in world units. Asked of the engine, because a
+    // footprint the command carried but the drawing ignored is the bug.
+    tokenFootprints: (): {
+      tokenId: string;
+      footprint: number;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      nameY: number | null;
+      barWidth: number | null;
+    }[] =>
+      tokenFootprints
+        ? (JSON.parse(tokenFootprints()) as {
+            tokenId: string;
+            footprint: number;
+            x: number;
+            y: number;
+            width: number;
+            height: number;
+            nameY: number | null;
+            barWidth: number | null;
+          }[])
+        : [],
   };
 }
 

@@ -79,6 +79,12 @@ export interface AttackPreviewRecord {
   distance: number | null;
   flags: AttackFlag[];
   turn: TurnCheckRecord;
+  /** The attack's reach and ranges, in `unit` (spec 046 T080). */
+  reach: number | null;
+  rangeNormal: number | null;
+  rangeLong: number | null;
+  /** "ft"; empty when nothing was measured. */
+  unit: string;
 }
 
 export interface AttackInput {

@@ -502,6 +502,22 @@ export type SetCarriedLightCommand = {
   dim: number;
 };
 
+/**
+ * How many squares a side one token fills, and whether it snaps (spec 046
+ * FR-031, contract §5) — the engine's `set_token_grid`.
+ *
+ * Resolved by the server from the creature's size (`tokenGrid`); `1` for a
+ * token the server leaves out. Snapping, hit-testing, keyboard moves,
+ * nameplates and bars all follow it.
+ */
+export type SetTokenGridCommand = {
+  type: "set_token_grid";
+  tokenId: string;
+  footprint: number;
+  /** Unchanged: the engine's default is `true`. */
+  snap?: boolean;
+};
+
 /** One interactive, in the shape the engine's command boundary expects. */
 export type WorldInteractive = {
   id: string;
@@ -523,6 +539,7 @@ export type WorldCommand =
   | SetAmbientLightCommand
   | SetTokenVisionCommand
   | SetCarriedLightCommand
+  | SetTokenGridCommand
   | UpsertTokenCommand
   | RemoveTokenCommand
   | SetTokenStatusCommand

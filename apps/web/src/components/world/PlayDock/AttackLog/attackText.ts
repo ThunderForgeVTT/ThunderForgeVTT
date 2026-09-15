@@ -1,4 +1,9 @@
-import type { AttackFlag, AttackRecord, OfferRecord } from "@/types/attack";
+import type {
+  AttackFlag,
+  AttackPreviewRecord,
+  AttackRecord,
+  OfferRecord,
+} from "@/types/attack";
 
 /**
  * How an attack reads to the table, as words.
@@ -22,6 +27,48 @@ const FLAG_TEXT: Record<AttackFlag, string> = {
 
 export function flagText(flag: AttackFlag): string {
   return FLAG_TEXT[flag];
+}
+
+/** "20 ft", or "20" when the system names no unit. */
+function measured(value: number, unit: string): string {
+  const rounded = Math.round(value * 100) / 100;
+  return unit ? `${rounded} ${unit}` : `${rounded}`;
+}
+
+/**
+ * What the attacker is told before rolling, one sentence per flag (FR-033):
+ * "Out of reach: 20 ft, reach 5 ft". A warning, never a refusal — the attack
+ * can still be made, and the table will be shown the same flag afterwards.
+ */
+export function warningTexts(preview: AttackPreviewRecord): string[] {
+  const { distance, unit } = preview;
+  const far = distance === null ? null : measured(distance, unit);
+  return preview.flags.map((flag) => {
+    switch (flag) {
+      case "OUT_OF_REACH":
+        return far !== null && preview.reach !== null
+          ? `Out of reach: ${far}, reach ${measured(preview.reach, unit)}`
+          : "Out of reach";
+      case "LONG_RANGE":
+        return far !== null && preview.rangeNormal !== null
+          ? `Long range: ${far}, normal range ${measured(preview.rangeNormal, unit)}`
+          : "Long range";
+      case "BEYOND_RANGE": {
+        const limit = preview.rangeLong ?? preview.rangeNormal;
+        return far !== null && limit !== null
+          ? `Beyond range: ${far}, range ${measured(limit, unit)}`
+          : "Beyond range";
+      }
+      case "NO_LINE_OF_SIGHT":
+        return "No line of sight: a wall is in the way";
+      case "NO_REACH_DECLARED":
+        return "This attack declares no reach or range";
+      default: {
+        const text = flagText(flag);
+        return text.charAt(0).toUpperCase() + text.slice(1);
+      }
+    }
+  });
 }
 
 /** "Aria → Goblin", "Unknown → Aria", "Aria → nothing". */

@@ -57,8 +57,8 @@ struct DrawnName(TokenName);
 
 /// A name, or its shadow, drawn for the token it is a child of.
 #[derive(Component)]
-struct Nameplate {
-    shadow: bool,
+pub(crate) struct Nameplate {
+    pub(crate) shadow: bool,
     font_px: f32,
 }
 

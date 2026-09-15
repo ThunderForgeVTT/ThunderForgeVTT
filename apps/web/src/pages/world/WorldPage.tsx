@@ -26,6 +26,7 @@ import {
   applyShapeWorldEvent,
   applyTokenWorldEvent,
   applyTokenVisionWorldEvent,
+  applyTokenGridWorldEvent,
   applyWallWorldEvent,
   getLiveSyncState,
   loadLightsIntoStore,
@@ -1705,6 +1706,10 @@ export default function WorldPage() {
             // token can see, and until spec 045 a sheet edit announced
             // nothing at all.
             applyTokenVisionWorldEvent(worldStore, sceneId, event, () =>
+              Object.keys(worldStore.getState().tokens),
+            ),
+            // Spec 046 US4: a sheet's size is the squares its tokens fill.
+            applyTokenGridWorldEvent(worldStore, sceneId, event, () =>
               Object.keys(worldStore.getState().tokens),
             ),
           ]);

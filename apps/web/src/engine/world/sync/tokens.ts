@@ -53,6 +53,7 @@ import {
 import { getTokenAttributes } from "@/api/tokenAttributes";
 import { GraphQLRequestError } from "@/api/graphqlClient";
 import { loadTokenVisionIntoEngine } from "./tokenVision";
+import { loadTokenGridIntoEngine } from "./tokenGrid";
 import { toast } from "sonner";
 import type { TokenRecord, UpdateTokenInput } from "@/types/token";
 import type { WorldStore } from "../store";
@@ -159,14 +160,15 @@ export async function applyTokenWorldEvent(
   }
 
   // Spec 045 US6: and how far each of them sees, which its game system
-  // decides. After the tokens, because the engine attaches a vision profile
-  // to a token it already holds — named first, it would have nothing to
-  // attach to.
-  await loadTokenVisionIntoEngine(
-    worldStore,
-    sceneId,
-    tokens.map((token) => token.tokenId),
-  );
+  // decides; spec 046 US4: and how many squares each fills. After the tokens,
+  // because the engine attaches both to a token it already holds — named
+  // first, it would have nothing to attach to. Read side by side: neither
+  // waits on the other.
+  const tokenIds = tokens.map((token) => token.tokenId);
+  await Promise.all([
+    loadTokenVisionIntoEngine(worldStore, sceneId, tokenIds),
+    loadTokenGridIntoEngine(worldStore, sceneId, tokenIds),
+  ]);
 }
 
 /**
@@ -278,14 +280,15 @@ export async function loadTokensIntoStore(
   }
 
   // Spec 045 US6: and how far each of them sees, which its game system
-  // decides. After the tokens, because the engine attaches a vision profile
-  // to a token it already holds — named first, it would have nothing to
-  // attach to.
-  await loadTokenVisionIntoEngine(
-    worldStore,
-    sceneId,
-    tokens.map((token) => token.tokenId),
-  );
+  // decides; spec 046 US4: and how many squares each fills. After the tokens,
+  // because the engine attaches both to a token it already holds — named
+  // first, it would have nothing to attach to. Read side by side: neither
+  // waits on the other.
+  const tokenIds = tokens.map((token) => token.tokenId);
+  await Promise.all([
+    loadTokenVisionIntoEngine(worldStore, sceneId, tokenIds),
+    loadTokenGridIntoEngine(worldStore, sceneId, tokenIds),
+  ]);
 }
 
 /**
