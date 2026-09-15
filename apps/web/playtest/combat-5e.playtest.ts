@@ -96,6 +96,9 @@ test("a Game Master runs a 5e fight for two players", async ({
     const cast: Record<string, { actorId: string; tokenId: string }> = {};
     let combat: Combat | null = null;
     const rolled: Record<string, number> = {};
+    // A second goblin placed from the same NPC. Not in `cast`, which is the
+    // roster: it is on the board, not in the fight.
+    let secondGoblinTokenId = "";
 
     await test.step("the table takes its places", async () => {
       cast.Aria = await placeCast(table, {
@@ -121,15 +124,12 @@ test("a Game Master runs a 5e fight for two players", async ({
       });
       // A second goblin of the same NPC: its own copy, with its own hit
       // points, and no second actor.
-      cast.Goblin2 = {
-        actorId: cast.Goblin.actorId,
-        tokenId: (
-          await placeToken(table, cast.Goblin.actorId, {
-            at: { x: 300, y: -100 },
-            label: "Goblin 2",
-          })
-        ).tokenId,
-      };
+      secondGoblinTokenId = (
+        await placeToken(table, cast.Goblin.actorId, {
+          at: { x: 300, y: -100 },
+          label: "Goblin 2",
+        })
+      ).tokenId;
       // An ogre: twice the size, so the board has a large piece on it as well
       // as a small one.
       cast.Ogre = await placeCast(table, {
@@ -539,7 +539,7 @@ test("a Game Master runs a 5e fight for two players", async ({
       // creatures. The hit landed on one copy; the other copy, and the NPC's
       // own sheet, are exactly as they were.
       expect(
-        await tokenHitPointsOf(table.gm, table.sceneId, cast.Goblin2.tokenId),
+        await tokenHitPointsOf(table.gm, table.sceneId, secondGoblinTokenId),
         "the second goblin copy is untouched by a hit on the first",
       ).toBe(GOBLIN_HP);
       const npcSheet = await systemDataOf(table.gm, cast.Goblin.actorId);
@@ -548,7 +548,7 @@ test("a Game Master runs a 5e fight for two players", async ({
         "the goblin NPC's own sheet is untouched by a hit on a copy",
       ).toBe(GOBLIN_HP);
       await expect
-        .poll(() => barCurrentOn(table.gm, cast.Goblin2.tokenId), {
+        .poll(() => barCurrentOn(table.gm, secondGoblinTokenId), {
           timeout: 5_000,
           message: "the second goblin's bar still reads whole",
         })
