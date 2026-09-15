@@ -585,6 +585,15 @@ at the start of its own turn.
    Cover is deliberately not in this: blocked or not blocked, and the table
    handles the rest.
 
+4. **"Unknown" follows the board, not the attack** (owner, 2026-09-14). Whether
+   a player's attack log names an attacker is judged from token centres, as the
+   engine draws the board, while an attack's line of sight (FR-007) is judged
+   from the squares each creature fills. The two can disagree about a Large
+   creature half round a corner: it may attack a player whose board does not
+   draw it, and that player reads "Unknown". Naming it instead would reveal a
+   creature the board hides. Moving both to footprints would reopen spec 045's
+   vision rules, and is not wanted. See research R11 and contract §3.
+
 ## Questions for the owner
 
 1. **Q1 — How far does the product resolve an attack?** *(answered: C, with
