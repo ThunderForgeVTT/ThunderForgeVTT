@@ -77,6 +77,24 @@ async function currentUserId(page: Page): Promise<string> {
   return id;
 }
 
+/**
+ * Shows an NPC to the world's players from its own page. An NPC is hidden
+ * from players until its Game Master does this (owner decision 2026-09-15).
+ */
+async function showNpcToPlayers(
+  page: Page,
+  worldId: string,
+  actorId: string,
+): Promise<void> {
+  await page.goto(`/world/${worldId}/actor/${actorId}/view`);
+  const toggle = page.getByTestId("actor-visible-toggle");
+  await expect(toggle).not.toBeChecked({ timeout: 15_000 });
+  // Not `check()`: the box follows the server's answer, so it is checked
+  // only once the change has been saved, after `check()` has looked.
+  await toggle.click();
+  await expect(toggle).toBeChecked({ timeout: 10_000 });
+}
+
 test.describe("US4: Viewer can view but is redirected away from /edit", () => {
   test("a default-Viewer world member sees /view but bounces off /edit", async ({
     page,
@@ -119,11 +137,27 @@ test.describe("US4: Viewer can view but is redirected away from /edit", () => {
         { timeout: 15_000 },
       );
 
+      // An NPC is hidden from players until its Game Master shows it (owner
+      // decision 2026-09-15), so a Viewer who has its id finds nothing, and
+      // nothing of it: not its name, and no way on to /edit.
+      await playerPage.goto(`/world/${worldId}/actor/${actorId}/view`);
+      await expect(
+        playerPage.getByRole("heading", { name: "Actor not found" }),
+      ).toBeVisible({ timeout: 10_000 });
+      await expect(playerPage.getByText(npcName)).toHaveCount(0);
+      await playerPage.goto(`/world/${worldId}/actor/${actorId}/edit`);
+      await expect(
+        playerPage.getByRole("heading", { name: "Actor not found" }),
+      ).toBeVisible({ timeout: 10_000 });
+      await expect(playerPage.getByText(npcName)).toHaveCount(0);
+
+      await showNpcToPlayers(page, worldId, actorId);
+
       // Default Viewer: /view renders, /edit redirects to /view.
       await playerPage.goto(`/world/${worldId}/actor/${actorId}/view`);
-      await expect(playerPage.getByRole("heading", { level: 1 })).toBeVisible({
-        timeout: 10_000,
-      });
+      await expect(
+        playerPage.getByRole("heading", { level: 1, name: npcName }),
+      ).toBeVisible({ timeout: 10_000 });
       await expect(
         playerPage.getByRole("button", { name: "Edit" }),
       ).toHaveCount(0);
