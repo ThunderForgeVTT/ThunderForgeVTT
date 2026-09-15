@@ -21,6 +21,11 @@ export interface WorldRecord {
   /** Spec 020 (FR-003): when true, Genie Session Resource holdings carry
    * over into the next session instead of resetting to 0. */
   genieResourceCarryoverEnabled: boolean;
+  /**
+   * Spec 046 FR-006: whether a hit on an NPC the Game Master runs is applied
+   * without an offer. Off by default; an encounter may override it.
+   */
+  autoApplyNpcDamage: boolean;
   /** Spec 022 (FR-014/FR-015): default grid type ("square" | "hex" |
    * "gridless") applied to a newly created scene when its own gridType
    * isn't explicitly set. */

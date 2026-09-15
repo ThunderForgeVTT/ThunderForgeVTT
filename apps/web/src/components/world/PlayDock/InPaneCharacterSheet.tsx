@@ -1,6 +1,10 @@
 import { createElement, useEffect, useMemo, useState } from "react";
 import { getWorldAbilities } from "@/api/abilities";
 import { getActorAbilities } from "@/api/actorAbilities";
+import { getTokens } from "@/api/tokens";
+import { useAuth } from "@/hooks/useAuth";
+import type { TokenRecord } from "@/types/token";
+import { AttackFlow } from "./AttackFlow/AttackFlow";
 import { rollDice } from "@/api/roll";
 import { triggerDiceRollAnimation } from "@/engine/bevy";
 import { RollResult } from "@/components/world/RollResult";
@@ -52,6 +56,8 @@ import { abilityRolls, statRolls, type CharacterRoll } from "./characterRolls";
 
 export interface InPaneCharacterSheetProps {
   worldId: string;
+  /** The scene in play, where this character's token is and its targets are. */
+  sceneId?: string | null;
   actor: WorldActorRecord;
   /** Returns the pane to whatever it was showing before (FR-002/US2 #3). */
   onDismiss: () => void;
@@ -59,9 +65,13 @@ export interface InPaneCharacterSheetProps {
 
 export function InPaneCharacterSheet({
   worldId,
+  sceneId = null,
   actor,
   onDismiss,
 }: InPaneCharacterSheetProps) {
+  const { user } = useAuth();
+  const [sceneTokens, setSceneTokens] = useState<TokenRecord[]>([]);
+  const [attacking, setAttacking] = useState<CharacterRoll | null>(null);
   const sheet = resolveActorSheet(actor.gameSystemId);
   const { data } = useActorSystemData(
     actor.id,
@@ -99,12 +109,48 @@ export function InPaneCharacterSheet({
     };
   }, [actor.id, worldId]);
 
+  // Spec 046: an attack is made from this character's token on the scene, at
+  // another token there.
+  useEffect(() => {
+    let active = true;
+    if (!sceneId) return;
+    getTokens(sceneId)
+      .then((tokens) => {
+        if (active) setSceneTokens(tokens);
+      })
+      .catch(() => {
+        if (active) setSceneTokens([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [sceneId]);
+
+  /** This character's token here: the viewer's own, else the first. */
+  const attackerToken = useMemo(() => {
+    const mine = sceneTokens.filter(
+      (token) => token.sceneId === sceneId && token.actorId === actor.id,
+    );
+    return (
+      mine.find((token) => token.ownerUserId === user?.id) ?? mine[0] ?? null
+    );
+  }, [sceneTokens, sceneId, actor.id, user?.id]);
+
   const rolls = useMemo<CharacterRoll[]>(
     () => [...statRolls(data?.ability_data), ...abilityRolls(entries, catalog)],
     [data?.ability_data, entries, catalog],
   );
 
   const handleRoll = async (roll: CharacterRoll) => {
+    // Spec 046: an attack roll is an attack, aimed at something, rolled and
+    // judged by the server — not a free number (it replaces the bare
+    // `rollDice` this used to send for it).
+    if (roll.attackAbilityId) {
+      setResult(null);
+      setRollError(null);
+      setAttacking(roll);
+      return;
+    }
     setRolling(roll.key);
     setRollError(null);
     setResult(null);
@@ -205,9 +251,18 @@ export function InPaneCharacterSheet({
               <li key={roll.key}>
                 <button
                   type="button"
-                  disabled={rolling !== null}
+                  disabled={
+                    rolling !== null ||
+                    (roll.attackAbilityId !== undefined && !attackerToken)
+                  }
+                  title={
+                    roll.attackAbilityId !== undefined && !attackerToken
+                      ? `${actor.label} has no token on this scene to attack from`
+                      : undefined
+                  }
                   onClick={() => void handleRoll(roll)}
                   data-testid={`in-pane-roll-${roll.key}`}
+                  data-attack={roll.attackAbilityId ? "true" : undefined}
                   className="flex w-full items-center gap-2 rounded border border-border px-2 py-1 text-left text-xs transition-colors hover:bg-muted disabled:opacity-60"
                 >
                   <span className="min-w-0 flex-1 truncate">{roll.label}</span>
@@ -220,6 +275,19 @@ export function InPaneCharacterSheet({
           </ul>
         )}
       </section>
+
+      {attacking?.attackAbilityId && attackerToken ? (
+        <AttackFlow
+          // A new attack starts clean: which target, reaction or not.
+          key={attacking.key}
+          worldId={worldId}
+          attackerTokenId={attackerToken.tokenId}
+          abilityId={attacking.attackAbilityId}
+          abilityName={attacking.label.replace(/ \(attack\)$/, "")}
+          tokens={sceneTokens}
+          onClose={() => setAttacking(null)}
+        />
+      ) : null}
 
       {rollError ? (
         <p

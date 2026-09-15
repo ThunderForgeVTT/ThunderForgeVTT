@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { updateWorldAutoApplyNpcDamage } from "@/api/attacks";
 import {
   generateInviteCode,
   getWorld,
@@ -52,11 +53,14 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
   const [allowPlayerCreatedActors, setAllowPlayerCreatedActors] =
     useState(false);
   const [isUpdatingAllowSetting, setIsUpdatingAllowSetting] = useState(false);
+  const [autoApplyNpcDamage, setAutoApplyNpcDamage] = useState(false);
+  const [isUpdatingAutoApply, setIsUpdatingAutoApply] = useState(false);
 
   useEffect(() => {
     void getWorld(worldId).then((world) => {
       if (world) {
         setAllowPlayerCreatedActors(world.allowPlayerCreatedActors);
+        setAutoApplyNpcDamage(world.autoApplyNpcDamage);
       }
     });
   }, [worldId]);
@@ -71,6 +75,21 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
       setError(err instanceof Error ? err.message : "Failed to update setting");
     } finally {
       setIsUpdatingAllowSetting(false);
+    }
+  };
+
+  /** Spec 046 FR-006: the world's default; an encounter may override it. */
+  const handleToggleAutoApply = async (enabled: boolean) => {
+    setIsUpdatingAutoApply(true);
+    setError(null);
+    try {
+      setAutoApplyNpcDamage(
+        await updateWorldAutoApplyNpcDamage(worldId, enabled),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update setting");
+    } finally {
+      setIsUpdatingAutoApply(false);
     }
   };
 
@@ -333,6 +352,29 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
               }
             />
             Allow players to create their own actors
+          </label>
+        </div>
+
+        {/* Spec 046 FR-006: auto-apply for the Game Master's own NPCs */}
+        <div className="grid gap-3">
+          <h3 className="font-semibold">Damage to your NPCs</h3>
+          <p className="text-sm text-muted-foreground">
+            When on, a hit on a creature no player controls is applied at once
+            instead of waiting for you to take it. Damage to a player&apos;s
+            character is always theirs to take. An encounter can override this
+            from the combat tracker. Off by default.
+          </p>
+          <label
+            className="flex items-center gap-2 text-sm"
+            data-testid="auto-apply-npc-damage-toggle"
+          >
+            <input
+              type="checkbox"
+              checked={autoApplyNpcDamage}
+              disabled={isUpdatingAutoApply}
+              onChange={(e) => void handleToggleAutoApply(e.target.checked)}
+            />
+            Apply damage to my NPCs automatically
           </label>
         </div>
       </Card>

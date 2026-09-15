@@ -30,6 +30,12 @@ export interface CharacterRoll {
   label: string;
   /** Sent verbatim to `rollDice`. Never evaluated here. */
   formula: string;
+  /**
+   * Spec 046: set on an ability's `ATTACK_ROLL`. Such a roll is an attack,
+   * made with `makeAttack` against a target, not a free roll — the server
+   * rolls this same formula when it is.
+   */
+  attackAbilityId?: string;
 }
 
 /** `might` -> `Might`, `wisdom_save` -> `Wisdom save`. */
@@ -107,6 +113,9 @@ export function abilityRolls(
           EFFECT_LABELS[effect.effectType] ?? effect.effectType.toLowerCase()
         })`,
         formula: effect.formula,
+        ...(effect.effectType === "ATTACK_ROLL"
+          ? { attackAbilityId: ability.id }
+          : {}),
       }));
   });
 }

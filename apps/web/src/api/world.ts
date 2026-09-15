@@ -27,6 +27,7 @@ const WORLD_FIELDS = `
   genieResourceCarryoverEnabled
   defaultSceneGridType
   activeSceneId
+  autoApplyNpcDamage
 `;
 
 type MyWorldsQuery = {

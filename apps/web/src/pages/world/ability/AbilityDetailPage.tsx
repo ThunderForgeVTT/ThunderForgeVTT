@@ -25,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ModeratedContentBanner } from "@/components/world/ModeratedContentBanner";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import { AbilityEffectEditor } from "@/pages/world/ability/AbilityEffectEditor";
+import { AttackFieldsEditor } from "@/pages/world/ability/AttackFieldsEditor";
 import { AbilityOwnershipBlock } from "@/pages/world/ability/AbilityOwnershipBlock";
 import type {
   AbilityClassification,
@@ -543,6 +544,11 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
           effects={ability.effects}
           canEdit={canEdit}
           onChanged={(effects) => setAbility({ ...ability, effects })}
+        />
+
+        <AttackFieldsEditor
+          owner={{ kind: "ability", id: abilityId }}
+          canEdit={canEdit}
         />
       </Container>
     </>

@@ -164,6 +164,8 @@ import {
 import { ChatPanel } from "@/components/world/PlayDock/ChatPanel";
 import { ActorsPanel } from "@/components/world/PlayDock/ActorsPanel";
 import { CombatPanel } from "@/components/world/PlayDock/CombatPanel";
+import { AttackLog } from "@/components/world/PlayDock/AttackLog/AttackLog";
+import { OfferPrompt } from "@/components/world/PlayDock/OfferPrompt/OfferPrompt";
 import { ClocksPanel } from "@/components/world/PlayDock/ClocksPanel";
 import { SettingsPanel } from "@/components/world/PlayDock/SettingsPanel";
 import { HelpPanel } from "@/components/world/PlayDock/HelpPanel";
@@ -2522,7 +2524,7 @@ export default function WorldPage() {
       id: "actors",
       label: "Actors",
       icon: "actors",
-      content: <ActorsPanel worldId={id} />,
+      content: <ActorsPanel worldId={id} sceneId={sceneId} />,
     },
     {
       id: "combat",
@@ -2801,6 +2803,21 @@ export default function WorldPage() {
                 overflow: "hidden",
               }}
             >
+              {/* Spec 046: what the table sees of a fight — every seat's view
+               * of the scene's attacks, and the offers waiting for this
+               * viewer. Over the board rather than in the dock, which mounts
+               * only its open section: a hit has to reach a player who is
+               * looking at something else. */}
+              {id ? (
+                <div
+                  className="pointer-events-none absolute bottom-3 left-16 z-[1040] flex w-80 max-w-[60%] flex-col gap-2"
+                  data-testid="table-feed"
+                >
+                  <OfferPrompt worldId={id} isGm={isSceneOwner} />
+                  <AttackLog worldId={id} sceneId={sceneId} />
+                </div>
+              ) : null}
+
               {/* Spec 029 FR-011a: a token's resources, pinned by a double-click
                * and dragged wherever the viewer wants them. */}
               <StatusPanel

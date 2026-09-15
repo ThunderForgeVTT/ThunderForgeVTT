@@ -124,6 +124,8 @@ describe("abilityRolls", () => {
         key: "ability-entry-1-e1",
         label: "Firebolt (attack)",
         formula: "1d20+5",
+        // Spec 046: an attack roll is made as an attack, against a target.
+        attackAbilityId: ability().id,
       },
       {
         key: "ability-entry-1-e2",

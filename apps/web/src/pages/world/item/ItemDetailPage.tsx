@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AttackFieldsEditor } from "@/pages/world/ability/AttackFieldsEditor";
 import { AttestationDialog } from "@/components/legal/AttestationDialog";
 import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
@@ -400,6 +401,11 @@ export default function ItemDetailPage({ mode }: ItemDetailPageProps) {
           onChanged={(effects) =>
             setItem((current) => (current ? { ...current, effects } : current))
           }
+        />
+
+        <AttackFieldsEditor
+          owner={{ kind: "item", id: itemId }}
+          canEdit={canEdit}
         />
 
         {/*

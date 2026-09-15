@@ -10,6 +10,7 @@ import {
   updateCombatant,
 } from "@/api/combat";
 import { getWorldActors } from "@/api/actors";
+import { setCombatAutoApply } from "@/api/attacks";
 import { getTokens } from "@/api/tokens";
 import { Button } from "@/components/ui/button/Button";
 import {
@@ -295,6 +296,61 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
       </div>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
+
+      {isGm ? (
+        // Spec 046 FR-006: the per-encounter override of the world's
+        // auto-apply default. It lives on this encounter and ends with it.
+        <label className="grid gap-1 text-xs">
+          <span className="text-muted-foreground">
+            Damage to your NPCs in this encounter
+          </span>
+          <select
+            value={
+              combat.autoApply === null
+                ? "world"
+                : combat.autoApply
+                  ? "on"
+                  : "off"
+            }
+            disabled={busy}
+            data-testid="combat-auto-apply"
+            className="rounded border border-border bg-background px-2 py-1"
+            onChange={(event) => {
+              const choice = event.target.value;
+              const enabled =
+                choice === "world" ? null : choice === "on" ? true : false;
+              void (async () => {
+                setBusy(true);
+                setError(null);
+                try {
+                  await setCombatAutoApply(combat.id, enabled);
+                  await refresh();
+                } catch (err) {
+                  setError(
+                    err instanceof Error
+                      ? err.message
+                      : "Changing auto-apply failed",
+                  );
+                } finally {
+                  setBusy(false);
+                }
+              })();
+            }}
+          >
+            <option value="world">
+              As the world says (
+              {combat.autoApply === null && combat.effectiveAutoApply
+                ? "applied"
+                : combat.autoApply === null
+                  ? "offered"
+                  : "world default"}
+              )
+            </option>
+            <option value="on">Applied automatically</option>
+            <option value="off">Offered to me first</option>
+          </select>
+        </label>
+      ) : null}
 
       {combat.combatants.length === 0 ? (
         <p className="text-sm text-muted-foreground">No combatants yet.</p>

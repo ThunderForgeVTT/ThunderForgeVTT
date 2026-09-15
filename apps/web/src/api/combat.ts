@@ -20,6 +20,8 @@ const COMBAT_FIELDS = `
   roundLabel
   activeCombatantId
   endedAt
+  autoApply
+  effectiveAutoApply
   combatants {
     id
     combatId

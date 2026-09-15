@@ -52,6 +52,13 @@ export interface CombatRecord {
   activeCombatantId: string | null;
   /** Set once the GM ends the encounter. */
   endedAt: string | null;
+  /**
+   * Spec 046 FR-006: this encounter's auto-apply override; null uses the
+   * world's setting. Ends with the encounter.
+   */
+  autoApply: boolean | null;
+  /** Whether hits on the Game Master's NPCs are applied in this encounter. */
+  effectiveAutoApply: boolean;
   /** Already in turn order — render as given, never re-sort. */
   combatants: CombatantRecord[];
 }

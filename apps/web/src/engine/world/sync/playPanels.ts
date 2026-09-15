@@ -14,6 +14,13 @@
 
 export const CHAT_MESSAGE_EVENT_CODE = 17;
 export const COMBAT_CHANGED_EVENT_CODE = 18;
+/**
+ * Spec 046: an attack was made, and an offer changed. Both payloads are ids
+ * and nothing else (`world_events.rs`): who attacked, and at what, is read per
+ * viewer from `attack(id)`, because a payload reaches every member.
+ */
+export const ATTACK_MADE_EVENT_CODE = 29;
+export const OFFER_CHANGED_EVENT_CODE = 30;
 
 type WorldEventLike = {
   event_code?: number;
@@ -27,6 +34,10 @@ export interface PlayPanelEventHandlers {
   onChatMessage?: (messageId: string | undefined) => void;
   /** The tracker changed — refetch `activeCombat(worldId)`. */
   onCombatChanged?: (combatId: string | undefined) => void;
+  /** Spec 046: an attack was made — read `attack(id)`. */
+  onAttackMade?: (attackId: string | undefined) => void;
+  /** Spec 046: an offer changed — re-read `pendingOffers(worldId)`. */
+  onOfferChanged?: (offerId: string | undefined) => void;
 }
 
 /**
@@ -50,6 +61,16 @@ export function applyPlayPanelWorldEvent(
 
   if (eventCode === COMBAT_CHANGED_EVENT_CODE) {
     handlers.onCombatChanged?.(payload?.combatId as string | undefined);
+    return;
+  }
+
+  if (eventCode === ATTACK_MADE_EVENT_CODE) {
+    handlers.onAttackMade?.(payload?.attackId as string | undefined);
+    return;
+  }
+
+  if (eventCode === OFFER_CHANGED_EVENT_CODE) {
+    handlers.onOfferChanged?.(payload?.offerId as string | undefined);
   }
 }
 

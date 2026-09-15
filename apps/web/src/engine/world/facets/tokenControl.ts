@@ -75,7 +75,9 @@ export type OfflineEditKind =
   | "scale"
   | "setArt"
   | "create"
-  | "delete";
+  | "delete"
+  /** Spec 046 R16: an attack, queued as an intent and resolved at replay. */
+  | "attack";
 
 /** Whether an edit may be made while disconnected, and why not if not. */
 export interface OfflineEditVerdict {
@@ -114,9 +116,13 @@ export interface OfflineEditVerdict {
  */
 export function offlineEditVerdict(kind: OfflineEditKind): OfflineEditVerdict {
   switch (kind) {
+    // An attack queued offline is an intent, not a result: the server rolls
+    // it at replay against the state it then holds, and refuses it there if
+    // the turn has passed (spec 046 research R16).
     case "move":
     case "rotate":
     case "scale":
+    case "attack":
       return { permitted: true };
     case "setArt":
       return {

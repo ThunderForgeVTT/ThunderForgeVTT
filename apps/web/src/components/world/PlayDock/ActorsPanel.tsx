@@ -8,6 +8,8 @@ import { InPaneCharacterSheet } from "./InPaneCharacterSheet";
 
 export interface ActorsPanelProps {
   worldId: string;
+  /** Spec 046: the scene in play, for attacks made from a character's sheet. */
+  sceneId?: string | null;
 }
 
 interface FolderProps {
@@ -69,7 +71,7 @@ function Folder({
  * -tripping per keystroke would be slower and noisier than filtering a list
  * this size in memory.
  */
-export function ActorsPanel({ worldId }: ActorsPanelProps) {
+export function ActorsPanel({ worldId, sceneId = null }: ActorsPanelProps) {
   const [actors, setActors] = useState<WorldActorRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -154,6 +156,7 @@ export function ActorsPanel({ worldId }: ActorsPanelProps) {
     return (
       <InPaneCharacterSheet
         worldId={worldId}
+        sceneId={sceneId}
         actor={viewing}
         onDismiss={() => setViewing(null)}
       />
