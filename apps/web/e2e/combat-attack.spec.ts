@@ -6,6 +6,7 @@ import {
   attackFromSheet,
   attackLogOn,
   barCurrentOn,
+  changeHitPoints,
   claimFor,
   grantAbility,
   makeAttackAs,
@@ -25,6 +26,7 @@ import {
   placeCast,
   sitDown,
 } from "../playtest/table";
+import { expectOnEverySeatWithinOneSecond } from "./fixtures/seatTiming";
 
 /**
  * Spec 046 tasks Phase 6 (plan phase 4, quickstart "an attack aimed at
@@ -58,15 +60,42 @@ const OGRE_NAME = "Grukk Stonebelly";
 interface Traffic {
   responses: string[];
   frames: string[];
+  /**
+   * Forget everything received so far, and every response to a request sent
+   * before now.
+   *
+   * The second half is the point. A response is recorded once its body has
+   * been read, which is after it arrived, which is after its request left —
+   * so emptying the arrays alone let a read sent while the ogre could still
+   * be seen land after the reset and be judged as if it had been sent after
+   * the ogre was hidden. It carried the name it was entitled to carry then.
+   */
+  reset: () => void;
 }
 
 function record(page: Page): Traffic {
-  const traffic: Traffic = { responses: [], frames: [] };
+  let epoch = 0;
+  const sentIn = new WeakMap<object, number>();
+  const traffic: Traffic = {
+    responses: [],
+    frames: [],
+    reset: () => {
+      epoch += 1;
+      traffic.responses.length = 0;
+      traffic.frames.length = 0;
+    },
+  };
+  page.on("request", (request) => {
+    sentIn.set(request, epoch);
+  });
   page.on("response", (response) => {
     if (!response.url().includes("graphql")) return;
+    const sent = sentIn.get(response.request());
     void response
       .text()
-      .then((body) => traffic.responses.push(body))
+      .then((body) => {
+        if (sent === epoch) traffic.responses.push(body);
+      })
       .catch(() => undefined);
   });
   page.on("websocket", (socket) => {
@@ -180,40 +209,60 @@ test("an attack is aimed at something, and the table is told", async ({
       await sitDown(table, client);
     }
 
-    await test.step("Aria attacks the goblin from her sheet, and every seat sees it", async () => {
-      const said = await attackFromSheet(
-        aria.page,
-        hero.actorId,
-        "Longsword",
-        "Goblin",
-      );
-      expect(said, "the attack flow reports the hit").toMatch(
-        new RegExp(`Aria → Goblin.*vs ${GOBLIN_AC}: hit`),
-      );
-      const started = Date.now();
-      for (const [who, client] of [
-        ["the Game Master", table.gm],
-        ["Aria", aria.page],
-        ["Brom", brom.page],
-      ] as const) {
-        await expect
-          .poll(async () => (await attackLogOn(client)).join(" | "), {
-            timeout: 5_000,
-            message: `${who}'s board shows Aria's attack, its total and whether it beat the goblin's armour`,
-          })
-          .toMatch(
-            new RegExp(
-              `Aria → Goblin.*Longsword.*vs ${GOBLIN_AC}: hit.*5 damage offered`,
-            ),
+    const seats = [
+      ["the Game Master", table.gm],
+      ["Aria", aria.page],
+      ["Brom", brom.page],
+    ] as const;
+    const ariasHit = new RegExp(
+      `Aria → Goblin.*Longsword.*vs ${GOBLIN_AC}: hit`,
+    );
+    const hitsOn = async (client: Page) =>
+      (await attackLogOn(client)).filter((line) => ariasHit.test(line));
+
+    await test.step("Aria attacks the goblin from her sheet, and every seat sees it within one second", async () => {
+      // SC-001 and FR-002, asserted: from the moment Aria confirms the roll
+      // to the slowest seat showing it, her own board included. Over a second
+      // is measured once more: the Game Master declines the first offer, so
+      // the goblin is owed exactly one when the next step looks, and Aria
+      // swings again.
+      await expectOnEverySeatWithinOneSecond(testInfo, {
+        what: "attack reached every seat",
+        seats,
+        act: async () => {
+          let rolled = 0;
+          const said = await attackFromSheet(
+            aria.page,
+            hero.actorId,
+            "Longsword",
+            "Goblin",
+            { onRoll: () => (rolled = Date.now()) },
           );
-      }
-      testInfo.annotations.push({
-        type: "attack reached every seat",
-        description: `${Date.now() - started} ms after the attacker saw it`,
+          expect(said, "the attack flow reports the hit").toMatch(
+            new RegExp(`Aria → Goblin.*vs ${GOBLIN_AC}: hit`),
+          );
+          return rolled;
+        },
+        shown: async (client, attempt) => {
+          const hits = await hitsOn(client);
+          return (
+            hits.length >= attempt &&
+            hits.some((line) => /5 damage offered/.test(line))
+          );
+        },
+        describe: async (client) =>
+          (await attackLogOn(client)).join(" | ") || "an empty attack log",
+        again: async () => {
+          await answerOffer(table.gm, "Goblin", false);
+          expect(
+            await tokenHitPointsOf(table.gm, table.sceneId, goblin.tokenId),
+            "a declined offer deals nothing",
+          ).toBe(GOBLIN_HP);
+        },
       });
     });
 
-    await test.step("the Game Master takes the goblin's offer, and the bars move everywhere", async () => {
+    await test.step("the Game Master takes the goblin's offer, and the bars move everywhere within one second", async () => {
       await expect
         .poll(() => offersOn(table.gm), { timeout: 10_000 })
         .toContain(`Goblin: take 5 damage?`);
@@ -221,21 +270,40 @@ test("an attack is aimed at something, and the table is told", async ({
         await offersOn(aria.page),
         "the attacker is not asked what the goblin takes",
       ).toEqual([]);
-      await answerOffer(table.gm, "Goblin", true);
+      // FR-013, asserted: from the Game Master's Take to the slowest bar. Over
+      // a second is measured once more: the goblin is healed back to full,
+      // Aria hits it again, and the Game Master takes that offer instead.
+      await expectOnEverySeatWithinOneSecond(testInfo, {
+        what: "bars moved after an offer was taken",
+        seats,
+        prepare: async () => {
+          await expect
+            .poll(() => offersOn(table.gm), { timeout: 10_000 })
+            .toContain(`Goblin: take 5 damage?`);
+        },
+        clock: "before-act",
+        act: () => answerOffer(table.gm, "Goblin", true),
+        shown: async (client) =>
+          (await barCurrentOn(client, goblin.tokenId)) === GOBLIN_HP - 5,
+        describe: async (client) =>
+          `bar reads ${await barCurrentOn(client, goblin.tokenId)}`,
+        again: async () => {
+          await changeHitPoints(table.gm, goblin.tokenId, "HEALING", 5);
+          for (const [who, client] of seats) {
+            await expect
+              .poll(() => barCurrentOn(client, goblin.tokenId), {
+                timeout: 10_000,
+                message: `${who}'s bar is back to ${GOBLIN_HP} before the offer is measured again`,
+              })
+              .toBe(GOBLIN_HP);
+          }
+          await attackFromSheet(aria.page, hero.actorId, "Longsword", "Goblin");
+        },
+      });
       expect(
         await tokenHitPointsOf(table.gm, table.sceneId, goblin.tokenId),
       ).toBe(GOBLIN_HP - 5);
-      for (const [who, client] of [
-        ["the Game Master", table.gm],
-        ["Aria", aria.page],
-        ["Brom", brom.page],
-      ] as const) {
-        await expect
-          .poll(() => barCurrentOn(client, goblin.tokenId), {
-            timeout: 5_000,
-            message: `${who}'s bar for the goblin reads 2`,
-          })
-          .toBe(GOBLIN_HP - 5);
+      for (const [, client] of seats) {
         await expect
           .poll(async () => (await attackLogOn(client)).join(" | "), {
             timeout: 5_000,
@@ -327,10 +395,8 @@ test("an attack is aimed at something, and the table is told", async ({
         }`,
         { tokenId: ogre.tokenId },
       );
-      ariaTraffic.responses.length = 0;
-      ariaTraffic.frames.length = 0;
-      bromTraffic.responses.length = 0;
-      bromTraffic.frames.length = 0;
+      ariaTraffic.reset();
+      bromTraffic.reset();
 
       const [hidden] = await makeAttackAs(table.gm, {
         attackerTokenId: ogre.tokenId,

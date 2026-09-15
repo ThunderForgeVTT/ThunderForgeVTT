@@ -78,7 +78,9 @@ then search the log for `✘`.
 
 - **e2e** `combat-attack.spec.ts`:
   - Aria attacks the goblin with her longsword. Every seat sees attacker,
-    target, total, and hit or miss against AC within one second.
+    target, total, and hit or miss against AC within one second (asserted:
+    `e2e/fixtures/seatTiming.ts` times the slowest seat and allows one
+    re-measurement of the step, never a rerun of the test).
   - On a hit, the Game Master receives an offer, takes it, and the bars move
     everywhere.
   - The ogre hits Aria. Aria's player receives the offer. With her player

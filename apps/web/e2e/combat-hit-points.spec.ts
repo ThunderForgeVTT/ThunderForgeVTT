@@ -13,6 +13,7 @@ import {
   type Combat,
 } from "../playtest/combat";
 import { closeTable, openTable, placeCast, sitDown } from "../playtest/table";
+import { expectOnEverySeatWithinOneSecond } from "./fixtures/seatTiming";
 
 /**
  * Spec 046 tasks Phase 3 (plan phase 1): damage lands, bars move, zero is out.
@@ -152,22 +153,36 @@ test("a Game Master's damage moves every board's bars, and zero takes a creature
       expect(refusal.join(" ")).toContain("Only the Game Master");
     });
 
-    await test.step("5 damage: every board draws 2, with no reload", async () => {
-      const started = Date.now();
-      await applyFromTracker(table.gm, "Damage", 5);
-      for (const [who, client] of everyone) {
-        await expect
-          .poll(() => barCurrentOn(client, goblin.tokenId), {
-            timeout: 5_000,
-            intervals: [50],
-            message: `${who}'s bar reads 2 without a reload`,
-          })
-          .toBe(2);
-      }
-      const elapsed = Date.now() - started;
-      testInfo.annotations.push({
-        type: "bars moved",
-        description: `all three boards drew 2 within ${elapsed} ms of the click`,
+    await test.step("5 damage: every board draws 2 within one second, with no reload", async () => {
+      // SC-002 and FR-013, asserted: from the Game Master's click (the amount
+      // typed beforehand, off the clock) to the
+      // slowest of the three boards. Over a second is measured once more,
+      // healing the 5 back first so the same blow can land again.
+      await expectOnEverySeatWithinOneSecond(testInfo, {
+        what: "bars moved",
+        seats: everyone,
+        clock: "before-act",
+        prepare: () =>
+          goblinRow(table.gm).getByTestId("combatant-hp-amount").fill("5"),
+        act: () =>
+          goblinRow(table.gm)
+            .getByRole("button", { name: "Damage Goblin" })
+            .click(),
+        shown: async (client) =>
+          (await barCurrentOn(client, goblin.tokenId)) === 2,
+        describe: async (client) =>
+          `bar reads ${await barCurrentOn(client, goblin.tokenId)}`,
+        again: async () => {
+          await applyFromTracker(table.gm, "Heal", 5);
+          for (const [who, client] of everyone) {
+            await expect
+              .poll(() => barCurrentOn(client, goblin.tokenId), {
+                timeout: 10_000,
+                message: `${who}'s bar is back to ${GOBLIN_HP} before the blow is measured again`,
+              })
+              .toBe(GOBLIN_HP);
+          }
+        },
       });
       const seen = await combatSeenBy(table.gm, table.worldId);
       expect(

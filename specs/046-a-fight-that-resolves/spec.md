@@ -6,7 +6,7 @@
 
 **Status**: Built, 2026-09-15 — every story (US1–US6) shipped in tasks
 Phases 3–9 and is proven by e2e and by `combat-5e.playtest.ts`, which has no
-soft FINDING left. One target is unmet and one is built but unproven; see
+soft FINDING left. One target is unmet; see
 [What shipped](#what-shipped-2026-09-15). The owner's three questions were
 answered on 2026-09-12 and a fourth decided on 2026-09-14
 (see [Decisions](#decisions-owner-2026-09-12)); clarified 2026-09-14.
@@ -79,11 +79,20 @@ ahead of plan.md's):
 4. "Unknown" follows the board (token centres), not an attack's line of sight
    (footprints).
 
-**Built, not proven as written**: the *one second* of SC-001 and SC-002. The
-specs that watch an attack reach every seat (`combat-attack.spec.ts`) and bars
-move on another client's board (`combat-hit-points.spec.ts`) poll with a
-5-second budget and record the elapsed time as an annotation on each run.
-Nothing asserts one second.
+**Proven, 2026-09-15**: the *one second* of SC-001, SC-002, FR-002 and
+FR-013, asserted (owner decision of 2026-09-15: one second, one retry).
+`combat-attack.spec.ts` times Aria's attack from the moment she confirms the
+roll to the slowest of the three seats showing it, and the goblin's bars from
+the Game Master taking the offer; `combat-hit-points.spec.ts` times the bars
+from the tracker's Damage click. Every seat is watched at once, each for up to
+five seconds so a failure reports the real figure, and a step fails when the
+slowest seat takes over a second. The one retry is a re-measurement of that
+step alone, after the table is put back (the offer declined, or the damage
+healed), never a rerun of the test; both figures are annotated
+(`e2e/fixtures/seatTiming.ts`). Measured on three runs with a `dev` engine:
+the attack reached every seat in 298, 340 and 361 ms; bars moved after an
+offer was taken in 269, 227 and 276 ms; bars moved from the tracker in 307,
+290 and 220 ms. None needed the retry.
 
 **Unmet**: research R17's load target. Two hundred unlinked copies add about
 750 ms to a scene's load-to-drawn time (+686 ms measured in Phase 5, +757 ms

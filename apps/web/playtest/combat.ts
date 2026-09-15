@@ -908,15 +908,24 @@ export async function attackFromSheet(
   actorId: string,
   abilityName: string,
   targetLabel: string,
+  options: { onRoll?: () => void } = {},
 ): Promise<string> {
-  return (await swingFromSheet(page, actorId, abilityName, targetLabel)).said;
+  return (
+    await swingFromSheet(page, actorId, abilityName, targetLabel, options)
+  ).said;
 }
 
+/**
+ * `onRoll` is told the moment the roll is confirmed, which is where a timing
+ * of "shown to every seat" starts (spec 046 SC-001) — not after the flow's own
+ * preview pause, and not after it has been read and closed.
+ */
 async function swingFromSheet(
   page: Page,
   actorId: string,
   abilityName: string,
   targetLabel: string,
+  options: { onRoll?: () => void } = {},
 ): Promise<{ warnings: string[]; said: string }> {
   await openDockTab(page, "actors");
   if (!(await page.getByTestId("in-pane-character-sheet").isVisible())) {
@@ -944,6 +953,7 @@ async function swingFromSheet(
   // say what it has to say before the roll is confirmed.
   await page.waitForTimeout(750);
   const warnings = await flow.getByTestId("attack-flow-flag").allTextContents();
+  options.onRoll?.();
   await flow.getByTestId("attack-flow-confirm").click();
   const outcome = flow
     .getByTestId("attack-flow-result")
