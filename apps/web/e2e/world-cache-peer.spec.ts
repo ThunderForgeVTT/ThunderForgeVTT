@@ -35,7 +35,8 @@ import {
  */
 
 /**
- * Make every `CHUNK` this context sends carry the wrong bytes.
+ * Let this context make every `CHUNK` it sends carry the wrong bytes, from the
+ * moment `startServingCorruptedBytes` is called on one of its pages.
  *
  * Installed as an init script in the *serving* peer's context, wrapping
  * `RTCDataChannel.prototype.send`. That is deliberately outside the
@@ -49,8 +50,23 @@ import {
  * correctly sized, so the requester cannot reject it on shape: the only
  * thing wrong with it is that the bytes do not hash to what was asked for,
  * which is the single property FR-046 turns on.
+ *
+ * # Why it waits to be switched on
+ *
+ * A client that catches a peer lying drops it and never asks it again, which
+ * is right. So a lie told before the content under test is asked for spends
+ * the only peer the table has. It used to be told from the first frame, and
+ * whether that mattered depended on a race this test does not control: the
+ * warm-up asset goes to whichever answers first, the server or a channel that
+ * has just opened. On a release bundle the server won; on a `dev` bundle the
+ * channel did, the warm-up came from the GM corrupted, the GM was dropped,
+ * and the player sat at `peers: 0, failures: 1` until the poll gave up. So
+ * the GM tells the truth until the table is connected and the warm-up is
+ * settled, and lies only about the asset this test is about.
  */
-async function serveCorruptedBytes(context: BrowserContext): Promise<void> {
+async function serveCorruptedBytesWhenAsked(
+  context: BrowserContext,
+): Promise<void> {
   await context.addInitScript(() => {
     const TAG_CHUNK = 3;
     const HEADER = 1 + 32;
@@ -58,12 +74,19 @@ async function serveCorruptedBytes(context: BrowserContext): Promise<void> {
     const send = RTCDataChannel.prototype.send;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (RTCDataChannel.prototype as any).send = function (data: unknown) {
+      const lying = (window as { __e2eCorruptPeerChunks?: boolean })
+        .__e2eCorruptPeerChunks;
       let frame: Uint8Array | null = null;
       if (data instanceof ArrayBuffer) frame = new Uint8Array(data);
       else if (ArrayBuffer.isView(data)) {
         frame = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
       }
-      if (frame && frame.length > HEADER + SEQ && frame[0] === TAG_CHUNK) {
+      if (
+        lying &&
+        frame &&
+        frame.length > HEADER + SEQ &&
+        frame[0] === TAG_CHUNK
+      ) {
         const copy = frame.slice();
         // One flipped byte in the payload is enough, and is the hardest
         // version of the test: everything else about the transfer is right.
@@ -76,6 +99,14 @@ async function serveCorruptedBytes(context: BrowserContext): Promise<void> {
       }
       return send.call(this, data as ArrayBufferView<ArrayBuffer>);
     };
+  });
+}
+
+/** From here on, this page lies on every channel it serves over. */
+async function startServingCorruptedBytes(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    (window as { __e2eCorruptPeerChunks?: boolean }).__e2eCorruptPeerChunks =
+      true;
   });
 }
 
@@ -176,28 +207,28 @@ test.describe("Client world cache — peer-assisted distribution", () => {
       "e2epeerbad",
     );
 
-    // The GM lies on the wire from here on.
-    await serveCorruptedBytes(gmContext);
+    // The GM will lie on the wire, once told to.
+    await serveCorruptedBytesWhenAsked(gmContext);
 
-    // Two assets, because the first fetch can never take the peer path.
+    // Two assets, because the first fetch races the channel.
     //
     // The engine awaits `startPeerTransfer` before `sync_world_cache`, but the
     // roster round trip that actually forms channels is deliberately not
-    // awaited — so a page's *first* sync runs before it knows any peer and
-    // goes to the server. That is correct behaviour, not a bug: peer transfer
-    // is opportunistic and cannot help a client's opening fetch.
+    // awaited — so a page's *first* sync may run before it knows any peer and
+    // go to the server, or may not. That is correct behaviour, not a bug:
+    // peer transfer is opportunistic.
     //
-    // This test used to have one asset and depend on losing that race. On a
-    // `--dev` wasm bundle the engine is slow enough that channels always won;
-    // on a release bundle the sync wins and no peer transfer ever happens —
-    // measured at `peers: 1, bytes: 0` held for a full minute, with the
-    // corrupted bytes this test is about never sent at all.
+    // This test used to have one asset and depend on how that race went. On a
+    // `dev` wasm bundle the channel wins; on a release bundle the sync wins and
+    // no peer transfer ever happens — measured at `peers: 1, bytes: 0` held
+    // for a full minute, with the corrupted bytes never sent at all.
     //
-    // So the first asset is a warm-up whose only job is to get both clients
-    // into the world with a channel between them, and the second is the one
-    // that matters: by the time it is asked for, a peer is known.
+    // So the first asset is a warm-up, served honestly by whichever wins, whose
+    // only job is to get both clients into the world with a channel between
+    // them. The second is the one that matters: by the time it is asked for, a
+    // peer is known and the GM has started lying.
     const warmupId = await createCanvasAsset(gm, worldId, sceneId, 7);
-    await assetFingerprint(gm, warmupId);
+    const warmup = await assetFingerprint(gm, warmupId);
 
     const gmSync = watchCacheSync(gm);
     await openWorldAndSync(gm, worldId, gmSync);
@@ -211,6 +242,17 @@ test.describe("Client world cache — peer-assisted distribution", () => {
         message: "the player needs a peer before there is a peer path to take",
       })
       .toBeGreaterThanOrEqual(1);
+    await expect
+      .poll(() => holdsFingerprint(player, worldId, warmup), {
+        timeout: 60_000,
+        message: "the warm-up is settled before the GM starts lying",
+      })
+      .toBe(true);
+    expect(
+      (await peerCounters(player)).failures,
+      "nothing has been rejected yet: the GM has told only the truth",
+    ).toBe(0);
+    await startServingCorruptedBytes(gm);
 
     // Now the content under test, published to a table that is already
     // connected. Re-synced rather than reloaded, which would drop the channel
