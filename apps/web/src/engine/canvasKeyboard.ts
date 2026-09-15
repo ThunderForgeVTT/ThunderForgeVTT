@@ -62,6 +62,21 @@ function isTextEntry(target: EventTarget | null): boolean {
 }
 
 /**
+ * True when the key belongs to an open menu or dialog.
+ *
+ * The play field's right-click menu is operated with the arrow keys, Enter
+ * and Escape, and the arrow keys walk a token. Forwarded, choosing "Damage"
+ * with the down arrow would also step the Game Master's selected token south.
+ */
+function isInOverlay(target: EventTarget | null): boolean {
+  return (
+    target instanceof Element &&
+    target.closest('[role="menu"], [role="dialog"], [role="alertdialog"]') !==
+      null
+  );
+}
+
+/**
  * Begins routing window key events to the engine canvas. Returns a cleanup
  * function; safe to call before the canvas exists, since the element is
  * resolved per event rather than captured up front (the engine mounts its
@@ -73,7 +88,11 @@ export function startCanvasKeyboardRouting(): () => void {
     // alone is what keeps this from feeding itself. A copy dispatched at
     // the canvas still travels the capture phase from the window down,
     // so this listener does see it.
-    if (synthetic.has(event) || isTextEntry(event.target)) {
+    if (
+      synthetic.has(event) ||
+      isTextEntry(event.target) ||
+      isInOverlay(event.target)
+    ) {
       return;
     }
 

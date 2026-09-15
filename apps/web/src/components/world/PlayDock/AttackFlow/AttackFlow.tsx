@@ -36,6 +36,11 @@ export interface AttackFlowProps {
   /** Every token on the scene, as this viewer was sent them. */
   tokens: TokenRecord[];
   /**
+   * The creature the flow opens aimed at — the one right-clicked on the
+   * board. Unset, the token selected on the board is the target, if any.
+   */
+  targetTokenId?: string | null;
+  /**
    * Move focus to the target list when the flow opens. On for a flow opened
    * by a button (the sheet's attack); off where the flow opens as an ability
    * is chosen from a list (the tracker), since moving focus out of that list
@@ -78,6 +83,7 @@ export function AttackFlow({
   abilityId,
   abilityName,
   tokens,
+  targetTokenId = null,
   focusOnOpen = true,
   onClose,
 }: AttackFlowProps) {
@@ -94,7 +100,14 @@ export function AttackFlow({
   const selectedTarget = selected.find((id) =>
     candidates.some((token) => token.tokenId === id),
   );
-  const [targetId, setTargetId] = useState<string>(selectedTarget ?? NO_TARGET);
+  const namedTarget = candidates.some(
+    (token) => token.tokenId === targetTokenId,
+  )
+    ? targetTokenId
+    : null;
+  const [targetId, setTargetId] = useState<string>(
+    namedTarget ?? selectedTarget ?? NO_TARGET,
+  );
   const [reaction, setReaction] = useState(false);
   const [preview, setPreview] = useState<AttackPreviewRecord | null>(null);
   const [rolling, setRolling] = useState(false);

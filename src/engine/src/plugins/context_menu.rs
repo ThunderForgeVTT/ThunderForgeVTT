@@ -132,7 +132,12 @@ fn report_right_click(
     mouse_button: Res<ButtonInput<MouseButton>>,
     windows: Query<&Window, With<PrimaryWindow>>,
     camera_query: Query<(&Camera, &GlobalTransform)>,
-    tokens: Query<(&Transform, &TokenIdentity, Option<&TokenGridBehaviour>)>,
+    tokens: Query<(
+        &Transform,
+        &TokenIdentity,
+        Option<&TokenGridBehaviour>,
+        Option<&Visibility>,
+    )>,
     grid: Option<Res<SceneGrid>>,
     mut press: Local<Option<(Vec2, f32)>>,
 ) {
@@ -171,9 +176,15 @@ fn report_right_click(
     // The same hit test a left-click drag uses (`systems::token.rs`), so
     // right-clicking a token and left-clicking it agree about which token that
     // is. Anything else would be a second answer to the same question.
+    //
+    // A token this board hides — out of a player's sight, or in the dark — is
+    // not under the pointer as far as this viewer knows (spec 045). Reporting
+    // it would put its name in a menu over a patch of darkness, and tell a
+    // player exactly where the thing they cannot see is standing.
     let candidates: Vec<StackCandidate> = tokens
         .iter()
-        .map(|(transform, identity, behaviour)| {
+        .filter(|(_, _, _, visibility)| !matches!(visibility, Some(Visibility::Hidden)))
+        .map(|(transform, identity, behaviour, _)| {
             let footprint = behaviour.map_or_else(Footprint::default, |b| b.footprint);
             let side = grid
                 .as_ref()

@@ -574,6 +574,87 @@ export function onAuthoringToolRevoked(
 }
 
 /**
+ * A right-click on the play field, and what was under it (spec 031 FR-029).
+ *
+ * The engine reports the gesture and the tokens its hit test found — topmost
+ * first, and only tokens this board draws — and nothing else. The menu is
+ * chrome's (Constitution Principle I): what may be done, and to what, is
+ * decided in React against what the server allows this viewer.
+ *
+ * `screenX`/`screenY` are the pointer in CSS pixels from the canvas's own
+ * top-left corner, where the press was; `worldX`/`worldY` are the same point
+ * on the board. An empty `tokenIds` is a right-click on bare board.
+ */
+export interface CanvasContextMenuEvent {
+  type: "canvas_context_menu";
+  worldX: number;
+  worldY: number;
+  screenX: number;
+  screenY: number;
+  tokenIds: string[];
+}
+
+function asCanvasContextMenu(event: unknown): CanvasContextMenuEvent | null {
+  const candidate = event as { type?: unknown; tokenIds?: unknown };
+  return candidate.type === "canvas_context_menu" &&
+    Array.isArray(candidate.tokenIds)
+    ? (event as CanvasContextMenuEvent)
+    : null;
+}
+
+const canvasContextMenuListeners = new Set<
+  (event: CanvasContextMenuEvent) => void
+>();
+
+/** Be told when the play field is right-clicked. */
+export function onCanvasContextMenu(
+  listener: (event: CanvasContextMenuEvent) => void,
+): () => void {
+  canvasContextMenuListeners.add(listener);
+  return () => {
+    canvasContextMenuListeners.delete(listener);
+  };
+}
+
+/**
+ * Where a board point is on the page, in client pixels — for anchoring a menu
+ * opened from the keyboard, where there is no pointer to open it at.
+ *
+ * One projection for one gesture, from the camera the engine already
+ * publishes (`camera_state`), not a per-frame stream. `null` before the
+ * engine or its canvas exists.
+ */
+export async function boardPointToClient(
+  x: number,
+  y: number,
+): Promise<{ x: number; y: number } | null> {
+  const module = await getWasmModule();
+  const cameraState = (module as { camera_state?: () => string }).camera_state;
+  const canvas = document.querySelector<HTMLCanvasElement>("canvas");
+  if (!cameraState || !canvas) return null;
+  const camera = JSON.parse(cameraState()) as {
+    x: number;
+    y: number;
+    scale: number;
+  };
+  const box = canvas.getBoundingClientRect();
+  const scale = camera.scale > 0 ? camera.scale : 1;
+  return {
+    x: box.left + box.width / 2 + (x - camera.x) / scale,
+    y: box.top + box.height / 2 - (y - camera.y) / scale,
+  };
+}
+
+/** The board point at the middle of the canvas: where the camera looks. */
+export async function boardCentre(): Promise<{ x: number; y: number } | null> {
+  const module = await getWasmModule();
+  const cameraState = (module as { camera_state?: () => string }).camera_state;
+  if (!cameraState) return null;
+  const camera = JSON.parse(cameraState()) as { x: number; y: number };
+  return { x: camera.x, y: camera.y };
+}
+
+/**
  * A carry that ended, one way or the other.
  *
  * `kind` is the word chrome used when it asked for the carry — `actor` for a
@@ -880,6 +961,20 @@ export async function bindWorldStore(worldStore: WorldStore): Promise<void> {
         // created when a drop is confirmed, which is precisely why chrome
         // hears about it. Dispatching either would put a command nothing
         // reduces into the store.
+        // Nor is a right-click. It asks chrome to open a menu; nothing in the
+        // world changed.
+        const contextMenu = asCanvasContextMenu(parsed);
+        if (contextMenu) {
+          for (const listener of canvasContextMenuListeners) {
+            try {
+              listener(contextMenu);
+            } catch {
+              // One bad listener must not stop the others hearing about this.
+            }
+          }
+          return;
+        }
+
         const placed = asPlacementConfirmed(parsed);
         if (placed) {
           for (const listener of placementConfirmedListeners) {

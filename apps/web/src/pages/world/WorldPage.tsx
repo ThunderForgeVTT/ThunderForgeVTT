@@ -148,6 +148,8 @@ import {
   type ControllableToken,
 } from "@/engine/world/facets";
 import { TokenStackPicker } from "@/components/canvas-tools/TokenStackPicker";
+import { CanvasContextMenu } from "@/components/world/CanvasContextMenu/CanvasContextMenu";
+import { useCanvasContextMenu } from "@/components/world/CanvasContextMenu/useCanvasContextMenu";
 import { InteractionTool } from "@/components/canvas-tools/InteractionTool";
 import { ApprovalQueue } from "@/components/ApprovalQueue";
 import {
@@ -1813,6 +1815,14 @@ export default function WorldPage() {
   // Spec 045 FR-061: a light's reach is set in the system's units.
   const sceneUnits = useSceneUnits(sceneId, isSceneOwner);
 
+  // The play field's right-click menu, and its keyboard equivalent: what this
+  // viewer may do to the token under the pointer, or on bare board.
+  const canvasMenu = useCanvasContextMenu(
+    worldStore,
+    Boolean(sceneId && user),
+    isSceneOwner,
+  );
+
   const explorationPlayers = useMemo(() => {
     const byOwner = new Map<string, string>();
     for (const token of Object.values(allTokens)) {
@@ -2651,6 +2661,17 @@ export default function WorldPage() {
           </button>
         </div>
       ) : null}
+      <CanvasContextMenu
+        request={canvasMenu.request}
+        onDone={canvasMenu.done}
+        worldId={id}
+        sceneId={sceneId}
+        worldStore={worldStore}
+        control={facets.tokens}
+        isGameMaster={isSceneOwner}
+        userId={user?.id ?? null}
+        units={sceneUnits}
+      />
       {stackPicker ? (
         <TokenStackPicker
           members={stackPicker.members}
