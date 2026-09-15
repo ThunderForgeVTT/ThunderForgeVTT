@@ -76,6 +76,10 @@ pub mod authoring_tools;
 
 pub mod actor_permissions;
 
+/// Owner decision 2026-09-15: whether players may see an NPC — a visibility
+/// axis beside the permission ladder, as `gm_only` is for abilities.
+pub mod npc_visibility;
+
 /// Spec 012: lore entry ownership/permission enforcement
 /// (`require_lore_permission`, `effective_lore_permission`) — generalizes
 /// `actor_permissions` to `world_lore_entries`.

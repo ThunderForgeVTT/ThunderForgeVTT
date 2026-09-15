@@ -50,6 +50,8 @@ pub struct ExportedActor {
     pub actor_type: String,
     pub game_system_id: Option<String>,
     pub is_npc: bool,
+    /// Whether players see it, if it is an NPC (owner decision 2026-09-15).
+    pub visible_to_players: bool,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     /// The sheet, as the game system stores it — the part of a character that
@@ -324,6 +326,7 @@ pub fn load_content_sync(conn: &mut PgConnection, user_id: Uuid) -> QueryResult<
             actor_type: actor.actor_type,
             game_system_id: actor.game_system_id,
             is_npc: actor.is_npc,
+            visible_to_players: actor.visible_to_players,
             created_at: actor.created_at,
             updated_at: actor.updated_at,
         })

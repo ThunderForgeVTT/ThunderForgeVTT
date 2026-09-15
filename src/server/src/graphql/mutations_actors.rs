@@ -114,6 +114,8 @@ pub async fn create_actor_impl(
             is_public: false,
             is_npc,
             description,
+            // An NPC is hidden from players until its Game Master shows it.
+            visible_to_players: false,
         };
 
         diesel::insert_into(world_actors::table)
@@ -179,6 +181,80 @@ pub async fn update_actor_impl(
     .map_err(Error::new)
 }
 
+/// Testable core of `ActorMutation::set_actor_visible_to_players`: a Game
+/// Master shows an NPC to the players of its world, or hides it again (owner
+/// decision 2026-09-15). A player character is seen by everyone and has no
+/// such setting, so asking to change one is refused rather than recorded.
+///
+/// The announcement is the sheet-changed nudge `setActorUnique` sends, which
+/// carries the actor's id and nothing else, never the name.
+pub async fn set_actor_visible_to_players_impl(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    is_admin: bool,
+    actor_id: uuid::Uuid,
+    visible: bool,
+) -> GraphQLResult<WorldActor> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let found = tokio::task::spawn_blocking(move || {
+        world_actors::table
+            .filter(world_actors::id.eq(actor_id))
+            .select((world_actors::world_id, world_actors::is_npc))
+            .first::<(uuid::Uuid, bool)>(&mut conn)
+            .optional()
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to load actor"))?;
+
+    // Not the Game Master: answered as if the actor were not there, since a
+    // player may not know a hidden NPC exists.
+    let Some((world_id, is_npc)) = found else {
+        return Err(Error::new("Actor not found"));
+    };
+    if !is_dm_of_world(state, user_id, is_admin, world_id).await? {
+        return Err(Error::new("Actor not found"));
+    }
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    tokio::task::spawn_blocking(move || -> GraphQLResult<WorldActor> {
+        crate::play_pause::gate::refuse_if_paused(&mut conn, world_id)?;
+        if !is_npc {
+            return Err(Error::new(
+                "Only an NPC can be hidden from players; every player sees the characters",
+            ));
+        }
+        let actor = diesel::update(world_actors::table.filter(world_actors::id.eq(actor_id)))
+            .set((
+                world_actors::visible_to_players.eq(visible),
+                world_actors::updated_at.eq(chrono::Utc::now().naive_utc()),
+            ))
+            .returning(WorldActor::as_returning())
+            .get_result(&mut conn)
+            .map_err(|e| Error::new(format!("Failed to change the actor: {e}")))?;
+        let _ = crate::world_events::record_world_event(
+            &mut conn,
+            world_id,
+            crate::world_events::EVENT_CODE_ACTOR_SHEET_CHANGED,
+            Some(serde_json::json!({
+                "action": "changed",
+                "actorId": actor_id,
+                "dataType": "visible_to_players",
+            })),
+            user_id,
+        );
+        Ok(actor)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+}
+
 #[derive(Default)]
 pub struct ActorMutation;
 
@@ -206,6 +282,28 @@ impl ActorMutation {
         update_actor_impl(state, auth_user.user_id, auth_user.is_admin, input)
             .await
             .map(GraphQLWorldActor::from)
+    }
+
+    /// Show an NPC to the players of its world, or hide it from them. Game
+    /// Master only. A hidden NPC reaches no player's actor list, search or
+    /// by-id read; its tokens' names follow their own setting either way.
+    async fn set_actor_visible_to_players(
+        &self,
+        ctx: &Context<'_>,
+        actor_id: uuid::Uuid,
+        visible: bool,
+    ) -> GraphQLResult<GraphQLWorldActor> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        set_actor_visible_to_players_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            actor_id,
+            visible,
+        )
+        .await
+        .map(GraphQLWorldActor::from)
     }
 }
 

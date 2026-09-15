@@ -254,6 +254,10 @@ pub const GATED: &[(&str, &str)] = &[
         r#"mutation { setActorUnique(actorId: "{actor}", unique: true) { __typename } }"#,
     ),
     (
+        "setActorVisibleToPlayers",
+        r#"mutation { setActorVisibleToPlayers(actorId: "{actor}", visible: true) { __typename } }"#,
+    ),
+    (
         "advanceTurn",
         r#"mutation { advanceTurn(combatId: "{combat}") { __typename } }"#,
     ),

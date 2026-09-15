@@ -108,6 +108,7 @@ pub async fn actor_abilities_impl(
         ActorPermissionLevel::Viewer,
     )
     .await?;
+    crate::auth::npc_visibility::require_actor_visible(state, user_id, is_admin, actor_id).await?;
 
     let world_id = actor_world_id(state, actor_id).await?;
     let caller_is_dm = is_dm_of_world(state, user_id, is_admin, world_id).await?;
@@ -371,6 +372,10 @@ mod tests {
                 world_actors::owned_by.eq(owner_id),
                 world_actors::is_public.eq(false),
                 world_actors::is_npc.eq(true),
+                // Shown to players: these tests are about which of a known
+                // NPC's abilities a player reads, not whether they may read
+                // the NPC (`auth::npc_visibility`).
+                world_actors::visible_to_players.eq(true),
                 world_actors::created_at.eq(now),
                 world_actors::updated_at.eq(now),
             ))

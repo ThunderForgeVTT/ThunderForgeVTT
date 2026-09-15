@@ -445,6 +445,7 @@ pub async fn create_and_claim_actor_impl(
                 is_public: false,
                 is_npc: false,
                 description,
+                visible_to_players: false,
             };
 
             let created = diesel::insert_into(world_actors::table)

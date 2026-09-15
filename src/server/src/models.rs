@@ -1082,6 +1082,10 @@ pub struct WorldActor {
     /// Spec 046 FR-016: a named individual ("Boblin the goblin"). Its tokens
     /// are placed linked; any other NPC's are placed as copies.
     pub is_unique: bool,
+    /// Owner decision 2026-09-15: whether players may see this NPC. Hidden
+    /// by default. Read only through `auth::npc_visibility`; a player
+    /// character ignores it.
+    pub visible_to_players: bool,
 }
 
 /// New actor for insertion
@@ -1098,6 +1102,9 @@ pub struct NewWorldActor {
     pub is_public: bool,
     pub is_npc: bool,
     pub description: Option<String>,
+    /// Whether players see it, if it is an NPC. Every insert decides, so a
+    /// copy cannot quietly arrive with a different answer than its source.
+    pub visible_to_players: bool,
 }
 
 /// Spec 010: an actor's "ownership block" entry — one explicit

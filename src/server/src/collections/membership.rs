@@ -25,7 +25,7 @@
 //! | scene | `scenes.hidden` | Not yet revealed to players — **staging, not a restriction**; see below |
 //! | item | *none* | Every member sees every item |
 //! | lore | *none* | Every member sees every lore entry |
-//! | actor | *none* | `world_actors.is_public` exists but gates nothing — it is never read as a visibility check anywhere in the server |
+//! | actor | `world_actors.visible_to_players` | An NPC not yet shown to players — **staging, not a restriction**, for the reason `scenes.hidden` is not (it defaults to hidden). `is_public` gates nothing |
 //!
 //! Four of the five types are therefore vacuous today. **That is not a reason
 //! to check only one.** This function is exhaustive over `MEMBER_TYPES` with
@@ -127,11 +127,16 @@ pub async fn restriction_reason(
             // content. The module documentation carries the full argument —
             // read it before "fixing" this arm.
             "scene" => Ok(None),
-            // The three vacuous arms, written out rather than folded into a
-            // catch-all. Every member of a world can already see every item,
-            // lore entry and actor in it, so there is no subset to publish
-            // past. If that ever changes, the change lands here.
-            "item" | "lore" | "actor" => Ok(None),
+            // Actors are NOT gated on `visible_to_players`, for the reason
+            // scenes are not gated on `hidden`: every NPC is hidden until its
+            // Game Master shows it, so gating would refuse nearly every NPC,
+            // and a copy carries the flag, so a hidden NPC arrives hidden.
+            "actor" => Ok(None),
+            // The two vacuous arms, written out rather than folded into a
+            // catch-all. Every member of a world can already see every item
+            // and lore entry in it, so there is no subset to publish past. If
+            // that ever changes, the change lands here.
+            "item" | "lore" => Ok(None),
             other => Err(format!("Unknown member type: {other}")),
         }
     })

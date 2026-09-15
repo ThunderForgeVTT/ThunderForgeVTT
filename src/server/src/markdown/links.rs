@@ -122,9 +122,20 @@ pub fn extract_and_resolve(
                     href: Some(format!("/world/{world_id}/lore/{slug}/view")),
                 }
             } else {
-                let actor_match = world_actors::table
+                let mut actor_query = world_actors::table
                     .filter(world_actors::world_id.eq(world_id))
                     .filter(world_actors::label.ilike(&title))
+                    .into_boxed();
+                // A hidden NPC resolves for nobody but a Game Master, as a
+                // GM-only ability does below (owner decision 2026-09-15).
+                if !viewer_is_dm {
+                    actor_query = actor_query.filter(
+                        world_actors::is_npc
+                            .eq(false)
+                            .or(world_actors::visible_to_players.eq(true)),
+                    );
+                }
+                let actor_match = actor_query
                     .order(world_actors::created_at.asc())
                     .select(world_actors::id)
                     .first::<Uuid>(conn)

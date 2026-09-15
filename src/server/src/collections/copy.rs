@@ -484,7 +484,7 @@ fn copy_actor(
         worlds,
     };
 
-    let (label, description, actor_type, game_system_id, is_npc, source_scene) =
+    let (label, description, actor_type, game_system_id, is_npc, source_scene, visible_to_players) =
         world_actors::table
             .filter(world_actors::id.eq(source_id))
             .select((
@@ -494,8 +494,18 @@ fn copy_actor(
                 world_actors::game_system_id,
                 world_actors::is_npc,
                 world_actors::scene_id,
+                // A hidden NPC arrives hidden, and a shown one shown.
+                world_actors::visible_to_players,
             ))
-            .first::<(String, Option<String>, String, Option<String>, bool, Uuid)>(conn)?;
+            .first::<(
+                String,
+                Option<String>,
+                String,
+                Option<String>,
+                bool,
+                Uuid,
+                bool,
+            )>(conn)?;
 
     // An actor needs a scene. If its own scene came along in the collection, it
     // lands there; otherwise FR-015a puts it in the destination world's
@@ -564,6 +574,7 @@ fn copy_actor(
             world_actors::owned_by.eq(ctx.user_id),
             world_actors::is_public.eq(false),
             world_actors::is_npc.eq(is_npc),
+            world_actors::visible_to_players.eq(visible_to_players),
             world_actors::created_at.eq(now),
             world_actors::updated_at.eq(now),
         ))

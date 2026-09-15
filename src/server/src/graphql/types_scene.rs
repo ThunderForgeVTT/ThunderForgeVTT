@@ -160,6 +160,10 @@ pub struct GraphQLWorldActor {
     /// Spec 046 FR-016: a named individual. Its tokens are placed linked;
     /// any other NPC's tokens are placed as unlinked copies.
     pub is_unique: bool,
+    /// Whether players see this NPC (owner decision 2026-09-15). Hidden by
+    /// default; set by `setActorVisibleToPlayers`. A player never receives a
+    /// hidden NPC at all, so a player reading `false` here holds it.
+    pub visible_to_players: bool,
 }
 
 #[async_graphql::ComplexObject]
@@ -240,6 +244,7 @@ impl From<WorldActor> for GraphQLWorldActor {
             updated_at: actor.updated_at,
             available_for_claim: actor.available_for_claim,
             is_unique: actor.is_unique,
+            visible_to_players: actor.visible_to_players,
         }
     }
 }

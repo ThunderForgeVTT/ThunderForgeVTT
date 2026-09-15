@@ -31,6 +31,13 @@ pub async fn world_actors_impl(
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(|_| Error::new("Failed to load world actors"))?;
 
+    // A hidden NPC is withheld from a player here, at the data boundary, not
+    // by the roster that draws the list (owner decision 2026-09-15).
+    let rows = crate::auth::npc_visibility::retain_visible_actors(
+        state, user_id, is_admin, world_id, rows,
+    )
+    .await?;
+
     // Spec 015 (contracts/graphql-moderation.md): a moderation-disabled
     // actor is excluded from every list query, for every caller.
     crate::moderation::filter_visible(state, "world_actor", rows, |a| a.id).await
@@ -80,6 +87,7 @@ pub async fn actor_system_data_impl(
     };
 
     require_visible_world(state, user_id, is_admin, world_id).await?;
+    crate::auth::npc_visibility::require_actor_visible(state, user_id, is_admin, actor_id).await?;
 
     let row = tokio::task::spawn_blocking(move || {
         crate::schema::world_actor_system_data::table
@@ -163,6 +171,7 @@ pub async fn actor_sheet_values_impl(
     .map_err(|_| Error::new("Actor not found"))?;
 
     require_visible_world(state, user_id, is_admin, world_id).await?;
+    crate::auth::npc_visibility::require_actor_visible(state, user_id, is_admin, actor_id).await?;
 
     // An actor belonging to no system has nothing declared about it. Not an
     // error: a marker on a map is a real thing with no sheet.
@@ -268,6 +277,11 @@ pub async fn search_actors_impl(
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(|_| Error::new("Failed to search world actors"))?;
+
+    let rows = crate::auth::npc_visibility::retain_visible_actors(
+        state, user_id, is_admin, world_id, rows,
+    )
+    .await?;
 
     crate::moderation::filter_visible(state, "world_actor", rows, |a| a.id).await
 }

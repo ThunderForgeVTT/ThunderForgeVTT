@@ -1084,6 +1084,7 @@ diesel::table! {
         description -> Nullable<Text>,
         available_for_claim -> Bool,
         is_unique -> Bool,
+        visible_to_players -> Bool,
     }
 }
 

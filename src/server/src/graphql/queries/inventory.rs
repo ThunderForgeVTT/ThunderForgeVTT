@@ -27,6 +27,7 @@ pub async fn actor_inventory_impl(
         ActorPermissionLevel::Viewer,
     )
     .await?;
+    crate::auth::npc_visibility::require_actor_visible(state, user_id, is_admin, actor_id).await?;
 
     let mut conn = state
         .db_pool

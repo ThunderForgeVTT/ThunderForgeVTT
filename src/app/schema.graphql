@@ -415,6 +415,12 @@ type AppMutationRoot {
 	createActor(input: CreateActorInput!): GraphQLWorldActor!
 	updateActor(input: UpdateActorInput!): GraphQLWorldActor!
 	"""
+	Show an NPC to the players of its world, or hide it from them. Game
+	Master only. A hidden NPC reaches no player's actor list, search or
+	by-id read; its tokens' names follow their own setting either way.
+	"""
+	setActorVisibleToPlayers(actorId: UUID!, visible: Boolean!): GraphQLWorldActor!
+	"""
 	DM-only. Grants an actor-level permission to one world member.
 	"""
 	setActorPermission(input: SetActorPermissionInput!): GraphQLActorPermission!
@@ -4917,6 +4923,12 @@ type GraphQLWorldActor {
 	any other NPC's tokens are placed as unlinked copies.
 	"""
 	isUnique: Boolean!
+	"""
+	Whether players see this NPC (owner decision 2026-09-15). Hidden by
+	default; set by `setActorVisibleToPlayers`. A player never receives a
+	hidden NPC at all, so a player reading `false` here holds it.
+	"""
+	visibleToPlayers: Boolean!
 	"""
 	Effective Viewer/Editor/Owner level the calling user holds on this
 	actor (data-model.md's "effective actor permission") — DM of the

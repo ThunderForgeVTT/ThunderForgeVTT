@@ -369,9 +369,20 @@ pub async fn lore_link_targets_impl(
                 }),
         );
 
-        let actor_matches = world_actors::table
+        let mut actor_query = world_actors::table
             .filter(world_actors::world_id.eq(world_id))
             .filter(world_actors::label.ilike(&pattern))
+            .into_boxed();
+        // A hidden NPC is not a name a player can be offered (owner decision
+        // 2026-09-15), for the reason GM-only abilities are withheld below.
+        if !caller_is_dm {
+            actor_query = actor_query.filter(
+                world_actors::is_npc
+                    .eq(false)
+                    .or(world_actors::visible_to_players.eq(true)),
+            );
+        }
+        let actor_matches = actor_query
             .select((world_actors::id, world_actors::label))
             .load::<(Uuid, String)>(&mut conn)?;
         results.extend(

@@ -151,7 +151,11 @@ async fn authorize_and_read(
         ActorPermissionLevel::Viewer,
     )
     .await
-    .is_ok();
+    .is_ok()
+        // A hidden NPC's portrait is as hidden as its name.
+        && crate::auth::npc_visibility::require_actor_visible(state, user_id, is_admin, actor_id)
+            .await
+            .is_ok();
     // The token image, and only it, follows the map — see
     // `token_art_visible_sync`.
     let may_view_token = !may_view_actor

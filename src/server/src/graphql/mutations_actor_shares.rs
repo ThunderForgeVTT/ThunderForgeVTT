@@ -406,6 +406,8 @@ pub async fn copy_shared_actor_to_world_impl(
                 is_public: false,
                 is_npc: source.is_npc,
                 description: source.description.clone(),
+                // A copy is exactly as visible as what it was copied from.
+                visible_to_players: source.visible_to_players,
             };
 
             let created = diesel::insert_into(world_actors::table)
