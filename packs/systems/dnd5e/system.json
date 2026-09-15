@@ -877,6 +877,19 @@
             "type": "string"
           },
           "description": "Racial and class traits"
+        },
+        "size": {
+          "type": "string",
+          "enum": [
+            "tiny",
+            "small",
+            "medium",
+            "large",
+            "huge",
+            "gargantuan"
+          ],
+          "label": "Size",
+          "description": "The space a creature fills. Declared as this system's size in combat.sizes, which says how many squares each fills; a creature with none recorded fills one."
         }
       },
       "required": [
@@ -1114,6 +1127,44 @@
       "field": "armor_class",
       "label": "Armor Class",
       "abbrev": "AC"
+    },
+    "sizes": {
+      "source": {
+        "slot": "traitData",
+        "field": "size"
+      },
+      "categories": [
+        {
+          "id": "tiny",
+          "label": "Tiny",
+          "footprint": 0.5
+        },
+        {
+          "id": "small",
+          "label": "Small",
+          "footprint": 1
+        },
+        {
+          "id": "medium",
+          "label": "Medium",
+          "footprint": 1
+        },
+        {
+          "id": "large",
+          "label": "Large",
+          "footprint": 2
+        },
+        {
+          "id": "huge",
+          "label": "Huge",
+          "footprint": 3
+        },
+        {
+          "id": "gargantuan",
+          "label": "Gargantuan",
+          "footprint": 4
+        }
+      ]
     }
   },
   "abilityVocabulary": {

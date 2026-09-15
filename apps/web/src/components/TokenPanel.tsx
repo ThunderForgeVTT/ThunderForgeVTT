@@ -13,10 +13,12 @@ import { getWorldActors } from "../api/actors";
 import { getGameSystemManifest } from "../api/gameSystems";
 import { useActorSystemData } from "../hooks/useActorSystemData";
 import {
-  resolveSizeScale,
-  type SizeCategoriesLookup,
+  declaredSizesOf,
+  footprintText,
+  resolveSizeFootprint,
+  sizeIdOnSheet,
+  type DeclaredSizes,
 } from "../utils/sizeCategory";
-import { readString } from "../lib/systemData";
 import { TOKEN_TYPES, type TokenRecord, type TokenType } from "../types/token";
 import { TokenDisclosureControl } from "./TokenDisclosureControl";
 import { getTokenStatus, type TokenStatus } from "@/api/tokenStatus";
@@ -32,10 +34,9 @@ interface TokenPanelProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   /** World this scene belongs to — used only to offer an NPC picker on
-   * token creation (spec 018 T047: staging a Genie NPC of a given
-   * `size_category` defaults its token's `scale` per the NPC's game
-   * system manifest `sizeCategories` lookup, research.md R6). Omit to
-   * keep the plain blank-token creation flow. */
+   * token creation (spec 018 T047), which shows how many squares the NPC
+   * fills by its game system's `combat.sizes` (spec 046). Omit to keep the
+   * plain blank-token creation flow. */
   worldId?: string;
 }
 
@@ -63,10 +64,11 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Spec 018 T047: NPC roster + size-category -> scale resolution for the
-  // "Create Token" dialog's optional NPC picker. Kept fully optional and
-  // additive — a blank `newTokenActorId` behaves exactly like before
-  // (createToken called with no `actorId`/`scale` override).
+  // Spec 018 T047: the "Create Token" dialog's optional NPC picker. Spec 046
+  // took size out of placement: a creature's footprint is resolved by the
+  // server from its sheet for every board (`tokenGrid`), and `scale` is the
+  // art multiplier, so nothing here derives a scale from a size any more.
+  // The dialog only says how many squares the NPC will fill.
   const [npcActors, setNpcActors] = useState<WorldActorRecord[]>([]);
   const [newTokenActorId, setNewTokenActorId] = useState<string>("");
   // `null` means "whatever the NPC selection implies"; a value means the
@@ -80,9 +82,9 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
   // apply right now" is derived during render instead of being reset from
   // inside the effect below — a manifest from a previously-picked NPC's
   // system can never be read as this one's.
-  const [loadedSizeCategories, setLoadedSizeCategories] = useState<{
+  const [loadedSizes, setLoadedSizes] = useState<{
     gameSystemId: string;
-    categories: SizeCategoriesLookup | undefined;
+    sizes: DeclaredSizes | null;
   } | null>(null);
 
   const selectedActor = npcActors.find((a) => a.id === newTokenActorId) ?? null;
@@ -101,11 +103,10 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
   }, [isOpen, worldId, isSceneOwner]);
 
   const selectedGameSystemId = selectedActor?.gameSystemId;
-  const sizeCategories =
-    selectedGameSystemId &&
-    loadedSizeCategories?.gameSystemId === selectedGameSystemId
-      ? loadedSizeCategories.categories
-      : undefined;
+  const sizes =
+    selectedGameSystemId && loadedSizes?.gameSystemId === selectedGameSystemId
+      ? loadedSizes.sizes
+      : null;
 
   useEffect(() => {
     if (!selectedGameSystemId) {
@@ -115,24 +116,19 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
     getGameSystemManifest(selectedGameSystemId)
       .then((manifest) => {
         if (active) {
-          setLoadedSizeCategories({
+          setLoadedSizes({
             gameSystemId: selectedGameSystemId,
-            categories: manifest.sizeCategories as
-              | SizeCategoriesLookup
-              | undefined,
+            sizes: declaredSizesOf(manifest),
           });
         }
       })
       .catch((err) => {
         console.error(
-          "Failed to load game system manifest for token scale:",
+          "Failed to load game system manifest for token size:",
           err,
         );
         if (active) {
-          setLoadedSizeCategories({
-            gameSystemId: selectedGameSystemId,
-            categories: undefined,
-          });
+          setLoadedSizes({ gameSystemId: selectedGameSystemId, sizes: null });
         }
       });
     return () => {
@@ -140,9 +136,6 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
     };
   }, [selectedGameSystemId]);
 
-  /** The `scale` a new token defaults to given the currently-selected NPC
-   * (if any) — `undefined` when no NPC is selected, so `createToken` falls
-   * back to the server's existing default rather than forcing a value. */
   /**
    * The kind a new token will be created as.
    *
@@ -153,11 +146,15 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
   const effectiveTokenType: TokenType =
     newTokenTypeChoice ?? (newTokenActorId ? "npc" : "character");
 
-  const resolvedNewTokenScale: number | undefined = newTokenActorId
-    ? resolveSizeScale(
-        sizeCategories,
-        readString(selectedActorSystemData?.trait_data, "size_category") ??
-          null,
+  /** How many squares a side the selected NPC fills, by its sheet's size —
+   * shown, not sent: the board is told by `tokenGrid`. */
+  const newTokenFootprint: number | undefined = newTokenActorId
+    ? resolveSizeFootprint(
+        sizes,
+        sizeIdOnSheet(
+          sizes,
+          selectedActorSystemData as Record<string, unknown> | null | undefined,
+        ),
       )
     : undefined;
   // Root cause of the primary-checkbox hang (spec 006 US2, found via
@@ -211,11 +208,9 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
         sceneId,
         x: 0,
         y: 0,
-        // Spec 018 T047: a token created for a selected NPC defaults to
-        // that NPC's size-category scale (resolveSizeScale, ../utils/
-        // sizeCategory.ts) rather than the server's plain default.
+        // No `scale`: a creature's size is its footprint, which the server
+        // resolves from its sheet (spec 046 T077). Scale is only its art.
         actorId: newTokenActorId || undefined,
-        scale: resolvedNewTokenScale,
         tokenType: effectiveTokenType,
       });
       setNewTokenActorId("");
@@ -229,13 +224,7 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [
-    sceneId,
-    newTokenActorId,
-    resolvedNewTokenScale,
-    effectiveTokenType,
-    refresh,
-  ]);
+  }, [sceneId, newTokenActorId, effectiveTokenType, refresh]);
 
   const handleDeleteToken = useCallback(
     async (tokenId: string) => {
@@ -602,9 +591,9 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
                         {newTokenActorId && (
                           <p
                             className="token-npc-scale-hint"
-                            data-testid="token-create-npc-scale-hint"
+                            data-testid="token-create-npc-size-hint"
                           >
-                            Default token scale: {resolvedNewTokenScale}x
+                            {footprintText(newTokenFootprint ?? 1)}
                           </p>
                         )}
                       </div>

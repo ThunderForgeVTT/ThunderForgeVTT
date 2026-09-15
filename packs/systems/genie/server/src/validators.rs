@@ -17,6 +17,32 @@ impl std::fmt::Display for ValidationError {
 
 impl std::error::Error for ValidationError {}
 
+/// The size ids this pack's manifest declares under `combat.sizes`.
+///
+/// Read once from the `system.json` compiled in beside this crate. Until spec
+/// 046 this was a hard-coded list beside a `sizeCategories` table in the
+/// manifest, and nothing kept the two in step.
+pub fn declared_size_ids() -> &'static [String] {
+    static IDS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+    IDS.get_or_init(|| {
+        serde_json::from_str::<serde_json::Value>(include_str!("../../system.json"))
+            .ok()
+            .and_then(|manifest| {
+                manifest
+                    .pointer("/combat/sizes/categories")
+                    .and_then(|c| c.as_array())
+                    .map(|categories| {
+                        categories
+                            .iter()
+                            .filter_map(|c| c.get("id").and_then(|id| id.as_str()))
+                            .map(str::to_string)
+                            .collect()
+                    })
+            })
+            .unwrap_or_default()
+    })
+}
+
 // ============================================================================
 // ability_data Validators
 // ============================================================================
@@ -161,8 +187,10 @@ pub fn validate_trait_data(data: &serde_json::Value) -> Result<(), ValidationErr
                 field: "trait_data.size_category".to_string(),
                 message: "must be a string or null".to_string(),
             })?;
-            let valid = ["diminutive", "small", "medium", "large", "huge", "colossal"];
-            if !valid.contains(&value) {
+            // The manifest's `combat.sizes` (spec 046), not a second list
+            // here that could drift from the one the grid measures by.
+            let valid = declared_size_ids();
+            if !valid.iter().any(|id| id == value) {
                 return Err(ValidationError {
                     field: "trait_data.size_category".to_string(),
                     message: format!("must be one of {valid:?}"),
@@ -245,6 +273,18 @@ mod tests {
     fn trait_data_accepts_known_size_category() {
         let data = json!({ "size_category": "colossal" });
         assert!(validate_trait_data(&data).is_ok());
+    }
+
+    #[test]
+    fn size_categories_are_the_manifests() {
+        assert_eq!(
+            declared_size_ids(),
+            ["diminutive", "small", "medium", "large", "huge", "colossal"],
+            "read from combat.sizes in system.json"
+        );
+        for id in declared_size_ids() {
+            assert!(validate_trait_data(&json!({ "size_category": id })).is_ok());
+        }
     }
 
     #[test]

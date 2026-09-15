@@ -17,6 +17,32 @@ impl std::fmt::Display for ValidationError {
 
 impl std::error::Error for ValidationError {}
 
+/// The size ids this pack's manifest declares under `combat.sizes`.
+///
+/// Read from the `system.json` compiled in beside this crate, once, rather
+/// than kept as a second list here that could drift from the one the grid
+/// measures by.
+pub fn declared_size_ids() -> &'static [String] {
+    static IDS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+    IDS.get_or_init(|| {
+        serde_json::from_str::<serde_json::Value>(include_str!("../../system.json"))
+            .ok()
+            .and_then(|manifest| {
+                manifest
+                    .pointer("/combat/sizes/categories")
+                    .and_then(|c| c.as_array())
+                    .map(|categories| {
+                        categories
+                            .iter()
+                            .filter_map(|c| c.get("id").and_then(|id| id.as_str()))
+                            .map(str::to_string)
+                            .collect()
+                    })
+            })
+            .unwrap_or_default()
+    })
+}
+
 // ============================================================================
 // ability_data Validators
 // ============================================================================
@@ -343,6 +369,25 @@ pub fn validate_trait_data(data: &serde_json::Value) -> Result<(), ValidationErr
                 return Err(ValidationError {
                     field: format!("trait_data.feats[{}]", i),
                     message: "must be a string".to_string(),
+                });
+            }
+        }
+    }
+
+    // Spec 046 FR-030: a creature's size, one of the categories this system
+    // declares in `combat.sizes` — read from the manifest, so the list a
+    // validator accepts and the list the grid measures by are one list.
+    if let Some(size) = obj.get("size") {
+        if !size.is_null() {
+            let value = size.as_str().ok_or(ValidationError {
+                field: "trait_data.size".to_string(),
+                message: "must be a string or null".to_string(),
+            })?;
+            let declared = declared_size_ids();
+            if !declared.iter().any(|id| id == value) {
+                return Err(ValidationError {
+                    field: "trait_data.size".to_string(),
+                    message: format!("must be one of {declared:?}"),
                 });
             }
         }
@@ -687,6 +732,26 @@ mod tests {
     fn test_validate_trait_data_missing_class() {
         let data = json!({"level": 5});
         assert!(validate_trait_data(&data).is_err());
+    }
+
+    #[test]
+    fn size_is_optional_and_one_of_the_manifests_declared_sizes() {
+        assert_eq!(
+            declared_size_ids(),
+            ["tiny", "small", "medium", "large", "huge", "gargantuan"],
+            "the ids come from combat.sizes in system.json"
+        );
+        let with =
+            |size: serde_json::Value| json!({ "class": "monster", "level": 1, "size": size });
+        for size in declared_size_ids() {
+            assert!(validate_trait_data(&with(json!(size))).is_ok(), "{size}");
+        }
+        assert!(validate_trait_data(&with(serde_json::Value::Null)).is_ok());
+        assert!(validate_trait_data(&json!({ "class": "monster", "level": 1 })).is_ok());
+        let unknown = validate_trait_data(&with(json!("colossal"))).unwrap_err();
+        assert_eq!(unknown.field, "trait_data.size");
+        let not_text = validate_trait_data(&with(json!(2))).unwrap_err();
+        assert_eq!(not_text.field, "trait_data.size");
     }
 
     #[test]

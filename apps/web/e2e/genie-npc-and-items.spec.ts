@@ -15,8 +15,9 @@ import { test, expect, type Page } from "./fixtures/test";
  *   never routed anywhere in apps/web). So `trait_data.size_category` is
  *   set here via the real `updateActorSystemData` GraphQL mutation
  *   directly through the live session.
- * - FIXED since this file was first written: `TokenPanel`'s NPC
- *   size-category -> scale resolution (spec 018 T047) used to read
+ * - FIXED since this file was first written (and since reworked by spec
+ *   046, which made size a footprint rather than a scale): `TokenPanel`'s
+ *   NPC size-category resolution (spec 018 T047) used to read
  *   `trait_data` via `useActorSystemData`, which queried a client-side
  *   RxDB `world_actor_system_data` collection that had no pull/push
  *   replication ever registered for it, so it never reflected a
@@ -25,7 +26,7 @@ import { test, expect, type Page } from "./fixtures/test";
  *   direct GraphQL fetch against the new `actorSystemData(actorId)`
  *   query (apps/web/src/api/actorSystemData.ts,
  *   src/server/src/graphql/queries/actor.rs's `actor_system_data_impl`),
- *   so `resolveSizeScale` (apps/web/src/utils/sizeCategory.ts,
+ *   so `resolveSizeFootprint` (apps/web/src/utils/sizeCategory.ts,
  *   unit-tested in apps/web/src/utils/__tests__/sizeCategory.test.ts) now
  *   receives real trait_data in the running app. This test previously
  *   used `test.fail()` to flag the confirmed regression; it now asserts
@@ -205,13 +206,14 @@ async function ensureSidebarOpen(page: Page): Promise<void> {
 }
 
 test.describe("Spec 018 Scenario 3: NPC size category sets a token's default footprint", () => {
-  // Previously flagged via test.fail() as a confirmed regression (see file
-  // header): TokenPanel's NPC scale hint never reflected a real NPC's
-  // trait_data.size_category because nothing in the running app populated
-  // the RxDB collection it read from. The RxDB hard-cut replaced that read
-  // path with a direct GraphQL fetch, so this now asserts the real,
-  // working behavior.
-  test("a colossal NPC's token defaults to a larger scale than a diminutive NPC's", async ({
+  // Spec 046 moved size out of placement. A size category used to become the
+  // token's `scale` when it was created; now it is the creature's footprint on
+  // the grid — resolved by the server from the NPC's sheet for every board
+  // (`tokenGrid`), through Genie's `combat.sizes` — and `scale` is only how
+  // its art is drawn. So this asserts what the dialog says the NPC will fill,
+  // that nothing sends a size-derived scale, and the footprint the server
+  // resolves for each token.
+  test("a colossal NPC's token fills more squares than a diminutive NPC's", async ({
     page,
   }) => {
     test.setTimeout(90_000);
@@ -242,76 +244,70 @@ test.describe("Spec 018 Scenario 3: NPC size category sets a token's default foo
     await waitForEngineReady(page);
     await ensureSidebarOpen(page);
 
-    // Diminutive NPC's token. `trait_data` was set via a raw GraphQL
-    // call above (no UI path exists to set it — see file header), and
-    // TokenPanel reads it via `useActorSystemData`'s direct GraphQL fetch
-    // on mount — select the NPC once and poll the hint text with a real
-    // retrying assertion rather than a manual loop that reselects
-    // "(blank token)" each iteration: that reselection unmounts/resets
-    // the in-flight fetch every time, so a synchronous `.innerText()`
-    // read right after always caught the pre-fetch "1x" default and the
-    // loop could never actually settle (found via live instrumentation —
-    // the correct 0.5x value does arrive, just ~200-500ms after
-    // selection, not within the same tick).
+    // Selected once and polled with a retrying assertion: TokenPanel reads
+    // the NPC's trait_data with a GraphQL fetch on selection, which lands a
+    // few hundred milliseconds after the choice.
     await page.reload();
     await waitForEngineReady(page);
     await page.getByTestId("token-panel-toggle-button").click({ force: true });
-    await page.getByTestId("token-create-trigger").click({ force: true });
-    await page
-      .getByTestId("token-create-npc-select")
-      .selectOption({ label: "Minor Sprite" });
-    const diminutiveHint = page.getByTestId("token-create-npc-scale-hint");
-    await expect(
-      diminutiveHint,
-      "TokenPanel's NPC scale hint never picked up trait_data.size_category (GraphQL fetch of a server-side updateActorSystemData write).",
-    ).toHaveText(/0\.5/, { timeout: 10_000 });
-    const [createDiminutiveResp] = await Promise.all([
-      page.waitForResponse(
-        (r) =>
-          r.url().includes("/api/graphql") &&
-          (r.request().postData() ?? "").includes("createToken"),
-      ),
-      page.getByTestId("token-create-submit").click({ force: true }),
-    ]);
-    const diminutiveTokenBody = (await createDiminutiveResp.json()) as {
-      data?: { createToken?: { tokenId?: string; scale?: number } };
-    };
-    expect(diminutiveTokenBody.data?.createToken?.scale).toBeCloseTo(0.5, 5);
-    // No Escape here: the create-token dialog already closes itself on a
-    // successful submit (handleCreateToken's setCreateDialogOpen(false))
-    // — pressing Escape on top of that closed the whole token *panel*
-    // (its own Escape-to-dismiss handler), not just the dialog, leaving
-    // nothing for the next "token-create-trigger" click to find.
 
-    // Colossal NPC's token.
-    await page.getByTestId("token-create-trigger").click({ force: true });
-    await page
-      .getByTestId("token-create-npc-select")
-      .selectOption({ label: "Towering Elemental Servant" });
-    const colossalHint = page.getByTestId("token-create-npc-scale-hint");
-    // Not /\b4\b/: "4" and "x" are both word characters, so there's no
-    // word boundary between them in "scale: 4x" and that regex could
-    // never match — this silently masked itself as a data-race retry
-    // instead of a clear regex failure until instrumented directly.
-    await expect(colossalHint).toHaveText(/\b4x\b/, { timeout: 10_000 });
-    const [createColossalResp] = await Promise.all([
-      page.waitForResponse(
-        (r) =>
-          r.url().includes("/api/graphql") &&
-          (r.request().postData() ?? "").includes("createToken"),
-      ),
-      page.getByTestId("token-create-submit").click({ force: true }),
-    ]);
-    const colossalTokenBody = (await createColossalResp.json()) as {
-      data?: { createToken?: { tokenId?: string; scale?: number } };
+    const place = async (label: string, hint: RegExp) => {
+      await page.getByTestId("token-create-trigger").click({ force: true });
+      await page.getByTestId("token-create-npc-select").selectOption({ label });
+      await expect(
+        page.getByTestId("token-create-npc-size-hint"),
+        "TokenPanel's size hint reads the NPC's trait_data.size_category through Genie's combat.sizes",
+      ).toHaveText(hint, { timeout: 10_000 });
+      const [response] = await Promise.all([
+        page.waitForResponse(
+          (r) =>
+            r.url().includes("/api/graphql") &&
+            (r.request().postData() ?? "").includes("createToken"),
+        ),
+        page.getByTestId("token-create-submit").click({ force: true }),
+      ]);
+      const sent = JSON.parse(response.request().postData() ?? "{}") as {
+        variables?: { input?: { sceneId?: string; scale?: number } };
+      };
+      expect(
+        sent.variables?.input?.scale,
+        "no scale is derived from a size any more (spec 046 T077)",
+      ).toBeUndefined();
+      const body = (await response.json()) as {
+        data?: { createToken?: { tokenId?: string } };
+      };
+      return {
+        tokenId: body.data!.createToken!.tokenId!,
+        sceneId: sent.variables!.input!.sceneId!,
+      };
     };
-    expect(colossalTokenBody.data?.createToken?.scale).toBeCloseTo(4.0, 5);
 
-    // Acceptance scenarios 1 & 2: the colossal token's footprint is
-    // proportional to (here, 8x) the diminutive token's.
-    expect(colossalTokenBody.data!.createToken!.scale!).toBeGreaterThan(
-      diminutiveTokenBody.data!.createToken!.scale!,
+    // No Escape between them: the dialog closes itself on a successful
+    // submit, and Escape on top of that closes the whole token panel.
+    const sprite = await place("Minor Sprite", /½ a square/);
+    const servant = await place("Towering Elemental Servant", /4×4 squares/);
+
+    const footprints = await graphql<{
+      data?: { tokenGrid?: { tokenId: string; footprint: number }[] };
+    }>(
+      page,
+      `
+        query ($sceneId: UUID!) {
+          tokenGrid(sceneId: $sceneId) {
+            tokenId
+            footprint
+          }
+        }
+      `,
+      { sceneId: sprite.sceneId },
     );
+    const footprintOf = (tokenId: string) =>
+      footprints.data?.tokenGrid?.find((g) => g.tokenId === tokenId)
+        ?.footprint ?? 1;
+    // Acceptance scenarios 1 & 2: the colossal token fills eight times the
+    // side of the diminutive one.
+    expect(footprintOf(sprite.tokenId)).toBe(0.5);
+    expect(footprintOf(servant.tokenId)).toBe(4);
 
     await page.keyboard.press("Escape");
     await page.keyboard.press("Escape");

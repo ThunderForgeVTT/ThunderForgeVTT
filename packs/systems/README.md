@@ -269,6 +269,12 @@ system that declares none of it still has initiative and turns.
   creature taken to zero leaves the turn order until it is healed.
 - **`defence`** is the number an attack's total must reach to hit.
 - **`sizes`** says how many cells a creature of each size fills, per side.
+  It is the creature's footprint on the grid — what it is snapped, clicked,
+  moved and measured by — not how large its art is drawn (a token's `scale`
+  is only that). A creature with no size recorded, or one you do not declare,
+  fills one cell. Reach is never derived from size: an attack says its own.
+  Validate the size field against this list by reading your manifest rather
+  than keeping a second copy of it.
 - **`legendary`** is where a creature's legendary actions per round are read.
 
 These are the rules the product enforces on a declaration, at install time:

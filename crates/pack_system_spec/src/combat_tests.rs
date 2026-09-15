@@ -178,4 +178,43 @@ fn the_shipped_dnd5e_combat_block_is_usable() {
         Some("current_hp".to_string())
     );
     validate_combat_content(&parsed).expect("its combat block is usable");
+
+    // Spec 046 Phase 7: Large is two squares, and reach is not in it.
+    let sizes = combat.sizes.expect("5e declares its sizes");
+    assert_eq!(sizes.source.field, "size");
+    let footprint = |id: &str| {
+        sizes
+            .categories
+            .iter()
+            .find(|c| c.id == id)
+            .map(|c| c.footprint)
+    };
+    assert_eq!(footprint("tiny"), Some(0.5));
+    assert_eq!(footprint("medium"), Some(1.0));
+    assert_eq!(footprint("large"), Some(2.0));
+    assert_eq!(footprint("gargantuan"), Some(4.0));
+}
+
+#[test]
+fn the_shipped_genie_sizes_live_in_its_combat_block() {
+    let json = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../packs/systems/genie/system.json"
+    ))
+    .expect("the Genie manifest is readable");
+    let parsed: Value = serde_json::from_str(&json).expect("valid JSON");
+    assert!(
+        parsed.get("sizeCategories").is_none(),
+        "sizeCategories moved under combat.sizes"
+    );
+    validate_combat_content(&parsed).expect("its combat block is usable");
+    let combat: SystemCombat =
+        serde_json::from_value(parsed["combat"].clone()).expect("Genie declares a combat block");
+    let sizes = combat.sizes.expect("Genie declares its sizes");
+    assert_eq!(sizes.source.field, "size_category");
+    assert_eq!(sizes.categories.len(), 6);
+    assert!(
+        combat.hit_points.is_none(),
+        "Genie declares no hit points (M1)"
+    );
 }
