@@ -406,3 +406,4 @@ SC-005) and **Phase 9** (US6: legendary, SC-006), each shippable alone.
 - Commits are signed, stage explicit paths, and each names the phase and task ids.
 - `.e2e-shards-durations.json` is rewritten by the harness; don't commit it with feature work.
 - Migrations get real timestamps when written; `<date>` above is a placeholder for that, not a directory name.
+- FR-016's `is_unique` was dropped by collection copies, shared-actor copies and the personal export, so a copied unique NPC placed unlinked copies. Fixed 2026-09-15: all three carry it, as they carry `visible_to_players` (the account-deletion rescue copies through the collection path); tests `an_npcs_uniqueness_travels_with_a_copy_and_an_export` and `a_shared_actor_copy_keeps_whether_the_npc_is_unique`.

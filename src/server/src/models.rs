@@ -1105,6 +1105,9 @@ pub struct NewWorldActor {
     /// Whether players see it, if it is an NPC. Every insert decides, so a
     /// copy cannot quietly arrive with a different answer than its source.
     pub visible_to_players: bool,
+    /// Spec 046 FR-016: a named individual whose tokens place linked. Every
+    /// insert decides, for the same reason as `visible_to_players`.
+    pub is_unique: bool,
 }
 
 /// Spec 010: an actor's "ownership block" entry — one explicit

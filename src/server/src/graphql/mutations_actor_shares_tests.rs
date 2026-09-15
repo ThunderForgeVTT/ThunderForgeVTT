@@ -512,3 +512,72 @@ async fn the_owner_can_recover_the_share_code_after_closing_the_page() {
         "a revoked share is not an active share link"
     );
 }
+
+/// Spec 046 FR-016: a unique NPC's tokens place linked, so a shared-actor copy
+/// of one must still be unique — and a copy of an ordinary NPC must not become
+/// one.
+#[tokio::test]
+async fn a_shared_actor_copy_keeps_whether_the_npc_is_unique() {
+    use crate::schema::world_actors;
+
+    let _publishing = publishable_instance();
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let source_owner_id = insert_test_user(&mut conn);
+    let source_world_id = insert_test_world(&mut conn, source_owner_id);
+    insert_test_scene(&mut conn, source_world_id, source_owner_id);
+    let dest_owner_id = insert_test_user(&mut conn);
+    let dest_world_id = insert_test_world(&mut conn, dest_owner_id);
+    insert_test_scene(&mut conn, dest_world_id, dest_owner_id);
+    drop(conn);
+
+    for unique in [true, false] {
+        let source_actor = create_actor_impl(
+            &state,
+            source_owner_id,
+            false,
+            CreateActorInput {
+                world_id: source_world_id,
+                label: format!("Boblin (unique: {unique})"),
+                is_npc: true,
+                actor_type: None,
+                game_system_id: None,
+                description: None,
+            },
+        )
+        .await
+        .expect("created");
+        let mut conn = state.db_pool.get().unwrap();
+        diesel::update(world_actors::table.filter(world_actors::id.eq(source_actor.id)))
+            .set(world_actors::is_unique.eq(unique))
+            .execute(&mut conn)
+            .expect("set uniqueness");
+        drop(conn);
+
+        let link = create_actor_share_link_impl(
+            &state,
+            source_owner_id,
+            false,
+            source_actor.id,
+            &an_agreement(&state).await,
+        )
+        .await
+        .expect("shared");
+        let copy = copy_shared_actor_to_world_impl(
+            &state,
+            dest_owner_id,
+            false,
+            CopySharedActorInput {
+                share_code: link.share_code,
+                destination_world_id: dest_world_id,
+            },
+        )
+        .await
+        .expect("copied");
+
+        assert_eq!(
+            copy.is_unique, unique,
+            "a copy is exactly as unique as what it was copied from"
+        );
+    }
+}

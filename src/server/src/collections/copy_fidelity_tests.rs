@@ -865,3 +865,77 @@ async fn an_npcs_visibility_to_players_travels_with_a_copy_and_an_export() {
     );
     assert!(flag(shown), "the export says the shown NPC is shown");
 }
+
+/// Spec 046 FR-016: a unique NPC's tokens place linked. That is only true of a
+/// copy if the copy is still unique, so the flag travels with a collection copy
+/// and the personal export, in both directions: a copied Boblin places linked,
+/// and a copied goblin still places as copies.
+#[tokio::test]
+async fn an_npcs_uniqueness_travels_with_a_copy_and_an_export() {
+    use crate::schema::world_actors;
+
+    let s = source();
+    let mut conn = s.state.db_pool.get().expect("connection");
+    let boblin = insert_test_actor(&mut conn, s.world_id, s.scene_id, s.owner_id);
+    diesel::update(world_actors::table.filter(world_actors::id.eq(boblin)))
+        .set((
+            world_actors::label.eq("Boblin the goblin"),
+            world_actors::is_unique.eq(true),
+        ))
+        .execute(&mut conn)
+        .expect("make it unique");
+    drop(conn);
+
+    let code = share_of(
+        &s,
+        &[("actor", s.actor_id), ("actor", boblin)],
+        "Uniqueness",
+    )
+    .await;
+    let receipt = copy_shared_collection_to_world_impl(
+        &s.state,
+        s.recipient_id,
+        false,
+        code,
+        s.destination_world_id,
+    )
+    .await
+    .expect("copied");
+
+    let mut conn = s.state.db_pool.get().expect("connection");
+    let mut unique_copy = |name: &str| -> bool {
+        let id = receipt
+            .created
+            .iter()
+            .find(|c| c.member_type == "actor" && c.name == name)
+            .unwrap_or_else(|| panic!("actor {name} arrived: {receipt:?}"))
+            .id;
+        world_actors::table
+            .filter(world_actors::id.eq(id))
+            .select(world_actors::is_unique)
+            .first::<bool>(&mut conn)
+            .expect("the copy")
+    };
+    assert!(
+        unique_copy("Boblin the goblin"),
+        "a unique NPC arrives unique"
+    );
+    assert!(
+        !unique_copy("Test Actor"),
+        "an ordinary NPC arrives ordinary"
+    );
+
+    let mut conn = s.state.db_pool.get().expect("connection");
+    let exported =
+        crate::users::export_content::load_content_sync(&mut conn, s.owner_id).expect("export");
+    let flag = |id: Uuid| {
+        exported
+            .actors
+            .iter()
+            .find(|a| a.id == id)
+            .expect("exported actor")
+            .is_unique
+    };
+    assert!(flag(boblin), "the export says Boblin is unique");
+    assert!(!flag(s.actor_id), "the export says the ordinary NPC is not");
+}

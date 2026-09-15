@@ -116,6 +116,8 @@ pub async fn create_actor_impl(
             description,
             // An NPC is hidden from players until its Game Master shows it.
             visible_to_players: false,
+            // Not a named individual until its Game Master says so.
+            is_unique: false,
         };
 
         diesel::insert_into(world_actors::table)
