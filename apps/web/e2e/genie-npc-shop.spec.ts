@@ -60,6 +60,15 @@ test.describe("Spec 020 User Story 2: NPC shop sells items for Session Resources
       },
     );
     const npcId = npc.data.createActor.id;
+    // A shopkeeper the players are meant to find: an NPC is hidden from
+    // players until its Game Master shows it (owner decision 2026-09-15).
+    await graphql(
+      gmPage,
+      `mutation ($actorId: UUID!) {
+        setActorVisibleToPlayers(actorId: $actorId, visible: true) { id }
+      }`,
+      { actorId: npcId },
+    );
 
     const playerActor = await graphql<{
       data: { createActor: { id: string } };
@@ -378,9 +387,21 @@ test.describe("Spec 020 User Story 2: NPC shop sells items for Session Resources
         },
       },
     );
+    // Shown, so the page opens and the assertion is about the shop, not
+    // about an NPC the player cannot reach.
+    await graphql(
+      gmPage,
+      `mutation ($actorId: UUID!) {
+        setActorVisibleToPlayers(actorId: $actorId, visible: true) { id }
+      }`,
+      { actorId: plainNpc.data.createActor.id },
+    );
     await playerPage.goto(
       `/world/${worldId}/actor/${plainNpc.data.createActor.id}/view`,
     );
+    await expect(
+      playerPage.getByRole("heading", { name: "Silent Statue" }),
+    ).toBeVisible({ timeout: 15_000 });
     await expect(playerPage.getByTestId("genie-shop-panel")).toHaveCount(0);
 
     await gmContext.close();

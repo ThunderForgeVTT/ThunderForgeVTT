@@ -60,6 +60,7 @@ function actor(over: Partial<WorldActorRecord> = {}): WorldActorRecord {
     loreLinkedFrom: [],
     availableForClaim: false,
     isUnique: false,
+    visibleToPlayers: false,
     claimedBy: null,
     ...over,
   };

@@ -8,6 +8,7 @@ import {
   getActor,
   setActorAvailability,
   setActorUnique,
+  setActorVisibleToPlayers,
   unclaimActor,
   updateActor,
 } from "@/api/actors";
@@ -70,6 +71,7 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
   const [isRevoking, setIsRevoking] = useState(false);
   const [isUpdatingClaim, setIsUpdatingClaim] = useState(false);
   const [isUpdatingUnique, setIsUpdatingUnique] = useState(false);
+  const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
   const { isGm: isDm } = useWorldRole(worldId, world);
   const { user } = useAuth();
 
@@ -221,6 +223,23 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
       );
     } finally {
       setIsUpdatingUnique(false);
+    }
+  };
+
+  const handleToggleVisibleToPlayers = async (visible: boolean) => {
+    setIsUpdatingVisibility(true);
+    setStatus(null);
+    try {
+      const updated = await setActorVisibleToPlayers(actorId, visible);
+      setActor(updated);
+    } catch (err) {
+      setStatus(
+        err instanceof Error
+          ? err.message
+          : "Failed to change who sees the NPC",
+      );
+    } finally {
+      setIsUpdatingVisibility(false);
     }
   };
 
@@ -537,6 +556,35 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
                 : null;
             })()
           : null}
+
+        {/* Owner decision 2026-09-15: GM-only, NPC-only. Whether players see
+            this NPC at all. The server withholds a hidden NPC from every
+            player's list and sheet; this is only the switch. */}
+        {isDm && actor.isNpc ? (
+          <Card className="grid gap-3 p-4" data-testid="actor-visibility-block">
+            <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+              Players
+            </h2>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                data-testid="actor-visible-toggle"
+                checked={actor.visibleToPlayers}
+                disabled={isUpdatingVisibility}
+                onChange={(e) =>
+                  void handleToggleVisibleToPlayers(e.target.checked)
+                }
+              />
+              Visible to players
+            </label>
+            <p className="text-sm text-muted-foreground">
+              {actor.visibleToPlayers
+                ? "Players see this NPC in the character list and can open its sheet."
+                : "Hidden: players cannot find this NPC in any list or open its sheet."}{" "}
+              A token's name follows its own setting either way.
+            </p>
+          </Card>
+        ) : null}
 
         {/* Spec 046 FR-016: GM-only, NPC-only. A unique NPC is one creature
             wherever it stands, so its tokens are placed linked to it; any

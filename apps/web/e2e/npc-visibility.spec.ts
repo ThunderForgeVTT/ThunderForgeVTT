@@ -1,0 +1,224 @@
+import { expect, test, type Page } from "./fixtures/test";
+import { expectNoAxeViolations } from "./fixtures/axe";
+import { graphql, openDockTab } from "./fixtures/helpers";
+import {
+  closeTable,
+  must,
+  openTable,
+  placeCast,
+  sitDown,
+} from "../playtest/table";
+
+/**
+ * Owner decision 2026-09-15: whether players see an NPC is the Game Master's
+ * choice, per NPC, and an NPC is hidden until they choose.
+ *
+ * Token-name hiding already kept a hidden name off the board and the combat
+ * tracker, but a player could read every NPC in the character list. "Hidden"
+ * here means what it means there: the server never sends it. So this watches
+ * what reaches a player's browser (every GraphQL response body and every
+ * subscription frame, the way `combat-attack.spec.ts` watches for the hidden
+ * ogre), not only what is drawn.
+ */
+
+/** Distinctive enough that finding either in traffic means it leaked. */
+const HIDDEN_NAME = "Vorlaine the Unseen";
+const SHOWN_NAME = "Mirella of the Lantern Inn";
+
+interface Traffic {
+  responses: string[];
+  frames: string[];
+}
+
+function record(page: Page): Traffic {
+  const traffic: Traffic = { responses: [], frames: [] };
+  page.on("response", (response) => {
+    if (!response.url().includes("graphql")) return;
+    void response
+      .text()
+      .then((body) => traffic.responses.push(body))
+      .catch(() => undefined);
+  });
+  page.on("websocket", (socket) => {
+    socket.on("framereceived", (frame) => {
+      traffic.frames.push(String(frame.payload));
+    });
+  });
+  return traffic;
+}
+
+async function createNpc(page: Page, worldId: string, label: string) {
+  const { createActor } = await must<{
+    createActor: { id: string; visibleToPlayers: boolean };
+  }>(
+    page,
+    `mutation ($input: CreateActorInput!) {
+      createActor(input: $input) { id visibleToPlayers }
+    }`,
+    { input: { worldId, label, isNpc: true, gameSystemId: "dnd5e" } },
+  );
+  return createActor;
+}
+
+test("a Game Master chooses which NPCs players see, and a hidden one never reaches a player", async ({
+  page,
+  browser,
+}, testInfo) => {
+  test.setTimeout(6 * 60_000);
+
+  const table = await openTable({
+    browser,
+    gm: page,
+    testInfo,
+    system: "dnd5e",
+    players: ["Aria"],
+    sceneName: "The Lantern Inn",
+  });
+  const [aria] = table.players;
+  const traffic = record(aria.page);
+
+  try {
+    await placeCast(table, {
+      label: "Aria",
+      at: { x: 0, y: 0 },
+      seat: aria,
+    });
+    const hidden = await createNpc(table.gm, table.worldId, HIDDEN_NAME);
+    const shown = await createNpc(table.gm, table.worldId, SHOWN_NAME);
+    expect(hidden.visibleToPlayers, "a new NPC starts hidden").toBe(false);
+    expect(shown.visibleToPlayers, "a new NPC starts hidden").toBe(false);
+
+    await test.step("the Game Master sees both, and shows one from the list with the keyboard", async () => {
+      await sitDown(table, table.gm);
+      await openDockTab(table.gm, "actors");
+      const panel = table.gm.getByTestId("actors-panel");
+      await expect(panel).toContainText(HIDDEN_NAME);
+      await expect(panel).toContainText(SHOWN_NAME);
+
+      const showToggle = table.gm.getByRole("button", {
+        name: `Visible to players: ${SHOWN_NAME}`,
+      });
+      const hiddenToggle = table.gm.getByRole("button", {
+        name: `Visible to players: ${HIDDEN_NAME}`,
+      });
+      await expect(showToggle).toHaveAttribute("aria-pressed", "false");
+      await expect(hiddenToggle).toHaveAttribute("aria-pressed", "false");
+      await expectNoAxeViolations(table.gm, '[data-testid="actors-panel"]');
+
+      await showToggle.focus();
+      await table.gm.keyboard.press("Enter");
+      await expect(showToggle).toHaveAttribute("aria-pressed", "true");
+      await expect(showToggle).toHaveText("Shown");
+      await expect(hiddenToggle).toHaveAttribute("aria-pressed", "false");
+    });
+
+    await test.step("a player's list, search, sheet and pages carry nothing of the hidden NPC", async () => {
+      await sitDown(table, aria.page);
+      await openDockTab(aria.page, "actors");
+      const panel = aria.page.getByTestId("actors-panel");
+      await expect(panel).toContainText(SHOWN_NAME, { timeout: 10_000 });
+      await expect(panel).toContainText("Aria");
+      await expect(panel).not.toContainText(HIDDEN_NAME);
+      await expect(
+        aria.page.getByTestId(`actor-visible-${shown.id}`),
+        "a player has no switch to press",
+      ).toHaveCount(0);
+
+      // The same player, straight at the API: search, and every by-id read.
+      const search = await must<{ searchActors: { id: string }[] }>(
+        aria.page,
+        `query ($worldId: UUID!) { searchActors(worldId: $worldId, query: "") { id } }`,
+        { worldId: table.worldId },
+      );
+      expect(search.searchActors.map((a) => a.id)).toContain(shown.id);
+      expect(search.searchActors.map((a) => a.id)).not.toContain(hidden.id);
+      for (const read of [
+        "actorSheet(actorId: $actorId) { all { id } }",
+        "actorSystemData(actorId: $actorId) { id }",
+        "actorInventory(actorId: $actorId) { id }",
+        "actorAbilities(actorId: $actorId) { abilityId }",
+      ]) {
+        const answer = await graphql<{
+          data?: unknown;
+          errors?: { message: string }[];
+        }>(aria.page, `query ($actorId: UUID!) { ${read} }`, {
+          actorId: hidden.id,
+        });
+        expect(
+          answer.errors?.[0]?.message,
+          `${read.split("(")[0]} refuses the hidden NPC as if it did not exist`,
+        ).toBe("Actor not found");
+        expect(JSON.stringify(answer)).not.toContain(HIDDEN_NAME);
+      }
+
+      // Its page, opened by a player who has its id, says it is not there.
+      await aria.page.goto(`/world/${table.worldId}/actor/${hidden.id}/view`);
+      await expect(
+        aria.page.getByRole("heading", { name: "Actor not found" }),
+      ).toBeVisible({ timeout: 10_000 });
+      // And the world's compendium lists only what a player may see.
+      await aria.page.goto(`/world/${table.worldId}/compendium`);
+      await aria.page.waitForLoadState("networkidle");
+      await expect(aria.page.locator("body")).not.toContainText(HIDDEN_NAME);
+
+      const everything = [...traffic.responses, ...traffic.frames];
+      expect(
+        traffic.responses.some(
+          (body) => body.includes('"worldActors"') && body.includes(SHOWN_NAME),
+        ),
+        "the player's client did read the roster (the check below is not vacuous)",
+      ).toBe(true);
+      expect(
+        traffic.frames.length,
+        "the player's subscription carried frames (the frame check is not vacuous)",
+      ).toBeGreaterThan(0);
+      const carryingName = everything.filter((b) => b.includes(HIDDEN_NAME));
+      const carryingId = everything.filter((b) => b.includes(hidden.id));
+      testInfo.annotations.push({
+        type: "Aria's traffic",
+        description:
+          `${traffic.responses.length} responses and ${traffic.frames.length} frames checked; ` +
+          `${carryingName.length} carry the hidden NPC's name, ${carryingId.length} its id`,
+      });
+      expect(
+        carryingName,
+        "no response or frame carries the hidden NPC's name",
+      ).toEqual([]);
+      expect(
+        carryingId,
+        "no response or frame carries the hidden NPC's id",
+      ).toEqual([]);
+    });
+
+    await test.step("shown from its own page, it reaches the player", async () => {
+      await table.gm.goto(`/world/${table.worldId}/actor/${hidden.id}/view`);
+      const block = table.gm.getByTestId("actor-visibility-block");
+      await expect(block).toBeVisible({ timeout: 10_000 });
+      const toggle = block.getByRole("checkbox", {
+        name: "Visible to players",
+      });
+      await expect(toggle).not.toBeChecked();
+      await expectNoAxeViolations(
+        table.gm,
+        '[data-testid="actor-visibility-block"]',
+      );
+      await toggle.focus();
+      await table.gm.keyboard.press("Space");
+      await expect(toggle).toBeChecked();
+
+      await sitDown(table, aria.page);
+      await openDockTab(aria.page, "actors");
+      await expect(aria.page.getByTestId("actors-panel")).toContainText(
+        HIDDEN_NAME,
+        { timeout: 10_000 },
+      );
+      await must(
+        aria.page,
+        `query ($actorId: UUID!) { actorSheet(actorId: $actorId) { all { id } } }`,
+        { actorId: hidden.id },
+      );
+    });
+  } finally {
+    await closeTable(table);
+  }
+});

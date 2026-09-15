@@ -30,6 +30,12 @@ export type WorldActorRecord = {
    * other NPC's are placed as unlinked copies with their own hit points.
    */
   isUnique: boolean;
+  /**
+   * Whether players see this NPC (owner decision 2026-09-15). Hidden by
+   * default. The server never sends a player a hidden NPC, so this toggle is
+   * the Game Master's; a player reading `false` holds the NPC.
+   */
+  visibleToPlayers: boolean;
   /** Spec 017 (FR-012): who currently has this actor claimed, if anyone. */
   claimedBy: ActorClaimMemberRecord | null;
 };

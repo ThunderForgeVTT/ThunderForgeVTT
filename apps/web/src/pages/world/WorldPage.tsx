@@ -2542,7 +2542,9 @@ export default function WorldPage() {
       id: "actors",
       label: "Actors",
       icon: "actors",
-      content: <ActorsPanel worldId={id} sceneId={sceneId} />,
+      content: (
+        <ActorsPanel worldId={id} sceneId={sceneId} isGm={isSceneOwner} />
+      ),
     },
     {
       id: "combat",

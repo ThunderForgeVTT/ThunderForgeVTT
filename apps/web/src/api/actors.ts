@@ -27,6 +27,7 @@ const WORLD_ACTOR_FIELDS = `
   }
   availableForClaim
   isUnique
+  visibleToPlayers
   claimedBy {
     id
     worldId
@@ -266,6 +267,27 @@ export function setActorUnique(
     `,
     { actorId, unique },
   ).then((data) => data.setActorUnique);
+}
+
+/**
+ * GM-only (owner decision 2026-09-15). Shows an NPC to the world's players,
+ * or hides it from them. A hidden NPC reaches no player's actor list, search
+ * or sheet; its tokens' names follow their own setting either way.
+ */
+export function setActorVisibleToPlayers(
+  actorId: string,
+  visible: boolean,
+): Promise<WorldActorRecord> {
+  return postGraphQL<{ setActorVisibleToPlayers: WorldActorRecord }>(
+    `
+      mutation SetActorVisibleToPlayers($actorId: UUID!, $visible: Boolean!) {
+        setActorVisibleToPlayers(actorId: $actorId, visible: $visible) {
+          ${WORLD_ACTOR_FIELDS}
+        }
+      }
+    `,
+    { actorId, visible },
+  ).then((data) => data.setActorVisibleToPlayers);
 }
 
 type UnclaimActorMutation = {

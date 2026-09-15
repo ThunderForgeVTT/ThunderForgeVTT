@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { beginTokenPlacement } from "@/engine/bevy";
 import { getMyActorClaim } from "@/api/actorClaims";
-import { getWorldActors } from "@/api/actors";
+import { getWorldActors, setActorVisibleToPlayers } from "@/api/actors";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
 import type { WorldActorRecord } from "@/types/actor";
 import { InPaneCharacterSheet } from "./InPaneCharacterSheet";
@@ -10,6 +10,12 @@ export interface ActorsPanelProps {
   worldId: string;
   /** Spec 046: the scene in play, for attacks made from a character's sheet. */
   sceneId?: string | null;
+  /**
+   * Whether the viewer runs the world. A Game Master gets a switch on each
+   * NPC for whether players see it (owner decision 2026-09-15). A player is
+   * never sent a hidden NPC, so there is nothing for them to switch.
+   */
+  isGm?: boolean;
 }
 
 interface FolderProps {
@@ -71,7 +77,11 @@ function Folder({
  * -tripping per keystroke would be slower and noisier than filtering a list
  * this size in memory.
  */
-export function ActorsPanel({ worldId, sceneId = null }: ActorsPanelProps) {
+export function ActorsPanel({
+  worldId,
+  sceneId = null,
+  isGm = false,
+}: ActorsPanelProps) {
   const [actors, setActors] = useState<WorldActorRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -144,6 +154,24 @@ export function ActorsPanel({ worldId, sceneId = null }: ActorsPanelProps) {
   }, [actors, query]);
 
   const searching = query.trim() !== "";
+
+  const [visibilityError, setVisibilityError] = useState<string | null>(null);
+  const toggleVisibleToPlayers = async (actor: WorldActorRecord) => {
+    setVisibilityError(null);
+    try {
+      const updated = await setActorVisibleToPlayers(
+        actor.id,
+        !actor.visibleToPlayers,
+      );
+      setActors((current) =>
+        (current ?? []).map((row) => (row.id === updated.id ? updated : row)),
+      );
+    } catch (err) {
+      setVisibilityError(
+        err instanceof Error ? err.message : "Failed to change who sees it",
+      );
+    }
+  };
 
   /*
     The character replaces the roster rather than opening over it. The dock is
@@ -225,6 +253,24 @@ export function ActorsPanel({ worldId, sceneId = null }: ActorsPanelProps) {
         </a>
       )}
 
+      {isGm && actor.isNpc ? (
+        <button
+          type="button"
+          aria-pressed={actor.visibleToPlayers}
+          aria-label={`Visible to players: ${actor.label}`}
+          title={
+            actor.visibleToPlayers
+              ? "Players see this NPC"
+              : "Hidden from players"
+          }
+          data-testid={`actor-visible-${actor.id}`}
+          className="rounded border border-border px-2 py-1 text-xs transition-colors hover:bg-muted aria-pressed:bg-muted"
+          onClick={() => void toggleVisibleToPlayers(actor)}
+        >
+          {actor.visibleToPlayers ? "Shown" : "Hidden"}
+        </button>
+      ) : null}
+
       {/*
         Place hands the token to the engine, which carries it on the cursor
         until a left click drops it. Nothing is created here: the engine
@@ -245,6 +291,11 @@ export function ActorsPanel({ worldId, sceneId = null }: ActorsPanelProps) {
 
   return (
     <div className="grid gap-3" data-testid="actors-panel">
+      {visibilityError ? (
+        <p role="alert" className="text-sm text-destructive">
+          {visibilityError}
+        </p>
+      ) : null}
       <input
         type="search"
         value={query}
