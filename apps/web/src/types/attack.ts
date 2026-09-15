@@ -87,8 +87,11 @@ export interface AttackPreviewRecord {
   unit: string;
 }
 
+/** Exactly one of `attackerTokenId` and `lairCombatantId`. */
 export interface AttackInput {
-  attackerTokenId: string;
+  attackerTokenId?: string | null;
+  /** A lair acting on its count (spec 046 US6). Game Master only. */
+  lairCombatantId?: string | null;
   abilityId?: string | null;
   itemId?: string | null;
   targetTokenId?: string | null;

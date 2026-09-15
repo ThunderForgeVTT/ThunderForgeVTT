@@ -7,6 +7,7 @@
 import { postGraphQL } from "@/api/graphqlClient";
 import type { CombatRecord } from "@/types/combat";
 import type {
+  ActionCost,
   AttackFields,
   AttackInput,
   AttackPreviewRecord,
@@ -52,6 +53,39 @@ const ATTACK_FIELDS = `
   multiattackOf
   createdAt
 `;
+
+/** An ability the Game Master may act with from the tracker. */
+export interface TrackerAbilityRecord {
+  id: string;
+  name: string;
+  actionCost: ActionCost;
+  legendaryCost: number;
+  effects: { effectType: string; formula: string }[];
+}
+
+/**
+ * The world's abilities with what they cost as an attack, for the tracker's
+ * legendary and lair actions (spec 046 US6). A Game Master may use any of
+ * them; which are attacks is the caller's to filter (an attack roll).
+ */
+export function getTrackerAbilities(
+  worldId: string,
+): Promise<TrackerAbilityRecord[]> {
+  return postGraphQL<{ worldAbilities: TrackerAbilityRecord[] }>(
+    `
+      query TrackerAbilities($worldId: UUID!) {
+        worldAbilities(worldId: $worldId) {
+          id
+          name
+          actionCost
+          legendaryCost
+          effects { effectType formula }
+        }
+      }
+    `,
+    { worldId },
+  ).then((data) => data.worldAbilities);
+}
 
 /** Make an attack. Several for a multiattack. */
 export function makeAttack(input: AttackInput): Promise<AttackRecord[]> {

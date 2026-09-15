@@ -72,6 +72,7 @@ function combatant(over: Partial<CombatantRecord> = {}): CombatantRecord {
     actorId: null,
     tokenId: null,
     label: "Someone",
+    kind: "CREATURE",
     initiative: 10,
     tiebreak: 0,
     isNpc: false,

@@ -24,7 +24,14 @@ export interface CombatantRecord {
    * shown to every seat. Null when the system declares no turn budget.
    */
   budget: TurnBudgetRecord | null;
+  /**
+   * Spec 046 US6: a creature, or a lair — no token or actor, at initiative
+   * count 20, losing ties, with no budget, acted for by the Game Master.
+   */
+  kind: CombatantKind;
 }
+
+export type CombatantKind = "CREATURE" | "LAIR";
 
 /**
  * One line of a turn's budget. `remaining` may be negative: an overspend is

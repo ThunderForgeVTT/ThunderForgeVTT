@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   addCombatant,
+  addLairCombatant,
   advanceTurn,
   changeHitPoints,
   endCombat,
@@ -28,6 +29,8 @@ import {
 } from "./combatRoster";
 import { CombatantHitPoints, CombatantOutMark } from "./CombatantHitPoints";
 import { CombatantBudget } from "./CombatantBudget";
+import { CombatantAct } from "./CombatantAct";
+import { combatantActKind } from "./combatantActions";
 import { useSelectedTokenIds } from "./useSelectedTokenIds";
 
 export interface CombatPanelProps {
@@ -64,6 +67,7 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
   const [loading, setLoading] = useState(true);
   const [actors, setActors] = useState<WorldActorRecord[]>([]);
   const [addActorId, setAddActorId] = useState("");
+  const [lairLabel, setLairLabel] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const selectedTokenIds = useSelectedTokenIds();
@@ -360,6 +364,7 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
           {combat.combatants.map((combatant) => {
             const isTurn = combatant.id === combat.activeCombatantId;
             const tokenId = combatant.tokenId;
+            const actKind = combatantActKind(combatant);
             return (
               <li
                 key={combatant.id}
@@ -400,7 +405,14 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
 
                 <span className="min-w-0 flex-1 truncate text-sm">
                   {combatant.label}
-                  {combatant.isNpc ? (
+                  {combatant.kind === "LAIR" ? (
+                    <span
+                      className="ml-1 text-xs text-muted-foreground"
+                      data-testid="combatant-lair"
+                    >
+                      Lair
+                    </span>
+                  ) : combatant.isNpc ? (
                     <span className="ml-1 text-xs text-muted-foreground">
                       NPC
                     </span>
@@ -455,11 +467,24 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
                   </>
                 ) : null}
 
-                {/* Spec 046 US5: every seat sees what each creature has left. */}
+                {/* Spec 046 US5: every seat sees what each creature has left.
+                    A lair has no budget (null), so shows none. */}
                 <CombatantBudget
                   label={combatant.label}
                   budget={combatant.budget}
                 />
+                {isGm && actKind ? (
+                  // Spec 046 US6: a legendary action between turns, or the
+                  // lair's, made as an attack by the Game Master.
+                  <CombatantAct
+                    worldId={worldId}
+                    combatant={combatant}
+                    tokens={sceneTokens.filter(
+                      (token) => token.sceneId === sceneId,
+                    )}
+                    kind={actKind}
+                  />
+                ) : null}
               </li>
             );
           })}
@@ -563,6 +588,39 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
               }}
             >
               Add
+            </Button>
+          </div>
+          {/* Spec 046 US6 (FR-053): a lair takes initiative count 20, and
+              loses ties; the server places it. */}
+          <label
+            htmlFor="combat-add-lair"
+            className="text-xs font-semibold tracking-widest text-muted-foreground uppercase"
+          >
+            Add lair
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="combat-add-lair"
+              type="text"
+              value={lairLabel}
+              placeholder="The lair's name"
+              onChange={(event) => setLairLabel(event.target.value)}
+              data-testid="combat-add-lair-name"
+              className="h-9 min-w-0 flex-1 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
+            />
+            <Button
+              type="button"
+              size="sm"
+              disabled={busy || lairLabel.trim() === ""}
+              data-testid="combat-add-lair-button"
+              onClick={() => {
+                const label = lairLabel.trim();
+                void run(() => addLairCombatant(combat.id, label)).then(() =>
+                  setLairLabel(""),
+                );
+              }}
+            >
+              Add lair
             </Button>
           </div>
         </div>

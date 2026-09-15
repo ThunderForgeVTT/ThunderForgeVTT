@@ -33,6 +33,7 @@ const COMBAT_FIELDS = `
     isNpc
     active
     downedBy
+    kind
     budget {
       action { allowed spent remaining }
       bonusAction { allowed spent remaining }
@@ -94,6 +95,27 @@ export function addCombatant(input: {
     `,
     { input },
   ).then((data) => data.addCombatant);
+}
+
+/**
+ * Game Master only (spec 046 US6). A lair at initiative count 20, losing ties:
+ * no token, no actor, no budget. It acts through `makeAttack` with
+ * `lairCombatantId`.
+ */
+export function addLairCombatant(
+  combatId: string,
+  label: string,
+): Promise<CombatRecord> {
+  return postGraphQL<{ addLairCombatant: CombatRecord }>(
+    `
+      mutation AddLairCombatant($combatId: UUID!, $label: String!) {
+        addLairCombatant(combatId: $combatId, label: $label) {
+          ${COMBAT_FIELDS}
+        }
+      }
+    `,
+    { combatId, label },
+  ).then((data) => data.addLairCombatant);
 }
 
 export function updateCombatant(input: {

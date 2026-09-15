@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button/Button";
 import { triggerDiceRollAnimation } from "@/engine/bevy";
 import { queueEdit, shouldQueue } from "@/engine/world/sync/offlineQueue";
 import type {
+  ActionCost,
   AttackInput,
   AttackPreviewRecord,
   AttackRecord,
@@ -17,7 +18,19 @@ const NO_TARGET = "";
 
 export interface AttackFlowProps {
   worldId: string;
-  attackerTokenId: string;
+  /** The creature attacking. Exactly one of this and `lairCombatantId`. */
+  attackerTokenId?: string | null;
+  /**
+   * A lair acting on its count (spec 046 US6): the Game Master's, never
+   * queued offline, never a reaction.
+   */
+  lairCombatantId?: string | null;
+  /**
+   * What the attack costs, fixed by whoever opened the flow — the tracker's
+   * "Spend legendary action" sends `LEGENDARY`. Unset, the ability's own cost
+   * applies and the attacker may call it a reaction.
+   */
+  actionCost?: ActionCost | null;
   abilityId: string;
   abilityName: string;
   /** Every token on the scene, as this viewer was sent them. */
@@ -47,12 +60,15 @@ function tokenLabel(token: TokenRecord): string {
  */
 export function AttackFlow({
   worldId,
-  attackerTokenId,
+  attackerTokenId = null,
+  lairCombatantId = null,
+  actionCost = null,
   abilityId,
   abilityName,
   tokens,
   onClose,
 }: AttackFlowProps) {
+  const reactionAllowed = actionCost === null && lairCombatantId === null;
   const selected = useSelectedTokenIds();
   const candidates = useMemo(
     () => tokens.filter((token) => token.tokenId !== attackerTokenId),
@@ -71,12 +87,21 @@ export function AttackFlow({
 
   const input: AttackInput = useMemo(
     () => ({
-      attackerTokenId,
+      ...(lairCombatantId ? { lairCombatantId } : { attackerTokenId }),
       abilityId,
       targetTokenId: targetId === NO_TARGET ? null : targetId,
-      actionCost: reaction ? "REACTION" : null,
+      actionCost:
+        actionCost ?? (reaction && reactionAllowed ? "REACTION" : null),
     }),
-    [attackerTokenId, abilityId, targetId, reaction],
+    [
+      attackerTokenId,
+      lairCombatantId,
+      abilityId,
+      targetId,
+      reaction,
+      actionCost,
+      reactionAllowed,
+    ],
   );
 
   useEffect(() => {
@@ -100,7 +125,11 @@ export function AttackFlow({
     setError(null);
     setResult(null);
     try {
-      if (shouldQueue()) {
+      if (shouldQueue() && !attackerTokenId) {
+        setError("A lair acts only while you are connected");
+        return;
+      }
+      if (shouldQueue() && attackerTokenId) {
         const attempt = await queueEdit({
           worldId,
           localId: crypto.randomUUID(),
@@ -171,15 +200,17 @@ export function AttackFlow({
           Use the token selected on the board
         </Button>
       ) : null}
-      <label className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          checked={reaction}
-          onChange={(event) => setReaction(event.target.checked)}
-          data-testid="attack-flow-reaction"
-        />
-        This is a reaction
-      </label>
+      {reactionAllowed ? (
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={reaction}
+            onChange={(event) => setReaction(event.target.checked)}
+            data-testid="attack-flow-reaction"
+          />
+          This is a reaction
+        </label>
+      ) : null}
 
       {preview && !preview.turn.allowed ? (
         <p
