@@ -163,6 +163,94 @@ pub fn clear_explored(explored: &mut ExploredCells) {
     explored.0.clear();
 }
 
+/// The engine's side of the exploration boundary: what the application last
+/// asked for, and the memory mirrored back out.
+///
+/// # Why a value, with one instance
+///
+/// The application speaks through `wasm_bindgen` free functions, which have no
+/// handle on the `World`, so its requests wait here until
+/// [`reconcile_exploration`] takes them up. The instance the web app talks to
+/// is process-wide ([`BOUNDARY`]). The systems reach it through the
+/// [`ExplorationLink`] resource rather than naming the static, so a test gives
+/// its app a boundary of its own. When they named the static, parallel tests
+/// drained each other's requests and the module failed nearly every run.
+pub struct ExplorationBoundary {
+    /// Whether the scene remembers, as the application last said.
+    pending_enabled: std::sync::Mutex<Option<bool>>,
+    /// Cells handed back from the browser, waiting to be taken up. An empty
+    /// list is a reset, which is not the same as nothing pending.
+    pending_cells: std::sync::Mutex<Option<Vec<(i32, i32)>>>,
+    /// What is remembered, as the JSON [`explored_cells`] returns; `None`
+    /// until the first frame, which reads as `[]`.
+    mirror: std::sync::Mutex<Option<String>>,
+}
+
+impl Default for ExplorationBoundary {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ExplorationBoundary {
+    pub const fn new() -> Self {
+        Self {
+            pending_enabled: std::sync::Mutex::new(None),
+            pending_cells: std::sync::Mutex::new(None),
+            mirror: std::sync::Mutex::new(None),
+        }
+    }
+
+    /// See [`set_exploration`].
+    pub fn set_enabled(&self, enabled: bool) -> bool {
+        if let Ok(mut pending) = self.pending_enabled.lock() {
+            *pending = Some(enabled);
+            return true;
+        }
+        false
+    }
+
+    /// See [`set_explored_cells`].
+    pub fn set_cells(&self, cells_json: &str) -> bool {
+        let parsed = if cells_json.is_empty() {
+            Some(Vec::new())
+        } else {
+            serde_json::from_str::<Vec<(i32, i32)>>(cells_json).ok()
+        };
+        let Some(cells) = parsed else {
+            return false;
+        };
+        if let Ok(mut pending) = self.pending_cells.lock() {
+            *pending = Some(cells);
+            return true;
+        }
+        false
+    }
+
+    /// See [`explored_cells`].
+    pub fn cells(&self) -> String {
+        self.mirror
+            .lock()
+            .ok()
+            .and_then(|held| held.clone())
+            .unwrap_or_else(|| String::from("[]"))
+    }
+}
+
+/// The one boundary the web app talks to.
+static BOUNDARY: ExplorationBoundary = ExplorationBoundary::new();
+
+/// Which boundary an app's exploration systems answer to: [`BOUNDARY`] unless
+/// a test inserts another.
+#[derive(Resource, Clone, Copy)]
+pub struct ExplorationLink(pub &'static ExplorationBoundary);
+
+impl Default for ExplorationLink {
+    fn default() -> Self {
+        Self(&BOUNDARY)
+    }
+}
+
 /// What has been remembered, as a JSON array of `[q, r]` pairs.
 ///
 /// The web persists this in the browser and hands it back on the next visit.
@@ -170,31 +258,13 @@ pub fn clear_explored(explored: &mut ExploredCells) {
 /// can tell whether anything changed without comparing sets.
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn explored_cells() -> String {
-    let slot = EXPLORED_MIRROR.get_or_init(|| std::sync::Mutex::new(String::from("[]")));
-    slot.lock()
-        .map(|held| held.clone())
-        .unwrap_or_else(|_| String::from("[]"))
+    BOUNDARY.cells()
 }
-
-static EXPLORED_MIRROR: std::sync::OnceLock<std::sync::Mutex<String>> = std::sync::OnceLock::new();
-
-/// Cells handed back from the browser, waiting to be taken up.
-static PENDING: std::sync::OnceLock<std::sync::Mutex<Option<Option<Vec<(i32, i32)>>>>> =
-    std::sync::OnceLock::new();
-
-/// Whether the scene remembers, as the application last said.
-static PENDING_ENABLED: std::sync::OnceLock<std::sync::Mutex<Option<bool>>> =
-    std::sync::OnceLock::new();
 
 /// Turn a scene's memory on or off, as the server says.
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn set_exploration(enabled: bool) -> bool {
-    let slot = PENDING_ENABLED.get_or_init(|| std::sync::Mutex::new(None));
-    if let Ok(mut pending) = slot.lock() {
-        *pending = Some(enabled);
-        return true;
-    }
-    false
+    BOUNDARY.set_enabled(enabled)
 }
 
 /// Hand back what this player's browser remembered, or `""` to forget.
@@ -205,20 +275,7 @@ pub fn set_exploration(enabled: bool) -> bool {
 /// which nothing else happens.
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn set_explored_cells(cells_json: &str) -> bool {
-    let parsed = if cells_json.is_empty() {
-        Some(Vec::new())
-    } else {
-        serde_json::from_str::<Vec<(i32, i32)>>(cells_json).ok()
-    };
-    let Some(cells) = parsed else {
-        return false;
-    };
-    let slot = PENDING.get_or_init(|| std::sync::Mutex::new(None));
-    if let Ok(mut pending) = slot.lock() {
-        *pending = Some(Some(cells));
-        return true;
-    }
-    false
+    BOUNDARY.set_cells(cells_json)
 }
 
 /// Apply what the application asked for, and mirror what is remembered.
@@ -228,19 +285,19 @@ pub fn set_explored_cells(cells_json: &str) -> bool {
 /// necessarily exists, and a request applied once and dropped is lost exactly
 /// when it arrives first.
 pub(crate) fn reconcile_exploration(
+    link: Res<ExplorationLink>,
     mut enabled: ResMut<ExplorationEnabled>,
     mut explored: ResMut<ExploredCells>,
 ) {
-    if let Some(slot) = PENDING_ENABLED.get()
-        && let Ok(mut pending) = slot.lock()
+    let boundary = link.0;
+    if let Ok(mut pending) = boundary.pending_enabled.lock()
         && let Some(requested) = pending.take()
     {
         enabled.set_if_neq(ExplorationEnabled(requested));
     }
 
-    if let Some(slot) = PENDING.get()
-        && let Ok(mut pending) = slot.lock()
-        && let Some(Some(cells)) = pending.take()
+    if let Ok(mut pending) = boundary.pending_cells.lock()
+        && let Some(cells) = pending.take()
     {
         explored.0 = cells.into_iter().collect();
     }
@@ -251,11 +308,10 @@ pub(crate) fn reconcile_exploration(
     let mut sorted: Vec<(i32, i32)> = explored.0.iter().copied().collect();
     sorted.sort_unstable();
     let json = serde_json::to_string(&sorted).unwrap_or_else(|_| String::from("[]"));
-    let slot = EXPLORED_MIRROR.get_or_init(|| std::sync::Mutex::new(String::from("[]")));
-    if let Ok(mut held) = slot.lock()
-        && *held != json
+    if let Ok(mut held) = boundary.mirror.lock()
+        && held.as_deref() != Some(json.as_str())
     {
-        *held = json;
+        *held = Some(json);
     }
 }
 
@@ -265,6 +321,7 @@ impl Plugin for ExplorationPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ExplorationEnabled>()
             .init_resource::<ExploredCells>()
+            .init_resource::<ExplorationLink>()
             .add_systems(
                 Update,
                 (

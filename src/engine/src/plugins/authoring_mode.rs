@@ -86,18 +86,112 @@ impl AuthoringMode {
     }
 }
 
-/// What the web app has most recently asked the mode to become.
+/// The engine's side of the tool boundary: what the web app last asked the
+/// mode to become, and which tools this viewer may use.
 ///
-/// A slot rather than a direct write, for the reason every other boundary here
-/// uses one: `App::run()` owns the `World` and never returns on wasm, so there
-/// is no handle to set a state from outside the schedule. A system inside the
-/// schedule drains this.
-static REQUESTED_MODE: std::sync::OnceLock<std::sync::Mutex<Option<AuthoringMode>>> =
-    std::sync::OnceLock::new();
-
-fn requested_mode_slot() -> &'static std::sync::Mutex<Option<AuthoringMode>> {
-    REQUESTED_MODE.get_or_init(|| std::sync::Mutex::new(None))
+/// # Why a value, with one instance
+///
+/// `App::run()` owns the `World` and never returns on wasm, so there is no
+/// handle to set a state from outside the schedule — the web app's calls land
+/// in [`BOUNDARY`] and a system inside the schedule drains it. That instance
+/// has to be process-wide. The *rules* do not: they are methods on this type,
+/// so a test builds its own boundary and exercises them without sharing one
+/// with every other test thread. When they were free functions over three
+/// statics, the module's tests rewrote each other's grants in parallel and
+/// failed a different one each run.
+pub struct ToolBoundary {
+    /// What the web app has most recently asked the mode to become.
+    requested: std::sync::Mutex<Option<AuthoringMode>>,
+    /// Which tools this viewer is allowed to use, or `None` for "no
+    /// restriction".
+    ///
+    /// `None` is the default and means the engine imposes no tool-level limit
+    /// — which is today's behaviour, where `IsGameMaster` alone decides whether
+    /// a person may author at all. Spec 031 FR-045 requires exactly that
+    /// default, so existing worlds are unchanged until a Game Master grants
+    /// something.
+    ///
+    /// When the set is present it is authoritative here regardless of what
+    /// chrome is showing. FR-047 is explicit that hiding a tool is not a
+    /// permission check: a request made directly must be refused too, and this
+    /// is where that happens.
+    allowed: std::sync::Mutex<Option<Vec<AuthoringMode>>>,
 }
+
+impl Default for ToolBoundary {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ToolBoundary {
+    pub const fn new() -> Self {
+        Self {
+            requested: std::sync::Mutex::new(None),
+            allowed: std::sync::Mutex::new(None),
+        }
+    }
+
+    /// Ask for a different authoring tool. See [`set_authoring_mode`].
+    pub fn request(&self, tool_id: &str) -> bool {
+        let Some(mode) = AuthoringMode::from_tool_id(tool_id) else {
+            return false;
+        };
+        // Refused here, not merely hidden in the rail. FR-047: a tool the
+        // viewer may not use must be unusable even when the request arrives
+        // directly — from a console, a stale tab, or chrome that has not
+        // caught up with a permission that just changed.
+        if !self.is_allowed(mode) {
+            return false;
+        }
+        if let Ok(mut slot) = self.requested.lock() {
+            *slot = Some(mode);
+        }
+        true
+    }
+
+    /// Take the pending request, if there is one.
+    pub fn take_request(&self) -> Option<AuthoringMode> {
+        self.requested.lock().ok().and_then(|mut slot| slot.take())
+    }
+
+    /// Whether this viewer may use `mode` right now.
+    pub fn is_allowed(&self, mode: AuthoringMode) -> bool {
+        self.allowed
+            .lock()
+            .ok()
+            .map(|slot| match slot.as_ref() {
+                None => true,
+                Some(allowed) => allowed.contains(&mode),
+            })
+            .unwrap_or(true)
+    }
+
+    /// Declare which tools this viewer may use. See
+    /// [`set_allowed_authoring_tools`].
+    pub fn set_allowed(&self, tool_ids: &str) {
+        let allowed: Vec<AuthoringMode> = tool_ids
+            .split(',')
+            .map(str::trim)
+            .filter(|id| !id.is_empty())
+            .filter_map(AuthoringMode::from_tool_id)
+            .collect();
+
+        if let Ok(mut slot) = self.allowed.lock() {
+            *slot = Some(allowed);
+        }
+    }
+
+    /// Remove any tool restriction, returning to the unrestricted default.
+    pub fn clear_allowed(&self) {
+        if let Ok(mut slot) = self.allowed.lock() {
+            *slot = None;
+        }
+    }
+}
+
+/// The one boundary the web app talks to.
+static BOUNDARY: ToolBoundary = ToolBoundary::new();
 
 /// Ask the engine to arm a different authoring tool.
 ///
@@ -108,20 +202,7 @@ fn requested_mode_slot() -> &'static std::sync::Mutex<Option<AuthoringMode>> {
 /// tool", which is a supported way to run rather than an error.
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn set_authoring_mode(tool_id: &str) -> bool {
-    let Some(mode) = AuthoringMode::from_tool_id(tool_id) else {
-        return false;
-    };
-    // Refused here, not merely hidden in the rail. FR-047: a tool the viewer
-    // may not use must be unusable even when the request arrives directly —
-    // from a console, a stale tab, or chrome that has not caught up with a
-    // permission that just changed.
-    if !tool_is_allowed(mode) {
-        return false;
-    }
-    if let Ok(mut slot) = requested_mode_slot().lock() {
-        *slot = Some(mode);
-    }
-    true
+    BOUNDARY.request(tool_id)
 }
 
 /// The mode the engine currently has armed, as the web app's tool id.
@@ -142,23 +223,6 @@ pub fn authoring_mode() -> String {
 static CURRENT_MODE: std::sync::OnceLock<std::sync::Mutex<AuthoringMode>> =
     std::sync::OnceLock::new();
 
-/// Which tools this viewer is allowed to use, or `None` for "no restriction".
-///
-/// `None` is the default and means the engine imposes no tool-level limit —
-/// which is today's behaviour, where `IsGameMaster` alone decides whether a
-/// person may author at all. Spec 031 FR-045 requires exactly that default, so
-/// existing worlds are unchanged until a Game Master grants something.
-///
-/// When the set is present it is authoritative here regardless of what chrome
-/// is showing. FR-047 is explicit that hiding a tool is not a permission check:
-/// a request made directly must be refused too, and this is where that happens.
-static ALLOWED_TOOLS: std::sync::OnceLock<std::sync::Mutex<Option<Vec<AuthoringMode>>>> =
-    std::sync::OnceLock::new();
-
-fn allowed_tools_slot() -> &'static std::sync::Mutex<Option<Vec<AuthoringMode>>> {
-    ALLOWED_TOOLS.get_or_init(|| std::sync::Mutex::new(None))
-}
-
 /// Whether this viewer may use `mode` right now.
 ///
 /// Public because it is the check, not a detail of one: `set_authoring_mode`
@@ -166,14 +230,7 @@ fn allowed_tools_slot() -> &'static std::sync::Mutex<Option<Vec<AuthoringMode>>>
 /// answer to the input systems as a run condition. Two spellings of "may I"
 /// is how a bypass gets in.
 pub fn tool_is_allowed(mode: AuthoringMode) -> bool {
-    allowed_tools_slot()
-        .lock()
-        .ok()
-        .map(|slot| match slot.as_ref() {
-            None => true,
-            Some(allowed) => allowed.contains(&mode),
-        })
-        .unwrap_or(true)
+    BOUNDARY.is_allowed(mode)
 }
 
 /// A run condition arming a system only while its tool is permitted.
@@ -198,24 +255,13 @@ pub fn authoring_tool_allowed(mode: AuthoringMode) -> impl FnMut() -> bool + Clo
 /// of one unknown name would take away tools the person legitimately has.
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn set_allowed_authoring_tools(tool_ids: &str) {
-    let allowed: Vec<AuthoringMode> = tool_ids
-        .split(',')
-        .map(str::trim)
-        .filter(|id| !id.is_empty())
-        .filter_map(AuthoringMode::from_tool_id)
-        .collect();
-
-    if let Ok(mut slot) = allowed_tools_slot().lock() {
-        *slot = Some(allowed);
-    }
+    BOUNDARY.set_allowed(tool_ids);
 }
 
 /// Remove any tool restriction, returning to the unrestricted default.
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn clear_allowed_authoring_tools() {
-    if let Ok(mut slot) = allowed_tools_slot().lock() {
-        *slot = None;
-    }
+    BOUNDARY.clear_allowed();
 }
 
 /// Leave a tool the viewer is no longer allowed to use.
@@ -261,10 +307,7 @@ fn apply_requested_mode(
     current: Res<State<AuthoringMode>>,
     mut next: ResMut<NextState<AuthoringMode>>,
 ) {
-    let requested = requested_mode_slot()
-        .lock()
-        .ok()
-        .and_then(|mut slot| slot.take());
+    let requested = BOUNDARY.take_request();
 
     if let Some(mode) = requested
         && mode != *current.get()
@@ -336,13 +379,13 @@ mod tests {
     /// FR-045's "existing worlds are unchanged", seen from this side.
     #[test]
     fn no_declaration_restricts_nothing() {
-        clear_allowed_authoring_tools();
+        let boundary = ToolBoundary::new();
         for mode in [
             AuthoringMode::Select,
             AuthoringMode::Walls,
             AuthoringMode::Tokens,
         ] {
-            assert!(tool_is_allowed(mode));
+            assert!(boundary.is_allowed(mode));
         }
     }
 
@@ -350,15 +393,20 @@ mod tests {
     /// rail involved, is refused for a tool the viewer does not hold.
     #[test]
     fn a_direct_request_for_a_forbidden_tool_is_refused() {
-        set_allowed_authoring_tools("select,walls");
+        let boundary = ToolBoundary::new();
+        boundary.set_allowed("select,walls");
 
-        assert!(set_authoring_mode("walls"), "a granted tool is accepted");
+        assert!(boundary.request("walls"), "a granted tool is accepted");
+        assert_eq!(boundary.take_request(), Some(AuthoringMode::Walls));
         assert!(
-            !set_authoring_mode("lights"),
+            !boundary.request("lights"),
             "a tool the viewer does not hold must be refused even when asked for directly"
         );
-
-        clear_allowed_authoring_tools();
+        assert_eq!(
+            boundary.take_request(),
+            None,
+            "a refused request queues nothing"
+        );
     }
 
     /// An empty grant is a real answer, not a missing one. A player whose Game
@@ -367,11 +415,16 @@ mod tests {
     /// everybody.
     #[test]
     fn granting_nothing_forbids_everything() {
-        set_allowed_authoring_tools("");
-        assert!(!tool_is_allowed(AuthoringMode::Walls));
-        assert!(!tool_is_allowed(AuthoringMode::Select));
-        assert!(!set_authoring_mode("walls"));
-        clear_allowed_authoring_tools();
+        let boundary = ToolBoundary::new();
+        boundary.set_allowed("");
+        assert!(!boundary.is_allowed(AuthoringMode::Walls));
+        assert!(!boundary.is_allowed(AuthoringMode::Select));
+        assert!(!boundary.request("walls"));
+        boundary.clear_allowed();
+        assert!(
+            boundary.is_allowed(AuthoringMode::Walls),
+            "clearing restores the default"
+        );
     }
 
     /// One unknown name must not cost a person the tools they do hold — a
@@ -379,10 +432,10 @@ mod tests {
     /// would fail *open* on the wrong side by disarming a legitimate grant.
     #[test]
     fn an_unknown_name_in_a_grant_does_not_void_the_rest() {
-        set_allowed_authoring_tools("walls, wombat ,shapes");
-        assert!(tool_is_allowed(AuthoringMode::Walls));
-        assert!(tool_is_allowed(AuthoringMode::Shapes));
-        assert!(!tool_is_allowed(AuthoringMode::Lights));
-        clear_allowed_authoring_tools();
+        let boundary = ToolBoundary::new();
+        boundary.set_allowed("walls, wombat ,shapes");
+        assert!(boundary.is_allowed(AuthoringMode::Walls));
+        assert!(boundary.is_allowed(AuthoringMode::Shapes));
+        assert!(!boundary.is_allowed(AuthoringMode::Lights));
     }
 }

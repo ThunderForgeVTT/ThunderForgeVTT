@@ -42,6 +42,15 @@ fn blocking_wall() -> Wall {
     }
 }
 
+/// A boundary of this test's own, linked into `app`, so no other test's
+/// requests reach it. Leaked because the link is `'static`; a test's worth of
+/// bytes.
+fn own_boundary(app: &mut App) -> &'static ExplorationBoundary {
+    let boundary: &'static ExplorationBoundary = Box::leak(Box::new(ExplorationBoundary::new()));
+    app.insert_resource(ExplorationLink(boundary));
+    boundary
+}
+
 fn remembered(app: &App) -> usize {
     app.world().resource::<ExploredCells>().0.len()
 }
@@ -178,7 +187,8 @@ fn a_memory_handed_back_from_the_browser_is_taken_up() {
     // The whole point of persisting: a player returning to a scene sees what
     // they saw last session, without walking it again.
     let mut app = app_for_reconcile();
-    assert!(set_explored_cells("[[7,7],[8,8]]"));
+    let boundary = own_boundary(&mut app);
+    assert!(boundary.set_cells("[[7,7],[8,8]]"));
     app.update();
 
     assert!(remembers(&app, 7, 7));
@@ -191,11 +201,12 @@ fn an_empty_string_is_a_reset_and_not_a_silence() {
     // anything yet" must not look the same, or a reset would be lost in any
     // frame where nothing else happened.
     let mut app = app_for_reconcile();
-    assert!(set_explored_cells("[[1,1],[2,2]]"));
+    let boundary = own_boundary(&mut app);
+    assert!(boundary.set_cells("[[1,1],[2,2]]"));
     app.update();
     assert!(remembered(&app) >= 2);
 
-    assert!(set_explored_cells(""));
+    assert!(boundary.set_cells(""));
     app.update();
     assert_eq!(remembered(&app), 0, "the reset reached the board");
 }
@@ -205,10 +216,11 @@ fn a_malformed_memory_is_refused_rather_than_forgetting_what_is_there() {
     // Broken storage must not read as "you have explored nothing": a player
     // whose browser returned nonsense should keep their map, not lose it.
     let mut app = app_for_reconcile();
-    assert!(set_explored_cells("[[3,3]]"));
+    let boundary = own_boundary(&mut app);
+    assert!(boundary.set_cells("[[3,3]]"));
     app.update();
 
-    assert!(!set_explored_cells("{not cells}"), "refused");
+    assert!(!boundary.set_cells("{not cells}"), "refused");
     app.update();
     assert!(remembers(&app, 3, 3), "and nothing was forgotten");
 }
@@ -219,12 +231,13 @@ fn the_mirror_reports_what_is_remembered_in_a_stable_order() {
     // unstable order would make every frame look like a change and write
     // constantly.
     let mut app = app_for_reconcile();
-    assert!(set_explored_cells("[[9,9],[1,1],[5,5]]"));
+    let boundary = own_boundary(&mut app);
+    assert!(boundary.set_cells("[[9,9],[1,1],[5,5]]"));
     app.update();
 
-    let first = explored_cells();
+    let first = boundary.cells();
     app.update();
-    assert_eq!(first, explored_cells(), "two reads agree");
+    assert_eq!(first, boundary.cells(), "two reads agree");
     assert!(first.starts_with("[[1,1]"), "sorted: {first}");
 }
 
@@ -234,15 +247,16 @@ fn after_a_reset_a_player_still_sees_where_they_are_standing() {
     // above reconcile without accumulating. The distant map is gone; the room
     // the player is in comes straight back, because they are looking at it.
     let mut app = app_with(true, vec![], Vec2::ZERO);
+    let boundary = own_boundary(&mut app);
     app.add_systems(Update, reconcile_exploration);
-    assert!(set_explored_cells("[[500,500]]"));
+    assert!(boundary.set_cells("[[500,500]]"));
     app.update();
     assert!(
         remembers(&app, 500, 500),
         "somewhere they went last session"
     );
 
-    assert!(set_explored_cells(""));
+    assert!(boundary.set_cells(""));
     app.update();
 
     assert!(!remembers(&app, 500, 500), "the far room is forgotten");

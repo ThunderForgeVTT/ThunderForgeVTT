@@ -500,7 +500,10 @@ async fn a_lairs_action_is_a_game_masters_resolves_like_an_attack_and_names_the_
     };
 
     // C2: a player is refused, before anything is written.
+    // This world's attacks, not the table's: every other combat test in the
+    // binary writes attacks into the same database at the same time.
     let before = world_attacks::table
+        .filter(world_attacks::world_id.eq(t.world_id))
         .count()
         .get_result::<i64>(&mut conn)
         .expect("count");
@@ -525,6 +528,7 @@ async fn a_lairs_action_is_a_game_masters_resolves_like_an_attack_and_names_the_
     );
     assert_eq!(
         world_attacks::table
+            .filter(world_attacks::world_id.eq(t.world_id))
             .count()
             .get_result::<i64>(&mut conn)
             .expect("count"),
