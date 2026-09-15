@@ -1,5 +1,7 @@
 //! Keeps tokens sized to the grid and, unless told otherwise, snapped to it.
 
+use std::collections::HashMap;
+
 use bevy::prelude::*;
 
 use crate::TokenIdentity;
@@ -94,23 +96,44 @@ type MovedOrResized = (
 /// as one square, and is told a moment later by `set_token_grid` that it is a
 /// Large ogre. Keyed on the transform alone, it would stay centred in one cell
 /// — straddling half of each neighbour — until somebody moved it.
+///
+/// And it re-snaps **from where the token was put, not from where the first
+/// snap left it**. Snapping is not idempotent across footprints: an ogre the
+/// server placed on a vertex, snapped first as one square, moves half a square
+/// to a cell's centre, and snapped from there as two squares moves half a
+/// square again — a whole square from where every other board and the server
+/// have it. So each token's unsnapped position is remembered beside the
+/// position snapping gave it; while the transform still holds that snapped
+/// position, nothing has moved the token and a new footprint snaps the
+/// remembered one. Found by `combat-reach.spec.ts`, which drew the ogre one
+/// square up and right of the server's.
 pub(crate) fn snap_tokens_to_grid(
     grid: Res<SceneGrid>,
     enabled: Res<GridSnapEnabled>,
-    mut tokens: Query<(&mut Transform, Option<&TokenGridBehaviour>), MovedOrResized>,
+    mut placed: Local<HashMap<Entity, (Vec2, Vec2)>>,
+    mut removed: RemovedComponents<TokenIdentity>,
+    mut tokens: Query<(Entity, &mut Transform, Option<&TokenGridBehaviour>), MovedOrResized>,
 ) {
+    for entity in removed.read() {
+        placed.remove(&entity);
+    }
     if !enabled.0 || grid.kind == GridKind::Gridless {
         return;
     }
 
-    for (mut transform, behaviour) in tokens.iter_mut() {
+    for (entity, mut transform, behaviour) in tokens.iter_mut() {
         let behaviour = behaviour.copied().unwrap_or_default();
         if !behaviour.snap {
             continue;
         }
 
         let current = transform.translation.truncate();
-        let snapped = grid.snap_footprint(current, behaviour.footprint);
+        let put_at = match placed.get(&entity) {
+            Some((raw, snapped)) if snapped.distance_squared(current) <= 0.0001 => *raw,
+            _ => current,
+        };
+        let snapped = grid.snap_footprint(put_at, behaviour.footprint);
+        placed.insert(entity, (put_at, snapped));
 
         // Guarded because this query is driven by `Changed<Transform>` and
         // writing the transform re-triggers it. Without the comparison an
