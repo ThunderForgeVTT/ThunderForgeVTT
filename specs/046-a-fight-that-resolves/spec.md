@@ -4,7 +4,11 @@
 
 **Created**: 2026-09-11
 
-**Status**: Draft. The owner's three questions were answered on 2026-09-12
+**Status**: Built, 2026-09-15 — every story (US1–US6) shipped in tasks
+Phases 3–9 and is proven by e2e and by `combat-5e.playtest.ts`, which has no
+soft FINDING left. One target is unmet and one is built but unproven; see
+[What shipped](#what-shipped-2026-09-15). The owner's three questions were
+answered on 2026-09-12 and a fourth decided on 2026-09-14
 (see [Decisions](#decisions-owner-2026-09-12)); clarified 2026-09-14.
 
 **Input**: Project owner, after watching the combat playtest: "can we do combat
@@ -15,12 +19,93 @@ attacks, bonus actions, the works for round based combat".
 
 ## Context
 
+### What shipped (2026-09-15)
+
+The rest of this Context is the problem as it stood on 2026-09-11, kept as the
+reason for this spec. Three of its claims were already stale when research
+read the code on 2026-09-14; they are corrected where they stand, marked
+*Corrected*. What was built, by tasks phase (tasks.md numbers its phases two
+ahead of plan.md's):
+
+- **Phase 3 — damage lands, bars move, zero is out** (US2, US3). The Game
+  Master's Damage and Heal on each tracker row (`changeHitPoints`): temporary
+  hit points spent first, bounded at 0 and the maximum, and every board
+  re-reads its bars on event 26 as well as 14 and 19. A creature reaching zero
+  is marked out *by hit points* and skipped; healing brings it back; a Game
+  Master's Down is not undone by healing. `combat-hit-points.spec.ts`.
+- **Phase 4 — turn order holds** (US1). A player's move on somebody else's
+  turn is refused by the server on every path — a drag, `moveOwnToken`, and a
+  queued offline move at replay — naming whose turn it is ("Unknown" when the
+  name is hidden). Game Masters and creatures outside the fight are not held.
+  An attack is held the same way (C1), reactions excepted.
+  `combat-turn-order.spec.ts`.
+- **Phase 5 — a token is its actor, or a copy of it** (US2, ADR-102). A
+  linked token reads and writes its actor's sheet; an unlinked copy holds its
+  own hit points. A unique NPC is placed linked and any other NPC as a copy;
+  the Game Master can change either. `tokens.health` is retired.
+  `token-links.spec.ts`; two hundred copies in `engine-status-limits.spec.ts`.
+- **Phase 6 — an attack is aimed at something** (US1, US2, ADR-101). An
+  attack from a character's sheet chooses a target and is resolved on the
+  server against its armour class. Every seat's attack log shows it, with the
+  attacker redacted to "Unknown" per viewer and nothing of it in that player's
+  traffic. A hit is offered to the target's controller, who takes or declines
+  it, and a Game Master may resolve it on their behalf; auto-apply is a world
+  default the tracker can override per encounter. Offline, an attack is
+  queued and judged at replay. `combat-attack.spec.ts`.
+- **Phase 7 — size fills squares, and attacks have reach** (US4). A pack's
+  `combat.sizes` decides the squares a creature fills on every board, for
+  drawing, snapping, hit-testing and keyboard movement. Reach, range and line
+  of sight are measured footprint to footprint, warned before the roll and
+  flagged to the table after it, never refused. `combat-reach.spec.ts`.
+- **Phase 8 — a round is an economy** (US5). Action, bonus action, reaction
+  and movement shown for every combatant on every seat, spent by attacks and
+  moves, an overspend shown as a debt and never refused, and refilled at the
+  creature's own turn. `combat-economy.spec.ts`.
+- **Phase 9 — a legendary creature acts between turns** (US6). Legendary
+  actions read from the sheet, spent from the tracker between other
+  creatures' turns and refilled at its own; a lair at initiative 20 that loses
+  ties and acts through the Game Master. `combat-legendary.spec.ts`.
+- **Phase 10 — polish.** The fight's controls driven by keyboard alone and
+  held to WCAG 2.2 AA by axe, with focus returning when the attack flow closes
+  and moving on when an offer is answered (`combat-accessibility.spec.ts`).
+
+**Decided** by the owner (see [Decisions](#decisions-owner-2026-09-12)):
+
+1. The product rolls, and the target's controller decides: a hit is an offer.
+   The only automatic path is the Game Master's auto-apply to NPCs they run.
+2. The economy shows and never refuses.
+3. An attack needs line of sight by default, and an ability or item can say
+   it does not.
+4. "Unknown" follows the board (token centres), not an attack's line of sight
+   (footprints).
+
+**Built, not proven as written**: the *one second* of SC-001 and SC-002. The
+specs that watch an attack reach every seat (`combat-attack.spec.ts`) and bars
+move on another client's board (`combat-hit-points.spec.ts`) poll with a
+5-second budget and record the elapsed time as an annotation on each run.
+Nothing asserts one second.
+
+**Unmet**: research R17's load target. Two hundred unlinked copies add about
+750 ms to a scene's load-to-drawn time (+686 ms measured in Phase 5, +757 ms
+in Phase 7) against a target of 500 ms. The copies cost nothing over the same
+two hundred tokens linked (+46 ms, gated at 500 ms), and the frame rate holds
+at 60 fps: the time is the engine bringing two hundred tokens and their bars
+onto a board, which predates this spec. Whether 500 ms against an empty scene
+is the right target is for whoever owns engine loading.
+
+### The problem, as it stood on 2026-09-11
+
 The combat tracker works. A Game Master starts an encounter, files everyone
 in, and initiative sorts server-side; every player's panel follows the round
 and the active combatant live; a player is refused the turn both in the
 screens and by the server; the Game Master marks a combatant down and the turn
 skips it; ending returns every panel to rest. `combat-5e.playtest.ts` checks
 all of that hard, and it passes.
+
+> *Corrected (research, 2026-09-14):* "refused the turn by the server" meant
+> only that `advanceTurn` is Game-Master-only. No server path checked whose
+> turn it was before a move, a roll or anything else; tasks Phase 4 added
+> that check.
 
 Everything the tracker points *at* is missing. The playtest of 2026-09-11
 records seven findings, and they are one story: **a turn is a pointer, and a
@@ -51,6 +136,13 @@ not move, on any board, until a token event or a reload. Spec 029 US1's own
 independent test says the opposite ("Reduce the character's hit points from
 another session; the bar shortens without a reload"), so the product
 contradicts a shipped spec.
+
+> *Corrected (research, 2026-09-14):* `useUpdateActorData` **is** used, by
+> Genie's sheet through `@thunderforge/host`; only the 5e pack has no sheet
+> writer, so for 5e the claim stood in effect. And the write **does** emit a
+> world event — `EVENT_CODE_ACTOR_SHEET_CHANGED` (26), since spec 045 — which
+> the bars ignored because `tokenStatus.ts` listened only for 14 and 19. The
+> fix was a listener (tasks T016), not a new event.
 
 At zero, nothing happens. The 5e validator allows `current_hp: 0` and says
 "Zero HP is valid (unconscious)", and that is the whole of it: no dying, no

@@ -46,7 +46,7 @@ import { setTraits } from "./combat";
  * beyond the lantern, and the Game Master's board hiding nothing on each
  * wandering round — only so one miss does not end the session before the rest
  * is seen; a soft miss still fails the run. A new gap goes in as a soft check
- * whose message starts FINDING, as `combat-5e.playtest.ts` still does.
+ * whose message starts FINDING, as both scenarios' first gaps did.
  *
  * Laid out in world units around the origin, because players move by dragging
  * and `dragToken` aims at the default 1:1 camera: everything a player drags

@@ -9,8 +9,9 @@ import { must, type Table } from "./table";
  * Everything here drives what the product already offers — the combat
  * mutations a Game Master's panel calls, the dice roller every seat has, the
  * system data an actor's sheet is built from — so a playtest finds what a
- * table would find. Where the product has no path at all (see the scenario's
- * FINDINGs), the helper is absent rather than invented.
+ * table would find. Where the product has no path at all, the helper is
+ * absent rather than invented. (The scenario's FINDINGs, which were those
+ * missing paths, are all hard checks since spec 046.)
  */
 
 export interface Combatant {
@@ -675,10 +676,10 @@ export async function roundOn(page: Page): Promise<string | null> {
 /**
  * Author an ability the way the compendium does, and give it to an actor.
  *
- * This is how a fighting style exists at all today: a named thing with
- * formulas on it. An effect's `formula` is checked for shape and never
- * resolved, and nothing is ever applied to a target — which is what the
- * scenario's FINDINGs are about.
+ * This is how a fighting style exists: a named thing with formulas on it.
+ * An `ATTACK_ROLL` and its `DAMAGE` are resolved against a target only when
+ * the ability is made as an attack (spec 046 `makeAttack`, from the sheet or
+ * the tracker); rolled on its own, a formula is a number and nothing more.
  */
 export async function grantAbility(
   table: Table,

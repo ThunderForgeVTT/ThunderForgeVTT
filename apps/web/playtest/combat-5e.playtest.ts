@@ -65,8 +65,15 @@ import {
  * has left of its turn, Aria's swing spends her action, and a swing past it
  * is made and shown as overspent); and a legendary creature (the ogre
  * chieftain spends three legendary actions from the tracker across other
- * creatures' turns, and has three again at its own). Nothing is faked with a test-only path: a
- * scenario that writes the outcome itself is a scenario proving nothing.
+ * creatures' turns, and has three again at its own). Nothing is faked with a
+ * test-only path: a scenario that writes the outcome itself is a scenario
+ * proving nothing.
+ *
+ * This scenario has no FINDINGs left. Its run on `main` before spec 046
+ * (2026-09-14) recorded eight, as soft checks: 263, 380, 416, 439, 481, 522,
+ * 548 and 606, by the line each stood on. Spec 046 closed each, and each is
+ * now a hard check, marked "Was FINDING" where it stands. A new gap goes in
+ * as a soft check whose message starts FINDING.
  */
 
 /** The scores a 5e actor needs before the pack will accept anything else. */
