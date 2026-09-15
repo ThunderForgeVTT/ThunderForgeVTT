@@ -404,6 +404,7 @@ export default function ItemDetailPage({ mode }: ItemDetailPageProps) {
         />
 
         <AttackFieldsEditor
+          worldId={worldId}
           owner={{ kind: "item", id: itemId }}
           canEdit={canEdit}
         />

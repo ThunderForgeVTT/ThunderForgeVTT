@@ -3,6 +3,7 @@ import { setAbilityAttack, setItemAttack } from "@/api/attacks";
 import { postGraphQL } from "@/api/graphqlClient";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
+import { MultiattackPicker } from "@/pages/world/ability/MultiattackPicker";
 import type { ActionCost, AttackFields } from "@/types/attack";
 
 const ATTACK_FIELD_SELECTION = `
@@ -61,6 +62,8 @@ function parseDistance(text: string): number | null {
 }
 
 export interface AttackFieldsEditorProps {
+  /** The world whose abilities a multiattack may name. */
+  worldId: string;
   owner: AttackFieldsOwner;
   canEdit: boolean;
 }
@@ -78,6 +81,7 @@ export interface AttackFieldsEditorProps {
  * these describe the whole ability.
  */
 export function AttackFieldsEditor({
+  worldId,
   owner,
   canEdit,
 }: AttackFieldsEditorProps) {
@@ -240,26 +244,13 @@ export function AttackFieldsEditor({
         />
         Needs to see its target
       </label>
-      <label className="grid gap-1 text-sm">
-        Multiattack: the ids of the abilities one use makes, in order, one per
-        line
-        <textarea
-          rows={2}
-          value={fields.multiattack.join("\n")}
-          disabled={!canEdit}
-          onChange={(e) =>
-            setFields({
-              ...fields,
-              multiattack: e.target.value
-                .split(/\s+/)
-                .map((part) => part.trim())
-                .filter(Boolean),
-            })
-          }
-          data-testid="attack-fields-multiattack"
-          className="rounded border border-border bg-background px-2 py-1 font-mono text-xs"
-        />
-      </label>
+      <MultiattackPicker
+        worldId={worldId}
+        value={fields.multiattack}
+        onChange={(multiattack) => setFields({ ...fields, multiattack })}
+        disabled={!canEdit}
+        selfId={owner.kind === "ability" ? owner.id : undefined}
+      />
       {canEdit ? (
         <div className="flex items-center gap-3">
           <Button

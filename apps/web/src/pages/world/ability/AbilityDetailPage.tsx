@@ -547,6 +547,7 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
         />
 
         <AttackFieldsEditor
+          worldId={worldId}
           owner={{ kind: "ability", id: abilityId }}
           canEdit={canEdit}
         />
