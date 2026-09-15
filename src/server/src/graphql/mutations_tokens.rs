@@ -112,6 +112,8 @@ impl TokenMutation {
         };
         let setting_primary = input.is_primary == Some(true);
         let input_owner_user_id = input.owner_user_id;
+        let moved_to = (input.x, input.y);
+        let systems_dir = state.directories.systems_dir.clone();
 
         let updated_token = tokio::task::spawn_blocking(move || {
             use crate::schema::tokens;
@@ -126,11 +128,20 @@ impl TokenMutation {
                 // `token_id` alone. Each write used to carry its own "scenes
                 // I own" subquery, which is how one rule came to be enforced
                 // in three places and be wrong in all of them.
-                let (existing_scene, existing_owner): (uuid::Uuid, Option<uuid::Uuid>) =
-                    tokens::table
-                        .filter(tokens::token_id.eq(token_id))
-                        .select((tokens::scene_id, tokens::owner_user_id))
-                        .first(conn)?;
+                let (existing_scene, existing_owner, from_x, from_y): (
+                    uuid::Uuid,
+                    Option<uuid::Uuid>,
+                    f64,
+                    f64,
+                ) = tokens::table
+                    .filter(tokens::token_id.eq(token_id))
+                    .select((
+                        tokens::scene_id,
+                        tokens::owner_user_id,
+                        tokens::x,
+                        tokens::y,
+                    ))
+                    .first(conn)?;
                 if !crate::auth::world_membership::is_dm_of_scene(
                     conn,
                     user_id,
@@ -168,6 +179,22 @@ impl TokenMutation {
                     .set(update_data)
                     .returning(crate::models::Token::as_returning())
                     .get_result(conn)?;
+
+                // Spec 046 US5: a Game Master's drag moves the creature, so it
+                // spends the creature's movement — one step, old place to new
+                // (a drag has no route). Shown, never refused (C9).
+                if moved_to.0.is_some() || moved_to.1.is_some() {
+                    crate::combat::budget::spend_for_move_logged(
+                        conn,
+                        &systems_dir,
+                        token.scene_id,
+                        token_id,
+                        (from_x, from_y),
+                        None,
+                        (token.x, token.y),
+                        user_id,
+                    );
+                }
 
                 refresh_scene_fingerprint(conn, token.scene_id, user_id);
 
@@ -388,6 +415,10 @@ impl TokenMutation {
             .db_pool
             .get()
             .map_err(|_| Error::new("Failed to get DB connection"))?;
+        let systems_dir = state.directories.systems_dir.clone();
+        let from = (existing.x, existing.y);
+        let route: Option<Vec<(f64, f64)>> =
+            path.map(|points| points.iter().map(|p| (p.x, p.y)).collect());
 
         let updated_token = tokio::task::spawn_blocking(move || {
             use crate::schema::tokens;
@@ -396,6 +427,19 @@ impl TokenMutation {
                 .set((tokens::x.eq(x), tokens::y.eq(y)))
                 .returning(crate::models::Token::as_returning())
                 .get_result(&mut conn)?;
+
+            // Spec 046 US5: the route the move took spends the creature's
+            // movement, shown and never refused (C9).
+            crate::combat::budget::spend_for_move_logged(
+                &mut conn,
+                &systems_dir,
+                token.scene_id,
+                token_id,
+                from,
+                route.as_deref(),
+                (x, y),
+                user_id,
+            );
 
             refresh_scene_fingerprint(&mut conn, token.scene_id, user_id);
 

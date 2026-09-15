@@ -169,6 +169,7 @@ pub async fn set_combat_auto_apply_impl(
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
     refuse_if_paused(&mut conn, world_id)?;
+    let systems_dir = state.directories.systems_dir.clone();
     tokio::task::spawn_blocking(move || -> Result<GraphQLCombat, String> {
         use crate::graphql::mutations_combat::{combat_world, load_combat, touch_and_broadcast};
         diesel::update(world_combats::table.filter(world_combats::id.eq(combat_id)))
@@ -177,7 +178,7 @@ pub async fn set_combat_auto_apply_impl(
             .map_err(|e| format!("Failed to update combat: {e}"))?;
         touch_and_broadcast(&mut conn, combat_id, world_id, user_id)?;
         let combat = combat_world(&mut conn, combat_id)?;
-        load_combat(&mut conn, combat, user_id, is_admin)
+        load_combat(&mut conn, &systems_dir, combat, user_id, is_admin)
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?

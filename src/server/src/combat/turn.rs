@@ -68,6 +68,26 @@ pub fn turn_refusal(label: &str) -> String {
     format!("It is {label}'s turn")
 }
 
+/// The world's running combat in this scene (a combat with no scene is the
+/// world's, and holds every scene), and its auto-apply override.
+pub fn running_combat(
+    conn: &mut PgConnection,
+    world_id: Uuid,
+    scene_id: Uuid,
+) -> QueryResult<Option<(Uuid, Option<bool>)>> {
+    world_combats::table
+        .filter(world_combats::world_id.eq(world_id))
+        .filter(world_combats::ended_at.is_null())
+        .filter(
+            world_combats::scene_id
+                .is_null()
+                .or(world_combats::scene_id.eq(scene_id)),
+        )
+        .select((world_combats::id, world_combats::auto_apply))
+        .first::<(Uuid, Option<bool>)>(conn)
+        .optional()
+}
+
 /// Whether `user_id` may act with `acting_token_id` now.
 ///
 /// `scene_id` is the scene the token is on. A token that does not exist is

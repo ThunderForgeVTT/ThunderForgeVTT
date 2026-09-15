@@ -2,10 +2,11 @@
 //! and where a copy's defence comes from.
 //!
 //! C6 and C7/C8 through an offer are `offers_tests`; C7 and C8 themselves are
-//! `hit_points_tests`; C9 is Phase 8's. Redaction (§3) is `redaction_tests`.
+//! `hit_points_tests`; C9 is `budget_tests`. Redaction (§3) is `redaction_tests`.
 
 use super::*;
 use crate::combat::fixtures::*;
+use crate::schema::world_combats;
 use crate::test_support::test_app_state;
 
 fn events(conn: &mut PgConnection, world_id: Uuid, code: i32) -> Vec<serde_json::Value> {

@@ -46,12 +46,12 @@ use crate::combat::hit_points::{HitPointChangeKind, apply_hit_point_change, slot
 use crate::combat::manifest::{combat_for_system, slot_key};
 use crate::combat::reach::{Measured, Reach, SceneMeasure};
 use crate::combat::records::*;
-use crate::combat::turn::{TurnCheck, turn_check};
+use crate::combat::turn::{TurnCheck, running_combat, turn_check};
 use crate::models::{NewRollRecord, WorldAbility, WorldItem};
 use crate::play_pause::gate::{GateError, refuse_if_paused};
 use crate::schema::{
     scenes, tokens, world_abilities, world_ability_effects, world_actor_abilities,
-    world_actor_inventory, world_actor_system_data, world_actors, world_attacks, world_combats,
+    world_actor_inventory, world_actor_system_data, world_actors, world_attacks,
     world_item_abilities, world_item_effects, world_items, world_offers, world_roll_records,
     worlds,
 };
@@ -531,25 +531,6 @@ fn roll_and_record<R: Rng>(
     Ok((id, resolution, value))
 }
 
-/// The world's running combat in this scene, and its auto-apply override.
-fn running_combat(
-    conn: &mut PgConnection,
-    world_id: Uuid,
-    scene_id: Uuid,
-) -> QueryResult<Option<(Uuid, Option<bool>)>> {
-    world_combats::table
-        .filter(world_combats::world_id.eq(world_id))
-        .filter(world_combats::ended_at.is_null())
-        .filter(
-            world_combats::scene_id
-                .is_null()
-                .or(world_combats::scene_id.eq(scene_id)),
-        )
-        .select((world_combats::id, world_combats::auto_apply))
-        .first::<(Uuid, Option<bool>)>(conn)
-        .optional()
-}
-
 /// Research R15, less the parts `make_attack` has already settled (a named
 /// target that was hit): the effective setting is on, no player controls the
 /// target, and the attack could see it or does not need to.
@@ -669,6 +650,12 @@ pub fn preview_attack(
             preview.flags.push(flag);
         }
     }
+    // C9: warned, like reach, and made anyway.
+    let cost = request.action_cost.unwrap_or_else(|| weapon.action_cost());
+    let (attacker, dir) = (request.attacker_token_id, systems_dir);
+    if crate::combat::budget::attack_would_overspend(conn, dir, scene_id, attacker, cost)? {
+        preview.flags.push(FLAG_OVERSPENT.to_string());
+    }
     preview.reach = parts.first().map(|p| p.reach).unwrap_or_default();
     preview.unit_label = unit_label;
     Ok(preview)
@@ -771,6 +758,12 @@ pub fn make_attack<R: Rng>(
         let effective_auto_apply = combat
             .and_then(|(_, override_)| override_)
             .unwrap_or(world_auto_apply);
+        // C9: one spend for the whole attack, every part of a multiattack
+        // included (FR-044); an overspend flags each part and refuses nothing.
+        let (attacker, dir) = (request.attacker_token_id, systems_dir);
+        let overspent = crate::combat::budget::spend_for_attack(
+            conn, dir, scene_id, attacker, action_cost, user_id,
+        )?;
 
         let mut made = MadeAttack {
             world_id,
@@ -795,7 +788,10 @@ pub fn make_attack<R: Rng>(
                 (Some(_), Some(defence)) if total >= defence as f64 => OUTCOME_HIT,
                 (Some(_), Some(_)) => OUTCOME_MISS,
             };
-            let Measured { distance, flags } = measured[index].clone();
+            let Measured { distance, mut flags } = measured[index].clone();
+            if overspent {
+                flags.push(FLAG_OVERSPENT.to_string());
+            }
 
             let damage = if outcome == OUTCOME_HIT && !part.damage.is_empty() {
                 let source = if part.damage.len() == 1 {

@@ -174,6 +174,7 @@ fn every_change_gets_exactly_one_outcome_including_the_bad_ones() {
         .map(|change| {
             apply_one(
                 &mut conn,
+                crate::combat::fixtures::SYSTEMS_DIR,
                 world,
                 owner,
                 Role::GameMaster,
@@ -225,6 +226,7 @@ fn a_trusted_player_replays_moves_as_a_player_does() {
 
     let mine = apply_one(
         &mut conn,
+        crate::combat::fixtures::SYSTEMS_DIR,
         world,
         trusted,
         role,
@@ -233,6 +235,7 @@ fn a_trusted_player_replays_moves_as_a_player_does() {
     );
     let not_mine = apply_one(
         &mut conn,
+        crate::combat::fixtures::SYSTEMS_DIR,
         world,
         trusted,
         role,
@@ -263,6 +266,7 @@ fn a_player_may_only_replay_moves_of_their_own_token() {
 
     let mine = apply_one(
         &mut conn,
+        crate::combat::fixtures::SYSTEMS_DIR,
         world,
         player,
         Role::Player,
@@ -271,6 +275,7 @@ fn a_player_may_only_replay_moves_of_their_own_token() {
     );
     let not_mine = apply_one(
         &mut conn,
+        crate::combat::fixtures::SYSTEMS_DIR,
         world,
         player,
         Role::Player,
@@ -305,6 +310,7 @@ fn a_game_master_reconnecting_later_still_wins() {
 
     let player_first = apply_one(
         &mut conn,
+        crate::combat::fixtures::SYSTEMS_DIR,
         world,
         player,
         Role::Player,
@@ -319,6 +325,7 @@ fn a_game_master_reconnecting_later_still_wins() {
 
     let gm_later = apply_one(
         &mut conn,
+        crate::combat::fixtures::SYSTEMS_DIR,
         world,
         gm,
         Role::GameMaster,
@@ -346,6 +353,7 @@ fn a_player_losing_to_a_game_master_is_told_who_won() {
 
     apply_one(
         &mut conn,
+        crate::combat::fixtures::SYSTEMS_DIR,
         world,
         gm,
         Role::GameMaster,
@@ -355,6 +363,7 @@ fn a_player_losing_to_a_game_master_is_told_who_won() {
 
     let player_late = apply_one(
         &mut conn,
+        crate::combat::fixtures::SYSTEMS_DIR,
         world,
         player,
         Role::Player,
@@ -414,6 +423,7 @@ fn a_game_master_may_submit_a_change_a_player_originated() {
 
     let outcome = apply_one(
         &mut conn,
+        crate::combat::fixtures::SYSTEMS_DIR,
         world,
         gm,
         Role::GameMaster,
@@ -446,6 +456,7 @@ fn a_player_may_not_submit_a_change_attributed_to_someone_else() {
 
     let outcome = apply_one(
         &mut conn,
+        crate::combat::fixtures::SYSTEMS_DIR,
         world,
         player,
         Role::Player,
@@ -487,6 +498,7 @@ fn a_reported_value_the_server_determined_differently_is_applied_and_disclosed()
 
     let outcome = apply_one(
         &mut conn,
+        crate::combat::fixtures::SYSTEMS_DIR,
         world,
         gm,
         Role::GameMaster,
@@ -536,6 +548,7 @@ fn a_game_master_acting_on_a_players_behalf_produces_no_flag() {
 
     let outcome = apply_one(
         &mut conn,
+        crate::combat::fixtures::SYSTEMS_DIR,
         world,
         gm,
         Role::GameMaster,
@@ -564,6 +577,7 @@ fn an_ordinary_token_move_reports_no_discrepancy() {
 
     let outcome = apply_one(
         &mut conn,
+        crate::combat::fixtures::SYSTEMS_DIR,
         world,
         gm,
         Role::GameMaster,
@@ -595,6 +609,7 @@ fn a_player_submitter_is_shown_no_discrepancy() {
 
     let outcome = apply_one(
         &mut conn,
+        crate::combat::fixtures::SYSTEMS_DIR,
         world,
         player,
         Role::Player,
@@ -774,6 +789,7 @@ fn a_queued_move_on_somebody_elses_turn_is_refused_and_says_whose() {
 
     let refused = apply_one(
         &mut conn,
+        crate::combat::fixtures::SYSTEMS_DIR,
         fight.world_id,
         fight.player,
         Role::Player,
@@ -787,6 +803,7 @@ fn a_queued_move_on_somebody_elses_turn_is_refused_and_says_whose() {
 
     let exploring = apply_one(
         &mut conn,
+        crate::combat::fixtures::SYSTEMS_DIR,
         fight.world_id,
         fight.player,
         Role::Player,
@@ -798,6 +815,7 @@ fn a_queued_move_on_somebody_elses_turn_is_refused_and_says_whose() {
     crate::combat::turn::tests::set_turn(&mut conn, fight.combat_id, fight.hero_combatant);
     let on_turn = apply_one(
         &mut conn,
+        crate::combat::fixtures::SYSTEMS_DIR,
         fight.world_id,
         fight.player,
         Role::Player,
@@ -809,6 +827,7 @@ fn a_queued_move_on_somebody_elses_turn_is_refused_and_says_whose() {
     crate::combat::turn::tests::set_turn(&mut conn, fight.combat_id, fight.ogre_combatant);
     let gm = apply_one(
         &mut conn,
+        crate::combat::fixtures::SYSTEMS_DIR,
         fight.world_id,
         fight.gm,
         Role::GameMaster,
@@ -816,6 +835,58 @@ fn a_queued_move_on_somebody_elses_turn_is_refused_and_says_whose() {
         move_command(fight.hero, 9.0),
     );
     assert!(gm.applied, "a Game Master is never held: {:?}", gm.reason);
+}
+
+/// Spec 046 US5: a move replayed at reconnect spends movement as a live one
+/// does, by the drag rule (a queued move carries no route): three squares is
+/// fifteen feet, against the creature that moved, whoever replays it.
+#[test]
+fn a_replayed_move_spends_movement_by_the_drag_rule() {
+    use crate::schema::{world_combatant_budgets, worlds};
+    let state = crate::test_support::test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let fight = crate::combat::turn::tests::fight(&mut conn);
+    diesel::update(worlds::table.filter(worlds::id.eq(fight.world_id)))
+        .set(worlds::game_system_id.eq(Some("dnd5e")))
+        .execute(&mut conn)
+        .expect("a 5e world");
+    let spent = |conn: &mut PgConnection, combatant: Uuid| {
+        world_combatant_budgets::table
+            .filter(world_combatant_budgets::combatant_id.eq(combatant))
+            .select(world_combatant_budgets::movement_spent)
+            .first::<f64>(conn)
+            .unwrap_or(0.0)
+    };
+
+    crate::combat::turn::tests::set_turn(&mut conn, fight.combat_id, fight.hero_combatant);
+    let moved = apply_one(
+        &mut conn,
+        crate::combat::fixtures::SYSTEMS_DIR,
+        fight.world_id,
+        fight.player,
+        Role::Player,
+        take_reconnect_seq(fight.world_id),
+        move_command(fight.hero, 15.0),
+    );
+    assert!(moved.applied, "{:?}", moved.reason);
+    assert_eq!(spent(&mut conn, fight.hero_combatant), 15.0);
+
+    let gm = apply_one(
+        &mut conn,
+        crate::combat::fixtures::SYSTEMS_DIR,
+        fight.world_id,
+        fight.gm,
+        Role::GameMaster,
+        take_reconnect_seq(fight.world_id),
+        move_command(fight.ogre, 10.0),
+    );
+    assert!(gm.applied, "{:?}", gm.reason);
+    assert_eq!(
+        spent(&mut conn, fight.ogre_combatant),
+        10.0,
+        "a Game Master moving the ogre spends the ogre's movement"
+    );
+    assert_eq!(spent(&mut conn, fight.hero_combatant), 15.0);
 }
 
 /// Spec 046 T057 (research R16): an attack queued offline is resolved at

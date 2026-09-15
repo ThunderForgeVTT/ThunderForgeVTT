@@ -1195,6 +1195,22 @@ diesel::table! {
 }
 
 diesel::table! {
+    world_combatant_budgets (combatant_id) {
+        combatant_id -> Uuid,
+        action_spent -> Int4,
+        bonus_action_spent -> Int4,
+        reaction_spent -> Int4,
+        movement_spent -> Float8,
+        legendary_per_round -> Nullable<Int4>,
+        legendary_remaining -> Nullable<Int4>,
+        created_by -> Uuid,
+        updated_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     world_combatants (id) {
         id -> Uuid,
         combat_id -> Uuid,
@@ -1691,6 +1707,7 @@ diesel::joinable!(world_collection_members -> world_collections (collection_id))
 diesel::joinable!(world_collection_shares -> users (created_by));
 diesel::joinable!(world_collection_shares -> world_collections (collection_id));
 diesel::joinable!(world_collections -> worlds (world_id));
+diesel::joinable!(world_combatant_budgets -> world_combatants (combatant_id));
 diesel::joinable!(world_combatants -> world_actors (actor_id));
 diesel::joinable!(world_combats -> scenes (scene_id));
 diesel::joinable!(world_combats -> users (created_by));
@@ -1814,6 +1831,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     world_collection_members,
     world_collection_shares,
     world_collections,
+    world_combatant_budgets,
     world_combatants,
     world_combats,
     world_entry_deltas,

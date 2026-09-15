@@ -22,6 +22,8 @@ pub const FLAG_LONG_RANGE: &str = "long_range";
 pub const FLAG_BEYOND_RANGE: &str = "beyond_range";
 pub const FLAG_NO_LINE_OF_SIGHT: &str = "no_line_of_sight";
 pub const FLAG_NO_REACH_DECLARED: &str = "no_reach_declared";
+/// Spent past what the turn affords (C9): shown, never refused.
+pub const FLAG_OVERSPENT: &str = "overspent";
 
 /// `world_offers.status`.
 pub const OFFER_PENDING: &str = "pending";

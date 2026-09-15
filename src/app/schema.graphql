@@ -1898,6 +1898,16 @@ input BringPartyToSceneInput {
 	actorIds: [UUID!]
 }
 
+"""
+One line of a turn's budget. `remaining` may be negative: that is a debt,
+and it is shown (C9).
+"""
+type BudgetLine {
+	allowed: Float!
+	spent: Float!
+	remaining: Float!
+}
+
 type CollectionTypeCount {
 	memberType: String!
 	count: Int!
@@ -2951,6 +2961,12 @@ type GraphQLCombatant {
 	recorded).
 	"""
 	downedBy: DownedBy
+	"""
+	Spec 046 US5: what this combatant's turn affords and what it has
+	spent, shown to every seat; null when the system declares no budget.
+	Numbers only, so a combatant read as "Unknown" gives nothing away.
+	"""
+	budget: TurnBudget
 }
 
 """
@@ -6329,6 +6345,23 @@ type TokenHitPoints {
 	current: Int!
 	max: Int!
 	temporary: Int!
+}
+
+"""
+What a combatant's turn affords and what it has spent (contract §1).
+"""
+type TurnBudget {
+	action: BudgetLine!
+	bonusAction: BudgetLine!
+	reaction: BudgetLine!
+	"""
+	In the system's units.
+	"""
+	movement: BudgetLine!
+	"""
+	Null when the creature has no legendary actions (Phase 9).
+	"""
+	legendary: BudgetLine
 }
 
 type TurnCheck {

@@ -49,6 +49,10 @@ pub struct GraphQLCombatant {
     /// pressed, null when it is in the fight (or went out before this was
     /// recorded).
     pub downed_by: Option<DownedBy>,
+    /// Spec 046 US5: what this combatant's turn affords and what it has
+    /// spent, shown to every seat; null when the system declares no budget.
+    /// Numbers only, so a combatant read as "Unknown" gives nothing away.
+    pub budget: Option<crate::combat::budget::TurnBudget>,
 }
 
 /// Why a combatant is out of the fight (spec 046 C8).
@@ -81,6 +85,7 @@ impl From<Combatant> for GraphQLCombatant {
             is_npc: row.is_npc,
             active: row.active,
             downed_by: DownedBy::from_column(row.downed_by.as_deref()),
+            budget: None,
         }
     }
 }
@@ -231,6 +236,7 @@ pub(crate) const UNKNOWN_COMBATANT: &str = "Unknown";
 /// the world, such a combatant is `UNKNOWN_COMBATANT` instead.
 pub(crate) fn load_combat(
     conn: &mut PgConnection,
+    systems_dir: &str,
     combat: Combat,
     user_id: Uuid,
     is_admin: bool,
@@ -242,6 +248,9 @@ pub(crate) fn load_combat(
         .map_err(|e| format!("Failed to load combatants: {e}"))?;
 
     sort_combatants(&mut combatants);
+    let mut budgets =
+        crate::combat::budget::budgets_for(conn, systems_dir, combat.world_id, &combatants)
+            .map_err(|e| format!("Failed to load budgets: {e}"))?;
 
     let runs_the_world =
         crate::auth::world_membership::actor_in_world(conn, user_id, is_admin, combat.world_id)
@@ -275,7 +284,16 @@ pub(crate) fn load_combat(
         round: combat.round,
         active_combatant_id: combat.active_combatant_id,
         ended_at: combat.ended_at,
-        combatants: combatants.into_iter().map(GraphQLCombatant::from).collect(),
+        combatants: combatants
+            .into_iter()
+            .map(|row| {
+                let budget = budgets.remove(&row.id);
+                GraphQLCombatant {
+                    budget,
+                    ..GraphQLCombatant::from(row)
+                }
+            })
+            .collect(),
         auto_apply: combat.auto_apply,
     })
 }
@@ -382,9 +400,11 @@ pub async fn start_combat_impl(
     let scene_id = input.scene_id;
     refuse_if_paused(&mut conn, world_id)?;
 
+    let systems_dir = state.directories.systems_dir.clone();
+
     let combat = tokio::task::spawn_blocking(move || -> Result<GraphQLCombat, String> {
         if let Some(existing) = find_active_combat(&mut conn, world_id)? {
-            return load_combat(&mut conn, existing, user_id, is_admin);
+            return load_combat(&mut conn, &systems_dir, existing, user_id, is_admin);
         }
 
         let combat = diesel::insert_into(world_combats::table)
@@ -406,7 +426,7 @@ pub async fn start_combat_impl(
             user_id,
         );
 
-        load_combat(&mut conn, combat, user_id, is_admin)
+        load_combat(&mut conn, &systems_dir, combat, user_id, is_admin)
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -451,10 +471,13 @@ pub async fn add_combatant_impl(
     }
     refuse_if_paused(&mut conn, world_id)?;
 
+    let systems_dir = state.directories.systems_dir.clone();
+
     let combat = tokio::task::spawn_blocking(move || -> Result<GraphQLCombat, String> {
+        let combatant_id = Uuid::now_v7();
         diesel::insert_into(world_combatants::table)
             .values(&NewCombatant {
-                id: Uuid::now_v7(),
+                id: combatant_id,
                 combat_id,
                 actor_id: input.actor_id,
                 token_id: input.token_id,
@@ -465,11 +488,14 @@ pub async fn add_combatant_impl(
             })
             .execute(&mut conn)
             .map_err(|e| format!("Failed to add combatant: {e}"))?;
+        // Spec 046 US5: a budget with each combatant, nothing spent.
+        crate::combat::budget::create_for(&mut conn, combatant_id, user_id)
+            .map_err(|e| format!("Failed to add combatant: {e}"))?;
 
         touch_and_broadcast(&mut conn, combat_id, world_id, user_id)?;
 
         let combat = combat_world(&mut conn, combat_id)?;
-        load_combat(&mut conn, combat, user_id, is_admin)
+        load_combat(&mut conn, &systems_dir, combat, user_id, is_admin)
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -513,6 +539,8 @@ pub async fn update_combatant_impl(
     let combat_id = combat.id;
     let world_id = combat.world_id;
     refuse_if_paused(&mut conn, world_id)?;
+
+    let systems_dir = state.directories.systems_dir.clone();
 
     let updated = tokio::task::spawn_blocking(move || -> Result<GraphQLCombat, String> {
         let now = Utc::now().naive_utc();
@@ -567,7 +595,7 @@ pub async fn update_combatant_impl(
 
         touch_and_broadcast(&mut conn, combat_id, world_id, user_id)?;
         let combat = combat_world(&mut conn, combat_id)?;
-        load_combat(&mut conn, combat, user_id, is_admin)
+        load_combat(&mut conn, &systems_dir, combat, user_id, is_admin)
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -611,6 +639,8 @@ pub async fn remove_combatant_impl(
     refuse_if_paused(&mut conn, world_id)?;
     let was_active_turn = combat.active_combatant_id == Some(combatant_id);
 
+    let systems_dir = state.directories.systems_dir.clone();
+
     let updated = tokio::task::spawn_blocking(move || -> Result<GraphQLCombat, String> {
         // Hand the turn on *before* deleting when the combatant being
         // removed is the one currently acting. The FK is ON DELETE SET
@@ -633,6 +663,11 @@ pub async fn remove_combatant_impl(
                 .set(world_combats::active_combatant_id.eq(successor))
                 .execute(&mut conn)
                 .map_err(|e| format!("Failed to hand off turn: {e}"))?;
+            // Handing the turn on starts the successor's turn (FR-042).
+            if let Some(successor) = successor {
+                crate::combat::budget::start_turn(&mut conn, successor, user_id)
+                    .map_err(|e| format!("Failed to hand off turn: {e}"))?;
+            }
         }
 
         diesel::delete(world_combatants::table.filter(world_combatants::id.eq(combatant_id)))
@@ -641,7 +676,7 @@ pub async fn remove_combatant_impl(
 
         touch_and_broadcast(&mut conn, combat_id, world_id, user_id)?;
         let combat = combat_world(&mut conn, combat_id)?;
-        load_combat(&mut conn, combat, user_id, is_admin)
+        load_combat(&mut conn, &systems_dir, combat, user_id, is_admin)
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -681,6 +716,8 @@ pub async fn advance_turn_impl(
     let active_id = combat.active_combatant_id;
     let round = combat.round;
 
+    let systems_dir = state.directories.systems_dir.clone();
+
     let updated = tokio::task::spawn_blocking(move || -> Result<GraphQLCombat, String> {
         let mut ordered = world_combatants::table
             .filter(world_combatants::combat_id.eq(combat_id))
@@ -700,10 +737,14 @@ pub async fn advance_turn_impl(
             ))
             .execute(&mut conn)
             .map_err(|e| format!("Failed to advance turn: {e}"))?;
+        // Spec 046 FR-041/FR-042: the new active combatant's action, bonus
+        // action, reaction and movement come back. Nobody else's change.
+        crate::combat::budget::start_turn(&mut conn, ordered[idx].id, user_id)
+            .map_err(|e| format!("Failed to advance turn: {e}"))?;
 
         touch_and_broadcast(&mut conn, combat_id, world_id, user_id)?;
         let combat = combat_world(&mut conn, combat_id)?;
-        load_combat(&mut conn, combat, user_id, is_admin)
+        load_combat(&mut conn, &systems_dir, combat, user_id, is_admin)
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -738,6 +779,8 @@ pub async fn end_combat_impl(
     let world_id = combat.world_id;
     refuse_if_paused(&mut conn, world_id)?;
 
+    let systems_dir = state.directories.systems_dir.clone();
+
     let updated = tokio::task::spawn_blocking(move || -> Result<GraphQLCombat, String> {
         diesel::update(world_combats::table.filter(world_combats::id.eq(combat_id)))
             .set(world_combats::ended_at.eq(Some(Utc::now().naive_utc())))
@@ -746,7 +789,7 @@ pub async fn end_combat_impl(
 
         touch_and_broadcast(&mut conn, combat_id, world_id, user_id)?;
         let combat = combat_world(&mut conn, combat_id)?;
-        load_combat(&mut conn, combat, user_id, is_admin)
+        load_combat(&mut conn, &systems_dir, combat, user_id, is_admin)
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -766,13 +809,17 @@ pub async fn active_combat_impl(
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
+    let systems_dir = state.directories.systems_dir.clone();
+
     let combat = tokio::task::spawn_blocking(move || -> Result<Option<GraphQLCombat>, String> {
         require_world_member(&mut conn, user_id, world_id)
             .map_err(|_| "You are not a member of this world".to_string())?;
 
         match find_active_combat(&mut conn, world_id)? {
             None => Ok(None),
-            Some(combat) => load_combat(&mut conn, combat, user_id, is_admin).map(Some),
+            Some(combat) => {
+                load_combat(&mut conn, &systems_dir, combat, user_id, is_admin).map(Some)
+            }
         }
     })
     .await

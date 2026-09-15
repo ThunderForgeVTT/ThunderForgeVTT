@@ -12,6 +12,7 @@
 
 pub mod attack;
 pub mod attack_fields;
+pub mod budget;
 pub mod controllers;
 pub mod hit_points;
 pub mod manifest;

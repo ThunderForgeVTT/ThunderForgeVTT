@@ -56,8 +56,32 @@ pub fn combat_from_manifest(manifest: &serde_json::Value) -> SystemCombat {
         .unwrap_or_default()
 }
 
-/// A system's turn budget, if it declares one. Not cached: read when a
-/// combatant is added or a turn passes, not on every hit.
+type BudgetCache = Mutex<HashMap<Key, Option<SystemTurnBudget>>>;
+
+/// A system's turn budget, if it declares one, read once and kept like the
+/// `combat` block: the tracker reads it on every refetch, and a move spends
+/// against it.
+pub fn turn_budget_for_system(systems_dir: &str, system_id: &str) -> Option<SystemTurnBudget> {
+    static CACHE: OnceLock<BudgetCache> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let key = (systems_dir.to_string(), system_id.to_string());
+    if let Some(found) = cache.lock().ok().and_then(|map| map.get(&key).cloned()) {
+        return found;
+    }
+    let path = std::path::Path::new(systems_dir)
+        .join(system_id)
+        .join("system.json");
+    let budget = std::fs::read_to_string(path)
+        .ok()
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        .and_then(|manifest| turn_budget_from_manifest(&manifest));
+    if let Ok(mut map) = cache.lock() {
+        map.insert(key, budget.clone());
+    }
+    budget
+}
+
+/// A system's turn budget, if it declares one, from a manifest in hand.
 pub fn turn_budget_from_manifest(manifest: &serde_json::Value) -> Option<SystemTurnBudget> {
     manifest
         .get("turnStructure")

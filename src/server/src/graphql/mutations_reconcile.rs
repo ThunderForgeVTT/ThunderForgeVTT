@@ -712,6 +712,7 @@ impl ReconcileMutation {
             }
             outcomes.push(apply_one(
                 &mut conn,
+                &systems_dir,
                 world_id,
                 user_id,
                 role,
@@ -726,6 +727,7 @@ impl ReconcileMutation {
 /// Adjudicate and apply one queued change, always answering with an outcome.
 fn apply_one(
     conn: &mut PgConnection,
+    systems_dir: &str,
     world_id: Uuid,
     user_id: Uuid,
     role: Role,
@@ -894,6 +896,23 @@ fn apply_one(
     if updated.is_err() {
         return GraphQLReconcileOutcome::rejected(local_id, GraphQLRejectionReason::Invalid)
             .disclosing(discrepancy);
+    }
+
+    // Spec 046 US5: a replayed move spends movement as a live one does, by the
+    // drag rule (a queued move carries no route), against the combat the
+    // server holds now.
+    if edit.x.is_some() || edit.y.is_some() {
+        let to = (edit.x.unwrap_or(existing.x), edit.y.unwrap_or(existing.y));
+        crate::combat::budget::spend_for_move_logged(
+            conn,
+            systems_dir,
+            existing.scene_id,
+            edit.token_id,
+            (existing.x, existing.y),
+            None,
+            to,
+            subject_user,
+        );
     }
 
     remember_mark(world_id, edit.token_id, role, reconnect_seq);

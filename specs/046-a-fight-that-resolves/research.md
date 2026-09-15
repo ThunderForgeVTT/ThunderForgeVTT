@@ -368,6 +368,56 @@ Multiattack: one `makeAttack` on an ability with `multiattack` makes each
 named attack in order against the same target (or targets given per attack)
 and spends one action.
 
+*Implemented in tasks Phase 8, with these decisions:*
+
+- **Spent is stored; allowed is not.** A row holds what was spent. What a turn
+  affords is resolved when the tracker is read: the pack's
+  `turnStructure.budget` (a line it does not declare affords 0) and, for
+  movement, the creature's speed for the declared movement type, read from
+  its sheet's `ability_data` through the pack's `movement` block, whose
+  default stands in for a sheet that says nothing (5e: 30 ft). A linked token
+  reads its actor; a copy its NPC; a token-less combatant its own actor. A
+  sheet whose speed changes mid-fight is shown against the new speed.
+- **Every seat sees it, and it names nothing.** `Combatant.budget` is numbers
+  only, so a combatant a player reads as "Unknown" shows its budget under
+  "Unknown". It rides the combat refetch (event 18): a spend touches the combat
+  and records event 18, never a per-token event.
+- **An attack spends once**, however many parts a multiattack makes, against
+  the attacker's combatant in the running combat in its scene: `action`,
+  `bonus_action` or `reaction` one each; `free` nothing; `legendary` is Phase
+  9's pool. When the line it spent is now past its allowance, **every part** is
+  flagged `overspent`. `previewAttack` flags `overspent` when one more would go
+  past (the warning's fallback sentence names it). Auto-apply is unchanged: it
+  looks only at `no_line_of_sight`.
+- **A move spends whoever moved it.** Every path that commits a move spends:
+  `moveOwnToken`, `updateToken` (a Game Master's drag: it is the creature's
+  movement, shown and never refused) and a move replayed by
+  `reconcileQueuedChanges`. Only for a token that is a combatant — by token,
+  else a token-less combatant for its actor, as the turn check finds it — in a
+  running combat in that scene. A spend that cannot be recorded is logged and
+  the move stands, in its own savepoint.
+- **What a move costs is counted from its steps**, in cells × the system's
+  `unitsPerCell`:
+  - *A route* (`moveOwnToken`'s `path`, points from the token's own centre):
+    the token's position, each route point, then the destination; each step
+    between two costs the cells the token's **footprint** moves by — on
+    squares the Chebyshev shift of the block it covers (`covered_cells`, 5-5-5
+    as reach counts), on hexes the axial distance between centre hexes, on a
+    gridless scene the straight-line length in cells. A Large token's route
+    runs vertex to vertex and costs one square per square stepped, as a
+    Medium one's does. A route that does not begin where the token stands is
+    counted from where it stands; there and back is the whole walk.
+  - *A drag, or anything with no route* (`updateToken`; an offline move, which
+    carries no route): one step from the old position to the new, by the same
+    footprint displacement — **not** `footprint_distance`, which is 0 when the
+    old and new squares overlap (a Large ogre dragged one square is 5 ft).
+  - The steps go through `movement_budget::cost_path` one open-ground cell at
+    a time, so difficult terrain has one place to arrive; on a gridless scene a
+    step is one entry whose multiplier is its length in cells.
+- **Reset** is `budget::start_turn` on the new active combatant in
+  `advanceTurn`, and on the successor when removing the active combatant hands
+  the turn on. Nobody else's row changes.
+
 ## R14. Legendary actions and the lair
 
 **Decision**: A combatant's legendary actions per round come from the pack's

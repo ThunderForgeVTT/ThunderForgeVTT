@@ -76,6 +76,14 @@ One row per combatant, created with the combatant.
 action, movement and reaction → 0 spent; C's `legendary_remaining` →
 `legendary_per_round`. Nobody else's budget changes.
 
+*Implemented (tasks T085, T087):* migration
+`2026-09-14-230000-0000_combatant_budgets` backfills a row for every existing
+combatant (attributed to its combat's `created_by`). A row is created by
+`addCombatant`; a combatant whose row is missing reads as nothing spent and
+gets one on its first spend or turn. The same reset runs when removing the
+active combatant hands the turn on. What is allowed is not stored (research
+R13). The legendary columns exist and stay null until Phase 9.
+
 ## New: `world_attacks` (phase 4)
 
 The record of one attack, and the source of every seat's view of it. One

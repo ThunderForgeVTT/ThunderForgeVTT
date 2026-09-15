@@ -143,6 +143,17 @@ type TurnBudget {
 type BudgetLine { allowed: Float!  spent: Float!  remaining: Float! }  # remaining may be negative
 ```
 
+*Implementation note (tasks Phase 8):* `Combatant.budget` is null when the
+world's system declares no `turnStructure.budget`. It carries numbers only, so
+a combatant redacted to "Unknown" shows its budget without identifying itself.
+`makeAttack` spends once per call (a multiattack's parts together) and flags
+every part `OVERSPENT` when the line it spent is past its allowance;
+`previewAttack` flags `OVERSPENT` when one more would be. `moveOwnToken`,
+`updateToken` and a replayed queued move spend movement for a combatant in a
+running combat in the scene: a route by the footprint's steps (cells × units),
+a move with no route by the footprint's displacement from old position to new
+(research R13). Every spend records event 18.
+
 ## 2. Rules each mutation enforces
 
 | # | Rule | Where | Refusal text |
@@ -156,7 +167,7 @@ type BudgetLine { allowed: Float!  spent: Float!  remaining: Float! }  # remaini
 | C6a | Taking an offer whose token was relinked or unlinked after the offer was made is refused; declining it is not (research R18). | server | `That creature was relinked after this offer was made, so its hit points are a different record now. …` |
 | C7 | Taking damage spends temporary hit points first, bounds current at 0; healing bounds at max. | server | — |
 | C8 | A hit-point change to 0 marks the combatant `active = false, downed_by = hit_points`; above 0 reactivates only `downed_by = hit_points`. | server | — |
-| C9 | Overspending a budget is recorded and shown, never refused. | server | — |
+| C9 | Overspending a budget is recorded and shown, never refused: `spent` may exceed `allowed`, `remaining` may be negative, and the attack is flagged `OVERSPENT`. | server | — |
 | C10 | Every mutation above refuses while the world's play is paused (`refuse_if_paused`), like every other play mutation. | server | the existing pause text |
 
 ## 3. Per-viewer redaction (FR-002a)
