@@ -59,6 +59,7 @@ import type { TokenRecord, UpdateTokenInput } from "@/types/token";
 import type { WorldStore } from "../store";
 import type { WorldCommand, WorldToken } from "../types";
 import { queueEdit, shouldQueue } from "./offlineQueue";
+import { beginLocalMove, isPositionStale, markRead } from "./localMoves";
 
 type WorldEventLike = {
   event_code?: number;
@@ -95,6 +96,26 @@ function tokenRecordToWorldToken(record: TokenRecord): WorldToken {
     // it in when it has no art. See `thunderforge_canvas_core::token_kind`.
     tokenType: record.tokenType,
   };
+}
+
+/**
+ * A token as the server read it, unless this client has since moved it.
+ *
+ * Then the position stays where this client put it and the rest of the read
+ * is taken — see `localMoves.ts` for why a read can be older than the token
+ * on this screen.
+ */
+function freshestToken(
+  worldStore: WorldStore,
+  record: TokenRecord,
+  mark: number,
+): WorldToken {
+  const token = tokenRecordToWorldToken(record);
+  const here = worldStore.getState().tokens[record.tokenId];
+  if (here && isPositionStale(record.tokenId, mark)) {
+    return { ...token, x: here.x, y: here.y };
+  }
+  return token;
 }
 
 /**
@@ -142,6 +163,7 @@ export async function applyTokenWorldEvent(
   // Fetched together so a token and its scores arrive in one dispatch. Two
   // separate paths would reintroduce the ordering problem spec 029 had to
   // solve for status, where whichever arrived first was dropped.
+  const mark = markRead();
   const [tokens, attributes] = await Promise.all([
     getTokens(sceneId),
     getTokenAttributes(sceneId),
@@ -151,7 +173,7 @@ export async function applyTokenWorldEvent(
       {
         type: "upsert_token",
         token: {
-          ...tokenRecordToWorldToken(token),
+          ...freshestToken(worldStore, token, mark),
           attributes: attributes[token.tokenId] ?? null,
         },
       },
@@ -205,11 +227,15 @@ async function applyMoveRefusal(
   );
 
   try {
+    const mark = markRead();
     const tokens = await getTokens(sceneId);
     const authoritative = tokens.find((token) => token.tokenId === tokenId);
     if (authoritative) {
       worldStore.dispatch(
-        { type: "upsert_token", token: tokenRecordToWorldToken(authoritative) },
+        {
+          type: "upsert_token",
+          token: freshestToken(worldStore, authoritative, mark),
+        },
         // `sync`, so this does not read as a local edit and bounce straight
         // back out as another move — which would refuse, re-read and dispatch
         // again, for as long as the wall is there.
@@ -262,6 +288,7 @@ export async function loadTokensIntoStore(
   // Fetched together so a token and its scores arrive in one dispatch. Two
   // separate paths would reintroduce the ordering problem spec 029 had to
   // solve for status, where whichever arrived first was dropped.
+  const mark = markRead();
   const [tokens, attributes] = await Promise.all([
     getTokens(sceneId),
     getTokenAttributes(sceneId),
@@ -271,7 +298,7 @@ export async function loadTokensIntoStore(
       {
         type: "upsert_token",
         token: {
-          ...tokenRecordToWorldToken(token),
+          ...freshestToken(worldStore, token, mark),
           attributes: attributes[token.tokenId] ?? null,
         },
       },
@@ -484,9 +511,12 @@ export function startTokenMutationBridge(
             if (token.photoUrl !== undefined) {
               input.photoUrl = token.photoUrl;
             }
-            void updateToken(knownTokenId, input).catch((error) => {
-              console.error("Failed to update token:", error);
-            });
+            const settle = beginLocalMove(knownTokenId);
+            void updateToken(knownTokenId, input)
+              .catch((error) => {
+                console.error("Failed to update token:", error);
+              })
+              .finally(settle);
           } else {
             // Spec 004 FR-009: non-GM callers only ever move a token they
             // control; the server enforces owner_user_id = requester and
@@ -496,12 +526,16 @@ export function startTokenMutationBridge(
             // refused for a second reason — one the player has to see and the
             // board has to reflect. Spec 046 C1 adds a third: somebody else's
             // turn, refused before the walls are asked.
+            // Settled before a refusal is read back, so that read-back is
+            // never mistaken for one older than the move it undoes.
+            const settle = beginLocalMove(knownTokenId);
             void moveOwnToken(
               knownTokenId,
               token.x,
               token.y,
               command.path,
-            ).catch((error) => {
+            ).then(settle, (error: unknown) => {
+              settle();
               void applyMoveRefusal(worldStore, sceneId, knownTokenId, error);
             });
           }

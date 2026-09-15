@@ -73,11 +73,24 @@ function reduceState(state: WorldState, command: WorldCommand): WorldState {
       };
 
     case "upsert_token":
+      // Merged into the token as it stands, not put in its place.
+      //
+      // The engine's own moves — a keyboard step, a drag — carry the
+      // transform and nothing else. Replacing the token with that dropped
+      // its owner, and with the owner gone the page stopped naming this
+      // player's token to the engine: control and sight went to nobody until
+      // the server's echo of the move was read back and put them back. A key
+      // pressed in that window moved nothing (spec 045 T065). A field a
+      // command does carry still wins, `undefined` included, so a full
+      // record from the server says everything it always said.
       return {
         ...state,
         tokens: {
           ...state.tokens,
-          [command.token.id]: command.token,
+          [command.token.id]: {
+            ...state.tokens[command.token.id],
+            ...command.token,
+          },
         },
       };
 
