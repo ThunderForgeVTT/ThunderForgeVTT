@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
   abilityRollsOn,
+  actFromTracker,
   activeRowOn,
   addCombatant,
   advanceTurn,
@@ -28,6 +29,8 @@ import {
   setTraits,
   darkvisionOn,
   gridSizeOf,
+  legendaryOn,
+  setAbilityCost,
   setDisclosure,
   setHitPoints,
   startCombat,
@@ -60,7 +63,9 @@ import {
  * two on every board, and a longsword swung across the room is warned and
  * flagged); and the economy of a round (every seat sees what each creature
  * has left of its turn, Aria's swing spends her action, and a swing past it
- * is made and shown as overspent). Nothing is faked with a test-only path: a
+ * is made and shown as overspent); and a legendary creature (the ogre
+ * chieftain spends three legendary actions from the tracker across other
+ * creatures' turns, and has three again at its own). Nothing is faked with a test-only path: a
  * scenario that writes the outcome itself is a scenario proving nothing.
  */
 
@@ -105,8 +110,18 @@ const OGRE_HP = 59;
  * on the ogre's sheet, as 5e declares it (spec 046 FR-030), not a token scale
  * that only draws it bigger. 5e keeps size among the traits, beside a class
  * and level its pack requires of every sheet.
+ *
+ * This ogre is the band's chieftain, with three legendary actions a round
+ * (spec 046 FR-050), kept among the traits where 5e's `combat.legendary`
+ * says.
  */
-const OGRE_TRAITS = { class: "monster", level: 5, size: "large" };
+const OGRE_LEGENDARY = 3;
+const OGRE_TRAITS = {
+  class: "monster",
+  level: 5,
+  size: "large",
+  legendary_actions: OGRE_LEGENDARY,
+};
 const OGRE_FOOTPRINT = 2;
 
 test("a Game Master runs a 5e fight for two players", async ({
@@ -473,8 +488,91 @@ test("a Game Master runs a 5e fight for two players", async ({
           "movement is its speed",
         ).toBeGreaterThan(0);
       }
-      // Legendary actions and the lair are Phase 9's (US6), not yet checked.
       await snapshot(table, "4b · the economy");
+    });
+
+    await test.step("the ogre chieftain acts between turns", async () => {
+      // Spec 046 US6, SC-006: a legendary creature spends three legendary
+      // actions across other creatures' turns and has three again at the
+      // start of its own. Spent by the Game Master from the tracker, where a
+      // table would, and resolved like any other attack (FR-051).
+      const sweep = await grantAbility(table, cast.Ogre.actorId, {
+        name: "Chieftain's Sweep",
+        classification: "feat",
+        description: "A greatclub swung wide, between other creatures' turns.",
+        effects: [
+          { effectType: "ATTACK_ROLL", formula: "1d20+100" },
+          { effectType: "DAMAGE", formula: "1" },
+        ],
+      });
+      await setAbilityCost(table, sweep, {
+        actionCost: "LEGENDARY",
+        legendaryCost: 1,
+      });
+      const activeLabel = () =>
+        combat!.combatants.find((c) => c.id === combat!.activeCombatantId)
+          ?.label;
+      const everySeat = [
+        ["the Game Master", table.gm],
+        ["Aria", aria.page],
+        ["Brom", brom.page],
+      ] as const;
+      const everySeatReads = async (remaining: number, why: string) => {
+        for (const [who, client] of everySeat) {
+          await openCombatPanel(client);
+          await expect
+            .poll(async () => (await legendaryOn(client, "Ogre"))?.remaining, {
+              timeout: 15_000,
+              message: `${who}'s tracker: ${why}`,
+            })
+            .toBe(remaining);
+        }
+      };
+
+      for (let turn = 0; turn < 5 && activeLabel() !== "Ogre"; turn += 1) {
+        combat = await advanceTurn(table, combat!.id);
+      }
+      expect(activeLabel(), "the ogre's turn comes round").toBe("Ogre");
+      await everySeatReads(OGRE_LEGENDARY, "the ogre has all three");
+
+      const spentOn: string[] = [];
+      for (let spent = 1; spent <= OGRE_LEGENDARY; spent += 1) {
+        combat = await advanceTurn(table, combat!.id);
+        const between = activeLabel();
+        expect(between, "somebody else's turn").not.toBe("Ogre");
+        const said = await actFromTracker(
+          table.gm,
+          "Ogre",
+          "Chieftain's Sweep",
+          "Aria",
+        );
+        expect(said, "a legendary action is an attack like any other").toMatch(
+          /^Ogre → Aria · Chieftain's Sweep · \d+ vs 16: hit/,
+        );
+        expect(said, "on another creature's turn, within its pool").not.toMatch(
+          /overspent|own turn/,
+        );
+        // Aria's player is offered the damage; the Game Master waves it off,
+        // so the rest of the fight meets Aria whole.
+        await answerOffer(table.gm, "Aria", false);
+        await everySeatReads(
+          OGRE_LEGENDARY - spent,
+          `${spent} spent, at the end of ${between}'s turn`,
+        );
+        spentOn.push(between ?? "?");
+      }
+
+      combat = await advanceTurn(table, combat!.id);
+      expect(activeLabel(), "round the table to the ogre again").toBe("Ogre");
+      await everySeatReads(
+        OGRE_LEGENDARY,
+        "three again at the start of the ogre's own turn (FR-052)",
+      );
+      testInfo.annotations.push({
+        type: "legendary",
+        description: `the ogre swept at the end of ${spentOn.join(", ")}'s turns and had ${OGRE_LEGENDARY} again at its own`,
+      });
+      await snapshot(table, "4c · legendary actions");
     });
 
     await test.step("a player cannot take the table's turn", async () => {

@@ -292,8 +292,10 @@ delivers. Phase 4 (turn order) serves US1's "a player on their turn". Phase 5
   - *Result 2026-09-15:* schema regenerated with `addLairCombatant`, `CombatantKind`, `GraphQLCombatant.kind` and the nullable `AttackInput.attackerTokenId` beside `lairCombatantId` (29.8 s). `addLairCombatant` joined `play_pause_surface_tables.rs` (`play_pause_surface` 6 passed). `pnpm verify`: **14 of 14 green** in 282 s (rust lint, engine lint on wasm, web lint, graphql schema and operations — 324 operations — included). `tsc --noEmit` clean after `combatRoster.test.ts`'s fixture gained `kind`; PlayDock vitest 36 passed.
 - [X] T102 [US6] e2e `apps/web/e2e/combat-legendary.spec.ts` per the independent test
   - *Note:* a dragon with `legendary_actions: 3` on its sheet at 20 and three players (Aria 15, Brom 10, Cora 5), on a Game Master's and three players' boards. Every seat reads "Legendary 3/3"; no player is offered "Spend legendary action" and no hero shows a legendary line. On each hero's turn the Game Master spends one through the tracker's own control (a `LEGENDARY` "Tail Swipe" at that hero, hit against AC 14, neither `overspent` nor "own turn") and every seat reads 2, 1, then 0, the hero's own log showing the swipe; at the dragon's turn every seat reads 3/3. "Add lair" puts "The Sunken Crypt" after the dragon at 20 and before the heroes on every board, marked "Lair", with no budget, initiative 20 on the Game Master's input and players' number; on its count the Game Master's "Lair action" (Falling Rocks at Brom) is logged as "The Sunken Crypt → Brom · Falling Rocks" on every seat. New helpers in `playtest/combat.ts`: `addLairCombatant`, `legendaryOn`, `actFromTracker`, `setAbilityCost`, and `kind` on the harness's `Combatant`. First run passed.
-- [ ] T103 [US6] Add a hard check to `apps/web/playtest/combat-5e.playtest.ts`: a legendary creature spends three legendary actions across turns and has three again at its own (SC-006)
-- [ ] T104 [US6] Prove: T102 through the harness; `cargo test` for T099; the playtest; record results here
+- [X] T103 [US6] Add a hard check to `apps/web/playtest/combat-5e.playtest.ts`: a legendary creature spends three legendary actions across turns and has three again at its own (SC-006)
+  - *Note:* the ogre is now the band's chieftain, `legendary_actions: 3` beside its size, and a new step "the ogre chieftain acts between turns" follows "a round is an economy": the turn is advanced to the ogre (every seat reads 3), then at each of the next three creatures' turns the Game Master spends "Chieftain's Sweep" (`LEGENDARY`, cost 1) at Aria from the tracker's own control — hit against AC 16, neither `overspent` nor "own turn", the offer waved off so Aria stays whole — and the Game Master's, Aria's and Brom's trackers read 2, 1, 0; at the ogre's next turn all three read 3. It uses the helpers T102 added.
+- [X] T104 [US6] Prove: T102 through the harness; `cargo test` for T099; the playtest; record results here
+  - *Result 2026-09-15:* `ENGINE_PROFILE=dev node scripts/e2e-parallel.mjs --shards=1 --only=combat-legendary,combat-economy,combat-attack,combat-turn-order,combat-panel`: **8 passed, 0 failed, no `✘` in the log**, 265 s wall (tests 3.8 min; the engine was up to date and not built, the server build 33 s); `combat-legendary` 45.9 s. No measured spec was selected, so nothing built release. `cargo test` for T099 on `tf_p9_scratch` (`RUST_MIN_STACK=16777216`): `combat::legendary` 8 passed, and `combat::` 110, `mutations_combat` 6, `mutations_attacks` 3, `mutations_reconcile` 26, `play_pause_surface` 6. `ENGINE_PROFILE=dev pnpm playtest --only=combat-5e`: passed in 59.2 s (93 s with the harness), reached Round 5 (one round more than Phase 8's, for the ogre's), no hard failure, no soft FINDING; SC-006 is hard and passes.
 
 **Checkpoint**: every story in the spec is real.
 
@@ -368,7 +370,9 @@ SC-005) and **Phase 9** (US6: legendary, SC-006), each shippable alone.
      After Phases 3 and 4 (same command, this branch): 522, 548 and 606 are hard
      checks and pass; 263, 380, 416, 439 and 481 remain.
      After Phase 7: 481 is hard as well; 380 alone remains.
-     After Phase 8: 380 is hard as well; no soft FINDING remains. -->
+     After Phase 8: 380 is hard as well; no soft FINDING remains.
+     After Phase 9: SC-006 (legendary actions spent across turns and
+     refilled) is a new hard check and passes. -->
 
 - Commits are signed, stage explicit paths, and each names the phase and task ids.
 - `.e2e-shards-durations.json` is rewritten by the harness; don't commit it with feature work.
