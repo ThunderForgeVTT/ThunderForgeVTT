@@ -25,6 +25,8 @@ export interface Combatant {
   isNpc: boolean;
   /** Spec 046: `HIT_POINTS` or `GAME_MASTER` while out of the fight. */
   downedBy: "HIT_POINTS" | "GAME_MASTER" | null;
+  /** Spec 046 US6: a lair has no token, no actor and no budget. */
+  kind: "CREATURE" | "LAIR";
 }
 
 export interface Combat {
@@ -37,7 +39,7 @@ export interface Combat {
 
 const COMBAT_FIELDS = `
   id round activeCombatantId endedAt
-  combatants { id label initiative tiebreak active actorId tokenId isNpc downedBy }
+  combatants { id label initiative tiebreak active actorId tokenId isNpc downedBy kind }
 `;
 
 export async function startCombat(table: Table): Promise<Combat> {
@@ -69,6 +71,27 @@ export async function addCombatant(
       addCombatant(input: $input) { ${COMBAT_FIELDS} }
     }`,
     { input: { combatId, ...entry } },
+  );
+  return combat;
+}
+
+/**
+ * Spec 046 US6: the Game Master puts a lair in the order. The server places it
+ * at initiative count 20, losing ties.
+ */
+export async function addLairCombatant(
+  table: Table,
+  combatId: string,
+  label: string,
+): Promise<Combat> {
+  const { addLairCombatant: combat } = await must<{
+    addLairCombatant: Combat;
+  }>(
+    table.gm,
+    `mutation ($combatId: UUID!, $label: String!) {
+      addLairCombatant(combatId: $combatId, label: $label) { ${COMBAT_FIELDS} }
+    }`,
+    { combatId, label },
   );
   return combat;
 }
@@ -553,6 +576,81 @@ export async function budgetOn(
   };
 }
 
+/**
+ * Spec 046 US6: `label`'s legendary actions as a board's tracker shows them,
+ * or null when its row shows none.
+ */
+export async function legendaryOn(
+  page: Page,
+  label: string,
+): Promise<BudgetLineShown | null> {
+  const row = page
+    .getByTestId("combatant-row")
+    .filter({ hasText: label })
+    .first();
+  if ((await row.count()) === 0) return null;
+  const pip = row.getByTestId("budget-legendary");
+  if ((await pip.count()) === 0) return null;
+  const number = async (name: string) =>
+    Number(await pip.getAttribute(`data-${name}`));
+  return {
+    allowed: await number("allowed"),
+    spent: await number("spent"),
+    remaining: await number("remaining"),
+    overspent: (await pip.getAttribute("data-overspent")) === "true",
+    text: ((await pip.textContent()) ?? "").trim(),
+  };
+}
+
+/**
+ * Spec 046 US6: the Game Master acts from the tracker — "Spend legendary
+ * action" on a legendary creature's row, "Lair action" on a lair's — with the
+ * ability named, at the target the list names. Returns what the attack flow
+ * says came of it.
+ */
+export async function actFromTracker(
+  page: Page,
+  rowLabel: string,
+  abilityName: string,
+  targetLabel: string,
+): Promise<string> {
+  await openCombatPanel(page);
+  const row = page
+    .getByTestId("combatant-row")
+    .filter({ hasText: rowLabel })
+    .first();
+  const open = row
+    .getByTestId("spend-legendary-action")
+    .or(row.getByTestId("lair-action"));
+  await expect(open, `${rowLabel} can be acted for`).toBeVisible({
+    timeout: 15_000,
+  });
+  if ((await open.getAttribute("aria-expanded")) !== "true") {
+    await open.click();
+  }
+  const act = row.getByTestId("combatant-act");
+  const choice = act.getByTestId("combatant-act-ability");
+  const option = choice.locator("option").filter({ hasText: abilityName });
+  await expect(option, `${abilityName} is offered`).toHaveCount(1, {
+    timeout: 15_000,
+  });
+  await choice.selectOption((await option.getAttribute("value")) ?? "");
+  const flow = act.getByTestId("attack-flow");
+  await expect(flow).toBeVisible();
+  await flow
+    .getByTestId("attack-flow-target")
+    .selectOption({ label: targetLabel });
+  await page.waitForTimeout(750);
+  await flow.getByTestId("attack-flow-confirm").click();
+  const outcome = flow
+    .getByTestId("attack-flow-result")
+    .or(flow.getByTestId("attack-flow-error"));
+  await expect(outcome).toBeVisible({ timeout: 15_000 });
+  const text = (await outcome.textContent())?.trim() ?? "";
+  await flow.getByTestId("attack-flow-close").click();
+  return text;
+}
+
 /** A budget's four lines as "remaining/allowed", for polling and messages. */
 export async function budgetTextOn(
   page: Page,
@@ -883,6 +981,41 @@ export async function setAbilityReach(
         needsLineOfSight: reach.needsLineOfSight ?? true,
         actionCost: "ACTION",
         legendaryCost: 1,
+        multiattack: [],
+      },
+    },
+  );
+}
+
+/**
+ * What an ability costs as an attack (spec 046 `setAbilityAttack`): a
+ * `LEGENDARY` ability spends `legendaryCost` from its creature's pool. A reach
+ * that covers the room unless one is given, so only the flags a check reads
+ * are raised.
+ */
+export async function setAbilityCost(
+  table: Table,
+  abilityId: string,
+  cost: {
+    actionCost: "ACTION" | "BONUS_ACTION" | "REACTION" | "LEGENDARY" | "FREE";
+    legendaryCost?: number;
+    reach?: number;
+  },
+): Promise<void> {
+  await must(
+    table.gm,
+    `mutation ($abilityId: UUID!, $attack: AttackFieldsInput!) {
+      setAbilityAttack(abilityId: $abilityId, attack: $attack)
+    }`,
+    {
+      abilityId,
+      attack: {
+        reach: cost.reach ?? 1000,
+        rangeNormal: null,
+        rangeLong: null,
+        needsLineOfSight: false,
+        actionCost: cost.actionCost,
+        legendaryCost: cost.legendaryCost ?? 1,
         multiattack: [],
       },
     },
