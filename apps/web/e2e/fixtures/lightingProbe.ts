@@ -50,7 +50,25 @@ export type EngineProbe = {
   hiddenTokens?: () => string[];
   dimTokens?: () => string[];
   carriedLights?: () => CarriedLight[];
+  tokenFootprints?: () => { tokenId: string }[];
 };
+
+/**
+ * Every token this engine draws, by id — asked of the engine, which is the
+ * only place a token with no store row (the sandbox's demo tokens, once
+ * spawned in every session) would show up.
+ */
+export async function engineTokenIds(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    (
+      (
+        window as unknown as { __engineProbe?: EngineProbe }
+      ).__engineProbe?.tokenFootprints?.() ?? []
+    )
+      .map((token) => token.tokenId)
+      .sort(),
+  );
+}
 
 export async function camera(page: Page): Promise<Camera | null> {
   return page.evaluate(

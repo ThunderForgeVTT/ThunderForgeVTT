@@ -83,6 +83,7 @@ pub(crate) fn parse_command(input: &str) -> Option<ExternalCommand> {
     let command_type = value.get("type")?.as_str()?;
 
     match command_type {
+        "spawn_demo_tokens" => Some(ExternalCommand::SpawnDemoTokens),
         "set_world" => Some(ExternalCommand::SetWorld {
             world_id: value.get("worldId")?.as_str()?.to_owned(),
         }),

@@ -212,8 +212,8 @@ export default function WorldPage() {
   // Scene-scoped tokens are loaded from the server (tokens(sceneId)) once
   // a scene is selected — see the loadTokensIntoStore/startTokenMutationBridge
   // effect below — rather than seeded here with fixture data. The engine's
-  // own demo "player"/"npc" tokens still spawn independently at Bevy
-  // startup (src/engine/src/lib.rs) regardless of what's loaded here.
+  // red/blue demo tokens are the engine sandbox's alone (`spawn_demo_tokens`);
+  // a world session never asks for them, so every token here has a row.
   const [worldStore] = useState(() =>
     createWorldStore({
       worldId: id,
@@ -1444,13 +1444,12 @@ export default function WorldPage() {
     }
 
     // Chrome's own copy of the tokens the canvas no longer holds, cleared for
-    // the same reason as the walls and shapes loops above — and tokens need it
-    // most, because the engine spawns demo tokens of its own at boot and
-    // announces them to the store. Spec 031's transition despawns those with
-    // everything else, so without this the store keeps rows for tokens that do
-    // not exist on the canvas and have no server row either: a panel listing
-    // one, a party roster placing one, and a click at its reported position
-    // landing on empty canvas.
+    // the same reason as the walls and shapes loops above. Spec 031's
+    // transition despawns every token on the canvas, so without this the store
+    // keeps rows for tokens that no longer exist there: a panel listing one, a
+    // party roster placing one, and a click at its reported position landing on
+    // empty canvas. (The engine's demo tokens, which once made this worst, are
+    // spawned only in the engine sandbox now.)
     //
     // `loadTokensIntoStore` only upserts, so leaving the stale rows for it to
     // overwrite was never an option — nothing overwrites a row whose id the

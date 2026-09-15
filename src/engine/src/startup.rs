@@ -171,7 +171,8 @@ pub fn start(canvas_selector: &str) {
         // drawn faintly into the fog layer. Off until a Game Master turns it
         // on for a scene.
         .add_plugins(ExplorationPlugin)
-        .add_systems(Startup, setup_scene)
+        // No demo tokens at startup: the engine sandbox asks for them with
+        // `spawn_demo_tokens`, and a world session never does.
         .add_systems(
             Update,
             (apply_external_commands, move_player, emit_player_state),

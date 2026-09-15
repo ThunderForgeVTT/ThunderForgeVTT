@@ -242,6 +242,9 @@ pub(crate) enum ExternalCommand {
     SetWorld {
         world_id: String,
     },
+    /// The engine sandbox's red and blue demo tokens. Sent by
+    /// `apps/engine-sandbox` and nothing else; a world session has none.
+    SpawnDemoTokens,
     UpsertToken {
         token: WorldTokenPayload,
     },

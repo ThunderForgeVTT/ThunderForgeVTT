@@ -29,6 +29,8 @@ import init, {
   frame_trace,
   set_event_callback,
   start,
+  token_footprints,
+  token_vision,
 } from "@thunderforge/engine";
 
 interface MapEntry {
@@ -167,6 +169,10 @@ async function boot(): Promise<void> {
 
   send({ type: "set_is_game_master", isGameMaster: true });
   send({ type: "set_world", worldId: "sandbox" });
+  // The red "player" and blue "npc" the size and lighting buttons below act
+  // on. The engine spawns them only when asked, and only this page asks: a
+  // world session has no demo tokens (owner decision 2026-09-15).
+  send({ type: "spawn_demo_tokens" });
 
   const maps: MapEntry[] = await fetch("/assets/maps/manifest.json").then((r) => r.json());
   const container = document.getElementById("maps") as HTMLDivElement;
@@ -672,4 +678,10 @@ async function boot(): Promise<void> {
 void boot().catch((error) => log(`boot failed: ${String(error)}`));
 
 // Exposed for the headless render check (scripts/render-check.mjs).
-(window as unknown as Record<string, unknown>).__sandbox = { readGpuPixels, send };
+// `tokenFootprints` and `tokenVision` for scripts/demo-tokens-check.mjs.
+(window as unknown as Record<string, unknown>).__sandbox = {
+  readGpuPixels,
+  send,
+  tokenFootprints: token_footprints,
+  tokenVision: token_vision,
+};

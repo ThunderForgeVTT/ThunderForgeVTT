@@ -28,10 +28,10 @@
  *    there is no separate "create_token intent" vs "confirmed upsert"
  *    distinction the way there is for walls/lights/shapes, because the
  *    engine has owned tokens' live-drag UX since before scene-scoped
- *    persistence existed. Note also that the engine's two demo tokens
- *    ("player"/"npc", spawned unconditionally at Bevy startup —
- *    src/engine/src/lib.rs's setup — not from any command) use fixed
- *    non-UUID engine ids, which can't be used directly as the `tokens`
+ *    persistence existed. Note also that an engine id need not be a UUID
+ *    (the engine sandbox's demo tokens, "player"/"npc", which a world
+ *    session no longer spawns, were the case that forced this), and a
+ *    non-UUID id can't be used directly as the `tokens`
  *    table's UUID primary key. `startTokenMutationBridge` therefore keeps
  *    an in-memory `engineIdToTokenId` map: the first `upsert_token` seen
  *    for a given engine id calls `createToken` (server mints the UUID)

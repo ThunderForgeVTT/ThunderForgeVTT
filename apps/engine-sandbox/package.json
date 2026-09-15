@@ -13,7 +13,8 @@
     "keyboard": "pnpm run maps && node scripts/keyboard-check.mjs",
     "stream": "pnpm run maps && node scripts/stream-check.mjs",
     "space": "pnpm run maps && node scripts/space-check.mjs",
-    "stacking": "pnpm run maps && node scripts/stacking-check.mjs"
+    "stacking": "pnpm run maps && node scripts/stacking-check.mjs",
+    "demo-tokens": "pnpm run maps && node scripts/demo-tokens-check.mjs"
   },
   "dependencies": {
     "@thunderforge/engine": "workspace:^"

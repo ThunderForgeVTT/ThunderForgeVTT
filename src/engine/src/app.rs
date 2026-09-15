@@ -2,48 +2,47 @@
 
 use super::*;
 
-pub(crate) fn setup_scene(mut commands: Commands, mut token_entities: ResMut<TokenEntities>) {
-    // NO camera is spawned here. `CameraPlugin` (plugins/camera.rs) owns the
-    // one and only camera — it is the one `CameraManager` drives for pan and
-    // zoom. This function used to spawn a second `Camera2d` as well, leaving
-    // two active cameras with the same order (0) on the same render target.
-    // Bevy warned about that every frame ("Camera order ambiguities
-    // detected ..."), and the consequence is not cosmetic: each camera
-    // clears the target on its own pass, so with an undefined order between
-    // them one pass can wipe the other's output.
-    //
-    // The warning was invisible until `bevy_log` was added to this crate's
-    // features; see the note there. Removing the duplicate silences it and
-    // leaves exactly one active camera.
-    //
-    // This was a real bug but not the cause of the "canvas renders nothing
-    // but the clear colour" symptom — that was the missing `*_render`
-    // features in Cargo.toml. Both are fixed; they were independent.
-    let player_entity = commands
-        .spawn((
-            Sprite::from_color(Color::srgb(0.851, 0.278, 0.306), TOKEN_SIZE),
-            Transform::from_xyz(-180.0, 0.0, 0.0),
-            PlayerToken,
-            TokenIdentity("player".to_string()),
-            // Not `PlayerControlled`. This placeholder used to carry that tag,
-            // and was therefore the only thing a movement key could move —
-            // which is why a player's keyboard moved nothing of theirs
-            // (spec 045). Control is named by the application now, through
-            // `SetControlledToken`.
-        ))
-        .id();
+/// The engine sandbox's two demo tokens: a red "player" square at (-180, 0)
+/// and a blue "npc" at (180, 0).
+///
+/// Sandbox only, by owner decision 2026-09-15. They used to be spawned at
+/// startup in every session, a real world's included, where they had no
+/// server row, widened the darkness pass, turned up in `hidden_tokens()` and
+/// became server rows the first time a stack click swept them into an
+/// `upsert_token`. Now nothing spawns them unless something asks, and only
+/// `apps/engine-sandbox` asks (`spawn_demo_tokens`), because its size and
+/// lighting buttons need something to act on without a server.
+///
+/// Asking twice spawns nothing new.
+///
+/// No camera is spawned here, nor anywhere but `CameraPlugin`: two cameras of
+/// the same order clear each other's output (see `plugins/camera.rs`).
+pub(crate) fn spawn_demo_tokens(commands: &mut Commands, token_entities: &mut TokenEntities) {
+    if !token_entities.0.contains_key("player") {
+        let player_entity = commands
+            .spawn((
+                Sprite::from_color(Color::srgb(0.851, 0.278, 0.306), TOKEN_SIZE),
+                Transform::from_xyz(-180.0, 0.0, 0.0),
+                // The WASD demo mover (`move_player`) looks for this tag; no
+                // real token carries it. Control of a real token is named by
+                // the application, through `SetControlledToken` (spec 045).
+                PlayerToken,
+                TokenIdentity("player".to_string()),
+            ))
+            .id();
+        token_entities.0.insert("player".to_string(), player_entity);
+    }
 
-    token_entities.0.insert("player".to_string(), player_entity);
-
-    let npc_entity = commands
-        .spawn((
-            Sprite::from_color(Color::srgb(0.282, 0.565, 0.996), TOKEN_SIZE),
-            Transform::from_xyz(180.0, 0.0, 0.0),
-            TokenIdentity("npc".to_string()),
-        ))
-        .id();
-
-    token_entities.0.insert("npc".to_string(), npc_entity);
+    if !token_entities.0.contains_key("npc") {
+        let npc_entity = commands
+            .spawn((
+                Sprite::from_color(Color::srgb(0.282, 0.565, 0.996), TOKEN_SIZE),
+                Transform::from_xyz(180.0, 0.0, 0.0),
+                TokenIdentity("npc".to_string()),
+            ))
+            .id();
+        token_entities.0.insert("npc".to_string(), npc_entity);
+    }
 }
 
 pub(crate) fn move_player(
@@ -215,6 +214,9 @@ pub(crate) fn apply_external_commands(
         match command {
             ExternalCommand::SetWorld { world_id } => {
                 active_world.0 = world_id;
+            }
+            ExternalCommand::SpawnDemoTokens => {
+                spawn_demo_tokens(&mut commands, &mut token_entities);
             }
             ExternalCommand::UpsertToken { token } => {
                 if let Some(existing_entity) = token_entities.0.get(&token.id).copied() {
