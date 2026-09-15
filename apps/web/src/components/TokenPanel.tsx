@@ -401,7 +401,10 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
                       </div>
                     </Popover.Trigger>
 
-                    <Popover.Content className="token-popover-content">
+                    <Popover.Content
+                      className="token-popover-content"
+                      collisionPadding={8}
+                    >
                       <div className="token-details">
                         <h4>Token Details</h4>
                         <p data-testid={`token-position-${token.tokenId}`}>

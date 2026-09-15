@@ -195,6 +195,12 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   // Spec 009: above WorldLayout's right-docked sidebar (z-[1050]).
   z-index: 1060;
+  // Never taller than the room Radix measured for it: a token's details
+  // (photo, link, owner, disclosure, delete) outgrow a 720px viewport, and an
+  // unbounded popover opened near the top was cut off above the screen with
+  // its first controls unreachable. It scrolls instead.
+  max-height: var(--radix-popover-content-available-height);
+  overflow-y: auto;
 }
 
 .token-details {

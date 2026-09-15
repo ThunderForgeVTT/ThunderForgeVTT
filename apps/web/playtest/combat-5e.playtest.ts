@@ -24,12 +24,14 @@ import {
   startCombat,
   statusOn,
   systemDataOf,
+  tokenHitPointsOf,
   type Combat,
 } from "./combat";
 import {
   closeTable,
   openTable,
   placeCast,
+  placeToken,
   sitDown,
   snapshot,
   tryDrag,
@@ -106,11 +108,28 @@ test("a Game Master runs a 5e fight for two players", async ({
         at: { x: -200, y: -150 },
         seat: brom,
       });
+      // The creatures are written before they are placed: an NPC's token is a
+      // copy of its sheet as it stands when it goes down (spec 046 ADR-102).
       cast.Goblin = await placeCast(table, {
         label: "Goblin",
         at: { x: 200, y: 0 },
         tokenType: "npc",
+        sheet: {
+          scores: GOBLIN_SCORES,
+          hitPoints: { current: GOBLIN_HP, max: GOBLIN_HP },
+        },
       });
+      // A second goblin of the same NPC: its own copy, with its own hit
+      // points, and no second actor.
+      cast.Goblin2 = {
+        actorId: cast.Goblin.actorId,
+        tokenId: (
+          await placeToken(table, cast.Goblin.actorId, {
+            at: { x: 300, y: -100 },
+            label: "Goblin 2",
+          })
+        ).tokenId,
+      };
       // An ogre: twice the size, so the board has a large piece on it as well
       // as a small one.
       cast.Ogre = await placeCast(table, {
@@ -118,22 +137,16 @@ test("a Game Master runs a 5e fight for two players", async ({
         at: { x: 500, y: 150 },
         tokenType: "npc",
         scale: OGRE_SCALE,
+        sheet: {
+          scores: OGRE_SCORES,
+          hitPoints: { current: OGRE_HP, max: OGRE_HP },
+        },
       });
 
       await setAbilityScores(table, cast.Aria.actorId, HERO_SCORES);
       await setAbilityScores(table, cast.Brom.actorId, CASTER_SCORES);
-      await setAbilityScores(table, cast.Goblin.actorId, GOBLIN_SCORES);
-      await setAbilityScores(table, cast.Ogre.actorId, OGRE_SCORES);
       await setHitPoints(table, cast.Aria.actorId, { current: 16, max: 16 });
       await setHitPoints(table, cast.Brom.actorId, { current: 11, max: 11 });
-      await setHitPoints(table, cast.Goblin.actorId, {
-        current: GOBLIN_HP,
-        max: GOBLIN_HP,
-      });
-      await setHitPoints(table, cast.Ogre.actorId, {
-        current: OGRE_HP,
-        max: OGRE_HP,
-      });
 
       // Two styles, each a real ability with its own rolls: Aria swings,
       // Brom throws fire.
@@ -503,8 +516,9 @@ test("a Game Master runs a 5e fight for two players", async ({
     await test.step("damage lands, and the board shows it", async () => {
       // Spec 046 FR-014: the Game Master's Damage, the same mutation the
       // tracker's button calls. It spends temporary hit points first and stops
-      // at zero, and announces itself as a sheet change (event 26) — which
-      // every board now re-reads its bars on.
+      // at zero. The goblin is a copy of its NPC (spec 046 ADR-102), so the
+      // hit is written to that token alone and announced as a token change
+      // (event 14) — which every board re-reads its bars on.
       const before = await barCurrentOn(table.gm, cast.Goblin.tokenId);
       expect(before, "the Game Master's board draws the goblin whole").toBe(
         GOBLIN_HP,
@@ -516,11 +530,29 @@ test("a Game Master runs a 5e fight for two players", async ({
         GOBLIN_HP,
       );
       expect(after.current, "the goblin is at zero").toBe(0);
-      const stored = await systemDataOf(table.gm, cast.Goblin.actorId);
       expect(
-        stored.resourceData?.current_hp,
+        await tokenHitPointsOf(table.gm, table.sceneId, cast.Goblin.tokenId),
         "the server holds the goblin at zero",
       ).toBe(0);
+
+      // Spec 046 SC-008 (tasks T046): two goblins of one NPC are two
+      // creatures. The hit landed on one copy; the other copy, and the NPC's
+      // own sheet, are exactly as they were.
+      expect(
+        await tokenHitPointsOf(table.gm, table.sceneId, cast.Goblin2.tokenId),
+        "the second goblin copy is untouched by a hit on the first",
+      ).toBe(GOBLIN_HP);
+      const npcSheet = await systemDataOf(table.gm, cast.Goblin.actorId);
+      expect(
+        npcSheet.resourceData?.current_hp,
+        "the goblin NPC's own sheet is untouched by a hit on a copy",
+      ).toBe(GOBLIN_HP);
+      await expect
+        .poll(() => barCurrentOn(table.gm, cast.Goblin2.tokenId), {
+          timeout: 5_000,
+          message: "the second goblin's bar still reads whole",
+        })
+        .toBe(GOBLIN_HP);
 
       // Was FINDING 522 ("the goblin's bar should shorten on every board").
       // Its wording blamed a missing event; `updateActorSystemData` had
