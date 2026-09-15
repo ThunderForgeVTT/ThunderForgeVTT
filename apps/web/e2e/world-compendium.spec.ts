@@ -67,13 +67,33 @@ async function addNpcFromStaging(
   page: Page,
   worldId: string,
   name: string,
-): Promise<void> {
+): Promise<string> {
   await page.goto(`/world/${worldId}/compendium/npc/new`);
   await page.getByTestId("npc-editor-name-input").fill(name);
   await page.getByTestId("npc-editor-save").click();
   await page.waitForURL(/\/compendium\/npc\/[^/]+\/edit$/, { timeout: 15_000 });
+  const actorId = /\/compendium\/npc\/([^/]+)\/edit$/.exec(page.url())![1];
   await page.goto(`/world/${worldId}/compendium`);
   await expect(page.getByText(name)).toBeVisible({ timeout: 10_000 });
+  return actorId;
+}
+
+/**
+ * Shows an NPC to the world's players from its own page. An NPC is hidden
+ * from players until its Game Master does this (owner decision 2026-09-15).
+ */
+async function showNpcToPlayers(
+  page: Page,
+  worldId: string,
+  actorId: string,
+): Promise<void> {
+  await page.goto(`/world/${worldId}/actor/${actorId}/view`);
+  const toggle = page.getByTestId("actor-visible-toggle");
+  await expect(toggle).not.toBeChecked({ timeout: 15_000 });
+  // Not `check()`: the box follows the server's answer, so it is checked
+  // only once the change has been saved, after `check()` has looked.
+  await toggle.click();
+  await expect(toggle).toBeChecked({ timeout: 10_000 });
 }
 
 test.describe("Compendium shell: tabs, NPC browse/search, row-select preview", () => {
@@ -302,7 +322,11 @@ test.describe("US2: a Player browses the Compendium with the same read access, m
     const worldName = `E2E Compendium Player ${uniqueSuffix()}`;
     const worldId = await registerAndCreateWorld(page, worldName);
     const npcName = `Player-Visible NPC ${uniqueSuffix()}`;
-    await addNpcFromStaging(page, worldId, npcName);
+    const npcId = await addNpcFromStaging(page, worldId, npcName);
+    await showNpcToPlayers(page, worldId, npcId);
+    // And one left hidden, which the player's catalogue must not list.
+    const hiddenName = `Still-Hidden NPC ${uniqueSuffix()}`;
+    await addNpcFromStaging(page, worldId, hiddenName);
 
     // Generate an invite from the world dashboard, mirroring the pattern
     // established in invite-membership.spec.ts / gm-staging-page.spec.ts.
@@ -340,6 +364,9 @@ test.describe("US2: a Player browses the Compendium with the same read access, m
       await expect(playerPage.getByTestId("npc-catalog-table")).toContainText(
         npcName,
       );
+      await expect(
+        playerPage.getByTestId("npc-catalog-table"),
+      ).not.toContainText(hiddenName);
       await playerPage
         .getByTestId("npc-catalog-search-input")
         .fill(npcName.slice(0, 6));
