@@ -90,8 +90,12 @@ Nothing asserts one second.
 in Phase 7) against a target of 500 ms. The copies cost nothing over the same
 two hundred tokens linked (+46 ms, gated at 500 ms), and the frame rate holds
 at 60 fps: the time is the engine bringing two hundred tokens and their bars
-onto a board, which predates this spec. Whether 500 ms against an empty scene
-is the right target is for whoever owns engine loading.
+onto a board, which predates this spec.
+
+**Accepted** (owner, 2026-09-15): about 750 ms for two hundred tokens is the
+accepted figure for now. It is still measured on every run of
+`engine-status-limits.spec.ts`; making token and bar spawning cheaper is left to
+a future engine-loading task, not this spec.
 
 ### The problem, as it stood on 2026-09-11
 
