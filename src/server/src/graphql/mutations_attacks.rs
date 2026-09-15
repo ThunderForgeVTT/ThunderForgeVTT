@@ -43,7 +43,7 @@ pub async fn make_attack_impl<R: rand::Rng + Send + 'static>(
             &systems_dir,
             user_id,
             is_admin,
-            &input.into_request(),
+            &input.into_request()?,
             &mut rng,
         )?;
         let records = world_attacks::table

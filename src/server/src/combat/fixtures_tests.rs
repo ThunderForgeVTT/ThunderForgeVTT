@@ -323,7 +323,7 @@ pub fn attack(
         user,
         false,
         &AttackRequest {
-            attacker_token_id: attacker,
+            attacker: crate::combat::attack::Attacker::Token(attacker),
             ability_id: Some(ability),
             target_token_id: target,
             ..Default::default()

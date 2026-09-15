@@ -912,7 +912,10 @@ fn a_queued_attack_is_resolved_at_replay_and_refused_off_turn_spending_nothing()
         reported_outcome: None,
     };
     let intent = parse_attack_intent(&queued("x").command.0).expect("an attack intent");
-    assert_eq!(intent.attacker_token_id, t.aria);
+    assert_eq!(
+        intent.attacker,
+        crate::combat::attack::Attacker::Token(t.aria)
+    );
     assert!(
         parse_token_edit(&queued("x").command.0).is_none(),
         "not a token edit"

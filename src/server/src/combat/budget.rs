@@ -18,13 +18,23 @@
 //! removal that hands the turn on) resets the **new** active combatant's
 //! action, bonus action, reaction and movement. Nobody else's budget changes,
 //! so a reaction spent on somebody else's turn stays spent until its owner's
-//! own turn begins (FR-041).
+//! own turn begins (FR-041). Its legendary actions refill then too (FR-052).
+//!
+//! # A lair has no budget
+//!
+//! A lair (`kind = 'lair'`) is not a creature: it has no speed, no action to
+//! spend and no legendary pool, and its actions are the Game Master's. The
+//! tracker is given `budget: null` for it, the same answer as a system that
+//! declares no budget, so no seat reads "Move 0/0 ft" beside a lair.
 //!
 //! # What spends
 //!
 //! - **An attack** spends one of the line its `action_cost` names. A
 //!   multiattack is one attack for this purpose: one action, however many
-//!   parts (FR-044). `free` spends nothing; `legendary` is Phase 9's pool.
+//!   parts (FR-044). `free` spends nothing; `legendary` spends the ability's
+//!   `legendary_cost` from the creature's legendary pool (see
+//!   `combat::legendary`), and is flagged `legendary_on_own_turn` when taken on
+//!   the creature's own turn.
 //! - **A move** spends its cost in the system's units, for a token that is a
 //!   combatant in a running combat in its scene, whoever moved it — a Game
 //!   Master dragging a creature moves that creature, and it is shown against
@@ -73,9 +83,11 @@ use uuid::Uuid;
 
 use crate::combat::attack::ActionCost;
 use crate::combat::manifest::{SystemTurnBudget, turn_budget_for_system};
+use crate::combat::records::{FLAG_LEGENDARY_ON_OWN_TURN, FLAG_OVERSPENT, KIND_LAIR};
 use crate::models::{ActorSystemData, Combatant};
 use crate::schema::{
-    scenes, tokens, world_actor_system_data, world_combatant_budgets, world_combatants, worlds,
+    scenes, tokens, world_actor_system_data, world_combatant_budgets, world_combatants,
+    world_combats, worlds,
 };
 
 /// One combatant's row: what it has spent this turn.
@@ -193,17 +205,20 @@ pub enum Spend {
     Reaction,
     /// In the system's units.
     Movement(f64),
+    /// From the legendary pool: the ability's `legendary_cost`.
+    Legendary(i32),
 }
 
 impl Spend {
-    /// The line an attack of this cost spends; `None` for free, and for
-    /// legendary (its own pool, Phase 9).
-    pub fn for_attack(cost: ActionCost) -> Option<Spend> {
+    /// The line an attack of this cost spends; `None` for free. A legendary
+    /// action spends `legendary_cost` from the pool.
+    pub fn for_attack(cost: ActionCost, legendary_cost: i32) -> Option<Spend> {
         match cost {
             ActionCost::Action => Some(Spend::Action),
             ActionCost::BonusAction => Some(Spend::BonusAction),
             ActionCost::Reaction => Some(Spend::Reaction),
-            ActionCost::Legendary | ActionCost::Free => None,
+            ActionCost::Legendary => Some(Spend::Legendary(legendary_cost.max(0))),
+            ActionCost::Free => None,
         }
     }
 }
@@ -257,11 +272,21 @@ pub fn spend(
             ))
             .returning(BudgetRow::as_returning())
             .get_result(conn),
+        // A creature with no pool (NULL) keeps none: NULL - n is NULL.
+        Spend::Legendary(cost) => query
+            .set((
+                world_combatant_budgets::legendary_remaining
+                    .eq(world_combatant_budgets::legendary_remaining - cost),
+                stamp,
+            ))
+            .returning(BudgetRow::as_returning())
+            .get_result(conn),
     }
 }
 
 /// The start of `combatant_id`'s turn: its action, bonus action, reaction and
-/// movement come back. Nobody else's budget is touched.
+/// movement come back, and its legendary actions refill to what it has each
+/// round (a creature with none keeps none). Nobody else's budget is touched.
 pub fn start_turn(conn: &mut PgConnection, combatant_id: Uuid, user_id: Uuid) -> QueryResult<()> {
     create_for(conn, combatant_id, user_id)?;
     diesel::update(
@@ -273,6 +298,8 @@ pub fn start_turn(conn: &mut PgConnection, combatant_id: Uuid, user_id: Uuid) ->
         world_combatant_budgets::bonus_action_spent.eq(0),
         world_combatant_budgets::reaction_spent.eq(0),
         world_combatant_budgets::movement_spent.eq(0.0),
+        world_combatant_budgets::legendary_remaining
+            .eq(world_combatant_budgets::legendary_per_round),
         world_combatant_budgets::updated_by.eq(user_id),
         world_combatant_budgets::updated_at.eq(chrono::Utc::now().naive_utc()),
     ))
@@ -281,7 +308,7 @@ pub fn start_turn(conn: &mut PgConnection, combatant_id: Uuid, user_id: Uuid) ->
 }
 
 /// The world's system, if it has one.
-fn world_system(conn: &mut PgConnection, world_id: Uuid) -> QueryResult<Option<String>> {
+pub(crate) fn world_system(conn: &mut PgConnection, world_id: Uuid) -> QueryResult<Option<String>> {
     Ok(worlds::table
         .filter(worlds::id.eq(world_id))
         .select(worlds::game_system_id)
@@ -362,6 +389,13 @@ pub fn budgets_for(
     let Some(declared) = turn_budget_for_system(systems_dir, &system_id) else {
         return Ok(HashMap::new());
     };
+    // A lair is not a creature and has no budget (module documentation).
+    let combatants: Vec<Combatant> = combatants
+        .iter()
+        .filter(|c| c.kind != KIND_LAIR)
+        .cloned()
+        .collect();
+    let combatants = combatants.as_slice();
     if combatants.is_empty() {
         return Ok(HashMap::new());
     }
@@ -397,6 +431,12 @@ pub fn budgets_for(
 /// token, else a token-less combatant for the token's actor (as the turn check
 /// finds it). `None` when no combat is running there, or the token is not in
 /// it.
+///
+/// The fallback is taken only when it is unambiguous: exactly one token-less
+/// creature combatant for that actor. Two of them (the same NPC added twice
+/// from the actor list) could be either, and a spend — a legendary action
+/// above all, whose pool is per creature — must not land on the wrong row, so
+/// neither is spent. A lair is never a token's combatant.
 pub fn combatant_of_token(
     conn: &mut PgConnection,
     scene_id: Uuid,
@@ -426,9 +466,16 @@ pub fn combatant_of_token(
         .load::<Combatant>(conn)?;
     let by_token = combatants.iter().find(|c| c.token_id == Some(token_id));
     let by_actor = || {
-        combatants
-            .iter()
-            .find(|c| c.token_id.is_none() && actor_id.is_some() && c.actor_id == actor_id)
+        let mut rows = combatants.iter().filter(|c| {
+            c.kind != KIND_LAIR
+                && c.token_id.is_none()
+                && actor_id.is_some()
+                && c.actor_id == actor_id
+        });
+        match (rows.next(), rows.next()) {
+            (Some(only), None) => Some(only),
+            _ => None,
+        }
     };
     Ok(by_token.or_else(by_actor).cloned().map(|c| (world_id, c)))
 }
@@ -447,57 +494,102 @@ fn budget_of(
 }
 
 /// What an attack spends, spent against the attacker's combatant in the
-/// running combat in its scene. Returns whether the line it spent is now
-/// overspent — the attack's `overspent` flag. Never refuses (C9).
+/// running combat in its scene. Returns the flags the spend puts on every
+/// part: `overspent` when the line it spent is now past its allowance, and
+/// `legendary_on_own_turn` for a legendary action taken on the creature's own
+/// turn. Never refuses (C9, FR-051).
 ///
 /// Called once per `makeAttack`, however many parts a multiattack makes: one
-/// action (FR-044).
+/// action (FR-044), one legendary cost.
+#[allow(clippy::too_many_arguments)]
 pub fn spend_for_attack(
     conn: &mut PgConnection,
     systems_dir: &str,
     scene_id: Uuid,
     attacker_token_id: Uuid,
     cost: ActionCost,
+    legendary_cost: i32,
     user_id: Uuid,
-) -> QueryResult<bool> {
-    let Some(what) = Spend::for_attack(cost) else {
-        return Ok(false);
+) -> QueryResult<Vec<&'static str>> {
+    let Some(what) = Spend::for_attack(cost, legendary_cost) else {
+        return Ok(Vec::new());
     };
     let Some((world_id, combatant)) = combatant_of_token(conn, scene_id, attacker_token_id)? else {
-        return Ok(false);
+        return Ok(Vec::new());
     };
     spend(conn, combatant.id, what, user_id)?;
     touch(conn, world_id, combatant.combat_id, user_id)?;
-    Ok(budget_of(conn, systems_dir, world_id, &combatant)?
-        .is_some_and(|budget| line_of(&budget, what).is_overspent()))
+    let Some(budget) = budget_of(conn, systems_dir, world_id, &combatant)? else {
+        return Ok(Vec::new());
+    };
+    let mut flags = Vec::new();
+    if line_of(&budget, what).is_none_or(|line| line.is_overspent()) {
+        flags.push(FLAG_OVERSPENT);
+    }
+    if what_is_legendary(what) && is_own_turn(conn, &combatant)? {
+        flags.push(FLAG_LEGENDARY_ON_OWN_TURN);
+    }
+    Ok(flags)
 }
 
-/// Whether an attack of this cost would overspend, for the warning before it
-/// is rolled. Writes nothing.
-pub fn attack_would_overspend(
+/// The flags an attack of this cost would be given, for the warning before it
+/// is rolled: `overspent` when one more would go past, and
+/// `legendary_on_own_turn`. Writes nothing.
+pub fn attack_would_flag(
     conn: &mut PgConnection,
     systems_dir: &str,
     scene_id: Uuid,
     attacker_token_id: Uuid,
     cost: ActionCost,
-) -> QueryResult<bool> {
-    let Some(what) = Spend::for_attack(cost) else {
-        return Ok(false);
+    legendary_cost: i32,
+) -> QueryResult<Vec<&'static str>> {
+    let Some(what) = Spend::for_attack(cost, legendary_cost) else {
+        return Ok(Vec::new());
     };
     let Some((world_id, combatant)) = combatant_of_token(conn, scene_id, attacker_token_id)? else {
-        return Ok(false);
+        return Ok(Vec::new());
     };
-    Ok(budget_of(conn, systems_dir, world_id, &combatant)?
-        .is_some_and(|budget| line_of(&budget, what).remaining < 1.0))
+    let Some(budget) = budget_of(conn, systems_dir, world_id, &combatant)? else {
+        return Ok(Vec::new());
+    };
+    let needed = match what {
+        Spend::Legendary(cost) => cost as f64,
+        _ => 1.0,
+    };
+    let mut flags = Vec::new();
+    if line_of(&budget, what).is_none_or(|line| line.remaining < needed) {
+        flags.push(FLAG_OVERSPENT);
+    }
+    if what_is_legendary(what) && is_own_turn(conn, &combatant)? {
+        flags.push(FLAG_LEGENDARY_ON_OWN_TURN);
+    }
+    Ok(flags)
 }
 
-fn line_of(budget: &TurnBudget, what: Spend) -> BudgetLine {
+/// The line a spend is counted against. `None` only for a legendary action
+/// by a creature with no legendary actions: past an allowance of nothing, so
+/// flagged overspent, and there is no pool to take it from.
+fn line_of(budget: &TurnBudget, what: Spend) -> Option<BudgetLine> {
     match what {
-        Spend::Action => budget.action,
-        Spend::BonusAction => budget.bonus_action,
-        Spend::Reaction => budget.reaction,
-        Spend::Movement(_) => budget.movement,
+        Spend::Action => Some(budget.action),
+        Spend::BonusAction => Some(budget.bonus_action),
+        Spend::Reaction => Some(budget.reaction),
+        Spend::Movement(_) => Some(budget.movement),
+        Spend::Legendary(_) => budget.legendary,
     }
+}
+
+fn what_is_legendary(what: Spend) -> bool {
+    matches!(what, Spend::Legendary(_))
+}
+
+/// Whether it is this combatant's own turn in its combat.
+fn is_own_turn(conn: &mut PgConnection, combatant: &Combatant) -> QueryResult<bool> {
+    let active = world_combats::table
+        .filter(world_combats::id.eq(combatant.combat_id))
+        .select(world_combats::active_combatant_id)
+        .first::<Option<Uuid>>(conn)?;
+    Ok(active == Some(combatant.id))
 }
 
 /// A budget changed: the tracker is re-read on every seat (event 18).

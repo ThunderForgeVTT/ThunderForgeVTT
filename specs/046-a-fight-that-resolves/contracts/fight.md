@@ -70,6 +70,12 @@ setCombatAutoApply(combatId: UUID!, enabled: Boolean): Combat!   # null = world'
 
 # Phase 7. Game Master only.
 addLairCombatant(combatId: UUID!, label: String!): Combat!
+# Implemented (tasks T098): returns `GraphQLCombat!` (the tracker's existing
+# type). A lair acts through `makeAttack` with `lairCombatantId` in place of
+# `attackerTokenId`: `AttackInput.attackerTokenId` is nullable, and exactly one
+# of the two is given. Game Master only (C2); nothing is measured from a lair
+# (no distance, reach, range or sight flags); nothing is spent; every seat is
+# told the lair's label and ability name (`world_attacks.attacker_kind`).
 
 # Phase 4 (implemented in tasks Phase 6). Editor on the ability or item.
 # What it is as an attack; every field is written, a null clears it.
@@ -138,7 +144,8 @@ type TurnCheck { allowed: Boolean!  activeLabel: String }
 type TurnBudget {
   action: BudgetLine!  bonusAction: BudgetLine!  reaction: BudgetLine!
   movement: BudgetLine!             # in system units
-  legendary: BudgetLine             # null when the creature has none
+  legendary: BudgetLine             # null when the creature has none; Phase 9: read from
+                                    # `combat.legendary` at addCombatant, refilled at its turn
   unit: String!                     # Phase 8: the system's unit ("ft"), so movement can be said
 }
 type BudgetLine { allowed: Float!  spent: Float!  remaining: Float! }  # remaining may be negative
@@ -154,6 +161,13 @@ every part `OVERSPENT` when the line it spent is past its allowance;
 running combat in the scene: a route by the footprint's steps (cells × units),
 a move with no route by the footprint's displacement from old position to new
 (research R13). Every spend records event 18.
+
+*Implementation note (tasks Phase 9):* `Combatant.kind: CombatantKind!`
+(`CREATURE`, `LAIR`). A lair's `budget` is null. A legendary action spends its
+`legendaryCost` from `budget.legendary` (remaining may go negative) and flags
+every part `LEGENDARY_ON_OWN_TURN` when taken on the creature's own turn and
+`OVERSPENT` when the pool is past zero, or the creature has none;
+`previewAttack` warns both. Neither refuses.
 
 ## 2. Rules each mutation enforces
 

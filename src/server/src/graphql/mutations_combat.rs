@@ -53,6 +53,16 @@ pub struct GraphQLCombatant {
     /// spent, shown to every seat; null when the system declares no budget.
     /// Numbers only, so a combatant read as "Unknown" gives nothing away.
     pub budget: Option<crate::combat::budget::TurnBudget>,
+    /// Spec 046 US6: a creature, or a lair (no token or actor, initiative
+    /// count 20, losing ties, and no budget).
+    pub kind: CombatantKind,
+}
+
+/// What a combatant is (`world_combatants.kind`).
+#[derive(async_graphql::Enum, Copy, Clone, Debug, PartialEq, Eq)]
+pub enum CombatantKind {
+    Creature,
+    Lair,
 }
 
 /// Why a combatant is out of the fight (spec 046 C8).
@@ -86,6 +96,11 @@ impl From<Combatant> for GraphQLCombatant {
             active: row.active,
             downed_by: DownedBy::from_column(row.downed_by.as_deref()),
             budget: None,
+            kind: if row.kind == crate::combat::records::KIND_LAIR {
+                CombatantKind::Lair
+            } else {
+                CombatantKind::Creature
+            },
         }
     }
 }
@@ -170,7 +185,7 @@ impl GraphQLCombat {
 
 /// The single definition of turn order. See this module's doc comment for
 /// why the trailing id comparison is load-bearing.
-fn sort_combatants(combatants: &mut [Combatant]) {
+pub(crate) fn sort_combatants(combatants: &mut [Combatant]) {
     combatants.sort_by(|a, b| {
         b.initiative
             .cmp(&a.initiative)
@@ -488,9 +503,18 @@ pub async fn add_combatant_impl(
             })
             .execute(&mut conn)
             .map_err(|e| format!("Failed to add combatant: {e}"))?;
-        // Spec 046 US5: a budget with each combatant, nothing spent.
-        crate::combat::budget::create_for(&mut conn, combatant_id, user_id)
-            .map_err(|e| format!("Failed to add combatant: {e}"))?;
+        // Spec 046 US5, US6: a budget with each combatant, nothing spent, and
+        // its legendary actions read from its sheet, full.
+        crate::combat::legendary::create_budget_for(
+            &mut conn,
+            &systems_dir,
+            world_id,
+            combatant_id,
+            input.token_id,
+            input.actor_id,
+            user_id,
+        )
+        .map_err(|e| format!("Failed to add combatant: {e}"))?;
 
         touch_and_broadcast(&mut conn, combat_id, world_id, user_id)?;
 

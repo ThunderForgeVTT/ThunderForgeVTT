@@ -427,7 +427,7 @@ fn parse_attack_intent(
         }),
     };
     Some(AttackRequest {
-        attacker_token_id: parsed.token.id,
+        attacker: crate::combat::attack::Attacker::Token(parsed.token.id),
         ability_id: parsed.attack.ability_id,
         item_id: parsed.attack.item_id,
         target_token_id: parsed.attack.target_token_id,
@@ -462,8 +462,12 @@ fn apply_attack_intent(
             GraphQLRejectionReason::PermissionDenied,
         );
     }
-    // The attacker must be in the world this batch is for.
-    match crate::combat::controllers::token_control(conn, intent.attacker_token_id) {
+    // The attacker must be in the world this batch is for. A queued attack is
+    // always a creature's: a lair's action is a Game Master's, made live.
+    let crate::combat::attack::Attacker::Token(attacker_token_id) = intent.attacker else {
+        return GraphQLReconcileOutcome::rejected(local_id, GraphQLRejectionReason::Invalid);
+    };
+    match crate::combat::controllers::token_control(conn, attacker_token_id) {
         Ok(Some(control)) if control.world_id == world_id => {}
         Ok(_) => {
             return GraphQLReconcileOutcome::rejected(local_id, GraphQLRejectionReason::GoneAway);

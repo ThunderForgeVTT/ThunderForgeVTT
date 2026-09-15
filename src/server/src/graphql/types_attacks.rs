@@ -172,7 +172,12 @@ pub struct GraphQLAttackPreview {
 
 #[derive(InputObject, Clone, Debug)]
 pub struct AttackInput {
-    pub attacker_token_id: Uuid,
+    /// The creature attacking. Exactly one of `attackerTokenId` and
+    /// `lairCombatantId`.
+    pub attacker_token_id: Option<Uuid>,
+    /// A lair acting on its count (spec 046 US6): its combatant. Game Master
+    /// only; nothing is measured from a lair, and nothing of it is hidden.
+    pub lair_combatant_id: Option<Uuid>,
     /// Exactly one of `abilityId` and `itemId`.
     pub ability_id: Option<Uuid>,
     pub item_id: Option<Uuid>,
@@ -186,9 +191,22 @@ pub struct AttackInput {
 }
 
 impl AttackInput {
-    pub fn into_request(self) -> crate::combat::attack::AttackRequest {
-        crate::combat::attack::AttackRequest {
-            attacker_token_id: self.attacker_token_id,
+    /// The request, or why it names no attacker, or two.
+    pub fn into_request(
+        self,
+    ) -> Result<crate::combat::attack::AttackRequest, async_graphql::Error> {
+        use crate::combat::attack::Attacker;
+        let attacker = match (self.attacker_token_id, self.lair_combatant_id) {
+            (Some(token_id), None) => Attacker::Token(token_id),
+            (None, Some(combatant_id)) => Attacker::Lair(combatant_id),
+            _ => {
+                return Err(async_graphql::Error::new(
+                    "Choose one creature or one lair to attack with",
+                ));
+            }
+        };
+        Ok(crate::combat::attack::AttackRequest {
+            attacker,
             ability_id: self.ability_id,
             item_id: self.item_id,
             target_token_id: self.target_token_id,
@@ -200,7 +218,7 @@ impl AttackInput {
                 .into_iter()
                 .map(|b| (b.name, b.value))
                 .collect(),
-        }
+        })
     }
 }
 
@@ -431,8 +449,18 @@ pub fn build_attacks(
     let mut out = Vec::with_capacity(records.len());
     for record in records {
         let sight = sights.for_scene(conn, record.scene_id)?;
-        let attacker = party(sight, record.attacker_token_id, &record.attacker_label);
-        let attacker_known = sight.may_know(record.attacker_token_id);
+        // A lair has nothing to hide: every seat is told its name and what it
+        // used (`combat::lair`). A creature is judged by the board.
+        let lair = record.attacker_kind == KIND_LAIR;
+        let attacker = if lair {
+            GraphQLAttackParty {
+                token_id: None,
+                label: record.attacker_label.clone(),
+            }
+        } else {
+            party(sight, record.attacker_token_id, &record.attacker_label)
+        };
+        let attacker_known = lair || sight.may_know(record.attacker_token_id);
         let target = record
             .target_label
             .as_deref()

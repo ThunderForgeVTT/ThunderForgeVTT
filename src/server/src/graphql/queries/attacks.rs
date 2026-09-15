@@ -171,13 +171,14 @@ impl AttackQuery {
             .db_pool
             .get()
             .map_err(|_| Error::new("Failed to get DB connection"))?;
+        let request = input.into_request()?;
         let preview = tokio::task::spawn_blocking(move || {
             crate::combat::attack::preview_attack(
                 &mut conn,
                 &systems_dir,
                 user_id,
                 is_admin,
-                &input.into_request(),
+                &request,
             )
         })
         .await

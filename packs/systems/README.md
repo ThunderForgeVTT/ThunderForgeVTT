@@ -275,7 +275,12 @@ system that declares none of it still has initiative and turns.
   fills one cell. Reach is never derived from size: an attack says its own.
   Validate the size field against this list by reading your manifest rather
   than keeping a second copy of it.
-- **`legendary`** is where a creature's legendary actions per round are read.
+- **`legendary`** is where a creature's legendary actions per round are read,
+  once, when it joins the turn order. The tracker shows how many remain; a
+  legendary action spends its `legendaryCost` from them and refills at the
+  start of the creature's own turn. One taken on its own turn is flagged, and
+  one past zero is shown as a debt; neither is refused. A creature with none
+  recorded, or 0, has no legendary line at all.
 
 These are the rules the product enforces on a declaration, at install time:
 

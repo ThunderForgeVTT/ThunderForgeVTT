@@ -6,6 +6,7 @@
 
 use super::*;
 use crate::combat::fixtures::*;
+use crate::schema::world_abilities;
 use crate::schema::world_combats;
 use crate::test_support::test_app_state;
 
@@ -98,7 +99,7 @@ fn c1_a_reaction_is_not_held_to_the_turn() {
         t.player,
         false,
         &AttackRequest {
-            attacker_token_id: t.aria,
+            attacker: crate::combat::attack::Attacker::Token(t.aria),
             ability_id: Some(t.longsword),
             target_token_id: Some(t.ogre),
             action_cost: Some(ActionCost::Reaction),
@@ -407,7 +408,7 @@ fn a_multiattack_makes_one_row_per_part_each_against_its_own_target() {
         t.gm,
         false,
         &AttackRequest {
-            attacker_token_id: t.ogre,
+            attacker: crate::combat::attack::Attacker::Token(t.ogre),
             ability_id: Some(multi),
             target_token_id: Some(t.aria),
             targets: Some(vec![t.aria, t.goblin]),
@@ -523,7 +524,7 @@ fn preview(
         user,
         false,
         &AttackRequest {
-            attacker_token_id: attacker,
+            attacker: crate::combat::attack::Attacker::Token(attacker),
             ability_id: Some(ability),
             target_token_id: Some(target),
             ..Default::default()

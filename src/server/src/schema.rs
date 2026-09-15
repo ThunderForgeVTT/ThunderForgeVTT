@@ -1111,6 +1111,7 @@ diesel::table! {
         updated_by -> Uuid,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        attacker_kind -> Text,
     }
 }
 
@@ -1224,6 +1225,7 @@ diesel::table! {
         created_at -> Timestamp,
         updated_at -> Timestamp,
         downed_by -> Nullable<Text>,
+        kind -> Text,
     }
 }
 

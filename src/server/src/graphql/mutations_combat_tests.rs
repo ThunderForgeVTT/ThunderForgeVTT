@@ -18,6 +18,7 @@ fn combatant(id: u128, initiative: i32, tiebreak: i32, active: bool) -> Combatan
         created_at: now,
         updated_at: now,
         downed_by: None,
+        kind: "creature".into(),
     }
 }
 

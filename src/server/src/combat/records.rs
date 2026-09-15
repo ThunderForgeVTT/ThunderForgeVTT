@@ -24,6 +24,13 @@ pub const FLAG_NO_LINE_OF_SIGHT: &str = "no_line_of_sight";
 pub const FLAG_NO_REACH_DECLARED: &str = "no_reach_declared";
 /// Spent past what the turn affords (C9): shown, never refused.
 pub const FLAG_OVERSPENT: &str = "overspent";
+/// A legendary action taken on its owner's own turn (FR-051): shown, never
+/// refused.
+pub const FLAG_LEGENDARY_ON_OWN_TURN: &str = "legendary_on_own_turn";
+
+/// `world_combatants.kind` and `world_attacks.attacker_kind`.
+pub const KIND_CREATURE: &str = "creature";
+pub const KIND_LAIR: &str = "lair";
 
 /// `world_offers.status`.
 pub const OFFER_PENDING: &str = "pending";
@@ -62,6 +69,8 @@ pub struct AttackRecord {
     pub updated_by: Uuid,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// `creature`, or `lair` for a lair's action (no attacker token).
+    pub attacker_kind: String,
 }
 
 #[derive(Queryable, Selectable, Insertable, Debug, Clone)]

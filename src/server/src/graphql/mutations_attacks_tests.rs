@@ -148,7 +148,8 @@ async fn make_attack_answers_the_caller_as_they_may_see_it() {
         t.player,
         false,
         AttackInput {
-            attacker_token_id: t.aria,
+            attacker_token_id: Some(t.aria),
+            lair_combatant_id: None,
             ability_id: Some(t.longsword),
             item_id: None,
             target_token_id: Some(t.goblin),
@@ -186,7 +187,8 @@ async fn make_attack_answers_the_caller_as_they_may_see_it() {
         t.player,
         false,
         AttackInput {
-            attacker_token_id: t.aria,
+            attacker_token_id: Some(t.aria),
+            lair_combatant_id: None,
             ability_id: Some(t.longsword),
             item_id: None,
             target_token_id: Some(t.goblin),

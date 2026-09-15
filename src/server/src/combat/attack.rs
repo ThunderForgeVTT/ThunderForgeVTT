@@ -32,8 +32,11 @@
 //! A multiattack (FR-044) makes one row per named attack, in order, each
 //! rolled on its own and each against its own target; the first part is the
 //! parent the rest point at.
-
-use std::collections::HashMap;
+//!
+//! What the attack is made with, and its parts, is `combat::weapon`. A lair's
+//! action (`Attacker::Lair`) is `combat::lair`: steps 1 to 3 and the
+//! measurement differ, because a lair has no body, and steps 4 to 9 are this
+//! file's `record_attack`, shared.
 
 use diesel::PgConnection;
 use diesel::prelude::*;
@@ -47,13 +50,12 @@ use crate::combat::manifest::{combat_for_system, slot_key};
 use crate::combat::reach::{Measured, Reach, SceneMeasure};
 use crate::combat::records::*;
 use crate::combat::turn::{TurnCheck, running_combat, turn_check};
-use crate::models::{NewRollRecord, WorldAbility, WorldItem};
+use crate::combat::weapon::{Part, find_weapon, parts_of};
+use crate::models::NewRollRecord;
 use crate::play_pause::gate::{GateError, refuse_if_paused};
 use crate::schema::{
-    scenes, tokens, world_abilities, world_ability_effects, world_actor_abilities,
-    world_actor_inventory, world_actor_system_data, world_actors, world_attacks,
-    world_item_abilities, world_item_effects, world_items, world_offers, world_roll_records,
-    worlds,
+    scenes, tokens, world_actor_system_data, world_actors, world_attacks, world_offers,
+    world_roll_records, worlds,
 };
 use crate::world_events::{EVENT_CODE_ATTACK_MADE, EVENT_CODE_OFFER_CHANGED, record_world_event};
 
@@ -143,10 +145,26 @@ impl From<FightRefusal> for async_graphql::Error {
     }
 }
 
+/// Who makes an attack.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Attacker {
+    /// A creature on the board: its token.
+    Token(Uuid),
+    /// A lair in the running encounter (spec 046 US6): its combatant. By a
+    /// Game Master only; see `combat::lair`.
+    Lair(Uuid),
+}
+
+impl Default for Attacker {
+    fn default() -> Self {
+        Attacker::Token(Uuid::nil())
+    }
+}
+
 /// What an attack is asked to be.
 #[derive(Clone, Debug, Default)]
 pub struct AttackRequest {
-    pub attacker_token_id: Uuid,
+    pub attacker: Attacker,
     pub ability_id: Option<Uuid>,
     pub item_id: Option<Uuid>,
     pub target_token_id: Option<Uuid>,
@@ -164,43 +182,6 @@ pub struct MadeAttack {
     /// In order: a multiattack's parent first.
     pub attack_ids: Vec<Uuid>,
     pub offer_ids: Vec<Uuid>,
-}
-
-/// One attack an ability or item makes: its name and its formulas.
-#[derive(Clone, Debug)]
-struct Part {
-    ability_id: Option<Uuid>,
-    item_id: Option<Uuid>,
-    name: String,
-    to_hit: String,
-    damage: Vec<String>,
-    reach: Reach,
-}
-
-/// What the attack is made with, once found.
-enum Weapon {
-    Ability(WorldAbility),
-    Item(WorldItem),
-}
-
-impl Weapon {
-    fn action_cost(&self) -> ActionCost {
-        ActionCost::from_db_str(match self {
-            Weapon::Ability(a) => &a.action_cost,
-            Weapon::Item(i) => &i.action_cost,
-        })
-    }
-
-    fn multiattack(&self) -> Vec<Uuid> {
-        match self {
-            Weapon::Ability(a) => &a.multiattack,
-            Weapon::Item(i) => &i.multiattack,
-        }
-        .iter()
-        .flatten()
-        .copied()
-        .collect()
-    }
 }
 
 /// A token's name as the server knows it: its own label, else its actor's.
@@ -223,214 +204,6 @@ pub fn token_label(conn: &mut PgConnection, token_id: Uuid) -> QueryResult<Strin
     Ok(actor_label
         .filter(|label| !label.trim().is_empty())
         .unwrap_or_else(|| "Unnamed creature".to_string()))
-}
-
-fn effects_of_ability(
-    conn: &mut PgConnection,
-    ability_id: Uuid,
-) -> QueryResult<Vec<(String, String)>> {
-    world_ability_effects::table
-        .filter(world_ability_effects::ability_id.eq(ability_id))
-        .order((
-            world_ability_effects::sort_order,
-            world_ability_effects::created_at,
-        ))
-        .select((
-            world_ability_effects::effect_type,
-            world_ability_effects::formula,
-        ))
-        .load(conn)
-}
-
-fn effects_of_item(conn: &mut PgConnection, item_id: Uuid) -> QueryResult<Vec<(String, String)>> {
-    world_item_effects::table
-        .filter(world_item_effects::item_id.eq(item_id))
-        .order((
-            world_item_effects::sort_order,
-            world_item_effects::created_at,
-        ))
-        .select((world_item_effects::effect_type, world_item_effects::formula))
-        .load(conn)
-}
-
-/// What an ability says about its reach, range and line of sight.
-fn reach_of_ability(a: &WorldAbility) -> Reach {
-    Reach {
-        reach: a.reach,
-        range_normal: a.range_normal,
-        range_long: a.range_long,
-        needs_line_of_sight: a.needs_line_of_sight,
-    }
-}
-
-fn reach_of_item(i: &WorldItem) -> Reach {
-    Reach {
-        reach: i.reach,
-        range_normal: i.range_normal,
-        range_long: i.range_long,
-        needs_line_of_sight: i.needs_line_of_sight,
-    }
-}
-
-fn part_from(
-    ability_id: Option<Uuid>,
-    item_id: Option<Uuid>,
-    name: String,
-    reach: Reach,
-    effects: Vec<(String, String)>,
-) -> Result<Part, FightRefusal> {
-    let to_hit = effects
-        .iter()
-        .find(|(kind, formula)| kind == "attack_roll" && !formula.trim().is_empty())
-        .map(|(_, formula)| formula.trim().to_string())
-        .ok_or_else(|| FightRefusal::Invalid(format!("{name} has no attack roll to make")))?;
-    let damage = effects
-        .iter()
-        .filter(|(kind, formula)| kind == "damage" && !formula.trim().is_empty())
-        .map(|(_, formula)| formula.trim().to_string())
-        .collect();
-    Ok(Part {
-        ability_id,
-        item_id,
-        name,
-        to_hit,
-        damage,
-        reach,
-    })
-}
-
-/// Find what the attack is made with, and whether this caller may use it.
-///
-/// A Game Master may use anything in the world. A player uses what the
-/// attacker has: an ability its actor knows, an item in its actor's
-/// inventory, or an ability one of those items carries. A Game-Master-only
-/// ability is not there for a player at all (spec 025 FR-024b).
-fn find_weapon(
-    conn: &mut PgConnection,
-    world_id: Uuid,
-    actor_id: Option<Uuid>,
-    runs_the_world: bool,
-    ability_id: Option<Uuid>,
-    item_id: Option<Uuid>,
-) -> Result<Weapon, FightRefusal> {
-    let not_known = || FightRefusal::NotFound("That creature has no such attack".to_string());
-    match (ability_id, item_id) {
-        (Some(ability_id), None) => {
-            let ability = world_abilities::table
-                .filter(world_abilities::id.eq(ability_id))
-                .filter(world_abilities::world_id.eq(world_id))
-                .select(WorldAbility::as_select())
-                .first::<WorldAbility>(conn)
-                .optional()?
-                .ok_or_else(not_known)?;
-            if !runs_the_world {
-                if ability.gm_only {
-                    return Err(not_known());
-                }
-                let Some(actor_id) = actor_id else {
-                    return Err(not_known());
-                };
-                let known = diesel::select(diesel::dsl::exists(
-                    world_actor_abilities::table
-                        .filter(world_actor_abilities::actor_id.eq(actor_id))
-                        .filter(world_actor_abilities::ability_id.eq(ability_id)),
-                ))
-                .get_result::<bool>(conn)?;
-                let carried = known
-                    || diesel::select(diesel::dsl::exists(
-                        world_item_abilities::table
-                            .inner_join(
-                                world_actor_inventory::table.on(world_actor_inventory::item_id
-                                    .eq(world_item_abilities::item_id.nullable())),
-                            )
-                            .filter(world_actor_inventory::actor_id.eq(actor_id))
-                            .filter(world_item_abilities::ability_id.eq(ability_id)),
-                    ))
-                    .get_result::<bool>(conn)?;
-                if !carried {
-                    return Err(not_known());
-                }
-            }
-            Ok(Weapon::Ability(ability))
-        }
-        (None, Some(item_id)) => {
-            let item = world_items::table
-                .filter(world_items::id.eq(item_id))
-                .filter(world_items::world_id.eq(world_id))
-                .select(WorldItem::as_select())
-                .first::<WorldItem>(conn)
-                .optional()?
-                .ok_or_else(not_known)?;
-            if !runs_the_world {
-                let Some(actor_id) = actor_id else {
-                    return Err(not_known());
-                };
-                let held = diesel::select(diesel::dsl::exists(
-                    world_actor_inventory::table
-                        .filter(world_actor_inventory::actor_id.eq(actor_id))
-                        .filter(world_actor_inventory::item_id.eq(item_id)),
-                ))
-                .get_result::<bool>(conn)?;
-                if !held {
-                    return Err(not_known());
-                }
-            }
-            Ok(Weapon::Item(item))
-        }
-        _ => Err(FightRefusal::Invalid(
-            "Choose one ability or one item to attack with".to_string(),
-        )),
-    }
-}
-
-/// The parts one use of `weapon` makes (FR-044).
-fn parts_of(
-    conn: &mut PgConnection,
-    world_id: Uuid,
-    weapon: &Weapon,
-) -> Result<Vec<Part>, FightRefusal> {
-    let named = weapon.multiattack();
-    if named.is_empty() {
-        return Ok(vec![match weapon {
-            Weapon::Ability(a) => part_from(
-                Some(a.id),
-                None,
-                a.name.clone(),
-                reach_of_ability(a),
-                effects_of_ability(conn, a.id)?,
-            )?,
-            Weapon::Item(i) => part_from(
-                None,
-                Some(i.id),
-                i.name.clone(),
-                reach_of_item(i),
-                effects_of_item(conn, i.id)?,
-            )?,
-        }]);
-    }
-    let abilities: HashMap<Uuid, WorldAbility> = world_abilities::table
-        .filter(world_abilities::id.eq_any(&named))
-        .filter(world_abilities::world_id.eq(world_id))
-        .select(WorldAbility::as_select())
-        .load::<WorldAbility>(conn)?
-        .into_iter()
-        .map(|a| (a.id, a))
-        .collect();
-    named
-        .iter()
-        .map(|id| {
-            let ability = abilities.get(id).ok_or_else(|| {
-                FightRefusal::NotFound("One of that multiattack's attacks is gone".to_string())
-            })?;
-            part_from(
-                Some(ability.id),
-                None,
-                ability.name.clone(),
-                reach_of_ability(ability),
-                effects_of_ability(conn, ability.id)?,
-            )
-        })
-        .collect()
 }
 
 /// The target's defence, as its pack declares it (research R3).
@@ -588,7 +361,13 @@ pub fn preview_attack(
     is_admin: bool,
     request: &AttackRequest,
 ) -> Result<AttackPreview, FightRefusal> {
-    let control = token_control(conn, request.attacker_token_id)?
+    let attacker_token_id = match request.attacker {
+        Attacker::Token(token_id) => token_id,
+        Attacker::Lair(combatant_id) => {
+            return crate::combat::lair::preview_lair_action(conn, user_id, is_admin, combatant_id);
+        }
+    };
+    let control = token_control(conn, attacker_token_id)?
         .ok_or_else(|| FightRefusal::NotFound("That creature is not on the board".to_string()))?;
     if crate::auth::world_membership::actor_in_world(conn, user_id, is_admin, control.world_id)
         .role
@@ -598,7 +377,7 @@ pub fn preview_attack(
         return Err(FightRefusal::NotControlled);
     }
     let scene_id = tokens::table
-        .filter(tokens::token_id.eq(request.attacker_token_id))
+        .filter(tokens::token_id.eq(attacker_token_id))
         .select(tokens::scene_id)
         .first::<Uuid>(conn)?;
     let turn = if request.action_cost == Some(ActionCost::Reaction) {
@@ -607,7 +386,7 @@ pub fn preview_attack(
             active_label: None,
         }
     } else {
-        turn_check(conn, scene_id, request.attacker_token_id, user_id, is_admin)?
+        turn_check(conn, scene_id, attacker_token_id, user_id, is_admin)?
     };
     // The turn is answered whatever else happens: it is the one thing that
     // refuses, and a warning about reach must never stand in front of it.
@@ -640,7 +419,7 @@ pub fn preview_attack(
         conn,
         systems_dir,
         scene_id,
-        request.attacker_token_id,
+        attacker_token_id,
         &parts,
         |index| target_of(request, index),
     )?;
@@ -650,11 +429,13 @@ pub fn preview_attack(
             preview.flags.push(flag);
         }
     }
-    // C9: warned, like reach, and made anyway.
+    // C9, FR-051: warned, like reach, and made anyway.
     let cost = request.action_cost.unwrap_or_else(|| weapon.action_cost());
-    let (attacker, dir) = (request.attacker_token_id, systems_dir);
-    if crate::combat::budget::attack_would_overspend(conn, dir, scene_id, attacker, cost)? {
-        preview.flags.push(FLAG_OVERSPENT.to_string());
+    let (attacker, dir, legendary) = (attacker_token_id, systems_dir, weapon.legendary_cost());
+    for flag in
+        crate::combat::budget::attack_would_flag(conn, dir, scene_id, attacker, cost, legendary)?
+    {
+        preview.flags.push(flag.to_string());
     }
     preview.reach = parts.first().map(|p| p.reach).unwrap_or_default();
     preview.unit_label = unit_label;
@@ -662,7 +443,7 @@ pub fn preview_attack(
 }
 
 /// The target of one part of a multiattack: its own, else the attack's.
-fn target_of(request: &AttackRequest, index: usize) -> Option<Uuid> {
+pub(crate) fn target_of(request: &AttackRequest, index: usize) -> Option<Uuid> {
     request
         .targets
         .as_ref()
@@ -671,6 +452,7 @@ fn target_of(request: &AttackRequest, index: usize) -> Option<Uuid> {
 }
 
 /// Make an attack. See the module documentation for the order of its rules.
+/// A lair's action is `combat::lair`'s.
 pub fn make_attack<R: Rng>(
     conn: &mut PgConnection,
     systems_dir: &str,
@@ -679,7 +461,21 @@ pub fn make_attack<R: Rng>(
     request: &AttackRequest,
     rng: &mut R,
 ) -> Result<MadeAttack, FightRefusal> {
-    let control = token_control(conn, request.attacker_token_id)?
+    let attacker_token_id = match request.attacker {
+        Attacker::Token(token_id) => token_id,
+        Attacker::Lair(combatant_id) => {
+            return crate::combat::lair::make_lair_action(
+                conn,
+                systems_dir,
+                user_id,
+                is_admin,
+                combatant_id,
+                request,
+                rng,
+            );
+        }
+    };
+    let control = token_control(conn, attacker_token_id)?
         .ok_or_else(|| FightRefusal::NotFound("That creature is not on the board".to_string()))?;
     let world_id = control.world_id;
 
@@ -695,7 +491,7 @@ pub fn make_attack<R: Rng>(
             .runs_the_world();
 
     let scene_id = tokens::table
-        .filter(tokens::token_id.eq(request.attacker_token_id))
+        .filter(tokens::token_id.eq(attacker_token_id))
         .select(tokens::scene_id)
         .first::<Uuid>(conn)?;
 
@@ -711,17 +507,56 @@ pub fn make_attack<R: Rng>(
 
     // C1. A reaction is taken between turns; a Game Master is never held.
     if action_cost != ActionCost::Reaction {
-        let check = turn_check(conn, scene_id, request.attacker_token_id, user_id, is_admin)?;
+        let check = turn_check(conn, scene_id, attacker_token_id, user_id, is_admin)?;
         if let Some(sentence) = check.refusal() {
             return Err(FightRefusal::NotYourTurn(sentence));
         }
     }
 
     let parts = parts_of(conn, world_id, &weapon)?;
-    let target_for = |index: usize| target_of(request, index);
-    // Every target is on this scene, checked before anything is rolled.
-    for index in 0..parts.len() {
-        if let Some(target) = target_for(index) {
+    targets_on_scene(conn, request, parts.len(), scene_id)?;
+
+    let attacker_label = token_label(conn, attacker_token_id)?;
+    // Reach, range and line of sight: flags, never refusals (C3). Measured
+    // before anything is written, where each creature stands now.
+    let (measured, _) = measure_parts(
+        conn,
+        systems_dir,
+        scene_id,
+        attacker_token_id,
+        &parts,
+        |index| target_of(request, index),
+    )?;
+
+    record_attack(
+        conn,
+        systems_dir,
+        user_id,
+        request,
+        Settled {
+            world_id,
+            scene_id,
+            attacker_token_id: Some(attacker_token_id),
+            attacker_kind: KIND_CREATURE,
+            attacker_label,
+            measured,
+            action_cost,
+            legendary_cost: weapon.legendary_cost(),
+            parts,
+        },
+        rng,
+    )
+}
+
+/// Every target is on this scene, checked before anything is rolled.
+pub(crate) fn targets_on_scene(
+    conn: &mut PgConnection,
+    request: &AttackRequest,
+    parts: usize,
+    scene_id: Uuid,
+) -> Result<(), FightRefusal> {
+    for index in 0..parts {
+        if let Some(target) = target_of(request, index) {
             let on_scene = tokens::table
                 .filter(tokens::token_id.eq(target))
                 .select(tokens::scene_id)
@@ -734,19 +569,49 @@ pub fn make_attack<R: Rng>(
             }
         }
     }
+    Ok(())
+}
 
-    let bindings: PlaceholderBindings = request.bindings.iter().cloned().collect();
-    let attacker_label = token_label(conn, request.attacker_token_id)?;
-    // Reach, range and line of sight: flags, never refusals (C3). Measured
-    // before anything is written, where each creature stands now.
-    let (measured, _) = measure_parts(
-        conn,
-        systems_dir,
+/// What an attack was decided with before anything is written: who made it,
+/// with what, and where each part was measured.
+pub(crate) struct Settled {
+    pub world_id: Uuid,
+    pub scene_id: Uuid,
+    /// `None` for a lair, which has no body: nothing is spent from a budget.
+    pub attacker_token_id: Option<Uuid>,
+    /// `creature` or `lair` (`world_attacks.attacker_kind`).
+    pub attacker_kind: &'static str,
+    pub attacker_label: String,
+    pub parts: Vec<Part>,
+    /// One per part.
+    pub measured: Vec<Measured>,
+    pub action_cost: ActionCost,
+    pub legendary_cost: i32,
+}
+
+/// Roll, judge, record and offer, in one transaction: steps 4 to 9 of the
+/// module documentation, for a creature's attack and a lair's action alike.
+pub(crate) fn record_attack<R: Rng>(
+    conn: &mut PgConnection,
+    systems_dir: &str,
+    user_id: Uuid,
+    request: &AttackRequest,
+    settled: Settled,
+    rng: &mut R,
+) -> Result<MadeAttack, FightRefusal> {
+    let Settled {
+        world_id,
         scene_id,
-        request.attacker_token_id,
-        &parts,
-        target_for,
-    )?;
+        attacker_token_id,
+        attacker_kind,
+        attacker_label,
+        parts,
+        measured,
+        action_cost,
+        legendary_cost,
+    } = settled;
+    let target_for = |index: usize| target_of(request, index);
+    let bindings: PlaceholderBindings = request.bindings.iter().cloned().collect();
 
     conn.transaction::<MadeAttack, FightRefusal, _>(|conn| {
         let world_system = worlds::table
@@ -759,12 +624,20 @@ pub fn make_attack<R: Rng>(
             .and_then(|(_, override_)| override_)
             .unwrap_or(world_auto_apply);
         // C9: one spend for the whole attack, every part of a multiattack
-        // included (FR-044); an overspend flags each part and refuses nothing.
-        let (attacker, dir) = (request.attacker_token_id, systems_dir);
-        let overspent = crate::combat::budget::spend_for_attack(
-            conn, dir, scene_id, attacker, action_cost, user_id,
-        )?;
-
+        // included (FR-044); an overspend, or a legendary action on the
+        // creature's own turn, flags each part and refuses nothing.
+        let spend_flags = match attacker_token_id {
+            Some(attacker) => crate::combat::budget::spend_for_attack(
+                conn,
+                systems_dir,
+                scene_id,
+                attacker,
+                action_cost,
+                legendary_cost,
+                user_id,
+            )?,
+            None => Vec::new(),
+        };
         let mut made = MadeAttack {
             world_id,
             scene_id,
@@ -789,9 +662,7 @@ pub fn make_attack<R: Rng>(
                 (Some(_), Some(_)) => OUTCOME_MISS,
             };
             let Measured { distance, mut flags } = measured[index].clone();
-            if overspent {
-                flags.push(FLAG_OVERSPENT.to_string());
-            }
+            flags.extend(spend_flags.iter().map(|flag| flag.to_string()));
 
             let damage = if outcome == OUTCOME_HIT && !part.damage.is_empty() {
                 let source = if part.damage.len() == 1 {
@@ -819,7 +690,7 @@ pub fn make_attack<R: Rng>(
                     world_id,
                     scene_id,
                     combat_id: combat.map(|(id, _)| id),
-                    attacker_token_id: Some(request.attacker_token_id),
+                    attacker_token_id,
                     target_token_id: target,
                     attacker_label: attacker_label.clone(),
                     target_label,
@@ -838,6 +709,7 @@ pub fn make_attack<R: Rng>(
                     updated_by: user_id,
                     created_at: now,
                     updated_at: now,
+                    attacker_kind: attacker_kind.to_string(),
                 })
                 .execute(conn)?;
             made.attack_ids.push(attack_id);

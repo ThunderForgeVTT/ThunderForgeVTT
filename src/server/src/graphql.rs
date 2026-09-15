@@ -226,6 +226,8 @@ pub mod mutations_combat;
 pub use mutations_combat::{CombatMutation, CombatQuery};
 // Spec 046: the Game Master's Damage and Heal.
 pub mod mutations_combat_hit_points;
+// Spec 046 US6: a lair in the turn order.
+pub mod mutations_combat_lair;
 // Spec 046 (ADR-102): linked tokens, unlinked copies, unique NPCs.
 pub mod mutations_token_links;
 // Spec 046 (ADR-101): an attack aimed at something, and its offer.
@@ -512,6 +514,8 @@ pub struct MutationRoot(
     CombatMutation,
     // Spec 046 FR-014: `changeHitPoints`.
     mutations_combat_hit_points::CombatHitPointsMutation,
+    // Spec 046 US6: `addLairCombatant`.
+    mutations_combat_lair::CombatLairMutation,
     // Spec 046 US1/US2: `makeAttack`, `resolveOffer`, auto-apply, and what an
     // ability or item is as an attack.
     mutations_attacks::AttackMutation,

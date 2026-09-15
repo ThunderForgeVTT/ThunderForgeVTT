@@ -84,6 +84,15 @@ gets one on its first spend or turn. The same reset runs when removing the
 active combatant hands the turn on. What is allowed is not stored (research
 R13). The legendary columns exist and stay null until Phase 9.
 
+*Implemented (tasks T095, T097):* `addCombatant` fills `legendary_per_round`
+and `legendary_remaining` from the creature's sheet through `combat.legendary`
+(null when absent or 0); `advanceTurn` refills `legendary_remaining`. A lair
+has no row and reads `budget: null`. Migration
+`2026-09-15-062900-0000_lair_combatants` adds `world_combatants.kind` with a
+CHECK that a lair has no token or actor, and `world_attacks.attacker_kind
+TEXT NOT NULL DEFAULT 'creature' CHECK IN ('creature','lair')`, which tells a
+lair's action from a creature whose token was deleted.
+
 ## New: `world_attacks` (phase 4)
 
 The record of one attack, and the source of every seat's view of it. One
@@ -93,7 +102,7 @@ row per attack in a multiattack.
 |---|---|---|
 | `id` | `UUID PK` | |
 | `world_id`, `scene_id`, `combat_id` | `UUID` (`combat_id` nullable) | |
-| `attacker_token_id` | `UUID NULL` | Null only for a lair action. |
+| `attacker_token_id` | `UUID NULL` | Null for a lair action, and once the token is deleted; `attacker_kind` tells them apart (Phase 9). |
 | `target_token_id` | `UUID NULL` | Null = "a roll into the air": nothing is offered or applied. |
 | `ability_id` / `item_id` | `UUID NULL` (at most one set) | `ON DELETE SET NULL`, so "exactly one" holds at creation and "at most one" after a deletion. |
 | `attacker_label`, `target_label` | `TEXT` (`target_label` nullable) | *Added in implementation.* The names when the attack was made, so a deleted token still reads in the Game Master's log. Server-side only: sent to a viewer only when that party is not redacted. |

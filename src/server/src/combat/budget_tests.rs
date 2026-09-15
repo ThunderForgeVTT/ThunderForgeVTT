@@ -63,7 +63,7 @@ fn player_attack(
         t.player,
         false,
         &AttackRequest {
-            attacker_token_id: t.aria,
+            attacker: crate::combat::attack::Attacker::Token(t.aria),
             ability_id: Some(ability),
             target_token_id: Some(t.goblin),
             action_cost: cost,
@@ -194,7 +194,7 @@ fn c9_a_second_action_is_made_recorded_and_flagged_overspent_never_refused() {
         t.aria,
     );
     let request = AttackRequest {
-        attacker_token_id: t.aria,
+        attacker: crate::combat::attack::Attacker::Token(t.aria),
         ability_id: Some(t.longsword),
         target_token_id: Some(t.goblin),
         ..Default::default()
@@ -280,7 +280,7 @@ fn a_multiattack_spends_one_action_for_all_its_parts() {
         t.gm,
         false,
         &AttackRequest {
-            attacker_token_id: t.ogre,
+            attacker: crate::combat::attack::Attacker::Token(t.ogre),
             ability_id: Some(multi),
             target_token_id: Some(t.aria),
             ..Default::default()

@@ -222,6 +222,10 @@ pub const GATED: &[(&str, &str)] = &[
         r#"mutation { addCombatant(input: { combatId: "{combat}", label: "x" }) { __typename } }"#,
     ),
     (
+        "addLairCombatant",
+        r#"mutation { addLairCombatant(combatId: "{combat}", label: "x") { __typename } }"#,
+    ),
+    (
         "updateCombatant",
         r#"mutation { updateCombatant(input: { combatantId: "{combatant}", initiative: 3 }) { __typename } }"#,
     ),

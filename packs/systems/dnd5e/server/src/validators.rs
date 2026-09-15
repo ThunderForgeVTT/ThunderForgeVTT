@@ -393,6 +393,24 @@ pub fn validate_trait_data(data: &serde_json::Value) -> Result<(), ValidationErr
         }
     }
 
+    // Spec 046 FR-050: legendary actions per round, declared in
+    // `combat.legendary`. A whole number, never negative; absent or null is a
+    // creature with none.
+    if let Some(legendary) = obj.get("legendary_actions") {
+        if !legendary.is_null() {
+            let value = legendary.as_i64().ok_or(ValidationError {
+                field: "trait_data.legendary_actions".to_string(),
+                message: "must be a whole number or null".to_string(),
+            })?;
+            if value < 0 {
+                return Err(ValidationError {
+                    field: "trait_data.legendary_actions".to_string(),
+                    message: "cannot be negative".to_string(),
+                });
+            }
+        }
+    }
+
     // Validate traits array (if present)
     if let Some(traits_val) = obj.get("traits") {
         let _traits = traits_val.as_array().ok_or(ValidationError {
@@ -752,6 +770,20 @@ mod tests {
         assert_eq!(unknown.field, "trait_data.size");
         let not_text = validate_trait_data(&with(json!(2))).unwrap_err();
         assert_eq!(not_text.field, "trait_data.size");
+    }
+
+    #[test]
+    fn legendary_actions_are_optional_whole_and_never_negative() {
+        let with = |legendary: serde_json::Value| json!({ "class": "monster", "level": 1, "legendary_actions": legendary });
+        assert!(validate_trait_data(&with(json!(3))).is_ok());
+        assert!(validate_trait_data(&with(json!(0))).is_ok());
+        assert!(validate_trait_data(&with(serde_json::Value::Null)).is_ok());
+        let negative = validate_trait_data(&with(json!(-1))).unwrap_err();
+        assert_eq!(negative.field, "trait_data.legendary_actions");
+        let fraction = validate_trait_data(&with(json!(1.5))).unwrap_err();
+        assert_eq!(fraction.field, "trait_data.legendary_actions");
+        let text = validate_trait_data(&with(json!("three"))).unwrap_err();
+        assert_eq!(text.field, "trait_data.legendary_actions");
     }
 
     #[test]

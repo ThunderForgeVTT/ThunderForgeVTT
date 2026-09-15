@@ -1832,6 +1832,9 @@ pub struct Combatant {
     pub updated_at: chrono::NaiveDateTime,
     /// Spec 046: `hit_points` or `game_master` while out of the fight.
     pub downed_by: Option<String>,
+    /// Spec 046 US6: `creature`, or `lair` — no token, no actor, initiative
+    /// count 20, losing ties.
+    pub kind: String,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
