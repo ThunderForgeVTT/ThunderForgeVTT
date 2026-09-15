@@ -167,6 +167,19 @@ async fn copy_produces_independent_ability_with_cloned_effects() {
     set_ability_gm_only_impl(&state, owner_id, false, ability.id, true)
         .await
         .unwrap();
+    // Spec 046: what it is as an attack travels too.
+    {
+        let mut conn = state.db_pool.get().unwrap();
+        diesel::update(world_abilities::table.filter(world_abilities::id.eq(ability.id)))
+            .set((
+                world_abilities::range_normal.eq(Some(150.0)),
+                world_abilities::range_long.eq(Some(600.0)),
+                world_abilities::needs_line_of_sight.eq(false),
+                world_abilities::action_cost.eq("bonus_action"),
+            ))
+            .execute(&mut conn)
+            .unwrap();
+    }
 
     let link = create_ability_share_link_impl(
         &state,
@@ -196,6 +209,13 @@ async fn copy_produces_independent_ability_with_cloned_effects() {
     assert_eq!(copy.name, "Fireball");
     assert_eq!(copy.created_by, other_id);
     assert!(copy.gm_only, "gm_only is preserved on copy, not reset");
+    assert_eq!(
+        (copy.range_normal, copy.range_long),
+        (Some(150.0), Some(600.0)),
+        "its ranges travel with it (spec 046)"
+    );
+    assert!(!copy.needs_line_of_sight);
+    assert_eq!(copy.action_cost, "bonus_action");
     assert_eq!(effects.len(), 1, "effects are cloned");
     assert_eq!(
         effects[0].ability_id, copy.id,

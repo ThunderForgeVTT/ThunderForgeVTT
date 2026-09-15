@@ -475,6 +475,15 @@ pub async fn copy_shared_ability_to_world_impl(
                 })
                 .returning(WorldAbility::as_returning())
                 .get_result::<WorldAbility>(conn)?;
+            // Spec 046: what it is as an attack. A shared ability arrives
+            // alone, so a multiattack's parts have nothing to point at here.
+            crate::combat::attack_fields::AttackFields::from(&source)
+                .in_destination(&std::collections::HashMap::new())
+                .write_to_ability(conn, copy.id)?;
+            let copy = world_abilities::table
+                .filter(world_abilities::id.eq(copy.id))
+                .select(WorldAbility::as_select())
+                .first::<WorldAbility>(conn)?;
 
             let mut cloned = Vec::with_capacity(source_effects.len());
             for effect in source_effects {

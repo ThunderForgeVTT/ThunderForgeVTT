@@ -190,6 +190,14 @@ pub async fn copy_shared_collection_to_world_impl(
                 copy_lore(conn, &mut ctx, member.member_id)?;
             }
 
+            // Spec 046: what each copied ability and item is as an attack,
+            // its multiattack pointing at the copies made above.
+            crate::combat::attack_fields::carry_copied_attack_fields(
+                conn,
+                &ctx.ability_map,
+                &ctx.item_map,
+            )?;
+
             record_adoptions(conn, &ctx)?;
 
             Ok(CopyReceipt {
@@ -289,6 +297,11 @@ pub(crate) fn rescue_actors_sync(
     for actor in actor_ids {
         copy_actor(conn, &mut ctx, *actor)?;
     }
+    crate::combat::attack_fields::carry_copied_attack_fields(
+        conn,
+        &ctx.ability_map,
+        &ctx.item_map,
+    )?;
     Ok(ctx)
 }
 

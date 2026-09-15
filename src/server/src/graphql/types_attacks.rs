@@ -161,6 +161,13 @@ pub struct GraphQLAttackPreview {
     pub distance: Option<f64>,
     pub flags: Vec<AttackFlag>,
     pub turn: GraphQLTurnCheck,
+    /// The attack's reach, in `unit`; null when it declares none.
+    pub reach: Option<f64>,
+    pub range_normal: Option<f64>,
+    pub range_long: Option<f64>,
+    /// What the system's distances are in ("ft"). Empty when nothing was
+    /// measured.
+    pub unit: String,
 }
 
 #[derive(InputObject, Clone, Debug)]

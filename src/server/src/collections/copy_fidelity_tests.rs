@@ -673,3 +673,129 @@ async fn tokens_stay_behind_and_the_omission_is_declared() {
         receipt.fidelity_notes
     );
 }
+
+/// Spec 046 (tasks Phase 7): what an ability or item is as an attack — reach,
+/// ranges, line of sight, action and legendary cost, multiattack — travels
+/// with a collection copy and a personal export, like every other field.
+///
+/// Phase 6 added the columns and claimed the copy carried them; it did not,
+/// because every copy inserts from a named list of fields. A multiattack's
+/// parts point at the copies made alongside, and a part that was not in the
+/// collection is dropped rather than left naming an ability in another world.
+#[tokio::test]
+async fn attack_fields_travel_with_a_copy_and_an_export() {
+    use crate::schema::{world_abilities, world_items};
+
+    let s = source();
+    let mut conn = s.state.db_pool.get().expect("connection");
+    // A second ability for the multiattack, and one left out of the collection.
+    let claw = insert_test_ability(&mut conn, s.world_id, s.owner_id);
+    let outsider = insert_test_ability(&mut conn, s.world_id, s.owner_id);
+    diesel::update(world_abilities::table.filter(world_abilities::id.eq(claw)))
+        .set(world_abilities::name.eq("Claw"))
+        .execute(&mut conn)
+        .expect("name");
+    diesel::update(world_abilities::table.filter(world_abilities::id.eq(s.ability_id)))
+        .set((
+            world_abilities::reach.eq(Some(10.0)),
+            world_abilities::range_normal.eq(Some(30.0)),
+            world_abilities::range_long.eq(Some(120.0)),
+            world_abilities::needs_line_of_sight.eq(false),
+            world_abilities::action_cost.eq("bonus_action"),
+            world_abilities::legendary_cost.eq(2),
+            world_abilities::multiattack.eq(vec![Some(claw), Some(outsider)]),
+        ))
+        .execute(&mut conn)
+        .expect("the ability as an attack");
+    diesel::update(world_items::table.filter(world_items::id.eq(s.item_id)))
+        .set((
+            world_items::reach.eq(Some(5.0)),
+            world_items::needs_line_of_sight.eq(false),
+            world_items::action_cost.eq("reaction"),
+            world_items::multiattack.eq(vec![Some(s.ability_id)]),
+        ))
+        .execute(&mut conn)
+        .expect("the item as an attack");
+    drop(conn);
+
+    let code = share_of(
+        &s,
+        &[
+            ("ability", s.ability_id),
+            ("ability", claw),
+            ("item", s.item_id),
+        ],
+        "Attacks",
+    )
+    .await;
+    let receipt = copy_shared_collection_to_world_impl(
+        &s.state,
+        s.recipient_id,
+        false,
+        code,
+        s.destination_world_id,
+    )
+    .await
+    .expect("copied");
+
+    let mut conn = s.state.db_pool.get().expect("connection");
+    let copied = |member_type: &str, name: &str| {
+        receipt
+            .created
+            .iter()
+            .find(|c| c.member_type == member_type && c.name == name)
+            .unwrap_or_else(|| panic!("{member_type} {name} arrived: {receipt:?}"))
+            .id
+    };
+    let ability_copy = copied("ability", "Test Ability");
+    let claw_copy = copied("ability", "Claw");
+    let item_copy = copied("item", "Test Item");
+
+    let ability = world_abilities::table
+        .filter(world_abilities::id.eq(ability_copy))
+        .select(crate::models::WorldAbility::as_select())
+        .first::<crate::models::WorldAbility>(&mut conn)
+        .expect("the copy");
+    assert_eq!(ability.reach, Some(10.0));
+    assert_eq!(ability.range_normal, Some(30.0));
+    assert_eq!(ability.range_long, Some(120.0));
+    assert!(!ability.needs_line_of_sight);
+    assert_eq!(ability.action_cost, "bonus_action");
+    assert_eq!(ability.legendary_cost, 2);
+    assert_eq!(
+        ability.multiattack,
+        vec![Some(claw_copy)],
+        "the part that came along points at its copy; the one that did not is dropped"
+    );
+
+    let item = world_items::table
+        .filter(world_items::id.eq(item_copy))
+        .select(crate::models::WorldItem::as_select())
+        .first::<crate::models::WorldItem>(&mut conn)
+        .expect("the copy");
+    assert_eq!(item.reach, Some(5.0));
+    assert!(!item.needs_line_of_sight);
+    assert_eq!(item.action_cost, "reaction");
+    assert_eq!(item.multiattack, vec![Some(ability_copy)]);
+
+    // A personal export says the same of the originals.
+    let exported =
+        crate::users::export_content::load_content_sync(&mut conn, s.owner_id).expect("export");
+    let ability = exported
+        .abilities
+        .iter()
+        .find(|a| a.id == s.ability_id)
+        .expect("exported ability");
+    assert_eq!(ability.attack.reach, Some(10.0));
+    assert_eq!(ability.attack.range_long, Some(120.0));
+    assert!(!ability.attack.needs_line_of_sight);
+    assert_eq!(ability.attack.action_cost, "bonus_action");
+    assert_eq!(ability.attack.multiattack, vec![claw, outsider]);
+    let item = exported
+        .items
+        .iter()
+        .find(|i| i.id == s.item_id)
+        .expect("exported item");
+    assert_eq!(item.attack.reach, Some(5.0));
+    assert_eq!(item.attack.action_cost, "reaction");
+}

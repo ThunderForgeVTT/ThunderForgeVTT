@@ -166,6 +166,7 @@ impl AttackQuery {
         let state = app_state(ctx)?;
         let user = authenticated_user(ctx)?;
         let (user_id, is_admin) = (user.user_id, user.is_admin);
+        let systems_dir = state.directories.systems_dir.clone();
         let mut conn = state
             .db_pool
             .get()
@@ -173,6 +174,7 @@ impl AttackQuery {
         let preview = tokio::task::spawn_blocking(move || {
             crate::combat::attack::preview_attack(
                 &mut conn,
+                &systems_dir,
                 user_id,
                 is_admin,
                 &input.into_request(),
@@ -191,6 +193,10 @@ impl AttackQuery {
                 allowed: preview.turn.allowed,
                 active_label: preview.turn.active_label,
             },
+            reach: preview.reach.reach,
+            range_normal: preview.reach.range_normal,
+            range_long: preview.reach.range_long,
+            unit: preview.unit_label,
         })
     }
 }

@@ -15,6 +15,14 @@ pub const OUTCOME_MISS: &str = "miss";
 pub const OUTCOME_NO_DEFENCE: &str = "no_defence";
 pub const OUTCOME_NO_TARGET: &str = "no_target";
 
+/// `world_attacks.flags` (contract §1 `AttackFlag`). Flags describe an attack;
+/// none of them refuses one (C3).
+pub const FLAG_OUT_OF_REACH: &str = "out_of_reach";
+pub const FLAG_LONG_RANGE: &str = "long_range";
+pub const FLAG_BEYOND_RANGE: &str = "beyond_range";
+pub const FLAG_NO_LINE_OF_SIGHT: &str = "no_line_of_sight";
+pub const FLAG_NO_REACH_DECLARED: &str = "no_reach_declared";
+
 /// `world_offers.status`.
 pub const OFFER_PENDING: &str = "pending";
 pub const OFFER_TAKEN: &str = "taken";

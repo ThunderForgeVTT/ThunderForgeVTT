@@ -270,3 +270,62 @@ fn pending_offers_read_by_their_controller_are_never_redacted() {
     assert_eq!(built[0].target.token_id, Some(t.aria));
     assert!(!format!("{built:?}").contains(OGRE_NAME));
 }
+
+/// Spec 046 Phase 7's decision, pinned (research R11, contract §3): an
+/// attack's line of sight is judged from the squares a creature fills, and a
+/// viewer's redaction from token centres, as the engine draws tokens. A Large
+/// ogre half round a corner can be swung at with line of sight, while the
+/// player whose board does not draw it still reads "Unknown".
+#[test]
+fn redaction_follows_the_board_by_centres_while_an_attacks_sight_follows_footprints() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().expect("conn");
+    let t = table(&mut conn);
+    // A 50-unit grid whose lines fall on multiples of 50; the ogre is Large.
+    diesel::update(scenes::table.filter(scenes::scene_id.eq(t.scene_id)))
+        .set((
+            scenes::grid_size.eq(50),
+            scenes::width.eq(1000),
+            scenes::height.eq(1000),
+        ))
+        .execute(&mut conn)
+        .expect("grid");
+    diesel::update(
+        world_actor_system_data::table.filter(world_actor_system_data::actor_id.eq(t.ogre_actor)),
+    )
+    .set(world_actor_system_data::trait_data.eq(Some(
+        serde_json::json!({ "class": "monster", "level": 1, "size": "large" }),
+    )))
+    .execute(&mut conn)
+    .expect("Large");
+    let at = |conn: &mut PgConnection, token: Uuid, x: f64, y: f64| {
+        diesel::update(tokens::table.filter(tokens::token_id.eq(token)))
+            .set((tokens::x.eq(x), tokens::y.eq(y)))
+            .execute(conn)
+            .expect("move");
+    };
+    // Aria in cell (0,3). The ogre fills (1..2, 0..1), centred at (100, 50).
+    // A wall along y = 100 ends at x = 75: the line between the two centres
+    // meets it at x = 70, while the ogre's right-hand squares are past it.
+    at(&mut conn, t.aria, 25.0, 175.0);
+    at(&mut conn, t.ogre, 100.0, 50.0);
+    at(&mut conn, t.goblin, 1025.0, 1025.0);
+    wall(&mut conn, &t, (-500.0, 100.0), (75.0, 100.0));
+
+    let made = attack(&mut conn, t.player, t.aria, t.longsword, Some(t.ogre)).expect("attack");
+    let row = attack_row(&mut conn, made.attack_ids[0]);
+    assert!(
+        !row.flags
+            .iter()
+            .flatten()
+            .any(|f| f == crate::combat::records::FLAG_NO_LINE_OF_SIGHT),
+        "the swing has line of sight from Aria's square to the ogre's: {:?}",
+        row.flags
+    );
+    assert!(
+        sight(&mut conn, t.player, &t)
+            .party(Some(t.ogre), OGRE_NAME)
+            .redacted,
+        "and her log still names what her board draws: nothing, by centres"
+    );
+}

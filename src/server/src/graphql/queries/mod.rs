@@ -36,6 +36,7 @@ pub mod scene;
 // Spec 039 US5: `myStanding`, `accountStanding`, `myNotices`.
 pub mod standing;
 pub mod token_attributes;
+pub mod token_grid;
 pub mod token_status;
 pub mod token_vision;
 pub mod user;

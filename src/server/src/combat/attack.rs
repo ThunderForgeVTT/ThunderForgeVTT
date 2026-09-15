@@ -17,8 +17,9 @@
 //!    holds only hit points, so it reads its defence from the NPC it copies;
 //!    a copy whose NPC is gone has none.
 //! 6. The outcome: `no_target`, `no_defence`, `hit` (total ≥ defence) or
-//!    `miss`. **C3**: reach, range and line of sight never refuse; Phase 7
-//!    measures them into `distance` and `flags`.
+//!    `miss`. **C3**: reach, range and line of sight never refuse; they are
+//!    measured from footprint to footprint into `distance` and `flags` by
+//!    `combat::reach`, the same measurement `preview_attack` warns with.
 //! 7. On a hit, the damage roll, in the same action.
 //! 8. **C4** — a miss, or no target, offers nothing. **C5** — a hit offers its
 //!    damage to whoever controls the target, pending; or, when auto-apply
@@ -43,6 +44,7 @@ use uuid::Uuid;
 use crate::combat::controllers::{may_act_for, player_controllers, token_control};
 use crate::combat::hit_points::{HitPointChangeKind, apply_hit_point_change, slot_column};
 use crate::combat::manifest::{combat_for_system, slot_key};
+use crate::combat::reach::{Measured, Reach, SceneMeasure};
 use crate::combat::records::*;
 use crate::combat::turn::{TurnCheck, turn_check};
 use crate::models::{NewRollRecord, WorldAbility, WorldItem};
@@ -172,7 +174,7 @@ struct Part {
     name: String,
     to_hit: String,
     damage: Vec<String>,
-    needs_line_of_sight: bool,
+    reach: Reach,
 }
 
 /// What the attack is made with, once found.
@@ -251,11 +253,30 @@ fn effects_of_item(conn: &mut PgConnection, item_id: Uuid) -> QueryResult<Vec<(S
         .load(conn)
 }
 
+/// What an ability says about its reach, range and line of sight.
+fn reach_of_ability(a: &WorldAbility) -> Reach {
+    Reach {
+        reach: a.reach,
+        range_normal: a.range_normal,
+        range_long: a.range_long,
+        needs_line_of_sight: a.needs_line_of_sight,
+    }
+}
+
+fn reach_of_item(i: &WorldItem) -> Reach {
+    Reach {
+        reach: i.reach,
+        range_normal: i.range_normal,
+        range_long: i.range_long,
+        needs_line_of_sight: i.needs_line_of_sight,
+    }
+}
+
 fn part_from(
     ability_id: Option<Uuid>,
     item_id: Option<Uuid>,
     name: String,
-    needs_line_of_sight: bool,
+    reach: Reach,
     effects: Vec<(String, String)>,
 ) -> Result<Part, FightRefusal> {
     let to_hit = effects
@@ -274,7 +295,7 @@ fn part_from(
         name,
         to_hit,
         damage,
-        needs_line_of_sight,
+        reach,
     })
 }
 
@@ -375,14 +396,14 @@ fn parts_of(
                 Some(a.id),
                 None,
                 a.name.clone(),
-                a.needs_line_of_sight,
+                reach_of_ability(a),
                 effects_of_ability(conn, a.id)?,
             )?,
             Weapon::Item(i) => part_from(
                 None,
                 Some(i.id),
                 i.name.clone(),
-                i.needs_line_of_sight,
+                reach_of_item(i),
                 effects_of_item(conn, i.id)?,
             )?,
         }]);
@@ -405,7 +426,7 @@ fn parts_of(
                 Some(ability.id),
                 None,
                 ability.name.clone(),
-                ability.needs_line_of_sight,
+                reach_of_ability(ability),
                 effects_of_ability(conn, ability.id)?,
             )
         })
@@ -550,10 +571,38 @@ pub struct AttackPreview {
     pub distance: Option<f64>,
     pub flags: Vec<String>,
     pub turn: TurnCheck,
+    /// The first part's reach and ranges, and the unit they are in, so a
+    /// warning can say "Out of reach: 20 ft, reach 5 ft".
+    pub reach: Reach,
+    pub unit_label: String,
+}
+
+/// Measure every part of an attack against its target, with the scene loaded
+/// once. The one measurement `make_attack` records and `preview_attack` warns
+/// with.
+fn measure_parts(
+    conn: &mut PgConnection,
+    systems_dir: &str,
+    scene_id: Uuid,
+    attacker: Uuid,
+    parts: &[Part],
+    target_for: impl Fn(usize) -> Option<Uuid>,
+) -> QueryResult<(Vec<Measured>, String)> {
+    let mut tokens_needed = vec![attacker];
+    tokens_needed.extend((0..parts.len()).filter_map(&target_for));
+    let needs_walls = parts.iter().any(|part| part.reach.needs_line_of_sight);
+    let scene = SceneMeasure::load(conn, systems_dir, scene_id, &tokens_needed, needs_walls)?;
+    let measured = parts
+        .iter()
+        .enumerate()
+        .map(|(index, part)| scene.measure(attacker, target_for(index), &part.reach))
+        .collect();
+    Ok((measured, scene.unit_label().to_string()))
 }
 
 pub fn preview_attack(
     conn: &mut PgConnection,
+    systems_dir: &str,
     user_id: Uuid,
     is_admin: bool,
     request: &AttackRequest,
@@ -579,12 +628,59 @@ pub fn preview_attack(
     } else {
         turn_check(conn, scene_id, request.attacker_token_id, user_id, is_admin)?
     };
-    // Phase 7 measures reach, range and line of sight into these.
-    Ok(AttackPreview {
+    // The turn is answered whatever else happens: it is the one thing that
+    // refuses, and a warning about reach must never stand in front of it.
+    let mut preview = AttackPreview {
         distance: None,
         flags: Vec::new(),
         turn,
-    })
+        reach: Reach::default(),
+        unit_label: String::new(),
+    };
+    let runs_the_world =
+        crate::auth::world_membership::actor_in_world(conn, user_id, is_admin, control.world_id)
+            .runs_the_world();
+    // Something `make_attack` would refuse as not there, or not an attack,
+    // has nothing to measure; the attempt says why when it is made.
+    let Ok(weapon) = find_weapon(
+        conn,
+        control.world_id,
+        control.actor_id,
+        runs_the_world,
+        request.ability_id,
+        request.item_id,
+    ) else {
+        return Ok(preview);
+    };
+    let Ok(parts) = parts_of(conn, control.world_id, &weapon) else {
+        return Ok(preview);
+    };
+    let (measured, unit_label) = measure_parts(
+        conn,
+        systems_dir,
+        scene_id,
+        request.attacker_token_id,
+        &parts,
+        |index| target_of(request, index),
+    )?;
+    preview.distance = measured.first().and_then(|m| m.distance);
+    for flag in measured.into_iter().flat_map(|m| m.flags) {
+        if !preview.flags.contains(&flag) {
+            preview.flags.push(flag);
+        }
+    }
+    preview.reach = parts.first().map(|p| p.reach).unwrap_or_default();
+    preview.unit_label = unit_label;
+    Ok(preview)
+}
+
+/// The target of one part of a multiattack: its own, else the attack's.
+fn target_of(request: &AttackRequest, index: usize) -> Option<Uuid> {
+    request
+        .targets
+        .as_ref()
+        .and_then(|targets| targets.get(index).copied())
+        .or(request.target_token_id)
 }
 
 /// Make an attack. See the module documentation for the order of its rules.
@@ -635,13 +731,7 @@ pub fn make_attack<R: Rng>(
     }
 
     let parts = parts_of(conn, world_id, &weapon)?;
-    let target_for = |index: usize| {
-        request
-            .targets
-            .as_ref()
-            .and_then(|targets| targets.get(index).copied())
-            .or(request.target_token_id)
-    };
+    let target_for = |index: usize| target_of(request, index);
     // Every target is on this scene, checked before anything is rolled.
     for index in 0..parts.len() {
         if let Some(target) = target_for(index) {
@@ -660,6 +750,16 @@ pub fn make_attack<R: Rng>(
 
     let bindings: PlaceholderBindings = request.bindings.iter().cloned().collect();
     let attacker_label = token_label(conn, request.attacker_token_id)?;
+    // Reach, range and line of sight: flags, never refusals (C3). Measured
+    // before anything is written, where each creature stands now.
+    let (measured, _) = measure_parts(
+        conn,
+        systems_dir,
+        scene_id,
+        request.attacker_token_id,
+        &parts,
+        target_for,
+    )?;
 
     conn.transaction::<MadeAttack, FightRefusal, _>(|conn| {
         let world_system = worlds::table
@@ -695,9 +795,7 @@ pub fn make_attack<R: Rng>(
                 (Some(_), Some(defence)) if total >= defence as f64 => OUTCOME_HIT,
                 (Some(_), Some(_)) => OUTCOME_MISS,
             };
-            // Phase 7 measures these.
-            let distance: Option<f64> = None;
-            let flags: Vec<String> = Vec::new();
+            let Measured { distance, flags } = measured[index].clone();
 
             let damage = if outcome == OUTCOME_HIT && !part.damage.is_empty() {
                 let source = if part.damage.len() == 1 {
@@ -801,8 +899,12 @@ pub fn make_attack<R: Rng>(
 
             // C5: auto-apply, or the offer waits for whoever controls the target.
             let players = player_controllers(conn, &target_control)?;
-            if auto_apply_holds(effective_auto_apply, &players, &flags, part.needs_line_of_sight)
-            {
+            if auto_apply_holds(
+                effective_auto_apply,
+                &players,
+                &flags,
+                part.reach.needs_line_of_sight,
+            ) {
                 // A savepoint: a creature with no hit points recorded leaves
                 // the offer pending for a person to deal with, rather than
                 // losing the attack.

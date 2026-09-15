@@ -302,6 +302,39 @@ enforced reach; here the engine only previews it (the warning before rolling,
 FR-033), so the server's answer is authoritative and the web asks the server
 through `previewAttack` rather than reimplementing distance.
 
+*Implemented in tasks Phase 7, with these decisions:*
+
+- **`footprint_distance` returns `f32` cells**, not `i32`: a gridless scene has
+  no whole number to give. Gridless is Euclidean between centres **less how far
+  each creature's half-width reaches past half a cell**, so touching creatures
+  are 1 apart at any size (as on squares) and two one-cell creatures read their
+  plain centre distance. Square blocks come from `GridSpec::covered_cells`, the
+  corner rounded half-up as `snap_footprint` rounds it. One measurement
+  (`combat::reach::SceneMeasure`) serves `makeAttack` and `previewAttack`.
+- **Line of sight is walls only** (`footprint_line_of_sight` over
+  `is_visible`), not light: a sword swung through a closed door is a question
+  about the door, and the dark is a question about what a viewer is told.
+- **Within reach is unflagged; past it, a declared range takes over** (a thrown
+  dagger), so `out_of_reach` is only for an attack with a reach and no range.
+  Beyond normal is `long_range`; beyond long — or beyond normal when no long
+  range is declared — is `beyond_range`. An attack that declares neither reach
+  nor range is `no_reach_declared`, every time it has a target.
+- **Redaction stays centre-based, deliberately** (the risk Phase 6 named). A
+  viewer's "Unknown" (R8, contract §3) is judged from token centres with
+  `visibility_of`, because that is how the engine decides which tokens to draw
+  (spec 045); the log follows the board. An attack's line of sight is judged
+  from footprints, because a rule about a Large creature is about the squares
+  it fills (FR-035). The two can disagree about a big creature half round a
+  corner: it can be swung at with line of sight while a player whose board does
+  not draw it reads "Unknown". Moving redaction to footprints would name, in a
+  player's log, a creature their own board hides; moving the engine's hiding to
+  footprints is spec 045's decision to revisit, not this one's. Both halves are
+  pinned by `redaction_follows_the_board_by_centres_while_an_attacks_sight_follows_footprints`.
+- **`previewAttack` answers the turn first and measures second**, and a weapon
+  it cannot find leaves the flags empty rather than hiding the turn check; it
+  also carries the attack's `reach`, `rangeNormal`, `rangeLong` and the
+  system's `unit`, so the warning can say "Out of reach: 20 ft, reach 5 ft".
+
 ## R12. Turn order
 
 **Decision**: While a combat is running in a scene, a player's move

@@ -1036,6 +1036,16 @@ type AppQueryRoot {
 	rows.
 	"""
 	tokenVision(sceneId: UUID!): [GraphQLTokenVision!]!
+	"""
+	Every token in the scene that fills something other than one square:
+	a linked token by its actor's size, a copy by its NPC's, as the world's
+	game system declares sizes (`combat.sizes`).
+	
+	A token of one square is **omitted**. The client tells the engine `1`
+	for every token it does not find here, so a creature that shrinks back
+	to Medium shrinks on every board.
+	"""
+	tokenGrid(sceneId: UUID!): [TokenGrid!]!
 	sceneExploration(sceneId: UUID!): GraphQLSceneExploration!
 	"""
 	What this build can perform.
@@ -1767,6 +1777,17 @@ type AttackPreview {
 	distance: Float
 	flags: [AttackFlag!]!
 	turn: TurnCheck!
+	"""
+	The attack's reach, in `unit`; null when it declares none.
+	"""
+	reach: Float
+	rangeNormal: Float
+	rangeLong: Float
+	"""
+	What the system's distances are in ("ft"). Empty when nothing was
+	measured.
+	"""
+	unit: String!
 }
 
 """
@@ -6290,6 +6311,14 @@ type TestMailResult {
 	whether it worked or not.
 	"""
 	outboxId: UUID!
+}
+
+"""
+One token's footprint, in squares a side.
+"""
+type TokenGrid {
+	tokenId: UUID!
+	footprint: Float!
 }
 
 """

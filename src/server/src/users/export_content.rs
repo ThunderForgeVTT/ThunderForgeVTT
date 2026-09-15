@@ -91,8 +91,38 @@ pub struct ExportedItem {
     pub world_id: Uuid,
     pub name: String,
     pub description: Option<String>,
+    /// What it is as an attack (spec 046).
+    pub attack: ExportedAttack,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+}
+
+/// What an ability or item is as an attack (spec 046 data-model.md): its
+/// reach or ranges, whether it needs line of sight, and what it costs.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ExportedAttack {
+    pub reach: Option<f64>,
+    pub range_normal: Option<f64>,
+    pub range_long: Option<f64>,
+    pub needs_line_of_sight: bool,
+    pub action_cost: String,
+    pub legendary_cost: i32,
+    /// Ability ids, in the world the ability or item is in.
+    pub multiattack: Vec<Uuid>,
+}
+
+impl From<crate::combat::attack_fields::AttackFields> for ExportedAttack {
+    fn from(f: crate::combat::attack_fields::AttackFields) -> Self {
+        ExportedAttack {
+            reach: f.reach,
+            range_normal: f.range_normal,
+            range_long: f.range_long,
+            needs_line_of_sight: f.needs_line_of_sight,
+            action_cost: f.action_cost,
+            legendary_cost: f.legendary_cost,
+            multiattack: f.multiattack,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -103,6 +133,8 @@ pub struct ExportedAbility {
     pub description: Option<String>,
     pub classification: String,
     pub grade: Option<i32>,
+    /// What it is as an attack (spec 046).
+    pub attack: ExportedAttack,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
@@ -304,6 +336,7 @@ pub fn load_content_sync(conn: &mut PgConnection, user_id: Uuid) -> QueryResult<
         .load::<WorldItem>(conn)?
         .into_iter()
         .map(|item| ExportedItem {
+            attack: crate::combat::attack_fields::AttackFields::from(&item).into(),
             id: item.id,
             world_id: item.world_id,
             name: item.name,
@@ -320,6 +353,7 @@ pub fn load_content_sync(conn: &mut PgConnection, user_id: Uuid) -> QueryResult<
         .load::<WorldAbility>(conn)?
         .into_iter()
         .map(|ability| ExportedAbility {
+            attack: crate::combat::attack_fields::AttackFields::from(&ability).into(),
             id: ability.id,
             world_id: ability.world_id,
             name: ability.name,

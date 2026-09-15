@@ -11,12 +11,15 @@
 //! [`manifest`].
 
 pub mod attack;
+pub mod attack_fields;
 pub mod controllers;
 pub mod hit_points;
 pub mod manifest;
 pub mod offers;
+pub mod reach;
 pub mod records;
 pub mod redaction;
+pub mod size;
 pub mod turn;
 
 /// A table for the fight's tests. A `_tests.rs` file because it names a game

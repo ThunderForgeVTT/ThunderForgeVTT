@@ -393,6 +393,17 @@ pub async fn copy_shared_item_to_world_impl(
                 .returning(WorldItem::as_returning())
                 .get_result::<WorldItem>(conn)
                 .map_err(|e| format!("Failed to create copied item: {e}"))?;
+            // Spec 046: what it is as an attack. A shared item arrives alone,
+            // so a multiattack's parts have nothing to point at here.
+            crate::combat::attack_fields::AttackFields::from(&source)
+                .in_destination(&std::collections::HashMap::new())
+                .write_to_item(conn, created.id)
+                .map_err(|e| format!("Failed to copy what the item is as an attack: {e}"))?;
+            let created = world_items::table
+                .filter(world_items::id.eq(created.id))
+                .select(WorldItem::as_select())
+                .first::<WorldItem>(conn)
+                .map_err(|e| format!("Failed to read the copied item: {e}"))?;
 
             let source_effects = world_item_effects::table
                 .filter(world_item_effects::item_id.eq(source.id))

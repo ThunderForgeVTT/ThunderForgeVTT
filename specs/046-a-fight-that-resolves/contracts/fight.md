@@ -31,6 +31,10 @@ type AttackPreview {
   distance: Float          # system units; null when there is no target
   flags: [AttackFlag!]!    # what makeAttack would record
   turn: TurnCheck!         # whether makeAttack would be refused for turn order
+  reach: Float             # Phase 7: the attack's own figures, and their unit,
+  rangeNormal: Float       #   so a warning can say "Out of reach: 20 ft,
+  rangeLong: Float         #   reach 5 ft"
+  unit: String!            # "ft"; empty when nothing was measured
 }
 ```
 
@@ -172,6 +176,12 @@ field, in any event payload, or in `pendingOffers`.
 
 A target's controller always sees their own target (they control it), and
 receives the offer even when the attacker is "Unknown".
+
+*Phase 7 (tasks T078):* "sees" here is judged from token **centres**, as the
+engine draws tokens, while an attack's `NO_LINE_OF_SIGHT` flag is judged from
+the squares each creature fills. They can disagree about a Large creature half
+round a corner, and that is deliberate: a player's log never names a creature
+their board does not draw. See research R11.
 
 ## 4. World events
 

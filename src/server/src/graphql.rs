@@ -329,6 +329,9 @@ pub struct QueryRoot(
     // Spec 045 US6: `tokenVision(sceneId)` — how far each token sees, as its
     // game system declares it.
     queries::token_vision::TokenVisionQuery,
+    // Spec 046 US4: `tokenGrid(sceneId)` — how many squares each token fills,
+    // as its game system declares sizes.
+    queries::token_grid::TokenGridQuery,
     // Spec 045 US7: `sceneExploration(sceneId)` — whether a scene remembers,
     // and the epoch this viewer's stored map must be at or above.
     exploration::ExplorationQuery,

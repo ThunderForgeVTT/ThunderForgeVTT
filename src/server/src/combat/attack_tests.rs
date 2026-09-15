@@ -143,10 +143,13 @@ fn a_hit_is_recorded_with_attacker_target_total_defence_and_damage() {
     );
     assert_eq!(row.ability_name, "Longsword");
     assert!(row.to_hit_roll_id.is_some() && row.damage_roll_id.is_some());
-    assert_eq!(row.distance, None, "Phase 7 measures distance");
-    assert!(
-        row.flags.is_empty(),
-        "C3: nothing is flagged, nothing refused"
+    // Forty five-foot squares apart on the test scene's grid (5 units a cell,
+    // anchored to its 100×100 map), measured from square to square.
+    assert_eq!(row.distance, Some(200.0));
+    assert_eq!(
+        row.flags,
+        vec![Some(FLAG_NO_REACH_DECLARED.to_string())],
+        "a longsword that says nothing about reach is flagged so, and still made (C3)"
     );
 
     // Event 29 carries the attack's id and nothing else (contract §4).
@@ -440,4 +443,317 @@ fn c10_a_paused_world_refuses_an_attack_before_anything_else() {
     let refused = attack(&mut conn, t.player, t.aria, t.longsword, Some(t.goblin)).unwrap_err();
     assert!(matches!(refused, FightRefusal::Paused(_)), "{refused:?}");
     assert_eq!(attacks_in(&mut conn, t.scene_id), 0);
+}
+
+// ---------------------------------------------------------------------------
+// Phase 7 (T079): reach, range and line of sight, from footprint to footprint
+// ---------------------------------------------------------------------------
+
+/// A 50-unit square grid anchored to a 1000×1000 map — its origin 10 cells
+/// from the world origin on each axis — so the cell holding (q, r) here
+/// has its centre at (50q + 25, 50r + 25). Five feet a cell.
+fn open_grid(conn: &mut PgConnection, t: &FightTable) {
+    use crate::schema::scenes;
+    diesel::update(scenes::table.filter(scenes::scene_id.eq(t.scene_id)))
+        .set((
+            scenes::grid_size.eq(50),
+            scenes::width.eq(1000),
+            scenes::height.eq(1000),
+        ))
+        .execute(conn)
+        .expect("grid");
+}
+
+/// Stand a one-cell token in cell (q, r).
+fn stand(conn: &mut PgConnection, token: Uuid, q: i32, r: i32) {
+    move_to(conn, token, 50.0 * q as f64 + 25.0, 50.0 * r as f64 + 25.0);
+}
+
+fn move_to(conn: &mut PgConnection, token: Uuid, x: f64, y: f64) {
+    diesel::update(tokens::table.filter(tokens::token_id.eq(token)))
+        .set((tokens::x.eq(x), tokens::y.eq(y)))
+        .execute(conn)
+        .expect("move");
+}
+
+fn set_reach(
+    conn: &mut PgConnection,
+    ability: Uuid,
+    reach: Option<f64>,
+    range: (Option<f64>, Option<f64>),
+    needs_line_of_sight: bool,
+) {
+    diesel::update(world_abilities::table.filter(world_abilities::id.eq(ability)))
+        .set((
+            world_abilities::reach.eq(reach),
+            world_abilities::range_normal.eq(range.0),
+            world_abilities::range_long.eq(range.1),
+            world_abilities::needs_line_of_sight.eq(needs_line_of_sight),
+        ))
+        .execute(conn)
+        .expect("set reach");
+}
+
+fn set_size(conn: &mut PgConnection, actor: Uuid, size: &str) {
+    diesel::update(
+        world_actor_system_data::table.filter(world_actor_system_data::actor_id.eq(actor)),
+    )
+    .set(world_actor_system_data::trait_data.eq(Some(
+        serde_json::json!({ "class": "monster", "level": 1, "size": size }),
+    )))
+    .execute(conn)
+    .expect("set size");
+}
+
+fn flags_of(row: &AttackRecord) -> Vec<String> {
+    row.flags.iter().flatten().cloned().collect()
+}
+
+fn preview(
+    conn: &mut PgConnection,
+    user: Uuid,
+    attacker: Uuid,
+    ability: Uuid,
+    target: Uuid,
+) -> AttackPreview {
+    preview_attack(
+        conn,
+        SYSTEMS_DIR,
+        user,
+        false,
+        &AttackRequest {
+            attacker_token_id: attacker,
+            ability_id: Some(ability),
+            target_token_id: Some(target),
+            ..Default::default()
+        },
+    )
+    .expect("preview")
+}
+
+#[test]
+fn within_reach_is_unflagged_and_four_squares_away_is_out_of_reach_and_still_made() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().expect("conn");
+    let t = table(&mut conn);
+    open_grid(&mut conn, &t);
+    set_reach(&mut conn, t.longsword, Some(5.0), (None, None), true);
+    stand(&mut conn, t.aria, 0, 0);
+    stand(&mut conn, t.ogre, 10, 10);
+
+    stand(&mut conn, t.goblin, 1, 1);
+    let made = attack(&mut conn, t.player, t.aria, t.longsword, Some(t.goblin)).expect("adjacent");
+    let row = attack_row(&mut conn, made.attack_ids[0]);
+    assert_eq!(row.distance, Some(5.0), "a diagonal neighbour is five feet");
+    assert!(flags_of(&row).is_empty(), "{:?}", row.flags);
+
+    // SC-004: four squares away. Warned before, flagged after, never refused.
+    stand(&mut conn, t.goblin, 4, 0);
+    let warned = preview(&mut conn, t.player, t.aria, t.longsword, t.goblin);
+    assert_eq!(warned.distance, Some(20.0));
+    assert_eq!(warned.flags, [FLAG_OUT_OF_REACH]);
+    assert_eq!(warned.reach.reach, Some(5.0));
+    assert_eq!(warned.unit_label, "ft");
+    let made = attack(&mut conn, t.player, t.aria, t.longsword, Some(t.goblin))
+        .expect("C3: out of reach is not refused");
+    let row = attack_row(&mut conn, made.attack_ids[0]);
+    assert_eq!(row.distance, Some(20.0));
+    assert_eq!(flags_of(&row), [FLAG_OUT_OF_REACH]);
+    assert_eq!(row.outcome, OUTCOME_HIT, "and it is rolled and judged");
+    assert_eq!(made.offer_ids.len(), 1, "and its hit offered");
+}
+
+#[test]
+fn a_ranged_attack_is_flagged_long_range_then_beyond_range() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().expect("conn");
+    let t = table(&mut conn);
+    open_grid(&mut conn, &t);
+    // A shortbow scaled down to the board: 20 ft normal, 40 ft long.
+    set_reach(&mut conn, t.longsword, None, (Some(20.0), Some(40.0)), true);
+    stand(&mut conn, t.aria, 0, 0);
+    stand(&mut conn, t.ogre, 20, 20);
+
+    for (column, expected) in [
+        (4, vec![]),
+        (5, vec![FLAG_LONG_RANGE]),
+        (8, vec![FLAG_LONG_RANGE]),
+        (9, vec![FLAG_BEYOND_RANGE]),
+    ] {
+        stand(&mut conn, t.goblin, column, 0);
+        let made = attack(&mut conn, t.player, t.aria, t.longsword, Some(t.goblin))
+            .expect("never refused");
+        let row = attack_row(&mut conn, made.attack_ids[0]);
+        assert_eq!(flags_of(&row), expected, "{column} squares");
+        assert_eq!(
+            preview(&mut conn, t.player, t.aria, t.longsword, t.goblin).flags,
+            expected,
+            "the preview warns with the same measurement ({column} squares)"
+        );
+    }
+}
+
+#[test]
+fn an_attack_that_declares_no_reach_is_flagged_so() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().expect("conn");
+    let t = table(&mut conn);
+    let made = attack(&mut conn, t.player, t.aria, t.longsword, Some(t.goblin)).expect("attack");
+    assert_eq!(
+        flags_of(&attack_row(&mut conn, made.attack_ids[0])),
+        [FLAG_NO_REACH_DECLARED]
+    );
+    // At nothing, there is nothing to measure.
+    let made = attack(&mut conn, t.player, t.aria, t.longsword, None).expect("into the air");
+    let row = attack_row(&mut conn, made.attack_ids[0]);
+    assert_eq!(row.distance, None);
+    assert!(flags_of(&row).is_empty());
+}
+
+#[test]
+fn a_large_creatures_reach_is_its_attacks_measured_from_every_square_it_fills() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().expect("conn");
+    let t = table(&mut conn);
+    open_grid(&mut conn, &t);
+    set_size(&mut conn, t.ogre_actor, "large");
+    set_reach(&mut conn, t.greatclub, Some(5.0), (None, None), true);
+    // The ogre fills cells (0,0)..(1,1); its centre is the vertex (50, 50).
+    move_to(&mut conn, t.ogre, 50.0, 50.0);
+    stand(&mut conn, t.goblin, 20, 20);
+
+    // Aria diagonal to its lower-left square. From the cell holding the
+    // ogre's centre she would be two squares off; from the squares it fills
+    // she is adjacent.
+    stand(&mut conn, t.aria, -1, -1);
+    let made = attack(&mut conn, t.gm, t.ogre, t.greatclub, Some(t.aria)).expect("attack");
+    let row = attack_row(&mut conn, made.attack_ids[0]);
+    assert_eq!(row.distance, Some(5.0));
+    assert!(flags_of(&row).is_empty(), "{:?}", row.flags);
+    stand(&mut conn, t.aria, 2, 1);
+    let made = attack(&mut conn, t.gm, t.ogre, t.greatclub, Some(t.aria)).expect("attack");
+    assert!(
+        flags_of(&attack_row(&mut conn, made.attack_ids[0])).is_empty(),
+        "adjacent to its right-hand squares"
+    );
+
+    // Two squares off: being Large does not give it ten feet (FR-032, US4 #4).
+    stand(&mut conn, t.aria, 3, 0);
+    let made = attack(&mut conn, t.gm, t.ogre, t.greatclub, Some(t.aria)).expect("attack");
+    let row = attack_row(&mut conn, made.attack_ids[0]);
+    assert_eq!(row.distance, Some(10.0));
+    assert_eq!(flags_of(&row), [FLAG_OUT_OF_REACH]);
+
+    // And a Medium hero is measured to the ogre the same way round.
+    stand(&mut conn, t.aria, -1, 1);
+    set_reach(&mut conn, t.longsword, Some(5.0), (None, None), true);
+    let made = attack(&mut conn, t.player, t.aria, t.longsword, Some(t.ogre)).expect("attack");
+    let row = attack_row(&mut conn, made.attack_ids[0]);
+    assert_eq!(row.distance, Some(5.0));
+    assert!(flags_of(&row).is_empty());
+}
+
+#[test]
+fn no_line_of_sight_is_flagged_and_skips_auto_apply_unless_the_attack_ignores_walls() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().expect("conn");
+    let t = table(&mut conn);
+    open_grid(&mut conn, &t);
+    diesel::update(worlds::table.filter(worlds::id.eq(t.world_id)))
+        .set(worlds::auto_apply_npc_damage.eq(true))
+        .execute(&mut conn)
+        .expect("auto-apply on");
+    set_reach(&mut conn, t.longsword, Some(5.0), (None, None), true);
+    stand(&mut conn, t.aria, 0, 0);
+    stand(&mut conn, t.goblin, 1, 0);
+    stand(&mut conn, t.ogre, 20, 20);
+    // A wall between them, on the line x = 50.
+    wall(&mut conn, &t, (50.0, -500.0), (50.0, 500.0));
+
+    let made =
+        attack(&mut conn, t.player, t.aria, t.longsword, Some(t.goblin)).expect("C3: not refused");
+    let row = attack_row(&mut conn, made.attack_ids[0]);
+    assert_eq!(flags_of(&row), [FLAG_NO_LINE_OF_SIGHT]);
+    assert_eq!(
+        offer_row(&mut conn, made.offer_ids[0]).status,
+        OFFER_PENDING,
+        "FR-007: a hit without line of sight is not auto-applied"
+    );
+    assert_eq!(copy_hp(&mut conn, t.goblin), GOBLIN_HP as i64);
+
+    // An attack that goes through walls is not flagged, and is applied.
+    set_reach(&mut conn, t.longsword, Some(5.0), (None, None), false);
+    let made = attack(&mut conn, t.player, t.aria, t.longsword, Some(t.goblin)).expect("attack");
+    assert!(flags_of(&attack_row(&mut conn, made.attack_ids[0])).is_empty());
+    assert_eq!(
+        offer_row(&mut conn, made.offer_ids[0]).status,
+        OFFER_APPLIED
+    );
+    assert_eq!(copy_hp(&mut conn, t.goblin), (GOBLIN_HP - 5) as i64);
+}
+
+#[test]
+fn a_reach_warning_never_stands_in_front_of_the_turn() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().expect("conn");
+    let t = table(&mut conn);
+    open_grid(&mut conn, &t);
+    set_reach(&mut conn, t.longsword, Some(5.0), (None, None), true);
+    stand(&mut conn, t.aria, 0, 0);
+    stand(&mut conn, t.goblin, 4, 0);
+    stand(&mut conn, t.ogre, 20, 20);
+    fight(&mut conn, &t, &[(t.aria, "Aria"), (t.ogre, "Ogre")], t.ogre);
+
+    // The preview says both: whose turn it is, and that it is out of reach.
+    let warned = preview(&mut conn, t.player, t.aria, t.longsword, t.goblin);
+    assert!(!warned.turn.allowed);
+    assert_eq!(warned.turn.active_label.as_deref(), Some("Ogre"));
+    assert_eq!(warned.flags, [FLAG_OUT_OF_REACH]);
+    // The attack is refused for the turn (C1), and for nothing else.
+    let refused = attack(&mut conn, t.player, t.aria, t.longsword, Some(t.goblin)).unwrap_err();
+    assert_eq!(
+        refused,
+        FightRefusal::NotYourTurn("It is Ogre's turn".into())
+    );
+    assert_eq!(attacks_in(&mut conn, t.scene_id), 0);
+}
+
+#[test]
+fn a_tokens_footprint_is_its_actors_size_or_its_npcs_and_one_square_otherwise() {
+    use crate::combat::size::footprints_in_scene;
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().expect("conn");
+    let t = table(&mut conn);
+    let marker = place(
+        &mut conn,
+        t.scene_id,
+        None,
+        Some(t.gm),
+        false,
+        None,
+        "Marker",
+        (0.0, 0.0),
+    );
+    let footprints = footprints_in_scene(&mut conn, SYSTEMS_DIR, t.scene_id).expect("sizes");
+    assert!(
+        [t.aria, t.goblin, t.ogre, marker]
+            .iter()
+            .all(|token| footprints[token] == 1.0),
+        "no sizes recorded: every token fills one square"
+    );
+
+    set_size(&mut conn, t.ogre_actor, "large"); // linked
+    set_size(&mut conn, t.goblin_actor, "huge"); // the goblin copy's NPC
+    let footprints = footprints_in_scene(&mut conn, SYSTEMS_DIR, t.scene_id).expect("sizes");
+    assert_eq!(
+        footprints[&t.ogre], 2.0,
+        "a linked token is its actor's size"
+    );
+    assert_eq!(footprints[&t.goblin], 3.0, "a copy is its NPC's size");
+    assert_eq!(footprints[&t.aria], 1.0);
+    assert_eq!(footprints[&marker], 1.0, "a token with no actor fills one");
+
+    set_size(&mut conn, t.ogre_actor, "tiny");
+    let footprints = footprints_in_scene(&mut conn, SYSTEMS_DIR, t.scene_id).expect("sizes");
+    assert_eq!(footprints[&t.ogre], 0.5, "and it follows the sheet");
 }
