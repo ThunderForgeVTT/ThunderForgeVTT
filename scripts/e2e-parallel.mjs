@@ -62,6 +62,7 @@ import {
 } from "./shared.mjs";
 import { checkDependencies, describeProblems } from "./e2e/deps.mjs";
 import { acquireRunLock, releaseRunLock } from "./e2e/run-lock.mjs";
+import { buildOutputHint } from "./clean-builds.mjs";
 import { removeContainers, startMailpitContainer } from "./e2e/mailpit.mjs";
 import { startLoadMonitor } from "./e2e/load.mjs";
 import { digestLines, writeRunSummary } from "./e2e/report.mjs";
@@ -1039,6 +1040,11 @@ async function main() {
     log("e2e", describeProblems(dependencyProblems), process.stderr);
     process.exit(1);
   }
+
+  // A line, never a refusal: a full disk fails a run far more confusingly
+  // than this note does, but a big `target/` is not by itself a problem.
+  const buildHint = buildOutputHint(ROOT_DIR);
+  if (buildHint) log("e2e", `note: ${buildHint}`);
 
   acquireRunLock(ROOT_DIR, process.argv.slice(2));
   releaseOnSignals();

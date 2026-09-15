@@ -1,4 +1,4 @@
-.PHONY: dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-rust test-mail bench-blob-store test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean
+.PHONY: clean-builds dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-rust test-mail bench-blob-store test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean
 
 # Loads DATABASE_URL (and anything else) from the repo-root .env for targets
 # that shell out to tools which don't read it themselves (diesel-cli).
@@ -23,6 +23,7 @@ help:
 	@echo "  make seed             Seed local demo logins (admin/admin, user1/user1, user2/user2) + a ready-to-play world"
 	@echo "  make build            Production build (engine WASM + backend + frontend)"
 	@echo "  make clean            Remove build output (dist/)"
+	@echo "  make clean-builds     Show what old cargo output and finished worktrees can go (ARGS=--apply deletes it)"
 	@echo "  make format           Run prettier + cargo fmt"
 	@echo "  make lint             Run cargo clippy (-D warnings) plus the file-length check"
 	@echo "  make lint-host        Clippy the workspace for the host target (everything but the wasm-only engine)"
@@ -36,9 +37,11 @@ help:
 	@echo "  make test-torture-clean  Remove orphaned tf-torture-* compose projects and apps/web/torture-results/"
 
 dev: services-up migrate seed
+	@node scripts/clean-builds.mjs --hint || true
 	pnpm dev
 
 dev-tunnel: services-up migrate seed
+	@node scripts/clean-builds.mjs --hint || true
 	@command -v cloudflared >/dev/null 2>&1 || { \
 		echo "cloudflared not found. Install it: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/"; \
 		exit 1; \
@@ -119,6 +122,15 @@ build:
 
 clean:
 	pnpm clean
+
+# Trim cargo's build output without throwing away the warm cache: incremental
+# sessions no crate reads, cargo units unused for a week, and agent worktrees
+# that are clean, merged and not in use. A dry run unless ARGS has --apply;
+# see scripts/clean-builds.mjs for what it keeps and why.
+#   make clean-builds
+#   make clean-builds ARGS="--apply"
+clean-builds:
+	@node scripts/clean-builds.mjs $(ARGS)
 
 format:
 	pnpm format

@@ -23,6 +23,46 @@ mbround18/feature-new-auth-platform
 mbround18/doc-minor-readme-typo
 ```
 
+## Build commands
+
+`make help` lists every target. The ones you will use most:
+
+```sh
+make dev            # postgres + rustfs, migrations, demo seed, then the app
+make lint           # clippy for the host and for wasm32, plus the file-length check
+make test-rust      # cargo test (ARGS="-p thunderforge-server --lib settings")
+pnpm verify         # formatting and lint, both languages
+```
+
+### Cleaning up build output
+
+Cargo never deletes what it built. Old incremental sessions, artifacts from
+feature and flag combinations nobody builds any more, and finished agent
+worktrees pile up — past a terabyte on one machine. `make clean` is not the
+answer: it takes the warm cache with it.
+
+```sh
+make clean-builds                  # dry run: what would go, and the size
+make clean-builds ARGS="--apply"   # delete it
+```
+
+It removes, from this checkout only:
+
+- incremental sessions, keeping each crate's newest and anything from the last
+  3 days (`--incremental-days=N`);
+- cargo units (`deps/`, `build/`, `.fingerprint/`) not rebuilt in 7 days
+  (`--deps-days=N`) — the same rule as `cargo-sweep --time`, without installing
+  it;
+- worktrees under `.claude/worktrees/` that are clean, merged into `main`, not
+  locked and not any running process's working directory, with their merged
+  branch (`git branch -d`). Each worktree it keeps is printed with the reasons.
+
+Anything it deletes costs at most a rebuild. It refuses while an e2e run or a
+cargo process is working in the checkout, and it never touches anything outside
+`target/` and `.claude/worktrees/`. `make dev` and the e2e harness print a
+one-line note when the build output has grown enough to be worth it.
+`--root=<path>` points it at another checkout.
+
 ## Commits
 
 When comitting, its fine to have short commits or using or own style but this repository uses squash and merge for pull requests.
