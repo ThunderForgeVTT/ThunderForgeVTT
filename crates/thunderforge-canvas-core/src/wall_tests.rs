@@ -609,3 +609,132 @@ fn a_path_with_nothing_to_judge_is_not_blocked() {
     assert!(path_blocked_by(&[], &walls).is_none());
     assert!(path_blocked_by(&[Vec2::new(0.0, -10.0)], &walls).is_none());
 }
+
+// --- footprint line of sight (spec 046 decision 3, research R11) ------------
+
+fn five_foot_grid() -> GridSpec {
+    GridSpec {
+        kind: crate::grid::GridKind::Square,
+        size: 100.0,
+        origin: Vec2::ZERO,
+    }
+}
+
+/// A token of `cells` a side with its lower-left cell at `(q, r)`.
+fn standing(q: i32, r: i32, cells: f32) -> (Vec2, Footprint) {
+    let centre = Vec2::new(q as f32 * 100.0, r as f32 * 100.0) + Vec2::splat(cells * 50.0);
+    (centre, Footprint::new(cells))
+}
+
+#[test]
+fn two_creatures_in_the_open_see_each_other() {
+    let grid = five_foot_grid();
+    let walls = scene(vec![]);
+    let (hero, h) = standing(0, 0, 1.0);
+    let (ogre, o) = standing(5, 5, 2.0);
+    assert!(footprint_line_of_sight(&grid, hero, h, ogre, o, &walls));
+}
+
+#[test]
+fn a_wall_between_two_medium_creatures_blocks_as_it_does_for_centres() {
+    let grid = five_foot_grid();
+    // A long wall at x = 150, between column 1 and column 2.
+    let walls = scene(vec![wall("w", 150.0, -1000.0, 150.0, 1000.0)]);
+    let (hero, h) = standing(0, 0, 1.0);
+    let (goblin, g) = standing(3, 0, 1.0);
+    assert!(!footprint_line_of_sight(&grid, hero, h, goblin, g, &walls));
+    // For one-cell creatures the footprint answer is the centre answer.
+    for (q, r) in [(3, 0), (1, 0), (0, 4), (-3, 2)] {
+        let (other, o) = standing(q, r, 1.0);
+        assert_eq!(
+            footprint_line_of_sight(&grid, hero, h, other, o, &walls),
+            is_visible(hero, other, &walls),
+            "({q},{r})"
+        );
+    }
+}
+
+#[test]
+fn a_large_ogre_peering_past_a_corner_sees_and_is_seen() {
+    let grid = five_foot_grid();
+    // A wall along y = 200 from far left to x = 150, the middle of the ogre's
+    // left column. The hero stands above it, to the left.
+    let walls = scene(vec![wall("corner", -1000.0, 200.0, 150.0, 200.0)]);
+    let (hero, h) = standing(0, 3, 1.0); // centre (50, 350)
+    // The ogre fills (1,0)..(2,1), centre (200, 100): the line between the two
+    // centres meets y = 200 at x = 140, on the wall.
+    let (ogre, o) = standing(1, 0, 2.0);
+    assert!(
+        !is_visible(hero, ogre, &walls),
+        "the centres cannot see each other: the case this function exists for"
+    );
+    assert!(
+        footprint_line_of_sight(&grid, hero, h, ogre, o, &walls),
+        "but the ogre's right-hand squares are past the corner"
+    );
+    assert!(
+        footprint_line_of_sight(&grid, ogre, o, hero, h, &walls),
+        "and it is symmetric"
+    );
+}
+
+#[test]
+fn a_closed_door_blocks_every_square_and_an_open_one_none() {
+    let grid = five_foot_grid();
+    let mut door = wall("door", -1000.0, 200.0, 1000.0, 200.0);
+    door.door_state = DoorState::Closed;
+    let (hero, h) = standing(0, 3, 1.0);
+    let (ogre, o) = standing(0, 0, 2.0);
+    assert!(!footprint_line_of_sight(
+        &grid,
+        hero,
+        h,
+        ogre,
+        o,
+        &scene(vec![door.clone()])
+    ));
+    door.door_state = DoorState::Open;
+    assert!(footprint_line_of_sight(
+        &grid,
+        hero,
+        h,
+        ogre,
+        o,
+        &scene(vec![door])
+    ));
+}
+
+#[test]
+fn a_wall_that_stops_feet_but_not_eyes_does_not_block_an_attack() {
+    let grid = five_foot_grid();
+    let mut window = wall("window", -1000.0, 200.0, 1000.0, 200.0);
+    window.blocks_vision = false;
+    window.blocks_movement = true;
+    let (hero, h) = standing(0, 3, 1.0);
+    let (goblin, g) = standing(0, 0, 1.0);
+    assert!(footprint_line_of_sight(
+        &grid,
+        hero,
+        h,
+        goblin,
+        g,
+        &scene(vec![window])
+    ));
+}
+
+#[test]
+fn a_gargantuan_creature_half_behind_a_pillar_is_seen() {
+    let grid = five_foot_grid();
+    // A pillar hiding the left of a 4×4 from a hero below it.
+    let walls = scene(vec![wall("pillar", -100.0, 300.0, 200.0, 300.0)]);
+    let (hero, h) = standing(0, 0, 1.0); // (50, 50)
+    let (tarrasque, t) = standing(0, 4, 4.0); // cells (0..3, 4..7)
+    assert!(footprint_line_of_sight(
+        &grid, hero, h, tarrasque, t, &walls
+    ));
+    // Widen it across the whole creature, and nothing is seen.
+    let walls = scene(vec![wall("pillar", -1000.0, 300.0, 1000.0, 300.0)]);
+    assert!(!footprint_line_of_sight(
+        &grid, hero, h, tarrasque, t, &walls
+    ));
+}

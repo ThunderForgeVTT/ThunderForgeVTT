@@ -384,6 +384,141 @@ fn axial_round(q: f32, r: f32) -> Cell {
     Cell::new(rq as i32, rr as i32)
 }
 
+/// The square block of cells a token covers, inclusive at both corners.
+///
+/// Only a square grid tiles a footprint into a block. On hexes a token stays
+/// centred on one hex (see [`GridSpec::snap_footprint`]), so its block is that
+/// one hex; on a gridless scene there are no cells, and the block is `(0,0)`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CoveredCells {
+    pub min: Cell,
+    pub max: Cell,
+}
+
+impl GridSpec {
+    /// Which cells a token of `footprint`, centred at `centre`, covers.
+    ///
+    /// A token of a cell or more covers `footprint` cells a side (rounded to
+    /// whole cells), placed where [`Self::snap_footprint`] would put its
+    /// corner — so a snapped token covers exactly the cells it is drawn over,
+    /// and an unsnapped one the block it mostly overlaps. A Tiny token, under
+    /// a cell, covers the one cell its centre is in.
+    pub fn covered_cells(&self, centre: Vec2, footprint: Footprint) -> CoveredCells {
+        if self.kind != GridKind::Square || footprint.cells() < 1.0 {
+            let cell = self.world_to_cell(centre);
+            return CoveredCells {
+                min: cell,
+                max: cell,
+            };
+        }
+        let size = self.safe_size();
+        let across = footprint.cells().round().max(1.0);
+        let corner = (centre - self.origin) / size - Vec2::splat(across / 2.0);
+        // Half-up, as `snap_footprint` rounds a corner.
+        let min = Cell::new(
+            (corner.x + 0.5).floor() as i32,
+            (corner.y + 0.5).floor() as i32,
+        );
+        let last = across as i32 - 1;
+        CoveredCells {
+            min,
+            max: Cell::new(min.q + last, min.r + last),
+        }
+    }
+
+    /// The points a token fills, for asking what it can see: the centre of
+    /// every cell it covers on a square grid, its one hex's centre on hexes,
+    /// and on a gridless scene a lattice of one point per cell of its
+    /// footprint (just its centre, for a token of a cell or less).
+    pub fn footprint_points(&self, centre: Vec2, footprint: Footprint) -> Vec<Vec2> {
+        match self.kind {
+            GridKind::Square => {
+                let block = self.covered_cells(centre, footprint);
+                if block.min == block.max && footprint.cells() < 1.0 {
+                    // A Tiny token is where it stands, not in its cell's middle.
+                    return vec![centre];
+                }
+                let mut points = Vec::new();
+                for q in block.min.q..=block.max.q {
+                    for r in block.min.r..=block.max.r {
+                        points.push(self.cell_center(Cell::new(q, r)));
+                    }
+                }
+                points
+            }
+            GridKind::HexPointyTop | GridKind::HexFlatTop => vec![centre],
+            GridKind::Gridless => {
+                if footprint.cells() <= 1.0 {
+                    return vec![centre];
+                }
+                let size = self.safe_size();
+                let across = footprint.cells().ceil() as i32;
+                let side = footprint.world_size(size);
+                let step = side / across as f32;
+                let start = centre - Vec2::splat(side / 2.0);
+                let mut points = Vec::with_capacity((across * across) as usize);
+                for i in 0..across {
+                    for j in 0..across {
+                        points.push(
+                            start + Vec2::new((i as f32 + 0.5) * step, (j as f32 + 0.5) * step),
+                        );
+                    }
+                }
+                points
+            }
+        }
+    }
+
+    /// How far apart two creatures are, **in cells**, measured from the
+    /// squares each fills rather than from their centres (spec 046 FR-035,
+    /// research R11).
+    ///
+    /// - **Square**: the fewest cells between the two covered blocks, counted
+    ///   Chebyshev (5-5-5), as [`Self::cell_distance`] counts. Two creatures
+    ///   side by side are 1 apart whatever their sizes — a Large ogre is
+    ///   adjacent to a hero from any of its four squares — and overlapping
+    ///   blocks are 0.
+    /// - **Hex**: the axial distance between the two centre hexes, because a
+    ///   footprint on hexes is still one hex.
+    /// - **Gridless**: the straight-line distance between centres in cells,
+    ///   less how far each creature's half-width reaches past half a cell —
+    ///   so two touching creatures are 1 apart, as on a square grid, and two
+    ///   one-cell creatures read exactly their centre distance. Never below 0.
+    ///
+    /// Returned as `f32` rather than a whole number because a gridless scene
+    /// has no whole numbers to give; the square and hex answers are integral.
+    pub fn footprint_distance(
+        &self,
+        a: Vec2,
+        a_footprint: Footprint,
+        b: Vec2,
+        b_footprint: Footprint,
+    ) -> f32 {
+        match self.kind {
+            GridKind::Square => {
+                let (a, b) = (
+                    self.covered_cells(a, a_footprint),
+                    self.covered_cells(b, b_footprint),
+                );
+                let gap = |a_min: i32, a_max: i32, b_min: i32, b_max: i32| {
+                    (b_min - a_max).max(a_min - b_max).max(0)
+                };
+                gap(a.min.q, a.max.q, b.min.q, b.max.q).max(gap(a.min.r, a.max.r, b.min.r, b.max.r))
+                    as f32
+            }
+            GridKind::HexPointyTop | GridKind::HexFlatTop => {
+                self.cell_distance(self.world_to_cell(a), self.world_to_cell(b)) as f32
+            }
+            GridKind::Gridless => {
+                let size = self.safe_size();
+                let past_half_a_cell = (a_footprint.cells() - 1.0).max(0.0) / 2.0
+                    + (b_footprint.cells() - 1.0).max(0.0) / 2.0;
+                (a.distance(b) / size - past_half_a_cell).max(0.0)
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod boundary_tie_break_tests {
     use super::*;
@@ -823,3 +958,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "grid_footprint_tests.rs"]
+mod footprint_tests;

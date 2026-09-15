@@ -1,5 +1,7 @@
 use glam::Vec2;
 
+use crate::grid::{Footprint, GridSpec};
+
 /// Door state for a wall, mirroring `door_state` in the server schema
 /// (data-model.md's Wall section). `None` = ordinary wall (not a door);
 /// `Open`/`Closed` = a door in that state.
@@ -511,6 +513,34 @@ pub fn is_visible(observer: Vec2, target: Vec2, walls: &WallSet) -> bool {
         }
     }
     true
+}
+
+/// Whether one creature can see another for an attack, judged from the squares
+/// each fills (spec 046 decision 3, research R11).
+///
+/// True when any point `a` fills can see any point `b` fills under
+/// [`is_visible`] — the same wall test movement and the engine's hiding use,
+/// asked of every pair rather than of two centres. So an ogre whose centre is
+/// behind a corner, but one of whose four squares is past it, can see and be
+/// seen. The points are [`GridSpec::footprint_points`]: every covered cell's
+/// centre on a square grid, the one hex's centre on hexes, a per-cell lattice
+/// on a gridless scene.
+///
+/// Walls only. Light, darkness and a creature's own sight are what a *viewer*
+/// is told (`visibility_of`); whether a sword can be swung through a closed
+/// door is a question about the door. Cover is not modelled: blocked or not.
+pub fn footprint_line_of_sight(
+    grid: &GridSpec,
+    a: Vec2,
+    a_footprint: Footprint,
+    b: Vec2,
+    b_footprint: Footprint,
+    walls: &WallSet,
+) -> bool {
+    let from = grid.footprint_points(a, a_footprint);
+    let to = grid.footprint_points(b, b_footprint);
+    from.iter()
+        .any(|eye| to.iter().any(|target| is_visible(*eye, *target, walls)))
 }
 
 /// The wall in the way of a move from `from` to `to`, if there is one.
