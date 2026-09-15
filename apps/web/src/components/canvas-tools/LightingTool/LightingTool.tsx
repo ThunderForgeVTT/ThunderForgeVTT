@@ -17,6 +17,9 @@ import {
   type AmbientLevel,
 } from "@/engine/world/sync/sceneLighting";
 import type { WorldLight, WorldToken } from "@/engine/world/types";
+import type { SceneUnits } from "@/types/light";
+import { LightReachFields } from "./LightReachFields";
+import { DEFAULT_SCENE_UNITS } from "./sceneUnits";
 
 export interface LightingToolProps {
   worldStore: WorldStore;
@@ -40,6 +43,11 @@ export interface LightingToolProps {
   onExplorationReset?: (forUser: string | null) => void;
   /** Who is at the table, for a reset aimed at one of them. */
   players?: { userId: string; name: string }[];
+  /**
+   * What this scene's distances are measured in, so a light's reach is set
+   * in the system's units (spec 045 FR-061). Five-foot squares until known.
+   */
+  units?: SceneUnits;
 }
 
 const NO_TOKEN_VALUE = "__none__";
@@ -79,6 +87,7 @@ export function LightingTool({
   onExplorationChange,
   onExplorationReset,
   players = [],
+  units = DEFAULT_SCENE_UNITS,
 }: LightingToolProps) {
   const [placeMode, setPlaceMode] = useState(false);
 
@@ -93,7 +102,12 @@ export function LightingTool({
       changes: Partial<
         Pick<
           WorldLight,
-          "radius" | "intensity" | "color" | "castsShadows" | "attachedTokenId"
+          | "radius"
+          | "brightRadius"
+          | "intensity"
+          | "color"
+          | "castsShadows"
+          | "attachedTokenId"
         >
       >,
     ) => {
@@ -230,19 +244,13 @@ export function LightingTool({
             Selected light
           </p>
 
-          <div className="grid gap-1.5">
-            <Label htmlFor="light-radius">Radius</Label>
-            <Input
-              id="light-radius"
-              type="number"
-              min={0}
-              step={1}
-              value={selectedLight.radius}
-              onChange={(event) =>
-                updateSelectedLight({ radius: Number(event.target.value) })
-              }
-            />
-          </div>
+          <LightReachFields
+            lightId={selectedLight.id}
+            radius={selectedLight.radius}
+            brightRadius={selectedLight.brightRadius}
+            units={units}
+            onChange={updateSelectedLight}
+          />
 
           <div className="grid gap-1.5">
             <Label htmlFor="light-intensity">Intensity</Label>

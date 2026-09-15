@@ -249,13 +249,26 @@ impl SceneSight {
                 light_sources::x,
                 light_sources::y,
                 light_sources::radius,
+                light_sources::bright_radius,
                 light_sources::intensity,
                 light_sources::color,
                 light_sources::attached_token_id,
                 light_sources::casts_shadows,
             ))
-            .load::<(Uuid, f64, f64, f64, f64, Option<String>, Option<Uuid>, bool)>(conn)?;
-        for (id, x, y, radius, intensity, color, attached, casts_shadows) in light_rows {
+            .load::<(
+                Uuid,
+                f64,
+                f64,
+                f64,
+                f64,
+                f64,
+                Option<String>,
+                Option<Uuid>,
+                bool,
+            )>(conn)?;
+        for (id, x, y, radius, bright_radius, intensity, color, attached, casts_shadows) in
+            light_rows
+        {
             let at = match attached {
                 // An attached light is where its token is, and a light
                 // attached to a token that is not here lights nothing.
@@ -274,7 +287,8 @@ impl SceneSight {
                 color,
                 attached_token_id: attached.map(|t| t.to_string()),
                 casts_shadows,
-                bright_radius: None,
+                // The stored bright reach, as every board draws it (FR-061).
+                bright_radius: Some(bright_radius as f32),
             };
             sight.lights.push(resolved(&light, at));
         }

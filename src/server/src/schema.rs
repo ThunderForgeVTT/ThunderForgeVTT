@@ -463,6 +463,7 @@ diesel::table! {
         updated_by -> Uuid,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        bright_radius -> Float8,
     }
 }
 

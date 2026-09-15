@@ -559,6 +559,7 @@ async fn a_copied_scene_brings_its_walls_and_lighting() {
                 light_sources::x.eq(5.0f64),
                 light_sources::y.eq(5.0f64),
                 light_sources::radius.eq(30.0f64),
+                light_sources::bright_radius.eq(15.0f64),
                 light_sources::intensity.eq(0.8f64),
                 light_sources::casts_shadows.eq(true),
                 light_sources::created_by.eq(s.owner_id),

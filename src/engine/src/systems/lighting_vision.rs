@@ -238,6 +238,44 @@ pub fn carried_lights() -> String {
         .unwrap_or_else(|| String::from("[]"))
 }
 
+static PLACED_LIGHTS: std::sync::OnceLock<std::sync::Mutex<String>> = std::sync::OnceLock::new();
+
+/// Record each placed light's reaches: id, bright and dim.
+pub(crate) fn mirror_placed_lights(mut lights: Vec<(String, f32, f32)>) {
+    lights.sort_by(|a, b| a.0.cmp(&b.0));
+    let json = serde_json::Value::from(
+        lights
+            .into_iter()
+            .map(|(id, bright, dim)| {
+                serde_json::json!({ "lightId": id, "bright": bright, "dim": dim })
+            })
+            .collect::<Vec<_>>(),
+    )
+    .to_string();
+    let slot = PLACED_LIGHTS.get_or_init(|| std::sync::Mutex::new(String::from("[]")));
+    if let Ok(mut held) = slot.lock()
+        && *held != json
+    {
+        *held = json;
+    }
+}
+
+/// The lights a Game Master placed, with the bright and dim reach this
+/// client's engine lights the board by, as
+/// `[{"lightId","bright","dim"}]` in world units.
+///
+/// Read-only, for tests (spec 045 FR-061): a bright reach set in the Lights
+/// panel is only proven when every seat's engine reports it, not when the
+/// server stored it. Empty in a bright scene with nothing to light, where the
+/// pass that reads lights returns before reading any.
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn placed_lights() -> String {
+    PLACED_LIGHTS
+        .get()
+        .and_then(|slot| slot.lock().ok().map(|held| held.clone()))
+        .unwrap_or_else(|| String::from("[]"))
+}
+
 static DIM_TOKENS: std::sync::OnceLock<std::sync::Mutex<Vec<String>>> = std::sync::OnceLock::new();
 
 pub(crate) fn mirror_dim_tokens(mut dim: Vec<String>) {

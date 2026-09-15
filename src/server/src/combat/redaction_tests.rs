@@ -106,6 +106,7 @@ fn darkness_hides_and_a_light_or_darkvision_reveals() {
             light_sources::x.eq(200.0),
             light_sources::y.eq(0.0),
             light_sources::radius.eq(60.0),
+            light_sources::bright_radius.eq(30.0),
             light_sources::intensity.eq(1.0),
             light_sources::casts_shadows.eq(true),
             light_sources::created_by.eq(t.gm),

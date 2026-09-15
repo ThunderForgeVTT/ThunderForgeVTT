@@ -2,6 +2,7 @@ import { postGraphQL } from "@/api/graphqlClient";
 import type {
   CreateLightInput,
   LightRecord,
+  SceneUnits,
   UpdateLightInput,
 } from "@/types/light";
 
@@ -11,6 +12,7 @@ const LIGHT_FIELDS = `
   x
   y
   radius
+  brightRadius
   intensity
   color
   attachedTokenId
@@ -96,4 +98,23 @@ export function deleteLight(lightId: string): Promise<boolean> {
     `,
     { lightId },
   ).then((data) => data.deleteLightSource);
+}
+
+/**
+ * What a scene's distances are measured in, so a light's reach can be set as
+ * "20 ft" and drawn in world units (spec 045 FR-061).
+ */
+export function getSceneUnits(sceneId: string): Promise<SceneUnits> {
+  return postGraphQL<{ sceneUnits: SceneUnits }>(
+    `
+      query SceneUnits($sceneId: UUID!) {
+        sceneUnits(sceneId: $sceneId) {
+          perCell
+          label
+          gridSize
+        }
+      }
+    `,
+    { sceneId },
+  ).then((data) => data.sceneUnits);
 }

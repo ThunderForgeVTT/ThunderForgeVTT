@@ -823,6 +823,9 @@ pub struct LightSource {
     pub updated_by: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// How far the light is bright (spec 045 FR-061). `radius` is how far it
+    /// reaches at all: its dim reach. Never beyond it.
+    pub bright_radius: f64,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
@@ -839,6 +842,7 @@ pub struct NewLightSource {
     pub metadata: Option<serde_json::Value>,
     pub created_by: uuid::Uuid,
     pub updated_by: uuid::Uuid,
+    pub bright_radius: f64,
 }
 
 #[derive(AsChangeset, Debug, Clone, Serialize, Deserialize)]
@@ -853,6 +857,7 @@ pub struct LightSourceUpdate {
     pub casts_shadows: Option<bool>,
     pub metadata: Option<serde_json::Value>,
     pub updated_by: uuid::Uuid,
+    pub bright_radius: Option<f64>,
 }
 
 // ========== Shape Models (native canvas authoring) ==========

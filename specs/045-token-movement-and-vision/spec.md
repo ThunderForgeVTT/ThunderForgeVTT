@@ -6,9 +6,9 @@
 
 **Status**: Built, 2026-09-11 to 2026-09-14 (checked 2026-09-14; phases as
 numbered in [tasks.md](./tasks.md)). The carried-light gap closed and SC-007
-was watched on a board on 2026-09-14. Not yet proven at the table: the gridless
-keyboard step, and a Game Master's separate bright reach on a placed light. The
-owner's decisions are recorded under
+was watched on a board on 2026-09-14. A placed light's separate bright and dim
+reach closed FR-061 on 2026-09-15 (T067). Not yet proven at the table: the
+gridless keyboard step. The owner's decisions are recorded under
 [Decisions](#decisions-owner-2026-09-11); nothing is open.
 
 - **Phase 2 — one crossing test for both sides.** Shipped: `movement_blocked_by`
@@ -34,9 +34,12 @@ owner's decisions are recorded under
   (T066). A carried light from the character's data reaches the engine as a
   light attached to its token (decision 6, T065): it lights every seat's
   board, a wall shadows it, and it follows its token, by
-  `e2e/carried-light.spec.ts` and the dnd5e crawl. A Game Master setting a
-  placed light's bright reach apart from its dim reach (FR-061's other half)
-  is not built: a stored light still has one radius.
+  `e2e/carried-light.spec.ts` and the dnd5e crawl. A Game Master sets a
+  placed light's bright reach apart from its dim reach, in the system's units,
+  in the Lights panel (FR-061's other half, T067, 2026-09-15); every light
+  saved with one radius was migrated bright to half of it (FR-062), and
+  `e2e/light-reach.spec.ts` watches 20 ft / 40 ft reach every seat's engine
+  and a player's pixels. **FR-061 is complete.**
 - **Phase 8 (US7) — a map that remembers.** Shipped and proven in a real
   browser by `e2e/scene-exploration.spec.ts`: the map survives a reload and a
   Game Master's reset reaches the player's storage. Not played in a playtest.

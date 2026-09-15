@@ -184,7 +184,12 @@ pub(crate) struct WorldLightPayload {
     pub(crate) id: String,
     pub(crate) x: f32,
     pub(crate) y: f32,
+    /// The dim reach: how far the light reaches at all.
     pub(crate) radius: f32,
+    /// The bright reach (spec 045 FR-061). Absent from a sender that predates
+    /// it, which draws the light as it always was: bright to half its radius.
+    #[serde(rename = "brightRadius", default)]
+    pub(crate) bright_radius: Option<f32>,
     pub(crate) intensity: f32,
     pub(crate) color: Option<String>,
     #[serde(rename = "attachedTokenId")]

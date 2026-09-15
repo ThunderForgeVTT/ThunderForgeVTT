@@ -651,6 +651,7 @@ async fn hand_built_edits_on_top_of_an_import_persist_exactly() {
             light_sources::x.eq(10.0),
             light_sources::y.eq(20.0),
             light_sources::radius.eq(100.0),
+            light_sources::bright_radius.eq(50.0),
             light_sources::intensity.eq(1.0),
             light_sources::casts_shadows.eq(true),
             light_sources::created_by.eq(owner_id),

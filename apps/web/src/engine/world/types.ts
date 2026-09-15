@@ -69,7 +69,10 @@ export type WorldLight = {
   sceneId: string;
   x: number;
   y: number;
+  /** The dim reach: how far the light reaches at all, in world units. */
   radius: number;
+  /** The bright reach, in world units (spec 045 FR-061). */
+  brightRadius: number;
   intensity: number;
   color: string | null;
   attachedTokenId: string | null;
@@ -294,6 +297,7 @@ export type LightFieldChanges = Partial<{
   x: number;
   y: number;
   radius: number;
+  brightRadius: number;
   intensity: number;
   color: string | null;
   attachedTokenId: string | null;
@@ -313,6 +317,8 @@ export type CreateLightCommand = {
     x: number;
     y: number;
     radius: number;
+    /** Omitted, half of `radius`, as the server stores it (FR-062). */
+    brightRadius?: number;
     intensity: number;
     color: string | null;
     attachedTokenId: string | null;

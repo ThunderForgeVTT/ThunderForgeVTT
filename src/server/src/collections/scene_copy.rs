@@ -202,6 +202,7 @@ pub fn copy_scene(
             light_sources::x,
             light_sources::y,
             light_sources::radius,
+            light_sources::bright_radius,
             light_sources::intensity,
             light_sources::color,
             light_sources::casts_shadows,
@@ -212,12 +213,13 @@ pub fn copy_scene(
             f64,
             f64,
             f64,
+            f64,
             Option<String>,
             bool,
             Option<serde_json::Value>,
         )>(conn)?;
 
-    for (x, y, radius, intensity, color, casts_shadows, metadata) in light_rows {
+    for (x, y, radius, bright_radius, intensity, color, casts_shadows, metadata) in light_rows {
         diesel::insert_into(light_sources::table)
             .values((
                 light_sources::light_id.eq(Uuid::now_v7()),
@@ -225,6 +227,7 @@ pub fn copy_scene(
                 light_sources::x.eq(x),
                 light_sources::y.eq(y),
                 light_sources::radius.eq(radius),
+                light_sources::bright_radius.eq(bright_radius),
                 light_sources::intensity.eq(intensity),
                 light_sources::color.eq(color),
                 // A light attached to a token loses that attachment, because

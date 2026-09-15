@@ -6,9 +6,12 @@ use crate::resources::{
     GridSnapEnabled, IsGameMaster, LightSet, SceneGrid, SelectedLight, WallSet,
 };
 use crate::systems::lighting::{
-    apply_light_illumination, handle_light_input, handle_light_keyboard_toggles,
-    handle_light_resize, handle_light_undo, handle_switch_effects, init_lighting_systems_resources,
-    sync_light_visuals,
+    apply_light_illumination, handle_light_input, handle_switch_effects,
+    init_lighting_systems_resources, sync_light_visuals,
+};
+use crate::systems::lighting_edit::{
+    draw_selected_light_reach, handle_light_keyboard_toggles, handle_light_resize,
+    handle_light_undo,
 };
 use crate::systems::lighting_vision::{
     PartyEyes, ViewerToken, apply_requested_party_eyes, apply_requested_viewer,
@@ -70,6 +73,13 @@ impl Plugin for LightingPlugin {
         init_lighting_systems_resources(app);
 
         app.add_systems(OnExit(AuthoringMode::Lights), abandon_light_gesture);
+
+        // The selected light's two reaches, drawn as rings (spec 045 FR-061).
+        // Only where something draws gizmos: a headless app built from
+        // `MinimalPlugins` has none, and this plugin must still build there.
+        if app.is_plugin_added::<bevy::gizmos::GizmoPlugin>() {
+            app.add_systems(Update, draw_selected_light_reach.after(sync_light_visuals));
+        }
 
         app.add_systems(
             Update,

@@ -16,7 +16,7 @@ use uuid::Uuid;
 
 use crate::declared_values::ActorSlots;
 use crate::graphql::{app_state, authenticated_user};
-use crate::vision_profiles::{cells_to_world, resolve, vision_declaration_for_system};
+use crate::vision_profiles::{cells_to_world, resolve, units_of, vision_declaration_for_system};
 
 /// One token's sight, in world units — what the engine's `set_token_vision`
 /// takes, so no client has to know what a cell is worth.
@@ -31,11 +31,77 @@ pub struct GraphQLTokenVision {
     pub carried_dim: f64,
 }
 
+/// What a distance on a scene is measured in: how much one grid square is
+/// worth in its game system's units, what those units are called, and how many
+/// world units wide a square is.
+///
+/// Spec 045 FR-061: a Game Master sets a light's reach as "20 ft", and the
+/// board draws it in world units. The conversion is a system's (`vision.
+/// unitsPerCell`/`unitLabel`) and a scene's (`gridSize`), both of which only
+/// the server holds, so the Lights panel asks rather than guessing five feet.
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLSceneUnits {
+    /// One grid square, in the system's units (5 for D&D 5e's feet).
+    pub per_cell: f64,
+    /// What the units are called ("ft").
+    pub label: String,
+    /// One grid square, in world units.
+    pub grid_size: i32,
+}
+
 #[derive(Default)]
 pub struct TokenVisionQuery;
 
 #[Object]
 impl TokenVisionQuery {
+    /// The units a scene's distances are quoted in. A world with no system, or
+    /// a system that declares none, measures in the default five-foot square.
+    async fn scene_units(
+        &self,
+        ctx: &Context<'_>,
+        scene_id: Uuid,
+    ) -> GraphQLResult<GraphQLSceneUnits> {
+        let user = authenticated_user(ctx)?;
+        let user_id = user.user_id;
+        let is_admin = user.is_admin;
+        let state = app_state(ctx)?;
+        let systems_dir = state.directories.systems_dir.clone();
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        tokio::task::spawn_blocking(move || {
+            use crate::schema::{scenes, worlds};
+
+            let (world_id, grid_size, system_id): (Uuid, i32, Option<String>) = scenes::table
+                .inner_join(worlds::table.on(worlds::id.eq(scenes::world_id)))
+                .filter(scenes::scene_id.eq(scene_id))
+                .select((scenes::world_id, scenes::grid_size, worlds::game_system_id))
+                .first(&mut conn)
+                .map_err(|_| Error::new("Scene not found"))?;
+
+            let actor = crate::auth::world_membership::actor_in_world(
+                &mut conn, user_id, is_admin, world_id,
+            );
+            if actor.role.is_none() && !actor.is_site_admin {
+                return Err(Error::new("Not a member of this world"));
+            }
+
+            let units = system_id
+                .as_deref()
+                .map(|id| units_of(&vision_declaration_for_system(&systems_dir, id)))
+                .unwrap_or_default();
+            Ok(GraphQLSceneUnits {
+                per_cell: f64::from(units.per_cell),
+                label: units.label,
+                grid_size,
+            })
+        })
+        .await
+        .map_err(|e| Error::new(format!("Task failed: {e}")))?
+    }
+
     /// Vision for every token in a scene whose system declares any and whose
     /// character has some.
     ///

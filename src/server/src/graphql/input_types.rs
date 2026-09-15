@@ -116,7 +116,12 @@ pub struct GraphQLCreateLightSourceInput {
     pub scene_id: Uuid,
     pub x: f64,
     pub y: f64,
+    /// How far the light reaches at all: its dim reach, in world units.
     pub radius: f64,
+    /// How far it is bright, in world units; never beyond `radius`. Omitted,
+    /// half of `radius` — the look every light had before a light had two
+    /// reaches (spec 045 FR-062).
+    pub bright_radius: Option<f64>,
     pub intensity: Option<f64>,
     pub color: Option<String>,
     pub attached_token_id: Option<Uuid>,
@@ -129,7 +134,11 @@ pub struct GraphQLCreateLightSourceInput {
 pub struct GraphQLUpdateLightSourceInput {
     pub x: Option<f64>,
     pub y: Option<f64>,
+    /// The dim reach, in world units. A bright reach it would fall inside of
+    /// is brought in to meet it.
     pub radius: Option<f64>,
+    /// The bright reach, in world units; never beyond the dim reach.
+    pub bright_radius: Option<f64>,
     pub intensity: Option<f64>,
     pub color: Option<String>,
     pub attached_token_id: Option<Uuid>,

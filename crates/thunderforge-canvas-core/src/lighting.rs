@@ -16,9 +16,10 @@ pub struct LightSource {
     pub color: Option<String>,
     pub attached_token_id: Option<String>,
     pub casts_shadows: bool,
-    /// How far this light is bright. `None` is a light with a single radius,
-    /// saved before bright and dim were separate: bright to half of it
-    /// (spec 045 FR-062). A game system's carried light sets it (FR-061).
+    /// How far this light is bright. `radius` is how far it reaches at all,
+    /// its dim reach. `None` is a light with a single radius: bright to half
+    /// of it (spec 045 FR-062). A Game Master sets it on a placed light, and a
+    /// game system on a carried one (FR-061).
     pub bright_radius: Option<f32>,
 }
 
@@ -222,11 +223,14 @@ pub enum LightEdit {
         prior_x: f32,
         prior_y: f32,
     },
-    /// A light's radius/intensity was changed (resize control). Undo
-    /// re-issues `update_light` with the prior radius/intensity.
+    /// A light's reach or intensity was changed (resize control). Undo
+    /// re-issues `update_light` with the prior dim reach (`radius`), bright
+    /// reach and intensity.
     Resize {
         light_id: String,
         prior_radius: f32,
+        /// `None` for a light with one radius (bright to half of it).
+        prior_bright_radius: Option<f32>,
         prior_intensity: f32,
     },
     /// A light's `casts_shadows` flag was toggled. Undo re-issues

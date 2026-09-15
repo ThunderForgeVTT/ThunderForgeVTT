@@ -510,8 +510,9 @@ pub(crate) fn apply_external_commands(
                         color: light.color,
                         attached_token_id: light.attached_token_id,
                         casts_shadows: light.casts_shadows,
-                        // A stored light has one radius (FR-062).
-                        bright_radius: None,
+                        // Its own bright reach (FR-061), or half its radius
+                        // when none was sent (FR-062).
+                        bright_radius: light.bright_radius,
                     });
                 }
             }

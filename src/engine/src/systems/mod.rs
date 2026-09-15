@@ -30,6 +30,9 @@ pub mod background;
 pub mod conflict_visualization;
 pub mod event_dispatcher;
 pub mod lighting;
+/// Resizing, toggling, deleting and undoing a placed light — split from
+/// `lighting` to keep that file within the length limit.
+pub mod lighting_edit;
 /// Whose eyes a client sees through, and what it reports back — split from
 /// `lighting` to keep that file within the length limit.
 pub mod lighting_vision;

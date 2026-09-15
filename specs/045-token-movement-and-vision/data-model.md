@@ -36,6 +36,12 @@ Gains an optional **path**: the ordered points or cells the token passed
 through. Absent means "a straight line from where it is to where it is going".
 The token's stored position remains the authority for where the move began.
 
+### Light source (T067, 2026-09-15)
+
+| Field | Type | Default | Why |
+|---|---|---|---|
+| `bright_radius` | double | `radius * 0.5` for existing rows; half the radius on a create that names none | FR-061: a placed light's bright reach. `radius` stays its dim reach. Never negative, never beyond `radius` (a check constraint). FR-062: a light saved with one radius keeps its look. |
+
 ## New concepts
 
 ### Move judgement (server, `src/server/src/movement/`)

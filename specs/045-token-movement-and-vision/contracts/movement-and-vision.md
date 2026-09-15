@@ -29,6 +29,27 @@ moveOwnToken(
 
 A Game Master's move is not judged (owner decision 1). No signature change.
 
+### Light sources: two reaches (changed, 2026-09-15, T067)
+
+```graphql
+type LightSource { radius: Float!  brightRadius: Float!  ... }
+input GraphQLCreateLightSourceInput { radius: Float!  brightRadius: Float  ... }
+input GraphQLUpdateLightSourceInput { radius: Float  brightRadius: Float  ... }
+sceneUnits(sceneId: UUID!): GraphQLSceneUnits!   # { perCell, label, gridSize }
+```
+
+- `radius` is the dim reach, as it always was the light's outer edge;
+  `brightRadius` is the bright reach, both in world units (FR-061).
+- A create without `brightRadius` is bright to half the radius, the look of
+  every light saved before this (FR-062); the migration gave every existing
+  row exactly that.
+- The server never stores a bright reach beyond the dim reach. Naming both
+  with bright past dim is refused with a message; changing only the dim reach
+  brings a bright reach it would fall inside of in to meet it.
+- `sceneUnits` is one grid square in the world's system's units (`vision.
+  unitsPerCell`, `unitLabel`; five feet when undeclared) and in world units, so
+  a panel can read and write "20 ft". Any member of the world may ask.
+
 ### Scene exploration (new)
 
 ```graphql
@@ -89,6 +110,20 @@ and so does `remove_token`. Sent for every token on scene load and on a sheet
 change (event 26), zeros included, beside `set_token_vision`. The Game
 Master's light tools do not select, move, resize or delete it, and no light
 mutation is ever sent for it.
+
+### `upsert_light` (changed, 2026-09-15, T067)
+
+```json
+{ "type": "upsert_light", "light": { "id": "<uuid>", "x": 0.0, "y": 0.0,
+  "radius": 400.0, "brightRadius": 200.0, "intensity": 1.0, "color": null,
+  "attachedTokenId": null, "castsShadows": true } }
+```
+
+`brightRadius` is new and optional: absent, the engine draws the light bright
+to half its radius, as before. The engine's own light intents
+(`create_light`, `update_light`) now carry `brightRadius` too, and the engine
+reports `{ "type": "select_light", "lightId": "<uuid>" | null }` when the Game
+Master selects or deselects a light on the board.
 
 ### Exploration (new)
 
@@ -184,3 +219,11 @@ with the same behaviour, except the last, which was a gap and is closed.
   `crates/thunderforge-canvas-core/src/lighting.rs` `LightSource::carried`).
   Probed by `__engineProbe.carriedLights()` (where each is lit from) and
   `__engineProbe.dimTokens()` (what a board draws dimly, for SC-007).
+- **Closed 2026-09-15 (T067): a placed light has a bright and a dim reach.**
+  It was the other half of FR-061: a stored light had one radius. Now
+  `light_sources.bright_radius` stores the bright reach, the GraphQL light
+  types and `upsert_light` carry it (§1, §2), the Lights panel sets both in
+  the system's units through `sceneUnits`, and the Game Master's wheel edits
+  the dim reach and Shift+wheel the bright one. Probed by
+  `__engineProbe.placedLights()` (each placed light's reaches as the engine
+  lights by them).

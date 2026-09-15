@@ -1026,6 +1026,11 @@ type AppQueryRoot {
 	"""
 	tokenAttributes(sceneId: UUID!): [GraphQLTokenAttributes!]!
 	"""
+	The units a scene's distances are quoted in. A world with no system, or
+	a system that declares none, measures in the default five-foot square.
+	"""
+	sceneUnits(sceneId: UUID!): GraphQLSceneUnits!
+	"""
 	Vision for every token in a scene whose system declares any and whose
 	character has some.
 	
@@ -3115,7 +3120,16 @@ input GraphQLCreateLightSourceInput {
 	sceneId: UUID!
 	x: Float!
 	y: Float!
+	"""
+	How far the light reaches at all: its dim reach, in world units.
+	"""
 	radius: Float!
+	"""
+	How far it is bright, in world units; never beyond `radius`. Omitted,
+	half of `radius` — the look every light had before a light had two
+	reaches (spec 045 FR-062).
+	"""
+	brightRadius: Float
 	intensity: Float
 	color: String
 	attachedTokenId: UUID
@@ -3690,7 +3704,14 @@ type GraphQLLightSource {
 	sceneId: UUID!
 	x: Float!
 	y: Float!
+	"""
+	How far the light reaches at all: its dim reach, in world units.
+	"""
 	radius: Float!
+	"""
+	How far it is bright, in world units (spec 045 FR-061).
+	"""
+	brightRadius: Float!
 	intensity: Float!
 	color: String
 	attachedTokenId: UUID
@@ -4390,6 +4411,31 @@ type GraphQLSceneExploration {
 	mine: Int!
 }
 
+"""
+What a distance on a scene is measured in: how much one grid square is
+worth in its game system's units, what those units are called, and how many
+world units wide a square is.
+
+Spec 045 FR-061: a Game Master sets a light's reach as "20 ft", and the
+board draws it in world units. The conversion is a system's (`vision.
+unitsPerCell`/`unitLabel`) and a scene's (`gridSize`), both of which only
+the server holds, so the Lights panel asks rather than guessing five feet.
+"""
+type GraphQLSceneUnits {
+	"""
+	One grid square, in the system's units (5 for D&D 5e's feet).
+	"""
+	perCell: Float!
+	"""
+	What the units are called ("ft").
+	"""
+	label: String!
+	"""
+	One grid square, in world units.
+	"""
+	gridSize: Int!
+}
+
 type GraphQLShape {
 	shapeId: UUID!
 	sceneId: UUID!
@@ -4604,7 +4650,15 @@ Input for updating light source properties
 input GraphQLUpdateLightSourceInput {
 	x: Float
 	y: Float
+	"""
+	The dim reach, in world units. A bright reach it would fall inside of
+	is brought in to meet it.
+	"""
 	radius: Float
+	"""
+	The bright reach, in world units; never beyond the dim reach.
+	"""
+	brightRadius: Float
 	intensity: Float
 	color: String
 	attachedTokenId: UUID

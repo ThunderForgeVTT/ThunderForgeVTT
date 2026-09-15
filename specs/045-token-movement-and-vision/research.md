@@ -155,7 +155,9 @@ token-attached light already used, so it gets its own shadow map row, lights
 every seat's board, and follows its token without a second path. Its id is
 `carried:<tokenId>`, which no server id can be, and that is what keeps it out of
 the Game Master's light editing. It carries its own bright reach
-(`LightSource::bright_radius`); a stored light keeps bright at half its radius
+(`LightSource::bright_radius`). A placed light carries one too since T067
+(2026-09-15): stored as `light_sources.bright_radius`, set by the Game Master in
+the system's units, and half the radius for every light saved before it
 (FR-062).
 
 *Rejected: a light inside `VisionProfile`.* It would light the dark only for

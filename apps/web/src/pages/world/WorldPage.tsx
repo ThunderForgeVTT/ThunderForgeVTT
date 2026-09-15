@@ -133,6 +133,7 @@ import { getScene, getScenes, updateSceneAmbientLight } from "@/api/scenes";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import { useWorldMembers } from "@/hooks/useWorldMembers";
+import { useSceneUnits } from "@/hooks/useSceneUnits";
 import { WallTool } from "@/components/canvas-tools/WallTool";
 import { LightingTool } from "@/components/canvas-tools/LightingTool";
 import { ShapeTool } from "@/components/canvas-tools/ShapeTool";
@@ -1809,6 +1810,9 @@ export default function WorldPage() {
   // is what they would say out loud. A world-membership list would be more
   // complete and less useful — it would offer players who have no token in
   // this scene and therefore no fog to reset.
+  // Spec 045 FR-061: a light's reach is set in the system's units.
+  const sceneUnits = useSceneUnits(sceneId, isSceneOwner);
+
   const explorationPlayers = useMemo(() => {
     const byOwner = new Map<string, string>();
     for (const token of Object.values(allTokens)) {
@@ -2738,6 +2742,7 @@ export default function WorldPage() {
                             sceneId ? resetExploration : undefined
                           }
                           players={explorationPlayers}
+                          units={sceneUnits}
                         />
                       ),
                     },

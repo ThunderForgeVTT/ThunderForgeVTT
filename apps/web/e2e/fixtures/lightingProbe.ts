@@ -51,7 +51,25 @@ export type EngineProbe = {
   dimTokens?: () => string[];
   carriedLights?: () => CarriedLight[];
   tokenFootprints?: () => { tokenId: string }[];
+  placedLights?: () => PlacedLight[];
 };
+
+/** A light a Game Master placed, with the reaches this engine lights by. */
+export type PlacedLight = { lightId: string; bright: number; dim: number };
+
+/** The placed light `lightId` on this canvas, or `null`. */
+export async function placedLightOf(
+  page: Page,
+  lightId: string,
+): Promise<PlacedLight | null> {
+  return page.evaluate(
+    (id) =>
+      (window as unknown as { __engineProbe?: EngineProbe }).__engineProbe
+        ?.placedLights?.()
+        .find((light) => light.lightId === id) ?? null,
+    lightId,
+  );
+}
 
 /**
  * Every token this engine draws, by id — asked of the engine, which is the

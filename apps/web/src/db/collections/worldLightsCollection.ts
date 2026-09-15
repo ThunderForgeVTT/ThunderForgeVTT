@@ -23,6 +23,7 @@ export interface WorldLightDoc {
   x: number;
   y: number;
   radius: number;
+  brightRadius: number;
   intensity: number;
   color?: string | null;
   attachedTokenId?: string | null;

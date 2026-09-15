@@ -6,9 +6,6 @@
 
 use std::collections::HashMap;
 
-use bevy::input::mouse::MouseWheel;
-
-use crate::plugins::camera::read_wheel_notches;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use serde_json::{Value, json};
@@ -20,7 +17,7 @@ use crate::resources::{
 };
 use crate::systems::lighting_vision::{
     PartyEyes, ViewerToken, mirror_carried_lights, mirror_dim_tokens, mirror_hidden_tokens,
-    mirror_marked_tokens, mirror_token_vision,
+    mirror_marked_tokens, mirror_placed_lights, mirror_token_vision,
 };
 use crate::{ActiveWorld, TokenIdentity, emit_event};
 use thunderforge_canvas_core::vision::{
@@ -28,8 +25,12 @@ use thunderforge_canvas_core::vision::{
     illumination_at, visibility_of,
 };
 
-/// Default radius (px) for a newly click-placed light (T037).
+/// Default dim reach (px) for a newly click-placed light (T037).
 const DEFAULT_LIGHT_RADIUS: f32 = 100.0;
+
+/// Default bright reach for a newly click-placed light: half its dim reach,
+/// the look a light with one radius has always had (spec 045 FR-062).
+const DEFAULT_LIGHT_BRIGHT_RADIUS: f32 = DEFAULT_LIGHT_RADIUS * 0.5;
 
 /// Default intensity for a newly click-placed light (T037).
 const DEFAULT_LIGHT_INTENSITY: f32 = 1.0;
@@ -42,14 +43,14 @@ const DEFAULT_LIGHT_INTENSITY: f32 = 1.0;
 const LIGHT_GRAB_RADIUS: f32 = 15.0;
 
 /// Radius (px) change per scroll-wheel notch (T037's resize control).
-const RESIZE_STEP: f32 = 10.0;
+pub(crate) const RESIZE_STEP: f32 = 10.0;
 
 /// Never let a resize drive radius to/below zero (T041's zero-radius
 /// rejection applies to resize too, not just creation).
-const MIN_LIGHT_RADIUS: f32 = 1.0;
+pub(crate) const MIN_LIGHT_RADIUS: f32 = 1.0;
 
 const DEFAULT_LIGHT_COLOR: Color = Color::srgb(1.0, 0.85, 0.55);
-const SELECTED_LIGHT_COLOR: Color = Color::srgb(0.95, 0.85, 0.25);
+pub(crate) const SELECTED_LIGHT_COLOR: Color = Color::srgb(0.95, 0.85, 0.25);
 const NON_SHADOW_CASTING_TINT: Color = Color::srgb(0.6, 0.85, 1.0);
 /// Side length of a light's on-canvas marker, in world units.
 ///
@@ -185,6 +186,18 @@ fn light_color(light: &LightSource, selected: bool) -> Color {
         .unwrap_or(DEFAULT_LIGHT_COLOR)
 }
 
+/// Tell chrome which light the Game Master has selected, or that none is.
+///
+/// The Lights panel edits "the selected light" (spec 045 FR-061: its bright
+/// and dim reach), and nothing ever told it which that was — the store has
+/// reduced `select_light` since spec 001, and the engine that owns the
+/// selection gesture never sent one, so the panel's reach fields could not be
+/// reached. The same command name the store already reduces, so it lands in
+/// world state like any other engine report.
+pub(crate) fn report_selected_light(light_id: Option<&str>) {
+    emit_event(json!({ "type": "select_light", "lightId": light_id }));
+}
+
 /// T037: click to place a light at the cursor (default radius/intensity),
 /// click an existing light to select it, drag it to reposition. GM-only
 /// per `CanvasLayer::Lighting.editing_is_gm_only()` — reuses
@@ -224,6 +237,7 @@ pub(crate) fn handle_light_input(
         for light in light_set.lights().iter().filter(|l| !l.is_carried()) {
             if cursor.distance(light.position()) <= LIGHT_GRAB_RADIUS {
                 selected_light.select(light.id.clone());
+                report_selected_light(Some(&light.id));
                 drag.mode = LightDragMode::Moving {
                     light_id: light.id.clone(),
                     prior_x: light.x,
@@ -234,6 +248,9 @@ pub(crate) fn handle_light_input(
         }
 
         // No existing light hit: place a new one, GM-only, per T037.
+        if selected_light.get_selected().is_some() {
+            report_selected_light(None);
+        }
         selected_light.deselect();
         drag.mode = LightDragMode::Idle;
 
@@ -254,6 +271,7 @@ pub(crate) fn handle_light_input(
                 "x": placed.x,
                 "y": placed.y,
                 "radius": DEFAULT_LIGHT_RADIUS,
+                "brightRadius": DEFAULT_LIGHT_BRIGHT_RADIUS,
                 "intensity": DEFAULT_LIGHT_INTENSITY,
                 "color": Value::Null,
                 "attachedTokenId": Value::Null,
@@ -308,203 +326,6 @@ pub(crate) fn handle_light_input(
             prior_x,
             prior_y,
         });
-    }
-}
-
-/// T037: scroll-wheel resize control for the selected light's radius,
-/// GM-only. Clamped at `MIN_LIGHT_RADIUS` so scrolling can never produce a
-/// zero-or-negative radius (T041 applies to resize as well as creation).
-pub(crate) fn handle_light_resize(
-    mut wheel_events: MessageReader<MouseWheel>,
-    mut light_set: ResMut<LightSet>,
-    selected_light: Res<SelectedLight>,
-    is_gm: Res<IsGameMaster>,
-    active_world: Res<ActiveWorld>,
-) {
-    if !is_gm.0 {
-        wheel_events.clear();
-        return;
-    }
-
-    // Notches, not raw deltas — see `read_wheel_notches`. Unnormalised, a
-    // single browser wheel notch was 100 units of radius change here for the
-    // same reason it was a hundred zoom steps in the camera.
-    let scroll = read_wheel_notches(&mut wheel_events);
-    if scroll == 0.0 {
-        return;
-    }
-
-    let Some(light_id) = selected_light.get_selected().cloned() else {
-        return;
-    };
-
-    let Some(light) = light_set.get(&light_id).cloned() else {
-        return;
-    };
-
-    let prior_radius = light.radius;
-    let prior_intensity = light.intensity;
-    let mut updated = light;
-    updated.radius = (updated.radius + scroll * RESIZE_STEP).max(MIN_LIGHT_RADIUS);
-    light_set.upsert(updated.clone());
-    light_set.push_undo(LightEdit::Resize {
-        light_id: light_id.clone(),
-        prior_radius,
-        prior_intensity,
-    });
-    emit_event(json!({
-        "type": "update_light",
-        "lightId": light_id,
-        "changes": { "radius": updated.radius },
-        "worldId": active_world.0,
-    }));
-}
-
-/// T037: `L` toggles `casts_shadows` on the selected light; Delete/Backspace
-/// removes it. GM-only, same gating as `handle_light_input`. Keybinds
-/// chosen to avoid `systems/wall.rs`'s `V`/`B`/`O`/Ctrl+Z and
-/// `move_player`'s WASD (`S` is taken by player-token movement, so `L` is
-/// used instead of the spec's suggested `S`).
-pub(crate) fn handle_light_keyboard_toggles(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mut light_set: ResMut<LightSet>,
-    mut selected_light: ResMut<SelectedLight>,
-    is_gm: Res<IsGameMaster>,
-    active_world: Res<ActiveWorld>,
-) {
-    if !is_gm.0 {
-        return;
-    }
-
-    let Some(light_id) = selected_light.get_selected().cloned() else {
-        return;
-    };
-
-    if keyboard.just_pressed(KeyCode::KeyL) {
-        if let Some(light) = light_set.get(&light_id).cloned() {
-            let prior_casts_shadows = light.casts_shadows;
-            let mut updated = light;
-            updated.casts_shadows = !updated.casts_shadows;
-            light_set.upsert(updated.clone());
-            light_set.push_undo(LightEdit::FlagsToggle {
-                light_id: light_id.clone(),
-                prior_casts_shadows,
-            });
-            emit_event(json!({
-                "type": "update_light",
-                "lightId": light_id,
-                "changes": { "castsShadows": updated.casts_shadows },
-                "worldId": active_world.0,
-            }));
-        }
-        return;
-    }
-
-    if (keyboard.just_pressed(KeyCode::Delete) || keyboard.just_pressed(KeyCode::Backspace))
-        && let Some(deleted) = light_set.remove(&light_id)
-    {
-        light_set.push_undo(LightEdit::Delete { deleted });
-        selected_light.deselect();
-        emit_event(json!({
-            "type": "delete_light",
-            "lightId": light_id,
-            "worldId": active_world.0,
-        }));
-    }
-}
-
-/// T039: light undo (FR-012). Ctrl+Z pops `LightSet`'s undo stack and
-/// re-issues the inverse mutation through the same outbound-event path a
-/// normal edit uses (research.md §4) — applied locally first (optimistic),
-/// then emitted so other clients converge once the server confirms it.
-/// Mirrors `systems/wall.rs`'s `handle_wall_undo` exactly.
-pub(crate) fn handle_light_undo(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mut light_set: ResMut<LightSet>,
-    is_gm: Res<IsGameMaster>,
-    active_world: Res<ActiveWorld>,
-) {
-    if !is_gm.0 {
-        return;
-    }
-
-    let ctrl = keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight);
-    if !ctrl || !keyboard.just_pressed(KeyCode::KeyZ) {
-        return;
-    }
-
-    let Some(edit) = light_set.pop_undo() else {
-        return;
-    };
-
-    match edit {
-        LightEdit::Move {
-            light_id,
-            prior_x,
-            prior_y,
-        } => {
-            if let Some(mut light) = light_set.get(&light_id).cloned() {
-                light.x = prior_x;
-                light.y = prior_y;
-                light_set.upsert(light);
-            }
-            emit_event(json!({
-                "type": "update_light",
-                "lightId": light_id,
-                "changes": { "x": prior_x, "y": prior_y },
-                "worldId": active_world.0,
-            }));
-        }
-        LightEdit::Resize {
-            light_id,
-            prior_radius,
-            prior_intensity,
-        } => {
-            if let Some(mut light) = light_set.get(&light_id).cloned() {
-                light.radius = prior_radius;
-                light.intensity = prior_intensity;
-                light_set.upsert(light);
-            }
-            emit_event(json!({
-                "type": "update_light",
-                "lightId": light_id,
-                "changes": { "radius": prior_radius, "intensity": prior_intensity },
-                "worldId": active_world.0,
-            }));
-        }
-        LightEdit::FlagsToggle {
-            light_id,
-            prior_casts_shadows,
-        } => {
-            if let Some(mut light) = light_set.get(&light_id).cloned() {
-                light.casts_shadows = prior_casts_shadows;
-                light_set.upsert(light);
-            }
-            emit_event(json!({
-                "type": "update_light",
-                "lightId": light_id,
-                "changes": { "castsShadows": prior_casts_shadows },
-                "worldId": active_world.0,
-            }));
-        }
-        LightEdit::Delete { deleted } => {
-            // Re-creates the light; the server assigns a new id (the
-            // original id cannot be resurrected, same caveat as
-            // `WallEdit::Delete`'s undo).
-            emit_event(json!({
-                "type": "create_light",
-                "light": {
-                    "x": deleted.x,
-                    "y": deleted.y,
-                    "radius": deleted.radius,
-                    "intensity": deleted.intensity,
-                    "color": deleted.color,
-                    "attachedTokenId": deleted.attached_token_id,
-                    "castsShadows": deleted.casts_shadows,
-                },
-                "worldId": active_world.0,
-            }));
-        }
     }
 }
 
@@ -723,6 +544,7 @@ pub(crate) fn apply_light_illumination(
         mirror_hidden_tokens(Vec::new());
         mirror_dim_tokens(Vec::new());
         mirror_carried_lights(Vec::new());
+        mirror_placed_lights(Vec::new());
         return;
     }
     *touched = true;
@@ -769,6 +591,18 @@ pub(crate) fn apply_light_illumination(
                     light.radius,
                 ))
             })
+            .collect(),
+    );
+
+    // Every placed light's two reaches, as this pass lights the board with
+    // them (spec 045 FR-061) — what a Game Master set in the Lights panel,
+    // read back from each seat's engine.
+    mirror_placed_lights(
+        light_set
+            .lights()
+            .iter()
+            .filter(|light| !light.is_carried())
+            .map(|light| (light.id.clone(), light.bright(), light.radius))
             .collect(),
     );
 

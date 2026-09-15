@@ -136,6 +136,7 @@ function installEngineProbe(wasm: BevyWasmModule): void {
   const tokenVision = (wasm as { token_vision?: () => string }).token_vision;
   const carriedLights = (wasm as { carried_lights?: () => string })
     .carried_lights;
+  const placedLights = (wasm as { placed_lights?: () => string }).placed_lights;
   const movementState = (wasm as { movement_state?: () => string })
     .movement_state;
   const tokenFootprints = (wasm as { token_footprints?: () => string })
@@ -193,6 +194,17 @@ function installEngineProbe(wasm: BevyWasmModule): void {
             tokenId: string;
             x: number;
             y: number;
+            bright: number;
+            dim: number;
+          }[])
+        : [],
+    // Spec 045 FR-061: every placed light's bright and dim reach, as this
+    // engine lights the board by them — a reach set in the Lights panel read
+    // back from each seat. Empty in a lit scene with nothing to light.
+    placedLights: (): { lightId: string; bright: number; dim: number }[] =>
+      placedLights
+        ? (JSON.parse(placedLights()) as {
+            lightId: string;
             bright: number;
             dim: number;
           }[])

@@ -330,7 +330,10 @@ pub struct GraphQLLightSource {
     scene_id: uuid::Uuid,
     x: f64,
     y: f64,
+    /// How far the light reaches at all: its dim reach, in world units.
     radius: f64,
+    /// How far it is bright, in world units (spec 045 FR-061).
+    bright_radius: f64,
     intensity: f64,
     color: Option<String>,
     attached_token_id: Option<uuid::Uuid>,
@@ -350,6 +353,7 @@ impl From<crate::models::LightSource> for GraphQLLightSource {
             x: light.x,
             y: light.y,
             radius: light.radius,
+            bright_radius: light.bright_radius,
             intensity: light.intensity,
             color: light.color,
             attached_token_id: light.attached_token_id,

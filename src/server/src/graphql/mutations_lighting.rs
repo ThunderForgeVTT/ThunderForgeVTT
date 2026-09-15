@@ -14,6 +14,24 @@ use crate::world_events::{
     EVENT_CODE_LIGHT_SOURCE_CHANGED, record_world_event, world_id_for_scene,
 };
 
+/// A light's bright reach, checked against its dim reach (spec 045 FR-061).
+///
+/// Refused rather than clamped when a caller names both and they disagree: a
+/// Game Master who typed a bright reach past the dim one has made a mistake
+/// worth being told about, not one to be quietly corrected into a different
+/// light.
+fn checked_reaches(radius: f64, bright_radius: f64) -> Result<(), Error> {
+    if !bright_radius.is_finite() || bright_radius < 0.0 {
+        return Err(Error::new("A light's bright reach cannot be negative"));
+    }
+    if bright_radius > radius {
+        return Err(Error::new(
+            "A light's bright reach cannot be further than its dim reach",
+        ));
+    }
+    Ok(())
+}
+
 #[derive(Default)]
 pub struct LightSourceMutation;
 
@@ -40,6 +58,10 @@ impl LightSourceMutation {
         let x = input.x;
         let y = input.y;
         let radius = input.radius;
+        // FR-062: a light created without a bright reach looks as every light
+        // did before it had one.
+        let bright_radius = input.bright_radius.unwrap_or(radius * 0.5);
+        checked_reaches(radius, bright_radius)?;
         let intensity = input.intensity.unwrap_or(1.0);
         let color = input.color;
         let attached_token_id = input.attached_token_id;
@@ -66,6 +88,7 @@ impl LightSourceMutation {
                     light_sources::x.eq(x),
                     light_sources::y.eq(y),
                     light_sources::radius.eq(radius),
+                    light_sources::bright_radius.eq(bright_radius),
                     light_sources::intensity.eq(intensity),
                     light_sources::color.eq(&color),
                     light_sources::attached_token_id.eq(attached_token_id),
@@ -123,7 +146,11 @@ impl LightSourceMutation {
             .get()
             .map_err(|_| Error::new("Failed to get DB connection"))?;
 
-        let update_data = crate::models::LightSourceUpdate {
+        if let (Some(radius), Some(bright_radius)) = (input.radius, input.bright_radius) {
+            checked_reaches(radius, bright_radius)?;
+        }
+        let mut update_data = crate::models::LightSourceUpdate {
+            bright_radius: input.bright_radius,
             x: input.x,
             y: input.y,
             radius: input.radius,
@@ -141,13 +168,17 @@ impl LightSourceMutation {
             // 🔐 Authority to author content on a scene follows the world
             // role — the Owner and any GM, never a Player — not who happened
             // to create the scene. See `world_membership::is_dm_of_scene`.
-            let scene_id = light_sources::table
+            let stored = light_sources::table
                 .filter(light_sources::light_id.eq(light_id))
-                .select(light_sources::scene_id)
-                .first::<uuid::Uuid>(&mut conn)
+                .select((
+                    light_sources::scene_id,
+                    light_sources::radius,
+                    light_sources::bright_radius,
+                ))
+                .first::<(uuid::Uuid, f64, f64)>(&mut conn)
                 .optional()?;
-            let authorized = match scene_id {
-                Some(scene_id) => crate::auth::world_membership::is_dm_of_scene(
+            let authorized = match stored {
+                Some((scene_id, _, _)) => crate::auth::world_membership::is_dm_of_scene(
                     &mut conn, user_id, is_admin, scene_id,
                 )?,
                 None => false,
@@ -155,8 +186,16 @@ impl LightSourceMutation {
             if !authorized {
                 return Err(DieselError::NotFound);
             }
-            if let Some(scene_id) = scene_id {
+            if let Some((scene_id, stored_radius, stored_bright)) = stored {
                 refuse_scene_if_paused(&mut conn, scene_id)?;
+                // Whichever reach was not named, the other is kept within:
+                // a dim reach pulled in past the bright one brings the bright
+                // one with it, and a bright reach is never stored past the dim.
+                let radius = update_data.radius.unwrap_or(stored_radius);
+                let bright = update_data.bright_radius.unwrap_or(stored_bright);
+                if update_data.radius.is_some() || update_data.bright_radius.is_some() {
+                    update_data.bright_radius = Some(bright.clamp(0.0, radius.max(0.0)));
+                }
             }
 
             let light =

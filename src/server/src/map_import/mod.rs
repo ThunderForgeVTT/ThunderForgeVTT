@@ -274,6 +274,9 @@ pub async fn import_uvtt_impl(
                         light_sources::x.eq(light.x),
                         light_sources::y.eq(light.y),
                         light_sources::radius.eq(light.radius),
+                        // A dd2vtt light has one range; it looks as a light
+                        // with one radius always has (spec 045 FR-062).
+                        light_sources::bright_radius.eq(light.radius * 0.5),
                         light_sources::intensity.eq(light.intensity),
                         light_sources::color.eq(&light.color),
                         light_sources::attached_token_id.eq(None::<Uuid>),
