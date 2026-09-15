@@ -56,3 +56,9 @@ Future collaborative world ownership rules remain a contract concern, but the cu
 
 - The endpoint must remain self-only, authenticated, and CSRF-protected.
 - Logging must avoid retaining direct personal identifiers after deletion.
+
+## Amendment — 2026-09-15: no `world_tokens` step
+
+The `world_tokens` table was dropped (ADR-040's amendment of the same date), so
+the deletion no longer has that step, and the summary and `deleteMyData`
+payload no longer carry `world_tokens_deleted` / `worldTokensDeleted`.

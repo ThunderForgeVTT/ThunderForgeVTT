@@ -377,12 +377,6 @@ async fn seed(
         |v| &v["shapeId"]
     );
     make!(
-        "worldToken",
-        "createWorldToken",
-        r#"mutation { createWorldToken(input: { worldId: "{world}" }) { id } }"#,
-        |v| &v["id"]
-    );
-    make!(
         "actor",
         "createActor",
         r#"mutation { createActor(input: { worldId: "{world}", label: "Seeded", isNpc: false }) { id } }"#,

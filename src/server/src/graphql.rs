@@ -21,9 +21,7 @@ use crate::state::AppState;
 
 // Phase 4.9.Z Step 1: Core entity types extracted to separate module
 pub mod types;
-pub use types::{
-    GraphQLMyWorldEntry, GraphQLUser, GraphQLWorld, GraphQLWorldEvent, GraphQLWorldToken,
-};
+pub use types::{GraphQLMyWorldEntry, GraphQLUser, GraphQLWorld, GraphQLWorldEvent};
 
 // Phase 4.9.Z Step 2: Admin types extracted to separate module
 pub mod admin_types;
@@ -38,21 +36,20 @@ pub mod input_types;
 pub use input_types::{
     GraphQLCreateLightSourceInput, GraphQLCreateSceneInput, GraphQLCreateShapeInput,
     GraphQLCreateTokenInput, GraphQLCreateWallInput, GraphQLCreateWorldInput,
-    GraphQLCreateWorldTokenInput, GraphQLDeleteMyDataPayload, GraphQLDeleteWorldPayload,
-    GraphQLDoorState, GraphQLExportManifest, GraphQLExportMyDataPayload, GraphQLMoveTokenInput,
-    GraphQLPlaceholderDomainObject, GraphQLPlayersOnlineList, GraphQLShapeKind,
-    GraphQLUpdateFogMaskInput, GraphQLUpdateLightSourceInput, GraphQLUpdateSceneInput,
-    GraphQLUpdateShapeInput, GraphQLUpdateTokenInput, GraphQLUpdateWallInput,
-    GraphQLUpsertWorldTokenInput,
+    GraphQLDeleteMyDataPayload, GraphQLDeleteWorldPayload, GraphQLDoorState, GraphQLExportManifest,
+    GraphQLExportMyDataPayload, GraphQLPlaceholderDomainObject, GraphQLPlayersOnlineList,
+    GraphQLShapeKind, GraphQLUpdateFogMaskInput, GraphQLUpdateLightSourceInput,
+    GraphQLUpdateSceneInput, GraphQLUpdateShapeInput, GraphQLUpdateTokenInput,
+    GraphQLUpdateWallInput,
 };
 
 // Phase 4.9.Z Step 4a: Helper functions extracted to separate module
 pub mod helpers;
 pub use helpers::{
     admin_user, app_state, authenticated_user, get_world_id_from_scene, load_all_worlds,
-    load_owned_world_event_by_id, load_owned_world_events, load_owned_world_token_by_id,
-    load_owned_world_tokens, load_owned_worlds, load_visible_world_by_id, normalize_world_name,
-    prepare_world_input, require_visible_world, validate_world_name, world_write_error,
+    load_owned_world_event_by_id, load_owned_world_events, load_owned_worlds,
+    load_visible_world_by_id, normalize_world_name, prepare_world_input, require_visible_world,
+    validate_world_name, world_write_error,
 };
 
 // Phase 4.9.Z Step 5: Query extraction into separate modules
@@ -244,10 +241,6 @@ pub use mutations_actor_claims::{ActorClaimMutation, ActorClaimQuery};
 pub mod types_scene;
 pub use types_scene::*;
 
-#[path = "graphql/mutations_world_tokens.rs"]
-pub mod mutations_world_tokens;
-pub use mutations_world_tokens::*;
-
 #[path = "graphql/mutations_actor_system_data.rs"]
 pub mod mutations_actor_system_data;
 pub use mutations_actor_system_data::*;
@@ -304,6 +297,11 @@ mod play_pause_stream_tests;
 #[cfg(test)]
 #[path = "graphql/play_pause_surface_tests.rs"]
 mod play_pause_surface_tests;
+
+/// The world-scoped token routes, which checked no membership, stay removed.
+#[cfg(test)]
+#[path = "graphql/world_tokens_retired_tests.rs"]
+mod world_tokens_retired_tests;
 
 /// The tables that test reads, public to dependent crates' tests so the app
 /// crate can hold the schema merged with the packs' fields to the same list
@@ -446,7 +444,6 @@ pub struct MutationRoot(
     UserDataMutation,
     AdminMutation,
     SceneMutation,
-    WorldTokenMutation,
     ActorSystemDataMutation,
     mutations_item_abilities::ItemAbilityMutation,
     CollaboratorMutation,

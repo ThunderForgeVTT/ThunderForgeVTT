@@ -15,7 +15,7 @@ use crate::schema::{
     world_combatants, world_combats, world_events, world_invites, world_item_abilities,
     world_item_effects, world_item_permissions, world_item_prices, world_item_shares, world_items,
     world_lore_entries, world_lore_image_assets, world_lore_links, world_lore_permissions,
-    world_lore_revisions, world_lore_tags, world_members, world_roll_records, world_tokens, worlds,
+    world_lore_revisions, world_lore_tags, world_members, world_roll_records, worlds,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -527,43 +527,6 @@ pub struct WorldEvent {
     pub updated_at: chrono::NaiveDateTime,
     pub created_by: uuid::Uuid,
     pub updated_by: uuid::Uuid,
-}
-
-#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
-#[diesel(table_name = world_tokens)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
-pub struct WorldToken {
-    pub id: String,
-    pub world_id: uuid::Uuid,
-    pub x: f64,
-    pub y: f64,
-    pub z: f64,
-    pub label: Option<String>,
-    pub health: Option<i32>,
-    pub max_health: Option<i32>,
-    pub created_by: uuid::Uuid,
-    pub updated_by: uuid::Uuid,
-    pub schema_version: i32,
-    pub created_at: chrono::NaiveDateTime,
-    pub updated_at: chrono::NaiveDateTime,
-}
-
-#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
-#[diesel(table_name = world_tokens)]
-pub struct NewWorldToken {
-    pub id: String,
-    pub world_id: uuid::Uuid,
-    pub x: f64,
-    pub y: f64,
-    pub z: f64,
-    pub label: Option<String>,
-    pub health: Option<i32>,
-    pub max_health: Option<i32>,
-    pub created_by: uuid::Uuid,
-    pub updated_by: uuid::Uuid,
-    pub schema_version: i32,
-    pub created_at: chrono::NaiveDateTime,
-    pub updated_at: chrono::NaiveDateTime,
 }
 
 // ========== Scene Models (Phase 3.5) ==========

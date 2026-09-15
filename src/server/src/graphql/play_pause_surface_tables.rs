@@ -121,22 +121,6 @@ pub const GATED: &[(&str, &str)] = &[
         "pickUpPlacedItem",
         r#"mutation { pickUpPlacedItem(input: { tokenId: "{placedItem}", actorId: "{actor}" }) { __typename } }"#,
     ),
-    (
-        "createWorldToken",
-        r#"mutation { createWorldToken(input: { worldId: "{world}" }) { __typename } }"#,
-    ),
-    (
-        "upsertWorldToken",
-        r#"mutation { upsertWorldToken(input: { worldId: "{world}", tokenId: "{worldToken}", x: 1 }) { __typename } }"#,
-    ),
-    (
-        "moveToken",
-        r#"mutation { moveToken(input: { tokenId: "{worldToken}", x: 1, y: 1 }) { __typename } }"#,
-    ),
-    (
-        "deleteWorldToken",
-        r#"mutation { deleteWorldToken(tokenId: "{worldToken}") }"#,
-    ),
     // --- walls, doors, lights, shapes (T031) -----------------------------
     (
         "createWall",

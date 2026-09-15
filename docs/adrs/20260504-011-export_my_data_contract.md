@@ -82,3 +82,10 @@ GraphQL type per table, which would be the same dump wearing a schema.
 makes. The ZIP still packages JSON only; image references name stored objects
 whose bytes are not included, which remains this ADR's second negative
 consequence.
+
+## Amendment — 2026-09-15: `v3`, without `world_tokens`
+
+The `world_tokens` table was dropped (ADR-040's amendment of the same date).
+The payload is now **`v3`**: `worldTokens` and the manifest's `worldTokens`
+count are gone. A person's tokens on scenes were never in that table, so the
+export carries nothing less than before.

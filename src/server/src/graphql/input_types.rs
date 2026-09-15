@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::db_types::PolicyEffectEnum;
 // use crate::models::Policy; // Disabled - Policy table not implemented
 
-use super::{GraphQLUser, GraphQLWorld, GraphQLWorldEvent, GraphQLWorldToken};
+use super::{GraphQLUser, GraphQLWorld, GraphQLWorldEvent};
 
 // ========== World & Scene Creation/Update ==========
 
@@ -273,7 +273,6 @@ pub struct GraphQLExportManifest {
     pub schema_version: String,
     pub exported_at: DateTime<Utc>,
     pub worlds: i32,
-    pub world_tokens: i32,
     pub world_events: i32,
     pub policies: i32,
     pub scenes: i32,
@@ -295,7 +294,6 @@ pub struct GraphQLExportMyDataPayload {
     pub manifest: GraphQLExportManifest,
     pub user: GraphQLUser,
     pub worlds: Vec<GraphQLWorld>,
-    pub world_tokens: Vec<GraphQLWorldToken>,
     pub world_events: Vec<GraphQLWorldEvent>,
     pub policies: Vec<GraphQLPolicy>,
     pub scenes: Vec<async_graphql::Json<serde_json::Value>>,
@@ -326,7 +324,6 @@ pub struct GraphQLDeleteMyDataPayload {
     pub status: String,
     pub message: String,
     pub worlds_deleted: i64,
-    pub world_tokens_deleted: i64,
     pub world_events_deleted: i64,
     pub policies_deleted: i64,
     pub oauth_links_deleted: i64,
@@ -342,42 +339,6 @@ pub struct GraphQLDeleteWorldPayload {
     pub id: Uuid,
     pub status: String,
     pub message: String,
-}
-
-// ========== Token Management ==========
-
-/// Input for creating a new world token
-#[derive(InputObject, Debug, Clone)]
-pub struct GraphQLCreateWorldTokenInput {
-    pub world_id: Uuid,
-    pub label: Option<String>,
-    pub x: Option<f64>,
-    pub y: Option<f64>,
-    pub z: Option<f64>,
-    pub health: Option<i32>,
-    pub max_health: Option<i32>,
-}
-
-/// Input for upserting (create or update) a world token
-#[derive(InputObject, Debug, Clone)]
-pub struct GraphQLUpsertWorldTokenInput {
-    pub world_id: Uuid,
-    pub token_id: Option<String>,
-    pub label: Option<String>,
-    pub x: Option<f64>,
-    pub y: Option<f64>,
-    pub z: Option<f64>,
-    pub health: Option<i32>,
-    pub max_health: Option<i32>,
-}
-
-/// Input for moving a token to new coordinates
-#[derive(InputObject, Debug, Clone)]
-pub struct GraphQLMoveTokenInput {
-    pub token_id: String,
-    pub x: f64,
-    pub y: f64,
-    pub z: Option<f64>,
 }
 
 // ========== Scene-Scoped Tokens (native canvas authoring) ==========

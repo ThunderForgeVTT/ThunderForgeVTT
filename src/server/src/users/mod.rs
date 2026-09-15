@@ -1,9 +1,9 @@
 use crate::admin::user_role;
 use crate::auth_middleware::AuthenticatedUser;
-use crate::models::{User, World, WorldEvent, WorldToken}; // Policy disabled
+use crate::models::{User, World, WorldEvent}; // Policy disabled
 use crate::schema::{
     login_two_factor_challenges, oauth_link_challenges, user_oauth_accounts, user_sessions, users,
-    world_events, world_tokens, worlds,
+    world_events, worlds,
 };
 use crate::state::AppState;
 use axum::{
@@ -49,7 +49,6 @@ pub use export_content::{
 #[derive(Debug, Clone, Serialize)]
 pub struct ExportCounts {
     pub worlds: usize,
-    pub world_tokens: usize,
     pub world_events: usize,
     pub policies: usize,
     pub scenes: usize,
@@ -78,7 +77,6 @@ pub struct UserDataExport {
     pub manifest: ExportManifest,
     pub user: PublicUser,
     pub worlds: Vec<World>,
-    pub world_tokens: Vec<WorldToken>,
     pub world_events: Vec<WorldEvent>,
     pub policies: Vec<String>, // Policy disabled
     /// Spec 039 T076 (ADR-011 as amended): what the person made, as the
@@ -100,7 +98,6 @@ pub struct UserDataExport {
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct UserDataDeleteSummary {
     pub worlds_deleted: i64,
-    pub world_tokens_deleted: i64,
     pub world_events_deleted: i64,
     pub policies_deleted: i64,
     pub oauth_links_deleted: i64,
@@ -193,7 +190,7 @@ pub async fn export_user_data_payload(
         .get()
         .map_err(|_| "Failed to get DB connection".to_string())?;
 
-    let (user, owned_worlds, owned_tokens, owned_events, owned_policies, content) =
+    let (user, owned_worlds, owned_events, owned_policies, content) =
         tokio::task::spawn_blocking(move || {
             let user = users::table
                 .filter(users::id.eq(user_id))
@@ -205,12 +202,6 @@ pub async fn export_user_data_payload(
                 .order(worlds::created_at.asc())
                 .select(World::as_select())
                 .load::<World>(&mut conn)?;
-
-            let owned_tokens = world_tokens::table
-                .filter(world_tokens::created_by.eq(user_id))
-                .order(world_tokens::created_at.asc())
-                .select(WorldToken::as_select())
-                .load::<WorldToken>(&mut conn)?;
 
             let owned_events = world_events::table
                 .filter(world_events::created_by.eq(user_id))
@@ -225,7 +216,6 @@ pub async fn export_user_data_payload(
             Ok::<_, diesel::result::Error>((
                 user,
                 owned_worlds,
-                owned_tokens,
                 owned_events,
                 owned_policies,
                 content,
@@ -238,11 +228,12 @@ pub async fn export_user_data_payload(
     Ok(UserDataExport {
         manifest: ExportManifest {
             // v2: the person's own content, as shapes (ADR-011 as amended).
-            schema_version: "v2",
+            // v3: without `world_tokens`, whose table was dropped — a scene's
+            // tokens were never in it (ADR-040).
+            schema_version: "v3",
             exported_at: Utc::now(),
             counts: ExportCounts {
                 worlds: owned_worlds.len(),
-                world_tokens: owned_tokens.len(),
                 world_events: owned_events.len(),
                 policies: owned_policies.len(),
                 scenes: content.scenes.len(),
@@ -255,7 +246,6 @@ pub async fn export_user_data_payload(
         },
         user: PublicUser::from(user),
         worlds: owned_worlds,
-        world_tokens: owned_tokens,
         world_events: owned_events,
         policies: owned_policies,
         scenes: content.scenes,
@@ -372,7 +362,6 @@ async fn delete_user_data(
         Some(subject_user_hash.clone()),
         Some(serde_json::json!({
             "worlds_deleted": summary.worlds_deleted,
-            "world_tokens_deleted": summary.world_tokens_deleted,
             "world_events_deleted": summary.world_events_deleted,
             "policies_deleted": summary.policies_deleted,
         })),
@@ -435,11 +424,6 @@ pub(crate) fn delete_user_data_on(
             )
             .execute(conn)? as i64;
 
-            summary.world_tokens_deleted += diesel::delete(
-                world_tokens::table.filter(world_tokens::world_id.eq_any(&owned_world_ids)),
-            )
-            .execute(conn)? as i64;
-
             summary.worlds_deleted +=
                 diesel::delete(worlds::table.filter(worlds::id.eq_any(&owned_world_ids)))
                     .execute(conn)? as i64;
@@ -447,10 +431,6 @@ pub(crate) fn delete_user_data_on(
 
         summary.world_events_deleted +=
             diesel::delete(world_events::table.filter(world_events::created_by.eq(user_id)))
-                .execute(conn)? as i64;
-
-        summary.world_tokens_deleted +=
-            diesel::delete(world_tokens::table.filter(world_tokens::created_by.eq(user_id)))
                 .execute(conn)? as i64;
 
         //         summary.policies_deleted +=
@@ -804,7 +784,7 @@ mod tests {
             .await
             .expect("export");
 
-        assert_eq!(export.manifest.schema_version, "v2");
+        assert_eq!(export.manifest.schema_version, "v3");
         let exported_actor = export
             .actors
             .iter()

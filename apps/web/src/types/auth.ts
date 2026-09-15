@@ -83,7 +83,6 @@ export interface OAuthActionResponse {
 export interface UserDataDeleteSummary {
   worlds_deleted: number;
   world_memberships_removed: number;
-  world_tokens_deleted: number;
   world_events_deleted: number;
   policies_deleted: number;
   oauth_links_deleted: number;

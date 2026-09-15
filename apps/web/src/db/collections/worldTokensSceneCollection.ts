@@ -3,8 +3,8 @@
  * Plain TS types for scene-scoped tokens (the modern `tokens` table,
  * native canvas authoring).
  *
- * Named distinctly from `worldTokensCollection.ts`, which holds the
- * legacy world-scoped `world_tokens` table's types.
+ * Named for the scene, as distinct from the world-scoped `world_tokens`
+ * table this replaced, which has since been dropped.
  *
  * RxDB was hard-cut from this collection: the sync path
  * (engine/world/sync/tokens.ts) already had a complete, working live-sync

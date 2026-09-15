@@ -203,26 +203,6 @@ impl UserQuery {
             .map(|item| item.map(GraphQLWorld::from))
     }
 
-    async fn my_world_tokens(&self, ctx: &Context<'_>) -> GraphQLResult<Vec<GraphQLWorldToken>> {
-        let state = app_state(ctx)?;
-        let auth_user = authenticated_user(ctx)?;
-        load_owned_world_tokens(state, auth_user.user_id)
-            .await
-            .map(|items| items.into_iter().map(GraphQLWorldToken::from).collect())
-    }
-
-    async fn world_token(
-        &self,
-        ctx: &Context<'_>,
-        token_id: String,
-    ) -> GraphQLResult<Option<GraphQLWorldToken>> {
-        let state = app_state(ctx)?;
-        let auth_user = authenticated_user(ctx)?;
-        load_owned_world_token_by_id(state, auth_user.user_id, token_id)
-            .await
-            .map(|item| item.map(GraphQLWorldToken::from))
-    }
-
     async fn my_world_events(&self, ctx: &Context<'_>) -> GraphQLResult<Vec<GraphQLWorldEvent>> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;

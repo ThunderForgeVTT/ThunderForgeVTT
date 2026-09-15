@@ -67,3 +67,22 @@ Unchanged pattern from ADR-033/Principle III — ownership enforced at the DB qu
 ## References
 
 - Spec 004: `specs/004-token-canvas-authoring/` (research.md §1, §3, §4; data-model.md; plan.md Constitution Check)
+
+## Amendment — 2026-09-15: `world_tokens` is dropped
+
+The follow-up this ADR asked for. `createWorldToken` and `upsertWorldToken`
+had stayed in the schema after the panel moved off them, checking that the
+caller was signed in and that the world was not paused but not that they
+belonged to the world: any account could write a token into any world, and
+`upsertWorldToken` broadcast the token's label past the hidden-name rule. No
+client, pack, engine request or script called them (the engine's two
+`moveToken` builders are stubs that never send). The six routes
+(`createWorldToken`, `upsertWorldToken`, `moveToken`, `deleteWorldToken`,
+`myWorldTokens`, `worldToken`) and their types are removed, and migration
+`2026-09-15-090000-0000_drop_world_tokens` drops the table. Its rows were test
+residue with no labels.
+
+Admin statistics' `totalWorldTokens` and the welcome summary's `totalTokens`
+now count the scene-scoped `tokens` table — the tokens actually in worlds. The
+export (ADR-011) and deletion (ADR-012) contracts lose their `world_tokens`
+sections. `graphql/world_tokens_retired_tests.rs` keeps the routes out.

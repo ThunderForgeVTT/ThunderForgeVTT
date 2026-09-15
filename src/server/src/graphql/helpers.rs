@@ -278,28 +278,6 @@ pub async fn load_all_worlds(state: &AppState) -> GraphQLResult<Vec<World>> {
     .map_err(|_| Error::new("Failed to query worlds"))
 }
 
-/// Load all world tokens owned by the given user, ordered by most recently created.
-pub async fn load_owned_world_tokens(
-    state: &AppState,
-    user_id: uuid::Uuid,
-) -> GraphQLResult<Vec<WorldToken>> {
-    let mut conn = state
-        .db_pool
-        .get()
-        .map_err(|_| Error::new("Failed to get DB connection"))?;
-
-    tokio::task::spawn_blocking(move || {
-        world_tokens::table
-            .filter(world_tokens::created_by.eq(user_id))
-            .order(world_tokens::created_at.desc())
-            .select(WorldToken::as_select())
-            .load::<WorldToken>(&mut conn)
-    })
-    .await
-    .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to query world tokens"))
-}
-
 /// Load all world events owned by the given user, ordered by most recently created.
 pub async fn load_owned_world_events(
     state: &AppState,
@@ -417,37 +395,6 @@ pub async fn require_visible_world(
         Some(_) => Ok(()),
         None => Err(Error::new("You do not have access to this world")
             .extend_with(|_, ext| ext.set("code", "FORBIDDEN"))),
-    }
-}
-
-/// Load a single world token by ID with ownership verification.
-///
-/// # Permissions
-/// Returns the token only if the user owns it (created_by match).
-pub async fn load_owned_world_token_by_id(
-    state: &AppState,
-    user_id: uuid::Uuid,
-    token_id: String,
-) -> GraphQLResult<Option<WorldToken>> {
-    let mut conn = state
-        .db_pool
-        .get()
-        .map_err(|_| Error::new("Failed to get DB connection"))?;
-
-    let found = tokio::task::spawn_blocking(move || {
-        world_tokens::table
-            .filter(world_tokens::id.eq(token_id))
-            .select(WorldToken::as_select())
-            .first::<WorldToken>(&mut conn)
-            .optional()
-    })
-    .await
-    .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to query world token"))?;
-
-    match found {
-        Some(token) if token.created_by != user_id => Err(Error::new("Forbidden")),
-        other => Ok(other),
     }
 }
 

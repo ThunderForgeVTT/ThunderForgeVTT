@@ -33,14 +33,13 @@ interface ExportPayload {
     schemaVersion: string;
     exportedAt: string;
     worlds: number;
-    worldTokens: number;
     worldEvents: number;
   };
   user: { id: string; username: string };
   worlds: { id: string; name: string }[];
-  worldTokens: { id: string }[];
   worldEvents: { id: string }[];
   // v2 (spec 039 T076): the person's own content, in the export's shapes.
+  // v3: `worldTokens` is gone with its table; a scene's tokens were never in it.
   scenes: { id: string; name: string }[];
   actors: { id: string; label: string }[];
   items: { id: string }[];
@@ -58,12 +57,10 @@ const EXPORT_QUERY = `
         schemaVersion
         exportedAt
         worlds
-        worldTokens
         worldEvents
       }
       user { id username }
       worlds { id name }
-      worldTokens { id }
       worldEvents { id }
       scenes
       actors
@@ -112,7 +109,7 @@ test.describe("ADR-011: the export answers for the person signed in", () => {
 
     const payload = await exportFor(page);
 
-    expect(payload.manifest.schemaVersion).toBe("v2");
+    expect(payload.manifest.schemaVersion).toBe("v3");
     expect(Number.isNaN(new Date(payload.manifest.exportedAt).getTime())).toBe(
       false,
     );
@@ -123,7 +120,6 @@ test.describe("ADR-011: the export answers for the person signed in", () => {
     // worth asserting against, because the count is what a person reads.
     expect(payload.worlds.map((world) => world.id)).toContain(worldId);
     expect(payload.manifest.worlds).toBe(payload.worlds.length);
-    expect(payload.manifest.worldTokens).toBe(payload.worldTokens.length);
     expect(payload.manifest.worldEvents).toBe(payload.worldEvents.length);
   });
 
@@ -201,7 +197,7 @@ test.describe("ADR-011: the export answers for the person signed in", () => {
       manifest: { schema_version: string; counts: { worlds: number } };
       worlds: { id: string }[];
     };
-    expect(downloaded.manifest.schema_version).toBe("v2");
+    expect(downloaded.manifest.schema_version).toBe("v3");
     expect(downloaded.worlds.map((world) => world.id)).toContain(worldId);
     expect(downloaded.manifest.counts.worlds).toBe(downloaded.worlds.length);
 

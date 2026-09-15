@@ -1577,24 +1577,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    world_tokens (id) {
-        id -> Text,
-        world_id -> Uuid,
-        x -> Float8,
-        y -> Float8,
-        z -> Float8,
-        label -> Nullable<Text>,
-        health -> Nullable<Int4>,
-        max_health -> Nullable<Int4>,
-        schema_version -> Int4,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
-        created_by -> Uuid,
-        updated_by -> Uuid,
-    }
-}
-
-diesel::table! {
     worlds (id) {
         id -> Uuid,
         name -> Varchar,
@@ -1754,7 +1736,6 @@ diesel::joinable!(world_play_pause_triggers -> world_play_pauses (pause_id));
 diesel::joinable!(world_play_pauses -> world_play_pause_requests (request_id));
 diesel::joinable!(world_roll_records -> users (triggered_by));
 diesel::joinable!(world_roll_records -> worlds (world_id));
-diesel::joinable!(world_tokens -> worlds (world_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     account_notices,
@@ -1858,6 +1839,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     world_play_pause_triggers,
     world_play_pauses,
     world_roll_records,
-    world_tokens,
     worlds,
 );

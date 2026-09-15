@@ -211,10 +211,6 @@ type AppMutationRoot {
 	launchScene(worldId: UUID!, sceneId: UUID!): GraphQLWorld!
 	deleteScene(sceneId: UUID!): Boolean!
 	updateFogMask(input: GraphQLUpdateFogMaskInput!): GraphQLFogMask!
-	createWorldToken(input: GraphQLCreateWorldTokenInput!): GraphQLWorldToken!
-	upsertWorldToken(input: GraphQLUpsertWorldTokenInput!): GraphQLWorldToken!
-	moveToken(input: GraphQLMoveTokenInput!): GraphQLWorldToken!
-	deleteWorldToken(tokenId: String!): Boolean!
 	"""
 	Generic mutation for updating system-specific actor data
 	Validates against manifest schema for the system
@@ -972,8 +968,6 @@ type AppQueryRoot {
 	"""
 	myDmWorlds: [GraphQLWorld!]!
 	world(id: UUID!): GraphQLWorld
-	myWorldTokens: [GraphQLWorldToken!]!
-	worldToken(tokenId: String!): GraphQLWorldToken
 	myWorldEvents: [GraphQLWorldEvent!]!
 	worldEvent(eventId: Int!): GraphQLWorldEvent
 	exportMyData: GraphQLExportMyDataPayload!
@@ -3211,19 +3205,6 @@ input GraphQLCreateWorldInput {
 }
 
 """
-Input for creating a new world token
-"""
-input GraphQLCreateWorldTokenInput {
-	worldId: UUID!
-	label: String
-	x: Float
-	y: Float
-	z: Float
-	health: Int
-	maxHealth: Int
-}
-
-"""
 One value a system publishes about an actor.
 
 Superset of [`GraphQLAttribute`]: it carries derived values too, and says
@@ -3283,7 +3264,6 @@ type GraphQLDeleteMyDataPayload {
 	status: String!
 	message: String!
 	worldsDeleted: Int!
-	worldTokensDeleted: Int!
 	worldEventsDeleted: Int!
 	policiesDeleted: Int!
 	oauthLinksDeleted: Int!
@@ -3395,7 +3375,6 @@ type GraphQLExportManifest {
 	schemaVersion: String!
 	exportedAt: DateTime!
 	worlds: Int!
-	worldTokens: Int!
 	worldEvents: Int!
 	policies: Int!
 	scenes: Int!
@@ -3418,7 +3397,6 @@ type GraphQLExportMyDataPayload {
 	manifest: GraphQLExportManifest!
 	user: GraphQLUser!
 	worlds: [GraphQLWorld!]!
-	worldTokens: [GraphQLWorldToken!]!
 	worldEvents: [GraphQLWorldEvent!]!
 	policies: [GraphQLPolicy!]!
 	scenes: [JSON!]!
@@ -3939,16 +3917,6 @@ type GraphQLModerationCase {
 	worldId: UUID!
 	currentStatus: ModerationActionType!
 	events: [GraphQLModerationAction!]!
-}
-
-"""
-Input for moving a token to new coordinates
-"""
-input GraphQLMoveTokenInput {
-	tokenId: String!
-	x: Float!
-	y: Float!
-	z: Float
 }
 
 """
@@ -4715,20 +4683,6 @@ input GraphQLUpdateWallInput {
 	metadata: JSON
 }
 
-"""
-Input for upserting (create or update) a world token
-"""
-input GraphQLUpsertWorldTokenInput {
-	worldId: UUID!
-	tokenId: String
-	label: String
-	x: Float
-	y: Float
-	z: Float
-	health: Int
-	maxHealth: Int
-}
-
 type GraphQLUser {
 	id: UUID!
 	username: String!
@@ -4956,22 +4910,6 @@ type GraphQLWorldMember {
 	worldId: UUID!
 	userId: UUID!
 	username: String!
-}
-
-type GraphQLWorldToken {
-	id: String!
-	worldId: UUID!
-	x: Float!
-	y: Float!
-	z: Float!
-	label: String
-	health: Int
-	maxHealth: Int
-	createdBy: UUID!
-	updatedBy: UUID!
-	schemaVersion: Int!
-	createdAt: NaiveDateTime!
-	updatedAt: NaiveDateTime!
 }
 
 """

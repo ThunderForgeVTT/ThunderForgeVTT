@@ -15,7 +15,7 @@ use crate::models::{
 };
 use crate::schema::{
     admin_bootstrap_setup, auth_security_settings, instance_access_settings, oauth_providers,
-    policies, users, world_events, world_tokens, worlds,
+    policies, tokens, users, world_events, worlds,
 };
 use crate::state::{AppState, DbPool};
 use chrono::Utc;
@@ -115,7 +115,9 @@ pub async fn load_admin_stats(state: &AppState) -> Result<AdminStatsSnapshot, St
         tokio::task::spawn_blocking(move || {
             let total_users = users::table.count().get_result::<i64>(&mut conn)?;
             let total_worlds = worlds::table.count().get_result::<i64>(&mut conn)?;
-            let total_world_tokens = world_tokens::table.count().get_result::<i64>(&mut conn)?;
+            // The tokens on every scene: the scene-scoped `tokens` table, the
+            // only one since the world-scoped `world_tokens` was dropped.
+            let total_world_tokens = tokens::table.count().get_result::<i64>(&mut conn)?;
             let total_world_events = world_events::table.count().get_result::<i64>(&mut conn)?;
             let total_policies = policies::table.count().get_result::<i64>(&mut conn)?;
             Ok::<_, diesel::result::Error>((

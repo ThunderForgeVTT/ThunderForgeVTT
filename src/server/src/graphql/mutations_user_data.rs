@@ -11,7 +11,6 @@ impl From<UserDataDeleteSummary> for GraphQLDeleteMyDataPayload {
             status: "deleted".to_string(),
             message: "User profile and owned data were permanently deleted".to_string(),
             worlds_deleted: summary.worlds_deleted,
-            world_tokens_deleted: summary.world_tokens_deleted,
             world_events_deleted: summary.world_events_deleted,
             policies_deleted: summary.policies_deleted,
             oauth_links_deleted: summary.oauth_links_deleted,
@@ -41,7 +40,6 @@ impl From<UserDataExport> for GraphQLExportMyDataPayload {
                 schema_version: export.manifest.schema_version.to_string(),
                 exported_at: export.manifest.exported_at,
                 worlds: counts.worlds as i32,
-                world_tokens: counts.world_tokens as i32,
                 world_events: counts.world_events as i32,
                 policies: counts.policies as i32,
                 scenes: counts.scenes as i32,
@@ -61,11 +59,6 @@ impl From<UserDataExport> for GraphQLExportMyDataPayload {
                 updated_at: export.user.updated_at,
             },
             worlds: export.worlds.into_iter().map(GraphQLWorld::from).collect(),
-            world_tokens: export
-                .world_tokens
-                .into_iter()
-                .map(GraphQLWorldToken::from)
-                .collect(),
             world_events: export
                 .world_events
                 .into_iter()

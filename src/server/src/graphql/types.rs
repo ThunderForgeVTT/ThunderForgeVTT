@@ -3,12 +3,11 @@
 //! This module contains the GraphQL object type definitions for core entities:
 //! - GraphQLUser (identity)
 //! - GraphQLWorld (world/session container)
-//! - GraphQLWorldToken (game token/character)
 //! - GraphQLWorldEvent (change log entry)
 //!
 //! These types are foundational and referenced by queries/mutations throughout.
 
-use crate::models::{User, World, WorldEvent, WorldToken};
+use crate::models::{User, World, WorldEvent};
 use async_graphql::Json;
 use async_graphql::SimpleObject;
 use chrono::NaiveDateTime;
@@ -124,47 +123,6 @@ impl From<World> for GraphQLWorld {
 pub struct GraphQLMyWorldEntry {
     pub world: GraphQLWorld,
     pub role: String,
-}
-
-// ============================================================================
-// World Token (Game Token/Character)
-// ============================================================================
-
-#[derive(SimpleObject, Debug, Clone)]
-pub struct GraphQLWorldToken {
-    pub id: String,
-    pub world_id: uuid::Uuid,
-    pub x: f64,
-    pub y: f64,
-    pub z: f64,
-    pub label: Option<String>,
-    pub health: Option<i32>,
-    pub max_health: Option<i32>,
-    pub created_by: uuid::Uuid,
-    pub updated_by: uuid::Uuid,
-    pub schema_version: i32,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
-}
-
-impl From<WorldToken> for GraphQLWorldToken {
-    fn from(token: WorldToken) -> Self {
-        Self {
-            id: token.id,
-            world_id: token.world_id,
-            x: token.x,
-            y: token.y,
-            z: token.z,
-            label: token.label,
-            health: token.health,
-            max_health: token.max_health,
-            created_by: token.created_by,
-            updated_by: token.updated_by,
-            schema_version: token.schema_version,
-            created_at: token.created_at,
-            updated_at: token.updated_at,
-        }
-    }
 }
 
 // ============================================================================
