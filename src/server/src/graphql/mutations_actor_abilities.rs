@@ -407,7 +407,7 @@ mod tests {
     /// + Viewer-on-actor is rejected.
     #[tokio::test]
     async fn actor_ability_permission_follows_actor_not_ability() {
-        dotenvy::dotenv().ok();
+        crate::test_support::load_dotenv();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -469,7 +469,7 @@ mod tests {
     /// FR-021: re-attaching is a no-op returning the existing entry.
     #[tokio::test]
     async fn attaching_same_ability_twice_is_a_noop() {
-        dotenvy::dotenv().ok();
+        crate::test_support::load_dotenv();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -509,7 +509,7 @@ mod tests {
     /// reference — it needs an explicit guard.
     #[tokio::test]
     async fn attaching_cross_world_ability_is_rejected() {
-        dotenvy::dotenv().ok();
+        crate::test_support::load_dotenv();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -540,7 +540,7 @@ mod tests {
     /// FR-023: deleting an ability tombstones the entry instead of blocking.
     #[tokio::test]
     async fn deleting_an_ability_tombstones_actor_entries_instead_of_blocking() {
-        dotenvy::dotenv().ok();
+        crate::test_support::load_dotenv();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -590,7 +590,7 @@ mod tests {
     /// reads REDACTED to a player, secret or not.
     #[tokio::test]
     async fn tombstoned_ability_names_are_redacted_for_non_dms() {
-        dotenvy::dotenv().ok();
+        crate::test_support::load_dotenv();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -659,7 +659,7 @@ mod tests {
     /// FR-023/FR-024b: a non-DM's list silently omits GM-only abilities.
     #[tokio::test]
     async fn gm_only_abilities_are_omitted_from_a_non_dms_known_list() {
-        dotenvy::dotenv().ok();
+        crate::test_support::load_dotenv();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -717,7 +717,7 @@ mod tests {
     /// US3 scenario 6: detaching removes the entry, not the ability.
     #[tokio::test]
     async fn detaching_does_not_delete_the_ability() {
-        dotenvy::dotenv().ok();
+        crate::test_support::load_dotenv();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);

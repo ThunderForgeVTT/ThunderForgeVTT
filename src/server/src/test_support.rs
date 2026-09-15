@@ -1,12 +1,29 @@
 //! Spec 002: shared test fixtures for integration tests that need a real
 //! `AppState` (DB pool) — and, for storage tests, a real RustFS instance.
 //!
-//! Requires `DATABASE_URL` pointing at a live Postgres with migrations
-//! applied (the project's normal local-dev Postgres is fine — see
-//! `compose.yml`), and, for tests that exercise `storage::rustfs`, a
-//! reachable RustFS (`docker compose up -d rustfs`). Tests that need
-//! RustFS are responsible for skipping/failing clearly if it is not
-//! reachable; this module does not gate on that itself.
+//! # The test database
+//!
+//! Tests do **not** use the development database. They connect to their own,
+//! `thunderforge_test` by default, which [`test_database_url`] creates and
+//! migrates the first time a test binary asks for it:
+//!
+//! - `TEST_DATABASE_URL`, when set, names it outright;
+//! - otherwise it is `DATABASE_URL` (from the environment or `.env`) with the
+//!   database name replaced by `thunderforge_test`;
+//! - otherwise `postgres://postgres:password@localhost:5432/thunderforge_test`.
+//!
+//! It refuses to run against the development database's name, or against an
+//! e2e shard's. Sharing the development database is what let `cargo test`
+//! and an e2e run fight over the same global settings rows, and what left
+//! a quarter of a million test users in it.
+//!
+//! `make test-db-reset` drops it; the next test recreates it.
+//!
+//! Tests that need RustFS (`docker compose up -d rustfs`) are responsible for
+//! skipping/failing clearly if it is not reachable; this module does not gate
+//! on that itself.
+
+use std::sync::{Once, OnceLock};
 
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::{pg::PgConnection, prelude::*};
@@ -15,6 +32,189 @@ use uuid::Uuid;
 
 use crate::config::{Config, Directories};
 use crate::state::AppState;
+
+/// The database tests use when nothing names another.
+pub const TEST_DATABASE_NAME: &str = "thunderforge_test";
+
+/// Loads `.env` into the process environment, **once** per test binary.
+///
+/// Every test that wants `.env` must come through here rather than calling
+/// `dotenvy::dotenv()` itself. `dotenv()` sets every variable in the file that
+/// is not set *at that moment* — so a test that had unset one (through
+/// `settings::test_env::temp_env`) could find it put back halfway through by a
+/// neighbour's `dotenv()` on another thread. That is exactly how
+/// `settings::resolver`'s `a_row_beats_the_default_and_no_row_falls_back_to_it`
+/// flaked: `.env` carries `SYNC_GITHUB_APP_SLUG`, and `github_app.sync.slug`
+/// resolved from the environment in the middle of the test that had removed
+/// it. After the first call this does nothing, and `test_env::lock()` calls it
+/// before it hands out the lock, so the file is read before any test changes
+/// the environment rather than during.
+pub fn load_dotenv() {
+    static LOADED: Once = Once::new();
+    LOADED.call_once(|| {
+        dotenvy::dotenv().ok();
+    });
+}
+
+/// Why no test database could be had.
+#[derive(Debug, Clone)]
+pub enum TestDatabaseError {
+    /// The URL names a database tests must never touch. Always a panic, even
+    /// for the tests that otherwise skip when no database is reachable.
+    Refused(String),
+    /// Postgres could not be reached, or the database not created or migrated.
+    Unavailable(String),
+}
+
+/// The database name in a Postgres URL (`postgres://u:p@host:port/name?x=y`).
+pub fn database_name(url: &str) -> Option<&str> {
+    let after_scheme = url.split_once("://").map_or(url, |(_, rest)| rest);
+    let (_, path) = after_scheme.split_once('/')?;
+    let name = path.split(['?', '#']).next().unwrap_or("");
+    (!name.is_empty()).then_some(name)
+}
+
+/// `url` with its database name replaced (or added).
+pub fn with_database_name(url: &str, name: &str) -> String {
+    let (scheme, after_scheme) = url.split_once("://").unwrap_or(("postgres", url));
+    let (authority, query) = match after_scheme.split_once('/') {
+        Some((authority, path)) => (
+            authority,
+            path.find(['?', '#']).map_or("", |at| &path[at..]),
+        ),
+        None => (after_scheme, ""),
+    };
+    format!("{scheme}://{authority}/{name}{query}")
+}
+
+/// Which URL tests would use, from these inputs — split out so the rule can be
+/// tested without touching the process environment.
+pub fn choose_test_database_url(
+    test_database_url: Option<&str>,
+    database_url: Option<&str>,
+) -> Result<String, TestDatabaseError> {
+    let chosen = match (test_database_url, database_url) {
+        (Some(explicit), _) if !explicit.trim().is_empty() => explicit.trim().to_string(),
+        (_, Some(dev)) if !dev.trim().is_empty() => {
+            with_database_name(dev.trim(), TEST_DATABASE_NAME)
+        }
+        _ => format!("postgres://postgres:password@localhost:5432/{TEST_DATABASE_NAME}"),
+    };
+
+    let name = database_name(&chosen).unwrap_or("");
+    let dev_name = database_url.and_then(database_name);
+    let refused = name.is_empty()
+        || name == "thunderforge"
+        || name.starts_with("thunderforge_e2e")
+        || (Some(name) == dev_name && test_database_url.is_some());
+    if refused {
+        return Err(TestDatabaseError::Refused(format!(
+            "refusing to run tests against the database `{name}`: tests get their own \
+             (`{TEST_DATABASE_NAME}` by default; set TEST_DATABASE_URL to another \
+             that is neither the development database nor an e2e shard's)"
+        )));
+    }
+    if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return Err(TestDatabaseError::Refused(format!(
+            "the test database name `{name}` must be letters, digits and underscores"
+        )));
+    }
+    Ok(chosen)
+}
+
+/// Create the database if it is missing and run any pending migrations, under
+/// an advisory lock so two test binaries starting at once do not both try.
+fn ensure_test_database(url: &str) -> Result<(), TestDatabaseError> {
+    use diesel_migrations::{FileBasedMigrations, MigrationHarness};
+
+    let unavailable = |what: &str, e: &dyn std::fmt::Display| {
+        TestDatabaseError::Unavailable(format!("{what}: {e}"))
+    };
+    let name = database_name(url).unwrap_or(TEST_DATABASE_NAME).to_string();
+    let maintenance_url = with_database_name(url, "postgres");
+    let mut maintenance = PgConnection::establish(&maintenance_url)
+        .map_err(|e| unavailable("could not reach Postgres to prepare the test database", &e))?;
+
+    // Any fixed number: it only has to be the same in every test binary.
+    const LOCK_KEY: i64 = 0x7466_7465_7374_6462; // "tftestdb"
+    diesel::sql_query(format!("SELECT pg_advisory_lock({LOCK_KEY})"))
+        .execute(&mut maintenance)
+        .map_err(|e| unavailable("could not take the test database lock", &e))?;
+
+    let result = (|| {
+        #[derive(QueryableByName)]
+        struct Exists {
+            #[diesel(sql_type = diesel::sql_types::Bool)]
+            exists: bool,
+        }
+        let exists = diesel::sql_query(
+            "SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1) AS exists",
+        )
+        .bind::<diesel::sql_types::Text, _>(&name)
+        .get_result::<Exists>(&mut maintenance)
+        .map_err(|e| unavailable("could not look for the test database", &e))?
+        .exists;
+        if !exists {
+            // The name was checked to be `[A-Za-z0-9_]+` when it was chosen.
+            diesel::sql_query(format!("CREATE DATABASE \"{name}\""))
+                .execute(&mut maintenance)
+                .map_err(|e| unavailable("could not create the test database", &e))?;
+        }
+
+        let migrations =
+            FileBasedMigrations::from_path(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations"))
+                .map_err(|e| unavailable("could not read src/server/migrations", &e))?;
+        let mut conn = PgConnection::establish(url)
+            .map_err(|e| unavailable("could not connect to the test database", &e))?;
+        conn.run_pending_migrations(migrations)
+            .map_err(|e| unavailable("could not migrate the test database", &e))?;
+        Ok(())
+    })();
+
+    let _ = diesel::sql_query(format!("SELECT pg_advisory_unlock({LOCK_KEY})"))
+        .execute(&mut maintenance);
+    result
+}
+
+fn prepared_test_database() -> &'static Result<String, TestDatabaseError> {
+    static PREPARED: OnceLock<Result<String, TestDatabaseError>> = OnceLock::new();
+    PREPARED.get_or_init(|| {
+        load_dotenv();
+        let url = choose_test_database_url(
+            std::env::var("TEST_DATABASE_URL").ok().as_deref(),
+            std::env::var("DATABASE_URL").ok().as_deref(),
+        )?;
+        ensure_test_database(&url)?;
+        Ok(url)
+    })
+}
+
+/// The test database's URL, created and migrated if need be. Panics when there
+/// is none — a database-backed test with no database has nothing to test.
+pub fn test_database_url() -> String {
+    match prepared_test_database() {
+        Ok(url) => url.clone(),
+        Err(TestDatabaseError::Refused(why) | TestDatabaseError::Unavailable(why)) => {
+            panic!("{why}")
+        }
+    }
+}
+
+/// For the older tests that skip, rather than fail, when no database is
+/// reachable: `None` then. A refused URL still panics — skipping would make
+/// pointing the suite at the development database look like it worked.
+pub fn try_test_database_url() -> Option<String> {
+    match prepared_test_database() {
+        Ok(url) => Some(url.clone()),
+        Err(TestDatabaseError::Refused(why)) => panic!("{why}"),
+        Err(TestDatabaseError::Unavailable(_)) => None,
+    }
+}
+
+/// A connection to the test database, or `None` when none is reachable.
+pub fn try_test_connection() -> Option<PgConnection> {
+    PgConnection::establish(&try_test_database_url()?).ok()
+}
 
 pub fn test_app_state() -> AppState {
     // Load `.env` here, at the one place every database-backed test funnels
@@ -32,11 +232,9 @@ pub fn test_app_state() -> AppState {
     //
     // Idempotent and does not override anything already exported, so a CI
     // machine setting `DATABASE_URL` directly keeps its value.
-    dotenvy::dotenv().ok();
+    load_dotenv();
 
-    let database_url = std::env::var("DATABASE_URL")
-        .expect("DATABASE_URL must be set to run spec-002 integration tests");
-    let manager = ConnectionManager::<PgConnection>::new(database_url);
+    let manager = ConnectionManager::<PgConnection>::new(test_database_url());
     // Every test builds its own pool, and `cargo test` defaults to one thread
     // per core. r2d2's defaults (max_size 10, and `build()` eagerly filling to
     // max_size because min_idle defaults to None) therefore try to open
@@ -476,4 +674,67 @@ pub fn insert_test_instance_invitation(
         .execute(conn)
         .expect("Failed to insert the test instance invitation");
     (id, code)
+}
+
+#[cfg(test)]
+mod test_database_tests {
+    use super::*;
+
+    const DEV: &str = "postgres://postgres:password@localhost/thunderforge";
+
+    #[test]
+    fn with_no_override_the_development_url_is_renamed() {
+        assert_eq!(
+            choose_test_database_url(None, Some(DEV)).unwrap(),
+            "postgres://postgres:password@localhost/thunderforge_test"
+        );
+        assert_eq!(
+            choose_test_database_url(None, Some("postgres://u:p@db:5432/dev?sslmode=disable"))
+                .unwrap(),
+            "postgres://u:p@db:5432/thunderforge_test?sslmode=disable"
+        );
+        assert_eq!(
+            choose_test_database_url(None, None).unwrap(),
+            "postgres://postgres:password@localhost:5432/thunderforge_test"
+        );
+    }
+
+    #[test]
+    fn an_explicit_test_database_is_used_as_given() {
+        let url = "postgres://postgres:password@localhost/tf_p9_scratch";
+        assert_eq!(choose_test_database_url(Some(url), Some(DEV)).unwrap(), url);
+    }
+
+    #[test]
+    fn the_development_and_e2e_databases_are_refused() {
+        for url in [
+            DEV,
+            "postgres://postgres:password@localhost:5432/thunderforge",
+            "postgres://postgres:password@localhost:5432/thunderforge_e2e_0",
+            "postgres://postgres:password@localhost:5432/thunderforge_e2e_template",
+        ] {
+            assert!(
+                matches!(
+                    choose_test_database_url(Some(url), Some(DEV)),
+                    Err(TestDatabaseError::Refused(_))
+                ),
+                "{url} must be refused"
+            );
+        }
+        // Whatever the development database is called, naming it outright is
+        // refused too.
+        let dev = "postgres://postgres:password@localhost/my_dev";
+        assert!(matches!(
+            choose_test_database_url(Some(dev), Some(dev)),
+            Err(TestDatabaseError::Refused(_))
+        ));
+    }
+
+    #[test]
+    fn a_name_that_would_need_quoting_is_refused() {
+        assert!(matches!(
+            choose_test_database_url(Some("postgres://h/bad\"name"), None),
+            Err(TestDatabaseError::Refused(_))
+        ));
+    }
 }

@@ -380,7 +380,7 @@ mod tests {
     /// wrong reason.
     async fn arrange(policy: &str) -> (PolicyGuard, crate::state::AppState, uuid::Uuid) {
         let lock = POLICY_LOCK.lock().await;
-        dotenvy::dotenv().ok();
+        crate::test_support::load_dotenv();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         // FR-010's exemption is unconditional and first, so every test that

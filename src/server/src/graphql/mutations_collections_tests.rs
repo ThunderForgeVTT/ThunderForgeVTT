@@ -15,7 +15,7 @@ struct Fixture {
 
 /// One world with one of every member type, plus a non-DM member.
 fn fixture() -> Fixture {
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().expect("connection");
 

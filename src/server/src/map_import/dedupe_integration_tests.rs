@@ -15,7 +15,7 @@ use crate::schema::canvas_image_assets;
 async fn the_same_map_imported_into_two_worlds_is_stored_once() {
     use crate::test_support::*;
 
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
 

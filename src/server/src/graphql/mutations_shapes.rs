@@ -257,14 +257,12 @@ mod tests {
     use super::*;
     use diesel::PgConnection;
 
-    /// Establishes a connection to the dev database configured via
-    /// DATABASE_URL (same source main.rs uses). Skips (rather than fails)
+    /// Establishes a connection to the test database (see
+    /// `test_support::test_database_url`). Skips (rather than fails)
     /// when no dev database is reachable, since this is a real-DB
     /// integration test, not a unit test.
     fn try_connect() -> Option<PgConnection> {
-        dotenvy::dotenv().ok();
-        let url = std::env::var("DATABASE_URL").ok()?;
-        PgConnection::establish(&url).ok()
+        crate::test_support::try_test_connection()
     }
 
     /// The rule every shape mutation (`create_shape`/`update_shape`/`delete_shape`) now asks, in the one place they all ask
@@ -282,7 +280,7 @@ mod tests {
     fn shape_authority_follows_the_world_role_not_the_scene_creator() {
         let Some(mut conn) = try_connect() else {
             eprintln!(
-                "skipping shape_authority_follows_the_world_role_not_the_scene_creator: no DATABASE_URL/dev DB reachable"
+                "skipping shape_authority_follows_the_world_role_not_the_scene_creator: no test database reachable"
             );
             return;
         };
@@ -357,7 +355,7 @@ mod tests {
     fn shapes_query_hides_gm_only_shapes_from_non_owners() {
         let Some(mut conn) = try_connect() else {
             eprintln!(
-                "skipping shapes_query_hides_gm_only_shapes_from_non_owners: no DATABASE_URL/dev DB reachable"
+                "skipping shapes_query_hides_gm_only_shapes_from_non_owners: no test database reachable"
             );
             return;
         };

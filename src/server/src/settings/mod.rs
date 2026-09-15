@@ -66,7 +66,12 @@ pub(crate) mod test_env {
     static LOCK: Mutex<()> = Mutex::new(());
 
     /// Hold this for the length of a test that writes settings rows.
+    ///
+    /// `.env` is loaded before the lock is handed out, so a variable a holder
+    /// removes cannot be put back by another test's first read of the file
+    /// (`test_support::load_dotenv` has the history).
     pub fn lock() -> MutexGuard<'static, ()> {
+        crate::test_support::load_dotenv();
         LOCK.lock().unwrap_or_else(|e| e.into_inner())
     }
 

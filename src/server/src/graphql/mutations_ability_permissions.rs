@@ -46,7 +46,7 @@ mod tests {
     /// FR-026: the ownership block is DM-only to read *and* write.
     #[tokio::test]
     async fn only_dm_can_set_or_view_ability_permissions() {
-        dotenvy::dotenv().ok();
+        crate::test_support::load_dotenv();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -122,7 +122,7 @@ mod tests {
     /// default, and removing a nonexistent row is a harmless no-op.
     #[tokio::test]
     async fn removing_a_permission_reverts_to_implicit_viewer() {
-        dotenvy::dotenv().ok();
+        crate::test_support::load_dotenv();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);

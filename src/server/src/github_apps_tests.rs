@@ -98,8 +98,8 @@ fn clear_rows(state: &AppState) {
 ///
 /// # Why "cleared" means `Some("")` and not `None`
 ///
-/// `test_support::test_app_state()` calls `dotenvy::dotenv()` on **every**
-/// call, from hundreds of tests, none of which hold this file's lock — and a
+/// `test_support::test_app_state()` used to call `dotenvy::dotenv()` on
+/// **every** call, from hundreds of tests, none of which hold this file's lock — and a
 /// developer's real `.env` has `SYNC_GITHUB_APP_*` in it. `dotenv()` does not
 /// override a variable that is *set*, but it happily re-creates one that was
 /// *removed*. So a case here that unset `SYNC_GITHUB_APP_CLIENT_ID` had it put
@@ -108,7 +108,9 @@ fn clear_rows(state: &AppState) {
 /// was observed as one random failure per run, in a different case each time,
 /// and it is the third variant of this hazard this session.
 ///
-/// Setting them to the empty string closes it: `registry::read_env` and
+/// `.env` is now read once per binary, before any lock holder changes the
+/// environment (`test_support::load_dotenv`), which closes it at the source.
+/// Setting them to the empty string closed it first, and still does: `registry::read_env` and
 /// `repo_host::non_empty` both treat an exported-but-empty variable as unset
 /// ("how a container platform says 'I did not set this'"), and `dotenv()`
 /// leaves a set variable alone. The clearing is therefore stable against every

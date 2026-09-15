@@ -1,4 +1,4 @@
-.PHONY: clean-builds dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-rust test-mail bench-blob-store test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean
+.PHONY: clean-builds test-db-reset dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-rust test-mail bench-blob-store test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean
 
 # Loads DATABASE_URL (and anything else) from the repo-root .env for targets
 # that shell out to tools which don't read it themselves (diesel-cli).
@@ -15,7 +15,8 @@ help:
 	@echo "                          without them you get an ephemeral https://*.trycloudflare.com URL"
 	@echo "  make services-up      Start postgres+rustfs only (docker compose), detached"
 	@echo "  make services-down    Stop postgres+rustfs, keep their data volumes"
-	@echo "  make test-rust        cargo test (ARGS=...), refused while an e2e run is live in any worktree"
+	@echo "  make test-rust        cargo test (ARGS=...) against the test database, thunderforge_test"
+	@echo "  make test-db-reset    Drop and rebuild the test database (migrated, empty)"
 	@echo "  make test-mail        SMTP tests against a real Mailpit (starts it first)"
 	@echo "  make bench-blob-store OPFS throughput, both paths, in a real browser (needs pnpm dev)"
 	@echo "  make services-down-clean  Stop postgres+rustfs and DELETE their data volumes"
@@ -160,18 +161,23 @@ lint-wasm:
 check-file-length:
 	@./scripts/check-file-length.sh
 
-# `cargo test`, but not on top of an e2e run.
+# `cargo test`, with the stack the server crate needs.
 #
-# Server tests write global settings rows in the same Postgres the e2e shards'
-# backends read, and that Postgres is shared by every worktree on the machine,
-# so a `cargo test` anywhere turns a green e2e run red in ways that look like
-# product bugs. This refuses while any worktree's `.e2e-running` names a live
-# run (scripts/e2e/run-lock.mjs); THUNDERFORGE_IGNORE_E2E_LOCK=1 overrides.
-# A bare `cargo test` is not wrapped — prefer this target while e2e may run.
+# Tests use their own database, `thunderforge_test` (TEST_DATABASE_URL names
+# another), created and migrated on demand by src/server/src/test_support.rs,
+# which refuses the development database and the e2e shards'. That is what
+# makes this safe beside an e2e run: they used to share the development
+# database's global settings rows, and a `cargo test` turned a green run red.
+# It no longer refuses while one is live; it still competes for CPU.
 #   make test-rust ARGS="-p thunderforge-server --lib settings"
 test-rust:
-	@node scripts/e2e/run-lock.mjs check --all-worktrees --purpose="cargo test"
-	cargo test $(ARGS)
+	RUST_MIN_STACK=16777216 cargo test $(ARGS)
+
+# Drop the test database and rebuild it, migrated and empty. Tests recreate it
+# on demand anyway; this is for starting clean. A running `cargo test` loses
+# its connections.
+test-db-reset:
+	@node scripts/test-db.mjs reset
 
 # The mail tests that talk to a real SMTP server.
 #

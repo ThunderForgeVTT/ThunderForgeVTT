@@ -32,7 +32,7 @@ struct Fixture {
 
 fn fixture() -> Fixture {
     let _publishing = publishable_instance();
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().expect("connection");
 

@@ -107,7 +107,8 @@ not addressed by this document.
 
 Regression tests for the access-control fix live in
 `src/server/src/graphql/helpers.rs` (`mod tests`) and require a live
-Postgres (`DATABASE_URL`, see `compose.yml`). Related coverage:
+Postgres (the test database, `thunderforge_test` — see
+`src/server/src/test_support.rs` — on the server from `compose.yml`). Related coverage:
 - `graphql/mutations_walls.rs`, `mutations_shapes.rs`,
   `mutations_tokens.rs`, `mutations_lighting.rs`: `*_scoped_to_scene_owner`
   tests for the scene-ownership write checks.

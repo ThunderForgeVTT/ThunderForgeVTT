@@ -732,7 +732,7 @@ mod tests {
     #[tokio::test]
     async fn lore_link_targets_includes_abilities_and_hides_gm_only_from_players() {
         use crate::schema::world_abilities;
-        dotenvy::dotenv().ok();
+        crate::test_support::load_dotenv();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);

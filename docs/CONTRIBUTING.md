@@ -34,6 +34,28 @@ make test-rust      # cargo test (ARGS="-p thunderforge-server --lib settings")
 pnpm verify         # formatting and lint, both languages
 ```
 
+### The test database
+
+`cargo test` never touches the development database. Database-backed tests use
+`thunderforge_test`, which the test harness (`src/server/src/test_support.rs`)
+creates and migrates the first time a test asks for it. `TEST_DATABASE_URL`
+names a different one; without it, the name in `DATABASE_URL` is swapped for
+`thunderforge_test`. The harness refuses the development database and the e2e
+shards' databases outright.
+
+That separation is what makes `cargo test` safe beside an e2e run — it used to
+share the development database's global settings rows with it — and it is why
+the development database no longer fills with test users.
+
+```sh
+make test-db-reset   # drop thunderforge_test and rebuild it, migrated and empty
+node scripts/cleanup-dev-test-rows.mjs   # one-off: count (or --apply to delete) the
+                                         # test rows left in the development database
+```
+
+`cargo test -p thunderforge` needs `RUST_MIN_STACK=16777216`; `make test-rust`
+sets it.
+
 ### Cleaning up build output
 
 Cargo never deletes what it built. Old incremental sessions, artifacts from

@@ -307,7 +307,7 @@ mod tests {
     /// FR-005: a plain world member can browse the world's abilities.
     #[tokio::test]
     async fn world_abilities_returns_all_abilities_for_a_member() {
-        dotenvy::dotenv().ok();
+        crate::test_support::load_dotenv();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -330,7 +330,7 @@ mod tests {
     /// FR-007: advisory only, and it must find a near miss.
     #[tokio::test]
     async fn suggest_ability_name_finds_close_matches() {
-        dotenvy::dotenv().ok();
+        crate::test_support::load_dotenv();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -362,7 +362,7 @@ mod tests {
     /// must be indistinguishable from a nonexistent id.
     #[tokio::test]
     async fn gm_only_ability_is_absent_from_every_non_dm_surface() {
-        dotenvy::dotenv().ok();
+        crate::test_support::load_dotenv();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -442,7 +442,7 @@ mod tests {
     /// the resolver, with no UI involved.
     #[tokio::test]
     async fn ability_detail_is_denied_without_viewer_access() {
-        dotenvy::dotenv().ok();
+        crate::test_support::load_dotenv();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);

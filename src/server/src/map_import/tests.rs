@@ -165,14 +165,12 @@ fn import_authority_follows_the_world_role_not_the_scene_creator() {
     use diesel::PgConnection;
 
     fn try_connect() -> Option<PgConnection> {
-        dotenvy::dotenv().ok();
-        let url = std::env::var("DATABASE_URL").ok()?;
-        PgConnection::establish(&url).ok()
+        crate::test_support::try_test_connection()
     }
 
     let Some(mut conn) = try_connect() else {
         eprintln!(
-            "skipping import_authority_follows_the_world_role_not_the_scene_creator: no DATABASE_URL/dev DB reachable"
+            "skipping import_authority_follows_the_world_role_not_the_scene_creator: no test database reachable"
         );
         return;
     };
@@ -402,7 +400,7 @@ async fn assert_round_trip_matches_fixture(fixture_name: &str) {
     // process environment with no dotenv fallback of its own, so
     // whichever test runs first in this binary is the one that
     // actually needs it loaded.
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner_id = insert_test_user(&mut conn);
@@ -582,7 +580,7 @@ async fn round_trip_demo_matches_fixture_exactly() {
 async fn hand_built_edits_on_top_of_an_import_persist_exactly() {
     use crate::test_support::*;
 
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner_id = insert_test_user(&mut conn);
@@ -747,7 +745,7 @@ async fn hand_built_edits_on_top_of_an_import_persist_exactly() {
 async fn import_and_get_warnings(fixture_name: &str) -> Vec<String> {
     use crate::test_support::*;
 
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner_id = insert_test_user(&mut conn);
@@ -771,7 +769,7 @@ async fn an_import_sets_the_scenes_light_from_its_file() {
     use crate::schema::scenes;
     use crate::test_support::*;
 
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner_id = insert_test_user(&mut conn);

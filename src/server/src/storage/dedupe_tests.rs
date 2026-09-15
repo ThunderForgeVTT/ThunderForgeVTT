@@ -46,7 +46,7 @@ fn unique_hash() -> String {
 
 #[test]
 fn bytes_already_stored_are_found_by_their_hash() {
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner = insert_test_user(&mut conn);
@@ -72,7 +72,7 @@ fn bytes_already_stored_are_found_by_their_hash() {
 /// with a row in a *different* world.
 #[test]
 fn the_same_image_in_a_different_world_is_still_found() {
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner_a = insert_test_user(&mut conn);
@@ -111,7 +111,7 @@ fn the_same_image_in_a_different_world_is_still_found() {
 
 #[test]
 fn different_bytes_are_never_confused_for_each_other() {
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner = insert_test_user(&mut conn);
@@ -135,7 +135,7 @@ fn different_bytes_are_never_confused_for_each_other() {
 /// world's image.
 #[test]
 fn an_unhashed_row_is_never_reused() {
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner = insert_test_user(&mut conn);
@@ -152,7 +152,7 @@ fn an_unhashed_row_is_never_reused() {
 /// rather than scattering across whichever row the planner returned first.
 #[test]
 fn the_oldest_copy_is_the_one_reused() {
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner = insert_test_user(&mut conn);

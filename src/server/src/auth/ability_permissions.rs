@@ -87,7 +87,7 @@ mod tests {
     /// not a denial — absence of a row is the default, not a gap.
     #[tokio::test]
     async fn no_permission_row_defaults_to_viewer() {
-        dotenvy::dotenv().ok();
+        crate::test_support::load_dotenv();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -107,7 +107,7 @@ mod tests {
     /// them — the rule is implicit and un-removable.
     #[tokio::test]
     async fn dm_is_always_owner_even_with_a_lower_row() {
-        dotenvy::dotenv().ok();
+        crate::test_support::load_dotenv();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -140,7 +140,7 @@ mod tests {
     /// erroring or silently granting more than intended.
     #[tokio::test]
     async fn unparseable_level_string_degrades_to_viewer() {
-        dotenvy::dotenv().ok();
+        crate::test_support::load_dotenv();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -165,7 +165,7 @@ mod tests {
     /// so the frontend can distinguish authorization from other failures.
     #[tokio::test]
     async fn require_permission_rejects_below_minimum() {
-        dotenvy::dotenv().ok();
+        crate::test_support::load_dotenv();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -205,7 +205,7 @@ mod tests {
     /// other.
     #[tokio::test]
     async fn gm_only_hides_from_non_dm_even_with_owner_permission() {
-        dotenvy::dotenv().ok();
+        crate::test_support::load_dotenv();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -248,7 +248,7 @@ mod tests {
     /// non-DM, so ids cannot be probed to discover hidden content.
     #[tokio::test]
     async fn hidden_and_nonexistent_are_indistinguishable_to_a_non_dm() {
-        dotenvy::dotenv().ok();
+        crate::test_support::load_dotenv();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);

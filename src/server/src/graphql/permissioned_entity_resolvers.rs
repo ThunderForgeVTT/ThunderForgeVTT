@@ -553,7 +553,7 @@ mod tests {
     /// to remove" and not "removal is broken".
     #[tokio::test]
     async fn removing_a_grant_that_is_not_there_reports_false_on_every_type() {
-        dotenvy::dotenv().ok();
+        crate::test_support::load_dotenv();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
 

@@ -41,7 +41,7 @@ async fn an_unknown_version_refuses_and_mints_no_ability_link() {
     // it, a missing notice contact refuses first and this passes for the
     // wrong reason.
     let _publishing = publishable_instance();
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner_id = insert_test_user(&mut conn);
@@ -90,7 +90,7 @@ async fn an_unknown_version_refuses_and_mints_no_ability_link() {
 #[tokio::test]
 async fn create_ability_share_link_requires_owner_level() {
     let _publishing = publishable_instance();
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner_id = insert_test_user(&mut conn);
@@ -132,7 +132,7 @@ async fn create_ability_share_link_requires_owner_level() {
 #[tokio::test]
 async fn copy_produces_independent_ability_with_cloned_effects() {
     let _publishing = publishable_instance();
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner_id = insert_test_user(&mut conn);
@@ -244,7 +244,7 @@ async fn copy_produces_independent_ability_with_cloned_effects() {
 #[tokio::test]
 async fn revoked_share_link_is_unavailable() {
     let _publishing = publishable_instance();
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner_id = insert_test_user(&mut conn);
@@ -285,7 +285,7 @@ async fn revoked_share_link_is_unavailable() {
 #[tokio::test]
 async fn shared_ability_is_unavailable_once_moderation_disabled() {
     let _publishing = publishable_instance();
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner_id = insert_test_user(&mut conn);
@@ -342,7 +342,7 @@ async fn shared_ability_is_unavailable_once_moderation_disabled() {
 #[tokio::test]
 async fn shared_ability_preview_omits_source_world_identity() {
     let _publishing = publishable_instance();
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner_id = insert_test_user(&mut conn);
@@ -391,7 +391,7 @@ async fn shared_ability_preview_omits_source_world_identity() {
 #[tokio::test]
 async fn a_revoked_share_is_indistinguishable_from_a_code_that_never_existed() {
     let _publishing = publishable_instance();
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner_id = insert_test_user(&mut conn);
@@ -437,7 +437,7 @@ async fn a_revoked_share_is_indistinguishable_from_a_code_that_never_existed() {
 #[tokio::test]
 async fn the_read_needs_no_account() {
     let _publishing = publishable_instance();
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner_id = insert_test_user(&mut conn);
@@ -469,7 +469,7 @@ async fn the_read_needs_no_account() {
 #[tokio::test]
 async fn the_anonymous_read_is_rate_limited() {
     let _publishing = publishable_instance();
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner_id = insert_test_user(&mut conn);
@@ -517,7 +517,7 @@ async fn the_anonymous_read_is_rate_limited() {
 #[tokio::test]
 async fn the_owner_can_recover_the_share_code_after_closing_the_page() {
     let _publishing = publishable_instance();
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner_id = insert_test_user(&mut conn);

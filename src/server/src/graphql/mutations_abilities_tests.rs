@@ -15,7 +15,7 @@ fn create_input(world_id: Uuid, name: &str) -> CreateAbilityInput {
 /// FR-002: only the DM may create.
 #[tokio::test]
 async fn only_dm_can_create_ability() {
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner_id = insert_test_user(&mut conn);
@@ -39,7 +39,7 @@ async fn only_dm_can_create_ability() {
 /// FR-006: duplicate names are permitted within a world.
 #[tokio::test]
 async fn ability_names_may_collide() {
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner_id = insert_test_user(&mut conn);
@@ -61,7 +61,7 @@ async fn ability_names_may_collide() {
 /// version must not inherit that.
 #[tokio::test]
 async fn update_ability_can_clear_description() {
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner_id = insert_test_user(&mut conn);
@@ -123,7 +123,7 @@ async fn update_ability_can_clear_description() {
 /// which is the whole reason this is a separate mutation.
 #[tokio::test]
 async fn only_dm_can_set_gm_only() {
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner_id = insert_test_user(&mut conn);

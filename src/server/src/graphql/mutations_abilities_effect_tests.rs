@@ -25,7 +25,7 @@ fn effect_input(formula: &str, target: &str) -> AbilityEffectInput {
 /// FR-018: an empty/whitespace-only formula errors before any write.
 #[tokio::test]
 async fn add_ability_effect_rejects_empty_formula() {
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner_id = insert_test_user(&mut conn);
@@ -84,7 +84,7 @@ async fn add_ability_effect_rejects_empty_formula() {
 /// others untouched.
 #[tokio::test]
 async fn ability_can_carry_multiple_effects() {
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner_id = insert_test_user(&mut conn);
@@ -145,7 +145,7 @@ async fn ability_can_carry_multiple_effects() {
 /// notation this spec deliberately does not understand.
 #[tokio::test]
 async fn ability_effect_formula_is_not_evaluated() {
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner_id = insert_test_user(&mut conn);
@@ -190,7 +190,7 @@ async fn ability_effect_formula_is_not_evaluated() {
 /// row — a Viewer must not be able to rewrite an ability's mechanics.
 #[tokio::test]
 async fn effect_edits_require_editor_on_the_parent_ability() {
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner_id = insert_test_user(&mut conn);
@@ -219,7 +219,7 @@ async fn effect_edits_require_editor_on_the_parent_ability() {
 #[tokio::test]
 async fn deleting_an_ability_nulls_referencing_lore_links_instead_of_blocking() {
     use crate::schema::{world_lore_entries, world_lore_links};
-    dotenvy::dotenv().ok();
+    crate::test_support::load_dotenv();
     let state = test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let owner_id = insert_test_user(&mut conn);

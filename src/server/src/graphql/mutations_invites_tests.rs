@@ -1,13 +1,11 @@
 use diesel::{Connection, PgConnection};
 
-/// Establishes a connection to the dev database configured via
-/// DATABASE_URL (same source main.rs uses). Skips (rather than fails)
+/// Establishes a connection to the test database (see
+/// `test_support::test_database_url`). Skips (rather than fails)
 /// when no dev database is reachable, since this is a real-DB
 /// integration test, not a unit test.
 fn try_connect() -> Option<PgConnection> {
-    dotenvy::dotenv().ok();
-    let url = std::env::var("DATABASE_URL").ok()?;
-    diesel::Connection::establish(&url).ok()
+    crate::test_support::try_test_connection()
 }
 
 /// Spec 005 US4 regression test (T020): before this fix,
@@ -26,7 +24,7 @@ fn try_connect() -> Option<PgConnection> {
 fn owner_can_be_authorized_for_invites_immediately_after_world_creation() {
     let Some(mut conn) = try_connect() else {
         eprintln!(
-            "skipping owner_can_be_authorized_for_invites_immediately_after_world_creation: no DATABASE_URL/dev DB reachable"
+            "skipping owner_can_be_authorized_for_invites_immediately_after_world_creation: no test database reachable"
         );
         return;
     };

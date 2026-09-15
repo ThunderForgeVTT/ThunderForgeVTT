@@ -93,6 +93,11 @@ diesel = { version = "2.3.12", features = [
   "serde_json",
 ] }
 chrono = { version = "0.4.45", features = ["serde"] }
+# `test_support` creates and migrates the test database on demand, from the
+# migration files on disk (no embedding, so a new migration needs no rebuild).
+# A normal dependency because `test_support` is public to the app's and the
+# packs' tests.
+diesel_migrations = { version = "2.3.1", features = ["postgres"] }
 diesel-derive-enum = { version = "2.1.0", features = ["postgres"] }
 uuid = { version = "1.26.0", features = ["serde", "v7"] }
 once_cell = "1.21.4"

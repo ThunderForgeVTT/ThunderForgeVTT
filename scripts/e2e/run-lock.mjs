@@ -12,8 +12,8 @@
  *   generators can write into the tree the shards' Vite servers watch (the
  *   bindings step once rewrote `apps/web/src` and reloaded every page), and a
  *   push runs clippy, which competes with the suite for every core;
- * - `cargo test`: server tests write the same global settings rows the shards'
- *   backends read, in the shared Postgres — from *any* worktree;
+ * - (not `cargo test`, any more: it has its own database, `thunderforge_test`,
+ *   and refuses the development and shard databases — `test_support.rs`);
  * - a second e2e run: it deletes the shard directory and drops the template
  *   database the first is using.
  *
@@ -188,7 +188,7 @@ function check(root, { allWorktrees, purpose }) {
     `e2e: an e2e run is in progress — refusing ${purpose}.\n${lines.join("\n")}\n` +
     `  ${purpose[0].toUpperCase()}${purpose.slice(1)} now would break it: ` +
     (allWorktrees
-      ? "server tests share the e2e stacks' Postgres and write the same settings rows.\n"
+      ? "a run in any worktree shares this machine's Postgres server and its cores.\n"
       : "the hooks' `pnpm verify` can write into the tree every shard's Vite is watching, and competes for CPU.\n") +
     `  Wait for the run to finish, or set ${OVERRIDE_ENV}=1 to proceed anyway.\n`;
 

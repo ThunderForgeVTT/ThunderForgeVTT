@@ -114,14 +114,12 @@ fn kind_matching_is_exact() {
     }
 }
 
-/// Establishes a connection to the dev database configured via
-/// DATABASE_URL (same source main.rs uses). Skips (rather than fails)
+/// Establishes a connection to the test database (see
+/// `test_support::test_database_url`). Skips (rather than fails)
 /// when no dev database is reachable, since this is a real-DB
 /// integration test, not a unit test.
 fn try_connect() -> Option<PgConnection> {
-    dotenvy::dotenv().ok();
-    let url = std::env::var("DATABASE_URL").ok()?;
-    PgConnection::establish(&url).ok()
+    crate::test_support::try_test_connection()
 }
 
 /// The rule every token mutation (`create_token`/`update_token`/`delete_token`) now asks, in the one place they all ask
@@ -142,7 +140,7 @@ fn try_connect() -> Option<PgConnection> {
 fn token_authority_follows_the_world_role_not_the_scene_creator() {
     let Some(mut conn) = try_connect() else {
         eprintln!(
-            "skipping token_authority_follows_the_world_role_not_the_scene_creator: no DATABASE_URL/dev DB reachable"
+            "skipping token_authority_follows_the_world_role_not_the_scene_creator: no test database reachable"
         );
         return;
     };
@@ -194,9 +192,7 @@ fn token_authority_follows_the_world_role_not_the_scene_creator() {
 #[test]
 fn move_own_token_filter_rejects_non_owner() {
     let Some(mut conn) = try_connect() else {
-        eprintln!(
-            "skipping move_own_token_filter_rejects_non_owner: no DATABASE_URL/dev DB reachable"
-        );
+        eprintln!("skipping move_own_token_filter_rejects_non_owner: no test database reachable");
         return;
     };
 
@@ -315,9 +311,7 @@ fn move_own_token_filter_rejects_non_owner() {
 #[test]
 fn setting_second_primary_replaces_the_first() {
     let Some(mut conn) = try_connect() else {
-        eprintln!(
-            "skipping setting_second_primary_replaces_the_first: no DATABASE_URL/dev DB reachable"
-        );
+        eprintln!("skipping setting_second_primary_replaces_the_first: no test database reachable");
         return;
     };
 
@@ -445,7 +439,7 @@ fn setting_second_primary_replaces_the_first() {
 fn token_photo_url_can_be_set_skipped_and_cleared() {
     let Some(mut conn) = try_connect() else {
         eprintln!(
-            "skipping token_photo_url_can_be_set_skipped_and_cleared: no DATABASE_URL/dev DB reachable"
+            "skipping token_photo_url_can_be_set_skipped_and_cleared: no test database reachable"
         );
         return;
     };
