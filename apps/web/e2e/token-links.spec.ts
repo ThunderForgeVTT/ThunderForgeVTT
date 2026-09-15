@@ -1,3 +1,4 @@
+import { expectNoAxeViolations } from "./fixtures/axe";
 import { expect, test, type Page } from "./fixtures/test";
 import {
   barCurrentOn,
@@ -197,6 +198,14 @@ test("a linked token shares its actor's hit points, and each copy keeps its own"
       await expect(table.gm.getByTestId("actor-unique-block")).toContainText(
         "New tokens share this NPC's hit points.",
       );
+      // Spec 046 T107: the toggle is named by its words and passes axe.
+      await expect(
+        table.gm.getByRole("checkbox", { name: /^Unique/ }),
+      ).toBeChecked();
+      await expectNoAxeViolations(
+        table.gm,
+        '[data-testid="actor-unique-block"]',
+      );
 
       const boblin = await placeToken(table, createActor.id, {
         at: { x: 0, y: 200 },
@@ -236,6 +245,16 @@ test("a linked token shares its actor's hit points, and each copy keeps its own"
       await expect(linked, "the panel shows goblin A linked").toBeChecked({
         timeout: 10_000,
       });
+      // Spec 046 T107: a named group of two named choices, passing axe.
+      await expect(
+        table.gm
+          .getByRole("group", { name: "Hit points" })
+          .getByRole("radio", { name: /^Linked/ }),
+      ).toBeChecked();
+      await expectNoAxeViolations(
+        table.gm,
+        `[data-testid="token-link-control-${goblinA.tokenId}"]`,
+      );
       await expect
         .poll(
           async () =>

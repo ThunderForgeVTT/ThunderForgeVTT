@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getTrackerAbilities, type TrackerAbilityRecord } from "@/api/attacks";
 import type { CombatantRecord } from "@/types/combat";
 import type { TokenRecord } from "@/types/token";
@@ -31,6 +31,9 @@ export function CombatantAct({
     null,
   );
   const [abilityId, setAbilityId] = useState("");
+  // Closing the flow unmounts whatever inside it had focus; focus goes back
+  // to the button that opened it rather than to the page (spec 046 T107).
+  const opener = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open || abilities !== null) return;
@@ -52,14 +55,15 @@ export function CombatantAct({
     [kind, abilities],
   );
   const chosen = offered.find((ability) => ability.id === abilityId);
-  const name =
-    kind === "legendary"
-      ? `Spend a legendary action for ${combatant.label}`
-      : `Act for ${combatant.label}`;
+  const shown = kind === "legendary" ? "Spend legendary action" : "Lair action";
+  // The spoken name starts with the words on the button, so a person who
+  // says what they see reaches it (WCAG 2.5.3).
+  const name = `${shown} for ${combatant.label}`;
 
   return (
     <div className="grid basis-full gap-1 pl-10">
       <button
+        ref={opener}
         type="button"
         aria-expanded={open}
         aria-label={name}
@@ -72,7 +76,7 @@ export function CombatantAct({
           setAbilityId("");
         }}
       >
-        {kind === "legendary" ? "Spend legendary action" : "Lair action"}
+        {shown}
       </button>
       {open ? (
         <div className="grid gap-1" data-testid="combatant-act">
@@ -107,9 +111,11 @@ export function CombatantAct({
               abilityId={chosen.id}
               abilityName={chosen.name}
               tokens={tokens}
+              focusOnOpen={false}
               onClose={() => {
                 setOpen(false);
                 setAbilityId("");
+                opener.current?.focus();
               }}
             />
           ) : null}

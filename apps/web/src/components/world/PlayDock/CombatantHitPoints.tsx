@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { CombatantRecord, HitPointChange } from "@/types/combat";
 
 /**
@@ -23,6 +23,7 @@ export function CombatantHitPoints({
 }) {
   const [amount, setAmount] = useState("");
   const inputId = useId();
+  const input = useRef<HTMLInputElement>(null);
   const parsed = Number.parseInt(amount, 10);
   const valid = Number.isFinite(parsed) && parsed >= 0;
 
@@ -30,6 +31,9 @@ export function CombatantHitPoints({
     if (!valid) return;
     onChange(kind, parsed);
     setAmount("");
+    // Clearing the amount disables both buttons, which takes focus from the
+    // one just pressed; back to the amount, ready for the next hit.
+    input.current?.focus();
   };
 
   return (
@@ -46,6 +50,7 @@ export function CombatantHitPoints({
         Hit points to change for {combatant.label}
       </label>
       <input
+        ref={input}
         id={inputId}
         type="number"
         min={0}
@@ -53,7 +58,7 @@ export function CombatantHitPoints({
         value={amount}
         placeholder="HP"
         data-testid="combatant-hp-amount"
-        className="h-7 w-14 rounded border border-input bg-transparent px-1 text-sm tabular-nums outline-none"
+        className="h-7 w-14 rounded border border-input bg-transparent px-1 text-sm tabular-nums outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
         onChange={(event) => setAmount(event.target.value)}
       />
       <button
@@ -94,12 +99,13 @@ export function CombatantOutMark({
   if (combatant.active) return null;
   const text =
     combatant.downedBy === "HIT_POINTS" ? "Out: 0 hit points" : "Down";
+  // No label of its own: a span is not a thing that can be named, and the
+  // words are read with the row they sit in ("Goblin NPC Out: 0 hit points").
   return (
     <span
       className="text-xs font-semibold text-muted-foreground"
       data-testid="combatant-out"
       data-downed-by={combatant.downedBy ?? "UNKNOWN"}
-      aria-label={`${combatant.label}: ${text}`}
     >
       {text}
     </span>

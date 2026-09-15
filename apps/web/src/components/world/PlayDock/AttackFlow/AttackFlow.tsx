@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { makeAttack, previewAttack } from "@/api/attacks";
 import { Button } from "@/components/ui/button/Button";
 import { triggerDiceRollAnimation } from "@/engine/bevy";
@@ -35,6 +35,18 @@ export interface AttackFlowProps {
   abilityName: string;
   /** Every token on the scene, as this viewer was sent them. */
   tokens: TokenRecord[];
+  /**
+   * Move focus to the target list when the flow opens. On for a flow opened
+   * by a button (the sheet's attack); off where the flow opens as an ability
+   * is chosen from a list (the tracker), since moving focus out of that list
+   * while its choice is still being made would take the list away from a
+   * keyboard user.
+   */
+  focusOnOpen?: boolean;
+  /**
+   * Closed with Cancel, Done or Escape. The caller returns focus to what
+   * opened the flow, which this component cannot know (spec 046 T107).
+   */
   onClose: () => void;
 }
 
@@ -66,8 +78,13 @@ export function AttackFlow({
   abilityId,
   abilityName,
   tokens,
+  focusOnOpen = true,
   onClose,
 }: AttackFlowProps) {
+  const targetRef = useRef<HTMLSelectElement>(null);
+  useEffect(() => {
+    if (focusOnOpen) targetRef.current?.focus();
+  }, [focusOnOpen]);
   const reactionAllowed = actionCost === null && lairCombatantId === null;
   const selected = useSelectedTokenIds();
   const candidates = useMemo(
@@ -170,12 +187,22 @@ export function AttackFlow({
     <section
       aria-label={`Attack with ${abilityName}`}
       data-testid="attack-flow"
+      onKeyDown={(event) => {
+        // Escape leaves the flow from anywhere inside it, as a dialog would;
+        // an open list takes its own Escape first.
+        if (event.key === "Escape" && !rolling) {
+          event.preventDefault();
+          event.stopPropagation();
+          onClose();
+        }
+      }}
       className="grid gap-2 rounded-lg border border-border p-2 text-xs"
     >
       <h3 className="text-sm font-semibold">Attack with {abilityName}</h3>
       <label className="grid gap-1">
         <span className="text-muted-foreground">Target</span>
         <select
+          ref={targetRef}
           value={targetId}
           onChange={(event) => setTargetId(event.target.value)}
           data-testid="attack-flow-target"
@@ -225,25 +252,32 @@ export function AttackFlow({
       {/* After the turn: reach and range warn, and never stand in front of
           the one thing that refuses (spec 046 C1, FR-033). */}
       {preview && preview.flags.length > 0 ? (
-        <ul
-          role="alert"
-          className="grid gap-0.5 text-amber-600"
-          data-testid="attack-flow-flags"
-        >
-          {warningTexts(preview).map((warning) => (
-            <li key={warning} data-testid="attack-flow-flag">
-              {warning}
-            </li>
-          ))}
-        </ul>
+        // The live region wraps the list rather than being it: a list given
+        // another role stops being a list, and its items lose their parent.
+        <div role="alert">
+          <ul
+            className="grid gap-0.5 text-amber-700 dark:text-amber-400"
+            data-testid="attack-flow-flags"
+          >
+            {warningTexts(preview).map((warning) => (
+              <li key={warning} data-testid="attack-flow-flag">
+                {warning}
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
 
       <div className="flex gap-2">
         <Button
           type="button"
           size="sm"
-          disabled={rolling}
-          onClick={() => void roll()}
+          // Not `disabled` while rolling: disabling the focused button takes
+          // focus from it, and a keyboard user is left on the page.
+          aria-disabled={rolling}
+          onClick={() => {
+            if (!rolling) void roll();
+          }}
           data-testid="attack-flow-confirm"
         >
           {rolling ? "Rolling…" : "Roll attack"}
@@ -260,20 +294,26 @@ export function AttackFlow({
       </div>
 
       {result ? (
-        <ul className="grid gap-1" data-testid="attack-flow-result">
-          {result.map((attack) => (
-            <li key={attack.id}>{attackSummary(attack)}</li>
-          ))}
-        </ul>
+        <div role="status">
+          <ul className="grid gap-1" data-testid="attack-flow-result">
+            {result.map((attack) => (
+              <li key={attack.id}>{attackSummary(attack)}</li>
+            ))}
+          </ul>
+        </div>
       ) : null}
       {queued ? (
-        <p data-testid="attack-flow-queued">
+        <p role="status" data-testid="attack-flow-queued">
           You are offline. The attack is queued and will be made when you
           reconnect, if it is still your turn.
         </p>
       ) : null}
       {error ? (
-        <p className="text-destructive" data-testid="attack-flow-error">
+        <p
+          role="alert"
+          className="text-destructive"
+          data-testid="attack-flow-error"
+        >
           {error}
         </p>
       ) : null}

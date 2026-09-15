@@ -382,7 +382,7 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
                     type="number"
                     value={combatant.initiative}
                     aria-label={`Initiative for ${combatant.label}`}
-                    className="h-7 w-12 rounded border border-input bg-transparent px-1 text-sm tabular-nums outline-none"
+                    className="h-7 w-12 rounded border border-input bg-transparent px-1 text-sm tabular-nums outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                     onChange={(event) => {
                       const initiative = Number.parseInt(
                         event.target.value,
@@ -558,7 +558,7 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
               value={addActorId}
               onChange={(event) => setAddActorId(event.target.value)}
               data-testid="combat-add-actor-select"
-              className="h-9 min-w-0 flex-1 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
+              className="h-9 min-w-0 flex-1 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
             >
               <option value="">Select an actor…</option>
               {addableActors.map((actor) => (
@@ -606,7 +606,7 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
               placeholder="The lair's name"
               onChange={(event) => setLairLabel(event.target.value)}
               data-testid="combat-add-lair-name"
-              className="h-9 min-w-0 flex-1 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
+              className="h-9 min-w-0 flex-1 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
             />
             <Button
               type="button"

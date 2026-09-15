@@ -6,7 +6,13 @@ import {
 } from "@/engine/world/sync";
 import { cn } from "@/lib/utils";
 import type { AttackRecord } from "@/types/attack";
-import { flagText, offerText, outcomeText, partiesText } from "./attackText";
+import {
+  attackSummary,
+  flagText,
+  offerText,
+  outcomeText,
+  partiesText,
+} from "./attackText";
 
 /** How many of the scene's latest attacks the table sees at once. */
 export const ATTACK_LOG_LENGTH = 5;
@@ -36,6 +42,9 @@ export interface AttackLogProps {
  */
 export function AttackLog({ worldId, sceneId }: AttackLogProps) {
   const [attacks, setAttacks] = useState<AttackRecord[]>([]);
+  // The newest attack as one sentence, for a screen reader. Only an attack
+  // made while this seat watched is announced, not the page read on load.
+  const [announced, setAnnounced] = useState("");
 
   const reload = useCallback(() => {
     if (!sceneId) return;
@@ -58,6 +67,7 @@ export function AttackLog({ worldId, sceneId }: AttackLogProps) {
           void getAttack(attackId)
             .then((attack) => {
               if (!attack || attack.sceneId !== sceneId) return;
+              setAnnounced(attackSummary(attack));
               setAttacks((current) =>
                 [attack, ...current.filter((a) => a.id !== attack.id)].slice(
                   0,
@@ -75,64 +85,80 @@ export function AttackLog({ worldId, sceneId }: AttackLogProps) {
 
   // Another scene's attacks, still in hand while this scene's are read.
   const shown = attacks.filter((attack) => attack.sceneId === sceneId);
-  if (shown.length === 0) return null;
+  // Always mounted, and apart from the list: a live region that appears with
+  // its content is often not read, and one around the whole list would read
+  // every entry again each time an offer is resolved.
+  const announcement = (
+    <p role="status" className="sr-only" data-testid="attack-log-announcement">
+      {announced}
+    </p>
+  );
+  if (shown.length === 0) return announcement;
 
   return (
-    <section
-      aria-label="Attacks"
-      aria-live="polite"
-      data-testid="attack-log"
-      // Read, never pressed: clicks pass through to the board beneath it.
-      className="pointer-events-none grid gap-1 rounded-lg border border-border bg-background/90 p-2 text-xs shadow-lg backdrop-blur"
-    >
-      <h2 className="text-[0.65rem] font-semibold tracking-widest text-muted-foreground uppercase">
-        Attacks
-      </h2>
-      <ol className="grid gap-1">
-        {shown.map((attack) => (
-          <li
-            key={attack.id}
-            data-testid="attack-log-entry"
-            data-attack-id={attack.id}
-            data-outcome={attack.outcome}
-            className="grid gap-0.5 rounded border border-border/60 px-2 py-1"
-          >
-            <span className="font-medium" data-testid="attack-log-parties">
-              {partiesText(attack)}
-              {attack.abilityName ? (
-                <span className="text-muted-foreground">
-                  {" "}
-                  · {attack.abilityName}
+    <>
+      {announcement}
+      <section
+        aria-label="Attacks"
+        data-testid="attack-log"
+        // Read, never pressed: clicks pass through to the board beneath it.
+        // Opaque: at 90% the dark board showed through enough to take the
+        // outcome's green under 4.5:1 (spec 046 T107).
+        className="pointer-events-none grid gap-1 rounded-lg border border-border bg-background p-2 text-xs shadow-lg"
+      >
+        <h2 className="text-[0.65rem] font-semibold tracking-widest text-muted-foreground uppercase">
+          Attacks
+        </h2>
+        <ol className="grid gap-1">
+          {shown.map((attack) => (
+            <li
+              key={attack.id}
+              data-testid="attack-log-entry"
+              data-attack-id={attack.id}
+              data-outcome={attack.outcome}
+              className="grid gap-0.5 rounded border border-border/60 px-2 py-1"
+            >
+              <span className="font-medium" data-testid="attack-log-parties">
+                {partiesText(attack)}
+                {attack.abilityName ? (
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · {attack.abilityName}
+                  </span>
+                ) : null}
+              </span>
+              <span
+                data-testid="attack-log-outcome"
+                className={cn(
+                  "tabular-nums",
+                  attack.outcome === "HIT" &&
+                    "text-emerald-700 dark:text-emerald-400",
+                  attack.outcome === "MISS" && "text-muted-foreground",
+                )}
+              >
+                {outcomeText(attack)}
+              </span>
+              {attack.offer ? (
+                <span data-testid="attack-log-offer">
+                  {offerText(attack.offer)}
+                </span>
+              ) : attack.damage ? (
+                <span data-testid="attack-log-damage">
+                  {attack.damage.resultValue} damage
                 </span>
               ) : null}
-            </span>
-            <span
-              data-testid="attack-log-outcome"
-              className={cn(
-                "tabular-nums",
-                attack.outcome === "HIT" && "text-emerald-600",
-                attack.outcome === "MISS" && "text-muted-foreground",
-              )}
-            >
-              {outcomeText(attack)}
-            </span>
-            {attack.offer ? (
-              <span data-testid="attack-log-offer">
-                {offerText(attack.offer)}
-              </span>
-            ) : attack.damage ? (
-              <span data-testid="attack-log-damage">
-                {attack.damage.resultValue} damage
-              </span>
-            ) : null}
-            {attack.flags.length > 0 ? (
-              <span data-testid="attack-log-flags" className="text-amber-600">
-                {attack.flags.map(flagText).join(", ")}
-              </span>
-            ) : null}
-          </li>
-        ))}
-      </ol>
-    </section>
+              {attack.flags.length > 0 ? (
+                <span
+                  data-testid="attack-log-flags"
+                  className="text-amber-700 dark:text-amber-400"
+                >
+                  {attack.flags.map(flagText).join(", ")}
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+      </section>
+    </>
   );
 }

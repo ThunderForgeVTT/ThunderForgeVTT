@@ -1,4 +1,4 @@
-import { createElement, useEffect, useMemo, useState } from "react";
+import { createElement, useEffect, useMemo, useRef, useState } from "react";
 import { getWorldAbilities } from "@/api/abilities";
 import { getActorAbilities } from "@/api/actorAbilities";
 import { getTokens } from "@/api/tokens";
@@ -72,6 +72,7 @@ export function InPaneCharacterSheet({
   const { user } = useAuth();
   const [sceneTokens, setSceneTokens] = useState<TokenRecord[]>([]);
   const [attacking, setAttacking] = useState<CharacterRoll | null>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
   const sheet = resolveActorSheet(actor.gameSystemId);
   const { data } = useActorSystemData(
     actor.id,
@@ -178,7 +179,11 @@ export function InPaneCharacterSheet({
   };
 
   return (
-    <div className="grid gap-3" data-testid="in-pane-character-sheet">
+    <div
+      ref={sheetRef}
+      className="grid gap-3"
+      data-testid="in-pane-character-sheet"
+    >
       <header className="flex items-center gap-2">
         <button
           type="button"
@@ -285,7 +290,17 @@ export function InPaneCharacterSheet({
           abilityId={attacking.attackAbilityId}
           abilityName={attacking.label.replace(/ \(attack\)$/, "")}
           tokens={sceneTokens}
-          onClose={() => setAttacking(null)}
+          onClose={() => {
+            // Back to the attack that opened the flow, which stays on the
+            // sheet: closing must not drop a keyboard user on the page.
+            const key = attacking.key;
+            setAttacking(null);
+            sheetRef.current
+              ?.querySelector<HTMLElement>(
+                `[data-testid="in-pane-roll-${CSS.escape(key)}"]`,
+              )
+              ?.focus();
+          }}
         />
       ) : null}
 
