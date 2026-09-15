@@ -139,6 +139,7 @@ type TurnBudget {
   action: BudgetLine!  bonusAction: BudgetLine!  reaction: BudgetLine!
   movement: BudgetLine!             # in system units
   legendary: BudgetLine             # null when the creature has none
+  unit: String!                     # Phase 8: the system's unit ("ft"), so movement can be said
 }
 type BudgetLine { allowed: Float!  spent: Float!  remaining: Float! }  # remaining may be negative
 ```

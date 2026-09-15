@@ -500,6 +500,74 @@ export async function activeRowOn(page: Page): Promise<string | null> {
   return ((await row.first().textContent()) ?? "").replace(/\s+/g, " ").trim();
 }
 
+/** One line of a combatant's budget as a board shows it. */
+export interface BudgetLineShown {
+  allowed: number;
+  spent: number;
+  remaining: number;
+  overspent: boolean;
+  /** The pip's text, "Action −1/1". */
+  text: string;
+}
+
+export interface BudgetShown {
+  action: BudgetLineShown;
+  bonusAction: BudgetLineShown;
+  reaction: BudgetLineShown;
+  movement: BudgetLineShown;
+}
+
+/**
+ * Spec 046 US5: what a board's tracker shows `label` has left this turn, or
+ * null when its row shows no budget. `label` is matched against the row's
+ * text, so a hidden combatant is asked for as "Unknown".
+ */
+export async function budgetOn(
+  page: Page,
+  label: string,
+): Promise<BudgetShown | null> {
+  const row = page
+    .getByTestId("combatant-row")
+    .filter({ hasText: label })
+    .first();
+  if ((await row.count()) === 0) return null;
+  const budget = row.getByTestId("combatant-budget");
+  if ((await budget.count()) === 0) return null;
+  const read = async (key: string): Promise<BudgetLineShown> => {
+    const pip = budget.getByTestId(`budget-${key}`);
+    const number = async (name: string) =>
+      Number(await pip.getAttribute(`data-${name}`));
+    return {
+      allowed: await number("allowed"),
+      spent: await number("spent"),
+      remaining: await number("remaining"),
+      overspent: (await pip.getAttribute("data-overspent")) === "true",
+      text: ((await pip.textContent()) ?? "").trim(),
+    };
+  };
+  return {
+    action: await read("action"),
+    bonusAction: await read("bonus-action"),
+    reaction: await read("reaction"),
+    movement: await read("movement"),
+  };
+}
+
+/** A budget's four lines as "remaining/allowed", for polling and messages. */
+export async function budgetTextOn(
+  page: Page,
+  label: string,
+): Promise<string | null> {
+  const budget = await budgetOn(page, label);
+  if (!budget) return null;
+  return [
+    budget.action.text,
+    budget.bonusAction.text,
+    budget.reaction.text,
+    budget.movement.text,
+  ].join(" · ");
+}
+
 export async function roundOn(page: Page): Promise<string | null> {
   const counter = page.getByTestId("combat-round-counter");
   if ((await counter.count()) === 0) return null;

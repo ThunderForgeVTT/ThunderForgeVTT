@@ -19,6 +19,35 @@ export interface CombatantRecord {
    * tracker's Down was pressed (healing does not), null when in the fight.
    */
   downedBy: CombatantDownedBy | null;
+  /**
+   * Spec 046 US5: what this combatant's turn affords and what it has spent,
+   * shown to every seat. Null when the system declares no turn budget.
+   */
+  budget: TurnBudgetRecord | null;
+}
+
+/**
+ * One line of a turn's budget. `remaining` may be negative: an overspend is
+ * recorded and shown, never refused (spec 046 C9), and a table may treat it
+ * as a debt.
+ */
+export interface BudgetLineRecord {
+  allowed: number;
+  spent: number;
+  remaining: number;
+}
+
+/** `TurnBudget`: a combatant's action economy for its current turn. */
+export interface TurnBudgetRecord {
+  action: BudgetLineRecord;
+  bonusAction: BudgetLineRecord;
+  reaction: BudgetLineRecord;
+  /** In the system's units (`unit`). */
+  movement: BudgetLineRecord;
+  /** Null when the creature has no legendary actions. */
+  legendary: BudgetLineRecord | null;
+  /** The system's unit for distances, e.g. "ft". */
+  unit: string;
 }
 
 export type CombatantDownedBy = "HIT_POINTS" | "GAME_MASTER";

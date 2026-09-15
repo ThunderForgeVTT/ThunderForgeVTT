@@ -337,6 +337,13 @@ test("a Large ogre fills four squares, and reach is measured from them", async (
       isNpc: true,
     });
     await advanceTurn(table, combat.id);
+    // Each swing after the first is made on a new turn of Aria's, so the
+    // flags a step reads are the ones it is about: a second action in one
+    // turn is flagged overspent (spec 046 Phase 8, `combat-economy.spec.ts`).
+    const aNewTurnForAria = async () => {
+      await advanceTurn(table, combat.id); // the ogre's
+      await advanceTurn(table, combat.id); // Aria's again
+    };
 
     await test.step("beside the ogre's corner square, a longsword swings unflagged", async () => {
       const { warnings, said } = await attackWarningsFromSheet(
@@ -355,6 +362,7 @@ test("a Large ogre fills four squares, and reach is measured from them", async (
     await test.step("four squares away she is warned, still swings, and the table is told", async () => {
       // Four columns west of the ogre's nearest square.
       await moveTo(table.gm, hero.tokenId, cell(-4, 0));
+      await aNewTurnForAria();
       const { warnings, said } = await attackWarningsFromSheet(
         aria.page,
         hero.actorId,
@@ -383,6 +391,7 @@ test("a Large ogre fills four squares, and reach is measured from them", async (
     });
 
     await test.step("a bow past its normal range is a long shot", async () => {
+      await aNewTurnForAria();
       const { warnings, said } = await attackWarningsFromSheet(
         aria.page,
         hero.actorId,
@@ -399,6 +408,7 @@ test("a Large ogre fills four squares, and reach is measured from them", async (
       await answerOffer(table.gm, "Ogre", false);
 
       await moveTo(table.gm, hero.tokenId, cell(-6, 0));
+      await aNewTurnForAria();
       const beyond = await attackWarningsFromSheet(
         aria.page,
         hero.actorId,
@@ -426,6 +436,7 @@ test("a Large ogre fills four squares, and reach is measured from them", async (
         { x: 0, y: 4 * GRID },
       );
       await makeDoor(table, door);
+      await aNewTurnForAria();
 
       const { warnings } = await attackWarningsFromSheet(
         aria.page,

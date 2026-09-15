@@ -8,6 +8,7 @@ import {
   attackFromSheet,
   attackLogOn,
   attackWarningsFromSheet,
+  budgetOn,
   footprintOn,
   setAbilityReach,
   barCurrentOn,
@@ -55,12 +56,12 @@ import {
  * player is refused a move on somebody else's), and an attack: Aria swings
  * her longsword from her own sheet at the goblin, the server rolls it against
  * the goblin's armour class, every seat is shown it, and a hit is offered to
- * the Game Master to take; and size and reach (the ogre fills two squares by
+ * the Game Master to take; size and reach (the ogre fills two squares by
  * two on every board, and a longsword swung across the room is warned and
- * flagged). What is not there yet — the economy of a round — is recorded as a
- * FINDING (soft, so the session plays to
- * the end) rather than faked with a test-only path: a scenario that writes the
- * outcome itself is a scenario proving nothing.
+ * flagged); and the economy of a round (every seat sees what each creature
+ * has left of its turn, Aria's swing spends her action, and a swing past it
+ * is made and shown as overspent). Nothing is faked with a test-only path: a
+ * scenario that writes the outcome itself is a scenario proving nothing.
  */
 
 /** The scores a 5e actor needs before the pack will accept anything else. */
@@ -429,30 +430,51 @@ test("a Game Master runs a 5e fight for two players", async ({
       await snapshot(table, "4 · round two");
     });
 
-    await test.step("a turn is a pointer, not an economy", async () => {
+    await test.step("a round is an economy", async () => {
       // What a round actually is at a 5e table: on your turn you move, take
       // an action and perhaps a bonus action; between turns you may take a
-      // reaction. A monster may have multiattack, and a big one — a
-      // tarrasque — spends legendary actions at the end of *other* creatures'
-      // turns, with lair actions on initiative count 20.
+      // reaction.
       //
-      // The tracker points at whose turn it is and counts rounds. Nothing
-      // here records what anyone has spent.
-      const panel =
-        (await table.gm.getByTestId("combat-panel").textContent()) ?? "";
-      const knowsTheEconomy = /action|bonus|reaction|legendary/i.test(panel);
-      expect
-        .soft(
-          knowsTheEconomy,
-          "FINDING: a round should be an economy, not a pointer. A turn " +
-            "affords an action, a bonus action and movement; a reaction " +
-            "happens between turns; a legendary creature spends legendary " +
-            "actions at the end of other creatures' turns, and lair actions " +
-            "on initiative 20. The tracker offers none of it, so everything " +
-            "a table spends is remembered out loud.",
-        )
-        .toBe(true);
-      await snapshot(table, "4b · the economy that isn't");
+      // Was FINDING 380 ("a round should be an economy, not a pointer").
+      // Spec 046 US5, SC-005: every seat can say what each creature has left
+      // to spend, and the creature whose turn it is starts it with all of it.
+      const active = combat!.combatants.find(
+        (c) => c.id === combat!.activeCombatantId,
+      );
+      for (const [who, client] of [
+        ["the Game Master", table.gm],
+        ["Aria", aria.page],
+        ["Brom", brom.page],
+      ] as const) {
+        await openCombatPanel(client);
+        for (const combatant of combat!.combatants) {
+          await expect
+            .poll(
+              async () => (await budgetOn(client, combatant.label)) !== null,
+              {
+                timeout: 20_000,
+                message: `${who}'s tracker shows what ${combatant.label} has left to spend`,
+              },
+            )
+            .toBe(true);
+        }
+        const fresh = await budgetOn(client, active!.label);
+        expect(
+          [
+            fresh?.action.remaining,
+            fresh?.bonusAction.remaining,
+            fresh?.reaction.remaining,
+            fresh?.movement.remaining,
+          ],
+          `${who}: ${active!.label}'s turn begins with an action, a bonus action, a reaction and all its movement`,
+        ).toEqual([1, 1, 1, fresh?.movement.allowed]);
+        expect(
+          fresh?.movement.allowed,
+          "movement is its speed",
+        ).toBeGreaterThan(0);
+      }
+      // Legendary actions and the lair are Phase 9's (US6), not yet checked.
+      await snapshot(table, "4b · the economy");
     });
 
     await test.step("a player cannot take the table's turn", async () => {
@@ -510,9 +532,23 @@ test("a Game Master runs a 5e fight for two players", async ({
           );
       }
 
+      // Spec 046 US5: the swing spent her action, and every seat sees it.
+      for (const [who, client] of [
+        ["the Game Master", table.gm],
+        ["Brom", brom.page],
+      ] as const) {
+        await openCombatPanel(client);
+        await expect
+          .poll(async () => (await budgetOn(client, "Aria"))?.action.spent, {
+            timeout: 10_000,
+            message: `${who} is shown Aria's action spent`,
+          })
+          .toBe(1);
+      }
+
       // A miss offers nothing. Aria swings until she lands one, as a player
-      // would (nothing yet spends her action; Phase 8's economy flags it),
-      // so every run also plays the hit.
+      // would: past her one action, which is made and shown as overspent,
+      // never refused (C9), so every run also plays the hit.
       const swings = [said];
       let landed = hit;
       if (!landed) {
@@ -532,6 +568,22 @@ test("a Game Master runs a 5e fight for two players", async ({
         type: "attack",
         description: swings.join(" / "),
       });
+      if (swings.length > 1) {
+        expect(
+          swings.slice(1).every((swing) => /overspent/.test(swing)),
+          "every swing past her action is made and flagged overspent",
+        ).toBe(true);
+        await expect
+          .poll(async () => (await budgetOn(brom.page, "Aria"))?.action, {
+            timeout: 10_000,
+            message: "Brom is shown Aria's overspend as a debt",
+          })
+          .toMatchObject({
+            spent: swings.length,
+            remaining: 1 - swings.length,
+            overspent: true,
+          });
+      }
 
       // A hit's damage is offered to whoever controls the goblin — the Game
       // Master — who declines it here, so the goblin meets the Game Master's

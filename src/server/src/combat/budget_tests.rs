@@ -126,7 +126,11 @@ async fn a_combatant_added_to_the_tracker_has_a_budget_with_nothing_spent() {
         .expect("a row is created with the combatant");
     assert_eq!(row, BudgetRow::fresh(row.combatant_id));
 
-    let shown = combat.combatants[0].budget.expect("shown on the tracker");
+    let shown = combat.combatants[0]
+        .budget
+        .clone()
+        .expect("shown on the tracker");
+    assert_eq!(shown.unit, "ft");
     assert_eq!(shown.action, BudgetLine::new(1.0, 0.0));
     assert_eq!(shown.bonus_action, BudgetLine::new(1.0, 0.0));
     assert_eq!(shown.reaction, BudgetLine::new(1.0, 0.0));
@@ -374,7 +378,7 @@ async fn a_turn_resets_only_the_new_active_combatant_and_a_reaction_waits_for_it
         .find(|c| c.token_id == Some(t.aria))
         .expect("Aria on the tracker");
     assert_eq!(
-        aria_row.budget.expect("shown").reaction,
+        aria_row.budget.clone().expect("shown").reaction,
         BudgetLine::new(1.0, 0.0)
     );
     assert_eq!(budget(&mut conn, &t, combat, t.goblin).action.spent, 1.0);
@@ -407,7 +411,7 @@ fn every_seat_sees_a_hidden_combatants_budget_under_unknown() {
         .expect("the ogre is on the tracker");
     assert_eq!(hidden.label, "Unknown");
     assert_eq!(
-        hidden.budget.expect("its budget is shown").action,
+        hidden.budget.clone().expect("its budget is shown").action,
         BudgetLine::new(1.0, 1.0)
     );
 }
@@ -685,7 +689,7 @@ fn a_resolved_budget_may_go_negative() {
     row.action_spent = 3;
     row.reaction_spent = 1;
     row.movement_spent = 10.0;
-    let budget = resolve(&declared, 30.0, &row);
+    let budget = resolve(&declared, 30.0, &row, "ft");
     assert_eq!(budget.action, BudgetLine::new(1.0, 3.0));
     assert_eq!(budget.action.remaining, -2.0);
     assert_eq!(

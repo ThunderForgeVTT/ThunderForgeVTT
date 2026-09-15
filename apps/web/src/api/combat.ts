@@ -33,6 +33,14 @@ const COMBAT_FIELDS = `
     isNpc
     active
     downedBy
+    budget {
+      action { allowed spent remaining }
+      bonusAction { allowed spent remaining }
+      reaction { allowed spent remaining }
+      movement { allowed spent remaining }
+      legendary { allowed spent remaining }
+      unit
+    }
   }
 `;
 

@@ -6362,6 +6362,10 @@ type TurnBudget {
 	Null when the creature has no legendary actions (Phase 9).
 	"""
 	legendary: BudgetLine
+	"""
+	What the system calls its distances ("ft"), so movement can be said.
+	"""
+	unit: String!
 }
 
 type TurnCheck {

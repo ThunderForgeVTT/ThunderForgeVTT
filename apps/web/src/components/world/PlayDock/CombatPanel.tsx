@@ -27,6 +27,7 @@ import {
   type RosterCandidate,
 } from "./combatRoster";
 import { CombatantHitPoints, CombatantOutMark } from "./CombatantHitPoints";
+import { CombatantBudget } from "./CombatantBudget";
 import { useSelectedTokenIds } from "./useSelectedTokenIds";
 
 export interface CombatPanelProps {
@@ -453,6 +454,12 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
                     </button>
                   </>
                 ) : null}
+
+                {/* Spec 046 US5: every seat sees what each creature has left. */}
+                <CombatantBudget
+                  label={combatant.label}
+                  budget={combatant.budget}
+                />
               </li>
             );
           })}

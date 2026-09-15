@@ -133,7 +133,7 @@ impl BudgetLine {
 }
 
 /// What a combatant's turn affords and what it has spent (contract §1).
-#[derive(async_graphql::SimpleObject, Clone, Copy, Debug, PartialEq)]
+#[derive(async_graphql::SimpleObject, Clone, Debug, PartialEq)]
 pub struct TurnBudget {
     pub action: BudgetLine,
     pub bonus_action: BudgetLine,
@@ -142,11 +142,13 @@ pub struct TurnBudget {
     pub movement: BudgetLine,
     /// Null when the creature has no legendary actions (Phase 9).
     pub legendary: Option<BudgetLine>,
+    /// What the system calls its distances ("ft"), so movement can be said.
+    pub unit: String,
 }
 
 /// A row resolved against the pack's allowances and the creature's speed
 /// (pure).
-pub fn resolve(declared: &SystemTurnBudget, speed: f64, row: &BudgetRow) -> TurnBudget {
+pub fn resolve(declared: &SystemTurnBudget, speed: f64, row: &BudgetRow, unit: &str) -> TurnBudget {
     let whole = |n: Option<u32>| n.unwrap_or(0) as f64;
     let movement_allowed = if declared.movement.is_some() {
         speed
@@ -165,6 +167,7 @@ pub fn resolve(declared: &SystemTurnBudget, speed: f64, row: &BudgetRow) -> Turn
             )),
             _ => None,
         },
+        unit: unit.to_string(),
     }
 }
 
@@ -370,6 +373,9 @@ pub fn budgets_for(
         .into_iter()
         .map(|row| (row.combatant_id, row))
         .collect();
+    let unit = crate::vision_profiles::vision_declaration_for_system(systems_dir, &system_id)
+        .grid_units()
+        .label;
     let speeds = match declared.movement.as_ref() {
         Some(movement) => speeds_for(conn, systems_dir, &system_id, &movement.speed, combatants)?,
         None => HashMap::new(),
@@ -382,7 +388,7 @@ pub fn budgets_for(
                 .cloned()
                 .unwrap_or_else(|| BudgetRow::fresh(c.id));
             let speed = speeds.get(&c.id).copied().unwrap_or(0.0);
-            (c.id, resolve(&declared, speed, &row))
+            (c.id, resolve(&declared, speed, &row, &unit))
         })
         .collect())
 }
