@@ -7,6 +7,9 @@ import {
   answerOffer,
   attackFromSheet,
   attackLogOn,
+  attackWarningsFromSheet,
+  footprintOn,
+  setAbilityReach,
   barCurrentOn,
   changeHitPoints,
   claimFor,
@@ -52,8 +55,10 @@ import {
  * player is refused a move on somebody else's), and an attack: Aria swings
  * her longsword from her own sheet at the goblin, the server rolls it against
  * the goblin's armour class, every seat is shown it, and a hit is offered to
- * the Game Master to take. What is not there yet — size and reach, the
- * economy of a round — is recorded as FINDINGs (soft, so the session plays to
+ * the Game Master to take; and size and reach (the ogre fills two squares by
+ * two on every board, and a longsword swung across the room is warned and
+ * flagged). What is not there yet — the economy of a round — is recorded as a
+ * FINDING (soft, so the session plays to
  * the end) rather than faked with a test-only path: a scenario that writes the
  * outcome itself is a scenario proving nothing.
  */
@@ -94,8 +99,14 @@ const GOBLIN_AC = GOBLIN_SCORES.armor_class;
 // goblin is Small with 7 hit points, an ogre is Large with 59.
 const GOBLIN_HP = 7;
 const OGRE_HP = 59;
-/** Large: ten feet of space, which is two squares of a five-foot grid. */
-const OGRE_SCALE = 2;
+/**
+ * Large: ten feet of space, which is two squares of a five-foot grid. A size
+ * on the ogre's sheet, as 5e declares it (spec 046 FR-030), not a token scale
+ * that only draws it bigger. 5e keeps size among the traits, beside a class
+ * and level its pack requires of every sheet.
+ */
+const OGRE_TRAITS = { class: "monster", level: 5, size: "large" };
+const OGRE_FOOTPRINT = 2;
 
 test("a Game Master runs a 5e fight for two players", async ({
   page,
@@ -120,6 +131,7 @@ test("a Game Master runs a 5e fight for two players", async ({
     // A second goblin placed from the same NPC. Not in `cast`, which is the
     // roster: it is on the board, not in the fight.
     let secondGoblinTokenId = "";
+    let longsword = "";
 
     await test.step("the table takes its places", async () => {
       cast.Aria = await placeCast(table, {
@@ -151,16 +163,16 @@ test("a Game Master runs a 5e fight for two players", async ({
           label: "Goblin 2",
         })
       ).tokenId;
-      // An ogre: twice the size, so the board has a large piece on it as well
-      // as a small one.
+      // An ogre: Large, so the board has a large piece on it as well as a
+      // small one.
       cast.Ogre = await placeCast(table, {
         label: "Ogre",
         at: { x: 500, y: 150 },
         tokenType: "npc",
-        scale: OGRE_SCALE,
         sheet: {
           scores: OGRE_SCORES,
           hitPoints: { current: OGRE_HP, max: OGRE_HP },
+          traits: OGRE_TRAITS,
         },
       });
 
@@ -182,7 +194,7 @@ test("a Game Master runs a 5e fight for two players", async ({
 
       // Two styles, each a real ability with its own rolls: Aria swings,
       // Brom throws fire.
-      await grantAbility(table, cast.Aria.actorId, {
+      longsword = await grantAbility(table, cast.Aria.actorId, {
         name: "Longsword",
         classification: "feat",
         description: "A blade, swung at whatever is in front of it.",
@@ -218,23 +230,34 @@ test("a Game Master runs a 5e fight for two players", async ({
           })
           .toContain("hitPoints");
       }
-      // The large piece is large on every board, not just where it was made.
+      // The large piece is large on every board, not just where it was made:
+      // the engine is told the ogre fills two squares a side, and draws it
+      // over two squares of this scene's grid.
+      const grid = await gridSizeOf(table);
       for (const [who, client] of [
+        ["the Game Master", table.gm],
         ["Aria", aria.page],
         ["Brom", brom.page],
       ] as const) {
         await expect
           .poll(
-            () =>
-              client.evaluate(
-                (id) =>
-                  window.__worldProbe?.state()?.tokens.find((t) => t.id === id)
-                    ?.scale ?? null,
-                cast.Ogre.tokenId,
-              ),
-            { timeout: 20_000, message: `${who} sees the ogre at its size` },
+            async () =>
+              (await footprintOn(client, cast.Ogre.tokenId))?.footprint,
+            {
+              timeout: 20_000,
+              message: `${who}'s board has the ogre filling two squares by two`,
+            },
           )
-          .toBe(OGRE_SCALE);
+          .toBe(OGRE_FOOTPRINT);
+        await expect
+          .poll(
+            async () => {
+              const drawn = await footprintOn(client, cast.Ogre.tokenId);
+              return drawn ? Math.max(drawn.width, drawn.height) : 0;
+            },
+            { timeout: 10_000, message: `${who} draws the ogre that big` },
+          )
+          .toBeCloseTo(OGRE_FOOTPRINT * grid, 0);
       }
       await snapshot(table, "1 · the guardroom");
     });
@@ -570,37 +593,52 @@ test("a Game Master runs a 5e fight for two players", async ({
       );
       expect(apart, "they are nowhere near each other").toBeGreaterThan(500);
 
-      // Two separate things a table plays by, and the product has neither.
-      //
-      // Size is the space a creature fills: an ogre is Large, ten feet, two
-      // squares of a five-foot grid; a tarrasque is Gargantuan, twenty feet,
-      // four. Reach belongs to the *attack*, not the size — an ogre is Large
-      // and its greatclub still reaches only five feet, while a tarrasque's
-      // four attacks reach ten, fifteen, ten and twenty. Deriving reach from
-      // size would get both of them wrong.
+      // Was FINDING 481 ("a creature should carry its size, and each of its
+      // attacks its own reach or range"). Two separate things a table plays
+      // by. Size is the space a creature fills: an ogre is Large, two squares
+      // of a five-foot grid. Reach belongs to the *attack*, not the size — an
+      // ogre is Large and its greatclub still reaches only five feet.
       const ogre = await systemDataOf(table.gm, cast.Ogre.actorId);
-      const describesSize = JSON.stringify(ogre)
-        .toLowerCase()
-        .match(/size|reach|large/);
-      expect
-        .soft(
-          describesSize,
-          "FINDING: a creature should carry its size, and each of its attacks " +
-            "its own reach or range. The ogre is Large — it should fill two " +
-            "squares by two — and its greatclub reaches five feet, the same " +
-            "as Aria's sword. Today its size is a token scale that only draws " +
-            "it bigger, the actor holds no size, no attack holds a reach, and " +
-            "no roll has a target to measure one against.",
-        )
-        .toBeTruthy();
+      expect(
+        ogre.traitData?.size,
+        "the ogre's own sheet carries its size",
+      ).toBe("large");
 
-      // Then the demonstration, unasserted: a longsword swung across the room.
-      const swing = await rollInPanel(aria.page, "1d20+5");
+      // The longsword says how far it reaches, and Aria swings it across the
+      // room anyway: warned before rolling, not refused, and the table told.
+      await setAbilityReach(table, longsword, { reach: 5 });
+      const { warnings, said } = await attackWarningsFromSheet(
+        aria.page,
+        cast.Aria.actorId,
+        "Longsword",
+        "Ogre",
+      );
+      expect(
+        warnings.join(" | "),
+        "Aria is warned before rolling that the ogre is out of her reach",
+      ).toMatch(/^Out of reach: \d+ ft, reach 5 ft/);
+      expect(said, "and the swing is still made (FR-033)").toMatch(
+        /Aria → Ogre.*(hit|miss).*out of reach/,
+      );
+      for (const [who, client] of [
+        ["the Game Master", table.gm],
+        ["Brom", brom.page],
+      ] as const) {
+        await expect
+          .poll(async () => (await attackLogOn(client))[0] ?? "", {
+            timeout: 5_000,
+            message: `${who} is shown the swing flagged out of reach`,
+          })
+          .toMatch(/Aria → Ogre.*out of reach/);
+      }
+      // A hit across the room is still a hit the Game Master is offered; they
+      // decline it, as a table would.
+      if (/: hit/.test(said)) {
+        await answerOffer(table.gm, "Ogre", false);
+      }
       testInfo.annotations.push({
         type: "reach",
-        description:
-          `Aria swung a longsword at an ogre ${apart.toFixed(0)} units away ` +
-          `and rolled ${swing}; nothing remarked on the distance.`,
+        description: `${warnings.join("; ")} — ${said}`,
       });
       await snapshot(table, "7 · reach");
     });

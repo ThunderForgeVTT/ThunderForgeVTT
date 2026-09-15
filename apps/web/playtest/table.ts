@@ -199,8 +199,6 @@ export async function placeCast(
     at: Point;
     seat?: Seat;
     tokenType?: "character" | "npc";
-    /** Sizes the piece: 2 is an ogre, filling four squares of the grid. */
-    scale?: number;
     /**
      * The creature's sheet, written before its token is placed.
      *
@@ -213,6 +211,12 @@ export async function placeCast(
     sheet?: {
       scores: Record<string, number>;
       hitPoints: { current: number; max: number };
+      /**
+       * The creature's traits, where a system keeps its size (spec 046
+       * FR-030): `{ size: "large" }` in 5e makes an ogre fill two squares by
+       * two on every board. A token's `scale` is only how its art is drawn.
+       */
+      traits?: Record<string, unknown>;
     };
   },
 ): Promise<{ actorId: string; tokenId: string }> {
@@ -230,7 +234,7 @@ export async function placeCast(
   );
   if (options.sheet) {
     // Scores first: the 5e pack refuses anything else on a sheet without them.
-    for (const [dataType, data] of [
+    const slots: [string, Record<string, unknown>][] = [
       ["ability_data", options.sheet.scores],
       [
         "resource_data",
@@ -240,7 +244,11 @@ export async function placeCast(
           temporary_hp: 0,
         },
       ],
-    ] as const) {
+    ];
+    if (options.sheet.traits) {
+      slots.push(["trait_data", options.sheet.traits]);
+    }
+    for (const [dataType, data] of slots) {
       await must(
         table.gm,
         `mutation ($input: GraphQLUpdateActorSystemDataInput!) {
@@ -260,7 +268,6 @@ export async function placeCast(
   const { tokenId } = await placeToken(table, createActor.id, {
     at: options.at,
     tokenType: options.tokenType ?? (options.seat ? "character" : "npc"),
-    scale: options.scale,
   });
   if (options.seat) {
     await must(

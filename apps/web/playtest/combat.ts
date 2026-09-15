@@ -742,6 +742,15 @@ export async function attackFromSheet(
   abilityName: string,
   targetLabel: string,
 ): Promise<string> {
+  return (await swingFromSheet(page, actorId, abilityName, targetLabel)).said;
+}
+
+async function swingFromSheet(
+  page: Page,
+  actorId: string,
+  abilityName: string,
+  targetLabel: string,
+): Promise<{ warnings: string[]; said: string }> {
   await openDockTab(page, "actors");
   if (!(await page.getByTestId("in-pane-character-sheet").isVisible())) {
     await page.getByTestId(`actor-view-${actorId}`).click();
@@ -764,6 +773,10 @@ export async function attackFromSheet(
   await flow
     .getByTestId("attack-flow-target")
     .selectOption({ label: targetLabel });
+  // The preview is asked for when the target changes; give it a moment to
+  // say what it has to say before the roll is confirmed.
+  await page.waitForTimeout(750);
+  const warnings = await flow.getByTestId("attack-flow-flag").allTextContents();
   await flow.getByTestId("attack-flow-confirm").click();
   const outcome = flow
     .getByTestId("attack-flow-result")
@@ -771,7 +784,81 @@ export async function attackFromSheet(
   await expect(outcome).toBeVisible({ timeout: 15_000 });
   const text = (await outcome.textContent())?.trim() ?? "";
   await flow.getByTestId("attack-flow-close").click();
-  return text;
+  return { warnings, said: text };
+}
+
+/**
+ * What an ability is as an attack (spec 046 `setAbilityAttack`): its reach or
+ * ranges in the system's units, and whether it needs to see its target.
+ */
+export async function setAbilityReach(
+  table: Table,
+  abilityId: string,
+  reach: {
+    reach?: number | null;
+    rangeNormal?: number | null;
+    rangeLong?: number | null;
+    needsLineOfSight?: boolean;
+  },
+): Promise<void> {
+  await must(
+    table.gm,
+    `mutation ($abilityId: UUID!, $attack: AttackFieldsInput!) {
+      setAbilityAttack(abilityId: $abilityId, attack: $attack)
+    }`,
+    {
+      abilityId,
+      attack: {
+        reach: reach.reach ?? null,
+        rangeNormal: reach.rangeNormal ?? null,
+        rangeLong: reach.rangeLong ?? null,
+        needsLineOfSight: reach.needsLineOfSight ?? true,
+        actionCost: "ACTION",
+        legendaryCost: 1,
+        multiattack: [],
+      },
+    },
+  );
+}
+
+/** What one token fills as `page`'s engine draws it (spec 046 US4). */
+export interface FootprintDrawn {
+  tokenId: string;
+  footprint: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  nameY: number | null;
+  barWidth: number | null;
+}
+
+/** Asked of the engine, not the store: what this board actually draws. */
+export async function footprintOn(
+  page: Page,
+  tokenId: string,
+): Promise<FootprintDrawn | null> {
+  return page.evaluate(
+    (tokenId) =>
+      (
+        window as unknown as {
+          __engineProbe?: { tokenFootprints?: () => FootprintDrawn[] };
+        }
+      ).__engineProbe
+        ?.tokenFootprints?.()
+        .find((drawn) => drawn.tokenId === tokenId) ?? null,
+    tokenId,
+  );
+}
+
+/** The warnings the attack flow shows before rolling, as sentences. */
+export async function attackWarningsFromSheet(
+  page: Page,
+  actorId: string,
+  abilityName: string,
+  targetLabel: string,
+): Promise<{ warnings: string[]; said: string }> {
+  return swingFromSheet(page, actorId, abilityName, targetLabel);
 }
 
 /** The attack log's entries on a board, newest first, as text. */
