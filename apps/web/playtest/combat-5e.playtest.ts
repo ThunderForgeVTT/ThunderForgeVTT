@@ -4,8 +4,13 @@ import {
   activeRowOn,
   addCombatant,
   advanceTurn,
+  answerOffer,
+  attackFromSheet,
+  attackLogOn,
   barCurrentOn,
   changeHitPoints,
+  claimFor,
+  offersOn,
   grantAbility,
   combatSeenBy,
   endCombat,
@@ -43,12 +48,14 @@ import {
  *
  * Initiative and turn order are real, and are checked hard. Since spec 046 so
  * are damage (the Game Master's hit-point change reaches every board), a
- * creature at zero (out of the fight, and skipped), and whose turn it is (a
- * player is refused a move on somebody else's). The rest of the fight is not
- * yet: there is no armour class to beat and no target on a roll. Those are
- * recorded as FINDINGs (soft, so the session plays to the end) rather than
- * faked with a test-only path — a scenario that writes the outcome itself is
- * a scenario proving nothing.
+ * creature at zero (out of the fight, and skipped), whose turn it is (a
+ * player is refused a move on somebody else's), and an attack: Aria swings
+ * her longsword from her own sheet at the goblin, the server rolls it against
+ * the goblin's armour class, every seat is shown it, and a hit is offered to
+ * the Game Master to take. What is not there yet — size and reach, the
+ * economy of a round — is recorded as FINDINGs (soft, so the session plays to
+ * the end) rather than faked with a test-only path: a scenario that writes the
+ * outcome itself is a scenario proving nothing.
  */
 
 /** The scores a 5e actor needs before the pack will accept anything else. */
@@ -66,8 +73,22 @@ const CASTER_SCORES = {
   dexterity: 14,
   intelligence: 16,
 };
-const GOBLIN_SCORES = { ...HERO_SCORES, strength: 8, dexterity: 14 };
-const OGRE_SCORES = { ...HERO_SCORES, strength: 19, dexterity: 8 };
+// Spec 046: armour class is the 5e pack's declared defence, kept with the
+// scores. A goblin wears leather and a shield (15); an ogre, hide (11); Aria,
+// chain mail (16); Brom, nothing (12).
+const GOBLIN_SCORES = {
+  ...HERO_SCORES,
+  strength: 8,
+  dexterity: 14,
+  armor_class: 15,
+};
+const OGRE_SCORES = {
+  ...HERO_SCORES,
+  strength: 19,
+  dexterity: 8,
+  armor_class: 11,
+};
+const GOBLIN_AC = GOBLIN_SCORES.armor_class;
 
 // The creatures' own numbers, so the fight is a fight somebody could run: a
 // goblin is Small with 7 hit points, an ogre is Large with 59.
@@ -143,8 +164,19 @@ test("a Game Master runs a 5e fight for two players", async ({
         },
       });
 
-      await setAbilityScores(table, cast.Aria.actorId, HERO_SCORES);
-      await setAbilityScores(table, cast.Brom.actorId, CASTER_SCORES);
+      await setAbilityScores(table, cast.Aria.actorId, {
+        ...HERO_SCORES,
+        armor_class: 16,
+      });
+      await setAbilityScores(table, cast.Brom.actorId, {
+        ...CASTER_SCORES,
+        armor_class: 12,
+      });
+      // Each player claims the character they play: a claimed character's
+      // sheet is the one that opens inside their dock, where their attacks
+      // are (spec 031 US2).
+      await claimFor(table, aria, cast.Aria.actorId);
+      await claimFor(table, brom, cast.Brom.actorId);
       await setHitPoints(table, cast.Aria.actorId, { current: 16, max: 16 });
       await setHitPoints(table, cast.Brom.actorId, { current: 11, max: 11 });
 
@@ -268,19 +300,16 @@ test("a Game Master runs a 5e fight for two players", async ({
         expect(value, `${who}'s d20 is a d20`).toBeLessThanOrEqual(20);
       }
 
-      // Aria rolled in front of the table. Nobody else saw a thing: a roll
-      // is not announced to the world, and the history is the Game Master's
-      // alone.
-      const onBromsScreen = await rollShown(brom.page);
-      expect
-        .soft(
-          onBromsScreen,
-          "FINDING: Aria's roll should reach the table. Nothing announces a " +
-            "roll — there is no world event for one, and `worldRollRecords` " +
-            "is Game-Master-only — so a player's roll is invisible to every " +
-            "other seat.",
-        )
-        .toContain(String(rolled.Aria));
+      // Was FINDING 263 ("Aria's roll should reach the table"). A free roll
+      // in the dice roller stays the roller's own; what the table is shown
+      // is an *attack* (spec 046 FR-002), which is checked hard in "Aria
+      // attacks the goblin" below.
+      testInfo.annotations.push({
+        type: "free roll",
+        description: `Aria's initiative d20 on Brom's screen: ${
+          (await rollShown(brom.page)) ?? "nothing"
+        }`,
+      });
       await snapshot(table, "2 · initiative");
     });
 
@@ -416,23 +445,89 @@ test("a Game Master runs a 5e fight for two players", async ({
     });
 
     await test.step("Aria attacks the goblin", async () => {
-      // A longsword, +3 to hit. The number is real; what it means is not.
-      const attack = await rollInPanel(aria.page, "1d20+3");
-      expect(attack).toBeGreaterThanOrEqual(4);
-      expect(attack).toBeLessThanOrEqual(23);
+      // Her turn first: an attack on somebody else's turn is refused (C1).
+      for (
+        let turn = 0;
+        turn < 5 &&
+        combat!.combatants.find((c) => c.id === combat!.activeCombatantId)
+          ?.label !== "Aria";
+        turn += 1
+      ) {
+        combat = await advanceTurn(table, combat!.id);
+      }
 
-      const goblin = await systemDataOf(table.gm, cast.Goblin.actorId);
-      const describesDefence = JSON.stringify(goblin)
-        .toLowerCase()
-        .match(/armor|armour|"ac"/);
-      expect
-        .soft(
-          describesDefence,
-          `FINDING: Aria rolled ${attack} to hit, and nothing can say whether ` +
-            "it hit. A 5e actor has no armour class the product reads, no " +
-            "roll takes a target, and nothing compares a result to a defence.",
-        )
-        .toBeTruthy();
+      // Was FINDING 416 ("nothing can say whether it hit"). The longsword,
+      // swung from Aria's own sheet at the goblin: the server rolls it
+      // against the goblin's armour class and says hit or miss.
+      const said = await attackFromSheet(
+        aria.page,
+        cast.Aria.actorId,
+        "Longsword",
+        "Goblin",
+      );
+      expect(
+        said,
+        "the attack is rolled against the goblin's armour class and judged",
+      ).toMatch(new RegExp(`Aria → Goblin.*vs ${GOBLIN_AC}: (hit|miss)`));
+      const hit = /: hit/.test(said);
+
+      // Was FINDING 263 ("Aria's roll should reach the table"): every other
+      // seat is shown it, without asking.
+      for (const [who, client] of [
+        ["the Game Master", table.gm],
+        ["Brom", brom.page],
+      ] as const) {
+        await expect
+          .poll(async () => (await attackLogOn(client)).join(" | "), {
+            timeout: 5_000,
+            message: `${who} is shown Aria's attack on the goblin`,
+          })
+          .toMatch(
+            new RegExp(`Aria → Goblin.*Longsword.*vs ${GOBLIN_AC}: (hit|miss)`),
+          );
+      }
+
+      // A miss offers nothing. Aria swings until she lands one, as a player
+      // would (nothing yet spends her action; Phase 8's economy flags it),
+      // so every run also plays the hit.
+      const swings = [said];
+      let landed = hit;
+      if (!landed) {
+        expect(await offersOn(table.gm), "a miss offers nothing").toEqual([]);
+      }
+      while (!landed && swings.length < 8) {
+        const again = await attackFromSheet(
+          aria.page,
+          cast.Aria.actorId,
+          "Longsword",
+          "Goblin",
+        );
+        swings.push(again);
+        landed = /: hit/.test(again);
+      }
+      testInfo.annotations.push({
+        type: "attack",
+        description: swings.join(" / "),
+      });
+
+      // A hit's damage is offered to whoever controls the goblin — the Game
+      // Master — who declines it here, so the goblin meets the Game Master's
+      // own damage below whole.
+      if (landed) {
+        await expect
+          .poll(() => offersOn(table.gm), {
+            timeout: 10_000,
+            message: "the Game Master is offered the goblin's damage",
+          })
+          .toContainEqual(expect.stringMatching(/^Goblin: take \d+ damage\?$/));
+        await answerOffer(table.gm, "Goblin", false);
+        await expect
+          .poll(async () => (await attackLogOn(brom.page)).join(" | "), {
+            timeout: 5_000,
+            message: "the table is told the Game Master declined it",
+          })
+          .toMatch(/damage declined by/);
+      }
       await snapshot(table, "5 · the attack");
     });
 
@@ -446,17 +541,14 @@ test("a Game Master runs a 5e fight for two players", async ({
       expect(firebolt, "a fire bolt's damage").toBeGreaterThanOrEqual(1);
       expect(firebolt).toBeLessThanOrEqual(10);
 
-      // Where a player should find their style: their own character sheet.
+      // Was FINDING 439. Where a player finds their style: their own
+      // character sheet, which opens in the dock for the character they
+      // claimed, with the longsword's attack and damage on it.
       const onAriasSheet = await abilityRollsOn(aria.page, cast.Aria.actorId);
-      expect
-        .soft(
-          onAriasSheet,
-          "FINDING: Aria's longsword should be on Aria's own sheet to roll. " +
-            "A Game Master authors and attaches an ability, and whether the " +
-            "player can reach it from Play is a different question — one " +
-            "worth answering before a table relies on it.",
-        )
-        .toBeGreaterThan(0);
+      expect(
+        onAriasSheet,
+        "Aria's longsword is on Aria's own sheet to roll",
+      ).toBeGreaterThan(0);
       await snapshot(table, "6 · two styles");
     });
 

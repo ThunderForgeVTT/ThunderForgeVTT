@@ -82,7 +82,8 @@ export function AttackLog({ worldId, sceneId }: AttackLogProps) {
       aria-label="Attacks"
       aria-live="polite"
       data-testid="attack-log"
-      className="pointer-events-auto grid gap-1 rounded-lg border border-border bg-background/90 p-2 text-xs shadow-lg backdrop-blur"
+      // Read, never pressed: clicks pass through to the board beneath it.
+      className="pointer-events-none grid gap-1 rounded-lg border border-border bg-background/90 p-2 text-xs shadow-lg backdrop-blur"
     >
       <h2 className="text-[0.65rem] font-semibold tracking-widest text-muted-foreground uppercase">
         Attacks

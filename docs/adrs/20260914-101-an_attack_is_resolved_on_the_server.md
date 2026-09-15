@@ -1,7 +1,7 @@
 # ADR-101: An Attack Is Resolved on the Server, and Its Damage Is an Offer
 
 **Date:** 2026-09-14
-**Status:** **PROPOSED**
+**Status:** **ACCEPTED** 2026-09-14, once spec 046 Phase 6 proved it (tasks T070: the e2e, the server rules and the playtest).
 **Participants:** ThunderForgeVTT Team
 **Related:** spec 046 (US1, US2, FR-001–FR-009, FR-002a, decisions 1 and 3, clarifications Q1–Q3 and Q5), spec 046 research R1, R7, R8, R15, R16, `specs/046-a-fight-that-resolves/contracts/fight.md`, ADR-044 (the server is the only source of a roll), ADR-095 (server-side movement adjudication), ADR-102 (a token is its actor, or a copy of it)
 

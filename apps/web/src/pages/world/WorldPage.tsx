@@ -2807,10 +2807,13 @@ export default function WorldPage() {
                * of the scene's attacks, and the offers waiting for this
                * viewer. Over the board rather than in the dock, which mounts
                * only its open section: a hit has to reach a player who is
-               * looking at something else. */}
+               * looking at something else. Bottom centre: the combat playtest
+               * found the dice roller's Roll button under it at the bottom
+               * left, and the Game Master's tool flyout over it at the top
+               * left. The open dock covers the right. */}
               {id ? (
                 <div
-                  className="pointer-events-none absolute bottom-3 left-16 z-[1040] flex w-80 max-w-[60%] flex-col gap-2"
+                  className="pointer-events-none absolute bottom-3 left-1/2 z-[1040] flex w-80 max-w-[40%] -translate-x-1/2 flex-col-reverse gap-2"
                   data-testid="table-feed"
                 >
                   <OfferPrompt worldId={id} isGm={isSceneOwner} />

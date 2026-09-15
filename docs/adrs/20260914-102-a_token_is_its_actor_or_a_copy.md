@@ -1,7 +1,7 @@
 # ADR-102: A Token Is Its Actor, or a Copy of It
 
 **Date:** 2026-09-14
-**Status:** **PROPOSED**
+**Status:** **ACCEPTED** 2026-09-14, once spec 046 Phase 6 proved it (tasks T070: the e2e, the server rules and the playtest).
 **Participants:** ThunderForgeVTT Team
 **Related:** spec 046 (FR-015, FR-016, FR-017, SC-008, clarification Q4), spec 046 research R4, R5, R7, R17, `specs/046-a-fight-that-resolves/data-model.md`, spec 029 (token status), ADR-056 (imagery hangs on the actor)
 
