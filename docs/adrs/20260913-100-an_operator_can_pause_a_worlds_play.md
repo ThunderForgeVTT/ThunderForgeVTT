@@ -89,3 +89,63 @@ world to be able to undo it.
   exists, and it would miss other processes.
 - **Automatic pause on takedown.** Rejected by spec 051 decision 2: a pause with
   no decision is what the owner ruled out.
+
+## Found in implementation
+
+Recorded 2026-09-16, after User Stories 1 to 5 shipped.
+
+**What the surface test caught.**
+
+- **`renameWorld` answered anyone.** Any signed-in caller who named a world's
+  id got the world back; the update matched nothing but the reply did not say
+  so. Found when a site admin who is a Player member "got through" the gate.
+  It now refuses a non-owner (commit `0f9e6f0`).
+- **A pack's own fields were invisible to it.** The server's closed-list test
+  reads the server's schema, and a system pack's root fields are merged only
+  in the app crate, so Genie's thirteen session mutations still moved a
+  paused world's state. Packs now declare a `PackSurface` through `inventory`,
+  and a second test in `src/app` reads the merged schema by introspection
+  and calls every gated pack field on a paused world (commit `4c568ba`).
+  `packs/systems/README.md` makes the classification part of the pack
+  contract.
+- **Two world-token routes let any account write into any world.**
+  `createWorldToken` and `upsertWorldToken` checked sign-in and, once gated,
+  the pause, but never membership; the gate was the first check they had.
+  Nothing called them and ADR-040 had retired their table, so they were
+  removed rather than fixed (commit `e9d97c2`).
+
+**Gated fields that surprised.**
+
+- `worldActorSystemDataUpdated` was a stub stream with no membership check at
+  all. It now opens only for a member of an unpaused world.
+- `reconcileQueuedChanges` cannot simply refuse: a refusal reads to the
+  client as a lost connection and is retried. It answers every queued change
+  `PLAY_PAUSED` and applies nothing, and the notice says how many were not
+  kept.
+- `worldSyncPlan` is fetched by the engine rather than the GraphQL client, so
+  its refusal arrived only as a degraded sync summary. That turned out to be
+  the fastest path off the playfield: a page leaves 46–49 ms after a pause,
+  before event 28 reaches it. The five-second liveness tick is proven
+  separately, against a client with no logic (`play-pause-stream-poll.spec.ts`).
+- Map import is the only world-scoped REST write. Image uploads are GraphQL
+  mutations and are gated with the rest.
+- A few writes are left open on purpose: `deleteWorld`, `removeCompendium`
+  (the book belongs to the importer's shelf, not the world) and
+  `deactivateLoreSync` (operators only).
+
+**Whether the trigger backstop is still unneeded.** Yes, with one known gap.
+Every path the surface tests missed was a *classification* gap: a field that
+was never listed, not a listed field that let a write through. The closed
+lists catch the first kind at build time, and the pack surface closes the one
+place the lists could not see. A Postgres trigger would have caught none of
+the three findings above, since they were about who may call, not whether
+the world was paused.
+
+The gap is timing. A mutation that checks the gate and then writes in
+separate statements can be beaten by a pause landing between the two;
+`create_light_source` is the recorded example. The owner decided on
+2026-09-15 to fix this in one pass that wraps gate and write in a transaction
+for every mutation with that shape, rather than one mutation at a time. The
+cost is a single stray write in a window of milliseconds, not a game played
+on after a takedown. A trigger would also close that window, which is why it
+stays the named next step if that pass is never made.
