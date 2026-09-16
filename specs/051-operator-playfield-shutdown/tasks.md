@@ -469,3 +469,19 @@ A world can be paused by an operator and every live browser is removed within fi
 5. **Polish** measures SC-001, audits accessibility, and records what implementation found.
 
 Each story commits separately with signed commits and explicit paths, and is ticked here only after its e2e has run green.
+
+## Known gap: a gated mutation can be beaten by milliseconds (2026-09-15)
+
+`create_light_source` (`src/server/src/graphql/mutations_lighting.rs`) checks the
+pause gate and then inserts, in separate statements. An operator pausing a world
+in that window still gets one light created after the pause. `update_light_source`
+was put in one transaction with `SELECT … FOR UPDATE` on 2026-09-15 (commit
+`b9df735`) for a different reason — concurrent reach clamping — and closed its own
+window as a side effect.
+
+**Decided (owner, 2026-09-15):** record it rather than fix it one mutation at a
+time. The window is milliseconds and the damage is a single stray light, not a
+game played on after a takedown. The fix is one pass over every gated mutation
+with the same check-then-write shape, wrapping gate and write in a transaction —
+worth doing as a piece of work with its own tests, not as a fix scattered across
+files.
