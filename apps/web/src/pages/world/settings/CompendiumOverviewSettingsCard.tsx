@@ -114,7 +114,7 @@ export function CompendiumOverviewSettingsCard({
   return (
     <Card className="grid gap-3 p-6" data-testid="compendium-overview-card">
       <div>
-        <h2 className="text-lg font-semibold">Compendium overview</h2>
+        <h3 className="text-lg font-semibold">Compendium overview</h3>
         <p className="text-sm text-muted-foreground">
           Shown at the top of the Compendium (NPCs/Lore/Items/Abilities). Write
           whatever sets the scene — Markdown supported.

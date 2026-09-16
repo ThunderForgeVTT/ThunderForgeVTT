@@ -133,9 +133,9 @@ export function WorldAppearanceSettingsCard({
   };
 
   return (
-    <Card data-testid="world-appearance-card">
-      <h2>Appearance</h2>
-      <p>
+    <Card className="grid gap-4 p-6" data-testid="world-appearance-card">
+      <h3 className="text-lg font-semibold">Appearance</h3>
+      <p className="text-sm text-muted-foreground">
         How this world looks, for everyone at the table. Light and dark stay
         each person&apos;s own choice.
       </p>

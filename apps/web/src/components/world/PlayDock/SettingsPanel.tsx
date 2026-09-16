@@ -9,6 +9,7 @@ import {
 import { SceneSwitcher } from "@/components/world/SceneSwitcher";
 import { Button } from "@/components/ui/button/Button";
 import type { SceneRecord } from "@/types/scene";
+import { gridTypeLabel } from "@/utils/gridType";
 
 export interface SettingsPanelProps {
   worldId: string;
@@ -98,7 +99,8 @@ export function SettingsPanel({
             <div className="flex justify-between gap-2">
               <dt className="text-muted-foreground">Grid</dt>
               <dd>
-                {currentScene.gridType} · {currentScene.gridSize}px
+                {gridTypeLabel(currentScene.gridType)} · {currentScene.gridSize}
+                px
               </dd>
             </div>
             <div className="flex justify-between gap-2">

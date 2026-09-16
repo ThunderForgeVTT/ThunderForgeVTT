@@ -24,7 +24,7 @@ export function PlayPauseHistoryCard({ worldId }: PlayPauseHistoryCardProps) {
   return (
     <Card className="grid gap-4 p-6" data-testid="play-pause-history-card">
       <div className="grid gap-1">
-        <h2 className="text-lg font-semibold">Paused play</h2>
+        <h3 className="text-lg font-semibold">Paused play</h3>
         <p className="text-sm text-muted-foreground">
           When an operator of this instance paused play in this world, and when
           play resumed.

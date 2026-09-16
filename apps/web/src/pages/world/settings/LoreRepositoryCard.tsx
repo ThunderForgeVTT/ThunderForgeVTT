@@ -175,7 +175,7 @@ export function LoreRepositoryCard({ worldId }: LoreRepositoryCardProps) {
   return (
     <Card className="grid gap-4 p-6" data-testid="lore-repository-card">
       <div>
-        <h2 className="text-lg font-semibold">Lore repository</h2>
+        <h3 className="text-lg font-semibold">Lore repository</h3>
         <p className="text-sm text-muted-foreground">
           Mirror this world&apos;s lore, as Markdown files, into a Git
           repository you own. ThunderForge writes to the repository; it never
@@ -586,9 +586,9 @@ function PendingIncomingChanges({
   return (
     <div className="grid gap-3" data-testid="lore-incoming-changes">
       <div>
-        <h3 className="text-sm font-semibold">
+        <h4 className="text-sm font-semibold">
           Changes in the repository, waiting for you
-        </h3>
+        </h4>
         <p className="text-sm text-muted-foreground">
           {changes.length === 1
             ? "One change was found in the repository that this world does not have."

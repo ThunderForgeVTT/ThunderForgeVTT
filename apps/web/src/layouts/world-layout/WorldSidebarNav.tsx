@@ -131,15 +131,19 @@ export function WorldSidebarNav({ worldId, isGm }: WorldSidebarNavProps) {
         title={collapsed ? category.label : undefined}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-          collapsed && "justify-center px-2",
+          "flex shrink-0 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors lg:shrink",
+          collapsed && "lg:justify-center lg:px-2",
           active
             ? "bg-primary/10 text-primary"
             : "text-muted-foreground hover:bg-secondary hover:text-foreground",
         )}
       >
         <FantasyIcon name={category.icon} size={18} />
-        {collapsed ? null : <span>{category.label}</span>}
+        {/* Collapsing hides labels in the rail only; the phone strip keeps
+            them, where an icon alone would be the whole navigation. */}
+        <span className={collapsed ? "lg:hidden" : undefined}>
+          {category.label}
+        </span>
       </Link>
     );
   };
@@ -147,15 +151,19 @@ export function WorldSidebarNav({ worldId, isGm }: WorldSidebarNavProps) {
   return (
     <nav
       className={cn(
-        "grid h-fit shrink-0 gap-4 rounded-xl border border-border bg-card p-3 transition-[width]",
-        collapsed ? "w-[3.75rem]" : "w-56",
+        "grid h-fit w-full shrink-0 gap-4 rounded-xl border border-border bg-card p-3 transition-[width]",
+        collapsed ? "lg:w-[3.75rem]" : "lg:w-56",
       )}
       data-testid="world-sidebar-nav"
       aria-label="World navigation"
     >
+      {/* The collapse control is about making room beside the content, which
+          is a thing that only exists from `lg` up. Below that the rail is a
+          strip above the content and collapsing it would hide the labels for
+          nothing. */}
       <div
         className={cn(
-          "flex items-center",
+          "hidden items-center lg:flex",
           collapsed ? "justify-center" : "justify-end",
         )}
       >
@@ -174,12 +182,15 @@ export function WorldSidebarNav({ worldId, isGm }: WorldSidebarNavProps) {
         </Button>
       </div>
 
-      <div className="grid gap-1">{categories.map(renderLink)}</div>
+      {/* One row that scrolls on a phone, one column in the rail. */}
+      <div className="-mx-1 flex gap-1 overflow-x-auto px-1 lg:mx-0 lg:grid lg:overflow-visible lg:px-0">
+        {categories.map(renderLink)}
+      </div>
 
       {isGm ? (
-        <div className="grid gap-1 border-t border-border pt-3">
+        <div className="-mx-1 flex gap-1 overflow-x-auto px-1 lg:mx-0 lg:grid lg:border-t lg:border-border lg:px-0 lg:pt-3">
           {!collapsed ? (
-            <p className="px-3 pb-1 text-[0.65rem] font-semibold tracking-widest text-muted-foreground uppercase">
+            <p className="hidden px-3 pb-1 text-[0.65rem] font-semibold tracking-widest text-muted-foreground uppercase lg:block">
               Admin
             </p>
           ) : null}

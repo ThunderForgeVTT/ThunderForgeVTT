@@ -50,7 +50,13 @@ export function WorldSectionShell({
         {/* Spec 051 US5: here rather than on one page, so every hub screen a
             member lands on says that play is paused, and since when. */}
         <PlayPausedBanner worldId={worldId} />
-        <div className="flex items-start gap-6">
+        {/* Stacked on a narrow screen, side by side from `lg` — the same
+            arrangement `AdminSectionShell` makes, for the same reason. A
+            14rem rail beside the content leaves about 95px for the content on
+            a 375px phone, which is not a narrow column: it is a page that
+            scrolls sideways, and every card on these screens was being blamed
+            for it. The rail is a strip above the content there instead. */}
+        <div className="flex flex-col items-stretch gap-4 lg:flex-row lg:items-start lg:gap-6">
           <WorldSidebarNav worldId={worldId} isGm={isGm} />
           <div className="min-w-0 flex-1">{children}</div>
         </div>

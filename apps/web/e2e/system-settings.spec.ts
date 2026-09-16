@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "./fixtures/test";
+import { expectNoAxeViolations } from "./fixtures/axe";
 
 /**
  * specs/016-system-pack-legal-compliance: the persistent world System
@@ -70,6 +71,15 @@ test.describe("Spec 016: GM assigns a game system and its legal notice is persis
     await page.goto(`/world/${worldId}/settings/system`);
     await expect(page.getByTestId("active-system-card")).toContainText("Genie");
 
+    // The owner's complaint, as an assertion: "if you are Genie, it should
+    // show Genie on the select dropdown". The closed trigger used to be
+    // blank — its `value` was the *pending* choice, undefined until you
+    // touched it — so a world with a system told its GM to select one.
+    await expect(page.getByTestId("system-picker")).toContainText("Genie");
+    await expect(page.getByTestId("system-picker")).not.toContainText(
+      "Select a system",
+    );
+
     await page.getByTestId("system-picker").click();
 
     // Spec 021 marked every pack but Genie "(TBD)" and disabled it, because
@@ -83,10 +93,13 @@ test.describe("Spec 016: GM assigns a game system and its legal notice is persis
     await expect(dnd5eOption).not.toContainText("(TBD)");
     await expect(dnd5eOption).not.toHaveAttribute("aria-disabled", "true");
 
-    // Re-picking the already-active system still exercises the "review the
-    // legal notice before confirming" flow (FR-004's "point of selection"
-    // review step), without needing a second implemented system.
-    await page.getByRole("option", { name: "Genie", exact: true }).click();
+    // A *different* system, because the trigger now carries the world's own
+    // system as its value: a select cannot change to what it already is, so
+    // re-picking Genie is no longer a change and raises no confirmation.
+    // Picking 5E is the better exercise of FR-004's "point of selection"
+    // review step anyway — it is the thing a GM would actually do — and the
+    // world is empty, so it takes the one-step path (FR-029).
+    await dnd5eOption.click();
     await expect(page.getByTestId("pending-system-confirmation")).toBeVisible({
       timeout: 10_000,
     });
@@ -99,12 +112,19 @@ test.describe("Spec 016: GM assigns a game system and its legal notice is persis
     await expect(page.getByText("System assigned.")).toBeVisible({
       timeout: 10_000,
     });
-    await expect(page.getByTestId("active-system-card")).toContainText("Genie");
+    await expect(page.getByTestId("active-system-card")).toContainText(
+      "5E System Core",
+    );
 
-    // Persists across a fresh navigation, not just optimistic local state.
+    // Persists across a fresh navigation, not just optimistic local state —
+    // and the closed picker says so too, which is the whole of the fix.
     await page.goto(`/world/${worldId}/settings/system`);
     await expect(page.getByTestId("active-system-card")).toContainText(
-      "Genie",
+      "5E System Core",
+      { timeout: 10_000 },
+    );
+    await expect(page.getByTestId("system-picker")).toContainText(
+      "5E System Core",
       { timeout: 10_000 },
     );
     await expect(page.getByTestId("active-system-card")).not.toContainText(
@@ -163,8 +183,17 @@ test.describe("Spec 016: GM assigns a game system and its legal notice is persis
   });
 });
 
-test.describe("Spec 022 User Story 4: System Settings relabel + Default Scene Grid Type control", () => {
-  test("the system-picker card reads 'System Settings', the picker is labeled 'Change System', and a Default Scene Grid Type control is present", async ({
+test.describe("Spec 022 User Story 4: named settings groups + Default Scene Grid Type control", () => {
+  /**
+   * Spec 022 FR-017 asked for one card headed "System Settings", because the
+   * page was one card and that card was really the world's settings home.
+   * The page is now grouped — "Game system", "At the table", "Content and
+   * contributors" — on the owner's instruction that it read as sections
+   * rather than one run of cards, so the settings home is the page and the
+   * card is only about the system. The labelled controls FR-017 named are
+   * unchanged and still asserted here.
+   */
+  test("the settings are grouped under named headings, the picker is labeled 'Change System', and Default Scene Grid Type offers Gridless/Squares/Hexagons", async ({
     page,
   }) => {
     await register(page, freshCredentials("e2esystemlabel"));
@@ -175,16 +204,75 @@ test.describe("Spec 022 User Story 4: System Settings relabel + Default Scene Gr
     await page.goto(`/world/${worldId}/settings/system`);
 
     await expect(
+      page.getByRole("heading", { name: "Game system", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "At the table", exact: true }),
+    ).toBeVisible();
+    await expect(
       page
         .getByTestId("system-picker-card")
-        .getByRole("heading", { name: "System Settings" }),
+        .getByRole("heading", { name: "Change the system" }),
     ).toBeVisible();
     await expect(page.getByLabel("Change System")).toBeVisible();
     await expect(page.getByLabel("Default Scene Grid Type")).toBeVisible();
 
-    await page.getByTestId("default-scene-grid-type-picker").click();
-    await expect(page.getByRole("option", { name: "None" })).toBeVisible();
+    // "None" read as *nothing chosen* — the empty state of a picker rather
+    // than a choice inside it — and hid a real mode with its own rules. The
+    // engine has called it Gridless all along.
+    const gridPicker = page.getByTestId("default-scene-grid-type-picker");
+    await expect(gridPicker).toContainText("Squares");
+    await gridPicker.click();
+    await expect(page.getByRole("option", { name: "Gridless" })).toBeVisible();
     await expect(page.getByRole("option", { name: "Squares" })).toBeVisible();
     await expect(page.getByRole("option", { name: "Hexagons" })).toBeVisible();
+    await expect(page.getByRole("option", { name: "None" })).toHaveCount(0);
+
+    // The stored value is what the closed trigger reads, here as much as on
+    // the system picker beside it.
+    await page.getByRole("option", { name: "Gridless" }).click();
+    await expect(gridPicker).toContainText("Gridless");
+    await page.goto(`/world/${worldId}/settings/system`);
+    await expect(
+      page.getByTestId("default-scene-grid-type-picker"),
+    ).toContainText("Gridless", { timeout: 10_000 });
+  });
+});
+
+test.describe("System settings is readable on a desktop and on a phone", () => {
+  test("no axe violations and no sideways page scroll at 1440px or 375px", async ({
+    page,
+  }) => {
+    await register(page, freshCredentials("e2esystema11y"));
+    const worldId = await createWorld(
+      page,
+      `E2E System Settings Layout ${uniqueSuffix()}`,
+    );
+
+    for (const width of [1440, 375]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`/world/${worldId}/settings/system`);
+      await expect(page.getByTestId("system-picker-card")).toBeVisible({
+        timeout: 20_000,
+      });
+
+      await expectNoAxeViolations(
+        page,
+        "[data-testid=world-system-settings-page]",
+      );
+
+      // The page itself must not scroll sideways. A card may scroll inside
+      // its own container; the document may not. At 375px the world rail
+      // used to sit beside the content and leave it about 95px, which is
+      // what this assertion was failing on before the rail became a strip.
+      const overflows = await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth >
+          document.documentElement.clientWidth + 1,
+      );
+      expect(overflows, `page scrolls sideways at ${width}px`).toBe(false);
+    }
+
+    await page.setViewportSize({ width: 1280, height: 900 });
   });
 });

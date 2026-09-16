@@ -144,7 +144,7 @@ export function AuthoringToolGrantsCard({
   return (
     <Card className="grid gap-4 p-6" data-testid="authoring-tool-grants-card">
       <div>
-        <h2 className="text-lg font-semibold">Player authoring tools</h2>
+        <h3 className="text-lg font-semibold">Player authoring tools</h3>
         <p className="text-sm text-muted-foreground">
           By default only you author the map. Give a player a tool here and it
           appears in their rail; take it back and it stops working for them
