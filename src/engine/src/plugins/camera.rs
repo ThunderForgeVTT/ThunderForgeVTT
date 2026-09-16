@@ -1,4 +1,5 @@
 use crate::resources::{CameraManager, SelectedLight};
+use crate::systems::camera_focus::{LastFocus, PanDragActive, apply_requested_focus};
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -9,6 +10,8 @@ pub struct CameraPlugin;
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CameraManager>()
+            .init_resource::<PanDragActive>()
+            .init_resource::<LastFocus>()
             .add_systems(Startup, setup_camera)
             .add_systems(
                 Update,
@@ -16,6 +19,9 @@ impl Plugin for CameraPlugin {
                     handle_mouse_wheel_zoom,
                     handle_drag_pan,
                     handle_keyboard_camera_shortcuts, // Phase 4.7.D2
+                    // After the drag, so a `focus_token` that arrives during
+                    // one sees the drag as live and stands aside for it.
+                    apply_requested_focus,
                     // Last, so a zoom applied this frame reaches the camera
                     // in the same frame rather than a frame late.
                     update_camera_transform,
@@ -92,6 +98,8 @@ fn handle_drag_pan(
     mouse_button: Res<ButtonInput<MouseButton>>,
     windows: Query<&Window, With<PrimaryWindow>>,
     mut camera_mgr: ResMut<CameraManager>,
+    // Published so `camera_focus` can stand aside for a hand on the mouse.
+    mut active: ResMut<PanDragActive>,
     mut drag: Local<DragPan>,
 ) {
     let cursor = windows
@@ -102,6 +110,7 @@ fn handle_drag_pan(
     if let Some(button) = drag.button {
         if !mouse_button.pressed(button) {
             *drag = DragPan::default();
+            active.set_if_neq(PanDragActive(false));
             return;
         }
         let Some(cursor) = cursor else {
@@ -116,8 +125,10 @@ fn handle_drag_pan(
             camera_mgr.drag_by(delta);
             drag.last = cursor;
         }
+        active.set_if_neq(PanDragActive(drag.dragging));
         return;
     }
+    active.set_if_neq(PanDragActive(false));
 
     if let Some(cursor) = cursor
         && let Some(button) = PAN_BUTTONS

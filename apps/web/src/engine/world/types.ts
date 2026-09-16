@@ -524,6 +524,34 @@ export type SetTokenGridCommand = {
   snap?: boolean;
 };
 
+/**
+ * "Look at this creature" (owner decision 2026-09-15) — the engine's
+ * `focus_token`.
+ *
+ * A name, not a coordinate. The engine owns the camera and every spatial
+ * question this needs answering (Principle I): where the creature is, how many
+ * cells it fills, how big the viewport is, and — the one that matters — whether
+ * this viewer's board draws it at all. A player who asks to look at a creature
+ * they cannot see is refused there, not here; the control is hidden here as
+ * well, but a hidden control is chrome and the engine is the rule.
+ */
+export type FocusTokenCommand = {
+  type: "focus_token";
+  tokenId: string;
+  /**
+   * How many cells of surroundings to frame around the creature. Omitted keeps
+   * the viewer's own zoom and only moves — which is what a plain locate does.
+   * Counted *around* the creature by the engine, so a Large one does not eat
+   * the context.
+   */
+  surroundCells?: number;
+  /**
+   * Land in one frame instead of gliding. True for a viewer who asked for
+   * `prefers-reduced-motion`: they are owed the destination, not the journey.
+   */
+  immediate?: boolean;
+};
+
 /** One interactive, in the shape the engine's command boundary expects. */
 export type WorldInteractive = {
   id: string;
@@ -546,6 +574,7 @@ export type WorldCommand =
   | SetTokenVisionCommand
   | SetCarriedLightCommand
   | SetTokenGridCommand
+  | FocusTokenCommand
   | UpsertTokenCommand
   | RemoveTokenCommand
   | SetTokenStatusCommand

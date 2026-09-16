@@ -221,6 +221,19 @@ pub(crate) fn parse_command(input: &str) -> Option<ExternalCommand> {
             width: value.get("width")?.as_f64()? as f32,
             height: value.get("height")?.as_f64()? as f32,
         }),
+        "focus_token" => Some(ExternalCommand::FocusToken {
+            token_id: value.get("tokenId")?.as_str()?.to_owned(),
+            // Absent keeps the viewer's own zoom: a plain "look at this" has
+            // no business overruling a zoom they chose.
+            surround_cells: value
+                .get("surroundCells")
+                .and_then(Value::as_f64)
+                .map(|v| v as f32),
+            immediate: value
+                .get("immediate")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+        }),
         "set_controlled_token" => Some(ExternalCommand::SetControlledToken {
             // Absent or null both mean "this client controls nothing".
             token_id: value

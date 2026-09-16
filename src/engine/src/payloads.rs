@@ -411,6 +411,27 @@ pub(crate) enum ExternalCommand {
         width: f32,
         height: f32,
     },
+    /// Puts a token on screen: "look at this creature" (owner decision
+    /// 2026-09-15).
+    ///
+    /// Distinct from `SetCamera`, which takes world coordinates the
+    /// application would have to work out for itself, and from `FitCameraTo`,
+    /// which frames a rectangle. This names a creature and lets the engine
+    /// answer every spatial question about it — where it is, how many cells
+    /// it fills, and whether this board draws it at all (Principle I).
+    ///
+    /// Refused for a viewer who may not see the creature; see
+    /// `systems::camera_focus` for the rule and why it is enforced there.
+    FocusToken {
+        token_id: String,
+        /// How many cells of surroundings to frame around the creature, or
+        /// `None` to keep the current zoom and only move. Counted *around*
+        /// the creature, so a Large one does not eat the context.
+        surround_cells: Option<f32>,
+        /// Land in one frame rather than gliding — what a viewer who asked
+        /// for `prefers-reduced-motion` gets.
+        immediate: bool,
+    },
     /// Names the token this client's own player may move.
     ///
     /// Distinct from `SetViewerToken`, which is whose eyes the board is drawn

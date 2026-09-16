@@ -45,9 +45,26 @@ pub(crate) fn spawn_demo_tokens(commands: &mut Commands, token_entities: &mut To
     }
 }
 
+/// The engine sandbox's demo mover: hold WASD or an arrow key and the red
+/// square slides.
+///
+/// `Without<PlayerControlled>` is what keeps this from being a second thing
+/// listening on the same keys. A real token is moved by
+/// `systems::token_move::handle_token_movement_input` — one discrete cell per
+/// press, through the grid, stopping at walls, telling the server — and the
+/// moment anything names an entity as this client's to move, that system is
+/// the only one allowed to move it. Without the filter, a session that named
+/// a demo token as controlled would have both running on one keypress: a cell
+/// per press *and* a continuous slide.
 pub(crate) fn move_player(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut player: Single<&mut Transform, With<PlayerToken>>,
+    mut player: Single<
+        &mut Transform,
+        (
+            With<PlayerToken>,
+            Without<crate::movement::PlayerControlled>,
+        ),
+    >,
     time: Res<Time>,
 ) {
     let mut direction = Vec2::ZERO;
@@ -604,6 +621,23 @@ pub(crate) fn apply_external_commands(
                 if let Some(grid_visible) = scene.grid_visible.as_deref_mut() {
                     grid_visible.0 = visible;
                 }
+            }
+            ExternalCommand::FocusToken {
+                token_id,
+                surround_cells,
+                immediate,
+            } => {
+                // Queued rather than applied here: the answer needs each
+                // token's drawn visibility, its name and its footprint, and
+                // this system is already at Bevy's parameter cap. The same
+                // shape `SetControlledToken` uses below, for the same reason.
+                crate::systems::camera_focus::request_focus(
+                    crate::systems::camera_focus::FocusRequest {
+                        token_id,
+                        surround_cells,
+                        immediate,
+                    },
+                );
             }
             ExternalCommand::SetControlledToken { token_id } => {
                 // Through the same queue the web uses, so there is one way a
