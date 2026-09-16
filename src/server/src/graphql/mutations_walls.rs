@@ -40,8 +40,13 @@ impl WallMutation {
         let y1 = input.y1;
         let x2 = input.x2;
         let y2 = input.y2;
+        // A wall with no profile given is a wall: it stops sight and it stops
+        // people. These defaults are deliberately the same pair the engine's
+        // wall tool sends (`DRAWN_WALL_BLOCKS_*` in `systems/wall.rs`) —
+        // a caller that omits the flags must not get a different wall
+        // depending on which side of the bridge built it.
         let blocks_vision = input.blocks_vision.unwrap_or(true);
-        let blocks_movement = input.blocks_movement.unwrap_or(false);
+        let blocks_movement = input.blocks_movement.unwrap_or(true);
         let door_state = input
             .door_state
             .unwrap_or(GraphQLDoorState::None)

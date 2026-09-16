@@ -288,19 +288,22 @@ test.describe("Wall passability toggles (US1, T001/T007)", () => {
     const blocksVision = page.locator("#wall-blocks-vision");
     const blocksMovement = page.locator("#wall-blocks-movement");
 
-    // FR-001: both default true/false per create_wall's defaults and are
-    // independently toggleable — flip each and confirm the checkbox
-    // state itself updates immediately (the real-time re-render is what
-    // "takes hold immediately" means at the UI layer; occlusion/movement
-    // effects on tokens have no DOM-observable signal, per
-    // canvas-authoring.spec.ts's documented screenshot-capture gap).
+    // A drawn wall arrives blocking both: it is a wall. They are still
+    // independently toggleable — clearing "Blocks movement" here is exactly
+    // how a Game Master draws a window, a railing or a balcony edge. Flip
+    // each and confirm the checkbox state itself updates immediately (the
+    // real-time re-render is what "takes hold immediately" means at the UI
+    // layer; occlusion/movement effects on tokens have no DOM-observable
+    // signal, per canvas-authoring.spec.ts's documented screenshot-capture
+    // gap).
     await expect(blocksVision).toBeChecked();
+    await expect(blocksMovement).toBeChecked();
+
     await blocksVision.click();
     await expect(blocksVision).not.toBeChecked();
 
-    await expect(blocksMovement).not.toBeChecked();
     await blocksMovement.click();
-    await expect(blocksMovement).toBeChecked();
+    await expect(blocksMovement).not.toBeChecked();
 
     // Reload and confirm both independent toggles persisted (FR-008/US2
     // territory, but a cheap sanity check here too).
@@ -315,7 +318,7 @@ test.describe("Wall passability toggles (US1, T001/T007)", () => {
       timeout: 10_000,
     });
     await expect(page.locator("#wall-blocks-vision")).not.toBeChecked();
-    await expect(page.locator("#wall-blocks-movement")).toBeChecked();
+    await expect(page.locator("#wall-blocks-movement")).not.toBeChecked();
   });
 
   test("door-state toggling is unaffected by the adjacent passability checkboxes (regression guard, T002)", async ({
@@ -357,13 +360,13 @@ test.describe("Wall passability toggles (US1, T001/T007)", () => {
     // Passability checkboxes remain exactly as set, unaffected by the
     // door-state change sitting right next to them in the same panel.
     await expect(page.locator("#wall-blocks-vision")).not.toBeChecked();
-    await expect(page.locator("#wall-blocks-movement")).toBeChecked();
+    await expect(page.locator("#wall-blocks-movement")).not.toBeChecked();
 
     await page.locator("#wall-door-state").click();
     await page.getByRole("option", { name: "Door (open)" }).click();
     await expect(page.locator("#wall-door-state")).toContainText("Door (open)");
     await expect(page.locator("#wall-blocks-vision")).not.toBeChecked();
-    await expect(page.locator("#wall-blocks-movement")).toBeChecked();
+    await expect(page.locator("#wall-blocks-movement")).not.toBeChecked();
   });
 });
 
@@ -425,9 +428,9 @@ test.describe("Live cross-session sync (US1, T003/T004/T008)", () => {
 
     // GM toggles Blocks Movement; the second, still-open session must
     // reflect it without a reload (FR-005, SC-002).
-    await expect(gmPage.locator("#wall-blocks-movement")).not.toBeChecked();
+    await expect(gmPage.locator("#wall-blocks-movement")).toBeChecked();
     await gmPage.locator("#wall-blocks-movement").click();
-    await expect(secondPage.locator("#wall-blocks-movement")).toBeChecked({
+    await expect(secondPage.locator("#wall-blocks-movement")).not.toBeChecked({
       timeout: 10_000,
     });
 

@@ -24,6 +24,22 @@ const WALL_VISUAL_HEIGHT: f32 = 4.0;
 /// of being rejected as a zero-length click (T016).
 const MIN_WALL_LENGTH: f32 = 1.0;
 
+/// What a freshly drawn wall stops.
+///
+/// A wall somebody drew on a map is a wall: it stops sight and it stops
+/// people. Every creation path here (drag, chain, room) uses these, so the
+/// answer is in one place rather than repeated three times and drifting.
+/// `create_wall` on the server defaults to the same pair, so a wall created
+/// without an explicit profile behaves identically whichever side made it.
+///
+/// A vision-only wall — a window, a railing, a balcony edge — is still
+/// drawable: select the wall and clear "Blocks movement" in the Walls panel,
+/// or press `B` with it selected. It is a deliberate second step because it
+/// is the rarer of the two.
+const DRAWN_WALL_BLOCKS_VISION: bool = true;
+/// See `DRAWN_WALL_BLOCKS_VISION`.
+const DRAWN_WALL_BLOCKS_MOVEMENT: bool = true;
+
 /// How close (px) the cursor must be to an existing wall's endpoint to
 /// grab it for a move-drag, rather than starting a new wall or selecting
 /// the wall's body.
@@ -214,8 +230,8 @@ fn emit_room(start: Vec2, end: Vec2, world_id: &str) {
                 "y1": from.y,
                 "x2": to.x,
                 "y2": to.y,
-                "blocksVision": true,
-                "blocksMovement": false,
+                "blocksVision": DRAWN_WALL_BLOCKS_VISION,
+                "blocksMovement": DRAWN_WALL_BLOCKS_MOVEMENT,
                 "doorState": "none",
             },
             "worldId": world_id,
@@ -235,10 +251,11 @@ fn emit_room(start: Vec2, end: Vec2, world_id: &str) {
 /// them is taught about this primitive, and none of them needs to be —
 /// inventing a second kind of door here is exactly what would break them.
 ///
-/// It blocks movement, where a plain wall from this tool does not. That is the
-/// difference between a wall and a doorway: a closed door is a way through
-/// that happens to be shut, so it has to stop somebody while it is shut and
-/// stop nobody once it opens, which `Wall::blocking` already derives.
+/// It blocks movement, as every wall from this tool does. The difference is
+/// not what it stops but that it can stop stopping: a closed door is a way
+/// through that happens to be shut, so it has to stop somebody while it is
+/// shut and stop nobody once it opens, which `Wall::blocking` already
+/// derives.
 fn emit_door(start: Vec2, end: Vec2, world_id: &str) {
     emit_event(json!({
         "type": "create_wall",
@@ -452,8 +469,8 @@ pub(crate) fn handle_wall_input(
                         "y1": start.y,
                         "x2": end.x,
                         "y2": end.y,
-                        "blocksVision": true,
-                        "blocksMovement": false,
+                        "blocksVision": DRAWN_WALL_BLOCKS_VISION,
+                        "blocksMovement": DRAWN_WALL_BLOCKS_MOVEMENT,
                         "doorState": "none",
                     },
                     "worldId": active_world.0,
@@ -539,8 +556,8 @@ pub(crate) fn handle_wall_keyboard_toggles(
                         "y1": pair[0].y,
                         "x2": pair[1].x,
                         "y2": pair[1].y,
-                        "blocksVision": true,
-                        "blocksMovement": false,
+                        "blocksVision": DRAWN_WALL_BLOCKS_VISION,
+                        "blocksMovement": DRAWN_WALL_BLOCKS_MOVEMENT,
                         "doorState": "none",
                     },
                     "worldId": active_world.0,

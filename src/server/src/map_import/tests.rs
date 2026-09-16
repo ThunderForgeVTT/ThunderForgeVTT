@@ -733,7 +733,10 @@ async fn hand_built_edits_on_top_of_an_import_persist_exactly() {
 // `blocks_movement: false` — a useful negative-control finding in
 // its own right, showing the check's teeth are in the coordinate/
 // door-state fields, not the always-false import-time
-// `blocks_movement` default.) The change was then reverted; `cargo
+// `blocks_movement` default. That default is now `true` — imported walls
+// stop tokens like drawn ones — and the negative control still holds for the
+// same reason: the flag is constant across an import.) The change was then
+// reverted; `cargo
 // test map_import::tests::round_trip` passed again with the fix
 // undone. This confirms the round-trip tests genuinely detect
 // fidelity regressions rather than trivially passing regardless of

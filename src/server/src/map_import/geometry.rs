@@ -84,7 +84,12 @@ fn wall(
         x2,
         y2,
         blocks_vision: true,
-        blocks_movement: false,
+        // A UVTT `line_of_sight` polygon edge is the map's own wall, and a
+        // `portals[]` entry is a door in one. Both stop people as well as
+        // sight — the same profile the wall tool draws. For a portal this
+        // only bites while it is closed: `Wall::blocking` lets an open door
+        // through regardless.
+        blocks_movement: true,
         door_state,
     }
 }
