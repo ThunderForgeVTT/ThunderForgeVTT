@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { getAllWorlds, getMyWorlds } from "@/api/world";
+import { listGameSystems, type GameSystemSummary } from "@/api/gameSystems";
+import { getAllWorlds, getMyWorldsWithRole } from "@/api/world";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
@@ -10,8 +11,15 @@ import { Loader } from "@/components/ui/loader/Loader";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { useAuth } from "@/hooks/useAuth";
 import type { SeoConfig } from "@/types/seo";
-import type { WorldRecord } from "@/types/world";
+import {
+  readStoredWorldsView,
+  resolveWorldsView,
+  storeWorldsView,
+  type WorldsView,
+} from "@/pages/world/worldsView";
 import { WorldCard } from "./components/WorldCard";
+import { WorldsTable, type WorldListEntry } from "./components/WorldsTable";
+import { WorldsViewToggle } from "./components/WorldsViewToggle";
 
 export const worldListPageSeo: SeoConfig = {
   title: "World archive",
@@ -21,31 +29,77 @@ export const worldListPageSeo: SeoConfig = {
   noindex: true,
 };
 
+/**
+ * The world archive, drawn as tiles or as a table.
+ *
+ * # Why the list query changed
+ *
+ * This page asked `myWorlds`, which is **owned-only**, and so could not have
+ * a "your role" column: every row would have said Owner. `myWorldsWithRole`
+ * is the query `/welcome` already uses — every world the caller owns *or* is
+ * an accepted member of, each paired with the role they hold there. A player
+ * invited to a table now finds that table in their archive, which is what an
+ * archive of "your worlds" was always claiming to be.
+ *
+ * # The threshold and the choice
+ *
+ * See `worldsView.ts`: seven worlds is where tiles stop being readable, and a
+ * person's own choice beats the count at any number. The control is visible
+ * at every count — including at two worlds, where the table is a strange
+ * thing to want and is nonetheless a click away.
+ */
 export default function WorldListPage() {
   const { isAdmin } = useAuth();
   const [includeAll, setIncludeAll] = useState(false);
   const scopeKey = isAdmin && includeAll ? "all" : "mine";
   const [archiveState, setArchiveState] = useState<{
     requestedScope: string;
-    worlds: WorldRecord[];
+    entries: WorldListEntry[];
     status: string | null;
     isLoading: boolean;
   }>({
     requestedScope: scopeKey,
-    worlds: [],
+    entries: [],
     status: null,
     isLoading: true,
   });
+  /** `null` until this person has expressed one — see `worldsView.ts`. */
+  const [chosenView, setChosenView] = useState<WorldsView | null>(
+    readStoredWorldsView,
+  );
+  /** Titles for the system column. A failed read leaves ids, never blanks. */
+  const [systems, setSystems] = useState<GameSystemSummary[]>([]);
 
   useEffect(() => {
     let active = true;
-    const request = isAdmin && includeAll ? getAllWorlds() : getMyWorlds();
+    listGameSystems()
+      .then((installed) => {
+        if (active) setSystems(installed.systems);
+      })
+      .catch(() => {
+        // `titleFor` falls back to the id, which is still an answer.
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const request =
+      isAdmin && includeAll
+        ? getAllWorlds().then((worlds) =>
+            worlds.map((world) => ({ world, role: null })),
+          )
+        : getMyWorldsWithRole().then((entries) =>
+            entries.map((entry) => ({ world: entry.world, role: entry.role })),
+          );
     void request
-      .then((response) => {
+      .then((entries) => {
         if (active) {
           setArchiveState({
             requestedScope: scopeKey,
-            worlds: response,
+            entries,
             status: null,
             isLoading: false,
           });
@@ -55,7 +109,7 @@ export default function WorldListPage() {
         if (active) {
           setArchiveState({
             requestedScope: scopeKey,
-            worlds: [],
+            entries: [],
             status:
               error instanceof Error
                 ? error.message
@@ -72,10 +126,17 @@ export default function WorldListPage() {
 
   const isLoading =
     archiveState.requestedScope !== scopeKey || archiveState.isLoading;
-  const worlds =
-    archiveState.requestedScope === scopeKey ? archiveState.worlds : [];
+  const entries =
+    archiveState.requestedScope === scopeKey ? archiveState.entries : [];
   const status =
     archiveState.requestedScope === scopeKey ? archiveState.status : null;
+
+  const view = resolveWorldsView(chosenView, entries.length);
+
+  const handleChangeView = (next: WorldsView) => {
+    setChosenView(next);
+    storeWorldsView(next);
+  };
 
   return (
     <>
@@ -117,16 +178,33 @@ export default function WorldListPage() {
 
           {isLoading ? (
             <Loader label="Opening world archive" />
-          ) : worlds.length > 0 ? (
-            <section className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-6">
-              {worlds.map((world) => (
-                <WorldCard
-                  key={world.id}
-                  world={world}
+          ) : entries.length > 0 ? (
+            <>
+              <section className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">
+                  {entries.length} world{entries.length === 1 ? "" : "s"}
+                </p>
+                <WorldsViewToggle view={view} onChange={handleChangeView} />
+              </section>
+
+              {view === "table" ? (
+                <WorldsTable
+                  entries={entries}
+                  systems={systems}
                   showOwner={Boolean(includeAll && isAdmin)}
                 />
-              ))}
-            </section>
+              ) : (
+                <section className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-6">
+                  {entries.map((entry) => (
+                    <WorldCard
+                      key={entry.world.id}
+                      world={entry.world}
+                      showOwner={Boolean(includeAll && isAdmin)}
+                    />
+                  ))}
+                </section>
+              )}
+            </>
           ) : (
             <Card surface="leather" className="grid gap-3 p-8 text-center">
               <h2 className="text-xl font-semibold">
