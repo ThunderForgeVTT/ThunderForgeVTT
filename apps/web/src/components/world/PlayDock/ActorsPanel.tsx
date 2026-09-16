@@ -176,10 +176,10 @@ export function ActorsPanel({
   const [sceneTokens, setSceneTokens] = useState<TokenRecord[]>([]);
 
   useEffect(() => {
-    if (!sceneId) {
-      setSceneTokens([]);
-      return;
-    }
+    // No scene, nothing to fetch. Tokens held from a previous scene are left
+    // in place rather than cleared here: `tokenByActor` only reads the ones on
+    // the scene in play, so they can offer nothing.
+    if (!sceneId) return;
     let active = true;
     getTokens(sceneId)
       .then((tokens) => {

@@ -162,10 +162,19 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
    * Per person and remembered in this browser — see `followTheTurn.ts` for why
    * it is nobody else's setting and why it starts off.
    */
-  const [following, setFollowing] = useState(() => readFollowTheTurn(worldId));
-  useEffect(() => {
-    setFollowing(readFollowTheTurn(worldId));
-  }, [worldId]);
+  // Held with the world it was read for, so a panel reused for another world
+  // reads that world's preference during render rather than one frame late
+  // from an effect.
+  const [followPref, setFollowPref] = useState(() => ({
+    worldId,
+    enabled: readFollowTheTurn(worldId),
+  }));
+  const following =
+    followPref.worldId === worldId
+      ? followPref.enabled
+      : readFollowTheTurn(worldId);
+  const setFollowing = (enabled: boolean) =>
+    setFollowPref({ worldId, enabled });
 
   /**
    * The turn the camera was last moved for.
