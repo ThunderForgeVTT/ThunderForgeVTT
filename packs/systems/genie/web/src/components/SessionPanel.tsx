@@ -9,6 +9,7 @@ import {
   type WorldItemRecord,
 } from "@thunderforge/host";
 import { useGenieSession } from "../session/useGenieSession";
+import { groupActorChoices } from "../session/actorChoices";
 
 export interface GenieSessionPanelProps {
   worldId: string;
@@ -71,6 +72,7 @@ export function GenieSessionPanel({
     advancePuzzleClock,
     myActor,
     partyMembers,
+    sessionActors,
     myHoldings,
     incomingProposals,
     proposeResourceTrade,
@@ -178,7 +180,12 @@ export function GenieSessionPanel({
     }
   };
 
-  const grantableActors = myActor ? [myActor, ...partyMembers] : partyMembers;
+  // Every actor this viewer may see, characters first and NPCs after
+  // (`session/actorChoices.ts`). This used to be `myActor` plus the party —
+  // player characters only — which left the dropdown empty in any world
+  // whose cast was NPCs, and refused a Game Master the shopkeeper they
+  // wanted to hand Favor to (owner, 2026-09-15).
+  const actorGroups = groupActorChoices(sessionActors);
 
   const handleGrant = async () => {
     if (!grantActorId || !grantResourceType) return;
@@ -287,13 +294,17 @@ export function GenieSessionPanel({
               onChange={(event) => setGrantActorId(event.target.value)}
               className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
               data-testid="grant-resource-actor-select"
-              aria-label="Character to grant to"
+              aria-label="Actor to grant to"
             >
-              <option value="">Select a character…</option>
-              {grantableActors.map((actor) => (
-                <option key={actor.id} value={actor.id}>
-                  {actor.label}
-                </option>
+              <option value="">Select an actor…</option>
+              {actorGroups.map((group) => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.actors.map((actor) => (
+                    <option key={actor.id} value={actor.id}>
+                      {actor.label}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
             <select
@@ -522,10 +533,14 @@ export function GenieSessionPanel({
                 aria-label="Actor to attribute this advance to"
               >
                 <option value="">(none — whole party)</option>
-                {grantableActors.map((actor) => (
-                  <option key={actor.id} value={actor.id}>
-                    {actor.label}
-                  </option>
+                {actorGroups.map((group) => (
+                  <optgroup key={group.label} label={group.label}>
+                    {group.actors.map((actor) => (
+                      <option key={actor.id} value={actor.id}>
+                        {actor.label}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
               <input

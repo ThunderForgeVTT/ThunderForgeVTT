@@ -109,6 +109,20 @@ export interface UseGenieSessionResult {
    * needs to offer a trade to someone. `null` while unresolved/absent. */
   myActor: WorldActorRecord | null;
   partyMembers: WorldActorRecord[];
+  /**
+   * Every actor of this world the viewer may see — NPCs included.
+   *
+   * Separate from `partyMembers` on purpose. Trading is between player
+   * characters, so `SessionResourceTrade` still wants the party; *granting*
+   * a Session Resource, and attributing a Puzzle Clock advance, are about
+   * actors, and a world staged with NPCs and no claimed character used to
+   * offer an empty dropdown for both (owner, 2026-09-15).
+   *
+   * Not filtered here. A hidden NPC never reaches this list, because the
+   * server withheld it (`src/server/src/auth/npc_visibility.rs`); a Game
+   * Master gets theirs because the server sent them.
+   */
+  sessionActors: WorldActorRecord[];
   myHoldings: GenieResourceHoldingRecord[];
   incomingProposals: GenieTradeProposalRecord[];
 }
@@ -140,6 +154,7 @@ export function useGenieSession(
     key: string;
     myActor: WorldActorRecord | null;
     partyMembers: WorldActorRecord[];
+    actors: WorldActorRecord[];
   } | null>(null);
   const [loadedTrades, setLoadedTrades] = useState<{
     key: string;
@@ -160,6 +175,8 @@ export function useGenieSession(
     partyKey && loadedParty?.key === partyKey
       ? loadedParty.partyMembers
       : NO_ACTORS;
+  const sessionActors =
+    partyKey && loadedParty?.key === partyKey ? loadedParty.actors : NO_ACTORS;
 
   // The one place the ambiguous-null rule lives; every path that learns a
   // new session record goes through it.
@@ -251,6 +268,9 @@ export function useGenieSession(
           key: partyKey,
           myActor: pcs.find((a) => controllerId(a) === currentUserId) ?? null,
           partyMembers: pcs.filter((a) => controllerId(a) !== currentUserId),
+          // Unfiltered, and that is the point: the grant and attribution
+          // pickers are about actors, not about the party.
+          actors,
         });
       })
       .catch((err) => {
@@ -534,6 +554,7 @@ export function useGenieSession(
     fetchPuzzleClockRewards,
     myActor,
     partyMembers,
+    sessionActors,
     myHoldings,
     incomingProposals,
   };
