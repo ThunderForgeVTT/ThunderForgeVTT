@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { createLoreEntry, getLoreEntry, updateLoreEntry } from "@/api/lore";
+import { getWorldPlayState } from "@/api/playPause";
 import {
   COMPENDIUM_OVERVIEW_DEFAULT_CONTENT,
   COMPENDIUM_OVERVIEW_SLUG,
@@ -34,12 +35,14 @@ export function CompendiumOverviewSettingsCard({
   const [content, setContent] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [paused, setPaused] = useState(false);
 
   // Reset during render rather than at the top of the effect below: this
   // is state derived from the arguments, and doing it in the effect commits
   // one render pairing the new key with the previous key's data.
   useResetOnChange(worldId, () => {
     setEntry(undefined);
+    setPaused(false);
   });
 
   useEffect(() => {
@@ -58,16 +61,33 @@ export function CompendiumOverviewSettingsCard({
         // Lazily create the reserved entry on first visit — the Markdown
         // editor needs a real loreEntryId (pasted-image uploads, `[[`
         // link autocomplete both hang off it).
-        return createLoreEntry({
-          worldId,
-          title: COMPENDIUM_OVERVIEW_TITLE,
-          content: COMPENDIUM_OVERVIEW_DEFAULT_CONTENT,
-        }).then((created) => {
-          if (active) {
-            setEntry(created);
-            setContent(created.content);
-          }
-        });
+        //
+        // Not while an operator has paused play (spec 051): the write is
+        // refused, and a refused write sends the page to the pause notice,
+        // so merely opening settings would have taken a member out of a
+        // world whose pages FR-024 keeps open. A failed read of the play
+        // state is not news about a pause, so it creates as before.
+        return getWorldPlayState(worldId)
+          .then((state) => state.paused)
+          .catch(() => false)
+          .then((isPaused) => {
+            if (!active) return;
+            if (isPaused) {
+              setPaused(true);
+              setEntry(null);
+              return;
+            }
+            return createLoreEntry({
+              worldId,
+              title: COMPENDIUM_OVERVIEW_TITLE,
+              content: COMPENDIUM_OVERVIEW_DEFAULT_CONTENT,
+            }).then((created) => {
+              if (active) {
+                setEntry(created);
+                setContent(created.content);
+              }
+            });
+          });
       })
       .catch((err) => {
         if (active) {
@@ -123,6 +143,14 @@ export function CompendiumOverviewSettingsCard({
 
       {entry === undefined ? (
         <Loader label="Loading" />
+      ) : entry === null && paused ? (
+        <p
+          className="text-sm text-muted-foreground"
+          data-testid="compendium-overview-paused"
+        >
+          Play in this world is paused, so the overview cannot be written yet.
+          It can be once play resumes.
+        </p>
       ) : entry === null ? (
         <StatusBadge variant="danger">
           {status ?? "Failed to load compendium overview"}

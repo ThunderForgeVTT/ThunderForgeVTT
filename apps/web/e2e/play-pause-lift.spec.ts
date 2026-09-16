@@ -349,6 +349,35 @@ test.describe("spec 051 US4: lifting a pause", () => {
       await expect(
         gmPage.getByRole("link", { name: "Return to the world" }),
       ).toHaveCount(0);
+
+      // 7. The history (T056): both pauses, newest first, times only — the
+      // lifted one with when it was paused and when it was lifted, the
+      // current one still paused.
+      await gmPage.goto(`/world/${worldId}/settings/system`);
+      const history = gmPage.getByTestId("play-pause-history-card");
+      await expect(history).toBeVisible({ timeout: 20_000 });
+      const rows = history.getByTestId("play-pause-history-row");
+      await expect(rows).toHaveCount(2);
+      const [current, lifted] = [rows.nth(0), rows.nth(1)];
+      await expect(current).toContainText("Still paused");
+      await expect(current.locator("time")).toHaveCount(1);
+      expect(
+        Date.parse(
+          (await current.locator("time").getAttribute("datetime")) ?? "",
+        ),
+      ).toBe(Date.parse(second.pausedAt));
+      const liftedTimes = lifted.locator("time");
+      await expect(liftedTimes).toHaveCount(2);
+      const [pausedAt, liftedAt] = (
+        await liftedTimes.evaluateAll((times) =>
+          times.map((time) => time.getAttribute("datetime") ?? ""),
+        )
+      ).map((value) => Date.parse(value));
+      expect(pausedAt).toBe(Date.parse(pause.pausedAt));
+      expect(liftedAt).toBeGreaterThanOrEqual(pausedAt);
+      expect(liftedAt).toBeLessThanOrEqual(Date.parse(second.pausedAt));
+      await expect(history).not.toContainText(grounds);
+      await expect(history).not.toContainText(liftGrounds);
     } finally {
       await adminPage.context().close();
       await claimantContext.close();
