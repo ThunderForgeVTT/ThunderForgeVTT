@@ -1,3 +1,4 @@
+import { expectNoAxeViolations } from "./fixtures/axe";
 import { test, expect, type Page } from "./fixtures/test";
 
 /**
@@ -46,6 +47,9 @@ async function chooseSystem(
   await page.goto(`/world/${worldId}/settings/system`);
   const picker = page.getByTestId("system-picker");
   await expect(picker).toBeVisible({ timeout: 15_000 });
+  // A new world already runs Genie, and re-picking the running system asks
+  // nothing, so there is no confirmation to wait for.
+  if ((await picker.textContent())?.trim() === title) return;
   await picker.click();
   await page.getByRole("option", { name: title }).click();
   const confirmation = page.getByTestId("pending-system-confirmation");
@@ -308,4 +312,73 @@ test.describe("US3: a system names its own ability types", () => {
     await page.getByTestId("ability-type-tab-spell").click();
     await expect(page.getByTestId("ability-tab-empty")).toBeVisible();
   });
+});
+
+/**
+ * The create form speaks the selected type's word, not the umbrella's.
+ *
+ * The owner, in a Genie world: standing in Scrolls, the form should read
+ * "scroll name" and "scroll description"; in Knacks, knack wording. Asserted
+ * through each field's accessible name, which is what a label is for, and by
+ * the select relabelling the form without a change of tab.
+ */
+test("a Genie world's create form names a scroll as a scroll and a knack as a knack", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await registerGm(page);
+  // A new world takes Genie as its system.
+  const worldId = await createWorld(page, `Vocab form ${uniqueSuffix()}`);
+  const vocabulary = await vocabularyOf(page, worldId);
+  expect(vocabulary.types.map((kind) => kind.id)).toEqual(
+    expect.arrayContaining(["spell", "talent"]),
+  );
+
+  await openAbilities(page, worldId);
+  const form = page.getByTestId("ability-create-form");
+
+  await page.getByTestId("ability-type-tab-spell").click();
+  await expect(form.getByLabel("Scroll name", { exact: true })).toBeVisible();
+  await expect(
+    form.getByLabel("Scroll description", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    form.getByRole("button", { name: "Add Scroll", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByTestId("ability-create-heading")).toHaveText(
+    "Add a scroll to the library",
+  );
+  await expectNoAxeViolations(page, '[data-testid="ability-create-form"]');
+
+  // Changing the select relabels the form before anything is created.
+  await form.getByLabel("Ability type").selectOption("talent");
+  await expect(form.getByLabel("Knack name", { exact: true })).toBeVisible();
+  await expect(
+    form.getByLabel("Knack description", { exact: true }),
+  ).toBeVisible();
+
+  // The Knacks tab opens on knack wording, and makes a knack.
+  await page.getByTestId("ability-type-tab-talent").click();
+  const name = `Knack ${uniqueSuffix()}`;
+  await form.getByLabel("Knack name", { exact: true }).fill(name);
+  await form
+    .getByLabel("Knack description", { exact: true })
+    .fill("Always lands on its feet.");
+  await form.getByRole("button", { name: "Add Knack", exact: true }).click();
+  await expect(page.getByTestId("ability-catalog-table")).toContainText(name, {
+    timeout: 10_000,
+  });
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await openAbilities(page, worldId);
+  await page.getByTestId("ability-type-tab-spell").click();
+  await expect(form.getByLabel("Scroll name", { exact: true })).toBeVisible();
+  // The form fits the phone. Measured on the form rather than the document:
+  // the app's top header is wider than 375px on every page, which is its own
+  // defect and not this screen's.
+  const formBox = await form.boundingBox();
+  expect(formBox, "the form is on screen").not.toBeNull();
+  expect(formBox!.x).toBeGreaterThanOrEqual(0);
+  expect(formBox!.x + formBox!.width).toBeLessThanOrEqual(375);
+  await expectNoAxeViolations(page, '[data-testid="ability-create-form"]');
 });
