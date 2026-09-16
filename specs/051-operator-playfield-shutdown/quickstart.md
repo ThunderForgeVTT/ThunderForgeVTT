@@ -50,6 +50,43 @@ Each maps to one e2e file under `apps/web/e2e/`.
    grounds text. The third browser is still playing.
 4. **Expect**: a non-operator's direct `pauseWorldPlay` call is refused.
 
+#### Measured (T062, 2026-09-16)
+
+Five runs of `play-pause.spec.ts` and `play-pause-stream-poll.spec.ts`, two
+shards, `ENGINE_PROFILE=dev`, 5/5 green each run. Times are from the
+operator's confirmation (or from the pause being sent, for the stream-poll
+spec) to the page leaving the playfield, or to the stream's error.
+
+**The event path**: a real page on the playfield.
+
+| Run | GM (scene B) | Player (scene A) | Operator who is a member | GM beside them | Event 28 withheld |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1 | 272 ms | 239 ms | 180 ms | 218 ms | 48 ms |
+| 2 | 223 ms | 167 ms | 280 ms | 280 ms | 47 ms |
+| 3 | 224 ms | 187 ms | 161 ms | 213 ms | 44 ms |
+| 4 | 229 ms | 228 ms | 244 ms | 205 ms | 66 ms |
+| 5 | 275 ms | 226 ms | 214 ms | 182 ms | 99 ms |
+
+Worst: **280 ms**. With event 28 withheld the page still leaves in under
+100 ms, because its `worldSyncPlan` is refused first (see `2e98fea`), so the
+page path never waits on a tick.
+
+**The poll-only path**: a client with no logic, which ignores event 28 and
+does nothing but hold `playField`, `peerSignals` and `worldEventsCreated`
+open. Only the server's `LIVENESS_POLL` (5 s) ends its streams.
+
+| Paused after the streams opened | Error after the pause (5 runs, 3 streams) | Error after the stream opened |
+| --- | --- | --- |
+| 1 s | 3984–4010 ms | 5006–5012 ms |
+| 3.5 s | 1471–1509 ms | 5005–5013 ms |
+
+The error always lands on the tick, 5,005–5,013 ms into the stream, so the
+wait after a pause is the rest of the current tick. **No run exceeded 5 s**,
+and neither SC-001 nor `LIVENESS_POLL` is changed. The one caveat, stated so
+it is not rediscovered: a pause landing in the few milliseconds just after a
+tick would wait a whole period plus the tick's query, about 5,013 ms, for a
+client that ignores every other signal. A real page is never that client.
+
 ### 2. The pause holds (US2, FR-061, SC-002, SC-003) — `play-pause-holds.spec.ts`
 
 1. Pause a world with a player's browser severed by `severableLink` beforehand,
