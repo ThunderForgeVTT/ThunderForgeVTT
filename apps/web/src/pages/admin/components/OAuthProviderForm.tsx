@@ -78,8 +78,13 @@ export function OAuthProviderForm({
     <article className="grid gap-4 rounded-lg border border-border bg-secondary/40 p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="font-semibold">{displayName}</h3>
-          <p className="text-muted-foreground">{providerSubtitle}</p>
+          {/* The row above this editor already carries the provider's name and
+              whether it holds credentials, so the editor states neither again.
+              What it does state is the one thing a row has no room for: why
+              five of these six fields are not yours to change. */}
+          <h3 className="sr-only">
+            {displayName} — {providerSubtitle}
+          </h3>
           {isEnvSourced ? (
             <p
               className="mt-1 text-xs text-muted-foreground"

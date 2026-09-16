@@ -374,16 +374,46 @@ async function gotoAdminConfiguration(page: Page): Promise<void> {
   await page.waitForURL((url) => url.pathname.startsWith("/admin"), {
     timeout: 10_000,
   });
-  await expect(providerCards(page).first()).toBeVisible();
+  await expect(providerRows(page).first()).toBeVisible();
 }
 
-/** Every provider row in the admin panel's "OAuth providers" card. The
- * client-id field is what distinguishes them from the page's other
- * `<article>`s. */
-function providerCards(page: Page) {
-  return page
-    .locator("article")
-    .filter({ has: page.locator('input[id$="-client-id"]') });
+/** Every provider's row in the admin panel's "OAuth providers" table.
+ *
+ * The providers used to be seven stacked forms; they are now a table whose
+ * rows open an editor. So the thing to wait for on load is a row — the form
+ * for a given provider does not exist until somebody opens it, which is the
+ * whole point of the table. */
+function providerRows(page: Page) {
+  return page.locator('[data-testid^="oauth-provider-row-"]');
+}
+
+/** Opens one provider's editor and returns it.
+ *
+ * Returns the `<article>` the editor is still drawn as, so every assertion
+ * below it — the disabled fields, the switch, "Update provider" — is
+ * unchanged from when the editor was always on screen. Only reaching it is
+ * new. Idempotent: a row already open is left open rather than toggled shut,
+ * because several of these tests re-resolve the card between steps. */
+async function openProviderEditor(
+  page: Page,
+  row: ReturnType<typeof providerRows>,
+) {
+  const toggle = row.getByRole("button", { name: /^(Edit|Done)$/ });
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+    await toggle.click();
+  }
+  const providerId = (await row.getAttribute("data-testid"))?.replace(
+    "oauth-provider-row-",
+    "",
+  );
+  const editor = page.locator(`#oauth-provider-editor-${providerId} article`);
+  await expect(editor).toBeVisible();
+  return editor;
+}
+
+/** The provider row whose displayed name contains `name`. */
+function providerRow(page: Page, name: string) {
+  return providerRows(page).filter({ hasText: name }).first();
 }
 
 /** Puts one seeded, admin-sourced provider row back to how the seed
@@ -448,11 +478,10 @@ test.describe("Admin panel: runtime provider configuration (US3, T017-T018, T021
 
     await gotoAdminConfiguration(page);
 
-    const githubCard = page
-      .locator("article")
-      .filter({ hasText: "GitHub" })
-      .first();
-    await expect(githubCard).toBeVisible();
+    const githubCard = await openProviderEditor(
+      page,
+      providerRow(page, "GitHub"),
+    );
     await githubCard
       .locator('input[id$="-client-id"]')
       .fill("e2e-github-client-id");
@@ -490,25 +519,29 @@ test.describe("Admin panel: runtime provider configuration (US3, T017-T018, T021
     // for enabled", not "Discord is env-sourced" — which provider carries
     // env credentials is a property of the stack (see the header's env
     // fixture), so the row is found by the indicator rather than by name.
-    const envCard = page
-      .locator("article")
-      .filter({ has: page.getByTestId(/env-sourced-indicator$/) })
+    // Found by the row's declared source rather than by the indicator inside
+    // its editor: the editor is behind a disclosure now, so "which row is the
+    // env-sourced one" has to be answerable before anything is opened.
+    const envRow = providerRows(page)
+      .filter({ has: page.locator('[data-config-source="ENV"]') })
+      .or(page.locator('tr[data-config-source="ENV"]'))
       .first();
     test.skip(
-      (await envCard.count()) === 0,
+      (await envRow.count()) === 0,
       "Dev stack has no env-sourced OAuth provider; start it with any OAUTH_<PROVIDER>_* set (see this file's header) to exercise this scenario.",
     );
-    await expect(envCard).toBeVisible();
+    // The row's own cell is the display name the login screen renders, so the
+    // button this row is responsible for can be named without knowing which
+    // provider it is.
+    const displayName = (await envRow.locator("th").first().innerText())
+      .split("\n")[0]
+      .trim();
+
+    const envCard = await openProviderEditor(page, envRow);
+    await expect(envCard.getByTestId(/env-sourced-indicator$/)).toBeVisible();
     await expect(envCard.locator('input[id$="-display-name"]')).toBeDisabled();
     await expect(envCard.locator('input[id$="-client-id"]')).toBeDisabled();
     await expect(envCard.locator('input[id$="-client-secret"]')).toBeDisabled();
-
-    // The card's heading is the display name the login screen renders, so
-    // the button this row is responsible for can be named without knowing
-    // which provider it is.
-    const displayName = (
-      await envCard.locator("h3").first().innerText()
-    ).trim();
     const loginButton = new RegExp(
       `Continue with ${escapeForRegExp(displayName)}$`,
       "i",
@@ -539,11 +572,11 @@ test.describe("Admin panel: runtime provider configuration (US3, T017-T018, T021
 
     // Toggle back on so this test doesn't leave a persistent side effect
     // for the rest of this file's suite (order-independence).
-    await page.goto("/admin/configuration");
-    const envCardAgain = page
-      .locator("article")
-      .filter({ has: page.getByTestId(/env-sourced-indicator$/) })
-      .first();
+    await gotoAdminConfiguration(page);
+    const envCardAgain = await openProviderEditor(
+      page,
+      page.locator('tr[data-config-source="ENV"]').first(),
+    );
     await envCardAgain.getByRole("switch").click();
     await save(envCardAgain);
   });
@@ -609,11 +642,10 @@ test.describe("Custom login-button branding (US4, T022-T023)", () => {
 
       await gotoAdminConfiguration(page);
 
-      const googleCard = page
-        .locator("article")
-        .filter({ hasText: "Google" })
-        .first();
-      await expect(googleCard).toBeVisible();
+      const googleCard = await openProviderEditor(
+        page,
+        providerRow(page, "Google"),
+      );
       await googleCard
         .locator('input[id$="-client-id"]')
         .fill("e2e-google-client-id");
@@ -622,9 +654,9 @@ test.describe("Custom login-button branding (US4, T022-T023)", () => {
         .fill("e2e-google-client-secret");
       await googleCard.getByRole("switch").click();
       // Display name filled last, and deliberately keeps the word "Google" in
-      // it — the `hasText: "Google"` filter above re-resolves on every
-      // further action against `googleCard`, so replacing it entirely would
-      // invalidate this locator for the remaining steps in this test.
+      // it: the editor is resolved by its own element id now, but the row it
+      // was opened from is still found by name, and a rerun of this file
+      // would not find "Google" again if it were replaced entirely.
       await googleCard
         .locator('input[id$="-display-name"]')
         .fill("Google (Big G)");

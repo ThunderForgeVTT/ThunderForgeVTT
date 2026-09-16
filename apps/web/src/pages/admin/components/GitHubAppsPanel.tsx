@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { postGraphQL } from "@/api/graphqlClient";
 import { Button } from "@/components/ui/button/Button";
-import { Card } from "@/components/ui/card/Card";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
+import { AdminDetailRow, AdminTable } from "./AdminTable";
 
 /**
  * Spec 040 US5 / ADR-090: this instance's GitHub applications, at two scales.
@@ -175,7 +175,7 @@ function sourceNote(field: GithubApplicationField): string | null {
   return null;
 }
 
-function ApplicationCard({
+function ApplicationEditor({
   app,
   onSaved,
 }: {
@@ -222,55 +222,11 @@ function ApplicationCard({
   };
 
   return (
-    <Card
-      surface="parchment"
-      className="grid gap-4 p-6"
-      data-testid={`github-app-${app.scope}`}
-    >
-      <div className="grid gap-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-lg font-semibold">
-            {SCOPE_LABEL[app.scope] ?? app.scope}
-          </h3>
-          <span data-testid={`github-app-${app.scope}-state`}>
-            <StatusBadge
-              variant={
-                app.complete ? "success" : app.configured ? "warning" : "info"
-              }
-            >
-              {app.complete
-                ? "Complete"
-                : app.configured
-                  ? "Incomplete"
-                  : "Not configured"}
-            </StatusBadge>
-          </span>
-        </div>
-        <p className="text-sm text-muted-foreground">Used by {app.serves}.</p>
-        <p
-          className="text-sm text-muted-foreground"
-          data-testid={`github-app-${app.scope}-acts-for`}
-        >
-          {actsForSentence(app)}
-        </p>
-      </div>
-
-      {/* FR-021: a subsystem that was half-written and stepped over whole. */}
-      {app.steppedOverGuidance ? (
-        <span data-testid={`github-app-${app.scope}-stepped-over`}>
-          <StatusBadge variant="warning">{app.steppedOverGuidance}</StatusBadge>
-        </span>
-      ) : null}
-
-      {app.scope !== "global" && app.resolvesTo === "global" ? (
-        <p
-          className="text-sm text-muted-foreground"
-          data-testid={`github-app-${app.scope}-resolves-to`}
-        >
-          This subsystem is using the global application.
-        </p>
-      ) : null}
-
+    <div className="grid gap-4">
+      {/* The row that opens this editor already carries the application's
+          name, its state, what it acts for and where each value came from.
+          What stays here is what a row has no room for: the guidance, the
+          fields themselves, and the live check. */}
       {app.guidance.length > 0 ? (
         <ul
           className="grid gap-1 text-sm text-muted-foreground"
@@ -409,14 +365,27 @@ function ApplicationCard({
           </StatusBadge>
         </span>
       ) : null}
-    </Card>
+    </div>
   );
 }
+
+const COLUMNS = [
+  "Subsystem",
+  "Application",
+  "Where each value came from",
+  "Edit",
+] as const;
+
+const COLUMN_WIDTHS = ["30%", "26%", "30%", "14%"] as const;
 
 export function GitHubAppsPanel() {
   const [applications, setApplications] = useState<GithubApplication[] | null>(
     null,
   );
+  // One editor open at a time: each holds its own unsaved drafts, and two
+  // half-filled applications on screen is exactly how a key gets saved
+  // against the wrong client ID.
+  const [openScope, setOpenScope] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -479,9 +448,127 @@ export function GitHubAppsPanel() {
           authentication failure that reads like a bad key.
         </p>
       </div>
-      {applications.map((app) => (
-        <ApplicationCard key={app.scope} app={app} onSaved={replace} />
-      ))}
+
+      <AdminTable
+        label="GitHub applications"
+        columns={COLUMNS}
+        columnWidths={COLUMN_WIDTHS}
+        data-testid="github-apps-table"
+      >
+        <tbody>
+          {applications.map((app) => {
+            const open = openScope === app.scope;
+            return [
+              <tr
+                key={app.scope}
+                className="border-b border-border last:border-b-0 align-top"
+                data-testid={`github-app-${app.scope}`}
+                data-complete={app.complete ? "true" : "false"}
+              >
+                <th scope="row" className="px-3 py-3 text-left">
+                  <span className="block font-semibold">
+                    {SCOPE_LABEL[app.scope] ?? app.scope}
+                  </span>
+                  <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+                    Used by {app.serves}.
+                  </span>
+                  <span
+                    className="mt-1 block text-xs font-normal text-muted-foreground"
+                    data-testid={`github-app-${app.scope}-acts-for`}
+                  >
+                    {actsForSentence(app)}
+                  </span>
+                  {app.scope !== "global" && app.resolvesTo === "global" ? (
+                    <span
+                      className="mt-1 block text-xs font-normal text-muted-foreground"
+                      data-testid={`github-app-${app.scope}-resolves-to`}
+                    >
+                      This subsystem is using the global application.
+                    </span>
+                  ) : null}
+                </th>
+                <td className="px-3 py-3">
+                  <span
+                    className="block"
+                    data-testid={`github-app-${app.scope}-state`}
+                  >
+                    <StatusBadge
+                      variant={
+                        app.complete
+                          ? "success"
+                          : app.configured
+                            ? "warning"
+                            : "info"
+                      }
+                    >
+                      {app.complete
+                        ? "Complete"
+                        : app.configured
+                          ? "Incomplete"
+                          : "Not configured"}
+                    </StatusBadge>
+                  </span>
+                  {/* The client ID is published by GitHub and is the value
+                      operators most often paste wrong, so it is on the row
+                      rather than behind the disclosure. The key never is. */}
+                  <span className="mt-1.5 block font-mono text-xs break-all text-muted-foreground">
+                    {app.clientId ?? "No client ID"}
+                  </span>
+                  {/* FR-021: a subsystem half-written and stepped over whole. */}
+                  {app.steppedOverGuidance ? (
+                    <span
+                      className="mt-1.5 block"
+                      data-testid={`github-app-${app.scope}-stepped-over`}
+                    >
+                      <StatusBadge variant="warning">
+                        {app.steppedOverGuidance}
+                      </StatusBadge>
+                    </span>
+                  ) : null}
+                </td>
+                <td className="px-3 py-3">
+                  <ul className="grid gap-1">
+                    {app.fields.map((field) => (
+                      <li key={field.key} className="text-xs">
+                        <span className="text-muted-foreground">
+                          {FIELD_LABEL[field.field] ?? field.field}:
+                        </span>{" "}
+                        <span
+                          data-testid={`github-app-${app.scope}-${field.field}-source`}
+                        >
+                          {sourceNote(field) ?? "Not set"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </td>
+                <td className="px-3 py-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-expanded={open}
+                    aria-controls={`github-app-editor-${app.scope}`}
+                    data-testid={`github-app-${app.scope}-toggle`}
+                    onClick={() => setOpenScope(open ? null : app.scope)}
+                  >
+                    {open ? "Done" : "Edit"}
+                  </Button>
+                </td>
+              </tr>,
+              open ? (
+                <AdminDetailRow
+                  key={`${app.scope}-editor`}
+                  columnCount={COLUMNS.length}
+                >
+                  <div id={`github-app-editor-${app.scope}`}>
+                    <ApplicationEditor app={app} onSaved={replace} />
+                  </div>
+                </AdminDetailRow>
+              ) : null,
+            ];
+          })}
+        </tbody>
+      </AdminTable>
     </div>
   );
 }

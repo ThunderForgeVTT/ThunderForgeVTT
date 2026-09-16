@@ -483,6 +483,14 @@ test.describe("Spec 040 US5: GitHub credentials at two scales", () => {
     await expect(admin.getByTestId("github-apps-panel")).toBeVisible({
       timeout: 20_000,
     });
+    // The applications are a table whose rows open an editor, so the fields
+    // have to be on screen before "the screen does not show the key" means
+    // anything: asserting it against a collapsed row would pass for the wrong
+    // reason, which is the failure mode this test exists to rule out.
+    await admin.getByTestId("github-app-global-toggle").click();
+    await expect(
+      admin.getByTestId("github-app-global-client_id-input"),
+    ).toBeVisible();
     const shown = (
       await admin.getByTestId("github-apps-panel").innerText()
     ).replace(/\s+/g, " ");
