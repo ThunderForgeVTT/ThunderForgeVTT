@@ -3013,12 +3013,7 @@ export default function WorldPage() {
               {engineReady && sceneId && sceneLoadState.status === "loading" ? (
                 <div
                   data-testid="scene-load-indicator"
-                  // Announced, not only drawn. A wait nobody is told about is
-                  // the freeze the owner reported; `polite` so it is read
-                  // after whatever the person was already being told, and the
-                  // overlay holds nothing focusable, so nothing loses focus
-                  // when it lifts.
-                  role="status"
+                  // Announced by `BoardLoading` itself, which is a status.
                   style={{
                     position: "absolute",
                     top: "50%",

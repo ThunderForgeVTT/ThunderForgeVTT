@@ -81,6 +81,11 @@ export function BoardLoading({
       )}
       data-testid="board-loading"
       data-step={current}
+      // Announced, not only drawn: a wait nobody is told about is the freeze
+      // the owner reported. `status` is polite, so it is read after whatever
+      // the person was already hearing. Nothing in here takes focus, so
+      // nothing loses it when the panel lifts.
+      role="status"
     >
       {/*
         The cute symbol the owner asked for: a die coming to rest. It is
