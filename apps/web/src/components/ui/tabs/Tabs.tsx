@@ -39,7 +39,10 @@ export function Tabs({
       defaultValue={defaultValue}
       value={value}
       onValueChange={onValueChange}
-      className={cn(className)}
+      // `min-w-0` so a grid or flex parent may shrink the tabs below the
+      // strip's full width; without it the strip below cannot scroll,
+      // because its parent never gets narrower than it.
+      className={cn("min-w-0", className)}
     >
       {/* `max-w-full` and its own horizontal scroll: the list is `w-fit`,
           so with five labelled tabs it grew past a 375px viewport and took

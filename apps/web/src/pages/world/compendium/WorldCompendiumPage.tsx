@@ -134,7 +134,13 @@ export function WorldCompendiumPage({
   );
 
   return (
-    <main className="grid w-full gap-4" data-testid="world-compendium-page">
+    // `minmax(0, 1fr)` rather than the implicit `auto` column: an auto grid
+    // track is at least as wide as its widest child's content, so the tab
+    // strip's five labels held the whole page 44px wider than a 375px phone.
+    <main
+      className="grid w-full grid-cols-[minmax(0,1fr)] gap-4"
+      data-testid="world-compendium-page"
+    >
       <header className="grid gap-1 rounded-lg border border-border bg-card px-4 py-3">
         <h1 className="text-xl font-semibold">
           {world?.name ?? "World"} artifacts
