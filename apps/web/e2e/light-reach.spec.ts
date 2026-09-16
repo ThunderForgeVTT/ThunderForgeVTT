@@ -139,6 +139,19 @@ test.describe("A placed light's two reaches (spec 045 FR-061)", () => {
     }
 
     await test.step("the Game Master selects the light and sets its reaches in feet", async () => {
+      // The pre-playtest run of 2026-09-15, on a busy machine, stored 40 ft
+      // dim and 5 ft bright: the bright reach was typed before the dim one
+      // had come back from the server, and refused as further out than the
+      // 10 ft the panel still held. Here every light edit is slow on purpose,
+      // so both reaches are set while the first is still on its way — the
+      // busy machine, without the machine.
+      await table.gm.route("**/api/graphql", async (route) => {
+        if ((route.request().postData() ?? "").includes("UpdateLightSource")) {
+          await new Promise((resolve) => setTimeout(resolve, 1_500));
+        }
+        await route.continue();
+      });
+
       await table.gm.getByTestId("gm-tool-lights").click();
       const bright = table.gm.getByTestId("light-bright-reach");
       await expect(async () => {
@@ -153,8 +166,18 @@ test.describe("A placed light's two reaches (spec 045 FR-061)", () => {
 
       await dim.fill("40");
       await dim.press("Enter");
+      // Read once, not retried: waiting for "40" would wait for the answer,
+      // and step past the very moment this is about.
+      expect(
+        await dim.inputValue(),
+        "a committed reach stays showing while it is on its way",
+      ).toBe("40");
       await bright.fill("20");
       await bright.press("Enter");
+      await expect(
+        table.gm.getByTestId("light-reach-problem"),
+        "20 ft bright is judged against the 40 ft dim reach just set",
+      ).toHaveCount(0);
     });
 
     await test.step("the server stores both, in world units", async () => {

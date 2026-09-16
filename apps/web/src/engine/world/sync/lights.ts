@@ -177,6 +177,23 @@ export function startLightMutationBridge(
   worldStore: WorldStore,
   sceneId: string,
 ): () => void {
+  // One light's mutations, one at a time, in the order they were asked for.
+  // Sent together, two edits to the same light can reach the server in either
+  // order, and their answers come back in either order: the answer to a move
+  // made by clicking the light, landing after the answer to the dim reach set
+  // a moment later, puts the old reach back in the store, and the Lights panel
+  // then judges the next reach against it (the pre-playtest run of
+  // 2026-09-15 stored 40 ft dim and 5 ft bright that way). Queued, each is
+  // applied to what the last one left, and each answer is the newest.
+  const inFlight = new Map<string, Promise<void>>();
+  const inTurn = (lightId: string, send: () => Promise<void>) => {
+    const next = (inFlight.get(lightId) ?? Promise.resolve()).then(send);
+    inFlight.set(lightId, next);
+    void next.finally(() => {
+      if (inFlight.get(lightId) === next) inFlight.delete(lightId);
+    });
+  };
+
   const unsubscribe = worldStore.subscribe((event) => {
     // Avoid reacting to our own confirmed dispatches.
     if (event.source === "sync") {
@@ -212,39 +229,44 @@ export function startLightMutationBridge(
 
     if (command.type === "update_light") {
       const { lightId, changes } = command;
-      void updateLight(lightId, {
-        x: changes.x,
-        y: changes.y,
-        radius: changes.radius,
-        brightRadius: changes.brightRadius,
-        intensity: changes.intensity,
-        color: changes.color,
-        attachedTokenId: changes.attachedTokenId,
-        castsShadows: changes.castsShadows,
-      })
-        .then((updated) => {
-          worldStore.dispatch(
-            { type: "upsert_light", light: lightRecordToWorldLight(updated) },
-            "sync",
-          );
+      inTurn(lightId, () =>
+        updateLight(lightId, {
+          x: changes.x,
+          y: changes.y,
+          radius: changes.radius,
+          brightRadius: changes.brightRadius,
+          intensity: changes.intensity,
+          color: changes.color,
+          attachedTokenId: changes.attachedTokenId,
+          castsShadows: changes.castsShadows,
         })
-        .catch((error) => {
-          console.error("Failed to update light source:", error);
-        });
+          .then((updated) => {
+            worldStore.dispatch(
+              { type: "upsert_light", light: lightRecordToWorldLight(updated) },
+              "sync",
+            );
+          })
+          .catch((error) => {
+            console.error("Failed to update light source:", error);
+          }),
+      );
       return;
     }
 
     if (command.type === "delete_light") {
       const { lightId } = command;
-      void deleteLight(lightId)
-        .then((ok) => {
-          if (ok) {
-            worldStore.dispatch({ type: "remove_light", lightId }, "sync");
-          }
-        })
-        .catch((error) => {
-          console.error("Failed to delete light source:", error);
-        });
+      // After the light's edits, so a late answer to one cannot bring it back.
+      inTurn(lightId, () =>
+        deleteLight(lightId)
+          .then((ok) => {
+            if (ok) {
+              worldStore.dispatch({ type: "remove_light", lightId }, "sync");
+            }
+          })
+          .catch((error) => {
+            console.error("Failed to delete light source:", error);
+          }),
+      );
     }
   });
 
