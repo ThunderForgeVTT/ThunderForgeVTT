@@ -1,3 +1,4 @@
+import { expectNoAxeViolations } from "./fixtures/axe";
 import { createNpcViaCompendium } from "./fixtures/content";
 import { expect, test } from "./fixtures/test";
 import { freshCredentials, register, uniqueSuffix } from "./fixtures/helpers";
@@ -139,12 +140,18 @@ test("US1: every member sees the roster paired with claimed characters, and Over
     .getByTestId("players-list")
     .locator('[data-testid^="player-card-"]');
   await expect(rows).toHaveCount(3);
-  await expect(pageA.getByText(actorLabel)).toBeVisible();
+  await expect(pageA.getByRole("link", { name: actorLabel })).toBeVisible();
   // Both the GM/Owner (synthesized into the roster — they have no real
   // world_members row of their own) and the non-claiming second member
   // show this label.
   // The card says "No character" where the table said "No character claimed".
-  await expect(pageA.getByText("No character", { exact: true })).toHaveCount(2);
+  // Only the second player's card, now: the Game Master's card says they play
+  // every character, and "None set" for a character of their own.
+  await expect(pageA.getByText("No character", { exact: true })).toHaveCount(1);
+  const gmCard = pageA.locator('[data-runs-the-table="true"]');
+  await expect(gmCard).toHaveCount(1);
+  await expect(gmCard).toContainText("Owner / Game Master");
+  await expect(gmCard).toContainText("Playing all characters.");
 
   await gmContext.close();
   await contextA.close();
@@ -240,4 +247,114 @@ test("US2: GM changes a role and removes a member from the Players section; non-
   await gmContext.close();
   await contextA.close();
   await contextB.close();
+});
+
+/**
+ * What a Game Master's card says, and a Game Master holding a character of
+ * their own.
+ *
+ * Two Game Masters, because the server treats them differently. A member
+ * promoted to Game Master has a membership record, and can set and unset a
+ * character of their own. A world's creator has none: the server refuses the
+ * binding ("That player is not a member of this world"), so their card says
+ * that rather than offering a picker that can only fail. When the server keeps
+ * a record for the creator, the second half of this test is what changes.
+ */
+test("a Game Master sets and unsets a character of their own, and still plays every character", async ({
+  browser,
+}) => {
+  test.setTimeout(150_000);
+  const ownerContext = await browser.newContext({
+    permissions: ["clipboard-read", "clipboard-write"],
+  });
+  const ownerPage = await ownerContext.newPage();
+  const worldId = await registerAndCreateWorld(
+    ownerPage,
+    `E2E Players GM Own ${uniqueSuffix()}`,
+  );
+  const actorLabel = `GM Own ${uniqueSuffix()}`;
+  await createPcActor(ownerPage, worldId, actorLabel);
+
+  // A second person joins, and the creator makes them a Game Master.
+  const invite = await generateInviteCode(ownerPage, worldId);
+  const gmContext = await browser.newContext();
+  const gmPage = await gmContext.newPage();
+  await register(gmPage, freshCredentials("e2eplyowngm"));
+  await gmPage.goto(`/join/${invite}`);
+  await gmPage.getByRole("button", { name: "Join Campaign" }).click();
+  await gmPage.waitForURL(
+    (url) => url.pathname.startsWith(`/world/${worldId}`),
+    { timeout: 15_000 },
+  );
+  await ownerPage.goto(`/world/${worldId}/players`);
+  const roleSelect = ownerPage
+    .getByTestId("players-list")
+    .locator('select[data-testid^="player-role-select-"]');
+  await expect(roleSelect).toHaveCount(1, { timeout: 10_000 });
+  await roleSelect.selectOption("GM");
+  await expect(roleSelect).toHaveValue("GM", { timeout: 10_000 });
+
+  // The creator's own card: what they are, that they play everything, and
+  // plainly that a character of their own cannot be set.
+  const creatorCard = ownerPage.locator(
+    '[data-runs-the-table="true"]:has-text("(you)")',
+  );
+  await expect(creatorCard).toContainText("Owner / Game Master");
+  await expect(creatorCard).toContainText("Playing all characters.");
+  await expect(
+    creatorCard.locator('[data-testid^="player-character-unavailable-"]'),
+  ).toContainText("can't be set for the world's creator yet");
+  await expect(
+    creatorCard.locator('select[data-testid^="player-character-select-"]'),
+  ).toHaveCount(0);
+
+  // The promoted Game Master sets a character of their own, on their own card.
+  await gmPage.goto(`/world/${worldId}/players`);
+  const ownCard = gmPage.locator(
+    '[data-runs-the-table="true"]:has-text("(you)")',
+  );
+  await expect(ownCard).toContainText("Game Master", { timeout: 10_000 });
+  await expect(ownCard).toContainText("Playing all characters.");
+  await expect(ownCard).toContainText("None set");
+  await expectNoAxeViolations(gmPage, '[data-testid="players-list"]');
+
+  await ownCard
+    .locator('select[data-testid^="player-character-select-"]')
+    .selectOption({ label: actorLabel });
+  await expect(ownCard).toContainText(
+    `Playing all characters, with ${actorLabel} as their own.`,
+    { timeout: 10_000 },
+  );
+  await expect(gmPage.getByTestId("players-error")).toHaveCount(0);
+  await expect(ownCard.getByRole("link", { name: actorLabel })).toBeVisible();
+
+  // The server's record, not the card's state: the creator sees it too.
+  await ownerPage.reload();
+  const promotedCard = ownerPage.locator(
+    '[data-runs-the-table="true"]:not(:has-text("(you)"))',
+  );
+  await expect(promotedCard).toContainText(`with ${actorLabel} as their own.`, {
+    timeout: 10_000,
+  });
+
+  // Unset. They give up their own character and nothing else.
+  await ownCard.getByRole("button", { name: "Unset your character" }).click();
+  await expect(ownCard).toContainText("None set", { timeout: 10_000 });
+  await expect(ownCard).toContainText("Playing all characters.");
+  await expect(gmPage.getByTestId("players-error")).toHaveCount(0);
+  await gmPage.reload();
+  await expect(ownCard).toContainText("None set", { timeout: 10_000 });
+
+  // 375px: the cards fit, and pass axe.
+  await gmPage.setViewportSize({ width: 375, height: 812 });
+  await gmPage.reload();
+  const list = gmPage.getByTestId("players-list");
+  await expect(list).toBeVisible({ timeout: 10_000 });
+  const listBox = await list.boundingBox();
+  expect(listBox, "the roster is on screen").not.toBeNull();
+  expect(listBox!.x + listBox!.width).toBeLessThanOrEqual(375);
+  await expectNoAxeViolations(gmPage, '[data-testid="players-list"]');
+
+  await ownerContext.close();
+  await gmContext.close();
 });

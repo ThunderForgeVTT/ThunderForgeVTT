@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { Input } from "@/components/ui/input";
 import { filterPlayers } from "@/pages/world/players/playerFilter";
+import { describeStanding } from "@/pages/world/players/playerStanding";
 import type { WorldActorRecord } from "@/types/actor";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -252,120 +253,193 @@ export function PlayersPage({ worldId, isGm }: PlayersPageProps) {
         className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
         data-testid="players-list"
       >
-        {visibleMembers.map((member) => (
-          <Card
-            key={member.id}
-            className="grid content-start gap-3 p-4"
-            data-testid={`player-card-${member.id}`}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <span
-                className="font-medium break-words"
-                data-testid={`player-name-${member.id}`}
-              >
-                {member.username}
-              </span>
-              <Badge variant="secondary">
-                {isWorldMemberRole(member.role)
-                  ? roleLabel(member.role)
-                  : member.role}
-              </Badge>
-            </div>
-
-            <div
-              className="grid gap-1"
-              data-testid={`player-character-${member.id}`}
+        {visibleMembers.map((member) => {
+          const standing = describeStanding(member);
+          const isYou = member.userId === user?.id;
+          /**
+           * A world's creator has no membership record to bind a character
+           * to, and the server refuses the binding: "That player is not a
+           * member of this world".
+           *
+           * Creating a world writes no `world_members` row for its creator.
+           * `worldMembers` makes up an Owner entry for the roster and gives
+           * it the world's own id, and `setPlayerCharacterBinding` looks that
+           * id up in `world_members` and finds nothing. Shown by e2e on
+           * 2026-09-16, not inferred from reading.
+           *
+           * The picker here could only produce that error, so this card says
+           * so instead, until the server keeps a record for the creator. A
+           * Game Master who joined and was promoted has a real record, and
+           * their card keeps the picker.
+           */
+          const hasNoMembershipRecord = member.id === worldId;
+          return (
+            <Card
+              key={member.id}
+              className="grid content-start gap-3 p-4"
+              data-testid={`player-card-${member.id}`}
+              data-runs-the-table={standing.runsTheTable ? "true" : "false"}
             >
-              <span className="text-xs tracking-wide text-muted-foreground uppercase">
-                Playing
-              </span>
-              {member.claimedActor ? (
-                <Link
-                  to={`/world/${worldId}/actor/${member.claimedActor.id}/view`}
-                  className="font-medium hover:underline"
+              <div className="grid gap-1">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <h2
+                    className="text-base font-medium break-words"
+                    data-testid={`player-name-${member.id}`}
+                  >
+                    {member.username}
+                    {isYou ? (
+                      <span className="ml-1.5 text-sm font-normal text-muted-foreground">
+                        (you)
+                      </span>
+                    ) : null}
+                  </h2>
+                  <Badge
+                    variant="secondary"
+                    data-testid={`player-role-${member.id}`}
+                  >
+                    {standing.title}
+                  </Badge>
+                </div>
+                <p
+                  className="text-sm text-muted-foreground"
+                  data-testid={`player-holding-${member.id}`}
                 >
-                  {member.claimedActor.label}
-                </Link>
-              ) : (
-                <span className="text-muted-foreground italic">
-                  No character
-                </span>
-              )}
-            </div>
+                  {standing.holding}
+                </p>
+              </div>
 
-            {isGm ? (
-              <label className="grid gap-1 text-sm">
-                <span className="text-xs tracking-wide text-muted-foreground uppercase">
-                  Set character
-                </span>
-                <select
-                  value={member.claimedActor?.id ?? NO_CHARACTER}
-                  onChange={(event) =>
-                    void handleChangeCharacter(member, event.target.value)
-                  }
-                  disabled={busyMemberId === member.id}
-                  data-testid={`player-character-select-${member.id}`}
-                  className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                >
-                  <option value={NO_CHARACTER}>No character</option>
-                  {characters.map((actor) => (
-                    <option
-                      key={actor.id}
-                      value={actor.id}
-                      // Taken characters stay listed rather than
-                      // disappearing: a GM looking for Aria needs to see
-                      // that she is spoken for, not that she is missing.
-                      disabled={
-                        actor.claimedBy !== null &&
-                        actor.claimedBy?.id !== member.id
-                      }
+              <dl
+                className="grid gap-1"
+                data-testid={`player-character-${member.id}`}
+              >
+                {/* "Their own character" for a Game Master, because theirs is
+                  held beside every other character rather than instead of
+                  them — see `playerStanding.ts`. */}
+                <dt className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                  {standing.runsTheTable ? "Their own character" : "Playing"}
+                </dt>
+                <dd>
+                  {member.claimedActor ? (
+                    <Link
+                      to={`/world/${worldId}/actor/${member.claimedActor.id}/view`}
+                      className="font-medium hover:underline"
                     >
-                      {actor.claimedBy && actor.claimedBy.id !== member.id
-                        ? `${actor.label} — played by ${actor.claimedBy.username}`
-                        : actor.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
+                      {member.claimedActor.label}
+                    </Link>
+                  ) : (
+                    <span className="text-muted-foreground italic">
+                      {standing.runsTheTable ? "None set" : "No character"}
+                    </span>
+                  )}
+                </dd>
+              </dl>
 
-            {canManage(member) ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <select
-                  value={member.role}
-                  onChange={(event) =>
-                    void handleChangeRole(member, event.target.value)
-                  }
-                  disabled={busyMemberId === member.id}
-                  data-testid={`player-role-select-${member.id}`}
-                  className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              {isGm && hasNoMembershipRecord ? (
+                <p
+                  className="text-sm text-muted-foreground"
+                  data-testid={`player-character-unavailable-${member.id}`}
                 >
-                  {/* Only what the caller may hand out: the server refuses
+                  A character of {isYou ? "your" : "their"} own can&apos;t be
+                  set for the world&apos;s creator yet.
+                </p>
+              ) : isGm ? (
+                <div className="grid gap-2">
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                      Set character
+                    </span>
+                    <select
+                      value={member.claimedActor?.id ?? NO_CHARACTER}
+                      onChange={(event) =>
+                        void handleChangeCharacter(member, event.target.value)
+                      }
+                      disabled={busyMemberId === member.id}
+                      data-testid={`player-character-select-${member.id}`}
+                      className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                    >
+                      <option value={NO_CHARACTER}>No character</option>
+                      {characters.map((actor) => (
+                        <option
+                          key={actor.id}
+                          value={actor.id}
+                          // Taken characters stay listed rather than
+                          // disappearing: a GM looking for Aria needs to see
+                          // that she is spoken for, not that she is missing.
+                          disabled={
+                            actor.claimedBy !== null &&
+                            actor.claimedBy?.id !== member.id
+                          }
+                        >
+                          {actor.claimedBy && actor.claimedBy.id !== member.id
+                            ? `${actor.label} — played by ${actor.claimedBy.username}`
+                            : actor.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {/* A clear way back, said as the action rather than hidden as
+                  the first option of a picker. For a Game Master it gives up
+                  their own character and nothing else: they still play all
+                  of them. */}
+                  {member.claimedActor ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="justify-self-start"
+                      onClick={() =>
+                        void handleChangeCharacter(member, NO_CHARACTER)
+                      }
+                      disabled={busyMemberId === member.id}
+                      data-testid={`player-character-unset-${member.id}`}
+                    >
+                      {!standing.runsTheTable
+                        ? "Unset character"
+                        : isYou
+                          ? "Unset your character"
+                          : "Unset their own character"}
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {canManage(member) ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={member.role}
+                    onChange={(event) =>
+                      void handleChangeRole(member, event.target.value)
+                    }
+                    disabled={busyMemberId === member.id}
+                    data-testid={`player-role-select-${member.id}`}
+                    className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  >
+                    {/* Only what the caller may hand out: the server refuses
                       a role above their own, and offering one would be
                       offering an error (ADR-099). */}
-                  {(currentUserRole
-                    ? assignableRoles(currentUserRole)
-                    : []
-                  ).map((role) => (
-                    <option key={role} value={role}>
-                      {roleLabel(role)}
-                    </option>
-                  ))}
-                </select>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  icon="trash"
-                  onClick={() => void handleRemove(member)}
-                  disabled={busyMemberId === member.id}
-                  data-testid={`player-remove-${member.id}`}
-                >
-                  Remove
-                </Button>
-              </div>
-            ) : null}
-          </Card>
-        ))}
+                    {(currentUserRole
+                      ? assignableRoles(currentUserRole)
+                      : []
+                    ).map((role) => (
+                      <option key={role} value={role}>
+                        {roleLabel(role)}
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    icon="trash"
+                    onClick={() => void handleRemove(member)}
+                    disabled={busyMemberId === member.id}
+                    data-testid={`player-remove-${member.id}`}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ) : null}
+            </Card>
+          );
+        })}
       </div>
 
       {visibleMembers.length === 0 ? (
