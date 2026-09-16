@@ -1,5 +1,19 @@
 <!--
 Sync Impact Report
+- Version change: 1.1.0 → 1.2.0
+- Modified principles: n/a
+- Added sections: the "DMCA / Content Moderation Guardrail" checkpoint gained
+  an access-mode condition (spec 052-access-mode-and-legal-duty, ADR-103):
+  the notice-and-takedown program is required of an instance that is **open**,
+  and of any instance that publishes content outward by any path, rather than
+  of every instance unconditionally. The checkpoint itself is unchanged for
+  features that expose content beyond a world; what changed is that the
+  guardrail now states which instances carry the program, and states plainly
+  what the relaxation does not mean.
+- Removed sections: none
+- Deferred TODOs: none
+
+Prior report (v1.1.0):
 - Version change: 1.0.0 → 1.1.0
 - Modified principles: n/a
 - Added sections: Development Workflow gained a "DMCA / Content Moderation
@@ -152,6 +166,31 @@ per crate prevents false "it's broken" or false "it's fine" conclusions.
   an accountable owner before build work starts. This checkpoint exists
   because the platform's own legal research identifies exactly this
   feature category as its single highest-liability move.
+- **Which instances carry that program** (spec `052-access-mode-and-legal-duty`,
+  ADR-103, amended 2026-09-15). The guardrail above was written as though
+  every instance shares. It does not. An instance's access mode — open,
+  invite-only or closed (spec 035) — decides which legal capabilities it MUST
+  carry:
+  - An **open** instance MUST carry the notice-and-takedown program of spec
+    015 in full, and MUST hold a published contact on which a copyright
+    notice can be served without an account, **before** it becomes open. A
+    change to open that would leave that contact unset MUST NOT take effect.
+  - An **invite-only** or **closed** instance MUST NOT be required to supply
+    that contact in order to be set up or operated, because it admits nobody
+    and publishes nothing outside itself.
+  - **In every mode**, the refusal to publish content beyond a world while
+    that contact is unset stays in force. The relaxation is about when the
+    question is asked, never about what an instance that has not answered it
+    may do.
+
+  This relaxation is narrow, and three things are NOT claimed by it:
+  copyright does not stop applying to material in a private world; a rights
+  holder loses no remedy, only a channel here, and an operator running
+  without a safe harbour carries that exposure themselves; and "closed" is
+  this product's word for an admission policy, true as a statement about
+  reach only while no other path on the instance publishes outward. Any
+  feature that adds such a path re-engages the checkpoint above regardless
+  of access mode.
 
 ## Governance
 
@@ -169,4 +208,4 @@ Compliance is reviewed at PR/change-review time. Any deviation from
 Principle I (ECS owns simulation) or Principle III (ownership enforcement)
 requires explicit justification recorded in the associated ADR or spec.
 
-**Version**: 1.1.0 | **Ratified**: 2026-08-20 | **Last Amended**: 2026-08-23
+**Version**: 1.2.0 | **Ratified**: 2026-08-20 | **Last Amended**: 2026-09-15
