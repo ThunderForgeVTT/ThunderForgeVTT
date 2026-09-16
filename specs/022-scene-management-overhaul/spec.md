@@ -70,24 +70,26 @@ A GM running a grid-free (theater-of-the-mind) or hex-based game is tired of re-
 
 1. **Given** a world with no default scene grid type configured, **When** a GM creates a scene, **Then** the scene defaults to the system's standard grid type (Squares), preserving today's behavior.
 2. **Given** a GM sets the world's default scene grid type to Hexagons, **When** they create a new scene, **Then** the new scene starts with a Hexagons grid.
-3. **Given** a world's default scene grid type is set to None, **When** a GM creates a new scene, **Then** the new scene starts with no grid overlay, no token snapping, and distance-measuring tools report raw pixel distances instead of grid units.
+3. **Given** a world's default scene grid type is set to Gridless, **When** a GM creates a new scene, **Then** the new scene starts with no grid overlay, no token snapping, and distance-measuring tools report raw pixel distances instead of grid units.
 4. **Given** an existing scene created before the default was changed, **When** the world's default scene grid type is later changed, **Then** the existing scene's grid type is unaffected (the default only applies at creation time).
 
 ---
 
-### User Story 4 - System Settings page is relabeled and gains the default grid type control (Priority: P4)
+### User Story 4 - System Settings page is grouped and gains the default grid type control (Priority: P4)
 
-The System Settings page's "Change system" card reads as if it's only about the system, when it's really the world's general settings home. A GM needs the heading to reflect that, with the system picker as one labeled control among others — including the new default scene grid type control from User Story 3.
+The System Settings page's "Change system" card read as if it were only about the system, when the page is really the world's general settings home. A GM needs the page to say so, with the system picker as one labeled control among others — including the new default scene grid type control from User Story 3.
+
+> **Amended 2026-09-16.** As first written, this story put every control in one card headed "System Settings", because the page was then a single run of cards and that card was the settings home. The owner then asked for the page to read as named sections rather than one run of cards, and this is what shipped: the page is the settings home, headed "System settings", with sections titled **Game system**, **At the table** and **Content and contributors**. The system picker is in a card headed "Change the system" in the Game system section. The default grid type has its own "Scenes" card in the At the table section. The option once called "None" is now **Gridless**, because "None" reads as nothing chosen rather than a mode with its own rules, and the engine already called it `GridKind::Gridless`. The closed picker shows the world's current system.
 
 **Why this priority**: Smallest, purely presentational/organizational change; depends on User Story 3 existing to have a second control to place under the renamed heading, so it's last.
 
-**Independent Test**: Can be fully tested by opening System Settings and confirming the card heading reads "System Settings," the system picker has its own "Change System" label, and a "Default Scene Grid Type" control is present alongside it.
+**Independent Test**: Can be fully tested by opening System Settings and confirming the settings are grouped under named section headings, the system picker has its own "Change System" label and shows the world's current system, and a "Default Scene Grid Type" control is present.
 
 **Acceptance Scenarios**:
 
-1. **Given** a GM opens System Settings, **When** the page renders, **Then** the section heading that previously read "Change system" / "Assign a system" now reads "System Settings."
-2. **Given** the System Settings page, **When** the GM looks at the system picker, **Then** it is labeled "Change System."
-3. **Given** the System Settings page, **When** the GM looks for the grid type control, **Then** they find a "Default Scene Grid Type" control offering None, Squares, and Hexagons.
+1. **Given** a GM opens System Settings, **When** the page renders, **Then** the settings are grouped under the section headings "Game system", "At the table" and "Content and contributors", and the system picker's card reads "Change the system" rather than "Change system" / "Assign a system."
+2. **Given** the System Settings page, **When** the GM looks at the system picker, **Then** it is labeled "Change System" and, before anything is picked, shows the world's current system.
+3. **Given** the System Settings page, **When** the GM looks for the grid type control, **Then** they find a "Default Scene Grid Type" control offering Gridless, Squares, and Hexagons.
 
 ---
 
@@ -127,12 +129,12 @@ The System Settings page's "Change system" card reads as if it's only about the 
 - **FR-011**: Non-GM (player) world members MUST be able to open a scene's detail view from that table, showing the scene's rendered summary and a reduced-size preview image of its map.
 - **FR-012**: System MUST generate a reduced-size preview image (roughly 1/16 the scale of the source map) for a scene's map whenever a map image is imported or uploaded for that scene.
 - **FR-013**: System MUST show a graceful placeholder (not a broken image) in the scene detail view when a scene has no map image or no preview image is available.
-- **FR-014**: System MUST allow a GM/Owner to set a world-level default scene grid type, offered as None, Squares, or Hexagons.
-- **FR-014a**: A scene with grid type None MUST render no grid lines, MUST NOT snap token movement to a grid, and distance-measuring tools on that scene MUST report distances in raw pixels rather than grid units.
+- **FR-014**: System MUST allow a GM/Owner to set a world-level default scene grid type, offered as Gridless, Squares, or Hexagons.
+- **FR-014a**: A scene with grid type Gridless MUST render no grid lines, MUST NOT snap token movement to a grid, and distance-measuring tools on that scene MUST report distances in raw pixels rather than grid units.
 - **FR-015**: System MUST apply the world's default scene grid type to every newly created scene in that world, unless the GM explicitly chooses a different grid type at creation time.
 - **FR-016**: Changing a world's default scene grid type MUST NOT retroactively change the grid type of scenes already created.
-- **FR-017**: System MUST rename the System Settings page's system-assignment section heading from "Change system"/"Assign a system" to "System Settings."
-- **FR-018**: System MUST label the existing game-system picker control "Change System" within that renamed section.
+- **FR-017** *(amended 2026-09-16)*: System MUST replace the System Settings page's "Change system"/"Assign a system" heading. The page is headed "System settings" and grouped into named sections ("Game system", "At the table", "Content and contributors"), and the system-assignment card is headed "Change the system." (As first written, this required a single card headed "System Settings"; see the amendment note under User Story 4.)
+- **FR-018**: System MUST label the existing game-system picker control "Change System" within the Game system section, and the closed picker MUST show the world's current system.
 - **FR-019**: System MUST reject attempts by non-GM/Owner world members to create scenes, import maps, edit summaries, change a scene's hidden state, or launch a scene, regardless of entry point.
 - **FR-020**: System MUST reject a dd2vtt import with a clear error message when the uploaded file is not a valid map export, without altering the scene's existing map, summary, or hidden state.
 
@@ -157,7 +159,7 @@ The System Settings page's "Change system" card reads as if it's only about the 
 
 - "Dd2vtt (DungeonDraft VTT export) file" refers to the existing map-import format already supported elsewhere in the product; this feature exposes that same import capability from the new Scenes section rather than defining a new file format.
 - "Markdown edit/view editor used for Lore entries" means reusing that same editing/rendering experience for scene summaries, not building a second, different Markdown implementation.
-- The three grid type options (None, Squares, Hexagons) are the complete set for this feature; no other grid shapes are in scope.
+- The three grid type options (Gridless, Squares, Hexagons) are the complete set for this feature; no other grid shapes are in scope.
 - "Non-GM (player) world members" means any world member without GM/Owner role, matching the existing GM/Owner-vs-Player distinction used elsewhere in the product (e.g. Compendium, Lore).
 - Existing scenes created before this feature ships have no summary and default to not-hidden (visible), so they continue appearing to players exactly as before until a GM chooses to hide them or add a summary.
 - "Launch" fully replaces today's separate "pick a scene, then click Play" flow — the Scenes section's Launch action is the single way to choose what's being played going forward; Session Setup keeps no scene-selection control of its own.
