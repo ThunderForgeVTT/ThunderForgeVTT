@@ -21,6 +21,11 @@
 //! mutation's answer — so a name a Game Master hid from players is withheld
 //! from all of them in one place (`GraphQLToken::for_viewer`). Token events
 //! carry ids only, so the broadcast never needs the same care.
+//!
+//! What counts as hidden is not this module's to decide: it asks
+//! `auth::npc_visibility::readable_token_names_sync`, which is one switch for
+//! the token and the creature it stands for (owner decision 2026-09-15) — a
+//! hidden NPC's token is nameless here whatever its own switch says.
 
 use std::collections::HashMap;
 
@@ -101,6 +106,15 @@ pub(crate) fn tokens_with_art(
         .collect();
     let names = character_names(conn, &wanting_name)?;
 
+    // Whose names this viewer may read. A Game Master reads them all, so
+    // nothing is loaded for one.
+    let readable = if viewer_runs_the_world {
+        std::collections::HashSet::new()
+    } else {
+        let token_ids: Vec<Uuid> = tokens.iter().map(|token| token.token_id).collect();
+        crate::auth::npc_visibility::readable_token_names_sync(conn, &token_ids)?
+    };
+
     Ok(tokens
         .into_iter()
         .map(|token| {
@@ -109,10 +123,11 @@ pub(crate) fn tokens_with_art(
                 .and_then(|actor_id| art.get(&actor_id))
                 .map(|asset_id| token_art_url(*asset_id));
             let fallback_name = actor.and_then(|actor_id| names.get(&actor_id).cloned());
+            let may_read_name = readable.contains(&token.token_id);
             GraphQLToken::from(token)
                 .with_photo_fallback(fallback_art)
                 .with_name_fallback(fallback_name)
-                .for_viewer(viewer_runs_the_world)
+                .for_viewer(viewer_runs_the_world, may_read_name)
         })
         .collect())
 }
@@ -196,10 +211,10 @@ mod tests {
 
     #[test]
     fn a_hidden_name_reaches_a_game_master_and_nobody_else() {
-        let gm = GraphQLToken::from(token(Some("The Lich"), false)).for_viewer(true);
+        let gm = GraphQLToken::from(token(Some("The Lich"), false)).for_viewer(true, false);
         assert!(as_sent(&gm).contains("The Lich"));
 
-        let player = GraphQLToken::from(token(Some("The Lich"), false)).for_viewer(false);
+        let player = GraphQLToken::from(token(Some("The Lich"), false)).for_viewer(false, false);
         assert!(
             !as_sent(&player).contains("The Lich"),
             "not as the name, and not in the metadata it was written in: {player:?}"
@@ -210,9 +225,22 @@ mod tests {
         );
     }
 
+    /// Owner decision 2026-09-15: one switch. A token whose own switch is on
+    /// still says nothing to a player while the creature it stands for is
+    /// hidden — `tokens_with_art` asks the rule, and passes what it answers.
+    #[test]
+    fn a_hidden_creatures_token_is_nameless_even_with_its_own_switch_on() {
+        let player = GraphQLToken::from(token(Some("The Lich"), true)).for_viewer(false, false);
+        assert!(!as_sent(&player).contains("The Lich"));
+        assert!(
+            as_sent(&player).contains("name_visible_to_players: false"),
+            "and the field says so, so no client draws a name it was not sent: {player:?}"
+        );
+    }
+
     #[test]
     fn a_shown_name_reaches_everyone() {
-        let player = GraphQLToken::from(token(Some("Grom"), true)).for_viewer(false);
+        let player = GraphQLToken::from(token(Some("Grom"), true)).for_viewer(false, true);
         assert!(as_sent(&player).contains("Grom"));
     }
 
@@ -220,7 +248,7 @@ mod tests {
     fn a_token_without_a_name_is_called_by_its_characters() {
         let named = GraphQLToken::from(token(None, true))
             .with_name_fallback(Some("Sir Pip".to_string()))
-            .for_viewer(false);
+            .for_viewer(false, true);
         assert!(as_sent(&named).contains("Sir Pip"));
 
         // Its own name wins; a hidden fallback is withheld like any other.
@@ -229,7 +257,7 @@ mod tests {
         assert!(as_sent(&own).contains("Some(\"Pip\")"));
         let hidden = GraphQLToken::from(token(None, false))
             .with_name_fallback(Some("Sir Pip".to_string()))
-            .for_viewer(false);
+            .for_viewer(false, false);
         assert!(!as_sent(&hidden).contains("Sir Pip"));
     }
 }

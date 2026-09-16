@@ -50,6 +50,8 @@ fn a_creature_in_plain_sight_is_named() {
     let state = test_app_state();
     let mut conn = state.db_pool.get().expect("conn");
     let t = table(&mut conn);
+    // The party has met these two, so sight is the only thing judged here.
+    show_npcs(&mut conn, &t);
     let player = sight(&mut conn, t.player, &t);
     assert_eq!(player.party(Some(t.ogre), OGRE_NAME).token_id, Some(t.ogre));
     assert_eq!(player.party(Some(t.goblin), "Goblin").label, "Goblin");
@@ -77,6 +79,8 @@ fn a_creature_behind_a_wall_reads_unknown_and_one_in_front_of_it_does_not() {
     let state = test_app_state();
     let mut conn = state.db_pool.get().expect("conn");
     let t = table(&mut conn);
+    // The party has met these two, so sight is the only thing judged here.
+    show_npcs(&mut conn, &t);
     wall_off_ogre(&mut conn, &t);
     let player = sight(&mut conn, t.player, &t);
     assert!(player.party(Some(t.ogre), OGRE_NAME).redacted);
@@ -88,6 +92,8 @@ fn darkness_hides_and_a_light_or_darkvision_reveals() {
     let state = test_app_state();
     let mut conn = state.db_pool.get().expect("conn");
     let t = table(&mut conn);
+    // The party has met these two, so sight is the only thing judged here.
+    show_npcs(&mut conn, &t);
     diesel::update(scenes::table.filter(scenes::scene_id.eq(t.scene_id)))
         .set(scenes::ambient_light.eq("dark"))
         .execute(&mut conn)
@@ -151,6 +157,8 @@ fn redaction_is_decided_when_the_answer_is_built_so_it_follows_the_board() {
     let state = test_app_state();
     let mut conn = state.db_pool.get().expect("conn");
     let t = table(&mut conn);
+    // The party has met these two, so sight is the only thing judged here.
+    show_npcs(&mut conn, &t);
     wall_off_ogre(&mut conn, &t);
     let made = attack(&mut conn, t.gm, t.ogre, t.greatclub, Some(t.aria)).expect("attack");
     let record = attack_row(&mut conn, made.attack_ids[0]);
@@ -236,6 +244,8 @@ fn a_redacted_target_nulls_its_defence_and_leaves_no_trace_in_the_answer() {
     let state = test_app_state();
     let mut conn = state.db_pool.get().expect("conn");
     let t = table(&mut conn);
+    // The party has met these two, so sight is the only thing judged here.
+    show_npcs(&mut conn, &t);
     hide_ogre_name(&mut conn, &t);
     // The goblin swings at the ogre; Aria's player can see the goblin, not
     // who it swung at.

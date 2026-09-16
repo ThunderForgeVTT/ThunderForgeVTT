@@ -190,6 +190,64 @@ pub async fn update_actor_impl(
 ///
 /// The announcement is the sheet-changed nudge `setActorUnique` sends, which
 /// carries the actor's id and nothing else, never the name.
+///
+/// And, since showing an NPC also shows its tokens' names (owner decision
+/// 2026-09-15, `auth::npc_visibility`), the token-changed nudge for every
+/// scene the creature stands on and the combat-changed nudge for a fight it
+/// is in — the two a client re-reads its board and its tracker on. Without
+/// them a revealed NPC would keep reading "Unknown" until a reload. Both
+/// carry ids only.
+/// Tells every seat to re-read what this creature's tokens are called: the
+/// board (token-changed, per scene it stands on) and the tracker
+/// (combat-changed, for the world's running fight). Ids only, never a name.
+fn announce_names_changed(
+    conn: &mut PgConnection,
+    world_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+    user_id: uuid::Uuid,
+) {
+    use crate::schema::{tokens, world_combats};
+
+    let placed = tokens::table
+        .filter(tokens::actor_id.eq(actor_id))
+        .select((tokens::token_id, tokens::scene_id))
+        .load::<(uuid::Uuid, uuid::Uuid)>(conn)
+        .unwrap_or_default();
+    let mut announced = std::collections::HashSet::new();
+    for (token_id, scene_id) in placed {
+        if !announced.insert(scene_id) {
+            continue;
+        }
+        let _ = crate::world_events::record_world_event(
+            conn,
+            world_id,
+            crate::world_events::EVENT_CODE_TOKEN_CHANGED,
+            Some(serde_json::json!({
+                "action": "updated",
+                "token_id": token_id,
+                "scene_id": scene_id,
+            })),
+            user_id,
+        );
+    }
+
+    if let Ok(Some(combat_id)) = world_combats::table
+        .filter(world_combats::world_id.eq(world_id))
+        .filter(world_combats::ended_at.is_null())
+        .select(world_combats::id)
+        .first::<uuid::Uuid>(conn)
+        .optional()
+    {
+        let _ = crate::world_events::record_world_event(
+            conn,
+            world_id,
+            crate::world_events::EVENT_CODE_COMBAT_CHANGED,
+            Some(serde_json::json!({ "combatId": combat_id })),
+            user_id,
+        );
+    }
+}
+
 pub async fn set_actor_visible_to_players_impl(
     state: &AppState,
     user_id: uuid::Uuid,
@@ -251,6 +309,7 @@ pub async fn set_actor_visible_to_players_impl(
             })),
             user_id,
         );
+        announce_names_changed(&mut conn, world_id, actor_id, user_id);
         Ok(actor)
     })
     .await

@@ -378,3 +378,186 @@ async fn an_npc_written_without_a_choice_is_hidden() {
         .expect("ogre");
     assert!(!visible);
 }
+
+// ---------------------------------------------------------------------------
+// Its tokens' names (owner decision 2026-09-15)
+// ---------------------------------------------------------------------------
+
+/// Every path that serves a token's name, asked about the ogre for one
+/// viewer: `Ok` names the paths that said "Grukk the Ogre", so a failure says
+/// which one let the name through.
+fn names_reaching(conn: &mut PgConnection, t: &FightTable, user: Uuid) -> Vec<&'static str> {
+    use crate::combat::fixtures::{OGRE_NAME, SYSTEMS_DIR, fight};
+    use crate::combat::redaction::SceneSight;
+    use crate::graphql::mutations_combat::{combat_world, load_combat};
+
+    let runs_the_world =
+        crate::auth::world_membership::actor_in_world(conn, user, false, t.world_id)
+            .runs_the_world();
+    let mut reached = Vec::new();
+
+    // The board: the token list the canvas draws names from.
+    let rows = tokens::table
+        .filter(tokens::token_id.eq(t.ogre))
+        .select(crate::models::Token::as_select())
+        .load::<crate::models::Token>(conn)
+        .expect("the ogre's token");
+    let served = crate::graphql::token_art::tokens_with_art(conn, rows, runs_the_world)
+        .expect("the board's tokens");
+    // As text, so the question asked is the one that matters: does the name
+    // appear anywhere in what this viewer is sent.
+    if format!("{served:?}").contains(OGRE_NAME) {
+        reached.push("sceneTokens");
+    }
+
+    // The combat tracker, and the refusal that names whose turn it is.
+    let combat_id = fight(conn, t, &[(t.aria, "Aria"), (t.ogre, OGRE_NAME)], t.ogre);
+    let row = combat_world(conn, combat_id).expect("combat");
+    let tracker = load_combat(conn, SYSTEMS_DIR, row, user, false).expect("tracker");
+    if tracker.combatants.iter().any(|c| c.label == OGRE_NAME) {
+        reached.push("combat tracker");
+    }
+    let check =
+        crate::combat::turn::turn_check(conn, t.scene_id, t.aria, user, false).expect("turn check");
+    if check
+        .refusal()
+        .is_some_and(|sentence| sentence.contains(OGRE_NAME))
+    {
+        reached.push("out-of-turn refusal");
+    }
+    diesel::delete(
+        crate::schema::world_combats::table.filter(crate::schema::world_combats::id.eq(combat_id)),
+    )
+    .execute(conn)
+    .expect("end the fight");
+
+    // The attack log's redaction.
+    let sight = SceneSight::for_viewer(conn, SYSTEMS_DIR, user, false, t.scene_id).expect("sight");
+    if !sight.party(Some(t.ogre), OGRE_NAME).redacted {
+        reached.push("attack log");
+    }
+
+    reached
+}
+
+/// Every path a player can be told a name by.
+const EVERY_NAME_PATH: [&str; 4] = [
+    "sceneTokens",
+    "combat tracker",
+    "out-of-turn refusal",
+    "attack log",
+];
+
+/// A Game Master is never refused for acting out of turn, so that one path
+/// has no answer for one. The other three are all theirs.
+const EVERY_GM_NAME_PATH: [&str; 3] = ["sceneTokens", "combat tracker", "attack log"];
+
+/// The decision: one switch. The ogre's token says "Grukk the Ogre" and its
+/// own `name_visible_to_players` is true — the default — and yet no player
+/// reads it, because the creature it stands for is hidden. Remove the actor's
+/// half of `player_may_read_token_name` and every path here hands the name
+/// over.
+#[test]
+fn a_hidden_npcs_token_is_nameless_to_players_on_every_path() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().expect("conn");
+    let t = table(&mut conn);
+    let own_switch: bool = tokens::table
+        .filter(tokens::token_id.eq(t.ogre))
+        .select(tokens::name_visible_to_players)
+        .first(&mut conn)
+        .expect("the ogre's token");
+    assert!(
+        own_switch,
+        "the token's own switch is on, and still says nothing"
+    );
+
+    assert_eq!(
+        names_reaching(&mut conn, &t, t.player),
+        Vec::<&str>::new(),
+        "a hidden NPC's name reaches no player by any path"
+    );
+    assert_eq!(
+        names_reaching(&mut conn, &t, t.stranger),
+        Vec::<&str>::new(),
+        "nor a member who controls nothing"
+    );
+    assert_eq!(
+        names_reaching(&mut conn, &t, t.gm),
+        EVERY_GM_NAME_PATH.to_vec(),
+        "and the Game Master reads it everywhere they can be told it"
+    );
+}
+
+/// Showing the NPC hands the name back at once — the same reads, no reload.
+/// And the token's own switch still has the last word over a shown creature.
+#[tokio::test]
+async fn showing_the_npc_names_its_token_and_the_tokens_own_switch_still_hides_it() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().expect("conn");
+    let t = table(&mut conn);
+    drop(conn);
+
+    set_actor_visible_to_players_impl(&state, t.gm, false, t.ogre_actor, true)
+        .await
+        .expect("the Game Master shows the ogre");
+
+    let mut conn = state.db_pool.get().expect("conn");
+    assert_eq!(
+        names_reaching(&mut conn, &t, t.player),
+        EVERY_NAME_PATH.to_vec(),
+        "a shown NPC is named on every path"
+    );
+
+    diesel::update(tokens::table.filter(tokens::token_id.eq(t.ogre)))
+        .set(tokens::name_visible_to_players.eq(false))
+        .execute(&mut conn)
+        .expect("hide this one token's name");
+    assert_eq!(
+        names_reaching(&mut conn, &t, t.player),
+        Vec::<&str>::new(),
+        "and a Game Master may still hide one token of a creature players know"
+    );
+}
+
+/// And the nudges that make "at once" true: showing an NPC tells every board
+/// to re-read its tokens, and the tracker to re-read its combatants. Without
+/// them a revealed creature reads "Unknown" until a reload.
+#[tokio::test]
+async fn showing_an_npc_tells_every_board_and_tracker_to_re_read() {
+    use crate::schema::world_events;
+    use crate::world_events::{EVENT_CODE_COMBAT_CHANGED, EVENT_CODE_TOKEN_CHANGED};
+
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().expect("conn");
+    let t = table(&mut conn);
+    crate::combat::fixtures::fight(
+        &mut conn,
+        &t,
+        &[
+            (t.aria, "Aria"),
+            (t.ogre, crate::combat::fixtures::OGRE_NAME),
+        ],
+        t.ogre,
+    );
+    drop(conn);
+
+    set_actor_visible_to_players_impl(&state, t.gm, false, t.ogre_actor, true)
+        .await
+        .expect("shown");
+
+    let mut conn = state.db_pool.get().expect("conn");
+    let codes: Vec<i32> = world_events::table
+        .filter(world_events::world_id.eq(t.world_id))
+        .select(world_events::event_code)
+        .load(&mut conn)
+        .expect("events");
+    assert!(
+        codes.contains(&EVENT_CODE_TOKEN_CHANGED),
+        "every board re-reads its tokens: {codes:?}"
+    );
+    assert!(
+        codes.contains(&EVENT_CODE_COMBAT_CHANGED),
+        "and the tracker its combatants: {codes:?}"
+    );
+}

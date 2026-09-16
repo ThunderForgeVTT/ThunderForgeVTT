@@ -218,6 +218,17 @@ export async function placeCast(
        */
       traits?: Record<string, unknown>;
     };
+    /**
+     * Whether players may see this NPC at all (owner decision 2026-09-15).
+     *
+     * Every NPC is hidden when it is written, and a hidden NPC's tokens are
+     * nameless to players wherever a name is served — the board, the tracker,
+     * the attack log. A table being played is a table whose party has met the
+     * monsters in front of it, so the harness shows them by default and every
+     * scenario reads as it did. A test *about* NPC visibility passes `false`,
+     * or writes its own actor.
+     */
+    visibleToPlayers?: boolean;
   },
 ): Promise<{ actorId: string; tokenId: string }> {
   const { createActor } = await must<{ createActor: { id: string } }>(
@@ -232,6 +243,16 @@ export async function placeCast(
       },
     },
   );
+  const isNpc = !options.seat;
+  if (isNpc && (options.visibleToPlayers ?? true)) {
+    await must(
+      table.gm,
+      `mutation ($actorId: UUID!) {
+        setActorVisibleToPlayers(actorId: $actorId, visible: true) { id }
+      }`,
+      { actorId: createActor.id },
+    );
+  }
   if (options.sheet) {
     // Scores first: the 5e pack refuses anything else on a sheet without them.
     const slots: [string, Record<string, unknown>][] = [

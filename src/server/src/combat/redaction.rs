@@ -39,7 +39,9 @@ use thunderforge_canvas_core::wall::WallSet;
 use uuid::Uuid;
 
 use crate::declared_values::ActorSlots;
-use crate::schema::{light_sources, scenes, tokens, walls, world_actor_system_data, worlds};
+use crate::schema::{
+    light_sources, scenes, tokens, walls, world_actor_system_data, world_actors, worlds,
+};
 use crate::vision_profiles::{cells_to_world, resolve, vision_declaration_for_system};
 
 /// What a viewer is told a redacted party is called.
@@ -66,6 +68,8 @@ impl Party {
 
 struct Placed {
     at: Vec2,
+    /// Whether a player may read this token's name at all: its own switch,
+    /// and the creature it stands for being one players may see.
     name_visible: bool,
 }
 
@@ -142,6 +146,7 @@ impl SceneSight {
                 .collect();
 
         let rows = tokens::table
+            .left_join(world_actors::table)
             .filter(tokens::scene_id.eq(scene_id))
             .select((
                 tokens::token_id,
@@ -149,14 +154,35 @@ impl SceneSight {
                 tokens::y,
                 tokens::actor_id,
                 tokens::name_visible_to_players,
+                world_actors::is_npc.nullable(),
+                world_actors::visible_to_players.nullable(),
             ))
-            .load::<(Uuid, f64, f64, Option<Uuid>, bool)>(conn)?;
-        for (token_id, x, y, _, name_visible) in &rows {
+            .load::<(
+                Uuid,
+                f64,
+                f64,
+                Option<Uuid>,
+                bool,
+                Option<bool>,
+                Option<bool>,
+            )>(conn)?;
+        for (token_id, x, y, _, name_visible, is_npc, actor_visible) in &rows {
+            // One switch (owner decision 2026-09-15): a hidden NPC's token is
+            // an unknown party in the log however its own switch stands.
+            let actor = (*is_npc).zip(*actor_visible).map(|(is_npc, visible)| {
+                crate::auth::npc_visibility::SeenActor {
+                    is_npc,
+                    visible_to_players: visible,
+                }
+            });
             sight.placed.insert(
                 *token_id,
                 Placed {
                     at: Vec2::new(*x as f32, *y as f32),
-                    name_visible: *name_visible,
+                    name_visible: crate::auth::npc_visibility::player_may_read_token_name(
+                        *name_visible,
+                        actor,
+                    ),
                 },
             );
         }
@@ -220,7 +246,7 @@ impl SceneSight {
             HashMap::new()
         };
 
-        for (token_id, x, y, actor_id, _) in &rows {
+        for (token_id, x, y, actor_id, _, _, _) in &rows {
             let at = Vec2::new(*x as f32, *y as f32);
             let seen_by = actor_id
                 .and_then(|id| slots.get(&id))

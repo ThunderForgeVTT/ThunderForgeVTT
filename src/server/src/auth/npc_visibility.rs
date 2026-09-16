@@ -22,12 +22,25 @@
 //! `Viewer`, is also its default, so it cannot express "hidden". Visibility is
 //! a separate axis, as `world_abilities.gm_only` is for abilities.
 //!
-//! # What this does not cover
+//! # And its tokens' names (owner decision 2026-09-15)
 //!
-//! A token's name is the token's own rule (`name_visible_to_players`), and a
-//! visible NPC's token still obeys it. The board sends every token, and a
-//! token carries its `actor_id`; the world-event nudge for a sheet change
-//! carries the actor's id too. Neither carries the name.
+//! One switch, not two. A player may read a token's name when the token's own
+//! `name_visible_to_players` says so **and** the creature it stands for is one
+//! the player may see — so hiding an NPC hides its tokens' names too, on the
+//! board and in the combat tracker, without a Game Master having to hide each
+//! token separately. [`player_may_read_token_name`] states that rule once and
+//! every serving path asks it.
+//!
+//! **Precedence:** the actor wins. A Game Master who has named a particular
+//! token of a hidden NPC still shows nothing to players until they show the
+//! NPC: the token's switch is kept, waiting, and takes effect the moment the
+//! creature is revealed. The other way round — a token's name leaking the
+//! creature a player is not supposed to know exists — is the leak this
+//! decision closes, so the token's switch cannot override the actor's.
+//!
+//! The board sends every token, and a token carries its `actor_id`; the
+//! world-event nudge for a sheet change carries the actor's id too. Neither
+//! carries the name.
 
 use std::collections::HashSet;
 
@@ -260,6 +273,93 @@ pub async fn require_actor_visible(
     } else {
         Err(Error::new("Actor not found").extend_with(|_, ext| ext.set("code", "NOT_FOUND")))
     }
+}
+
+/// Whether a player may read this token's name.
+///
+/// The token's own switch, **and** the creature it stands for being one every
+/// player may see. A token with no actor — a marker, or a copy whose NPC is
+/// gone — is its own switch alone, since there is no creature to give away.
+///
+/// A Game Master never asks this: they read every name.
+pub fn player_may_read_token_name(name_visible_to_players: bool, actor: Option<SeenActor>) -> bool {
+    name_visible_to_players && actor.is_none_or(|actor| actor.seen_by_everyone())
+}
+
+/// The part of an actor that decides a token's name: whether every player may
+/// see the creature at all.
+#[derive(Clone, Copy, Debug)]
+pub struct SeenActor {
+    pub is_npc: bool,
+    pub visible_to_players: bool,
+}
+
+impl SeenActor {
+    fn seen_by_everyone(self) -> bool {
+        !self.is_npc || self.visible_to_players
+    }
+}
+
+impl From<Visibility> for SeenActor {
+    fn from(v: Visibility) -> Self {
+        SeenActor {
+            is_npc: v.is_npc,
+            visible_to_players: v.visible_to_players,
+        }
+    }
+}
+
+/// One row of what [`player_may_read_token_name`] needs, straight from the
+/// database: a token, and the actor it stands for if it has one.
+type TokenNameRow = (Uuid, bool, Option<bool>, Option<bool>);
+
+fn name_rule(row: &TokenNameRow) -> bool {
+    let (_, name_visible, is_npc, visible_to_players) = row;
+    let actor = match (is_npc, visible_to_players) {
+        (Some(is_npc), Some(visible_to_players)) => Some(SeenActor {
+            is_npc: *is_npc,
+            visible_to_players: *visible_to_players,
+        }),
+        _ => None,
+    };
+    player_may_read_token_name(*name_visible, actor)
+}
+
+fn name_rows(conn: &mut PgConnection, token_ids: &[Uuid]) -> QueryResult<Vec<TokenNameRow>> {
+    use crate::schema::world_actors as actors;
+
+    tokens::table
+        .left_join(actors::table)
+        .filter(tokens::token_id.eq_any(token_ids))
+        .select((
+            tokens::token_id,
+            tokens::name_visible_to_players,
+            actors::is_npc.nullable(),
+            actors::visible_to_players.nullable(),
+        ))
+        .load::<TokenNameRow>(conn)
+}
+
+/// Of `token_ids`, the ones whose names players may read — one query for any
+/// number of tokens. A token id that is not there is not in the answer.
+pub fn readable_token_names_sync(
+    conn: &mut PgConnection,
+    token_ids: &[Uuid],
+) -> QueryResult<HashSet<Uuid>> {
+    if token_ids.is_empty() {
+        return Ok(HashSet::new());
+    }
+    Ok(name_rows(conn, token_ids)?
+        .into_iter()
+        .filter(name_rule)
+        .map(|(token_id, _, _, _)| token_id)
+        .collect())
+}
+
+/// Whether players may read this one token's name. `false` for a token that
+/// is not there.
+pub fn token_name_readable_sync(conn: &mut PgConnection, token_id: Uuid) -> QueryResult<bool> {
+    Ok(name_rows(conn, &[token_id])?.first().is_some_and(name_rule))
 }
 
 #[cfg(test)]

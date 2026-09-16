@@ -92,6 +92,21 @@ test.describe("Token names (playtest 2026-09-10 P7)", () => {
       { input: { worldId, label: NAME, isNpc: true, gameSystemId: "genie" } },
     );
     const actorId = actor.data!.createActor!.id;
+    // Shown to the players (owner decision 2026-09-15): every NPC is hidden
+    // when it is written, and a hidden one's tokens are nameless whatever
+    // their own switch says. Here the token's own switch is what is under
+    // test, so the creature is one the party has met.
+    await graphql(
+      page,
+      `
+        mutation ($actorId: UUID!) {
+          setActorVisibleToPlayers(actorId: $actorId, visible: true) {
+            id
+          }
+        }
+      `,
+      { actorId },
+    );
     const token = await graphql<{
       data?: { createToken?: { tokenId: string } };
     }>(

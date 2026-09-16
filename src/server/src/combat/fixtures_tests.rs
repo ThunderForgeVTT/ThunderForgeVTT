@@ -54,6 +54,20 @@ pub struct FightTable {
     pub greatclub: Uuid,
 }
 
+/// The party has met these two. Owner decision 2026-09-15 makes every NPC
+/// hidden until its Game Master shows it, and a hidden NPC's tokens are
+/// nameless to players whatever their own switch says — so a test about what
+/// the *board* shows says so here, and leaves sight the only variable. A test
+/// about NPC visibility itself takes the table as it comes.
+pub fn show_npcs(conn: &mut PgConnection, t: &FightTable) {
+    diesel::update(
+        world_actors::table.filter(world_actors::id.eq_any([t.goblin_actor, t.ogre_actor])),
+    )
+    .set(world_actors::visible_to_players.eq(true))
+    .execute(conn)
+    .expect("show the NPCs");
+}
+
 pub fn rng() -> rand::rngs::StdRng {
     rand::rngs::StdRng::seed_from_u64(46)
 }

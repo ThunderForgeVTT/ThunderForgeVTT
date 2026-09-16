@@ -160,13 +160,10 @@ pub fn turn_check(
         return Ok(TurnCheck::permitted());
     };
 
+    // The one rule (owner decision 2026-09-15): the token's own switch, and
+    // the creature it stands for being one players may see.
     let hidden = match active.token_id {
-        Some(token) => tokens::table
-            .filter(tokens::token_id.eq(token))
-            .select(tokens::name_visible_to_players)
-            .first::<bool>(conn)
-            .optional()?
-            .is_some_and(|visible| !visible),
+        Some(token) => !crate::auth::npc_visibility::token_name_readable_sync(conn, token)?,
         None => false,
     };
     let label = if hidden {

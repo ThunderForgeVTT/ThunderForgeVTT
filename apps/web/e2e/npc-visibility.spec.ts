@@ -8,6 +8,12 @@ import {
   placeCast,
   sitDown,
 } from "../playtest/table";
+import {
+  addCombatant,
+  openCombatPanel,
+  rosterOn,
+  startCombat,
+} from "../playtest/combat";
 
 /**
  * Owner decision 2026-09-15: whether players see an NPC is the Game Master's
@@ -216,6 +222,172 @@ test("a Game Master chooses which NPCs players see, and a hidden one never reach
         aria.page,
         `query ($actorId: UUID!) { actorSheet(actorId: $actorId) { all { id } } }`,
         { actorId: hidden.id },
+      );
+    });
+  } finally {
+    await closeTable(table);
+  }
+});
+
+/**
+ * Owner decision 2026-09-15, second half: one switch. Hiding an NPC hides its
+ * tokens' names too — on the board and in the combat tracker — and showing it
+ * hands them back without a reload.
+ *
+ * Before this, a hidden NPC's token still drew the creature's name above it on
+ * every player's board, because a token's name fell back to its actor's label
+ * with no visibility check: the whole point of hiding the creature, undone by
+ * dropping a token of it.
+ */
+const LURKER_NAME = "Thessaly Nightglass";
+
+type Nameplate = { tokenId: string; text: string; dimmed: boolean };
+
+async function plateFor(page: Page, tokenId: string): Promise<Nameplate | null> {
+  const plates = await page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          __engineProbe?: { nameplates?: () => Nameplate[] };
+        }
+      ).__engineProbe?.nameplates?.() ?? [],
+  );
+  return plates.find((plate) => plate.tokenId === tokenId) ?? null;
+}
+
+test("a hidden NPC's token is nameless on a player's board and tracker, and showing it names them at once", async ({
+  page,
+  browser,
+}, testInfo) => {
+  test.setTimeout(6 * 60_000);
+
+  const table = await openTable({
+    browser,
+    gm: page,
+    testInfo,
+    system: "dnd5e",
+    players: ["Aria"],
+    sceneName: "The Cellar",
+  });
+  const [aria] = table.players;
+  const traffic = record(aria.page);
+
+  try {
+    await placeCast(table, { label: "Aria", at: { x: 0, y: 0 }, seat: aria });
+    // Hidden, which is how every NPC starts. Its token's own name switch is
+    // left alone — on, the default — so the creature's state is the only
+    // thing deciding what a player reads.
+    const lurker = await placeCast(table, {
+      label: LURKER_NAME,
+      at: { x: 96, y: 0 },
+      tokenType: "npc",
+      visibleToPlayers: false,
+    });
+
+    const combat = await startCombat(table);
+    await addCombatant(table, combat.id, {
+      label: "Aria",
+      tokenId: (await must<{ tokens: { tokenId: string; name: string }[] }>(
+        table.gm,
+        `query ($sceneId: UUID!) { tokens(sceneId: $sceneId) { tokenId name } }`,
+        { sceneId: table.sceneId },
+      ).then(
+        (answer) =>
+          answer.tokens.find((token) => token.name === "Aria")!.tokenId,
+      )),
+      initiative: 20,
+    });
+    await addCombatant(table, combat.id, {
+      label: LURKER_NAME,
+      actorId: lurker.actorId,
+      tokenId: lurker.tokenId,
+      initiative: 10,
+      isNpc: true,
+    });
+
+    for (const client of [table.gm, aria.page]) {
+      await sitDown(table, client);
+    }
+
+    await test.step("the Game Master reads the name; the player's board and tracker read nothing of it", async () => {
+      await expect
+        .poll(() => plateFor(table.gm, lurker.tokenId), { timeout: 20_000 })
+        .toEqual({ tokenId: lurker.tokenId, text: LURKER_NAME, dimmed: false });
+
+      // The player's canvas is sent no name, so it has none to draw. Polled
+      // to a settled answer, then held long enough for one that was going to
+      // arrive to have arrived.
+      await expect
+        .poll(
+          () =>
+            aria.page.evaluate(
+              () => window.__worldProbe?.state()?.counts.tokens ?? 0,
+            ),
+          { timeout: 20_000 },
+        )
+        .toBeGreaterThan(1);
+      await aria.page.waitForTimeout(1_500);
+      expect(
+        await plateFor(aria.page, lurker.tokenId),
+        "the player's canvas has no name to draw above a hidden creature",
+      ).toBeNull();
+
+      await openCombatPanel(aria.page);
+      await expect(aria.page.getByTestId("combatant-list")).toContainText(
+        "Unknown",
+        { timeout: 20_000 },
+      );
+      expect(
+        (await rosterOn(aria.page)).join(" | "),
+        "the tracker names nobody the player may not know",
+      ).not.toContain(LURKER_NAME);
+
+      // And straight at the API, in case a panel merely declined to draw it.
+      const tokens = await must<{ tokens: { tokenId: string; name: string | null }[] }>(
+        aria.page,
+        `query ($sceneId: UUID!) { tokens(sceneId: $sceneId) { tokenId name } }`,
+        { sceneId: table.sceneId },
+      );
+      expect(
+        tokens.tokens.find((token) => token.tokenId === lurker.tokenId)?.name,
+        "the token list a player is sent carries no name",
+      ).toBeNull();
+
+      const everything = [...traffic.responses, ...traffic.frames];
+      expect(
+        everything.length,
+        "the player's client did read the board (the check below is not vacuous)",
+      ).toBeGreaterThan(0);
+      const carrying = everything.filter((body) =>
+        body.includes(LURKER_NAME),
+      );
+      testInfo.annotations.push({
+        type: "Aria's traffic",
+        description:
+          `${traffic.responses.length} responses and ${traffic.frames.length} frames checked; ` +
+          `${carrying.length} carry the hidden creature's name`,
+      });
+      expect(
+        carrying,
+        "no response or frame carries a hidden creature's token name",
+      ).toEqual([]);
+    });
+
+    await test.step("the Game Master shows the NPC, and the name appears with no reload", async () => {
+      await must(
+        table.gm,
+        `mutation ($actorId: UUID!) {
+          setActorVisibleToPlayers(actorId: $actorId, visible: true) { id }
+        }`,
+        { actorId: lurker.actorId },
+      );
+
+      await expect
+        .poll(() => plateFor(aria.page, lurker.tokenId), { timeout: 20_000 })
+        .toEqual({ tokenId: lurker.tokenId, text: LURKER_NAME, dimmed: false });
+      await expect(aria.page.getByTestId("combatant-list")).toContainText(
+        LURKER_NAME,
+        { timeout: 20_000 },
       );
     });
   } finally {

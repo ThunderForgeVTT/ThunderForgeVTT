@@ -190,9 +190,24 @@ every part `LEGENDARY_ON_OWN_TURN` when taken on the creature's own turn and
 For a viewer V who is not a Game Master, an `AttackParty` for token T is
 redacted — `tokenId: null`, `label: "Unknown"` — when either:
 
-- `T.name_visible_to_players = false`, or
+- V may not read T's name, or
 - no token V controls in the scene sees T under
   `thunderforge_canvas_core::vision::visibility_of`.
+
+**May read T's name** is one rule, stated once in
+`auth::npc_visibility::player_may_read_token_name` and asked by every path
+that serves a name (owner decision 2026-09-15):
+`T.name_visible_to_players = true` **and** the creature T stands for is one
+every player may see — a character, or an NPC its Game Master has made
+`visible_to_players`. A token with no actor is its own switch alone.
+
+The actor wins where the two disagree: a token of a hidden NPC reads
+"Unknown" however its own switch stands, and that switch takes effect the
+moment the NPC is shown. Hiding the creature is the broader statement, and a
+named token of a creature the player is not supposed to know exists is the
+leak this closes. Showing the NPC reaches every board and tracker at once —
+`setActorVisibleToPlayers` nudges token-changed per scene and combat-changed
+for the running fight, ids only — with no reload.
 
 When the **attacker** is redacted, `abilityName` is also null. When the
 **target** is redacted, `defence` is also null. Redaction is decided when the

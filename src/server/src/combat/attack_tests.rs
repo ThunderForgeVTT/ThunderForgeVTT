@@ -74,6 +74,8 @@ fn c1_an_attack_on_somebody_elses_turn_is_refused_names_whose_and_spends_nothing
     let state = test_app_state();
     let mut conn = state.db_pool.get().expect("conn");
     let t = table(&mut conn);
+    // The party has met these two, so sight is the only thing judged here.
+    show_npcs(&mut conn, &t);
     fight(&mut conn, &t, &[(t.aria, "Aria"), (t.ogre, "Ogre")], t.ogre);
 
     let refused = attack(&mut conn, t.player, t.aria, t.longsword, Some(t.goblin)).unwrap_err();
@@ -699,6 +701,8 @@ fn a_reach_warning_never_stands_in_front_of_the_turn() {
     let state = test_app_state();
     let mut conn = state.db_pool.get().expect("conn");
     let t = table(&mut conn);
+    // The party has met these two, so sight is the only thing judged here.
+    show_npcs(&mut conn, &t);
     open_grid(&mut conn, &t);
     set_reach(&mut conn, t.longsword, Some(5.0), (None, None), true);
     stand(&mut conn, t.aria, 0, 0);

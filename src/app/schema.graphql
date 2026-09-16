@@ -4544,7 +4544,11 @@ type GraphQLToken {
 	"""
 	name: String
 	"""
-	Whether players may read the name. A Game Master always can.
+	Whether players may read the name. A Game Master always can, and is
+	sent the token's own switch so their control shows what it is set to;
+	a player is sent the effective rule, which a hidden NPC makes `false`
+	however the token's own switch stands
+	(`auth::npc_visibility::player_may_read_token_name`).
 	"""
 	nameVisibleToPlayers: Boolean!
 	"""

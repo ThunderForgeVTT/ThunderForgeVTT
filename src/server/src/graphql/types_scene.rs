@@ -429,7 +429,11 @@ pub struct GraphQLToken {
     /// does not run the world when a Game Master has hidden it: they are
     /// never sent it (`for_viewer`).
     name: Option<String>,
-    /// Whether players may read the name. A Game Master always can.
+    /// Whether players may read the name. A Game Master always can, and is
+    /// sent the token's own switch so their control shows what it is set to;
+    /// a player is sent the effective rule, which a hidden NPC makes `false`
+    /// however the token's own switch stands
+    /// (`auth::npc_visibility::player_may_read_token_name`).
     name_visible_to_players: bool,
     /// Spec 046 (ADR-102): `true` when this token is its actor — its hit
     /// points are the actor's — and `false` for an unlinked copy holding its
@@ -502,11 +506,21 @@ impl GraphQLToken {
     /// What this viewer may read. A name hidden from players reaches nobody
     /// but a Game Master — neither as `name` nor as the `metadata.label` it
     /// was written in, which would otherwise carry it straight past this.
-    pub(crate) fn for_viewer(mut self, runs_the_world: bool) -> Self {
-        if runs_the_world || self.name_visible_to_players {
+    ///
+    /// `players_may_read_name` is the whole rule
+    /// (`auth::npc_visibility::player_may_read_token_name`): the token's own
+    /// switch **and** the creature it stands for being one players may see.
+    /// The field goes out false with the name, so a client never draws a name
+    /// it was not sent.
+    pub(crate) fn for_viewer(mut self, runs_the_world: bool, players_may_read_name: bool) -> Self {
+        if runs_the_world {
+            return self;
+        }
+        if players_may_read_name {
             return self;
         }
         self.name = None;
+        self.name_visible_to_players = false;
         if let Some(Json(serde_json::Value::Object(metadata))) = self.metadata.as_mut() {
             metadata.remove("label");
         }

@@ -249,6 +249,10 @@ pub(crate) const UNKNOWN_COMBATANT: &str = "Unknown";
 /// a token whose name the Game Master hid from players would otherwise have
 /// that name printed in every player's tracker. For anyone who does not run
 /// the world, such a combatant is `UNKNOWN_COMBATANT` instead.
+///
+/// Hidden is the one rule in `auth::npc_visibility` (owner decision
+/// 2026-09-15): the token's own switch, and the creature it stands for being
+/// one players may see. So a hidden NPC rolls into the tracker as "Unknown".
 pub(crate) fn load_combat(
     conn: &mut PgConnection,
     systems_dir: &str,
@@ -271,22 +275,11 @@ pub(crate) fn load_combat(
         crate::auth::world_membership::actor_in_world(conn, user_id, is_admin, combat.world_id)
             .runs_the_world();
     if !runs_the_world {
-        use crate::schema::tokens;
         let token_ids: Vec<Uuid> = combatants.iter().filter_map(|c| c.token_id).collect();
-        let hidden: std::collections::HashSet<Uuid> = if token_ids.is_empty() {
-            std::collections::HashSet::new()
-        } else {
-            tokens::table
-                .filter(tokens::token_id.eq_any(&token_ids))
-                .filter(tokens::name_visible_to_players.eq(false))
-                .select(tokens::token_id)
-                .load::<Uuid>(conn)
-                .map_err(|e| format!("Failed to load token names: {e}"))?
-                .into_iter()
-                .collect()
-        };
+        let readable = crate::auth::npc_visibility::readable_token_names_sync(conn, &token_ids)
+            .map_err(|e| format!("Failed to load token names: {e}"))?;
         for combatant in &mut combatants {
-            if combatant.token_id.is_some_and(|id| hidden.contains(&id)) {
+            if combatant.token_id.is_some_and(|id| !readable.contains(&id)) {
                 combatant.label = UNKNOWN_COMBATANT.to_string();
             }
         }

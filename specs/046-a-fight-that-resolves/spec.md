@@ -699,6 +699,28 @@ at the start of its own turn.
    creature the board hides. Moving both to footprints would reopen spec 045's
    vision rules, and is not wanted. See research R11 and contract §3.
 
+5. **Hiding a creature hides its tokens' names** (owner, 2026-09-15). One
+   switch, not two. A player may read a token's name when the token's own
+   `name_visible_to_players` says so **and** the creature it stands for is one
+   every player may see — a character, or an NPC its Game Master has made
+   `visible_to_players`. Before this, a hidden NPC's token still drew its
+   creature's name on every player's board, which is the whole point of hiding
+   it undone.
+
+   **The actor wins.** A Game Master who has explicitly named one token of a
+   hidden NPC still shows players nothing: hiding the creature is the broader
+   statement, and the token's switch is kept, waiting, to take effect the
+   moment the NPC is shown. The other precedence would let a single token leak
+   a creature a player is not supposed to know exists — the leak this closes.
+
+   The rule is stated once, in
+   `auth::npc_visibility::player_may_read_token_name`, and asked by every path
+   that serves a name: the board's token list, a mutation's answer, the combat
+   tracker, the out-of-turn refusal, and the attack log's redaction (contract
+   §3). Showing the NPC nudges token-changed per scene and combat-changed for
+   the running fight, so every board and tracker reads the name at once,
+   without a reload. A token with no actor is its own switch alone.
+
 ## Questions for the owner
 
 1. **Q1 — How far does the product resolve an attack?** *(answered: C, with

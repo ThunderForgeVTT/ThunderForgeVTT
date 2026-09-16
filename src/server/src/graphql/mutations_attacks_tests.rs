@@ -142,6 +142,8 @@ async fn make_attack_answers_the_caller_as_they_may_see_it() {
     state.directories.systems_dir = SYSTEMS_DIR.to_string();
     let mut conn = state.db_pool.get().expect("conn");
     let t = table(&mut conn);
+    // The party has met these two, so sight is the only thing judged here.
+    show_npcs(&mut conn, &t);
     drop(conn);
     let attacks = make_attack_impl(
         &state,

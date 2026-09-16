@@ -899,6 +899,8 @@ fn a_queued_attack_is_resolved_at_replay_and_refused_off_turn_spending_nothing()
     let state = crate::test_support::test_app_state();
     let mut conn = state.db_pool.get().unwrap();
     let t = table(&mut conn);
+    // The party has met these two, so sight is the only thing judged here.
+    show_npcs(&mut conn, &t);
     let combat = fight(&mut conn, &t, &[(t.aria, "Aria"), (t.ogre, "Ogre")], t.ogre);
 
     let queued = |local: &str| QueuedChangeInput {
