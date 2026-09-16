@@ -74,6 +74,8 @@ test.describe("The world dashboard shows figures, not every scene", () => {
     await expect(scenesFigure.locator("dd").first()).toHaveText(
       String(SCENE_COUNT + 1),
     );
+    // A member is never told they came in through administrator access.
+    await expect(page.getByTestId("world-admin-access-warning")).toHaveCount(0);
     // A Game Master is told about NPCs.
     await expect(page.getByTestId("world-stat-npcs")).toBeVisible();
     await expect(page.getByTestId("world-stat-players")).toBeVisible();

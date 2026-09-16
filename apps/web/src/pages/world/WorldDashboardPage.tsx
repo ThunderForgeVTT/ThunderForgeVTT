@@ -18,6 +18,8 @@ import { CampaignSettingsPanel } from "@/components/campaign/CampaignSettingsPan
 import type { SeoConfig } from "@/types/seo";
 import type { WorldRecord } from "@/types/world";
 import { WorldAtAGlance } from "@/pages/world/components/WorldAtAGlance";
+import { reachedThroughAdminAccess } from "@/pages/world/adminAccess";
+import { useWorldRole } from "@/hooks/useWorldRole";
 
 function formatTimestamp(value: string) {
   return new Date(value).toLocaleString();
@@ -34,7 +36,7 @@ export const worldDashboardPageSeo: SeoConfig = {
 export default function WorldDashboardPage() {
   const navigate = useNavigate();
   const { id = "" } = useParams();
-  const { user } = useAuth();
+  const { isAdmin } = useAuth();
   const [worldState, setWorldState] = useState<{
     requestedId: string;
     world: WorldRecord | null;
@@ -86,6 +88,7 @@ export default function WorldDashboardPage() {
   // Spec 017 (FR-001): a non-GM member with no claimed character yet is
   // redirected to Actor Selection before this dashboard renders.
   const { cleared: claimGateCleared } = useActorClaimGate(id, world);
+  const { role, loading: roleLoading } = useWorldRole(id, world);
 
   const handleDelete = async () => {
     if (!world || isDeleting) {
@@ -182,8 +185,15 @@ export default function WorldDashboardPage() {
                 </div>
               </section>
 
-              {world.createdBy !== user?.id ? (
-                <StatusBadge variant="warning">
+              {reachedThroughAdminAccess({
+                isAdmin,
+                role,
+                roleLoading,
+              }) ? (
+                <StatusBadge
+                  variant="warning"
+                  data-testid="world-admin-access-warning"
+                >
                   You are viewing this world through administrator access.
                 </StatusBadge>
               ) : null}
