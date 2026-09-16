@@ -41,7 +41,15 @@ export function Tabs({
       onValueChange={onValueChange}
       className={cn(className)}
     >
-      <TabsList aria-label="Sections">
+      {/* `max-w-full` and its own horizontal scroll: the list is `w-fit`,
+          so with five labelled tabs it grew past a 375px viewport and took
+          the whole page sideways with it (44px on the compendium). The
+          strip scrolls instead of the page, and arrow keys still move
+          focus along it, which scrolls the focused tab into view. */}
+      <TabsList
+        aria-label="Sections"
+        className="max-w-full justify-start overflow-x-auto"
+      >
         {items.map((item) => (
           <TabsTrigger key={item.value} value={item.value}>
             {item.icon ? <FantasyIcon name={item.icon} size={16} /> : null}

@@ -97,6 +97,32 @@ async function showNpcToPlayers(
 }
 
 test.describe("Compendium shell: tabs, NPC browse/search, row-select preview", () => {
+  test("no tab of the compendium scrolls the page sideways at 375px", async ({
+    page,
+  }) => {
+    // The actor art agent measured 292px of sideways scroll here at 375px.
+    // Most of it was the world rail sitting beside the column; the last 44px
+    // was the section tab strip, which grew to fit five labels. Both now stay
+    // inside the viewport, and the strip scrolls on its own.
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Compendium Phone ${uniqueSuffix()}`,
+    );
+    await page.setViewportSize({ width: 375, height: 812 });
+    for (const tab of ["npcs", "lore", "items", "abilities"]) {
+      await page.goto(`/world/${worldId}/compendium?tab=${tab}`);
+      await expect(page.getByTestId("world-compendium-page")).toBeVisible({
+        timeout: 15_000,
+      });
+      const sideways = await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth -
+          document.documentElement.clientWidth,
+      );
+      expect(sideways, `compendium ${tab} tab scrolls sideways`).toBe(0);
+    }
+  });
+
   test("loads inside app chrome with NPCs tab selected, real data, search, and preview", async ({
     page,
   }) => {
