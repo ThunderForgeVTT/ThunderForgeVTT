@@ -375,10 +375,11 @@ These journeys go through the product the way people do: UI only, no GraphQL sho
   - the operator `playPauses`/`playPauseRequests` return who, when, grounds, triggers and lift;
   - a world deleted while paused leaves both readable with `worldExists: false`;
   - deleting the pausing operator's account leaves `pausedBy.name` intact.
-- [ ] T056 [US5] Extend the e2e:
+- [x] T056 [US5] Extend the e2e:
   - `play-pause.spec.ts`: the Game Master's world page and world list show "Play paused by an operator since {time}", with no reason on any Game Master surface. Assert the absence of the grounds string in each page's full text.
   - `play-pause-request.spec.ts`: the declined request appears in the operator record.
   - `play-pause-lift.spec.ts`: the history shows the paused and lifted times.
+  *2026-09-16: the lift spec's history check found opening a paused world's settings sent a member to the notice — the compendium overview card created its lore entry on arrival, and the refused write redirected. The card now asks the play state first (`1625005`). The declined request is asserted on the portal's Record (`0aaca8b`).*
 
 ### Implementation for User Story 5
 
@@ -388,14 +389,14 @@ These journeys go through the product the way people do: UI only, no GraphQL sho
   - a quiet banner on the world page in `apps/web/src/pages/world/WorldPage.tsx`;
   - a status on the world's card in the world list (find the card component with `grep -rn "clickPlay\|Play</" apps/web/src/pages`);
   - the pause history in the world's settings, with times only.
-- [ ] T060 [US5] Run the four pause e2e until they pass, then `cargo test -q --lib` and `tsc --noEmit`. Commit.
+- [x] T060 [US5] Run the four pause e2e until they pass, then `cargo test -q --lib` and `tsc --noEmit`. Commit. *2026-09-16: `play-pause`, `-request`, `-lift` 8/8 and `-holds` 1/1 green; `cargo test -q --lib` 1724 passed, 0 failed, 6 ignored (with the Makefile's `RUST_MIN_STACK=16777216` — without it `an_explicit_null_clears_the_binding_through_the_schema` overflows its stack); `tsc --noEmit` clean.*
 - [ ] T072 [US5] Write `apps/web/e2e/journeys/what-the-table-is-told.journey.spec.ts`. As the Game Master, the world list card and the world page show *paused since {time}* while paused. After the lift, the world's settings show the pause history with times only. As a Trusted Player and a Player, the same. As the operator, `/admin/play-pauses` *Record* shows who, when, grounds, triggers and the lift. On every non-operator page visited, the page's full text never contains the grounds string, the trigger kind, the operator's name or the word "takedown".
 
 ---
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T061 [P] Run `expectNoAxeViolations` on `/admin/play-pauses` in `apps/web/e2e/play-pause.spec.ts`. Check the notice at 200% zoom and at a 1920×1080 viewport viewed as a room screen: take screenshots and record them in the commit (SC-008).
+- [x] T061 [P] Run `expectNoAxeViolations` on `/admin/play-pauses` in `apps/web/e2e/play-pause.spec.ts`. Check the notice at 200% zoom and at a 1920×1080 viewport viewed as a room screen: take screenshots and record them in the commit (SC-008). *2026-09-16 (`9476603`): axe on the portal found destructive text on its tint at 3.99:1 and the warning badge at 3.19:1, both in shared components; now 5.37:1 and 5.05:1 in light mode. Zoom is checked as 640x360 CSS pixels, the room screen as 1920x1080; both screenshots are attached to the report.*
 - [ ] T062 Measure SC-001 across 5 runs of `play-pause.spec.ts`: the event path and, with the world event suppressed in a test-only way, the poll-only path. Record both in `specs/051-operator-playfield-shutdown/quickstart.md` under a *Measured* heading. If the poll-only path exceeds 5 s, correct SC-001 or `LIVENESS_POLL` and say which.
 - [x] T063 [P] Update `apps/web/PRODUCT.md` with the pause as an operator lever, and the notice's tone rule. Update spec 015's tasks and notes (`specs/015-dmca-notice-takedown/`) to point the withdrawn "takedowns reach live tables" item at spec 051.
 - [x] T064 [P] Add "Found in implementation" to ADR-100 in `docs/adrs/20260913-100-an_operator_can_pause_a_worlds_play.md`: anything the surface test caught, any gated field that surprised, and whether the trigger backstop is still unneeded.
