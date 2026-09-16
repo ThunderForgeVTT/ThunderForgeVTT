@@ -1,8 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
-import { beginTokenPlacement } from "@/engine/bevy";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  beginTokenPlacement,
+  cancelTokenPlacement,
+  onPlacementCancelled,
+  onPlacementConfirmed,
+} from "@/engine/bevy";
 import { getMyActorClaim } from "@/api/actorClaims";
-import { getWorldActors, setActorVisibleToPlayers } from "@/api/actors";
+import {
+  getWorldActorImages,
+  getWorldActors,
+  setActorVisibleToPlayers,
+  type ActorImageRecord,
+} from "@/api/actors";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
+import { cn } from "@/lib/utils";
+import { portraitOf, tokenImageOf } from "@/pages/world/actor/actorImagery";
 import type { WorldActorRecord } from "@/types/actor";
 import { InPaneCharacterSheet } from "./InPaneCharacterSheet";
 
@@ -110,6 +122,42 @@ export function ActorsPanel({
    * in a component the other four share.
    */
   const [viewing, setViewing] = useState<WorldActorRecord | null>(null);
+  /**
+   * Owner, 2026-09-15: "When I place a token I don't necessarily know if it
+   * places the actor's image."
+   *
+   * The roster's imagery, so this panel can answer that question before the
+   * click rather than after it. Fetched separately from the roster because it
+   * costs the server a query per actor (ADR-057) and only the surfaces that
+   * show a face should pay for it.
+   */
+  const [imagesByActor, setImagesByActor] = useState<
+    Record<string, ActorImageRecord[]>
+  >({});
+  /**
+   * The actor currently on the cursor, if any.
+   *
+   * The engine owns the carry itself — the snapping, the preview and the
+   * cancel all live there. This is chrome's copy of "a carry I started is in
+   * flight", kept so the panel can say what is about to be placed; the engine
+   * is still the one that decides when it ends, which is why both the drop and
+   * the abandon are subscribed to below.
+   */
+  const [carrying, setCarrying] = useState<WorldActorRecord | null>(null);
+  /**
+   * What just landed, so a plain token does not read as nothing having
+   * happened. Cleared on a timer rather than left up: it is a confirmation,
+   * not a state, and a notice that stays becomes furniture.
+   */
+  const [justPlaced, setJustPlaced] = useState<{
+    label: string;
+    /** Bumped per drop, so placing the same actor twice restarts the clock
+     *  instead of inheriting the first drop's timer. */
+    seq: number;
+  } | null>(null);
+  /** A build whose engine cannot take a carry at all. */
+  const [placeProblem, setPlaceProblem] = useState<string | null>(null);
+  const carryingRef = useRef<WorldActorRecord | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -127,6 +175,63 @@ export function ActorsPanel({
       active = false;
     };
   }, [worldId]);
+
+  useEffect(() => {
+    let active = true;
+    getWorldActorImages(worldId)
+      .then((byActor) => {
+        if (active) setImagesByActor(byActor);
+      })
+      .catch(() => {
+        // Imagery that cannot be read leaves the roster usable. What it costs
+        // is the warning below — which is why the warning is only shown for an
+        // actor this panel positively knows has nothing, never for one it
+        // simply failed to ask about.
+        if (active) setImagesByActor({});
+      });
+    return () => {
+      active = false;
+    };
+  }, [worldId]);
+
+  /**
+   * Follow the carry the engine is actually holding.
+   *
+   * Mounted once rather than per carry: the listener is global and the panel
+   * must hear an abandon it did not cause — Escape, a tool change, a scene
+   * change — or it would go on claiming to be placing something the engine
+   * dropped long ago.
+   */
+  useEffect(() => {
+    const stopConfirmed = onPlacementConfirmed((event) => {
+      // A prop is somebody else's carry (`InteractionTool`).
+      if (event.kind !== "actor") return;
+      const placed = carryingRef.current;
+      carryingRef.current = null;
+      setCarrying(null);
+      if (placed)
+        setJustPlaced((current) => ({
+          label: placed.label,
+          seq: (current?.seq ?? 0) + 1,
+        }));
+    });
+    const stopCancelled = onPlacementCancelled(() => {
+      carryingRef.current = null;
+      setCarrying(null);
+    });
+    return () => {
+      stopConfirmed();
+      stopCancelled();
+    };
+  }, []);
+
+  // The confirmation clears itself. Keyed on the label so placing a second
+  // actor restarts the clock rather than inheriting the first one's.
+  useEffect(() => {
+    if (justPlaced === null) return;
+    const timer = window.setTimeout(() => setJustPlaced(null), 4_000);
+    return () => window.clearTimeout(timer);
+  }, [justPlaced]);
 
   useEffect(() => {
     let active = true;
@@ -198,6 +303,40 @@ export function ActorsPanel({
   if (actors === null) {
     return <p className="text-sm text-muted-foreground">Loading actors…</p>;
   }
+
+  /**
+   * What the server will find to draw this actor with.
+   *
+   * The resolution is the server's (`graphql/token_art.rs`): a token with no
+   * photo of its own inherits its actor's token image, or failing that its
+   * portrait. This reads the same two rows in the same order, so what the
+   * panel promises before the click is what arrives after it.
+   */
+  const artFor = (actor: WorldActorRecord) => {
+    const images = imagesByActor[actor.id];
+    return tokenImageOf(images) ?? portraitOf(images);
+  };
+
+  /**
+   * Arm the engine, and say what is on the cursor.
+   *
+   * Nothing is created here: the engine carries the token and reports where it
+   * was dropped, and the server decides whether it exists. The button is the
+   * armed signal — it is the control that armed it, and a second indicator
+   * elsewhere on screen would be one more thing to reconcile with the engine's
+   * own idea of what it is holding.
+   */
+  const handlePlace = async (actor: WorldActorRecord) => {
+    setPlaceProblem(null);
+    setJustPlaced(null);
+    const began = await beginTokenPlacement(actor.id);
+    if (!began) {
+      setPlaceProblem("This build cannot place tokens on the map.");
+      return;
+    }
+    carryingRef.current = actor;
+    setCarrying(actor);
+  };
 
   const renderActor = (actor: WorldActorRecord) => (
     <li
@@ -279,9 +418,18 @@ export function ActorsPanel({
       <button
         type="button"
         data-testid={`actor-place-${actor.id}`}
-        className="rounded border border-border px-2 py-1 text-xs transition-colors hover:bg-muted"
+        // The button is the armed signal: pressed while its own token is on
+        // the cursor, unpressed the moment the engine says the carry ended.
+        aria-pressed={carrying?.id === actor.id}
+        aria-label={`Place ${actor.label} on the map`}
+        className={cn(
+          "rounded border border-border px-2 py-1 text-xs transition-colors",
+          carrying?.id === actor.id
+            ? "border-primary bg-primary text-primary-foreground"
+            : "hover:bg-muted",
+        )}
         onClick={() => {
-          void beginTokenPlacement(actor.id);
+          void handlePlace(actor);
         }}
       >
         Place
@@ -294,6 +442,107 @@ export function ActorsPanel({
       {visibilityError ? (
         <p role="alert" className="text-sm text-destructive">
           {visibilityError}
+        </p>
+      ) : null}
+
+      {/*
+        What is about to be placed, while it is about to be placed.
+
+        The owner's complaint was that a click on the map is a leap of faith:
+        the token lands, and whether it carries the actor's picture is only
+        discoverable afterwards. So the answer is given at the moment the
+        question is asked — the name, and the very image the server will
+        resolve — and when there is no image, that is said outright rather
+        than left to be inferred from a plain shape.
+
+        A ghost on the cursor would be better still, and is not possible from
+        here: the engine owns the carry's preview and cannot be handed an
+        actor's art without an engine change. So it is shown in the rail,
+        beside the button that armed it.
+      */}
+      {carrying ? (
+        <section
+          // Announced as well as drawn — a Game Master arming a placement is
+          // looking at the map, not at this pane.
+          role="status"
+          className="grid gap-2 rounded-lg border border-primary bg-primary/10 p-2"
+          data-testid="placement-preview"
+        >
+          <div className="flex items-center gap-2">
+            {artFor(carrying) ? (
+              <img
+                src={artFor(carrying)!.thumbnailUrl}
+                alt=""
+                className="h-10 w-10 rounded-full border border-border object-cover"
+                data-testid="placement-preview-art"
+              />
+            ) : (
+              <div
+                className="grid h-10 w-10 place-items-center rounded-full border border-dashed border-border text-muted-foreground"
+                data-testid="placement-preview-no-art"
+                aria-hidden="true"
+              >
+                <FantasyIcon
+                  name={carrying.isNpc ? "skull" : "shield"}
+                  size={14}
+                />
+              </div>
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium">
+                Placing {carrying.label}
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                Click the map to drop it, or press Escape.
+              </span>
+            </span>
+          </div>
+
+          {artFor(carrying) ? null : (
+            <p className="text-xs text-muted-foreground">
+              {carrying.label} has no art, so it will drop as a plain marker.{" "}
+              {/* One way to fix it, offered where the gap is noticed. The
+                  actor's own edit page is the page that sets both roles
+                  (portrait and token); the compendium row sets a portrait in
+                  place for whoever is already standing in the list. */}
+              <a
+                href={`/world/${worldId}/actor/${carrying.id}/edit`}
+                target="_blank"
+                rel="noreferrer"
+                className="underline"
+                data-testid="placement-preview-add-art"
+              >
+                Give {carrying.label} a portrait or token
+              </a>
+              .
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={() => void cancelTokenPlacement()}
+            data-testid="placement-preview-cancel"
+            className="justify-self-start rounded border border-border px-2 py-1 text-xs transition-colors hover:bg-muted"
+          >
+            Cancel
+          </button>
+        </section>
+      ) : null}
+
+      {justPlaced ? (
+        // So a plain token does not read as nothing having happened.
+        <p
+          role="status"
+          className="rounded-lg border border-border px-2 py-1 text-xs text-muted-foreground"
+          data-testid="placement-placed"
+        >
+          {justPlaced.label} is on the map.
+        </p>
+      ) : null}
+
+      {placeProblem ? (
+        <p role="alert" className="text-sm text-destructive">
+          {placeProblem}
         </p>
       ) : null}
       <input
