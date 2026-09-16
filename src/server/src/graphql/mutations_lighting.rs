@@ -32,6 +32,89 @@ fn checked_reaches(radius: f64, bright_radius: f64) -> Result<(), Error> {
     Ok(())
 }
 
+/// Read the stored reaches and write the new ones in **one transaction**,
+/// with the light's row locked while it happens.
+///
+/// The clamping rules need what is stored now — a dim reach pulled in brings
+/// the bright one with it, and a bright reach is never stored past the dim —
+/// so a read followed by an unguarded write clamps against a reach another
+/// writer may already have moved. What the table then refuses is the honest
+/// write: `light_sources_bright_within_dim` rejects the row, and a Game Master
+/// who pushed the bright reach out while the dim one was shrinking is told
+/// their change failed for no reason they can see.
+///
+/// The client queues its writes, but the server is what makes the rule true,
+/// so it locks the row it is about to write, exactly as `combat::hit_points`
+/// does. A second writer waits here and then reads what the first left.
+fn update_light_source_sync(
+    conn: &mut PgConnection,
+    light_id: uuid::Uuid,
+    user_id: uuid::Uuid,
+    is_admin: bool,
+    mut update_data: crate::models::LightSourceUpdate,
+) -> Result<crate::models::LightSource, DieselError> {
+    use crate::schema::light_sources;
+
+    conn.transaction(|conn| {
+        // The lock, and the read the clamp is decided from: one statement, so
+        // nothing can change the reaches between them.
+        let stored = light_sources::table
+            .filter(light_sources::light_id.eq(light_id))
+            .select((
+                light_sources::scene_id,
+                light_sources::radius,
+                light_sources::bright_radius,
+            ))
+            .for_update()
+            .first::<(uuid::Uuid, f64, f64)>(conn)
+            .optional()?;
+
+        // 🔐 Authority to author content on a scene follows the world
+        // role — the Owner and any GM, never a Player — not who happened
+        // to create the scene. See `world_membership::is_dm_of_scene`.
+        let Some((scene_id, stored_radius, stored_bright)) = stored else {
+            return Err(DieselError::NotFound);
+        };
+        if !crate::auth::world_membership::is_dm_of_scene(conn, user_id, is_admin, scene_id)? {
+            return Err(DieselError::NotFound);
+        }
+        refuse_scene_if_paused(conn, scene_id)?;
+
+        // Whichever reach was not named, the other is kept within:
+        // a dim reach pulled in past the bright one brings the bright
+        // one with it, and a bright reach is never stored past the dim.
+        let radius = update_data.radius.unwrap_or(stored_radius);
+        let bright = update_data.bright_radius.unwrap_or(stored_bright);
+        if update_data.radius.is_some() || update_data.bright_radius.is_some() {
+            update_data.bright_radius = Some(bright.clamp(0.0, radius.max(0.0)));
+        }
+
+        let light =
+            diesel::update(light_sources::table.filter(light_sources::light_id.eq(light_id)))
+                .set(update_data)
+                .returning(crate::models::LightSource::as_returning())
+                .get_result(conn)?;
+
+        // In the transaction too: a client told the light changed must not be
+        // able to read it before the change is there.
+        if let Ok(world_id) = world_id_for_scene(conn, light.scene_id) {
+            let _ = record_world_event(
+                conn,
+                world_id,
+                EVENT_CODE_LIGHT_SOURCE_CHANGED,
+                Some(serde_json::json!({
+                    "action": "updated",
+                    "light_id": light_id,
+                    "scene_id": light.scene_id,
+                })),
+                user_id,
+            );
+        }
+
+        Ok(light)
+    })
+}
+
 #[derive(Default)]
 pub struct LightSourceMutation;
 
@@ -149,7 +232,7 @@ impl LightSourceMutation {
         if let (Some(radius), Some(bright_radius)) = (input.radius, input.bright_radius) {
             checked_reaches(radius, bright_radius)?;
         }
-        let mut update_data = crate::models::LightSourceUpdate {
+        let update_data = crate::models::LightSourceUpdate {
             bright_radius: input.bright_radius,
             x: input.x,
             y: input.y,
@@ -163,62 +246,7 @@ impl LightSourceMutation {
         };
 
         let updated_light = tokio::task::spawn_blocking(move || {
-            use crate::schema::light_sources;
-
-            // 🔐 Authority to author content on a scene follows the world
-            // role — the Owner and any GM, never a Player — not who happened
-            // to create the scene. See `world_membership::is_dm_of_scene`.
-            let stored = light_sources::table
-                .filter(light_sources::light_id.eq(light_id))
-                .select((
-                    light_sources::scene_id,
-                    light_sources::radius,
-                    light_sources::bright_radius,
-                ))
-                .first::<(uuid::Uuid, f64, f64)>(&mut conn)
-                .optional()?;
-            let authorized = match stored {
-                Some((scene_id, _, _)) => crate::auth::world_membership::is_dm_of_scene(
-                    &mut conn, user_id, is_admin, scene_id,
-                )?,
-                None => false,
-            };
-            if !authorized {
-                return Err(DieselError::NotFound);
-            }
-            if let Some((scene_id, stored_radius, stored_bright)) = stored {
-                refuse_scene_if_paused(&mut conn, scene_id)?;
-                // Whichever reach was not named, the other is kept within:
-                // a dim reach pulled in past the bright one brings the bright
-                // one with it, and a bright reach is never stored past the dim.
-                let radius = update_data.radius.unwrap_or(stored_radius);
-                let bright = update_data.bright_radius.unwrap_or(stored_bright);
-                if update_data.radius.is_some() || update_data.bright_radius.is_some() {
-                    update_data.bright_radius = Some(bright.clamp(0.0, radius.max(0.0)));
-                }
-            }
-
-            let light =
-                diesel::update(light_sources::table.filter(light_sources::light_id.eq(light_id)))
-                    .set(update_data)
-                    .returning(crate::models::LightSource::as_returning())
-                    .get_result(&mut conn)?;
-
-            if let Ok(world_id) = world_id_for_scene(&mut conn, light.scene_id) {
-                let _ = record_world_event(
-                    &mut conn,
-                    world_id,
-                    EVENT_CODE_LIGHT_SOURCE_CHANGED,
-                    Some(serde_json::json!({
-                        "action": "updated",
-                        "light_id": light_id,
-                        "scene_id": light.scene_id,
-                    })),
-                    user_id,
-                );
-            }
-
-            Ok::<_, DieselError>(light)
+            update_light_source_sync(&mut conn, light_id, user_id, is_admin, update_data)
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -311,6 +339,153 @@ impl LightSourceMutation {
 mod tests {
     use super::*;
     use diesel::PgConnection;
+
+    /// A world, a scene and a light on it, at a dim reach of 100 and a bright
+    /// reach of 50.
+    fn a_light(conn: &mut PgConnection, gm: uuid::Uuid) -> (uuid::Uuid, uuid::Uuid) {
+        use crate::schema::light_sources;
+        use crate::test_support::{insert_test_scene, insert_test_world};
+
+        let world_id = insert_test_world(conn, gm);
+        let scene_id = insert_test_scene(conn, world_id, gm);
+        let light_id = uuid::Uuid::now_v7();
+        let now = Utc::now().naive_utc();
+        diesel::insert_into(light_sources::table)
+            .values((
+                light_sources::light_id.eq(light_id),
+                light_sources::scene_id.eq(scene_id),
+                light_sources::x.eq(0.0),
+                light_sources::y.eq(0.0),
+                light_sources::radius.eq(100.0),
+                light_sources::bright_radius.eq(50.0),
+                light_sources::intensity.eq(1.0),
+                light_sources::casts_shadows.eq(true),
+                light_sources::created_by.eq(gm),
+                light_sources::updated_by.eq(gm),
+                light_sources::created_at.eq(now),
+                light_sources::updated_at.eq(now),
+            ))
+            .execute(conn)
+            .expect("insert light");
+        (scene_id, light_id)
+    }
+
+    fn reaches(conn: &mut PgConnection, light_id: uuid::Uuid) -> (f64, f64) {
+        use crate::schema::light_sources;
+        light_sources::table
+            .filter(light_sources::light_id.eq(light_id))
+            .select((light_sources::radius, light_sources::bright_radius))
+            .first::<(f64, f64)>(conn)
+            .expect("the light")
+    }
+
+    fn write(
+        conn: &mut PgConnection,
+        light_id: uuid::Uuid,
+        gm: uuid::Uuid,
+        radius: Option<f64>,
+        bright_radius: Option<f64>,
+    ) -> Result<crate::models::LightSource, DieselError> {
+        update_light_source_sync(
+            conn,
+            light_id,
+            gm,
+            false,
+            crate::models::LightSourceUpdate {
+                x: None,
+                y: None,
+                radius,
+                intensity: None,
+                color: None,
+                attached_token_id: None,
+                casts_shadows: None,
+                metadata: None,
+                updated_by: gm,
+                bright_radius,
+            },
+        )
+    }
+
+    /// The reaches are read and written in one transaction, with the row
+    /// locked — so two writers who arrive together cannot clamp against a
+    /// reach the other has already moved.
+    ///
+    /// One shrinks the dim reach to 10, which pulls the bright reach in with
+    /// it; the other pushes the bright reach out to 80, which is only ever
+    /// stored within the dim one. Both orders end at the same place —
+    /// `(10, 10)` — so the answer is the test's to assert rather than the
+    /// scheduler's. Without the lock the second writer clamps 80 against the
+    /// 100 the first has already replaced, and the table refuses the row it
+    /// then tries to write (`light_sources_bright_within_dim`): the write is
+    /// lost, and the caller is told nothing it can act on.
+    #[test]
+    fn two_writers_at_once_leave_one_light_and_lose_no_clamp() {
+        let state = crate::test_support::test_app_state();
+        let gm = {
+            let mut conn = state.db_pool.get().expect("conn");
+            crate::test_support::insert_test_user(&mut conn)
+        };
+        let light_id = {
+            let mut conn = state.db_pool.get().expect("conn");
+            a_light(&mut conn, gm).1
+        };
+
+        // Enough rounds that an unguarded read-then-write loses a clamp in
+        // one of them; the lock makes every round the same.
+        for round in 0..25 {
+            {
+                let mut conn = state.db_pool.get().expect("conn");
+                write(&mut conn, light_id, gm, Some(100.0), Some(50.0)).expect("reset");
+            }
+            let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+            let handles: Vec<_> = [(Some(10.0), None), (None, Some(80.0))]
+                .into_iter()
+                .map(|(radius, bright)| {
+                    let pool = state.db_pool.clone();
+                    let barrier = barrier.clone();
+                    std::thread::spawn(move || {
+                        let mut conn = pool.get().expect("conn");
+                        barrier.wait();
+                        write(&mut conn, light_id, gm, radius, bright).expect("written");
+                    })
+                })
+                .collect();
+            for handle in handles {
+                handle.join().expect("thread");
+            }
+
+            let mut conn = state.db_pool.get().expect("conn");
+            assert_eq!(
+                reaches(&mut conn, light_id),
+                (10.0, 10.0),
+                "round {round}: both writes landed, and the bright reach stayed within the dim one"
+            );
+        }
+    }
+
+    /// And the rules themselves, which the transaction must not have changed:
+    /// a dim reach pulled in brings the bright one with it, and a bright reach
+    /// named alone is stored within the dim reach that is already there.
+    #[test]
+    fn shrinking_the_dim_reach_pulls_the_bright_one_in() {
+        let state = crate::test_support::test_app_state();
+        let mut conn = state.db_pool.get().expect("conn");
+        let gm = crate::test_support::insert_test_user(&mut conn);
+        let light_id = a_light(&mut conn, gm).1;
+
+        write(&mut conn, light_id, gm, Some(20.0), None).expect("dim in");
+        assert_eq!(reaches(&mut conn, light_id), (20.0, 20.0));
+
+        write(&mut conn, light_id, gm, None, Some(5.0)).expect("bright in");
+        assert_eq!(reaches(&mut conn, light_id), (20.0, 5.0));
+
+        write(&mut conn, light_id, gm, None, Some(500.0)).expect("bright out");
+        assert_eq!(
+            reaches(&mut conn, light_id),
+            (20.0, 20.0),
+            "a bright reach is never stored past the dim one"
+        );
+    }
 
     /// Establishes a connection to the test database (see
     /// `test_support::test_database_url`). Skips (rather than fails)
