@@ -4,6 +4,7 @@ import {
   readSetting,
   writeSettingOrThrow,
 } from "./fixtures/admin";
+import { expectNoAxeViolations } from "./fixtures/axe";
 
 /**
  * Spec 040 T028–T034, T048, T090: the operator-facing half, driven the way an
@@ -30,6 +31,14 @@ import {
  *    reason (FR-009). `scripts/e2e-parallel.mjs` fixes `THUNDERFORGE_REALM_NAME`
  *    on every shard, so there is always exactly one such setting to look at.
  * 4. A secret rendered as anything other than "Set" or "Not set" (FR-023).
+ *
+ * # The group is in the URL
+ *
+ * The instance panel shows one group at a time and puts the chosen group in
+ * the address, so a link can point at the setting somebody is being asked to
+ * fix. That is asserted here by using it: every navigation below names its
+ * group, and a page that ignored the parameter would fail on the very first
+ * field rather than quietly showing the wrong group.
  */
 
 test.describe.configure({ mode: "serial" });
@@ -42,6 +51,10 @@ test.describe.configure({ mode: "serial" });
  * editing it exercises the grouping as well as the write.
  */
 const NOTICE_NAME = "notice.contact_name";
+
+/** `?group=` for the groups this file visits. */
+const NOTICE_GROUP = "copyright-notices";
+const REALM_GROUP = "realm";
 
 /** Fixed by `THUNDERFORGE_REALM_NAME` on every shard of this harness. */
 const REALM_NAME = "realm_name";
@@ -82,7 +95,7 @@ test.describe("Spec 040: the instance is configurable by a person", () => {
   test("a setting edited on the screen is the value the server then resolves", async () => {
     const written = `Notice Contact ${Date.now()}`;
 
-    await admin.goto("/admin/instance");
+    await admin.goto(`/admin/instance?group=${NOTICE_GROUP}`);
     await expect(admin.getByTestId("instance-settings-panel")).toBeVisible({
       timeout: 20_000,
     });
@@ -104,7 +117,7 @@ test.describe("Spec 040: the instance is configurable by a person", () => {
   });
 
   test("a setting the environment fixed says which variable fixed it, and offers no field", async () => {
-    await admin.goto("/admin/instance");
+    await admin.goto(`/admin/instance?group=${REALM_GROUP}`);
 
     const row = admin.getByTestId(`instance-setting-${REALM_NAME}`);
     await expect(row).toBeVisible({ timeout: 20_000 });
@@ -125,15 +138,17 @@ test.describe("Spec 040: the instance is configurable by a person", () => {
     await writeSettingOrThrow(admin, "mail.password", secretValue);
 
     try {
-      await admin.goto("/admin/instance");
+      // Mail's settings are rendered on the mail page now — the same
+      // `SettingRow`, the same mutation, beside the tester they are for.
+      await admin.goto("/admin/mail");
       const row = admin.getByTestId("instance-setting-mail.password");
       await expect(row).toBeVisible({ timeout: 20_000 });
 
       // The value was just written, so it exists to leak. Nothing on this
       // screen may contain it, in any form.
-      await expect(
-        admin.getByTestId("instance-settings-panel"),
-      ).not.toContainText(secretValue);
+      await expect(admin.getByTestId("mail-panel")).not.toContainText(
+        secretValue,
+      );
       await expect(row).toContainText("Set");
 
       await admin
@@ -193,5 +208,41 @@ test.describe("Spec 040: the instance is configurable by a person", () => {
     await expect(
       panel.locator('[data-testid^="outbox-entry-"]').first(),
     ).toContainText("operator@example.org", { timeout: 20_000 });
+  });
+
+  /**
+   * The admin screens, against WCAG 2.2 AA.
+   *
+   * Scoped to `main` rather than the whole document on purpose, the way
+   * `fixtures/axe.ts` asks: a whole-page run reports the shared header and
+   * footer on all six screens, which is six copies of one finding that
+   * belongs to whoever owns the chrome — and a repeated finding nobody in
+   * this file can fix is how an assertion gets deleted.
+   *
+   * They are checked at 375px as well as at desktop width, because the tables
+   * these screens are built from change shape there: the scroll container
+   * that keeps the page from sliding sideways is itself a thing that has to
+   * be reachable from a keyboard.
+   */
+  test("every admin screen this spec covers is free of WCAG 2.2 AA violations", async () => {
+    const screens = [
+      "/admin/configuration",
+      "/admin/instance",
+      "/admin/readiness",
+      "/admin/mail",
+      "/admin/legal",
+      "/admin/security",
+    ];
+
+    for (const width of [1440, 375]) {
+      await admin.setViewportSize({ width, height: 900 });
+      for (const screen of screens) {
+        await admin.goto(screen);
+        await expect(admin.locator("main")).toBeVisible({ timeout: 20_000 });
+        await expectNoAxeViolations(admin, "main");
+      }
+    }
+
+    await admin.setViewportSize({ width: 1280, height: 900 });
   });
 });

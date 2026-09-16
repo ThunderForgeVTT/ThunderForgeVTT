@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button/Button";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import {
@@ -12,8 +13,10 @@ import {
   groupOf,
   groupTitle,
   settingLabel,
+  slugify,
   type RequiredSetting,
 } from "@/services/instanceSetup";
+import { cn } from "@/lib/utils";
 import { SettingField } from "@/pages/setup/steps/SettingField";
 
 /**
@@ -204,7 +207,10 @@ export function SettingRow({ setting, onSaved }: SettingRowProps) {
 
   return (
     <div
-      className="grid gap-2 rounded-lg border border-border bg-secondary/40 p-4"
+      // The anchor readiness and mail link to. `scroll-mt` keeps the row
+      // clear of the sticky header a deep link would otherwise hide it under.
+      id={`setting-${setting.key}`}
+      className="grid scroll-mt-24 gap-2 rounded-lg border border-border bg-secondary/40 p-4"
       data-testid={`instance-setting-${setting.key}`}
       data-source={setting.source}
       data-editable={setting.editable ? "true" : "false"}
@@ -330,9 +336,31 @@ export function SettingRow({ setting, onSaved }: SettingRowProps) {
   );
 }
 
+/**
+ * The group a link points at, and the one every other surface links with.
+ *
+ * Exported because readiness and mail both send an operator *to a setting*,
+ * and a second copy of `slugify(group)` in either of them is a second place
+ * for the link and the page to disagree about what "Copyright notices" is
+ * called in a URL.
+ */
+export function groupSlug(group: string): string {
+  return slugify(group);
+}
+
+/** `/admin/instance?group=…`, for a link that should land on one group. */
+export function instanceGroupPath(group: string): string {
+  return `/admin/instance?group=${groupSlug(group)}`;
+}
+
 export function InstanceSettingsPanel() {
   const [settings, setSettings] = useState<ResolvedSetting[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The chosen group lives in the URL rather than in state, so an operator
+  // sent here to fix a copyright-notice address arrives *at* it. That is the
+  // same reason each admin section is its own route: a screen you cannot link
+  // to is a screen somebody has to be talked through.
+  const [searchParams] = useSearchParams();
 
   const load = useCallback(() => {
     fetchInstanceSettings()
@@ -362,13 +390,29 @@ export function InstanceSettingsPanel() {
       else byGroup.set(group, [setting]);
     }
     return [...byGroup.entries()]
-      .map(([group, items]) => ({ group, items }))
+      .map(([group, items]) => ({
+        group,
+        items,
+        slug: groupSlug(group),
+        // What an operator is actually scanning the rail for: not "how many
+        // keys are in here" but "is there anything in here still to do".
+        unset: items.filter(
+          (setting) =>
+            !(setting.secretState
+              ? setting.secretState === "SET"
+              : Boolean(setting.value)),
+        ).length,
+      }))
       .sort(
         (left, right) =>
           groupRank(left.group) - groupRank(right.group) ||
           left.group.localeCompare(right.group),
       );
   }, [settings]);
+
+  const requested = searchParams.get("group");
+  const active =
+    groups.find((entry) => entry.slug === requested) ?? groups[0] ?? null;
 
   const onSaved = useCallback((updated: ResolvedSetting) => {
     setSettings((current) =>
@@ -389,24 +433,96 @@ export function InstanceSettingsPanel() {
   }
 
   return (
-    <div className="grid gap-6" data-testid="instance-settings-panel">
-      {groups.map(({ group, items }) => (
+    <div
+      className="grid gap-5 lg:grid-cols-[minmax(12rem,15rem)_minmax(0,1fr)] lg:gap-6"
+      data-testid="instance-settings-panel"
+    >
+      {/* A rail on a wide screen, a scrolling strip on a narrow one. Both are
+          one list in the DOM: two renderings would be two tab orders. */}
+      <nav
+        aria-label="Setting groups"
+        data-testid="instance-settings-groups"
+        className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 lg:mx-0 lg:grid lg:h-fit lg:gap-1 lg:overflow-visible lg:px-0 lg:pb-0"
+      >
+        {groups.map((entry) => {
+          const current = active?.slug === entry.slug;
+          return (
+            <Link
+              key={entry.slug}
+              to={`?group=${entry.slug}`}
+              replace
+              aria-current={current ? "page" : undefined}
+              data-testid={`instance-settings-group-link-${entry.slug}`}
+              className={cn(
+                "flex shrink-0 items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors lg:shrink",
+                current
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+              )}
+            >
+              <span>{groupTitle(entry.group)}</span>
+              <span
+                className={cn(
+                  "rounded-full px-1.5 py-0.5 text-xs tabular-nums",
+                  entry.unset > 0
+                    ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                    : "bg-secondary text-muted-foreground",
+                )}
+                // The number is a count of settings; the colour is whether
+                // any of them is still unset. Announced together so the
+                // colour is never the only carrier (WCAG 1.4.1).
+                aria-label={`${entry.items.length} settings, ${entry.unset} not set`}
+              >
+                {entry.items.length}
+              </span>
+            </Link>
+          );
+        })}
+      </nav>
+
+      {active ? (
         <section
-          key={group}
-          className="grid gap-3"
-          data-testid={`settings-group-${group}`}
+          key={active.slug}
+          className="grid min-w-0 gap-3"
+          aria-labelledby={`settings-group-heading-${active.slug}`}
+          data-testid={`settings-group-${active.group}`}
         >
-          <h4 className="text-sm font-semibold tracking-wider text-muted-foreground uppercase">
-            {groupTitle(group)}
-          </h4>
-          {items.map((setting) => (
+          <div className="grid gap-1">
+            <h4
+              id={`settings-group-heading-${active.slug}`}
+              className="text-lg font-semibold"
+            >
+              {groupTitle(active.group)}
+            </h4>
+            <p className="text-sm text-muted-foreground">
+              {active.items.length}{" "}
+              {active.items.length === 1 ? "setting" : "settings"}
+              {active.unset > 0
+                ? ` · ${active.unset} not set yet`
+                : " · all set"}
+              . Each one says where its value came from, and keeps its own
+              record of who changed it.
+            </p>
+          </div>
+          {active.items.map((setting) => (
             <SettingRow key={setting.key} setting={setting} onSaved={onSaved} />
           ))}
         </section>
-      ))}
-      <p className="text-muted-foreground">
-        GitHub applications are configured above, as whole applications rather
-        than as individual keys.
+      ) : (
+        <p className="text-muted-foreground">
+          This instance declares no settings.
+        </p>
+      )}
+
+      <p className="text-sm text-muted-foreground lg:col-span-2">
+        GitHub applications are configured in{" "}
+        <Link
+          className="underline hover:text-foreground"
+          to="/admin/configuration"
+        >
+          Configuration
+        </Link>
+        , as whole applications rather than as individual keys.
       </p>
     </div>
   );
