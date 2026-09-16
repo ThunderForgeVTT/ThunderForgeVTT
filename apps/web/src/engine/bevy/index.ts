@@ -1123,6 +1123,32 @@ export async function setActiveShapeTool(kind: string): Promise<boolean> {
 }
 
 /**
+ * Tell the engine what a drag with the wall tool draws — `"segment"`,
+ * `"room"` (four walls between two corners) or `"door"` (a closed door).
+ *
+ * The engine has offered all three since spec 031 FR-026, but nothing in the
+ * web app asked for anything but the default segment, so a Game Master can
+ * only reach a room or a door by drawing segments and pressing `O`. This is the
+ * seam a control in the Walls panel calls; the e2e that proves a drawn room
+ * holds a player in uses it today.
+ *
+ * Returns whether the engine recognised the primitive. Never throws, like
+ * `setAuthoringMode`.
+ */
+export async function setWallPrimitive(primitive: string): Promise<boolean> {
+  try {
+    const module = await getWasmModule();
+    const set = (
+      module as { set_wall_primitive?: (primitive: string) => boolean }
+    ).set_wall_primitive;
+    if (!set) return false;
+    return set(primitive);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Where the engine's camera is, in world units, or `null` if it cannot say —
  * for turning a click on the page into a point on the map
  * (`./screenToWorld`). Read-only.
