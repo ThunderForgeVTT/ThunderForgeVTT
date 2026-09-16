@@ -137,51 +137,38 @@ test("WASD walks a token, a target looks at a creature, and the camera can follo
     }
 
     await test.step("W, A, S and D each walk the player's token, and typing in a field walks nothing", async () => {
-      const start = (await serverTokenPosition(
-        table.gm,
-        table.sceneId,
-        hero.tokenId,
-      ))!;
+      const at = async () =>
+        (await serverTokenPosition(table.gm, table.sceneId, hero.tokenId))!;
 
-      await aria.page.keyboard.press("w");
-      await expect
-        .poll(
-          async () =>
-            (await serverTokenPosition(table.gm, table.sceneId, hero.tokenId))
-              ?.y ?? null,
-          { timeout: 20_000, message: "W walks north" },
-        )
-        .toBeGreaterThan(start.y);
-
-      await aria.page.keyboard.press("d");
-      await expect
-        .poll(
-          async () =>
-            (await serverTokenPosition(table.gm, table.sceneId, hero.tokenId))
-              ?.x ?? null,
-          { timeout: 20_000, message: "D walks east" },
-        )
-        .toBeGreaterThan(start.x);
-
-      await aria.page.keyboard.press("s");
-      await expect
-        .poll(
-          async () =>
-            (await serverTokenPosition(table.gm, table.sceneId, hero.tokenId))
-              ?.y ?? null,
-          { timeout: 20_000, message: "S walks south" },
-        )
-        .toBe(start.y);
-
-      await aria.page.keyboard.press("a");
-      await expect
-        .poll(
-          async () =>
-            (await serverTokenPosition(table.gm, table.sceneId, hero.tokenId))
-              ?.x ?? null,
-          { timeout: 20_000, message: "A walks west" },
-        )
-        .toBe(start.x);
+      // Each key is judged against where the token stood just before it. The
+      // token is placed on a raw point, and its first step lands it on a cell
+      // centre, so "back where it started" is not a position it can return to.
+      const steps: {
+        key: string;
+        axis: "x" | "y";
+        sign: 1 | -1;
+        name: string;
+      }[] = [
+        { key: "w", axis: "y", sign: 1, name: "W walks north" },
+        { key: "d", axis: "x", sign: 1, name: "D walks east" },
+        { key: "s", axis: "y", sign: -1, name: "S walks south" },
+        { key: "a", axis: "x", sign: -1, name: "A walks west" },
+      ];
+      for (const step of steps) {
+        const before = await at();
+        await aria.page.keyboard.press(step.key);
+        await expect
+          .poll(
+            async () =>
+              ((await at())[step.axis] - before[step.axis]) * step.sign,
+            {
+              timeout: 20_000,
+              message: step.name,
+            },
+          )
+          .toBeGreaterThan(0);
+      }
+      const start = await at();
 
       // The same letters, typed into the actor search: a chat message or a
       // search must never walk a token across the map.
