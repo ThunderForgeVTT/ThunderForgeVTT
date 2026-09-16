@@ -570,6 +570,20 @@ test.describe("spec 051 US3: a takedown asks for a pause", () => {
       const declined = await decidedRequest(adminPage, request!.id, "DECLINED");
       expect(declined?.decisionNote).toBe(note);
       expect(declined?.decidedBy?.name).toBeTruthy();
+
+      // …and shows it on the portal's Record (T056): the world, the decline,
+      // who decided and the note.
+      await openPortal(adminPage);
+      const recorded = adminPage.locator(
+        `[data-testid="play-pause-record-request"][data-request-id="${request!.id}"]`,
+      );
+      await expect(recorded).toHaveAttribute("data-state", "DECLINED", {
+        timeout: 15_000,
+      });
+      await expect(recorded).toContainText(table.worldName);
+      await expect(recorded).toContainText(`Declined`);
+      await expect(recorded).toContainText(`by ${declined!.decidedBy!.name}`);
+      await expect(recorded).toContainText(note);
     } finally {
       await adminPage.context().close();
       await claimantContext.close();
