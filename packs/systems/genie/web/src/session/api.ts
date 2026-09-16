@@ -31,6 +31,19 @@ export interface GenieSessionRecord {
   puzzleClocks: GeniePuzzleClockRecord[];
 }
 
+/** One wish that was spent, and what the Game Master narrated for it. */
+export interface GenieWishEntryRecord {
+  id: string;
+  sessionId: string;
+  /** What was asked for, in the Game Master's own words (FR-014). */
+  narrativeEffect: string;
+  /** What the pool stood at after this wish. */
+  wishesRemaining: number;
+  spentBy: string;
+  spentByName: string | null;
+  spentAt: string;
+}
+
 export interface GenieResourceHoldingRecord {
   actorId: string;
   resourceType: string;
@@ -131,6 +144,37 @@ export async function fetchGenieResourceHoldings(
     genieResourceHoldings: GenieResourceHoldingRecord[];
   }>(GENIE_RESOURCE_HOLDINGS_QUERY, { sessionId, actorId });
   return data.genieResourceHoldings;
+}
+
+const GENIE_WISH_LOG_QUERY = `
+  query GenieWishLog($sessionId: UUID!) {
+    genieWishLog(sessionId: $sessionId) {
+      id
+      sessionId
+      narrativeEffect
+      wishesRemaining
+      spentBy
+      spentByName
+      spentAt
+    }
+  }
+`;
+
+/**
+ * What the table has asked for with its wishes, oldest first (FR-014).
+ *
+ * Readable by any world member, like the pool itself: a wish is spent by
+ * group agreement, so a list of them only the GM could see would be a
+ * strange thing to agree to.
+ */
+export async function fetchGenieWishLog(
+  sessionId: string,
+): Promise<GenieWishEntryRecord[]> {
+  const data = await postGraphQL<{ genieWishLog: GenieWishEntryRecord[] }>(
+    GENIE_WISH_LOG_QUERY,
+    { sessionId },
+  );
+  return data.genieWishLog;
 }
 
 const GENIE_TRADE_PROPOSALS_QUERY = `

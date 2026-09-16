@@ -39,11 +39,13 @@ import {
   fetchGenieSession,
   fetchGenieShopListings,
   fetchGenieTradeProposals,
+  fetchGenieWishLog,
   type GenieResourceHoldingRecord,
   type GeniePuzzleClockRewardRecord,
   type GenieSessionRecord,
   type GenieShopListingRecord,
   type GenieTradeProposalRecord,
+  type GenieWishEntryRecord,
   grantSessionResource as grantSessionResourceRequest,
   proposeResourceTrade as proposeResourceTradeRequest,
   type ProposeResourceTradeInput,
@@ -123,6 +125,16 @@ export interface UseGenieSessionResult {
    * Master gets theirs because the server sent them.
    */
   sessionActors: WorldActorRecord[];
+  /**
+   * Every wish this session has spent, and what was asked for, oldest
+   * first (FR-014).
+   *
+   * `spendWish` has always written the Wish Effect the Game Master typed —
+   * into the `world_events` row it records for the live nudge — and nothing
+   * ever read it back, so the one thing a wish is *about* was captured and
+   * then shown to nobody (owner, 2026-09-15). This is that read.
+   */
+  wishLog: GenieWishEntryRecord[];
   myHoldings: GenieResourceHoldingRecord[];
   incomingProposals: GenieTradeProposalRecord[];
 }
@@ -133,6 +145,7 @@ export interface UseGenieSessionResult {
 const NO_ACTORS: WorldActorRecord[] = [];
 const NO_HOLDINGS: GenieResourceHoldingRecord[] = [];
 const NO_PROPOSALS: GenieTradeProposalRecord[] = [];
+const NO_WISHES: GenieWishEntryRecord[] = [];
 
 /** worldId may be undefined while the host page's world is still loading —
  * the hook simply won't fetch until it's set. currentUserId may be null
@@ -160,6 +173,10 @@ export function useGenieSession(
     key: string;
     myHoldings: GenieResourceHoldingRecord[];
     incomingProposals: GenieTradeProposalRecord[];
+  } | null>(null);
+  const [loadedWishLog, setLoadedWishLog] = useState<{
+    key: string;
+    entries: GenieWishEntryRecord[];
   } | null>(null);
 
   // With no world there is nothing to load, which is what the previous
@@ -291,6 +308,39 @@ export function useGenieSession(
       ? loadedTrades.incomingProposals
       : NO_PROPOSALS;
 
+  // Stored against the session it was fetched for, like the party and the
+  // trade tables above: "whose wishes are these" is answered during render,
+  // so a session change cannot leave the previous night's wishes on screen
+  // for a frame.
+  const wishLogSessionId = session?.id ?? null;
+  const wishLog =
+    wishLogSessionId && loadedWishLog?.key === wishLogSessionId
+      ? loadedWishLog.entries
+      : NO_WISHES;
+
+  const refetchWishLog = useCallback(async () => {
+    if (!wishLogSessionId) return;
+    setLoadedWishLog({
+      key: wishLogSessionId,
+      entries: await fetchGenieWishLog(wishLogSessionId),
+    });
+  }, [wishLogSessionId]);
+
+  useEffect(() => {
+    if (!wishLogSessionId) return;
+    let active = true;
+    fetchGenieWishLog(wishLogSessionId)
+      .then((entries) => {
+        if (active) setLoadedWishLog({ key: wishLogSessionId, entries });
+      })
+      .catch((err) => {
+        console.error("Failed to load the Genie wish log:", err);
+      });
+    return () => {
+      active = false;
+    };
+  }, [wishLogSessionId]);
+
   const refetchTrades = useCallback(async () => {
     if (!session || !myActor) {
       return;
@@ -338,13 +388,19 @@ export function useGenieSession(
     if (!worldId) return;
     const stopSync = startGenieSessionEventSync(
       {
-        onSessionStateChanged: () => void refetch(),
+        onSessionStateChanged: () => {
+          void refetch();
+          // The pool's count and the list of what it bought are one fact.
+          // Refetching only the session would leave the other client
+          // showing two wishes left and no second entry.
+          void refetchWishLog();
+        },
         onResourceTradeChanged: () => void refetchTrades(),
       },
       subscribeToWorldEvents(worldId),
     );
     return stopSync;
-  }, [worldId, refetch, refetchTrades]);
+  }, [worldId, refetch, refetchTrades, refetchWishLog]);
 
   const startSession = useCallback(
     async (doomClockMax: number) => {
@@ -360,8 +416,12 @@ export function useGenieSession(
       if (!session) return;
       const result = await spendWishRequest(session.id, narrativeEffect);
       setSession(result);
+      // The entry is the audit row the mutation just wrote; the mutation
+      // returns the session, not the row, so this is a read rather than a
+      // local merge.
+      await refetchWishLog();
     },
-    [session],
+    [session, refetchWishLog],
   );
 
   const advanceDoomClock = useCallback(
@@ -555,6 +615,7 @@ export function useGenieSession(
     myActor,
     partyMembers,
     sessionActors,
+    wishLog,
     myHoldings,
     incomingProposals,
   };

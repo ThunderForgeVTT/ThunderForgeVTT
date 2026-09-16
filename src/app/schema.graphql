@@ -1664,6 +1664,10 @@ type AppQueryRoot {
 	"""
 	worldPlayState(worldId: UUID!): WorldPlayState!
 	genieSession(worldId: UUID!): GraphQLGenieSession
+	"""
+	What the table has asked for with its wishes, oldest first (FR-014).
+	"""
+	genieWishLog(sessionId: UUID!): [GraphQLGenieWishEntry!]!
 	genieResourceHoldings(sessionId: UUID!, actorId: UUID): [GraphQLGenieResourceHolding!]!
 	genieTradeProposals(actorId: UUID!): [GraphQLGenieTradeProposal!]!
 	genieShopListings(actorId: UUID!): [GraphQLGenieShopListing!]!
@@ -3508,6 +3512,34 @@ type GraphQLGenieTradeProposal {
 	toResourceType: String!
 	toQuantity: Int!
 	status: String!
+}
+
+"""
+One wish that was spent, and the Wish Effect the Game Master narrated.
+"""
+type GraphQLGenieWishEntry {
+	"""
+	The audit row's id, as a string — `world_events.id` is a bigint and
+	this is only ever a React key and a dedupe handle.
+	"""
+	id: String!
+	sessionId: UUID!
+	"""
+	What was asked for, in the Game Master's own words (FR-014).
+	"""
+	narrativeEffect: String!
+	"""
+	What the pool stood at *after* this wish — so a reader can see the
+	three wishes counting down without recomputing them.
+	"""
+	wishesRemaining: Int!
+	spentBy: UUID!
+	"""
+	The Game Master's display name, so the list reads as people rather
+	than ids. `None` if the account is gone.
+	"""
+	spentByName: String
+	spentAt: NaiveDateTime!
 }
 
 """

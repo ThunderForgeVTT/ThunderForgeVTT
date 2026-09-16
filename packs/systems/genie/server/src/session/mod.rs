@@ -22,6 +22,7 @@ pub mod mutations;
 mod play_pause_surface;
 pub mod queries;
 pub mod schema;
+pub mod wish_log;
 
 pub use mutations::GenieSessionMutation;
 pub use queries::GenieSessionQuery;

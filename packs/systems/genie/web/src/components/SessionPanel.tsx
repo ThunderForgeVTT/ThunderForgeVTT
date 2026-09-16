@@ -73,6 +73,7 @@ export function GenieSessionPanel({
     myActor,
     partyMembers,
     sessionActors,
+    wishLog,
     myHoldings,
     incomingProposals,
     proposeResourceTrade,
@@ -343,6 +344,12 @@ export function GenieSessionPanel({
         wishesRemaining={session.wishesRemaining}
         status={session.status}
         isGm={isGm}
+        spentWishes={wishLog.map((entry) => ({
+          id: entry.id,
+          narrativeEffect: entry.narrativeEffect,
+          spentByName: entry.spentByName,
+          spentAt: entry.spentAt,
+        }))}
         onSpendWish={(narrativeEffect) => spendWish(narrativeEffect)}
       />
       <SessionClocks

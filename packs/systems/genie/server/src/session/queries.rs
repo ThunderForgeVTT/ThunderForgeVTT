@@ -341,6 +341,17 @@ impl GenieSessionQuery {
         genie_session_impl(state, auth_user.user_id, world_id).await
     }
 
+    /// What the table has asked for with its wishes, oldest first (FR-014).
+    async fn genie_wish_log(
+        &self,
+        ctx: &Context<'_>,
+        session_id: Uuid,
+    ) -> GraphQLResult<Vec<super::wish_log::GraphQLGenieWishEntry>> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        super::wish_log::genie_wish_log_impl(state, auth_user.user_id, session_id).await
+    }
+
     async fn genie_resource_holdings(
         &self,
         ctx: &Context<'_>,
