@@ -98,6 +98,14 @@ impl Plugin for LightingPlugin {
                     .run_if(crate::plugins::authoring_mode::authoring_tool_allowed(
                         AuthoringMode::Lights,
                     )),
+                // Gated identically, so the preview is shown exactly when the
+                // click that it previews would be accepted — never a frame
+                // longer (spec 031 SC-012's revocation window).
+                crate::systems::lighting::preview_light_at_cursor
+                    .run_if(in_state(AuthoringMode::Lights))
+                    .run_if(crate::plugins::authoring_mode::authoring_tool_allowed(
+                        AuthoringMode::Lights,
+                    )),
                 handle_light_resize,
                 handle_light_keyboard_toggles,
                 handle_light_undo,

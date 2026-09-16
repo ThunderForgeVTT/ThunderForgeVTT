@@ -42,6 +42,19 @@ const DEFAULT_LIGHT_INTENSITY: f32 = 1.0;
 /// `ENDPOINT_GRAB_RADIUS` fixed-pixel approach.
 const LIGHT_GRAB_RADIUS: f32 = 15.0;
 
+/// The placement preview's rings: warm, and plainly provisional.
+///
+/// Alpha does the work of saying "not yet", the same way
+/// `plugins::placement::PREVIEW_COLOR` does for a carried token. Drawn in the
+/// light's own default warmth rather than a UI accent, because what is being
+/// previewed is a lamp.
+const PREVIEW_BRIGHT: Color = Color::srgba(1.0, 0.92, 0.70, 0.75);
+const PREVIEW_DIM: Color = Color::srgba(1.0, 0.92, 0.70, 0.35);
+
+/// Segments per preview ring — matching `plugins::lighting_overlay`, so a
+/// preview and the light it becomes are drawn to the same fidelity.
+const PREVIEW_SEGMENTS: u32 = 48;
+
 /// Radius (px) change per scroll-wheel notch (T037's resize control).
 pub(crate) const RESIZE_STEP: f32 = 10.0;
 
@@ -196,6 +209,84 @@ fn light_color(light: &LightSource, selected: bool) -> Color {
 /// world state like any other engine report.
 pub(crate) fn report_selected_light(light_id: Option<&str>) {
     emit_event(json!({ "type": "select_light", "lightId": light_id }));
+}
+
+/// The light about to be placed, drawn at the cursor (owner decision
+/// 2026-09-15: "the place light source doesn't attach to cursor like I
+/// expected it to be").
+///
+/// Placing a token attaches it to the cursor and the click drops it
+/// (`plugins::placement`); placing a light armed a mode and then showed
+/// nothing at all, so the only way to learn where a light would land — and how
+/// far it would reach — was to place one and look. This is the same gesture,
+/// in the same style: what is about to happen, shown where it will happen.
+///
+/// # Why gizmos, and why here
+///
+/// Gizmos are immediate-mode, so "leave no trace" needs no `OnExit` cleanup:
+/// the rings stop being drawn the frame the tool is disarmed, the tool is
+/// revoked, or the pointer leaves the window. `plugins::placement` needs a
+/// despawn for its sprite; this does not, and inventing one would be a second
+/// lifetime to get wrong.
+///
+/// It lives beside `handle_light_input` and reads the same `SnapRule`, the
+/// same `LIGHT_GRAB_RADIUS` and the same `DEFAULT_LIGHT_*` reaches deliberately.
+/// A preview computed from its own copy of those numbers is a preview that can
+/// disagree with the click, which is worse than none: it would promise a
+/// position and a reach the placement does not honour.
+///
+/// Two rings, bright inside dim, matching `plugins::lighting_overlay`'s
+/// vocabulary for a placed light — the owner liked the bright/dim distinction
+/// and this is the same distinction, one moment earlier.
+///
+/// Nothing is drawn while the cursor is over an existing light: that click
+/// selects rather than places, and a placement preview over it would promise
+/// the wrong outcome.
+/// Whether a click here would place a new light rather than grab an existing
+/// one.
+///
+/// The same question `handle_light_input` asks at the top of its click, pulled
+/// out so the preview and the click cannot answer it differently — and so it
+/// can be tested without a window, a camera and a mouse.
+///
+/// A carried light is its character's and cannot be grabbed (spec 045 T065),
+/// so standing on one does not stop a placement.
+pub(crate) fn click_would_place_a_light(cursor: Vec2, lights: &[LightSource]) -> bool {
+    !lights
+        .iter()
+        .any(|light| !light.is_carried() && cursor.distance(light.position()) <= LIGHT_GRAB_RADIUS)
+}
+
+pub(crate) fn preview_light_at_cursor(
+    windows: Query<&Window, With<PrimaryWindow>>,
+    camera_query: Query<(&Camera, &GlobalTransform)>,
+    light_set: Res<LightSet>,
+    is_gm: Res<IsGameMaster>,
+    scene_grid: Res<crate::resources::grid::SceneGrid>,
+    snap_enabled: Res<crate::resources::token_grid::GridSnapEnabled>,
+    mut gizmos: Gizmos,
+) {
+    if !is_gm.0 {
+        return;
+    }
+    let Some(cursor) = cursor_world_position(&windows, &camera_query) else {
+        return;
+    };
+
+    if !click_would_place_a_light(cursor, light_set.lights()) {
+        return;
+    }
+
+    let at = SnapRule::new(scene_grid.0, snap_enabled.0).cell(cursor);
+    gizmos
+        .circle_2d(at, DEFAULT_LIGHT_BRIGHT_RADIUS, PREVIEW_BRIGHT)
+        .resolution(PREVIEW_SEGMENTS);
+    gizmos
+        .circle_2d(at, DEFAULT_LIGHT_RADIUS, PREVIEW_DIM)
+        .resolution(PREVIEW_SEGMENTS);
+    // The point the light itself will sit on, so the snap is legible on a
+    // gridless scene where the rings alone do not say where centre is.
+    gizmos.circle_2d(at, 3.0, PREVIEW_BRIGHT).resolution(12);
 }
 
 /// T037: click to place a light at the cursor (default radius/intensity),

@@ -18,6 +18,34 @@ fn source(id: &str, x: f32, y: f32, radius: f32, casts_shadows: bool) -> LightSo
     }
 }
 
+// # Placing a light attaches it to the cursor (owner decision 2026-09-15)
+//
+// The preview itself is gizmos, which leave nothing to assert on. What can be
+// asserted — and what actually decides whether the preview tells the truth —
+// is the one question it shares with the click it previews: would a click
+// here place a light, or grab one?
+
+#[test]
+fn a_click_on_empty_floor_would_place_a_light() {
+    let lamp = source("l1", 500.0, 500.0, 100.0, true);
+    assert!(click_would_place_a_light(Vec2::ZERO, &[lamp]));
+}
+
+#[test]
+fn a_click_on_an_existing_light_would_grab_it_instead() {
+    let lamp = source("l1", 0.0, 0.0, 100.0, true);
+    // Inside the grab radius: this click selects, so nothing is previewed.
+    assert!(!click_would_place_a_light(Vec2::new(5.0, 0.0), &[lamp]));
+}
+
+/// A carried light belongs to its character's sheet and cannot be grabbed
+/// (spec 045 T065), so standing on one does not stop a placement.
+#[test]
+fn a_carried_light_does_not_block_placing_one() {
+    let torch = LightSource::carried("token-1", 20.0, 40.0).expect("carried light");
+    assert!(click_would_place_a_light(torch.position(), &[torch]));
+}
+
 #[test]
 fn light_color_prioritizes_selection() {
     let light = source("l1", 0.0, 0.0, 100.0, false);
