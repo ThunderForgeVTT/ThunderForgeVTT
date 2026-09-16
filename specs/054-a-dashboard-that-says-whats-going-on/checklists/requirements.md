@@ -31,13 +31,16 @@
 
 ## Notes
 
-**Two of the owner's panels have nothing behind them, and the spec says so
-before it asks for them.** There is no invitation addressed to a person — world
-invites are anonymous codes with a use count — and there is no last-played
-timestamp anywhere in the schema. The first is Q1, recommended out of this spec
-and into its own. The second is FR-012, written as "the product MUST record
-this; nothing records it today" so that the plan cannot mistake it for a
-read.
+**One of the owner's panels has nothing behind it, and one had a source under a
+name nobody would look under.** There is no invitation addressed to a person —
+world invites are anonymous codes with a use count — so FR-035 drops the panel
+and FR-037 sends targeted invitations to their own spec. Last played turned out
+to exist: `world_live_play.last_beat_at`, the durable per-world mark spec 051's
+heartbeat writes. The spec's first draft said nothing records it, which is true
+of `worlds` and `world_members` and false of that table; FR-012a now requires
+reading the existing record and forbids a second one. This is the correction
+most worth checking, because a plan built on the first draft would have added a
+column the product already has.
 
 **One requirement exists because of something buried on the page being
 removed.** `/counter` holds the only user-facing export-my-data and
@@ -56,7 +59,8 @@ sees the welcome page at all — zero worlds redirects to the create-world form,
 and so does a failed load, so a transient error reads as "your worlds are gone".
 US5 and FR-042 separate the two.
 
-**Three open questions, none blocking.** Q1 (invitations), Q2 (what counts as
-"played", recommended as any live session in the world, since spec 051's
-heartbeat is the nearest existing fact) and Q3 (which address survives). A plan
-can start on the panels that have sources while these are decided.
+**The three questions this spec asked are now decided (owner, 2026-09-15) and
+are recorded in Decisions 5 to 8.** Invitations leave this spec; "played" means
+any live session in the world by anybody, including a Game Master preparing
+alone; and `/welcome` is the address that survives, with `/counter` redirecting
+to it. Each was decided by taking the recommendation the question carried.

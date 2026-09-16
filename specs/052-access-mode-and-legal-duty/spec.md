@@ -87,10 +87,13 @@ may read content, and today three outward paths do not consult it at all:
    and the share modules' own refusal constant exists because "the caller need
    not have an account" (`src/server/src/graphql/mutations_actor_shares.rs:47-54`).
    A closed instance can mint a link today that anybody on the internet can
-   open.
+   open. FR-014 ends that: on a closed or invite-only instance, a share link
+   resolves only for a signed-in account on that instance.
 2. **Lore synchronisation publishes to a repository the instance does not
    operate** (spec 034, `src/server/src/lore_sync/`). Spec 015's FR-015 to
-   FR-018 exist precisely because that content leaves.
+   FR-018 exist precisely because that content leaves. FR-015 below treats
+   enabling it the way it treats going open: an instance that carries content
+   outward must be reachable by somebody who wants that stopped.
 3. **Scene audio and tab sharing** (spec 038) carry a session's media to the
    people at the table, which stays inside the world, and is named here only so
    that the list is the whole list.
@@ -109,6 +112,14 @@ That is the honest shape of the owner's decision, and this spec is written to
 it: **not asking at setup is safe because the gate at the point of use already
 holds.** What changes is when the question is asked, not whether anything is
 allowed without an answer.
+
+Two of those paths change here, so that "a non-open instance publishes nothing
+outward" needs no footnote. FR-014 requires a signed-in account to resolve a
+share link on a closed or invite-only instance — a predicate on the four
+resolvers that already share `anonymous.rs`. FR-015 requires the notice contact
+before lore synchronisation may be enabled, in any mode, because an instance
+that can be asked to stop carrying content outward (spec 015 FR-016) should
+have an address at which it can be asked.
 
 ## The legal reasoning, stated plainly
 
@@ -139,7 +150,10 @@ group of four friends typing it into a shared document.
 - **"Closed" is not a legal category.** It is this product's word for an
   admission policy, and it is true only while nothing else on the instance
   publishes outward. That is why FR-012 keeps the publishing gate in force in
-  every mode, and why Q1 and Q2 below are asked rather than assumed.
+  every mode, why FR-014 closes anonymous resolution on a non-open instance,
+  and why FR-015 makes lore synchronisation oblige an instance the way going
+  open does. With those three, the sentence is true by construction rather
+  than by assertion.
 - **Jurisdiction is not settled by this spec.** § 512 is United States law;
   other regimes attach their own duties to hosting. `operator.jurisdiction`
   already exists as a declared setting (`registry.rs:288-300`), and this spec
@@ -271,6 +285,47 @@ decision, its date and its limits.
 
 ---
 
+### User Story 5 - A non-open instance really does publish nothing outward (Priority: P1)
+
+An operator on a closed or invite-only instance shares a character with
+somebody at their table, and the link opens for that person because they have
+an account here. A stranger with the same link is told the instance requires an
+account. And nobody can start synchronising a world's lore to a repository
+without first giving a contact a rights holder could write to.
+
+**Why this priority**: The whole relaxation rests on the sentence "a non-open
+instance publishes nothing outward". Until these two paths consult the mode,
+that sentence is false, and the legal argument in this spec rests on something
+that is not true.
+
+**Independent Test**: On an invite-only instance, open a share link signed out
+— refused; sign in as a member — it resolves. Then try to enable lore
+synchronisation with the notice contact unset — refused, naming what is
+missing.
+
+**Acceptance Scenarios**:
+
+1. **Given** a closed or invite-only instance with a live share link, **When**
+   a caller with no session opens it, **Then** they are told the link is real
+   and that this instance requires an account, are offered the way to sign in,
+   and are told nothing about what the link names.
+2. **Given** the same link, **When** a signed-in account on that instance opens
+   it, **Then** it resolves exactly as it does today.
+3. **Given** an open instance, **When** a caller with no session opens a share
+   link, **Then** it resolves anonymously, as it does today.
+4. **Given** an instance with live share links, **When** an operator changes it
+   away from open, **Then** they are told first how many links will stop
+   opening for people without an account, and after the change no link is
+   revoked.
+5. **Given** an instance in any mode whose copyright-notice contact is
+   incomplete, **When** anybody tries to enable lore synchronisation for a
+   world, **Then** it is refused, naming each missing setting and where to set
+   it.
+6. **Given** a world already synchronising when this rule arrives, **Then** it
+   keeps synchronising and its operators are told what is missing.
+
+---
+
 ### Edge Cases
 
 - **An invitation on a closed instance.** Closed refuses a valid invitation
@@ -296,11 +351,17 @@ decision, its date and its limits.
   (`instance_access.rs:63-69`). Under this spec that also means no legal
   capability is required, which is the safe direction: an instance that admits
   nobody publishes nothing new.
-- **A closed instance with existing share links.** Links minted before the mode
-  changed keep resolving. Revoking them is an operator action, not a
-  consequence of a mode change, for the same reason `may_publish_beyond_world`
-  is not consulted on read: a configuration change must not become a
-  data-loss event.
+- **A closed instance with existing share links.** The links are not revoked —
+  a configuration change must not become a data-loss event, the same reason
+  `may_publish_beyond_world` is not consulted on read. But under FR-014 they
+  stop resolving for a caller with no account until the instance is open
+  again, and FR-014c tells the operator how many that is before they make the
+  change. Revoking a link stays an operator action.
+- **Sharing with a friend who has no account, on a closed instance.** Under
+  FR-014 it does not work, and that is the point: on a closed instance nobody
+  can make an account either, so the way to show somebody a character is to
+  open the instance, or to invite them from invite-only. An operator who wants
+  to hand a link to a stranger is describing an open instance.
 
 ## Requirements *(mandatory)*
 
@@ -316,9 +377,25 @@ decision, its date and its limits.
 - **FR-003**: An instance that already exists MUST keep the access mode it has.
   No migration or upgrade may change a running instance's mode, in either
   direction.
-- **FR-004**: Every statement of the starting mode MUST agree — the seed, the
-  declared default and the repair path — so an operator reading Admin →
-  Instance sees what the instance actually did.
+- **FR-004**: Every statement of the starting mode MUST agree — the seed
+  (`src/server/migrations/2026-09-06-000000-0000_instance_access/up.sql:36-40`),
+  the declared default (`registry.rs:848`) and the repair path
+  (`admin.rs:748-757`) — on one rule with two arms, and no surface may state a
+  third answer:
+
+  - a **fresh install**, meaning an instance with no accounts, starts
+    **closed**;
+  - an **instance that already has accounts** keeps the mode it already has,
+    and an upgrade that introduces this rule changes nothing about it.
+
+  The declared default and the repair path both read `closed`, which is the
+  fresh-install arm, so both already agree with the rule and neither changes.
+  Only the seed changes, and only in one arm: `invite_only` becomes `closed`.
+  Its other arm stays `open`, because an instance that pre-dates spec 035 has
+  no stored mode and the mode it was running under was open — seeding `open`
+  there *is* how it keeps the mode it has, and FR-003 is why. An operator
+  reading Admin → Instance MUST see the mode the instance actually holds, and
+  that mode MUST be the one this rule produces.
 
 **What each mode requires**
 
@@ -328,13 +405,54 @@ decision, its date and its limits.
   not require as *not required in this mode*, naming the mode that would
   require it. It MUST NOT report it as satisfied, and MUST NOT hide it: an
   operator must be able to see the whole ladder and where they are on it.
+  *Not required* MUST be a **third state of its own** — neither a gap nor a
+  tick — distinguishable from both at a glance and without reading the label,
+  because a row rendered like every other satisfied row reads as "done".
 - **FR-012**: The refusal to create a new share link while the copyright-notice
   contact is unset MUST remain in force **in every access mode**
   (`readiness::may_publish_beyond_world`). This spec relaxes when the question
   is asked, never whether an unanswered instance may publish.
 - **FR-013**: Capabilities unrelated to sharing MUST NOT be affected. Mail,
-  terms of service, feedback and lore synchronisation keep the requirements
-  they have today.
+  terms of service and feedback keep the requirements they have today. Lore
+  synchronisation is not unrelated to sharing and is dealt with in FR-015.
+
+**The two outward paths a mode must actually govern**
+
+- **FR-014**: On an instance that is **not open** — closed or invite-only — a
+  share link MUST resolve only for a caller signed in to an account on that
+  instance. All four resolvers that answer without a session today
+  (`sharedCollection`, `sharedActor`, `sharedItem`, `sharedAbility`, the list
+  held in `src/server/src/graphql/anonymous.rs:1-12`) MUST apply it, and a
+  later resolver that answers without a session MUST join that list rather
+  than escape it. On an open instance they resolve anonymously exactly as they
+  do today: anonymous resolution is an open-instance behaviour.
+  - **FR-014a**: The refusal MUST tell an unauthenticated caller that the link
+    is real but that this instance requires an account to open it, and offer
+    the way to sign in. It MUST NOT reveal whether the code names anything,
+    and it MUST be rate-limited exactly as a resolution is
+    (`anonymous.rs`), because a refusal that is cheaper than a resolution is
+    an oracle.
+  - **FR-014b**: A link minted while an instance was open and read after it
+    closes MUST be refused for the same reason and in the same words. It MUST
+    NOT be revoked, and MUST resolve again if the instance re-opens: a mode
+    change is not a data-loss event, which is the same reason
+    `may_publish_beyond_world` is not consulted on read
+    (`readiness.rs:220-225`).
+  - **FR-014c**: An operator changing the mode away from open MUST be told,
+    before they confirm, how many live share links will stop resolving for
+    people without an account.
+- **FR-015**: Enabling lore synchronisation for a world MUST require the
+  copyright-notice contact, **in every access mode**, on the same terms as
+  FR-030 requires it for going open. Spec 015's FR-016 obliges the platform to
+  be able to deactivate an outward path on a valid notice; an instance that can
+  be asked to do something must have an address at which it can be asked.
+  - **FR-015a**: The requirement applies at the point of enabling, not on every
+    push. A world already synchronising when this rule arrives MUST keep
+    synchronising, and its operators MUST be told what is missing, on the same
+    terms FR-040 to FR-042 give an already-open instance.
+  - **FR-015b**: `Capability::SyncLore` MUST carry this requirement alongside
+    the GitHub app credential it requires today, so that readiness states it in
+    one place and FR-011 renders it like any other rung.
 
 **Changing mode**
 
@@ -392,6 +510,13 @@ decision, its date and its limits.
   mode across the change that introduces this rule.
 - **FR-063**: A test MUST prove that creating a share link is still refused on a
   closed instance with no copyright-notice contact — that FR-012 holds.
+- **FR-064**: An end-to-end test MUST prove, for each of the four share kinds,
+  that a link resolves for a caller with no account while the instance is open,
+  is refused for that caller once the instance leaves open mode, and resolves
+  for a signed-in member throughout.
+- **FR-065**: A test MUST prove that enabling lore synchronisation is refused
+  while the copyright-notice contact is incomplete, in a closed instance as
+  well as an open one, and that a world already synchronising keeps doing so.
 
 ### Key Entities
 
@@ -426,15 +551,29 @@ decision, its date and its limits.
   who, when, and both modes.
 - **SC-007**: An operator reading the readiness screen on a closed instance can
   say, without leaving the page, which capability is not required and which
-  mode would require it.
+  mode would require it, and can tell *not required* from *satisfied* without
+  reading either row's label.
+- **SC-008**: On an instance that is not open, **100%** of share-link reads by
+  a caller with no account are refused, across all four share kinds, and
+  **100%** of the same reads by a signed-in member succeed.
+- **SC-009**: **100%** of attempts to enable lore synchronisation with an
+  incomplete notice contact are refused, in every one of the three modes.
+- **SC-010**: An operator about to leave open mode is shown the number of live
+  share links that will stop resolving anonymously, before they confirm, in
+  **100%** of such changes.
 
 ## Assumptions
 
-- **"Closed" is a statement about admission, not about reach.** It is true that
-  a closed instance shares nothing outside itself only while nothing else on it
-  publishes outward. FR-012 keeps the existing publishing gate in force in
-  every mode so that the statement stays true by construction rather than by
-  assertion. Questions 1 and 2 below are where the remaining gap lives.
+- **"Closed" is a statement about admission, and — as of FR-014 — about reach
+  as well.** A closed instance shares nothing outside itself only while nothing
+  else on it publishes outward. Three requirements hold that together: FR-012
+  keeps the existing publishing gate in force in every mode, FR-014 stops
+  anonymous share resolution on a non-open instance, and FR-015 makes lore
+  synchronisation carry the notice contact whatever the mode. The claim is
+  true by construction, not by assertion.
+- **Scene audio and tab sharing stay inside the world** (spec 038) and are not
+  an outward path. They are named in the list above so that the list is the
+  whole list, and they are untouched here.
 - **The operator is the accountable party.** This product is self-hosted. An
   operator choosing to run open without the apparatus is making a decision
   about their own exposure; the product's job is to make that decision explicit
@@ -454,8 +593,11 @@ decision, its date and its limits.
 - Any per-world or per-account sharing setting. Mode is an instance-level fact.
 - Registering an agent with a copyright office, or any external filing. The
   product publishes a contact; filing is an operator's act.
-- Restricting who may *read* an existing share link — see Q1, which asks
-  whether that should change and deliberately does not decide it here.
+- Revoking, expiring or re-issuing share links. FR-014 changes who may read
+  one on a non-open instance; it changes nothing about a link's lifetime.
+- Making a repository's visibility known to the product. FR-015 requires the
+  notice contact whenever lore synchronisation is enabled, without asking
+  whether the target repository is public.
 
 ## Dependencies
 
@@ -489,44 +631,28 @@ decision, its date and its limits.
    assumes sharing is always possible and would otherwise be read as requiring
    the programme of every instance regardless of mode.
 
-## Questions for the owner
 
-1. **Q1 — Should a share link on a closed or invite-only instance still open
-   for a stranger?** Today it does: four resolvers answer callers with no
-   account (`anonymous.rs:1-12`, ADR-070, ADR-071). This is the one fact that
-   sits awkwardly against "on closed there's no real sharing".
+5. **A share link on a non-open instance opens only for a signed-in account.**
+   FR-014. The four anonymous resolvers in
+   `src/server/src/graphql/anonymous.rs` are the code that must change.
+   Decided 2026-09-15 by the owner, taking option B of the question this spec
+   asked: it is the option under which "a non-open instance publishes nothing
+   outward" is true without a footnote, and the cost is one predicate on four
+   resolvers that already share a module. The sharp edge — a link that stops
+   opening for a stranger when an instance leaves open mode — is the correct
+   behaviour for a link that was only ever meant for people at the table, and
+   FR-014c makes it visible before the change is made.
 
-   | Option | Answer | Implications |
-   |--------|--------|--------------|
-   | A | Leave it. Mode governs admission only; the existing publishing gate is the whole protection | Nothing to build. The claim in decision 1 stays *nearly* true, and the spec says where it is not. |
-   | B | **On a non-open instance, a share link resolves only for a signed-in account on that instance** | Makes "shares nothing outside itself" literally true, which is what the legal argument rests on. Costs a session check on four resolvers and changes what an existing link does when an instance closes. |
-   | C | On a non-open instance, refuse to *mint* anonymous links at all; existing ones keep working | Narrower than B, no behaviour change for links already issued, but an operator who closes an instance still has old public links live. |
+6. **Enabling lore synchronisation obliges an instance the way going open
+   does.** FR-015. Decided 2026-09-15 by the owner, taking option B of the
+   question this spec asked. Lore sync (spec 034) is the other outward path,
+   and spec 015's FR-016 already obliges the platform to deactivate an outward
+   path on a valid notice; an instance that can be asked to do something must
+   have an address at which it can be asked. The requirement is not conditioned
+   on the target repository's visibility — option C — because the product
+   cannot know that and would have to watch it change.
 
-   **Recommendation: B.** It is the option under which the sentence in the ADR
-   is true without a footnote, and the cost is one predicate on four resolvers
-   that already share a module. Its one sharp edge — a link that stops working
-   when an instance leaves open mode — is the correct behaviour for a link that
-   was only ever meant for people at the table.
-
-2. **Q2 — Does turning on lore synchronisation oblige an instance the way going
-   open does?** Lore sync (spec 034) copies a world's lore to a repository the
-   instance does not operate. Spec 015's FR-015 to FR-018 are written about
-   exactly that, and `Capability::SyncLore` requires only a GitHub app
-   credential today — not a notice contact.
-
-   | Option | Answer | Implications |
-   |--------|--------|--------------|
-   | A | No. Lore sync publishes to a repository the *user* controls, so the user is the publisher | Consistent with spec 015 FR-017. A closed instance stays unencumbered. |
-   | B | **Yes: enabling lore sync requires the notice contact, whatever the mode** | The instance is operating an outward path and can be asked to stop carrying content outward (spec 015 FR-016); it should be reachable by somebody who wants it stopped. |
-   | C | Only when the target repository is public | Truest, and needs the product to know a repository's visibility and to watch it change. |
-
-   **Recommendation: B.** Spec 015's FR-016 already obliges the platform to be
-   able to deactivate the outward path on a valid notice. An instance that can
-   be asked to do something should have an address at which it can be asked.
-
-3. **Q3 — What does an operator see when readiness reports a capability their
-   mode does not require?** The wording matters more than it looks: "not
-   required" reads as "done" if it is rendered like every other satisfied row.
-   Recommendation: a third state of its own — neither a gap nor a tick — that
-   names the mode which would require it, so the ladder stays visible from the
-   bottom rung.
+7. **Readiness renders "not required in this mode" as a third state.** FR-011.
+   Decided 2026-09-15 by the owner, taking the recommendation the question
+   carried: neither a gap nor a tick, naming the mode that would require it, so
+   the ladder stays visible from the bottom rung.

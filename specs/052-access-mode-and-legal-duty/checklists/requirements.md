@@ -35,16 +35,25 @@
 decision rests on a claim about what the product does today — "on closed there's
 no real sharing" — and two parts of that claim are not true as stated. A spec
 that asserted the claim without showing where it fails would launch a plan built
-on it. The references are there so a reader can check the correction, and they
-are confined to the Context sections; no requirement names a function or a file.
+on it. The references are there so a reader can check the correction.
 
-**Three open questions, all with recommendations.** None of them blocks
-planning. Q1 (whether a share link opens for a stranger on a non-open instance)
-is the one that decides how literally true the spec's own legal sentence is, and
-it is recommended rather than decided because it changes what an already-issued
-link does. Q2 (lore sync) and Q3 (how readiness words a requirement that does
-not apply) are smaller. The owner's four decisions of 2026-09-15 settle
-everything else.
+**Three requirements name a file, deliberately.** FR-004 names the three places
+that state a starting mode, because the defect *is* that they disagree and a
+requirement to make them agree has to say which three. FR-014 names
+`anonymous.rs`, because the requirement is about the exact set of resolvers
+that answer without a session and that set is a list the product keeps in one
+module. FR-015b names the capability the requirement attaches to. Everywhere
+else, a requirement states behaviour and the Context sections carry the
+references.
+
+**The three questions this spec asked are now decided (owner, 2026-09-15) and
+are recorded in Decisions 5 to 7.** A share link on a non-open instance
+resolves only for a signed-in account (FR-014); enabling lore synchronisation
+requires the notice contact in every mode (FR-015); readiness renders "not
+required in this mode" as a third state (FR-011). The first two change what the
+spec claims: with them, "a non-open instance publishes nothing outward" is true
+by construction rather than nearly true with a footnote, which is what the
+legal argument in the Context needs.
 
 **The legal reasoning is stated as an argument, not as advice.** "The legal
 reasoning, stated plainly" lists what is claimed and four things that are not,

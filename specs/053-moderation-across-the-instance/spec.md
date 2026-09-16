@@ -377,14 +377,23 @@ the right thing without touching a sibling.
   claimant's contact details to anybody the statute does not.
 - **FR-042**: Every read of a conduct report by an operator MUST be attributable
   to that operator.
-- **FR-043**: A retention period MUST be stated for conduct reports, and
-  enforced: a resolved report is kept for that period and then removed, except
-  where it is part of an account's standing record or subject to a legal hold.
-  Takedown records keep spec 015 FR-013's retention, which this spec does not
-  change.
+- **FR-043**: A resolved conduct report MUST be kept for **two years** from
+  resolution and then removed, except where it forms part of an account's
+  standing record — in which case it is kept as long as that record — or where
+  it is subject to a legal hold. The period MUST be stated where a reporter can
+  read it before they file. Two years is long enough to show a pattern across a
+  campaign or two and short enough that an instance is not accumulating
+  accounts of people's worst days indefinitely. Takedown records keep spec 015
+  FR-013's retention, which this spec does not change.
 - **FR-044**: A conduct report MUST NOT create a copyright strike and MUST NOT
-  be counted by the repeat-infringer ladder. Whether repeated conduct findings
-  carry a consequence of their own is Q1 below.
+  be counted by the repeat-infringer ladder. There is **no conduct ladder in
+  this feature**: every conduct decision is an operator's own, recorded under
+  FR-031. FR-011 makes the pattern legible — an operator can see every conduct
+  case against an account — and that is the whole of what this spec does with
+  repetition. A ladder for conduct, with its own thresholds, its own published
+  policy and its own appeals path, is a feature of its own and MUST NOT be
+  invented here; a copyright strike and a harassment finding are not the same
+  currency, so the two ladders must never be merged.
 
 **Every content type**
 
@@ -451,7 +460,13 @@ the right thing without touching a sibling.
 - **SC-006**: **0** surfaces available to the person reported change as a result
   of a report, verified by inspecting every surface that person can reach.
 - **SC-007**: **0** conduct reports leave the instance by any delivery path.
-- **SC-008**: **100%** of conduct reports add **0** copyright strikes.
+- **SC-008**: **100%** of conduct reports add **0** copyright strikes and move
+  **0** accounts along any ladder.
+- **SC-011**: A reporter can read how long a resolved report is kept before
+  they file it, in **one step** from the reporting form.
+- **SC-012**: **100%** of conduct reports resolved more than two years ago, and
+  forming no part of an account's standing record and under no legal hold, are
+  absent from the instance.
 - **SC-009**: A takedown can be filed and listed by name for **every** content
   type the product can share: actor, item, ability, lore entry, scene,
   collection.
@@ -469,9 +484,15 @@ the right thing without touching a sibling.
 - **Both people's world roles matter for who may file, not for who is
   believed.** The product records who held which role; it takes no view on the
   report's truth.
-- **Operators are few and accountable.** This spec makes reports readable by
-  operators and records who read them; it does not build a role system for
-  moderators below operator. Q2 asks whether it should.
+- **Operators are few and accountable, and there is no moderator who is not an
+  operator.** Everything admin is `is_admin` with a mandatory second factor,
+  and that stays true here: the account that can read reports can also change
+  everything else. A moderator role that can read and resolve cases but change
+  no settings is right for a larger instance and is deliberately not built now
+  — ADR-099 keeps the role list short, and the role should arrive when an
+  instance exists that needs it. Every requirement in this spec is written in
+  terms of "operators" precisely so that such a role slots in later without
+  rewriting one of them.
 - **The statutory flow is untouched.** Counter-notice, restoration timing,
   repeat-infringer counting and retention stay as spec 015 and spec 039 built
   them. Where this spec lists or names them it is reading, not deciding.
@@ -484,9 +505,14 @@ the right thing without touching a sibling.
 - Moderation of live speech — voice, text chat at the table — which the product
   does not carry today. A report describes it; the product does not record it.
 - A public transparency report.
+- A consequence ladder for repeated misconduct — thresholds, automatic
+  outcomes, a published conduct policy. FR-044 keeps it out deliberately; it is
+  its own feature, and it needs the policy written before the thresholds are.
+- A moderator role below operator. The requirements are written so one can be
+  added later without rewriting them.
 - Appeals against a conduct decision. Spec 039's standing surfaces already tell
-  an account where it stands; an appeals process is its own feature, and Q1
-  touches its edge.
+  an account where it stands; an appeals process is its own feature, and a
+  conduct ladder would need one.
 - Rewriting the takedown flow of spec 015 or the ladder of spec 039.
 
 ## Dependencies
@@ -523,41 +549,24 @@ the right thing without touching a sibling.
    product says the words, because a person in that position should not have to
    invent the category while writing the report.
 
-## Questions for the owner
+6. **No conduct ladder in this feature.** Decided 2026-09-15 by the owner,
+   taking option A of the question this spec asked — make the pattern legible
+   now (FR-011 shows every case against an account), and decide the consequence
+   deliberately, with a published policy, rather than inventing thresholds in a
+   spec about seeing things. A separate ladder with its own thresholds remains
+   the right answer eventually, as its own feature; one ladder for both was
+   rejected, because a copyright strike and a harassment finding are not the
+   same currency. FR-044 holds the line.
 
-1. **Q1 — Does repeated misconduct carry a consequence the way repeated
-   infringement does?** Spec 039 has a ladder for copyright: warn, suspend
-   publishing, disable, terminate. Conduct has none, and FR-044 keeps the two
-   apart.
+7. **Operators only; no moderator role below operator.** Decided 2026-09-15 by
+   the owner, taking option A of the question this spec asked. The role is
+   added when an instance exists that needs it, not before, and the
+   requirements are written in terms of "operators" so it slots in later
+   without a rewrite.
 
-   | Option | Answer | Implications |
-   |--------|--------|--------------|
-   | A | No ladder. Every conduct decision is an operator's own | Nothing to build; consistent across small instances where the operator knows everybody. |
-   | B | **A separate ladder with its own thresholds and its own consequences** | Repeat offenders are handled consistently and visibly; costs a second ladder, its own published policy, and an appeals question. |
-   | C | One ladder for both | Simplest to read, and wrong: a copyright strike and a harassment finding are not the same currency. |
-
-   **Recommendation: A for this spec, and B as its own feature.** Make the
-   pattern legible now (FR-011 shows the cases), and decide the consequence
-   deliberately, with a published policy, rather than inventing thresholds in
-   a spec about seeing things.
-
-2. **Q2 — Is there a moderator who is not an operator?** Today everything admin
-   is `is_admin` with a mandatory second factor. On an instance with many
-   tables, the person who should read a harassment report may not be the person
-   who should hold the keys to the settings.
-
-   | Option | Answer | Implications |
-   |--------|--------|--------------|
-   | A | **No. Operators only, for now** | Nothing new to model; the account that can read reports can also change everything else. |
-   | B | A moderator role that can read and resolve cases but change no settings | Right for a larger instance; a new role in a product that has kept its role list deliberately short (ADR-099). |
-
-   **Recommendation: A.** Add the role when an instance exists that needs it,
-   not before; the spec's requirements are written in terms of "operators" so
-   that a later role slots in without rewriting them.
-
-3. **Q3 — How long is a resolved conduct report kept?** FR-043 requires a stated
-   period and does not pick one. Recommendation: **two years** from resolution,
-   with anything forming part of an account's standing record kept as long as
-   that record — long enough to show a pattern across a campaign or two, short
-   enough that an instance is not accumulating accounts of people's worst days
-   indefinitely.
+8. **A resolved conduct report is kept for two years.** FR-043. Decided
+   2026-09-15 by the owner, taking the recommendation the question carried —
+   long enough to show a pattern across a campaign or two, short enough that an
+   instance is not accumulating accounts of people's worst days indefinitely.
+   Anything forming part of an account's standing record is kept as long as
+   that record.

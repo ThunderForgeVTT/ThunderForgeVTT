@@ -64,8 +64,9 @@ form they did not ask for.
 
 ## What a dashboard can read today, and what it cannot
 
-Most of the panels the owner named already have a source. Two do not, and this
-spec says so rather than assuming.
+Most of the panels the owner named already have a source. One does not, and one
+has a source under a name nobody would look under. This spec says so rather
+than assuming.
 
 | Panel | Source today |
 |-------|--------------|
@@ -76,7 +77,7 @@ spec says so rather than assuming.
 | My content under moderation | `myStanding` and `myNotices` (`apps/web/src/api/standing.ts:104-122`; `src/server/src/graphql/queries/standing.rs:154-179`), and the per-item banner `ModeratedContentBanner` |
 | Recent activity in my worlds | `myWorldEvents` (`src/server/src/graphql/queries/user.rs:206`) — **owned worlds only** |
 | **Invitations waiting for me** | **Nothing.** See below |
-| **When a world was last played** | **Nothing.** See below |
+| **When a world was last played** | `world_live_play.last_beat_at` — a stored per-world timestamp, already written whenever a session runs. See below |
 
 **There are no invitations addressed to a person.** A world invite is an
 anonymous *code* with `max_uses` and `used_count` and no invitee
@@ -84,15 +85,46 @@ anonymous *code* with `max_uses` and `used_count` and no invitee
 `worldInvites(worldId)`, which only an Owner or Game Master may call
 (`src/server/src/graphql/queries/invite.rs:311`), and redeemed by whoever holds
 the link. So "invitations waiting" is not a panel that can be populated — it is
-a feature that does not exist. Q1 below asks how far this spec should go.
+a feature that does not exist. FR-035 drops the panel and FR-037 sends targeted
+invitations to a spec of their own.
 
-**There is no last-played timestamp.** The `worlds` table has `created_at` and
-`updated_at` and no `last_played_at`; `world_members` has `joined_at` and no
-last-visit column. Spec 051 made the server keep a throttled per-world
-heartbeat while a world is in live play (ADR-100 decision 5), which is the
-nearest existing fact and is about the world, not about the person. "When each
-was last played" therefore needs something recorded that nothing records today
-(FR-012).
+**The last-played timestamp already exists, under another name.** It is true
+that the `worlds` table has `created_at` and `updated_at` and no
+`last_played_at`, and that `world_members` has `joined_at` and no last-visit
+column. But spec 051 did not only keep a live/not-live flag: it keeps a
+**durable row per world holding the time of the last beat** —
+`world_live_play (world_id, last_beat_at)`
+(`src/server/src/schema.rs:1394-1398`), written by `mark_live`
+(`src/server/src/play_pause/live_play.rs:71-91`) from the heartbeat mutation
+(`src/server/src/graphql/mutations_heartbeat.rs:108`).
+
+That row is exactly a last-played record, and it has the four properties the
+dashboard needs:
+
+- **It is written when a session actually runs**, not when a world is edited.
+  The heartbeat comes from a client present in a world, and only from a member:
+  membership is checked on every beat
+  (`mutations_heartbeat.rs:85-86`).
+- **It is durable and never pruned.** `mark_live` upserts one row per world
+  (`live_play.rs:79-87`); nothing deletes it. The in-memory map it throttles
+  against is pruned (`live_play.rs:60-62`), the row is not. So a world played
+  once in March still carries March.
+- **Absence means never played.** A world with no row has never had a beat, and
+  the module's own test asserts it in those words
+  (`a_beat_marks_the_world_and_the_next_is_throttled`, `live_play.rs:126-146`),
+  which is precisely what FR-015 needs.
+- **It is accurate to thirty seconds**, because the write is throttled in the
+  process and conditional in the database (`live_play.rs:9-20`). Thirty seconds
+  is far finer than "two hours ago".
+
+So FR-012 is a requirement to *read and display* a fact the product already
+records, under the conditions FR-012a to FR-012e set, rather than a new
+column. `live_among` (`live_play.rs:99-110`) already answers the same table for
+a set of world ids in one query, which is the shape a dashboard wants.
+
+One thing the row is not: it is not per person. It says when *the table* last
+played, not when *this member* last sat at it. FR-012 asks for the former,
+which is the fact a table would recognise.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -311,9 +343,34 @@ settings.
 
 **My worlds**
 
-- **FR-012**: Each world MUST show when it was last played. "Played" means a
-  live session in that world, not an edit to the world's data. The product MUST
-  record this; nothing records it today.
+- **FR-012**: Each world MUST show when it was last played. **"Played" means
+  any live session in that world, by anybody** — one member present and beating
+  is a session, so a Game Master who opened a scene alone to prepare it counts.
+  It is one fact per world, not one per member, and it is the fact a table
+  would recognise when asked "when did we last play?". It is never an edit to
+  the world's data.
+  - **FR-012a**: The product MUST read this from the record it already keeps —
+    `world_live_play.last_beat_at`, the durable per-world mark spec 051's
+    heartbeat writes (`src/server/src/schema.rs:1394-1398`,
+    `src/server/src/play_pause/live_play.rs:71-91`). It MUST NOT introduce a
+    second timestamp for the same fact: two records of when a world was last
+    played will disagree, and the dashboard would be the surface where that
+    shows.
+  - **FR-012b**: That record MUST be readable for a set of worlds in one
+    query, as `live_among` already reads the same table for liveness
+    (`live_play.rs:99-110`). A dashboard MUST NOT ask once per world for it.
+  - **FR-012c**: The last-played time MUST be shown to **every** member of the
+    world, not only to those who were present for that session. It is a fact
+    about the table.
+  - **FR-012d**: A world whose play is paused MUST show the last-played time it
+    had when the pause began and MUST NOT present it as freshness. A paused
+    world's beats are refused (`mutations_heartbeat.rs:89`), so its mark stops
+    advancing; the card says play is paused (FR-016), and the two together must
+    not read as "this table went quiet on its own".
+  - **FR-012e**: The last-played time MUST be accurate to within a minute of
+    the session it describes. The existing mark is written at most once per
+    thirty seconds per world (`live_play.rs:9-20`), which satisfies this; no
+    finer accuracy is required, and nothing may be added to obtain one.
 - **FR-013**: The world list MUST be ordered by when each world was last
   played, most recent first, with worlds never played after them.
 - **FR-014**: Each world MUST show the role the person holds in it.
@@ -323,6 +380,17 @@ settings.
   paused and when, and MUST NOT state or hint at why (spec 051 FR-050).
 - **FR-017**: The list MUST be bounded and MUST offer a way to the full list of
   worlds.
+- **FR-018**: Last-played MUST be a property of a world, available to **every**
+  surface that lists worlds — the dashboard, the full worlds list, and the
+  world's own staging page — and read from the one record FR-012a names. It
+  does not deserve a home of its own: `world_live_play` already is that home,
+  and the gap is that nothing outside `play_pause` reads it. The fix is to
+  carry it on the world as `myWorldsWithRole` already carries the role
+  (`src/server/src/graphql/queries/user.rs:166`), so that a second surface
+  wanting it needs no second query and cannot show a different answer.
+- **FR-019**: The full worlds list MUST offer the same ordering the dashboard
+  uses — most recently played first — and MUST say, for a world never played,
+  that it has not been played, on the same terms as FR-015.
 
 **Characters I hold**
 
@@ -339,6 +407,28 @@ settings.
   so in the same words spec 039's standing surfaces use.
 - **FR-032**: An account in good standing with nothing disabled MUST be shown
   nothing about moderation.
+
+**Invitations**
+
+- **FR-035**: This feature MUST NOT carry an "invitations waiting" panel, and
+  the dashboard MUST NOT imply that one is coming. There is nothing behind it:
+  a world invite is an anonymous code with `max_uses` and `used_count` and no
+  invitee (`world_invites`, `src/server/src/schema.rs`), readable only by the
+  world's Owner or Game Master
+  (`src/server/src/graphql/queries/invite.rs:311`), and redeemed by whoever
+  holds the link. A panel listing invitations addressed to a person can only
+  list nothing.
+- **FR-036**: The route into a world by code MUST stay on the dashboard for a
+  person who has been handed one — the invite-code box `/welcome` has today
+  (`WelcomePage.tsx:156-238`) — because that is the whole of what the product
+  can offer a person holding an invitation.
+- **FR-037**: Targeted invitations — an invitation addressed to an account,
+  which it could then appear on their dashboard, and which would let a Game
+  Master see who has not answered — are a feature of their own and MUST be
+  specified separately. They carry their own questions: who may invite, what a
+  declined invitation does, and how they sit alongside the anonymous code path
+  that already exists. This spec MUST NOT be the reason a new invitation model
+  is designed in passing.
 
 **A new account**
 
@@ -363,6 +453,11 @@ settings.
   at a route that is not offered to anybody else.
 - **FR-054**: The navigation item shown while setup is required MUST point at
   something about setup.
+- **FR-055**: `/welcome` MUST be the address a signed-in person lands on, and
+  it MUST be the dashboard. `/counter` MUST redirect there (FR-052), and the
+  gallery MUST take a route of its own (FR-053). The product ends this feature
+  with **one** landing address, not two, and no existing link to `/welcome`
+  breaks.
 
 **Proof**
 
@@ -378,6 +473,14 @@ settings.
 - **FR-064**: An end-to-end test MUST prove that export-my-data and
   delete-my-account are reachable and working after the gallery leaves the
   navigation.
+- **FR-065**: A test MUST prove that a world never played says so, that editing
+  a world does not give it a last-played time, and that a Game Master alone in
+  a scene does.
+- **FR-066**: A test MUST prove that a world's last-played time is the same on
+  the dashboard and on the full worlds list, read from one record.
+- **FR-067**: A test MUST prove that a paused world's last-played time is the
+  one it had when the pause began, and that the card says play is paused
+  without hinting why.
 
 ### Key Entities
 
@@ -385,8 +488,9 @@ settings.
   what awaits them.
 - **Waiting item**: something addressed to this person that wants an answer —
   an offer today, and whatever later specs address to a person.
-- **Last played**: when a world last had a live session. A new fact; nothing
-  records it today.
+- **Last played**: when a world last had a live session, by anybody. Not a new
+  fact — `world_live_play.last_beat_at`, which spec 051's heartbeat already
+  writes, and which nothing outside `play_pause` reads yet.
 - **World card**: one world, the role held in it, when it was last played, and
   whether its play is paused.
 - **Component gallery**: the showcase that `/counter` is today, moved out of the
@@ -415,6 +519,13 @@ settings.
   render, in **100%** of runs.
 - **SC-009**: The dashboard meets WCAG 2.2 AA under an automated audit and is
   fully operable by keyboard.
+- **SC-010**: A world's last-played time on the dashboard, on the full worlds
+  list and on the world's own page agree in **100%** of comparisons, because
+  all three read one record.
+- **SC-011**: A world played for one minute shows a last-played time within
+  **one minute** of that session ending.
+- **SC-012**: The product ends this feature with **one** address a signed-in
+  person lands on.
 
 ## Assumptions
 
@@ -424,9 +535,16 @@ settings.
   (constitution Principle I, and Principle III for who may do it).
 - **"Last played" is about live play**, not about editing a world's data. That
   is why `worlds.updated_at` is not an acceptable stand-in (FR-015).
-- **`/welcome` and the dashboard are the same page.** This spec does not add a
-  third landing screen; whichever address survives, there is one place a person
-  lands.
+- **The heartbeat is the definition, not merely the source.** A world was
+  played when a member's client was present in it. This accepts that a Game
+  Master preparing a scene alone counts as play, which is the price of having
+  one fact per world rather than a rule about how many people were present at
+  the same time — and it is the answer a table would give.
+- **`/welcome` and the dashboard are the same page, at `/welcome`.** This spec
+  does not add a third landing screen, and it removes one address rather than
+  adding one (FR-055).
+- **There is no such thing as an invitation addressed to a person**, and this
+  spec does not invent one (FR-035 to FR-037).
 - **Per-world queries are a shape question, not a requirement.** Several sources
   are per world today (claims, offers, pause state). Whether the dashboard asks
   once per world or a single query answers across worlds belongs to the plan;
@@ -442,7 +560,9 @@ settings.
 - Redesigning the worlds page, the world staging page, or the play dock.
 - Any change to what a takedown, a pause or an offer *does*. This spec surfaces
   them.
-- Building targeted invitations, unless Q1 is answered that way.
+- Building targeted invitations. FR-037 sends them to their own spec.
+- A per-person "when was I last in this world" fact. FR-012 is about the table,
+  not the reader.
 
 ## Dependencies
 
@@ -469,41 +589,30 @@ settings.
 4. **A new account is told what to do next**, on the dashboard, rather than
    being redirected to a form.
 
-## Questions for the owner
+5. **"Invitations waiting" is dropped, and targeted invitations become their
+   own spec.** Decided 2026-09-15 by the owner, taking option A of the question
+   this spec asked, with option C as a feature of its own (FR-035 to FR-037).
+   A world invite is an anonymous code with no invitee, so the panel could only
+   list nothing; and an invitation addressed to an account is worth doing
+   properly — it is also what would let a Game Master see who has not answered.
+   The dashboard must not be the reason a new invitation model gets designed in
+   passing.
 
-1. **Q1 — "Invitations waiting" has nothing behind it. How far should this spec
-   go?** A world invite is an anonymous code with a use count and no invitee
-   (`world_invites`), readable only by the world's Owner or Game Master. There
-   is no such thing as an invitation addressed to a person.
+6. **"Played" means any live session in the world, by anybody.** FR-012.
+   Decided 2026-09-15 by the owner, taking option A of the question this spec
+   asked. It is one fact per world, it is the fact a table would recognise, and
+   — as the corrected reading above shows — it is the fact the product already
+   records in `world_live_play.last_beat_at`. A solo preparation session counts;
+   that is the price of not needing a rule about how many people were present
+   at the same time.
 
-   | Option | Answer | Implications |
-   |--------|--------|--------------|
-   | A | Drop the panel from this spec and say why | Honest and small. The owner's list loses an item. |
-   | B | **Show invite codes the person has been handed but not yet redeemed**, once they have pasted one | Needs somewhere to hold a code a person has not used, which is a new idea with its own questions about a code that someone else consumes first. |
-   | C | Build targeted invitations — an invitation addressed to an account, which appears on their dashboard | The panel the owner described, and a feature of its own size: who may invite, what a declined invitation does, how it interacts with the anonymous code path that already exists. |
+7. **Last played is read, not newly recorded.** The spec as first written said
+   nothing records it today. That is true of `worlds` and of `world_members`,
+   and false of `world_live_play`, which spec 051 added and which holds exactly
+   this: a durable per-world timestamp written only while a session is running.
+   FR-012a requires reading that record and forbids a second one.
 
-   **Recommendation: A now, C as its own spec.** The dashboard should not be
-   the reason a new invitation model gets designed in passing, and an invitation
-   addressed to an account is worth doing properly — it is also what would let a
-   Game Master see who has not answered.
-
-2. **Q2 — What counts as "played", exactly?** FR-012 needs a rule, and the
-   candidates give different answers for a Game Master who opened a scene alone
-   to prepare it.
-
-   | Option | Answer | Implications |
-   |--------|--------|--------------|
-   | A | **Any live session in the world, by anybody** | One fact per world, matches "when was this table last played", and a solo preparation session counts. |
-   | B | A live session with two or more people | Truer to "played"; a Game Master preparing alone does not disturb the ordering. Needs a definition of "at the same time". |
-   | C | Per person: when *I* was last in it | Orders each person's own list by their own history; a different fact per member, and a world a person has never opened has no date. |
-
-   **Recommendation: A.** Spec 051 already keeps a throttled per-world
-   heartbeat while a world is in live play (ADR-100 decision 5), so option A is
-   the fact the product is nearest to holding, and it is the one a table would
-   recognise.
-
-3. **Q3 — Which address survives, `/welcome` or the dashboard's?** They are the
-   same page under this spec. Recommendation: keep `/welcome` as the address a
-   person lands on, redirect `/counter` to it, and give the gallery a route of
-   its own — one fewer address in the product, and no existing link to `/welcome`
-   breaks.
+8. **`/welcome` is the address that survives.** FR-055. Decided 2026-09-15 by
+   the owner, taking the recommendation the question carried: `/counter`
+   redirects to it, the gallery takes a route of its own, one fewer address
+   exists in the product, and no existing link to `/welcome` breaks.

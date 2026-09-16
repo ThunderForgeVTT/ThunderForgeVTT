@@ -50,14 +50,16 @@ happen to the person least able to absorb it.
 
 **Privacy is stated as requirements, not as a principle.** Who may read a
 report (FR-040), what a listing must not publish about a claimant (FR-041),
-that reads are attributable (FR-042) and how long a report is kept (FR-043).
-The retention period itself is Q3, with a recommendation of two years.
+that reads are attributable (FR-042) and how long a report is kept (FR-043),
+which the owner settled at two years on 2026-09-15.
 
-**Three open questions, none blocking.** Q1 (a consequence ladder for repeated
-misconduct) is recommended as its own later feature so that thresholds are not
-invented in a spec about visibility. Q2 (a moderator who is not an operator) is
-recommended against for now, and the requirements are worded so the role can be
-added later without rewriting them. Q3 is the retention figure.
+**The three questions this spec asked are now decided (owner, 2026-09-15) and
+are recorded in Decisions 6 to 8.** A consequence ladder for repeated
+misconduct is deliberately not in this feature, so that thresholds are not
+invented in a spec about visibility; a moderator who is not an operator is not
+built now, and the requirements are worded so the role can be added later
+without rewriting them; a resolved conduct report is kept for two years. Each
+was decided by taking the recommendation the question carried.
 
 **Scope held against the statute.** Spec 015's counter-notice, restoration and
 repeat-infringer counting and spec 039's ladder are read and listed by this
