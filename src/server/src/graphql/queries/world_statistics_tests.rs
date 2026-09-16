@@ -286,3 +286,81 @@ async fn a_stranger_is_refused() {
         "a non-member was told this world's figures"
     );
 }
+
+/// The owner's five-year campaign: forty scenes and two thousand tokens.
+///
+/// The claim is that the dashboard costs the same at this size as at three
+/// scenes, because the answer is a handful of counts rather than rows. The
+/// bound is generous on purpose, because a shared test machine is noisy. A
+/// regression to loading every token would still land far outside it. The
+/// elapsed time is printed so a run can report it.
+#[tokio::test]
+async fn forty_scenes_and_two_thousand_tokens_are_counted_without_loading_them() {
+    use crate::schema::{scenes, tokens};
+
+    let Some(mut conn) = try_test_connection() else {
+        return;
+    };
+    let gm = insert_test_user(&mut conn);
+    let small_world = insert_test_world(&mut conn, gm);
+    let big_world = insert_test_world(&mut conn, gm);
+    for index in 0..3 {
+        insert_test_scene_named(&mut conn, small_world, gm, &format!("Small {index}"));
+    }
+
+    let now = chrono::Utc::now().naive_utc();
+    let mut scene_ids = Vec::with_capacity(40);
+    for index in 0..40 {
+        let id = insert_test_scene_named(&mut conn, big_world, gm, &format!("Session {index}"));
+        scene_ids.push(id);
+    }
+    diesel::update(scenes::table.filter(scenes::world_id.eq(big_world)))
+        .set(scenes::hidden.eq(false))
+        .execute(&mut conn)
+        .expect("open the scenes");
+    let rows: Vec<_> = (0..2_000)
+        .map(|index| {
+            (
+                tokens::token_id.eq(Uuid::now_v7()),
+                tokens::scene_id.eq(scene_ids[index % scene_ids.len()]),
+                tokens::x.eq(0.0),
+                tokens::y.eq(0.0),
+                tokens::rotation.eq(0.0),
+                tokens::scale.eq(1.0),
+                tokens::created_at.eq(now),
+                tokens::updated_at.eq(now),
+            )
+        })
+        .collect();
+    for chunk in rows.chunks(500) {
+        diesel::insert_into(tokens::table)
+            .values(chunk)
+            .execute(&mut conn)
+            .expect("place two thousand tokens");
+    }
+
+    let schema = schema(test_app_state());
+    // Warm the schema and the pool, so the first measurement is not paying
+    // for either.
+    let _ = ask(&schema, as_user(gm), small_world).await;
+
+    let started = std::time::Instant::now();
+    let small = data(ask(&schema, as_user(gm), small_world).await);
+    let small_elapsed = started.elapsed();
+
+    let started = std::time::Instant::now();
+    let big = data(ask(&schema, as_user(gm), big_world).await);
+    let big_elapsed = started.elapsed();
+
+    println!(
+        "[world-statistics] 3 scenes / 0 tokens: {small_elapsed:?}; 40 scenes / 2000 tokens: {big_elapsed:?}"
+    );
+
+    assert_eq!(small["worldStatistics"]["scenes"], 3);
+    assert_eq!(big["worldStatistics"]["scenes"], 40);
+    assert_eq!(big["worldStatistics"]["tokens"], 2_000);
+    assert!(
+        big_elapsed < std::time::Duration::from_millis(500),
+        "counting a large world took {big_elapsed:?}"
+    );
+}
