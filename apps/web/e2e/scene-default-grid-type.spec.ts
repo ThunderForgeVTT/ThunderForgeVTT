@@ -66,10 +66,10 @@ test("a scene created after the world default changes inherits that default, wit
 
   expect(await gridTypeOfScene(page, worldId, hexSceneName)).toBe("hex");
 
-  // Switch the default to None and create another scene.
+  // Switch the default to Gridless and create another scene.
   await page.goto(`/world/${worldId}/settings/system`);
   await page.getByTestId("default-scene-grid-type-picker").click();
-  await page.getByRole("option", { name: "None" }).click();
+  await page.getByRole("option", { name: "Gridless" }).click();
 
   const gridlessSceneName = `Gridless Scene ${uniqueSuffix()}`;
   await page.goto(`/world/${worldId}/scenes`);
