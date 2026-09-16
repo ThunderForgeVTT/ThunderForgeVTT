@@ -135,6 +135,7 @@ export function CompendiumOverviewSettingsCard({
             value={content}
             onChange={setContent}
             disabled={isSaving}
+            label="Compendium overview"
           />
           <div className="flex items-center gap-3">
             <Button onClick={() => void handleSave()} disabled={isSaving}>

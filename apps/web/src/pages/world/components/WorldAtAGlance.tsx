@@ -140,7 +140,7 @@ export function WorldAtAGlance({ worldId }: { worldId: string }) {
       )}
 
       <Card
-        surface="stone"
+        surface="parchment"
         className="grid gap-3 p-5"
         data-testid="recent-scenes"
       >

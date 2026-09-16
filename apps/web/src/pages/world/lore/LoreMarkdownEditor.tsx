@@ -31,6 +31,13 @@ export interface LoreMarkdownEditorProps {
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
+  /**
+   * The editor's accessible name. CodeMirror's editable surface is a
+   * `contenteditable` with `role="textbox"`, and a `<label>` elsewhere on the
+   * page does not reach it, so without this a screen reader announces an
+   * unnamed text box (axe `aria-input-field-name`).
+   */
+  label?: string;
 }
 
 /**
@@ -53,6 +60,7 @@ export function LoreMarkdownEditor({
   value,
   onChange,
   disabled,
+  label = "Lore entry content",
 }: LoreMarkdownEditorProps) {
   const { theme } = useTheme();
   const [isUploading, setIsUploading] = useState(false);
@@ -130,6 +138,7 @@ export function LoreMarkdownEditor({
 
     return [
       markdown(),
+      EditorView.contentAttributes.of({ "aria-label": label }),
       autocompletion({ override: [loreLinkCompletionSource] }),
       EditorView.domEventHandlers({
         paste(event, view) {
@@ -159,7 +168,7 @@ export function LoreMarkdownEditor({
         },
       }),
     ];
-  }, [loreEntryId, worldId]);
+  }, [label, loreEntryId, worldId]);
 
   return (
     <div className="grid gap-2" data-testid="lore-markdown-editor-textarea">
