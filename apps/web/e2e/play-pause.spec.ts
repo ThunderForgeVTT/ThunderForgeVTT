@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "./fixtures/test";
 import { openAdminPage } from "./fixtures/admin";
+import { expectNoAxeViolations } from "./fixtures/axe";
 import {
   ensureSidebarOpen,
   graphql,
@@ -194,7 +195,67 @@ async function pauseFromPortal(
       `[data-testid="play-pause-active"][data-world-id="${worldId}"]`,
     ),
   ).toContainText(grounds);
+  // T061: the operator's portal, with the pause just made, passes axe.
+  await expectNoAxeViolations(adminPage);
   return clickedAt;
+}
+
+/**
+ * T061, SC-008: the notice still reads at 200% zoom and on a screen across
+ * the room.
+ *
+ * 200% zoom is a 1280x720 window seen through half as many CSS pixels, which
+ * is how WCAG's reflow criterion measures it: 640x360. Nothing may scroll
+ * sideways and the heading and its sentence must stay on screen. The room
+ * screen is 1920x1080 with the notice still centred and its heading no
+ * smaller than it is on a laptop. Both are screenshotted into the report.
+ */
+async function expectNoticeReadsZoomedAndAcrossARoom(
+  page: Page,
+  worldName: string,
+): Promise<void> {
+  const notice = page.getByTestId("play-paused-notice");
+  const heading = notice.getByRole("heading", { name: "Play is paused" });
+  const status = notice.getByRole("status");
+  const original = page.viewportSize();
+  const headingPx = async () =>
+    Number.parseFloat(
+      await heading.evaluate((el) => getComputedStyle(el).fontSize),
+    );
+  const laptopHeadingPx = await headingPx();
+
+  try {
+    await page.setViewportSize({ width: 640, height: 360 });
+    await expect(heading).toBeInViewport();
+    await expect(status).toContainText(worldName);
+    const sideways = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    );
+    expect(sideways, "the notice must not scroll sideways at 200%").toBe(0);
+    const box = await status.boundingBox();
+    expect(box, "the sentence is laid out").not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(640);
+    await test.info().attach("notice at 200% zoom", {
+      body: await page.screenshot({ fullPage: true }),
+      contentType: "image/png",
+    });
+    await expectNoAxeViolations(page, '[data-testid="play-paused-notice"]');
+
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await expect(heading).toBeInViewport();
+    expect(await headingPx()).toBeGreaterThanOrEqual(laptopHeadingPx);
+    const room = await notice.boundingBox();
+    expect(room, "the notice is laid out").not.toBeNull();
+    const centre = room!.x + room!.width / 2;
+    expect(Math.abs(centre - 960)).toBeLessThanOrEqual(48);
+    await test.info().attach("notice on a 1920x1080 room screen", {
+      body: await page.screenshot(),
+      contentType: "image/png",
+    });
+  } finally {
+    if (original) await page.setViewportSize(original);
+  }
 }
 
 /**
@@ -458,6 +519,7 @@ test.describe("spec 051 US1: pausing a world's play reaches the table", () => {
       expect(gmScenes.length).toBe(gmBeatsAtNotice);
       expect(playerScenes.length).toBe(playerBeatsAtNotice);
 
+      await expectNoticeReadsZoomedAndAcrossARoom(playerPage, worldName);
       await expectMembersToldThatAndWhen(gmPage, adminPage, worldId, grounds);
     } finally {
       await adminPage.context().close();

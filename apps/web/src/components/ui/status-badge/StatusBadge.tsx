@@ -35,7 +35,7 @@ const VARIANT_MAP: Record<
 
 const VARIANT_EXTRA_CLASS: Record<StatusBadgeVariant, string> = {
   success: "bg-emerald-600 text-white",
-  warning: "border-amber-500 text-amber-600 dark:text-amber-400",
+  warning: "border-amber-500 text-amber-700 dark:text-amber-400",
   danger: "",
   info: "",
 };
