@@ -141,7 +141,15 @@ function installEngineProbe(wasm: BevyWasmModule): void {
     .movement_state;
   const tokenFootprints = (wasm as { token_footprints?: () => string })
     .token_footprints;
+  const focusState = (wasm as { focus_state?: () => string }).focus_state;
   (window as unknown as Record<string, unknown>).__engineProbe = {
+    // Owner decision 2026-09-15: what became of the last "look at this
+    // creature" — moved, or refused and why. A refusal draws nothing by
+    // design, so without this it cannot be told from a bug.
+    focusState: (): { tokenId?: string; outcome?: string } =>
+      focusState
+        ? (JSON.parse(focusState()) as { tokenId?: string; outcome?: string })
+        : {},
     camera: (): { x: number; y: number; scale: number } | null =>
       cameraState
         ? (JSON.parse(cameraState()) as { x: number; y: number; scale: number })
