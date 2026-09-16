@@ -477,6 +477,29 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
                   !combatant.active && "opacity-50",
                 )}
               >
+                {/*
+                  "When I'm in combat with 50 goblins, any one of them should
+                  have a little icon I can scroll to." A lair has no token, and
+                  a creature this viewer may not name gets none either — the
+                  engine would refuse it, and an icon that quietly does nothing
+                  is worse than no icon.
+
+                  First in the row, not beside the name: a Game Master's
+                  keyboard path through a row runs from initiative straight to
+                  the hit-point amount, and a target between them would cost an
+                  extra Tab on every creature they damage. A row with no target
+                  keeps the space, so fifty rows still line up.
+                */}
+                {locatable ? (
+                  <LookAtButton
+                    tokenId={locatable.tokenId}
+                    label={combatant.label}
+                    testIdPrefix="combatant-look-at"
+                  />
+                ) : (
+                  <span aria-hidden="true" className="w-[22px] shrink-0" />
+                )}
+
                 {isGm ? (
                   <input
                     type="number"
@@ -519,21 +542,6 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
                   ) : null}
                 </span>
                 <CombatantOutMark combatant={combatant} />
-
-                {/*
-                  "When I'm in combat with 50 goblins, any one of them should
-                  have a little icon I can scroll to." A lair has no token, and
-                  a creature this viewer may not name gets none either — the
-                  engine would refuse it, and an icon that quietly does nothing
-                  is worse than no icon.
-                */}
-                {locatable ? (
-                  <LookAtButton
-                    tokenId={locatable.tokenId}
-                    label={combatant.label}
-                    testIdPrefix="combatant-look-at"
-                  />
-                ) : null}
 
                 {isGm && tokenId ? (
                   <CombatantHitPoints
