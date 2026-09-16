@@ -353,8 +353,11 @@ test.describe("The demo: from an empty browser to a table with two people at it"
         // loaded, because the scene record they needed was filtered away from
         // them. No reload here — if that came back, this is where it shows.
         await expectCanvasLive(playerPage);
+        // By testid rather than by the overlay's words: the words are now the
+        // four named steps of bringing a table up, and an assertion pinned to
+        // a phrase would have gone quietly vacuous the moment they changed.
         await expect(
-          playerPage.getByText("Loading scene…"),
+          playerPage.getByTestId("scene-load-indicator"),
           "the player should not be left under a loading overlay",
         ).toBeHidden({ timeout: 30_000 });
       });

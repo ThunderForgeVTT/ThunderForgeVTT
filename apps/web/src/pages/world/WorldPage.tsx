@@ -128,6 +128,7 @@ interface ReconcileReportState {
 }
 import { useCanvasEngine } from "@/engine/bevy/useCanvasEngine";
 import { EngineLoader } from "@/components/engine/EngineLoader";
+import { BoardLoading } from "@/components/engine/BoardLoading";
 import { getWorld } from "@/api/world";
 import { getScene, getScenes, updateSceneAmbientLight } from "@/api/scenes";
 import { useAuth } from "@/hooks/useAuth";
@@ -205,6 +206,41 @@ function readSavedPin(): PanelPosition | null {
     // double-click is, which is the right answer anyway.
     return null;
   }
+}
+
+/**
+ * The ground a loading panel stands on, over the play field.
+ *
+ * The canvas is a flat dark plate the theme knows nothing about, so anything
+ * drawn over it has to bring its own background or be white-by-hand and
+ * unreadable the moment a light map loads behind it. Sized to fit its
+ * contents rather than the `min-h-64` a full-page loader wants.
+ */
+const LOADING_PLATE =
+  "min-h-0 max-w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-border bg-background/95 shadow-xl backdrop-blur";
+
+/**
+ * What is still coming, in words a person at a table would use.
+ *
+ * Named rather than counted: "3 of 5 resources" is a number about the
+ * implementation, while "the map image" is the thing the owner was actually
+ * watching for. The map image is always said first and said differently,
+ * because it is the large one — a scene whose walls and lights have landed
+ * and whose art has not is precisely the moment that read as a freeze.
+ */
+function describeSceneLoad(pending: readonly string[]): string {
+  const waitingOnMap = pending.includes("background");
+  const rest = pending.filter((resource) => resource !== "background");
+  if (waitingOnMap && rest.length === 0) {
+    return "The map image is on its way — a large map takes a moment.";
+  }
+  if (waitingOnMap) {
+    return `Loading the map image, and the scene's ${rest.join(", ")}.`;
+  }
+  if (rest.length === 0) {
+    return "Putting the last of it on the board.";
+  }
+  return `Loading the scene's ${rest.join(", ")}.`;
 }
 
 export default function WorldPage() {
@@ -481,6 +517,20 @@ export default function WorldPage() {
     status: "loading",
   });
   const pendingSceneResourcesRef = useRef<Set<SceneLoadResource>>(new Set());
+  /**
+   * The same pending set, in a form render can read (owner, 2026-09-15).
+   *
+   * The ref decides *when* the overlay lifts and must stay a ref — it is
+   * written from loader callbacks that must not wait for a render to see each
+   * other's writes. This mirror decides *what the overlay says* while it is
+   * up: which pieces of the scene are still coming, the map image above all,
+   * which is the one the owner watched arrive with no signal at all. Two
+   * copies of one fact is a cost paid deliberately; the ref remains the
+   * authority and this is only ever read for words on screen.
+   */
+  const [pendingSceneResources, setPendingSceneResources] = useState<
+    readonly SceneLoadResource[]
+  >([]);
 
   // Reset to "loading" whenever the active scene or the retry generation
   // changes — mirrors the walls/shapes "clear the previous scene's stale
@@ -507,6 +557,15 @@ export default function WorldPage() {
     // the loader effects below see the same state they report into.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSceneLoadState({ status: "loading" });
+    // Same reset, same reason — the words on screen and the status they
+    // describe have to change together.
+    setPendingSceneResources([
+      "background",
+      "walls",
+      "tokens",
+      "lights",
+      "shapes",
+    ]);
   }, [sceneId, sceneLoadGeneration]);
 
   const markSceneResourceLoaded = useCallback(
@@ -515,6 +574,9 @@ export default function WorldPage() {
         return;
       }
       pendingSceneResourcesRef.current.delete(resource);
+      setPendingSceneResources((current) =>
+        current.filter((pending) => pending !== resource),
+      );
       if (pendingSceneResourcesRef.current.size === 0) {
         setSceneLoadState((current) =>
           current.status === "error" ? current : { status: "ready" },
@@ -2894,7 +2956,21 @@ export default function WorldPage() {
                     zIndex: 1000,
                   }}
                 >
-                  <EngineLoader progress={loadProgress} error={null} />
+                  {/* `step="engine"`: by the time this page is mounted the
+                      world has been fetched and the route's chunk has landed,
+                      so the first of the four waits is genuinely done. The
+                      suspense fallback that preceded it said so too, which is
+                      what makes the hand-off invisible. */}
+                  <EngineLoader
+                    progress={loadProgress}
+                    error={null}
+                    step="engine"
+                    // On its own ground rather than over the raw canvas: the
+                    // play field is a flat dark plate the theme knows nothing
+                    // about, and text laid straight onto it was white by hand
+                    // and unreadable the moment a light map loaded behind it.
+                    className={LOADING_PLATE}
+                  />
                 </div>
               ) : null}
               {/* Deliberately outside `engine-load-indicator`: spec 008
@@ -2915,6 +2991,7 @@ export default function WorldPage() {
                   <EngineLoader
                     progress={null}
                     error={engineError}
+                    className={LOADING_PLATE}
                     onRetry={retryEngine}
                   />
                 </div>
@@ -2936,17 +3013,38 @@ export default function WorldPage() {
               {engineReady && sceneId && sceneLoadState.status === "loading" ? (
                 <div
                   data-testid="scene-load-indicator"
+                  // Announced, not only drawn. A wait nobody is told about is
+                  // the freeze the owner reported; `polite` so it is read
+                  // after whatever the person was already being told, and the
+                  // overlay holds nothing focusable, so nothing loses focus
+                  // when it lifts.
+                  role="status"
                   style={{
                     position: "absolute",
                     top: "50%",
                     left: "50%",
                     transform: "translate(-50%, -50%)",
-                    color: "white",
                     textAlign: "center",
                     zIndex: 1000,
                   }}
                 >
-                  <p>Loading scene…</p>
+                  {/*
+                    The map image is the specific complaint: it is the largest
+                    thing a scene waits on and, until this, the only one with
+                    no signal at all. So it is its own named step, and it is
+                    the step shown whenever it is what is left — everything
+                    else in a scene is small and arrives together.
+                  */}
+                  <BoardLoading
+                    current={
+                      pendingSceneResources.length === 1 &&
+                      pendingSceneResources[0] === "background"
+                        ? "map"
+                        : "scene"
+                    }
+                    detail={describeSceneLoad(pendingSceneResources)}
+                    className={LOADING_PLATE}
+                  />
                 </div>
               ) : null}
               {sceneId && sceneLoadState.status === "error" ? (
