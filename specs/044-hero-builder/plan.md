@@ -198,7 +198,7 @@ about copies below.
 | **I. ECS owns simulation, React owns chrome** | The builder never speaks to the engine (FR-029). It draws SVG in React and hands bytes to an existing mutation; a built token reaches the map the way every uploaded token has since spec 031, through `token_art.rs`. No canvas state moves, and no rule is computed in React — there is no rule here, only a picture. |
 | **II. Plugin-modular engine** | No engine change in any phase. `make lint-wasm` is named in the gates only because the pre-push hook runs it, not because this feature touches wasm. |
 | **III. Ownership at the data boundary** | Phases (a) and (b) add no authority: `uploadActorImage` keeps its Editor gate and its pause gate (`mutations_actor_images.rs:113-124`), and the panel's `canEdit` stays presentation. Phase (c) widens the gate **on the server**, in one function that reads the claim, the world setting and the per-character lock, and every e2e proves the refusal by calling the mutation directly (SC-010). Phase (d) treats a stored spec as untrusted input, shape-checked and size-capped server-side before it is written (FR-037). |
-| **IV. ADRs before divergent implementation** | Two, each landing with its phase: **ADR-104, "A character's look belongs to whoever holds it"** (phase c) — the first right derived from a claim rather than a `world_actor_permissions` row, and the two ways a Game Master withdraws it; and **ADR-105, "A stored image remembers the spec that drew it"** (phase d), recorded as an extension of ADR-057 and carrying R4's rejected alternatives and the append-only consequence (FR-038). Phases (a) and (b) need none: they add a tool over paths that are already decided. |
+| **IV. ADRs before divergent implementation** | Two, each landing with its phase: **ADR-105, "A character's look belongs to whoever holds it"** (phase c) — the first right derived from a claim rather than a `world_actor_permissions` row, and the two ways a Game Master withdraws it; and **ADR-106, "A stored image remembers the spec that drew it"** (phase d), recorded as an extension of ADR-057 and carrying R4's rejected alternatives and the append-only consequence (FR-038). Phases (a) and (b) need none: they add a tool over paths that are already decided. |
 | **V. Verify before claiming done** | Per phase: `pnpm verify` (which already runs `packages/heroes`' own `check`), `pnpm -F @thunderforge/web exec tsc --noEmit` for every web phase because verify does not type-check the app, `cargo test` for (c) and (d), the phase's e2e through the harness with the log searched for `✘`, and `make lint-wasm` before the final commit because the hook demands it. The playtest is **not** a gate here: no playtest scenario builds a hero, and inventing one to satisfy a habit would prove nothing. |
 
 **Gate result (pre-research)**: PASS.
@@ -206,7 +206,7 @@ about copies below.
 **Re-check after design**: PASS, with one asymmetry recorded rather than
 waived. Phase (c) makes a claim confer a right, which the one permission
 declaration of ADR-050 — world role, then an explicit row, then Viewer — does
-not do for any noun. That is a divergence, which is why it gets ADR-104
+not do for any noun. That is a divergence, which is why it gets ADR-105
 rather than a comment: the alternative — writing an Editor grant row on every
 claim — would hand a player the whole actor (its sheet, its abilities, its
 inventory) to give them a hat, and would leave a stale grant behind when the
@@ -281,7 +281,7 @@ src/server/src/
 ├── users/export_content.rs         # (d): carry hero_spec (FR-040)
 └── migrations/                     # one directory for (c), one for (d)
 
-docs/adrs/                          # ADR-104 (c), ADR-105 (d)
+docs/adrs/                          # ADR-105 (c), ADR-106 (d)
 ```
 
 **Structure Decision**: the repository's existing layout, plus the two new
