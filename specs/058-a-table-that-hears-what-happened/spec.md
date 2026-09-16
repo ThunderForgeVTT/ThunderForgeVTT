@@ -1,6 +1,6 @@
 # Feature Specification: A Table That Hears What Happened
 
-**Feature Branch**: `056-a-table-that-hears-what-happened`
+**Feature Branch**: `058-a-table-that-hears-what-happened`
 
 **Created**: 2026-09-16
 
