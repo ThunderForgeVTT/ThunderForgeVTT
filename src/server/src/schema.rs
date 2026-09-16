@@ -914,6 +914,12 @@ diesel::table! {
 }
 
 diesel::table! {
+    walls_block_movement_backfill (wall_id) {
+        wall_id -> Uuid,
+    }
+}
+
+diesel::table! {
     world_abilities (id) {
         id -> Uuid,
         world_id -> Uuid,
@@ -1797,6 +1803,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     user_sessions,
     users,
     walls,
+    walls_block_movement_backfill,
     world_abilities,
     world_ability_effects,
     world_ability_permissions,
