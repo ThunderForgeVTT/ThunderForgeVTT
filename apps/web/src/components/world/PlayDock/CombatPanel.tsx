@@ -32,6 +32,9 @@ import { CombatantBudget } from "./CombatantBudget";
 import { CombatantAct } from "./CombatantAct";
 import { combatantActKind } from "./combatantActions";
 import { useSelectedTokenIds } from "./useSelectedTokenIds";
+import { LookAtButton } from "./LookAtButton";
+import { readFollowTheTurn, writeFollowTheTurn } from "./followTheTurn";
+import { FOLLOW_SURROUND_CELLS, lookAtToken, mayLookAt } from "@/engine/lookAt";
 
 export interface CombatPanelProps {
   worldId: string;
@@ -104,14 +107,25 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
       .catch(() => setActors([]));
   }, [worldId, isGm]);
 
+  /**
+   * The scene's tokens, for the selection offer and for the target icons.
+   *
+   * No longer a Game Master's read alone (owner decision 2026-09-15): a
+   * player's tracker offers to look at a creature too, and the token's record
+   * is what says where it is and whether this viewer may read its name. The
+   * server already sends a player these tokens to draw the board with, so this
+   * asks for nothing new — and everything the offer drives is still rendered
+   * under `isGm`.
+   */
   const loadSceneTokens = useCallback(() => {
-    if (!isGm || !sceneId) return;
+    if (!sceneId) return;
     getTokens(sceneId)
-      // A failure here costs the offer, not the tracker: the roster, the round
-      // and every existing control keep working without it.
+      // A failure here costs the offer and the target icons, not the tracker:
+      // the roster, the round and every existing control keep working without
+      // it.
       .then(setSceneTokens)
       .catch(() => undefined);
-  }, [isGm, sceneId]);
+  }, [sceneId]);
 
   useEffect(() => {
     lookedUp.current = new Set();
@@ -141,6 +155,58 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
     for (const id of pending) lookedUp.current.add(id);
     loadSceneTokens();
   }, [offer.unresolvedTokenIds, loadSceneTokens]);
+
+  /**
+   * Spec: the camera follows whoever's turn it is (owner decision 2026-09-15).
+   *
+   * Per person and remembered in this browser — see `followTheTurn.ts` for why
+   * it is nobody else's setting and why it starts off.
+   */
+  const [following, setFollowing] = useState(() => readFollowTheTurn(worldId));
+  useEffect(() => {
+    setFollowing(readFollowTheTurn(worldId));
+  }, [worldId]);
+
+  /**
+   * The turn the camera was last moved for.
+   *
+   * The rule, stated here: **the camera moves on a turn change, and never
+   * between turns.** Moving the camera yourself mid-turn is therefore not a
+   * fight — nothing pulls it back, and following simply resumes at the next
+   * turn. That is the behaviour the toggle promises: a Game Master who pans
+   * away to look at the far end of the corridor keeps their view until the
+   * turn passes, and then gets taken to whoever is up.
+   *
+   * A ref rather than state: it must not cause a render, and it must be
+   * written before the next render so one turn change moves the camera once
+   * however many times this component re-renders for other reasons.
+   */
+  const followedTurn = useRef<string | null>(null);
+
+  const activeCombatantId = combat?.activeCombatantId ?? null;
+  const activeTokenId =
+    combat?.combatants.find((combatant) => combatant.id === activeCombatantId)
+      ?.tokenId ?? null;
+
+  useEffect(() => {
+    if (!following) {
+      // Remembered even while off, so turning it back on mid-fight does not
+      // immediately yank the camera to the turn already in progress. The next
+      // turn change is what moves it, which is what "follow the turn" means.
+      followedTurn.current = activeCombatantId;
+      return;
+    }
+    if (!activeCombatantId || activeCombatantId === followedTurn.current) {
+      return;
+    }
+    followedTurn.current = activeCombatantId;
+    // A lair has no token to fly to (spec 046 US6), and neither has a
+    // combatant added from an actor that was never placed. Nothing to do.
+    if (!activeTokenId) return;
+    // Zoomed out a little, so what is around the creature is visible too —
+    // the engine decides how far, from the creature's own footprint.
+    lookAtToken(activeTokenId, { surroundCells: FOLLOW_SURROUND_CELLS });
+  }, [following, activeCombatantId, activeTokenId]);
 
   /** Runs a mutation, adopts its authoritative result, and surfaces failures. */
   const run = async (action: () => Promise<CombatRecord>) => {
@@ -302,6 +368,27 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
+      {/*
+        Everyone's, not the Game Master's: a player waiting for their turn is
+        exactly who this was asked for ("I could scroll through the combat and
+        see if it's my turn — the viewport should scroll to me"). It changes
+        nothing anyone else sees.
+      */}
+      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+        <input
+          type="checkbox"
+          checked={following}
+          data-testid="follow-the-turn"
+          className="size-3.5 accent-primary"
+          onChange={(event) => {
+            const enabled = event.target.checked;
+            setFollowing(enabled);
+            writeFollowTheTurn(worldId, enabled);
+          }}
+        />
+        Follow the turn
+      </label>
+
       {isGm ? (
         // Spec 046 FR-006: the per-encounter override of the world's
         // auto-apply default. It lives on this encounter and ends with it.
@@ -365,6 +452,10 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
             const isTurn = combatant.id === combat.activeCombatantId;
             const tokenId = combatant.tokenId;
             const actKind = combatantActKind(combatant);
+            const token = sceneTokens.find(
+              (row) => row.sceneId === sceneId && row.tokenId === tokenId,
+            );
+            const locatable = mayLookAt(token, isGm) ? token : undefined;
             return (
               <li
                 key={combatant.id}
@@ -419,6 +510,21 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
                   ) : null}
                 </span>
                 <CombatantOutMark combatant={combatant} />
+
+                {/*
+                  "When I'm in combat with 50 goblins, any one of them should
+                  have a little icon I can scroll to." A lair has no token, and
+                  a creature this viewer may not name gets none either — the
+                  engine would refuse it, and an icon that quietly does nothing
+                  is worse than no icon.
+                */}
+                {locatable ? (
+                  <LookAtButton
+                    tokenId={locatable.tokenId}
+                    label={combatant.label}
+                    testIdPrefix="combatant-look-at"
+                  />
+                ) : null}
 
                 {isGm && tokenId ? (
                   <CombatantHitPoints

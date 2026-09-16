@@ -4,6 +4,7 @@ import {
   Check,
   Compass,
   Copy,
+  Crosshair,
   Crown,
   Feather,
   Flame,
@@ -37,6 +38,8 @@ export type FantasyIconName =
   | "crown"
   | "inventory"
   | "link"
+  /** The target reticle on "look at this creature" (owner decision 2026-09-15). */
+  | "locate"
   | "map"
   | "moon"
   | "quill"
@@ -78,6 +81,7 @@ const ICON_MAP: Record<
   crown: Crown,
   inventory: Package,
   link: LinkIcon,
+  locate: Crosshair,
   map: MapIcon,
   moon: Moon,
   quill: Feather,

@@ -12,11 +12,15 @@ import {
   setActorVisibleToPlayers,
   type ActorImageRecord,
 } from "@/api/actors";
+import { getTokens } from "@/api/tokens";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
+import { mayLookAt } from "@/engine/lookAt";
 import { cn } from "@/lib/utils";
 import { portraitOf, tokenImageOf } from "@/pages/world/actor/actorImagery";
 import type { WorldActorRecord } from "@/types/actor";
+import type { TokenRecord } from "@/types/token";
 import { InPaneCharacterSheet } from "./InPaneCharacterSheet";
+import { LookAtButton } from "./LookAtButton";
 
 export interface ActorsPanelProps {
   worldId: string;
@@ -158,6 +162,56 @@ export function ActorsPanel({
   /** A build whose engine cannot take a carry at all. */
   const [placeProblem, setPlaceProblem] = useState<string | null>(null);
   const carryingRef = useRef<WorldActorRecord | null>(null);
+  /**
+   * The scene's tokens, so a roster row can offer to look at the creature
+   * (owner decision 2026-09-15).
+   *
+   * A creature is somewhere only by standing on the board, so the row needs
+   * its token before it can offer to scroll to it — and the token's record is
+   * also what says whether this viewer may read its name, which is half the
+   * rule for whether they may look at it at all. A failure here costs the
+   * target icons and nothing else: the roster, its search and every existing
+   * control carry on.
+   */
+  const [sceneTokens, setSceneTokens] = useState<TokenRecord[]>([]);
+
+  useEffect(() => {
+    if (!sceneId) {
+      setSceneTokens([]);
+      return;
+    }
+    let active = true;
+    getTokens(sceneId)
+      .then((tokens) => {
+        if (active) setSceneTokens(tokens);
+      })
+      .catch(() => {
+        if (active) setSceneTokens([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [sceneId]);
+
+  /**
+   * One token per actor: the primary when there is one, else the first.
+   *
+   * A creature standing on the board twice is rare but real — a summoner's
+   * copies, a shapechanger's forms — and the target has to go somewhere
+   * definite. The primary is the one the rest of the app already treats as
+   * "the" token for an actor.
+   */
+  const tokenByActor = useMemo(() => {
+    const byActor = new Map<string, TokenRecord>();
+    for (const token of sceneTokens) {
+      if (!token.actorId || token.sceneId !== sceneId) continue;
+      const held = byActor.get(token.actorId);
+      if (!held || (token.isPrimary && !held.isPrimary)) {
+        byActor.set(token.actorId, token);
+      }
+    }
+    return byActor;
+  }, [sceneTokens, sceneId]);
 
   useEffect(() => {
     let active = true;
@@ -338,20 +392,36 @@ export function ActorsPanel({
     setCarrying(actor);
   };
 
-  const renderActor = (actor: WorldActorRecord) => (
-    <li
-      key={actor.id}
-      className="flex items-center gap-2 rounded-lg border border-border px-2 py-1.5"
-    >
-      <FantasyIcon name={actor.isNpc ? "skull" : "shield"} size={14} />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm">{actor.label}</span>
-        <span className="block truncate text-xs text-muted-foreground">
-          {actor.actorType}
-        </span>
-      </span>
+  const renderActor = (actor: WorldActorRecord) => {
+    // Offered only for a creature actually standing on this scene, and only to
+    // a viewer allowed to know which one it is. The engine refuses the rest —
+    // see `systems::camera_focus` — so this is the chrome half of one rule,
+    // not a second rule.
+    const token = tokenByActor.get(actor.id);
+    const locatable = mayLookAt(token, isGm) ? token : undefined;
 
-      {/*
+    return (
+      <li
+        key={actor.id}
+        className="flex items-center gap-2 rounded-lg border border-border px-2 py-1.5"
+      >
+        <FantasyIcon name={actor.isNpc ? "skull" : "shield"} size={14} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm">{actor.label}</span>
+          <span className="block truncate text-xs text-muted-foreground">
+            {actor.actorType}
+          </span>
+        </span>
+
+        {locatable ? (
+          <LookAtButton
+            tokenId={locatable.tokenId}
+            label={actor.label}
+            testIdPrefix="actor-look-at"
+          />
+        ) : null}
+
+        {/*
         View never navigates.
 
         This row used to be a `Link`, so looking at a character cost whoever
@@ -371,71 +441,72 @@ export function ActorsPanel({
         actor is playing it. A Game Master has no claim (spec 017), so they
         fall through to the tab without a role check written here.
       */}
-      {actor.id === claimedActorId ? (
-        <button
-          type="button"
-          onClick={() => setViewing(actor)}
-          data-testid={`actor-view-${actor.id}`}
-          className="rounded border border-border px-2 py-1 text-xs transition-colors hover:bg-muted"
-        >
-          View
-        </button>
-      ) : (
-        <a
-          href={`/world/${worldId}/actor/${actor.id}/view`}
-          target="_blank"
-          rel="noreferrer"
-          data-testid={`actor-view-${actor.id}`}
-          className="rounded border border-border px-2 py-1 text-xs transition-colors hover:bg-muted"
-        >
-          View
-        </a>
-      )}
+        {actor.id === claimedActorId ? (
+          <button
+            type="button"
+            onClick={() => setViewing(actor)}
+            data-testid={`actor-view-${actor.id}`}
+            className="rounded border border-border px-2 py-1 text-xs transition-colors hover:bg-muted"
+          >
+            View
+          </button>
+        ) : (
+          <a
+            href={`/world/${worldId}/actor/${actor.id}/view`}
+            target="_blank"
+            rel="noreferrer"
+            data-testid={`actor-view-${actor.id}`}
+            className="rounded border border-border px-2 py-1 text-xs transition-colors hover:bg-muted"
+          >
+            View
+          </a>
+        )}
 
-      {isGm && actor.isNpc ? (
-        <button
-          type="button"
-          aria-pressed={actor.visibleToPlayers}
-          aria-label={`Visible to players: ${actor.label}`}
-          title={
-            actor.visibleToPlayers
-              ? "Players see this NPC"
-              : "Hidden from players"
-          }
-          data-testid={`actor-visible-${actor.id}`}
-          className="rounded border border-border px-2 py-1 text-xs transition-colors hover:bg-muted aria-pressed:bg-muted"
-          onClick={() => void toggleVisibleToPlayers(actor)}
-        >
-          {actor.visibleToPlayers ? "Shown" : "Hidden"}
-        </button>
-      ) : null}
+        {isGm && actor.isNpc ? (
+          <button
+            type="button"
+            aria-pressed={actor.visibleToPlayers}
+            aria-label={`Visible to players: ${actor.label}`}
+            title={
+              actor.visibleToPlayers
+                ? "Players see this NPC"
+                : "Hidden from players"
+            }
+            data-testid={`actor-visible-${actor.id}`}
+            className="rounded border border-border px-2 py-1 text-xs transition-colors hover:bg-muted aria-pressed:bg-muted"
+            onClick={() => void toggleVisibleToPlayers(actor)}
+          >
+            {actor.visibleToPlayers ? "Shown" : "Hidden"}
+          </button>
+        ) : null}
 
-      {/*
+        {/*
         Place hands the token to the engine, which carries it on the cursor
         until a left click drops it. Nothing is created here: the engine
         reports where it was dropped and the server decides whether it exists.
       */}
-      <button
-        type="button"
-        data-testid={`actor-place-${actor.id}`}
-        // The button is the armed signal: pressed while its own token is on
-        // the cursor, unpressed the moment the engine says the carry ended.
-        aria-pressed={carrying?.id === actor.id}
-        aria-label={`Place ${actor.label} on the map`}
-        className={cn(
-          "rounded border border-border px-2 py-1 text-xs transition-colors",
-          carrying?.id === actor.id
-            ? "border-primary bg-primary text-primary-foreground"
-            : "hover:bg-muted",
-        )}
-        onClick={() => {
-          void handlePlace(actor);
-        }}
-      >
-        Place
-      </button>
-    </li>
-  );
+        <button
+          type="button"
+          data-testid={`actor-place-${actor.id}`}
+          // The button is the armed signal: pressed while its own token is on
+          // the cursor, unpressed the moment the engine says the carry ended.
+          aria-pressed={carrying?.id === actor.id}
+          aria-label={`Place ${actor.label} on the map`}
+          className={cn(
+            "rounded border border-border px-2 py-1 text-xs transition-colors",
+            carrying?.id === actor.id
+              ? "border-primary bg-primary text-primary-foreground"
+              : "hover:bg-muted",
+          )}
+          onClick={() => {
+            void handlePlace(actor);
+          }}
+        >
+          Place
+        </button>
+      </li>
+    );
+  };
 
   return (
     <div className="grid gap-3" data-testid="actors-panel">
