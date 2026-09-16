@@ -21,7 +21,12 @@ export interface AdminSectionShellProps {
 export function AdminSectionShell({ children }: AdminSectionShellProps) {
   return (
     <div className="mx-auto grid w-full max-w-[1800px] gap-4 p-4 sm:p-6 lg:p-8">
-      <div className="flex items-start gap-6">
+      {/* Stacked on a narrow screen, side by side from `lg`.
+          A 14rem rail beside the content leaves about 95px for the content on
+          a 375px phone, which is not a narrow column — it is a page that
+          scrolls sideways, and every table on these screens was being blamed
+          for it. The rail is a strip above the content there instead. */}
+      <div className="flex flex-col items-stretch gap-4 lg:flex-row lg:items-start lg:gap-6">
         <AdminSidebarNav />
         <div className="min-w-0 flex-1">{children}</div>
       </div>

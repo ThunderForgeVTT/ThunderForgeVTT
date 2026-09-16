@@ -54,15 +54,19 @@ export function AdminSidebarNav() {
         title={collapsed ? section.label : undefined}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-          collapsed && "justify-center px-2",
+          "flex shrink-0 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors lg:shrink",
+          collapsed && "lg:justify-center lg:px-2",
           active
             ? "bg-primary/10 text-primary"
             : "text-muted-foreground hover:bg-secondary hover:text-foreground",
         )}
       >
         <FantasyIcon name={section.icon} size={18} />
-        {collapsed ? null : <span>{section.label}</span>}
+        {/* Collapsing hides labels in the rail only; the phone strip keeps
+            them, where an icon alone would be the whole navigation. */}
+        <span className={collapsed ? "lg:hidden" : undefined}>
+          {section.label}
+        </span>
       </Link>
     );
   };
@@ -70,15 +74,19 @@ export function AdminSidebarNav() {
   return (
     <nav
       className={cn(
-        "grid h-fit shrink-0 gap-4 rounded-xl border border-border bg-card p-3 transition-[width]",
-        collapsed ? "w-[3.75rem]" : "w-56",
+        "grid h-fit w-full shrink-0 gap-4 rounded-xl border border-border bg-card p-3 transition-[width]",
+        collapsed ? "lg:w-[3.75rem]" : "lg:w-56",
       )}
       data-testid="admin-sidebar-nav"
       aria-label="Admin navigation"
     >
+      {/* The collapse control is about making room beside the content, which
+          is a thing that only exists from `lg` up. Below that the rail is a
+          strip above the content and collapsing it would hide the labels for
+          nothing. */}
       <div
         className={cn(
-          "flex items-center",
+          "hidden items-center lg:flex",
           collapsed ? "justify-center" : "justify-end",
         )}
       >
@@ -97,7 +105,10 @@ export function AdminSidebarNav() {
         </Button>
       </div>
 
-      <div className="grid gap-1">{ADMIN_SECTIONS.map(renderLink)}</div>
+      {/* One row that scrolls on a phone, one column in the rail. */}
+      <div className="-mx-1 flex gap-1 overflow-x-auto px-1 lg:mx-0 lg:grid lg:overflow-visible lg:px-0">
+        {ADMIN_SECTIONS.map(renderLink)}
+      </div>
     </nav>
   );
 }

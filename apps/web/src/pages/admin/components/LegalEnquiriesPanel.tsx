@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button/Button";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
@@ -27,12 +27,49 @@ import {
  * An intake queue is worked front to back. Every other admin list here is
  * newest-first because it is an audit trail; this one is a backlog, and the
  * person waiting longest is the one to answer next.
+ *
+ * # Why the tabs carry counts, and why one fetch feeds all three
+ *
+ * The owner's report was "the tabs do absolutely nothing". They always did —
+ * the panel refetched by `kind` — but on an instance with no enquiries all
+ * three tabs drew the same three words, so clicking one changed nothing
+ * visible and the control read as dead. That is a real defect even though the
+ * code was correct: a filter with no feedback is indistinguishable from a
+ * filter that is not wired up.
+ *
+ * So every enquiry is read once and the tabs filter what is already here.
+ * That buys the two things that make a tab look alive: a count on each one
+ * before it is clicked, and an empty state that names *what would be here*
+ * rather than a shared "nothing outstanding". It costs nothing — the server
+ * has no paging on this query and the queue is small by construction; a
+ * backlog large enough to matter is a backlog nobody is working.
  */
 
-const TABS: { label: string; kind?: LegalEnquiryKind }[] = [
-  { label: "All" },
-  { label: "Terms disputes", kind: "TERMS" },
-  { label: "Privacy requests", kind: "PRIVACY" },
+interface Tab {
+  label: string;
+  kind?: LegalEnquiryKind;
+  /** What would be here, and what put it here. Shown when nothing is. */
+  empty: string;
+}
+
+const TABS: Tab[] = [
+  {
+    label: "All",
+    empty:
+      "Nothing has been sent to this instance. Terms disputes and privacy requests both land here when somebody submits one.",
+  },
+  {
+    label: "Terms disputes",
+    kind: "TERMS",
+    empty:
+      "No terms disputes. These arrive from the “dispute these terms” form on the terms of service page.",
+  },
+  {
+    label: "Privacy requests",
+    kind: "PRIVACY",
+    empty:
+      "No privacy requests. These arrive from the privacy policy page, where a person asks to see, correct or erase what this instance holds about them.",
+  },
 ];
 
 const STATUS_VARIANT: Record<string, "info" | "warning" | "success"> = {
@@ -49,7 +86,7 @@ export function LegalEnquiriesPanel() {
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    fetchLegalEnquiries(kind)
+    fetchLegalEnquiries(undefined)
       .then((rows) => {
         setEnquiries(rows);
         setError(null);
@@ -61,7 +98,7 @@ export function LegalEnquiriesPanel() {
             : "The enquiries could not be read.",
         );
       });
-  }, [kind]);
+  }, []);
 
   useEffect(load, [load]);
 
@@ -81,29 +118,87 @@ export function LegalEnquiriesPanel() {
     }
   };
 
+  // The server sends `kind` lower-cased on a row and upper-cased in the
+  // filter argument. Compared case-insensitively rather than by trusting
+  // either, because getting that wrong shows an empty tab that looks exactly
+  // like an empty queue — which is the defect this whole pass is about.
+  const counts = useMemo(() => {
+    const open = (enquiries ?? []).filter((row) => row.status !== "closed");
+    return new Map(
+      TABS.map((tab) => [
+        tab.kind ?? "all",
+        tab.kind
+          ? open.filter(
+              (row) => row.kind.toUpperCase() === tab.kind?.toUpperCase(),
+            ).length
+          : open.length,
+      ]),
+    );
+  }, [enquiries]);
+
+  const activeTab = TABS.find((tab) => tab.kind === kind) ?? TABS[0];
+
   const visible = (enquiries ?? []).filter(
-    (row) => showClosed || row.status !== "closed",
+    (row) =>
+      (showClosed || row.status !== "closed") &&
+      (!kind || row.kind.toUpperCase() === kind),
   );
 
   return (
     <div className="grid gap-4" data-testid="legal-enquiries-panel">
-      <div className="flex flex-wrap items-center gap-2">
-        {TABS.map((tab) => (
-          <Button
-            key={tab.label}
-            type="button"
-            variant={kind === tab.kind ? "secondary" : "ghost"}
-            size="sm"
-            onClick={() => setKind(tab.kind)}
-            data-testid={`legal-enquiries-tab-${tab.kind ?? "all"}`}
-          >
-            {tab.label}
-          </Button>
-        ))}
+      {/* Takedowns belong to the moderation queue, which handles the statutory
+          side and the counter-notice window. Prominent rather than a footnote:
+          an operator who came here holding a copyright notice is holding the
+          one thing this screen does not do, and finding that out at the bottom
+          is finding it out too late. */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4">
+        <p className="max-w-[60ch] text-sm">
+          <strong>Holding a copyright takedown notice?</strong> Those are worked
+          in Moderation, where the counter-notice window and repeat-infringer
+          flags live. They are never listed here.
+        </p>
+        <Button asChild variant="secondary" size="sm" icon="quill">
+          <Link to="/admin/moderation">Go to Moderation</Link>
+        </Button>
+      </div>
+
+      <div
+        className="flex flex-wrap items-center gap-2"
+        role="tablist"
+        aria-label="Enquiry kinds"
+      >
+        {TABS.map((tab) => {
+          const selected = kind === tab.kind;
+          const count = counts.get(tab.kind ?? "all") ?? 0;
+          return (
+            <Button
+              key={tab.label}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              variant={selected ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setKind(tab.kind)}
+              data-testid={`legal-enquiries-tab-${tab.kind ?? "all"}`}
+            >
+              {tab.label}
+              {/* The count is what makes an empty tab read as empty rather
+                  than as inert. Spoken as words so it is not a bare number
+                  beside a label a screen reader has already moved past. */}
+              <span
+                className="ml-1.5 rounded-full bg-secondary px-1.5 py-0.5 text-xs tabular-nums"
+                aria-label={`${count} open`}
+              >
+                {count}
+              </span>
+            </Button>
+          );
+        })}
         <Button
           type="button"
           variant="ghost"
           size="sm"
+          aria-pressed={showClosed}
           onClick={() => setShowClosed((current) => !current)}
           data-testid="legal-enquiries-toggle-closed"
         >
@@ -111,31 +206,25 @@ export function LegalEnquiriesPanel() {
         </Button>
       </div>
 
-      {/* Takedowns belong to the moderation queue, which handles the statutory
-          side and the counter-notice window. Named here so an operator looking
-          for "the legal inbox" finds all three. */}
-      <p className="text-sm text-muted-foreground">
-        Copyright takedown notices are worked in{" "}
-        <Link
-          className="underline hover:text-foreground"
-          to="/admin/moderation"
-        >
-          Moderation
-        </Link>
-        , where the counter-notice window and repeat-infringer flags live.
-      </p>
-
       {error ? <StatusBadge variant="danger">{error}</StatusBadge> : null}
 
       {enquiries === null ? (
         <p className="text-muted-foreground">Reading the queue...</p>
       ) : visible.length === 0 ? (
-        <p
-          className="text-muted-foreground"
+        <div
+          className="grid gap-1 rounded-lg border border-dashed border-border p-6 text-center"
           data-testid="legal-enquiries-empty"
         >
-          Nothing outstanding.
-        </p>
+          <p className="font-semibold">Nothing outstanding</p>
+          <p className="mx-auto max-w-[60ch] text-sm text-muted-foreground">
+            {activeTab.empty}
+          </p>
+          {!showClosed ? (
+            <p className="text-sm text-muted-foreground">
+              Anything already closed is hidden — “Show closed” brings it back.
+            </p>
+          ) : null}
+        </div>
       ) : (
         <ul className="grid gap-3">
           {visible.map((row) => (

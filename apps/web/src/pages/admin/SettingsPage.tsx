@@ -34,7 +34,7 @@ import { UndeliveredFeedbackPanel } from "./components/UndeliveredFeedbackPanel"
 import { MailPanel } from "./components/MailPanel";
 import { ManifestEditor } from "./components/ManifestEditor";
 import { MetricsCard } from "./components/MetricsCard";
-import { OAuthProviderForm } from "./components/OAuthProviderForm";
+import { OAuthProvidersTable } from "./components/OAuthProvidersTable";
 import { ReadinessPanel } from "./components/ReadinessPanel";
 import { SecurityPanel } from "./components/SecurityPanel";
 
@@ -362,24 +362,15 @@ export default function SettingsPage({
                     <div className="grid gap-1">
                       <h3 className="text-lg font-semibold">OAuth providers</h3>
                       <p className="text-muted-foreground">
-                        Edit stored provider credentials and availability.
+                        Who people can sign in with, what each provider holds,
+                        and whether its button is on the sign-in page. Open a
+                        row to change one.
                       </p>
                     </div>
-                    <div className="grid gap-4">
-                      {data.oauthProviders.length ? (
-                        data.oauthProviders.map((provider) => (
-                          <OAuthProviderForm
-                            key={provider.id}
-                            provider={provider}
-                            onSave={updateProvider}
-                          />
-                        ))
-                      ) : (
-                        <StatusBadge variant="warning">
-                          No persisted OAuth providers are currently configured.
-                        </StatusBadge>
-                      )}
-                    </div>
+                    <OAuthProvidersTable
+                      providers={data.oauthProviders}
+                      onSave={updateProvider}
+                    />
                   </Card>
 
                   {/* Spec 040 US5 / ADR-090: one GitHub application for
@@ -389,7 +380,11 @@ export default function SettingsPage({
                       needs the resolution, and folding it into the page's
                       single fetch would make every other admin screen carry
                       it. */}
-                  <Card surface="parchment" className="grid gap-4 p-6">
+                  <Card
+                    id="github-applications"
+                    surface="parchment"
+                    className="grid scroll-mt-24 gap-4 p-6"
+                  >
                     <div className="grid gap-1">
                       <h3 className="text-lg font-semibold">
                         GitHub applications
@@ -404,9 +399,10 @@ export default function SettingsPage({
 
                   <Card surface="parchment" className="grid gap-4 p-6">
                     <div className="grid gap-1">
-                      <h3 className="text-lg font-semibold">Manifest viewer</h3>
+                      <h3 className="text-lg font-semibold">System manifest</h3>
                       <p className="text-muted-foreground">
-                        Adjust editable MVP keys stored in the system manifest.
+                        Every key in the manifest file, and which of them this
+                        screen may change.
                       </p>
                     </div>
                     <ManifestEditor
@@ -434,6 +430,11 @@ export default function SettingsPage({
                     <h2 className="text-xl font-semibold">
                       Settings, their source, and their history
                     </h2>
+                    <p className="mt-1 max-w-[70ch] text-muted-foreground">
+                      Every setting this instance declares, one group at a time.
+                      The group you pick is in the address, so a link can point
+                      somebody at the setting you mean.
+                    </p>
                   </div>
                 </div>
                 <Card surface="parchment" className="grid gap-4 p-6">
@@ -453,6 +454,10 @@ export default function SettingsPage({
                     <h2 className="text-xl font-semibold">
                       What this instance can and cannot do
                     </h2>
+                    <p className="mt-1 max-w-[70ch] text-muted-foreground">
+                      Derived from how it is configured, on every read. Each gap
+                      links to where it is fixed.
+                    </p>
                   </div>
                 </div>
                 <Card surface="stone" className="grid gap-4 p-6">
@@ -470,7 +475,7 @@ export default function SettingsPage({
                       Mail
                     </p>
                     <h2 className="text-xl font-semibold">
-                      Delivery, proof of delivery, and the outbox
+                      Set up mail, then prove it works
                     </h2>
                   </div>
                 </div>
@@ -488,12 +493,17 @@ export default function SettingsPage({
                       <FantasyIcon name="quill" size={16} />
                       Legal
                     </p>
-                    <h2 className="text-xl font-semibold">
-                      Terms disputes and privacy requests
-                    </h2>
+                    <h2 className="text-xl font-semibold">The legal inbox</h2>
                   </div>
                 </div>
                 <Card surface="parchment" className="grid gap-4 p-6">
+                  <p className="max-w-[70ch] text-muted-foreground">
+                    Everything a person outside this instance sends its
+                    operator, in one queue. Terms disputes come from the terms
+                    of service page and privacy requests from the privacy policy
+                    page; both reach this screen without the sender needing an
+                    account. Work each one down and mark it closed.
+                  </p>
                   <LegalEnquiriesPanel />
                 </Card>
 
@@ -546,7 +556,7 @@ export default function SettingsPage({
                       Security
                     </p>
                     <h2 className="text-xl font-semibold">
-                      2FA and bootstrap governance
+                      Who has to prove who they are
                     </h2>
                   </div>
                 </div>
