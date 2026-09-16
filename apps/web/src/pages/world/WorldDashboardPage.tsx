@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { deleteWorld, getWorld } from "@/api/world";
-import { getScenes } from "@/api/scenes";
 import {
   interfacePackLabel,
   useInterfacePacks,
@@ -10,7 +9,6 @@ import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { Container } from "@/components/ui/container/Container";
-import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
 import { Loader } from "@/components/ui/loader/Loader";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { PlayPausedBanner } from "@/components/world/PlayPausedBanner";
@@ -19,7 +17,7 @@ import { useActorClaimGate } from "@/hooks/useActorClaimGate";
 import { CampaignSettingsPanel } from "@/components/campaign/CampaignSettingsPanel";
 import type { SeoConfig } from "@/types/seo";
 import type { WorldRecord } from "@/types/world";
-import type { SceneRecord } from "@/types/scene";
+import { WorldAtAGlance } from "@/pages/world/components/WorldAtAGlance";
 
 function formatTimestamp(value: string) {
   return new Date(value).toLocaleString();
@@ -50,13 +48,6 @@ export default function WorldDashboardPage() {
   });
   const [isDeleting, setIsDeleting] = useState(false);
   const packs = useInterfacePacks();
-  // T015 (US2): the dashboard's old "Scenes" panel read from `world.scenes`,
-  // a GraphQLWorld field that's permanently hardcoded to an empty array at
-  // the resolver (never real data). Real scene data lives behind the
-  // separate `scenes(worldId)` query WorldPage/SceneSwitcher already use —
-  // reusing that here instead (research.md's correction to its original
-  // plan).
-  const [scenes, setScenes] = useState<SceneRecord[] | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -83,24 +74,6 @@ export default function WorldDashboardPage() {
         }
       });
 
-    return () => {
-      active = false;
-    };
-  }, [id]);
-
-  useEffect(() => {
-    let active = true;
-    void getScenes(id)
-      .then((result) => {
-        if (active) {
-          setScenes(result);
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setScenes([]);
-        }
-      });
     return () => {
       active = false;
     };
@@ -215,6 +188,11 @@ export default function WorldDashboardPage() {
                 </StatusBadge>
               ) : null}
 
+              {/* Figures first, and only the few scenes touched last. This
+                  used to be a bullet per scene, which at forty scenes is the
+                  page. See `WorldAtAGlance`. */}
+              <WorldAtAGlance worldId={world.id} />
+
               <section className="grid gap-6 md:grid-cols-2">
                 <Card surface="parchment" className="grid gap-4 p-6">
                   <h2 className="text-xl font-semibold">World metadata</h2>
@@ -299,33 +277,6 @@ export default function WorldDashboardPage() {
                       Permanently delete this world
                     </button>
                   </div>
-                </Card>
-              </section>
-
-              <section className="grid gap-4">
-                <Card surface="stone" className="grid gap-3 p-5">
-                  <div className="flex items-center gap-3">
-                    <span className="inline-grid size-9 shrink-0 place-items-center rounded-full border border-border bg-secondary">
-                      <FantasyIcon name="map" size={16} />
-                    </span>
-                    <div>
-                      <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-                        Scenes
-                      </p>
-                      <h3 className="text-lg font-semibold">
-                        {scenes === null
-                          ? "Loading…"
-                          : `${scenes.length} scene${scenes.length === 1 ? "" : "s"}`}
-                      </h3>
-                    </div>
-                  </div>
-                  {scenes && scenes.length > 0 ? (
-                    <ul className="grid list-inside list-disc gap-1 text-sm text-muted-foreground">
-                      {scenes.map((scene) => (
-                        <li key={scene.sceneId}>{scene.name}</li>
-                      ))}
-                    </ul>
-                  ) : null}
                 </Card>
               </section>
 
