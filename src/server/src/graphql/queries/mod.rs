@@ -46,6 +46,8 @@ pub mod world_content;
 pub mod world_events_since;
 // Spec 028: the client-cache delta-sync plan (`worldSyncPlan`).
 pub mod world_sync_plan;
+// A world by its figures, counted server-side for the dashboard.
+pub mod world_statistics;
 
 pub use ability::AbilityQuery;
 pub use ability_vocabulary::AbilityVocabularyQuery;
@@ -68,4 +70,5 @@ pub use standing::StandingQuery;
 pub use user::UserQuery;
 pub use world_content::WorldContentQuery;
 pub use world_events_since::WorldEventsSinceQuery;
+pub use world_statistics::WorldStatisticsQuery;
 pub use world_sync_plan::WorldSyncPlanQuery;

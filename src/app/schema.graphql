@@ -88,6 +88,25 @@ enum ActionCost {
 }
 
 """
+The encounter running right now, if one is.
+
+At most one per world: `world_combats` carries a partial unique index on
+`ended_at IS NULL` (see `mutations_combat::find_active_combat`), so this
+is a `first`, not a `first` over an ordering that might tie.
+"""
+type ActiveEncounterSummary {
+	id: UUID!
+	"""
+	Which round the encounter is on.
+	"""
+	round: Int!
+	"""
+	How many combatants are in the initiative order.
+	"""
+	combatants: Int!
+}
+
+"""
 Effective permission level a caller holds on one actor. `Owner` is
 always implicit for the world's DM (Owner/GM role) regardless of any
 explicit `world_actor_permissions` row (spec 010 FR-017).
@@ -1663,6 +1682,17 @@ type AppQueryRoot {
 	not a member is refused like anyone else who is not.
 	"""
 	worldPlayState(worldId: UUID!): WorldPlayState!
+	"""
+	A world's figures for the person asking: how many scenes they may
+	open, how many people are at the table and how many of them hold a
+	character, how many characters and (for a Game Master) how many NPCs,
+	how many tokens stand on those scenes, and whether a fight is running.
+	
+	Guarded by membership, like its neighbours. A site admin who is not a
+	member is answered, because the dashboard already tells them they are
+	looking through administrator access.
+	"""
+	worldStatistics(worldId: UUID!): WorldStatistics!
 	genieSession(worldId: UUID!): GraphQLGenieSession
 	"""
 	What the table has asked for with its wishes, oldest first (FR-014).
@@ -6960,6 +6990,42 @@ type WorldPreviewPayload {
 	id: String!
 	name: String!
 	description: String
+}
+
+"""
+A world's figures, for the person who asked.
+"""
+type WorldStatistics {
+	"""
+	Scenes this viewer may open. Hidden scenes are excluded for a player.
+	"""
+	scenes: Int!
+	"""
+	People in the world, the creator included whether or not a
+	`world_members` row was ever written for them.
+	"""
+	members: Int!
+	"""
+	How many of those hold a character.
+	"""
+	membersWithCharacter: Int!
+	"""
+	Player characters — actors that are not NPCs.
+	"""
+	characters: Int!
+	"""
+	NPCs. `null` for anyone who does not run the world; see the module
+	doc for why this is absent rather than partial.
+	"""
+	npcs: Int
+	"""
+	Tokens standing on the scenes this viewer may open.
+	"""
+	tokens: Int!
+	"""
+	The encounter in progress, or `null`.
+	"""
+	activeEncounter: ActiveEncounterSummary
 }
 
 """

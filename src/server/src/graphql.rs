@@ -433,6 +433,9 @@ pub struct QueryRoot(
     // Spec 051: the pause record and the worlds an operator might pause
     // (operators), and `worldPlayState` — *that and when* (members).
     queries::PlayPauseQuery,
+    // `worldStatistics(worldId)` — a world by its figures, counted where the
+    // rows are so the dashboard's cost does not grow with the campaign.
+    queries::WorldStatisticsQuery,
 );
 
 #[derive(MergedObject, Default)]
