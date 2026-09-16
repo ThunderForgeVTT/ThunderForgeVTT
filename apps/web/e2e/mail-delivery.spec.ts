@@ -118,12 +118,23 @@ async function setThroughPanel(key: string, value: string): Promise<void> {
   );
 }
 
-/** Configure this instance to talk to the shard's own Mailpit. */
-async function configureWorkingMail(port: number): Promise<void> {
-  await admin.goto("/admin/instance");
-  await expect(admin.getByTestId("instance-settings-panel")).toBeVisible({
+/**
+ * The mail settings are set up on the mail page now, beside the tester that
+ * proves them — that is where an operator configuring mail is, and where the
+ * eight `mail.*` rows are rendered. They are the same `SettingRow` over the
+ * same mutation the instance settings panel uses, so every `instance-setting-*`
+ * testid below is unchanged; only the page they are read on has moved.
+ */
+async function gotoMailSetup(): Promise<void> {
+  await admin.goto("/admin/mail");
+  await expect(admin.getByTestId("mail-panel")).toBeVisible({
     timeout: 20_000,
   });
+}
+
+/** Configure this instance to talk to the shard's own Mailpit. */
+async function configureWorkingMail(port: number): Promise<void> {
+  await gotoMailSetup();
   await setThroughPanel("mail.host", "127.0.0.1");
   await setThroughPanel("mail.port", String(port));
   // Mailpit's SMTP listener is plaintext, which is what `none` is for.
@@ -201,7 +212,7 @@ test.describe("Spec 040 Scenario D: mail, end to end", () => {
 
   test("a broken port fails with something to act on, and the password appears nowhere", async () => {
     // A password that is actually set, so there is something real to leak.
-    await admin.goto("/admin/instance");
+    await gotoMailSetup();
     await setThroughPanel("mail.password", SMTP_PASSWORD);
     await setThroughPanel("mail.port", String(CLOSED_PORT));
 
@@ -231,7 +242,7 @@ test.describe("Spec 040 Scenario D: mail, end to end", () => {
   });
 
   test("with mail cleared, readiness says what is missing and a message is held rather than discarded", async () => {
-    await admin.goto("/admin/instance");
+    await gotoMailSetup();
     await setThroughPanel("mail.enabled", "false");
     // Cleared, not merely disabled: step 6 says every `mail.*` setting.
     for (const key of ["mail.host", "mail.from_address", "mail.password"]) {
