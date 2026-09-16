@@ -16,19 +16,21 @@ import {
  * announced, and it stands still for someone who asked for less movement.
  */
 
-/** Give the engine's arrival a floor, so the loading window is observable.
- *  The reasoning is `engine-loading.spec.ts`'s `serveEngineSlowly`. */
+/**
+ * Give the engine's arrival a floor, so the loading window is observable.
+ *
+ * Held and then let through, not fetched and re-served as
+ * `engine-loading.spec.ts`'s `serveEngineSlowly` does. That one runs in the
+ * measured lane against a release engine; in the ordinary lane the engine is
+ * the dev build, some 270MB, and `route.fetch` carries the whole body across
+ * the DevTools protocol — which closes the browser session long before the
+ * test's own timeout, and reads as the loader never finishing. A fresh
+ * context has nothing cached, so delaying the request is enough.
+ */
 async function serveEngineSlowly(page: Page, delayMs = 2_000): Promise<void> {
   await page.route("**/*.wasm", async (route) => {
-    const response = await route.fetch();
     await new Promise((resolve) => setTimeout(resolve, delayMs));
-    await route.fulfill({
-      response,
-      headers: {
-        ...response.headers(),
-        "cache-control": "no-store, no-cache, must-revalidate",
-      },
-    });
+    await route.continue();
   });
 }
 
