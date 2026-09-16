@@ -58,13 +58,16 @@ test.describe("Spec 018 Scenario 4: applying and clearing a condition", () => {
     await boundCheckbox.click();
     await expect(boundCheckbox).toBeChecked({ timeout: 10_000 });
 
-    // Conditions tab on the sheet itself should reflect it too.
-    await page.getByRole("tab", { name: "Conditions" }).click();
+    // The read-only sheet names it too. There is no Conditions tab any more:
+    // the sheet shows every region at once, and on the view route the
+    // conditions region lists what is active instead of offering checkboxes.
+    await page.goto(`/world/${demoWorld.worldId}/actor/${actorId}/view`);
     await expect(
       page.getByTestId("genie-condition-track-sheet").getByText("Bound"),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("genie-condition-editor")).toHaveCount(0);
 
-    await page.reload();
+    await page.goto(`/world/${demoWorld.worldId}/actor/${actorId}/edit`);
     await expect(page.getByTestId("genie-actor-sheet")).toBeVisible({
       timeout: 15_000,
     });

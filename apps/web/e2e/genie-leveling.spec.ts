@@ -43,7 +43,6 @@ test.describe("Spec 019 Scenario 6: Wish Points scale on level-up", () => {
     await expect(page.getByTestId("genie-actor-sheet")).toBeVisible({
       timeout: 15_000,
     });
-    await page.getByRole("tab", { name: "Resources" }).click();
 
     const levelInput = page.getByTestId("genie-level-input");
     await expect(levelInput).toHaveValue("1");
@@ -66,7 +65,6 @@ test.describe("Spec 019 Scenario 6: Wish Points scale on level-up", () => {
     await expect(page.getByTestId("genie-actor-sheet")).toBeVisible({
       timeout: 15_000,
     });
-    await page.getByRole("tab", { name: "Resources" }).click();
     await expect(page.getByTestId("genie-level-input")).toHaveValue("5", {
       timeout: 10_000,
     });
