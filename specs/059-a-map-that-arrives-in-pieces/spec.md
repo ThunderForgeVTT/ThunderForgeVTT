@@ -869,51 +869,22 @@ clear answer:
 7. **The retired endpoint goes.** One import path, with one ceiling and one set
    of messages (FR-005).
 
-## Questions for the owner
+8. **R2 support is its own spec** (Q1 → B, owner, 2026-09-16). This spec ships
+   the protocol proven on RustFS, written against one credential seam
+   (FR-088). The owner's hosted instance stores to RustFS they run themselves,
+   so it needs only this spec. Making storage work on R2 or AWS S3 — today
+   every read and write starts with STS `AssumeRole` against placeholder role
+   ARNs (`rustfs.rs:216-236`, `:265-289`, `:222`, `:276`), which R2 does not
+   offer and real S3 would refuse — is a separate spec amending ADR-039.
 
-1. **Q1 — Does this spec also make storage work on R2?**
-   *(recommendation: B)*
+9. **A pause mid-upload keeps the bytes** (Q2 → A, owner, 2026-09-16). Parts
+   are still accepted; completion is refused while the world is paused; the
+   upload survives until it expires. A staged part changes nothing anyone
+   sees, and spec 051's rule holds at completion, where the world would change.
 
-   Today every storage read and write starts with STS `AssumeRole`
-   (`rustfs.rs:216-236`, `:265-289`), which R2 does not offer, against a role
-   ARN that exists only in RustFS (`:222`, `:276`). The upload protocol does not
-   make this worse, but "works against R2" is not true of anything that stores
-   bytes until it is fixed.
+10. **The original is removed once processed** (Q3 → A, owner, 2026-09-16).
+    Storage holds what is served (FR-024). A future tiling spec asks the Game
+    Master to import again.
 
-   | Option | Answer | Implications |
-   |---|---|---|
-   | A | Yes, in this spec | One spec reaches a hosted R2 instance end to end. Adds a credential mode for stores without STS, an amendment to ADR-039, and R2 in the test matrix — roughly doubling the storage work, and holding the Cloudflare fix behind it. |
-   | **B** | **No: a separate, small spec amends ADR-039 first or alongside** | This spec ships the protocol proven on RustFS, written against one credential seam (FR-088). The owner's hosted instance needs both before it can store to R2; if the hosted instance stores to RustFS behind the tunnel, it needs only this one. |
-   | C | Not now | Leaves an instance behind Cloudflare with RustFS as its only store. |
-
-2. **Q2 — Does a pause that lands mid-upload keep the bytes?**
-   *(recommendation: A)*
-
-   | Option | Answer | Implications |
-   |---|---|---|
-   | **A** | **Parts are still accepted; completion is refused while paused; the upload survives until expiry** | A staged part changes nothing anyone sees, so accepting it is not play. A GM mid-way through 400 MB does not lose it to a pause that lifts in ten minutes. Spec 051's rule — nothing in the world changes — holds at completion, where the world would change. |
-   | B | A pause refuses parts too | Stricter reading of "paused". The upload stalls, and expires if the pause outlasts 24 hours. |
-   | C | A pause cancels unfinished uploads in that world | Simplest to reason about; costs the GM the upload for every pause. |
-
-3. **Q3 — Keep the original after import?** *(recommendation: A)*
-
-   The stored background is at most 4096 px; a 500 MB original is mostly detail
-   nobody is shown.
-
-   | Option | Answer | Implications |
-   |---|---|---|
-   | **A** | **No: remove it once processed (FR-024)** | Storage holds what is served. A future tiling spec asks the GM to import again — which is also how a grid mismatch is fixed today. |
-   | B | Keep it, deduplicated by content hash | Tiling could use art already on the server. Up to 500 MB per map kept indefinitely, and a new referenced object class that needs reference counting before anything may delete it (`dedupe.rs:24-34`). |
-   | C | Keep it for 30 days | Covers "I imported the wrong grid" without re-uploading; adds a retention sweep and a second prefix rule. |
-
-4. **Q4 — Should the browser shrink the art before sending it?**
-   *(recommendation: B)*
-
-   Since the server stores at most 4096 px, the browser could resize first and
-   send a few megabytes instead of hundreds.
-
-   | Option | Answer | Implications |
-   |---|---|---|
-   | A | Yes, always | The fastest upload by far. Browser resampling differs from the server's Lanczos3, the server's grid-exact cell sizing (`transcode.rs:177-192`) must be reproduced in the browser, and decoding a 134 MP image in a tab takes over 500 MB of memory. Decision 3 says upload the image. |
-   | **B** | **No, not in this spec** | Decision 3 as written; one resizer, on the server. Revisit with tiling, when whether to keep the full image is decided (Q3). |
-   | C | Only above a size, say 200 MB | Two pipelines to keep in step, with the misalignment bug `map_import/mod.rs:181-188` records waiting in the seam. |
+11. **The browser does not shrink the art in this spec** (Q4 → B, owner,
+    2026-09-16). One resizer, on the server. Revisit with tiling.
