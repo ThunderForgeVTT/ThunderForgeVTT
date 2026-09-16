@@ -56,7 +56,7 @@ dropped connection that often accompanies it into "check your connection".
 this spec does not cause and cannot fix alone. Every read and write calls STS
 `AssumeRole` (`storage/rustfs.rs:216-236`, `:265-289`), which R2 does not offer,
 with role ARNs hard-coded in RustFS's placeholder form (`:222`, `:276`).
-Question 1 recommends a separate amendment to ADR-039.
+Decision 8 makes that a separate spec amending ADR-039.
 
 **There is a second ceiling nobody has hit.** The `image` crate's default
 512 MiB decode allocation refuses images over about 134 megapixels, after the

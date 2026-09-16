@@ -116,7 +116,7 @@ Every stored background is capped at **4096 px** on its long side
 stored as a WebP of a few megabytes. That is correct and stays — tiling is how
 larger art will be served, and that is not this spec — but it means the upload
 path exists to carry bytes the server will mostly throw away, which bears on
-Question 3.
+Decision 10.
 
 And one limit the owner has not met yet: the `image` crate refuses to decode an
 image whose pixel buffer exceeds **512 MiB** (`Limits::default().max_alloc`,
@@ -147,7 +147,7 @@ R2 and S3":
   because nothing that might be deduplicated may be deleted
   (`src/server/src/storage/dedupe.rs:24-34`).
 
-The first two are pre-existing, and not this spec's to fix (Question 1); the
+The first two are pre-existing, and not this spec's to fix (Decision 8); the
 last two this spec must change.
 
 ### What there is not
@@ -351,7 +351,7 @@ attempt to complete: refused, nothing written. Repeat with a pause.
    completion is refused, and no background, wall, door or light is written.
 4. **Given** a world paused mid-upload, **When** the upload completes, **Then**
    completion is refused with the pause code, and the upload stays resumable
-   until its expiry (Question 2).
+   until its expiry (Decision 9).
 5. **Given** another user who learns an upload's identifier, **When** they send
    a part, read its state, complete or cancel it, **Then** each is refused as
    though the upload did not exist.
@@ -482,7 +482,7 @@ attempt to complete: refused, nothing written. Repeat with a pause.
   `feedback/`, for the same stated reason, and nothing else.
 - **FR-024**: Once a map is processed — imported or refused — its staged
   original MUST be removed. The stored background is the transcoded rendition,
-  as today (Question 3).
+  as today (Decision 10).
 - **FR-025**: A user MUST hold at most **3** unfinished uploads at once; a
   fourth declaration MUST be refused naming the ones they have.
 - **FR-026**: The operator documentation MUST recommend a storage lifecycle rule
@@ -799,7 +799,7 @@ attempt to complete: refused, nothing written. Repeat with a pause.
 - **Moving portrait, token, pasted, actor, lore and feedback images** onto the
   chunked path (Decision 5). Their message is fixed here (FR-060 to FR-062).
 - **Making the storage client work against R2 or real S3 at all** — the STS
-  dependency and the hard-coded role ARNs (Question 1).
+  dependency and the hard-coded role ARNs (Decision 8).
 - **Serving art larger than 4096 px.** Tiling, not this spec.
 - **Raising the ceiling above 500 MB.**
 - **Content collections and pack imports**, which have their own import path.
