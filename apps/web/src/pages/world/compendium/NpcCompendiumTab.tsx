@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Link } from "react-router-dom";
 import {
+  ACTOR_IMAGE_PORTRAIT,
   getWorldActorImages,
   getWorldActors,
+  uploadActorImage,
   type ActorImageRecord,
 } from "@/api/actors";
 import { indexActors, searchActorIds } from "@/search/actorSearch";
@@ -65,6 +67,18 @@ export function NpcCompendiumTab({
   const [imagesByActor, setImagesByActor] = useState<
     Record<string, ActorImageRecord[]>
   >({});
+  /**
+   * Owner, 2026-09-15: "This page would be really handy if we could set the
+   * image of the individual right from this page. Maybe not everything, but
+   * just the image."
+   *
+   * Which row is mid-upload, and which rows were refused. Keyed by actor
+   * rather than held as one value apiece, because the list is the surface:
+   * two rows can be in flight at once, and a single flag would put one row's
+   * refusal on another row's face.
+   */
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<Record<string, string>>({});
 
   // Reset during render rather than at the top of the effect below: this
   // is state derived from the arguments, and doing it in the effect commits
@@ -147,6 +161,50 @@ export function NpcCompendiumTab({
       .sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
   }, [npcs, matchedIds]);
 
+  /**
+   * Set or replace one NPC's portrait without leaving the list.
+   *
+   * The same call the editor's imagery panel makes (`uploadActorImage`), not a
+   * second uploader: the server transcodes to WebP and refuses an oversized or
+   * undecodable file before writing anything (ADR-057), so a refusal here means
+   * this NPC's imagery is exactly as it was — which is why the old thumbnail
+   * stays on screen and only the message changes.
+   *
+   * Portrait only. A token is drawn for map scale and cannot be judged at the
+   * size a table shows a face; the row's Edit link goes to the editor, which
+   * offers both, for everything else.
+   */
+  const handlePortrait = async (npc: WorldActorRecord, file: File) => {
+    setUploadingId(npc.id);
+    setUploadError((current) => {
+      const next = { ...current };
+      delete next[npc.id];
+      return next;
+    });
+    try {
+      const saved = await uploadActorImage(npc.id, ACTOR_IMAGE_PORTRAIT, file);
+      // The reply is the whole of the change, so the row updates from it
+      // rather than refetching every actor's imagery to learn one row.
+      setImagesByActor((current) => ({
+        ...current,
+        [npc.id]: [
+          ...(current[npc.id] ?? []).filter(
+            (image) => image.role !== ACTOR_IMAGE_PORTRAIT,
+          ),
+          saved,
+        ],
+      }));
+    } catch (err) {
+      setUploadError((current) => ({
+        ...current,
+        [npc.id]:
+          err instanceof Error ? err.message : "That portrait was refused.",
+      }));
+    } finally {
+      setUploadingId((current) => (current === npc.id ? null : current));
+    }
+  };
+
   if (error) {
     return (
       <p className="text-sm text-destructive">
@@ -201,22 +259,94 @@ export function NpcCompendiumTab({
                 >
                   <td className="p-2">
                     {/* The list shows the portrait, never the token: a token
-                        is drawn for map scale and reads as a smudge here. */}
-                    {portraitOf(imagesByActor[npc.id]) ? (
-                      <img
-                        src={portraitOf(imagesByActor[npc.id])!.thumbnailUrl}
-                        alt=""
-                        className="h-10 w-8 rounded border border-border object-cover"
-                        data-testid={`npc-catalog-portrait-${npc.id}`}
-                      />
-                    ) : (
-                      <div
-                        className="h-10 w-8 rounded border border-dashed border-border"
-                        data-testid={`npc-catalog-portrait-empty-${npc.id}`}
-                      />
-                    )}
+                        is drawn for map scale and reads as a smudge here.
+
+                        The face is also the control (owner, 2026-09-15). The
+                        thing a person points at when they want to change a
+                        picture is the picture, so the avatar itself opens the
+                        file chooser rather than growing a button beside it —
+                        and the box keeps the same 8×10 whatever state it is
+                        in, so nothing below it moves when an image lands.
+
+                        A real file input, visually hidden but focusable, with
+                        the avatar as its label: that is a keyboard-operable
+                        upload without re-implementing one, and it carries the
+                        NPC's actual name for anyone who cannot see the face.
+
+                        Offered only where the server would allow it — the same
+                        permission the row's Edit link is gated on. The server
+                        refuses either way (Constitution Principle III). */}
+                    <div
+                      className="relative h-10 w-8"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      {portraitOf(imagesByActor[npc.id]) ? (
+                        <img
+                          src={portraitOf(imagesByActor[npc.id])!.thumbnailUrl}
+                          alt=""
+                          className="h-10 w-8 rounded border border-border object-cover"
+                          data-testid={`npc-catalog-portrait-${npc.id}`}
+                        />
+                      ) : (
+                        <div
+                          className="h-10 w-8 rounded border border-dashed border-border"
+                          data-testid={`npc-catalog-portrait-empty-${npc.id}`}
+                        />
+                      )}
+                      {npc.myPermissionLevel !== "VIEWER" ? (
+                        <>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            id={`npc-portrait-input-${npc.id}`}
+                            disabled={uploadingId === npc.id}
+                            className="peer sr-only"
+                            data-testid={`npc-catalog-portrait-input-${npc.id}`}
+                            onChange={(event) => {
+                              const file = event.target.files?.[0];
+                              // Cleared so choosing the same file again after
+                              // a refusal still fires a change event.
+                              event.target.value = "";
+                              if (file) {
+                                void handlePortrait(npc, file);
+                              }
+                            }}
+                          />
+                          <label
+                            htmlFor={`npc-portrait-input-${npc.id}`}
+                            aria-label={`${
+                              portraitOf(imagesByActor[npc.id])
+                                ? "Replace portrait for"
+                                : "Set portrait for"
+                            } ${npc.label}`}
+                            title={`${
+                              portraitOf(imagesByActor[npc.id])
+                                ? "Replace portrait"
+                                : "Set portrait"
+                            }`}
+                            data-testid={`npc-catalog-portrait-set-${npc.id}`}
+                            className="absolute inset-0 grid cursor-pointer place-items-center rounded bg-background/95 text-[0.6rem] font-semibold text-foreground opacity-0 transition-opacity hover:opacity-100 peer-focus-visible:opacity-100 peer-focus-visible:ring-2 peer-focus-visible:ring-ring"
+                          >
+                            {uploadingId === npc.id ? "…" : "Edit"}
+                          </label>
+                        </>
+                      ) : null}
+                    </div>
                   </td>
-                  <td className="p-2 font-medium">{npc.label}</td>
+                  <td className="p-2 font-medium">
+                    {npc.label}
+                    {uploadError[npc.id] ? (
+                      // On the row that failed, and nowhere else. The previous
+                      // portrait is untouched above it.
+                      <span
+                        role="alert"
+                        className="block text-xs font-normal text-destructive"
+                        data-testid={`npc-catalog-portrait-error-${npc.id}`}
+                      >
+                        {uploadError[npc.id]}
+                      </span>
+                    ) : null}
+                  </td>
                   <td className="max-w-xs truncate p-2 text-muted-foreground">
                     {npc.description || (
                       <span className="italic">No description</span>
