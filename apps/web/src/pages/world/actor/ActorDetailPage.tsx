@@ -25,6 +25,7 @@ import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import { ActorAbilitiesPanel } from "@/pages/world/actor/ActorAbilitiesPanel";
+import { ActorImageryPanel } from "@/pages/world/actor/ActorImageryPanel";
 import { ActorInventoryPanel } from "@/pages/world/actor/ActorInventoryPanel";
 import { ActorLorePanel } from "@/pages/world/actor/ActorLorePanel";
 import { ActorOwnershipBlock } from "@/pages/world/actor/ActorOwnershipBlock";
@@ -458,6 +459,47 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
             </div>
           )}
         </Card>
+
+        {/*
+          Owner, 2026-09-15: "This screen doesn't show the ability to upload
+          icons, which is a pain, especially for the Genie system. I expected
+          to see a token and/or a portrait."
+
+          The same panel the NPC editor mounts, not a second uploader. Spec
+          031's context recorded the gap and it stayed open: a portrait and a
+          token could only be set from `/world/:id/compendium/npc/:id/edit`,
+          which is a Game Master's route for NPCs — so the page where a
+          player's own character lives had no imagery controls at all, and the
+          one way to give a character a face was a screen that character never
+          appears on.
+
+          `canEdit` is the actor's own permission, exactly as everywhere else
+          on this page: whoever the server already lets edit this actor's
+          imagery is offered the controls, and nobody else. The server refuses
+          the upload regardless (Constitution Principle III) — this only
+          decides what is offered.
+
+          Edit mode only, matching the NPC editor. The view route is what a
+          share link and a player's read-only look land on, and a file input
+          there would be offering a write on a screen whose whole shape says
+          "reading".
+        */}
+        {mode === "edit" ? (
+          <div className="grid gap-3">
+            <ActorImageryPanel
+              worldId={worldId}
+              actorId={actorId}
+              actorLabel={actor.label}
+              canEdit={canEdit}
+            />
+            {/*
+              Spec 044 (the hero builder) puts its "Build a hero" button here,
+              beside the imagery it will fill in. Its plan is being written as
+              this ships; nothing is rendered for it yet, because a button that
+              does nothing is worse than no button. This comment is the space.
+            */}
+          </div>
+        ) : null}
 
         {/* Spec 012 (T037, FR-006): lore entries that reference this actor —
             and, since spec 031 (FR-039), the place to write or attach one

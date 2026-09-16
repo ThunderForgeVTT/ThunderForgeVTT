@@ -224,6 +224,7 @@ export default function NpcEditorPage({ mode }: NpcEditorPageProps) {
           <ActorImageryPanel
             worldId={worldId}
             actorId={actor.id}
+            actorLabel={actor.label}
             canEdit={canEdit}
           />
         ) : (

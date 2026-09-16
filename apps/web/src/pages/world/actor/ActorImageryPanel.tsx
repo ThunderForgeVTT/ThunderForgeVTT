@@ -48,6 +48,14 @@ export interface ActorImageryPanelProps {
    * offered at all.
    */
   canEdit: boolean;
+  /**
+   * The actor's name, for the controls' accessible names.
+   *
+   * "Upload portrait" is fine on a page about one character and useless in a
+   * list of them, and this panel is now mounted from both. Optional so an
+   * older caller keeps working, with the generic wording it already had.
+   */
+  actorLabel?: string;
 }
 
 const ROLE_SLOTS = [
@@ -71,7 +79,9 @@ export function ActorImageryPanel({
   worldId,
   actorId,
   canEdit,
+  actorLabel,
 }: ActorImageryPanelProps) {
+  const ofActor = actorLabel ? ` for ${actorLabel}` : " for this actor";
   const [images, setImages] = useState<ActorImageRecord[]>([]);
   const [busyRole, setBusyRole] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -156,7 +166,7 @@ export function ActorImageryPanel({
               {image ? (
                 <img
                   src={image.thumbnailUrl}
-                  alt={`${slot.label} for this actor`}
+                  alt={`${slot.label}${ofActor}`}
                   className={`border border-border bg-muted ${slot.previewClass}`}
                   data-testid={`actor-imagery-preview-${slot.role}`}
                 />
@@ -176,7 +186,7 @@ export function ActorImageryPanel({
                     accept="image/*"
                     disabled={isBusy}
                     className="text-xs"
-                    aria-label={`Upload ${slot.label.toLowerCase()}`}
+                    aria-label={`${image ? "Replace" : "Set"} ${slot.label.toLowerCase()}${ofActor}`}
                     data-testid={`actor-imagery-input-${slot.role}`}
                     onChange={(event) => {
                       const file = event.target.files?.[0];
@@ -195,6 +205,7 @@ export function ActorImageryPanel({
                       size="sm"
                       disabled={isBusy}
                       onClick={() => void handleRemove(slot.role)}
+                      aria-label={`Remove ${slot.label.toLowerCase()}${ofActor}`}
                       data-testid={`actor-imagery-remove-${slot.role}`}
                     >
                       Remove
@@ -209,6 +220,10 @@ export function ActorImageryPanel({
 
       {status ? (
         <p
+          // Announced, not merely drawn: the useful half of this message is a
+          // refusal (the size limit, in practice), and a refusal nobody is
+          // told about reads as the upload having silently worked.
+          role="status"
           className="text-sm text-muted-foreground"
           data-testid="actor-imagery-status"
         >
