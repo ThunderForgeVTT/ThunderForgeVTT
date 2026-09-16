@@ -90,14 +90,16 @@ list the panel would need already exists on the server — tokens, walls, lights
 shapes, interactives — with the player-visibility filtering already applied.
 
 **The boundary with the placing spec is stated as three requirements, not a
-sentence.** FR-079a to FR-079c say which spec owns what: the placing spec owns
+sentence.** FR-079a to FR-079c say which spec owns what: spec 056 owns
 the gesture and everything after the click — the carry, the snap, the drop, what
 is created, whether it is scenery or interactive, the "place here" menu — and
 this spec owns finding the thing and deciding who may see it. The seam is one
 handover, *this thing, now, on the cursor*, and the gesture behind it already
 exists (`beginTokenPlacement`). Written this way so that neither spec
 respecifies the other, and so a reviewer can tell immediately which one a
-question belongs to.
+question belongs to. Spec 056 was still being written when this landed; if its
+own text draws the line differently, the two must be reconciled before either is
+planned.
 
 **Performance is stated in numbers against a named world.** SC-020 defines the
 world once — 3,000 lore entries, 2,000 items, 500 NPCs, 500 abilities, an

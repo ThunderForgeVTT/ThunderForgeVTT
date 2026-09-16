@@ -959,7 +959,7 @@ to SC-024 on each tab.
 
 **Where this spec stops, and the placing spec starts**
 
-- **FR-079a**: The spec on **reaching and placing things on a map** — walls,
+- **FR-079a**: Spec 056, **placing and reaching things on a map** — walls,
   objects, interaction points, the single "place here" menu, and the decision
   that an object is scenery until it is made interactive — owns **the gesture
   and what happens on the map**: arming a placement, the carried preview,
@@ -1270,9 +1270,8 @@ to SC-024 on each tab.
   scene half of the token list (FR-071).
 - **Spec 045**: token movement and vision, and the scene the token list
   describes.
-- **The spec on reaching and placing things on a map** (in progress at the time
-  of writing; fill in its number when it lands): owns the placement gesture this
-  spec hands to, and the boundary FR-079a to FR-079c states.
+- **Spec 056**: placing and reaching things on a map — owns the placement
+  gesture this spec hands to, and the boundary FR-079a to FR-079c states.
 - **Spec 053**: moderation across the instance — FR-090's link, and the path by
   which an operator legitimately reads a book's contents.
 
