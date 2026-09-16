@@ -126,6 +126,45 @@ export function pluralLabelFor(
   return typeFor(vocabulary, id)?.pluralLabel ?? id;
 }
 
+/**
+ * A declared label where it opens a phrase — a field label, a heading, a
+ * button.
+ *
+ * Adds case; never removes it. A pack declaring "Scroll" and a pack declaring
+ * "d8 Knack" both come back the way they were written, because the only thing
+ * this knows about is position.
+ */
+export function atStart(label: string): string {
+  const first = label.slice(0, 1);
+  return first.toUpperCase() + label.slice(1);
+}
+
+/**
+ * A declared label where it sits inside a sentence — "Add a scroll to the
+ * library", "No scrolls match that".
+ *
+ * # Why this is not `toLowerCase()`
+ *
+ * Because a pack's capitals are not all positional. `toLowerCase()` is right
+ * for "Scroll" and wrong for every label whose capitals carry meaning: "PC"
+ * becomes "pc", "AoE Knack" becomes "aoe knack", "MacGuffin" becomes
+ * "macguffin". Those are the pack's words being corrupted by a rule about
+ * English sentence position, which is exactly the mislabelling the rest of
+ * this module exists to prevent.
+ *
+ * So only an *ordinary capitalised word* is lowered — one capital, at the
+ * front, and nothing but lower case behind it. Anything else is left alone,
+ * on the grounds that a pack that wrote a second capital meant it.
+ */
+export function inSentence(label: string): string {
+  const first = label.slice(0, 1);
+  const rest = label.slice(1);
+  const opensWithACapital =
+    first === first.toUpperCase() && first !== first.toLowerCase();
+  const restIsPlain = rest === rest.toLowerCase();
+  return opensWithACapital && restIsPlain ? first.toLowerCase() + rest : label;
+}
+
 /** Whether this world's active system recognises a stored type identity. */
 export function recognises(vocabulary: AbilityVocabulary, id: string): boolean {
   return typeFor(vocabulary, id) !== null;

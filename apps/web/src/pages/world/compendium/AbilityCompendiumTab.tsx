@@ -7,13 +7,19 @@ import {
   suggestAbilityName,
 } from "@/api/abilities";
 import { Button } from "@/components/ui/button/Button";
+import { Field } from "@/components/ui/field/Field";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type {
   AbilityClassification,
   WorldAbilityRecord,
 } from "@/types/ability";
-import { type AbilityVocabulary } from "@/abilities/vocabulary";
+import {
+  atStart,
+  inSentence,
+  typeFor,
+  type AbilityVocabulary,
+} from "@/abilities/vocabulary";
 
 /**
  * The tab holding abilities whose type this world's system does not
@@ -197,7 +203,7 @@ export function AbilityCompendiumTab({
   if (abilities === null) {
     return (
       <p className="text-sm text-muted-foreground">
-        Loading {vocabulary.umbrella.pluralLabel.toLowerCase()}…
+        Loading {inSentence(vocabulary.umbrella.pluralLabel)}…
       </p>
     );
   }
@@ -266,15 +272,35 @@ export function AbilityCompendiumTab({
   const classificationForNew: AbilityClassification =
     selected && selected !== UNRECOGNISED_TAB ? selected : "spell";
 
+  // The type the create form is about to author, as the system names it.
+  //
+  // Read from the select's current value rather than the tab's, because the
+  // two are allowed to differ (FR-008) and the form must describe what the
+  // button will actually make.
+  //
+  // The umbrella is the fallback, as it was before any of this: a system
+  // declaring no types has no type word to offer, and "Ability name" is then
+  // the most specific true thing this form can say. FR-035's rule does not
+  // apply here — showing the raw stored identity ("spell") is right for an
+  // ability authored under another system, and wrong for a field label on a
+  // form about to create one.
+  const kindForNew = typeFor(
+    vocabulary,
+    newClassification ?? classificationForNew,
+  );
+  const newKindLabel = kindForNew?.label ?? vocabulary.umbrella.label;
+  const newKindPluralLabel =
+    kindForNew?.pluralLabel ?? vocabulary.umbrella.pluralLabel;
+
   return (
     <div className="grid gap-3">
       <Input
         type="search"
-        placeholder={`Search ${vocabulary.umbrella.pluralLabel.toLowerCase()} by name or description…`}
+        placeholder={`Search ${inSentence(vocabulary.umbrella.pluralLabel)} by name or description…`}
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         data-testid="ability-catalog-search-input"
-        aria-label={`Search ${vocabulary.umbrella.pluralLabel.toLowerCase()}`}
+        aria-label={`Search ${inSentence(vocabulary.umbrella.pluralLabel)}`}
       />
 
       {/* One tab per type this world presents, in the system's order and the
@@ -326,11 +352,23 @@ export function AbilityCompendiumTab({
           className="text-sm text-muted-foreground"
           data-testid="ability-tab-empty"
         >
+          {/*
+           * One sentence, one casing rule. These two branches used to
+           * disagree: the search branch lowercased the umbrella blindly while
+           * the sibling interpolated a type label verbatim, so the same line
+           * read "No abilities match" and "No Spells yet." — and the `??`
+           * fallback made it "No abilities yet." when the type did not
+           * resolve. Both go through `inSentence` now, which lowers an
+           * ordinary word and leaves a pack's deliberate capitals alone.
+           */}
           {query
-            ? `No ${vocabulary.umbrella.pluralLabel.toLowerCase()} match "${query}".`
+            ? `No ${inSentence(vocabulary.umbrella.pluralLabel)} match "${query}".`
             : selected === UNRECOGNISED_TAB
               ? "Nothing here."
-              : `No ${tabs.find((tab) => tab.id === selected)?.label ?? "abilities"} yet.`}
+              : `No ${inSentence(
+                  tabs.find((tab) => tab.id === selected)?.label ??
+                    vocabulary.umbrella.pluralLabel,
+                )} yet.`}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -429,57 +467,110 @@ export function AbilityCompendiumTab({
       )}
 
       {canCreateHere ? (
-        <div className="grid gap-2">
-          <div className="grid gap-2 sm:grid-cols-[1fr_auto_1fr_auto]">
-            <Input
-              value={newName}
-              onChange={(event) => setNewName(event.target.value)}
-              placeholder="New ability name"
-              disabled={isCreating}
-              data-testid="new-ability-name-input"
-            />
-            <select
-              className="rounded-md border border-border bg-background px-2 text-sm"
-              value={newClassification ?? classificationForNew}
-              onChange={(event) =>
-                setNewClassification(
-                  event.target.value as AbilityClassification,
-                )
-              }
-              disabled={isCreating}
-              aria-label="Ability type"
-              data-testid="new-ability-classification-select"
+        <div
+          className="grid gap-3 rounded-lg border border-border bg-muted/30 p-4"
+          data-testid="ability-create-form"
+        >
+          {/*
+           * The form speaks the type's word, not the umbrella's (spec 033
+           * FR-006, extended to the create path).
+           *
+           * The list, the search and the empty states already did. The form
+           * did not, and the owner's report was exactly that gap: standing in
+           * Scrolls, the thing that adds a scroll said "New ability name" and
+           * "Add Ability". The tab had already answered "which of these am I
+           * making?" and the form asked the reader to translate the answer
+           * back into the system's book.
+           *
+           * `newKindLabel` is what the select is *currently* set to rather
+           * than the tab's type, because the select is allowed to disagree
+           * with the tab (FR-008) — and a form relabelling itself the moment
+           * somebody picks Knack is the form telling the truth about what the
+           * button will make.
+           */}
+          <div className="grid gap-1">
+            {/* `h2`, under the page's own `h1` and level with the preview
+                panel's heading beside it. An `h3` here would skip a level:
+                this tab contributes no `h2` of its own. */}
+            <h2
+              className="text-sm font-semibold"
+              data-testid="ability-create-heading"
             >
-              {/*
-               * The world's own types, in the system's words and the
-               * system's order (FR-004, FR-006), rather than a fixed list of
-               * four in ours.
-               *
-               * Filtered to built-ins for now because the wire type is still
-               * a GraphQL enum and only those four are storable. Increment D
-               * retires the enum and drops the CHECK constraint, and this
-               * filter goes with them — at which point a system's own type
-               * becomes authorable here and nothing else about this control
-               * changes.
-               */}
-              {/* Every type this world recognises, built in or declared by
-               * its system (FR-011). The built-in filter that stood here was
-               * a placeholder while the wire type was still a closed enum;
-               * Increment D retired the enum and the CHECK constraint, so a
-               * system's own type is authorable and belongs in this list. */}
-              {vocabulary.types.map((kind) => (
-                <option key={kind.id} value={kind.id}>
-                  {kind.label}
-                </option>
-              ))}
-            </select>
-            <Input
-              value={newDescription}
-              onChange={(event) => setNewDescription(event.target.value)}
-              placeholder="Description (optional)"
-              disabled={isCreating}
-              data-testid="new-ability-description-input"
-            />
+              Add a {inSentence(newKindLabel)} to the library
+            </h2>
+            <p className="max-w-[70ch] text-sm text-muted-foreground">
+              It joins this world&apos;s {inSentence(newKindPluralLabel)} for
+              anyone here to attach to a character or an item. Names can be
+              reused.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr_auto] sm:items-end">
+            <Field
+              label={`${atStart(newKindLabel)} name`}
+              htmlFor="new-ability-name"
+            >
+              <Input
+                id="new-ability-name"
+                value={newName}
+                onChange={(event) => setNewName(event.target.value)}
+                placeholder={`New ${inSentence(newKindLabel)} name`}
+                disabled={isCreating}
+                data-testid="new-ability-name-input"
+              />
+            </Field>
+            <Field
+              label={`${atStart(vocabulary.umbrella.label)} type`}
+              htmlFor="new-ability-classification"
+            >
+              <select
+                id="new-ability-classification"
+                className="h-9 rounded-md border border-border bg-background px-2 text-sm"
+                value={newClassification ?? classificationForNew}
+                onChange={(event) =>
+                  setNewClassification(
+                    event.target.value as AbilityClassification,
+                  )
+                }
+                disabled={isCreating}
+                data-testid="new-ability-classification-select"
+              >
+                {/*
+                 * The world's own types, in the system's words and the
+                 * system's order (FR-004, FR-006), rather than a fixed list of
+                 * four in ours.
+                 *
+                 * Filtered to built-ins for now because the wire type is still
+                 * a GraphQL enum and only those four are storable. Increment D
+                 * retires the enum and drops the CHECK constraint, and this
+                 * filter goes with them — at which point a system's own type
+                 * becomes authorable here and nothing else about this control
+                 * changes.
+                 */}
+                {/* Every type this world recognises, built in or declared by
+                 * its system (FR-011). The built-in filter that stood here was
+                 * a placeholder while the wire type was still a closed enum;
+                 * Increment D retired the enum and the CHECK constraint, so a
+                 * system's own type is authorable and belongs in this list. */}
+                {vocabulary.types.map((kind) => (
+                  <option key={kind.id} value={kind.id}>
+                    {kind.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field
+              label={`${atStart(newKindLabel)} description`}
+              htmlFor="new-ability-description"
+            >
+              <Input
+                id="new-ability-description"
+                value={newDescription}
+                onChange={(event) => setNewDescription(event.target.value)}
+                placeholder="Optional"
+                disabled={isCreating}
+                data-testid="new-ability-description-input"
+              />
+            </Field>
             <Button
               type="button"
               size="sm"
@@ -488,7 +579,7 @@ export function AbilityCompendiumTab({
               disabled={isCreating || !newName.trim()}
               data-testid="add-ability-button"
             >
-              Add Ability
+              Add {atStart(newKindLabel)}
             </Button>
           </div>
           {suggestion ? (

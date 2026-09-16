@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  atStart,
   DEFAULT_VOCABULARY,
+  inSentence,
   labelFor,
   pluralLabelFor,
   recognises,
@@ -106,5 +108,43 @@ describe("facets a type may declare", () => {
     expect(typeFor(fivee, "spell")?.grade?.label).toBe("Level");
     expect(typeFor(fivee, "enchantment")?.grade).toBeNull();
     expect(typeFor(fivee, "enchantment")?.binds).toBe("ITEM");
+  });
+});
+
+/**
+ * Position, not case-folding.
+ *
+ * These two exist because the surfaces that needed a pack's word inside a
+ * sentence were calling `toLowerCase()` on it — right for "Scroll", and
+ * destructive for every label whose capitals carry meaning. The interesting
+ * cases are all the ones that must come back untouched.
+ */
+describe("casing a declared label for its position", () => {
+  it("opens a phrase with a capital, and never removes one", () => {
+    expect(atStart("scroll")).toBe("Scroll");
+    expect(atStart("Scroll")).toBe("Scroll");
+    // Meaningful capitals survive being moved to the front.
+    expect(atStart("AoE Knack")).toBe("AoE Knack");
+    expect(atStart("")).toBe("");
+  });
+
+  it("lowers an ordinary capitalised word inside a sentence", () => {
+    expect(inSentence("Scroll")).toBe("scroll");
+    expect(inSentence("Scrolls")).toBe("scrolls");
+    expect(inSentence("scroll")).toBe("scroll");
+  });
+
+  it("leaves a label alone when its capitals are not positional", () => {
+    // The whole reason this is not `toLowerCase()`.
+    expect(inSentence("PC")).toBe("PC");
+    expect(inSentence("AoE Knack")).toBe("AoE Knack");
+    expect(inSentence("MacGuffin")).toBe("MacGuffin");
+    expect(inSentence("Wish Point")).toBe("Wish Point");
+    expect(inSentence("")).toBe("");
+  });
+
+  it("passes a non-alphabetic opener through both unchanged", () => {
+    expect(atStart("8th-circle spell")).toBe("8th-circle spell");
+    expect(inSentence("8th-circle spell")).toBe("8th-circle spell");
   });
 });

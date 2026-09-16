@@ -33,8 +33,10 @@ import type {
 } from "@/types/ability";
 import type { WorldRecord } from "@/types/world";
 import {
+  atStart,
   DEFAULT_VOCABULARY,
   getAbilityVocabulary,
+  inSentence,
   labelFor,
   type AbilityVocabulary,
 } from "@/abilities/vocabulary";
@@ -200,6 +202,20 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
 
   const classificationLabel = labelFor(vocabulary, ability.classification);
 
+  /**
+   * The word this page's fields and messages use for what is being edited.
+   *
+   * Taken from the `classification` *being edited* rather than the one
+   * stored, so that re-typing a Scroll to a Knack relabels the form to match
+   * what Save is about to write (FR-038's deliberate re-typing, said out
+   * loud). In view mode the two are the same value.
+   *
+   * `labelFor` falls back to the raw stored identity for a type this system
+   * does not recognise, which is FR-035 and is right here: an ability
+   * authored elsewhere should say what it was authored as.
+   */
+  const editingLabel = labelFor(vocabulary, classification);
+
   const handleSave = async () => {
     setIsSaving(true);
     setStatus(null);
@@ -216,7 +232,11 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
       setAbility(updated);
       setStatus("Saved.");
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to save ability");
+      setStatus(
+        err instanceof Error
+          ? err.message
+          : `Failed to save this ${inSentence(editingLabel)}`,
+      );
     } finally {
       setIsSaving(false);
     }
@@ -230,7 +250,9 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
       navigate(`/world/${worldId}/compendium?tab=abilities`);
     } catch (err) {
       setStatus(
-        err instanceof Error ? err.message : "Failed to delete ability",
+        err instanceof Error
+          ? err.message
+          : `Failed to delete this ${inSentence(editingLabel)}`,
       );
       setIsDeleting(false);
     }
@@ -302,7 +324,7 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
     <>
       <SEO
         title={`${ability.name} — ${mode === "edit" ? "Edit" : "View"}`}
-        description="Ability detail"
+        description={`${classificationLabel} detail`}
         noindex
       />
       <Container className="grid max-w-2xl gap-6 py-10">
@@ -398,9 +420,10 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
               Share link
             </p>
             <p className="text-xs text-muted-foreground">
-              Anyone with this link can view the ability and copy it into a
-              world they run. It is not listed or discoverable anywhere — revoke
-              it to stop it working.
+              Anyone with this link can view this{" "}
+              {inSentence(classificationLabel)} and copy it into a world they
+              run. It is not listed or discoverable anywhere — revoke it to stop
+              it working.
             </p>
             <Input
               readOnly
@@ -423,7 +446,10 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
         <Card className="grid gap-4 p-5">
           {mode === "edit" ? (
             <>
-              <Field label="Name" htmlFor="ability-name">
+              <Field
+                label={`${atStart(editingLabel)} name`}
+                htmlFor="ability-name"
+              >
                 <Input
                   id="ability-name"
                   value={name}
@@ -432,7 +458,10 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
                   data-testid="ability-name-input"
                 />
               </Field>
-              <Field label="Type" htmlFor="ability-classification">
+              <Field
+                label={`${atStart(vocabulary.umbrella.label)} type`}
+                htmlFor="ability-classification"
+              >
                 <select
                   id="ability-classification"
                   className="w-full rounded-md border border-border bg-background px-2 py-2 text-sm"
@@ -459,7 +488,10 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
                   ))}
                 </select>
               </Field>
-              <Field label="Description" htmlFor="ability-description">
+              <Field
+                label={`${atStart(editingLabel)} description`}
+                htmlFor="ability-description"
+              >
                 <Textarea
                   id="ability-description"
                   rows={4}
