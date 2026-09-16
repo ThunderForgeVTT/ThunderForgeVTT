@@ -165,14 +165,14 @@ export default function SettingsPage({
             {
               title: "Tokens",
               value: data.adminStats.totalWorldTokens.toLocaleString(),
-              subtitle: "Scene entities persisted for active worlds.",
+              subtitle: "Every token row in the database, across all worlds.",
               icon: "tokens" as const,
               emphasis: "forest" as const,
             },
             {
               title: "Events",
               value: data.adminStats.totalWorldEvents.toLocaleString(),
-              subtitle: "Durable world event records flowing through sync.",
+              subtitle: "Every world event ever recorded, not a live rate.",
               icon: "spark" as const,
               emphasis: "gold" as const,
             },
