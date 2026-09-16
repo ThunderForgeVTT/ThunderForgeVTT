@@ -76,7 +76,7 @@ have been a frontend fix.
 | P5 | "a little target icon... takes my viewport and scrolls me over to that specific icon", for any actor and in combat | Locate from the actors panel and the tracker, obeying what the viewer may see | **Building** |
 | P6 | "if it's my turn, the viewport should scroll to me, slightly zoomed out... should be toggleable" | Follow the turn, per person, remembered | **Building** |
 | P7 | "the place light source doesn't attach to cursor like I expected" | Light placement matches token placement | **Building** |
-| P8 | "the shapes tools simply just do not work" | A regression: they were fixed on 2026-09-10 (P10) | **Building** — bisecting, and asking why the spec that covers them passed |
+| P8 | "the shapes tools simply just do not work" | Not reproduced. The shape code is unchanged since the 2026-09-10 fix, every tool armed and drew on current main in a real browser (fresh scene, imported map, dark scene, the seeded demo scene), and the owner confirmed on 2026-09-16 that drawing works after restarting the stack | **Closed** — most likely an older build or stale world state. One lesson kept: `canvas-authoring.spec.ts` checks the stored shape count but never the canvas, so a shape saved but not drawn would still pass |
 | P9 | "the tokens list shows me absolutely nothing" | What is on the board, the compendium by type, one search, and picking places it on the cursor | **Spec 055** |
 | P10 | "there should be a right click context menu on a wall" | Select a wall, right-click it; the id picker becomes a fallback | **Spec 056** |
 | P11 | "start a wall here if you click anywhere on the map" | One "place here" menu: token, object, light, wall, interaction point | **Spec 056** |
