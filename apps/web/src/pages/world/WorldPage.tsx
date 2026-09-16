@@ -217,7 +217,9 @@ function readSavedPin(): PanelPosition | null {
  * contents rather than the `min-h-64` a full-page loader wants.
  */
 const LOADING_PLATE =
-  "min-h-0 max-w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-border bg-background/95 shadow-xl backdrop-blur";
+  // Opaque, not translucent: axe found the muted step text failing contrast
+  // once the dark canvas showed through a 95% plate.
+  "min-h-0 max-w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-border bg-background shadow-xl";
 
 /**
  * What is still coming, in words a person at a table would use.

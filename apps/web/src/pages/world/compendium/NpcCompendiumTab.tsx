@@ -301,6 +301,14 @@ export function NpcCompendiumTab({
                             id={`npc-portrait-input-${npc.id}`}
                             disabled={uploadingId === npc.id}
                             className="peer sr-only"
+                            // The name belongs on the input, which is what
+                            // takes focus and what a screen reader lands on.
+                            // On the label it named a thing nobody can reach.
+                            aria-label={`${
+                              portraitOf(imagesByActor[npc.id])
+                                ? "Replace portrait for"
+                                : "Set portrait for"
+                            } ${npc.label}`}
                             data-testid={`npc-catalog-portrait-input-${npc.id}`}
                             onChange={(event) => {
                               const file = event.target.files?.[0];
@@ -314,11 +322,9 @@ export function NpcCompendiumTab({
                           />
                           <label
                             htmlFor={`npc-portrait-input-${npc.id}`}
-                            aria-label={`${
-                              portraitOf(imagesByActor[npc.id])
-                                ? "Replace portrait for"
-                                : "Set portrait for"
-                            } ${npc.label}`}
+                            // The pointer's target, not a second name: the
+                            // input above already carries it.
+                            aria-hidden="true"
                             title={`${
                               portraitOf(imagesByActor[npc.id])
                                 ? "Replace portrait"
