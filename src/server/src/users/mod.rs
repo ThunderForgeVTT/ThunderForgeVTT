@@ -532,6 +532,10 @@ fn build_download_response(body: Vec<u8>, content_type: &str, filename: &str) ->
 }
 
 #[cfg(test)]
+#[path = "library_deletion_tests.rs"]
+mod library_deletion_tests;
+
+#[cfg(test)]
 mod tests {
     use super::{hash_user_identifier_for_audit, normalize_export_format};
 

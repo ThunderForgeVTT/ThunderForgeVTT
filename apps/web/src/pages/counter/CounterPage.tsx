@@ -343,7 +343,7 @@ export default function CounterPage() {
                   </Button>
                 }
                 title="Permanently delete this account?"
-                description="This deletes the local profile, linked OAuth identities, sessions, and all currently persisted user-created data. Shared worlds keep their remaining owners."
+                description="This deletes your profile, sign-ins and sessions, every world you created, and your whole library: every book you read in and every collection you wrote. Players in your worlds keep their characters, which are copied to their own accounts first."
                 footer={
                   <Button
                     variant="danger"
@@ -355,10 +355,13 @@ export default function CounterPage() {
                   </Button>
                 }
               >
-                <p>
-                  This action is irreversible. ThunderForge will remove local
-                  credentials, OAuth links, sessions, and owned persisted
-                  content.
+                {/* Spec 050 FR-062 to FR-064: what is true, not what is
+                    reassuring. There is no shared store behind the library, so
+                    nothing of it is kept anywhere once this is done. */}
+                <p data-testid="delete-account-consequence">
+                  This cannot be undone. Nothing of your library is kept
+                  anywhere afterwards: there is no shared copy of any book to
+                  keep.
                 </p>
               </Dialog>
             </div>

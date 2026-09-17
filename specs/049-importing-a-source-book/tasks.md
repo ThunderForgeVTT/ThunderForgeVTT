@@ -301,11 +301,17 @@ does not.
 **Independent test**: after deletion, nothing of that account's library remains,
 verified by inspection rather than by assertion.
 
-- [ ] T089 [050-US4] Account deletion deletes the entire library including bases **no world referenced** (050 FR-062, FR-064). There is no other account's copy to keep it for — which is what rejecting cross-account dedup bought (049 decision 1)
-- [ ] T090 [050-US4] The existing rule still runs first: players' actors are copied to their own accounts, and **inherited content is not copied with them** (050 FR-063) — that would move a book between accounts
-- [ ] T091 [050-US4] The content agreement on every import states what is true under this architecture (050 FR-054): for that person and their games, never shared between users, and deleting it deletes it — **with no shared copy retained behind the scenes, because there is none**
-- [ ] T092 [050-US4] `apps/web/e2e/` — delete an account and verify by inspection that zero bytes of its library remain (050 SC-007, FR-083)
-- [ ] T093 [050-US4] Proved: that e2e green; `cargo test -p thunderforge-server` green
+- [X] T089 [050-US4] Account deletion deletes the entire library including bases **no world referenced** (050 FR-062, FR-064). There is no other account's copy to keep it for — which is what rejecting cross-account dedup bought (049 decision 1)
+- [X] T090 [050-US4] The existing rule still runs first: players' actors are copied to their own accounts, and **inherited content is not copied with them** (050 FR-063) — that would move a book between accounts
+- [X] T091 [050-US4] The content agreement on every import states what is true under this architecture (050 FR-054): for that person and their games, never shared between users, and deleting it deletes it — **with no shared copy retained behind the scenes, because there is none**
+- [X] T092 [050-US4] `apps/web/e2e/` — delete an account and verify by inspection that zero bytes of its library remain (050 SC-007, FR-083)
+- [X] T093 [050-US4] Proved: that e2e green; `cargo test -p thunderforge-server` green
+
+> **Phase 14 notes (verified 2026-09-16).** The cascades were already right: `compendiums.owner_user_id` cascades, entries, book-list links and deltas cascade from their book, and an account's worlds are deleted explicitly before the user row. Nothing links an actor to library content, so the character rescue has no book to carry. What this phase added is proof, one agreement, and one correction:
+> - **Proved by reading the tables, not the cascades.** `users/library_deletion_tests.rs` builds an unused book, a collection, and a book in a world with a change and an addition, deletes the account, and finds no row anywhere naming any of them while another account's book is untouched; and a rescued character arrives with an empty shelf and no world of the player's reading the book. `library-account-deletion.spec.ts` does the same through the product and asks Postgres for the **bytes** of every row naming the library, before (each table above zero) and after deleting the account from its page (every table zero).
+> - **FR-054's agreement did not exist.** The import review now says, beside the submit button, that the content is for this person and their games, never shared with another account nor published, exported or downloaded, and that deleting it deletes it with no copy kept anywhere, because there is none. Shown, not a tick box: the requirement is that it is said, and a gate would have been a consent step nobody specified.
+> - **The account deletion dialog was wrong.** It said shared worlds keep their remaining owners, which spec 039's decision reversed: owned worlds go, players' characters copied out first. It now says that, and that nothing of the library is kept anywhere.
+> - **Observed**: the two Rust tests green, `cargo test --lib` 1738 passed; e2e `library-account-deletion`, `book-import-review`, `user-data-export` and `library-collections` 17/17.
 
 ---
 

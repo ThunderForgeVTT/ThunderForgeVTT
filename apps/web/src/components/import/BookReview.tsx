@@ -164,6 +164,28 @@ export function BookReview({
         ))}
       </div>
 
+      {/* Spec 050 FR-054: on every import, what is true of this content
+          under this architecture — said before the Game Master commits it,
+          and nothing promised that is not. There is no shared store to
+          deduplicate into, so "deleting it deletes it" is the whole story. */}
+      <div
+        className="grid gap-1 rounded-md border border-border p-3 text-sm"
+        data-testid="import-content-agreement"
+      >
+        <p className="font-medium">What happens to what you import</p>
+        <ul className="list-disc space-y-0.5 pl-5 text-muted-foreground">
+          <li>It is for you and your own games, on your shelf.</li>
+          <li>
+            It is never shared with another account, and cannot be published,
+            exported or downloaded.
+          </li>
+          <li>
+            Deleting it, or your account, deletes it. No copy is kept anywhere
+            else, because there is no shared copy to keep.
+          </li>
+        </ul>
+      </div>
+
       <footer className="flex items-center justify-between gap-4 border-t border-border pt-3">
         <p className="text-sm text-muted-foreground" data-testid="submit-count">
           {chosen.length} of {book.entries.length} will be imported.
