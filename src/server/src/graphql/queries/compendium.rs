@@ -101,6 +101,9 @@ pub struct GraphQLCompendium {
     pub entry_total: i32,
     pub imported_at: String,
     pub updated_at: String,
+    /// Which reading of the book is in force: 1 for the first import, and one
+    /// more for each re-import (050 FR-006).
+    pub base_version: i32,
 }
 
 impl From<Compendium> for GraphQLCompendium {
@@ -120,6 +123,7 @@ impl From<Compendium> for GraphQLCompendium {
             entry_total,
             imported_at: row.created_at.and_utc().to_rfc3339(),
             updated_at: row.updated_at.and_utc().to_rfc3339(),
+            base_version: row.base_version,
         }
     }
 }

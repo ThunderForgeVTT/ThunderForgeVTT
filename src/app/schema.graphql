@@ -1626,6 +1626,15 @@ type AppQueryRoot {
 	"""
 	compendiumForFileHash(sourceHash: String!): Compendium
 	"""
+	Changes the caller's worlds hold over this book that its reading in
+	force no longer takes, per world, each with why (050 FR-027).
+	
+	Asked after a re-import, so the person who re-read the book is told
+	what the re-read stranded. Nothing is removed: each change stays with
+	its world until somebody there restores it.
+	"""
+	compendiumUnattachedDeltas(id: UUID!): [WorldUnattachedDeltas!]!
+	"""
 	Which books this table is running (FR-030, FR-035).
 	
 	Readable by every member, and it carries no content — see
@@ -2002,6 +2011,11 @@ type Compendium {
 	entryTotal: Int!
 	importedAt: String!
 	updatedAt: String!
+	"""
+	Which reading of the book is in force: 1 for the first import, and one
+	more for each re-import (050 FR-006).
+	"""
+	baseVersion: Int!
 }
 
 """
@@ -7026,6 +7040,19 @@ type WorldStatistics {
 	The encounter in progress, or `null`.
 	"""
 	activeEncounter: ActiveEncounterSummary
+}
+
+"""
+One world's changes over a book that its reading in force no longer takes
+(050 FR-027).
+"""
+type WorldUnattachedDeltas {
+	worldId: UUID!
+	worldName: String!
+	"""
+	Never empty: a world whose changes all still attach is not listed.
+	"""
+	deltas: [UnattachedWorldDelta!]!
 }
 
 """

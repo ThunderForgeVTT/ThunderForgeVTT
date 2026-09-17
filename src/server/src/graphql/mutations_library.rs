@@ -272,7 +272,7 @@ pub struct GraphQLUnattachedDelta {
 }
 
 impl GraphQLUnattachedDelta {
-    fn from((delta, why): (deltas::Delta, Unattached)) -> Self {
+    pub(crate) fn from((delta, why): (deltas::Delta, Unattached)) -> Self {
         let reason = match why {
             Unattached::Ambiguous { count } => format!(
                 "This book has {count} {} entries named \"{}\", so this change cannot tell which one it belongs to and is applied to neither.",

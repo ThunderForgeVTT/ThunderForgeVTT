@@ -50,6 +50,7 @@ use crate::auth::account_ownership::{AccountOwned, require_account_owner};
 use crate::compendium::store::{self, ImportError, NewBook};
 use crate::content::{Entry, NameState, ReadValue};
 use crate::content_patterns::content_patterns_for_system;
+use crate::graphql::mutations_library::GraphQLUnattachedDelta;
 use crate::graphql::queries::compendium::GraphQLCompendium;
 use crate::graphql::{GraphQLResult, app_state, authenticated_user};
 use crate::schema::compendium_entries;
@@ -181,6 +182,17 @@ pub struct GraphQLRemovalReport {
     /// Whether this call removed anything. False for the report, true for the
     /// confirmation — so a caller can never mistake one reply for the other.
     pub removed: bool,
+}
+
+/// One world's changes over a book that its reading in force no longer takes
+/// (050 FR-027).
+#[derive(SimpleObject, Debug, Clone)]
+#[graphql(name = "WorldUnattachedDeltas")]
+pub struct GraphQLWorldUnattachedDeltas {
+    pub world_id: Uuid,
+    pub world_name: String,
+    /// Never empty: a world whose changes all still attach is not listed.
+    pub deltas: Vec<GraphQLUnattachedDelta>,
 }
 
 /// Everything the four arrival checks can refuse, phrased for the person
@@ -468,6 +480,43 @@ pub async fn remove_compendium_impl(
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
 }
 
+/// Testable core of `compendiumUnattachedDeltas`.
+///
+/// The owner only, through the same load every other shelf call uses: a book
+/// list draws on its world owner's shelf, so the worlds named here are the
+/// owner's own, and a stranger learns nothing, including whether the id
+/// exists.
+pub async fn compendium_unattached_deltas_impl(
+    state: &AppState,
+    caller: Uuid,
+    compendium_id: Uuid,
+) -> GraphQLResult<Vec<GraphQLWorldUnattachedDeltas>> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    tokio::task::spawn_blocking(move || {
+        store::load(&mut conn, caller, compendium_id).map_err(|e| refusal(e.to_string()))?;
+        let worlds = crate::library::deltas::unattached_after_reimport(&mut conn, compendium_id)
+            .map_err(|e| refusal(format!("Failed to read this book's changes: {e}")))?;
+        Ok(worlds
+            .into_iter()
+            .map(|world| GraphQLWorldUnattachedDeltas {
+                world_id: world.world_id,
+                world_name: world.world_name,
+                deltas: world
+                    .deltas
+                    .into_iter()
+                    .map(GraphQLUnattachedDelta::from)
+                    .collect(),
+            })
+            .collect())
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+}
+
 /// Whether this account already holds the book in this file (FR-047).
 pub async fn compendium_for_file_hash_impl(
     state: &AppState,
@@ -545,6 +594,22 @@ impl CompendiumImportQuery {
         let state = app_state(ctx)?;
         let user = authenticated_user(ctx)?;
         compendium_for_file_hash_impl(state, user.user_id, source_hash).await
+    }
+
+    /// Changes the caller's worlds hold over this book that its reading in
+    /// force no longer takes, per world, each with why (050 FR-027).
+    ///
+    /// Asked after a re-import, so the person who re-read the book is told
+    /// what the re-read stranded. Nothing is removed: each change stays with
+    /// its world until somebody there restores it.
+    async fn compendium_unattached_deltas(
+        &self,
+        ctx: &Context<'_>,
+        id: Uuid,
+    ) -> GraphQLResult<Vec<GraphQLWorldUnattachedDeltas>> {
+        let state = app_state(ctx)?;
+        let user = authenticated_user(ctx)?;
+        compendium_unattached_deltas_impl(state, user.user_id, id).await
     }
 }
 

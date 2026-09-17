@@ -666,7 +666,10 @@ pub struct RemovalConsequence {
     pub kept: Vec<String>,
 }
 
+mod reimport;
 mod write;
+
+pub use reimport::{WorldUnattached, unattached_after_reimport};
 
 use write::origin_of_book;
 pub use write::{add_entry, change_entry, hide_entry, remove_kept_addition, restore_entry};

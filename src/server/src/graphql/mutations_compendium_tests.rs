@@ -353,6 +353,106 @@ async fn a_re_import_of_the_same_file_overwrites_in_place() {
     assert_eq!(replaced.parser_version, "test-improved");
     // FR-057: nothing about a re-read can change where the content came from.
     assert_eq!(replaced.origin, GraphQLContentOrigin::Uploaded);
+    // 050 FR-006: the re-read is the next version, not an edit of the first.
+    assert_eq!(first.base_version, 1);
+    assert_eq!(replaced.base_version, 2);
+}
+
+/// **050 FR-027, through the resolver.** A world changes the goblin; the
+/// owner re-reads the book and the goblin is gone from the new reading. The
+/// owner is told which world holds a change that no longer attaches, by name
+/// and with why; a stranger asking about the same book is refused.
+#[tokio::test]
+async fn after_a_re_import_the_owner_is_told_which_changes_no_longer_attach() {
+    use crate::library::book_list::switch_on;
+    use crate::library::deltas::{Content, change_entry};
+    use crate::schema::worlds;
+    use crate::test_support::insert_test_world;
+
+    let state = test_app_state();
+    let system = DeclaredSystem::with_kinds(&["creature"]);
+    let (owner, stranger) = {
+        let mut conn = state.db_pool.get().unwrap();
+        (insert_test_user(&mut conn), insert_test_user(&mut conn))
+    };
+
+    let first = create_compendium_from_import_impl(
+        &state,
+        system.dir(),
+        owner,
+        an_import(
+            &system,
+            vec![an_entry("creature", "Goblin"), an_entry("creature", "Orc")],
+        ),
+    )
+    .await
+    .expect("the first import stands");
+
+    let world = {
+        let mut conn = state.db_pool.get().unwrap();
+        let world = insert_test_world(&mut conn, owner);
+        diesel::update(worlds::table.filter(worlds::id.eq(world)))
+            .set(worlds::game_system_id.eq(Some(system.id.clone())))
+            .execute(&mut conn)
+            .unwrap();
+        switch_on(&mut conn, owner, world, first.id).unwrap();
+        change_entry(
+            &mut conn,
+            owner,
+            world,
+            first.id,
+            "creature",
+            "Goblin",
+            Content::Fields(
+                [(
+                    "armourClass".to_string(),
+                    ReadValue::Clear("17".to_string()),
+                )]
+                .into_iter()
+                .collect(),
+            ),
+        )
+        .unwrap();
+        world
+    };
+    assert!(
+        compendium_unattached_deltas_impl(&state, owner, first.id)
+            .await
+            .unwrap()
+            .is_empty(),
+        "before the re-read, the change attaches"
+    );
+
+    let mut again = an_import(&system, vec![an_entry("creature", "Orc")]);
+    again.source_hash = first.source_hash.clone();
+    again.replaces_compendium_id = Some(first.id);
+    create_compendium_from_import_impl(&state, system.dir(), owner, again)
+        .await
+        .expect("the re-read stands");
+
+    let report = compendium_unattached_deltas_impl(&state, owner, first.id)
+        .await
+        .expect("the owner may ask");
+    let [stranded] = report.as_slice() else {
+        panic!("one world expected: {report:?}");
+    };
+    assert_eq!(stranded.world_id, world);
+    let [goblin] = stranded.deltas.as_slice() else {
+        panic!("one change expected: {stranded:?}");
+    };
+    assert_eq!(goblin.name, "Goblin");
+    assert_eq!(goblin.form, "changed");
+    assert_eq!(
+        goblin.reason,
+        "This book no longer has a creature named \"Goblin\"."
+    );
+
+    assert!(
+        compendium_unattached_deltas_impl(&state, stranger, first.id)
+            .await
+            .is_err(),
+        "a stranger learns nothing about somebody else's book"
+    );
 }
 
 /// The second import of the same file with no overwrite named is refused, and

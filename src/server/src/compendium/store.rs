@@ -65,6 +65,9 @@ pub struct Compendium {
     pub updated_by: Uuid,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// Which reading of the book is in force (050 FR-006). 1 for the first
+    /// import; each re-import is the next version, never an edit of this one.
+    pub base_version: i32,
 }
 
 /// One entry as it is stored.
@@ -192,7 +195,15 @@ pub fn import_book(
 /// database refuses the first of them outright.
 ///
 /// One transaction, so a failed re-read leaves the previous contents intact
-/// rather than an emptied bucket (FR-032).
+/// rather than an emptied bucket (FR-032) — and the previous version number
+/// with them, so a version is never claimed by a reading that did not land.
+///
+/// A new version, not an edit (050 FR-006): every entry is a new row with a
+/// new id, and `base_version` moves on by one. Worlds' deltas are not touched
+/// here at all. They attach by kind and name (FR-025), so they survive the
+/// replacement by construction (FR-026), and any that no longer find their
+/// entry are reported by [`crate::library::deltas::unattached_after_reimport`]
+/// rather than removed (FR-027).
 pub fn replace_entries(
     conn: &mut PgConnection,
     caller: Uuid,
@@ -219,6 +230,7 @@ pub fn replace_entries(
             .set((
                 compendiums::entry_counts.eq(&counts),
                 compendiums::parser_version.eq(parser_version),
+                compendiums::base_version.eq(compendiums::base_version + 1),
                 compendiums::updated_by.eq(caller),
                 compendiums::updated_at.eq(diesel::dsl::now),
             ))

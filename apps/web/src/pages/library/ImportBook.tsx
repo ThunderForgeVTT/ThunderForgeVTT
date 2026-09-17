@@ -6,8 +6,10 @@ import {
   findBookByHash,
   ImportAbandoned,
   submitImport,
+  unattachedDeltasOf,
   type Compendium,
   type ImportProgress,
+  type WorldUnattachedDeltas,
 } from "@/api/compendium";
 import {
   getGameSystemManifest,
@@ -67,6 +69,12 @@ type Stage =
       replaces?: string;
     }
   | { phase: "sending"; progress: ImportProgress | null }
+  | {
+      phase: "replaced";
+      compendium: Compendium;
+      /** `null` when the question itself could not be answered. */
+      stranded: WorldUnattachedDeltas[] | null;
+    }
   | { phase: "failed"; reason: string };
 
 export function ImportBook({ onImported }: ImportBookProps) {
@@ -177,8 +185,19 @@ export function ImportBook({ onImported }: ImportBookProps) {
           (progress) => setStage({ phase: "sending", progress }),
           controller.signal,
         );
-        setStage({ phase: "idle" });
         onImported(compendium);
+        if (!replaces) {
+          setStage({ phase: "idle" });
+          return;
+        }
+        // A re-read replaces the base under every world reading it. Their
+        // changes survive it, except any whose entry the new reading no
+        // longer has; those are named here rather than discovered at a
+        // table (050 FR-027).
+        const stranded = await unattachedDeltasOf(compendium.id).catch(
+          () => null,
+        );
+        setStage({ phase: "replaced", compendium, stranded });
       } catch (cause: unknown) {
         // Abandoning is not a failure, and leaves nothing behind (FR-034).
         if (cause instanceof ImportAbandoned) {
@@ -324,6 +343,62 @@ export function ImportBook({ onImported }: ImportBookProps) {
               onClick={() => abandon.current?.abort()}
             >
               Abandon
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {stage.phase === "replaced" && (
+        <div
+          className="grid gap-2 rounded-md border p-3 text-sm"
+          role="status"
+          data-testid="import-replaced"
+        >
+          <p>
+            <strong>{stage.compendium.bookTitle}</strong> now reads as version{" "}
+            {stage.compendium.baseVersion}.
+          </p>
+          {stage.stranded === null ? (
+            <p>
+              Whether any world&rsquo;s changes still apply could not be
+              checked. Each world&rsquo;s books will say.
+            </p>
+          ) : stage.stranded.length === 0 ? (
+            <p>Every change your worlds made to it still applies.</p>
+          ) : (
+            <div className="grid gap-1" data-testid="import-stranded">
+              <p>
+                Some changes your worlds made no longer find their entry. They
+                are kept, not applied, until someone at that table restores
+                them:
+              </p>
+              <ul className="grid gap-1 pl-5">
+                {stage.stranded.map((world) => (
+                  <li key={world.worldId} className="list-disc">
+                    <span className="font-medium">{world.worldName}</span>
+                    <ul className="pl-5">
+                      {world.deltas.map((delta) => (
+                        <li
+                          key={`${delta.kind}/${delta.name}`}
+                          className="list-[circle]"
+                        >
+                          {delta.form} {delta.kind} &ldquo;{delta.name}
+                          &rdquo; &mdash; {delta.reason}
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setStage({ phase: "idle" })}
+            >
+              Done
             </Button>
           </div>
         </div>

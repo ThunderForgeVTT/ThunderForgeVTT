@@ -821,4 +821,121 @@ test.describe("A world's changes to its books (spec 050 US2)", () => {
     await expect(page.getByTestId("kept-additions")).toHaveCount(0);
     expect(deltaCount(worldId)).toBe(0);
   });
+
+  /**
+   * Spec 049 T079 to T082, 050 FR-006, FR-026, FR-027: the owner re-reads the
+   * book, and this time leaves the goblin out. The base is version 2, every
+   * delta is still stored, the other table's hide still applies, and the
+   * goblin change that no longer has an entry is named — to the person who
+   * re-read the book, as they finish, and at the table that holds it.
+   */
+  test("re-reading the book keeps every change, applies those that attach, and names the one that does not", async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+
+    await register(page, freshCredentials("deltasreread"));
+    const compendiumId = await readInTheBook(page);
+    const changed = await aWorldRunning(page, "The Goblin Table", compendiumId);
+    const hidden = await aWorldRunning(page, "The Dragon Table", compendiumId);
+
+    const goblin = named(
+      await worldReads(page, changed, compendiumId),
+      "GOBLIN",
+    ) as Entry;
+    const [field] = aReadField(goblin);
+    for (const [query, variables] of [
+      [
+        `mutation C($w: UUID!, $c: UUID!, $f: JSON) {
+           changeWorldEntry(worldId: $w, compendiumId: $c, kind: "${goblin.kind}", name: "GOBLIN", fieldValues: $f) { state }
+         }`,
+        {
+          w: changed,
+          c: compendiumId,
+          f: { [field]: { state: "clear", value: "99" } },
+        },
+      ],
+      [
+        `mutation H($w: UUID!, $c: UUID!) {
+           hideWorldEntry(worldId: $w, compendiumId: $c, kind: "${goblin.kind}", name: "ADULT RED DRAGON") { state }
+         }`,
+        { w: hidden, c: compendiumId },
+      ],
+    ] as const) {
+      const done = await graphql<Gql<unknown>>(page, query, variables);
+      expect(done.errors, JSON.stringify(done.errors)).toBeUndefined();
+    }
+    const deltasBefore = sql(
+      `SELECT string_agg(d::text, E'\\n' ORDER BY d.id) FROM world_entry_deltas d
+        WHERE d.compendium_id = '${uuid(compendiumId)}';`,
+    );
+    const imported = baseAsStored(compendiumId);
+    expect(
+      sql(
+        `SELECT base_version FROM compendiums WHERE id = '${uuid(compendiumId)}';`,
+      ),
+    ).toBe("1");
+
+    // The same file again: the shelf recognises it and offers to replace it.
+    await page.goto("/library");
+    await page.getByTestId("import-system").selectOption(SYSTEM);
+    await page.getByTestId("import-file").setInputFiles({
+      name: BOOK,
+      mimeType: "application/pdf",
+      buffer: Buffer.from(MONSTERS, "latin1"),
+    });
+    await expect(page.getByTestId("import-duplicate")).toBeVisible({
+      timeout: 30_000,
+    });
+    await page.getByTestId("import-replace").click();
+    await expect(page.getByTestId("found-total")).toBeVisible({
+      timeout: 120_000,
+    });
+    // This reading leaves the goblin out.
+    const goblinRow = page
+      .locator('[data-testid^="entry-"]')
+      .filter({ hasText: "GOBLIN" });
+    await expect(goblinRow).toHaveCount(1);
+    await goblinRow.locator('[data-testid^="include-entry-"]').uncheck();
+    await page.getByTestId("submit-import").click();
+
+    // Told as they finish: the new version, and the stranded change by world.
+    const replaced = page.getByTestId("import-replaced");
+    await expect(replaced).toContainText("now reads as version 2", {
+      timeout: 60_000,
+    });
+    const stranded = page.getByTestId("import-stranded");
+    await expect(stranded).toContainText("The Goblin Table");
+    await expect(stranded).toContainText("changed creature “GOBLIN”");
+    await expect(stranded).toContainText("no longer has a creature");
+    await expect(stranded).not.toContainText("The Dragon Table");
+
+    // The rows: a new version of the base, and every delta exactly as it was.
+    expect(
+      sql(
+        `SELECT base_version FROM compendiums WHERE id = '${uuid(compendiumId)}';`,
+      ),
+    ).toBe("2");
+    expect(baseAsStored(compendiumId)).not.toBe(imported);
+    expect(baseAsStored(compendiumId)).not.toContain("GOBLIN");
+    expect(
+      sql(
+        `SELECT string_agg(d::text, E'\\n' ORDER BY d.id) FROM world_entry_deltas d
+          WHERE d.compendium_id = '${uuid(compendiumId)}';`,
+      ),
+      "reported, not discarded",
+    ).toBe(deltasBefore);
+
+    // The hide still applies at the other table.
+    expect(
+      named(await worldReads(page, hidden, compendiumId), "ADULT RED DRAGON")
+        ?.state,
+    ).toBe("HIDDEN");
+
+    // And the goblin's table is told too, where its books are browsed.
+    await browseTheBook(page, changed);
+    const unattached = page.getByTestId("unattached-deltas");
+    await expect(unattached).toContainText("GOBLIN", { timeout: 15_000 });
+    await expect(unattached).toContainText("no longer has a creature");
+  });
 });

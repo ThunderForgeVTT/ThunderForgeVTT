@@ -68,6 +68,15 @@ export interface Compendium {
   silentPageCount: number;
   entryTotal: number;
   entryCounts: { kind: string; count: number }[];
+  /** Which reading of the book is in force: 1, and one more per re-import. */
+  baseVersion: number;
+}
+
+/** One world's changes a re-read of its book no longer takes (050 FR-027). */
+export interface WorldUnattachedDeltas {
+  worldId: string;
+  worldName: string;
+  deltas: { kind: string; name: string; form: string; reason: string }[];
 }
 
 /** What a removal would take, or did (FR-044 to FR-046). */
@@ -157,6 +166,7 @@ const COMPENDIUM_FIELDS = `
   silentPageCount
   entryTotal
   entryCounts { kind count }
+  baseVersion
 `;
 
 const CREATE_MUTATION = `
@@ -365,6 +375,32 @@ export async function findBookByHash(
     { sourceHash: sha256 },
   );
   return data.compendiumForFileHash;
+}
+
+/**
+ * The changes your worlds hold over this book that its reading in force no
+ * longer takes, per world (050 FR-027).
+ *
+ * Asked after a re-import, so the person who re-read the book hears what the
+ * re-read stranded instead of each table finding out alone. Nothing is
+ * removed: each change stays with its world until somebody there restores it.
+ */
+export async function unattachedDeltasOf(
+  compendiumId: string,
+): Promise<WorldUnattachedDeltas[]> {
+  const data = await postGraphQL<{
+    compendiumUnattachedDeltas: WorldUnattachedDeltas[];
+  }>(
+    `query CompendiumUnattachedDeltas($id: UUID!) {
+       compendiumUnattachedDeltas(id: $id) {
+         worldId
+         worldName
+         deltas { kind name form reason }
+       }
+     }`,
+    { id: compendiumId },
+  );
+  return data.compendiumUnattachedDeltas;
 }
 
 /**

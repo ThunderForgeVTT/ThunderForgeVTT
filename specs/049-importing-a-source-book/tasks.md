@@ -257,10 +257,15 @@ other world.
 **Independent test**: deltas still apply after a re-import, and any that cannot
 re-attach are reported by name.
 
-- [ ] T079 [050-US5] Re-import replaces the base as a new version, leaving deltas attached (050 FR-026). The base is immutable; a new reading is a new version, never an edit (050 FR-006)
-- [ ] T080 [050-US5] A delta that can no longer attach is **reported by name and not silently discarded** (050 FR-027) — including the rename case, which Phase 10's rule makes a removal plus an addition
-- [ ] T081 [P] [050-US5] A re-import that fails partway leaves the previous base in place and no delta touched
-- [ ] T082 [050-US5] Proved: deltas in two worlds survive a re-import; an unattachable delta is named; a failed re-import changes nothing; `cargo test` green
+- [X] T079 [050-US5] Re-import replaces the base as a new version, leaving deltas attached (050 FR-026). The base is immutable; a new reading is a new version, never an edit (050 FR-006)
+- [X] T080 [050-US5] A delta that can no longer attach is **reported by name and not silently discarded** (050 FR-027) — including the rename case, which Phase 10's rule makes a removal plus an addition
+- [X] T081 [P] [050-US5] A re-import that fails partway leaves the previous base in place and no delta touched
+- [X] T082 [050-US5] Proved: deltas in two worlds survive a re-import; an unattachable delta is named; a failed re-import changes nothing; `cargo test` green
+
+> **Phase 12 notes (verified 2026-09-16).** Most of the phase was already true by construction: a re-import replaced the entries whole in one transaction, and deltas attach by kind and name, so they survived it and the world's read already reported what did not attach. What was missing, and is now built:
+> - **A version to name.** `compendiums.base_version` starts at 1 and each re-import moves it on, inside the same transaction, so a failed re-read never claims a version. This answers Phase 9's "FR-015's base version in force has no version to name".
+> - **Telling the person who re-read the book.** `compendiumUnattachedDeltas` lists, per world, every change the reading in force no longer takes, with why. The library asks it after a replace and names the stranded changes there, so nobody has to find them table by table.
+> - **Proved:** `reimport_tests.rs` covers two worlds surviving a re-read with a corrected field and a new entry; a rename, a new twin and a shadowed addition each named and still stored; and a re-read failing in its second batch of rows, which leaves the base byte for byte, the version, the counts and every delta. `library-deltas.spec.ts` re-reads the book through the page with the goblin unticked: version 2, every delta row identical, the other table's hide still applying, and the stranded goblin change named on the library and at its table. 10/10 across `library-deltas`, `book-import-commit` and `account-library`.
 
 ---
 
