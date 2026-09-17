@@ -74,6 +74,9 @@ inventory::submit! {
             "genieTradeProposals",
             "genieShopListings",
             "geniePuzzleClockRewards",
+            // What the table asked for with its wishes: read from the world's
+            // own events, and readable while paused like the rest.
+            "genieWishLog",
         ],
         seed: &[
             // An actor needs a scene to stand in.
