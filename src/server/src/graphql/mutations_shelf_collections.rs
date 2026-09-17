@@ -18,11 +18,12 @@ use thunderforge_canvas_core::content_patterns::ContentPatterns;
 use uuid::Uuid;
 
 use crate::compendium::collections::{self, CollectionError};
+use crate::compendium::versions::{self, At, PastVersion, VersionEntry};
 use crate::content::ReadValue;
 use crate::content_patterns::content_patterns_for_system;
 use crate::graphql::mutations_library::content_from;
 use crate::graphql::queries::compendium::{
-    GraphQLCompendium, GraphQLCompendiumEntry, to_graphql_entry,
+    GraphQLCompendium, GraphQLCompendiumEntry, GraphQLKindCount, kind_counts, to_graphql_entry,
 };
 use crate::graphql::{GraphQLResult, app_state, authenticated_user};
 use crate::state::AppState;
@@ -47,6 +48,55 @@ pub struct GraphQLShelfCollectionDownload {
     pub entry_count: i32,
     /// What was left out, named, so a thinner file is never silent (FR-009c).
     pub excluded: Vec<GraphQLExcludedEntry>,
+}
+
+/// An earlier version of a collection, named without its content (050
+/// FR-104).
+#[derive(SimpleObject, Debug, Clone)]
+#[graphql(name = "ShelfCollectionVersion")]
+pub struct GraphQLShelfCollectionVersion {
+    pub version: i32,
+    pub book_title: String,
+    pub entry_counts: Vec<GraphQLKindCount>,
+    pub entry_total: i32,
+    /// What moved the collection on from this version, e.g. "Synced from The
+    /// Sunken Keep".
+    pub replaced_by: String,
+    pub replaced_at: String,
+}
+
+impl From<PastVersion> for GraphQLShelfCollectionVersion {
+    fn from(past: PastVersion) -> Self {
+        Self {
+            version: past.version,
+            book_title: past.book_title,
+            entry_counts: kind_counts(&past.entry_counts),
+            entry_total: past.entry_total,
+            replaced_by: past.replaced_by,
+            replaced_at: past.replaced_at.and_utc().to_rfc3339(),
+        }
+    }
+}
+
+/// One entry as a version of a collection holds it.
+#[derive(SimpleObject, Debug, Clone)]
+#[graphql(name = "ShelfCollectionVersionEntry")]
+pub struct GraphQLVersionEntry {
+    pub kind: String,
+    pub name: String,
+    pub field_values: Json<serde_json::Value>,
+    pub prose_text: Option<String>,
+}
+
+impl From<VersionEntry> for GraphQLVersionEntry {
+    fn from(entry: VersionEntry) -> Self {
+        Self {
+            kind: entry.kind,
+            name: entry.name,
+            field_values: Json(entry.field_values),
+            prose_text: entry.prose_text,
+        }
+    }
 }
 
 fn refusal(e: CollectionError) -> Error {
@@ -180,6 +230,56 @@ pub async fn download_shelf_collection_impl(
     })
 }
 
+/// Testable core of `shelfCollectionVersions`.
+pub async fn shelf_collection_versions_impl(
+    state: &AppState,
+    caller: Uuid,
+    collection_id: Uuid,
+) -> GraphQLResult<Vec<GraphQLShelfCollectionVersion>> {
+    let mut conn = connection(state)?;
+    tokio::task::spawn_blocking(move || {
+        versions::history(&mut conn, caller, collection_id)
+            .map(|history| history.into_iter().map(Into::into).collect())
+            .map_err(refusal)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+}
+
+/// Testable core of `shelfCollectionVersionEntries`.
+pub async fn shelf_collection_version_entries_impl(
+    state: &AppState,
+    caller: Uuid,
+    collection_id: Uuid,
+    version: i32,
+) -> GraphQLResult<Vec<GraphQLVersionEntry>> {
+    let mut conn = connection(state)?;
+    tokio::task::spawn_blocking(move || {
+        versions::read_at(&mut conn, caller, collection_id, At::Version(version))
+            .map(|entries| entries.into_iter().map(Into::into).collect())
+            .map_err(refusal)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+}
+
+/// Testable core of `restoreShelfCollectionVersion`.
+pub async fn restore_shelf_collection_version_impl(
+    state: &AppState,
+    caller: Uuid,
+    collection_id: Uuid,
+    version: i32,
+) -> GraphQLResult<GraphQLCompendium> {
+    let mut conn = connection(state)?;
+    tokio::task::spawn_blocking(move || {
+        versions::restore(&mut conn, caller, collection_id, version)
+            .map(GraphQLCompendium::from)
+            .map_err(refusal)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+}
+
 /// A file name a person recognises, safe on every file system they might save
 /// it to.
 fn file_name_for(title: &str) -> String {
@@ -257,6 +357,19 @@ impl ShelfCollectionMutation {
         let user = authenticated_user(ctx)?;
         remove_shelf_collection_entry_impl(state, user.user_id, collection_id, entry_id).await
     }
+
+    /// Put an earlier version of one of the caller's collections back, as a
+    /// new version; the one it replaces is kept too (050 FR-104).
+    async fn restore_shelf_collection_version(
+        &self,
+        ctx: &Context<'_>,
+        collection_id: Uuid,
+        version: i32,
+    ) -> GraphQLResult<GraphQLCompendium> {
+        let state = app_state(ctx)?;
+        let user = authenticated_user(ctx)?;
+        restore_shelf_collection_version_impl(state, user.user_id, collection_id, version).await
+    }
 }
 
 #[derive(Default)]
@@ -275,6 +388,30 @@ impl ShelfCollectionQuery {
         let state = app_state(ctx)?;
         let user = authenticated_user(ctx)?;
         download_shelf_collection_impl(state, user.user_id, id).await
+    }
+
+    /// One of the caller's collections' earlier versions, newest first (050
+    /// FR-104). Its owner's alone (ADR-098).
+    async fn shelf_collection_versions(
+        &self,
+        ctx: &Context<'_>,
+        id: Uuid,
+    ) -> GraphQLResult<Vec<GraphQLShelfCollectionVersion>> {
+        let state = app_state(ctx)?;
+        let user = authenticated_user(ctx)?;
+        shelf_collection_versions_impl(state, user.user_id, id).await
+    }
+
+    /// What one of the caller's collections held at an earlier version.
+    async fn shelf_collection_version_entries(
+        &self,
+        ctx: &Context<'_>,
+        id: Uuid,
+        version: i32,
+    ) -> GraphQLResult<Vec<GraphQLVersionEntry>> {
+        let state = app_state(ctx)?;
+        let user = authenticated_user(ctx)?;
+        shelf_collection_version_entries_impl(state, user.user_id, id, version).await
     }
 }
 

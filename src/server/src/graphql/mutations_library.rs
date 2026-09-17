@@ -73,6 +73,10 @@ pub struct GraphQLWorldBook {
     /// for it.
     pub base_parser_version: String,
     pub switched_on_at: String,
+    /// `AUTHORED` for a collection, whose owner can sync this world's changes
+    /// back to it; `UPLOADED` for a book read in, which never takes them
+    /// (050 FR-100, FR-101).
+    pub origin: GraphQLContentOrigin,
 }
 
 impl From<ListedBook> for GraphQLWorldBook {
@@ -87,6 +91,7 @@ impl From<ListedBook> for GraphQLWorldBook {
             system_matches: listed.system_matches,
             base_parser_version: listed.row.base_parser_version,
             switched_on_at: listed.row.switched_on_at.and_utc().to_rfc3339(),
+            origin: listed.origin.into(),
         }
     }
 }
@@ -521,7 +526,7 @@ fn require_content_manager(
     Ok(())
 }
 
-fn delta_refusal(e: DeltaError) -> Error {
+pub(crate) fn delta_refusal(e: DeltaError) -> Error {
     match e {
         DeltaError::Book(e) => refusal(e),
         e => Error::new(e.to_string()),

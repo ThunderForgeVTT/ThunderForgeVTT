@@ -30,5 +30,6 @@
 pub mod collections;
 pub mod origin;
 pub mod store;
+pub mod versions;
 
 pub use origin::ContentOrigin;

@@ -134,3 +134,66 @@ export function saveFile(fileName: string, contents: string): void {
   // the save in some browsers.
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
+
+/** An earlier version of one of your collections (spec 050 FR-104). */
+export interface ShelfCollectionVersion {
+  version: number;
+  bookTitle: string;
+  entryCounts: { kind: string; count: number }[];
+  entryTotal: number;
+  /** What moved the collection on from this version, e.g. "Synced from …". */
+  replacedBy: string;
+  replacedAt: string;
+}
+
+/** Your collection's earlier versions, newest first. Yours alone. */
+export async function shelfCollectionVersions(
+  id: string,
+): Promise<ShelfCollectionVersion[]> {
+  const data = await postGraphQL<{
+    shelfCollectionVersions: ShelfCollectionVersion[];
+  }>(
+    `query ShelfCollectionVersions($id: UUID!) {
+       shelfCollectionVersions(id: $id) {
+         version
+         bookTitle
+         entryCounts { kind count }
+         entryTotal
+         replacedBy
+         replacedAt
+       }
+     }`,
+    { id },
+  );
+  return data.shelfCollectionVersions;
+}
+
+/**
+ * Put an earlier version back. The server makes that a new version and keeps
+ * the one it replaces, so going back can itself be undone.
+ */
+export async function restoreShelfCollectionVersion(
+  collectionId: string,
+  version: number,
+): Promise<Compendium> {
+  const data = await postGraphQL<{
+    restoreShelfCollectionVersion: Compendium;
+  }>(
+    `mutation RestoreShelfCollectionVersion($collectionId: UUID!, $version: Int!) {
+       restoreShelfCollectionVersion(collectionId: $collectionId, version: $version) {
+         id
+         bookTitle
+         sourceHash
+         systemId
+         origin
+         pageCount
+         silentPageCount
+         entryTotal
+         entryCounts { kind count }
+         baseVersion
+       }
+     }`,
+    { collectionId, version },
+  );
+  return data.restoreShelfCollectionVersion;
+}

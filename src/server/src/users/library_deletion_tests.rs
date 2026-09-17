@@ -14,7 +14,10 @@ use crate::compendium::store::{self, NewBook};
 use crate::content::{Entry, NameState, ReadValue};
 use crate::library::book_list::switch_on;
 use crate::library::deltas::{self, Content};
-use crate::schema::{compendium_entries, compendiums, world_books, world_entry_deltas, worlds};
+use crate::schema::{
+    compendium_entries, compendiums, shelf_collection_versions, world_books, world_entry_deltas,
+    worlds,
+};
 use crate::test_support::{
     insert_test_actor, insert_test_scene, insert_test_user, insert_test_world,
     insert_test_world_member, test_app_state,
@@ -60,7 +63,7 @@ fn a_world_on_the_system(conn: &mut PgConnection, owner: Uuid) -> Uuid {
 }
 
 /// How many rows anywhere still name one of `books`.
-fn rows_naming(conn: &mut PgConnection, books: &[Uuid], titles: &[&str]) -> [i64; 4] {
+fn rows_naming(conn: &mut PgConnection, books: &[Uuid], titles: &[&str]) -> [i64; 5] {
     [
         compendiums::table
             .filter(compendiums::id.eq_any(books))
@@ -83,6 +86,11 @@ fn rows_naming(conn: &mut PgConnection, books: &[Uuid], titles: &[&str]) -> [i64
                     .eq_any(books.iter().map(|id| Some(*id)).collect::<Vec<_>>())
                     .or(world_entry_deltas::written_beside_title.eq_any(titles)),
             )
+            .count()
+            .get_result(conn)
+            .unwrap(),
+        shelf_collection_versions::table
+            .filter(shelf_collection_versions::compendium_id.eq_any(books))
             .count()
             .get_result(conn)
             .unwrap(),
@@ -153,14 +161,14 @@ fn deleting_an_account_leaves_nothing_of_its_library() {
     .unwrap();
 
     let books = [unused.id, used.id, collection.id];
-    assert_eq!(rows_naming(&mut conn, &books, &titles), [3, 3, 2, 2]);
+    assert_eq!(rows_naming(&mut conn, &books, &titles), [3, 3, 2, 2, 1]);
 
     crate::users::delete_user_data_on(&mut conn, owner).unwrap();
 
     assert_eq!(
         rows_naming(&mut conn, &books, &titles),
-        [0, 0, 0, 0],
-        "bases, entries, book-list links and deltas: nothing names the deleted library"
+        [0, 0, 0, 0, 0],
+        "bases, entries, book-list links, deltas and earlier versions: nothing names the deleted library"
     );
     assert_eq!(
         store::entries_for(&mut conn, bystander, theirs.id, None)
@@ -218,6 +226,6 @@ fn a_rescued_character_brings_no_book_with_it() {
     assert_eq!((linked, changed), (0, 0), "and no world of theirs reads it");
     assert_eq!(
         rows_naming(&mut conn, &[book.id], &[title.as_str()]),
-        [0, 0, 0, 0]
+        [0, 0, 0, 0, 0]
     );
 }

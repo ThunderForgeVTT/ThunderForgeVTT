@@ -1,0 +1,3 @@
+DROP TRIGGER shelf_collection_versions_only_authored_trigger ON shelf_collection_versions;
+DROP FUNCTION shelf_collection_versions_only_authored();
+DROP TABLE shelf_collection_versions;

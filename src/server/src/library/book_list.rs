@@ -56,6 +56,9 @@ pub struct ListedBook {
     /// world runs any more — see `system_matches`.
     pub system_id: String,
     pub entry_counts: serde_json::Value,
+    /// A book read in or a collection, which decides whether this world's
+    /// changes can go back to it (spec 050 FR-100, FR-101).
+    pub origin: crate::compendium::ContentOrigin,
     /// Whether this world still runs the system the book was read as
     /// (FR-042).
     ///
@@ -264,7 +267,14 @@ pub fn switch_on(
 pub fn books_on(conn: &mut PgConnection, world_id: Uuid) -> Result<Vec<ListedBook>, BookListError> {
     let world_system = system_of_world(conn, world_id)?;
 
-    let rows: Vec<(BookOnList, String, String, serde_json::Value)> = world_books::table
+    #[allow(clippy::type_complexity)]
+    let rows: Vec<(
+        BookOnList,
+        String,
+        String,
+        serde_json::Value,
+        crate::compendium::ContentOrigin,
+    )> = world_books::table
         .inner_join(compendiums::table.on(compendiums::id.eq(world_books::compendium_id)))
         .filter(world_books::world_id.eq(world_id))
         .order(compendiums::book_title.asc())
@@ -273,18 +283,22 @@ pub fn books_on(conn: &mut PgConnection, world_id: Uuid) -> Result<Vec<ListedBoo
             compendiums::book_title,
             compendiums::system_id,
             compendiums::entry_counts,
+            compendiums::origin,
         ))
         .load(conn)?;
 
     Ok(rows
         .into_iter()
-        .map(|(row, book_title, system_id, entry_counts)| ListedBook {
-            system_matches: world_system.as_deref() == Some(system_id.as_str()),
-            row,
-            book_title,
-            system_id,
-            entry_counts,
-        })
+        .map(
+            |(row, book_title, system_id, entry_counts, origin)| ListedBook {
+                system_matches: world_system.as_deref() == Some(system_id.as_str()),
+                row,
+                book_title,
+                system_id,
+                entry_counts,
+                origin,
+            },
+        )
         .collect())
 }
 

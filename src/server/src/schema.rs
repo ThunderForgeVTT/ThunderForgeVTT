@@ -778,6 +778,21 @@ diesel::table! {
 }
 
 diesel::table! {
+    shelf_collection_versions (id) {
+        id -> Uuid,
+        compendium_id -> Uuid,
+        version -> Int4,
+        #[max_length = 300]
+        book_title -> Varchar,
+        entries -> Jsonb,
+        entry_counts -> Jsonb,
+        #[max_length = 300]
+        replaced_by -> Varchar,
+        replaced_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     terms_versions (version_id) {
         version_id -> Text,
         document_slug -> Text,
@@ -1654,6 +1669,7 @@ diesel::joinable!(scene_state_fingerprints -> scenes (scene_id));
 diesel::joinable!(scene_state_fingerprints -> users (updated_by));
 diesel::joinable!(scenes -> users (owner_id));
 diesel::joinable!(shapes -> scenes (scene_id));
+diesel::joinable!(shelf_collection_versions -> compendiums (compendium_id));
 diesel::joinable!(token_resource_disclosure -> tokens (token_id));
 diesel::joinable!(tokens -> scenes (scene_id));
 diesel::joinable!(tokens -> users (owner_user_id));
@@ -1795,6 +1811,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     scene_state_fingerprints,
     scenes,
     shapes,
+    shelf_collection_versions,
     terms_versions,
     token_resource_disclosure,
     tokens,

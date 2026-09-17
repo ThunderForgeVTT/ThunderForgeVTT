@@ -16,6 +16,7 @@ import {
 } from "@/api/shelfCollections";
 import type { SeoConfig } from "@/types/seo";
 import { BookBrowser } from "./BookBrowser";
+import { CollectionVersions } from "./CollectionVersions";
 import { ImportBook } from "./ImportBook";
 import { NewCollection } from "./NewCollection";
 import { myLibrary, type LibraryBook } from "./library";
@@ -53,6 +54,7 @@ export function LibraryPage() {
   const [shelf, setShelf] = useState<LibraryBook[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [removing, setRemoving] = useState<RemovalReport | null>(null);
+  const [history, setHistory] = useState<string | null>(null);
   const [downloaded, setDownloaded] = useState<ShelfCollectionDownload | null>(
     null,
   );
@@ -211,6 +213,24 @@ export function LibraryPage() {
                         Download as JSON
                       </Button>
                     )}
+                    {/* FR-104: a collection keeps its earlier versions. */}
+                    {held.origin === "AUTHORED" && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        data-testid="collection-history"
+                        onClick={() =>
+                          setHistory((open) =>
+                            open === held.id ? null : held.id,
+                          )
+                        }
+                      >
+                        {history === held.id
+                          ? "Hide earlier versions"
+                          : "Earlier versions"}
+                      </Button>
+                    )}
                     <Button
                       type="button"
                       size="sm"
@@ -230,6 +250,14 @@ export function LibraryPage() {
                       Remove
                     </Button>
                   </div>
+
+                  {held.origin === "AUTHORED" && history === held.id && (
+                    <CollectionVersions
+                      collectionId={held.id}
+                      baseVersion={held.baseVersion}
+                      onRestored={read}
+                    />
+                  )}
                 </li>
               ))}
             </ul>

@@ -73,6 +73,9 @@ pub mod mutations_compendium;
 // Spec 049 Phase 13 / spec 050 FR-007 to FR-009c: collections on the shelf —
 // authored content beside the books read in, and the one kind that downloads.
 pub mod mutations_shelf_collections;
+// Spec 049 Phase 15 / spec 050 FR-100 to FR-105: a world's changes synced back
+// to its collection, shown first and confirmed by stamp.
+pub mod mutations_sync_back;
 // Spec 040 US5: `githubApplications`, `setGithubApplication` and
 // `checkGithubApplication` — one application for everything, or one per
 // subsystem, and which acts for what. Resolution itself is `crate::github_apps`.
@@ -436,6 +439,8 @@ pub struct QueryRoot(
     // `compendiumsOfferedToWorld` and `worldCompendiumEntries` — the book
     // list, and the fetch that is the only way content reaches a world.
     mutations_library::LibraryWorldQuery,
+    // Spec 050 FR-103: `worldSyncBackPlan` — what a sync back would do.
+    mutations_sync_back::SyncBackQuery,
     // Spec 051: the pause record and the worlds an operator might pause
     // (operators), and `worldPlayState` — *that and when* (members).
     queries::PlayPauseQuery,
@@ -501,6 +506,8 @@ pub struct MutationRoot(
     // Spec 050 US3: switching a book on for a world and off again. The one
     // mechanism, whether a Game Master ticks it at creation or later.
     mutations_library::LibraryWorldMutation,
+    // Spec 050 FR-100: `syncBackToCollection`, only with a plan's stamp.
+    mutations_sync_back::SyncBackMutation,
     ActorAbilityMutation,
     ItemMutation,
     ItemPermissionMutation,

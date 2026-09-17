@@ -587,6 +587,10 @@ pub const GATED: &[(&str, &str)] = &[
         r#"mutation { removeKeptAddition(worldId: "{world}", additionId: "00000000-0000-0000-0000-000000000001") }"#,
     ),
     (
+        "syncBackToCollection",
+        r#"mutation { syncBackToCollection(worldId: "{world}", compendiumId: "{compendium}", stamp: "x") { __typename } }"#,
+    ),
+    (
         "restoreWorldEntry",
         r#"mutation { restoreWorldEntry(worldId: "{world}", compendiumId: "{compendium}", kind: "monster", name: "x") { __typename } }"#,
     ),
@@ -722,6 +726,11 @@ pub const CALLED_AS: &[(&str, &[Who], &str)] = &[
         "managing a world's books has no site-admin bypass (spec 050)",
     ),
     (
+        "syncBackToCollection",
+        &[Who::GameMaster],
+        "syncing to a collection is the world owner's alone, with no site-admin bypass (spec 050)",
+    ),
+    (
         "restoreWorldEntry",
         &[Who::GameMaster],
         "managing a world's books has no site-admin bypass (spec 050)",
@@ -763,6 +772,9 @@ pub const NOT_WORLD_SCOPED: &[&str] = &[
     "createShelfCollection",
     "writeShelfCollectionEntry",
     "removeShelfCollectionEntry",
+    // Restoring an earlier version is a change to the shelf as any write is;
+    // worlds reading the collection meet it as a new version.
+    "restoreShelfCollectionVersion",
     // --- touches a world, and deliberately not gated -------------------------
     //
     // The shelf again, but removal reaches into worlds: it takes the book off

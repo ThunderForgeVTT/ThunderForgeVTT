@@ -20,6 +20,7 @@ import {
   type WorldBookEntry,
 } from "./worldBooks";
 import { KeptAdditions } from "./KeptAdditions";
+import { SyncBack } from "./SyncBack";
 import type { ReadValue } from "@/engine/sdk/ReadValue";
 
 /**
@@ -80,6 +81,9 @@ export function BookListTab({
   // Bumped whenever a book goes on or off, so what the table wrote beside a
   // book is re-read at the moment it may have been left without one.
   const [listVersion, setListVersion] = useState(0);
+  // Bumped when a sync back lands, so an open book is read again without the
+  // changes the collection now holds (050 FR-105).
+  const [synced, setSynced] = useState(0);
 
   const readList = useCallback(() => {
     worldBookList(worldId)
@@ -245,10 +249,19 @@ export function BookListTab({
               )}
 
               {managesBooks && browsing === book.compendiumId && (
-                <BookEntries
-                  worldId={worldId}
-                  compendiumId={book.compendiumId}
-                />
+                <>
+                  <SyncBack
+                    worldId={worldId}
+                    book={book}
+                    isOwner={isOwner}
+                    onSynced={() => setSynced((seen) => seen + 1)}
+                  />
+                  <BookEntries
+                    key={synced}
+                    worldId={worldId}
+                    compendiumId={book.compendiumId}
+                  />
+                </>
               )}
             </li>
           ))}
@@ -285,6 +298,26 @@ export function BookListTab({
               </ul>
             </div>
           )}
+          {/* FR-100: a collection's changes need not go with it — they can
+              be synced to the shelf first. A book read in says why not. */}
+          {leaving.deltas.length > 0 &&
+            books?.some(
+              (book) => book.compendiumId === leaving.compendiumId,
+            ) && (
+              <SyncBack
+                worldId={worldId}
+                book={
+                  books.find(
+                    (book) => book.compendiumId === leaving.compendiumId,
+                  )!
+                }
+                isOwner={isOwner}
+                onSynced={() => {
+                  setSynced((seen) => seen + 1);
+                  askToTurnOff(leaving.compendiumId);
+                }}
+              />
+            )}
           {/* Decision 5: what the table added beside the book stays, and the
               person switching it off is told so before they decide. */}
           {leaving.additionsKept.length > 0 && (

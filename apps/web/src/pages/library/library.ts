@@ -62,6 +62,7 @@ const BOOK_FIELDS = `
   silentPageCount
   entryTotal
   entryCounts { kind count }
+  baseVersion
   importedAt
   updatedAt
 `;

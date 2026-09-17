@@ -710,6 +710,11 @@ type AppMutationRoot {
 	"""
 	removeShelfCollectionEntry(collectionId: UUID!, entryId: UUID!): Boolean!
 	"""
+	Put an earlier version of one of the caller's collections back, as a
+	new version; the one it replaces is kept too (050 FR-104).
+	"""
+	restoreShelfCollectionVersion(collectionId: UUID!, version: Int!): Compendium!
+	"""
 	Switch a book on for a world (FR-010, FR-031, FR-033).
 	
 	The same call at world creation and a fortnight later. Nothing is
@@ -748,6 +753,13 @@ type AppMutationRoot {
 	(050 FR-024).
 	"""
 	restoreWorldEntry(worldId: UUID!, compendiumId: UUID!, kind: String!, name: String!): WorldEntry
+	"""
+	Sync this world's changes back to the collection as a new version,
+	keeping the one it replaces (050 FR-100, FR-104). Only with the stamp
+	of the plan that was shown (FR-103). The world stops holding what was
+	synced (FR-105).
+	"""
+	syncBackToCollection(worldId: UUID!, compendiumId: UUID!, stamp: String!): SyncBackOutcome!
 	attachAbilityToActor(input: AttachAbilityToActorInput!): GraphQLActorAbilityEntry!
 	detachAbilityFromActor(entryId: UUID!): Boolean!
 	createItem(input: CreateItemInput!): GraphQLItem!
@@ -1656,6 +1668,15 @@ type AppQueryRoot {
 	"""
 	downloadShelfCollection(id: UUID!): ShelfCollectionDownload!
 	"""
+	One of the caller's collections' earlier versions, newest first (050
+	FR-104). Its owner's alone (ADR-098).
+	"""
+	shelfCollectionVersions(id: UUID!): [ShelfCollectionVersion!]!
+	"""
+	What one of the caller's collections held at an earlier version.
+	"""
+	shelfCollectionVersionEntries(id: UUID!, version: Int!): [ShelfCollectionVersionEntry!]!
+	"""
 	Which books this table is running (FR-030, FR-035).
 	
 	Readable by every member, and it carries no content — see
@@ -1688,6 +1709,12 @@ type AppQueryRoot {
 	removes it with `restoreWorldEntry`.
 	"""
 	worldAdditionsWithoutBook(worldId: UUID!): [WorldEntry!]!
+	"""
+	What syncing this world's changes back to a collection would do to
+	the shelf, without doing it (050 FR-103). The world's owner's alone. A
+	book read in is refused with the reason (FR-101, FR-102).
+	"""
+	worldSyncBackPlan(worldId: UUID!, compendiumId: UUID!): SyncBackPlan!
 	"""
 	Worlds whose name contains `search`, or whose id it is, for an
 	operator deciding what to pause.
@@ -6246,6 +6273,38 @@ type SharedItemPreview {
 	effects: [GraphQLItemEffect!]!
 }
 
+type ShelfChange {
+	kind: String!
+	name: String!
+	change: ShelfChangeKind!
+	"""
+	What the collection says now. `null` for an addition.
+	"""
+	before: WorldEntryBefore
+	"""
+	What it will say. `null` for an entry taken out.
+	"""
+	after: WorldEntryBefore
+}
+
+"""
+What a sync back does to one entry on the shelf.
+"""
+enum ShelfChangeKind {
+	"""
+	The collection's entry takes this world's version of it.
+	"""
+	REWRITTEN
+	"""
+	This world hid it, so the collection no longer holds it.
+	"""
+	TAKEN_OUT
+	"""
+	This world wrote it, so the collection gains it.
+	"""
+	ADDED
+}
+
 """
 A collection as a file its owner takes away (FR-009a).
 """
@@ -6272,6 +6331,33 @@ type ShelfCollectionExcludedEntry {
 	kind: String!
 	name: String!
 	reason: String!
+}
+
+"""
+An earlier version of a collection, named without its content (050
+FR-104).
+"""
+type ShelfCollectionVersion {
+	version: Int!
+	bookTitle: String!
+	entryCounts: [CompendiumKindCount!]!
+	entryTotal: Int!
+	"""
+	What moved the collection on from this version, e.g. "Synced from The
+	Sunken Keep".
+	"""
+	replacedBy: String!
+	replacedAt: String!
+}
+
+"""
+One entry as a version of a collection holds it.
+"""
+type ShelfCollectionVersionEntry {
+	kind: String!
+	name: String!
+	fieldValues: JSON!
+	proseText: String
 }
 
 type SourceFlip {
@@ -6429,6 +6515,47 @@ type SubscriptionRoot {
 	For now, returns a tick stream that can be tested.
 	"""
 	worldActorSystemDataUpdated(worldId: String!, gameSystemId: String!): GraphQLActorSystemDataEvent!
+}
+
+"""
+What a landed sync back did.
+"""
+type SyncBackOutcome {
+	plan: SyncBackPlan!
+	"""
+	The version the collection is at now.
+	"""
+	baseVersion: Int!
+	"""
+	Changes in any world that no longer attach to the new version, per
+	world, as a re-read reports them (FR-105, FR-027). Still stored.
+	"""
+	stranded: [WorldUnattachedDeltas!]!
+}
+
+"""
+Everything a sync back would do, before it is confirmed (FR-103).
+"""
+type SyncBackPlan {
+	compendiumId: UUID!
+	collectionTitle: String!
+	worldName: String!
+	"""
+	The version in force; the sync makes the next one, and this one is
+	kept (FR-104).
+	"""
+	baseVersion: Int!
+	changes: [ShelfChange!]!
+	"""
+	This world's changes that do not attach, which stay in the world.
+	"""
+	staying: [UnattachedWorldDelta!]!
+	"""
+	Hand this back to `syncBackToCollection`. If the collection or the
+	changes move on first, the sync is refused rather than landing
+	something nobody looked at.
+	"""
+	stamp: String!
 }
 
 type SyncPlan {
@@ -6864,6 +6991,12 @@ type WorldBook {
 	"""
 	baseParserVersion: String!
 	switchedOnAt: String!
+	"""
+	`AUTHORED` for a collection, whose owner can sync this world's changes
+	back to it; `UPLOADED` for a book read in, which never takes them
+	(050 FR-100, FR-101).
+	"""
+	origin: ContentOrigin!
 }
 
 """

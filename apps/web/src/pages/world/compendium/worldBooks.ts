@@ -37,6 +37,9 @@ export interface WorldBook {
   systemMatches: boolean;
   baseParserVersion: string;
   switchedOnAt: string;
+  /** A collection written on the shelf syncs back; a book read in never
+   * does (spec 050 FR-101). */
+  origin: EntryOrigin;
 }
 
 /** A book on the owner's shelf that this world could switch on. */
@@ -129,6 +132,7 @@ const BOOK_FIELDS = `
   systemMatches
   baseParserVersion
   switchedOnAt
+  origin
 `;
 
 const ENTRY_FIELDS = `

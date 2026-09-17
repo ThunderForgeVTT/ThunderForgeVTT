@@ -24,6 +24,9 @@
 //! re-import moves (FR-006). A world reading the collection meets a new
 //! version exactly as it meets a re-read book: its deltas attach by kind and
 //! name and anything that no longer does is reported, not dropped.
+//!
+//! Unlike a book's, a collection's previous version is kept (FR-104), by
+//! [`crate::compendium::versions`], so any change to it can be undone.
 
 use std::collections::BTreeMap;
 
@@ -34,6 +37,7 @@ use uuid::Uuid;
 use crate::auth::account_ownership::{AccountOwned, AccountOwnershipError, require_account_owner};
 use crate::compendium::origin::ContentOrigin;
 use crate::compendium::store::{Compendium, StoredEntry};
+use crate::compendium::versions;
 use crate::library::deltas::Content;
 use crate::schema::{compendium_entries, compendiums};
 
@@ -63,6 +67,8 @@ pub enum CollectionError {
     Untitled,
     #[error("this collection has no such entry")]
     NoSuchEntry,
+    #[error("this collection has no version {version} to go back to")]
+    NoSuchVersion { version: i32 },
     #[error("an entry could not be stored as written: {0}")]
     Unstorable(String),
     #[error("database error: {0}")]
@@ -149,6 +155,7 @@ pub fn write_entry(
                 name: name.to_string(),
             });
         }
+        versions::record(conn, collection.id, &format!("Wrote {kind} \"{name}\""))?;
 
         let entry = diesel::insert_into(compendium_entries::table)
             .values((
@@ -176,6 +183,16 @@ pub fn remove_entry(
 ) -> Result<(), CollectionError> {
     let collection = writable(conn, caller, collection_id)?;
     conn.transaction(|conn| {
+        let named: Option<(String, String)> = compendium_entries::table
+            .filter(compendium_entries::id.eq(entry_id))
+            .filter(compendium_entries::compendium_id.eq(collection.id))
+            .select((compendium_entries::kind, compendium_entries::name))
+            .first(conn)
+            .optional()?;
+        let Some((kind, name)) = named else {
+            return Err(CollectionError::NoSuchEntry);
+        };
+        versions::record(conn, collection.id, &format!("Took out {kind} \"{name}\""))?;
         let removed = diesel::delete(
             compendium_entries::table
                 .filter(compendium_entries::id.eq(entry_id))
@@ -320,7 +337,9 @@ fn writable(
 }
 
 /// Recount the collection's entries and move it on a version.
-fn next_version(
+///
+/// Every caller has [`versions::record`]ed the version it replaces first.
+pub(crate) fn next_version(
     conn: &mut PgConnection,
     caller: Uuid,
     collection_id: Uuid,

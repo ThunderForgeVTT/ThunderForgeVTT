@@ -277,6 +277,23 @@ pub enum DeltaError {
     Unnamed,
     #[error("an entry could not be stored as written: {0}")]
     Unstorable(String),
+    /// FR-101, FR-102: an imported base records what its book says, so no
+    /// change of any size goes back into it. Said where the sync is looked
+    /// for, so its absence is never a mystery.
+    #[error(
+        "{title} was read in from a book, so your changes stay in this world: a book's entries record what the book says, and nothing is written back into them"
+    )]
+    BookNeverSyncsBack { title: String },
+    /// A sync back writes to the world owner's shelf, not to the table.
+    #[error("only the world's owner can sync changes back to their collection")]
+    OnlyTheOwnerSyncs,
+    /// FR-103: what was confirmed is no longer what would land.
+    #[error(
+        "the collection or this world's changes moved on since you looked; review the changes again before syncing"
+    )]
+    SyncPlanChanged,
+    #[error("this world has no changes to sync back to the collection")]
+    NothingToSync,
     #[error("database error: {0}")]
     Database(String),
 }
@@ -667,9 +684,11 @@ pub struct RemovalConsequence {
 }
 
 mod reimport;
+mod sync_back;
 mod write;
 
 pub use reimport::{WorldUnattached, unattached_after_reimport};
+pub use sync_back::{ShelfChange, SyncOutcome, SyncPlan, plan_sync_back, sync_back};
 
 use write::origin_of_book;
 pub use write::{add_entry, change_entry, hide_entry, remove_kept_addition, restore_entry};

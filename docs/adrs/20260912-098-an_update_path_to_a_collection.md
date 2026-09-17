@@ -155,6 +155,43 @@ adopted scene records no adoption for a takedown to follow. The owner chose to
 keep scenes out of syncable collections. Sync-back therefore waits on both this
 determination and T042.
 
+## How the conditions hold as built (2026-09-16)
+
+Sync-back shipped in spec 049 phase 15 **for collections on the owner's shelf**
+(`compendiums` rows of origin `Authored`). Versions are rows of
+`shelf_collection_versions`; every write, removal, sync and restore keeps the
+version it replaces, and a restore is a new version, never a rewind.
+
+1. **Condition 1 holds by construction.** A shelf collection has no share link
+   and cannot be adopted: those belong to spec 026's shared collections, a
+   different table. `versions::history`, `versions::read_at` and
+   `versions::restore` refuse everyone but the account owner, and no GraphQL
+   field exposes a version to anyone else.
+2. **Condition 2 holds by construction**, for the same reason: there is no
+   adopted copy of a shelf collection for a sync to reach. A sync writes the
+   owner's own rows and the syncing world's deltas, nothing else.
+3. **Condition 3 holds vacuously.** No notice can name a shelf entry — the
+   current version included — because shelf entries are not a moderated
+   entity type. There is nothing for a takedown to withhold from an earlier
+   version that it could withhold from the current one.
+
+**Where condition 3 gets re-tested:** the day shelf entries become moderatable.
+To make that re-test real rather than remembered, every read of an earlier
+version goes through one function, `compendium::versions::read_at`, and
+`versions_tests.rs::an_earlier_version_is_read_in_one_function` fails if a
+second read of the stored entries appears, through Diesel or SQL.
+
+**The caveat, stated plainly:** `read_at` covers *earlier* versions only. The
+version in force is also read by `compendium::collections::download` and by
+`library::book_list::entries_served_by` (what worlds are served). A future
+moderation check must go into those two as well as `read_at`, or the current
+version would be withheld less than its history.
+
+Imported books have no versions and no sync-back at any volume of change
+(spec 050 FR-101): the server refuses with the reason, and a database trigger
+refuses a version row for any compendium that is not `Authored`, however it is
+written.
+
 ## Consequences if accepted
 
 - Spec 050's sync-back is unblocked, and only for authored **collections**.

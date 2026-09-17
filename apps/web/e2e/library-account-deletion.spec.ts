@@ -130,6 +130,11 @@ function libraryBytes(
       "world_entry_deltas",
       `t.compendium_id IN (${ids}) OR t.name IN (${named})`,
     ),
+    // A collection's earlier versions (spec 050 FR-104) hold its entries too.
+    versions: bytes(
+      "shelf_collection_versions",
+      `t.compendium_id IN (${ids})`,
+    ),
   };
 }
 
@@ -244,5 +249,6 @@ test("deleting an account from its page leaves zero bytes of its library", async
     entries: 0,
     bookLists: 0,
     deltas: 0,
+    versions: 0,
   });
 });
