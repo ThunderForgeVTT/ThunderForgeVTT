@@ -1,9 +1,11 @@
 # Implementation Plan: The Hero Builder
 
-**Branch**: `044-hero-builder` | **Date**: 2026-09-15 | **Spec**: [spec.md](./spec.md)
+**Branch**: `044-hero-builder` | **Date**: 2026-09-15, re-planned 2026-09-16 | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `/specs/044-hero-builder/spec.md`, decided
-2026-09-14.
+2026-09-14 and clarified 2026-09-16 (look only; full-screen dialog; "Build look"
+on every NPC row; a race-aware dice roll whose race is pre-selected from the
+sheet).
 
 ## Summary
 
@@ -14,9 +16,11 @@ plan builds the thing that drives it, in the order the owner meets it.
 
 A **hero spec** stays the unit of currency. Phase (a) makes it editable by
 looking at it, in a library of React components and a standalone app that needs
-no server. Phase (b) puts a "Build a hero" control inside `ActorImageryPanel`,
-so it appears on every page that mounts the panel, and adds Quick NPC beside the
-compendium's Add-NPC link. Phase (c) gives the player who holds a character the
+no server, with a dice roll that can be narrowed to a race. Phase (b) puts a
+"Build look" control inside `ActorImageryPanel`, so it appears on every page
+that mounts the panel, puts the same control on every row of the compendium's
+NPC list, and adds Quick NPC beside the compendium's "New NPC" button. All three
+open one full-screen dialog and save through one helper. Phase (c) gives the player who holds a character the
 right to change its art — the first right in this product derived from a claim
 rather than from a permission row — with a per-world setting and a per-character
 lock as the two ways to withdraw it. Phase (d) stores the spec beside the image
@@ -28,8 +32,8 @@ at all.
 
 | Phase | Who | What lands | Proven by |
 |---|---|---|---|
-| **(a)** | Us | Five additions to `packages/heroes`; `packages/hero-builder`; `apps/hero-builder` | `apps/hero-builder/e2e/builder.spec.ts`, no backend; `pnpm -F @thunderforge/heroes check` |
-| **(b)** | A Game Master | "Build a hero" inside `ActorImageryPanel`; Quick NPC in the compendium | `apps/web/e2e/hero-builder-npc.spec.ts` |
+| **(a)** | Us | Six additions to `packages/heroes` (labels, palettes, race looks, randomiser, minimal spec, preset source); `packages/hero-builder`; `apps/hero-builder` | `apps/hero-builder/e2e/builder.spec.ts`, no backend; `pnpm -F @thunderforge/heroes check` |
+| **(b)** | A Game Master | "Build look" in `ActorImageryPanel` and on each NPC row; the race read from the sheet through the manifest; Quick NPC in the compendium | `apps/web/e2e/hero-builder-npc.spec.ts` |
 | **(c)** | A player | A holder's imagery grant at the data boundary; the world setting; the per-character lock; building while creating your own character | `apps/web/e2e/hero-builder-player.spec.ts` |
 | **(d)** | Everyone above | `world_actor_images.hero_spec`; re-opening a saved hero; travel through collections and the export | `apps/web/e2e/hero-builder-saved.spec.ts` |
 
@@ -37,9 +41,9 @@ Each phase ships alone. (b) needs (a), because the builder is what the button
 opens. (c) needs (b) for the control and adds only authorisation. (d) needs (b)
 for something to save, and changes the data model as (c) does.
 
-**The owner's request of 2026-09-15 — a "Build a hero" button beside the
-portrait and token on an actor's edit page — is phase (b), and it is the
-second phase.** There is no honest way to make it the first: the button opens a
+**The owner's request of 2026-09-15 — a builder button beside the
+portrait and token on an actor's edit page, now labelled "Build look" — is
+phase (b), and it is the second phase.** There is no honest way to make it the first: the button opens a
 builder that does not exist yet. Phase (a) is therefore scoped to the builder
 and nothing else, and phase (b) puts the control in `ActorImageryPanel.tsx`
 rather than in a page, so it arrives on the NPC editor and on the character page
@@ -99,14 +103,18 @@ a dynamic `import()` at the point of opening, in the manner of
   `require_actor_permission`'s neighbourhood, not in the panel (Principle III).
 
 **Scale/Scope**: Four phases. They touch `packages/heroes` (five pure additions
-plus a JSON Schema in phase d), two new workspace members, five files in
-`apps/web`, four server modules, two migrations, and four Playwright specs. No
+plus a JSON Schema in phase d), two new workspace members, about eight files
+in `apps/web`, one manifest field in `packs/systems/dnd5e/system.json`, four
+server modules, two migrations, and four Playwright specs. No
 new service and no new runtime dependency.
 
 ## What the code says, against what the spec assumed
 
 The spec's context was written on 2026-09-10 and decided on 2026-09-14. Verified
-against `main` at `d3b91d7` on 2026-09-15, five of its statements have moved.
+against `main` at `d3b91d7` on 2026-09-15, five of its statements had moved.
+Re-verified against `main` at `3101e9f` on 2026-09-16: items 1–4 still hold
+(`copy.rs`'s image select now starts at `:595`), item 5 has changed, and a sixth
+has appeared.
 Each is a planning input, not a correction to the spec's intent.
 
 1. **The catalogue has doubled, and the builder must cover monsters.** The spec
@@ -152,16 +160,47 @@ Each is a planning input, not a correction to the spec's intent.
    different again: `mutations_actor_shares.rs:390-420` copies an actor **without
    any imagery rows at all**, so nothing travels there and nothing needs to.
 
-5. **The imagery panel is still mounted in one place, and there is no room left
-   for a button yet.** `ActorImageryPanel` is imported only by
-   `NpcEditorPage.tsx:14`, mounted at `:224` when `mode === "edit"`;
-   `ActorDetailPage.tsx` mounts lore, inventory, abilities, checks and the pack
-   sheet, and no imagery. As of `d3b91d7` no in-flight change in the working tree
-   or in any of the three worktrees adds one. The plan therefore does not depend
-   on that work: phase (b) puts the control inside the panel, and phase (c)'s
-   task list includes mounting the panel on `ActorDetailPage` (FR-033) should it
-   not already be there. If the separate change lands first, that task becomes a
-   no-op and says so.
+5. **The imagery panel is now mounted twice, and the compendium row uploads
+   too** (`04b1cf9`, `88d7a55`, `f15a9d6`, 2026-09-15/16).
+   - `NpcEditorPage.tsx:224` (edit mode, after the NPC is saved) and
+     `ActorDetailPage.tsx:489-494` (edit mode, `canEdit =
+     myPermissionLevel !== "VIEWER"`, `:144`). A comment at `:~496-501` holds
+     the builder's place. Phase (b)'s control in the panel therefore reaches
+     both pages at once, and phase (c)'s "mount the panel" task is gone.
+   - **But phase (c) is not free on that page.** Edit mode redirects a Viewer
+     to `/view` (`:140-142`), and a claim holder resolves to Viewer (item 3).
+     So the holder never sees the panel. Phase (c) mounts it in view mode as
+     well, gated by a server-computed `myMayChangeImagery` (contract §4).
+   - `NpcCompendiumTab` now has a per-row portrait upload
+     (`handlePortrait`, `:177-200`; input at `:296-352`), and the old Add-NPC
+     link at `:261-270` is a "New NPC" button at `:397-407`. FR-028a's row
+     control sits beside the row's upload; Quick NPC sits beside "New NPC".
+   - `ActorImageryPanel`'s `canEdit` gate is at `:182`, not `:175`.
+
+6. **An image upload is refused while the world is paused.**
+   `refuse_content_if_paused` (`mutations_actor_images.rs:122-124`) runs after
+   the permission check. The spec now names the edge case; the save helper
+   reports it per role and keeps the dialog open with the hero intact.
+
+### The race the dice read (FR-007a)
+
+- The dnd5e sheet stores race as free text, `trait_data.race`
+  (`packs/systems/dnd5e/system.json:855-858`); Genie has no race field.
+- `apps/web` already reads sheet fields without naming a system: size is
+  located by the manifest's `combat.sizes.source` (`utils/sizeCategory.ts:30`).
+  Race follows the same pattern: a manifest `appearance.race.source`, read by
+  a small `utils/raceOnSheet.ts`, matched by `matchRace` in `packages/heroes`
+  (research R6, R7).
+- The manifest is a typed schema, not loose JSON: `SystemManifest`
+  (`crates/pack_system_spec/src/lib.rs:53-110`) carries each optional block, and
+  `combat.rs:215-220` refuses a `sizes.source` whose slot and field the system's
+  data types do not declare. `appearance` joins it the same way — an optional
+  `SystemAppearance { race: Option<{ source: { slot, field } }> }`, checked by
+  the same `require_field`, with the published JSON Schema regenerated. Absent
+  stays a correct answer, as it is for `vision`.
+- The race picker and dice live in the library; the race looks and aliases live
+  in `packages/heroes`. No drawing is added: every race in R6's first table is
+  built from parts that already exist.
 
 Two smaller confirmations, since the plan rests on them: `storage/svg.rs`
 rasterises at 1024 px on the longest edge (`:25`, `:54-56`), resolves no
@@ -195,7 +234,7 @@ about copies below.
 
 | Principle | How this plan satisfies it |
 |---|---|
-| **I. ECS owns simulation, React owns chrome** | The builder never speaks to the engine (FR-029). It draws SVG in React and hands bytes to an existing mutation; a built token reaches the map the way every uploaded token has since spec 031, through `token_art.rs`. No canvas state moves, and no rule is computed in React — there is no rule here, only a picture. |
+| **I. ECS owns simulation, React owns chrome** | The builder never speaks to the engine (FR-029). The race-aware roll is deterministic presentation data in `packages/heroes`, not a game rule, and it never writes the sheet. It draws SVG in React and hands bytes to an existing mutation; a built token reaches the map the way every uploaded token has since spec 031, through `token_art.rs`. No canvas state moves, and no rule is computed in React — there is no rule here, only a picture. |
 | **II. Plugin-modular engine** | No engine change in any phase. `make lint-wasm` is named in the gates only because the pre-push hook runs it, not because this feature touches wasm. |
 | **III. Ownership at the data boundary** | Phases (a) and (b) add no authority: `uploadActorImage` keeps its Editor gate and its pause gate (`mutations_actor_images.rs:113-124`), and the panel's `canEdit` stays presentation. Phase (c) widens the gate **on the server**, in one function that reads the claim, the world setting and the per-character lock, and every e2e proves the refusal by calling the mutation directly (SC-010). Phase (d) treats a stored spec as untrusted input, shape-checked and size-capped server-side before it is written (FR-037). |
 | **IV. ADRs before divergent implementation** | Two, each landing with its phase: **ADR-105, "A character's look belongs to whoever holds it"** (phase c) — the first right derived from a claim rather than a `world_actor_permissions` row, and the two ways a Game Master withdraws it; and **ADR-106, "A stored image remembers the spec that drew it"** (phase d), recorded as an extension of ADR-057 and carrying R4's rejected alternatives and the append-only consequence (FR-038). Phases (a) and (b) need none: they add a tool over paths that are already decided. |
@@ -219,13 +258,13 @@ cover imagery only" says so.
 
 ```text
 specs/044-hero-builder/
-├── spec.md              # the specification, decided 2026-09-14
-├── research.md          # Phase 0: R1–R5
+├── spec.md              # the specification, decided 2026-09-14, clarified 2026-09-16
+├── research.md          # Phase 0: R1–R7 (R6 race looks, R7 where race is read)
 ├── plan.md              # this file
 ├── data-model.md        # Phase 1: the three columns, and who carries them
 ├── contracts/
 │   └── builder.md       # Phase 1: the package's new exports, the library's seam,
-│                        # the GraphQL surface, and rules B1–B9
+│                        # the GraphQL surface, and rules B1–B9 and B5a
 ├── quickstart.md        # Phase 1: how each phase is proved
 ├── checklists/
 │   └── requirements.md  # the spec's own quality gate
@@ -235,11 +274,12 @@ specs/044-hero-builder/
 ### Source Code (repository root)
 
 ```text
-packages/heroes/src/                # phase (a): five pure additions, phase (d): one
+packages/heroes/src/                # phase (a): six pure additions, phase (d): one
 ├── spec.ts                         # unchanged lists; labels and palettes import from here
 ├── labels.ts                       # new (a): HERO_LABELS, one per field and per choice
 ├── palettes.ts                     # new (a): HERO_PALETTES, a swatch list per colour field
-├── random.ts                       # new (a): randomHero(seed, locked), over `seeded`
+├── races.ts                        # new (a): HERO_RACES, matchRace — race looks and aliases
+├── random.ts                       # new (a): randomHero(seed, { locked, race }), over `seeded`
 ├── minimal.ts                      # new (a): minimalSpec(spec) — drop what does not change the draw
 ├── presetSource.ts                 # new (a): presetSource(slug, spec) — SKIN_TONES names where they match
 ├── schema.ts                       # new (d): HERO_SPEC_SCHEMA, derived from the lists
@@ -249,6 +289,7 @@ packages/hero-builder/              # new workspace package (a)
 ├── package.json                    # @thunderforge/hero-builder; React 19 as a peer dependency
 ├── src/HeroBuilder.tsx             # the builder; state is a HeroSpec, drawn through validateHero
 ├── src/controls/                   # one control kind per field kind, rendered from the catalogue
+├── src/roll/                       # race picker and dice (FR-007a), from HERO_RACES
 ├── src/preview/HeroPreview.tsx     # portrait and token, each with a unique id prefix (FR-011)
 ├── src/io/                         # import, export, copy-as-preset
 └── src/index.ts                    # the seam in contracts/builder.md §2
@@ -260,15 +301,22 @@ apps/hero-builder/                  # new workspace app (a)
 └── e2e/builder.spec.ts             # SC-002 to SC-006, from the catalogue at run time
 
 apps/web/src/
-├── pages/world/actor/ActorImageryPanel.tsx     # (b): "Build a hero", both roles, per-role result
-├── pages/world/actor/HeroBuilderDialog.tsx     # (b): the dialog, dynamic import(), focus trap
-├── pages/world/actor/ActorDetailPage.tsx       # (c): mount the panel (FR-033), the GM's lock control
-├── pages/world/compendium/NpcCompendiumTab.tsx # (b): Quick NPC beside the Add-NPC link
+├── pages/world/actor/ActorImageryPanel.tsx     # (b): "Build look", both roles, per-role result
+├── pages/world/actor/HeroBuilderDialog.tsx     # (b): full-screen dialog, dynamic import(), focus trap, race
+├── pages/world/actor/saveBuiltHero.ts          # (b): the one save path — two uploads, per-role, paused
+├── pages/world/actor/heroFiles.ts              # (b): SVG string + role → File
+├── pages/world/actor/ActorDetailPage.tsx       # (b): drop the reserved comment; (c): panel in view mode, the GM's lock
+├── pages/world/compendium/NpcCompendiumTab.tsx # (b): "Build look" per row (FR-028a); Quick NPC beside "New NPC"
+├── utils/raceOnSheet.ts                        # (b): the manifest-declared race field, system-agnostic
 ├── pages/world/compendium/QuickNpcDialog.tsx   # (b): name, previews, reroll, room for a template
 ├── pages/world/ActorSelectionPage.tsx          # (c): build while creating your own character
 ├── pages/world/settings/…                      # (c): "Players may change their character's art"
 ├── api/actors.ts                               # (b) heroSpec on upload (d); (c) the two new mutations
 └── vite.config.mts                             # (a/b): the workspace deps, no second React
+
+crates/pack_system_spec/src/lib.rs              # (b): optional `appearance` block on SystemManifest
+crates/pack_system_spec/src/appearance.rs       # (b): SystemAppearance + require_field check, with tests
+packs/systems/dnd5e/system.json                 # (b): "appearance.race.source" → traitData.race
 
 src/server/src/
 ├── auth/actor_imagery.rs           # new (c): may_change_actor_imagery — claim, setting, lock
@@ -288,11 +336,11 @@ docs/adrs/                          # ADR-105 (c), ADR-106 (d)
 workspace members research R1 decided. Two points the structure makes that the
 task list depends on:
 
-- **The control lives in the panel, not in a page.** `ActorImageryPanel` already
-  owns both roles, the upload call and the per-role status line
-  (`ActorImageryPanel.tsx:51-68`, `:99`, `:210`). Putting "Build a hero" there
-  means FR-023, FR-025 and FR-033 are one component's job and arrive on every
-  page that mounts the panel.
+- **The control lives in the panel, not in a page, and the save lives in one
+  helper.** `ActorImageryPanel` already owns both roles and the per-role status
+  line, and is mounted on both actor pages. The compendium row and Quick NPC are
+  the other two hosts, so the two-upload, per-role, paused-aware save is
+  `saveBuiltHero`, used by all three — FR-025 is written once.
 - **Phase (a)'s e2e does not go through `scripts/e2e-parallel.mjs`.** That
   harness knows two suites, both rooted at `apps/web`
   (`scripts/e2e-parallel.mjs:185-193`), and every lane stands up a database, a
@@ -329,12 +377,17 @@ No constitution violations to justify. Four risks, named rather than tracked:
 Two questions the code raised that the spec's Decisions do not answer. Neither
 blocks phase (a); both want an answer before the phase that needs them.
 
+0. **Settled 2026-09-16** (spec Clarifications): look only, full-screen
+   dialog, "Build look" on each NPC row, and a race picker pre-selected from the
+   sheet. A full character builder is a later spec that embeds this one.
+
 1. **Does the builder offer `size`?** It is a spec field with a footprint on the
    board (`SIZE_CATEGORIES`, `render.ts:45`) and FR-001 does not list it. This
    plan gives it a control, because a builder that can draw a dragon but not say
    it is huge writes a spec whose token is the wrong size on the map. If size
    should instead be the actor's business and not the hero's, the control comes
-   out and phase (d)'s stored spec keeps carrying the default.
+   out and phase (d)'s stored spec keeps carrying the default. A race that
+   narrows size (halfling, gnome, goblin in R6) depends on this answer too.
 2. **What happens to a stored spec when a choice is retired anyway?** FR-038
    makes choices append-only, and US6 scenario 4 says a spec that no longer
    validates shows its problem and leaves the image alone. That is the right

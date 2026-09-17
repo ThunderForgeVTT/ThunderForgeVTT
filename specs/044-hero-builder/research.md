@@ -1,6 +1,6 @@
 # Research: The Hero Builder
 
-**Spec**: [spec.md](./spec.md) · **Date**: 2026-09-10
+**Spec**: [spec.md](./spec.md) · **Date**: 2026-09-10, R6–R7 added 2026-09-16
 
 This file records the decisions the spec states and the options that lost.
 Each entry has the same four parts: decision, why, alternatives and
@@ -197,3 +197,91 @@ The phase (a) spec takes its expectations from `HERO_PARTS`, `HERO_COLORS` and
 `HERO_FLAGS` at run time, not from hard-coded counts, so it grows with the
 catalogue (SC-002). It also checks the page for duplicated ids after every
 preset (SC-005) and walks the builder by keyboard alone (SC-004).
+
+## R6: What a race is to the builder (FR-007a, decided 2026-09-16)
+
+**Decision**: a race is a **race look** in `packages/heroes` — a key, a label,
+aliases, and for some fields a narrower list of choices or swatches than the
+catalogue offers. `randomHero` takes an optional race and picks each
+constrained field from the race's list and every other field from the whole
+catalogue. Nothing else in the builder knows what a race is.
+
+A first set, all drawn from parts that exist today (`spec.ts:17-79`), so phase
+(a) adds no drawing:
+
+| Race | Aliases (matched case-insensitively) | Constrains |
+|---|---|---|
+| human | — | skin to `SKIN_TONES`' natural tones (not `sage`, `ember`); ears `round` |
+| elf | high elf, wood elf, dark elf, drow, eladrin | ears `pointed`; beard off |
+| half-elf | half elf | ears `pointed` |
+| dwarf | hill dwarf, mountain dwarf, duergar | ears `round`; beard on; size `medium` |
+| halfling | lightfoot, stout | ears `round`; size `small` |
+| gnome | forest gnome, rock gnome, deep gnome | ears `pointed`; size `small` |
+| orc | — | skin from `sage` and `MONSTER_TONES.orcMoss`; tusks on |
+| half-orc | half orc | skin from `sage`, `orcMoss` and the natural tones; tusks on |
+| tiefling | — | headgear `tiefling`; skin from `ember`, `fiendCrimson` and the natural tones |
+| dragonborn | — | muzzle `snout`; hide `scales`; skin from the three dragon tones |
+| goblin | — | skin `goblinGreen`; ears `pointed`; size `small` |
+
+**Why**:
+
+- **It is the catalogue's own rule, applied once more.** Labels and palettes
+  live in the package so a new choice fails the package's check, not the
+  builder (R2). A race is the same kind of data, and it gets the same test:
+  every constrained choice is a real choice, every swatch is `#rrggbb`, no
+  alias belongs to two races, and every roll for a race satisfies it.
+- **Narrowing, not dictating.** A race lists only what makes it recognisable.
+  Hair, mouth, headgear (except the tiefling's horns), props and outfit stay
+  free, so a hundred elves are a hundred elves.
+- **A lock beats a race.** A field the user locked is not rolled at all
+  (FR-007), so an elf with round ears the GM chose on purpose stays that way.
+  The race narrows only what the dice pick.
+- **Scope, not style** (spec Assumptions): the table says what a race is known
+  for; the look is ThunderForge's parts.
+- **The table grows like the catalogue.** A race needing a part that does not
+  exist yet (a tabaxi's fur and whiskers) waits for the part; this plan draws
+  none.
+
+**Alternatives**:
+
+| Option | Why not |
+|---|---|
+| **Races inside a game system pack** | The look is not a rule. Two systems' elves should look alike here, and a pack would have to import `packages/heroes` to name its parts. |
+| **Presets per race** (roll picks a preset and mutates it) | Twelve presets are too few; races would collapse into a handful of faces. |
+| **Weights instead of lists** | More knobs than the owner asked for; lists are testable by "every roll satisfies it", weights are not. |
+
+## R7: Where the builder reads a character's race (FR-007a, decided 2026-09-16)
+
+**Decision**: a game system **declares** where its sheet keeps a race, in its
+manifest, the way spec 046 made systems declare where size is kept
+(`combat.sizes.source`, `apps/web/src/utils/sizeCategory.ts:30-33`). `apps/web`
+reads that field through `useActorSystemData` and passes the text to
+`matchRace(text)` in `packages/heroes`. A match pre-selects the picker; no
+match, no declaration, or no sheet starts it on "any".
+
+```json
+// packs/systems/dnd5e/system.json — beside "resources"
+"appearance": { "race": { "source": { "slot": "traitData", "field": "race" } } }
+```
+
+Genie declares nothing (its sheet has no race), so a Genie character always
+opens on "any".
+
+**Why**:
+
+- **`apps/web` names no system and no field.** `sizeCategory.ts` is
+  system-agnostic by the same rule, and a second reader should not hard-code
+  `trait_data.race` where the first does not hard-code size.
+- **The sheet's text is free.** dnd5e's `race` is a string
+  (`system.json:855-858`), so "High Elf", "half-orc" and a homebrew "Moonkin"
+  all occur. Aliases turn the common ones into a race; the rest fall to "any",
+  which never blocks a roll.
+- **Read-only.** The picker never writes the race back (FR-007a).
+
+**Alternatives**:
+
+| Option | Why not |
+|---|---|
+| **Hard-code `trait_data.race` in the web app** | Names a system's field outside its pack; breaks the day a system calls it `species` or `ancestry`. |
+| **Guess across keys (`race`, `species`, `ancestry`)** | Silent heuristics; a Genie `lineage` field means something else entirely. |
+| **Only a picker, never read the sheet** | The owner chose a picker pre-selected from the sheet over a picker alone (clarify session, 2026-09-16). |

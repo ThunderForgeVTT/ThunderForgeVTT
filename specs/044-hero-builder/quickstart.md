@@ -26,7 +26,10 @@ The catalogue's own gate, which `pnpm verify` already runs:
 pnpm -F @thunderforge/heroes check
 ```
 
-It must fail, not the builder, when a choice has no label (US2 scenario 3), when
+It must fail, not the builder, when a race's look names a choice or swatch
+that does not exist, when an alias belongs to two races, when a roll for a race
+breaks its look, or when `matchRace` misses a listed alias; and when a choice
+has no label (US2 scenario 3), when
 two choices draw alike (already true, `heroes.test.ts:59-71`), when `randomHero`
 is not reproducible, when `minimalSpec` drops a field that changes the drawing,
 or — from phase (d) — when `HERO_SPEC_SCHEMA` and the lists disagree.
@@ -52,6 +55,10 @@ from a count written in the spec file (SC-002). It checks:
 - every preset loads and matches what the CLI writes for it (US1 scenario 3);
 - randomise is reproducible from its shown seed and leaves locked fields alone
   (FR-007);
+- the race picker lists every key of `HERO_RACES` after "any"; for every race,
+  rolling with a few seeds gives heroes that satisfy that race's look, derived
+  from `HERO_RACES` at run time; a locked field beats the race; the exported
+  spec carries no race (FR-007a, B5a);
 - export then import reproduces the on-screen hero byte for byte, for every
   preset (SC-003);
 - copy-as-preset produces an entry that pastes into `presets.ts` and passes the
@@ -79,11 +86,20 @@ then search the log for `✘` — the summary is not the proof.
 
 `apps/web/e2e/hero-builder-npc.spec.ts`:
 
-- a Game Master opens an NPC's edit page, presses "Build a hero", changes a
-  choice, saves, and both roles appear in the panel; the served bytes are WebP
+- a Game Master opens an NPC's edit page, presses "Build look", the builder
+  opens as a full-screen dialog with no change of URL (FR-019), they change a
+  choice, save, and both roles appear in the panel; the served bytes are WebP
   (`RIFF`/`WEBP`), the same assertion the P8 spec makes
   (`world-compendium.spec.ts:268`);
 - the hero opens with the NPC's name already in it (FR-023);
+- on the compendium list, a row's "Build look" opens the same dialog, saves both
+  roles, and the GM is still on the list with the row's portrait updated
+  (FR-028a); a Player sees no row build control;
+- a dnd5e NPC whose sheet race is "High Elf" opens with the picker on elf and
+  rolls pointed ears; a race of "Moonkin" and a Genie NPC both open on "any"
+  (FR-007a, research R7);
+- with the world paused, saving reports the refusal, stores nothing, and the
+  dialog keeps the hero (spec Edge Cases);
 - an NPC that already has art warns before saving that both roles will be
   replaced (FR-025);
 - one role made to fail reports that role failed, the other as saved, and the
@@ -137,6 +153,10 @@ mutation directly as well as by looking for the button**.
 ```bash
 node scripts/e2e-parallel.mjs --shards=1 --only=hero-builder-saved,collections-copy
 ```
+
+`cargo test -p pack_system_spec` covers the new `appearance` block: dnd5e's
+declaration loads, a source naming an undeclared field is refused, and an
+absent block is accepted (phase b, run with phase b's gates).
 
 `cargo test` for B7 in `src/server/src/heroes/spec_schema_tests.rs`: an array
 refused, an over-cap spec refused, an unknown field refused, a valid spec

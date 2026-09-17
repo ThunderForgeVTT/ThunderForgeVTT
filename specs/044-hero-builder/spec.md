@@ -22,9 +22,10 @@ Both are self-contained 256×256 SVG strings.
 
 The package was built with a builder in mind, and it says so:
 
-- **Every choice is exported as data.** `HERO_PARTS` holds six closed lists of
-  choices: ears, mouth, hair, headgear, emblem and prop. `HERO_COLORS` lists ten
-  colour fields, `HERO_FLAGS` two on/off fields, and `SKIN_TONES` eight starting
+- **Every choice is exported as data.** `HERO_PARTS` holds twelve closed lists
+  of choices: ears, mouth, hair, headgear, emblem and prop, plus build, muzzle,
+  eye style, hide, wings and tail from the bestiary work. `HERO_COLORS` lists
+  twelve colour fields, `HERO_FLAGS` two on/off fields, and `SKIN_TONES` eight starting
   swatches. A builder can render its controls from these instead of keeping its
   own list.
 - **No choice is a dead control.** The package test asserts that every choice
@@ -54,10 +55,12 @@ the latter.
   `world_actor_images`, unique on (`actor_id`, `role`), so re-uploading a role
   replaces that role's image and nothing else. `world_actors` has no image
   columns.
-- **The NPC editor is the only UI for this.** On
+- **Two pages mount the imagery panel.** On
   `/world/:id/compendium/npc/:actorId/edit`, `ActorImageryPanel` offers a file
   input per role. Because imagery hangs off an actor id, the NPC must be saved
-  before it can have art.
+  before it can have art. Since 2026-09-15 the same panel is also mounted on
+  `ActorDetailPage` in edit mode, and each row of the compendium's NPC list has
+  a portrait upload of its own.
 - **The e2e "Hero art (playtest 2026-09-10 P8)"** in `world-compendium.spec.ts`
   proves the path end to end. It uploads a preset's token as SVG, and it is
   served back as WebP.
@@ -75,10 +78,10 @@ somebody else's picture.** The imagery panel takes a file. It cannot make one.
 "GMs to build NPCs fast" means making the art in the product, in seconds, from
 parts that are ours to redistribute.
 
-**3. A player cannot give their own character a face.** The imagery panel is
-mounted on the NPC editor only. `ActorDetailPage`, the page a player's
-character lives on, has no imagery controls at all. There is a second gap
-underneath the first. As read on 2026-09-10, claiming a character or creating
+**3. A player cannot give their own character a face.** `ActorDetailPage`, the
+page a player's character lives on, now shows the imagery panel in edit mode,
+but only to someone who is not a Viewer on that actor. The real gap is
+underneath. As read on 2026-09-10, claiming a character or creating
 one's own (spec 017) writes no actor-permission row. Actor permission
 resolution does not consult claims or `owned_by`, and a member with no grant
 resolves to Viewer. The imagery mutation requires Editor. So a player most
@@ -109,6 +112,16 @@ already works around for `@thunderforge/genie`. So:
   and the e2e import it without React.
 
 The reasons, and the options not taken, are in [research.md](./research.md) R1.
+
+## Clarifications
+
+### Session 2026-09-16
+
+- Q: When a GM or player presses the builder button on an NPC or character, should it build only the character's look, or start building the whole character? → A: Look only (portrait and token) in this spec. A full character builder (look plus the game system's sheet) is wanted eventually, as its own spec, and opens this builder as its look step.
+- Q: Should the builder open in a dialog over the edit page, or on a page of its own? → A: A full-screen dialog over the page, so navigation stays simple (FR-019).
+- Q: Should each NPC row in the compendium also open the builder? → A: Yes. Each row gets a build control that opens the same dialog and saves both portrait and token (FR-028a). Owner also asked for a dice control on the build screen that randomises with the character's race taken into account (FR-007a).
+- Q: Where does the builder get the character's race for the dice roll? → A: A race picker in the builder, pre-selected from the sheet's race when it matches a known race or alias, otherwise "any" (FR-007a).
+- Q: What should the control that opens the builder say? → A: "Build look" (FR-023, FR-028a, FR-033).
 
 ## Phases
 
@@ -212,7 +225,7 @@ panel.
 **Acceptance Scenarios**:
 
 1. **Given** a GM (Editor or above) on an NPC's edit page, **When** they open
-   the imagery panel, **Then** a "Build a hero" control opens the builder with
+   the imagery panel, **Then** a "Build look" control opens the builder with
    the NPC's name as the hero's name.
 2. **Given** a hero in the builder, **When** "Save to this NPC" is pressed,
    **Then** the portrait and the token are both uploaded through
@@ -227,6 +240,14 @@ panel.
    or save control is offered. The server refuses the upload regardless.
 6. **Given** a builder that was closed without saving, **When** the GM returns,
    **Then** the NPC's images are unchanged.
+7. **Given** a GM on the compendium's NPC list, **When** they press a row's
+   "Build look", **Then** the same builder opens for that NPC, and saving
+   stores both roles while the GM stays on the list (FR-028a).
+8. **Given** an NPC whose sheet names a race the catalogue knows (for example
+   "High Elf"), **When** the builder opens, **Then** the race picker starts on
+   that race, and the dice roll a hero with that race's look. **When** the
+   race is unknown or the system has none, **Then** it starts on "any"
+   (FR-007a).
 
 ---
 
@@ -287,7 +308,7 @@ them.
    first and its art uploaded second. If the upload fails, the character exists
    without art and the player can add it from their character's page.
 2. **Given** a player's own character (created or claimed), **When** they open
-   its page, **Then** the imagery panel and "Build a hero" are offered.
+   its page, **Then** the imagery panel and "Build look" are offered.
 3. **Given** a character the player does not hold, **When** they try to change
    its imagery by any route, including a direct call to the mutation, **Then**
    the server refuses it.
@@ -298,7 +319,7 @@ them.
    that character's imagery, **Then** they are refused.
 6. **Given** a world whose GM has turned off "Players may change their
    character's art", **When** a player opens their own character, **Then** the
-   imagery panel shows the art without "Build a hero" or an upload control, and
+   imagery panel shows the art without "Build look" or an upload control, and
    a direct call to the mutation is refused.
 7. **Given** a character whose look the GM has locked, **When** the player who
    holds it tries to change its imagery by any route, **Then** they are refused
@@ -396,6 +417,10 @@ Confirm it is the same hero.
 - **Saving to an NPC while another GM saves to the same NPC.** Each upload
   replaces its role, and the last write wins per role. This matches
   `uploadActorImage` today, and the panel shows what was actually stored.
+- **The world is paused while the builder is open.** The server refuses image
+  uploads to a paused world. Saving reports that refusal for each role, stores
+  nothing, and keeps the hero in the builder so it can be saved after the
+  world resumes or exported.
 - **The NPC is deleted while the builder is open.** Saving fails with the
   server's refusal, and the builder keeps the hero so it can be exported.
 - **A part's drawing changes after a hero was saved.** Stored images are
@@ -444,6 +469,20 @@ Confirm it is the same hero.
   package's palettes. It MUST be reproducible from a seed that is shown, and it
   MUST leave locked fields unchanged. Randomise is deterministic code in
   `packages/heroes`, and no model or service is involved.
+- **FR-007a**: The build screen MUST offer a dice control that rolls a random
+  hero for the chosen race. A race narrows what randomise may pick (for example
+  pointed ears for an elf, green skin and tusks for an orc) and leaves every
+  other field free. The race-to-look mapping is data in `packages/heroes`,
+  drawn in ThunderForge's own style, and it is scope, not a copy of any
+  publisher's art. Rolling with no race chosen behaves as FR-007. Locked fields
+  stay unchanged, and the roll stays reproducible from its shown seed.
+  The race is chosen in a picker on the build screen, whose choices and their
+  aliases (for example "high elf" → elf, "half-orc") come from that same data.
+  Where the builder opens on an actor whose sheet names a race, the picker
+  MUST start on the matching race, compared case-insensitively against names
+  and aliases. Where nothing matches, or the game system has no race field,
+  it MUST start on "any". The picker never writes the race back to the sheet.
+  In the standalone app (phase a) it starts on "any".
 - **FR-008**: Colour controls MUST offer curated swatches from
   `packages/heroes` (`SKIN_TONES` for skin, and a palette per colour field for
   the rest). Every colour control MUST also accept any `#rrggbb`. Randomise
@@ -484,8 +523,11 @@ Confirm it is the same hero.
 - **FR-018**: Every choice and every colour swatch MUST have an accessible name
   that does not depend on seeing it, for example "Headgear: wizard hat" or
   "Skin: peach". A colour's hex value MUST be available as text.
-- **FR-019**: Where the builder opens as a dialog, focus MUST move into it,
-  stay within it and return to the control that opened it.
+- **FR-019**: In `apps/web` the builder MUST open as a full-screen dialog over
+  the page that opened it, never as a route of its own, so the GM or player
+  never navigates away from the actor. Focus MUST move into it, stay within it
+  and return to the control that opened it. Closing it returns to that page as
+  it was, and an unsaved hero does not survive a refresh.
 - **FR-020**: At 375 px wide the builder MUST keep both previews visible while
   its controls scroll, MUST NOT scroll horizontally, and MUST give every
   control a touch target of at least 44 px.
@@ -497,7 +539,7 @@ Confirm it is the same hero.
 
 **Phase (b): a GM, an NPC**
 
-- **FR-023**: The actor imagery panel MUST offer "Build a hero" to anyone the
+- **FR-023**: The actor imagery panel MUST offer "Build look" to anyone the
   panel already lets edit imagery. It MUST open the builder with the actor's name
   as the hero's name.
 - **FR-024**: "Save to this NPC" MUST upload the portrait and the token through
@@ -518,6 +560,12 @@ Confirm it is the same hero.
 - **FR-028**: Where quick NPC creates the NPC but cannot store its art, the NPC
   MUST remain. It MUST be shown as lacking art, with a way to add it. It MUST
   NOT be deleted to hide the failure.
+- **FR-028a**: Every NPC row in the compendium's NPC list MUST offer a build
+  control to the users who may edit that NPC's imagery. It MUST open the same
+  builder dialog as the edit page (FR-019), with the NPC's name, and saving MUST
+  follow FR-024 and FR-025 for both roles. The GM stays on the list, and the
+  row shows the new art when the save succeeds. The row's existing portrait
+  upload is unchanged.
 - **FR-029**: The builder MUST NOT communicate with the engine. A built token
   reaches the map the way any uploaded token does today.
 
@@ -543,7 +591,7 @@ Confirm it is the same hero.
 - **FR-032**: The GM's existing authority over every actor in their world MUST be
   unchanged, including the authority to replace a player's art. Neither the
   world setting nor a lock constrains the GM.
-- **FR-033**: The imagery panel, with "Build a hero", MUST be available on a
+- **FR-033**: The imagery panel, with "Build look", MUST be available on a
   character's own page to anyone permitted to change that character's imagery.
 - **FR-034**: "Create your own character" MUST allow a hero to be built as part
   of creating. It MUST create the character first and upload the art second,
@@ -579,8 +627,10 @@ Confirm it is the same hero.
   exports as data.
 - **Resolved hero**: a spec with every default filled in. It is what the parts
   draw from, and only `validateHero` produces one.
+- **Race look**: a race's name, its aliases, and the parts and palettes a roll
+  for that race may use. It is data in `packages/heroes`, part of the catalogue.
 - **Catalogue**: the exported lists of parts, choices, colour fields, flags,
-  labels and palettes in `packages/heroes`. The builder's controls come from
+  labels, palettes and race looks in `packages/heroes`. The builder's controls come from
   this and from nowhere else.
 - **Rendered hero**: the portrait SVG and the token SVG for one resolved hero.
 - **Actor image** (existing, ADR-057): one stored WebP per actor per role. From
@@ -677,6 +727,12 @@ Confirm it is the same hero.
 - **A stat block for quick NPC.** Quick NPC makes a named NPC with a face, and
   the sheet is filled in the way it is today. Applying a game system's NPC
   template is a later spec (see Decisions, 2).
+- **Building the whole character.** The builder makes a character's look, its
+  portrait and token, and nothing else. Ancestry, class, stats and the rest of
+  a game system's sheet stay in the existing editors. A full character builder
+  is wanted eventually as its own spec, and it opens this builder as its look
+  step (Decisions, 4), so nothing here may assume the builder is the whole
+  flow.
 - **A public "make your hero" page.** See Decisions, 3.
 - **An approval queue for players' art.** See FR-030c.
 - **Name suggestions.** The GM types the name.
@@ -718,3 +774,9 @@ questions this section held.
    of any server, so publishing it later is a static deploy plus a privacy
    note, not a redesign. That is reconsidered with the profile-content spec,
    where a hero can exist outside a world.
+4. **The builder makes a look, not a character** (decided 2026-09-16). This
+   spec builds the portrait and token only. A full character builder, the look
+   plus a game system's sheet, is wanted later as its own spec, and it embeds
+   this builder as one step. The library's props (contracts §2) therefore take
+   a starting spec and hand back a result through `actions`, and they never
+   assume they own the page or the save.

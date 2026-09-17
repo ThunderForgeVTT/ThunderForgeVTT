@@ -5,7 +5,12 @@
 Postgres through Diesel, one migration directory per change with paired
 `up.sql`/`down.sql` (constitution). Phase letters are the plan's.
 
-**Phases (a) and (b) change nothing here.** A hero built for an NPC is an SVG
+**Phases (a) and (b) change no table.** Phase (b) adds one optional block to
+the game-system manifest schema (`crates/pack_system_spec`), `appearance.race.
+source`, which dnd5e fills and Genie omits (research R7). A race is never
+stored: it narrows a roll and is gone (contract B5a).
+
+**Phases (a) and (b) change nothing in Postgres.** A hero built for an NPC is an SVG
 handed to `uploadActorImage`, and the server stores the WebP it already stored
 for any upload. The first schema change is phase (c)'s two switches; the second
 is phase (d)'s stored spec.
@@ -97,6 +102,9 @@ columns by name, so the new column travels only where a task puts it.
 - **The catalogue.** Parts, choices, labels, palettes and flags are code in
   `packages/heroes`, reviewed and shipped with the client. Nothing in the
   database names a part.
+- **The race a roll used.** It is a roll setting, not part of the look; the
+  sheet already says what the character's race is, and a saved spec is the
+  same however it was rolled.
 - **A randomiser's seed.** It is shown in the builder and travels in nothing.
   Re-entering it reproduces the hero (FR-007); storing it would be a second,
   weaker description of a spec that is already stored whole.
@@ -110,6 +118,7 @@ columns by name, so the new column travels only where a task puts it.
 |---|---|---|
 | **Hero spec** | `HeroSpec` (`packages/heroes/src/spec.ts:220`) — a name plus whatever differs from the defaults | Untrusted whenever it comes from outside the code; `validateHero` is the client gate, `HERO_SPEC_SCHEMA` and the size cap the server's |
 | **Resolved hero** | `ResolvedHero` (`spec.ts:178-217`), 28 fields, produced only by `validateHero`/`resolveHero` | Trusted, because only the validator makes one |
-| **Catalogue** | `HERO_PARTS` (12), `HERO_COLORS` (12), `HERO_FLAGS` (2), `SIZE_CATEGORIES` (6), `SKIN_TONES` (8), `MONSTER_TONES` (12), plus phase (a)'s labels and palettes | Trusted; it is our code |
+| **Catalogue** | `HERO_PARTS` (12), `HERO_COLORS` (12), `HERO_FLAGS` (2), `SIZE_CATEGORIES` (6), `SKIN_TONES` (8), `MONSTER_TONES` (12), plus phase (a)'s labels, palettes and race looks | Trusted; it is our code |
+| **Race look** | `HERO_RACES` in `packages/heroes/src/races.ts`: key, aliases, narrowed choices, swatches and flags (research R6) | Trusted; it is our code. The sheet's race text is untrusted and only ever passed to `matchRace` |
 | **Rendered hero** | two 256×256 SVG strings from `createHero(spec)` (`render.ts:41-49`) | Trusted as markup; the id prefix is validated against `^[A-Za-z][\w-]{0,63}$` (`render.ts:62`) |
 | **Actor image** | a `world_actor_images` row, one per `(actor_id, role)`; from phase (d) it may carry the spec that drew it | The image is WebP the server made; the spec is untrusted input stored beside it |
