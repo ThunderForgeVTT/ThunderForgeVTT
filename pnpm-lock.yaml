@@ -25,6 +25,43 @@ importers:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@26.2.0)(lightningcss@1.32.0)(sass@1.99.0)(terser@5.46.2)
 
+  apps/hero-builder:
+    dependencies:
+      '@thunderforge/hero-builder':
+        specifier: workspace:^
+        version: link:../../packages/hero-builder
+      '@thunderforge/heroes':
+        specifier: workspace:^
+        version: link:../../packages/heroes
+      react:
+        specifier: ^19.2.5
+        version: 19.2.5
+      react-dom:
+        specifier: ^19.2.5
+        version: 19.2.5(react@19.2.5)
+    devDependencies:
+      '@playwright/test':
+        specifier: ^1.62.1
+        version: 1.62.1
+      '@types/node':
+        specifier: ^26.2.0
+        version: 26.2.0
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.14)
+      '@vitejs/plugin-react':
+        specifier: ^6.0.1
+        version: 6.0.1(vite@8.0.10(@types/node@26.2.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.46.2))
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.10
+        version: 8.0.10(@types/node@26.2.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.46.2)
+
   apps/web:
     dependencies:
       '@codemirror/autocomplete':
@@ -224,6 +261,31 @@ importers:
   dist/engine: {}
 
   dist/pdf: {}
+
+  packages/hero-builder:
+    dependencies:
+      '@thunderforge/heroes':
+        specifier: workspace:^
+        version: link:../heroes
+    devDependencies:
+      '@types/node':
+        specifier: ^26.2.0
+        version: 26.2.0
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.14)
+      react:
+        specifier: ^19.2.5
+        version: 19.2.5
+      react-dom:
+        specifier: ^19.2.5
+        version: 19.2.5(react@19.2.5)
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
 
   packages/heroes:
     devDependencies:

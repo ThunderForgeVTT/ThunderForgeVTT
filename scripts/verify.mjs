@@ -147,6 +147,17 @@ const steps = [
     command: ["pnpm", "run", "check"],
   },
   {
+    // Spec 044 T036. The hero builder library is a package of its own for the
+    // same reason, and its check carries contract B1: the guard that fails if
+    // the builder names a catalogue key instead of reading it. Its behaviour is
+    // proved by `pnpm -F @thunderforge/hero-builder-app test:e2e`, which needs
+    // a browser and so is not a verify step.
+    id: "hero-builder",
+    name: "hero builder package",
+    cwd: "packages/hero-builder",
+    command: ["pnpm", "run", "check"],
+  },
+  {
     // Spec 029 T064. The TypeScript SDK types are generated from the Rust
     // types by ts-rs, and a generated file that has drifted from its source
     // is worse than no generated file: the compiler goes on cheerfully

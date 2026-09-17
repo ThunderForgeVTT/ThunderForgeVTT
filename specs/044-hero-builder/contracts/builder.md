@@ -34,9 +34,9 @@ export function randomHero(
   seed: string,
   options?: {
     locked?: Partial<Record<keyof ResolvedHero, true>>;
-    race?: RaceKey;            // absent = "any"
+    race?: RaceKey | null;     // absent or null = "any"
   },
-): HeroSpec;
+): Omit<HeroSpec, "name">;     // RolledHero: the name is the caller's
 // Built on the existing `seeded(seed)` chooser (seed.ts:56). Chooses only from
 // the closed lists and HERO_PALETTES, narrowed by the race's look where one is
 // given. A locked field is absent from the result, so the caller's own value
@@ -116,6 +116,16 @@ export function renderHero(
   spec: HeroSpec,
   idPrefix: string,
 ): { portrait: string; token: string };
+
+/** Files, for hosts that offer export or import (implemented 2026-09-16).
+ *  heroFiles' SVGs carry the renderer's default ids, byte-identical to
+ *  packages/heroes/src/cli.ts; parseHeroText refuses a spec whole, by field. */
+export function heroFiles(spec: HeroSpec): Record<"portrait" | "token" | "json", HeroFile>;
+export function parseHeroText(text: string):
+  | { ok: true; spec: HeroSpec }
+  | { ok: false; problems: HeroProblem[] };
+export function saveHeroFile(file: HeroFile): void;
+export function fileStem(name: string): string;
 
 /** The previews alone, for a dialog that is not the full builder (Quick NPC). */
 export function HeroPreview(props: {
