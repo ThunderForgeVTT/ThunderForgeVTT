@@ -87,8 +87,9 @@ pub struct GraphQLCompendium {
     pub book_title: String,
     /// The file's SHA-256. Readable only by the account that holds it, and
     /// what lets a client recognise a file it already has before reading a
-    /// second copy of it (FR-047). A hash is not content.
-    pub source_hash: String,
+    /// second copy of it (FR-047). A hash is not content. `null` for a
+    /// collection, which was read from no file.
+    pub source_hash: Option<String>,
     pub system_id: String,
     pub origin: GraphQLContentOrigin,
     pub parser_version: String,
@@ -145,7 +146,9 @@ pub struct GraphQLCompendiumEntry {
     pub name: String,
     /// The reader was unsure it had the name right. Shown, not hidden.
     pub name_uncertain: bool,
-    pub page: i32,
+    /// `null` for an entry written in a collection: it is on no page of any
+    /// book, and naming one would send somebody looking.
+    pub page: Option<i32>,
     /// Each declared field with the certainty it was read at. A field looked
     /// for and not found carries no value at all, which is why this crosses
     /// as it was stored rather than being flattened into strings.
@@ -342,7 +345,7 @@ fn connection(
         .map_err(|_| Error::new("Failed to get DB connection"))
 }
 
-fn to_graphql_entry(entry: &StoredEntry, book_title: &str) -> GraphQLCompendiumEntry {
+pub(crate) fn to_graphql_entry(entry: &StoredEntry, book_title: &str) -> GraphQLCompendiumEntry {
     GraphQLCompendiumEntry {
         id: entry.id,
         compendium_id: entry.compendium_id,

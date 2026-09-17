@@ -213,7 +213,7 @@ fn the_database_refuses_a_book_from_another_shelf() {
         Uuid::now_v7(),
         world,
         not_theirs.id,
-        not_theirs.source_hash,
+        not_theirs.source_hash.unwrap(),
         stranger,
     ))
     .execute(&mut conn);

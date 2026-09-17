@@ -61,7 +61,8 @@ export interface ApprovedBook {
 export interface Compendium {
   id: string;
   bookTitle: string;
-  sourceHash: string;
+  /** `null` for a collection, which was read from no file. */
+  sourceHash: string | null;
   systemId: string;
   origin: "AUTHORED" | "UPLOADED";
   pageCount: number;

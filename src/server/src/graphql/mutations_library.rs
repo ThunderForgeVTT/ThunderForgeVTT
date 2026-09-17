@@ -532,7 +532,7 @@ fn delta_refusal(e: DeltaError) -> Error {
 ///
 /// The wire has two optional arguments because GraphQL has no input union;
 /// this is where that looseness ends; past here, [`Content`] cannot hold both.
-fn content_from(
+pub(crate) fn content_from(
     field_values: Option<Json<BTreeMap<String, ReadValue>>>,
     prose_text: Option<String>,
 ) -> GraphQLResult<Content> {

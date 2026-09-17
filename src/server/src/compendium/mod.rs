@@ -27,6 +27,7 @@
 //! FR-057, and the trigger in the `2026-09-12-100000-0000_compendium`
 //! migration.
 
+pub mod collections;
 pub mod origin;
 pub mod store;
 

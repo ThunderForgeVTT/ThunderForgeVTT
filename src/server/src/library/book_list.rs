@@ -34,7 +34,7 @@ pub struct BookOnList {
     /// The base that was in force when this was switched on (FR-015): the
     /// file's hash and the build of the reader that read it, which is the
     /// pair that changes when a re-import replaces a base.
-    pub base_source_hash: String,
+    pub base_source_hash: Option<String>,
     pub base_parser_version: String,
     /// `None` once the person who switched it on has deleted their account:
     /// the book stays on, and the record says only that somebody did.

@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button/Button";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import type { ReadValue } from "@/engine/sdk/ReadValue";
+import { removeShelfCollectionEntry } from "@/api/shelfCollections";
+import { CollectionEntryForm } from "./CollectionEntryForm";
 import {
   book as loadBook,
   entriesOf,
@@ -36,6 +38,10 @@ export function BookBrowser({ compendiumId }: BookBrowserProps) {
   const [cursor, setCursor] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  // Moves on whenever a collection is written, so the book and its page are
+  // read again from the server rather than patched here.
+  const [version, setVersion] = useState(0);
+  const written = useCallback(() => setVersion((held) => held + 1), []);
 
   useEffect(() => {
     let live = true;
@@ -49,7 +55,7 @@ export function BookBrowser({ compendiumId }: BookBrowserProps) {
     return () => {
       live = false;
     };
-  }, [compendiumId]);
+  }, [compendiumId, version]);
 
   // A change of kind starts the browse again rather than appending to what
   // was already on screen, which is the bug a shared "load more" list makes
@@ -69,7 +75,7 @@ export function BookBrowser({ compendiumId }: BookBrowserProps) {
     return () => {
       live = false;
     };
-  }, [compendiumId, kind]);
+  }, [compendiumId, kind, version]);
 
   const more = useCallback(() => {
     if (!cursor) return;
@@ -108,12 +114,26 @@ export function BookBrowser({ compendiumId }: BookBrowserProps) {
           Back to your library
         </Link>
         <h1 className="text-2xl font-semibold">{book.bookTitle}</h1>
-        <p className="text-sm text-muted-foreground">
-          Read as {book.systemId} on{" "}
-          {new Date(book.importedAt).toLocaleDateString()} — {book.entryTotal}{" "}
-          entries from {book.pageCount} pages.
-        </p>
+        {book.origin === "AUTHORED" ? (
+          <p className="text-sm text-muted-foreground">
+            A collection for {book.systemId} — {book.entryTotal} entries.
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Read as {book.systemId} on{" "}
+            {new Date(book.importedAt).toLocaleDateString()} — {book.entryTotal}{" "}
+            entries from {book.pageCount} pages.
+          </p>
+        )}
       </header>
+
+      {book.origin === "AUTHORED" && (
+        <CollectionEntryForm
+          collectionId={book.id}
+          systemId={book.systemId}
+          onWritten={written}
+        />
+      )}
 
       <nav className="flex flex-wrap gap-2" data-testid="kind-filter">
         <Button
@@ -157,7 +177,8 @@ export function BookBrowser({ compendiumId }: BookBrowserProps) {
                 <span className="text-muted-foreground">
                   {/* FR-043: the book it came from and the page it was on,
                       on the entry itself rather than only in the header. */}
-                  — {entry.kind}, {entry.bookTitle}, page {entry.page}
+                  — {entry.kind}, {entry.bookTitle}
+                  {entry.page !== null && `, page ${entry.page}`}
                 </span>
                 {entry.nameUncertain && (
                   <span className="ml-2 text-xs text-amber-600">
@@ -190,6 +211,24 @@ export function BookBrowser({ compendiumId }: BookBrowserProps) {
                 <p className="mt-2 text-sm whitespace-pre-wrap">
                   {entry.proseText}
                 </p>
+              )}
+              {book.origin === "AUTHORED" && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="mt-2"
+                  data-testid="remove-collection-entry"
+                  onClick={() => {
+                    removeShelfCollectionEntry(book.id, entry.id)
+                      .then(written)
+                      .catch(() =>
+                        setError("That entry could not be removed."),
+                      );
+                  }}
+                >
+                  Take it out
+                </Button>
               )}
             </details>
           </li>

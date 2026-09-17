@@ -337,7 +337,7 @@ pub fn resolve(
             kind: entry.kind,
             name: entry.name,
             name_uncertain: entry.name_uncertain,
-            page: Some(entry.page),
+            page: entry.page,
             field_values: entry.field_values,
             prose_text: entry.prose_text,
             suspect: entry.suspect,

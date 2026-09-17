@@ -239,7 +239,7 @@ async fn an_overwrite_from_the_wrong_account_is_refused() {
 
     let mut over_theirs = an_import(&system, vec![an_entry("creature", "Something Else")]);
     over_theirs.replaces_compendium_id = Some(theirs.id);
-    over_theirs.source_hash = theirs.source_hash.clone();
+    over_theirs.source_hash = theirs.source_hash.clone().unwrap();
 
     let refused =
         create_compendium_from_import_impl(&state, system.dir(), stranger, over_theirs).await;
@@ -250,7 +250,7 @@ async fn an_overwrite_from_the_wrong_account_is_refused() {
     );
 
     // And it is still the owner's book, unchanged.
-    let still_theirs = compendium_for_file_hash_impl(&state, owner, theirs.source_hash)
+    let still_theirs = compendium_for_file_hash_impl(&state, owner, theirs.source_hash.unwrap())
         .await
         .expect("the owner can look for their own book")
         .expect("it is still there");
@@ -278,7 +278,7 @@ async fn the_same_file_is_recognised_and_a_near_identical_one_is_not() {
     .expect("the first import stands");
 
     assert!(
-        compendium_for_file_hash_impl(&state, owner, book.source_hash.clone())
+        compendium_for_file_hash_impl(&state, owner, book.source_hash.clone().unwrap())
             .await
             .unwrap()
             .is_some(),
@@ -289,7 +289,7 @@ async fn the_same_file_is_recognised_and_a_near_identical_one_is_not() {
     // character of difference in the hash is not a match, and claiming it
     // were would overwrite a book with a different one.
     let near_identical = {
-        let mut hash = book.source_hash.clone();
+        let mut hash = book.source_hash.clone().unwrap();
         hash.replace_range(0..1, if hash.starts_with('a') { "b" } else { "a" });
         hash
     };
@@ -304,7 +304,7 @@ async fn the_same_file_is_recognised_and_a_near_identical_one_is_not() {
     // FR-055a: another account's library is not searched, so the same file in
     // two libraries is two books and neither account learns of the other.
     assert!(
-        compendium_for_file_hash_impl(&state, somebody_else, book.source_hash)
+        compendium_for_file_hash_impl(&state, somebody_else, book.source_hash.unwrap())
             .await
             .unwrap()
             .is_none(),
@@ -336,7 +336,7 @@ async fn a_re_import_of_the_same_file_overwrites_in_place() {
             an_entry("creature", "Adult Red Dragon"),
         ],
     );
-    again.source_hash = first.source_hash.clone();
+    again.source_hash = first.source_hash.clone().unwrap();
     again.replaces_compendium_id = Some(first.id);
     again.parser_version = "test-improved".to_string();
 
@@ -424,7 +424,7 @@ async fn after_a_re_import_the_owner_is_told_which_changes_no_longer_attach() {
     );
 
     let mut again = an_import(&system, vec![an_entry("creature", "Orc")]);
-    again.source_hash = first.source_hash.clone();
+    again.source_hash = first.source_hash.clone().unwrap();
     again.replaces_compendium_id = Some(first.id);
     create_compendium_from_import_impl(&state, system.dir(), owner, again)
         .await
@@ -473,7 +473,7 @@ async fn importing_the_same_file_twice_is_refused_rather_than_duplicated() {
     .expect("the first import stands");
 
     let mut again = an_import(&system, vec![an_entry("creature", "Goblin")]);
-    again.source_hash = first.source_hash;
+    again.source_hash = first.source_hash.unwrap();
 
     let message = create_compendium_from_import_impl(&state, system.dir(), owner, again)
         .await
@@ -545,7 +545,7 @@ async fn asking_what_a_removal_would_take_changes_nothing() {
     assert_eq!(report.entry_count, 2);
     assert!(!report.removed, "asking is not removing");
     assert!(
-        compendium_for_file_hash_impl(&state, owner, book.source_hash)
+        compendium_for_file_hash_impl(&state, owner, book.source_hash.unwrap())
             .await
             .unwrap()
             .is_some(),
@@ -583,13 +583,13 @@ async fn confirming_removes_that_import_and_leaves_the_other_alone() {
     assert!(confirmed.removed);
 
     assert!(
-        compendium_for_file_hash_impl(&state, owner, going.source_hash)
+        compendium_for_file_hash_impl(&state, owner, going.source_hash.unwrap())
             .await
             .unwrap()
             .is_none(),
         "the removed book is gone"
     );
-    let survivor = compendium_for_file_hash_impl(&state, owner, staying.source_hash)
+    let survivor = compendium_for_file_hash_impl(&state, owner, staying.source_hash.unwrap())
         .await
         .unwrap()
         .expect("the other book is untouched");
@@ -627,7 +627,7 @@ async fn a_stranger_cannot_remove_or_report_on_somebody_elses_book() {
         "a book that is not yours and one that does not exist must refuse identically"
     );
     assert!(
-        compendium_for_file_hash_impl(&state, owner, book.source_hash)
+        compendium_for_file_hash_impl(&state, owner, book.source_hash.unwrap())
             .await
             .unwrap()
             .is_some(),

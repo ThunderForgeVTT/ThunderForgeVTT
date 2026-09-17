@@ -70,6 +70,9 @@ pub mod mutations_collections;
 // pre-upload hash check. Everything a browser review decided is decided again
 // here, because a review that happened in a browser is not a permission.
 pub mod mutations_compendium;
+// Spec 049 Phase 13 / spec 050 FR-007 to FR-009c: collections on the shelf —
+// authored content beside the books read in, and the one kind that downloads.
+pub mod mutations_shelf_collections;
 // Spec 040 US5: `githubApplications`, `setGithubApplication` and
 // `checkGithubApplication` — one application for everything, or one per
 // subsystem, and which acts for what. Resolution itself is `crate::github_apps`.
@@ -426,6 +429,9 @@ pub struct QueryRoot(
     // Spec 049 FR-047: `compendiumForFileHash` — asked with a hash and
     // nothing else, before any of a book is sent.
     mutations_compendium::CompendiumImportQuery,
+    // Spec 050 FR-009a: `downloadShelfCollection` — a collection as JSON; a
+    // book read in is refused.
+    mutations_shelf_collections::ShelfCollectionQuery,
     // Spec 050 US3: `worldBookList` (which every member reads),
     // `compendiumsOfferedToWorld` and `worldCompendiumEntries` — the book
     // list, and the fetch that is the only way content reaches a world.
@@ -490,6 +496,8 @@ pub struct MutationRoot(
     // Spec 049 US2/US3: committing a reviewed book, and taking one back off
     // the shelf.
     mutations_compendium::CompendiumMutation,
+    // Spec 050 FR-007: starting a collection on the shelf and writing it.
+    mutations_shelf_collections::ShelfCollectionMutation,
     // Spec 050 US3: switching a book on for a world and off again. The one
     // mechanism, whether a Game Master ticks it at creation or later.
     mutations_library::LibraryWorldMutation,

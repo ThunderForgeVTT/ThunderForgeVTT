@@ -14,7 +14,7 @@ fn stored(kind: &str, name: &str, fields: serde_json::Value) -> StoredEntry {
         kind: kind.to_string(),
         name: name.to_string(),
         name_uncertain: false,
-        page: 12,
+        page: Some(12),
         field_values: fields,
         prose_text: None,
         suspect: false,

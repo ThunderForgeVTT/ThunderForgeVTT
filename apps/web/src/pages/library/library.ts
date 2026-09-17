@@ -30,7 +30,8 @@ export interface LibraryEntry {
   kind: string;
   name: string;
   nameUncertain: boolean;
-  page: number;
+  /** `null` for an entry written in a collection: it is on no page. */
+  page: number | null;
   /**
    * Each declared field with the certainty it was read at. A field looked for
    * and not found is `{ state: "unread" }` and has no value to show, which is

@@ -141,7 +141,7 @@ diesel::table! {
         kind -> Varchar,
         name -> Text,
         name_uncertain -> Bool,
-        page -> Int4,
+        page -> Nullable<Int4>,
         field_values -> Jsonb,
         prose_text -> Nullable<Text>,
         suspect -> Bool,
@@ -160,7 +160,7 @@ diesel::table! {
         #[max_length = 300]
         book_title -> Varchar,
         #[max_length = 64]
-        source_hash -> Varchar,
+        source_hash -> Nullable<Varchar>,
         #[max_length = 64]
         system_id -> Varchar,
         origin -> ContentOrigin,
@@ -1142,7 +1142,7 @@ diesel::table! {
         world_id -> Uuid,
         compendium_id -> Uuid,
         #[max_length = 64]
-        base_source_hash -> Varchar,
+        base_source_hash -> Nullable<Varchar>,
         #[max_length = 64]
         base_parser_version -> Varchar,
         switched_on_by -> Nullable<Uuid>,

@@ -9,9 +9,15 @@ import {
   previewRemoveCompendium,
   type RemovalReport,
 } from "@/api/compendium";
+import {
+  downloadShelfCollection,
+  saveFile,
+  type ShelfCollectionDownload,
+} from "@/api/shelfCollections";
 import type { SeoConfig } from "@/types/seo";
 import { BookBrowser } from "./BookBrowser";
 import { ImportBook } from "./ImportBook";
+import { NewCollection } from "./NewCollection";
 import { myLibrary, type LibraryBook } from "./library";
 
 /**
@@ -47,6 +53,9 @@ export function LibraryPage() {
   const [shelf, setShelf] = useState<LibraryBook[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [removing, setRemoving] = useState<RemovalReport | null>(null);
+  const [downloaded, setDownloaded] = useState<ShelfCollectionDownload | null>(
+    null,
+  );
 
   const read = useCallback(() => {
     myLibrary()
@@ -86,12 +95,33 @@ export function LibraryPage() {
           <header className="grid gap-1">
             <h1 className="text-2xl font-semibold">Your library</h1>
             <p className="text-sm text-muted-foreground">
-              Books you have read in. They belong to this account, not to any
-              one world, and they go when the account goes.
+              Books you have read in, and collections you have written. They
+              belong to this account, not to any one world, and they go when the
+              account goes.
             </p>
           </header>
 
           <ImportBook onImported={read} />
+          <NewCollection onCreated={read} />
+
+          {downloaded && (
+            <p
+              className="text-sm"
+              role="status"
+              data-testid="collection-downloaded"
+            >
+              Saved {downloaded.fileName} with {downloaded.entryCount}{" "}
+              {downloaded.entryCount === 1 ? "entry" : "entries"}.
+              {downloaded.excluded.length === 0
+                ? " Nothing was left out."
+                : ` Left out: ${downloaded.excluded
+                    .map(
+                      (excluded) =>
+                        `${excluded.kind} “${excluded.name}” — ${excluded.reason}`,
+                    )
+                    .join("; ")}`}
+            </p>
+          )}
 
           {error && <StatusBadge variant="danger">{error}</StatusBadge>}
 
@@ -112,6 +142,7 @@ export function LibraryPage() {
                   key={held.id}
                   className="grid gap-2 rounded-md border p-4"
                   data-testid={`library-book-${held.id}`}
+                  data-origin={held.origin}
                 >
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <Link
@@ -122,20 +153,28 @@ export function LibraryPage() {
                       {held.bookTitle}
                     </Link>
                     <span className="text-sm text-muted-foreground">
-                      {held.systemId} — read in on{" "}
+                      {held.systemId} —{" "}
+                      {held.origin === "AUTHORED" ? "started" : "read in"} on{" "}
                       {new Date(held.importedAt).toLocaleDateString()}
                     </span>
                   </div>
 
                   <p className="text-sm" data-testid="book-counts">
                     {held.entryCounts.length === 0
-                      ? "Nothing was kept from this book."
+                      ? held.origin === "AUTHORED"
+                        ? "Nothing written in it yet"
+                        : "Nothing was kept from this book."
                       : held.entryCounts
                           .map((count) => `${count.count} ${count.kind}`)
-                          .join(", ")}{" "}
-                    — {held.pageCount} pages
-                    {held.silentPageCount > 0 &&
-                      `, ${held.silentPageCount} of them images with no text`}
+                          .join(", ")}
+                    {held.origin === "UPLOADED" && (
+                      <>
+                        {" "}
+                        — {held.pageCount} pages
+                        {held.silentPageCount > 0 &&
+                          `, ${held.silentPageCount} of them images with no text`}
+                      </>
+                    )}
                     .
                   </p>
 
@@ -145,10 +184,33 @@ export function LibraryPage() {
                   >
                     {held.origin === "UPLOADED"
                       ? "Read out of a document you supplied. It stays with this account: it cannot be shared, published or exported."
-                      : "Authored in ThunderForge."}
+                      : "A collection, written in ThunderForge. It is yours to take with you."}
                   </p>
 
-                  <div>
+                  <div className="flex flex-wrap gap-2">
+                    {/* FR-009a and FR-009b: a collection downloads; a book
+                        read in offers no way to, and the server refuses one
+                        asked for anyway. */}
+                    {held.origin === "AUTHORED" && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        data-testid="download-collection"
+                        onClick={() => {
+                          downloadShelfCollection(held.id)
+                            .then((file) => {
+                              saveFile(file.fileName, file.contents);
+                              setDownloaded(file);
+                            })
+                            .catch(() =>
+                              setError("That collection could not be saved."),
+                            );
+                        }}
+                      >
+                        Download as JSON
+                      </Button>
+                    )}
                     <Button
                       type="button"
                       size="sm"

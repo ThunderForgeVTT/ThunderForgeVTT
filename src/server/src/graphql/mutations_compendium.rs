@@ -395,7 +395,9 @@ pub async fn create_compendium_from_import_impl(
         // book — and claiming it as a match would overwrite one book with
         // another while the shelf went on naming the first one's hash (spec
         // 047 FR-075).
-        if existing.source_hash != book.source_hash {
+        // A collection has no file, so no re-read can match it: it is
+        // written, not read, and never replaced by an import.
+        if existing.source_hash.as_deref() != Some(book.source_hash.as_str()) {
             return Err(refusal(
                 "This is not the file that book was read from. It may be a different printing or \
                  a re-saved copy; import it as its own book rather than over this one.",

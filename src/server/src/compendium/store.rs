@@ -50,7 +50,9 @@ pub struct Compendium {
     pub book_title: String,
     /// SHA-256 of the file, hex, hashed in the browser before any upload
     /// (spec 047 FR-070). The file itself is not stored and never was.
-    pub source_hash: String,
+    /// `None` for a collection, which was read from no file; the database
+    /// ties the two together.
+    pub source_hash: Option<String>,
     pub system_id: String,
     pub origin: ContentOrigin,
     pub parser_version: String,
@@ -79,7 +81,9 @@ pub struct StoredEntry {
     pub kind: String,
     pub name: String,
     pub name_uncertain: bool,
-    pub page: i32,
+    /// The page of the book it was read from. `None` for an entry written in
+    /// a collection, which is on no page of any book.
+    pub page: Option<i32>,
     /// The declared fields, each with its certainty. A field that was looked
     /// for and not found is stored with no value at all — see [`Entry`].
     pub field_values: serde_json::Value,
@@ -133,7 +137,7 @@ struct NewStoredEntry {
     kind: String,
     name: String,
     name_uncertain: bool,
-    page: i32,
+    page: Option<i32>,
     field_values: serde_json::Value,
     prose_text: Option<String>,
     suspect: bool,
@@ -398,7 +402,7 @@ fn encode_entries(
                 kind: entry.kind.clone(),
                 name: entry.name.clone(),
                 name_uncertain: matches!(entry.name_state, crate::content::NameState::Uncertain),
-                page,
+                page: Some(page),
                 field_values,
                 prose_text: entry.text.clone(),
                 suspect: entry.suspect,

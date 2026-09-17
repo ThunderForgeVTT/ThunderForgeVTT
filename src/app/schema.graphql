@@ -695,6 +695,21 @@ type AppMutationRoot {
 	"""
 	removeCompendium(id: UUID!, confirm: Boolean!): GraphQLRemovalReport!
 	"""
+	Start a collection on the caller's shelf, for one game system (050
+	FR-007, FR-009).
+	"""
+	createShelfCollection(title: String!, systemId: String!): Compendium!
+	"""
+	Write an entry into one of the caller's collections: `fieldValues` or
+	`proseText`, not both. Refused for a book read in, whose entries are
+	what the book says.
+	"""
+	writeShelfCollectionEntry(collectionId: UUID!, kind: String!, name: String!, fieldValues: JSON, proseText: String): CompendiumEntry!
+	"""
+	Take an entry out of one of the caller's collections.
+	"""
+	removeShelfCollectionEntry(collectionId: UUID!, entryId: UUID!): Boolean!
+	"""
 	Switch a book on for a world (FR-010, FR-031, FR-033).
 	
 	The same call at world creation and a fortnight later. Nothing is
@@ -1635,6 +1650,12 @@ type AppQueryRoot {
 	"""
 	compendiumUnattachedDeltas(id: UUID!): [WorldUnattachedDeltas!]!
 	"""
+	One of the caller's collections as a JSON file (050 FR-009a). A book
+	read in is refused (FR-009b), and anything left out is named
+	(FR-009c).
+	"""
+	downloadShelfCollection(id: UUID!): ShelfCollectionDownload!
+	"""
 	Which books this table is running (FR-030, FR-035).
 	
 	Readable by every member, and it carries no content — see
@@ -1992,9 +2013,10 @@ type Compendium {
 	"""
 	The file's SHA-256. Readable only by the account that holds it, and
 	what lets a client recognise a file it already has before reading a
-	second copy of it (FR-047). A hash is not content.
+	second copy of it (FR-047). A hash is not content. `null` for a
+	collection, which was read from no file.
 	"""
-	sourceHash: String!
+	sourceHash: String
 	systemId: String!
 	origin: ContentOrigin!
 	parserVersion: String!
@@ -2037,7 +2059,11 @@ type CompendiumEntry {
 	The reader was unsure it had the name right. Shown, not hidden.
 	"""
 	nameUncertain: Boolean!
-	page: Int!
+	"""
+	`null` for an entry written in a collection: it is on no page of any
+	book, and naming one would send somebody looking.
+	"""
+	page: Int
 	"""
 	Each declared field with the certainty it was read at. A field looked
 	for and not found carries no value at all, which is why this crosses
@@ -6218,6 +6244,34 @@ type SharedItemPreview {
 	description: String
 	iconAssetId: UUID
 	effects: [GraphQLItemEffect!]!
+}
+
+"""
+A collection as a file its owner takes away (FR-009a).
+"""
+type ShelfCollectionDownload {
+	"""
+	A name to save it under.
+	"""
+	fileName: String!
+	"""
+	The file itself: JSON, as it is saved.
+	"""
+	contents: String!
+	entryCount: Int!
+	"""
+	What was left out, named, so a thinner file is never silent (FR-009c).
+	"""
+	excluded: [ShelfCollectionExcludedEntry!]!
+}
+
+"""
+Something left out of a download, and why (FR-009c).
+"""
+type ShelfCollectionExcludedEntry {
+	kind: String!
+	name: String!
+	reason: String!
 }
 
 type SourceFlip {

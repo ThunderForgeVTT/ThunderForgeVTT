@@ -757,6 +757,12 @@ pub const NOT_WORLD_SCOPED: &[&str] = &[
     // The account's own shelf (spec 049). A book on the shelf belongs to its
     // importer, not to any world.
     "createCompendiumFromImport",
+    // Collections on that shelf (spec 050 FR-007). A world reading one meets
+    // a new version as it meets a re-read book; writing one is not a write to
+    // any world.
+    "createShelfCollection",
+    "writeShelfCollectionEntry",
+    "removeShelfCollectionEntry",
     // --- touches a world, and deliberately not gated -------------------------
     //
     // The shelf again, but removal reaches into worlds: it takes the book off

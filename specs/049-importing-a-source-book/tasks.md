@@ -276,12 +276,21 @@ re-attach are reported by name.
 **Independent test**: a collection downloads as JSON; an imported compendium
 does not.
 
-- [ ] T083 Collections on the library shelf (050 FR-007 to FR-009), behaving identically to a compendium everywhere origin does not decide the answer — shelf, book list, world, delta
-- [ ] T084 [P] A collection carries a system and is offered only to worlds on it (050 FR-009)
-- [ ] T085 Download a collection as JSON (050 FR-009a). It is theirs and they made it
-- [ ] T086 [P] An imported compendium does not download, by that route or any other (050 FR-009b) — the existing rule, not a new one
-- [ ] T087 A download containing anything derived from an import **excludes it and says so** (050 FR-009c). A silently thinner file is worse than a refused one
-- [ ] T088 Proved: a collection downloads and opens outside ThunderForge; a compendium is refused; `pnpm verify` green
+- [X] T083 Collections on the library shelf (050 FR-007 to FR-009), behaving identically to a compendium everywhere origin does not decide the answer — shelf, book list, world, delta
+- [X] T084 [P] A collection carries a system and is offered only to worlds on it (050 FR-009)
+- [X] T085 Download a collection as JSON (050 FR-009a). It is theirs and they made it
+- [X] T086 [P] An imported compendium does not download, by that route or any other (050 FR-009b) — the existing rule, not a new one
+- [X] T087 A download containing anything derived from an import **excludes it and says so** (050 FR-009c). A silently thinner file is worse than a refused one
+- [X] T088 Proved: a collection downloads and opens outside ThunderForge; a compendium is refused; `pnpm verify` green
+
+> **Phase 13 notes (verified 2026-09-16).** A collection is a `compendiums` row whose origin is `Authored`: same table, same entries table, same id space. FR-008's "behaves identically" is then true by construction — the shelf, the book list, a world's read and a world's deltas already take a compendium id — instead of being a second path kept in step with the first.
+> - **What origin decides is held twice.** `source_hash` and an entry's `page` became nullable, and the migration ties both to origin: a CHECK that a hash belongs to an uploaded book and only to one, and a trigger that an uploaded book's entry names its page and a collection's names none. `compendium::collections` refuses writing entries into a book read in, and refuses downloading one before reading any of it.
+> - **Every write is a version.** Writing or removing a collection entry moves `base_version` on, the counter Phase 12 gave a re-import, so a world reading a collection meets a change exactly as it meets a re-read book.
+> - **FR-009c has no live case yet.** An entry's origin is its collection's, so no collection can hold an uploaded entry today. The download still asks each entry's origin and names anything not authored, and `compose_file` is tested with one forced to `Uploaded`, so the rule holds on the day a sync-back or an adoption could put one there.
+> - **"Shelf collection" on the wire**, because spec 026 already owns "collection" for a world's own gathering: `createShelfCollection`, `writeShelfCollectionEntry`, `removeShelfCollectionEntry`, `downloadShelfCollection`. The three mutations are classified not world-scoped in the pause surface list.
+> - **Two nullable fields on the wire**: `Compendium.sourceHash` and `CompendiumEntry.page`. The contract check flags both as breaking for tabs opened before a deploy; nothing already open reads either for a collection, which is the only kind that sends null.
+> - **Found and fixed on the way**: `genieWishLog` was in no pack's surface classification, which failed the merged-schema pause test (`91288c7`).
+> - **Proved**: `collections_tests.rs` (6) and `mutations_shelf_collections_tests.rs` (2); `library-collections.spec.ts` starts a collection on the page beside a book, writes two entries and takes one out, is offered to a dnd5e world and refused by a Genie one, switches on and is changed by a world as an authored entry, and downloads through the browser as a file that parses as JSON with exactly what was written, while the book shows no download and the server refuses one asked for directly. 23/23 across the library and import e2e; `cargo test --lib` 1736 passed; vitest 669 passed; `pnpm verify` 14/14.
 
 ---
 
