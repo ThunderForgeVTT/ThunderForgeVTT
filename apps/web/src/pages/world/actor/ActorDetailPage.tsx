@@ -492,12 +492,6 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
               actorLabel={actor.label}
               canEdit={canEdit}
             />
-            {/*
-              Spec 044 (the hero builder) puts its "Build a hero" button here,
-              beside the imagery it will fill in. Its plan is being written as
-              this ships; nothing is rendered for it yet, because a button that
-              does nothing is worse than no button. This comment is the space.
-            */}
           </div>
         ) : null}
 

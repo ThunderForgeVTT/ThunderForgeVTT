@@ -6,6 +6,7 @@ import {
   postGraphQLMultipart,
 } from "@/api/graphqlClient";
 import { alreadyLiftedBy } from "@/api/playPause";
+import { onPlayPaused, rearmPlayPaused } from "@/api/playPauseSignal";
 
 /**
  * Covers the failure modes the 23 duplicated `postGraphQL` copies handled
@@ -366,5 +367,43 @@ describe("CSRF", () => {
       string
     >;
     expect(headers["x-csrf-token"]).toBeUndefined();
+  });
+});
+
+describe("announcePause", () => {
+  const paused = () =>
+    jsonResponse({
+      errors: [
+        {
+          message: "This world's play is paused.",
+          extensions: { code: "WORLD_PLAY_PAUSED", worldId: "w-paused" },
+        },
+      ],
+    });
+
+  it("announces a pause by default, and not when a caller keeps its own work", async () => {
+    // Spec 044 Edge Cases: the hero builder holds a hero that could not be
+    // saved, so its upload must not send the page to the notice and lose it.
+    const heard: string[] = [];
+    const stop = onPlayPaused((worldId) => heard.push(worldId));
+    try {
+      fetchMock.mockResolvedValue(paused());
+      const quiet = (await postGraphQLMultipart(
+        "mutation Up($file: Upload!) { up(file: $file) }",
+        {},
+        new Blob(["x"]),
+        "file",
+        { announcePause: false },
+      ).catch((e: unknown) => e)) as GraphQLRequestError;
+      expect(quiet.codes).toEqual(["WORLD_PLAY_PAUSED"]);
+      expect(heard).toEqual([]);
+
+      fetchMock.mockResolvedValue(paused());
+      await postGraphQL(QUERY).catch(() => undefined);
+      expect(heard).toEqual(["w-paused"]);
+    } finally {
+      stop();
+      rearmPlayPaused("w-paused");
+    }
   });
 });

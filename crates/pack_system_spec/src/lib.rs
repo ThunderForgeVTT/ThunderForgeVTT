@@ -1,3 +1,4 @@
+pub mod appearance;
 pub mod combat;
 pub mod content_patterns;
 pub mod contrast;
@@ -101,6 +102,12 @@ pub struct SystemManifest {
     /// Whether the system counts rounds, and what one turn affords.
     #[serde(default)]
     pub turn_structure: Option<combat::SystemTurnStructure>,
+
+    /// Where a creature's race is written, for the hero builder's dice
+    /// (spec 044 FR-007a). Absent means the system has no races; see
+    /// `appearance.rs`.
+    #[serde(default)]
+    pub appearance: Option<appearance::SystemAppearance>,
 }
 
 /// A system's `vision` block, mirroring
@@ -252,6 +259,7 @@ pub fn validate_system_manifest(json_string: &str) -> Result<(), String> {
     validate_legal_content(&instance)?;
     validate_vision_content(&instance)?;
     combat::validate_combat_content(&instance)?;
+    appearance::validate_appearance_content(&instance)?;
     content_patterns::validate_content_patterns(&instance)
 }
 

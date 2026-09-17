@@ -148,7 +148,7 @@ pub fn slot_key(slot: &str) -> String {
 
 /// M2: `slot` is a data type the pack declares, and `field` one of its
 /// properties.
-fn require_field(
+pub(crate) fn require_field(
     data_types: Option<&serde_json::Value>,
     path: &str,
     slot: &str,

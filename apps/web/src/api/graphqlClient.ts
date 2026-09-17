@@ -62,6 +62,15 @@ export interface GraphQLRequestOptions {
   endpoint?: string;
   /** Milliseconds before aborting. `null` disables the timeout entirely. */
   timeoutMs?: number | null;
+  /**
+   * Whether a refusal because the world is paused sends the page to the
+   * notice (spec 051). On by default. Off for a caller that holds unsaved
+   * work and says so itself — the hero builder keeps a hero that could not
+   * be saved, so it can be saved after the world resumes or exported (spec
+   * 044 Edge Cases). The subscription client's `announcePause` is the same
+   * switch for a stream.
+   */
+  announcePause?: boolean;
 }
 
 /**
@@ -200,6 +209,7 @@ function unwrap<TData>(
   response: Response,
   operation: string | undefined,
   notOkFallback: string,
+  announcePause = true,
 ): TData {
   // Spec 036 FR-009. A 401 is the server saying this session is no longer
   // accepted, and it is said the same way whether the session was revoked from
@@ -229,7 +239,7 @@ function unwrap<TData>(
   // once, here, for every request in the app, exactly as a 401 is above. The
   // caller still throws and still says whatever it says; the page that owns
   // play is what leaves for the notice (`api/playPauseSignal`).
-  reportPlayPausedIn(payload.errors);
+  if (announcePause) reportPlayPausedIn(payload.errors);
 
   const messages = collectMessages(payload.errors);
   const codes = collectCodes(payload.errors);
@@ -317,6 +327,7 @@ export async function postGraphQL<TData>(
     response,
     operation,
     "Request failed",
+    options.announcePause ?? true,
   );
 }
 
@@ -369,5 +380,6 @@ export async function postGraphQLMultipart<TData>(
     response,
     operation,
     "Upload failed",
+    options.announcePause ?? true,
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import {
   ACTOR_IMAGE_PORTRAIT,
   ACTOR_IMAGE_TOKEN,
@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { imageForRole } from "@/pages/world/actor/actorImagery";
+import { LazyHeroBuilderDialog } from "@/pages/world/actor/heroBuilderLazy";
 
 /**
  * Spec 031 (T070, FR-036): giving an actor a portrait and a token image.
@@ -85,6 +86,9 @@ export function ActorImageryPanel({
   const [images, setImages] = useState<ActorImageRecord[]>([]);
   const [busyRole, setBusyRole] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  // Spec 044 FR-023: the builder is mounted only while it is open, so its
+  // code loads on the press and not with the page.
+  const [building, setBuilding] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -124,6 +128,21 @@ export function ActorImageryPanel({
     } finally {
       setBusyRole(null);
     }
+  };
+
+  // The builder's replies are the whole of the change, as an upload's is.
+  const handleBuilt = (saved: ActorImageRecord[]) => {
+    setImages((current) => [
+      ...current.filter(
+        (image) => !saved.some((row) => row.role === image.role),
+      ),
+      ...saved,
+    ]);
+    setStatus(
+      saved.length === 2
+        ? "Portrait and token saved."
+        : `${saved[0]?.role === ACTOR_IMAGE_TOKEN ? "Token" : "Portrait"} saved.`,
+    );
   };
 
   const handleRemove = async (role: string) => {
@@ -217,6 +236,36 @@ export function ActorImageryPanel({
           );
         })}
       </div>
+
+      {canEdit ? (
+        // Beside the imagery it fills, on the condition the file inputs are
+        // offered on: whoever may upload a picture may build one.
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          icon="quill"
+          className="justify-self-start"
+          onClick={() => setBuilding(true)}
+          aria-label={`Build look${ofActor}`}
+          data-testid="actor-imagery-build"
+        >
+          Build look
+        </Button>
+      ) : null}
+
+      {building ? (
+        <Suspense fallback={null}>
+          <LazyHeroBuilderDialog
+            open
+            onOpenChange={(open) => setBuilding(open)}
+            actorId={actorId}
+            actorLabel={actorLabel ?? "Hero"}
+            existingRoles={images.map((image) => image.role)}
+            onSaved={handleBuilt}
+          />
+        </Suspense>
+      ) : null}
 
       {status ? (
         <p

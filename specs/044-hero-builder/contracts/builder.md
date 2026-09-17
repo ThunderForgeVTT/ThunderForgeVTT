@@ -161,9 +161,13 @@ Rules the library holds to:
 
 `HeroBuilderDialog` is the only way `apps/web` shows the builder, and it is a
 **full-screen dialog** over whatever page opened it — never a route (FR-019).
-It `import()`s the library at open time and nowhere else (FR-022, SC-012),
-traps focus, and returns it to the opener. It takes `{ worldId, actorId,
-actorLabel, existingRoles, onSaved }`, and reads the race itself:
+Hosts reach it only through `React.lazy` (`heroBuilderLazy.ts`); the dialog
+module imports the library statically, so the library loads when a dialog
+first opens and nowhere else (FR-022, SC-012). It traps focus and returns it
+to the opener. It takes `{ open, onOpenChange, actorId, actorLabel,
+existingRoles, onSaved, initialSpec?, onUse? }`. `actorId: null` is a hero with
+no actor yet (Quick NPC's "Open in builder"): no save, and "Use this look"
+hands the spec back through `onUse`. It reads the race itself:
 `useActorSystemData(actorId)` plus the world's manifest `appearance.race.source`
 (research R7) → `matchRace` → `initialRace`.
 
@@ -197,15 +201,19 @@ Saving:
 4. **A paused world** (`refuse_content_if_paused`,
    `mutations_actor_images.rs:122-124`) refuses both roles. The dialog shows the
    server's message, stays open with the hero intact, and offers export; nothing
-   is reported saved (spec Edge Cases).
+   is reported saved (spec Edge Cases). The uploads pass
+   `announcePause: false` (`GraphQLRequestOptions`), so spec 051's
+   redirect to `/world/:id/paused` does not tear the dialog and its hero down;
+   the portrait's refusal stops the token from being tried.
 
 ### Quick NPC (phase b, FR-027, FR-028)
 
 `data-testid="quick-npc"` beside the compendium's "New NPC" button
 (`data-testid="new-npc-link"`, `NpcCompendiumTab.tsx:397-407`), on the same
 `isGm` condition. The dialog
-holds, in this order: a name field, the previews of a random hero, a reroll, a
-space reserved for a later template choice, "Open in builder", and Create.
+holds, in this order: a name field, a space reserved for a later template
+choice (directly below the name, so adding it moves nothing else), the previews
+of a random hero, a reroll and "Open in builder", and Create.
 Create is `createActor({ worldId, label, isNpc: true })` followed by the same two
 uploads. **The NPC is never deleted to hide a failed upload** (FR-028): it stays,
 listed as lacking art, and its row's "Build look" is the way to add it. Quick

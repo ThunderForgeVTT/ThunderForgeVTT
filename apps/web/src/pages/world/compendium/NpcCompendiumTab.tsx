@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Link } from "react-router-dom";
 import {
   ACTOR_IMAGE_PORTRAIT,
+  ACTOR_IMAGE_TOKEN,
   getWorldActorImages,
   getWorldActors,
   uploadActorImage,
@@ -12,7 +13,11 @@ import { indexActors, searchActorIds } from "@/search/actorSearch";
 import { Button } from "@/components/ui/button/Button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { portraitOf } from "@/pages/world/actor/actorImagery";
+import { imageForRole, portraitOf } from "@/pages/world/actor/actorImagery";
+import {
+  LazyHeroBuilderDialog,
+  LazyQuickNpcDialog,
+} from "@/pages/world/actor/heroBuilderLazy";
 import type { WorldActorRecord } from "@/types/actor";
 
 export interface NpcCompendiumTabProps {
@@ -79,6 +84,13 @@ export function NpcCompendiumTab({
    */
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<Record<string, string>>({});
+  // Spec 044 FR-028a, FR-027: the row whose look is being built, and whether
+  // Quick NPC is open. The builder's code loads only when one of them is set.
+  const [buildingId, setBuildingId] = useState<string | null>(null);
+  const [quickNpcOpen, setQuickNpcOpen] = useState(false);
+  // Whether the imagery has answered, so a row is not called "lacking art"
+  // in the moment before its art arrives.
+  const [imagesLoaded, setImagesLoaded] = useState(false);
 
   // Reset during render rather than at the top of the effect below: this
   // is state derived from the arguments, and doing it in the effect commits
@@ -118,6 +130,7 @@ export function NpcCompendiumTab({
       .then((byActor) => {
         if (active) {
           setImagesByActor(byActor);
+          setImagesLoaded(true);
         }
       })
       .catch(() => {
@@ -204,6 +217,47 @@ export function NpcCompendiumTab({
       setUploadingId((current) => (current === npc.id ? null : current));
     }
   };
+
+  /** Rows a save stored, merged into one NPC's imagery by role. */
+  const handleBuilt = (actorId: string, saved: ActorImageRecord[]) => {
+    setImagesByActor((current) => ({
+      ...current,
+      [actorId]: [
+        ...(current[actorId] ?? []).filter(
+          (image) => !saved.some((row) => row.role === image.role),
+        ),
+        ...saved,
+      ],
+    }));
+  };
+
+  /**
+   * Quick NPC made an NPC. It joins the list and is selected (US4 scenario 2)
+   * whether or not its art was stored — a failed upload leaves it listed as
+   * lacking art, never deleted (FR-028).
+   */
+  const handleQuickNpc = (
+    actor: WorldActorRecord,
+    saved: ActorImageRecord[],
+  ) => {
+    const next = [...(actors ?? []), actor];
+    setActors(next);
+    onRosterLoaded?.(next);
+    void indexActors(
+      worldId,
+      next
+        .filter((entry) => entry.isNpc)
+        .map((npc) => ({
+          id: npc.id,
+          label: npc.label,
+          description: npc.description,
+        })),
+    );
+    handleBuilt(actor.id, saved);
+    onSelect(actor.id);
+  };
+
+  const buildingNpc = npcs.find((npc) => npc.id === buildingId) ?? null;
 
   if (error) {
     return (
@@ -373,6 +427,44 @@ export function NpcCompendiumTab({
                           View
                         </Link>
                       </Button>
+                      {imagesLoaded &&
+                      (!portraitOf(imagesByActor[npc.id]) ||
+                        !imageForRole(
+                          imagesByActor[npc.id],
+                          ACTOR_IMAGE_TOKEN,
+                        )) ? (
+                        // Spec 044 FR-028: an NPC without both pictures says
+                        // so, beside the control that gives it them.
+                        <span
+                          role="img"
+                          aria-label={`${npc.label} lacks ${
+                            portraitOf(imagesByActor[npc.id])
+                              ? "a token"
+                              : imageForRole(
+                                    imagesByActor[npc.id],
+                                    ACTOR_IMAGE_TOKEN,
+                                  )
+                                ? "a portrait"
+                                : "a portrait and a token"
+                          }`}
+                          className="self-center rounded border border-dashed border-border px-1.5 text-[0.65rem] text-muted-foreground"
+                          data-testid={`npc-catalog-lacks-art-${npc.id}`}
+                        >
+                          No art
+                        </span>
+                      ) : null}
+                      {npc.myPermissionLevel !== "VIEWER" ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setBuildingId(npc.id)}
+                          aria-label={`Build look for ${npc.label}`}
+                          data-testid={`npc-catalog-build-${npc.id}`}
+                        >
+                          Build look
+                        </Button>
+                      ) : null}
                       {npc.myPermissionLevel !== "VIEWER" ? (
                         <Button
                           asChild
@@ -395,15 +487,50 @@ export function NpcCompendiumTab({
       )}
 
       {isGm ? (
-        <Button
-          asChild
-          size="sm"
-          icon="skull"
-          className="justify-self-start"
-          data-testid="new-npc-link"
-        >
-          <Link to={`/world/${worldId}/compendium/npc/new`}>New NPC</Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild size="sm" icon="skull" data-testid="new-npc-link">
+            <Link to={`/world/${worldId}/compendium/npc/new`}>New NPC</Link>
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            icon="spark"
+            onClick={() => setQuickNpcOpen(true)}
+            data-testid="quick-npc"
+          >
+            Quick NPC
+          </Button>
+        </div>
+      ) : null}
+
+      {buildingNpc ? (
+        <Suspense fallback={null}>
+          <LazyHeroBuilderDialog
+            key={buildingNpc.id}
+            open
+            onOpenChange={(open) => {
+              if (!open) setBuildingId(null);
+            }}
+            actorId={buildingNpc.id}
+            actorLabel={buildingNpc.label}
+            existingRoles={(imagesByActor[buildingNpc.id] ?? []).map(
+              (image) => image.role,
+            )}
+            onSaved={(saved) => handleBuilt(buildingNpc.id, saved)}
+          />
+        </Suspense>
+      ) : null}
+
+      {isGm && quickNpcOpen ? (
+        <Suspense fallback={null}>
+          <LazyQuickNpcDialog
+            open
+            worldId={worldId}
+            onOpenChange={setQuickNpcOpen}
+            onCreated={handleQuickNpc}
+          />
+        </Suspense>
       ) : null}
     </div>
   );

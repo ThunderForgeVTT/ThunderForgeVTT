@@ -67,6 +67,8 @@
     "@tailwindcss/postcss": "^4.2.4",
     "@thunderforge/engine": "workspace:^",
     "@thunderforge/genie": "workspace:^",
+    "@thunderforge/hero-builder": "workspace:^",
+    "@thunderforge/heroes": "workspace:^",
     "@thunderforge/pdf": "workspace:^",
     "@uiw/react-codemirror": "^4.25.11",
     "class-variance-authority": "^0.7.1",

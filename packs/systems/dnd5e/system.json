@@ -1129,6 +1129,14 @@
       }
     }
   },
+  "appearance": {
+    "race": {
+      "source": {
+        "slot": "traitData",
+        "field": "race"
+      }
+    }
+  },
   "combat": {
     "hitPoints": {
       "slot": "resourceData",

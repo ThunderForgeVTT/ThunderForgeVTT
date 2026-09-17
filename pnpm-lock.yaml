@@ -118,6 +118,12 @@ importers:
       '@thunderforge/genie':
         specifier: workspace:^
         version: link:../../packs/systems/genie/web
+      '@thunderforge/hero-builder':
+        specifier: workspace:^
+        version: link:../../packages/hero-builder
+      '@thunderforge/heroes':
+        specifier: workspace:^
+        version: link:../../packages/heroes
       '@thunderforge/pdf':
         specifier: workspace:^
         version: link:../../dist/pdf

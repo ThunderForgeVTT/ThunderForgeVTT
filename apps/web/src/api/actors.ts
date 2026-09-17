@@ -1,4 +1,8 @@
-import { postGraphQL, postGraphQLMultipart } from "@/api/graphqlClient";
+import {
+  postGraphQL,
+  postGraphQLMultipart,
+  type GraphQLRequestOptions,
+} from "@/api/graphqlClient";
 import type {
   ActorPermissionLevel,
   ActorPermissionRecord,
@@ -391,6 +395,7 @@ export async function uploadActorImage(
   actorId: string,
   role: string,
   file: Blob,
+  options: GraphQLRequestOptions = {},
 ): Promise<ActorImageRecord> {
   const data = await postGraphQLMultipart<{
     uploadActorImage: ActorImageRecord;
@@ -410,6 +415,7 @@ export async function uploadActorImage(
     { actorId, role },
     file,
     "file",
+    options,
   );
   return data.uploadActorImage;
 }

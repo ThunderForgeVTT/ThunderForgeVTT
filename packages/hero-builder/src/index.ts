@@ -12,6 +12,7 @@
 export { HeroBuilder, type HeroBuilderProps } from "./HeroBuilder.tsx";
 export { HeroPreview, type HeroPreviewProps } from "./preview/HeroPreview.tsx";
 export { renderHero } from "./preview/renderHero.ts";
+export { freshSeed } from "./roll/freshSeed.ts";
 export type { HeroProblem } from "./problems.ts";
 export {
   fileStem,
