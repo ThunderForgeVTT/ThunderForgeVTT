@@ -76,6 +76,10 @@ pub mod authoring_tools;
 
 pub mod actor_permissions;
 
+/// Spec 044 phase (c), ADR-105: the player who holds a character may change
+/// its portrait and token, beside the ladder rather than on it.
+pub mod actor_imagery;
+
 /// Owner decision 2026-09-15: whether players may see an NPC — a visibility
 /// axis beside the permission ladder, as `gm_only` is for abilities.
 pub mod npc_visibility;

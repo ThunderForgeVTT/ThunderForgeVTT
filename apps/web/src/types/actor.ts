@@ -36,6 +36,14 @@ export type WorldActorRecord = {
    * the Game Master's; a player reading `false` holds the NPC.
    */
   visibleToPlayers: boolean;
+  /** Spec 044 FR-030b: the Game Master has locked this character's look. */
+  artLocked: boolean;
+  /**
+   * Spec 044 B6: whether the caller may change this actor's portrait and
+   * token, answered by the same rule `uploadActorImage` enforces — Editor,
+   * or the player holding it while the world allows it and it is unlocked.
+   */
+  myMayChangeImagery: boolean;
   /** Spec 017 (FR-012): who currently has this actor claimed, if anyone. */
   claimedBy: ActorClaimMemberRecord | null;
 };

@@ -61,6 +61,8 @@ function actor(over: Partial<WorldActorRecord> = {}): WorldActorRecord {
     availableForClaim: false,
     isUnique: false,
     visibleToPlayers: false,
+    artLocked: false,
+    myMayChangeImagery: false,
     claimedBy: null,
     ...over,
   };

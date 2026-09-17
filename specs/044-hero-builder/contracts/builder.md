@@ -285,6 +285,13 @@ be told *which* rule stopped them:
   character's art in this world."
 - `art_locked` → "The Game Master has locked this character's look."
 
+As built (phase c): each refusal is a `FORBIDDEN` error with a stable `reason`
+extension — `NOT_HOLDER`, `PLAYER_ART_OFF`, `ART_LOCKED` — so a client need not
+compare sentences. When a character is locked **and** the world setting is off,
+the lock is reported (it is the narrower rule). An actor that cannot be resolved
+on upload is refused as `NOT_HOLDER`. The actor page shows the holder the lock or
+world-off sentence beside the pictures (`actor-imagery-refusal`).
+
 ## 6. What does not change
 
 - `storage/svg.rs` — the 1024 px raster, the refusal of external references, the

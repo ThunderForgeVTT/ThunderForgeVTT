@@ -29,14 +29,14 @@
 //! Reading them back is `assets_serve/actor.rs`, which mirrors
 //! `assets_serve/lore.rs` in the same way.
 
-use async_graphql::{Context, Error, ErrorExtensions, Result as GraphQLResult, Upload};
+use async_graphql::{Context, Error, Result as GraphQLResult, Upload};
 use diesel::prelude::*;
 use uuid::Uuid;
 
 use crate::assets_serve::actor::{actor_image_full_key, actor_image_thumb_key};
-use crate::auth::actor_permissions::require_actor_permission;
+use crate::auth::actor_imagery::{ImageryRefusal, may_change_actor_imagery, require_actor_imagery};
 use crate::graphql::permissioned_entity_resolvers::{PausableContent, refuse_content_if_paused};
-use crate::graphql::types::{ActorPermissionLevel, GraphQLActorImage};
+use crate::graphql::types::GraphQLActorImage;
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{NewWorldActorImage, WorldActorImage};
 use crate::schema::world_actor_images;
@@ -58,8 +58,9 @@ pub const KNOWN_ROLES: [&str; 2] = [ROLE_PORTRAIT, ROLE_TOKEN];
 
 #[derive(Debug, thiserror::Error)]
 pub enum UploadActorImageError {
-    #[error("insufficient permission to change this actor's imagery")]
-    Forbidden,
+    /// Refused by B6; carries which rule refused it (spec 044 SC-010).
+    #[error("{}", .0.message())]
+    Forbidden(ImageryRefusal),
     #[error("unknown image role '{0}' — expected 'portrait' or 'token'")]
     UnknownRole(String),
     #[error("upload exceeds maximum size of {max} bytes (got {actual})")]
@@ -79,16 +80,15 @@ fn to_graphql_error(e: UploadActorImageError) -> Error {
     if let UploadActorImageError::Paused(refusal) = e {
         return refusal;
     }
-    let msg = e.to_string();
-    if matches!(e, UploadActorImageError::Forbidden) {
-        Error::new(msg).extend_with(|_, ext| ext.set("code", "FORBIDDEN"))
-    } else {
-        Error::new(msg)
+    if let UploadActorImageError::Forbidden(refusal) = e {
+        return refusal.into_error();
     }
+    Error::new(e.to_string())
 }
 
 /// FR-036. Ordering mirrors `upload_lore_image_impl`: authorize (Editor or
-/// Owner on the actor, the same gate `updateActor` uses — Constitution
+/// Owner on the actor, the same gate `updateActor` uses, or the player holding
+/// it under spec 044's B6 — Constitution
 /// Principle III puts the rule here, at the data boundary, not in whichever
 /// screen happens to offer the button) → transcode both renditions, so an
 /// oversized or undecodable upload is refused before anything is written →
@@ -110,15 +110,13 @@ pub async fn upload_actor_image_impl(
         return Err(UploadActorImageError::UnknownRole(role));
     }
 
-    require_actor_permission(
-        state,
-        user_id,
-        is_admin,
-        actor_id,
-        ActorPermissionLevel::Editor,
-    )
-    .await
-    .map_err(|_| UploadActorImageError::Forbidden)?;
+    // Spec 044 B6: Editor by the ladder, or the player holding the character
+    // while neither the world setting nor a lock withdraws it.
+    may_change_actor_imagery(state, user_id, is_admin, actor_id)
+        .await
+        // An actor that cannot be resolved is refused as before, not reported.
+        .unwrap_or(Err(ImageryRefusal::NotHolder))
+        .map_err(UploadActorImageError::Forbidden)?;
     refuse_content_if_paused(state, PausableContent::Actor(actor_id))
         .await
         .map_err(UploadActorImageError::Paused)?;
@@ -203,7 +201,7 @@ pub async fn actor_images_impl(
     .map_err(|_| Error::new("Failed to load actor images"))
 }
 
-/// Removes one role's image. Same Editor gate as setting it.
+/// Removes one role's image. Same gate as setting it (spec 044 B6).
 ///
 /// The stored object is deliberately left in place: nothing else in this
 /// application deletes written bytes on a row delete either (`deleteLoreEntry`
@@ -216,14 +214,7 @@ pub async fn remove_actor_image_impl(
     actor_id: Uuid,
     role: String,
 ) -> GraphQLResult<bool> {
-    require_actor_permission(
-        state,
-        user_id,
-        is_admin,
-        actor_id,
-        ActorPermissionLevel::Editor,
-    )
-    .await?;
+    require_actor_imagery(state, user_id, is_admin, actor_id).await?;
     refuse_content_if_paused(state, PausableContent::Actor(actor_id)).await?;
 
     let mut conn = state
@@ -437,7 +428,10 @@ mod tests {
             tiny_png_bytes(),
         )
         .await;
-        assert!(matches!(result, Err(UploadActorImageError::Forbidden)));
+        assert!(matches!(
+            result,
+            Err(UploadActorImageError::Forbidden(ImageryRefusal::NotHolder))
+        ));
 
         let mut conn = state.db_pool.get().unwrap();
         let count: i64 = world_actor_images::table

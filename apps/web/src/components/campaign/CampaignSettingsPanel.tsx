@@ -3,6 +3,7 @@ import { updateWorldAutoApplyNpcDamage } from "@/api/attacks";
 import {
   generateInviteCode,
   getWorld,
+  updateWorldAllowPlayerActorArt,
   updateWorldAllowPlayerCreatedActors,
 } from "@/api/world";
 import { Button } from "@/components/ui/button/Button";
@@ -55,12 +56,15 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
   const [isUpdatingAllowSetting, setIsUpdatingAllowSetting] = useState(false);
   const [autoApplyNpcDamage, setAutoApplyNpcDamage] = useState(false);
   const [isUpdatingAutoApply, setIsUpdatingAutoApply] = useState(false);
+  const [allowPlayerActorArt, setAllowPlayerActorArt] = useState(true);
+  const [isUpdatingActorArt, setIsUpdatingActorArt] = useState(false);
 
   useEffect(() => {
     void getWorld(worldId).then((world) => {
       if (world) {
         setAllowPlayerCreatedActors(world.allowPlayerCreatedActors);
         setAutoApplyNpcDamage(world.autoApplyNpcDamage);
+        setAllowPlayerActorArt(world.allowPlayerActorArt);
       }
     });
   }, [worldId]);
@@ -90,6 +94,20 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
       setError(err instanceof Error ? err.message : "Failed to update setting");
     } finally {
       setIsUpdatingAutoApply(false);
+    }
+  };
+
+  /** Spec 044 FR-030a: on by default; off withdraws every player's grant. */
+  const handleToggleActorArt = async (allow: boolean) => {
+    setIsUpdatingActorArt(true);
+    setError(null);
+    try {
+      const updated = await updateWorldAllowPlayerActorArt(worldId, allow);
+      setAllowPlayerActorArt(updated.allowPlayerActorArt);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update setting");
+    } finally {
+      setIsUpdatingActorArt(false);
     }
   };
 
@@ -352,6 +370,30 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
               }
             />
             Allow players to create their own actors
+          </label>
+        </div>
+
+        {/* Spec 044 FR-030a: players and their own character's art */}
+        <div className="grid gap-3">
+          <h3 className="font-semibold">Players&apos; character art</h3>
+          <p className="text-sm text-muted-foreground">
+            When on, the player who holds a character may change its portrait
+            and token, and build a look for it. Turning this off stops every
+            player in this world from doing so; art already set stays, and you
+            may still change any character&apos;s art. To stop one player only,
+            lock that character&apos;s look on its page. On by default.
+          </p>
+          <label
+            className="flex items-center gap-2 text-sm"
+            data-testid="allow-player-actor-art-toggle"
+          >
+            <input
+              type="checkbox"
+              checked={allowPlayerActorArt}
+              disabled={isUpdatingActorArt}
+              onChange={(e) => void handleToggleActorArt(e.target.checked)}
+            />
+            Players may change their character&apos;s art
           </label>
         </div>
 

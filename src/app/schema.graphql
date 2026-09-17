@@ -204,6 +204,11 @@ type AppMutationRoot {
 	"""
 	updateWorldInterfacePack(input: UpdateWorldInterfacePackInput!): GraphQLWorld!
 	updateWorldAllowPlayerCreatedActors(input: UpdateWorldAllowPlayerCreatedActorsInput!): GraphQLWorld!
+	"""
+	Whether the player who holds a character may change its portrait and
+	token. On unless the Game Master turns it off.
+	"""
+	updateWorldAllowPlayerActorArt(input: UpdateWorldAllowPlayerActorArtInput!): GraphQLWorld!
 	updateWorldGenieResourceCarryover(input: UpdateWorldGenieResourceCarryoverInput!): GraphQLWorld!
 	updateWorldDefaultSceneGridType(input: UpdateWorldDefaultSceneGridTypeInput!): GraphQLWorld!
 	renameWorld(worldId: UUID!, worldName: String!): GraphQLWorld!
@@ -439,6 +444,11 @@ type AppMutationRoot {
 	by-id read; its tokens' names follow their own setting either way.
 	"""
 	setActorVisibleToPlayers(actorId: UUID!, visible: Boolean!): GraphQLWorldActor!
+	"""
+	Lock one character's look against its player, or unlock it. Game
+	Master only; changes no image.
+	"""
+	setActorArtLocked(actorId: UUID!, locked: Boolean!): GraphQLWorldActor!
 	"""
 	DM-only. Grants an actor-level permission to one world member.
 	"""
@@ -5030,6 +5040,11 @@ type GraphQLWorld {
 	without an offer. Off by default; an encounter may override it.
 	"""
 	autoApplyNpcDamage: Boolean!
+	"""
+	Spec 044 FR-030a: players may change their own character's art. On
+	by default.
+	"""
+	allowPlayerActorArt: Boolean!
 }
 
 type GraphQLWorldActor {
@@ -5062,6 +5077,17 @@ type GraphQLWorldActor {
 	hidden NPC at all, so a player reading `false` here holds it.
 	"""
 	visibleToPlayers: Boolean!
+	"""
+	Spec 044 FR-030b: the Game Master has locked this character's look
+	against its player.
+	"""
+	artLocked: Boolean!
+	"""
+	Spec 044 B6: whether the caller may change this actor's portrait and
+	token — the same answer `uploadActorImage` would give them. A client
+	shows "Build look" on this and on nothing else.
+	"""
+	myMayChangeImagery: Boolean!
 	"""
 	Effective Viewer/Editor/Owner level the calling user holds on this
 	actor (data-model.md's "effective actor permission") — DM of the
@@ -6836,6 +6862,15 @@ input UpdateMemberRoleInput {
 	New role: Owner, GM, or Player
 	"""
 	role: String!
+}
+
+"""
+Spec 044 FR-030a: whether the player who holds a character may change its
+portrait and token in this world.
+"""
+input UpdateWorldAllowPlayerActorArtInput {
+	worldId: UUID!
+	allow: Boolean!
 }
 
 """

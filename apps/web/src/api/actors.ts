@@ -32,6 +32,8 @@ const WORLD_ACTOR_FIELDS = `
   availableForClaim
   isUnique
   visibleToPlayers
+  artLocked
+  myMayChangeImagery
   claimedBy {
     id
     worldId
@@ -292,6 +294,26 @@ export function setActorVisibleToPlayers(
     `,
     { actorId, visible },
   ).then((data) => data.setActorVisibleToPlayers);
+}
+
+/**
+ * Spec 044 FR-030b, Game Master only. Locks one character's look against the
+ * player holding it, or unlocks it. Changes no image.
+ */
+export function setActorArtLocked(
+  actorId: string,
+  locked: boolean,
+): Promise<WorldActorRecord> {
+  return postGraphQL<{ setActorArtLocked: WorldActorRecord }>(
+    `
+      mutation SetActorArtLocked($actorId: UUID!, $locked: Boolean!) {
+        setActorArtLocked(actorId: $actorId, locked: $locked) {
+          ${WORLD_ACTOR_FIELDS}
+        }
+      }
+    `,
+    { actorId, locked },
+  ).then((data) => data.setActorArtLocked);
 }
 
 type UnclaimActorMutation = {

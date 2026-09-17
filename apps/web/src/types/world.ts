@@ -26,6 +26,11 @@ export interface WorldRecord {
    * without an offer. Off by default; an encounter may override it.
    */
   autoApplyNpcDamage: boolean;
+  /**
+   * Spec 044 FR-030a: whether the player who holds a character may change
+   * its portrait and token. On by default.
+   */
+  allowPlayerActorArt: boolean;
   /** Spec 022 (FR-014/FR-015): default grid type ("square" | "hex" |
    * "gridless") applied to a newly created scene when its own gridType
    * isn't explicitly set. */

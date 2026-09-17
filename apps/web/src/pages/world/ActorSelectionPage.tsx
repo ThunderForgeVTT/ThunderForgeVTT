@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import type { HeroSpec } from "@thunderforge/heroes";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   claimActor,
@@ -14,6 +15,7 @@ import { Container } from "@/components/ui/container/Container";
 import { Field } from "@/components/ui/field/Field";
 import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/loader/Loader";
+import { LazyHeroBuilderDialog } from "@/pages/world/actor/heroBuilderLazy";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import type { WorldActorRecord } from "@/types/actor";
 import type { WorldRecord } from "@/types/world";
@@ -37,6 +39,14 @@ export default function ActorSelectionPage() {
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  /** Spec 044 FR-034: a look built before the character exists. */
+  const [look, setLook] = useState<HeroSpec | null>(null);
+  const [building, setBuilding] = useState(false);
+  /** The character was created but its art was not stored. */
+  const [lacksArt, setLacksArt] = useState<{
+    actorId: string;
+    message: string;
+  } | null>(null);
 
   const loadWorldAndActors = () => {
     setIsLoading(true);
@@ -111,11 +121,30 @@ export default function ActorSelectionPage() {
     setIsCreating(true);
     setStatus(null);
     try {
-      await createAndClaimActor(
+      const claim = await createAndClaimActor(
         worldId,
         newName.trim(),
         newDescription.trim() || undefined,
       );
+      // Spec 044 FR-034: the character first, then its look — the same order
+      // and the same reasoning as Quick NPC. A failed upload keeps the
+      // character, which is what the player asked for, and says where the
+      // art can be added; it never deletes the character to hide the failure.
+      if (look) {
+        const { saveBuiltHero } =
+          await import("@/pages/world/actor/saveBuiltHero");
+        const saved = await saveBuiltHero(claim.actorId, {
+          ...look,
+          name: newName.trim(),
+        });
+        const failed = [saved.portrait, saved.token].find(
+          (outcome) => outcome.status === "failed",
+        );
+        if (failed?.status === "failed") {
+          setLacksArt({ actorId: claim.actorId, message: failed.message });
+          return;
+        }
+      }
       navigate(`/world/${worldId}`, { replace: true });
     } catch (err) {
       setStatus(
@@ -227,14 +256,99 @@ export default function ActorSelectionPage() {
                 placeholder="A short description…"
               />
             </Field>
+            {/* Spec 044 FR-034: optional; a character with no look is
+                still a character. */}
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                variant="secondary"
+                icon="quill"
+                onClick={() => setBuilding(true)}
+                disabled={isCreating || lacksArt !== null}
+                data-testid="create-own-build-look"
+              >
+                {look ? "Change look" : "Build look"}
+              </Button>
+              <span
+                className="text-sm text-muted-foreground"
+                data-testid="create-own-look-state"
+              >
+                {look
+                  ? "A portrait and a token will be stored with your character."
+                  : "Optional. You can add art later from your character's page."}
+              </span>
+            </div>
+            {lacksArt ? (
+              <div
+                role="alert"
+                className="grid gap-2 text-sm"
+                data-testid="create-own-lacks-art"
+              >
+                <p>
+                  Your character was created, but without its art:{" "}
+                  {lacksArt.message}
+                </p>
+                <p>
+                  Open your character&apos;s page and use “Build look” to add a
+                  portrait and a token.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    onClick={() =>
+                      navigate(
+                        `/world/${worldId}/actor/${lacksArt.actorId}/view`,
+                        { replace: true },
+                      )
+                    }
+                    data-testid="create-own-open-character"
+                  >
+                    Open my character
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() =>
+                      navigate(`/world/${worldId}`, { replace: true })
+                    }
+                  >
+                    Continue to the world
+                  </Button>
+                </div>
+              </div>
+            ) : null}
             <Button
               className="justify-self-start"
               onClick={() => void handleCreate()}
-              disabled={isCreating}
+              disabled={isCreating || lacksArt !== null}
+              data-testid="create-own-submit"
             >
               {isCreating ? "Creating..." : "Create and play as this character"}
             </Button>
           </Card>
+        ) : null}
+
+        {building ? (
+          <Suspense fallback={null}>
+            <LazyHeroBuilderDialog
+              open
+              onOpenChange={setBuilding}
+              actorId={null}
+              actorLabel={newName.trim() || "Your character"}
+              existingRoles={[]}
+              initialSpec={
+                look
+                  ? { ...look, name: newName.trim() || look.name }
+                  : undefined
+              }
+              onUse={(chosen) => {
+                setLook(chosen);
+                if (!newName.trim() && chosen.name.trim()) {
+                  setNewName(chosen.name);
+                }
+              }}
+            />
+          </Suspense>
         ) : null}
 
         {!hasAvailable && !canCreateOwn ? (

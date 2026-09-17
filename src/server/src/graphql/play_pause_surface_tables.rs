@@ -258,6 +258,10 @@ pub const GATED: &[(&str, &str)] = &[
         r#"mutation { setActorVisibleToPlayers(actorId: "{actor}", visible: true) { __typename } }"#,
     ),
     (
+        "setActorArtLocked",
+        r#"mutation { setActorArtLocked(actorId: "{actor}", locked: true) { __typename } }"#,
+    ),
+    (
         "advanceTurn",
         r#"mutation { advanceTurn(combatId: "{combat}") { __typename } }"#,
     ),
@@ -614,6 +618,10 @@ pub const GATED: &[(&str, &str)] = &[
     (
         "updateWorldAllowPlayerCreatedActors",
         r#"mutation { updateWorldAllowPlayerCreatedActors(input: { worldId: "{world}", allow: true }) { __typename } }"#,
+    ),
+    (
+        "updateWorldAllowPlayerActorArt",
+        r#"mutation { updateWorldAllowPlayerActorArt(input: { worldId: "{world}", allow: false }) { __typename } }"#,
     ),
     (
         "updateWorldGenieResourceCarryover",

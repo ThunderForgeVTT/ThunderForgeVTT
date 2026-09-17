@@ -28,6 +28,7 @@ const WORLD_FIELDS = `
   defaultSceneGridType
   activeSceneId
   autoApplyNpcDamage
+  allowPlayerActorArt
 `;
 
 type MyWorldsQuery = {
@@ -175,6 +176,26 @@ export function updateWorldAllowPlayerCreatedActors(
     `,
     { input: { worldId, allow } },
   ).then((data) => data.updateWorldAllowPlayerCreatedActors);
+}
+
+/**
+ * Spec 044 FR-030a, Game Master only. Whether the player who holds a
+ * character may change its portrait and token in this world.
+ */
+export function updateWorldAllowPlayerActorArt(
+  worldId: string,
+  allow: boolean,
+): Promise<WorldRecord> {
+  return postGraphQL<{ updateWorldAllowPlayerActorArt: WorldRecord }>(
+    `
+      mutation UpdateWorldAllowPlayerActorArt($input: UpdateWorldAllowPlayerActorArtInput!) {
+        updateWorldAllowPlayerActorArt(input: $input) {
+          ${WORLD_FIELDS}
+        }
+      }
+    `,
+    { input: { worldId, allow } },
+  ).then((data) => data.updateWorldAllowPlayerActorArt);
 }
 
 type WorldMemberQuery = {

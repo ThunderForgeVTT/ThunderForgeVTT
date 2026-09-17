@@ -83,6 +83,9 @@ pub struct GraphQLWorld {
     /// Spec 046 FR-006: a hit on an NPC the Game Master runs is applied
     /// without an offer. Off by default; an encounter may override it.
     pub auto_apply_npc_damage: bool,
+    /// Spec 044 FR-030a: players may change their own character's art. On
+    /// by default.
+    pub allow_player_actor_art: bool,
 }
 
 impl From<World> for GraphQLWorld {
@@ -109,6 +112,7 @@ impl From<World> for GraphQLWorld {
             default_scene_grid_type: world.default_scene_grid_type,
             active_scene_id: world.active_scene_id,
             auto_apply_npc_damage: world.auto_apply_npc_damage,
+            allow_player_actor_art: world.allow_player_actor_art,
         }
     }
 }

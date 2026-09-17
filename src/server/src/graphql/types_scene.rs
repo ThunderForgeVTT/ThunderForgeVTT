@@ -164,10 +164,29 @@ pub struct GraphQLWorldActor {
     /// default; set by `setActorVisibleToPlayers`. A player never receives a
     /// hidden NPC at all, so a player reading `false` here holds it.
     pub visible_to_players: bool,
+    /// Spec 044 FR-030b: the Game Master has locked this character's look
+    /// against its player.
+    pub art_locked: bool,
 }
 
 #[async_graphql::ComplexObject]
 impl GraphQLWorldActor {
+    /// Spec 044 B6: whether the caller may change this actor's portrait and
+    /// token — the same answer `uploadActorImage` would give them. A client
+    /// shows "Build look" on this and on nothing else.
+    async fn my_may_change_imagery(&self, ctx: &Context<'_>) -> GraphQLResult<bool> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        Ok(crate::auth::actor_imagery::may_change_actor_imagery(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            self.id,
+        )
+        .await?
+        .is_ok())
+    }
+
     /// Effective Viewer/Editor/Owner level the calling user holds on this
     /// actor (data-model.md's "effective actor permission") — DM of the
     /// actor's world always resolves to `Owner` (FR-017); otherwise the
@@ -245,6 +264,7 @@ impl From<WorldActor> for GraphQLWorldActor {
             available_for_claim: actor.available_for_claim,
             is_unique: actor.is_unique,
             visible_to_players: actor.visible_to_players,
+            art_locked: actor.art_locked,
         }
     }
 }

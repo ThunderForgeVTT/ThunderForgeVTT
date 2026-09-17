@@ -497,6 +497,9 @@ pub struct World {
     /// runs is applied without an offer. Off by default; an encounter may
     /// override it (`world_combats.auto_apply`).
     pub auto_apply_npc_damage: bool,
+    /// Spec 044 FR-030a: whether the player who holds a character may change
+    /// its portrait and token. On by default; a Game Master turns it off.
+    pub allow_player_actor_art: bool,
 }
 
 // Policy struct disabled - table not implemented
@@ -1086,6 +1089,9 @@ pub struct WorldActor {
     /// by default. Read only through `auth::npc_visibility`; a player
     /// character ignores it.
     pub visible_to_players: bool,
+    /// Spec 044 FR-030b: the Game Master has locked this character's look, so
+    /// its holder's grant (`auth::actor_imagery`) does not apply to it.
+    pub art_locked: bool,
 }
 
 /// New actor for insertion

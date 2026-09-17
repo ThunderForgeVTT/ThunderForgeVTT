@@ -7,6 +7,7 @@ import { createActorShareLink, revokeActorShareLink } from "@/api/actorShares";
 import {
   getActor,
   setActorAvailability,
+  setActorArtLocked,
   setActorUnique,
   setActorVisibleToPlayers,
   unclaimActor,
@@ -73,6 +74,7 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
   const [isUpdatingClaim, setIsUpdatingClaim] = useState(false);
   const [isUpdatingUnique, setIsUpdatingUnique] = useState(false);
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
+  const [isUpdatingArtLock, setIsUpdatingArtLock] = useState(false);
   const { isGm: isDm } = useWorldRole(worldId, world);
   const { user } = useAuth();
 
@@ -142,6 +144,8 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
   }
 
   const canEdit = actor.myPermissionLevel !== "VIEWER";
+  /** Spec 044 FR-030: this caller is the player holding the character. */
+  const heldByMe = !!user && actor.claimedBy?.userId === user.id;
 
   /**
    * Re-read the actor from the server.
@@ -209,6 +213,23 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
       );
     } finally {
       setIsUpdatingClaim(false);
+    }
+  };
+
+  /** Spec 044 FR-030b: locks the look only; the sheet is untouched. */
+  const handleToggleArtLocked = async (locked: boolean) => {
+    setIsUpdatingArtLock(true);
+    setStatus(null);
+    try {
+      setActor(await setActorArtLocked(actorId, locked));
+    } catch (err) {
+      setStatus(
+        err instanceof Error
+          ? err.message
+          : "Failed to lock this character's look",
+      );
+    } finally {
+      setIsUpdatingArtLock(false);
     }
   };
 
@@ -473,27 +494,39 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
           one way to give a character a face was a screen that character never
           appears on.
 
-          `canEdit` is the actor's own permission, exactly as everywhere else
-          on this page: whoever the server already lets edit this actor's
-          imagery is offered the controls, and nobody else. The server refuses
-          the upload regardless (Constitution Principle III) — this only
-          decides what is offered.
+          Who is offered the controls is the server's answer, not this page's:
+          `myMayChangeImagery` is B6 of spec 044 (ADR-105), the rule
+          `uploadActorImage` itself enforces — Editor or above, or the player
+          holding this character while the world allows it and the Game
+          Master has not locked its look. The server refuses the upload
+          regardless (Constitution Principle III); this only decides what is
+          offered.
 
-          Edit mode only, matching the NPC editor. The view route is what a
-          share link and a player's read-only look land on, and a file input
-          there would be offering a write on a screen whose whole shape says
-          "reading".
+          Both modes, since spec 044 phase (c). A player holding a character
+          resolves to Viewer on it and is redirected away from /edit, so the
+          view route is the only place their own character's look can be
+          changed. Everyone else sees the pictures without the controls.
         */}
-        {mode === "edit" ? (
-          <div className="grid gap-3">
-            <ActorImageryPanel
-              worldId={worldId}
-              actorId={actorId}
-              actorLabel={actor.label}
-              canEdit={canEdit}
-            />
-          </div>
-        ) : null}
+        <div className="grid gap-3">
+          <ActorImageryPanel
+            worldId={worldId}
+            actorId={actorId}
+            actorLabel={actor.label}
+            canEdit={actor.myMayChangeImagery}
+          />
+          {heldByMe && !actor.myMayChangeImagery ? (
+            <p
+              className="text-sm text-muted-foreground"
+              data-testid="actor-imagery-refusal"
+            >
+              {actor.artLocked
+                ? "The Game Master has locked this character's look."
+                : world?.allowPlayerActorArt === false
+                  ? "The Game Master has turned off players changing their character's art in this world."
+                  : null}
+            </p>
+          ) : null}
+        </div>
 
         {/* Spec 012 (T037, FR-006): lore entries that reference this actor —
             and, since spec 031 (FR-039), the place to write or attach one
@@ -645,6 +678,34 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
                 ? "New tokens share this NPC's hit points."
                 : "New tokens are copies, each with hit points of its own."}{" "}
               Tokens already placed keep what they are.
+            </p>
+          </Card>
+        ) : null}
+
+        {/* Spec 044 FR-030b: GM-only, PC-only. Locks the holder out of
+            changing this one character's portrait and token; the Game Master
+            may still change them, and nothing else about the character is
+            locked. */}
+        {isDm && !actor.isNpc ? (
+          <Card className="grid gap-3 p-4" data-testid="actor-art-lock-block">
+            <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+              Look
+            </h2>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                data-testid="actor-art-lock-toggle"
+                checked={actor.artLocked}
+                disabled={isUpdatingArtLock}
+                onChange={(e) => void handleToggleArtLocked(e.target.checked)}
+              />
+              Lock this character&apos;s look (portrait and token)
+            </label>
+            <p className="text-sm text-muted-foreground">
+              {actor.artLocked
+                ? "Locked: the player holding this character cannot change its portrait or token."
+                : "The player holding this character may change its portrait and token, if the world allows it."}{" "}
+              The sheet is not locked, and you may still change the look.
             </p>
           </Card>
         ) : null}

@@ -316,6 +316,72 @@ pub async fn set_actor_visible_to_players_impl(
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
 }
 
+/// Testable core of `ActorMutation::set_actor_art_locked`: spec 044 FR-030b.
+/// A Game Master locks one character's look, so the player holding it may no
+/// longer change its portrait or token (`auth::actor_imagery`), whatever the
+/// world setting says. Locking changes no image, and the Game Master's own
+/// authority over the art is untouched.
+///
+/// Answered as not found for anyone else, as `setActorVisibleToPlayers` is.
+pub async fn set_actor_art_locked_impl(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    is_admin: bool,
+    actor_id: uuid::Uuid,
+    locked: bool,
+) -> GraphQLResult<WorldActor> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let world_id = tokio::task::spawn_blocking(move || {
+        world_actors::table
+            .filter(world_actors::id.eq(actor_id))
+            .select(world_actors::world_id)
+            .first::<uuid::Uuid>(&mut conn)
+            .optional()
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to load actor"))?
+    .ok_or_else(|| Error::new("Actor not found"))?;
+    if !is_dm_of_world(state, user_id, is_admin, world_id).await? {
+        return Err(Error::new("Actor not found"));
+    }
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    tokio::task::spawn_blocking(move || -> GraphQLResult<WorldActor> {
+        crate::play_pause::gate::refuse_if_paused(&mut conn, world_id)?;
+        let actor = diesel::update(world_actors::table.filter(world_actors::id.eq(actor_id)))
+            .set((
+                world_actors::art_locked.eq(locked),
+                world_actors::updated_at.eq(chrono::Utc::now().naive_utc()),
+            ))
+            .returning(WorldActor::as_returning())
+            .get_result(&mut conn)
+            .map_err(|e| Error::new(format!("Failed to change the actor: {e}")))?;
+        // The holder's page re-reads on it, so its "Build look" appears or
+        // goes without a reload. Ids only.
+        let _ = crate::world_events::record_world_event(
+            &mut conn,
+            world_id,
+            crate::world_events::EVENT_CODE_ACTOR_SHEET_CHANGED,
+            Some(serde_json::json!({
+                "action": "changed",
+                "actorId": actor_id,
+                "dataType": "art_locked",
+            })),
+            user_id,
+        );
+        Ok(actor)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+}
+
 #[derive(Default)]
 pub struct ActorMutation;
 
@@ -362,6 +428,27 @@ impl ActorMutation {
             auth_user.is_admin,
             actor_id,
             visible,
+        )
+        .await
+        .map(GraphQLWorldActor::from)
+    }
+
+    /// Lock one character's look against its player, or unlock it. Game
+    /// Master only; changes no image.
+    async fn set_actor_art_locked(
+        &self,
+        ctx: &Context<'_>,
+        actor_id: uuid::Uuid,
+        locked: bool,
+    ) -> GraphQLResult<GraphQLWorldActor> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        set_actor_art_locked_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            actor_id,
+            locked,
         )
         .await
         .map(GraphQLWorldActor::from)

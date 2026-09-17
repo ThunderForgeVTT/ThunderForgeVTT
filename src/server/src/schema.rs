@@ -1107,6 +1107,7 @@ diesel::table! {
         available_for_claim -> Bool,
         is_unique -> Bool,
         visible_to_players -> Bool,
+        art_locked -> Bool,
     }
 }
 
@@ -1617,6 +1618,7 @@ diesel::table! {
         default_scene_grid_type -> Text,
         active_scene_id -> Nullable<Uuid>,
         auto_apply_npc_damage -> Bool,
+        allow_player_actor_art -> Bool,
     }
 }
 

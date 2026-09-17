@@ -143,6 +143,8 @@ pub async fn create_world_impl(
         default_scene_grid_type: "square".to_string(),
         active_scene_id: None,
         auto_apply_npc_damage: false,
+        // Spec 044 FR-030a: on, as the migration backfilled every old world.
+        allow_player_actor_art: true,
     };
 
     let inserted_world = new_world.clone();
@@ -490,6 +492,52 @@ pub async fn update_world_allow_player_created_actors_impl(
     Ok(GraphQLWorld::from(updated))
 }
 
+/// Spec 044 FR-030a: whether the player who holds a character may change its
+/// portrait and token in this world.
+#[derive(InputObject, Debug, Clone)]
+pub struct UpdateWorldAllowPlayerActorArtInput {
+    pub world_id: uuid::Uuid,
+    pub allow: bool,
+}
+
+/// Testable core of `WorldMutation::update_world_allow_player_actor_art`.
+/// Game Master only; refused while play is paused, like every other world
+/// setting. Turning it off changes no image already stored.
+pub async fn update_world_allow_player_actor_art_impl(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    is_admin: bool,
+    input: UpdateWorldAllowPlayerActorArtInput,
+) -> GraphQLResult<GraphQLWorld> {
+    if !crate::auth::world_membership::is_dm_of_world(state, user_id, is_admin, input.world_id)
+        .await?
+    {
+        return Err(Error::new(
+            "Only the Game Master may change whether players may change their character's art",
+        ));
+    }
+
+    let world_id = input.world_id;
+    let allow = input.allow;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let updated = tokio::task::spawn_blocking(move || {
+        refuse_if_paused(&mut conn, world_id)?;
+        diesel::update(worlds::table.filter(worlds::id.eq(world_id)))
+            .set(worlds::allow_player_actor_art.eq(allow))
+            .returning(World::as_returning())
+            .get_result::<World>(&mut conn)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|e| refusal_or(e, "Failed to update allow_player_actor_art"))?;
+
+    Ok(GraphQLWorld::from(updated))
+}
+
 /// Spec 020 (FR-003, research.md R1): the GM-controlled per-world setting
 /// gating whether Genie Session Resource holdings carry over into the
 /// next session.
@@ -649,6 +697,24 @@ impl WorldMutation {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         update_world_allow_player_created_actors_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            input,
+        )
+        .await
+    }
+
+    /// Whether the player who holds a character may change its portrait and
+    /// token. On unless the Game Master turns it off.
+    async fn update_world_allow_player_actor_art(
+        &self,
+        ctx: &Context<'_>,
+        input: UpdateWorldAllowPlayerActorArtInput,
+    ) -> GraphQLResult<GraphQLWorld> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        update_world_allow_player_actor_art_impl(
             state,
             auth_user.user_id,
             auth_user.is_admin,
