@@ -47,6 +47,18 @@ export {
   type CreatureSource,
 } from "./monsters.ts";
 export { seeded } from "./seed.ts";
+export { HERO_LABELS, labelProblems, type HeroLabels } from "./labels.ts";
+export { HERO_PALETTES } from "./palettes.ts";
+export {
+  HERO_RACES,
+  matchRace,
+  raceProblems,
+  type RaceKey,
+  type RaceLook,
+} from "./races.ts";
+export { randomHero, type RolledHero, type RollOptions } from "./random.ts";
+export { minimalSpec } from "./minimal.ts";
+export { presetSource } from "./presetSource.ts";
 export {
   BUILDS,
   EAR_SHAPES,
