@@ -34,6 +34,31 @@ async function camera(page: Page): Promise<Camera> {
   );
 }
 
+/**
+ * The camera once it has stopped moving: two readings a quarter-second apart
+ * that agree. A look-at eases in, so "within 2 units of the creature" can be
+ * true while it is still gliding, and a reading taken then is not where it
+ * will rest.
+ */
+async function settledCamera(page: Page): Promise<Camera> {
+  let last = await camera(page);
+  await expect
+    .poll(
+      async () => {
+        await page.waitForTimeout(250);
+        const next = await camera(page);
+        const moved =
+          Math.hypot(next.x - last.x, next.y - last.y) +
+          Math.abs(next.scale - last.scale);
+        last = next;
+        return moved;
+      },
+      { timeout: 10_000, message: "the camera comes to rest" },
+    )
+    .toBeLessThan(0.01);
+  return last;
+}
+
 /** Where this board draws a token, in world units. */
 async function drawnAt(
   page: Page,
@@ -332,7 +357,7 @@ test("WASD walks a token, a target looks at a creature, and the camera can follo
           timeout: 10_000,
         })
         .toBeLessThan(2);
-      const held = await camera(aria.page);
+      const held = await settledCamera(aria.page);
 
       await advanceTurn(table, combat.id);
       await advanceTurn(table, combat.id);
