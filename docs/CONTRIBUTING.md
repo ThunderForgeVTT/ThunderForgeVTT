@@ -45,6 +45,57 @@ login. Reach for them before the full app when the work is in their part.
   page of its own, for tuning looks and race-aware dice in `packages/heroes`
   (`pnpm -F @thunderforge/hero-builder-app dev`). It needs no stack at all.
 
+### Proving a change
+
+A change is proven by its feature's slice, not by the full e2e suite. A
+slice is the feature's own specs plus the neighbouring specs that read what
+it writes, and it runs in minutes. The rule is
+[constitution Principle VI](../.specify/memory/constitution.md#vi-every-feature-is-proven-by-its-own-slice);
+how slices are declared is
+[ADR-107](adrs/20260922-107-a_feature_is_proven_by_a_declared_slice.md).
+
+Ask which slices your change needs, then run them:
+
+```sh
+pnpm e2e:which --diff     # your branch against origin/main, plus uncommitted files
+pnpm e2e:combat           # each slice it names
+pnpm e2e:slices           # every slice, its specs and how long it takes
+```
+
+`pnpm e2e:<slice>` runs the slice's stack-free suite first where it has
+one, then `pnpm e2e:<slice>:integration`, which runs its specs against the
+real stack.
+
+**The full suite is the gate when a cross-cutting path changes.** Those are
+the paths any slice could depend on: the GraphQL schema, auth, migrations,
+the e2e fixtures and harness, shared UI and styles, and the lockfiles. The
+lookup says `FULL SUITE` beside them, and the full list is `crossCutting` in
+`scripts/e2e/slices.json`. Run `node ./scripts/e2e-parallel.mjs` before
+merging.
+
+**Adding a spec.** Every spec under `apps/web/e2e` belongs to exactly one
+slice. Add it to the `own` list of its feature's slice in
+`scripts/e2e/slices.json`. An entry is either an exact file name
+(`combat-panel.spec.ts`) or a prefix (`combat-`); an exact name beats a
+prefix, and a longer prefix beats a shorter one. If the spec also asserts
+something another feature writes, add it to that slice's `neighbours` with
+a one-sentence `seam` saying what crosses. A new slice needs its scripts in
+the root `package.json`, and `node scripts/check-e2e-slices.mjs --fix`
+writes them.
+
+**If you forget**, the `e2e-slices` step of `pnpm verify`, which also runs
+on every commit, fails and names the file and the fix:
+
+```text
+apps/web/e2e/new-thing.spec.ts belongs to no slice — add it to "own" of a slice in scripts/e2e/slices.json
+```
+
+It fails the same way on a neighbour or an exact name that no longer
+exists, a prefix or path glob that matches nothing, a spec two slices own
+equally, and a slice script in `package.json` that is missing or has
+drifted. Only the scripts are fixed for you. Which slice a spec belongs to
+is a judgement about the feature, so the check never guesses it.
+
 ### The test database
 
 `cargo test` never touches the development database. Database-backed tests use
