@@ -154,6 +154,10 @@ comrak = "0.54.0"
 ammonia = "4.1.4"
 slug = "0.1.6"
 regex = "1.13.1"
+# Spec 044 B7: a stored hero spec is checked against HERO_SPEC_SCHEMA, the
+# JSON Schema `packages/heroes` emits. Already in the tree through
+# `pack_system_spec`, at the same version.
+jsonschema = "0.52.0"
 # Spec 040 US4: SMTP. `lettre` is the only maintained Rust SMTP client with a
 # native async Tokio transport, and the TLS choice matters more than the crate
 # choice: the first-party dependency tree is rustls throughout (`reqwest` is

@@ -2071,6 +2071,11 @@ pub struct WorldActorImage {
     pub updated_by: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// Spec 044 FR-035: the hero spec that drew this image, or `None` when it
+    /// was uploaded as a file. Checked by `heroes::spec_schema` before it is
+    /// written; untrusted input stored beside the image, never read as a
+    /// command.
+    pub hero_spec: Option<serde_json::Value>,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
@@ -2081,6 +2086,9 @@ pub struct NewWorldActorImage {
     pub asset_id: uuid::Uuid,
     pub created_by: uuid::Uuid,
     pub updated_by: uuid::Uuid,
+    /// `None` means no spec. The upsert sets the column explicitly, so a
+    /// replacing upload with none clears the old one (contract B8).
+    pub hero_spec: Option<serde_json::Value>,
 }
 
 /// Spec 031 (FR-037): what a Game Master says an item costs.

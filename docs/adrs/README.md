@@ -109,6 +109,7 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20260915-103](./20260915-103-the_access_mode_decides_the_legal_duty.md) | Accepted | The Access Mode Decides the Legal Duty |
 | [20260916-104](./20260916-104-large_uploads_arrive_in_numbered_parts.md) | Proposed | Large Uploads Arrive in Numbered Parts, Through the Server |
 | [20260916-105](./20260916-105-a_characters_look_belongs_to_whoever_holds_it.md) | Proposed | A Character's Look Belongs to Whoever Holds It |
+| [20260921-106](./20260921-106-a_stored_image_remembers_the_spec_that_drew_it.md) | Proposed | A Stored Image Remembers the Spec That Drew It |
 
 > **Note (2026-08-19):** ADRs 020–024 originally collided with an unrelated "pack system" batch that reused the same day-020 through day-024 numbers. The world-domain ADRs (020–024 above) were committed first and are documented here; the colliding pack-system ADRs were renumbered to 026–030. See `docs/SYSTEM_HOOKS_API_GUIDE.md` and ADR-036's "Related Decisions" for the corrected references.
 

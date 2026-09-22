@@ -52,6 +52,7 @@ pub mod feedback;
 /// `repo_host` talks to the host, this decides which credential it talks with.
 pub mod github_apps;
 pub mod graphql;
+pub mod heroes;
 pub mod instance_identity;
 pub mod interaction;
 pub mod interface_packs;

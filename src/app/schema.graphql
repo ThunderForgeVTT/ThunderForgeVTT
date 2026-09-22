@@ -574,7 +574,14 @@ type AppMutationRoot {
 	control a person uses after losing a device.
 	"""
 	endAllSessions: Int!
-	uploadActorImage(actorId: UUID!, role: String!, file: Upload!): GraphQLActorImage!
+	"""
+	Stores one role's image. `heroSpec` is the hero spec that drew it
+	(spec 044), stored beside it; omitted or null stores none, so an
+	uploaded file clears that role's spec. It must be a JSON object of at
+	most 4 KB that passes HERO_SPEC_SCHEMA, and a refusal stores neither
+	the spec nor the image.
+	"""
+	uploadActorImage(actorId: UUID!, role: String!, file: Upload!, heroSpec: JSON): GraphQLActorImage!
 	removeActorImage(actorId: UUID!, role: String!): Boolean!
 	createLoreEntry(input: CreateLoreEntryInput!): GraphQLLoreEntry!
 	updateLoreEntry(input: UpdateLoreEntryInput!): GraphQLLoreEntry!
@@ -2856,6 +2863,12 @@ type GraphQLActorImage {
 	assetId: UUID!
 	url: String!
 	thumbnailUrl: String!
+	"""
+	Spec 044 FR-035: the hero spec that drew this image, or null when the
+	image was uploaded as a file. Untrusted stored input: a client runs
+	`validateHero` before drawing it (FR-037).
+	"""
+	heroSpec: JSON
 }
 
 type GraphQLActorPermission {

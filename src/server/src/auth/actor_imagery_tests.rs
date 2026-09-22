@@ -143,6 +143,7 @@ async fn a_holder_may_and_another_player_may_not() {
         actor,
         ROLE_PORTRAIT.into(),
         tiny_png_bytes(),
+        None,
     )
     .await
     .expect("the holder uploads a portrait");
@@ -264,6 +265,7 @@ async fn the_game_master_is_refused_by_neither() {
         actor,
         ROLE_PORTRAIT.into(),
         tiny_png_bytes(),
+        None,
     )
     .await
     .expect("the holder uploads a portrait");
@@ -280,6 +282,7 @@ async fn the_game_master_is_refused_by_neither() {
         actor,
         ROLE_PORTRAIT.into(),
         tiny_png_bytes(),
+        None,
     )
     .await
     .expect("the Game Master replaces the player's portrait");

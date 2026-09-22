@@ -8422,6 +8422,7 @@ dependencies = [
  "image",
  "include_dir",
  "inventory",
+ "jsonschema",
  "lettre",
  "once_cell",
  "pack_system_spec",

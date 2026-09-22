@@ -29,7 +29,7 @@
 //! Reading them back is `assets_serve/actor.rs`, which mirrors
 //! `assets_serve/lore.rs` in the same way.
 
-use async_graphql::{Context, Error, Result as GraphQLResult, Upload};
+use async_graphql::{Context, Error, ErrorExtensions, Json, Result as GraphQLResult, Upload};
 use diesel::prelude::*;
 use uuid::Uuid;
 
@@ -38,6 +38,7 @@ use crate::auth::actor_imagery::{ImageryRefusal, may_change_actor_imagery, requi
 use crate::graphql::permissioned_entity_resolvers::{PausableContent, refuse_content_if_paused};
 use crate::graphql::types::GraphQLActorImage;
 use crate::graphql::{app_state, authenticated_user};
+use crate::heroes::spec_schema::{HeroSpecRefusal, check_hero_spec};
 use crate::models::{NewWorldActorImage, WorldActorImage};
 use crate::schema::world_actor_images;
 use crate::state::AppState;
@@ -74,6 +75,9 @@ pub enum UploadActorImageError {
     /// The world's play is paused; carries the gate's refusal as-is.
     #[error("play paused")]
     Paused(Error),
+    /// Refused by B7: the spec sent with the image is not one we store.
+    #[error("{0}")]
+    HeroSpec(HeroSpecRefusal),
 }
 
 fn to_graphql_error(e: UploadActorImageError) -> Error {
@@ -82,6 +86,13 @@ fn to_graphql_error(e: UploadActorImageError) -> Error {
     }
     if let UploadActorImageError::Forbidden(refusal) = e {
         return refusal.into_error();
+    }
+    if let UploadActorImageError::HeroSpec(refusal) = e {
+        let reason = refusal.reason();
+        return Error::new(refusal.to_string()).extend_with(|_, ext| {
+            ext.set("code", "BAD_USER_INPUT");
+            ext.set("reason", reason);
+        });
     }
     Error::new(e.to_string())
 }
@@ -98,6 +109,12 @@ fn to_graphql_error(e: UploadActorImageError) -> Error {
 /// index on (`actor_id`, `role`) turns a second upload of the same role into
 /// an update, so the caller never has to delete first and never risks two
 /// rows racing for one role.
+///
+/// Spec 044 phase (d): `hero_spec` is the spec that drew the image, checked
+/// by B7 before anything is transcoded or written, so a refused spec stores
+/// neither itself nor the image. It is written by the same upsert as the
+/// image, and `None` writes NULL (B8): replacing a built image with a file
+/// clears that role's spec in the same write.
 pub async fn upload_actor_image_impl(
     state: &AppState,
     user_id: Uuid,
@@ -105,6 +122,7 @@ pub async fn upload_actor_image_impl(
     actor_id: Uuid,
     role: String,
     file_bytes: Vec<u8>,
+    hero_spec: Option<serde_json::Value>,
 ) -> Result<WorldActorImage, UploadActorImageError> {
     if !KNOWN_ROLES.contains(&role.as_str()) {
         return Err(UploadActorImageError::UnknownRole(role));
@@ -120,6 +138,9 @@ pub async fn upload_actor_image_impl(
     refuse_content_if_paused(state, PausableContent::Actor(actor_id))
         .await
         .map_err(UploadActorImageError::Paused)?;
+    if let Some(spec) = &hero_spec {
+        check_hero_spec(spec).map_err(UploadActorImageError::HeroSpec)?;
+    }
 
     let renditions = transcode_to_lore_renditions(&file_bytes).map_err(|e| match e {
         TranscodeError::TooLarge { max, actual } => UploadActorImageError::TooLarge { max, actual },
@@ -151,6 +172,7 @@ pub async fn upload_actor_image_impl(
         asset_id,
         created_by: user_id,
         updated_by: user_id,
+        hero_spec,
     };
 
     let mut conn = state
@@ -164,6 +186,7 @@ pub async fn upload_actor_image_impl(
             .do_update()
             .set((
                 world_actor_images::asset_id.eq(new_image.asset_id),
+                world_actor_images::hero_spec.eq(new_image.hero_spec.clone()),
                 world_actor_images::updated_by.eq(user_id),
                 world_actor_images::updated_at.eq(chrono::Utc::now().naive_utc()),
             ))
@@ -242,12 +265,18 @@ pub struct ActorImageMutation;
 
 #[async_graphql::Object]
 impl ActorImageMutation {
+    /// Stores one role's image. `heroSpec` is the hero spec that drew it
+    /// (spec 044), stored beside it; omitted or null stores none, so an
+    /// uploaded file clears that role's spec. It must be a JSON object of at
+    /// most 4 KB that passes HERO_SPEC_SCHEMA, and a refusal stores neither
+    /// the spec nor the image.
     async fn upload_actor_image(
         &self,
         ctx: &Context<'_>,
         actor_id: Uuid,
         role: String,
         file: Upload,
+        hero_spec: Option<Json<serde_json::Value>>,
     ) -> GraphQLResult<GraphQLActorImage> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
@@ -264,6 +293,7 @@ impl ActorImageMutation {
             actor_id,
             role,
             bytes,
+            hero_spec.map(|Json(value)| value),
         )
         .await
         .map_err(to_graphql_error)?;
@@ -330,6 +360,7 @@ mod tests {
             actor_id,
             ROLE_PORTRAIT.to_string(),
             tiny_png_bytes(),
+            None,
         )
         .await
         .expect("owner may upload a portrait");
@@ -340,6 +371,7 @@ mod tests {
             actor_id,
             ROLE_TOKEN.to_string(),
             tiny_png_bytes(),
+            None,
         )
         .await
         .expect("owner may upload a token image");
@@ -375,6 +407,7 @@ mod tests {
             actor_id,
             ROLE_PORTRAIT.to_string(),
             tiny_png_bytes(),
+            None,
         )
         .await
         .unwrap();
@@ -385,6 +418,7 @@ mod tests {
             actor_id,
             ROLE_PORTRAIT.to_string(),
             tiny_png_bytes(),
+            None,
         )
         .await
         .unwrap();
@@ -426,6 +460,7 @@ mod tests {
             actor_id,
             ROLE_PORTRAIT.to_string(),
             tiny_png_bytes(),
+            None,
         )
         .await;
         assert!(matches!(
@@ -462,6 +497,7 @@ mod tests {
             actor_id,
             "portrat".to_string(),
             tiny_png_bytes(),
+            None,
         )
         .await;
         assert!(matches!(result, Err(UploadActorImageError::UnknownRole(_))));
@@ -486,6 +522,7 @@ mod tests {
                 actor_id,
                 role.to_string(),
                 tiny_png_bytes(),
+                None,
             )
             .await
             .unwrap();

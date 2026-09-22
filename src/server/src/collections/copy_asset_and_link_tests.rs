@@ -236,3 +236,119 @@ async fn an_owner_can_retrieve_their_own_share_link_and_a_stranger_cannot() {
         "a revoked link is not an active link"
     );
 }
+
+/// Spec 044 B9 (T090): each image's hero spec travels with the copy, the copy
+/// then owns its own, and a personal export carries it too.
+///
+/// The spec is asserted by value on both rows after the copy's look is
+/// rebuilt: a copy that pointed at the original's row, or an update that
+/// matched on the asset id both rows share, would change the original too.
+#[tokio::test]
+async fn a_copy_carries_each_images_hero_spec_and_then_owns_its_own() {
+    use crate::graphql::mutations_actor_images::{ROLE_PORTRAIT, upload_actor_image_impl};
+    use crate::schema::world_actor_images;
+
+    let s = source();
+    let asset = Uuid::now_v7();
+    let spec = serde_json::json!({ "name": "Sir Pip", "headgear": "helm", "prop": "sword" });
+    {
+        let mut conn = s.state.db_pool.get().expect("connection");
+        let now = chrono::Utc::now().naive_utc();
+        for role in ["portrait", "token"] {
+            diesel::insert_into(world_actor_images::table)
+                .values((
+                    world_actor_images::id.eq(Uuid::now_v7()),
+                    world_actor_images::actor_id.eq(s.actor_id),
+                    world_actor_images::role.eq(role),
+                    world_actor_images::asset_id.eq(asset),
+                    world_actor_images::hero_spec.eq(Some(spec.clone())),
+                    world_actor_images::created_by.eq(s.owner_id),
+                    world_actor_images::updated_by.eq(s.owner_id),
+                    world_actor_images::created_at.eq(now),
+                    world_actor_images::updated_at.eq(now),
+                ))
+                .execute(&mut conn)
+                .expect("a built image");
+        }
+    }
+
+    let code = share_of(&s, &[("actor", s.actor_id)], "A built hero").await;
+    let receipt = copy_shared_collection_to_world_impl(
+        &s.state,
+        s.recipient_id,
+        false,
+        code,
+        s.destination_world_id,
+    )
+    .await
+    .expect("copied");
+    let copy_id = receipt
+        .created
+        .iter()
+        .find(|c| c.member_type == "actor")
+        .expect("an actor")
+        .id;
+
+    let specs_of = |actor_id: Uuid| -> Vec<(String, Option<serde_json::Value>)> {
+        let mut conn = s.state.db_pool.get().expect("connection");
+        world_actor_images::table
+            .filter(world_actor_images::actor_id.eq(actor_id))
+            .order(world_actor_images::role.asc())
+            .select((world_actor_images::role, world_actor_images::hero_spec))
+            .load(&mut conn)
+            .expect("imagery")
+    };
+    let both = |value: &serde_json::Value| {
+        vec![
+            ("portrait".to_string(), Some(value.clone())),
+            ("token".to_string(), Some(value.clone())),
+        ]
+    };
+    assert_eq!(specs_of(copy_id), both(&spec), "every role's spec travels");
+
+    // The recipient rebuilds the copy's portrait in their own world.
+    let rebuilt = serde_json::json!({ "name": "Sir Pip", "headgear": "wizard" });
+    upload_actor_image_impl(
+        &s.state,
+        s.recipient_id,
+        false,
+        copy_id,
+        ROLE_PORTRAIT.to_string(),
+        crate::test_support::tiny_png_bytes(),
+        Some(rebuilt.clone()),
+    )
+    .await
+    .expect("the recipient may change their copy's look");
+
+    assert_eq!(
+        specs_of(copy_id),
+        vec![
+            ("portrait".to_string(), Some(rebuilt)),
+            ("token".to_string(), Some(spec.clone())),
+        ]
+    );
+    assert_eq!(
+        specs_of(s.actor_id),
+        both(&spec),
+        "the original is untouched"
+    );
+
+    // FR-040: the personal export carries it.
+    let mut conn = s.state.db_pool.get().expect("connection");
+    let exported =
+        crate::users::export_content::load_content_sync(&mut conn, s.owner_id).expect("export");
+    let actor = exported
+        .actors
+        .iter()
+        .find(|a| a.id == s.actor_id)
+        .expect("exported actor");
+    assert_eq!(actor.images.len(), 2);
+    for image in &actor.images {
+        assert_eq!(
+            image.hero_spec.as_ref(),
+            Some(&spec),
+            "{} carries its spec",
+            image.role
+        );
+    }
+}

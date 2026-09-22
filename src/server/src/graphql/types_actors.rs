@@ -82,6 +82,10 @@ pub struct GraphQLActorImage {
     pub asset_id: uuid::Uuid,
     pub url: String,
     pub thumbnail_url: String,
+    /// Spec 044 FR-035: the hero spec that drew this image, or null when the
+    /// image was uploaded as a file. Untrusted stored input: a client runs
+    /// `validateHero` before drawing it (FR-037).
+    pub hero_spec: Option<async_graphql::Json<serde_json::Value>>,
 }
 
 impl From<WorldActorImage> for GraphQLActorImage {
@@ -93,6 +97,7 @@ impl From<WorldActorImage> for GraphQLActorImage {
             asset_id: row.asset_id,
             url: format!("/api/actor-assets/{}", row.asset_id),
             thumbnail_url: format!("/api/actor-assets/{}/thumb", row.asset_id),
+            hero_spec: row.hero_spec.map(async_graphql::Json),
         }
     }
 }

@@ -1030,6 +1030,7 @@ diesel::table! {
         updated_by -> Uuid,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        hero_spec -> Nullable<Jsonb>,
     }
 }
 

@@ -601,18 +601,28 @@ fn copy_actor(
     // role comes across rather than a chosen one: `role` is open text by
     // ADR-054, so picking "portrait" here would silently drop whatever roles a
     // pack introduced later.
+    //
+    // Spec 044 FR-039: so does the hero spec that drew each image. The select
+    // and the insert both name their columns, so a column added to the table
+    // travels only when it is named here; the copy's spec is its own row, and
+    // saving a new look in the destination changes the copy alone.
     let images = world_actor_images::table
         .filter(world_actor_images::actor_id.eq(source_id))
-        .select((world_actor_images::role, world_actor_images::asset_id))
-        .load::<(String, Uuid)>(conn)?;
+        .select((
+            world_actor_images::role,
+            world_actor_images::asset_id,
+            world_actor_images::hero_spec,
+        ))
+        .load::<(String, Uuid, Option<serde_json::Value>)>(conn)?;
 
-    for (role, asset_id) in images {
+    for (role, asset_id, hero_spec) in images {
         diesel::insert_into(world_actor_images::table)
             .values((
                 world_actor_images::id.eq(Uuid::now_v7()),
                 world_actor_images::actor_id.eq(new_id),
                 world_actor_images::role.eq(role),
                 world_actor_images::asset_id.eq(asset_id),
+                world_actor_images::hero_spec.eq(hero_spec),
                 world_actor_images::created_by.eq(ctx.user_id),
                 world_actor_images::updated_by.eq(ctx.user_id),
                 world_actor_images::created_at.eq(now),

@@ -87,6 +87,9 @@ pub struct ExportedInventoryLine {
 pub struct ExportedImage {
     pub role: String,
     pub asset_id: Uuid,
+    /// Spec 044 FR-040: the hero spec that drew the image, when it was built
+    /// rather than uploaded, so an exported look can be rebuilt.
+    pub hero_spec: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -307,10 +310,20 @@ pub fn load_content_sync(conn: &mut PgConnection, user_id: Uuid) -> QueryResult<
                 world_actor_images::actor_id,
                 world_actor_images::role,
                 world_actor_images::asset_id,
+                world_actor_images::hero_spec,
             ))
-            .load::<(Uuid, String, Uuid)>(conn)?
+            .load::<(Uuid, String, Uuid, Option<serde_json::Value>)>(conn)?
             .into_iter()
-            .map(|(actor_id, role, asset_id)| (actor_id, ExportedImage { role, asset_id }))
+            .map(|(actor_id, role, asset_id, hero_spec)| {
+                (
+                    actor_id,
+                    ExportedImage {
+                        role,
+                        asset_id,
+                        hero_spec,
+                    },
+                )
+            })
             .collect(),
     );
 
