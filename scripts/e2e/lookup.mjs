@@ -36,6 +36,30 @@ export const NO_E2E_GLOBS = [
   "marketing/**",
 ];
 
+/**
+ * Whether `path` matches any of `globs`, trying only the globs whose literal
+ * head (everything before the first wildcard, brace or extglob) the path
+ * starts with. `matchesGlob` compiles each glob on every call, so without this
+ * a `which` over a large diff spends seconds comparing an engine file with
+ * every web glob; with it, the head rules most globs out by a string compare.
+ */
+function matchesAnyGlob(path, globs) {
+  return globs.some(
+    (glob) => path.startsWith(literalHead(glob)) && matchPath(path, [glob]),
+  );
+}
+
+const HEADS = new Map();
+
+function literalHead(glob) {
+  let head = HEADS.get(glob);
+  if (head === undefined) {
+    head = glob.split(/[*?[{(!@+]/, 1)[0];
+    HEADS.set(glob, head);
+  }
+  return head;
+}
+
 /** Where the e2e specs live, from the repository root. */
 const SPEC_DIR = "apps/web/e2e/";
 /** Journeys end in `.spec.ts` but run on their own instance, never in a slice. */
@@ -77,7 +101,7 @@ export function lookupPath(rawPath, list) {
   const path = normalisePath(rawPath);
   const { crossCutting = [], slices } = list;
 
-  const rule = crossCutting.find(({ glob }) => matchPath(path, [glob]));
+  const rule = crossCutting.find(({ glob }) => matchesAnyGlob(path, [glob]));
   if (rule) {
     return { path, kind: "crossCutting", slices: [], why: rule.why };
   }
@@ -111,13 +135,13 @@ export function lookupPath(rawPath, list) {
   }
 
   const claimed = slices
-    .filter((slice) => matchPath(path, slice.paths ?? []))
+    .filter((slice) => matchesAnyGlob(path, slice.paths ?? []))
     .map((slice) => slice.name);
   if (claimed.length > 0) {
     return { path, kind: "slice", slices: claimed, why: "" };
   }
 
-  if (matchPath(path, NO_E2E_GLOBS)) {
+  if (matchesAnyGlob(path, NO_E2E_GLOBS)) {
     return { path, kind: "noE2e", slices: [], why: "no e2e needed" };
   }
 
