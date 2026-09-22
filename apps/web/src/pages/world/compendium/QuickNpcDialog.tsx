@@ -191,6 +191,7 @@ export default function QuickNpcDialog({
           <Suspense fallback={null}>
             <LazyHeroBuilderDialog
               open
+              worldId={worldId}
               onOpenChange={setBuilding}
               actorId={null}
               actorLabel={trimmed || "New NPC"}

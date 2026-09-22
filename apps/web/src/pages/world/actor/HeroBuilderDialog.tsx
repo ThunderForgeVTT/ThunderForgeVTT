@@ -1,11 +1,15 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import {
   HeroBuilder,
   heroFiles,
   saveHeroFile,
 } from "@thunderforge/hero-builder";
 import { matchRace, type HeroSpec, type RaceKey } from "@thunderforge/heroes";
-import type { ActorImageRecord } from "@/api/actors";
+import {
+  getActorImageSpecs,
+  type ActorImageRecord,
+  type ActorImageSpec,
+} from "@/api/actors";
 import { getGameSystemManifest } from "@/api/gameSystems";
 import {
   Dialog,
@@ -23,6 +27,7 @@ import {
   type BuiltRole,
   type RoleOutcome,
 } from "@/pages/world/actor/saveBuiltHero";
+import { openingLook, type OpeningLook } from "@/pages/world/actor/storedLook";
 import { raceOnSheet } from "@/utils/raceOnSheet";
 
 /**
@@ -50,9 +55,21 @@ import { raceOnSheet } from "@/utils/raceOnSheet";
  * turned into a look by `matchRace`. A system with no races, a sheet with no
  * race or a race we have no look for all open on "any". The race narrows the
  * dice and is never written back (contract B5a).
+ *
+ * # Where the hero comes from
+ *
+ * The spec stored with the actor's images, the portrait's first (FR-036);
+ * read from the server each time the builder opens, so it is the look the
+ * server holds and not one this page remembers. A stored spec passes
+ * `validateHero` before anything draws it (FR-037); one that fails is shown
+ * by field and nothing is redrawn or saved unless the user asks to start
+ * again from the name (US6 scenario 4). An actor with no stored spec opens on
+ * its name, as in phase (b).
  */
 export interface HeroBuilderDialogProps {
   open: boolean;
+  /** The world the actor is in; its stored look is read from there. */
+  worldId: string;
   onOpenChange(open: boolean): void;
   /** The actor saved to, or null for a hero with no actor yet (Quick NPC's
    *  "Open in builder"), which hands the hero back through `onUse`. */
@@ -62,7 +79,8 @@ export interface HeroBuilderDialogProps {
   existingRoles: readonly string[];
   /** Every row a save stored, as it is stored. */
   onSaved?(images: ActorImageRecord[]): void;
-  /** The hero to open on; defaults to one named after the actor. */
+  /** The hero to open on. Without one, the actor's stored look, or one
+   *  named after the actor. */
   initialSpec?: HeroSpec;
   /** For an actor-less hero: the look chosen. */
   onUse?(spec: HeroSpec): void;
@@ -106,9 +124,40 @@ function useSheetRace(actorId: string | null): RaceKey | null | undefined {
   return race?.key === key ? race.race : undefined;
 }
 
+/** The actor's images' stored specs; `undefined` while they are read, and
+ *  empty when there is no actor or nothing could be read. */
+function useStoredSpecs(
+  worldId: string,
+  actorId: string | null,
+  wanted: boolean,
+): readonly ActorImageSpec[] | undefined {
+  const key = `${worldId}|${actorId}`;
+  const [read, setRead] = useState<{
+    key: string;
+    images: ActorImageSpec[];
+  } | null>(null);
+
+  useEffect(() => {
+    if (!actorId || !wanted) return;
+    let active = true;
+    getActorImageSpecs(worldId, actorId)
+      .catch(() => [])
+      .then((images) => {
+        if (active) setRead({ key, images });
+      });
+    return () => {
+      active = false;
+    };
+  }, [worldId, actorId, wanted, key]);
+
+  if (!actorId || !wanted) return [];
+  return read?.key === key ? read.images : undefined;
+}
+
 export default function HeroBuilderDialog({
   open,
   onOpenChange,
+  worldId,
   actorId,
   actorLabel,
   existingRoles,
@@ -118,9 +167,27 @@ export default function HeroBuilderDialog({
 }: HeroBuilderDialogProps) {
   const idPrefix = `hb${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const race = useSheetRace(actorId);
-  const [spec, setSpec] = useState<HeroSpec>(
-    () => initialSpec ?? { name: actorLabel.slice(0, MAX_NAME) || "Hero" },
+  const stored = useStoredSpecs(worldId, actorId, initialSpec === undefined);
+  const [fromName, setFromName] = useState(false);
+  const nameSpec = useMemo<HeroSpec>(
+    () => ({ name: actorLabel.slice(0, MAX_NAME) || "Hero" }),
+    [actorLabel],
   );
+  const opening = useMemo<OpeningLook | undefined>(() => {
+    if (initialSpec !== undefined) {
+      return { source: "name", valid: true, spec: initialSpec, note: null };
+    }
+    if (fromName) {
+      return { source: "name", valid: true, spec: nameSpec, note: null };
+    }
+    return stored === undefined ? undefined : openingLook(stored, nameSpec);
+  }, [initialSpec, fromName, nameSpec, stored]);
+  // The hero as the user has changed it; until the first change, the one
+  // it opened on. Null while an invalid stored spec is on screen, so nothing
+  // can be saved from it.
+  const [edited, setEdited] = useState<HeroSpec | null>(null);
+  const spec: HeroSpec | null =
+    edited ?? (opening?.valid ? opening.spec : null);
   const [confirming, setConfirming] = useState(false);
   const [saving, setSaving] = useState(false);
   const [save, setSave] = useState<BuiltHeroSave | null>(null);
@@ -135,7 +202,7 @@ export default function HeroBuilderDialog({
   };
 
   const start = async () => {
-    if (!actorId) return;
+    if (!actorId || !spec) return;
     setConfirming(false);
     setSaving(true);
     try {
@@ -172,8 +239,9 @@ export default function HeroBuilderDialog({
     }
   };
 
-  const exportFile = (which: "portrait" | "token" | "json") =>
-    saveHeroFile(heroFiles(spec)[which]);
+  const exportFile = (which: "portrait" | "token" | "json") => {
+    if (spec) saveHeroFile(heroFiles(spec)[which]);
+  };
 
   const onSave = () => {
     if (replaces && !confirming) setConfirming(true);
@@ -230,7 +298,7 @@ export default function HeroBuilderDialog({
           <Button
             type="button"
             onClick={() => {
-              onUse?.(spec);
+              if (spec) onUse?.(spec);
               onOpenChange(false);
             }}
             data-testid="hero-dialog-use"
@@ -281,6 +349,7 @@ export default function HeroBuilderDialog({
         // its placement classes is overridden here.
         className="top-0 left-0 flex h-dvh w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-3 overflow-y-auto rounded-none p-4 sm:max-w-none"
         data-testid="hero-builder-dialog"
+        data-opened-from={opening?.source}
       >
         <div className="grid gap-1 pr-10">
           <DialogTitle>Build look — {actorLabel}</DialogTitle>
@@ -288,7 +357,7 @@ export default function HeroBuilderDialog({
             A portrait and a token, drawn from the parts below.
           </DialogDescription>
         </div>
-        {race === undefined ? (
+        {race === undefined || opening === undefined ? (
           <p
             className="text-sm text-muted-foreground"
             data-testid="hero-dialog-loading"
@@ -296,16 +365,61 @@ export default function HeroBuilderDialog({
             Reading the sheet…
           </p>
         ) : (
-          <HeroBuilder
-            initialSpec={spec}
-            idPrefix={idPrefix}
-            initialRace={race}
-            onChange={(next) => {
-              setSpec(next);
-              setSave(null);
-            }}
-            actions={actions}
-          />
+          <>
+            {opening.note ? (
+              <p
+                role="status"
+                className="rounded-md border border-border p-3 text-sm"
+                data-testid="hero-dialog-stored-note"
+              >
+                {opening.note}
+              </p>
+            ) : null}
+            {opening.valid ? null : (
+              <div
+                className="grid gap-2 rounded-md border border-destructive p-3 text-sm"
+                data-testid="hero-dialog-stored-invalid"
+              >
+                <p>
+                  The saved look no longer draws: the parts named below have
+                  changed since it was saved. Nothing has been redrawn, and the
+                  stored portrait and token are as they were.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setFromName(true)}
+                    data-testid="hero-dialog-start-from-name"
+                  >
+                    Start again from {nameSpec.name}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => onOpenChange(false)}
+                    data-testid="hero-dialog-close"
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
+            )}
+            <HeroBuilder
+              key={`${opening.source}|${fromName}`}
+              // An invalid stored spec goes in as it is: the builder
+              // validates it again, draws nothing and lists its problems by
+              // field (B3).
+              initialSpec={opening.spec as HeroSpec}
+              idPrefix={idPrefix}
+              initialRace={race}
+              onChange={(next) => {
+                setEdited(next);
+                setSave(null);
+              }}
+              actions={actions}
+            />
+          </>
         )}
       </DialogContent>
     </Dialog>

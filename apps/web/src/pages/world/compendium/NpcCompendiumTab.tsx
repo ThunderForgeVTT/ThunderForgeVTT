@@ -509,6 +509,7 @@ export function NpcCompendiumTab({
           <LazyHeroBuilderDialog
             key={buildingNpc.id}
             open
+            worldId={worldId}
             onOpenChange={(open) => {
               if (!open) setBuildingId(null);
             }}

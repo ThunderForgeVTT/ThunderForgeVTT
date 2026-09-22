@@ -3,6 +3,7 @@ import {
   postGraphQLMultipart,
   type GraphQLRequestOptions,
 } from "@/api/graphqlClient";
+import type { HeroSpec } from "@thunderforge/heroes";
 import type {
   ActorPermissionLevel,
   ActorPermissionRecord,
@@ -412,19 +413,36 @@ export async function getWorldActorImages(
  * cannot carry the bytes. The server transcodes to WebP and refuses an
  * oversized or undecodable file before writing anything, so a rejection here
  * means the actor's imagery is exactly as it was.
+ *
+ * `heroSpec` is the spec that drew a built image (spec 044 FR-035). Only the
+ * builder sends one; a file chosen by hand is sent without, which clears it.
  */
+export interface UploadActorImageOptions extends GraphQLRequestOptions {
+  heroSpec?: HeroSpec;
+}
+
 export async function uploadActorImage(
   actorId: string,
   role: string,
   file: Blob,
-  options: GraphQLRequestOptions = {},
+  { heroSpec, ...options }: UploadActorImageOptions = {},
 ): Promise<ActorImageRecord> {
   const data = await postGraphQLMultipart<{
     uploadActorImage: ActorImageRecord;
   }>(
     `
-      mutation UploadActorImage($actorId: UUID!, $role: String!, $file: Upload!) {
-        uploadActorImage(actorId: $actorId, role: $role, file: $file) {
+      mutation UploadActorImage(
+        $actorId: UUID!
+        $role: String!
+        $file: Upload!
+        $heroSpec: JSON
+      ) {
+        uploadActorImage(
+          actorId: $actorId
+          role: $role
+          file: $file
+          heroSpec: $heroSpec
+        ) {
           id
           actorId
           role
@@ -434,12 +452,52 @@ export async function uploadActorImage(
         }
       }
     `,
-    { actorId, role },
+    // An absent spec is sent as nothing at all, which the server stores as
+    // no spec: a file that replaces a built image clears that role's spec
+    // (spec 044 FR-035, B8).
+    heroSpec === undefined ? { actorId, role } : { actorId, role, heroSpec },
     file,
     "file",
     options,
   );
   return data.uploadActorImage;
+}
+
+/**
+ * Spec 044 FR-035, FR-036: the hero spec stored with each of one actor's
+ * images, by role. `heroSpec` is null for an image stored as a file.
+ *
+ * Untrusted: the server checked its shape when it was stored, but the
+ * catalogue may have moved since, so a caller runs `validateHero` before
+ * drawing it (FR-037). Asked for only when a builder opens, never with the
+ * roster's imagery, so the screens that only show a face never carry specs.
+ */
+export interface ActorImageSpec {
+  role: string;
+  heroSpec: unknown;
+}
+
+export async function getActorImageSpecs(
+  worldId: string,
+  actorId: string,
+): Promise<ActorImageSpec[]> {
+  const data = await postGraphQL<{
+    worldActors: { id: string; images: ActorImageSpec[] }[];
+  }>(
+    `
+      query WorldActorImageSpecs($worldId: UUID!) {
+        worldActors(worldId: $worldId) {
+          id
+          images {
+            role
+            heroSpec
+          }
+        }
+      }
+    `,
+    { worldId },
+  );
+  return data.worldActors.find((actor) => actor.id === actorId)?.images ?? [];
 }
 
 /** Removes one role's image, leaving the actor's other roles untouched. */

@@ -332,6 +332,7 @@ export default function ActorSelectionPage() {
           <Suspense fallback={null}>
             <LazyHeroBuilderDialog
               open
+              worldId={worldId}
               onOpenChange={setBuilding}
               actorId={null}
               actorLabel={newName.trim() || "Your character"}

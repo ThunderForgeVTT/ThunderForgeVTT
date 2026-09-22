@@ -258,6 +258,7 @@ export function ActorImageryPanel({
         <Suspense fallback={null}>
           <LazyHeroBuilderDialog
             open
+            worldId={worldId}
             onOpenChange={(open) => setBuilding(open)}
             actorId={actorId}
             actorLabel={actorLabel ?? "Hero"}

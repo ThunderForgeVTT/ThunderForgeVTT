@@ -1,5 +1,5 @@
 import { renderHero } from "@thunderforge/hero-builder";
-import type { HeroSpec } from "@thunderforge/heroes";
+import { minimalSpec, type HeroSpec } from "@thunderforge/heroes";
 import {
   ACTOR_IMAGE_PORTRAIT,
   ACTOR_IMAGE_TOKEN,
@@ -20,6 +20,10 @@ import { heroSvgFile } from "@/pages/world/actor/heroFiles";
  *   R3). Each replaces its own role and nothing else.
  * - A role is `saved` only when the mutation returned its row (B4). Anything
  *   else is `failed`, with the server's own message, and can be retried alone.
+ * - Each upload carries the spec that drew it — the smallest one, so a
+ *   colour that follows another keeps following when the look is re-opened
+ *   (FR-009, FR-035). The spec is the same for both roles; the race the dice
+ *   rolled with is never part of it (B5a).
  * - A paused world refuses every upload. The first refusal stands for both
  *   roles — the second would only be refused too — and the transport is told
  *   not to send the page to the pause notice, because the builder is holding
@@ -63,15 +67,14 @@ async function uploadRole(
   actorId: string,
   role: BuiltRole,
   svg: string,
+  heroSpec: HeroSpec,
 ): Promise<RoleOutcome> {
   try {
     const image = await uploadActorImage(
       actorId,
       role,
       heroSvgFile(svg, role),
-      {
-        announcePause: false,
-      },
+      { announcePause: false, heroSpec },
     );
     return { status: "saved", image };
   } catch (err) {
@@ -84,7 +87,9 @@ export async function saveBuiltHero(
   spec: HeroSpec,
 ): Promise<BuiltHeroSave> {
   const svgs = renderHero(spec, STORED_PREFIX);
-  const retry = (role: BuiltRole) => uploadRole(actorId, role, svgs[role]);
+  const stored = minimalSpec(spec);
+  const retry = (role: BuiltRole) =>
+    uploadRole(actorId, role, svgs[role], stored);
 
   const portrait = await retry(ACTOR_IMAGE_PORTRAIT);
   if (portrait.status === "failed" && portrait.paused) {
