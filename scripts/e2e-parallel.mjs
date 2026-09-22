@@ -67,8 +67,19 @@ import { removeContainers, startMailpitContainer } from "./e2e/mailpit.mjs";
 import { startLoadMonitor } from "./e2e/load.mjs";
 import { digestLines, writeRunSummary } from "./e2e/report.mjs";
 import {
+  SliceError,
+  selectedSpecs,
+  sliceConflict,
+  sliceSpecs,
+} from "./e2e/select.mjs";
+import {
+  SLICE_DURATIONS_FILE,
+  measuredCommit,
+  measuredDate,
+  recordSliceDuration,
+} from "./e2e/slice-durations.mjs";
+import {
   SUITES,
-  allSpecFiles,
   isFirstRunSpec,
   isGithubAppsSpec,
   isPerfSpec,
@@ -141,15 +152,7 @@ const LOCAL_DURATIONS_PATH = join(ROOT_DIR, ".e2e-shards-durations.local.json");
  * and that is well before the lanes are partitioned below.
  */
 function measuredSpecsSelected(args) {
-  const onlyPatterns = args.only
-    ?.split(",")
-    .map((p) => p.trim())
-    .filter(Boolean);
-  return allSpecFiles(args.suite)
-    .filter(
-      (file) => !onlyPatterns || onlyPatterns.some((p) => file.includes(p)),
-    )
-    .filter(isPerfSpec);
+  return selectedSpecs(args).filter(isPerfSpec);
 }
 
 /**
@@ -899,24 +902,48 @@ async function main() {
     keep: false,
     recordDurations: false,
     only: null,
+    slice: null,
+    sliceSpecs: null,
     suite: "e2e",
   };
   for (const argv of process.argv.slice(2)) {
     const shardMatch = /^--shards=(\d+)$/.exec(argv);
     const onlyMatch = /^--only=(.+)$/.exec(argv);
+    const sliceMatch = /^--slice=(.+)$/.exec(argv);
     const suiteMatch = /^--suite=(e2e|playtest)$/.exec(argv);
     if (shardMatch) args.shards = Number(shardMatch[1]);
     else if (suiteMatch) args.suite = suiteMatch[1];
     // A substring of the spec path, for exercising the harness itself without
     // waiting out the suite it exists to speed up.
     else if (onlyMatch) args.only = onlyMatch[1];
+    // A feature's declared specs, exactly (`scripts/e2e/slices.json`).
+    else if (sliceMatch) args.slice = sliceMatch[1];
     else if (argv === "--all") args.all = true;
     else if (argv === "--keep") args.keep = true;
-    // Also write the tracked `.e2e-shards-durations.json` baseline.
+    // Also write the tracked `.e2e-shards-durations.json` baseline, and with
+    // `--slice`, the slice's time to `scripts/e2e/slice-durations.json`.
     else if (argv === "--record-durations") args.recordDurations = true;
     else throw new Error(`Unknown argument: ${argv}`);
   }
   run.args = args;
+  // Exit 2, before the lock or anything that costs time: a slice that does
+  // not exist, or flags that contradict it, are a typo to fix, not a run to
+  // start. 2 rather than the runner's 1 so a script can tell "you asked
+  // wrongly" from "the specs failed".
+  if (args.slice) {
+    const conflict = sliceConflict(args);
+    if (conflict) {
+      log("e2e", conflict, process.stderr);
+      process.exit(2);
+    }
+    try {
+      args.sliceSpecs = sliceSpecs(args.slice);
+    } catch (error) {
+      if (!(error instanceof SliceError)) throw error;
+      log("e2e", error.message, process.stderr);
+      process.exit(2);
+    }
+  }
   // A playtest is one table on one stack. Each scenario already runs three
   // browsers against an engine-heavy scene and records them, so a second
   // shard would only compete with the recording it is making.
@@ -940,7 +967,13 @@ async function main() {
   if (buildHint) log("e2e", `note: ${buildHint}`);
 
   acquireRunLock(ROOT_DIR, process.argv.slice(2));
+  // The slice's recorded time starts here: stack start and engine build are
+  // part of what a contributor waits for (research R10). The commit is taken
+  // now too, since the run itself leaves files behind.
+  run.lockAcquired = Date.now();
+  if (args.slice && args.recordDurations) run.commit = measuredCommit(ROOT_DIR);
   releaseOnSignals();
+  if (args.slice) log("e2e", sliceHeader(args, total));
   run.load = startLoadMonitor();
   logLoadAtStart(run.load.snapshot());
   // Two past the sharded stacks: the first-run lane runs on index `total` and
@@ -1011,14 +1044,10 @@ async function main() {
 
   // `--only` takes a comma-separated list, so a triage run can name exactly
   // the handful of specs under suspicion rather than a prefix that drags in
-  // their neighbours.
-  const onlyPatterns = args.only
-    ?.split(",")
-    .map((p) => p.trim())
-    .filter(Boolean);
-  const specs = allSpecFiles(args.suite).filter(
-    (file) => !onlyPatterns || onlyPatterns.some((p) => file.includes(p)),
-  );
+  // their neighbours. `--slice` replaces that filter with the slice's exact
+  // list, and everything below — the three lanes, the lock, the report — is
+  // the same for both.
+  const specs = selectedSpecs(args);
   if (specs.length === 0) {
     throw new Error(`--only=${args.only} matched no spec files`);
   }
@@ -1059,11 +1088,21 @@ async function main() {
       `${firstRunSpecs.length} first-run spec file(s); the sharded lane has nothing to do.`,
     );
   }
-  if (parallelSpecs.length === 0 && serialSpecs.length > 0 && onlyPatterns) {
+  if (parallelSpecs.length === 0 && serialSpecs.length > 0 && args.only) {
     log(
       "e2e",
       `--only=${args.only} matched only measured specs (${serialSpecs.join(", ")}).` +
         " Pass --all to shard them, or expect the serial lane alone.",
+    );
+  }
+  // The same note for a slice, minus the advice: `--all` is refused with
+  // `--slice`, and a slice that is all measured specs (engine-limits) is
+  // declared that way on purpose. A note, never a failure.
+  if (parallelSpecs.length === 0 && serialSpecs.length > 0 && args.slice) {
+    log(
+      "e2e",
+      `Slice ${args.slice} has only measured specs (${serialSpecs.join(", ")}),` +
+        " so the run is the serial lane alone, on a release build.",
     );
   }
   log(
@@ -1156,6 +1195,8 @@ async function main() {
  */
 const run = {
   args: null,
+  lockAcquired: null,
+  commit: null,
   results: [],
   shards: [],
   durations: null,
@@ -1281,6 +1322,12 @@ async function finish(exitCode = null) {
         startedAt: run.startedAt,
       });
       digest = digestLines(summary, ROOT_DIR);
+      if (run.args?.slice) {
+        digest.unshift(sliceHeader(run.args, run.args.shards));
+        if (run.args.recordDurations) {
+          recordSlice(summary, exitCode);
+        }
+      }
     } catch (error) {
       log(
         "e2e",
@@ -1314,6 +1361,61 @@ async function finish(exitCode = null) {
   process.exit(
     exitCode ?? (failed.length > 0 || run.results.length === 0 ? 1 : 0),
   );
+}
+
+/**
+ * The first line of a slice run's report: which slice, and how big.
+ * `e2e slice combat: 13 specs (1 shard)`.
+ */
+function sliceHeader(args, shards) {
+  const count = args.sliceSpecs.length;
+  return (
+    `e2e slice ${args.slice}: ${count} spec${count === 1 ? "" : "s"} ` +
+    `(${shards} shard${shards === 1 ? "" : "s"})`
+  );
+}
+
+/**
+ * Write this slice run's time to `scripts/e2e/slice-durations.json`.
+ *
+ * A red run is recorded too, with its failures, so a slice that broke shows
+ * as red rather than quietly keeping an older green time. An interrupted one
+ * is not: Ctrl-C part way through measures the person, not the slice, and
+ * would overwrite a real measurement with a meaningless one.
+ */
+function recordSlice(summary, exitCode) {
+  if (exitCode === 130) {
+    log("e2e", "Interrupted, so the slice's time was not recorded.");
+    return;
+  }
+  const { passed, failed, flaky, skipped } = summary.totals;
+  const record = {
+    wallSeconds: Math.round((Date.now() - run.lockAcquired) / 1000),
+    specs: run.args.sliceSpecs.length,
+    passed,
+    failed,
+    flaky,
+    skipped,
+    measuredAt: measuredDate(new Date(run.lockAcquired)),
+    commit: run.commit,
+  };
+  try {
+    recordSliceDuration(
+      join(ROOT_DIR, SLICE_DURATIONS_FILE),
+      run.args.slice,
+      record,
+    );
+    log(
+      "e2e",
+      `Recorded slice ${run.args.slice}: ${record.wallSeconds}s to ${SLICE_DURATIONS_FILE}.`,
+    );
+  } catch (error) {
+    log(
+      "e2e",
+      `Could not record the slice's time: ${firstLine(error)}`,
+      process.stderr,
+    );
+  }
 }
 
 /**

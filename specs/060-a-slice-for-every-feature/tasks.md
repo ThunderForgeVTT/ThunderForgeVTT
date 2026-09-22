@@ -136,7 +136,7 @@ resolves every spec to one owner.
 running. Only the resolved combat specs run, the report names the slice,
 and the run is green.
 
-- [ ] T007 [US1] Add `--slice=<name>` to `scripts/e2e-parallel.mjs`:
+- [X] T007 [US1] Add `--slice=<name>` to `scripts/e2e-parallel.mjs`:
       - Parse the flag in the argv loop (around line 1013).
       - `--slice` with `--only` or `--all` exits 2 with a message.
       - Resolve the slice through `resolveSlice`. An unknown name exits 2
@@ -149,13 +149,15 @@ and the run is green.
         reworded to name the slice. It stays a warning, never a failure
         (spec Edge Cases).
       - `--only` behaviour is untouched (FR-020).
-- [ ] T008 [P] [US1] Add a regression test to
+      - 2026-09-22: `--slice=<name>` is parsed with the other flags and checked before the dependency check, the lock or any build: `--slice` with `--only`, `--all` or `--suite=playtest` exits 2 naming the conflict (playtest added: the playtest suite has no slices), and an unknown name exits 2 with `unknown slice "x". Valid slices: …` (the list does not load either → exit 2). The resolved paths replace the `--only` filter through `selectedSpecs(args)` in the new `scripts/e2e/select.mjs`, which the engine-profile decision (`measuredSpecsSelected`) now uses too, so a measured slice still gets its release build; the three-lane partition is untouched. The header `e2e slice combat: 13 specs (1 shard)` is logged right after the lock and again as the first line of the end-of-run digest. The measured-only note fires for a slice as `Slice <name> has only measured specs (…), so the run is the serial lane alone, on a release build.` — without `--only`'s "pass --all" advice, since `--all` is refused with `--slice`; still a log line, never a failure. Verified by hand: `--slice=nope`, `--slice=combat --only=x`, `--slice=combat --all` each exit 2 and leave no `.e2e-running`.
+- [X] T008 [P] [US1] Add a regression test to
       `scripts/e2e/__tests__/slices.test.mjs`. `--only`'s substring match
       over a fixture file list must return exactly what it returns today,
       so extract the filter into a small exported function if that is what
       makes it testable. `--slice` must return exact paths. The
       `--only=lighting` case from R3 is the example: with `--only` it pulls
       in `engine-lighting-limits`; with `--slice=lighting` it does not.
+      - 2026-09-22: in `scripts/e2e/__tests__/runner.test.mjs`, not `slices.test.mjs` (that file belongs to T005; a file of its own kept parallel agents apart). The `--only` filter is now `filterOnly(files, only)` / `onlyPatterns(only)` in `scripts/e2e/select.mjs`, the same expression the runner had inline. Tests pin: no `--only` selects all; `--only=lighting` selects `engine-lighting-limits` and a `torture/` file; comma lists trim and drop empties; `--slice=lighting` returns exactly its own and neighbour files; `sliceConflict` names each conflict; and the runner itself exits 2 on an unknown slice, `--slice`+`--only` and `--slice`+`--all` (spawned — safe beside a live run, since those paths exit before the lock).
 - [ ] T009 [US1] Add the root `package.json` scripts for all 27 slices, in
       the canonical form from [contracts/cli.md](contracts/cli.md):
       `e2e:<slice>`, `e2e:<slice>:integration`, and `e2e:<slice>:standalone`
@@ -319,7 +321,7 @@ with over-target and over-limit flags.
 `scripts/e2e/slice-durations.json` gains a dated `lore` record, and
 `pnpm e2e:slices` shows it.
 
-- [ ] T025 [US4] Make `scripts/e2e-parallel.mjs` record slice time. When
+- [X] T025 [US4] Make `scripts/e2e-parallel.mjs` record slice time. When
       `--slice` and `--record-durations` are both given, it writes the
       slice's record to `scripts/e2e/slice-durations.json`, in the shape
       given in [contracts/slices-json.md](contracts/slices-json.md):
@@ -331,6 +333,7 @@ with over-target and over-limit flags.
 
       Keys are sorted, with two-space indentation and a trailing newline.
       The existing per-spec `recordDurations` behaviour is unchanged.
+      - 2026-09-22: `scripts/e2e/slice-durations.mjs` exports `readSliceDurations(root = ROOT_DIR)` → the parsed file, or `{}` when it is missing (a corrupt file throws); `recordSliceDuration(file, name, record)` (merges, sorts slice names, writes fields in the contract's order, two spaces, trailing newline, via temp file + rename); `measuredCommit(root)` (short SHA, `-dirty` when `git status --porcelain` is non-empty, `null` outside git); `measuredDate(date)` (local `YYYY-MM-DD`); `SLICE_DURATIONS_FILE`, `RECORD_FIELDS`. The runner takes the clock and the commit when the lock is acquired and writes the record right after `e2e-summary.json`, with counts from that summary's totals and `specs` = the resolved list's length. A red or crashed run is recorded; a signal-interrupted one (exit 130) is not, since it measures the Ctrl-C rather than the slice. Unit-tested in `runner.test.mjs`. No `slice-durations.json` is committed; the first recorded run creates it.
 - [ ] T026 [US4] Implement `scripts/e2e-slice.mjs list [<name>] [--json]`
       per [contracts/cli.md](contracts/cli.md):
       - one row per slice: specs, own, neighbours, lanes, time, measured
