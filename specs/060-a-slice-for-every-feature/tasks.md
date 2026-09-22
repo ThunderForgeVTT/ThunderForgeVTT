@@ -158,7 +158,7 @@ and the run is green.
       `--only=lighting` case from R3 is the example: with `--only` it pulls
       in `engine-lighting-limits`; with `--slice=lighting` it does not.
       - 2026-09-22: in `scripts/e2e/__tests__/runner.test.mjs`, not `slices.test.mjs` (that file belongs to T005; a file of its own kept parallel agents apart). The `--only` filter is now `filterOnly(files, only)` / `onlyPatterns(only)` in `scripts/e2e/select.mjs`, the same expression the runner had inline. Tests pin: no `--only` selects all; `--only=lighting` selects `engine-lighting-limits` and a `torture/` file; comma lists trim and drop empties; `--slice=lighting` returns exactly its own and neighbour files; `sliceConflict` names each conflict; and the runner itself exits 2 on an unknown slice, `--slice`+`--only` and `--slice`+`--all` (spawned — safe beside a live run, since those paths exit before the lock).
-- [ ] T009 [US1] Add the root `package.json` scripts for all 27 slices, in
+- [X] T009 [US1] Add the root `package.json` scripts for all 27 slices, in
       the canonical form from [contracts/cli.md](contracts/cli.md):
       `e2e:<slice>`, `e2e:<slice>:integration`, and `e2e:<slice>:standalone`
       for the hero builder only.
@@ -167,6 +167,7 @@ and the run is green.
       - Leave `e2e:hero-builder` and `e2e:hero-builder:standalone` as they
         are (FR-008).
       - Keep the `e2e:*` scripts together, in slice-name order.
+      - 2026-09-22: 55 slice scripts generated from `slices.json` (27 `e2e:<slice>`, 27 `:integration`, hero-builder's `:standalone`), in slice-name order where `e2e:hero-builder*` already sat, after `playtest`. `e2e:hero-builder` and `:standalone` are byte-identical to before; only `:integration` moved from `--only=hero-builder-,actor-art` to `--slice=hero-builder`. `node scripts/check-e2e-slices.mjs` (rule 6) passes on it.
 - [ ] T010 [US1] Proof for US1. Run each of these alone, then `grep ✘` its
       log:
       - `pnpm e2e:hero-builder`, which must still give standalone 7 passed
@@ -242,9 +243,10 @@ answers "no e2e needed". On an unclaimed file it answers UNCOVERED and exits
       - a spec file answers its owner plus its borrowers;
       - union deduplication;
       - exit code 3 when anything is uncovered.
-- [ ] T017 [US2] Add root scripts `"e2e:which": "node ./scripts/e2e-slice.mjs which"`
+- [X] T017 [US2] Add root scripts `"e2e:which": "node ./scripts/e2e-slice.mjs which"`
       and `"e2e:slices": "node ./scripts/e2e-slice.mjs list"`. `list` is a
       stub until T026.
+      - 2026-09-22: both added, after the slice scripts, so every `e2e:*` script stays in one block.
 - [ ] T018 [US2] Triage what is still uncovered. Run
       `git ls-files | xargs node scripts/e2e-slice.mjs which --json`, then
       take every `uncovered` source path and do one of two things:
