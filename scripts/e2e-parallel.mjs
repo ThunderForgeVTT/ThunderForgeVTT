@@ -907,6 +907,10 @@ async function main() {
     suite: "e2e",
   };
   for (const argv of process.argv.slice(2)) {
+    // pnpm 10 forwards the `--` of `pnpm e2e:<slice>:integration -- <flags>`
+    // to the script, so the separator arrives here. It carries no meaning of
+    // its own: the flags after it are this runner's, parsed like any other.
+    if (argv === "--") continue;
     const shardMatch = /^--shards=(\d+)$/.exec(argv);
     const onlyMatch = /^--only=(.+)$/.exec(argv);
     const sliceMatch = /^--slice=(.+)$/.exec(argv);

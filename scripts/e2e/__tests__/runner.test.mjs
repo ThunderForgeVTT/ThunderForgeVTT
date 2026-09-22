@@ -157,6 +157,15 @@ describe("the runner refuses a bad --slice with exit 2", () => {
     assert.equal(result.status, 2);
     assert.match(result.stderr, /--slice cannot be combined with --all/);
   });
+
+  // `pnpm e2e:<slice>:integration -- --record-durations` hands the runner a
+  // literal `--`. It is skipped, so the flags after it are still parsed.
+  test("a bare -- from pnpm is skipped, not an unknown argument", () => {
+    const result = runner("--slice=no-such-slice", "--", "--record-durations");
+    assert.equal(result.status, 2);
+    assert.doesNotMatch(result.stderr, /Unknown argument/);
+    assert.match(result.stderr, /unknown slice "no-such-slice"/);
+  });
 });
 
 describe("slice-durations.json", () => {
