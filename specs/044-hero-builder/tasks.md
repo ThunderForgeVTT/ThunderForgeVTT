@@ -256,9 +256,9 @@ is polish. Research, data-model, contracts and quickstart all use the letters.
 
 ## Phase 7: Polish & cross-cutting
 
-- [ ] T098 [P] Accept ADR-105 and ADR-106 once their phases are proven, dating the acceptance and naming the tasks that proved them, as ADR-101 and ADR-102 do
+- [X] T098 [P] Accept ADR-105 and ADR-106 once their phases are proven, dating the acceptance and naming the tasks that proved them, as ADR-101 and ADR-102 do
 - [X] T099 [P] Document the standalone builder where a developer will find it: `apps/hero-builder/README.md` linked from wherever `apps/engine-sandbox` is linked, and a line in the repository's development docs saying it needs no stack; and a line in the pack-authoring docs for `appearance.race.source`, beside `combat.sizes.source`
-- [ ] T100 [P] Re-read the spec's Assumptions against what shipped and correct anything that moved, in the manner of plan.md's findings section
+- [X] T100 [P] Re-read the spec's Assumptions against what shipped and correct anything that moved, in the manner of plan.md's findings section
 - [ ] T101 Full run: `node scripts/e2e-parallel.mjs --shards=2` with nothing else running; search the log for `✘`; record the time and result beside the run recorded in spec 046's T109
 - [ ] T102 `pnpm verify`, `pnpm -F @thunderforge/web exec tsc --noEmit`, `make lint` and `make lint-wasm` before the final commit of the feature
 
@@ -371,4 +371,7 @@ shippable alone and in either order.
 - ADR numbers are taken when the ADR is written. 105 and 106 are free as of 2026-09-16 (104 was taken by large uploads).
 - The race is a roll setting, never data: nothing in phases (b)–(d) stores it, sends it, or writes it to the sheet (B5a).
 - Two questions are left for the owner in plan.md: whether the builder offers a `size` control (this plan says yes; the halfling, gnome, goblin and dwarf size constraints in `HERO_RACES` depend on it), and what should happen to stored specs if a choice is ever retired despite FR-038.
+  - What shipped, recorded 2026-09-21 (T100); neither question has had an owner's answer:
+    - **Size:** the builder offers a `size` control. It is the first choice group, read from `SIZES` in `packages/hero-builder/src/controls/catalogue.ts`. The race looks in `HERO_RACES` narrow it: a halfling, gnome or goblin rolls small, and a dwarf rolls medium. The stored spec carries `size` whenever it is not the default.
+    - **Retiring a choice:** nothing rewrites stored specs. `packages/heroes/src/shipped.json` and `shipped.test.ts` hold the catalogue append-only (T091), so a retirement fails the tests. A stored spec that no longer validates opens with its problems named by field, draws nothing and leaves the images alone (T094). No migration for a deliberate retirement was built.
 - The label is "Build look" everywhere; "Build a hero" is retired.

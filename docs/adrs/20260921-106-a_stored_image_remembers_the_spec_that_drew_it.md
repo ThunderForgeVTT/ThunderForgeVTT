@@ -1,7 +1,7 @@
 # ADR-106: A Stored Image Remembers the Spec That Drew It
 
 **Date:** 2026-09-21
-**Status:** **PROPOSED** 2026-09-21 with spec 044 phase (d). Extends ADR-057.
+**Status:** **ACCEPTED** 2026-09-21, once spec 044 Phase 6 proved it (tasks T087, T090, T096 and T097: the server rules for B7 and B8, the copy and export rules for B9, the saved-look e2e, and the proof run). Proposed 2026-09-21 with spec 044 phase (d). Extends ADR-057.
 **Participants:** ThunderForgeVTT Team
 **Related:** spec 044 (FR-035–FR-040, SC-011; research R4; contracts §5 B5a, B7, B8, B9), ADR-057 (actor imagery as rows keyed by role), ADR-105 (who may change a character's look)
 

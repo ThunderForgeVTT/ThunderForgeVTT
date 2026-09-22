@@ -672,6 +672,38 @@ Confirm it is the same hero.
 
 ## Assumptions
 
+Re-read against what shipped (`main` at `94e00a0`, commits `c74cdb9..94e00a0`)
+on 2026-09-21 for T100. Five of the eight held as written. Three had moved, and
+they are corrected in place below, each marked *(moved)*:
+
+1. **The upload's gate is no longer Editor alone.** Phase (c) let the player
+   holding a character upload its images without Editor (ADR-105): the gate is
+   `may_change_actor_imagery` in `src/server/src/auth/actor_imagery.rs`, used by
+   both `uploadActorImage` and `removeActorImage`. The "server never sees a
+   spec" assumption said "anyone with Editor", and so did the Security table.
+2. **One spec per image, not per actor.** Phase (d) stores the spec on each
+   `world_actor_images` row (ADR-106), so a portrait and a token carry a spec
+   each. A save from the builder writes the same spec to both. A plain file
+   upload clears that role's spec only, and the dialog then opens from the
+   portrait's spec and says the token is no longer built
+   (`pages/world/actor/storedLook.ts`).
+3. **The name is edited in the builder, but the actor is not renamed by it.**
+   The builder has name and title controls. On an existing actor the dialog
+   starts from the actor's name, and a name typed there is stored in the spec
+   only; the actor keeps its own name. Once a look is saved, the builder
+   re-opens on the stored spec's name, which can differ from the actor's if
+   either was changed later. Quick NPC and "Create your own character" are the
+   exceptions, because they create the actor: a name picked in the builder
+   becomes the NPC's name, and fills the character's name when that field is
+   still empty.
+
+Held as written: randomising is seeded choice from closed lists (the race
+picker narrows it to a race's look, also a closed list in `races.ts`, and adds
+no decision a GM would make); the art is our own (no part or drawing was added
+by this spec); the builder uploads SVG and the server rasterises it; the
+standalone builder (`apps/hero-builder`) is a developer tool and is not part of
+a release; the catalogue ships twelve presets.
+
 - **Randomising is not AI.** Quick NPC and randomise choose from closed lists
   with a seeded generator. They make no decision a GM would make and replace
   nobody. ADR-051 governs anything AI-adjacent, and no AI feature is proposed
@@ -681,13 +713,24 @@ Confirm it is the same hero.
   from a publisher's artwork or a game system's sheet. Where a system suggests
   what a character looks like, that is scope, not style.
 - **The server never sees a spec in phases (a) to (c).** It sees an SVG, which
-  it already accepts from anyone with Editor on the actor, and it stores WebP.
-  Phase (d) is the first time a spec is stored, and FR-037 covers it.
+  it accepts from anyone with Editor on the actor and, since phase (c), from the
+  player holding the character (ADR-105) *(moved)*, and it stores WebP. Phase
+  (d) is the first time a spec is stored: the server checks it against
+  `HERO_SPEC_SCHEMA` and a 4 KB cap before storing it with the image (FR-037,
+  ADR-106).
 - **One hero per actor.** A portrait and a token drawn from the same spec is the
   normal case. A different hero per role is possible but gets no extra support.
+  *(moved)* The spec is stored per image, not per actor (ADR-106), so the two
+  roles can disagree. The builder opens from the portrait's spec and says when
+  the token's differs or is no longer built. That note is the only extra
+  support.
 - **The hero's name is the actor's name.** In phases (b) and (c) the builder
   takes the actor's label and does not offer to rename the actor. It is the
-  portrait's accessible label, and it is not drawn.
+  portrait's accessible label, and it is not drawn. *(moved)* The builder's name
+  control stays, and a name typed there is stored in the spec without renaming
+  the actor. A saved look re-opens on the stored name. Quick NPC and "Create
+  your own character" are the exceptions, because there the name creates the
+  actor.
 - **Uploading SVG, not rasterising in the browser.** The existing server path
   is the single rasteriser, at a fixed 1024 px edge, for every client. Research
   R3 records the alternative.
@@ -706,7 +749,7 @@ Confirm it is the same hero.
 | A spec from import, paste, file, storage or a collection copy | **No** | `validateHero` is the client-side gate. Unknown fields and choices are refused, colours must match `#rrggbb`, and text is bounded. Nothing draws before it passes (FR-004, FR-010). |
 | The name and title | **No** | Free text. The renderer escapes it into the SVG as text, and the builder never inserts it as HTML. |
 | An SVG from anywhere | **No, and not accepted** | The builder imports specs only (FR-026). |
-| The SVG the builder uploads | **No, from the server's side** | The server cannot tell a built SVG from a hand-made one, and does not try. `svg.rs` loads no referenced image, follows no data or file URL, draws no text and ignores the declared size. The upload keeps its size limit and its Editor gate. A built hero widens nothing, because any Editor could already upload any SVG. |
+| The SVG the builder uploads | **No, from the server's side** | The server cannot tell a built SVG from a hand-made one, and does not try. `svg.rs` loads no referenced image, follows no data or file URL, draws no text and ignores the declared size. The upload keeps its size limit and its Editor gate. A built hero widens nothing, because any Editor could already upload any SVG. Since phase (c) the player holding a character passes the gate for that character's images too (ADR-105). That grant is the one widening, and it covers images only. |
 | A stored spec (phase d) | **No** | The server shape-checks it and caps its size before storing it (FR-037), and clients validate again before drawing. The server cannot verify that a spec matches the image stored beside it. A mismatch requires a hand-made request by someone who could already upload any image, and it misleads only the builder's starting point. |
 | The id prefix | Validated | The renderer accepts only `^[A-Za-z][\w-]{0,63}$`, and the builder generates it (FR-011). |
 

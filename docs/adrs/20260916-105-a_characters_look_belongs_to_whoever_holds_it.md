@@ -1,7 +1,7 @@
 # ADR-105: A Character's Look Belongs to Whoever Holds It
 
 **Date:** 2026-09-16
-**Status:** **PROPOSED** 2026-09-16 with spec 044 phase (c). The grant and its two withdrawals are the owner's (spec 044 clarifications); the shape of the rule is proposed.
+**Status:** **ACCEPTED** 2026-09-21, once spec 044 Phase 5 proved it (tasks T071, T078 and T079: the server rules for every clause of B6, the player e2e, and the proof run). Proposed 2026-09-16 with spec 044 phase (c); the grant and its two withdrawals are the owner's (spec 044 clarifications).
 **Participants:** ThunderForgeVTT Team
 **Related:** spec 044 (FR-030, FR-030a, FR-030b, FR-030c, FR-032, FR-033, FR-034, SC-010; contracts §5 B6), ADR-050 (permission declaration), spec 017 (actor claiming)
 
