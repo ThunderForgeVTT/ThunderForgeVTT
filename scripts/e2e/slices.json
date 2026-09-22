@@ -1,6 +1,131 @@
 {
   "$comment": "One owner per spec; see docs/CONTRIBUTING.md 'Proving a change'. Checked by scripts/check-e2e-slices.mjs.",
-  "crossCutting": [],
+  "crossCutting": [
+    {
+      "glob": "src/app/schema.graphql",
+      "why": "every client speaks this schema"
+    },
+    {
+      "glob": "apps/web/src/engine/sdk/**",
+      "why": "the generated SDK bindings every engine command and display is typed against"
+    },
+    {
+      "glob": "src/server/src/auth/**",
+      "why": "every spec signs in through it"
+    },
+    {
+      "glob": "src/server/src/auth_middleware.rs",
+      "why": "every signed-in request passes through it"
+    },
+    {
+      "glob": "crates/thunderforge-axum-auth-core/**",
+      "why": "password hashing, sessions and CSRF, which every sign-in uses"
+    },
+    {
+      "glob": "crates/thunderforge-authz/**",
+      "why": "world membership and scene visibility, which the auth checks every world page passes"
+    },
+    {
+      "glob": "src/server/seeds/{demo_accounts,e2e_demo}.sql",
+      "why": "the template database and demo sign-in every run starts from"
+    },
+    {
+      "glob": "src/server/src/schema.rs",
+      "why": "the database schema every query is written against"
+    },
+    {
+      "glob": "src/server/migrations/**",
+      "why": "schema history every slice reads"
+    },
+    {
+      "glob": "src/server/src/{lib,graphql,models,db_types,state,pubsub,world_events}.rs",
+      "why": "server wiring every request, model and world event goes through"
+    },
+    {
+      "glob": "src/server/src/graphql/{types,input_types,helpers,subscriptions}.rs",
+      "why": "GraphQL types and the subscription every client listens on"
+    },
+    {
+      "glob": "src/server/Cargo.toml",
+      "why": "the server's features and dependencies, which every stack is built with"
+    },
+    {
+      "glob": "src/app/Cargo.toml",
+      "why": "the server binary every stack runs"
+    },
+    {
+      "glob": "src/app/src/{main,schema_roots}.rs",
+      "why": "the server binary every stack runs, and the roots of its schema"
+    },
+    {
+      "glob": "apps/web/src/api/graphqlClient.ts",
+      "why": "every query, mutation and subscription goes through it"
+    },
+    {
+      "glob": "apps/web/src/engine/world/{store,types}.ts",
+      "why": "the world store, the one sync path between server, engine and UI"
+    },
+    {
+      "glob": "apps/web/src/engine/world/sync/{index,subscriptionClient}.ts",
+      "why": "the world store's subscription wiring, which every live page depends on"
+    },
+    {
+      "glob": "apps/web/src/{main,App}.tsx",
+      "why": "every page mounts through the app shell"
+    },
+    {
+      "glob": "apps/web/src/routes/**",
+      "why": "every page is reached through the router"
+    },
+    {
+      "glob": "apps/web/src/layouts/{BaseLayout.tsx,main-layout/**}",
+      "why": "the layout nearly every page renders inside"
+    },
+    {
+      "glob": "apps/web/{index.html,package.json,tsconfig.json,vite.config.mts,tailwind.config.js,postcss.config.js}",
+      "why": "how the web app every spec loads is built"
+    },
+    {
+      "glob": "apps/web/src/components/ui/**",
+      "why": "shared UI primitives on every page"
+    },
+    {
+      "glob": "apps/web/src/styles/**",
+      "why": "global styles every page renders with"
+    },
+    {
+      "glob": "apps/web/e2e/fixtures/**",
+      "why": "shared e2e fixtures every spec builds on"
+    },
+    {
+      "glob": "apps/web/e2e/harness/**",
+      "why": "shared e2e harness mounts"
+    },
+    {
+      "glob": "apps/web/playwright.config.ts",
+      "why": "how every spec runs"
+    },
+    {
+      "glob": "scripts/e2e-parallel.mjs",
+      "why": "the e2e runner itself"
+    },
+    {
+      "glob": "scripts/e2e/{deps,load,mailpit,report,run-lock,select,slice-durations,slices,specs}.mjs",
+      "why": "the e2e runner's modules: which specs run, on which stack, and how results are read"
+    },
+    {
+      "glob": "scripts/shared.mjs",
+      "why": "builds the engine and PDF wasm and starts the processes every run uses"
+    },
+    {
+      "glob": "pnpm-lock.yaml",
+      "why": "every JavaScript dependency"
+    },
+    {
+      "glob": "Cargo.lock",
+      "why": "every Rust dependency"
+    }
+  ],
   "slices": [
     {
       "name": "accounts",
@@ -17,7 +142,40 @@
         "invite-membership.spec.ts"
       ],
       "neighbours": [],
-      "paths": []
+      "paths": [
+        "apps/web/src/api/__tests__/twoFactor.test.ts",
+        "apps/web/src/api/{auth,password,twoFactor,sessions,sessionExpiry,standing}.ts",
+        "apps/web/src/components/navigation/**",
+        "apps/web/src/components/security/**",
+        "apps/web/src/db/collections/__tests__/{worldInvitesCollection,worldMembersCollection}.test.ts",
+        "apps/web/src/db/collections/{worldInvitesCollection,worldMembersCollection}.ts",
+        "apps/web/src/hooks/{useAuth,useWorldInvites}.ts",
+        "apps/web/src/layouts/auth-layout/**",
+        "apps/web/src/pages/admin/components/{OAuthProviderForm,OAuthProvidersTable,UserTwoFactorControl,SecurityPanel}.tsx",
+        "apps/web/src/pages/auth/**",
+        "apps/web/src/pages/user/components/**",
+        "apps/web/src/pages/user/noticeText*.ts",
+        "apps/web/src/pages/user/{SecuritySettingsPage,StandingPage,WelcomePage}.tsx",
+        "apps/web/src/services/__tests__/twoFactorEnrolment.test.ts",
+        "apps/web/src/services/{auth,twoFactorEnrolment}.ts",
+        "apps/web/src/types/{auth,twoFactor}.ts",
+        "config/realm-defaults.json",
+        "crates/thunderforge-axum-oauth/**",
+        "crates/thunderforge-axum-oidc/**",
+        "scripts/oauth-stub.mjs",
+        "src/core/**",
+        "src/server/src/admin/two_factor_operations.rs",
+        "src/server/src/config/oauth_env.rs",
+        "src/server/src/graphql/mutations_invites*.rs",
+        "src/server/src/graphql/mutations_standing.rs",
+        "src/server/src/graphql/mutations_user_data.rs",
+        "src/server/src/graphql/queries/{standing,standing_tests,user,invite}.rs",
+        "src/server/src/graphql/two_factor_coverage_tests.rs",
+        "src/server/src/graphql/{mutations_sessions,session_lifetime,anonymous}.rs",
+        "src/server/src/moderation/standing*.rs",
+        "src/server/src/users/**",
+        "src/server/src/{session,crypto,qr}.rs"
+      ]
     },
     {
       "name": "actors",
@@ -38,7 +196,33 @@
           "seam": "the actor-to-token link is written from the actor side"
         }
       ],
-      "paths": []
+      "paths": [
+        "apps/web/src/api/__tests__/actorClaims.test.ts",
+        "apps/web/src/api/{actors,actorClaims,actorShares,actorSheet,actorSystemData,actorAbilities}.ts",
+        "apps/web/src/components/avatars/Avatar.tsx",
+        "apps/web/src/components/world/PlayDock/{ActorsPanel,InPaneCharacterSheet}.tsx",
+        "apps/web/src/components/world/{NpcCatalog,NpcRoster}/**",
+        "apps/web/src/db/collections/worldActorSystemDataCollection.ts",
+        "apps/web/src/hooks/{useActorClaimGate,useActorSystemData,useUpdateActorData,useAvatar}.ts",
+        "apps/web/src/lib/systemData.ts",
+        "apps/web/src/pages/actor-share/**",
+        "apps/web/src/pages/world/ActorSelectionPage.tsx",
+        "apps/web/src/pages/world/actor/**",
+        "apps/web/src/pages/world/players/**",
+        "apps/web/src/search/actorSearch.ts",
+        "apps/web/src/services/__tests__/playFieldClaim.test.ts",
+        "apps/web/src/services/playFieldClaim.ts",
+        "apps/web/src/types/{actor,actorShare,actorAbility}.ts",
+        "apps/web/src/utils/__tests__/raceOnSheet.test.ts",
+        "apps/web/src/utils/raceOnSheet.ts",
+        "src/server/src/assets_serve/actor.rs",
+        "src/server/src/graphql/mutations_actor*.rs",
+        "src/server/src/graphql/mutations_play_field.rs",
+        "src/server/src/graphql/permissioned_entity_resolvers.rs",
+        "src/server/src/graphql/queries/actor.rs",
+        "src/server/src/graphql/types_actors.rs",
+        "src/server/src/{play_field,sheet,sheet_tests,adapters}.rs"
+      ]
     },
     {
       "name": "book-import",
@@ -50,7 +234,14 @@
           "seam": "an imported book lands in the library's book list"
         }
       ],
-      "paths": []
+      "paths": [
+        "apps/web/src/components/import/**",
+        "apps/web/src/pages/library/{ImportBook,BookBrowser}.tsx",
+        "apps/web/src/pages/world/compendium/{BookListTab.tsx,worldBooks.ts}",
+        "apps/web/src/services/{bookImport,pdfReader}.ts",
+        "crates/thunderforge-pdf/**",
+        "src/server/src/library/book_list*.rs"
+      ]
     },
     {
       "name": "canvas",
@@ -69,7 +260,35 @@
           "seam": "switching scenes reloads the board the canvas draws"
         }
       ],
-      "paths": []
+      "paths": [
+        "apps/web/src/api/{shapes,walls,assets,authoringTools}.ts",
+        "apps/web/src/components/canvas-tools/{AssetPasteTool,MapImportTool,ShapeTool,WallTool}/**",
+        "apps/web/src/components/engine/**",
+        "apps/web/src/components/world/{CanvasContextMenu,GmToolRail}/**",
+        "apps/web/src/db/collections/{worldShapesCollection,worldWallsCollection}.ts",
+        "apps/web/src/engine/bevy/__tests__/screenToWorld.test.ts",
+        "apps/web/src/engine/bevy/{index,types,useCanvasEngine,screenToWorld,stats,sdkFaultProbe}.ts",
+        "apps/web/src/engine/world/sync/{shapes,walls}.ts",
+        "apps/web/src/hooks/useAuthoringTools.ts",
+        "apps/web/src/lib/__tests__/authoringTools.test.ts",
+        "apps/web/src/lib/authoringTools.ts",
+        "apps/web/src/types/{shape,wall}.ts",
+        "apps/web/src/utils/gridType.ts",
+        "crates/thunderforge-canvas-core/src/{wall,wall_tests,wall_room_and_clear_tests,shape,grid,grid_footprint_tests,camera,snapping,measure}.rs",
+        "crates/thunderforge-mapforge/**",
+        "examples/maps/**",
+        "src/engine/src/grid/**",
+        "src/engine/src/plugins/{shape,wall,background,canvas_layer,grid,camera,context_menu,authoring_mode,render_probe}.rs",
+        "src/engine/src/resources/{background,background_cache,canvas_layer,grid,shape,wall,camera}.rs",
+        "src/engine/src/systems/{background,shape,wall,wall_tests,camera_focus}.rs",
+        "src/engine/src/transforms/**",
+        "src/server/src/assets_serve/{mod,canvas}.rs",
+        "src/server/src/graphql/mutations_{shapes,walls,assets,authoring_tools}.rs",
+        "src/server/src/graphql/queries/authoring_tools.rs",
+        "src/server/src/map_import/**",
+        "src/server/src/static_files/**",
+        "src/server/src/storage/**"
+      ]
     },
     {
       "name": "collections",
@@ -86,7 +305,22 @@
         "publishing-gate.spec.ts"
       ],
       "neighbours": [],
-      "paths": []
+      "paths": [
+        "apps/web/src/api/{collections,shelfCollections,sharingTerms,attestations,abilityShares,itemShares}.ts",
+        "apps/web/src/components/legal/AttestationDialog.tsx",
+        "apps/web/src/pages/library/{LibraryPage,NewCollection,CollectionEntryForm,CollectionVersions}.tsx",
+        "apps/web/src/pages/library/{index,library}.ts",
+        "apps/web/src/pages/{collection-share,world-collections,ability-share,item-share}/**",
+        "apps/web/src/types/{collection,abilityShare,itemShare}.ts",
+        "examples/maps/demo.dd2vtt",
+        "src/server/src/collections/**",
+        "src/server/src/compendium/{collections,collections_tests,origin,origin_tests}.rs",
+        "src/server/src/graphql/mutations_{collections,collection_shares,shelf_collections,library,ability_shares,item_shares,sync_back}*.rs",
+        "src/server/src/graphql/{share_codes,share_rate_limit,publishing_gate}.rs",
+        "src/server/src/library/**",
+        "src/server/src/users/library_deletion_tests.rs",
+        "src/server/src/{publishing,publishing_tests,attestation,attestation_tests,content}.rs"
+      ]
     },
     {
       "name": "combat",
@@ -102,7 +336,26 @@
           "seam": "combat applies the conditions that status displays show"
         }
       ],
-      "paths": []
+      "paths": [
+        "apps/web/src/api/{combat,attacks,roll,systemChecks}.ts",
+        "apps/web/src/components/world/PlayDock/__tests__/{attackWarnings,budgetText,characterRolls,combatRoster,combatantActions}.test.ts",
+        "apps/web/src/components/world/PlayDock/{AttackFlow,AttackLog,OfferPrompt}/**",
+        "apps/web/src/components/world/PlayDock/{CombatPanel,CombatantAct,CombatantBudget,CombatantHitPoints}.tsx",
+        "apps/web/src/components/world/PlayDock/{budgetText,characterRolls,combatRoster,combatantActions,followTheTurn}.ts",
+        "apps/web/src/components/world/{DiceRollerPanel/**,RollResult.tsx,rollDiscrepancy.ts,__tests__/rollDiscrepancy.test.ts}",
+        "apps/web/src/pages/world/actor/SystemChecksPanel.tsx",
+        "apps/web/src/types/{combat,attack,roll}.ts",
+        "crates/pack_system_spec/src/combat*.rs",
+        "crates/thunderforge-canvas-core/src/{system_rules,system_rules_tests}.rs",
+        "crates/thunderforge-dice/**",
+        "packs/systems/dnd5e/**",
+        "src/engine/src/plugins/dice_roll.rs",
+        "src/server/src/combat/**",
+        "src/server/src/graphql/mutations_{combat,attacks,roll}*.rs",
+        "src/server/src/graphql/queries/{attacks,roll}.rs",
+        "src/server/src/graphql/types_{attacks,dice}.rs",
+        "src/server/src/turn_structure*.rs"
+      ]
     },
     {
       "name": "companion",
@@ -114,7 +367,20 @@
           "seam": "companion state reaches other clients through the live broadcast"
         }
       ],
-      "paths": []
+      "paths": [
+        "apps/web/src/api/chat.ts",
+        "apps/web/src/components/world/PlayDock/ChatPanel.tsx",
+        "apps/web/src/components/world/SessionNotesPanel/**",
+        "apps/web/src/engine/world/sync/offlineQueue.ts",
+        "apps/web/src/pages/world/actor/{ActorDetailPage,PackActorSheet}.tsx",
+        "apps/web/src/services/__tests__/playFieldClaim.test.ts",
+        "apps/web/src/services/playFieldClaim.ts",
+        "apps/web/src/types/chat.ts",
+        "crates/thunderforge-presence/**",
+        "src/server/src/graphql/mutations_chat.rs",
+        "src/server/src/markdown/**",
+        "src/server/src/play_field.rs"
+      ]
     },
     {
       "name": "compendium",
@@ -126,28 +392,79 @@
           "seam": "abilities from the compendium are what an attack uses in play"
         }
       ],
-      "paths": []
+      "paths": [
+        "apps/web/src/abilities/**",
+        "apps/web/src/api/{abilities,compendium,compendiumOverview,items,itemAbilities,inventory}.ts",
+        "apps/web/src/pages/world/WorldCompendiumRoutePage.tsx",
+        "apps/web/src/pages/world/actor/{ActorAbilitiesPanel,ActorInventoryPanel}.tsx",
+        "apps/web/src/pages/world/settings/CompendiumOverviewSettingsCard.tsx",
+        "apps/web/src/pages/world/{compendium,ability,item}/**",
+        "apps/web/src/types/{ability,item,inventory}.ts",
+        "apps/web/src/utils/effectLabels.ts",
+        "src/server/src/compendium/**",
+        "src/server/src/graphql/mutations_{abilities,ability_permissions,actor_abilities,item_abilities,item_permissions,item_prices,items,compendium,inventory}*.rs",
+        "src/server/src/graphql/queries/{ability,ability_vocabulary,compendium,compendium_tests,item,inventory}.rs",
+        "src/server/src/graphql/types_{abilities,items}.rs",
+        "src/server/src/{ability_vocabulary,ability_vocabulary_tests,declared_values,declared_values_tests}.rs"
+      ]
     },
     {
       "name": "engine-limits",
       "summary": "Engine frame-rate sweeps, both measured-lane specs (specs/029-in-engine-status-displays, specs/046-a-fight-that-resolves)",
       "own": ["engine-limits.spec.ts", "engine-status-limits.spec.ts"],
       "neighbours": [],
-      "paths": []
+      "paths": [
+        "crates/thunderforge-canvas-core/src/{frame_trace,texture_budget,resource_display,resource_display_tests}.rs",
+        "scripts/status-capacity-metrics.mjs",
+        "src/engine/Cargo.toml",
+        "src/engine/src/plugins/{mod,frame_trace,status_display,token,nameplate}.rs",
+        "src/engine/src/resources/mod.rs",
+        "src/engine/src/systems/{mod,token,token_loader,sync,event_dispatcher}.rs",
+        "src/engine/src/{app,lib,startup,components,derived_data,payloads,sdk}.rs"
+      ]
     },
     {
       "name": "engine-other",
       "summary": "The other engine perf and monitor specs, measured lane except engine-monitor (specs/028-client-world-cache, specs/030-interactive-elements, specs/045-token-movement-and-vision); owns the engine- prefix, so a new engine spec lands here unless named elsewhere",
       "own": ["engine-"],
       "neighbours": [],
-      "paths": []
+      "paths": [
+        "apps/web/src/components/diagnostics/EngineMonitor.tsx",
+        "apps/web/src/engine/bevy/{index,stats,interactionProbe}.ts",
+        "apps/web/src/services/__tests__/engineMonitor.test.ts",
+        "apps/web/src/services/engineMonitor.ts",
+        "crates/thunderforge-canvas-core/Cargo.toml",
+        "crates/thunderforge-canvas-core/src/{lib,frame_trace,seam_probe,texture_budget}.rs",
+        "examples/maps/**",
+        "src/engine/Cargo.toml",
+        "src/engine/src/network/**",
+        "src/engine/src/plugins/cached_assets*.rs",
+        "src/engine/src/plugins/cached_assets/**",
+        "src/engine/src/plugins/darkness.wgsl",
+        "src/engine/src/plugins/{mod,frame_trace,seam_probe,websocket_plugin,lighting,lighting_overlay,darkness,interaction,interaction_marker}.rs",
+        "src/engine/src/resources/mod.rs",
+        "src/engine/src/systems/{mod,mutation_sender,optimistic,sync,event_dispatcher,presence,conflict_visualization,tests_f1_unit,tests_f2_f4_integration}.rs",
+        "src/engine/src/{app,lib,startup,components,derived_data,payloads,sdk,sync_test,integration_tests}.rs"
+      ]
     },
     {
       "name": "feedback",
       "summary": "In-app feedback (specs/037-in-app-feedback)",
       "own": ["feedback"],
       "neighbours": [],
-      "paths": []
+      "paths": [
+        "apps/web/src/api/feedback.ts",
+        "apps/web/src/components/feedback/**",
+        "apps/web/src/pages/admin/components/UndeliveredFeedbackPanel.tsx",
+        "apps/web/src/pages/user/FeedbackSettingsPage.tsx",
+        "apps/web/src/services/__tests__/feedback*.test.ts",
+        "apps/web/src/services/feedback*.ts",
+        "config/feedback-redaction.json",
+        "scripts/github-stub.mjs",
+        "src/server/src/assets_serve/feedback.rs",
+        "src/server/src/feedback/**",
+        "src/server/src/{github_apps,github_apps_tests}.rs"
+      ]
     },
     {
       "name": "game-systems",
@@ -159,7 +476,24 @@
           "seam": "each game system supplies the statuses the status display shows"
         }
       ],
-      "paths": []
+      "paths": [
+        "apps/web/src/api/{gameSystems,interfacePacks}.ts",
+        "apps/web/src/components/game-systems/**",
+        "apps/web/src/components/world/PlayDock/__tests__/systemSheetResolution.test.ts",
+        "apps/web/src/host/**",
+        "apps/web/src/pages/world/actor/{PackActorSheet.tsx,systemActorSheets.ts}",
+        "apps/web/src/pages/world/settings/WorldSystemSettingsPage.tsx",
+        "apps/web/src/panels/**",
+        "apps/web/src/sheet-layout/**",
+        "apps/web/src/types/systemManifest.ts",
+        "crates/pack_system_spec/**",
+        "crates/thunderforge-canvas-core/src/{system_contribution,content_entry,content_patterns}.rs",
+        "crates/thunderforge-content/**",
+        "packs/systems/{basic-game-system,blades_in_the_dark,cypher_system,dnd5e,fate_core,pathfinder2e,year_zero_engine}/**",
+        "src/app/src/system_packs.rs",
+        "src/server/src/graphql_world_default_system_tests.rs",
+        "src/server/src/{systems,systems_manifest_legal_enforcement_tests,systems_registry_tests,test_packs,content_patterns}.rs"
+      ]
     },
     {
       "name": "genie",
@@ -171,7 +505,13 @@
           "seam": "Genie's panels mount in the system panel host"
         }
       ],
-      "paths": []
+      "paths": [
+        "apps/web/src/components/world/PlayDock/ClocksPanel.tsx",
+        "apps/web/src/panels/**",
+        "apps/web/src/utils/__tests__/sizeCategory.test.ts",
+        "apps/web/src/utils/sizeCategory.ts",
+        "packs/systems/genie/**"
+      ]
     },
     {
       "name": "hero-builder",
@@ -183,7 +523,16 @@
           "seam": "the builder writes the actor imagery that the art panel shows"
         }
       ],
-      "paths": [],
+      "paths": [
+        "apps/hero-builder/**",
+        "apps/web/src/pages/world/actor/__tests__/{storedLook,actorImagery}.test.ts",
+        "apps/web/src/pages/world/actor/{HeroBuilderDialog.tsx,heroBuilderLazy.ts,heroFiles.ts,saveBuiltHero.ts,storedLook.ts,actorImagery.ts}",
+        "crates/thunderforge-canvas-core/src/token_art.rs",
+        "packages/hero-builder/**",
+        "packages/heroes/**",
+        "src/server/src/graphql/token_art.rs",
+        "src/server/src/heroes/**"
+      ],
       "standalone": "pnpm -F @thunderforge/hero-builder-app test:e2e"
     },
     {
@@ -196,7 +545,31 @@
         "github-apps.spec.ts"
       ],
       "neighbours": [],
-      "paths": []
+      "paths": [
+        "apps/web/src/api/{admin,instanceAccess,instanceSettings,mail,operatorAcknowledgement}.ts",
+        "apps/web/src/hooks/useSetupStatus.ts",
+        "apps/web/src/pages/admin/components/__tests__/**",
+        "apps/web/src/pages/admin/components/adminSections.ts",
+        "apps/web/src/pages/admin/components/{AccessPanel,AdminSectionShell,AdminSidebarNav,AdminTable,DiskUsageChart,GitHubAppsPanel,InstanceSettingsPanel,MailPanel,ManifestEditor,MetricsCard,OperatorAcknowledgementBanner,ReadinessPanel}.tsx",
+        "apps/web/src/pages/admin/{AdminWelcomePage,SettingsPage}.tsx",
+        "apps/web/src/pages/invite/**",
+        "apps/web/src/pages/setup/**",
+        "apps/web/src/pages/status/**",
+        "apps/web/src/pages/world/{adminAccess.ts,__tests__/adminAccess.test.ts}",
+        "apps/web/src/services/__tests__/instanceSetup.test.ts",
+        "apps/web/src/services/instanceSetup.ts",
+        "apps/web/src/types/admin.ts",
+        "config/realm-defaults.json",
+        "scripts/github-stub.mjs",
+        "src/server/src/admin.rs",
+        "src/server/src/config/mod.rs",
+        "src/server/src/graphql/mutations_github_apps*.rs",
+        "src/server/src/graphql/queries/{admin,healthcheck}.rs",
+        "src/server/src/graphql/{admin_types,admin_surface_tests,disabled_surface_tests,mutations_admin,mutations_instance_access,operator_acknowledgement}.rs",
+        "src/server/src/mail/**",
+        "src/server/src/settings/**",
+        "src/server/src/{github_apps,github_apps_tests,instance_identity,readiness,notices}.rs"
+      ]
     },
     {
       "name": "interactive",
@@ -212,7 +585,20 @@
           "seam": "opening an element reveals what exploration shows"
         }
       ],
-      "paths": []
+      "paths": [
+        "apps/web/src/api/interactives.ts",
+        "apps/web/src/components/ApprovalQueue/**",
+        "apps/web/src/components/InteractionAuthor/**",
+        "apps/web/src/components/canvas-tools/InteractionTool/**",
+        "apps/web/src/engine/bevy/interactionProbe.ts",
+        "apps/web/src/engine/world/sync/interactives.ts",
+        "crates/thunderforge-canvas-core/src/interaction*.rs",
+        "scripts/check-interaction-seam.mjs",
+        "src/engine/src/plugins/{interaction,interaction_marker}.rs",
+        "src/server/src/graphql/mutations_interactives*.rs",
+        "src/server/src/graphql/queries/interactives.rs",
+        "src/server/src/{interaction,door_effects}.rs"
+      ]
     },
     {
       "name": "lighting",
@@ -230,14 +616,49 @@
           "seam": "drawn walls occlude the light this slice casts"
         }
       ],
-      "paths": []
+      "paths": [
+        "apps/web/src/api/lights.ts",
+        "apps/web/src/components/canvas-tools/LightingTool/**",
+        "apps/web/src/db/collections/worldLightsCollection.ts",
+        "apps/web/src/engine/world/sync/__tests__/lightBridge.test.ts",
+        "apps/web/src/engine/world/sync/{lights,sceneLighting,tokenVision}.ts",
+        "apps/web/src/hooks/useSceneUnits.ts",
+        "apps/web/src/types/light.ts",
+        "crates/thunderforge-canvas-core/src/{lighting,vision,vision_declaration,vision_declaration_tests,shadow_map}.rs",
+        "src/engine/src/plugins/darkness.wgsl",
+        "src/engine/src/plugins/{lighting,lighting_overlay,darkness}.rs",
+        "src/engine/src/resources/{lighting,vision}.rs",
+        "src/engine/src/systems/{lighting,lighting_edit,lighting_tests,lighting_vision}.rs",
+        "src/server/src/graphql/mutations_lighting.rs",
+        "src/server/src/graphql/queries/token_vision.rs",
+        "src/server/src/{light_effects,vision_profiles,vision_profiles_tests}.rs"
+      ]
     },
     {
       "name": "lore",
       "summary": "The lore wiki and its git sync (specs/012-lore-wiki, specs/034-lore-git-sync); lore-repository-sync runs in the GitHub-apps lane",
       "own": ["lore-"],
       "neighbours": [],
-      "paths": []
+      "paths": [
+        "apps/web/src/api/{lore,loreSync}.ts",
+        "apps/web/src/pages/world/actor/ActorLorePanel.tsx",
+        "apps/web/src/pages/world/compendium/LoreCompendiumTab.tsx",
+        "apps/web/src/pages/world/lore/**",
+        "apps/web/src/pages/world/settings/LoreRepositoryCard.tsx",
+        "apps/web/src/types/lore.ts",
+        "crates/thunderforge-canvas-core/src/lore_link.rs",
+        "crates/thunderforge-repo-host/**",
+        "scripts/github-stub.mjs",
+        "src/engine/src/plugins/lore_link.rs",
+        "src/server/src/assets_serve/lore.rs",
+        "src/server/src/graphql/mutations_lore*.rs",
+        "src/server/src/graphql/queries/{lore,lore_sync}.rs",
+        "src/server/src/graphql/types_lore.rs",
+        "src/server/src/lore_sync/**",
+        "src/server/src/markdown/**",
+        "src/server/src/repo_host/**",
+        "src/server/src/{repo_host,repo_host_tests}.rs"
+      ]
     },
     {
       "name": "moderation",
@@ -249,7 +670,22 @@
           "seam": "reports and takedowns act on collections"
         }
       ],
-      "paths": []
+      "paths": [
+        "apps/web/src/api/{moderation,legalEnquiries}.ts",
+        "apps/web/src/components/legal/{CounterNoticeForm,LegalEnquiryForm,TakedownNoticeForm,LegalProse}.tsx",
+        "apps/web/src/components/world/ModeratedContentBanner.tsx",
+        "apps/web/src/legal/**",
+        "apps/web/src/pages/admin/ModerationReviewPage.tsx",
+        "apps/web/src/pages/admin/components/{CaseAgreement,LegalEnquiriesPanel,TerminationPanel}.tsx",
+        "apps/web/src/pages/{legal,counter}/**",
+        "apps/web/src/types/moderation.ts",
+        "src/server/src/graphql/adoption_surface_tests.rs",
+        "src/server/src/graphql/queries/{moderation,legal,legal_tests}.rs",
+        "src/server/src/graphql/{mutations_moderation,types_moderation}.rs",
+        "src/server/src/lore_sync/takedown_hook.rs",
+        "src/server/src/moderation/**",
+        "src/server/src/{legal,legal_intake}/**"
+      ]
     },
     {
       "name": "play-pause",
@@ -265,7 +701,21 @@
           "seam": "the pause reaches every client through the live broadcast"
         }
       ],
-      "paths": []
+      "paths": [
+        "apps/web/src/api/__tests__/playPauseSignal.test.ts",
+        "apps/web/src/api/{playPause,playPauseSignal}.ts",
+        "apps/web/src/components/world/PlayPausedBanner.tsx",
+        "apps/web/src/engine/world/sync/__tests__/{playPausedReconcile,worldEventsPauseAnnounce}.test.ts",
+        "apps/web/src/hooks/{usePlayPauseRedirect,useWorldPlayState}.ts",
+        "apps/web/src/pages/admin/PlayPausesPage.tsx",
+        "apps/web/src/pages/world/settings/PlayPauseHistoryCard.tsx",
+        "apps/web/src/pages/world/{PlayPausedPage.tsx,playPauseStatus.ts,__tests__/playPauseStatus.test.ts}",
+        "src/app/src/play_pause_surface_tests.rs",
+        "src/server/src/graphql/queries/play_pause*.rs",
+        "src/server/src/graphql/{mutations_play_pause,play_pause_}*.rs",
+        "src/server/src/moderation/play_pause_hook_tests.rs",
+        "src/server/src/play_pause/**"
+      ]
     },
     {
       "name": "scenes",
@@ -282,7 +732,26 @@
           "seam": "launching a scene has to respect a paused table"
         }
       ],
-      "paths": []
+      "paths": [
+        "apps/web/src/api/{scenes,exploration}.ts",
+        "apps/web/src/components/campaign/**",
+        "apps/web/src/components/world/SceneSwitcher/**",
+        "apps/web/src/engine/world/sync/{scenes,exploration}.ts",
+        "apps/web/src/layouts/world-layout/WorldStagingPage.tsx",
+        "apps/web/src/pages/world/WorldStagingRoutePage.tsx",
+        "apps/web/src/pages/world/scenes/**",
+        "apps/web/src/services/exploredAreas.ts",
+        "apps/web/src/types/scene.ts",
+        "crates/thunderforge-canvas-core/src/party.rs",
+        "examples/maps/**",
+        "src/engine/src/plugins/{scene,scene_transition,exploration,exploration_tests}.rs",
+        "src/engine/src/resources/scene_data.rs",
+        "src/server/src/assets_serve/scene.rs",
+        "src/server/src/collections/scene_copy.rs",
+        "src/server/src/graphql/queries/scene.rs",
+        "src/server/src/graphql/{mutations_scenes,types_scene,exploration,mutations_party}.rs",
+        "src/server/src/{exploration,exploration_tests,scene_fingerprint}.rs"
+      ]
     },
     {
       "name": "status",
@@ -294,7 +763,18 @@
           "seam": "status displays show the hit-point state combat writes"
         }
       ],
-      "paths": []
+      "paths": [
+        "apps/web/src/api/tokenStatus.ts",
+        "apps/web/src/components/StatusPanel/**",
+        "apps/web/src/components/TokenDisclosureControl.tsx",
+        "apps/web/src/engine/bevy/tokenStatus.ts",
+        "apps/web/src/engine/world/sync/tokenStatus.ts",
+        "crates/thunderforge-canvas-core/src/{resource_display,resource_display_tests}.rs",
+        "scripts/status-capacity-metrics.mjs",
+        "src/engine/src/plugins/status_display.rs",
+        "src/server/src/graphql/queries/token_status.rs",
+        "src/server/src/status_display.rs"
+      ]
     },
     {
       "name": "tokens",
@@ -314,21 +794,73 @@
           "seam": "tokens are carried across a world session"
         }
       ],
-      "paths": []
+      "paths": [
+        "apps/web/src/api/{tokens,tokenAttributes}.ts",
+        "apps/web/src/components/avatars/TokenAvatar.tsx",
+        "apps/web/src/components/canvas-tools/{TokenTool,TokenStackPicker}/**",
+        "apps/web/src/components/world/GmToolRail/SelectionFilterMenu.tsx",
+        "apps/web/src/components/world/PlacedItemPrompt.tsx",
+        "apps/web/src/components/world/PlayDock/{LookAtButton.tsx,useSelectedTokenIds.ts}",
+        "apps/web/src/components/{TokenPanel,TokenDisclosureControl}.tsx",
+        "apps/web/src/db/collections/worldTokensSceneCollection.ts",
+        "apps/web/src/engine/world/facets/**",
+        "apps/web/src/engine/world/probe.ts",
+        "apps/web/src/engine/world/sync/__tests__/{tokenBridge,localMoves}.test.ts",
+        "apps/web/src/engine/world/sync/{tokens,tokenGrid,localMoves}.ts",
+        "apps/web/src/engine/{lookAt,canvasKeyboard}.ts",
+        "apps/web/src/pages/world/usePlaceActorTokens.ts",
+        "apps/web/src/types/token.ts",
+        "crates/thunderforge-canvas-core/src/{token_art,token_kind,token_stack,movement,movement_budget,navigation,item,attributes}.rs",
+        "src/engine/src/movement.rs",
+        "src/engine/src/plugins/{token,nameplate,navigation,selection,selection_filter,item,placement}.rs",
+        "src/engine/src/resources/{token_grid,selection}.rs",
+        "src/engine/src/systems/{token,token_grid,token_loader,token_move,token_sync_d2,selection}.rs",
+        "src/server/src/attributes.rs",
+        "src/server/src/graphql/mutations_{tokens,token_links,pickup}*.rs",
+        "src/server/src/graphql/queries/{token_attributes,token_grid}.rs",
+        "src/server/src/graphql/world_tokens_retired_tests.rs",
+        "src/server/src/movement/**"
+      ]
     },
     {
       "name": "torture",
       "summary": "Concurrency torture specs under e2e/torture (specs/036-concurrent-client-sessions)",
       "own": ["torture/"],
       "neighbours": [],
-      "paths": []
+      "paths": [
+        "apps/web/playwright.torture.config.ts",
+        "compose.torture.yml",
+        "crates/thunderforge-pg-sockets/**",
+        "crates/thunderforge-pg/**",
+        "scripts/torture*.mjs",
+        "src/server/src/network/**",
+        "src/server/src/peer_signaling/**"
+      ]
     },
     {
       "name": "world-cache",
       "summary": "The client world cache, prefetch, repair and storage (specs/028-client-world-cache, specs/059-a-map-that-arrives-in-pieces); owns scene-preload by exact name, over the scene- prefix, and the world-cache prefix except the four core specs",
       "own": ["world-cache", "scene-preload.spec.ts"],
       "neighbours": [],
-      "paths": []
+      "paths": [
+        "apps/web/public/sw.js",
+        "apps/web/src/components/diagnostics/{CachePanel,PeerIndicator,PeerPanel,StoragePanel}.tsx",
+        "apps/web/src/engine/bevy/{cacheStats,cacheSupport}.ts",
+        "apps/web/src/engine/world/sync/offlineQueue.ts",
+        "apps/web/src/pages/user/StorageSettingsPage.tsx",
+        "apps/web/src/serviceWorker.ts",
+        "apps/web/src/services/__tests__/{worldCache,worldCacheStorage,peerTransfer}.test.ts",
+        "apps/web/src/services/{worldCache,worldCacheDiagnostics,worldCacheStorage,scenePreload,peerTransfer}.ts",
+        "crates/thunderforge-cache-browser/**",
+        "crates/thunderforge-cache-core/**",
+        "crates/thunderforge-opfs/**",
+        "examples/maps/**",
+        "src/engine/src/plugins/cached_assets*.rs",
+        "src/engine/src/plugins/cached_assets/**",
+        "src/server/src/graphql/queries/world_sync_plan.rs",
+        "src/server/src/peer_signaling/**",
+        "src/server/src/scene_fingerprint.rs"
+      ]
     },
     {
       "name": "world-cache-core",
@@ -340,7 +872,20 @@
         "world-cache-multitab.spec.ts"
       ],
       "neighbours": [],
-      "paths": []
+      "paths": [
+        "apps/web/public/sw.js",
+        "apps/web/src/components/diagnostics/{PeerIndicator,PeerPanel}.tsx",
+        "apps/web/src/engine/world/facets/__tests__/offlineEdits.test.ts",
+        "apps/web/src/engine/world/sync/offlineQueue.ts",
+        "apps/web/src/serviceWorker.ts",
+        "apps/web/src/services/__tests__/{worldCache,worldCacheStorage,peerTransfer}.test.ts",
+        "apps/web/src/services/{worldCache,worldCacheStorage,peerTransfer}.ts",
+        "crates/thunderforge-cache-browser/**",
+        "crates/thunderforge-cache-core/**",
+        "crates/thunderforge-opfs/**",
+        "src/server/src/graphql/queries/world_sync_plan.rs",
+        "src/server/src/peer_signaling/**"
+      ]
     },
     {
       "name": "worlds",
@@ -355,7 +900,36 @@
         "demo-first-session.spec.ts"
       ],
       "neighbours": [],
-      "paths": []
+      "paths": [
+        "apps/web/src/api/{world,worldContent,worldStatistics,worldMembers,reconcile}.ts",
+        "apps/web/src/appearance/**",
+        "apps/web/src/components/seo/**",
+        "apps/web/src/components/world/PlayDock/{WorldDock,SettingsPanel,HelpPanel}.tsx",
+        "apps/web/src/components/world/{ConnectionStatus,SessionSetupInviteLink,ReconcileReport}.tsx",
+        "apps/web/src/engine/world/__tests__/store.test.ts",
+        "apps/web/src/engine/world/facets/**",
+        "apps/web/src/engine/world/sync/__tests__/{adjudicatedReconcile,appearance,connectivity,discrepancies,heartbeat,reconcile,socketWiring}.test.ts",
+        "apps/web/src/engine/world/sync/{reconcile,heartbeat,discrepancies,appearance,playPanels}.ts",
+        "apps/web/src/hooks/useTheme.tsx",
+        "apps/web/src/hooks/{useWorldMemberCounts,useWorldMembers,useWorldRole,theme-context,useResetOnChange}.ts",
+        "apps/web/src/layouts/world-layout/{WorldLayout,WorldSectionShell,WorldSidebarNav}.tsx",
+        "apps/web/src/lib/utils.ts",
+        "apps/web/src/pages/world/components/**",
+        "apps/web/src/pages/world/settings/{WorldAppearanceSettingsCard,AuthoringToolGrantsCard}.tsx",
+        "apps/web/src/pages/world/worldsView.ts",
+        "apps/web/src/pages/world/{WorldListPage,CreateWorldPage,JoinWorldPage,WorldDashboardPage,WorldPage}.tsx",
+        "apps/web/src/types/{world,seo}.ts",
+        "apps/web/src/utils/env.ts",
+        "packs/interface/**",
+        "scripts/seed-demo-art.mjs",
+        "src/core/**",
+        "src/engine/src/network/**",
+        "src/engine/src/plugins/websocket_plugin.rs",
+        "src/server/src/graphql/queries/{mod,world_events_since,world_statistics,world_statistics_tests,world_content}.rs",
+        "src/server/src/graphql/{mutations_worlds,mutations_heartbeat,mutations_reconcile,mutations_reconcile_tests}.rs",
+        "src/server/src/world/**",
+        "src/server/src/{world_hooks,interface_packs,interface_packs_tests,interface_packs_integration_tests,graphql_world_interface_pack_tests,graphql_tests}.rs"
+      ]
     }
   ]
 }
