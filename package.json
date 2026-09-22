@@ -23,6 +23,9 @@
     "torture:50": "./scripts/torture.mjs 50",
     "torture:100": "./scripts/torture.mjs 100",
     "playtest": "node ./scripts/e2e-parallel.mjs --suite=playtest",
+    "e2e:hero-builder": "pnpm run e2e:hero-builder:standalone && pnpm run e2e:hero-builder:integration",
+    "e2e:hero-builder:standalone": "pnpm -F @thunderforge/hero-builder-app test:e2e",
+    "e2e:hero-builder:integration": "node ./scripts/e2e-parallel.mjs --shards=1 --only=hero-builder-,actor-art",
     "journeys": "node ./scripts/journeys.mjs",
     "prepare": "node ./scripts/install-hooks.mjs",
     "hooks:install": "node ./scripts/install-hooks.mjs"
