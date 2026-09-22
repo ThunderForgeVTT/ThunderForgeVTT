@@ -38,10 +38,11 @@ P1, and each depends only on Phase 2.
 
 ## Phase 1: Setup
 
-- [ ] T001 Create the `scripts/e2e/__tests__/` directory. Add a root
+- [X] T001 Create the `scripts/e2e/__tests__/` directory. Add a root
       `package.json` script, `"test:scripts": "node --test scripts/e2e/__tests__"`.
       Confirm `node --test` runs, and passes, on an empty placeholder test
       file, `scripts/e2e/__tests__/slices.test.mjs`.
+      - 2026-09-22: `pnpm test:scripts` passes 1/0 on the placeholder. The script is `node --test "scripts/e2e/__tests__/*.test.mjs"`, not the bare directory: Node 24 treats a directory argument as a module to load and fails with `MODULE_NOT_FOUND`, so the glob (which `node --test` expands itself) is what runs the directory. Later tasks that say `node --test scripts/e2e/__tests__` should use `pnpm test:scripts` or the glob.
 - [ ] T002 [P] Write ADR-107, "A feature is proven by a declared slice", in
       `docs/adrs/20260922-107-a_feature_is_proven_by_a_declared_slice.md`,
       in the format of ADR-106. Status: Proposed. It records these decisions:
@@ -65,7 +66,7 @@ P1, and each depends only on Phase 2.
 task reads the list through `scripts/e2e/slices.mjs` and never parses
 `slices.json` on its own.
 
-- [ ] T003 Move spec discovery out of the runner. Move `allSpecFiles(suite)`
+- [X] T003 Move spec discovery out of the runner. Move `allSpecFiles(suite)`
       and `PERF_LANE_SPECS` from `scripts/e2e-parallel.mjs` (lines 137 and
       203), with `isPerfSpec`, `isFirstRunSpec` and `isGithubAppsSpec`, into a
       new `scripts/e2e/specs.mjs`. The runner imports them from there, and
@@ -75,6 +76,7 @@ task reads the list through `scripts/e2e/slices.mjs` and never parses
         throwaway `node -e` that prints `allSpecFiles()`.
       - The move exists so the check and the CLI see exactly the file set
         the runner runs: `torture/` included, `journeys/` excluded.
+      - 2026-09-22: `scripts/e2e/specs.mjs` exports `SUITES`, `PERF_LANE_SPECS`, `allSpecFiles`, `isFirstRunSpec`, `isPerfSpec` and `isGithubAppsSpec`, moved with their comments; `SUITES` came too, since `allSpecFiles` reads it. The runner has no `--help` or dry listing (`--help` is "Unknown argument"), so a throwaway script printed every file of both suites with its three lane predicates, plus `PERF_LANE_SPECS`, from the old source and from the new module: the two outputs are identical (181 e2e specs, paths relative to `apps/web`, e.g. `e2e/combat-panel.spec.ts`).
 - [ ] T004 Implement `scripts/e2e/slices.mjs`, following
       [data-model.md](data-model.md) and
       [contracts/slices-json.md](contracts/slices-json.md). It exports:
