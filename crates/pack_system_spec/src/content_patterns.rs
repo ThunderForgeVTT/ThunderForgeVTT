@@ -182,12 +182,12 @@ pub fn validate_content_patterns(instance: &serde_json::Value) -> Result<(), Str
                         "{at}.name.position must be 'before' or 'after' for an anchored kind"
                     ));
                 }
-                if let Some(prefer) = name.and_then(|n| n.get("prefer")).and_then(|v| v.as_str()) {
-                    if !matches!(prefer, "largest" | "bold" | "nearest") {
-                        return Err(format!(
-                            "{at}.name.prefer must be 'largest', 'bold' or 'nearest'"
-                        ));
-                    }
+                if let Some(prefer) = name.and_then(|n| n.get("prefer")).and_then(|v| v.as_str())
+                    && !matches!(prefer, "largest" | "bold" | "nearest")
+                {
+                    return Err(format!(
+                        "{at}.name.prefer must be 'largest', 'bold' or 'nearest'"
+                    ));
                 }
             }
             "prose" => {

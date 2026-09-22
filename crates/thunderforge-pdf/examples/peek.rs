@@ -1,6 +1,9 @@
 //! Print the lines of a few pages, with size and weight. For designing a
 //! reader against what books actually contain.
 //!     cargo run -p thunderforge-pdf --example peek -- <file> <page> [count]
+
+#![allow(clippy::print_stdout)] // a command-line tool: its output is the point
+
 use thunderforge_pdf::{Document, layout};
 
 fn main() {

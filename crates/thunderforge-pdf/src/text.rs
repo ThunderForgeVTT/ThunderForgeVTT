@@ -307,7 +307,7 @@ fn push_run(
     }
     let placed = text_matrix.multiply(graphics.ctm);
     let (x, y) = placed.translation();
-    let size = font_size * placed.vertical_scale() * horizontal_scale.max(0.01).min(10.0);
+    let size = font_size * placed.vertical_scale() * horizontal_scale.clamp(0.01, 10.0);
     // Summed from the font's own advances. `code_width` walks the *bytes*,
     // not the decoded characters: a two-byte font maps two bytes to one
     // character, and measuring the characters would halve every run.

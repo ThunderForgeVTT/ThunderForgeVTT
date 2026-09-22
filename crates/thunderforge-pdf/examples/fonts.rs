@@ -1,5 +1,8 @@
 //! What fonts a page declares, and what this crate can do with them.
 //!     cargo run -p thunderforge-pdf --example fonts -- <file> <page>
+
+#![allow(clippy::print_stdout)] // a command-line tool: its output is the point
+
 fn main() {
     let mut args = std::env::args().skip(1);
     let path = args.next().expect("usage: fonts <file> <page>");

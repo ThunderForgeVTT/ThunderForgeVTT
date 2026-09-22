@@ -36,6 +36,8 @@
 //! **Renames are not measured.** Answering that needs two editions of one
 //! work, and the corpus has none. Stated rather than papered over.
 
+#![allow(clippy::print_stdout)] // a command-line tool: its output is the point
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use blades_server as _;

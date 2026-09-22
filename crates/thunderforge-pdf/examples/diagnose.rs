@@ -1,5 +1,8 @@
 //! Why a document yields no pages.
 //!     cargo run -p thunderforge-pdf --example diagnose -- <file>
+
+#![allow(clippy::print_stdout)] // a command-line tool: its output is the point
+
 fn main() {
     let path = std::env::args().nth(1).expect("usage: diagnose <file>");
     let bytes = std::fs::read(&path).expect("readable");

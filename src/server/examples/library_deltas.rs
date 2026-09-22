@@ -35,6 +35,8 @@
 //!
 //! Nothing: one transaction, rolled back, as `library_storage` does.
 
+#![allow(clippy::print_stdout)] // a command-line tool: its output is the point
+
 use std::time::{Duration, Instant};
 
 use diesel::prelude::*;

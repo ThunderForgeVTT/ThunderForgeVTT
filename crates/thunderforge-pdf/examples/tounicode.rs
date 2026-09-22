@@ -1,5 +1,8 @@
 //! Dump a page's ToUnicode CMaps, to see why a parser rejects them.
 //!     cargo run -p thunderforge-pdf --example tounicode -- <file> <page>
+
+#![allow(clippy::print_stdout)] // a command-line tool: its output is the point
+
 fn main() {
     let mut args = std::env::args().skip(1);
     let path = args.next().expect("usage");

@@ -295,6 +295,8 @@ async fn a_stranger_is_refused() {
 /// regression to loading every token would still land far outside it. The
 /// elapsed time is printed so a run can report it.
 #[tokio::test]
+// The timings are read by a person with --nocapture; the assertions are the test.
+#[allow(clippy::print_stdout)]
 async fn forty_scenes_and_two_thousand_tokens_are_counted_without_loading_them() {
     use crate::schema::{scenes, tokens};
 

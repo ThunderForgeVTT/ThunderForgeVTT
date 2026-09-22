@@ -9,6 +9,8 @@
 //! commercial books is not something to page through in a terminal, and the
 //! question here is whether the parser works, not what the books say.
 
+#![allow(clippy::print_stdout)] // a command-line tool: its output is the point
+
 use std::path::PathBuf;
 use thunderforge_pdf::{Document, layout};
 

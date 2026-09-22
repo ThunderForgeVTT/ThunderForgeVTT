@@ -1,6 +1,9 @@
 //! Look closely at a handful of documents: pages, and where text starts.
 //!
 //!     cargo run -p thunderforge-pdf --example probe -- <file>...
+
+#![allow(clippy::print_stdout)] // a command-line tool: its output is the point
+
 use thunderforge_pdf::{Document, layout};
 
 fn main() {

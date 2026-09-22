@@ -260,7 +260,9 @@ is polish. Research, data-model, contracts and quickstart all use the letters.
 - [X] T099 [P] Document the standalone builder where a developer will find it: `apps/hero-builder/README.md` linked from wherever `apps/engine-sandbox` is linked, and a line in the repository's development docs saying it needs no stack; and a line in the pack-authoring docs for `appearance.race.source`, beside `combat.sizes.source`
 - [X] T100 [P] Re-read the spec's Assumptions against what shipped and correct anything that moved, in the manner of plan.md's findings section
 - [ ] T101 Full run: `node scripts/e2e-parallel.mjs --shards=2` with nothing else running; search the log for `✘`; record the time and result beside the run recorded in spec 046's T109
-- [ ] T102 `pnpm verify`, `pnpm -F @thunderforge/web exec tsc --noEmit`, `make lint` and `make lint-wasm` before the final commit of the feature
+  - Deferred 2026-09-21 at the owner's request; not run.
+- [X] T102 `pnpm verify`, `pnpm -F @thunderforge/web exec tsc --noEmit`, `make lint` and `make lint-wasm` before the final commit of the feature
+  - 2026-09-21: `make lint` (lint-host, lint-wasm, file length) green, `pnpm verify` **15/15**, web `tsc --noEmit` clean. Host clippy had been failing before this feature. None of the failures were in lines spec 044 touched: `git blame` puts them in commits from 2026-09-02 to 2026-09-16, and the new toolchain (rustc 1.98.1) flags the older code too. All were fixed mechanically. In `thunderforge-pdf`: a `clamp` in `text.rs`, `as_chunks` in `page.rs`, and an unused `contains` in `repair.rs`. In `pack_system_spec`: a collapsed `if let` in `content_patterns.rs`. The workspace `print_stdout` lint now has an explicit allow in the ten command-line examples (`thunderforge-pdf`, `src/server`, `src/app`) and in the timing test in `world_statistics_tests.rs`. `cargo test -p thunderforge-pdf -p pack_system_spec` passes, 151/0.
 
 ---
 

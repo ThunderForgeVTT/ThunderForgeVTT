@@ -33,6 +33,8 @@
 //! load-bearing thing, for the same reason, and deleting one removes a system
 //! from the measurement without any other sign.
 
+#![allow(clippy::print_stdout)] // a command-line tool: its output is the point
+
 // See "The `use … as _` block is load-bearing" above. Nothing here reads a
 // symbol from these crates; referencing them at all is what links their
 // `inventory` submissions in.

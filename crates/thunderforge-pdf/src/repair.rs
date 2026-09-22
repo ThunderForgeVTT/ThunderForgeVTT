@@ -197,10 +197,6 @@ fn declares_catalog(body: &[u8]) -> bool {
     false
 }
 
-fn contains(haystack: &[u8], needle: &[u8]) -> bool {
-    find_from(haystack, needle, 0).is_some()
-}
-
 // ---------------------------------------------------------------------------
 // Object streams
 // ---------------------------------------------------------------------------

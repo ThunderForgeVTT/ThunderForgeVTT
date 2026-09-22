@@ -31,6 +31,8 @@
 //! account. The measurement is unaffected: rows written in a transaction are
 //! rows, and `pg_column_size` measures them as such.
 
+#![allow(clippy::print_stdout)] // a command-line tool: its output is the point
+
 use diesel::prelude::*;
 use diesel::sql_types::BigInt;
 use thunderforge_server::compendium::store::{self, NewBook};
