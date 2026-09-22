@@ -1,5 +1,20 @@
 <!--
 Sync Impact Report
+- Version change: 1.2.0 → 1.3.0
+- Modified principles: n/a
+- Added sections: Principle VI "Every Feature Is Proven by Its Own Slice".
+  Every feature or feature set ships its own e2e entry point: a
+  stack-free standalone slice where one is possible, and an integration
+  slice that is the smallest set of specs crossing every seam the feature
+  touches. The slice gates the feature; the full suite gates releases and
+  cross-cutting changes. The model is spec 044's `pnpm e2e:hero-builder`.
+- Removed sections: none
+- Templates: plan/tasks templates are not edited by this command. The
+  tasks template's proof task and the plan's Constitution Check will pick
+  up Principle VI at runtime; see Next Actions in the amendment's summary.
+- Deferred TODOs: none
+
+Prior report (v1.2.0):
 - Version change: 1.1.0 → 1.2.0
 - Modified principles: n/a
 - Added sections: the "DMCA / Content Moderation Guardrail" checkpoint gained
@@ -113,6 +128,43 @@ justified; pre-existing warnings are not blocking.
 `cargo check` will always fail and is not a signal. Knowing the right check
 per crate prevents false "it's broken" or false "it's fine" conclusions.
 
+### VI. Every Feature Is Proven by Its Own Slice
+Every feature or feature set MUST be testable on its own. Proving a change
+MUST NOT require the full end-to-end suite, which takes 30 minutes to an hour.
+Each feature MUST ship an isolated e2e entry point as root scripts named
+`e2e:<feature>`. The model is `pnpm e2e:hero-builder` (spec 044):
+
+- **A standalone slice** (`e2e:<feature>:standalone`) wherever the feature
+  can run without the stack: a package or harness app, served and tested
+  with no database, bucket or server.
+- **An integration slice** (`e2e:<feature>:integration`) that runs
+  `scripts/e2e-parallel.mjs --only=...` on one shard, with a stack of its
+  own. It MUST NOT depend on state left behind by specs outside the slice.
+- **The combined script** (`e2e:<feature>`) runs both, standalone first.
+
+An integration slice MUST be the *smallest* set of specs that crosses every
+seam the feature touches. That is the feature's own specs, plus the
+neighbouring specs of each existing surface it changes. For spec 044 that
+meant adding `actor-art` for the actor imagery the builder writes. The
+slice SHOULD select specs by a shared file prefix (`hero-builder-*`), so a
+new spec joins without editing the script. It SHOULD finish in about ten
+minutes on one shard. A slice that cannot is a sign the feature set is too
+wide and SHOULD be split. When a feature starts touching a new surface, the
+neighbour specs for that surface MUST be added to its slice in the same
+change.
+
+A feature's proof task in `tasks.md` MUST name its slice and record that
+slice's result. A green slice is what "done" means for the feature. The
+full suite remains the check before a release and for changes that cut
+across the whole app, such as the schema, auth, the harness itself, or
+shared UI primitives. It MUST NOT be the gate for an individual change.
+
+**Rationale**: A gate that takes an hour gets skipped, run less often, or
+run while other edits land in the tree. Any of those turns "tested" into a
+guess. A slice that crosses exactly the feature's seams gives the same
+confidence about that feature in minutes. It can run beside other work,
+and one agent or contributor can own it end to end.
+
 ## Technology & Architecture Constraints
 
 - Canvas rendering and interaction: Bevy (Rust, compiled to WASM). No
@@ -208,4 +260,4 @@ Compliance is reviewed at PR/change-review time. Any deviation from
 Principle I (ECS owns simulation) or Principle III (ownership enforcement)
 requires explicit justification recorded in the associated ADR or spec.
 
-**Version**: 1.2.0 | **Ratified**: 2026-08-20 | **Last Amended**: 2026-09-15
+**Version**: 1.3.0 | **Ratified**: 2026-08-20 | **Last Amended**: 2026-09-22
