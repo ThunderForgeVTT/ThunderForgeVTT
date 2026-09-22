@@ -95,6 +95,10 @@ export function recordSliceDuration(file, name, record) {
  * The commit a measurement describes: `HEAD`'s short SHA, with `-dirty` when
  * the tree has changes, because a time measured on uncommitted code is a
  * time for code nobody else can check out. `null` outside a git checkout.
+ *
+ * The two files a recorded run writes are not counted: after the first slice
+ * of a sequence they are always changed, and they describe measurements, not
+ * the code measured. Counting them marked every slice after the first dirty.
  */
 export function measuredCommit(root = ROOT_DIR) {
   const git = (args) =>
@@ -105,7 +109,15 @@ export function measuredCommit(root = ROOT_DIR) {
     }).trim();
   try {
     const sha = git(["rev-parse", "--short", "HEAD"]);
-    return git(["status", "--porcelain"]) ? `${sha}-dirty` : sha;
+    const changes = git([
+      "status",
+      "--porcelain",
+      "--",
+      ".",
+      `:!${SLICE_DURATIONS_FILE}`,
+      ":!.e2e-shards-durations.json",
+    ]);
+    return changes ? `${sha}-dirty` : sha;
   } catch {
     return null;
   }
