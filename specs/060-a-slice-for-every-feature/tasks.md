@@ -43,7 +43,7 @@ P1, and each depends only on Phase 2.
       Confirm `node --test` runs, and passes, on an empty placeholder test
       file, `scripts/e2e/__tests__/slices.test.mjs`.
       - 2026-09-22: `pnpm test:scripts` passes 1/0 on the placeholder. The script is `node --test "scripts/e2e/__tests__/*.test.mjs"`, not the bare directory: Node 24 treats a directory argument as a module to load and fails with `MODULE_NOT_FOUND`, so the glob (which `node --test` expands itself) is what runs the directory. Later tasks that say `node --test scripts/e2e/__tests__` should use `pnpm test:scripts` or the glob.
-- [ ] T002 [P] Write ADR-107, "A feature is proven by a declared slice", in
+- [X] T002 [P] Write ADR-107, "A feature is proven by a declared slice", in
       `docs/adrs/20260922-107-a_feature_is_proven_by_a_declared_slice.md`,
       in the format of ADR-106. Status: Proposed. It records these decisions:
       - one list, in JSON (R1);
@@ -57,6 +57,10 @@ P1, and each depends only on Phase 2.
       It also records each rejected alternative from research.md, and names
       Principle VI as the *what* this ADR implements. Add a row to
       `docs/adrs/README.md` if that file indexes ADRs.
+      - 2026-09-22: Written, status Proposed; it becomes Accepted once the
+        proof (quickstart scenario 6) has run every slice. It records R1–R5
+        and R10 as six decisions, and every rejected alternative from R1–R10.
+        `docs/adrs/README.md` indexes ADRs, so it gained a Proposed row.
 
 ---
 
