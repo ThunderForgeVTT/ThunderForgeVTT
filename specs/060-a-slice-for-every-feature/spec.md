@@ -378,11 +378,11 @@ no standalone half, not an empty one.
 
 ## Assumptions
 
-- **The e2e runner is kept, not replaced.** Slices are named `--only` lists
-  run through `scripts/e2e-parallel.mjs`. The runner's lanes, lock, rate-limit
-  bypass and durations are reused as they are. Any change the runner needs
-  (for example, reading the declared list directly) is small and keeps
-  `--only` working.
+- **The e2e runner is kept, not replaced.** The runner's lanes, lock,
+  rate-limit bypass and durations are reused as they are. *As shipped:* a
+  slice is not an `--only` list. `--slice=<name>` resolves the declared list
+  to exact spec paths, so a slice cannot pull in a release-build perf spec by
+  a substring match. `--only` is untouched, and refused alongside `--slice`.
 - **One shard is the unit of measure.** The target of about ten minutes is on
   one shard, with nothing else running, on the owner's development machine.
   That machine's per-spec durations are the only measurements that exist.
@@ -396,6 +396,12 @@ no standalone half, not an empty one.
 - **Durations are measured, not assumed.** The per-spec record from
   2026-09-14 (141 specs, about 69 minutes serial) is used only to draft the
   groupings. Every recorded slice duration comes from running that slice.
+- **27 slices, none split.** *As shipped:* the grouping in research R8 held.
+  T035 split nothing. `canvas` is the one slice over the twelve-minute limit
+  (15m 30s) and stays whole, flagged: its tests are 6m 54s, and the rest is
+  the cold release wasm build its measured-lane spec needs, which a split
+  would move rather than remove. `engine-limits`, `world-cache` and
+  `world-cache-core` are over the ten-minute target but inside the limit.
 - **Overlap is acceptable.** Summed over all slices, the time is expected to
   exceed a full run, because neighbours repeat. A slice is sized for the one
   change being proven, never for running every slice back to back.

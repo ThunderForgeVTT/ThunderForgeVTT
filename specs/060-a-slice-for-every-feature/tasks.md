@@ -598,15 +598,39 @@ runs with no stack up.
       - 2026-09-22: committed alone, 27 records.
         `.e2e-shards-durations.json`, which the same runs also rewrote, went
         in a separate commit of its own after every run had finished.
-- [ ] T037 [P] Mark ADR-107 as Accepted, dated, naming T010, T024 and T035
+- [X] T037 [P] Mark ADR-107 as Accepted, dated, naming T010, T024 and T035
       as the proof. Re-read the spec's Assumptions against what shipped and
       correct anything that moved, such as the final slice count and any
-      splits made in T035.
-- [ ] T038 Run the quickstart, scenarios 1–7, and record the result under
-      this task.
-- [ ] T039 Run `pnpm verify` and `node --test scripts/e2e/__tests__` before
+      splits made in T035.      - 2026-09-22: ADR-107 marked ACCEPTED, naming T010, T024 and T035 as its
+        proof, and the docs/adrs/README.md row updated. Two Assumptions moved and
+        were corrected in spec.md: a slice is a declared list resolved to exact
+        paths, not an `--only` list; and the 27 slices of R8 held with no split,
+        `canvas` flagged over the limit for its cold release wasm build.
+- [X] T038 Run the quickstart, scenarios 1–7, and record the result under
+      this task.      - 2026-09-22: scenarios 1-7 all pass.
+        1. check 0.66 s, exit 0, "181 specs in 27 slices, 0 orphans"; `pnpm verify`
+           green, 16 of 16 including `e2e slices`.
+        2. the orphan spec failed the check by name and passed once removed (T024).
+        3. `list` shows 27 rows, all dated after T035; `which` answered the three
+           paths in 0.30 s (owner + neighbour, FULL SUITE, no e2e needed); the
+           `--diff` lookup exits 3 naming only the slice tooling, which T018
+           records as deliberately uncovered. The runs' own timing files answered
+           "uncovered" until 083d2ce gave them the built-in no-e2e rule.
+        4. `pnpm e2e:hero-builder`: standalone 7 passed, integration 16 passed /
+           0 failed / 0 flaky / 0 skipped, 4m 47s, no `✘` in the log.
+        5. `pnpm e2e:engine-other:integration`: header "e2e slice engine-other:
+           4 specs (1 shard)", release build, serial lane, 9 passed / 0 failed,
+           9m 56s, no `✘`.
+        6. done as T035: 27 slices, 0 red, 23 within ten minutes.
+        7. the plan template asks for the slice and its neighbouring specs; the
+           tasks template carries the slice task and the proof task.
+- [X] T039 Run `pnpm verify` and `node --test scripts/e2e/__tests__` before
       the final commit. Nothing in Rust or the engine changes, so
       `make lint` is not a gate. Run it only if the pre-push hook demands it.
+      - 2026-09-22: `pnpm verify` green, 16 of 16 checks, and
+        `node --test "scripts/e2e/__tests__/*.test.mjs"` 88 of 88. The glob form
+        is used because a bare directory fails on Node 24. `make lint` was not
+        run: no Rust or engine code changed.
       - This feature's own Principle VI slice is stack-free: the verify
         check and its tests, plus T010's hero-builder run as the real-stack
         neighbour, whose resolution this feature changed.

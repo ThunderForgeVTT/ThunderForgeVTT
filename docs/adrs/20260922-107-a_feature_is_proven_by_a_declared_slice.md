@@ -1,7 +1,11 @@
 # ADR-107: A Feature Is Proven by a Declared Slice
 
 **Date:** 2026-09-22
-**Status:** **PROPOSED** 2026-09-22 with spec 060. It becomes Accepted once spec 060's proof has run every slice once, measured (quickstart scenario 6).
+**Status:** **ACCEPTED** 2026-09-22. Proven by spec 060's T010 (the hero builder's
+existing entry point, unchanged at 7 standalone and 16 integration passes, now resolved
+through `--slice`), T024 (`pnpm verify` green with the `e2e-slices` check, which fails a
+spec that belongs to no slice), and T035 (all 27 slices run once each, measured: 0 red,
+23 of 27 within ten minutes, one flagged over the limit).
 **Participants:** ThunderForgeVTT Team
 **Related:** spec 060 (FR-001–FR-021; research R1–R10; contracts `cli.md`, `slices-json.md`), constitution Principle VI (v1.3.0), spec 044 (`pnpm e2e:hero-builder`, the model slice)
 
