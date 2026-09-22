@@ -60,6 +60,12 @@ async function chooseSystem(
   await page.goto(`/world/${worldId}/settings/system`);
   const picker = page.getByTestId("system-picker");
   await expect(picker).toBeVisible({ timeout: 15_000 });
+  // A new world already runs Genie (the server default), and re-picking the
+  // running system asks nothing (8339da8), so there is no confirmation then.
+  if ((await picker.textContent())?.trim() === title) {
+    await expect(page.getByTestId("active-system-card")).toContainText(title);
+    return;
+  }
   await picker.click();
   await page.getByRole("option", { name: title }).click();
 

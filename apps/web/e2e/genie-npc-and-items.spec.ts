@@ -89,14 +89,24 @@ async function registerAndCreateWorld(
   return match[1];
 }
 
+/**
+ * The world runs Genie. A new world already does (the server default), and
+ * re-picking the running system asks nothing (8339da8), so the choice is made
+ * only when the world is on something else.
+ */
 async function assignGenieSystem(page: Page, worldId: string): Promise<void> {
   await page.goto(`/world/${worldId}/settings/system`);
-  await page.getByTestId("system-picker").click();
-  await page.getByRole("option", { name: "genie" }).click();
-  await page.getByRole("button", { name: "Confirm" }).click();
-  await expect(page.getByText("System assigned.")).toBeVisible({
-    timeout: 10_000,
-  });
+  const picker = page.getByTestId("system-picker");
+  await expect(picker).toBeVisible({ timeout: 15_000 });
+  if ((await picker.textContent())?.trim() !== "Genie") {
+    await picker.click();
+    await page.getByRole("option", { name: "genie" }).click();
+    await page.getByRole("button", { name: "Confirm" }).click();
+    await expect(page.getByText("System assigned.")).toBeVisible({
+      timeout: 10_000,
+    });
+  }
+  await expect(page.getByTestId("active-system-card")).toContainText("Genie");
 }
 
 async function graphql<T>(

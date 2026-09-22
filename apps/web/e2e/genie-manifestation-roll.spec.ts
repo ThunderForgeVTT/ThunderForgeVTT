@@ -104,16 +104,25 @@ test.describe("Spec 018 Scenario 1: the Manifestation roll exercises keep/drop +
       `E2E Genie System ${uniqueSuffix()}`,
     );
 
-    // Genie is now the server-side default (prepare_world_input,
-    // src/server/src/graphql/helpers.rs) for a world created with no
-    // system explicitly selected — a fresh world here already has one
-    // assigned. Re-picking Genie itself exercises the "review the legal
-    // notice before confirming" flow this test is actually about, without
-    // dragging in a second ruleset it does not care about. (Spec 021 used to
-    // have a stronger reason — every other pack was "(TBD)" and disabled —
-    // which spec 032 removed by giving every bundled pack a sheet.)
+    // Genie is the server-side default (prepare_world_input,
+    // src/server/src/graphql/helpers.rs) for a world created with no system
+    // selected, and re-picking the running system asks nothing (8339da8). So
+    // the world is moved to 5E through the API first — it is empty, so no
+    // acknowledgement is needed — and the "review the legal notice before
+    // confirming" flow this test is about is then walked in the UI, for Genie.
+    const moved = await graphql<{ errors?: unknown[] }>(
+      page,
+      `mutation U($input: UpdateWorldGameSystemInput!) {
+        updateWorldGameSystem(input: $input) { id gameSystemId }
+      }`,
+      { input: { worldId, gameSystemId: "dnd5e" } },
+    );
+    expect(moved.errors, "an empty world moves to 5E unasked").toBeUndefined();
     await page.goto(`/world/${worldId}/settings/system`);
-    await expect(page.getByTestId("active-system-card")).toContainText("Genie");
+    await expect(page.getByTestId("active-system-card")).not.toContainText(
+      "Genie",
+      { timeout: 10_000 },
+    );
 
     await page.getByTestId("system-picker").click();
     await page.getByRole("option", { name: "Genie", exact: true }).click();
@@ -154,13 +163,14 @@ test.describe("Spec 018 Scenario 1: the Manifestation roll exercises keep/drop +
     // Assign Genie as the world's system first (Scenario setup — not
     // strictly required by rollDice, which is system-agnostic, but keeps
     // this test's world in the state quickstart.md Scenario 1 describes).
+    // A new world already runs Genie (the server default), and re-picking the
+    // running system asks nothing (8339da8), so this confirms it rather than
+    // waiting for a confirmation that never comes.
     await page.goto(`/world/${worldId}/settings/system`);
-    await page.getByTestId("system-picker").click();
-    await page.getByRole("option", { name: "genie" }).click();
-    await page.getByRole("button", { name: "Confirm" }).click();
-    await expect(page.getByText("System assigned.")).toBeVisible({
-      timeout: 10_000,
-    });
+    await expect(page.getByTestId("active-system-card")).toContainText(
+      "Genie",
+      { timeout: 15_000 },
+    );
 
     await page.goto(`/world/${worldId}/staging`);
     await page.getByTestId("play-button").click();
