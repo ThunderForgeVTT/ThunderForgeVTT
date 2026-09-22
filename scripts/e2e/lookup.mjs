@@ -34,6 +34,11 @@ export const NO_E2E_GLOBS = [
   "**/*.md",
   ".specify/**",
   "marketing/**",
+  // The timing files a run writes about itself. They are measurements, not
+  // behaviour, so a change in one proves nothing and needs proving by nothing.
+  ".e2e-shards-durations.json",
+  ".e2e-shards-durations.local.json",
+  "scripts/e2e/slice-durations.json",
 ];
 
 /**

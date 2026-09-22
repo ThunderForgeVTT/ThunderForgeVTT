@@ -184,6 +184,16 @@ describe("lookupPaths", () => {
     assert.match(formatLookup(result), /Run: nothing — no e2e needed/);
   });
 
+  test("a run's own timing files need no e2e", () => {
+    const result = lookupPaths(
+      ["scripts/e2e/slice-durations.json", ".e2e-shards-durations.json"],
+      LIST,
+    );
+    assert.deepEqual(result.uncovered, []);
+    assert.equal(exitCodeFor(result), 0);
+    assert.match(formatLookup(result), /Run: nothing — no e2e needed/);
+  });
+
   test("a spec reads as owner and neighbours in the report", () => {
     const result = lookupPaths(["apps/web/e2e/status-display.spec.ts"], LIST);
     assert.match(
