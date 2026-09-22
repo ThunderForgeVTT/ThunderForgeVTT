@@ -284,7 +284,9 @@ test("a legendary creature acts between turns, and a lair takes 20", async ({
           board
             .getByTestId("combatant-row")
             .filter({ hasText: LAIR })
-            .locator("span")
+            // The first visible span: a lair has no look-at target, so its row
+            // opens with an empty aria-hidden spacer that keeps rows aligned.
+            .locator("span:not([aria-hidden])")
             .first(),
           `${who} reads the lair at 20`,
         ).toHaveText("20");
