@@ -55,11 +55,13 @@ async function addAnAbility(page: Page, worldId: string): Promise<void> {
   await expect(page.getByTestId("ability-type-tabs")).toBeVisible({
     timeout: 20_000,
   });
-  await page
-    .getByTestId("new-ability-name-input")
-    .fill(`Ward ${uniqueSuffix()}`);
+  const name = `Ward ${uniqueSuffix()}`;
+  await page.getByTestId("new-ability-name-input").fill(name);
   await page.getByTestId("add-ability-button").click();
-  await expect(page.getByTestId("ability-catalog-table")).toBeVisible({
+  // The ability's own row, not just the table: from the second ability on
+  // the table is already there, and a caller that reads the world's content
+  // next (the stale-digest check) must not run before this one is saved.
+  await expect(page.getByTestId("ability-catalog-table")).toContainText(name, {
     timeout: 15_000,
   });
 }
