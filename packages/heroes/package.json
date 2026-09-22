@@ -12,7 +12,8 @@
     "test": "node --test src/*.test.ts",
     "typecheck": "tsc --noEmit",
     "check": "tsc --noEmit && node --test src/*.test.ts",
-    "export": "node src/cli.ts"
+    "export": "node src/cli.ts",
+    "schema": "node src/writeSchema.ts"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",

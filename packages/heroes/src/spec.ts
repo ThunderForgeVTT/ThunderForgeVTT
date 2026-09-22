@@ -219,8 +219,12 @@ export interface ResolvedHero {
 /** A hero as written: a name, and whatever else differs from the defaults. */
 export type HeroSpec = { name: string } & Partial<Omit<ResolvedHero, "name">>;
 
-const MAX_NAME = 80;
-const MAX_TITLE = 120;
+/** The longest name and title `validateHero` accepts, in UTF-16 code units
+ * (`String.length`). Exported so `HERO_SPEC_SCHEMA` states the same bounds
+ * rather than a copy of them. */
+export const HERO_TEXT_LIMITS = { name: 80, title: 120 } as const;
+const MAX_NAME = HERO_TEXT_LIMITS.name;
+const MAX_TITLE = HERO_TEXT_LIMITS.title;
 
 const ACCENT_BY_HEADGEAR: Partial<Record<Headgear, string>> = {
   helm: "#d94a4a",

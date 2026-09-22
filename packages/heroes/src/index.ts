@@ -59,6 +59,7 @@ export {
 export { randomHero, type RolledHero, type RollOptions } from "./random.ts";
 export { minimalSpec } from "./minimal.ts";
 export { presetSource } from "./presetSource.ts";
+export { HERO_SPEC_SCHEMA, heroSpecSchemaText } from "./schema.ts";
 export {
   BUILDS,
   EAR_SHAPES,
@@ -69,6 +70,7 @@ export {
   HERO_COLORS,
   HERO_FLAGS,
   HERO_PARTS,
+  HERO_TEXT_LIMITS,
   HeroSpecError,
   HIDES,
   MONSTER_TONES,

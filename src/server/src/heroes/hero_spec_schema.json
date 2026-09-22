@@ -1,0 +1,217 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "HeroSpec",
+  "description": "A hero as written: a name, and whatever else differs from the defaults. Generated from @thunderforge/heroes; do not edit by hand.",
+  "type": "object",
+  "required": [
+    "name"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "\\S",
+      "maxLength": 80
+    },
+    "title": {
+      "type": "string",
+      "pattern": "^$|\\S",
+      "maxLength": 120
+    },
+    "size": {
+      "type": "string",
+      "enum": [
+        "tiny",
+        "small",
+        "medium",
+        "large",
+        "huge",
+        "gargantuan"
+      ]
+    },
+    "ears": {
+      "type": "string",
+      "enum": [
+        "round",
+        "pointed"
+      ]
+    },
+    "mouth": {
+      "type": "string",
+      "enum": [
+        "smile",
+        "grin",
+        "smirk",
+        "snarl",
+        "gape"
+      ]
+    },
+    "hair": {
+      "type": "string",
+      "enum": [
+        "bald",
+        "short",
+        "long",
+        "braids",
+        "bun",
+        "spiky",
+        "curly"
+      ]
+    },
+    "headgear": {
+      "type": "string",
+      "enum": [
+        "none",
+        "helm",
+        "wizard",
+        "hood",
+        "circlet",
+        "horned",
+        "cap",
+        "leaves",
+        "headband",
+        "goggles",
+        "tiefling",
+        "crest",
+        "antlers",
+        "boneCrown"
+      ]
+    },
+    "emblem": {
+      "type": "string",
+      "enum": [
+        "none",
+        "sun",
+        "cross",
+        "gear"
+      ]
+    },
+    "prop": {
+      "type": "string",
+      "enum": [
+        "none",
+        "sword",
+        "staff",
+        "dagger",
+        "bow",
+        "lute",
+        "axe",
+        "vine",
+        "hammer",
+        "fists",
+        "flame",
+        "wrench",
+        "club",
+        "claws"
+      ]
+    },
+    "build": {
+      "type": "string",
+      "enum": [
+        "upright",
+        "hulking",
+        "hunched",
+        "sinuous"
+      ]
+    },
+    "muzzle": {
+      "type": "string",
+      "enum": [
+        "none",
+        "snout",
+        "maw",
+        "beak"
+      ]
+    },
+    "eyeStyle": {
+      "type": "string",
+      "enum": [
+        "round",
+        "slit",
+        "beady",
+        "hollow"
+      ]
+    },
+    "hide": {
+      "type": "string",
+      "enum": [
+        "none",
+        "scales",
+        "fur",
+        "bone",
+        "warts"
+      ]
+    },
+    "wings": {
+      "type": "string",
+      "enum": [
+        "none",
+        "bat",
+        "feathered"
+      ]
+    },
+    "tail": {
+      "type": "string",
+      "enum": [
+        "none",
+        "reptile",
+        "spiked",
+        "tuft"
+      ]
+    },
+    "skin": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "eyes": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "hairColor": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "beardColor": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "headgearColor": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "accent": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "outfit": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "trim": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "glow": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "ring": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "hideColor": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "wingColor": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "tusks": {
+      "type": "boolean"
+    },
+    "beard": {
+      "type": "boolean"
+    }
+  }
+}

@@ -1,0 +1,137 @@
+{
+  "fields": {
+    "name": "text",
+    "title": "text",
+    "size": "choice",
+    "ears": "choice",
+    "mouth": "choice",
+    "hair": "choice",
+    "headgear": "choice",
+    "emblem": "choice",
+    "prop": "choice",
+    "build": "choice",
+    "muzzle": "choice",
+    "eyeStyle": "choice",
+    "hide": "choice",
+    "wings": "choice",
+    "tail": "choice",
+    "skin": "colour",
+    "eyes": "colour",
+    "hairColor": "colour",
+    "beardColor": "colour",
+    "headgearColor": "colour",
+    "accent": "colour",
+    "outfit": "colour",
+    "trim": "colour",
+    "glow": "colour",
+    "ring": "colour",
+    "hideColor": "colour",
+    "wingColor": "colour",
+    "tusks": "flag",
+    "beard": "flag"
+  },
+  "choices": {
+    "size": [
+      "tiny",
+      "small",
+      "medium",
+      "large",
+      "huge",
+      "gargantuan"
+    ],
+    "ears": [
+      "round",
+      "pointed"
+    ],
+    "mouth": [
+      "smile",
+      "grin",
+      "smirk",
+      "snarl",
+      "gape"
+    ],
+    "hair": [
+      "bald",
+      "short",
+      "long",
+      "braids",
+      "bun",
+      "spiky",
+      "curly"
+    ],
+    "headgear": [
+      "none",
+      "helm",
+      "wizard",
+      "hood",
+      "circlet",
+      "horned",
+      "cap",
+      "leaves",
+      "headband",
+      "goggles",
+      "tiefling",
+      "crest",
+      "antlers",
+      "boneCrown"
+    ],
+    "emblem": [
+      "none",
+      "sun",
+      "cross",
+      "gear"
+    ],
+    "prop": [
+      "none",
+      "sword",
+      "staff",
+      "dagger",
+      "bow",
+      "lute",
+      "axe",
+      "vine",
+      "hammer",
+      "fists",
+      "flame",
+      "wrench",
+      "club",
+      "claws"
+    ],
+    "build": [
+      "upright",
+      "hulking",
+      "hunched",
+      "sinuous"
+    ],
+    "muzzle": [
+      "none",
+      "snout",
+      "maw",
+      "beak"
+    ],
+    "eyeStyle": [
+      "round",
+      "slit",
+      "beady",
+      "hollow"
+    ],
+    "hide": [
+      "none",
+      "scales",
+      "fur",
+      "bone",
+      "warts"
+    ],
+    "wings": [
+      "none",
+      "bat",
+      "feathered"
+    ],
+    "tail": [
+      "none",
+      "reptile",
+      "spiked",
+      "tuft"
+    ]
+  }
+}
