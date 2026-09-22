@@ -326,9 +326,13 @@ progress.
       "eight" if those counts are now wrong. Measure the step's time and
       confirm it is under 1 s.
       - 2026-09-22: added to `.hooks/pre-commit`; header counts corrected (verify has sixteen steps, pre-commit runs seven). `node scripts/verify.mjs --only=e2e-slices`: 0.30 s wall.
-- [ ] T024 [US3] Proof for US3. Run `pnpm verify` and confirm it is green
+- [X] T024 [US3] Proof for US3. Run `pnpm verify` and confirm it is green
       and includes `e2e slices`. Run the quickstart's scenario 2: orphan,
       fail, remove, pass. Record both under this task.
+      - 2026-09-22: `pnpm verify` green, 16 of 16 checks including `e2e slices`, in 29.8 s.
+        Scenario 2: copying `dice-roll.spec.ts` to `zz-orphan.spec.ts` gave exit 1 and
+        "apps/web/e2e/zz-orphan.spec.ts belongs to no slice — add it to "own" of a slice
+        in scripts/e2e/slices.json". Removing it gave exit 0, "181 specs in 27 slices, 0 orphans".
 
 **Checkpoint**: US3 is shippable. Slices cannot silently decay.
 
@@ -442,12 +446,16 @@ runs with no stack up.
       not an empty entry. Confirm check rule 7 covers a `standalone` whose
       package script does not exist.
       - 2026-09-22: hero-builder's lanes read `default +standalone`, and its detail has a `Standalone:` line that the other slices do not. The list tests pin both. Rule 7 is covered in `check.test.mjs`, both for a missing script and for a package outside the workspace.
-- [ ] T033 [US6] Proof for US6. With no stack running, run
+- [X] T033 [US6] Proof for US6. With no stack running, run
       `pnpm e2e:hero-builder:standalone`: 7 passed. Then break the
       standalone half on purpose with a throwaway failing assertion that is
       never committed, and run `pnpm e2e:hero-builder`. The integration half
       must never start, so no run lock is taken. Revert the assertion.
       Record the result under this task.
+      - 2026-09-22: standalone alone gave 7 passed in 43.6 s. With a throwaway
+        `expect(1).toBe(2)` test appended, `pnpm e2e:hero-builder` gave 7 passed and
+        1 failed, then exit 1; the integration half never ran and no `.e2e-running`
+        lock appeared. The spec was restored from a copy; the tree was clean after.
 
 ---
 
