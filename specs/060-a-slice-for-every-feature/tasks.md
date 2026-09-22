@@ -193,7 +193,7 @@ combat. On `src/app/schema.graphql` it answers FULL SUITE. On a docs file it
 answers "no e2e needed". On an unclaimed file it answers UNCOVERED and exits
 3. It answers in under 5 s.
 
-- [ ] T011 [US2] Fill `crossCutting` in `scripts/e2e/slices.json` with the
+- [X] T011 [US2] Fill `crossCutting` in `scripts/e2e/slices.json` with the
       initial set in [data-model.md](data-model.md#cross-cutting-rule),
       each with a `why`.
       - Confirm each glob against `git ls-files`: the real SDK bindings
@@ -202,7 +202,8 @@ answers "no e2e needed". On an unclaimed file it answers UNCOVERED and exits
       - `scripts/e2e/slices.json` and `scripts/e2e/slice-durations.json`
         are **not** cross-cutting, because editing the list is not a
         harness change.
-- [ ] T012 [P] [US2] Fill `paths` for the play-surface slices in
+      - 2026-09-22: 31 rules, every one matching tracked files. The SDK bindings are `apps/web/src/engine/sdk/**` (the `OUT_DIR` of `scripts/sdk-bindings.mjs`, 47 files) and shared UI is `apps/web/src/components/ui/**` (39). Beyond the data-model set: the world-store bridge, the router and app shell, the web build files, the server wiring (`lib`, `graphql`, `state`, `pubsub`, `world_events`, the subscription), `thunderforge-axum-auth-core` and `thunderforge-authz` (every sign-in and world-membership check), the demo and e2e seeds, and `scripts/shared.mjs` (it builds the engine for every run). The runner's modules are named one by one, not by extglob, because `check-e2e-slices.mjs`'s literal-head prefilter reads `!(` as literal text. `slices.json` and `slice-durations.json` stay out.
+- [X] T012 [P] [US2] Fill `paths` for the play-surface slices in
       `scripts/e2e/slices.json`:
       - slices: tokens, canvas, scenes, lighting, interactive, status,
         play-pause, combat;
@@ -211,17 +212,20 @@ answers "no e2e needed". On an unclaimed file it answers UNCOVERED and exits
       - derive each glob from the source directories and files those
         specs' features live in. Read the spec's `specs/NNN-*/plan.md`
         Project Structure section to find them.
-- [ ] T013 [P] [US2] Fill `paths` for the content slices: actors,
+      - 2026-09-22: tokens 25 globs, canvas 27, scenes 18, lighting 15, interactive 12, status 10, play-pause 13, combat 18. Every glob, and every brace alternative inside one, matches a tracked file.
+- [X] T013 [P] [US2] Fill `paths` for the content slices: actors,
       hero-builder, compendium, collections, book-import, lore, genie,
       game-systems, worlds, world-cache-core, world-cache. Same method as
       T012. Include `packs/**` and `packages/**` where a slice owns a
       package.
-- [ ] T014 [P] [US2] Fill `paths` for the platform slices: accounts,
+      - 2026-09-22: actors 25, hero-builder 8 (`packages/heroes/**`, `packages/hero-builder/**`, `apps/hero-builder/**`), compendium 13, collections 14, book-import 6, lore 18, genie 5 (`packs/systems/genie/**`), game-systems 16 (the other seven system packs, by name), worlds 28, world-cache-core 12, world-cache 17.
+- [X] T014 [P] [US2] Fill `paths` for the platform slices: accounts,
       instance, moderation, feedback, companion, engine-limits,
       engine-other, torture. Same method. The engine slices claim
       `src/engine/**` paths that the play-surface slices do not claim.
       Overlap between slices is allowed: several slices may claim one path.
-- [ ] T015 [US2] Implement the lookup in `scripts/e2e-slice.mjs which`,
+      - 2026-09-22: accounts 32, instance 23, moderation 14, feedback 11, companion 12, engine-limits 7, engine-other 16, torture 7. The engine slices claim the engine core, network and frame-trace paths; `examples/maps/**` goes to every slice whose specs load a map from it.
+- [X] T015 [US2] Implement the lookup in `scripts/e2e-slice.mjs which`,
       following [contracts/cli.md](contracts/cli.md) and research R5:
       - Inputs: `<path>…`, `--diff[=<base>]` (default `origin/main`, plus
         uncommitted and untracked files via `git status --porcelain`),
@@ -235,7 +239,8 @@ answers "no e2e needed". On an unclaimed file it answers UNCOVERED and exits
       - Exit codes are 0, 3 and 2.
       - One `git` call per input mode, so the whole lookup answers in under
         5 s.
-- [ ] T016 [P] [US2] Lookup tests in `scripts/e2e/__tests__/slices.test.mjs`,
+      - 2026-09-22: `scripts/e2e-slice.mjs`, with the pure logic in `scripts/e2e/lookup.mjs`. A rename in the diff contributes both paths, and a git failure exits 2. Timings: 3 typed paths take 0.06 s, `--diff=HEAD~10` 0.27 s, and all 2,900 tracked files 0.6 s. The whole-tree lookup took 20 s until each glob's literal prefix was compared first.
+- [X] T016 [P] [US2] Lookup tests in `scripts/e2e/__tests__/slices.test.mjs`,
       with the path list passed in and no git involved:
       - every answer kind;
       - precedence: a cross-cutting path that also matches a slice glob
@@ -243,11 +248,12 @@ answers "no e2e needed". On an unclaimed file it answers UNCOVERED and exits
       - a spec file answers its owner plus its borrowers;
       - union deduplication;
       - exit code 3 when anything is uncovered.
+      - 2026-09-22: in a new file, `scripts/e2e/__tests__/lookup.test.mjs`, so the slice-list tests stay about the list. 15 tests, and `pnpm test:scripts` passes 85/85.
 - [X] T017 [US2] Add root scripts `"e2e:which": "node ./scripts/e2e-slice.mjs which"`
       and `"e2e:slices": "node ./scripts/e2e-slice.mjs list"`. `list` is a
       stub until T026.
       - 2026-09-22: both added, after the slice scripts, so every `e2e:*` script stays in one block.
-- [ ] T018 [US2] Triage what is still uncovered. Run
+- [X] T018 [US2] Triage what is still uncovered. Run
       `git ls-files | xargs node scripts/e2e-slice.mjs which --json`, then
       take every `uncovered` source path and do one of two things:
       - give it to a slice's `paths`, when a slice's specs do exercise it;
@@ -257,6 +263,15 @@ answers "no e2e needed". On an unclaimed file it answers UNCOVERED and exits
 
       The lookup keeps reporting them as UNCOVERED. That is the honest
       answer (FR-012), and it is not hidden by widening the no-e2e rule.
+      - 2026-09-22: of 2,885 tracked files, 181 are specs, 503 are cross-cutting, 1,432 are claimed by a slice, 618 need no e2e, and 151 are uncovered. This was run through `lookupPaths` in one process, because `xargs` splits the list into several `--json` documents. Three files were given away: the demo and e2e seeds and `thunderforge-authz` became cross-cutting, and `adoption_surface_tests.rs` went to moderation. The rest stay uncovered on purpose:
+        - **Root manifests** (`package.json`, `Cargo.toml`, `pnpm-workspace.yaml`, `tsconfig.json`): a dependency change shows in the cross-cutting lockfiles, and a script change is proven by what the script runs.
+        - **Slice tooling that is not the runner**: `scripts/e2e-slice.mjs`, `scripts/e2e/{lookup,list}.mjs`, `scripts/check-e2e-slices.mjs`, `scripts/e2e/__tests__/**`, `scripts/e2e/slices.json` and `.e2e-shards-durations.json`. These are proven by `pnpm test:scripts` and the verify check.
+        - **Verify checks and generators** (`scripts/check-*.mjs`, `check-file-length.sh`, `verify.mjs`, `sdk-bindings.mjs`, `src/app/src/bin/print_schema.rs`): proven by `pnpm verify`.
+        - **Dev, build and repo tooling**: `scripts/{dev,build,clean-builds,install-hooks,test-db,cleanup-dev-test-rows,bench-blob-store,marketing-metrics,e2e-flakes}.mjs`, `.hooks/**`, `Makefile`, `clippy.toml`, `.cargo/**`, both `diesel.toml`, `compose.yml`, `.env.example`, `.github/**`, `.vscode/**`, `.claude/**`, the dotfiles, the web lint, test and type config (`eslint.config.mjs`, `vitest.config.ts`, `components.json`, `vite-env.d.ts`, `e2e/runtime-modules.d.ts`), the LICENSE files and `assets/**`. No browser loads them.
+        - **Other harnesses**: journeys (`apps/web/e2e/journeys/**`, `playwright.journeys.config.ts`, `compose.journeys.yml`, `scripts/journeys.mjs`), the playtest (`apps/web/playtest/**`, `playwright.playtest.config.ts`) and `apps/engine-sandbox/**`. Each has its own runner.
+        - **Rust no spec reaches**: `crates/thunderforge-crucible/**` (wired into `AppState`, but no request calls the adjudicator yet, so `cargo test` proves it), `src/server/src/test_support.rs`, `src/server/src/utils/mod.rs` (empty), `src/server/src/errors/mod.rs` (the API's 404 fallback), the cargo examples in `src/server/examples/**` and `src/app/examples/**`, and diesel's `.diesel_lock` and `.keep` (dotfiles, which `**` does not match).
+        - **Web files no spec visits**: `pages/not-found/NotFoundPage.tsx`, the SEO files (`public/{robots.txt,sitemap.xml,social-card.svg,brand-mark.svg}`, `scripts/generate-seo-files.mjs`), `public/bench/**`, and the vitest-only `api/__tests__/graphqlClient.test.ts`.
+        - **`examples/space/**`**: art that no spec, seed or script loads.
 
 **Checkpoint**: US2 is shippable. The quickstart's scenario 3 passes.
 
@@ -341,7 +356,7 @@ with over-target and over-limit flags.
       Keys are sorted, with two-space indentation and a trailing newline.
       The existing per-spec `recordDurations` behaviour is unchanged.
       - 2026-09-22: `scripts/e2e/slice-durations.mjs` exports `readSliceDurations(root = ROOT_DIR)` → the parsed file, or `{}` when it is missing (a corrupt file throws); `recordSliceDuration(file, name, record)` (merges, sorts slice names, writes fields in the contract's order, two spaces, trailing newline, via temp file + rename); `measuredCommit(root)` (short SHA, `-dirty` when `git status --porcelain` is non-empty, `null` outside git); `measuredDate(date)` (local `YYYY-MM-DD`); `SLICE_DURATIONS_FILE`, `RECORD_FIELDS`. The runner takes the clock and the commit when the lock is acquired and writes the record right after `e2e-summary.json`, with counts from that summary's totals and `specs` = the resolved list's length. A red or crashed run is recorded; a signal-interrupted one (exit 130) is not, since it measures the Ctrl-C rather than the slice. Unit-tested in `runner.test.mjs`. No `slice-durations.json` is committed; the first recorded run creates it.
-- [ ] T026 [US4] Implement `scripts/e2e-slice.mjs list [<name>] [--json]`
+- [X] T026 [US4] Implement `scripts/e2e-slice.mjs list [<name>] [--json]`
       per [contracts/cli.md](contracts/cli.md):
       - one row per slice: specs, own, neighbours, lanes, time, measured
         date and commit;
@@ -353,10 +368,12 @@ with over-target and over-limit flags.
         unlabelled (FR-016);
       - totals appear in a footer;
       - `list <name>` prints the full detail described in the contract.
-- [ ] T027 [P] [US4] State tests in `scripts/e2e/__tests__/slices.test.mjs`:
+      - 2026-09-22: `scripts/e2e/list.mjs`, reading measurements through `readSliceDurations`. It prints 27 rows in 0.11 s, all "not measured" with `est.` times. `list <name>` shows ownership (exact or prefix), neighbours with their seams, paths and run lines, and an unknown name exits 2.
+- [X] T027 [P] [US4] State tests in `scripts/e2e/__tests__/slices.test.mjs`:
       - the boundaries at 600 s and 720 s;
       - `red` taking precedence over time;
       - a slice that has not been measured shows `est.`.
+      - 2026-09-22: in a new file, `scripts/e2e/__tests__/list.test.mjs`. 600 s and 720 s count as within the target and within the limit, red beats any time, an unmeasured slice shows `est.`, and gaps show as `*`. 11 tests.
 - [ ] T028 [US4] Proof for US4. Run
       `pnpm e2e:lore:integration -- --record-durations` alone, then
       `pnpm e2e:slices`. Confirm the lore row is dated and every other row
@@ -419,11 +436,12 @@ the listing.
 command. Every other slice shows none. `pnpm e2e:hero-builder:standalone`
 runs with no stack up.
 
-- [ ] T032 [US6] Make sure `list` shows the `standalone` command in the
+- [X] T032 [US6] Make sure `list` shows the `standalone` command in the
       slice detail. In the table, mark slices that have one, for example
       `+standalone` in the lanes column. Slices without one show nothing,
       not an empty entry. Confirm check rule 7 covers a `standalone` whose
       package script does not exist.
+      - 2026-09-22: hero-builder's lanes read `default +standalone`, and its detail has a `Standalone:` line that the other slices do not. The list tests pin both. Rule 7 is covered in `check.test.mjs`, both for a missing script and for a package outside the workspace.
 - [ ] T033 [US6] Proof for US6. With no stack running, run
       `pnpm e2e:hero-builder:standalone`: 7 passed. Then break the
       standalone half on purpose with a throwaway failing assertion that is
