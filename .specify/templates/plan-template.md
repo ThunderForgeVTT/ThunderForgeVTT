@@ -42,6 +42,16 @@
 
 [Gates determined based on constitution file]
 
+This item is required in every plan, whatever else the gates above yield:
+
+- **VI. Every feature is proven by its own slice** — the slice's name
+  (`<slice>`, run as `pnpm e2e:<slice>`); its own specs; for each existing
+  surface this feature changes, the neighbouring specs that cross that seam
+  (see `pnpm e2e:which --diff`); and whether a standalone half exists
+  (`e2e:<slice>:standalone`). A change that is cross-cutting (the schema,
+  auth, the harness, shared UI primitives) says so here, because its proof
+  is the full suite.
+
 ## Project Structure
 
 ### Documentation (this feature)
@@ -102,6 +112,11 @@ ios/ or android/
 
 **Structure Decision**: [Document the selected structure and reference the real
 directories captured above]
+
+**Slice**: `scripts/e2e/slices.json` gains this feature's entry, or extends
+an existing one (own prefix, neighbours with their seams, `paths`), and the
+root `package.json` gains or keeps its `e2e:<slice>` scripts. List both in
+the tree above.
 
 ## Complexity Tracking
 

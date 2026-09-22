@@ -358,7 +358,7 @@ with over-target and over-limit flags.
 **Independent test**: The quickstart's scenario 7. The two templates
 contain the Principle VI Constitution Check item and the slice tasks.
 
-- [ ] T029 [P] [US5] Edit `.specify/templates/plan-template.md`, the core
+- [X] T029 [P] [US5] Edit `.specify/templates/plan-template.md`, the core
       template, following the precedent of commit 462bd7e:
       - Under Constitution Check, add a required item: "**VI. Every feature
         is proven by its own slice** — the slice's name; its own specs; for
@@ -367,16 +367,33 @@ contain the Principle VI Constitution Check item and the slice tasks.
         standalone half exists."
       - In Project Structure, note that `scripts/e2e/slices.json` gains or
         extends this feature's entry.
-- [ ] T030 [P] [US5] Edit `.specify/templates/tasks-template.md`:
+      - 2026-09-22: Done. The item follows the constitution gates, marked
+        required in every plan, uses `<slice>` placeholders, and asks a
+        cross-cutting change to say so (its proof is the full suite). A
+        **Slice** note follows the Structure Decision.
+- [X] T030 [P] [US5] Edit `.specify/templates/tasks-template.md`:
       - In Phase 1, add
         `- [ ] TXXX Add or extend this feature's slice in scripts/e2e/slices.json (own prefix, neighbours with their seams, paths) and its e2e:<slice> scripts; pnpm verify's e2e-slices check must pass`.
       - Before the `pnpm verify` task in the final phase, add
         `- [ ] TXXX Proof: run pnpm e2e:<slice> alone with --record-durations, grep the log for ✘, and record the result and wall time here. The full suite is for releases and cross-cutting changes (pnpm e2e:which says which)`.
-- [ ] T031 [US5] Proof for US5. Run the quickstart's scenario 7 `grep`, and
+      - 2026-09-22: Done, both lines verbatim: the first after T003 in
+        Phase 1, the second between the quickstart validation and
+        `pnpm verify` in Phase N.
+- [X] T031 [US5] Proof for US5. Run the quickstart's scenario 7 `grep`, and
       confirm both templates still render as valid Spec Kit templates.
       `setup-plan.sh` and `setup-tasks.sh` should copy and read them without
       error in a dry run on a scratch feature directory, which is then
       deleted without being committed.
+      - 2026-09-22: Green. The scenario 7 grep finds the item in the plan
+        template (lines 47–51, and the Slice note at 116) and both tasks in
+        the tasks template (lines 55 and 161). With `.specify/feature.json`
+        pointed at a scratch `specs/999-scratch-template-check` holding only
+        a stub spec.md, `setup-plan.sh --json` exited 0 and copied the plan
+        template, and the copy holds both additions; `setup-tasks.sh --json`
+        exited 0, resolved the core tasks template, and its
+        TASKS_TEMPLATE_CONTENT holds both new tasks. The scratch directory
+        was deleted, no branch was created, and feature.json was restored
+        byte for byte (same sha256).
 
 ---
 

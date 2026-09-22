@@ -52,6 +52,7 @@ description: "Task list template for feature implementation"
 - [ ] T001 Create project structure per implementation plan
 - [ ] T002 Initialize [language] project with [framework] dependencies
 - [ ] T003 [P] Configure linting and formatting tools
+- [ ] TXXX Add or extend this feature's slice in scripts/e2e/slices.json (own prefix, neighbours with their seams, paths) and its e2e:<slice> scripts; pnpm verify's e2e-slices check must pass
 
 ---
 
@@ -157,6 +158,7 @@ Examples of foundational tasks (adjust based on your project):
 - [ ] TXXX [P] Additional unit tests (if requested) in tests/unit/
 - [ ] TXXX Security hardening
 - [ ] TXXX Run quickstart.md validation
+- [ ] TXXX Proof: run pnpm e2e:<slice> alone with --record-durations, grep the log for ✘, and record the result and wall time here. The full suite is for releases and cross-cutting changes (pnpm e2e:which says which)
 - [ ] TXXX Run `pnpm verify` (rustfmt, clippy, prettier, eslint) and fix what
       it reports **in the code this feature added**. Keep it to that: a
       repo-wide lint remediation folded into a feature phase buries the
