@@ -127,24 +127,44 @@ async function addTokens(
       // coincident sprites is not the same rendering problem as a populated
       // map — overdraw, culling and the shadow pass all behave differently.
       const side = Math.ceil(Math.sqrt(howMany + offset));
+      // Hundreds of requests in a row, so a single dropped connection — the
+      // browser aborts every request in flight when the host's network
+      // changes, which a container host does several times a minute — would
+      // end the run before the measurement began. A transport failure is
+      // retried; a refusal from the server is not, and still fails below.
+      const post = async (body: string) => {
+        let last: unknown;
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          try {
+            return await fetch("/api/graphql", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: {
+                "Content-Type": "application/json",
+                ...(csrf ? { "x-csrf-token": csrf } : {}),
+              },
+              body,
+            });
+          } catch (error) {
+            last = error;
+            await new Promise((resolve) => setTimeout(resolve, 250));
+          }
+        }
+        throw last;
+      };
+
       const create = async (i: number) => {
         const n = i + offset;
         const x = ((n % side) - side / 2) * 140;
         const y = (Math.floor(n / side) - side / 2) * 140;
-        const res = await fetch("/api/graphql", {
-          method: "POST",
-          credentials: "same-origin",
-          headers: {
-            "Content-Type": "application/json",
-            ...(csrf ? { "x-csrf-token": csrf } : {}),
-          },
-          body: JSON.stringify({
+        const res = await post(
+          JSON.stringify({
             query: `mutation ($input: GraphQLCreateTokenInput!) {
               createToken(input: $input) { tokenId }
             }`,
             variables: { input: { sceneId: scene, x, y } },
           }),
-        });
+        );
         const body = await res.json();
         if (body.errors) {
           throw new Error(`createToken failed: ${JSON.stringify(body.errors)}`);
