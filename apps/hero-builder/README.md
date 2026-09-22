@@ -16,10 +16,15 @@ app, the fault is in the dialog around it.
 
 ## Run it
 
+It needs no stack: no `make dev`, no Postgres, no RustFS, no Rust server. A
+`pnpm install` at the repository root is enough; the two packages it uses are
+read from source, so there is nothing to build first.
+
 ```bash
-pnpm -F @thunderforge/hero-builder-app dev       # http://127.0.0.1:5190
-pnpm -F @thunderforge/hero-builder-app build
-pnpm -F @thunderforge/hero-builder-app preview   # http://127.0.0.1:5191
+pnpm -F @thunderforge/hero-builder-app dev        # http://127.0.0.1:5190
+pnpm -F @thunderforge/hero-builder-app build      # into dist/
+pnpm -F @thunderforge/hero-builder-app preview    # the build, http://127.0.0.1:5191
+pnpm -F @thunderforge/hero-builder-app typecheck
 ```
 
 The ports are strict; set `HERO_BUILDER_PORT` or `HERO_BUILDER_PREVIEW_PORT`
@@ -35,6 +40,26 @@ to move them.
 - **Import** a spec, pasted or from a file. A spec with problems is refused
   whole, and every problem is named. Drawings cannot be imported.
 - **Copy as preset**: a `presets.ts` entry on the clipboard, ready to paste.
+
+## Where the looks live
+
+The page draws nothing of its own. Everything it offers comes from the
+catalogue in `packages/heroes/src`, so tuning a look means editing there and
+reloading this page:
+
+| File | What it holds |
+|---|---|
+| `spec.ts` | Every field and choice a hero has |
+| `parts.ts` | How each choice is drawn |
+| `palettes.ts` | The swatches offered, and the only colours the dice pick |
+| `labels.ts` | What a person reads for each field and choice |
+| `races.ts` | Race looks: aliases, the choices and swatches a race narrows the dice to, and `matchRace` |
+| `presets.ts` | `PRESET_HEROES`, the "Start from" list |
+
+In the web app, the race that narrows the dice is read from the sheet field a
+system names in its manifest's `appearance.race.source` (see
+[`packs/systems/README.md`](../../packs/systems/README.md#appearance)) and
+matched to a key or alias here.
 
 ## Test it
 

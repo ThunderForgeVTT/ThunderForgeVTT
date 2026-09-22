@@ -34,6 +34,17 @@ make test-rust      # cargo test (ARGS="-p thunderforge-server --lib settings")
 pnpm verify         # formatting and lint, both languages
 ```
 
+### Standalone harnesses
+
+Two pages run without the stack: no `make dev`, no database, no server, no
+login. Reach for them before the full app when the work is in their part.
+
+- [`apps/engine-sandbox`](../apps/engine-sandbox/README.md): the wasm engine
+  on a canvas with example maps (`pnpm -F @thunderforge/engine-sandbox dev`).
+- [`apps/hero-builder`](../apps/hero-builder/README.md): the hero builder on a
+  page of its own, for tuning looks and race-aware dice in `packages/heroes`
+  (`pnpm -F @thunderforge/hero-builder-app dev`). It needs no stack at all.
+
 ### The test database
 
 `cargo test` never touches the development database. Database-backed tests use

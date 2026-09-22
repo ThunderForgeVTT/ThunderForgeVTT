@@ -298,6 +298,23 @@ These are the rules the product enforces on a declaration, at install time:
 D&D 5e declares `hitPoints` today. The rest of its block arrives with the
 spec 046 phases that read it.
 
+### `appearance`
+
+Where a creature's race is written, so the hero builder can roll a face
+narrowed to it (spec 044). It is read the way `combat.sizes.source` is.
+
+```json
+"appearance": { "race": { "source": { "slot": "traitData", "field": "race" } } }
+```
+
+- **`race.source`** names a `slot` and a field your `data_types` declares; a
+  name it does not declare is refused at install, as M2 refuses one in
+  `combat`. The field's free text is matched, trimmed and ignoring case,
+  against the race keys and aliases in `packages/heroes/src/races.ts`
+  ("High Elf" is an elf); text that matches none rolls as any race.
+- The race narrows a roll only. Nothing writes it back to the sheet.
+- A system with no races declares nothing, and its creatures roll as any race.
+
 ### `checks`
 
 ```json
