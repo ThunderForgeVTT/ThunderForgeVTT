@@ -32,13 +32,14 @@
  * # Cost, and what the hooks make of it
  *
  * This was written expecting to be cheap enough to run before every commit.
- * Measured, it is two things rather than one. rustfmt, prettier and the two
- * node checkers read files and exit — about 3.6s together, and that number
- * does not move. clippy and eslint compile, so they are sub-second on a warm
- * tree and minutes after a rebase or a change to a widely-included header.
+ * Measured, it is two things rather than one. rustfmt, prettier, the node
+ * checkers and the file-length script read files and exit — a few seconds
+ * together, and that number does not move. clippy, eslint and the compiled
+ * checks are sub-second on a warm tree and minutes after a rebase or a change
+ * to a widely-included header.
  *
- * So `.hooks/pre-commit` runs the flat-cost four by id and `.hooks/pre-push`
- * runs all eight. The point of the split is not that the compiled checks
+ * So `.hooks/pre-commit` runs the flat-cost seven by id and `.hooks/pre-push`
+ * runs all sixteen. The point of the split is not that the compiled checks
  * matter less; it is that a hook with an unbounded worst case teaches people
  * to pass `--no-verify`, and a gate that is routinely bypassed gates nothing.
  */
@@ -277,6 +278,24 @@ const steps = [
     name: "file length",
     cwd: ".",
     command: ["./scripts/check-file-length.sh"],
+  },
+  {
+    // Spec 060, FR-013. Principle VI says a change is proven by its feature's
+    // slice, and a slice is only as good as its list: a spec committed without
+    // an owner is a spec no slice run ever executes, and nothing says so,
+    // because the full suite still runs it. This fails on that orphan, on an
+    // entry or glob that stopped matching after a rename, and on a slice
+    // script in `package.json` that drifted from its name.
+    //
+    // Reads a few JSON files and `git ls-files`, so it runs on every commit.
+    // `--fix` rewrites only the slice scripts; which slice a spec belongs to
+    // is a judgement about the feature, and no script has it.
+    id: "e2e-slices",
+    name: "e2e slices",
+    cwd: ".",
+    command: fix
+      ? ["node", "./scripts/check-e2e-slices.mjs", "--fix"]
+      : ["node", "./scripts/check-e2e-slices.mjs"],
   },
 ];
 

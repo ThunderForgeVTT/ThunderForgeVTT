@@ -272,7 +272,7 @@ or drifted scripts.
 the copy and it exits 0 in under 1 s. Do this only with no e2e run in
 progress.
 
-- [ ] T019 [US3] Implement `scripts/check-e2e-slices.mjs` with rules 1–9
+- [X] T019 [US3] Implement `scripts/check-e2e-slices.mjs` with rules 1–9
       from [research R7](research.md#r7-the-coverage-check):
       - rule 4 reads `git ls-files` once;
       - rule 9 treats a missing `slice-durations.json` as empty;
@@ -282,11 +282,13 @@ progress.
         `node --test scripts/e2e/__tests__`.
 
       Exit 1 on any failure.
-- [ ] T020 [US3] Add `--fix` to `scripts/check-e2e-slices.mjs`. It rewrites
+      - 2026-09-22: `checkSlices({document, specFiles, trackedFiles, packageJson, sliceDurations, workspacePackages})` is pure; the CLI reads `git ls-files` once and durations through `readSliceDurations`. Real tree: `e2e slices: 181 specs in 27 slices, 0 orphans`, then the script tests; 0.28 s wall in total.
+- [X] T020 [US3] Add `--fix` to `scripts/check-e2e-slices.mjs`. It rewrites
       only the `e2e:<slice>*` scripts in root `package.json` to canonical
       form (rule 6), preserving the order and formatting of every other
       key. It never edits `slices.json`.
-- [ ] T021 [P] [US3] Checker tests in `scripts/e2e/__tests__/check.test.mjs`,
+      - 2026-09-22: `fixPackageJson(text, slices)`: corrects bodies, drops scripts of slices that are gone, inserts missing ones beside their slice in sorted order, re-serialises with the file's own indent (round-trips byte for byte). `e2e:slices`/`e2e:which` are left alone.
+- [X] T021 [P] [US3] Checker tests in `scripts/e2e/__tests__/check.test.mjs`,
       one fixture per rule, each asserting the failure message: an orphan;
       a missing neighbour; a dead prefix; a dead glob; a tie; a missing,
       extra and non-canonical script; a missing standalone script; a bad
@@ -295,17 +297,20 @@ progress.
       possible, the checker takes its inputs (the list, spec files,
       tracked files, `package.json`) as arguments, with a thin CLI wrapper
       on top.
-- [ ] T022 [US3] Register the check in `scripts/verify.mjs`:
+      - 2026-09-22: 25 tests, all green: one per rule (orphan; missing own name, missing neighbour, self-neighbour; dead prefix; dead paths and cross-cutting globs; tie; missing, extra, non-canonical and reserved scripts; standalone script and package; non-kebab and reserved names; stale duration), `parsePnpmCommand`, and `--fix` (canonical, unrelated keys untouched, byte-identical when clean, insertion order).
+- [X] T022 [US3] Register the check in `scripts/verify.mjs`:
       - id `e2e-slices`, name "e2e slices", command
         `["node", "./scripts/check-e2e-slices.mjs"]`;
       - `--fix` maps to `--fix`;
       - write a comment in the style of the neighbouring steps saying why
         it exists (Principle VI, FR-013).
-- [ ] T023 [US3] Add `e2e-slices` to the `--only=` id list in
+      - 2026-09-22: step `e2e-slices` registered last in `scripts/verify.mjs`; `--fix` passes `--fix`.
+- [X] T023 [US3] Add `e2e-slices` to the `--only=` id list in
       `.hooks/pre-commit` (line 34). Update the header comment in
       `scripts/verify.mjs` that counts "the flat-cost four" and the pre-push
       "eight" if those counts are now wrong. Measure the step's time and
       confirm it is under 1 s.
+      - 2026-09-22: added to `.hooks/pre-commit`; header counts corrected (verify has sixteen steps, pre-commit runs seven). `node scripts/verify.mjs --only=e2e-slices`: 0.30 s wall.
 - [ ] T024 [US3] Proof for US3. Run `pnpm verify` and confirm it is green
       and includes `e2e slices`. Run the quickstart's scenario 2: orphan,
       fail, remove, pass. Record both under this task.
@@ -430,7 +435,7 @@ runs with no stack up.
 
 ## Phase 9: Polish, and this feature's proof
 
-- [ ] T034 [P] Add a "Proving a change" section to `docs/CONTRIBUTING.md`,
+- [X] T034 [P] Add a "Proving a change" section to `docs/CONTRIBUTING.md`,
       beside the "Standalone harnesses" section. Cover:
       - `pnpm e2e:which --diff`, then `pnpm e2e:<slice>`;
       - when the full suite is the gate, which is any cross-cutting path;
@@ -438,6 +443,7 @@ runs with no stack up.
       - what the verify check says when you forget.
 
       Link ADR-107 and Principle VI.
+      - 2026-09-22: "Proving a change" added after "Standalone harnesses", linking Principle VI and ADR-107.
 - [ ] T035 **The proof (FR-016, FR-017, SC-002, SC-005).** Run every slice's
       integration half once, one at a time, with nothing else running:
       `pnpm e2e:<slice>:integration -- --record-durations`. Use the loop in
