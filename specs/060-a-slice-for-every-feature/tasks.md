@@ -106,7 +106,7 @@ task reads the list through `scripts/e2e/slices.mjs` and never parses
       - an unknown key is rejected;
       - an unsorted list is rejected.
       - 2026-09-22: 19 tests, 19 pass (`pnpm test:scripts`). Beyond the list above: a tie below an exact winner is not a tie, every path spelling gets the same owner, a missing neighbour throws, duplicate/non-kebab/reserved names are rejected, `loadSlices` reads a temp root and rejects bad JSON, `sliceLanes` covers all four lanes, and `matchPath` crosses directories with `**`.
-- [ ] T006 Author `scripts/e2e/slices.json` with the 27 slices in
+- [X] T006 Author `scripts/e2e/slices.json` with the 27 slices in
       [research.md R8](research.md#r8-the-slice-grouping).
       - For each slice: `name`, `summary` (naming its `specs/NNN-*`
         directories), `own` and `neighbours` (each with a `seam` sentence
@@ -121,6 +121,7 @@ task reads the list through `scripts/e2e/slices.mjs` and never parses
         named in its slice's `summary`: `scene-lighting` and
         `interactive-lighting` go to lighting, `scene-preload` to
         world-cache.
+      - 2026-09-22: 27 slices, 181 specs, 181 owned, no orphans, no ties, every `own` entry wins at least one spec, every neighbour exists and is owned by another slice (checked with `ownershipOf` and `resolveSlice` over `allSpecFiles()`). Owned / neighbours / resolved: accounts 13/0/13, actors 9/2/11, book-import 3/1/4, canvas 8/1/9, collections 13/0/13, combat 11/2/13, companion 5/1/6, compendium 4/1/5, engine-limits 2/0/2, engine-other 4/0/4, feedback 6/0/6, game-systems 3/1/4, genie 14/1/15, hero-builder 3/1/4, instance 9/0/9, interactive 7/2/9, lighting 5/1/6, lore 2/0/2, moderation 5/1/6, play-pause 5/2/7, scenes 8/1/9, status 8/1/9, tokens 8/2/10, torture 7/0/7, world-cache 8/0/8, world-cache-core 4/0/4, worlds 7/0/7. Where R8 lists names, a prefix is used when it selects exactly those files, so a new spec joins without an edit: `lore-`, `canvas-` (which covers `canvas-authoring`, so it needs no exact entry), `world-cache` (the four core specs win by exact name) and `engine-` for engine-other (engine-limits' two win by exact name). R8's "`actor-` (6)" is five files today; actors owns 9, not 10. Seams are R8's parentheticals written out as sentences. canvas and engine-other include measured-lane specs; instance spans the default, first-run and GitHub-apps lanes; lore includes the GitHub-apps lane.
 
 **Checkpoint**: `node --test scripts/e2e/__tests__` is green, and the list
 resolves every spec to one owner.

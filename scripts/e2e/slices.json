@@ -1,0 +1,361 @@
+{
+  "$comment": "One owner per spec; see docs/CONTRIBUTING.md 'Proving a change'. Checked by scripts/check-e2e-slices.mjs.",
+  "crossCutting": [],
+  "slices": [
+    {
+      "name": "accounts",
+      "summary": "Sign-in, two-factor, sessions and account standing (specs/007-configurable-auth-providers, specs/008-seamless-onboarding-flow, specs/017-invite-actor-selection, specs/036-concurrent-client-sessions, specs/039-sharing-attestation, specs/041-two-factor-enrolment)",
+      "own": [
+        "two-factor",
+        "oauth-provider.spec.ts",
+        "auth-providers.spec.ts",
+        "onboarding-flow.spec.ts",
+        "anonymous-shell.spec.ts",
+        "concurrent-sessions.spec.ts",
+        "user-data-export.spec.ts",
+        "account-standing.spec.ts",
+        "invite-membership.spec.ts"
+      ],
+      "neighbours": [],
+      "paths": []
+    },
+    {
+      "name": "actors",
+      "summary": "Actors, their ownership and the play field (specs/010-world-staging-actors, specs/017-invite-actor-selection, specs/023-players-section, specs/031-playability, specs/039-sharing-attestation)",
+      "own": [
+        "actor-",
+        "play-field-",
+        "npc-visibility.spec.ts",
+        "players-section.spec.ts"
+      ],
+      "neighbours": [
+        {
+          "spec": "hero-builder-saved.spec.ts",
+          "seam": "the stored look of a built hero is what an actor shows"
+        },
+        {
+          "spec": "token-links.spec.ts",
+          "seam": "the actor-to-token link is written from the actor side"
+        }
+      ],
+      "paths": []
+    },
+    {
+      "name": "book-import",
+      "summary": "Importing a source book and reading its PDF (specs/047-the-bestiary, specs/049-importing-a-source-book)",
+      "own": ["book-import-", "pdf-reader.spec.ts"],
+      "neighbours": [
+        {
+          "spec": "library-book-list.spec.ts",
+          "seam": "an imported book lands in the library's book list"
+        }
+      ],
+      "paths": []
+    },
+    {
+      "name": "canvas",
+      "summary": "Map authoring on the canvas, drawn walls and board loading (specs/001-bevy-canvas-authoring, specs/002-canvas-authoring-asset-storage, specs/003-dd2vtt-map-fidelity, specs/045-token-movement-and-vision, specs/059-a-map-that-arrives-in-pieces); owns canvas-authoring (measured lane) and token-movement-walls by exact name, since walls are canvas behaviour",
+      "own": [
+        "canvas-",
+        "map-editor-tooling.spec.ts",
+        "drawn-walls-block.spec.ts",
+        "token-movement-walls.spec.ts",
+        "board-loading.spec.ts",
+        "screenshot.spec.ts"
+      ],
+      "neighbours": [
+        {
+          "spec": "scene-management.spec.ts",
+          "seam": "switching scenes reloads the board the canvas draws"
+        }
+      ],
+      "paths": []
+    },
+    {
+      "name": "collections",
+      "summary": "Content collections, the account library, sharing and access links (specs/026-content-collections, specs/027-unified-access-links, specs/039-sharing-attestation, specs/040-instance-setup, specs/050-the-account-library)",
+      "own": [
+        "collection-",
+        "library-",
+        "content-collections.spec.ts",
+        "content-origin.spec.ts",
+        "account-library.spec.ts",
+        "sharing-attestation.spec.ts",
+        "singleton-share-anonymous-access.spec.ts",
+        "access-links.spec.ts",
+        "publishing-gate.spec.ts"
+      ],
+      "neighbours": [],
+      "paths": []
+    },
+    {
+      "name": "combat",
+      "summary": "Combat, dice and checks (specs/014-dice-rolling-engine, specs/046-a-fight-that-resolves, specs/056-placing-and-reaching-things-on-a-map)",
+      "own": ["combat-", "dice-roll.spec.ts", "roll-check.spec.ts"],
+      "neighbours": [
+        {
+          "spec": "token-attributes.spec.ts",
+          "seam": "combat writes the hit points that tokens show"
+        },
+        {
+          "spec": "status-display.spec.ts",
+          "seam": "combat applies the conditions that status displays show"
+        }
+      ],
+      "paths": []
+    },
+    {
+      "name": "companion",
+      "summary": "The companion app, chat and session notes (specs/021-unified-markdown-editor, specs/036-concurrent-client-sessions)",
+      "own": ["companion-", "chat-panel.spec.ts", "session-notes.spec.ts"],
+      "neighbours": [
+        {
+          "spec": "live-sync.spec.ts",
+          "seam": "companion state reaches other clients through the live broadcast"
+        }
+      ],
+      "paths": []
+    },
+    {
+      "name": "compendium",
+      "summary": "The world compendium and abilities (specs/011-world-compendium, specs/025-world-abilities-compendium, specs/033-abilities-vocabulary, specs/055-a-compendium-you-can-find-things-in)",
+      "own": ["abilities-", "world-compendium.spec.ts"],
+      "neighbours": [
+        {
+          "spec": "combat-attack.spec.ts",
+          "seam": "abilities from the compendium are what an attack uses in play"
+        }
+      ],
+      "paths": []
+    },
+    {
+      "name": "engine-limits",
+      "summary": "Engine frame-rate sweeps, both measured-lane specs (specs/029-in-engine-status-displays, specs/046-a-fight-that-resolves)",
+      "own": ["engine-limits.spec.ts", "engine-status-limits.spec.ts"],
+      "neighbours": [],
+      "paths": []
+    },
+    {
+      "name": "engine-other",
+      "summary": "The other engine perf and monitor specs, measured lane except engine-monitor (specs/028-client-world-cache, specs/030-interactive-elements, specs/045-token-movement-and-vision); owns the engine- prefix, so a new engine spec lands here unless named elsewhere",
+      "own": ["engine-"],
+      "neighbours": [],
+      "paths": []
+    },
+    {
+      "name": "feedback",
+      "summary": "In-app feedback (specs/037-in-app-feedback)",
+      "own": ["feedback"],
+      "neighbours": [],
+      "paths": []
+    },
+    {
+      "name": "game-systems",
+      "summary": "Game-system settings and panel slots (specs/016-system-pack-legal-compliance, specs/032-pack-architecture, specs/033-abilities-vocabulary)",
+      "own": ["system-"],
+      "neighbours": [
+        {
+          "spec": "status-systems.spec.ts",
+          "seam": "each game system supplies the statuses the status display shows"
+        }
+      ],
+      "paths": []
+    },
+    {
+      "name": "genie",
+      "summary": "The Genie house system (specs/018-genie-house-system, specs/019-genie-leveling-and-trading, specs/020-genie-economy-and-shops)",
+      "own": ["genie-"],
+      "neighbours": [
+        {
+          "spec": "system-panel-slots.spec.ts",
+          "seam": "Genie's panels mount in the system panel host"
+        }
+      ],
+      "paths": []
+    },
+    {
+      "name": "hero-builder",
+      "summary": "Hero builder (specs/044-hero-builder, specs/048-bringing-a-character-in)",
+      "own": ["hero-builder-"],
+      "neighbours": [
+        {
+          "spec": "actor-art.spec.ts",
+          "seam": "the builder writes the actor imagery that the art panel shows"
+        }
+      ],
+      "paths": [],
+      "standalone": "pnpm -F @thunderforge/hero-builder-app test:e2e"
+    },
+    {
+      "name": "instance",
+      "summary": "Instance setup, access, mail and GitHub applications (specs/035-instance-access, specs/040-instance-setup, specs/042-admin-portal); instance-setup runs in the first-run lane and github-apps in the GitHub-apps lane",
+      "own": [
+        "instance-",
+        "admin-instance-panels.spec.ts",
+        "mail-delivery.spec.ts",
+        "github-apps.spec.ts"
+      ],
+      "neighbours": [],
+      "paths": []
+    },
+    {
+      "name": "interactive",
+      "summary": "Interactive elements: doors, props, regions and secrets (specs/030-interactive-elements, specs/045-token-movement-and-vision); interactive-lighting belongs to lighting by exact name",
+      "own": ["interactive-"],
+      "neighbours": [
+        {
+          "spec": "token-movement-walls.spec.ts",
+          "seam": "doors are walls that tokens must stop at"
+        },
+        {
+          "spec": "scene-exploration.spec.ts",
+          "seam": "opening an element reveals what exploration shows"
+        }
+      ],
+      "paths": []
+    },
+    {
+      "name": "lighting",
+      "summary": "Light, darkvision and reach of light (specs/030-interactive-elements, specs/045-token-movement-and-vision); owns scene-lighting and interactive-lighting by exact name, over the scene- and interactive- prefixes",
+      "own": [
+        "carried-light.spec.ts",
+        "darkvision-range.spec.ts",
+        "light-reach.spec.ts",
+        "scene-lighting.spec.ts",
+        "interactive-lighting.spec.ts"
+      ],
+      "neighbours": [
+        {
+          "spec": "drawn-walls-block.spec.ts",
+          "seam": "drawn walls occlude the light this slice casts"
+        }
+      ],
+      "paths": []
+    },
+    {
+      "name": "lore",
+      "summary": "The lore wiki and its git sync (specs/012-lore-wiki, specs/034-lore-git-sync); lore-repository-sync runs in the GitHub-apps lane",
+      "own": ["lore-"],
+      "neighbours": [],
+      "paths": []
+    },
+    {
+      "name": "moderation",
+      "summary": "DMCA notices, takedowns and legal enquiries (specs/015-dmca-notice-takedown, specs/052-access-mode-and-legal-duty, specs/053-moderation-across-the-instance)",
+      "own": ["dmca-", "takedown-reach.spec.ts", "legal-enquiries.spec.ts"],
+      "neighbours": [
+        {
+          "spec": "collection-moderation.spec.ts",
+          "seam": "reports and takedowns act on collections"
+        }
+      ],
+      "paths": []
+    },
+    {
+      "name": "play-pause",
+      "summary": "Pausing and resuming play (specs/051-operator-playfield-shutdown)",
+      "own": ["play-pause"],
+      "neighbours": [
+        {
+          "spec": "world-event-catchup.spec.ts",
+          "seam": "a lifted pause is caught up through world events"
+        },
+        {
+          "spec": "live-sync.spec.ts",
+          "seam": "the pause reaches every client through the live broadcast"
+        }
+      ],
+      "paths": []
+    },
+    {
+      "name": "scenes",
+      "summary": "Scenes, staging and the player's active scene (specs/009-gm-staging-page, specs/010-world-staging-actors, specs/022-scene-management-overhaul); scene-lighting and scene-preload are owned elsewhere by exact name",
+      "own": [
+        "scene-",
+        "player-active-scene.spec.ts",
+        "gm-staging-page.spec.ts",
+        "world-staging-route.spec.ts"
+      ],
+      "neighbours": [
+        {
+          "spec": "play-pause.spec.ts",
+          "seam": "launching a scene has to respect a paused table"
+        }
+      ],
+      "paths": []
+    },
+    {
+      "name": "status",
+      "summary": "In-engine status displays (specs/029-in-engine-status-displays)",
+      "own": ["status-"],
+      "neighbours": [
+        {
+          "spec": "combat-hit-points.spec.ts",
+          "seam": "status displays show the hit-point state combat writes"
+        }
+      ],
+      "paths": []
+    },
+    {
+      "name": "tokens",
+      "summary": "Token authoring, movement and links (specs/004-token-canvas-authoring, specs/006-token-authoring-polish, specs/045-token-movement-and-vision, specs/046-a-fight-that-resolves, specs/056-placing-and-reaching-things-on-a-map); token-movement-walls belongs to canvas by exact name",
+      "own": [
+        "token-",
+        "look-at-and-follow.spec.ts",
+        "item-pickup-race.spec.ts"
+      ],
+      "neighbours": [
+        {
+          "spec": "token-movement-walls.spec.ts",
+          "seam": "walls stop the tokens this slice moves"
+        },
+        {
+          "spec": "world-session-tokens.spec.ts",
+          "seam": "tokens are carried across a world session"
+        }
+      ],
+      "paths": []
+    },
+    {
+      "name": "torture",
+      "summary": "Concurrency torture specs under e2e/torture (specs/036-concurrent-client-sessions)",
+      "own": ["torture/"],
+      "neighbours": [],
+      "paths": []
+    },
+    {
+      "name": "world-cache",
+      "summary": "The client world cache, prefetch, repair and storage (specs/028-client-world-cache, specs/059-a-map-that-arrives-in-pieces); owns scene-preload by exact name, over the scene- prefix, and the world-cache prefix except the four core specs",
+      "own": ["world-cache", "scene-preload.spec.ts"],
+      "neighbours": [],
+      "paths": []
+    },
+    {
+      "name": "world-cache-core",
+      "summary": "The world cache's isolation, offline, peer and multitab behaviour, split from world-cache because world-cache-isolated alone is about six minutes (specs/028-client-world-cache)",
+      "own": [
+        "world-cache-isolated.spec.ts",
+        "world-cache-offline.spec.ts",
+        "world-cache-peer.spec.ts",
+        "world-cache-multitab.spec.ts"
+      ],
+      "neighbours": [],
+      "paths": []
+    },
+    {
+      "name": "worlds",
+      "summary": "Worlds, their dashboard and live sync (specs/005-live-canvas-sync, specs/022-scene-management-overhaul, specs/032-pack-architecture, specs/054-a-dashboard-that-says-whats-going-on)",
+      "own": [
+        "worlds-list.spec.ts",
+        "world-appearance.spec.ts",
+        "world-dashboard-statistics.spec.ts",
+        "world-event-catchup.spec.ts",
+        "world-session-tokens.spec.ts",
+        "live-sync.spec.ts",
+        "demo-first-session.spec.ts"
+      ],
+      "neighbours": [],
+      "paths": []
+    }
+  ]
+}
