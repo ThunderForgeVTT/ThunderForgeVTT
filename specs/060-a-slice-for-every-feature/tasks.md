@@ -81,7 +81,7 @@ task reads the list through `scripts/e2e/slices.mjs` and never parses
       - The move exists so the check and the CLI see exactly the file set
         the runner runs: `torture/` included, `journeys/` excluded.
       - 2026-09-22: `scripts/e2e/specs.mjs` exports `SUITES`, `PERF_LANE_SPECS`, `allSpecFiles`, `isFirstRunSpec`, `isPerfSpec` and `isGithubAppsSpec`, moved with their comments; `SUITES` came too, since `allSpecFiles` reads it. The runner has no `--help` or dry listing (`--help` is "Unknown argument"), so a throwaway script printed every file of both suites with its three lane predicates, plus `PERF_LANE_SPECS`, from the old source and from the new module: the two outputs are identical (181 e2e specs, paths relative to `apps/web`, e.g. `e2e/combat-panel.spec.ts`).
-- [ ] T004 Implement `scripts/e2e/slices.mjs`, following
+- [X] T004 Implement `scripts/e2e/slices.mjs`, following
       [data-model.md](data-model.md) and
       [contracts/slices-json.md](contracts/slices-json.md). It exports:
       - `loadSlices(root)`, which parses JSON, rejects unknown keys (so
@@ -96,7 +96,8 @@ task reads the list through `scripts/e2e/slices.mjs` and never parses
       - `matchPath(path, globs)`, which uses `path.matchesGlob`.
 
       Pure functions: nothing in the module touches git or the network.
-- [ ] T005 [P] Unit tests for T004 in `scripts/e2e/__tests__/slices.test.mjs`,
+      - 2026-09-22: exports `loadSlices(root = ROOT_DIR)` → `{ crossCutting, slices }`, `validateSlices(document)` (the shape rules, for fixtures), `ownerOf(specPath, slices)` → name or `null`, `ownershipOf(specPath, slices)` → `{ slice, entry, exact }` or `null` (for `list <name>`'s exact/prefix column), `resolveSlice(name, slices, specFiles = allSpecFiles())`, `sliceLanes(paths)` → lanes in `LANES` order, `matchPath(path, globs)` → the first matching glob or `null`, plus `SliceError`, `specKey`, `entryMatches`, `isExactEntry`, `SLICES_FILE`, `RESERVED_SLICE_NAMES` and `LANES`. `resolveSlice` returns paths as `specFiles` spells them — `allSpecFiles()`'s `e2e/x.spec.ts`, relative to `apps/web` — because that is what the runner hands Playwright; `ownerOf` accepts that form, the `apps/web/e2e/…` form or the bare name. A tie is judged only at the winning specificity, so two slices sharing a prefix do not tie on a file a third names exactly. `validateSlices` also rejects non-kebab, duplicate and reserved (`slices`, `which`) names and a prefix given as a neighbour.
+- [X] T005 [P] Unit tests for T004 in `scripts/e2e/__tests__/slices.test.mjs`,
       against in-memory fixtures rather than the real tree:
       - exact beats prefix; longer prefix beats shorter; a tie throws;
       - a prefix selects `torture/` files;
@@ -104,6 +105,7 @@ task reads the list through `scripts/e2e/slices.mjs` and never parses
       - an unknown slice throws and lists names;
       - an unknown key is rejected;
       - an unsorted list is rejected.
+      - 2026-09-22: 19 tests, 19 pass (`pnpm test:scripts`). Beyond the list above: a tie below an exact winner is not a tie, every path spelling gets the same owner, a missing neighbour throws, duplicate/non-kebab/reserved names are rejected, `loadSlices` reads a temp root and rejects bad JSON, `sliceLanes` covers all four lanes, and `matchPath` crosses directories with `**`.
 - [ ] T006 Author `scripts/e2e/slices.json` with the 27 slices in
       [research.md R8](research.md#r8-the-slice-grouping).
       - For each slice: `name`, `summary` (naming its `specs/NNN-*`
