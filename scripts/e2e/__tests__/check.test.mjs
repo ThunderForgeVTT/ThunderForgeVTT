@@ -169,6 +169,16 @@ describe("checkSlices", () => {
     assert.deepEqual(run({ slices }), []);
   });
 
+  test("rule 4: an extglob that matches a tracked file is alive", () => {
+    const slices = [
+      slice("combat", ["combat-"], {
+        paths: ["apps/web/src/features/!(lore)/**"],
+      }),
+      ...SLICES.slice(1),
+    ];
+    assert.deepEqual(run({ slices }), []);
+  });
+
   test("rule 5: two slices owning a spec equally is a tie, naming both", () => {
     const slices = [
       slice("combat", ["combat-"]),

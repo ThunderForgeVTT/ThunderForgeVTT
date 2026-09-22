@@ -239,9 +239,11 @@ function globProblems(slices, crossCutting, trackedFiles) {
  * Whether `glob` matches any of `files`. The literal head of the glob (the
  * part before its first wildcard) filters first, so a glob is compared with
  * the handful of files under its directory rather than the whole tree.
+ * Extglob openers (`!(`, `@(`, `+(`) end the head too, or `a/!(b)/**`
+ * would look for files under a literal `a/!(b)/`.
  */
 function matchesAny(glob, files) {
-  const head = glob.split(/[*?[{]/, 1)[0];
+  const head = glob.split(/[*?[{(!@+]/, 1)[0];
   return files.some(
     (file) => file.startsWith(head) && matchPath(file, [glob]) !== null,
   );
