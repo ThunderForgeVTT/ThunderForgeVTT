@@ -168,7 +168,7 @@ and the run is green.
         are (FR-008).
       - Keep the `e2e:*` scripts together, in slice-name order.
       - 2026-09-22: 55 slice scripts generated from `slices.json` (27 `e2e:<slice>`, 27 `:integration`, hero-builder's `:standalone`), in slice-name order where `e2e:hero-builder*` already sat, after `playtest`. `e2e:hero-builder` and `:standalone` are byte-identical to before; only `:integration` moved from `--only=hero-builder-,actor-art` to `--slice=hero-builder`. `node scripts/check-e2e-slices.mjs` (rule 6) passes on it.
-- [ ] T010 [US1] Proof for US1. Run each of these alone, then `grep ✘` its
+- [X] T010 [US1] Proof for US1. Run each of these alone, then `grep ✘` its
       log:
       - `pnpm e2e:hero-builder`, which must still give standalone 7 passed
         and integration 16 passed / 0 failed / 0 flaky / 0 skipped, as on
@@ -177,6 +177,16 @@ and the run is green.
         resolved specs.
 
       Record both results and wall times under this task.
+
+      - 2026-09-22: both green, run alone, `grep -c '✘'` = 0 on each log.
+        `pnpm e2e:hero-builder` — standalone 7 passed; integration 16
+        passed / 0 failed / 0 flaky / 0 skipped, unchanged from 2026-09-21.
+        The integration half ran `--slice=hero-builder` (4 specs: 3 own +
+        `actor-art-and-sheet.spec.ts`) and recorded 216 s; the two halves
+        together took 260 s wall. `pnpm e2e:combat:integration` — 21 passed
+        / 0 / 0 / 0 over 13 specs in 415 s, and the log's spec list is
+        exactly `node scripts/e2e-slice.mjs list combat` (11 own + 2
+        neighbours), nothing looser.
 
 **Checkpoint**: US1 is shippable. Every slice is runnable by name, even
 before the lookup and the check exist.
@@ -378,10 +388,23 @@ with over-target and over-limit flags.
       - `red` taking precedence over time;
       - a slice that has not been measured shows `est.`.
       - 2026-09-22: in a new file, `scripts/e2e/__tests__/list.test.mjs`. 600 s and 720 s count as within the target and within the limit, red beats any time, an unmeasured slice shows `est.`, and gaps show as `*`. 11 tests.
-- [ ] T028 [US4] Proof for US4. Run
+- [X] T028 [US4] Proof for US4. Run
       `pnpm e2e:lore:integration -- --record-durations` alone, then
       `pnpm e2e:slices`. Confirm the lore row is dated and every other row
       reads `est.`. Record the result under this task.
+      - 2026-09-22: green. 13 passed / 0 failed / 0 flaky / 1 skipped over
+        2 specs in 106 s, `grep -c '✘'` = 0. The one skip is
+        `lore-repository-sync`'s "the mirror reaches a real repository and a
+        clone matches", which is opt-in on
+        `THUNDERFORGE_E2E_LIVE_MIRROR` / `_LIVE_REPO` / `_LIVE_INSTALLATION`
+        and is skipped by design without them. `node scripts/e2e-slice.mjs
+        list` then showed the lore row as `1m 46s  2026-09-22 4177c9e` and
+        every one of the other 26 rows as `est.`, so the file is written per
+        slice and read back by name.
+      - The documented command needed a runner fix first: pnpm 10 forwards
+        the `--` of `pnpm e2e:lore:integration -- --record-durations` into
+        the script, and the runner rejected it with `Unknown argument: --`.
+        A bare `--` is now skipped (commit 4177c9e), with a test.
 
 ---
 
@@ -470,7 +493,7 @@ runs with no stack up.
 
       Link ADR-107 and Principle VI.
       - 2026-09-22: "Proving a change" added after "Standalone harnesses", linking Principle VI and ADR-107.
-- [ ] T035 **The proof (FR-016, FR-017, SC-002, SC-005).** Run every slice's
+- [X] T035 **The proof (FR-016, FR-017, SC-002, SC-005).** Run every slice's
       integration half once, one at a time, with nothing else running:
       `pnpm e2e:<slice>:integration -- --record-durations`. Use the loop in
       [quickstart.md §6](quickstart.md). This is roughly 3 hours of wall
@@ -488,8 +511,93 @@ runs with no stack up.
         (spec Edge Cases).
       - Done when every slice is green, none is over the limit, and at least
         80% are at 10 minutes or less.
-- [ ] T036 Commit `scripts/e2e/slice-durations.json` from T035 on its own,
+
+      - 2026-09-22: all 27 slices run one at a time on an idle machine,
+        every log `grep -c '✘'` = 0, `27 measured, 3 over target, 1 over
+        limit, 0 red`. 23 of 27 (85.2%) are at 10 minutes or less, over the
+        80% SC-005 asks for. One skip in the whole proof (lore's opt-in live
+        mirror, see T028); the runner reported 0 flaky everywhere.
+
+      | Slice | Specs | Passed / Failed / Flaky / Skipped | Wall | State |
+      | --- | --- | --- | --- | --- |
+      | `accounts` | 13 | 67 / 0 / 0 / 0 | 7m 18s | within target |
+      | `actors` | 11 | 27 / 0 / 0 / 0 | 6m 55s | within target |
+      | `book-import` | 4 | 17 / 0 / 0 / 0 | 1m 42s | within target |
+      | `canvas` | 9 | 31 / 0 / 0 / 0 | 15m 30s | over limit |
+      | `collections` | 13 | 30 / 0 / 0 / 0 | 4m 54s | within target |
+      | `combat` | 13 | 21 / 0 / 0 / 0 | 6m 55s | within target |
+      | `companion` | 6 | 13 / 0 / 0 / 0 | 2m 06s | within target |
+      | `compendium` | 5 | 26 / 0 / 0 / 0 | 3m 42s | within target |
+      | `engine-limits` | 2 | 3 / 0 / 0 / 0 | 10m 27s | over target |
+      | `engine-other` | 4 | 9 / 0 / 0 / 0 | 4m 20s | within target |
+      | `feedback` | 6 | 19 / 0 / 0 / 0 | 4m 51s | within target |
+      | `game-systems` | 4 | 16 / 0 / 0 / 0 | 2m 27s | within target |
+      | `genie` | 15 | 21 / 0 / 0 / 0 | 4m 01s | within target |
+      | `hero-builder` | 4 | 16 / 0 / 0 / 0 | 3m 36s | within target |
+      | `instance` | 9 | 36 / 0 / 0 / 0 | 4m 28s | within target |
+      | `interactive` | 9 | 11 / 0 / 0 / 0 | 3m 13s | within target |
+      | `lighting` | 6 | 8 / 0 / 0 / 0 | 3m 35s | within target |
+      | `lore` | 2 | 13 / 0 / 0 / 1 | 1m 46s | within target |
+      | `moderation` | 6 | 14 / 0 / 0 / 0 | 3m 16s | within target |
+      | `play-pause` | 7 | 13 / 0 / 0 / 0 | 8m 43s | within target |
+      | `scenes` | 9 | 17 / 0 / 0 / 0 | 4m 18s | within target |
+      | `status` | 9 | 13 / 0 / 0 / 0 | 3m 26s | within target |
+      | `tokens` | 10 | 23 / 0 / 0 / 0 | 9m 38s | within target |
+      | `torture` | 7 | 7 / 0 / 0 / 0 | 1m 54s | within target |
+      | `world-cache` | 8 | 23 / 0 / 0 / 0 | 11m 01s | over target |
+      | `world-cache-core` | 4 | 17 / 0 / 0 / 0 | 11m 27s | over target |
+      | `worlds` | 7 | 20 / 0 / 0 / 0 | 3m 30s | within target |
+
+      - Fixed where the defect was, never by skipping a spec (FR-021):
+        - `combat-legendary` read the lair's initiative through a positional
+          `span`, which the aria-hidden alignment spacer added by 8be536d
+          had taken over. The locator now skips aria-hidden spans (89face9).
+        - Four specs waited for a `pending-system-confirmation` that no
+          longer appears: a new world already runs Genie, and 8339da8
+          stopped asking when the running system is re-picked. The helpers
+          now accept the system already being active, and the Genie legal
+          notice test moves its world to 5E first so the change it is about
+          is a real change (b1a36f7).
+        - `system-change-guard` read the ability digest while the second add
+          was still in flight — the table was already on screen from the
+          first. It now waits for the new ability's name (79a6293).
+        - `look-at-and-follow` sampled the held camera mid-ease and saw it
+          drift 1.87 units. It now polls until two readings 250 ms apart
+          agree (ef9f4c4).
+        - `engine-limits`' capacity sweep died twice in `addTokens` with
+          `Failed to fetch`. The fixture now retries the transport (not the
+          GraphQL result, which still throws on `errors`) three times
+          (718da06).
+        - Recording itself was wrong: every slice after the first stamped
+          `-dirty`, because the run's own two output files counted as tree
+          changes. `measuredCommit()` now ignores them (cc96588), and
+          hero-builder and combat were re-measured for clean stamps.
+      - Not a product defect, recorded so the next runner recognises it:
+        several red runs (hero-builder, engine-limits twice, engine-other,
+        status, game-systems, compendium) failed with
+        `net::ERR_NETWORK_CHANGED` / `Failed to fetch`. An unrelated
+        project's crash-looping Docker containers were creating veth
+        devices a few times a minute, which makes Chromium abort in-flight
+        localhost requests. Every affected slice passed on a re-run. No
+        429s appeared: the run lock sets the rate-limit bypass.
+      - `canvas` (15m 30s) stays whole and is flagged over the limit, per
+        the spec's Edge Cases. Its tests are 6m 54s of the run; the rest is
+        a cold release wasm build (6m 26s, mostly `wasm-opt`) plus a server
+        compile, paid because `canvas-authoring` is a measured-lane spec.
+        Splitting `canvas-authoring` off would move that build, not remove
+        it — the authoring half would still be about 11 minutes — and the
+        authoring→board-loading seam would be lost unless authoring were
+        kept as a neighbour of `canvas`, which drags the release build
+        straight back in. The overrun is a build cost, not spec time, so
+        the slice is left whole and no seam is spent on a number.
+      - `engine-limits` (10m 27s), `world-cache-core` (11m 27s) and
+        `world-cache` (11m 01s) are over the 10-minute target but inside the
+        12-minute limit, and are left as they are.
+- [X] T036 Commit `scripts/e2e/slice-durations.json` from T035 on its own,
       and not `.e2e-shards-durations.json`.
+      - 2026-09-22: committed alone, 27 records.
+        `.e2e-shards-durations.json`, which the same runs also rewrote, went
+        in a separate commit of its own after every run had finished.
 - [ ] T037 [P] Mark ADR-107 as Accepted, dated, naming T010, T024 and T035
       as the proof. Re-read the spec's Assumptions against what shipped and
       correct anything that moved, such as the final slice count and any

@@ -217,7 +217,11 @@ no standalone half, not an empty one.
   exactly one.
 - **A slice over target that cannot be split without losing a seam.** The
   slice stays whole, is flagged over target, and has the reason on record.
-  Splitting a seam to hit a number would make the slice prove less.
+  Splitting a seam to hit a number would make the slice prove less. On
+  record from the T035 proof: `canvas` (15m 30s, over the limit) keeps its
+  `canvas-authoring` spec, because splitting it off would move the cold
+  release wasm build that makes up most of that time rather than remove it,
+  and would cost the authoring→board-loading seam.
 - **Specs that need a first-run stack.** `instance-setup` and similar specs
   need an unseeded instance. The e2e runner already puts them in their own
   lane. A slice containing them must still run them correctly on one shard.
