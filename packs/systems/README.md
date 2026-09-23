@@ -44,15 +44,15 @@ repository and in the build.
 
 ### Identity — required
 
-| Key | Meaning |
-|---|---|
-| `id` | Stable identifier, and the directory name. |
-| `title` | What a person reads in a picker. |
-| `version` | The pack's own version. |
-| `description` | One paragraph, shown beside the title. |
-| `author`, `url`, `license` | Provenance. |
-| `compatibility` | `{ "minimum", "verified", "maximum" }` — product versions. |
-| `legal` | See [Legal metadata](#legal-metadata). Required, and enforced. |
+| Key                        | Meaning                                                        |
+| -------------------------- | -------------------------------------------------------------- |
+| `id`                       | Stable identifier, and the directory name.                     |
+| `title`                    | What a person reads in a picker.                               |
+| `version`                  | The pack's own version.                                        |
+| `description`              | One paragraph, shown beside the title.                         |
+| `author`, `url`, `license` | Provenance.                                                    |
+| `compatibility`            | `{ "minimum", "verified", "maximum" }` — product versions.     |
+| `legal`                    | See [Legal metadata](#legal-metadata). Required, and enforced. |
 
 `template: true` declares that the pack is a starting point rather than a
 ruleset. A template is **not offered** as a system a world can be bound to.
@@ -178,14 +178,14 @@ The rest of the character sheet: everything that is not a score or a pool.
 An ordered list of entries, each with `id`, `label`, `kind`, `slot`, `source`,
 and optionally `group`.
 
-| `kind` | What it is | Extra keys |
-|---|---|---|
-| `text` | Free text — an aspect, a concept, a note | |
-| `number` | A single number | |
-| `list` | An ordered list of strings | |
-| `slots` | `count` blank slots the player names and fills | `count` |
-| `track` | `of` marks, ticked or not | `of` |
-| `state` | One of a set of named states, in order | `options` |
+| `kind`   | What it is                                     | Extra keys |
+| -------- | ---------------------------------------------- | ---------- |
+| `text`   | Free text — an aspect, a concept, a note       |            |
+| `number` | A single number                                |            |
+| `list`   | An ordered list of strings                     |            |
+| `slots`  | `count` blank slots the player names and fills | `count`    |
+| `track`  | `of` marks, ticked or not                      | `of`       |
+| `state`  | One of a set of named states, in order         | `options`  |
 
 ```json
 "sheet": [
@@ -284,13 +284,13 @@ system that declares none of it still has initiative and turns.
 
 These are the rules the product enforces on a declaration, at install time:
 
-| # | Rule |
-|---|---|
-| M1 | Every block is optional. A system without `hitPoints` has no damage operation; its attacks still roll, and a hit's damage is shown as a number nobody can take. |
-| M2 | `hitPoints`, `defence`, `sizes.source` and `legendary` name a `slot` and a field your `data_types` declares. A name it does not declare is refused, and the error names it. |
-| M3 | Every `sizes.categories[].footprint` is at least 0.5, and every `id` is unique. |
-| M4 | `turnStructure.budget.movement.speed` names a key of your `movement` block. |
-| M5 | Shared code names no system's fields. The product reads `current_hp` because 5e's manifest says so, never because the platform knows what 5e calls it. |
+| #   | Rule                                                                                                                                                                        |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M1  | Every block is optional. A system without `hitPoints` has no damage operation; its attacks still roll, and a hit's damage is shown as a number nobody can take.             |
+| M2  | `hitPoints`, `defence`, `sizes.source` and `legendary` name a `slot` and a field your `data_types` declares. A name it does not declare is refused, and the error names it. |
+| M3  | Every `sizes.categories[].footprint` is at least 0.5, and every `id` is unique.                                                                                             |
+| M4  | `turnStructure.budget.movement.speed` names a key of your `movement` block.                                                                                                 |
+| M5  | Shared code names no system's fields. The product reads `current_hp` because 5e's manifest says so, never because the platform knows what 5e calls it.                      |
 
 `slot` uses the manifest's own vocabulary (`resourceData`, `traitData`), as
 `resources` and `vision` do.
@@ -363,8 +363,8 @@ bundled pack so a shipped one cannot carry a broken formula.
 
 **`checks` is not your core resolution mechanic.** If your manifest also has a
 `coreCheck`, `actionRoll`, `taskResolution`, `ladderRoll`, `skillRoll` or the
-like, keep it: that key says *how this system resolves things*, and it is read
-by your own crate. `checks` says *what this character's sheet may roll*. They
+like, keep it: that key says _how this system resolves things_, and it is read
+by your own crate. `checks` says _what this character's sheet may roll_. They
 answer different questions, and in some systems the answers happen to look
 alike.
 
@@ -394,11 +394,11 @@ inventory::submit! {
 }
 ```
 
-| Field | What it contributes |
-|---|---|
-| `id` | Must equal the manifest's `id`. |
+| Field                                                                           | What it contributes                          |
+| ------------------------------------------------------------------------------- | -------------------------------------------- |
+| `id`                                                                            | Must equal the manifest's `id`.              |
 | `ability_data`, `resource_data`, `proficiency_data`, `trait_data`, `spell_data` | Validate one slot of an actor's stored data. |
-| `rules` | The system's **derived** values — see below. |
+| `rules`                                                                         | The system's **derived** values — see below. |
 
 **Every field beyond `id` is optional, and absence is a fact about the
 ruleset rather than an omission.** Genie has no spellcasting and therefore no
@@ -456,6 +456,28 @@ Both are build-graph facts: they say a crate exists and should be linked, and
 say nothing about what it contains, so they cannot drift out of step with
 your pack the way a validator list can. **A pack with no `server/` crate
 needs neither** — drop the directory in and the product offers it.
+
+## How to check a pack
+
+`apps/web` owns the `@thunderforge/host` module and lists every pack in its
+own `include`, so a pack's web code is type-checked as part of that program,
+not its own. The real gate is:
+
+```sh
+pnpm --filter @thunderforge/web typecheck
+```
+
+A pack's `pnpm type-check` delegates to exactly that, and deliberately does
+not run `tsc` against the pack alone. It used to, and it reported phantom
+TS2307/TS18046/TS7006 errors for code that compiled perfectly — `@thunderforge/host`
+is a tsconfig path alias, not a package on disk, so a standalone `tsc` cannot
+see it. Mapping the alias into each pack drags all of `apps/web` into the
+pack's program and then fails on that app's environment rather than the
+pack's, which is worse than not running.
+
+Everything else is per-pack and means what it says: `pnpm test` for the web
+logic, `cargo test -p <pack>-server` for the validators, and the feature's
+own e2e slice for the rest.
 
 ## How a pack is found
 

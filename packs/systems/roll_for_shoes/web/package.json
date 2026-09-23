@@ -15,7 +15,7 @@
   "scripts": {
     "build": "tsc && vite build",
     "dev": "vite",
-    "type-check": "tsc --noEmit",
+    "type-check": "pnpm --filter @thunderforge/web typecheck",
     "lint": "eslint src --max-warnings 0",
     "test": "node --test src/**/*.test.ts"
   },
