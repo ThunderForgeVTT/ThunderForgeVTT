@@ -10,6 +10,16 @@ export interface AdvancementPromptProps {
   busy: boolean;
   onConfirm: (name: string) => void;
   onDecline: () => void;
+  /**
+   * Room left at the level this new skill would sit at: `null` where the level
+   * is uncapped, which is the case in every world that has not turned skill
+   * slots on. Zero or less means the advancement happened and has nowhere to go.
+   */
+  room?: number | null;
+  /** The character's experience, and what a slot at that level costs. */
+  xp?: number;
+  slotCost?: number;
+  onBuySlot?: () => void;
 }
 
 /**
@@ -28,6 +38,10 @@ export function AdvancementPrompt({
   busy,
   onConfirm,
   onDecline,
+  room = null,
+  xp = 0,
+  slotCost = 0,
+  onBuySlot,
 }: AdvancementPromptProps) {
   const [name, setName] = useState("");
   const [refusal, setRefusal] = useState<string | null>(null);
@@ -40,6 +54,56 @@ export function AdvancementPrompt({
     setRefusal(null);
     onConfirm(name);
   };
+
+  // The level the new skill would sit at is full.
+  //
+  // The character is **told**, rather than silently denied (FR-030). The
+  // advancement happened — every die came up a six and that is not taken back —
+  // and what is missing is somewhere to put it. Saying so is the difference
+  // between a rule and a bug.
+  if (room !== null && room <= 0) {
+    return (
+      <section data-testid="rfs-advancement-no-room" className="grid gap-2">
+        <h3 className={cardTitleClass}>Every die showed a six</h3>
+        <p className={hintClass}>
+          There is no room at level {parent.level + 1} — this table limits how
+          many skills sit at each level, and that one is full. The roll still
+          earned this; it has nowhere to go until room is made.
+        </p>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {onBuySlot ? (
+            <Button
+              type="button"
+              size="sm"
+              disabled={busy || xp < slotCost}
+              data-testid="rfs-buy-slot"
+              onClick={onBuySlot}
+            >
+              Buy room for {slotCost} XP
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            disabled={busy}
+            data-testid="rfs-advancement-decline"
+            onClick={onDecline}
+          >
+            Not this time
+          </Button>
+        </div>
+
+        {xp < slotCost ? (
+          <p className={hintClass} data-testid="rfs-no-room-short">
+            A level {parent.level + 1} slot costs {slotCost} XP, and they have{" "}
+            {xp}.
+          </p>
+        ) : null}
+      </section>
+    );
+  }
 
   return (
     <section data-testid="rfs-advancement" className="grid gap-2">

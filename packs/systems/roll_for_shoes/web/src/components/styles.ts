@@ -34,3 +34,13 @@ export const dieClass =
 /** A die that counts as a six because experience was spent on it. */
 export const boughtDieClass =
   "inline-flex h-9 w-9 items-center justify-center rounded-lg border border-primary bg-primary/10 text-sm font-semibold tabular-nums text-primary";
+
+/**
+ * A die the Game Master rolled for the opposition.
+ *
+ * Drawn differently from a character's die on purpose: these two sets of dice
+ * are never added together, never counted together for an advancement, and a
+ * player who confuses them has misread the roll.
+ */
+export const gmDieClass =
+  "inline-flex h-9 w-9 items-center justify-center rounded-lg border border-dashed border-border bg-background text-sm font-semibold tabular-nums text-muted-foreground";

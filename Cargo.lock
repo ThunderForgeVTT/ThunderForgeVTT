@@ -7365,9 +7365,16 @@ dependencies = [
 name = "roll-for-shoes-server"
 version = "0.1.0"
 dependencies = [
+ "async-graphql",
+ "chrono",
+ "diesel",
  "inventory",
+ "serde",
  "serde_json",
+ "thunderforge-server",
  "thunderforge_canvas_core",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]
@@ -8442,6 +8449,7 @@ dependencies = [
  "regex",
  "reqwest",
  "resvg",
+ "roll-for-shoes-server",
  "serde",
  "serde_derive",
  "serde_json",

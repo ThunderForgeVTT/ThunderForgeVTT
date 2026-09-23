@@ -232,3 +232,7 @@ package = "blades-server"
 [dev-dependencies.yze_server]
 path = "../../packs/systems/year_zero_engine/server"
 package = "yze-server"
+
+[dev-dependencies.roll_for_shoes_server]
+path = "../../packs/systems/roll_for_shoes/server"
+package = "roll-for-shoes-server"

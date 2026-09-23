@@ -1002,6 +1002,10 @@ type AppMutationRoot {
 	acceptResourceTrade(proposalId: UUID!): [GraphQLGenieResourceHolding!]!
 	declineResourceTrade(proposalId: UUID!): GraphQLGenieTradeProposal!
 	spendResourceOnPuzzleClock(clockId: UUID!, actorId: UUID!, resourceType: String!, quantity: Int!): GraphQLGeniePuzzleClock!
+	"""
+	Set this world's optional rules. Game Master only.
+	"""
+	updateRollForShoesWorldSettings(input: UpdateRollForShoesWorldSettingsInput!): RollForShoesWorldSettings!
 }
 
 """
@@ -1776,6 +1780,15 @@ type AppQueryRoot {
 	genieTradeProposals(actorId: UUID!): [GraphQLGenieTradeProposal!]!
 	genieShopListings(actorId: UUID!): [GraphQLGenieShopListing!]!
 	geniePuzzleClockRewards(clockId: UUID!): [GraphQLGeniePuzzleClockReward!]!
+	"""
+	This world's optional rules.
+	
+	Any member may read. The settings describe how the table plays and
+	every player needs them to roll; there is nothing here to keep from a
+	player. A world with no row reads as every default rather than as an
+	error, which is what makes the whole feature opt-in.
+	"""
+	rollForShoesWorldSettings(worldId: UUID!): RollForShoesWorldSettings!
 }
 
 input AttachAbilityToActorInput {
@@ -6126,6 +6139,31 @@ input RollDiceInput {
 	bindings: [PlaceholderBindingInput!]
 }
 
+type RollForShoesStartingSkill {
+	name: String!
+	level: Int!
+}
+
+input RollForShoesStartingSkillInput {
+	name: String!
+	level: Int!
+}
+
+type RollForShoesWorldSettings {
+	worldId: UUID!
+	"""
+	One of `free`, `rolled`, `target`.
+	"""
+	difficultyMode: String!
+	tieSucceeds: Boolean!
+	statusesEnabled: Boolean!
+	skillSlotsEnabled: Boolean!
+	"""
+	Empty means the core default, "Do Anything 1".
+	"""
+	startingSkills: [RollForShoesStartingSkill!]!
+}
+
 enum RollResultKind {
 	TOTAL
 	SUCCESS_COUNT
@@ -6875,6 +6913,24 @@ input UpdateMemberRoleInput {
 	New role: Owner, GM, or Player
 	"""
 	role: String!
+}
+
+"""
+Every field is required, because this is a whole-row upsert.
+
+The panel reads the settings, changes one, and sends all five back. An
+input of optionals would make "absent" ambiguous between "leave it" and
+"clear it", and the spec's guarantee that enabling one setting never
+silently changes another is easiest to hold when every call states all
+five.
+"""
+input UpdateRollForShoesWorldSettingsInput {
+	worldId: UUID!
+	difficultyMode: String!
+	tieSucceeds: Boolean!
+	statusesEnabled: Boolean!
+	skillSlotsEnabled: Boolean!
+	startingSkills: [RollForShoesStartingSkillInput!]!
 }
 
 """

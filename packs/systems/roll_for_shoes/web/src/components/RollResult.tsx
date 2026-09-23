@@ -17,6 +17,8 @@ export interface RollResultProps {
   skill: Skill;
   faces: number[];
   total: number;
+  /** What the statuses came to, already included in `total`. */
+  modifier: number;
   opposition: number | null;
   result: Verdict;
   /** How many dice experience has been spent on, this roll. */
@@ -47,6 +49,7 @@ export function RollResult({
   skill,
   faces,
   total,
+  modifier,
   opposition,
   result,
   bought,
@@ -89,6 +92,18 @@ export function RollResult({
         <span data-testid="rfs-total" className="font-semibold tabular-nums">
           {total}
         </span>{" "}
+        {modifier === 0 ? null : (
+          // Shown beside the total rather than folded into it silently: a
+          // player who cannot see the adjustment cannot check the arithmetic,
+          // and the dice above deliberately still read as they fell.
+          <span className={hintClass}>
+            (
+            <span data-testid="rfs-modifier" className="tabular-nums">
+              {modifier > 0 ? `+${modifier}` : `\u2212${Math.abs(modifier)}`}
+            </span>{" "}
+            from statuses){" "}
+          </span>
+        )}
         {opposition === null ? (
           <span className={hintClass}>with nothing to beat</span>
         ) : (

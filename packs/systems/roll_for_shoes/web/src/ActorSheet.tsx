@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   GraphQLRequestError,
   Input,
@@ -11,19 +11,37 @@ import {
 } from "@thunderforge/host";
 
 import {
+  BAND_DICE,
+  BAND_TARGET,
+  DEFAULT_SETTINGS,
   SYSTEM_ID,
+  addStatus,
+  boughtSlotsAt,
+  buySlot,
   grantSkill,
   isAdvancement,
   newSkillId,
+  newStatusId,
+  removeStatus,
+  resolve,
   skillsOf,
+  slotCost,
+  slotsAvailable,
   spendXp,
-  verdict,
+  statusesOf,
+  withBoughtSlot,
   xpAward,
   xpOf,
+  type Band,
   type Skill,
+  type Status,
   type Verdict,
+  type WorldSettings,
 } from "./game.ts";
+import { fetchWorldSettings } from "./settings.ts";
 import { AdvancementPrompt } from "./components/AdvancementPrompt.tsx";
+import { DifficultyPicker } from "./components/DifficultyPicker.tsx";
+import { StatusList } from "./components/StatusList.tsx";
 import { RollResult } from "./components/RollResult.tsx";
 import { SkillLineage } from "./components/SkillLineage.tsx";
 import {
@@ -53,6 +71,8 @@ interface Attempt {
   skill: Skill;
   faces: number[];
   total: number;
+  /** What the statuses came to for this roll; already inside `total`. */
+  modifier: number;
   opposition: number | null;
   result: Verdict;
   /** Dice bought with experience, this attempt. */
@@ -86,15 +106,45 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
   const { updateTraits } = useUpdateTraitData(actor.id, SYSTEM_ID);
   const { updateResources } = useUpdateResourceData(actor.id, SYSTEM_ID);
 
+  const [settings, setSettings] = useState<WorldSettings>(DEFAULT_SETTINGS);
   const [opposition, setOpposition] = useState("");
+  const [band, setBand] = useState<Band | null>(null);
+  const [gmDice, setGmDice] = useState<number[] | null>(null);
   const [attempt, setAttempt] = useState<Attempt | null>(null);
   const [description, setDescription] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Read once, when the sheet opens. The settings describe how the table
+  // plays, not what this character is, so they do not change under a roll —
+  // and a failed read leaves the defaults in place, which is the core game.
+  // It is deliberately not an error the player sees: a world that has never
+  // configured anything and a world whose settings could not be read want the
+  // same sheet.
+  useEffect(() => {
+    let cancelled = false;
+    void fetchWorldSettings(actor.worldId)
+      .then((stored) => {
+        if (!cancelled) {
+          setSettings(stored);
+        }
+      })
+      .catch(() => {
+        // Deliberately silent; see above.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [actor.worldId]);
+
   const traitData = (data?.trait_data ?? {}) as Record<string, unknown>;
   const resourceData = (data?.resource_data ?? {}) as Record<string, unknown>;
-  const skills = skillsOf(traitData);
+  // The settings are handed over so a character nobody has opened yet is given
+  // what this world starts people with. A character who has stored skills does
+  // not reach that branch, which is the whole of "changing the setting never
+  // alters anyone who already exists" (FR-039).
+  const skills = skillsOf(traitData, settings);
+  const statuses = statusesOf(traitData);
   const xp = xpOf(resourceData);
   const storedDescription =
     typeof traitData["description"] === "string"
@@ -122,31 +172,91 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
     }
   };
 
+  /**
+   * One d6 pool from the dice engine.
+   *
+   * The character's pool and the Game Master's go through the same call with
+   * the same shape of formula, because they are the same act — dice are dice.
+   * What differs is only where the answer is put afterwards, and that
+   * difference is the whole of FR-014: these two arrays are never merged.
+   */
+  const rollPool = async (
+    name: string,
+    count: number,
+  ): Promise<{ faces: number[] }> => {
+    const { rollDice } = await postGraphQL<{ rollDice: RollResolution }>(
+      ROLL_SKILL,
+      {
+        input: {
+          worldId: actor.worldId,
+          formula: `(${name})d6`,
+          bindings: [{ name, value: count }],
+        },
+      },
+    );
+    return { faces: rollDice.dice.map((die) => die.finalValue) };
+  };
+
+  /**
+   * The Game Master picked how hard it is.
+   *
+   * Both modes finish by writing a number into the opposition field, which the
+   * player can still read and still change. The band is a way of arriving at
+   * the opposition, not a second kind of it.
+   */
+  const chooseBand = async (chosen: Band): Promise<void> => {
+    setError(null);
+    setBand(chosen);
+
+    if (settings.difficultyMode === "target") {
+      setGmDice(null);
+      setOpposition(String(BAND_TARGET[chosen]));
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const { faces } = await rollPool("BAND", BAND_DICE[chosen]);
+      setGmDice(faces);
+      setOpposition(
+        String(faces.reduce((running, face) => running + face, 0)),
+      );
+    } catch (thrown) {
+      reportRefusal(thrown);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const roll = async (skill: Skill): Promise<void> => {
     setError(null);
     setBusy(true);
     const against = opposition.trim() === "" ? null : Number(opposition);
 
     try {
-      const { rollDice } = await postGraphQL<{ rollDice: RollResolution }>(
-        ROLL_SKILL,
-        {
-          input: {
-            worldId: actor.worldId,
-            formula: "(LEVEL)d6",
-            bindings: [{ name: "LEVEL", value: skill.level }],
-          },
-        },
-      );
-
-      const faces = rollDice.dice.map((die) => die.finalValue);
-      const total = rollDice.resultValue;
-      const result = verdict(total, Number.isFinite(against) ? against : null);
+      // `faces` is the character's pool and nothing else. The Game Master's
+      // dice live in their own state and never reach this array, which is what
+      // keeps a six of theirs from earning anybody a skill (FR-014).
+      const { faces } = await rollPool("LEVEL", skill.level);
+      // Every roll goes through the one resolver, whatever this world has
+      // turned on. With nothing on it is spec 061's comparison exactly, and
+      // `game.test.ts` checks that exhaustively rather than by example.
+      const outcome = resolve({
+        faces,
+        // A world that has not turned statuses on rolls with none, whatever a
+        // character happens to have stored from a world that had — the setting
+        // decides whether they apply, never whether they exist.
+        statuses: settings.statusesEnabled ? statuses : [],
+        opposition: Number.isFinite(against) ? against : null,
+        tieSucceeds: settings.tieSucceeds,
+      });
+      const result = outcome.verdict;
 
       setAttempt({
         skill,
         faces,
-        total,
+        total: outcome.total,
+        modifier: outcome.modifier,
         opposition: against,
         result,
         bought: 0,
@@ -195,6 +305,40 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
     }
   };
 
+  /**
+   * Statuses are stored on the character, next to the skills.
+   *
+   * They go through the same `updateTraits` every other trait write uses, so a
+   * refusal — a paused world, a lost permission — is badged like any other
+   * rather than leaving the sheet showing a status the server never took.
+   */
+  const writeStatuses = async (next: Status[]): Promise<void> => {
+    setBusy(true);
+    try {
+      await updateTraits({
+        ...traitData,
+        description: description ?? storedDescription,
+        skills,
+        statuses: next,
+      });
+      await refetch();
+    } catch (thrown) {
+      reportRefusal(thrown);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const addAStatus = async (name: string, modifier: number): Promise<void> => {
+    setError(null);
+    const added = addStatus(statuses, name, modifier, newStatusId());
+    if (!added.added) {
+      setError(added.reason);
+      return;
+    }
+    await writeStatuses(added.statuses);
+  };
+
   const learnIt = async (name: string): Promise<void> => {
     if (!attempt) {
       return;
@@ -227,6 +371,47 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
     attempt !== null &&
     !attempt.advancementAnswered &&
     isAdvancement(attempt.faces, attempt.bought);
+
+  // Where the new skill would sit, and whether there is room for it there.
+  //
+  // `null` room means no cap, and that is every world that has not turned
+  // skill slots on — so with the setting off this is exactly the prompt spec
+  // 061 shipped, by the same route rather than by a second branch.
+  const newLevel = attempt ? attempt.skill.level + 1 : 1;
+  const boughtHere = boughtSlotsAt(resourceData, newLevel);
+  const roomForIt = settings.skillSlotsEnabled
+    ? slotsAvailable(skills, newLevel, boughtHere)
+    : null;
+
+  /**
+   * Buy room at the level the advancement wants to sit at.
+   *
+   * Against the same `resource_data.xp` a die-into-a-six is bought from, which
+   * is what keeps the ledger honest across both kinds of spend (FR-035): there
+   * is one balance, so there is nothing to reconcile.
+   */
+  const buyRoom = async (): Promise<void> => {
+    setError(null);
+    const purchase = buySlot(xp, newLevel, boughtHere);
+    if (!purchase.bought) {
+      setError(purchase.reason);
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await updateResources({
+        ...resourceData,
+        xp: purchase.balance,
+        boughtSlots: withBoughtSlot(resourceData, newLevel, purchase.slots),
+      });
+      await refetch();
+    } catch (thrown) {
+      reportRefusal(thrown);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <div data-testid="rfs-sheet" className="grid gap-4">
@@ -271,6 +456,16 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
           onRoll={(skill) => void roll(skill)}
         />
 
+        {settings.difficultyMode === "free" ? null : (
+          <DifficultyPicker
+            mode={settings.difficultyMode}
+            chosen={band}
+            gmDice={gmDice}
+            busy={busy || loading}
+            onChoose={(chosen) => void chooseBand(chosen)}
+          />
+        )}
+
         <label className="mt-3 grid gap-1">
           <span className={hintClass}>What has to be beaten</span>
           <Input
@@ -285,12 +480,25 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
         </label>
       </div>
 
+      {settings.statusesEnabled ? (
+        <div className={cardClass}>
+          <StatusList
+            statuses={statuses}
+            canEdit={canEdit}
+            busy={busy || loading}
+            onAdd={(name, modifier) => void addAStatus(name, modifier)}
+            onRemove={(id) => void writeStatuses(removeStatus(statuses, id))}
+          />
+        </div>
+      ) : null}
+
       {attempt ? (
         <div className={cardClass}>
           <RollResult
             skill={attempt.skill}
             faces={attempt.faces}
             total={attempt.total}
+            modifier={attempt.modifier}
             opposition={attempt.opposition}
             result={attempt.result}
             bought={attempt.bought}
@@ -306,6 +514,12 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
           <AdvancementPrompt
             parent={attempt.skill}
             busy={busy}
+            room={roomForIt}
+            xp={xp}
+            slotCost={slotCost(newLevel)}
+            onBuySlot={
+              settings.skillSlotsEnabled ? () => void buyRoom() : undefined
+            }
             onConfirm={(name) => void learnIt(name)}
             onDecline={() =>
               setAttempt({ ...attempt, advancementAnswered: true })

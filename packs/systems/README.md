@@ -441,6 +441,39 @@ not declare is rejected rather than silently rendered**.
 is recomputed on every read and never stored, so an impure one shows two
 viewers of the same character two different sheets.
 
+### Panels the host will mount
+
+A pack may fill any of four **panel slots** by dropping a file at
+`web/src/panels/<slot>.tsx` that default-exports a React component. There is
+no registration step: `apps/web/src/panels/systemPanels.ts` globs that path at
+build time, and the page owning each slot renders whatever it finds for the
+world's system.
+
+| Slot             | Where it appears                                          | Props                     |
+| ---------------- | --------------------------------------------------------- | ------------------------- |
+| `npc-detail`     | The actor page, below inventory and abilities, for an NPC | `NpcDetailPanelProps`     |
+| `world-staging`  | The pre-session staging page, below session notes          | `WorldStagingPanelProps`  |
+| `world-settings` | The world's system-settings page                           | `WorldSettingsPanelProps` |
+| `clocks`         | The clocks dock                                            | `ClocksPanelProps`        |
+
+The slot names and their props are declared in `apps/web/src/host/index.ts`
+(`PanelSlot`, `PanelSlotProps`), and the registry is typed against them — a
+`panels/clocks.tsx` written for staging's props fails to compile rather than
+failing at a table. **A file named for a slot that does not exist is silently
+never rendered**, so check the spelling against that list.
+
+A panel gets its props and nothing else. It reaches the server the same way
+every other caller does, through `postGraphQL` from `@thunderforge/host`;
+`world-settings` in particular is handed the `WorldRecord`, which carries no
+per-system settings, so a pack storing its own reads them itself.
+
+**A pack that stores settings of its own owns the table they live in**
+(ADR-063), declares it in a migration under `src/server/migrations/`, and adds
+it to `except_tables` in both `diesel.toml` files so shared schema generation
+leaves it alone. ADR-108 records why there is not yet a generic per-world
+settings surface to use instead, and what the next pack to want one should do.
+Roll for Shoes' `server/src/settings/` is the worked example.
+
 ### The one line outside your directory
 
 SC-004 says adding a system touches only that system's own pack directory,

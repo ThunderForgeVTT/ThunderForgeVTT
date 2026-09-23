@@ -8,14 +8,43 @@ edition = "2021"
 repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
 license.workspace = true
 
-# This pack owns no tables and contributes no GraphQL. It exists so the system
-# is *registered* — an unregistered system has every write of its data refused
-# — and so its two stored slots have a shape. Hence no diesel, no
-# async-graphql, no thunderforge-server: it never touches the database.
+# Two jobs. The first is registration: an unregistered system has every write
+# of its data refused, so without this crate the sheet could draw the game but
+# never save it. The second arrived with spec 062 — the world's optional rules
+# are per-world settings, and a setting that lives nowhere cannot vary by
+# world, so the pack owns a table for them (ADR-063) and the GraphQL that
+# reads and writes it. The validators still touch no database; only
+# `settings/` does.
 [dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 inventory = "0.3"
+tokio = { version = "1.53", features = ["full"] }
 thunderforge_canvas_core = { path = "../../../../crates/thunderforge-canvas-core" }
+
+thunderforge-server = { path = "../../../../src/server" }
+diesel = { version = "2.3.12", features = [
+  "postgres",
+  "r2d2",
+  "chrono",
+  "uuid",
+  "serde_json",
+] }
+async-graphql = { version = "7.2.1", features = [
+  "chrono",
+  "dataloader",
+  "log",
+  "uuid",
+] }
+chrono = { version = "0.4.45", features = ["serde"] }
+uuid = { version = "1.26.0", features = ["serde", "v7"] }
+
+[dev-dependencies]
+# The server's shared fixtures — `insert_test_world`, `test_app_state`. Behind
+# a feature so a normal build never compiles them.
+thunderforge-server = { path = "../../../../src/server", features = [
+  "test-support",
+] }
 
 [lib]
 name = "roll_for_shoes_server"

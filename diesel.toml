@@ -11,7 +11,10 @@ custom_type_derives = ["diesel::query_builder::QueryId"]
 # them by hand. That was found the hard way while adding the compendium
 # tables; it is a filter rather than a note because a note only helps somebody
 # who already suspects there is a problem.
-filter = { except_tables = ["^world_genie_.*"] }
+filter = { except_tables = [
+  "^world_genie_.*",
+  "^world_roll_for_shoes_.*",
+] }
 
 [migrations_directory]
 dir = "src/server/migrations"

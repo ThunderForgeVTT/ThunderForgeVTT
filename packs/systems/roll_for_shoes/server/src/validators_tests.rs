@@ -174,28 +174,52 @@ fn t9_a_level_is_one_higher_than_its_parent() {
     );
 }
 
-/// The other one: a character has a single starting skill, however long the
-/// lineage grows.
+/// The other one: a lineage has to start somewhere.
+///
+/// Every skill claiming a parent means either a cycle or a parent outside the
+/// set. T8 catches the second; this is what catches the first, which is why it
+/// survives the relaxation below.
 #[test]
-fn t10_a_list_holds_exactly_one_starting_skill() {
-    let two_roots = json!({ "skills": [
-        root(),
-        { "id": "s2", "name": "Run Away", "level": 1, "parentId": null },
+fn t10_a_list_holds_at_least_one_starting_skill() {
+    let rootless = json!({ "skills": [
+        { "id": "s1", "name": "Do Anything", "level": 1, "parentId": "s2" },
+        { "id": "s2", "name": "Kick A Door Down", "level": 2, "parentId": "s1" },
     ]});
-    assert_eq!(
-        refusal(validate_trait_data(&two_roots)),
-        "skills: must have exactly one starting skill"
-    );
+    // Refused — by T9 here, since a cycle fails the arithmetic first — and the
+    // rootless case below reaches T10 itself.
+    assert!(validate_trait_data(&rootless).is_err());
 }
 
+/// **This is the rule spec 062 changed, and why.**
+///
+/// It used to read "exactly one starting skill, at level 1", which was true of
+/// every character while `Do Anything 1` was the only way to begin. A world may
+/// now declare its own starting skills — several of them, at any level — and
+/// each is a root, because none descends from another. The old rule would have
+/// made a legal world's characters unstorable the moment they were created:
+/// the validator is world-blind, so it cannot ask which world this is, and a
+/// rule it cannot evaluate is a rule it must not enforce.
+///
+/// What it still refuses is what was never a dice pool.
 #[test]
-fn t11_the_starting_skill_is_at_level_one() {
-    let high_root = json!({ "skills": [
-        { "id": "s1", "name": "Do Anything", "level": 2, "parentId": null },
+fn t11_a_world_may_declare_several_starting_skills_at_any_level() {
+    let declared = json!({ "skills": [
+        { "id": "s1", "name": "Scavenge", "level": 3, "parentId": null },
+        { "id": "s2", "name": "Run Away", "level": 1, "parentId": null },
+        { "id": "s3", "name": "Scavenge A Battlefield", "level": 4, "parentId": "s1" },
+    ]});
+    assert!(
+        validate_trait_data(&declared).is_ok(),
+        "a character created from a world's own starting skills must save"
+    );
+
+    // Level 0 is still not a pool, and T7 is what says so.
+    let nothing = json!({ "skills": [
+        { "id": "s1", "name": "Do Anything", "level": 0, "parentId": null },
     ]});
     assert_eq!(
-        refusal(validate_trait_data(&high_root)),
-        "skills: the starting skill must be at level 1"
+        refusal(validate_trait_data(&nothing)),
+        "skills[0].level: must be a whole number of at least 1"
     );
 }
 
@@ -248,4 +272,165 @@ fn a_name_is_never_judged_and_a_level_is_never_capped() {
 fn an_empty_list_is_a_character_who_has_not_been_opened_yet() {
     assert!(validate_trait_data(&json!({ "skills": [] })).is_ok());
     assert!(validate_trait_data(&json!({})).is_ok());
+}
+
+// ============================================================================
+// Statuses (T12-T16) and bought slots (R4-R6) — spec 062
+// ============================================================================
+
+#[test]
+fn t12_statuses_must_be_a_list() {
+    assert_eq!(
+        refusal(validate_trait_data(&json!({ "statuses": {} }))),
+        "statuses: must be a list"
+    );
+}
+
+#[test]
+fn t13_a_status_carries_an_id_a_name_and_a_modifier() {
+    for incomplete in [
+        json!({ "name": "Wounded", "modifier": -2 }),
+        json!({ "id": "x", "modifier": -2 }),
+        json!({ "id": "x", "name": "Wounded" }),
+        json!("Wounded"),
+    ] {
+        assert_eq!(
+            refusal(validate_trait_data(&json!({ "statuses": [incomplete] }))),
+            "statuses[0]: must be an object with id, name and modifier"
+        );
+    }
+}
+
+#[test]
+fn t14_status_ids_are_unique_within_the_character() {
+    let twice = json!({ "statuses": [
+        { "id": "st1", "name": "Wounded", "modifier": -2 },
+        { "id": "st1", "name": "Soaked", "modifier": -1 },
+    ]});
+    assert_eq!(
+        refusal(validate_trait_data(&twice)),
+        "statuses[1].id: must be unique and not empty"
+    );
+}
+
+/// Names are free text the table wrote, so two may repeat — saying "Wounded"
+/// twice is a table saying it twice, and both modifiers count. Only the id,
+/// which nobody sees and which exists to remove a row by, has to be unique.
+#[test]
+fn t14_two_statuses_may_share_a_name() {
+    let same_name = json!({ "statuses": [
+        { "id": "st1", "name": "Wounded", "modifier": -2 },
+        { "id": "st2", "name": "Wounded", "modifier": -2 },
+    ]});
+    assert!(validate_trait_data(&same_name).is_ok());
+}
+
+#[test]
+fn t15_a_status_name_must_not_be_empty() {
+    assert_eq!(
+        refusal(validate_trait_data(
+            &json!({ "statuses": [{ "id": "st1", "name": "   ", "modifier": 0 }] })
+        )),
+        "statuses[0].name: must not be empty"
+    );
+}
+
+#[test]
+fn t16_a_modifier_must_be_a_whole_number() {
+    for bad in [json!(1.5), json!("-2"), json!(null)] {
+        assert_eq!(
+            refusal(validate_trait_data(
+                &json!({ "statuses": [{ "id": "st1", "name": "Wounded", "modifier": bad }] })
+            )),
+            "statuses[0].modifier: must be a whole number"
+        );
+    }
+}
+
+/// This system ships no list of statuses and judges none, exactly as it judges
+/// no skill name. A table wanting nine of them at −20 apiece is playing their
+/// game, and a −100 is a legitimate way to say "this is not happening".
+#[test]
+fn nothing_caps_how_many_statuses_or_how_large() {
+    let absurd = json!({ "statuses": (0..9)
+        .map(|i| json!({ "id": format!("st{i}"), "name": "Doomed", "modifier": -100 }))
+        .collect::<Vec<_>>() });
+    assert!(validate_trait_data(&absurd).is_ok());
+
+    let zero = json!({ "statuses": [{ "id": "st1", "name": "Marked", "modifier": 0 }] });
+    assert!(validate_trait_data(&zero).is_ok());
+}
+
+/// Absent is the ordinary case — it is every character until a table turns
+/// statuses on — and it must never read as an error.
+#[test]
+fn no_statuses_is_not_an_error() {
+    assert!(validate_trait_data(&json!({})).is_ok());
+    assert!(validate_trait_data(&json!({ "statuses": [] })).is_ok());
+    assert!(validate_trait_data(&json!({ "statuses": null })).is_ok());
+}
+
+#[test]
+fn r4_bought_slots_must_be_an_object() {
+    assert_eq!(
+        refusal(validate_resource_data(
+            &json!({ "xp": 0, "boughtSlots": [] })
+        )),
+        "boughtSlots: must be a JSON object"
+    );
+}
+
+#[test]
+fn r5_bought_slots_are_keyed_by_a_level() {
+    for bad_key in ["0", "-1", "two", "1.5", ""] {
+        assert_eq!(
+            refusal(validate_resource_data(
+                &json!({ "xp": 0, "boughtSlots": { bad_key: 1 } })
+            )),
+            format!("boughtSlots[{bad_key}]: must be keyed by a whole level of at least 1")
+        );
+    }
+}
+
+#[test]
+fn r6_a_bought_count_is_a_whole_number_of_at_least_zero() {
+    for bad in [json!(-1), json!(1.5), json!("two"), json!(null)] {
+        assert_eq!(
+            refusal(validate_resource_data(
+                &json!({ "xp": 0, "boughtSlots": { "2": bad } })
+            )),
+            "boughtSlots[2]: must be a whole number of at least 0"
+        );
+    }
+
+    assert!(validate_resource_data(&json!({ "xp": 0, "boughtSlots": { "2": 0 } })).is_ok());
+    assert!(validate_resource_data(&json!({ "xp": 4, "boughtSlots": { "2": 3, "7": 1 } })).is_ok());
+}
+
+/// **Turning skill slots on must never make an existing character unstorable**
+/// (FR-036). A character who already holds five skills at level 2 predates the
+/// setting, or was stored while it was off, and the storage layer has no way to
+/// ask which — so it does not refuse them. The cap is enforced where an
+/// advancement is *granted*, not where a character is saved.
+///
+/// Written as a test rather than only as a comment, because a future reader
+/// adding "and the skills must fit the caps" here would break every such
+/// character and the comment alone would not stop them.
+#[test]
+fn a_character_over_the_caps_is_still_storable() {
+    let mut skills = vec![root()];
+    for i in 2..=6 {
+        skills.push(json!({
+            "id": format!("s{i}"),
+            "name": format!("Crowded {i}"),
+            "level": 2,
+            "parentId": "s1",
+        }));
+    }
+    assert!(
+        validate_trait_data(&json!({ "skills": skills })).is_ok(),
+        "five skills at level 2 exceeds the cap of four, and must still save"
+    );
+
+    assert!(validate_resource_data(&json!({ "xp": 0, "boughtSlots": {} })).is_ok());
 }

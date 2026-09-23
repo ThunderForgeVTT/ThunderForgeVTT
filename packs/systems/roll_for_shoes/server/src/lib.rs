@@ -9,11 +9,17 @@
 //! only from `inventory`-submitted contributions. So without this crate the
 //! sheet could draw the game but could never save it.
 //!
-//! That is the whole job. There is no table, no migration, no GraphQL, and
-//! nothing here touches the database — a roll goes down the same path every
-//! other system's roll takes.
+//! That was the whole job until spec 062. The Extras — the optional rules the
+//! game leaves to the table — are *per-world* settings, and a setting that
+//! lives nowhere cannot vary by world. So the pack now also owns one table and
+//! the two root fields that read and write it (`settings`, ADR-063 and
+//! ADR-108). The validators below still touch no database; only `settings`
+//! does, and a roll still goes down the same path every other system's takes.
 
+pub mod settings;
 pub mod validators;
+
+pub use settings::graphql::{RollForShoesSettingsMutation, RollForShoesSettingsQuery};
 
 #[cfg(test)]
 mod validators_tests;
@@ -38,23 +44,36 @@ pub const SYSTEM_ID: &str = "roll_for_shoes";
 /// the host gives a sheet no way to read a manifest — that duplication is
 /// recorded and accepted in the spec's research (D6), and the test below is
 /// what keeps this half of it honest.
-pub fn starting_skill() -> (String, i64) {
-    static DECLARED: std::sync::OnceLock<(String, i64)> = std::sync::OnceLock::new();
+pub fn starting_skills() -> Vec<(String, i64)> {
+    static DECLARED: std::sync::OnceLock<Vec<(String, i64)>> = std::sync::OnceLock::new();
     DECLARED
         .get_or_init(|| {
             let manifest =
                 serde_json::from_str::<serde_json::Value>(include_str!("../../system.json")).ok();
-            let declared = manifest.as_ref().and_then(|m| m.get("startingSkill"));
-            let name = declared
-                .and_then(|s| s.get("name"))
-                .and_then(|n| n.as_str())
-                .unwrap_or("Do Anything")
-                .to_string();
-            let level = declared
-                .and_then(|s| s.get("level"))
-                .and_then(serde_json::Value::as_i64)
-                .unwrap_or(1);
-            (name, level)
+            let declared = manifest
+                .as_ref()
+                .and_then(|m| m.get("startingSkills"))
+                .and_then(serde_json::Value::as_array)
+                .map(|entries| {
+                    entries
+                        .iter()
+                        .filter_map(|entry| {
+                            let name = entry.get("name").and_then(|n| n.as_str())?;
+                            let level = entry.get("level").and_then(serde_json::Value::as_i64)?;
+                            Some((name.to_string(), level))
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+
+            // A manifest that declares none still means the core rule, not a
+            // character with no skills. The two are never the same thing here,
+            // and this is the one place the distinction is made in Rust.
+            if declared.is_empty() {
+                vec![("Do Anything".to_string(), 1)]
+            } else {
+                declared
+            }
         })
         .clone()
 }
@@ -84,19 +103,44 @@ mod tests {
         assert_eq!(VERSION, "0.1.0");
     }
 
-    /// The manifest's starting skill must be at level 1, because that is what
-    /// the trait validator enforces of a character's root skill (T11). If the
-    /// manifest ever said otherwise, every character created from it would be
+    /// The manifest's starting skill must be one the trait validator accepts of
+    /// a character's root skill, or every character created from it would be
     /// refused on first save.
+    ///
+    /// Spec 062 loosened what that means: T11 once demanded exactly level 1,
+    /// and now demands only a level of at least 1, because a world may declare
+    /// its own starting skills. This test is deliberately written against the
+    /// validator rather than against the number, so it keeps holding whichever
+    /// of the two rules is in force.
     #[test]
     fn the_declared_starting_skill_is_one_the_validator_would_accept() {
-        let (name, level) = starting_skill();
-        assert!(!name.trim().is_empty());
-        assert_eq!(level, 1);
+        let declared = starting_skills();
+        assert!(
+            !declared.is_empty(),
+            "an empty declaration must still mean the core rule"
+        );
 
-        let seeded = serde_json::json!({ "skills": [
-            { "id": "s1", "name": name, "level": level, "parentId": null },
-        ]});
-        assert!(validate_trait_data(&seeded).is_ok());
+        let seeded = serde_json::json!({
+            "skills": declared
+                .iter()
+                .enumerate()
+                .map(|(index, (name, level))| serde_json::json!({
+                    "id": format!("s{index}"),
+                    "name": name,
+                    "level": level,
+                    "parentId": null,
+                }))
+                .collect::<Vec<_>>()
+        });
+        for (name, level) in &declared {
+            assert!(!name.trim().is_empty());
+            assert!(*level >= 1);
+        }
+        assert!(
+            validate_trait_data(&seeded).is_ok(),
+            "the pack's own declared starting skills must produce a character \
+             the validator accepts — otherwise a new character is refused on \
+             first save"
+        );
     }
 }

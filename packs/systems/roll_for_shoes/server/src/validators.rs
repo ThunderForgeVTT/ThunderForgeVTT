@@ -73,6 +73,53 @@ pub fn validate_resource_data(data: &serde_json::Value) -> Result<(), Validation
         return Err(ValidationError::new("xp", "must not be negative"));
     }
 
+    validate_bought_slots(obj)
+}
+
+/// Validates `{ "boughtSlots": { "<level>": <integer ≥ 0> } }` (R4-R6).
+///
+/// Room bought with experience, counted per level. Absent means none bought,
+/// which is every character until a table turns skill slots on — so this is
+/// not written on creation and its absence is never an error.
+///
+/// The keys are level numbers written as strings, because JSON object keys are
+/// strings and this is stored as JSON. Nothing caps how much room may be
+/// bought: the price rises with the level and the experience has to be earned
+/// by failing, which is the only limit the game puts on it.
+fn validate_bought_slots(
+    obj: &serde_json::Map<String, serde_json::Value>,
+) -> Result<(), ValidationError> {
+    let Some(bought) = obj.get("boughtSlots") else {
+        return Ok(());
+    };
+    if bought.is_null() {
+        return Ok(());
+    }
+
+    // R4
+    let bought = bought
+        .as_object()
+        .ok_or_else(|| ValidationError::new("boughtSlots", "must be a JSON object"))?;
+
+    for (level, count) in bought {
+        // R5
+        if !level.parse::<i64>().is_ok_and(|level| level >= 1) {
+            return Err(ValidationError::new(
+                format!("boughtSlots[{level}]"),
+                "must be keyed by a whole level of at least 1",
+            ));
+        }
+
+        // R6
+        let count = count.as_i64();
+        if count.is_none_or(|count| count < 0) {
+            return Err(ValidationError::new(
+                format!("boughtSlots[{level}]"),
+                "must be a whole number of at least 0",
+            ));
+        }
+    }
+
     Ok(())
 }
 
@@ -99,6 +146,8 @@ pub fn validate_trait_data(data: &serde_json::Value) -> Result<(), ValidationErr
             return Err(ValidationError::new("description", "must be text"));
         }
     }
+
+    validate_statuses(obj)?;
 
     let Some(skills) = obj.get("skills") else {
         return Ok(());
@@ -182,14 +231,15 @@ pub fn validate_trait_data(data: &serde_json::Value) -> Result<(), ValidationErr
         let parent_id = entry.get("parentId").unwrap_or(&serde_json::Value::Null);
 
         if parent_id.is_null() {
+            // T11 — a root is at level 1 or higher, which T7 has already
+            // established of every skill. It used to be *exactly* 1, because
+            // every character began with `Do Anything 1` and nothing else was
+            // reachable. A world may now declare its own starting skills, at
+            // whatever level it likes, so a root at level 3 is a table's
+            // choice rather than corrupt data. What stays refused is level 0
+            // and below, which is not a dice pool.
             roots += 1;
-            // T11
-            if level != 1 {
-                return Err(ValidationError::new(
-                    "skills",
-                    "the starting skill must be at level 1",
-                ));
-            }
+            let _ = level;
             continue;
         }
 
@@ -215,12 +265,104 @@ pub fn validate_trait_data(data: &serde_json::Value) -> Result<(), ValidationErr
         }
     }
 
-    // T10
-    if roots != 1 {
+    // T10 — at least one root, not exactly one.
+    //
+    // A world may declare several starting skills, and each of them is a root:
+    // they are what the character was given, so none of them descends from
+    // another. Refusing more than one would make a legal world's characters
+    // unstorable the moment they were created.
+    //
+    // Zero is still refused, and for the reason the old rule existed: a
+    // lineage has to start somewhere, and skills that all claim a parent
+    // either form a cycle or point outside the set. T8 catches the second;
+    // this catches the first.
+    if roots == 0 {
         return Err(ValidationError::new(
             "skills",
-            "must have exactly one starting skill",
+            "must have at least one starting skill",
         ));
+    }
+
+    Ok(())
+}
+
+/// Validates `{ "statuses": [{ "id", "name", "modifier" }] }` (T12-T15).
+///
+/// A status is a label the table wrote and a signed number. This system ships
+/// no list of them and judges none, exactly as it judges no skill name: what
+/// counts as a condition, and what it is worth, is the table's call.
+///
+/// So nothing here caps the count or the magnitude. A table that wants a
+/// character carrying nine things at −20 apiece is playing their game, and a
+/// −100 status is a legitimate way to say "this is not happening". What is
+/// checked is only what makes the data readable: an id to remove it by, a name
+/// to show, and a number that is a number.
+fn validate_statuses(
+    obj: &serde_json::Map<String, serde_json::Value>,
+) -> Result<(), ValidationError> {
+    let Some(statuses) = obj.get("statuses") else {
+        return Ok(());
+    };
+    if statuses.is_null() {
+        return Ok(());
+    }
+
+    // T12
+    let statuses = statuses
+        .as_array()
+        .ok_or_else(|| ValidationError::new("statuses", "must be a list"))?;
+
+    let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+
+    for (index, entry) in statuses.iter().enumerate() {
+        // T13
+        let entry = entry.as_object().ok_or_else(|| {
+            ValidationError::new(
+                format!("statuses[{index}]"),
+                "must be an object with id, name and modifier",
+            )
+        })?;
+
+        for key in ["id", "name", "modifier"] {
+            if !entry.contains_key(key) {
+                return Err(ValidationError::new(
+                    format!("statuses[{index}]"),
+                    "must be an object with id, name and modifier",
+                ));
+            }
+        }
+
+        // T14 — unique within this character. Two statuses may share a name;
+        // "Wounded" twice is a table saying it twice, and both count.
+        let id = entry.get("id").and_then(|id| id.as_str()).unwrap_or("");
+        if id.is_empty() || !seen.insert(id) {
+            return Err(ValidationError::new(
+                format!("statuses[{index}].id"),
+                "must be unique and not empty",
+            ));
+        }
+
+        // T15
+        let name = entry.get("name").and_then(|name| name.as_str());
+        if !name.is_some_and(|name| !name.trim().is_empty()) {
+            return Err(ValidationError::new(
+                format!("statuses[{index}].name"),
+                "must not be empty",
+            ));
+        }
+
+        // T16 — any integer, either sign. A modifier of zero is allowed: a
+        // table may want a label that is currently worth nothing.
+        if entry
+            .get("modifier")
+            .and_then(serde_json::Value::as_i64)
+            .is_none()
+        {
+            return Err(ValidationError::new(
+                format!("statuses[{index}].modifier"),
+                "must be a whole number",
+            ));
+        }
     }
 
     Ok(())
