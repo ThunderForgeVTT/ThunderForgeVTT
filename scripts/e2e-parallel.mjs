@@ -131,10 +131,12 @@ const SHARD_DIR = join(ROOT_DIR, ".e2e-shards");
 /**
  * Measured seconds per spec file, so each run balances better than the last.
  *
- * Two files. The tracked one is a baseline that keeps the first run on a new
- * machine balanced, and changes only when someone asks (`--record-durations`)
- * and commits it. The local one is rewritten by every run and preferred when
- * present, so this machine's own measurements still steer its next run.
+ * Two files, both ignored by git. The baseline changes only when someone asks
+ * (`--record-durations`); the local one is rewritten by every run and preferred
+ * when present, so this machine's own measurements steer its next run. Neither
+ * is committed: the numbers are per-machine, and a file most of which changes
+ * on every recorded run only ever arrived as noise in somebody else's diff.
+ * Absent both, sharding falls back to spec count and self-corrects.
  */
 const DURATIONS_PATH = join(ROOT_DIR, ".e2e-shards-durations.json");
 const LOCAL_DURATIONS_PATH = join(ROOT_DIR, ".e2e-shards-durations.local.json");
@@ -176,7 +178,8 @@ const GITHUB_APPS_LANE_ENV = {
 
 /**
  * Seconds per spec file: this machine's last run if it has one, else the
- * committed baseline, else `{}`.
+ * recorded baseline, else `{}` — which shards by spec count until a run
+ * records something better.
  */
 function readDurations() {
   for (const path of [LOCAL_DURATIONS_PATH, DURATIONS_PATH]) {
@@ -233,10 +236,11 @@ function partitionByDuration(files, shardCount, durations) {
  * for shards that produced one — a crashed shard must not zero out the
  * estimate that keeps the next run balanced.
  *
- * Always to the gitignored local file; to the tracked baseline only under
- * `--record-durations`. Every run used to rewrite the tracked file, so every
+ * Always to the local file; to the baseline only under `--record-durations`.
+ * Both are gitignored now. Every run used to rewrite the baseline, so every
  * checkout that had run e2e had a modified file in git, and on 2026-09-14 that
- * local rewrite blocked a fast-forward merge.
+ * rewrite blocked a fast-forward merge; splitting the files narrowed that to
+ * recorded runs, and ignoring both closed it.
  */
 function recordDurations(shardDirs, previous, { baseline = false } = {}) {
   const totals = { ...previous };
@@ -924,7 +928,7 @@ async function main() {
     else if (sliceMatch) args.slice = sliceMatch[1];
     else if (argv === "--all") args.all = true;
     else if (argv === "--keep") args.keep = true;
-    // Also write the tracked `.e2e-shards-durations.json` baseline, and with
+    // Also write the `.e2e-shards-durations.json` baseline, and with
     // `--slice`, the slice's time to `scripts/e2e/slice-durations.json`.
     else if (argv === "--record-durations") args.recordDurations = true;
     else throw new Error(`Unknown argument: ${argv}`);

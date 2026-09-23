@@ -7,9 +7,9 @@
  * `contracts/slices-json.md` fixes.
  *
  * A file of its own, tracked, and separate from `.e2e-shards-durations.json`:
- * the per-spec file rebalances shards and must never ride along with feature
- * work, while this one is a claim ("combat takes 6m 40s") that belongs in the
- * commit that changes it, where a reviewer can see it.
+ * the per-spec file rebalances shards, is per-machine noise and is gitignored,
+ * while this one is a claim ("combat takes 6m 40s") that belongs in the commit
+ * that changes it, where a reviewer can see it.
  */
 
 import { execFileSync } from "node:child_process";

@@ -176,11 +176,17 @@ apps/web/e2e/fixtures/.demo/
 apps/web/e2e/.demo/
 
 # Working state for `scripts/e2e-parallel.mjs`: one data path, demo dir and
-# JSON report per shard, rebuilt from scratch on every run. The measured
-# durations baseline (`.e2e-shards-durations.json`) is *not* ignored — it keeps
-# the first run on a new machine balanced, and changes only through
-# `--record-durations`. Every run's own measurements go to the local file.
+# JSON report per shard, rebuilt from scratch on every run.
+#
+# The shard-balancing durations are ignored too, baseline and local alike. They
+# are per-machine timing noise: every recorded run rewrites most of the file,
+# so the baseline arrived dirty in unrelated commits and told a reviewer
+# nothing. A fresh clone now balances its first parallel run by spec count and
+# corrects itself on the first `--record-durations`. The measurement worth
+# keeping is `scripts/e2e/slice-durations.json`, which is a claim about a
+# feature's slice and stays tracked.
 .e2e-shards/
+.e2e-shards-durations.json
 .e2e-shards-durations.local.json
 .e2e-shards.lock
 # The live-run marker (pid, start, args); the hooks refuse while it is live.
