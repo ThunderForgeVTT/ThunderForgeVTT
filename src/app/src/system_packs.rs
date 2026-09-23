@@ -41,6 +41,7 @@ use dnd5e_server as _;
 use fate_server as _;
 use genie_server as _;
 use pathfinder2e_server as _;
+use roll_for_shoes_server as _;
 use yze_server as _;
 
 #[cfg(test)]
@@ -64,6 +65,7 @@ mod tests {
             "fate_core",
             "genie",
             "pathfinder2e",
+            "roll_for_shoes",
             "year_zero_engine",
         ] {
             assert!(

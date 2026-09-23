@@ -1,0 +1,88 @@
+{
+  "id": "roll_for_shoes",
+  "title": "Roll for Shoes",
+  "version": "0.1.0",
+  "author": "Ben Wray",
+  "description": "A whole roleplaying game in six rules. Say what you do, roll a die for each level of a skill you have, and beat the opposition. Fail and you learn something; roll all sixes and you invent a skill nobody has ever had.",
+  "license": "CC0-1.0",
+  "url": "https://rollforshoes.com/",
+  "compatibility": {
+    "minimum": "0.1.0",
+    "verified": "0.1.0",
+    "maximum": "1.0.0"
+  },
+  "esmodules": ["web/dist/index.js"],
+  "styles": ["web/dist/index.css"],
+  "packages": {
+    "server": "./server",
+    "web": "./web"
+  },
+  "legal": {
+    "licenseName": "CC0 1.0 Universal (Public Domain Dedication)",
+    "attributionText": "Roll for Shoes by Ben Wray — rollforshoes.com",
+    "requiredNotice": null,
+    "disclaimer": null,
+    "trademarkRestrictions": [],
+    "requiredUiPlacement": null,
+    "sourceUrl": "https://rollforshoes.com/"
+  },
+  "data_types": {
+    "trait_data": {
+      "description": "A Roll for Shoes character's description and skill lineage",
+      "properties": {
+        "description": {
+          "type": "string",
+          "label": "Description"
+        },
+        "skills": {
+          "type": "array",
+          "label": "Skills"
+        }
+      },
+      "required": []
+    },
+    "resource_data": {
+      "description": "Experience earned from failure",
+      "properties": {
+        "xp": {
+          "type": "integer",
+          "label": "XP"
+        }
+      },
+      "required": []
+    }
+  },
+  "resources": [
+    {
+      "id": "xp",
+      "label": "XP",
+      "kind": "counter",
+      "order": 0,
+      "allowStacking": false,
+      "source": {
+        "slot": "resourceData",
+        "entries": [
+          {
+            "current": "xp"
+          }
+        ]
+      }
+    }
+  ],
+  "sheet": [
+    {
+      "id": "description",
+      "label": "Description",
+      "kind": "text",
+      "slot": "traitData",
+      "source": "description"
+    }
+  ],
+  "turnStructure": {
+    "rounds": false
+  },
+  "startingSkill": {
+    "name": "Do Anything",
+    "level": 1
+  }
+}

@@ -449,7 +449,7 @@ that nothing references is never linked, and its `inventory` submissions
 vanish with it — measured, not assumed. So a bundled pack with a `server/`
 crate needs:
 
-- one `use <pack> as _;` line in `src/server/src/system_packs.rs`, and
+- one `use <pack> as _;` line in `src/app/src/system_packs.rs`, and
 - one dependency in `src/server/Cargo.toml`.
 
 Both are build-graph facts: they say a crate exists and should be linked, and

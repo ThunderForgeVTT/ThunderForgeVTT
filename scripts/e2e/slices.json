@@ -489,7 +489,7 @@
         "crates/pack_system_spec/**",
         "crates/thunderforge-canvas-core/src/{system_contribution,content_entry,content_patterns}.rs",
         "crates/thunderforge-content/**",
-        "packs/systems/{basic-game-system,blades_in_the_dark,cypher_system,dnd5e,fate_core,pathfinder2e,year_zero_engine}/**",
+        "packs/systems/{basic-game-system,blades_in_the_dark,cypher_system,dnd5e,fate_core,pathfinder2e,roll_for_shoes,year_zero_engine}/**",
         "src/app/src/system_packs.rs",
         "src/server/src/graphql_world_default_system_tests.rs",
         "src/server/src/{systems,systems_manifest_legal_enforcement_tests,systems_registry_tests,test_packs,content_patterns}.rs"

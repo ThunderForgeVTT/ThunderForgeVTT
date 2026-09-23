@@ -1,0 +1,22 @@
+[lints]
+workspace = true
+
+[package]
+name = "roll-for-shoes-server"
+version = "0.1.0"
+edition = "2021"
+repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
+license.workspace = true
+
+# This pack owns no tables and contributes no GraphQL. It exists so the system
+# is *registered* — an unregistered system has every write of its data refused
+# — and so its two stored slots have a shape. Hence no diesel, no
+# async-graphql, no thunderforge-server: it never touches the database.
+[dependencies]
+serde_json = "1.0.151"
+inventory = "0.3"
+thunderforge_canvas_core = { path = "../../../../crates/thunderforge-canvas-core" }
+
+[lib]
+name = "roll_for_shoes_server"
+path = "src/lib.rs"

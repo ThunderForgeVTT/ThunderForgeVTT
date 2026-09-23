@@ -7362,6 +7362,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "roll-for-shoes-server"
+version = "0.1.0"
+dependencies = [
+ "inventory",
+ "serde_json",
+ "thunderforge_canvas_core",
+]
+
+[[package]]
 name = "ron"
 version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8352,6 +8361,7 @@ dependencies = [
  "genie-server",
  "pathfinder2e-server",
  "reqwest",
+ "roll-for-shoes-server",
  "serde",
  "serde_json",
  "thunderforge-pdf",

@@ -36,7 +36,8 @@ members = [
     "packs/systems/blades_in_the_dark/server",
     "packs/systems/blades_in_the_dark/engine",
     "packs/systems/year_zero_engine/server",
-    "packs/systems/year_zero_engine/engine"
+    "packs/systems/year_zero_engine/engine",
+    "packs/systems/roll_for_shoes/server"
 ]
 default-members = ["src/app", "src/server", "src/core"]
 
