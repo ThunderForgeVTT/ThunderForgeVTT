@@ -174,6 +174,7 @@ export function ItemOwnershipBlock({
               </div>
               <select
                 data-testid={`item-ownership-select-${subject.userId}`}
+                aria-label={`Access level for ${subject.displayName ?? subject.userId}`}
                 value={explicit?.level ?? ""}
                 disabled={pendingUserId === subject.userId}
                 onChange={(event) =>
