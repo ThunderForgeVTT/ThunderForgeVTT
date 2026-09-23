@@ -110,14 +110,14 @@
     "commit": "cc96588"
   },
   "game-systems": {
-    "wallSeconds": 152,
+    "wallSeconds": 176,
     "specs": 5,
-    "passed": 17,
+    "passed": 18,
     "failed": 0,
     "flaky": 0,
     "skipped": 0,
     "measuredAt": "2026-09-22",
-    "commit": "d9464bb-dirty"
+    "commit": "0f0d043-dirty"
   },
   "genie": {
     "wallSeconds": 241,
