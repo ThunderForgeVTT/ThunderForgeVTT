@@ -145,7 +145,7 @@ phase is done** — without registration every write is refused.
 **Independent Test**: after two advancements, read the sheet and see which skill each one grew out of.
 
 - [X] T028 [US7] Render the lineage nested — each skill beneath the one it advanced from, the root first, each showing its level (FR-042, FR-043).
-- [ ] T029 [US7] Make the sheet work in the play dock: mounted with `canEdit: false`, compacted to roughly 22rem, no crash without edit permission, and rolling still available — the dock is where a player sits during play. There is no declarative fallback behind it.
+- [X] T029 [US7] Make the sheet work in the play dock: mounted with `canEdit: false`, compacted to roughly 22rem, no crash without edit permission, and rolling still available — the dock is where a player sits during play. There is no declarative fallback behind it.
 
 **Checkpoint**: every user story works.
 
@@ -156,10 +156,20 @@ phase is done** — without registration every write is refused.
 - [X] T030 Write `apps/web/e2e/system-roll-for-shoes.spec.ts` — the name puts it in the `game-systems` slice, which its `system-` prefix owns. Play the loop of FR-047: register, create a world on `roll_for_shoes` through GraphQL, create an actor, open the sheet, roll the starting skill against an opposition of 6, assert the failure and the XP it paid, then drive an advancement and name the skill it grants. Assert the dice as invariants — one die per level, six sides, faces in range, total equal to the sum — because **no seed exists and a roll cannot be forced** (research D9).
 - [X] T031 [P] Assert the sheet is accessible with `expectNoAxeViolations` from the e2e fixtures.
 - [X] T032 [P] Fix the stale path in `packs/systems/README.md`: the linkage line lives in `src/app/src/system_packs.rs`, not `src/server/src/system_packs.rs`. One line, found while writing this plan, kept separate from the feature's own code.
-- [ ] T033 Walk [quickstart.md](./quickstart.md) end to end on a real stack, including the play-dock check and the reload.
+- [X] T033 Walk [quickstart.md](./quickstart.md) end to end on a real stack, including the play-dock check and the reload.
 - [X] T034 Proof: run `pnpm e2e:game-systems` alone with `--record-durations`, grep the log for `✘`, and record the result and wall time here. The full suite is for releases and cross-cutting changes; this feature is neither.
 
-  **Result (2026-09-22)**: `THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT=1 pnpm e2e:game-systems --record-durations` — **17 passed, 0 failed, 0 flaky, 0 skipped** across 5 specs on 1 shard, **152s** wall (recorded to `scripts/e2e/slice-durations.json`). No `✘` in the log. The first attempt crashed before any test ran because the Postgres container was down (`Totals: 0 passed, 0 failed`); the second surfaced one real defect, a pre-existing unnamed `<select>` in the host's Ownership block, fixed separately.
+  **Result (2026-09-22)**: `THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT=1 pnpm e2e:game-systems --record-durations` — **18 passed, 0 failed, 0 flaky, 0 skipped** across 5 specs on 1 shard (recorded to `scripts/e2e/slice-durations.json`). No `✘` in the log.
+
+  Getting there took five runs, and every failure but the first was a real finding rather than a flaky test:
+
+  1. Crashed before any test ran: the Postgres container was down (`Totals: 0 passed, 0 failed`). Only the `Totals:` line is meaningful from this harness — the shell exit code said 0.
+  2. One real defect, a pre-existing unnamed `<select>` in the host's Ownership block, fixed separately in its own commit. The pack's axe assertion is now scoped to `[data-testid="rfs-sheet"]`.
+  3. T029's dock test could not reach the in-pane sheet at all: it opens **only for the person playing the character** (spec 031 FR-002), and the server refuses a Game Master's claim outright ("The GM does not claim characters"). The test now invites a second account and drives the dock from the player's page.
+  4. The sheet mounted, rendered read-only, fitted the column and rolled — but the XP stayed 0. **Claiming a character grants no write access to it**; `updateActorSystemData` needs Editor, which is the GM's to give. The fixture now grants it, and the test asserts `rfs-error` has count 0 so a refused write can never again read as a disagreement about a number.
+  5. Green.
+
+  Point 4 is worth a decision that does not belong to this pack: a player who claims a character but was never granted Editor can roll, fail, and earn nothing, with only a small badge to say so. Whether a claim should imply write access on the claimed character is a host question — if yes, it is a host change and its own spec.
 - [X] T035 Run `pnpm verify` and fix what it reports **in the code this feature added** — `rust-fmt`, `rust-lint`, `web-fmt`, `web-lint`, `registry`, `packdocs`, `filelength`, `e2e-slices`. `pnpm verify:fix` rewrites what can be rewritten mechanically. Repo-wide lint work gets its own commit.
 
 ---

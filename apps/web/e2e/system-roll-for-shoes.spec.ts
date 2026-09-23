@@ -1,7 +1,11 @@
 import type { Page } from "@playwright/test";
 
 import { expectNoAxeViolations } from "./fixtures/axe";
-import { graphql, registerAndCreateWorld } from "./fixtures/helpers";
+import {
+  graphql,
+  inviteAndJoinAsPlayer,
+  registerAndCreateWorld,
+} from "./fixtures/helpers";
 import { expect, test } from "./fixtures/test";
 
 /**
@@ -142,4 +146,128 @@ test("a character starts with one skill, fails its way to XP, and spends it to l
   // actor page is the host's, and a regression there belongs to the host's
   // specs rather than breaking Roll for Shoes.
   await expectNoAxeViolations(page, '[data-testid="rfs-sheet"]');
+});
+
+test("the sheet works in the play dock, where a player sits with no edit rights", async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(180_000);
+  const { worldId, actorId } = await createCharacter(page);
+
+  // The dock opens a character inside the pane only for the person playing it
+  // (spec 031 FR-002); everybody else gets a new tab, and the server refuses a
+  // claim from a Game Master outright — "The GM does not claim characters".
+  // So this needs a second account at the table, not a shortcut.
+  await graphql(
+    page,
+    `
+      mutation ($actorId: UUID!) {
+        setActorAvailability(actorId: $actorId, available: true) {
+          id
+        }
+      }
+    `,
+    { actorId },
+  );
+
+  const player = await inviteAndJoinAsPlayer(browser, page, worldId, "e2erfsp");
+
+  // Claiming records who is playing whom; it grants nothing. Writing to the
+  // character still needs Editor access on it, which is the Game Master's to
+  // give. Without this the roll works and the XP it earned is refused —
+  // rule 5, which is the whole of progression, silently lost.
+  const me = await graphql<{ data: { me: { id: string } } }>(
+    player,
+    `
+      query {
+        me {
+          id
+        }
+      }
+    `,
+    {},
+  );
+  await graphql(
+    page,
+    `
+      mutation ($input: SetActorPermissionInput!) {
+        setActorPermission(input: $input) {
+          level
+        }
+      }
+    `,
+    { input: { actorId, userId: me.data.me.id, level: "EDITOR" } },
+  );
+
+  const claim = await graphql<{
+    data?: { claimActor?: { actorId: string } };
+    errors?: { message: string }[];
+  }>(
+    player,
+    `
+      mutation ($worldId: UUID!, $actorId: UUID!) {
+        claimActor(worldId: $worldId, actorId: $actorId) {
+          actorId
+        }
+      }
+    `,
+    { worldId, actorId },
+  );
+  expect(
+    claim.data?.claimActor?.actorId,
+    `claim refused: ${JSON.stringify(claim.errors ?? claim)}`,
+  ).toBe(actorId);
+
+  // The dock mounts every pack sheet with `canEdit: false`. Roll for Shoes
+  // has no declarative fallback behind it, so if the sheet cannot cope with
+  // that the player is left with nothing during play.
+  await player.goto(`/world/${worldId}/play`);
+  await player.getByTestId("world-dock-tab-actors").click();
+  await player.getByTestId(`actor-view-${actorId}`).click();
+
+  const body = player.getByTestId("in-pane-sheet-body");
+  await expect(body).toBeVisible({ timeout: 15_000 });
+  await expect(player.getByTestId("in-pane-sheet-unavailable")).toHaveCount(0);
+
+  const sheet = player.getByTestId("rfs-sheet");
+  await expect(sheet).toBeVisible({ timeout: 15_000 });
+  await expect(
+    player.getByTestId(`rfs-skill-${STARTING_SKILL_ID}`),
+  ).toBeVisible();
+
+  // Read-only means the description is text, not a box to type in.
+  await expect(player.locator('[data-testid="rfs-description"]')).toHaveCount(
+    1,
+  );
+  await expect(
+    player.locator('textarea[data-testid="rfs-description"]'),
+  ).toHaveCount(0);
+
+  // The dock is one narrow column. A sheet that overflows it is unusable
+  // however correct its contents are.
+  const overflow = await sheet.evaluate(
+    (element) => element.scrollWidth - element.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+
+  // Rolling is the one thing a player must still be able to do here.
+  await player.getByTestId("rfs-opposition").fill("6");
+  await player.getByTestId(`rfs-roll-${STARTING_SKILL_ID}`).click();
+
+  await expect(player.getByTestId("rfs-total")).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(player.locator('[data-testid^="rfs-die-"]')).toHaveCount(1);
+  await expect(player.getByTestId("rfs-result")).toContainText(/fail/i);
+
+  // The sheet reports a refused write in a badge rather than throwing, so
+  // without this an XP that never reached the server would read as a plain
+  // disagreement about a number.
+  await expect(player.getByTestId("rfs-error")).toHaveCount(0);
+  await expect(player.getByTestId("rfs-xp")).toHaveText("1", {
+    timeout: 15_000,
+  });
+
+  await expectNoAxeViolations(player, '[data-testid="rfs-sheet"]');
 });
