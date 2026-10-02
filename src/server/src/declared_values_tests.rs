@@ -387,12 +387,15 @@ fn every_bundled_system_publishes_something() {
                 "current_wish_points": 1, "max_wish_points": 3,
                 "current_hp": 9, "max_hp": 15,
                 "might": 8, "might_pool": 10,
-                "fate_points": 3, "refresh": 3, "stress": 1
+                "fate_points": 3, "refresh": 3, "stress": 1,
+                "xp": 2
             })),
             proficiency_data: Some(
                 serde_json::json!({ "skills": [{"name":"Something","value":1}] }),
             ),
-            trait_data: Some(serde_json::json!({ "level": 3, "tier": 2 })),
+            trait_data: Some(
+                serde_json::json!({ "level": 3, "tier": 2, "description": "Someone" }),
+            ),
         };
 
         let values = declared_values_for_actor(&packs(), &id, &slots);
