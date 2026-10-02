@@ -45,10 +45,26 @@ export interface JourneyTable {
   contexts: BrowserContext[];
 }
 
+export interface SeatATableOptions {
+  /**
+   * Run after the world exists and before the Game Master invites anyone.
+   *
+   * The seam exists because a table is not always invited to an empty world.
+   * `the-table-assembles` has the Game Master build a scene, import a map and
+   * stock a bestiary first, which is the order a person works in: you do not
+   * hand out a join link and *then* decide where play happens. Without the
+   * hook that journey would need its own copy of register-create-invite-join,
+   * and this file's whole reason for existing is that a fourth copy would
+   * drift from the other three.
+   */
+  beforeInvite?: (gmPage: Page, worldId: string) => Promise<void>;
+}
+
 /** A Game Master and a player at one world, both on the playfield. */
 export async function seatATable(
   browser: Browser,
   label: string,
+  options: SeatATableOptions = {},
 ): Promise<JourneyTable> {
   const suffix = uniqueSuffix();
   const worldName = `Journey ${label} ${suffix}`;
@@ -75,6 +91,10 @@ export async function seatATable(
       new URL(gmPage.url()).pathname,
     )![1];
   });
+
+  if (options.beforeInvite) {
+    await options.beforeInvite(gmPage, worldId);
+  }
 
   let joinLink = "";
   await test.step("the Game Master lets players make characters, and makes a join link", async () => {
