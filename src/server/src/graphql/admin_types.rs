@@ -8,6 +8,7 @@ use crate::admin::{
 };
 use crate::models::{AdminBootstrapSetup, AuthSecuritySetting, OAuthProvider};
 use crate::settings::graphql::GraphQLSettingSource;
+use thunderforge_axum_oauth::provider_kind::ProviderKind;
 
 /// Disk usage breakdown for admin statistics
 #[derive(SimpleObject, Debug, Clone)]
@@ -31,6 +32,20 @@ impl From<DiskUsageSummary> for GraphQLDiskUsageBreakdown {
             modules_bytes: value.modules_bytes,
         }
     }
+}
+
+/// Whether this instance can actually store a file, asked and answered.
+///
+/// Carries the endpoint and bucket it tried, because the failure an operator
+/// most often needs to see is that it reached the *wrong* one — a stale
+/// environment variable beating the answers they just typed.
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLStorageConnectionReport {
+    pub reachable: bool,
+    pub endpoint: String,
+    pub bucket: String,
+    /// The object store's own error, when there was one.
+    pub detail: Option<String>,
 }
 
 /// Comprehensive admin statistics snapshot
@@ -110,6 +125,17 @@ pub struct GraphQLOAuthProvider {
     pub authorization_url: String,
     pub token_url: String,
     pub userinfo_url: Option<String>,
+    /// Set only on a provider whose endpoints are derived from it, and only
+    /// once an operator has supplied one. A client uses its presence in the
+    /// declaration — not this value — to decide whether to offer the field;
+    /// `null` here means "not configured yet", not "not applicable".
+    pub issuer_url: Option<String>,
+    /// Whether this provider's endpoints come from an issuer URL, so a client
+    /// knows whether to offer the field at all. Derived from the provider's
+    /// `ProviderKind`, which is a code-level fact about a self-hosted IdP's
+    /// URL layout — not something an operator sets, and not something a
+    /// client should infer from a provider key it has to pattern-match.
+    pub requires_issuer_url: bool,
     pub scopes: Vec<String>,
     pub oauth_client_id: Option<String>,
     pub configured: bool,
@@ -134,12 +160,19 @@ impl From<OAuthProvider> for GraphQLOAuthProvider {
     fn from(value: OAuthProvider) -> Self {
         Self {
             id: value.id,
-            provider_key: value.provider_key,
             display_name: value.display_name,
             authorization_url: value.authorization_url,
             token_url: value.token_url,
             userinfo_url: value.userinfo_url,
+            issuer_url: value.issuer_url,
+            // From the stored key, which is lowercase — `from_env_segment`
+            // reads uppercase environment-variable segments and would answer
+            // `None` for every row, hiding the field on the one provider that
+            // cannot be configured without it.
+            requires_issuer_url: ProviderKind::from_provider_key(&value.provider_key)
+                .is_some_and(|kind| kind.required_issuer_field().is_some()),
             scopes: value.scopes.into_iter().flatten().collect(),
+            provider_key: value.provider_key,
             oauth_client_id: value.oauth_client_id,
             configured: value.configured,
             enabled: value.enabled,
@@ -348,6 +381,9 @@ pub struct GraphQLOAuthProviderConfigInput {
     pub oauth_client_secret: Option<String>,
     pub enabled: Option<bool>,
     pub userinfo_url: Option<String>,
+    /// A self-hosted provider's base URL. Supplying it for a provider with
+    /// fixed endpoints is an error rather than a no-op.
+    pub issuer_url: Option<String>,
     pub scopes: Option<Vec<String>>,
 }
 
@@ -359,6 +395,7 @@ impl From<GraphQLOAuthProviderConfigInput> for OAuthProviderUpdate {
             oauth_client_secret: value.oauth_client_secret,
             enabled: value.enabled,
             userinfo_url: value.userinfo_url,
+            issuer_url: value.issuer_url,
             scopes: value.scopes,
         }
     }

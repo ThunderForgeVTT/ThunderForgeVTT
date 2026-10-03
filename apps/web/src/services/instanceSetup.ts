@@ -107,6 +107,16 @@ export interface RequiredSetting {
   /** For `ENUM`. */
   options?: string[] | null;
   secret?: boolean | null;
+  /**
+   * Whether the wizard gives this a step of its own.
+   *
+   * The registry states it per declaration (`SetupVisibility`). False means
+   * "offered": something an operator might have meant to set, which belongs on
+   * the last step with the other such things rather than on a screen of its own
+   * that looks like a question. Absent from an older server, and absent reads
+   * as essential — the pre-064 behaviour, one step per group.
+   */
+  essential?: boolean | null;
 }
 
 /** `GET /authentication/setup/status`, with what spec 040 adds to it. */
@@ -115,7 +125,12 @@ export interface SetupStatusWithSettings extends SetupStatus {
   second_factor_confirmed?: boolean | null;
 }
 
-export type SetupStepKind = "account" | "settings" | "second-factor" | "review";
+export type SetupStepKind =
+  | "account"
+  | "settings"
+  | "providers"
+  | "second-factor"
+  | "review";
 
 export interface SetupStep {
   /** Stable across renders and reloads; the testid suffix. */
@@ -136,6 +151,11 @@ export interface SetupStep {
   skipped: boolean;
   /** True once this step's answers are stored, so a resumed pass lands past it. */
   complete: boolean;
+  /**
+   * Why this step is being asked about, when "why" is the operator's real
+   * question. Undefined for a step whose field hints already say everything.
+   */
+  explainer?: string;
 }
 
 /**
@@ -155,9 +175,59 @@ const GROUP_LABELS: Record<string, string> = {
   "GitHub applications": "GitHub applications",
   Realm: "This realm",
   Access: "Who may join",
+  Storage: "Where uploads are kept",
 };
 
+/**
+ * The step title for everything the wizard merely offers.
+ *
+ * One step, not one per group, and the distinction is the point: storage
+ * credentials, a realm name and a GitHub application are all things an operator
+ * may want and none of them is a question this instance needs answered to run.
+ * Four more screens that look mandatory is how a wizard stops being read.
+ */
+const LEFTOVERS_STEP_TITLE = "Anything else you meant to set";
+
+const LEFTOVERS_STEP_ID = "settings-anything-else";
+
+/**
+ * Why a group is being asked about, for the groups where "why" is the
+ * operator's actual question.
+ *
+ * Spec 052 FR-032: the duties publishing creates are explained *before* the
+ * operator is asked to discharge them. An operator who is asked for a
+ * copyright agent's postal address with no reason given reasonably concludes
+ * the software is being nosy; the reason is that serving other people's
+ * uploads to the public is what creates the duty, and that is worth one
+ * sentence.
+ *
+ * Keyed by registry group so a new declaration in one of these groups inherits
+ * the explanation rather than needing a second one written for it.
+ */
+const GROUP_EXPLAINERS: Record<string, string> = {
+  Access:
+    "This decides who can get an account here. Invite-only is the usual answer for a private table: nobody signs up unless you hand them a link, and that link lets them either create an account or sign in with any provider you configure below.",
+  "Copyright notices":
+    "You said this instance publishes content beyond a world. Publishing other people's uploads to people who are not at the table is what creates a copyright-notice duty, so somebody has to be reachable about it. These answers are served publicly at /legal/dmca — which is the point of them, and the reason they cannot be a reserved example address.",
+  "Legal prose":
+    "Also because this instance publishes beyond a world: people who are not at your table need to be able to read what they are agreeing to before they join. Leave a field blank and that page simply is not served — nothing is invented on your behalf.",
+  Mail: "Without a mail server this instance cannot send an invitation, a password reset or a verification link. You can leave it blank and hand out invite links yourself.",
+  Storage:
+    "Maps, tokens and portraits are kept in an S3-compatible object store. The shipped defaults point at a local RustFS, which is right for a self-hosted instance running the bundled stack and wrong for anything else.",
+};
+
+/**
+ * The sentence above a step, or nothing.
+ *
+ * Nothing is the honest answer for a group whose own field hints already say
+ * everything — a realm name does not need a paragraph.
+ */
+export function groupExplainer(group: string): string | undefined {
+  return GROUP_EXPLAINERS[group];
+}
+
 const KEY_PREFIX_GROUPS: Record<string, string> = {
+  storage: "Storage",
   operator: "Operator",
   notice: "Copyright notices",
   support_email: "Support",
@@ -251,6 +321,16 @@ export function requirementLabel(setting: RequiredSetting): string {
     : "Required";
 }
 
+/**
+ * Whether this setting gets a step of its own.
+ *
+ * Absent means yes, which keeps a server that does not send the field behaving
+ * as it did before: one step per group, nothing merged.
+ */
+export function isEssential(setting: RequiredSetting): boolean {
+  return setting.essential !== false;
+}
+
 /** Blocks completion while unset — the predicate `/complete` enforces. */
 export function blocksCompletion(setting: RequiredSetting): boolean {
   return (
@@ -281,10 +361,13 @@ export function buildSetupSteps({
   accountCreated,
   secondFactorConfirmed,
 }: BuildStepsInput): SetupStep[] {
+  const essential = requiredSettings.filter(isEssential);
+  const leftovers = requiredSettings.filter((s) => !isEssential(s));
+
   const groups: string[] = [];
   const byGroup = new Map<string, RequiredSetting[]>();
 
-  for (const setting of requiredSettings) {
+  for (const setting of essential) {
     const group = groupOf(setting);
     if (!byGroup.has(group)) {
       byGroup.set(group, []);
@@ -309,8 +392,47 @@ export function buildSetupSteps({
       // A step is answered when nothing in it still blocks completion. An
       // optional field left blank is answered; that is FR-003.
       complete: settings.every((s) => !blocksCompletion(s)),
+      explainer: groupExplainer(group),
     };
   });
+
+  // Everything the wizard merely offers, on one step, in the registry's order.
+  //
+  // `complete: true` is not an assumption that it was filled in — nothing here
+  // can block completion by construction, so an operator who skips it has
+  // answered it. What it buys is FR-006: a resumed pass lands on the second
+  // factor rather than being sent back to a page of optional extras it already
+  // walked past.
+  const leftoversStep: SetupStep = {
+    id: LEFTOVERS_STEP_ID,
+    kind: "settings",
+    title: LEFTOVERS_STEP_TITLE,
+    settings: leftovers,
+    askable: leftovers.filter((s) => !isFixedByEnvironment(s)),
+    fixed: leftovers.filter(isFixedByEnvironment),
+    skipped: leftovers.every(isFixedByEnvironment),
+    complete: true,
+    explainer:
+      "None of this is needed to start playing, and every one of it can be changed later in the admin area. It is here because this is the moment an operator remembers the thing they meant to configure.",
+  };
+
+  // Providers sit after the settings groups and before the extras: by this
+  // point the operator has said who may join, so "an invite link also admits
+  // someone by signing in with one of these" is a sentence that means
+  // something. It is never required — an instance with local accounts only is
+  // a supported instance — so it is always complete and always skippable.
+  const providersStep: SetupStep = {
+    id: "providers",
+    kind: "providers",
+    title: "Signing in with an existing account",
+    settings: [],
+    askable: [],
+    fixed: [],
+    skipped: false,
+    complete: true,
+    explainer:
+      "Letting people sign in with an account they already have. Optional — this instance works with its own accounts alone — and worth doing if you handed out an invite link, because a link admits its holder either by creating an account or by signing in with any provider enabled here.",
+  };
 
   return [
     {
@@ -324,6 +446,11 @@ export function buildSetupSteps({
       complete: accountCreated,
     },
     ...settingSteps,
+    providersStep,
+    // Omitted rather than rendered empty. A step titled "anything else you
+    // meant to set" with nothing on it is a dead end, and a server that
+    // offers nothing optional should produce no such screen at all.
+    ...(leftovers.length > 0 ? [leftoversStep] : []),
     {
       id: "second-factor",
       kind: "second-factor",

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getSetupStatus } from "@/api/auth";
+import { getSetupStatus, startOAuthLogin } from "@/api/auth";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
@@ -80,14 +80,15 @@ export default function InstanceInvitePage() {
                     variant="secondary"
                     data-testid={`invite-provider-${provider.provider_key}`}
                     onClick={() => {
-                      // The code rides the authorization session the flow
-                      // already creates, so it survives the provider redirect
-                      // without a cookie of its own.
-                      const redirectUri = `${window.location.origin}/auth/callback`;
-                      window.location.href =
-                        `/api/authentication/oauth/${provider.provider_key}/start` +
-                        `?redirect_uri=${encodeURIComponent(redirectUri)}` +
-                        `&invitation=${encodeURIComponent(code)}`;
+                      // The same entry point every other provider sign-in
+                      // uses, invitation attached. Hand-rolling the URL here
+                      // is how this button came to point at `/auth/callback`,
+                      // a route that does not exist: the provider sent the
+                      // visitor back to a 404 and the invitation was never
+                      // redeemed.
+                      startOAuthLogin(provider.provider_key, "/welcome", {
+                        invitation: code,
+                      });
                     }}
                   >
                     Continue with {provider.display_name}

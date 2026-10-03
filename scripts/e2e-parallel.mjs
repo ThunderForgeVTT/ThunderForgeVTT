@@ -568,6 +568,47 @@ const OAUTH_PROVIDER_FIXTURE = {
   OAUTH_MYSERVICE_TOKEN_URL: "https://myservice.example/token",
 };
 
+/**
+ * Every `OAUTH_*` variable, blanked — the first-run lane's counterpart to the
+ * fixture above.
+ *
+ * An instance nobody has configured yet has no providers configured either,
+ * and `.env` is where that stops being true. `dotenvy` searches parent
+ * directories, so a developer whose own file names a real Keycloak hands the
+ * first-run stack a provider row with `config_source = 'ENV'` — and such a row
+ * accepts nothing but `enabled` (ADR-041). The wizard's providers step then
+ * renders its fields read-only, which is correct behaviour for an
+ * env-configured provider and makes the step unanswerable for the operator the
+ * first-run specs are about.
+ *
+ * Blank rather than deleted, for the same reason the `SYNC_GITHUB_APP_*`
+ * variables above are: `oauth_env.rs` treats an empty variable as unset, and
+ * `dotenvy` only fills in variables that are *absent*, so deleting one invites
+ * it straight back.
+ *
+ * Read out of the files themselves rather than written out as a list, because
+ * the point is to be exhaustive about a file this repository does not control.
+ * `process.env` is not enough on its own: this runner does not load `.env`,
+ * the backend does, so the variables that cause the trouble are ones node
+ * never sees.
+ */
+function blankedOauthEnv() {
+  const keys = new Set(
+    Object.keys(process.env).filter((key) => key.startsWith("OAUTH_")),
+  );
+  // `dotenvy` walks up from the working directory, so a worktree inside a
+  // developer's checkout inherits the parent's file too.
+  for (const dir of [ROOT_DIR, join(ROOT_DIR, "..")]) {
+    const file = join(dir, ".env");
+    if (!existsSync(file)) continue;
+    for (const line of readFileSync(file, "utf8").split("\n")) {
+      const name = /^\s*(?:export\s+)?(OAUTH_[A-Za-z0-9_]*)\s*=/.exec(line);
+      if (name) keys.add(name[1]);
+    }
+  }
+  return Object.fromEntries([...keys].map((key) => [key, ""]));
+}
+
 /** Starts one shard's backend and frontend, and resolves once both answer. */
 async function startShard(
   index,
@@ -588,7 +629,12 @@ async function startShard(
     // auth limiter accounted for 18 of the 42 failures the last full sweep
     // started from, and every shard registers users from the same IP.
     THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT: "1",
-    // One declared setting, fixed in the environment on purpose.
+    // One declared setting, fixed in the environment on purpose — and, since
+    // spec 064 declared the object store's connection as settings, no longer
+    // the only env-fixed one on this harness. `RUSTFS_BUCKET` is set below,
+    // and a developer's root `.env` typically fixes the other four, which is
+    // why the first-run specs treat each storage field as either askable or
+    // declared-fixed rather than assuming which.
     //
     // `instance-settings.spec.ts` asserts that an environment-fixed setting
     // reports its variable and refuses a write — and it used to find its
@@ -596,7 +642,8 @@ async function startShard(
     // skipping itself when there was none. On this harness there was none, so
     // the refusal was pinned by nothing: the test passed by not running.
     //
-    // `realm_name` is the one to fix because it costs nothing to fix. It is
+    // `realm_name` remains the one `instance-settings.spec.ts` aims at
+    // because it costs nothing to fix. It is
     // `Optional` with no capability, so it stays out of the setup wizard's
     // `required_settings`; nothing in `apps/web/src` reads it; and it is
     // neither of the two keys that spec writes, so its own writable-setting
@@ -655,11 +702,30 @@ async function startShard(
       "crates/thunderforge-repo-host/tests/fixtures/throwaway-test-app-key.pem",
     ),
     // Seeded stacks only, like the OAuth stub rewrite in `cloneShardDatabase`:
-    // the first-run lane is an instance nobody has configured yet.
-    ...(firstRun ? {} : OAUTH_PROVIDER_FIXTURE),
+    // the first-run lane is an instance nobody has configured yet, and
+    // `blankedOauthEnv` is what makes that true of the environment as well as
+    // of the database.
+    ...(firstRun ? blankedOauthEnv() : OAUTH_PROVIDER_FIXTURE),
     // Last, so it overrides the feedback and sync values above.
     ...(githubApps ? GITHUB_APPS_LANE_ENV : {}),
   };
+
+  // First, before any long-lived process and well before a browser exists.
+  //
+  // Nothing in `shared` above names this sink — the instance is pointed at it
+  // by a *test*, through the settings mutation, which is the whole of what
+  // Scenario D is about — so it used to be started last, after the frontend
+  // was already answering. That ordering cost the first-run lane its first
+  // navigation: creating a container makes docker reprogram the bridge, the
+  // OS reports a network change, and Chromium's `NetworkChangeNotifier`
+  // aborts every request in flight with `net::ERR_NETWORK_CHANGED`. The
+  // symptom is a blank page on `page.goto("/")` with a vite dependency
+  // failing to load, which looks like a frontend fault and is not one.
+  //
+  // Starting it here keeps that churn behind the frontend's readiness wait,
+  // so by the time Playwright launches, the network has settled.
+  const mailpit = await startMailpit(index);
+  if (!mailpit) return null;
 
   spawnManaged(
     `node scripts/github-stub.mjs ${GITHUB_STUB_PORT_BASE + index}`,
@@ -737,12 +803,6 @@ async function startShard(
     return null;
   }
 
-  // Started after the stack rather than before it: the instance is configured
-  // to talk to this sink by a *test*, through the settings mutation, which is
-  // the whole of what Scenario D is about. Nothing in `shared` above names it.
-  const mailpit = await startMailpit(index);
-  if (!mailpit) return null;
-
   return {
     index,
     database,
@@ -817,6 +877,15 @@ function runShard(shard, files, label = "parallel", suite = null) {
       THUNDERFORGE_E2E_OAUTH_STUB: `http://127.0.0.1:${OAUTH_STUB_PORT_BASE + shard.index}`,
       THUNDERFORGE_E2E_MAILPIT_API: shard.mailpit.api,
       THUNDERFORGE_E2E_MAILPIT_SMTP_PORT: String(shard.mailpit.smtpPort),
+      // A headless browser has no business on the machine's *system* message
+      // bus, and on a workstation that has launched a few hundred thousand
+      // peers this boot it cannot get on anyway: dbus-broker hands the new
+      // peer no budget, drops it, and chromium turns that into
+      // `[FATAL:dbus/bus.cc] D-Bus connection was disconnected. Aborting.`
+      // before the first test runs. Pointing it at an address that does not
+      // exist means it never connects, which is the state the tests want.
+      DBUS_SYSTEM_BUS_ADDRESS:
+        "unix:path=/nonexistent/thunderforge-e2e-no-dbus",
       // Global setup applies `e2e_demo.sql` and then signs in as the demo user
       // to capture a reusable storage state. Against an unseeded database
       // there is no demo user to sign in as, so it would fail before the first
@@ -1163,19 +1232,45 @@ async function main() {
   // lane's later tests running against an instance somebody else just
   // configured, which is exactly the class of cross-test contamination the
   // per-shard database exists to prevent.
+  //
+  // And a stack *per spec*, not one for the lane, for the same reason stated
+  // the other way round: an instance that has completed setup cannot complete
+  // it again, so the second spec on a shared stack would find `/setup`
+  // redirecting and fail with something that looks nothing like its subject.
+  // Spec 064 put three specs here — the original walk, a private instance and
+  // a public one — and the template they clone from is migrate-only, so an
+  // extra stack is cheap. They run together, because by this point nothing
+  // else is competing for the machine.
   if (firstRunSpecs.length > 0) {
-    log("e2e", "Running the first-run lane on an unseeded stack.");
+    log(
+      "e2e",
+      `Running ${firstRunSpecs.length} first-run spec(s), each on an unseeded stack of its own.`,
+    );
     await provisionFirstRunTemplate();
-    const { shard, reason } = await startStack(total, { firstRun: true });
-    if (!shard) {
-      run.results.push(stackFailure(total, "first-run", reason));
-    } else {
-      log(
-        "e2e",
-        `First-run stack up on :${shard.webPort} (db ${shard.database}, unseeded).`,
-      );
-      run.results.push(await runShard(shard, firstRunSpecs, "first-run"));
-    }
+
+    // Index `total + 1` belongs to the GitHub-applications lane below, so the
+    // run after the first skips over it rather than renumbering that lane.
+    const indices = firstRunSpecs.map((_, position) =>
+      position === 0 ? total : total + 1 + position,
+    );
+    const started = await Promise.all(
+      indices.map((index) => startStack(index, { firstRun: true })),
+    );
+    run.results.push(
+      ...(await Promise.all(
+        started.map(({ shard, reason }, position) => {
+          const index = indices[position];
+          if (!shard) {
+            return Promise.resolve(stackFailure(index, "first-run", reason));
+          }
+          log(
+            "e2e",
+            `First-run stack up on :${shard.webPort} (db ${shard.database}, unseeded).`,
+          );
+          return runShard(shard, [firstRunSpecs[position]], "first-run");
+        }),
+      )),
+    );
   }
 
   // The GitHub-applications lane, on its own stack for the reason

@@ -1,7 +1,14 @@
-import { test, expect, type Page } from "./fixtures/test";
+import { test, expect } from "./fixtures/test";
 import { readFileSync } from "node:fs";
 import { graphql } from "./fixtures/helpers";
 import { totpNow } from "./fixtures/totp";
+import {
+  advanceFrom,
+  BACKEND_LOG,
+  graphqlPublic,
+  RESERVED_NOTICE_ADDRESS,
+  waitForSetupCode,
+} from "./fixtures/first-run";
 
 /**
  * Spec 040 US1: an empty database becomes a usable, contactable instance.
@@ -27,83 +34,6 @@ import { totpNow } from "./fixtures/totp";
  * it out of the log is not a test convenience — it is exactly what an operator
  * does with a container's output, which is why T074 asks for it this way.
  */
-
-const BACKEND_LOG = process.env.THUNDERFORGE_E2E_BACKEND_LOG;
-
-/** The one address that must be refused: a reserved domain cannot receive a notice. */
-const RESERVED_NOTICE_ADDRESS = "dmca@thunderforge.example";
-
-/**
- * The setup link the server printed, waited for rather than read once.
- *
- * The stack answers `/api/readyz` before `ensure_admin_bootstrap_code` has
- * necessarily logged, so a single read races the line it is looking for.
- */
-async function waitForSetupCode(): Promise<string> {
-  if (!BACKEND_LOG) {
-    throw new Error(
-      "THUNDERFORGE_E2E_BACKEND_LOG is unset. This spec runs only in the " +
-        "first-run lane, which `scripts/e2e-parallel.mjs` starts; running it " +
-        "against a seeded stack could not work, because setup is already done there.",
-    );
-  }
-  const deadline = Date.now() + 30_000;
-  while (Date.now() < deadline) {
-    let log = "";
-    try {
-      log = readFileSync(BACKEND_LOG, "utf-8");
-    } catch {
-      // Not written yet.
-    }
-    // The path form is what an instance with no public URL logs; the full-link
-    // form is what this lane produces, because the runner sets
-    // THUNDERFORGE_PUBLIC_URL. Accepting both means this keeps working if that
-    // ever changes, and the assertion below is what pins the behaviour.
-    const found = /\/setup\/([A-Za-z0-9_-]{8,})/.exec(log);
-    if (found) {
-      return found[1];
-    }
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  throw new Error(`no setup link in ${BACKEND_LOG} after 30s`);
-}
-
-/**
- * A GraphQL read over the anonymous transport.
- *
- * `/api/graphql` is wrapped in `require_authenticated_user`, so the ordinary
- * helper cannot express "a stranger asks" — it would assert a 401 rather than
- * the answer. `/api/graphql/public` is the endpoint the five existing
- * anonymous readers use, and FR-056 makes the notice contact the sixth.
- */
-async function graphqlPublic<T>(page: Page, query: string): Promise<T> {
-  const csrf = (await page.context().cookies()).find(
-    (cookie) => cookie.name === "csrf_token",
-  )?.value;
-  const response = await page.request.post("/api/graphql/public", {
-    headers: {
-      "Content-Type": "application/json",
-      ...(csrf ? { "x-csrf-token": csrf } : {}),
-    },
-    data: { query, variables: {} },
-  });
-  const text = await response.text();
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    throw new Error(
-      `Non-JSON response (status ${response.status()}): ${text.slice(0, 300)}`,
-    );
-  }
-}
-
-/** Move to the next step and wait for the walk to actually advance. */
-async function advanceFrom(page: Page, stepId: string) {
-  await page.getByTestId("setup-next").click();
-  await expect(page.getByTestId(`setup-step-${stepId}`)).toBeHidden({
-    timeout: 15_000,
-  });
-}
 
 test.describe("Spec 040 US1: from an empty database to a contactable instance", () => {
   test("an operator sets this instance up in one pass, and the legal pages then name them", async ({
@@ -163,6 +93,19 @@ test.describe("Spec 040 US1: from an empty database to a contactable instance", 
     ).toContainText("acknowledge");
     await page.getByTestId("setup-operator-acknowledge").click();
     await page.getByTestId("setup-account-submit").click();
+
+    // 3a. Who may join, and whether this instance publishes beyond a world.
+    //     Spec 064 made that second answer the hinge: a `false` here is what
+    //     spares a private instance the copyright-notice and legal-prose
+    //     steps entirely. This case is the instance that says yes, so that
+    //     the steps below exist to be walked; the two first-run specs beside
+    //     this one are the fork proper.
+    const accessStep = page.getByTestId("setup-step-settings-access");
+    await expect(accessStep).toBeVisible({ timeout: 30_000 });
+    await page
+      .getByTestId("setup-setting-instance.publishes_beyond_world")
+      .check();
+    await advanceFrom(page, "settings-access");
 
     // 4. Who operates this instance — and it refuses to continue with the
     //    name blank, saying which field it wants (FR-003).
@@ -269,6 +212,11 @@ test.describe("Spec 040 US1: from an empty database to a contactable instance", 
     // section now, so the one-time copy of it had become a speed bump — the
     // by-hand pass of Scenario A said so, and this is that change.
     await page.waitForURL(/\/admin(\?|$)/, { timeout: 30_000 });
+    // And stays there. `waitForURL` resolves on the first matching
+    // navigation, so a landing that immediately bounces to `/login` satisfies
+    // it — which is exactly what a stale auth context used to do here, and
+    // what this run would otherwise keep passing through.
+    await expect(page).toHaveURL(/\/admin(\?|$)/);
 
     // Spec 039 FR-043: the acknowledgement is on record — who, and which
     // version — in the same table a sharing agreement is, and of the words

@@ -345,9 +345,10 @@ impl InstanceAccessMutation {
     ) -> GraphQLResult<GraphQLInstanceAccessSettings> {
         let state = app_state(ctx)?;
         let admin = admin_user(ctx)?;
-        let row = crate::admin::update_instance_access_policy(state, admin.user_id, policy.into())
-            .await
-            .map_err(Error::new)?;
+        let row =
+            crate::admin::update_instance_access_policy(state, Some(admin.user_id), policy.into())
+                .await
+                .map_err(Error::new)?;
         Ok(GraphQLInstanceAccessSettings {
             policy: InstanceAccessPolicy::from_db_str(&row.access_policy).into(),
             updated_at: row.updated_at.to_string(),

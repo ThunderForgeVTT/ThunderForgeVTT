@@ -176,7 +176,7 @@ pub async fn upload_canvas_image_impl(
     let key = match existing_object {
         Some(path) => path,
         None => {
-            let cfg = RustFsConfig::from_env();
+            let cfg = RustFsConfig::resolve(state).await;
             write_object(&cfg, &key, transcoded.webp_bytes, "image/webp")
                 .await
                 .map_err(|e| UploadCanvasImageError::Storage(e.to_string()))?;

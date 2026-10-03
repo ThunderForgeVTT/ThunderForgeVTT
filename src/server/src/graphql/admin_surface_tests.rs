@@ -235,6 +235,12 @@ const ADMIN_ONLY: &[(&str, &str)] = &[
         "updateOauthProvider",
         r#"mutation { updateOauthProvider(providerId: "00000000-0000-0000-0000-000000000001", config: {}) { __typename } }"#,
     ),
+    // Spec 064: it reaches the object store with the instance's root
+    // credential, so it is an operator's to call and nobody else's.
+    (
+        "testStorageConnection",
+        r#"mutation { testStorageConnection { __typename } }"#,
+    ),
 ];
 
 /// Operator-shaped names that are **not** operator-scoped, each with the

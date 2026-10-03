@@ -34,6 +34,42 @@
 
 import { createServer } from "node:http";
 
+/**
+ * Keycloak's own path layout, answered by the same three handlers.
+ *
+ * Spec 064: an operator wiring up a self-hosted OIDC provider in the setup
+ * wizard supplies an **issuer URL**, and the server expands it into
+ * `{issuer}/protocol/openid-connect/{auth,token,userinfo}`
+ * (`ProviderKind::derive_endpoints`). Pointing that issuer at this stub is how
+ * the first-run specs drive the derivation end to end — through the product's
+ * own expansion rather than around it, which is the whole point of having a
+ * stub at all.
+ *
+ * Aliases rather than a second server: what is being exercised is the path
+ * expansion, not Keycloak's behaviour, and a provider that answered these
+ * three paths differently from `/authorize`, `/token` and `/userinfo` would be
+ * testing this file instead of the product.
+ */
+const KEYCLOAK_PATHS = {
+  "/protocol/openid-connect/auth": "/authorize",
+  "/protocol/openid-connect/token": "/token",
+  "/protocol/openid-connect/userinfo": "/userinfo",
+};
+
+/**
+ * A Keycloak endpoint is a realm path followed by one of the three suffixes
+ * above -- `/realms/<realm>/protocol/openid-connect/auth`, say -- and the
+ * realm is the operator's to choose. So the alias is matched on the suffix,
+ * not on the whole pathname: an issuer of `{stub}/realms/thunderforge`
+ * expands to a path no fixed table could have listed in advance.
+ */
+function aliasFor(pathname) {
+  for (const [suffix, alias] of Object.entries(KEYCLOAK_PATHS)) {
+    if (pathname === suffix || pathname.endsWith(suffix)) return alias;
+  }
+  return pathname;
+}
+
 /** What `/userinfo` answers with until a test says otherwise. */
 const DEFAULT_IDENTITY = {
   sub: "stub-user-1",
@@ -49,9 +85,11 @@ export function startOAuthStub(port) {
 
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? "/", `http://127.0.0.1:${port}`);
-    const path = url.pathname;
     const method = req.method ?? "GET";
-    calls.push(`${method} ${path}`);
+    // Recorded as it arrived, routed as what it means: a scenario asserting
+    // that the issuer expansion happened needs to see the expanded path.
+    calls.push(`${method} ${url.pathname}`);
+    const path = aliasFor(url.pathname);
 
     let raw = "";
     req.on("data", (chunk) => {

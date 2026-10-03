@@ -340,7 +340,7 @@ pub async fn attempt(state: &AppState, submission_id: Uuid) -> Result<Outcome, S
     let mut log_text: Option<String> = None;
     for row in &attachments {
         let Some(kind) = row.kind() else { continue };
-        let bytes = match read_object(&row.storage_path).await {
+        let bytes = match read_object(state, &row.storage_path).await {
             Ok(bytes) => bytes,
             // The bytes are gone from this instance's storage but the row says
             // otherwise. Retrying will not conjure them, and delivering a
@@ -454,8 +454,11 @@ fn fail(conn: &mut PgConnection, attempt_id: Uuid, failure: &HostFailure) -> Res
     )
 }
 
-async fn read_object(key: &str) -> Result<Vec<u8>, String> {
-    let cfg = crate::storage::rustfs::RustFsConfig::from_env();
+/// Takes `state` for one reason: the object store's address is a resolved
+/// setting now, so reading an attachment needs whatever the operator last
+/// answered rather than whatever the process started with.
+async fn read_object(state: &AppState, key: &str) -> Result<Vec<u8>, String> {
+    let cfg = crate::storage::rustfs::RustFsConfig::resolve(state).await;
     crate::storage::rustfs::read_object(&cfg, key)
         .await
         .map_err(|e| format!("Failed to read an attachment: {e}"))

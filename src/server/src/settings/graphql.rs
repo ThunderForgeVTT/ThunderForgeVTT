@@ -205,6 +205,10 @@ pub struct GraphQLCapability {
     pub key: String,
     pub label: String,
     pub available: bool,
+    /// Whether this instance does the thing at all. False means the operator
+    /// said this instance does not publish beyond a world, so the gaps below
+    /// are duties it does not owe — not work it has left undone.
+    pub applicable: bool,
     pub gaps: Vec<GraphQLReadinessGap>,
 }
 
@@ -220,8 +224,8 @@ pub struct GraphQLSourceFlip {
 #[graphql(name = "InstanceReadiness")]
 pub struct GraphQLInstanceReadiness {
     pub capabilities: Vec<GraphQLCapability>,
-    /// True only when every capability is available. Not an absence of
-    /// complaints.
+    /// True only when every *applicable* capability is available. Not an
+    /// absence of complaints.
     pub fully_configured: bool,
     /// Rows in `instance_settings` the registry no longer declares. Reported,
     /// never deleted.
@@ -289,6 +293,7 @@ impl InstanceSettingsQuery {
                     key: c.key.to_string(),
                     label: c.label.to_string(),
                     available: c.available,
+                    applicable: c.applicable,
                     gaps: c
                         .gaps
                         .into_iter()

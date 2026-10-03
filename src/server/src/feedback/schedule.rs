@@ -169,7 +169,7 @@ pub async fn purge(state: &AppState, submission_id: Uuid) -> Result<(), String> 
     let attachments = super::attachments_of(&mut conn, submission_id)?;
     drop(conn);
 
-    let cfg = crate::storage::rustfs::RustFsConfig::from_env();
+    let cfg = crate::storage::rustfs::RustFsConfig::resolve(state).await;
     for attachment in attachments.iter().filter(|a| a.purged_at.is_none()) {
         // A key outside `feedback/` is refused inside `delete_object` itself,
         // not here — `storage/dedupe.rs` warns that deleting a shared object

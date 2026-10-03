@@ -631,7 +631,7 @@ mod tests {
         record_refusal(&state, &AdmissionRoute::OAuth("google".to_string())).await;
         crate::admin::update_instance_access_policy(
             &state,
-            admin_id,
+            Some(admin_id),
             InstanceAccessPolicy::InviteOnly,
         )
         .await

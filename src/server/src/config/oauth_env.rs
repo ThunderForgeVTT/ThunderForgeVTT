@@ -135,6 +135,11 @@ pub struct ResolvedProviderInstance {
     pub scopes: Vec<String>,
     pub client_id: String,
     pub client_secret: String,
+    /// The base URL the three endpoints above were derived from, for a
+    /// provider kind that derives them. `None` for a fixed-endpoint kind and
+    /// for a generic provider whose endpoints were given one by one — in
+    /// neither case is there an issuer to record.
+    pub issuer_url: Option<String>,
 }
 
 /// Why a candidate `OAUTH_*` env-var group could not be resolved into a
@@ -233,6 +238,14 @@ pub fn resolve(parsed: &ParsedProviderInstance) -> Result<ResolvedProviderInstan
         format!("{}__{}", parsed.provider.to_lowercase(), parsed.instance)
     };
 
+    // Recorded only where it means something. A `Fixed` kind ignores
+    // `ISSUER_URL` entirely, so storing one an operator set by mistake would
+    // put a URL on the row that nothing derives from and the form would
+    // offer to edit.
+    let issuer_url = ProviderKind::from_env_segment(&parsed.provider)
+        .and_then(|kind| kind.required_issuer_field())
+        .and(parsed.fields.issuer_url.clone());
+
     Ok(ResolvedProviderInstance {
         provider_key,
         display_name,
@@ -242,6 +255,7 @@ pub fn resolve(parsed: &ParsedProviderInstance) -> Result<ResolvedProviderInstan
         scopes,
         client_id,
         client_secret,
+        issuer_url,
     })
 }
 

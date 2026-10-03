@@ -97,9 +97,15 @@ export function allSpecFiles(suite = "e2e") {
  * assertions because "measures the machine" is a property of what a test
  * checks, "needs an unconfigured instance" is a property of which *stack* it
  * must run against, and that is a lane, not a heuristic.
+ *
+ * Three of them since spec 064, and each gets a stack of its own: setup
+ * completes once and an instance that has been set up cannot be set up again.
+ * The pattern is deliberately the same one `playwright.config.ts` partitions
+ * its two projects with — a file routed to the first-run stack but collected
+ * by `chromium` would run against a seeded instance and fail unreadably.
  */
 export function isFirstRunSpec(file) {
-  return file.endsWith("instance-setup.spec.ts");
+  return /instance-(setup|first-run-[a-z]+)\.spec\.ts$/.test(file);
 }
 
 export function isPerfSpec(file) {

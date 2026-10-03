@@ -83,7 +83,7 @@ async fn serve_scene_preview(
         return (StatusCode::FORBIDDEN, "not a member of this scene's world").into_response();
     }
 
-    let cfg = RustFsConfig::from_env();
+    let cfg = RustFsConfig::resolve(&state).await;
     match read_object(&cfg, &preview_key(asset_id)).await {
         Ok(bytes) => (
             StatusCode::OK,

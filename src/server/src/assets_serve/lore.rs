@@ -75,7 +75,7 @@ async fn authorize_and_read(
             .into_response();
     }
 
-    let cfg = RustFsConfig::from_env();
+    let cfg = RustFsConfig::resolve(state).await;
     match read_object(&cfg, &key).await {
         Ok(bytes) => (
             StatusCode::OK,

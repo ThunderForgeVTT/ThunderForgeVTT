@@ -241,6 +241,7 @@ export function getCurrentSession(): Promise<AuthSessionResponse> {
 export function startOAuthLogin(
   providerKey: string,
   returnTo = "/counter",
+  options: { invitation?: string } = {},
 ): void {
   if (typeof window === "undefined") {
     return;
@@ -255,6 +256,11 @@ export function startOAuthLogin(
   );
   startUrl.searchParams.set("redirect_uri", redirectUri);
   startUrl.searchParams.set("return_to", absoluteReturnTo);
+  // An invitation rides the authorization session the server creates here, so
+  // it survives the round trip to the provider without a cookie of its own.
+  if (options.invitation) {
+    startUrl.searchParams.set("invitation", options.invitation);
+  }
   window.location.assign(startUrl.toString());
 }
 

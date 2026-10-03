@@ -102,6 +102,7 @@ async fn every_declared_provider_reaches_a_live_authorization_route() {
                 authorization_url: resolved.authorization_url.clone(),
                 token_url: resolved.token_url.clone(),
                 userinfo_url: resolved.userinfo_url.clone(),
+                issuer_url: resolved.issuer_url.clone(),
                 scopes: resolved.scopes.iter().cloned().map(Some).collect(),
                 oauth_client_id: Some(resolved.client_id.clone()),
                 oauth_client_secret: Some(resolved.client_secret.clone()),

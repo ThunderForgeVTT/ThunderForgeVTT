@@ -79,7 +79,13 @@ pub struct SavedScenePreview {
 /// the full-resolution background. Reuses `storage/transcode.rs`'s
 /// `transcode_scene_preview` (research.md §5) — the same decode/resize/
 /// encode machinery `save_background_image` already depends on.
+///
+/// Takes the storage configuration rather than reading it, because this
+/// module is deliberately DB-light — it takes an `Option<DbPool>` and its
+/// tests call it with `None`. Resolving a setting here would make a database
+/// the price of transcoding a picture.
 pub async fn save_scene_preview_image(
+    cfg: &crate::storage::rustfs::RustFsConfig,
     image_base64: &str,
 ) -> Result<SavedScenePreview, MapImportError> {
     let bytes = BASE64_STANDARD
@@ -93,8 +99,7 @@ pub async fn save_scene_preview_image(
     let asset_id = Uuid::now_v7();
     let key = crate::assets_serve::scene::preview_key(asset_id);
     let byte_size = preview.webp_bytes.len() as i64;
-    let cfg = crate::storage::rustfs::RustFsConfig::from_env();
-    crate::storage::rustfs::write_object(&cfg, &key, preview.webp_bytes, "image/webp")
+    crate::storage::rustfs::write_object(cfg, &key, preview.webp_bytes, "image/webp")
         .await
         .map_err(|e| MapImportError::Storage(e.to_string()))?;
 
@@ -113,6 +118,7 @@ pub async fn save_scene_preview_image(
 /// not two). Superseded the earlier local-filesystem write this
 /// function did in spec 001.
 pub async fn save_background_image(
+    cfg: &crate::storage::rustfs::RustFsConfig,
     owner_user_id: Uuid,
     world_id: Uuid,
     scene_id: Uuid,
@@ -170,8 +176,7 @@ pub async fn save_background_image(
     let key = match existing_object {
         Some(path) => path,
         None => {
-            let cfg = crate::storage::rustfs::RustFsConfig::from_env();
-            crate::storage::rustfs::write_object(&cfg, &key, transcoded.webp_bytes, "image/webp")
+            crate::storage::rustfs::write_object(cfg, &key, transcoded.webp_bytes, "image/webp")
                 .await
                 .map_err(|e| MapImportError::Storage(e.to_string()))?;
             key
@@ -221,9 +226,11 @@ mod tests {
         let source = crate::test_support::tiny_png_bytes();
         let encoded = BASE64_STANDARD.encode(&source);
 
-        let saved = save_background_image(owner_id, world_id, scene_id, &encoded, 128.0, None)
-            .await
-            .expect("saving a valid png background should succeed");
+        let cfg = crate::storage::rustfs::RustFsConfig::from_env();
+        let saved =
+            save_background_image(&cfg, owner_id, world_id, scene_id, &encoded, 128.0, None)
+                .await
+                .expect("saving a valid png background should succeed");
 
         assert_eq!(saved.content_hash.len(), 64, "lowercase hex SHA-256");
         assert!(

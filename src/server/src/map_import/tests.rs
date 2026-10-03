@@ -231,7 +231,9 @@ async fn save_background_image_writes_webp_to_rustfs_not_filesystem() {
     let world_id = Uuid::now_v7();
     let scene_id = Uuid::now_v7();
 
+    let cfg = crate::storage::rustfs::RustFsConfig::from_env();
     let saved = save_background_image(
+        &cfg,
         owner_user_id,
         world_id,
         scene_id,

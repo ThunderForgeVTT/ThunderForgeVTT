@@ -4,6 +4,7 @@ import {
   buildSetupSteps,
   firstUnansweredStep,
   initialValues,
+  isEssential,
   isFixedByEnvironment,
   normaliseReadiness,
   settingLabel,
@@ -56,6 +57,11 @@ describe("buildSetupSteps", () => {
       "settings-operator",
       "settings-copyright-notices",
       "settings-support",
+      // Providers sits after the settings groups: by then the operator has
+      // said who may join, which is what makes "an invite link also admits
+      // its holder through one of these" a sentence worth reading. It is not
+      // registry-derived and so is always present.
+      "providers",
       "second-factor",
       "review",
     ]);
@@ -86,6 +92,93 @@ describe("buildSetupSteps", () => {
     });
 
     expect(steps.filter((step) => step.kind === "settings")).toHaveLength(1);
+  });
+});
+
+/**
+ * Spec 064 — what the wizard insists on, and what it merely offers.
+ *
+ * The server states this per declaration (`SetupVisibility`), and `essential:
+ * false` is the wire form. What is asserted here is the consequence: one final
+ * step for all of it, rather than a mandatory-looking screen per group.
+ */
+describe("essential answers and offered ones", () => {
+  const offered = (key: string, group?: string) =>
+    setting(key, { essential: false, ...(group ? { group } : {}) });
+
+  it("gathers everything merely offered onto one final step", () => {
+    const steps = buildSetupSteps({
+      requiredSettings: [
+        setting("operator.name"),
+        offered("storage.endpoint", "Storage"),
+        offered("realm.name", "Realm"),
+      ],
+      accountCreated: false,
+      secondFactorConfirmed: false,
+    });
+
+    expect(steps.map((step) => step.id)).toEqual([
+      "account",
+      "settings-operator",
+      "providers",
+      "settings-anything-else",
+      "second-factor",
+      "review",
+    ]);
+
+    const leftovers = steps.find(
+      (step) => step.id === "settings-anything-else",
+    );
+    expect(leftovers?.settings.map((item) => item.key)).toEqual([
+      "storage.endpoint",
+      "realm.name",
+    ]);
+    // Nothing on it can hold setup up, so a resumed pass walks past it.
+    expect(leftovers?.complete).toBe(true);
+  });
+
+  it("omits the final step entirely when nothing is offered", () => {
+    const steps = buildSetupSteps({
+      requiredSettings: [setting("operator.name")],
+      accountCreated: false,
+      secondFactorConfirmed: false,
+    });
+
+    expect(steps.map((step) => step.id)).not.toContain(
+      "settings-anything-else",
+    );
+  });
+
+  it("treats a server that does not state it as stating essential", () => {
+    // The pre-064 server sends no `essential`, and its wizard was one step
+    // per group with nothing merged. Absent must keep meaning that, or an
+    // upgrade of the UI ahead of the server silently moves required
+    // questions onto an optional-looking step.
+    expect(isEssential(setting("operator.name"))).toBe(true);
+    expect(isEssential(setting("storage.endpoint", { essential: false }))).toBe(
+      false,
+    );
+  });
+
+  it("explains the groups whose reason is the operator's real question", () => {
+    const steps = buildSetupSteps({
+      requiredSettings: [
+        setting("notice.contact_email", { kind: "EMAIL" }),
+        setting("operator.name"),
+      ],
+      accountCreated: false,
+      secondFactorConfirmed: false,
+    });
+
+    const notices = steps.find(
+      (step) => step.id === "settings-copyright-notices",
+    );
+    // FR-032: the reason is in front of the operator before the question is.
+    expect(notices?.explainer).toMatch(/publishes/i);
+    // And a group that needs no paragraph does not get one invented for it.
+    expect(
+      steps.find((step) => step.id === "settings-operator")?.explainer,
+    ).toBeUndefined();
   });
 });
 
@@ -153,6 +246,10 @@ describe("FR-009: a setting the environment fixed", () => {
 
     expect(visibleSteps(steps).map((step) => step.id)).toEqual([
       "account",
+      // Not a settings group, so an environment that fixes every setting does
+      // not fix this: there is still a decision here, and it is still the
+      // operator's.
+      "providers",
       "second-factor",
       "review",
     ]);

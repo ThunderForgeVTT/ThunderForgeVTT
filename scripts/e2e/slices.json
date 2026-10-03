@@ -537,7 +537,7 @@
     },
     {
       "name": "instance",
-      "summary": "Instance setup, access, mail and GitHub applications (specs/035-instance-access, specs/040-instance-setup, specs/042-admin-portal); instance-setup runs in the first-run lane and github-apps in the GitHub-apps lane",
+      "summary": "Instance setup, access, mail and GitHub applications (specs/035-instance-access, specs/040-instance-setup, specs/042-admin-portal); the three instance-setup/instance-first-run-* specs each run in the first-run lane on an unseeded stack of their own, and github-apps in the GitHub-apps lane",
       "own": [
         "instance-",
         "admin-instance-panels.spec.ts",

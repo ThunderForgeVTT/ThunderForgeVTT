@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { getCurrentSession } from "@/services/auth";
+import { useAuth } from "@/hooks/useAuth";
 import { readTwoFactorStatus } from "@/api/twoFactor";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
@@ -8,8 +9,11 @@ import { Card } from "@/components/ui/card/Card";
 import { Field } from "@/components/ui/field/Field";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
+import { testStorageConnection } from "@/api/admin";
+import type { StorageConnectionReport } from "@/types/admin";
 import { AuthLayout } from "@/layouts/auth-layout/AuthLayout";
 import { AccountStep } from "@/pages/setup/steps/AccountStep";
+import { ProvidersStep } from "@/pages/setup/steps/ProvidersStep";
 import { ReviewStep } from "@/pages/setup/steps/ReviewStep";
 import { SecondFactorStep } from "@/pages/setup/steps/SecondFactorStep";
 import { SettingsStep } from "@/pages/setup/steps/SettingsStep";
@@ -111,6 +115,9 @@ export default function SetupPage({
   onSetupComplete,
 }: SetupPageProps) {
   const navigate = useNavigate();
+  // Named for what it refreshes: the *authenticated session*, not the setup
+  // status. `refresh` below is the status one.
+  const { refresh: refreshAuthenticatedSession } = useAuth();
   const [searchParams] = useSearchParams();
   const { code } = useParams();
 
@@ -228,6 +235,17 @@ export default function SetupPage({
   const walk = useMemo(() => visibleSteps(steps), [steps]);
   const skippedCount = steps.length - walk.length;
 
+  /**
+   * Whether this instance has said it publishes beyond a world.
+   *
+   * Read from the answers rather than from the presence of the legal steps,
+   * because those two can disagree for a moment: the flag is saved on the
+   * Access step and the steps it unlocks only appear on the next refresh.
+   */
+  const publishesBeyondWorld = ["true", "1", "yes", "on"].includes(
+    (values["instance.publishes_beyond_world"] ?? "").trim().toLowerCase(),
+  );
+
   // Where a resumed pass lands, until the operator moves: the first step the
   // instance says is unanswered. Once they have moved, their choice stands —
   // re-deriving it on every refresh would drag somebody who stepped back to
@@ -265,24 +283,31 @@ export default function SetupPage({
     setNotice(null);
   };
 
-  /** Step forward, writing this step's answers first (contract rule 2). */
-  const onNext = async () => {
+  /**
+   * Write this step's answers, and say whether that worked.
+   *
+   * Split out of `onNext` because the storage step needs the same write for a
+   * different reason: a connection test runs on the server against resolved
+   * settings, so testing answers that are still only in this page's state
+   * would test the previous answers and report them as fine.
+   */
+  const saveCurrentStep = async (): Promise<boolean> => {
     if (!current) {
-      return;
+      return false;
     }
 
     if (current.kind === "settings" && current.askable.length > 0) {
       const problems = validateStep(current, values);
       if (Object.keys(problems).length > 0) {
         setErrors(problems);
-        return;
+        return false;
       }
 
       const payload = stepPayload(current, values);
       if (Object.keys(payload).length > 0) {
         if (!adminCode.trim()) {
           setNotice("Enter the one-time admin code before saving this step.");
-          return;
+          return false;
         }
 
         setIsSaving(true);
@@ -308,14 +333,38 @@ export default function SetupPage({
               error instanceof Error ? error.message : "That step failed.",
             );
           }
-          return;
+          return false;
         } finally {
           setIsSaving(false);
         }
       }
     }
 
-    goTo(index + 1);
+    return true;
+  };
+
+  /** Step forward, writing this step's answers first (contract rule 2). */
+  const onNext = async () => {
+    if (await saveCurrentStep()) {
+      goTo(index + 1);
+    }
+  };
+
+  /**
+   * Save the storage answers, then ask the server whether they reach a store.
+   *
+   * The failure this exists to catch is not a typo in an endpoint — it is an
+   * operator finishing setup, uploading a map a week later, and finding out
+   * then. Pressing it is optional, like everything else on that step.
+   */
+  const onTestStorage = async (): Promise<StorageConnectionReport> => {
+    if (!(await saveCurrentStep())) {
+      throw new Error(
+        "The storage answers could not be saved, so there was nothing to test.",
+      );
+    }
+    await refresh();
+    return testStorageConnection();
   };
 
   const onComplete = async () => {
@@ -368,6 +417,23 @@ export default function SetupPage({
    * acknowledge it to leave.
    */
   const onLeave = async () => {
+    // The operator has held a session cookie since the account step. The auth
+    // context does not know: it asks `GET /authentication/session` exactly
+    // once, when it mounts, and on this page that ask happened before there
+    // was an account to find — it answered 401 and nothing has asked since.
+    //
+    // So the context still reads "signed out", and both routes that matter
+    // consult it the moment setup stops being required: `/setup/:code`
+    // redirects to `publicHome`, and `/admin` is behind
+    // `RequireAuthenticated`. Without this the last click of a wizard that
+    // just created the administrator, enrolled their second factor and
+    // finished setup sent them to a sign-in screen they did not need.
+    //
+    // Refreshed *before* the status, so that by the time `setupRequired`
+    // flips, `isAuthenticated` is already true and neither route has a window
+    // in which to bounce. Failure is not fatal: the session is whatever the
+    // server says it is, and `/admin` will say so.
+    await refreshAuthenticatedSession().catch(() => null);
     await onSetupComplete();
     navigate("/admin?bootstrap=complete", { replace: true });
   };
@@ -422,6 +488,25 @@ export default function SetupPage({
                 </li>
               ))}
             </ol>
+            {/*
+             * Spec 052 FR-011: a question this instance is not being asked is
+             * said out loud, not simply absent. An operator who has read that
+             * ThunderForge asks for a copyright-notice contact and is never
+             * asked for one has no way to tell "it decided I do not owe this"
+             * from "it forgot" — and the second reading is the one that makes
+             * somebody go looking for a setting that is not there.
+             */}
+            {!publishesBeyondWorld ? (
+              <p
+                data-testid="setup-not-asked"
+                className="text-sm text-muted-foreground"
+              >
+                You have not said this instance publishes content beyond the
+                world it was made in, so it is not being asked for a
+                copyright-notice contact, a jurisdiction or public terms. Say
+                otherwise on &ldquo;Who may join&rdquo; and those steps appear.
+              </p>
+            ) : null}
             {skippedCount > 0 ? (
               <p
                 data-testid="setup-skipped-steps"
@@ -495,7 +580,12 @@ export default function SetupPage({
                 values={values}
                 errors={errors}
                 onChange={onChange}
+                onTestStorage={onTestStorage}
               />
+            ) : null}
+
+            {current?.kind === "providers" ? (
+              <ProvidersStep accessPolicy={values["instance.access_policy"]} />
             ) : null}
 
             {current?.kind === "second-factor" ? (

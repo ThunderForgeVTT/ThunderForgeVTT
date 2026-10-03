@@ -1,0 +1,14 @@
+-- An issuer-derived provider's base URL, kept rather than reverse-derived.
+--
+-- Keycloak's three endpoints are `<issuer>/protocol/openid-connect/{auth,
+-- token,userinfo}`, so the issuer *could* be recovered from
+-- `authorization_url` by chopping a known suffix. That only works while
+-- exactly one issuer-derived provider exists and its layout never changes;
+-- the second one makes the chop ambiguous. Storing what the operator typed
+-- also lets the form show it back to them, which is the difference between
+-- "edit this URL" and "retype it from memory".
+--
+-- NULL on every fixed-endpoint provider, and on every row seeded before this
+-- migration — including the Keycloak row, whose endpoints are empty strings
+-- precisely because no issuer has been supplied yet.
+ALTER TABLE oauth_providers ADD COLUMN issuer_url VARCHAR;

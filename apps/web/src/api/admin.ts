@@ -5,9 +5,36 @@ import type {
   AdminWelcomeSummary,
   AuthSecuritySettings,
   OAuthProviderConfig,
+  StorageConnectionReport,
   SystemManifest,
   UpdateOAuthProviderInput,
 } from "@/types/admin";
+
+/**
+ * Every field of a provider the UI reads, in one place.
+ *
+ * Three queries select it — the admin panel's bundle, the update mutation's
+ * response, and the setup wizard's own smaller query — and a provider the
+ * wizard could not see because one copy of this list lagged behind is a bug
+ * with no symptom but a missing field.
+ */
+const OAUTH_PROVIDER_FIELDS = `
+  id
+  providerKey
+  displayName
+  authorizationUrl
+  tokenUrl
+  userinfoUrl
+  issuerUrl
+  requiresIssuerUrl
+  scopes
+  oauthClientId
+  configured
+  enabled
+  hasClientSecret
+  updatedAt
+  configSource
+`;
 
 type AdminWelcomeSummaryQuery = {
   adminWelcomeSummary: AdminWelcomeSummary;
@@ -83,21 +110,7 @@ export function getAdminSettingsData(): Promise<AdminSettingsData> {
           fixedBy
         }
       }
-      oauthProviders {
-        id
-        providerKey
-        displayName
-        authorizationUrl
-        tokenUrl
-        userinfoUrl
-        scopes
-        oauthClientId
-        configured
-        enabled
-        hasClientSecret
-        updatedAt
-        configSource
-      }
+      oauthProviders { ${OAUTH_PROVIDER_FIELDS} }
       authSecuritySettings {
         twoFactorRequiredForAllUsers
         updatedAt
@@ -124,6 +137,42 @@ export function getAdminSettingsData(): Promise<AdminSettingsData> {
   }));
 }
 
+/**
+ * The sign-in providers alone.
+ *
+ * The setup wizard needs these and nothing else in `adminSettings` — disk
+ * usage and the system manifest on a wizard step are both a waste and a
+ * surface for an unrelated resolver to fail the step with.
+ */
+export function getOAuthProviders(): Promise<OAuthProviderConfig[]> {
+  return postGraphQL<{ oauthProviders: OAuthProviderConfig[] }>(
+    `
+      query SetupOAuthProviders {
+        oauthProviders { ${OAUTH_PROVIDER_FIELDS} }
+      }
+    `,
+  ).then((data) => data.oauthProviders);
+}
+
+/**
+ * Ask the server whether the storage answers actually reach an object store.
+ *
+ * Creates the bucket if it is missing, which on a fresh instance is the
+ * expected state rather than a failure.
+ */
+export function testStorageConnection(): Promise<StorageConnectionReport> {
+  return postGraphQL<{ testStorageConnection: StorageConnectionReport }>(`
+    mutation TestStorageConnection {
+      testStorageConnection {
+        reachable
+        endpoint
+        bucket
+        detail
+      }
+    }
+  `).then((data) => data.testStorageConnection);
+}
+
 export function updateOAuthProvider(
   providerId: string,
   config: UpdateOAuthProviderInput,
@@ -131,21 +180,7 @@ export function updateOAuthProvider(
   return postGraphQL<UpdateOAuthProviderMutation>(
     `
       mutation UpdateOAuthProvider($providerId: UUID!, $config: GraphQLOAuthProviderConfigInput!) {
-        updateOauthProvider(providerId: $providerId, config: $config) {
-          id
-          providerKey
-          displayName
-          authorizationUrl
-          tokenUrl
-          userinfoUrl
-          scopes
-          oauthClientId
-          configured
-          enabled
-          hasClientSecret
-          updatedAt
-          configSource
-        }
+        updateOauthProvider(providerId: $providerId, config: $config) { ${OAUTH_PROVIDER_FIELDS} }
       }
     `,
     {

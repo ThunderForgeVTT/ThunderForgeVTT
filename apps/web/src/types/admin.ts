@@ -34,6 +34,18 @@ export interface OAuthProviderConfig {
   authorizationUrl: string;
   tokenUrl: string;
   userinfoUrl: string | null;
+  /**
+   * The base URL a self-hosted provider's endpoints are derived from, or
+   * `null` when none has been supplied yet. Only meaningful where
+   * `requiresIssuerUrl` is true.
+   */
+  issuerUrl: string | null;
+  /**
+   * Whether this provider's endpoints come from an issuer URL. A fact about
+   * the provider's kind, so the form asks the server rather than
+   * pattern-matching `providerKey`.
+   */
+  requiresIssuerUrl: boolean;
   scopes: string[];
   oauthClientId: string | null;
   configured: boolean;
@@ -107,5 +119,16 @@ export interface UpdateOAuthProviderInput {
   oauthClientSecret?: string;
   enabled?: boolean;
   userinfoUrl?: string;
+  issuerUrl?: string;
   scopes?: string[];
+}
+
+/** What `testStorageConnection` answers. */
+export interface StorageConnectionReport {
+  reachable: boolean;
+  /** What it tried — a stale environment variable shows up here. */
+  endpoint: string;
+  bucket: string;
+  /** The object store's own error, when it failed. */
+  detail: string | null;
 }

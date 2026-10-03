@@ -306,6 +306,11 @@ pub struct OAuthProvider {
     /// kept in sync by the startup env-var scan; only `enabled` is writable
     /// on them through the admin GraphQL mutation.
     pub config_source: String,
+    /// The operator's base URL, for a provider whose endpoints are derived
+    /// from one (`ProviderKind::required_issuer_field`). `None` on a
+    /// fixed-endpoint provider, and on an issuer-derived one nobody has
+    /// configured yet — which is the Keycloak row's state as seeded.
+    pub issuer_url: Option<String>,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
@@ -325,6 +330,7 @@ pub struct NewOAuthProvider {
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
     pub config_source: String,
+    pub issuer_url: Option<String>,
 }
 
 #[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]

@@ -102,7 +102,7 @@ pub async fn upload_lore_image_impl(
 
     // 3. Write both objects via the existing per-object-scoped credential path.
     let asset_id = Uuid::now_v7();
-    let cfg = RustFsConfig::from_env();
+    let cfg = RustFsConfig::resolve(state).await;
     write_object(
         &cfg,
         &full_key(asset_id),

@@ -170,6 +170,24 @@ impl ProviderKind {
         }
     }
 
+    /// The kind behind a stored `oauth_providers.provider_key`, if any.
+    ///
+    /// A `provider_key` is **lowercase** and may carry an instance suffix —
+    /// `keycloak`, `keycloak__work` (`oauth_env::resolve`) — while
+    /// `env_segment` is uppercase because it is matched against environment
+    /// variable names. Resolving one with the other is a mismatch that
+    /// returns `None` for every provider there is, which is both silent and
+    /// total: it was how an operator came to be told that Keycloak
+    /// "publishes its own endpoints" and could take no issuer URL.
+    ///
+    /// `None` is still a real answer. An operator may name a provider this
+    /// build has never heard of (`OAUTH_MYSERVICE_*`), and such a row carries
+    /// the endpoints its operator gave it rather than any this type knows.
+    pub fn from_provider_key(provider_key: &str) -> Option<ProviderKind> {
+        let base = provider_key.split("__").next().unwrap_or_default();
+        Self::from_env_segment(&base.to_uppercase())
+    }
+
     /// Which operator-supplied field an issuer-derived provider cannot
     /// resolve without, or `None` if its endpoints are fixed.
     pub fn required_issuer_field(self) -> Option<&'static str> {
@@ -264,6 +282,36 @@ mod tests {
             );
             assert_eq!(ProviderKind::from_env_segment(segment), Some(*kind));
         }
+    }
+
+    /// The stored key resolves too, in every form a row can hold it.
+    ///
+    /// Walked over `ALL` rather than spot-checked, because a provider this
+    /// cannot resolve is one whose operator is told it takes no issuer URL —
+    /// a refusal with no way around it short of editing the database.
+    #[test]
+    fn every_provider_resolves_from_its_stored_provider_key() {
+        for kind in ProviderKind::ALL {
+            let key = kind.env_segment().to_lowercase();
+            assert_eq!(
+                ProviderKind::from_provider_key(&key),
+                Some(*kind),
+                "a row keyed `{key}` resolves to no provider"
+            );
+            // Spec 036: a second instance of one provider suffixes the key.
+            assert_eq!(
+                ProviderKind::from_provider_key(&format!("{key}__work")),
+                Some(*kind),
+                "a second instance of `{key}` resolves to no provider"
+            );
+        }
+    }
+
+    /// And an operator's own provider is not forced into one of these.
+    #[test]
+    fn a_provider_key_this_build_never_heard_of_resolves_to_nothing() {
+        assert_eq!(ProviderKind::from_provider_key("myservice"), None);
+        assert_eq!(ProviderKind::from_provider_key(""), None);
     }
 
     #[test]

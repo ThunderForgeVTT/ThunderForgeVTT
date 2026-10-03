@@ -25,6 +25,41 @@ impl AdminMutation {
         Ok(result)
     }
 
+    /// Prove the storage answers before an operator walks away from them.
+    ///
+    /// `ensure_bucket` first, then `health_check`: a bucket that does not
+    /// exist yet is the *expected* state on a fresh instance, and reporting
+    /// "unreachable" for it would send an operator to re-read credentials
+    /// that were right all along. Together they answer the only question
+    /// worth asking here — can this instance store a map and serve it back.
+    ///
+    /// Deliberately not a write-then-delete probe. `delete_object` refuses
+    /// any key outside the feedback prefix, so a probe object would be
+    /// litter this server cannot clear up.
+    async fn test_storage_connection(
+        &self,
+        ctx: &Context<'_>,
+    ) -> GraphQLResult<GraphQLStorageConnectionReport> {
+        let state = app_state(ctx)?;
+        let _ = admin_user(ctx)?;
+
+        let cfg = crate::storage::rustfs::RustFsConfig::resolve(state).await;
+        let outcome = match crate::storage::rustfs::ensure_bucket(&cfg).await {
+            Ok(()) => crate::storage::rustfs::health_check(&cfg).await,
+            Err(error) => Err(error),
+        };
+
+        Ok(GraphQLStorageConnectionReport {
+            reachable: outcome.is_ok(),
+            endpoint: cfg.endpoint,
+            bucket: cfg.bucket,
+            // The store's own words, not a translation of them. An S3 error
+            // names which of the four answers was wrong far better than
+            // "could not connect" does.
+            detail: outcome.err().map(|error| error.to_string()),
+        })
+    }
+
     async fn update_manifest_key(
         &self,
         ctx: &Context<'_>,

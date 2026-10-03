@@ -215,6 +215,20 @@ type AppMutationRoot {
 	deleteWorld(id: UUID!): GraphQLDeleteWorldPayload!
 	deleteMyData: GraphQLDeleteMyDataPayload!
 	updateOauthProvider(providerId: UUID!, config: GraphQLOAuthProviderConfigInput!): GraphQLOAuthProvider!
+	"""
+	Prove the storage answers before an operator walks away from them.
+	
+	`ensure_bucket` first, then `health_check`: a bucket that does not
+	exist yet is the *expected* state on a fresh instance, and reporting
+	"unreachable" for it would send an operator to re-read credentials
+	that were right all along. Together they answer the only question
+	worth asking here — can this instance store a map and serve it back.
+	
+	Deliberately not a write-then-delete probe. `delete_object` refuses
+	any key outside the feedback prefix, so a probe object would be
+	litter this server cannot clear up.
+	"""
+	testStorageConnection: GraphQLStorageConnectionReport!
 	updateManifestKey(key: String!, value: String!): GraphQLSystemManifest!
 	recalculateDiskUsage: GraphQLAdminStats!
 	updateTwoFactorPolicy(requiredForAllUsers: Boolean!): GraphQLAuthSecuritySettings!
@@ -4145,6 +4159,21 @@ type GraphQLOAuthProvider {
 	authorizationUrl: String!
 	tokenUrl: String!
 	userinfoUrl: String
+	"""
+	Set only on a provider whose endpoints are derived from it, and only
+	once an operator has supplied one. A client uses its presence in the
+	declaration — not this value — to decide whether to offer the field;
+	`null` here means "not configured yet", not "not applicable".
+	"""
+	issuerUrl: String
+	"""
+	Whether this provider's endpoints come from an issuer URL, so a client
+	knows whether to offer the field at all. Derived from the provider's
+	`ProviderKind`, which is a code-level fact about a self-hosted IdP's
+	URL layout — not something an operator sets, and not something a
+	client should infer from a provider key it has to pattern-match.
+	"""
+	requiresIssuerUrl: Boolean!
 	scopes: [String!]!
 	oauthClientId: String
 	configured: Boolean!
@@ -4176,6 +4205,11 @@ input GraphQLOAuthProviderConfigInput {
 	oauthClientSecret: String
 	enabled: Boolean
 	userinfoUrl: String
+	"""
+	A self-hosted provider's base URL. Supplying it for a provider with
+	fixed endpoints is an error rather than a no-op.
+	"""
+	issuerUrl: String
 	scopes: [String!]
 }
 
@@ -4648,6 +4682,23 @@ type GraphQLSpeed {
 	"""
 	label: String!
 	value: Float!
+}
+
+"""
+Whether this instance can actually store a file, asked and answered.
+
+Carries the endpoint and bucket it tried, because the failure an operator
+most often needs to see is that it reached the *wrong* one — a stale
+environment variable beating the answers they just typed.
+"""
+type GraphQLStorageConnectionReport {
+	reachable: Boolean!
+	endpoint: String!
+	bucket: String!
+	"""
+	The object store's own error, when there was one.
+	"""
+	detail: String
 }
 
 """
@@ -5256,6 +5307,12 @@ type InstanceCapability {
 	key: String!
 	label: String!
 	available: Boolean!
+	"""
+	Whether this instance does the thing at all. False means the operator
+	said this instance does not publish beyond a world, so the gaps below
+	are duties it does not owe — not work it has left undone.
+	"""
+	applicable: Boolean!
 	gaps: [ReadinessGap!]!
 }
 
@@ -5290,8 +5347,8 @@ type InstanceInvitationRedemption {
 type InstanceReadiness {
 	capabilities: [InstanceCapability!]!
 	"""
-	True only when every capability is available. Not an absence of
-	complaints.
+	True only when every *applicable* capability is available. Not an
+	absence of complaints.
 	"""
 	fullyConfigured: Boolean!
 	"""

@@ -28,7 +28,8 @@ pub mod admin_types;
 pub use admin_types::{
     GraphQLAdminAccount, GraphQLAdminBootstrapSettings, GraphQLAdminStats,
     GraphQLAdminWelcomeSummary, GraphQLAuthSecuritySettings, GraphQLOAuthProvider,
-    GraphQLOAuthProviderConfigInput, GraphQLSystemManifest, GraphQLTwoFactorCoverage,
+    GraphQLOAuthProviderConfigInput, GraphQLStorageConnectionReport, GraphQLSystemManifest,
+    GraphQLTwoFactorCoverage,
 };
 
 // Phase 4.9.Z Step 3: Input & utility types extracted to separate module

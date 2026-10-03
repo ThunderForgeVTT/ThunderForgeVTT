@@ -18,6 +18,16 @@ const stackIsExternal = process.env.THUNDERFORGE_E2E_EXTERNAL_STACK === "1";
 /** `e2e/journeys/**`: see the projects below, and `scripts/journeys.mjs`. */
 const JOURNEYS = /[\\/]e2e[\\/]journeys[\\/]/;
 
+/**
+ * The specs that need an instance nobody has set up yet.
+ *
+ * One pattern, used by both projects, so the partition cannot drift: whatever
+ * `first-run` matches is exactly what `chromium` refuses. Keep it in step with
+ * `isFirstRunSpec` in `scripts/e2e/specs.mjs`, which decides which *stack* a
+ * file is routed to.
+ */
+const FIRST_RUN = /instance-(setup|first-run-[a-z]+)\.spec\.ts$/;
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
@@ -86,10 +96,15 @@ export default defineConfig({
   // whole reason no setup spec existed before — not that nobody wrote one, but
   // that there was nowhere to run it.
   //
-  // `chromium` ignores the setup spec and `first-run` matches only it, so
-  // neither lane can pick up the other's files even when `e2e-parallel.mjs`
-  // names them positionally. Both use the same browser; what differs is the
-  // database behind `PLAYWRIGHT_BASE_URL`.
+  // `chromium` ignores the first-run specs and `first-run` matches only
+  // them, so neither lane can pick up the other's files even when
+  // `e2e-parallel.mjs` names them positionally. Both use the same browser;
+  // what differs is the database behind `PLAYWRIGHT_BASE_URL`.
+  //
+  // There are three of them since spec 064 — the original walk, a private
+  // instance and a public one — and each needs a *pristine* instance, because
+  // setup completes once and cannot be re-walked. `e2e-parallel.mjs` gives
+  // the lane a stack per spec for that reason.
   projects: [
     //
     // Journeys (`e2e/journeys`) are in neither. They run on a throwaway
@@ -101,12 +116,12 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
-      testIgnore: [/instance-setup\.spec\.ts$/, JOURNEYS],
+      testIgnore: [FIRST_RUN, JOURNEYS],
     },
     {
       name: "first-run",
       use: { ...devices["Desktop Chrome"] },
-      testMatch: /instance-setup\.spec\.ts$/,
+      testMatch: FIRST_RUN,
       testIgnore: JOURNEYS,
     },
   ],

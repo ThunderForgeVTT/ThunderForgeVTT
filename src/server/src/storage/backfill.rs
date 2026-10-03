@@ -46,7 +46,7 @@
 use diesel::prelude::*;
 use uuid::Uuid;
 
-use crate::state::DbPool;
+use crate::state::{AppState, DbPool};
 use crate::storage::rustfs::{RustFsConfig, read_object};
 
 /// Candidates fetched per cycle. Small on purpose: the loop is a trickle
@@ -184,9 +184,15 @@ pub async fn backfill_asset(
 /// the upload path has always written a hash. Restarting the server
 /// restarts the walk, which is also how objects that were unreadable once
 /// get another chance.
-pub fn spawn_content_hash_backfill_task(pool: DbPool) {
+/// Takes the whole state rather than a pool because the object store's
+/// address is a resolved setting now. Resolved once per pass rather than once
+/// per process, so a walk that is still running when an operator corrects an
+/// endpoint picks up the correction on its next batch instead of spending the
+/// rest of its life reading from the wrong place.
+pub fn spawn_content_hash_backfill_task(state: AppState) {
     tokio::spawn(async move {
-        let cfg = RustFsConfig::from_env();
+        let pool = state.db_pool.clone();
+        let cfg = RustFsConfig::resolve(&state).await;
         let mut cursor: Option<Uuid> = None;
         let mut hashed = 0usize;
         let mut skipped = 0usize;

@@ -820,6 +820,7 @@ pub const OPERATOR: &[&str] = &[
     "executeTermination",
     "acknowledgeOperatorStatement",
     "updateOauthProvider",
+    "testStorageConnection",
     "updateManifestKey",
     "recalculateDiskUsage",
     "updateTwoFactorPolicy",

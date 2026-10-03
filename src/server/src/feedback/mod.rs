@@ -385,7 +385,7 @@ pub async fn record(state: &AppState, new: NewSubmission) -> Result<SubmissionRo
         let attachment_id = Uuid::now_v7();
         let key = object_key(id, attachment_id, attachment.kind);
         let bytes = attachment.content.clone();
-        let cfg = crate::storage::rustfs::RustFsConfig::from_env();
+        let cfg = crate::storage::rustfs::RustFsConfig::resolve(state).await;
         crate::storage::rustfs::write_object(
             &cfg,
             &key,

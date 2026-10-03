@@ -29,9 +29,10 @@ use std::sync::OnceLock;
 
 use diesel::prelude::*;
 
+use crate::auth::setup_requirements::publishes_beyond_world;
 use crate::repo_host::{RegistrationProblem, registration_from_env};
 use crate::schema::instance_settings;
-use crate::settings::registry::{Capability, SettingDeclaration, declarations};
+use crate::settings::registry::{Capability, SettingDeclaration, SetupVisibility, declarations};
 use crate::settings::resolver::{Settings, Source, resolve_all};
 use crate::settings::validate::placeholder_problem;
 use crate::state::AppState;
@@ -52,6 +53,16 @@ pub struct CapabilityReport {
     pub key: &'static str,
     pub label: &'static str,
     pub available: bool,
+    /// Whether this capability is something this instance has asked for at
+    /// all.
+    ///
+    /// A private instance is not obliged to publish a copyright-notice
+    /// contact, so reporting the publishing capability as *unavailable* would
+    /// be reporting a gap the operator has no reason to close — and
+    /// `fully_configured` would never go true on a perfectly complete private
+    /// instance (spec 052 FR-011). Three states, not two: available, missing,
+    /// or not something this instance does.
+    pub applicable: bool,
     pub gaps: Vec<Gap>,
 }
 
@@ -86,7 +97,10 @@ pub async fn report(state: &AppState) -> Result<ReadinessReport, String> {
     let source_flips = flips_since_last_boot(state, &settings).await;
 
     Ok(ReadinessReport {
-        fully_configured: capabilities.iter().all(|c| c.available),
+        fully_configured: capabilities
+            .iter()
+            .filter(|c| c.applicable)
+            .all(|c| c.available),
         capabilities,
         unrecognised_settings: settings.unrecognised().to_vec(),
         source_flips,
@@ -100,9 +114,11 @@ pub async fn report(state: &AppState) -> Result<ReadinessReport, String> {
 /// missing `git` — are used, because presence is answered by the resolver and
 /// answering it twice would report a value set in a row as missing.
 pub fn assess(settings: &Settings, sync_problems: &[RegistrationProblem]) -> Vec<CapabilityReport> {
+    let publishing = publishes_beyond_world(settings);
     Capability::all()
         .iter()
         .map(|capability| {
+            let applicable = applies_here(*capability, publishing);
             let mut gaps: Vec<Gap> = declarations()
                 .iter()
                 .filter(|d| belongs_to(d, *capability))
@@ -117,10 +133,35 @@ pub fn assess(settings: &Settings, sync_problems: &[RegistrationProblem]) -> Vec
                 key: capability.key(),
                 label: capability.label(),
                 available: gaps.is_empty(),
+                applicable,
                 gaps,
             }
         })
         .collect()
+}
+
+/// Whether this capability is one this instance has asked for.
+///
+/// Derived from the declarations rather than from a second list of capability
+/// names: a capability every one of whose settings is only asked for when the
+/// instance publishes is, by that fact, a capability only a publishing
+/// instance has. Adding a declaration is therefore the whole of adding it
+/// here, and a capability with no declarations at all stays applicable.
+fn applies_here(capability: Capability, publishing: bool) -> bool {
+    if publishing {
+        return true;
+    }
+    let owned: Vec<&SettingDeclaration> = declarations()
+        .iter()
+        .filter(|d| belongs_to(d, capability))
+        .collect();
+    // An empty list is applicable on purpose: a capability nothing declares
+    // for cannot be one this instance declined, and `all` over nothing is
+    // true, which would silently excuse it.
+    owned.is_empty()
+        || owned
+            .iter()
+            .any(|d| d.setup != SetupVisibility::AskedWhenPublishing)
 }
 
 /// Whether a declaration's absence is what stops a capability working.
@@ -749,6 +790,72 @@ mod tests {
                     settings.get(d.key).is_some(),
                     "`{}` did not resolve with everything unset",
                     d.key
+                );
+            }
+        });
+    }
+
+    /// Spec 052 FR-011: a duty this instance does not owe is reported as not
+    /// applicable, not as work left undone.
+    ///
+    /// The distinction matters because `fully_configured` is a positive claim.
+    /// Without it, a private instance that has answered every question it was
+    /// ever asked still reports itself incompletely configured forever, over a
+    /// copyright agent it has no reason to name — and an operator who is told
+    /// they are permanently unfinished stops reading the report.
+    #[test]
+    fn a_duty_a_private_instance_does_not_owe_is_not_a_gap() {
+        nothing_set(|settings| {
+            let reports = assess(&settings, &[]);
+            let applicability = |key: &str| {
+                reports
+                    .iter()
+                    .find(|r| r.key == key)
+                    .unwrap_or_else(|| panic!("`{key}` was not reported at all"))
+                    .applicable
+            };
+
+            assert!(
+                !applicability("publish_beyond_world"),
+                "an instance that never said it publishes was held to a publisher's duties"
+            );
+            assert!(!applicability("publish_terms"));
+
+            // Mail and identifying the operator are not publishing duties, so
+            // they stay applicable. Asserted here rather than left implicit,
+            // because the derivation walks the declarations and a mis-stamped
+            // one would quietly excuse a capability that does matter.
+            assert!(applicability("send_mail"));
+            assert!(applicability("identify_operator"));
+            assert!(applicability("store_assets"));
+        });
+    }
+
+    /// And saying so puts them back.
+    #[test]
+    fn saying_the_instance_publishes_makes_the_duties_apply() {
+        let state = test_app_state();
+        let keys: Vec<&str> = declarations().iter().map(|d| d.key).collect();
+        let mut vars: Vec<(&str, Option<&str>)> = declarations()
+            .iter()
+            .flat_map(|d| d.env_var.into_iter().chain(d.env_aliases.iter().copied()))
+            .map(|name| (name, None))
+            .collect();
+        vars.push(("THUNDERFORGE_INSTANCE_PUBLISHES_BEYOND_WORLD", Some("true")));
+
+        temp_env(&vars, || {
+            let _rows = crate::settings::test_env::without_rows(&state, &keys);
+            let settings = block_on(resolve_all(&state)).expect("resolves");
+            let reports = assess(&settings, &[]);
+            for key in ["publish_beyond_world", "publish_terms"] {
+                let report = reports.iter().find(|r| r.key == key).expect("reported");
+                assert!(
+                    report.applicable,
+                    "`{key}` did not apply to an instance that says it publishes"
+                );
+                assert!(
+                    !report.available,
+                    "`{key}` was available with nothing set behind it"
                 );
             }
         });

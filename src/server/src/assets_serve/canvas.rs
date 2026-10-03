@@ -157,7 +157,7 @@ async fn serve_canvas_asset(
         }
     }
 
-    let cfg = RustFsConfig::from_env();
+    let cfg = RustFsConfig::resolve(&state).await;
     match read_object(&cfg, &storage_path).await {
         Ok(bytes) => (
             StatusCode::OK,

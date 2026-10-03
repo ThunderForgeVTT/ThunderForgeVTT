@@ -531,7 +531,7 @@ async fn run() {
     // the system is correct the whole time this is unfinished, merely
     // wasteful. Nothing waits on it.
     eprintln!("[Server] 🚀 Starting canvas asset content-hash backfill task");
-    thunderforge_server::storage::backfill::spawn_content_hash_backfill_task(db_pool.clone());
+    thunderforge_server::storage::backfill::spawn_content_hash_backfill_task(app_state.clone());
 
     let schema = Schema::build(
         AppQueryRoot::default(),

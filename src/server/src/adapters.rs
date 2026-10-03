@@ -123,6 +123,10 @@ impl From<CoreOAuthProvider> for DbOAuthProvider {
             // has) rather than guessing "env" for a row this conversion path
             // didn't itself materialize from an env-var scan.
             config_source: "admin".to_string(),
+            // Likewise: core carries no issuer, so a row built from one has
+            // none. Harmless, because a provider whose endpoints come from an
+            // issuer already has them filled in here.
+            issuer_url: None,
         }
     }
 }

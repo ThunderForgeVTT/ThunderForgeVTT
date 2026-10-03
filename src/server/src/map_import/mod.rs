@@ -186,7 +186,12 @@ pub async fn import_uvtt_impl(
     // a map with forty-eight, and every wall, portal and light out by the same
     // 1.5x. `transcode_map_background` picks the stored cell size and the
     // stored image together, and reports the one that survived.
+    // Resolved once for the whole import, which is also the only sane place
+    // for it: the background and its preview must land in the same store even
+    // if an operator changes the answer halfway through an upload.
+    let storage_cfg = crate::storage::rustfs::RustFsConfig::resolve(state).await;
     let saved_background = save_background_image(
+        &storage_cfg,
         user_id,
         world_id,
         scene_id,
@@ -210,7 +215,9 @@ pub async fn import_uvtt_impl(
     // alongside the full-resolution background from the same source
     // bytes. Best-effort — a preview-generation failure must not fail the
     // whole import (the map itself already saved successfully above).
-    let saved_preview = save_scene_preview_image(&parsed.file.image).await.ok();
+    let saved_preview = save_scene_preview_image(&storage_cfg, &parsed.file.image)
+        .await
+        .ok();
 
     // Walls, doors and lights are placed on the background as stored: centred
     // on the origin, y up — see `ScenePlacement`.

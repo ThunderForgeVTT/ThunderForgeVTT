@@ -3,25 +3,29 @@
 /// gate; the cut is by subject, not by convenience.
 #[path = "admin/two_factor_operations.rs"]
 pub mod two_factor_operations;
+
+/// The sign-in providers an operator may configure. Its own file for the same
+/// reason as `two_factor_operations`, and along a seam that was already there:
+/// one table, and the two rules that govern it.
+#[path = "admin/providers.rs"]
+pub mod providers;
 pub use two_factor_operations::{
     AdminAccountView, TwoFactorCoverage, find_account_for_admin, load_two_factor_coverage,
 };
 
 use crate::auth::instance_access::InstanceAccessPolicy;
-use crate::config::oauth_env::{parse_oauth_env_vars, resolve};
 use crate::models::{
     AdminBootstrapSetup, AuthSecuritySetting, InstanceAccessSetting, NewAuthSecuritySetting,
-    NewOAuthProvider, OAuthProvider,
 };
 use crate::schema::{
-    admin_bootstrap_setup, auth_security_settings, instance_access_settings, oauth_providers,
-    policies, tokens, users, world_events, worlds,
+    admin_bootstrap_setup, auth_security_settings, instance_access_settings, policies, tokens,
+    users, world_events, worlds,
 };
-use crate::state::{AppState, DbPool};
+use crate::state::AppState;
 use chrono::Utc;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -157,270 +161,10 @@ pub async fn load_admin_welcome_summary(
     })
 }
 
-pub async fn load_oauth_providers(state: &AppState) -> Result<Vec<OAuthProvider>, String> {
-    let mut conn = state
-        .db_pool
-        .get()
-        .map_err(|_| "Failed to get DB connection".to_string())?;
-
-    tokio::task::spawn_blocking(move || {
-        oauth_providers::table
-            .order((
-                oauth_providers::display_name.asc(),
-                oauth_providers::provider_key.asc(),
-            ))
-            .select(OAuthProvider::as_select())
-            .load::<OAuthProvider>(&mut conn)
-    })
-    .await
-    .map_err(|_| "Failed to spawn blocking task".to_string())?
-    .map_err(|_| "Failed to query OAuth providers".to_string())
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct OAuthProviderUpdate {
-    pub display_name: Option<String>,
-    pub oauth_client_id: Option<String>,
-    pub oauth_client_secret: Option<String>,
-    pub enabled: Option<bool>,
-    pub userinfo_url: Option<String>,
-    pub scopes: Option<Vec<String>>,
-}
-
-pub async fn update_oauth_provider(
-    state: &AppState,
-    provider_id: uuid::Uuid,
-    update: OAuthProviderUpdate,
-) -> Result<OAuthProvider, String> {
-    // SSRF guard. `userinfo_url` is the one URL on this row an administrator
-    // can set through the API, and the server **fetches it**, with the
-    // provider access token attached (`fetch_userinfo`). Unchecked, that is a
-    // request the instance makes to any address an admin names — and the
-    // addresses worth naming are all internal: `169.254.169.254` hands back
-    // cloud instance credentials, loopback reaches admin interfaces bound
-    // there deliberately.
-    //
-    // "Only an admin can set it" is weaker than it sounds. An administrator of
-    // a ThunderForge instance is not necessarily trusted with the machine it
-    // runs on — on anything hosted they are usually different people — and an
-    // admin account is a thing that gets taken over. This turns that from a
-    // ThunderForge problem into an infrastructure one.
-    //
-    // Loopback is permitted only in a debug build, for a developer running a
-    // provider locally. A release binary does not contain the allowance at
-    // all, so no environment variable can switch it on — the same two-locks
-    // reasoning `rate_limit_disabled` uses, and for a comparable reason.
-    if let Some(url) = update.userinfo_url.as_deref().map(str::trim)
-        && !url.is_empty()
-    {
-        thunderforge_axum_oidc::url_guard::check_outbound_url(url, cfg!(debug_assertions))
-            .map_err(|refusal| refusal.message().to_string())?;
-    }
-
-    let mut conn = state
-        .db_pool
-        .get()
-        .map_err(|_| "Failed to get DB connection".to_string())?;
-    let now = Utc::now().naive_utc();
-
-    tokio::task::spawn_blocking(move || {
-        let existing = oauth_providers::table
-            .filter(oauth_providers::id.eq(provider_id))
-            .select(OAuthProvider::as_select())
-            .first::<OAuthProvider>(&mut conn)
-            .optional()?;
-
-        let Some(existing) = existing else {
-            return Ok::<_, diesel::result::Error>(None);
-        };
-
-        // ADR-041 write guard: env-sourced rows are re-asserted by the
-        // startup materialization scan on every restart, so admin edits to
-        // their credential/URL/label fields would silently have no lasting
-        // effect. Only `enabled` (FR-006) is ever writable on such a row
-        // through this mutation — every other field in `update` is ignored,
-        // not erased, so the response still reflects the row's real,
-        // persisted (env-sourced) values.
-        let is_env_sourced = existing.config_source == "env";
-        let display_name = if is_env_sourced {
-            existing.display_name
-        } else {
-            update.display_name.unwrap_or(existing.display_name)
-        };
-        let oauth_client_id = if is_env_sourced {
-            existing.oauth_client_id
-        } else {
-            update.oauth_client_id.or(existing.oauth_client_id)
-        };
-        let oauth_client_secret = if is_env_sourced {
-            existing.oauth_client_secret
-        } else {
-            update.oauth_client_secret.or(existing.oauth_client_secret)
-        };
-        let enabled = update.enabled.unwrap_or(existing.enabled);
-        let userinfo_url = if is_env_sourced {
-            existing.userinfo_url
-        } else {
-            update.userinfo_url.or(existing.userinfo_url)
-        };
-        let scopes = if is_env_sourced {
-            existing.scopes
-        } else {
-            update
-                .scopes
-                .map(|items| items.into_iter().map(Some).collect::<Vec<_>>())
-                .unwrap_or(existing.scopes)
-        };
-        let configured = oauth_client_id.is_some() && oauth_client_secret.is_some();
-
-        diesel::update(oauth_providers::table.filter(oauth_providers::id.eq(provider_id)))
-            .set((
-                oauth_providers::display_name.eq(display_name),
-                oauth_providers::oauth_client_id.eq(oauth_client_id),
-                oauth_providers::oauth_client_secret.eq(oauth_client_secret),
-                oauth_providers::enabled.eq(enabled),
-                oauth_providers::userinfo_url.eq(userinfo_url),
-                oauth_providers::scopes.eq(scopes),
-                oauth_providers::configured.eq(configured),
-                oauth_providers::updated_at.eq(now),
-            ))
-            .execute(&mut conn)?;
-
-        oauth_providers::table
-            .filter(oauth_providers::id.eq(provider_id))
-            .select(OAuthProvider::as_select())
-            .first::<OAuthProvider>(&mut conn)
-            .optional()
-            .map(Some)
-    })
-    .await
-    .map_err(|_| "Failed to spawn blocking task".to_string())?
-    .map_err(|_| "Failed to update OAuth provider".to_string())?
-    .flatten()
-    .ok_or_else(|| "OAuth provider not found".to_string())
-}
-
-/// Startup-time materialization of `OAUTH_*` env-var-configured provider
-/// instances into `oauth_providers` rows (ADR-041, research.md §3/§6).
-///
-/// - Every env-var-detected instance is upserted with `config_source =
-///   "env"`; every writable field is refreshed on each run except `enabled`,
-///   which is only set `true` on first insert — an admin's later toggle
-///   must survive a restart.
-/// - Any row that *was* `config_source = "env"` but whose env vars are no
-///   longer present in this scan is flipped back to `config_source =
-///   "admin"`, values untouched (never deleted — see research.md §6 on why
-///   deleting would cascade-orphan linked `user_oauth_accounts`).
-/// - Incomplete env-var groups are logged (FR-010) and skipped, never
-///   panicking startup.
-pub async fn materialize_env_oauth_providers(db_pool: &DbPool) -> Result<(), String> {
-    let parsed = parse_oauth_env_vars(std::env::vars());
-    let mut resolved = Vec::with_capacity(parsed.len());
-    for instance in &parsed {
-        match resolve(instance) {
-            Ok(r) => resolved.push(r),
-            Err(missing) => {
-                tracing::warn!(
-                    provider = %missing.provider,
-                    instance = %missing.instance,
-                    missing_field = %missing.field,
-                    "OAuth env-var provider instance is missing a required setting; skipping"
-                );
-            }
-        }
-    }
-
-    let mut conn = db_pool
-        .get()
-        .map_err(|_| "Failed to get DB connection".to_string())?;
-
-    tokio::task::spawn_blocking(move || {
-        let now = Utc::now().naive_utc();
-        let mut seen_keys: HashSet<String> = HashSet::new();
-
-        for r in &resolved {
-            seen_keys.insert(r.provider_key.clone());
-            let scopes: Vec<Option<String>> = r.scopes.iter().cloned().map(Some).collect();
-
-            let existing = oauth_providers::table
-                .filter(oauth_providers::provider_key.eq(&r.provider_key))
-                .select(OAuthProvider::as_select())
-                .first::<OAuthProvider>(&mut conn)
-                .optional()?;
-
-            match existing {
-                Some(row) => {
-                    // Only set enabled=true on the row's first transition
-                    // into config_source="env"; an already-env-sourced row
-                    // keeps whatever an admin last toggled it to.
-                    let enabled = if row.config_source == "env" {
-                        row.enabled
-                    } else {
-                        true
-                    };
-                    diesel::update(oauth_providers::table.filter(oauth_providers::id.eq(row.id)))
-                        .set((
-                            oauth_providers::display_name.eq(&r.display_name),
-                            oauth_providers::authorization_url.eq(&r.authorization_url),
-                            oauth_providers::token_url.eq(&r.token_url),
-                            oauth_providers::userinfo_url.eq(&r.userinfo_url),
-                            oauth_providers::scopes.eq(&scopes),
-                            oauth_providers::oauth_client_id.eq(Some(&r.client_id)),
-                            oauth_providers::oauth_client_secret.eq(Some(&r.client_secret)),
-                            oauth_providers::configured.eq(true),
-                            oauth_providers::config_source.eq("env"),
-                            oauth_providers::enabled.eq(enabled),
-                            oauth_providers::updated_at.eq(now),
-                        ))
-                        .execute(&mut conn)?;
-                }
-                None => {
-                    let new_row = NewOAuthProvider {
-                        id: uuid::Uuid::now_v7(),
-                        provider_key: r.provider_key.clone(),
-                        display_name: r.display_name.clone(),
-                        authorization_url: r.authorization_url.clone(),
-                        token_url: r.token_url.clone(),
-                        userinfo_url: r.userinfo_url.clone(),
-                        scopes,
-                        oauth_client_id: Some(r.client_id.clone()),
-                        oauth_client_secret: Some(r.client_secret.clone()),
-                        configured: true,
-                        enabled: true,
-                        created_at: now,
-                        updated_at: now,
-                        config_source: "env".to_string(),
-                    };
-                    diesel::insert_into(oauth_providers::table)
-                        .values(&new_row)
-                        .execute(&mut conn)?;
-                }
-            }
-        }
-
-        // Anything still config_source="env" but not seen in this scan had
-        // its env vars removed — revert to admin-editable, values retained.
-        let stale_env_rows = oauth_providers::table
-            .filter(oauth_providers::config_source.eq("env"))
-            .select(OAuthProvider::as_select())
-            .load::<OAuthProvider>(&mut conn)?;
-        for row in stale_env_rows {
-            if !seen_keys.contains(&row.provider_key) {
-                diesel::update(oauth_providers::table.filter(oauth_providers::id.eq(row.id)))
-                    .set((
-                        oauth_providers::config_source.eq("admin"),
-                        oauth_providers::updated_at.eq(now),
-                    ))
-                    .execute(&mut conn)?;
-            }
-        }
-
-        Ok::<_, diesel::result::Error>(())
-    })
-    .await
-    .map_err(|_| "Failed to spawn blocking task".to_string())?
-    .map_err(|_| "Failed to materialize env-configured OAuth providers".to_string())
-}
+pub use providers::{
+    OAuthProviderUpdate, load_oauth_providers, materialize_env_oauth_providers,
+    update_oauth_provider,
+};
 
 pub async fn load_auth_security_settings(state: &AppState) -> Result<AuthSecuritySetting, String> {
     ensure_auth_security_settings(state).await?;
@@ -767,9 +511,15 @@ async fn ensure_instance_access_settings(state: &AppState) -> Result<(), String>
 /// Writes the policy and its audit event **in one transaction** (FR-002,
 /// FR-004). An audit row that can be lost independently of the change it
 /// records is not an audit row.
+///
+/// `actor_user_id` is optional because the first time this is called there is
+/// nobody signed in: "who may join" is the first-run wizard's opening
+/// question (spec 064), and the wizard is authenticated by the bootstrap admin
+/// code rather than by a session. Both columns are nullable, so an
+/// unattributed change is recorded as one rather than attributed to a guess.
 pub async fn update_instance_access_policy(
     state: &AppState,
-    actor_user_id: uuid::Uuid,
+    actor_user_id: Option<uuid::Uuid>,
     new_policy: InstanceAccessPolicy,
 ) -> Result<InstanceAccessSetting, String> {
     ensure_instance_access_settings(state).await?;
@@ -791,7 +541,7 @@ pub async fn update_instance_access_policy(
             )
             .set((
                 instance_access_settings::access_policy.eq(new_policy.as_db_str()),
-                instance_access_settings::updated_by.eq(Some(actor_user_id)),
+                instance_access_settings::updated_by.eq(actor_user_id),
                 instance_access_settings::updated_at.eq(now),
             ))
             .returning(InstanceAccessSetting::as_returning())
@@ -801,7 +551,7 @@ pub async fn update_instance_access_policy(
                 .values(crate::models::NewInstanceAccessEvent {
                     id: uuid::Uuid::now_v7(),
                     event_type: "policy_changed".to_string(),
-                    actor_user_id: Some(actor_user_id),
+                    actor_user_id,
                     previous_policy: Some(previous),
                     new_policy: Some(new_policy.as_db_str().to_string()),
                     attempted_route: None,

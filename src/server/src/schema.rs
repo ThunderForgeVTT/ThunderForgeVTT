@@ -657,6 +657,7 @@ diesel::table! {
         oauth_client_secret -> Nullable<Varchar>,
         configured -> Bool,
         config_source -> Varchar,
+        issuer_url -> Nullable<Varchar>,
     }
 }
 

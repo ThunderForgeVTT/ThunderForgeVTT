@@ -28,6 +28,7 @@ export function OAuthProviderForm({
   );
   const [oauthClientSecret, setOauthClientSecret] = useState("");
   const [userinfoUrl, setUserinfoUrl] = useState(provider.userinfoUrl ?? "");
+  const [issuerUrl, setIssuerUrl] = useState(provider.issuerUrl ?? "");
   const [scopes, setScopes] = useState(provider.scopes.join(" "));
   const [enabled, setEnabled] = useState(provider.enabled);
   const [status, setStatus] = useState<string | null>(null);
@@ -56,7 +57,13 @@ export function OAuthProviderForm({
               oauthClientId: oauthClientId.trim() || undefined,
               oauthClientSecret: oauthClientSecret.trim() || undefined,
               enabled,
-              userinfoUrl: userinfoUrl.trim() || undefined,
+              // Mutually exclusive by construction: a provider whose
+              // endpoints come from an issuer derives its userinfo URL too,
+              // and sending both would have the server quietly discard one of
+              // them.
+              ...(provider.requiresIssuerUrl
+                ? { issuerUrl: issuerUrl.trim() || undefined }
+                : { userinfoUrl: userinfoUrl.trim() || undefined }),
               scopes: scopes
                 .split(/\s+/)
                 .map((item) => item.trim())
@@ -100,6 +107,7 @@ export function OAuthProviderForm({
           <Switch
             checked={enabled}
             onCheckedChange={(checked) => setEnabled(checked)}
+            data-testid={`${provider.id}-enabled`}
           />
           <span>{enabled ? "Enabled" : "Disabled"}</span>
         </label>
@@ -109,6 +117,7 @@ export function OAuthProviderForm({
         <Field label="Display name" htmlFor={`${provider.id}-display-name`}>
           <Input
             id={`${provider.id}-display-name`}
+            data-testid={`${provider.id}-display-name`}
             value={displayName}
             onChange={(event) => setDisplayName(event.target.value)}
             placeholder="Google"
@@ -119,6 +128,7 @@ export function OAuthProviderForm({
         <Field label="Client ID" htmlFor={`${provider.id}-client-id`}>
           <Input
             id={`${provider.id}-client-id`}
+            data-testid={`${provider.id}-client-id`}
             value={oauthClientId}
             onChange={(event) => setOauthClientId(event.target.value)}
             placeholder="OAuth client identifier"
@@ -139,6 +149,7 @@ export function OAuthProviderForm({
         >
           <Input
             id={`${provider.id}-client-secret`}
+            data-testid={`${provider.id}-client-secret`}
             type="password"
             value={oauthClientSecret}
             onChange={(event) => setOauthClientSecret(event.target.value)}
@@ -147,16 +158,44 @@ export function OAuthProviderForm({
             readOnly={isEnvSourced}
           />
         </Field>
-        <Field label="Userinfo URL" htmlFor={`${provider.id}-userinfo-url`}>
-          <Input
-            id={`${provider.id}-userinfo-url`}
-            value={userinfoUrl}
-            onChange={(event) => setUserinfoUrl(event.target.value)}
-            placeholder="https://example.com/oauth/userinfo"
-            disabled={isEnvSourced}
-            readOnly={isEnvSourced}
-          />
-        </Field>
+        {provider.requiresIssuerUrl ? (
+          /* A self-hosted provider states one URL and the server works out
+             the other three. Offering all four would invite an operator to
+             type a token endpoint from one realm and a userinfo endpoint from
+             another, which fails at the last step of a sign-in rather than
+             here. */
+          <Field
+            label="Issuer URL"
+            htmlFor={`${provider.id}-issuer-url`}
+            hint={
+              isEnvSourced
+                ? "Set via environment variable — not editable here."
+                : "The provider's base URL. Authorization, token and userinfo endpoints are derived from it."
+            }
+          >
+            <Input
+              id={`${provider.id}-issuer-url`}
+              data-testid={`${provider.id}-issuer-url`}
+              value={issuerUrl}
+              onChange={(event) => setIssuerUrl(event.target.value)}
+              placeholder="https://id.example.com/realms/main"
+              disabled={isEnvSourced}
+              readOnly={isEnvSourced}
+            />
+          </Field>
+        ) : (
+          <Field label="Userinfo URL" htmlFor={`${provider.id}-userinfo-url`}>
+            <Input
+              id={`${provider.id}-userinfo-url`}
+              data-testid={`${provider.id}-userinfo-url`}
+              value={userinfoUrl}
+              onChange={(event) => setUserinfoUrl(event.target.value)}
+              placeholder="https://example.com/oauth/userinfo"
+              disabled={isEnvSourced}
+              readOnly={isEnvSourced}
+            />
+          </Field>
+        )}
         <Field
           label="Scopes"
           htmlFor={`${provider.id}-scopes`}
@@ -164,6 +203,7 @@ export function OAuthProviderForm({
         >
           <Input
             id={`${provider.id}-scopes`}
+            data-testid={`${provider.id}-scopes`}
             value={scopes}
             onChange={(event) => setScopes(event.target.value)}
             placeholder="openid profile email"
@@ -180,10 +220,15 @@ export function OAuthProviderForm({
           icon="wand"
           onClick={() => void handleSubmit()}
           disabled={isSaving}
+          data-testid={`${provider.id}-save`}
         >
           {isSaving ? "Saving..." : "Update provider"}
         </Button>
-        {status ? <StatusBadge variant="info">{status}</StatusBadge> : null}
+        {status ? (
+          <StatusBadge variant="info" data-testid={`${provider.id}-status`}>
+            {status}
+          </StatusBadge>
+        ) : null}
       </div>
     </article>
   );

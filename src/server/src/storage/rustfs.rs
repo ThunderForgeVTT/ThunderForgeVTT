@@ -13,6 +13,9 @@ use aws_sdk_sts::config::Credentials as StsCredentials;
 use serde_json::json;
 use uuid::Uuid;
 
+use crate::settings::resolver::{Settings, resolve_all};
+use crate::state::AppState;
+
 /// STS credential TTL for a single write (research.md §3's "target: 15
 /// minutes").
 const CREDENTIAL_TTL_SECONDS: i32 = 900;
@@ -27,6 +30,62 @@ pub struct RustFsConfig {
 }
 
 impl RustFsConfig {
+    /// The configuration as the registry resolves it: a row written by first-run
+    /// setup, overridden by the environment, falling back to the same defaults
+    /// `from_env` has always used.
+    ///
+    /// Pure, and separate from `resolve` for the reason `SmtpTransport` is:
+    /// the interesting half is which value wins, and that is worth testing
+    /// without a database.
+    pub fn from_settings(settings: &Settings) -> Self {
+        let value = |key: &str, fallback: &str| -> String {
+            settings
+                .get(key)
+                .and_then(|r| r.value.clone())
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(|| fallback.to_string())
+        };
+        Self {
+            endpoint: value("storage.endpoint", "http://localhost:9000"),
+            region: value("storage.region", "us-east-1"),
+            bucket: value("storage.bucket", "thunderforge-canvas-assets"),
+            root_access_key: value("storage.access_key", "thunderforge-rustfs-root"),
+            root_secret_key: value("storage.secret_key", "thunderforge-rustfs-root-secret"),
+        }
+    }
+
+    /// The configuration for this instance, right now.
+    ///
+    /// Resolved per use and never cached, which is what lets an operator
+    /// correct an endpoint in the wizard or the admin area and have the next
+    /// upload use it. Caching it would also make a process-global out of
+    /// something every request already has a cheap path to — a shape that has
+    /// caused test flakes in this repository before.
+    ///
+    /// Infallible on purpose. The only way resolution fails is that the
+    /// database is unreachable, and in that case the environment is the best
+    /// answer available — which is also exactly what this call site did before
+    /// a row could hold the value at all. Returning a `Result` here would make
+    /// every asset handler carry an error path for a condition it cannot do
+    /// anything about.
+    pub async fn resolve(state: &AppState) -> Self {
+        match resolve_all(state).await {
+            Ok(settings) => Self::from_settings(&settings),
+            Err(error) => {
+                tracing::warn!(
+                    %error,
+                    "could not resolve storage settings; falling back to the environment"
+                );
+                Self::from_env()
+            }
+        }
+    }
+
+    /// The configuration from the environment alone.
+    ///
+    /// Retained for the two places that run before a resolved setting is
+    /// available or wanted: bucket creation at boot, and tests that are not
+    /// about resolution.
     pub fn from_env() -> Self {
         Self {
             endpoint: std::env::var("RUSTFS_ENDPOINT")

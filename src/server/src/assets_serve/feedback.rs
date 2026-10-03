@@ -118,7 +118,7 @@ async fn serve_attachment(
         return (StatusCode::NOT_FOUND, "attachment has expired").into_response();
     }
 
-    let cfg = RustFsConfig::from_env();
+    let cfg = RustFsConfig::resolve(&state).await;
     match read_object(&cfg, &row.storage_path).await {
         Ok(bytes) => (
             StatusCode::OK,

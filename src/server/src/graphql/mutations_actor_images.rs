@@ -148,7 +148,7 @@ pub async fn upload_actor_image_impl(
     })?;
 
     let asset_id = Uuid::now_v7();
-    let cfg = RustFsConfig::from_env();
+    let cfg = RustFsConfig::resolve(state).await;
     write_object(
         &cfg,
         &actor_image_full_key(asset_id),

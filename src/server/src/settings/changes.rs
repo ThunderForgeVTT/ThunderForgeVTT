@@ -87,14 +87,6 @@ pub async fn write_setting(
         ));
     }
 
-    if matches!(d.backing, Backing::AccessPolicy) {
-        return Err(format!(
-            "`{}` is changed with `setInstanceAccessPolicy`, which records the change in the \
-             instance's access log. Writing it here would leave that log incomplete.",
-            d.key
-        ));
-    }
-
     let accepted = match value {
         Some(raw) => Some(validate(d, raw)?),
         None => None,
@@ -155,7 +147,62 @@ pub async fn write_setting(
             )
             .await?;
         }
-        Backing::AccessPolicy => unreachable!("refused above"),
+        Backing::AccessPolicy => {
+            // Spec 035 refused this surface outright, and the reason it gave
+            // was sound: a direct row write would leave `instance_access_events`
+            // with a gap, so policy changes would exist that the access log
+            // never saw. But that objection is about the *path*, not about who
+            // may ask. Routing the write through the same helper
+            // `setInstanceAccessPolicy` uses writes the policy and its audit
+            // event in one transaction either way, so the log stays complete
+            // and the refusal has nothing left to protect.
+            //
+            // Spec 064 needs that, because "who may join" is the first
+            // question the first-run wizard asks, and a question whose answer
+            // cannot be stored is not a question — it was a `<select>` the
+            // operator could not leave.
+            let Some(chosen) = accepted.as_deref() else {
+                // Clearing resolves back to the default, which is a different
+                // policy from the one in force — a silent widening or
+                // narrowing of who may create an account. An instance always
+                // has a policy, so changing it means naming the new one.
+                return Err(format!(
+                    "`{}` cannot be cleared. An instance always has an access policy, so name \
+                     the one it should have instead.",
+                    d.key
+                ));
+            };
+            crate::admin::update_instance_access_policy(
+                state,
+                actor,
+                // Validated against `OneOf(ACCESS_POLICIES)` above, so this is
+                // one of the three. `from_db_str` would fail shut to `closed`
+                // on anything else, which is the right direction for a value
+                // read back out of the database but would be the wrong way to
+                // handle one being written in.
+                crate::auth::instance_access::InstanceAccessPolicy::from_db_str(chosen),
+            )
+            .await?;
+            // The access log records the policy change; this records the
+            // *setting* change, so the settings history has no hole where one
+            // declaration is concerned. Two logs, two questions: who may join
+            // and when that changed, versus what this instance has been
+            // configured to.
+            append_record(
+                state,
+                NewInstanceSettingChange {
+                    id: Uuid::now_v7(),
+                    key: d.key.to_string(),
+                    previous_value: previous_recorded,
+                    new_value: new_recorded,
+                    redacted: d.secret,
+                    changed_by: actor,
+                    changed_at: Utc::now().naive_utc(),
+                    source: source.as_db_str().to_string(),
+                },
+            )
+            .await?;
+        }
     }
 
     let after = resolve_all(state).await?;
@@ -551,22 +598,61 @@ mod tests {
         assert!(refusal.contains("does not declare") || refusal.contains("declares"));
     }
 
-    /// Spec 035 keeps its own mutation and its own audit trail. A second write
-    /// path would produce policy changes `instance_access_events` never saw.
+    /// Spec 035 refused this surface to keep `instance_access_events` whole.
+    /// Spec 064 needs the wizard to ask the question, so the write routes
+    /// through the audited helper instead of being refused — and this asserts
+    /// the thing that refusal was protecting: **the access log sees it.**
+    ///
+    /// Written with `actor: None` deliberately. That is how the first-run
+    /// wizard writes — authenticated by the bootstrap admin code, nobody
+    /// signed in — so an unattributed write is the case that has to work.
     #[tokio::test]
-    async fn the_access_policy_is_not_writable_through_this_surface() {
+    async fn writing_the_access_policy_here_still_reaches_the_access_log() {
+        let _guard = lock();
+        let state = test_app_state();
+
+        let resolved = write_setting(
+            &state,
+            "instance.access_policy",
+            Some("open"),
+            None,
+            ChangeSource::Setup,
+        )
+        .await
+        .expect("the wizard may set the policy it asks about");
+        assert_eq!(resolved.value.as_deref(), Some("open"));
+
+        let mut conn = state.db_pool.get().expect("a connection");
+        let events = crate::schema::instance_access_events::table
+            .filter(crate::schema::instance_access_events::event_type.eq("policy_changed"))
+            .select(crate::schema::instance_access_events::new_policy)
+            .load::<Option<String>>(&mut conn)
+            .expect("the access events load");
+        assert!(
+            events.iter().any(|p| p.as_deref() == Some("open")),
+            "a policy change written through the settings surface must appear in the \
+             access log; found {events:?}",
+        );
+    }
+
+    /// The instance always has an access policy, so there is no such thing as
+    /// clearing it — the default it would fall back to is a different policy
+    /// from the one in force, which would widen or narrow who may join
+    /// silently.
+    #[tokio::test]
+    async fn the_access_policy_cannot_be_cleared() {
         let _guard = lock();
         let state = test_app_state();
         let refusal = write_setting(
             &state,
             "instance.access_policy",
-            Some("open"),
+            None,
             None,
             ChangeSource::Admin,
         )
         .await
         .expect_err("refused");
-        assert!(refusal.contains("setInstanceAccessPolicy"));
+        assert!(refusal.contains("cannot be cleared"), "{refusal}");
     }
 
     /// Spec 040 T022 / FR-009, and ADR-041's lesson stated as a test.
@@ -588,13 +674,6 @@ mod tests {
 
         for d in declarations() {
             let Some(name) = d.env_var else { continue };
-            if matches!(d.backing, Backing::AccessPolicy) {
-                // Refused earlier and for a different reason, which its own
-                // test above covers. Asserting the environment message here
-                // would be asserting the wrong refusal.
-                continue;
-            }
-
             let mut vars: Vec<(&str, Option<&str>)> = vec![(name, Some("from-the-environment"))];
             vars.extend(d.env_aliases.iter().map(|alias| (*alias, None)));
 

@@ -31,7 +31,7 @@ use serde::Serialize;
 
 use crate::schema::users;
 use crate::settings::declarations;
-use crate::settings::registry::{Capability, Kind, Requirement, SettingDeclaration};
+use crate::settings::registry::{Kind, Requirement, SettingDeclaration, SetupVisibility};
 use crate::settings::resolver::{Settings, Source, resolve_all};
 use crate::state::AppState;
 
@@ -71,6 +71,13 @@ pub(crate) struct RequiredSetting {
     /// `REQUIRED_FOR` — offered, skippable, and a readiness gap while unset.
     /// `OPTIONAL` — offered and nothing depends on it.
     pub(crate) requirement: &'static str,
+    /// Whether the wizard gives this a step of its own, or files it on the last
+    /// step with everything else an operator might have meant to set.
+    ///
+    /// Separate from `requirement`, which says whether anything *depends* on
+    /// the value. A mail host is not required and is still asked for on its own
+    /// step; a realm name is not required and is not.
+    pub(crate) essential: bool,
     /// The capability this contributes to, for the review step's readiness
     /// report to key against. `None` for a setting that enables nothing in
     /// particular.
@@ -94,27 +101,20 @@ pub(crate) struct RequiredSetting {
     /// anywhere in this product, `set` and `not set`. This endpoint answers
     /// without a session, which makes it the last place to make an exception.
     pub(crate) value: Option<String>,
+    /// The values an `ENUM` accepts, in declaration order; `None` for every
+    /// other kind.
+    ///
+    /// The wizard renders a `<select>` from this and has expected it since
+    /// spec 040 (`instanceSetup.ts`: `options?: string[] | null`). Nothing
+    /// ever sent it, which went unnoticed only because no `ENUM` declaration
+    /// was asked about at setup until `instance.access_policy` became the
+    /// first question: the field then rendered as a box containing nothing but
+    /// "Not set", so the step could not be answered and could not be left.
+    pub(crate) options: Option<&'static [&'static str]>,
     pub(crate) what_to_set: &'static str,
     pub(crate) what_is_limited: &'static str,
     pub(crate) group: &'static str,
 }
-
-/// The capabilities FR-002's one pass collects for, beyond the declarations
-/// that are `RequiredAtSetup` outright.
-///
-/// Named here rather than inferred, because "which capabilities does first run
-/// ask about" is a product decision from the requirement text and not a
-/// property of the registry. Adding a capability to the product does not
-/// silently add a step to the wizard.
-const CAPABILITIES_SETUP_ASKS_ABOUT: [Capability; 3] = [
-    // "the contact for copyright notices"
-    Capability::PublishBeyondWorld,
-    // "mail delivery settings"
-    Capability::SendMail,
-    // part of "the operator identity" — the jurisdiction the terms are read
-    // under.
-    Capability::PublishTerms,
-];
 
 fn kind_name(kind: Kind) -> &'static str {
     match kind {
@@ -125,6 +125,15 @@ fn kind_name(kind: Kind) -> &'static str {
         Kind::Bool => "BOOL",
         Kind::Enum(_) => "ENUM",
         Kind::Prose => "PROSE",
+    }
+}
+
+/// The values an `ENUM` declaration accepts, taken from the declaration
+/// itself so the wizard's choices and the validator's are the same list.
+fn enum_options(kind: Kind) -> Option<&'static [&'static str]> {
+    match kind {
+        Kind::Enum(values) => Some(values),
+        _ => None,
     }
 }
 
@@ -144,16 +153,45 @@ fn requirement_name(requirement: Requirement) -> &'static str {
     }
 }
 
-/// Whether the wizard asks about this declaration at all.
-fn setup_asks_about(d: &SettingDeclaration) -> bool {
-    if d.is_required_at_setup() {
-        return true;
+/// The key whose answer decides whether this instance owes the public
+/// anything. Read here rather than passed in, so there is one name for it.
+pub(crate) const PUBLISHES_BEYOND_WORLD: &str = "instance.publishes_beyond_world";
+
+/// Whether this instance has said it publishes content beyond a world.
+///
+/// Unset is false. An instance that has not said it publishes is not asked to
+/// prove it can handle a copyright notice — that is spec 052 US1 in one line.
+pub(crate) fn publishes_beyond_world(settings: &Settings) -> bool {
+    settings
+        .get(PUBLISHES_BEYOND_WORLD)
+        .and_then(|r| r.value.as_deref())
+        .is_some_and(|v| {
+            matches!(
+                v.trim().to_ascii_lowercase().as_str(),
+                "true" | "1" | "yes" | "on"
+            )
+        })
+}
+
+/// Whether the wizard asks about this declaration at all, and how.
+///
+/// The declaration answers it (`SettingDeclaration::setup`); the only thing
+/// decided here is what `AskedWhenPublishing` resolves to for *this* instance.
+fn setup_asks_about(d: &SettingDeclaration, publishing: bool) -> bool {
+    match d.setup {
+        SetupVisibility::Asked | SetupVisibility::Offered => true,
+        SetupVisibility::AskedWhenPublishing => publishing,
     }
-    // An optional declaration is offered when it belongs to a capability the
-    // pass covers — an SMTP username is not required, but somebody configuring
-    // a mail server needs to be able to enter one in the same breath.
-    d.capability
-        .is_some_and(|c| CAPABILITIES_SETUP_ASKS_ABOUT.contains(&c))
+}
+
+/// Whether this declaration gets a step of its own, or goes on the last step
+/// with everything else an operator might have meant to set.
+///
+/// `Offered` is the whole of the latter. It is a separate question from
+/// `setup_asks_about` because the wizard needs both answers: what to show, and
+/// what to show *as a question* rather than as a courtesy.
+fn setup_insists_on(d: &SettingDeclaration) -> bool {
+    !matches!(d.setup, SetupVisibility::Offered)
 }
 
 /// Every setting the wizard asks about, resolved, in declaration order.
@@ -162,9 +200,10 @@ fn setup_asks_about(d: &SettingDeclaration) -> bool {
 /// says so — so the wizard's field order and its step order are the registry's
 /// and not a second opinion about it.
 pub(crate) fn required_settings(settings: &Settings) -> Vec<RequiredSetting> {
+    let publishing = publishes_beyond_world(settings);
     declarations()
         .iter()
-        .filter(|d| setup_asks_about(d))
+        .filter(|d| setup_asks_about(d, publishing))
         .map(|d| {
             let resolved = settings.get(d.key);
             let satisfied = resolved.is_some_and(|r| r.is_set());
@@ -173,6 +212,7 @@ pub(crate) fn required_settings(settings: &Settings) -> Vec<RequiredSetting> {
                 key: d.key,
                 kind: kind_name(d.kind),
                 requirement: requirement_name(d.requirement),
+                essential: setup_insists_on(d),
                 capability: d.capability.map(|c| c.key()),
                 satisfied,
                 // A source is only meaningful for a value that exists. An
@@ -185,6 +225,7 @@ pub(crate) fn required_settings(settings: &Settings) -> Vec<RequiredSetting> {
                     (Some(Source::Instance), false) => resolved.and_then(|r| r.value.clone()),
                     _ => None,
                 },
+                options: enum_options(d.kind),
                 what_to_set: d.what_to_set,
                 what_is_limited: d.what_is_limited,
                 group: d.group,
@@ -525,18 +566,98 @@ mod tests {
             }
         }
 
-        // FR-002's own list, which the wizard renders as steps: the copyright
-        // notice contact, mail delivery, and the operator's jurisdiction.
-        // Named by capability rather than by key, so adding a declaration to
-        // one of them does not need this test edited.
-        for capability in ["publish_beyond_world", "send_mail", "publish_terms"] {
+        // Mail is asked about whatever kind of instance this is: a private
+        // table still sends invitations and password resets.
+        assert!(
+            required_settings(&settings)
+                .iter()
+                .any(|r| r.capability == Some("send_mail")),
+            "setup asks nothing about `send_mail`, so FR-002 never collects it"
+        );
+
+        // And the two duties that publishing creates are *not* asked about,
+        // because this instance has not said it publishes. Spec 052 US1 in a
+        // single assertion: nobody running a game for five friends is asked
+        // for a copyright agent's postal address.
+        for capability in ["publish_beyond_world", "publish_terms"] {
+            assert!(
+                !required_settings(&settings)
+                    .iter()
+                    .any(|r| r.capability == Some(capability)),
+                "an instance that has not said it publishes was still asked about `{capability}`"
+            );
+        }
+    }
+
+    /// The other half of the fork: saying this instance publishes beyond a
+    /// world is what puts the publishing duties into the wizard.
+    ///
+    /// Asserted through the environment form of the flag rather than by
+    /// writing a row, because the question here is only what
+    /// `required_settings` does with a resolved `true` — the resolver's own
+    /// precedence is tested where it lives.
+    #[test]
+    fn saying_the_instance_publishes_adds_the_duties_publishing_creates() {
+        let state = test_app_state();
+        let settings = temp_env_async(
+            &[("THUNDERFORGE_INSTANCE_PUBLISHES_BEYOND_WORLD", Some("true"))],
+            || resolve_all(&state),
+        );
+        assert!(
+            publishes_beyond_world(&settings),
+            "the flag did not resolve from its environment form"
+        );
+
+        for capability in ["publish_beyond_world", "publish_terms"] {
             assert!(
                 required_settings(&settings)
                     .iter()
                     .any(|r| r.capability == Some(capability)),
-                "setup asks nothing about `{capability}`, so FR-002 never collects it"
+                "a publishing instance was never asked about `{capability}`"
             );
         }
+
+        // What saying so does *not* do: make any of them block completion. An
+        // operator may publish and still finish setup with the terms blank —
+        // readiness then reports the capability as a gap, and the publishing
+        // gate refuses to serve what was never written.
+        let blocking = missing_required_settings(&settings);
+        for entry in required_settings(&settings) {
+            if entry.requirement != "REQUIRED_AT_SETUP" {
+                assert!(
+                    !blocking.contains(&entry.key),
+                    "`{}` became a completion blocker by saying the instance publishes",
+                    entry.key
+                );
+            }
+        }
+    }
+
+    /// The last step's courtesy is not a question.
+    ///
+    /// `essential` is what lets the wizard put storage and a realm name on one
+    /// final "anything else?" step instead of sprouting a mandatory-looking
+    /// screen per group. If a declaration marked `Offered` ever came back
+    /// essential, the wizard would grow a step nobody asked for.
+    #[test]
+    fn what_setup_merely_offers_is_marked_as_such() {
+        let state = test_app_state();
+        let settings = temp_env_async(&[], || resolve_all(&state));
+
+        for entry in required_settings(&settings) {
+            let d = crate::settings::registry::declaration(entry.key).expect("declared");
+            assert_eq!(
+                entry.essential,
+                d.setup != SetupVisibility::Offered,
+                "`{}` reports an essentialness its declaration does not state",
+                entry.key
+            );
+        }
+
+        assert!(
+            required_settings(&settings).iter().any(|r| !r.essential),
+            "nothing is merely offered, so the final step has nothing to put on it"
+        );
     }
 
     /// A secret is never echoed back, and neither is an environment-fixed
