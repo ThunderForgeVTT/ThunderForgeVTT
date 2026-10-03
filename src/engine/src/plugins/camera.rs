@@ -1,5 +1,5 @@
 use crate::resources::{CameraManager, SelectedLight};
-use crate::systems::camera_focus::{LastFocus, PanDragActive, apply_requested_focus};
+use crate::systems::camera_focus::{LastFocus, PanDragActive, PendingFocus, apply_requested_focus};
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -12,6 +12,7 @@ impl Plugin for CameraPlugin {
         app.init_resource::<CameraManager>()
             .init_resource::<PanDragActive>()
             .init_resource::<LastFocus>()
+            .init_resource::<PendingFocus>()
             .add_systems(Startup, setup_camera)
             .add_systems(
                 Update,

@@ -60,16 +60,29 @@ pub(crate) struct FocusRequest {
 #[derive(Resource, Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PanDragActive(pub bool);
 
-static REQUESTED_FOCUS: std::sync::OnceLock<std::sync::Mutex<Option<FocusRequest>>> =
+/// The inbox a `focus_token` command arrives in, before any world has seen it.
+///
+/// A process-global because the only caller is the external-command system,
+/// which is already at Bevy's parameter cap and so cannot hold one more
+/// `ResMut`. It is an inbox and nothing more: `apply_requested_focus` empties
+/// it into [`PendingFocus`] on the next frame, and every decision after that is
+/// made from that world's own resource. A test asks for a focus by setting the
+/// resource, never this — one process runs the whole test binary, and a request
+/// left in here is a request any of the other tests' apps may take first.
+static FOCUS_INBOX: std::sync::OnceLock<std::sync::Mutex<Option<FocusRequest>>> =
     std::sync::OnceLock::new();
 
-/// Asks the camera to look at a token. Applied on the next frame.
+/// A `focus_token` this world has been handed and not yet applied.
 ///
 /// A second request before the first is applied replaces it: the last thing
 /// asked for is the thing wanted, and flying through an abandoned target on
 /// the way would be motion nobody asked for.
+#[derive(Resource, Default, Debug, Clone, PartialEq)]
+pub(crate) struct PendingFocus(pub Option<FocusRequest>);
+
+/// Asks the camera to look at a token. Applied on the next frame.
 pub(crate) fn request_focus(request: FocusRequest) {
-    let slot = REQUESTED_FOCUS.get_or_init(|| std::sync::Mutex::new(None));
+    let slot = FOCUS_INBOX.get_or_init(|| std::sync::Mutex::new(None));
     if let Ok(mut pending) = slot.lock() {
         *pending = Some(request);
     }
@@ -164,6 +177,7 @@ pub(crate) fn framed_extent(footprint_cells: f32, surround_cells: f32, cell_size
 pub(crate) fn apply_requested_focus(
     mut camera_mgr: ResMut<CameraManager>,
     mut last: ResMut<LastFocus>,
+    mut pending: ResMut<PendingFocus>,
     grid: Option<Res<SceneGrid>>,
     is_game_master: Option<Res<IsGameMaster>>,
     dragging: Option<Res<PanDragActive>>,
@@ -176,19 +190,21 @@ pub(crate) fn apply_requested_focus(
     )>,
     viewport: Query<&Camera, With<Camera2d>>,
 ) {
-    let Some(slot) = REQUESTED_FOCUS.get() else {
-        return;
-    };
-    let Ok(mut pending) = slot.lock() else {
-        return;
-    };
+    // Empty the inbox into this world first, so a command that arrived from
+    // the web is this world's pending request and no longer a global one.
+    if let Some(slot) = FOCUS_INBOX.get()
+        && let Ok(mut inbox) = slot.lock()
+        && let Some(arrived) = inbox.take()
+    {
+        pending.0 = Some(arrived);
+    }
+
     // Taken whether or not it is acted on. A request held back would arrive
     // one frame after the drag ended, which is a camera moving for no reason
     // the user can see.
-    let Some(request) = pending.take() else {
+    let Some(request) = pending.0.take() else {
         return;
     };
-    drop(pending);
 
     if dragging.is_some_and(|drag| drag.0) {
         return;
@@ -287,8 +303,14 @@ mod tests {
             .id()
     }
 
+    /// Asks *this* app to look at a token.
+    ///
+    /// Through the resource rather than `request_focus`, because the inbox that
+    /// function writes is one slot shared by every test in the binary: six of
+    /// these tests used to fail at the default thread count, each having had
+    /// its request taken by whichever other app's `update` ran first.
     fn focus(app: &mut App, id: &str, surround: Option<f32>, immediate: bool) {
-        request_focus(FocusRequest {
+        app.world_mut().resource_mut::<PendingFocus>().0 = Some(FocusRequest {
             token_id: id.to_string(),
             surround_cells: surround,
             immediate,
