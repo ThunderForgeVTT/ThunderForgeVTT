@@ -1,7 +1,11 @@
-# Keeps the Docker build context (this repo, used by
-# ThunderForgeVTT/docker's server/Dockerfile and web/Dockerfile) to just
-# source — everything below is either a build artifact regenerated inside
-# the image, or irrelevant to the build and multi-GB in a working tree.
+# Keeps the Docker build context (this repo) to just what an image needs —
+# everything excluded here is either a build artifact regenerated elsewhere,
+# or irrelevant to the build and multi-GB in a working tree.
+#
+# The re-includes below are for the root `Dockerfile`, which packages a build
+# the host has already done rather than compiling in a stage. The idiom is
+# exclude-then-re-include and order matters: the last pattern to match a path
+# decides.
 
 target/
 node_modules/
@@ -11,3 +15,11 @@ data/
 test-results/
 playwright-report/
 apps/web/e2e/.demo/
+
+# Staged by `make container`: the stripped server binary and diesel-cli.
+!target/container
+# What the server serves and reads. Its writable siblings — assets, worlds,
+# databases, config, modules — are volumes in `compose.app.yml`, so an image
+# rebuild does not discard an instance's state.
+!data/client
+!data/packs

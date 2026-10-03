@@ -1,4 +1,4 @@
-.PHONY: clean-builds test-db-reset dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-rust test-mail bench-blob-store test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean
+.PHONY: clean-builds test-db-reset dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-rust test-mail bench-blob-store test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean container container-up container-down container-down-clean
 
 # Loads DATABASE_URL (and anything else) from the repo-root .env for targets
 # that shell out to tools which don't read it themselves (diesel-cli).
@@ -24,6 +24,10 @@ help:
 	@echo "  make seed             Seed local demo logins (admin/admin, user1/user1, user2/user2) + a ready-to-play world"
 	@echo "  make build            Production build (engine WASM + backend + frontend)"
 	@echo "  make clean            Remove build output (dist/)"
+	@echo "  make container        Build the all-in-one app image from an already-built tree"
+	@echo "  make container-up     Start the whole app (app+postgres+rustfs+mailpit) detached on http://localhost:42080"
+	@echo "  make container-down   Stop it, keep the instance's data"
+	@echo "  make container-down-clean  Stop it and DELETE the instance (database, uploads, worlds)"
 	@echo "  make clean-builds     Show what old cargo output and finished worktrees can go (ARGS=--apply deletes it)"
 	@echo "  make format           Run prettier + cargo fmt"
 	@echo "  make lint             Run cargo clippy (-D warnings) plus the file-length check"
@@ -123,6 +127,35 @@ build:
 
 clean:
 	pnpm clean
+
+# The whole app in containers, on a port block that collides with nothing:
+# http://localhost:42080. See compose.app.yml for why it is a second file
+# rather than a service added to compose.yml.
+#
+# The images package a build the host has already done. Staging the two
+# binaries into target/container/ and stripping them is what keeps the image
+# near 300MB instead of near 2GB — a debug `thunderforge` carries about 1.4GB
+# of symbols, and nothing in a container I click through needs them.
+container: build
+	@mkdir -p target/container
+	@install -m 755 target/debug/thunderforge target/container/thunderforge
+	@install -m 755 "$$(command -v diesel)" target/container/diesel
+	@strip target/container/thunderforge target/container/diesel
+	docker compose -f compose.app.yml build
+
+container-up:
+	docker compose -f compose.app.yml up -d
+	@echo "ThunderForge is coming up at http://localhost:42080"
+	@echo "Mailpit is at http://localhost:42825 — the instance starts unconfigured,"
+	@echo "so the first-run wizard greets you; its setup link is in the app log:"
+	@echo "  docker compose -f compose.app.yml logs app | grep /setup/"
+
+container-down:
+	docker compose -f compose.app.yml down
+
+# Stops it and deletes the instance: database, uploads, worlds, the lot.
+container-down-clean:
+	docker compose -f compose.app.yml down -v
 
 # Trim cargo's build output without throwing away the warm cache: incremental
 # sessions no crate reads, cargo units unused for a week, and agent worktrees
