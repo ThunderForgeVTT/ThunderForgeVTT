@@ -7,8 +7,8 @@ ThunderForgeVTT is a robust multiplayer virtual tabletop system combining:
 - **Backend**: Rust/Axum (HTTP + WebSocket server)
 - **Database**: PostgreSQL + Diesel ORM (durable persistence + pub/sub via NOTIFY/LISTEN)
 - **Game Engine**: Bevy (WebAssembly, ECS-based simulation and rendering)
-- **Frontend**: React + RxDB (UI, real-time sync, offline-first caching)
-- **Graphics**: tldraw (collaborative drawing and canvas)
+- **Frontend**: React + an in-memory world store (UI, real-time sync, optimistic updates)
+- **Graphics**: the Bevy engine draws the board; React draws everything around it
 
 This architecture mirrors enterprise multiplayer systems like **Figma** and **PlayCanvas**, where a central server acts as the authority while thick clients handle presentation and optimistic updates.
 
@@ -18,11 +18,11 @@ This architecture mirrors enterprise multiplayer systems like **Figma** and **Pl
 
 ### 1. Circular Event-Driven Data Flow
 
-**Never** treat frontend (React/tldraw) or engine (Bevy) as the final source of truth. Enforce strict circular flow:
+**Never** treat frontend (React) or engine (Bevy) as the final source of truth. Enforce strict circular flow:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│ 1. USER ACTION (tldraw stroke or Bevy token move)       │
+│ 1. USER ACTION (a drawn wall or a Bevy token move)      │
 └──────────────┬──────────────────────────────────────────┘
                ↓
 ┌─────────────────────────────────────────────────────────┐
@@ -48,9 +48,9 @@ This architecture mirrors enterprise multiplayer systems like **Figma** and **Pl
 ┌──────────────┴──────────────┬──────────────────────────┐
 │                             │                          │
 ▼                             ▼                          ▼
-BEVY SYNC              RXDB SYNC              (Other clients)
+BEVY SYNC              WORLD STORE SYNC       (Other clients)
 • Receive delta        • Receive delta
-• Apply to ECS         • Update collections
+• Apply to ECS         • Dispatch into store
 • Render canvas        • React re-renders
 ```
 
@@ -58,34 +58,43 @@ BEVY SYNC              RXDB SYNC              (Other clients)
 
 ---
 
-### 2. Isolate tldraw and Bevy from Network
+### 2. Isolate React and Bevy from Network
 
-#### For React/tldraw
+#### For React
 
-- **Do NOT**: Import GraphQL client directly in tldraw components
-- **Do**: Let RxDB act as the single source of truth
-  - RxDB collections mirror PostgreSQL tables
-  - RxDB replication plugin listens to `worldEventCreated` subscription
-  - tldraw components query RxDB directly
-  - User drawings → RxDB mutation → GraphQL mutation → Server
+- **Do NOT**: Import the GraphQL client in a component, or keep server state
+  in component `useState`
+- **Do**: Let the world store act as the client's single source of truth
+  - The store (`apps/web/src/engine/world/store.ts`) holds tokens, walls,
+    lights and shapes in memory, for React and Bevy alike
+  - Components dispatch commands into the store and read from it
+  - A mutation bridge per kind (`startTokenMutationBridge` and its siblings in
+    `apps/web/src/engine/world/sync/`) turns commands into GraphQL mutations
+  - An event sync per kind (`startTokenEventSync`) dispatches what the server
+    confirmed back into the store
+  - Reads the store does not hold (members, invites, an actor's system data)
+    are plain GraphQL fetches in a hook that exposes `refetch()`
+
+There is no client-side database. RxDB was removed when it became a paid
+product; do not reintroduce it, or anything like it, without raising the
+licensing with the project owner first.
 
 ```typescript
 // ❌ Wrong
-export const DrawingComponent = () => {
-  const [drawing, setDrawing] = useState();
+export const WallTool = () => {
+  const [walls, setWalls] = useState<WorldWall[]>([]);
   const graphql = useGraphQL(); // Tightly coupled!
-  const handleDraw = (shape) => {
-    setDrawing(shape);
-    await graphql.mutation(UpsertShape, { shape }); // Network logic in component
+  const handleDraw = async (wall: WorldWall) => {
+    setWalls([...walls, wall]);
+    await graphql.mutation(UpsertWall, { wall }); // Network logic in component
   };
 };
 
 // ✅ Right
-export const DrawingComponent = () => {
-  const drawing$ = useRxDB("drawings").find().sort("_id");
-  const handleDraw = (shape) => {
-    drawing$.insert({ ...shape, _id: uuid() }); // RxDB handles everything
-    // RxDB replication → GraphQL mutation → Server → NOTIFY → other clients
+export const WallTool = ({ store }: { store: WorldStore }) => {
+  const handleDraw = (wall: WorldWall) => {
+    store.dispatch({ type: "create_wall", wall }, "ui"); // Store handles everything
+    // Mutation bridge → GraphQL mutation → Server → NOTIFY → every client's store
   };
 };
 ```
@@ -214,26 +223,28 @@ pub fn handle_move_token(
 }
 ```
 
-#### React/RxDB Optimistic Updates
+#### React Optimistic Updates
 
 ```typescript
-export const handleTokenMove = async (tokenId: string, newPos: { x; y }) => {
-  const tokens = db.collections.world_tokens;
-  const oldDoc = await tokens.findByIds([tokenId]);
+export const handleTokenMove = async (
+  store: WorldStore,
+  tokenId: string,
+  newPos: { x: number; y: number },
+) => {
+  const before = store.getState().tokens[tokenId];
 
   // 1. Update locally (optimistic)
-  await tokens.upsert({
-    ...oldDoc[0],
-    x: newPos.x,
-    y: newPos.y,
-  });
+  store.dispatch(
+    { type: "upsert_token", token: { ...before, ...newPos } },
+    "ui",
+  );
 
   // 2. Send mutation to server
   try {
     await graphql.mutate(UpsertTokenMutation, { tokenId, ...newPos });
   } catch (error) {
     // 3. Rollback on rejection
-    await tokens.upsert(oldDoc[0]);
+    store.dispatch({ type: "upsert_token", token: before }, "sync");
     showErrorNotification(`Invalid move: ${error.message}`);
   }
 };
@@ -288,7 +299,7 @@ pub fn calculate_stats_system(mut query: Query<&mut WorldToken>) {
 **In React:**
 
 ```typescript
-const token = useRxDB("world_tokens").findOne(id);
+const token = store.getState().tokens[id];
 token.prepareDerivedData(); // Calculation on client side
 return <TokenDisplay strength={token.effectiveStrength} />;
 ```
@@ -511,7 +522,7 @@ EXECUTE FUNCTION notify_world_event();
 - [ ] GraphQL subscriptions for real-time sync
 - [ ] Bevy GraphQL client abstraction
 - [ ] Bevy optimistic update + rollback system
-- [ ] RxDB collections and replication setup
+- [ ] World store, mutation bridges and event sync for every synced kind
 - [ ] React optimistic update + rollback hooks
 - [ ] `prepareDerivedData()` in all data models
 - [ ] Database trigger for NOTIFY on world_events insert
@@ -545,7 +556,7 @@ send_backlog_to_client(backlog).await?;
 3. Profile Diesel queries for missing indexes
 4. Add query tracing to identify bottlenecks
 
-### State Conflicts Between Bevy and RxDB
+### State Conflicts Between Bevy and React
 
 **Symptom**: Engine shows token at (10, 20), frontend shows (15, 25)
 
@@ -584,5 +595,4 @@ send_backlog_to_client(backlog).await?;
 - [Bevy ECS Book](https://bevyengine.org/learn/book/introduction/)
 - [PostgreSQL NOTIFY/LISTEN](https://www.postgresql.org/docs/current/sql-notify.html)
 - [Axum Web Framework](https://github.com/tokio-rs/axum)
-- [RxDB Replication](https://rxdb.info/replication.html)
 - [Event Sourcing Pattern](https://martinfowler.com/eaaDev/EventSourcing.html)
