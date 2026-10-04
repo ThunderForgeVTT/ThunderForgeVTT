@@ -41,8 +41,8 @@ description: "Task list for What a Pack May Reach"
 - [X] T030 [US3] Confirm with the owner: the adjudicator's signature and where an outcome is stored — verdict plus label, stored with the roll
 - [X] T031 [US3] `check-packs`: refuse a top-level manifest key outside the contract's list (FR-030)
 - [X] T032 [US3] Restate or remove the six single-pack roll keys, and the four other keys nothing read (FR-031)
-- [ ] T033 [US3] The roll adjudicator on `SystemContribution`; Roll for Shoes' outcome decided on the server (FR-032, FR-033)
-- [ ] T034 [US3] Proof
+- [X] T033 [US3] The roll adjudicator on `SystemContribution`; Roll for Shoes' outcome decided on the server (FR-032, FR-033)
+- [X] T034 [US3] Proof
 
 ## Phase 4: Conditions (Story 4)
 

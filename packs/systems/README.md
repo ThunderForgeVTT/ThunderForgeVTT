@@ -492,6 +492,7 @@ inventory::submit! {
 | `id`                                                                            | Must equal the manifest's `id`.              |
 | `ability_data`, `resource_data`, `proficiency_data`, `trait_data`, `spell_data` | Validate one slot of an actor's stored data. |
 | `rules`                                                                         | The system's **derived** values — see below. |
+| `adjudicate`                                                                    | What a roll **meant** — see below.           |
 
 **Every field beyond `id` is optional, and absence is a fact about the
 ruleset rather than an omission.** Genie has no spellcasting and therefore no
@@ -533,6 +534,42 @@ not declare is rejected rather than silently rendered**.
 **`derive` must be pure** — no I/O, no clock, no randomness. A derived value
 is recomputed on every read and never stored, so an impure one shows two
 viewers of the same character two different sheets.
+
+### What a roll meant
+
+The host rolls the dice; `adjudicate` says what the result meant. It is a
+plain function:
+
+```rust
+fn adjudicate(roll: &RollFacts<'_>, context: &serde_json::Value) -> Option<RollOutcome>
+```
+
+`RollFacts` is the check's identifier, the dice that were kept and the total.
+`RollOutcome` is a `verdict` and a `label`. The verdict comes from the host's
+closed list — success, failure, tie, critical success, critical failure — so
+the host can show and store any system's outcome without knowing the system.
+The label is your wording for it. `None` means the roll was made and not
+judged, which is a fact about the roll rather than an error: a Roll for Shoes
+roll with nothing to beat has no verdict.
+
+**`adjudicate` must be pure** — no I/O, no clock, no randomness. Whatever it
+needs beyond the dice is gathered first and handed to it as `context`:
+
+- For a declared [`checks`](#checks) entry rolled through the host's
+  `rollCheck`, the context is the world's system settings, keyed by setting
+  identifier.
+- For a roll of your own, your resolver gathers the context and calls
+  `thunderforge_server::graphql::mutations_roll::roll_and_settle`. Its
+  closure is given the resolution and a connection **inside the transaction
+  that records the roll**, and returns the outcome. Anything the outcome
+  pays for is written there, so a roll and its consequence are stored
+  together or not at all.
+
+The outcome is stored with the roll and answered as `outcome` on every roll
+resolution, so a client is told the verdict and never computes one. Roll for
+Shoes' `server/src/roll/` is the worked example: the character's skill, the
+difficulty and the table's tie rule are gathered on the server, and a failed
+roll's experience is awarded in the same transaction as its verdict.
 
 ### Panels the host will mount
 
