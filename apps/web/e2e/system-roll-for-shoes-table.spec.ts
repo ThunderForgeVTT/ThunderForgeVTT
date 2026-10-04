@@ -48,6 +48,28 @@ async function setTheTable(page: Page): Promise<{
     "e2erfst",
   );
 
+  // The world, not only the character, has to be a Roll for Shoes one: the
+  // dock picks the Game Master's panel from the world's system, and a new
+  // world starts as something else.
+  const system = await graphql<{
+    data?: { updateWorldGameSystem?: { id: string } };
+    errors?: { message: string }[];
+  }>(
+    page,
+    `
+      mutation ($input: UpdateWorldGameSystemInput!) {
+        updateWorldGameSystem(input: $input) {
+          id
+        }
+      }
+    `,
+    { input: { worldId, gameSystemId: "roll_for_shoes" } },
+  );
+  expect(
+    system.data?.updateWorldGameSystem?.id,
+    `system refused: ${JSON.stringify(system.errors ?? system)}`,
+  ).toBeTruthy();
+
   // Statuses are an Extra, off unless the world asks. The mutation is a
   // whole-row write, so everything else is stated as the core game has it.
   const settings = await graphql<{

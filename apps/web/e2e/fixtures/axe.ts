@@ -38,6 +38,23 @@ export async function expectNoAxeViolations(
   page: Page,
   selector?: string,
 ): Promise<void> {
+  // Let entrance animations finish first. A result that fades in is checked
+  // half-transparent otherwise, and fails contrast on text that passes once
+  // it has arrived — which is the only state a reader is asked to read it in.
+  // Endless animations (spinners) are left alone: they never finish.
+  await page.evaluate(async (scope) => {
+    const root = scope ? document.querySelector(scope) : document.body;
+    const running = (root ?? document.body)
+      .getAnimations({ subtree: true })
+      .filter(
+        (animation) =>
+          animation.effect?.getComputedTiming().iterations !== Infinity,
+      );
+    await Promise.all(
+      running.map((animation) => animation.finished.catch(() => undefined)),
+    );
+  }, selector);
+
   let builder = new AxeBuilder({ page }).withTags(WCAG_22_AA_TAGS);
   if (selector !== undefined) {
     builder = builder.include(selector);
