@@ -11,8 +11,10 @@
  * half-styled, then the 5e sheet's container-query columns (@md:, @xl:)
  * never applied and the sheet stayed one column wide at any width.
  * The whole packs directory is named, so the next pack cannot be forgotten.
- * A directory and not a glob: `packs/systems/*/web/src` matches nothing in
- * this Tailwind version and fails silently, which is how this was found. */
+ * A directory and not a glob: a star between `systems` and `web/src`
+ * matched nothing in this Tailwind version and failed silently, which is
+ * how this was found. (The glob is described, not written out, because a
+ * star followed by a slash would end this comment.) */
 @source "../../../../packs/systems";
 
 @custom-variant dark (&:is(.dark *));
