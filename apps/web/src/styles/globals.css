@@ -10,9 +10,10 @@
  * from the compiled stylesheet: first the Genie session panel came out
  * half-styled, then the 5e sheet's container-query columns (@md:, @xl:)
  * never applied and the sheet stayed one column wide at any width.
- * All bundled packs are named by one glob so the next pack cannot be
- * forgotten. */
-@source "../../../../packs/systems/*/web/src";
+ * The whole packs directory is named, so the next pack cannot be forgotten.
+ * A directory and not a glob: `packs/systems/*/web/src` matches nothing in
+ * this Tailwind version and fails silently, which is how this was found. */
+@source "../../../../packs/systems";
 
 @custom-variant dark (&:is(.dark *));
 
