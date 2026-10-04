@@ -1,5 +1,5 @@
 /**
- * `clocks` — Genie's session loop again, reached from the play dock.
+ * `dock` — Genie's session loop again, reached from the play dock.
  *
  * Deliberately the *same component object* as `world-staging.tsx`, not a
  * copy and not a variant. The Doom Clock and Puzzle Clocks are the session
@@ -12,3 +12,6 @@
  * refactor that quietly forks them fails a test instead of drifting.
  */
 export { default } from "./world-staging";
+
+/** What the dock tab reads. */
+export const title = "Clocks";

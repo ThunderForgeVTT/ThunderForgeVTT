@@ -174,7 +174,8 @@ import { ActorsPanel } from "@/components/world/PlayDock/ActorsPanel";
 import { CombatPanel } from "@/components/world/PlayDock/CombatPanel";
 import { AttackLog } from "@/components/world/PlayDock/AttackLog/AttackLog";
 import { OfferPrompt } from "@/components/world/PlayDock/OfferPrompt/OfferPrompt";
-import { ClocksPanel } from "@/components/world/PlayDock/ClocksPanel";
+import { SystemDockPanel } from "@/components/world/PlayDock/SystemDockPanel";
+import { systemDockTitle } from "@/panels/systemPanels";
 import { SettingsPanel } from "@/components/world/PlayDock/SettingsPanel";
 import { HelpPanel } from "@/components/world/PlayDock/HelpPanel";
 import type { CanvasImageAsset } from "@/api/assets";
@@ -2738,6 +2739,7 @@ export default function WorldPage() {
     [id],
   );
 
+  const systemDockLabel = systemDockTitle(world?.gameSystemId ?? null);
   const dockSections: DockSection[] = [
     {
       id: "chat",
@@ -2768,19 +2770,25 @@ export default function WorldPage() {
         <CombatPanel worldId={id} sceneId={sceneId} isGm={isSceneOwner} />
       ),
     },
-    {
-      id: "clocks",
-      label: "Clocks & Timers",
-      icon: "moon",
-      content: (
-        <ClocksPanel
-          worldId={id}
-          isGm={isSceneOwner}
-          currentUserId={user?.id}
-          gameSystemId={world?.gameSystemId ?? null}
-        />
-      ),
-    },
+    // Spec 067: the tab is the pack's, titled by the pack, and absent for a
+    // system that puts nothing in the dock.
+    ...(systemDockLabel
+      ? [
+          {
+            id: "system" as const,
+            label: systemDockLabel,
+            icon: "moon" as const,
+            content: (
+              <SystemDockPanel
+                worldId={id}
+                isGm={isSceneOwner}
+                currentUserId={user?.id}
+                gameSystemId={world?.gameSystemId ?? null}
+              />
+            ),
+          },
+        ]
+      : []),
     // Spec 030. Game-Master-only: a player is not shown the queue. Their own
     // outcome reaches them directly, and the rest of it is a list of what other
     // people asked for — which at some tables is information the GM is

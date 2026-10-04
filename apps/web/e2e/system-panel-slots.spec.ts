@@ -22,12 +22,11 @@ import { test, expect, type Page } from "./fixtures/test";
  * system that contributes nothing" were the same branch. They are now
  * different questions, and both still have to answer correctly.
  *
- * **Not covered here: the clocks dock's empty state.** `ClocksPanel` inverted
- * from "is this world *not* that system?" to "did any pack fill the clocks
- * slot?", and the honest browser test of that would mount the play dock,
- * which loads the engine — a large cost for one paragraph of text. It is
- * covered instead by `systemPanels.test.ts`, which asserts the lookup the
- * component now makes, and left named here rather than quietly skipped.
+ * **The play dock's slot is covered elsewhere.** A system that fills `dock`
+ * gets a tab titled by its pack, and one that does not gets no tab (spec 067).
+ * Mounting the play dock loads the engine, so that is asserted where the
+ * engine is already up: `system-world-create.spec.ts`, for both the titled
+ * tab and its absence.
  */
 
 function uniqueSuffix(): string {

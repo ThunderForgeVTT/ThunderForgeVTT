@@ -304,7 +304,7 @@ const KNOWN = new Map();
 // them `${systemId}:${slot}`; `@thunderforge/host` declares the slot
 // vocabulary and one props type per slot, which is the part a sheet did not
 // need and a panel does. Two slots may point at one component, and Genie's
-// staging and clocks panels do.
+// staging and dock panels do.
 //
 // The data layer went with them. `api/genieSession.ts`,
 // `hooks/useGenieSession.ts` and `engine/world/sync/genieSession.ts` were

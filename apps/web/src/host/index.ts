@@ -292,7 +292,7 @@ export interface StatBlockSource {
  * Four pages in this app used to ask "is this world Genie?" and mount a Genie
  * component if so — the actor page's NPC shop, the staging page's session
  * loop, the system-settings page's carryover card, and the play dock's clocks
- * panel. Each was the client-side shape of exactly what FR-029 forbids: shared
+ * panel (the slot now named `dock`). Each was the client-side shape of exactly what FR-029 forbids: shared
  * code deciding something per game system. `check-system-registry.mjs` listed
  * all four against `032/T108`, which is this.
  *
@@ -326,7 +326,7 @@ export interface StatBlockSource {
  *
  * ## Two slots may share a component
  *
- * `world-staging` and `clocks` both show Genie's session loop, and that is
+ * `world-staging` and `dock` both show Genie's session loop, and that is
  * not a mistake to collapse — a GM sees it while staging, and reaches it
  * again mid-session from the play dock. A pack points both slot files at one
  * component and the registry resolves both keys to the same reference.
@@ -335,7 +335,7 @@ export type PanelSlot =
   | "npc-detail"
   | "world-staging"
   | "world-settings"
-  | "clocks";
+  | "dock";
 
 /**
  * The actor page, below inventory and abilities, for an actor the host has
@@ -360,15 +360,15 @@ export interface WorldStagingPanelProps {
 }
 
 /**
- * The play dock's Clocks & Timers section.
+ * The play dock's section for the world's game system (spec 067 Story 2).
  *
- * The dock draws its own empty state when no pack fills this slot, which is
- * the inversion that made this slot worth having: the panel used to ask "is
- * this Genie?" and print an empty state otherwise. It now asks "did anyone
- * contribute a clocks panel?" and prints the same empty state when nobody
- * did — the comparison is deleted rather than relocated.
+ * Named for where it mounts, not for what the first pack put there: it was
+ * `clocks` until a pack filled it with something that was not a clock. The
+ * module may also export `title`, a string, which is what the dock tab
+ * reads. The dock shows no tab at all for a system that fills no `dock`
+ * slot, so there is no empty state for a pack to be mistaken for.
  */
-export interface ClocksPanelProps {
+export interface DockPanelProps {
   worldId: string;
   isGm: boolean;
   currentUserId?: string;
@@ -395,14 +395,14 @@ export interface WorldSettingsPanelProps {
 /**
  * Slot name to the props that slot supplies.
  *
- * The registry is typed against this, so `resolvePanel("clocks")` hands back
- * a component the clocks dock can actually render, and a pack whose
- * `panels/clocks.tsx` takes staging's props fails to compile rather than
+ * The registry is typed against this, so `resolvePanel("dock")` hands back
+ * a component the play dock can actually render, and a pack whose
+ * `panels/dock.tsx` takes staging's props fails to compile rather than
  * failing at a table.
  */
 export interface PanelSlotProps {
   "npc-detail": NpcDetailPanelProps;
   "world-staging": WorldStagingPanelProps;
   "world-settings": WorldSettingsPanelProps;
-  clocks: ClocksPanelProps;
+  dock: DockPanelProps;
 }

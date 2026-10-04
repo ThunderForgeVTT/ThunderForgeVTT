@@ -5,7 +5,7 @@ import { graphql, registerAndCreateWorld } from "./fixtures/helpers";
  * Genie's session loop on the play field, where the owner found both of
  * these (2026-09-15) — not on the staging page the older specs drive.
  *
- * 1. **The actor picker offered nothing.** The Clocks & Timers panel's
+ * 1. **The actor picker offered nothing.** The dock's Clocks panel's
  *    "grant to" and "attribute to" dropdowns were the *party*: player
  *    characters only. A world whose cast was NPCs got an empty list. They
  *    list actors now, characters first and NPCs after, each group labelled.
@@ -59,8 +59,13 @@ test.describe("Genie session loop on the play field", () => {
     await createActor(page, worldId, "Aurelia", false);
 
     await page.goto(`/world/${worldId}/play`);
-    await page.getByTestId("world-dock-tab-clocks").click();
-    const panel = page.getByTestId("world-dock-panel-clocks");
+    // The tab is the pack's, and reads what the pack calls it (spec 067).
+    await expect(page.getByTestId("world-dock-tab-system")).toHaveAttribute(
+      "aria-label",
+      "Clocks",
+    );
+    await page.getByTestId("world-dock-tab-system").click();
+    const panel = page.getByTestId("world-dock-panel-system");
     await expect(panel.getByTestId("genie-session-panel")).toBeVisible({
       timeout: 15_000,
     });
@@ -179,20 +184,20 @@ test.describe("Genie session loop on the play field", () => {
     await page.reload();
     // The dock may remember its open section across a reload; clicking an
     // open tab would close it.
-    await expect(page.getByTestId("world-dock-tab-clocks")).toBeVisible({
+    await expect(page.getByTestId("world-dock-tab-system")).toBeVisible({
       timeout: 15_000,
     });
     if (
       !(await page
-        .getByTestId("world-dock-panel-clocks")
+        .getByTestId("world-dock-panel-system")
         .isVisible()
         .catch(() => false))
     ) {
-      await page.getByTestId("world-dock-tab-clocks").click();
+      await page.getByTestId("world-dock-tab-system").click();
     }
     await expect(
       page
-        .getByTestId("world-dock-panel-clocks")
+        .getByTestId("world-dock-panel-system")
         .getByTestId("wish-asked-for-entry"),
     ).toHaveText([/The sandstorm turns aside from the caravan\./], {
       timeout: 15_000,

@@ -5,7 +5,7 @@ interface WorldLayoutProps {
   canvas: ReactNode;
   /** The GM's left-hand tool rail. Omitted entirely for players. */
   toolRail?: ReactNode;
-  /** The right-hand dock (Chat / Actors / Combat / Clocks / Settings). */
+  /** The right-hand dock (Chat / Actors / Combat / the game system's own / Settings). */
   dock?: ReactNode;
 }
 

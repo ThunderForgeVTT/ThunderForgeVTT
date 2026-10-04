@@ -519,7 +519,7 @@
         }
       ],
       "paths": [
-        "apps/web/src/components/world/PlayDock/ClocksPanel.tsx",
+        "apps/web/src/components/world/PlayDock/SystemDockPanel.tsx",
         "apps/web/src/panels/**",
         "apps/web/src/utils/__tests__/sizeCategory.test.ts",
         "apps/web/src/utils/sizeCategory.ts",

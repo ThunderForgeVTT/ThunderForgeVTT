@@ -189,7 +189,7 @@ test("a Game Master and a player at one table, with no map between them", async 
   // The Game Master's seat. They have no sheet of their own open and no token
   // to click; the control is in the play dock, where they already are.
   await page.goto(`/world/${worldId}/play`);
-  await openDockTab(page, "clocks");
+  await openDockTab(page, "system");
   const gmTable = page.getByTestId("rfs-table-panel");
   await expect(gmTable).toBeVisible({ timeout: 20_000 });
 
@@ -296,7 +296,7 @@ test("a Game Master and a player at one table, with no map between them", async 
   });
 
   await test.step("the Game Master takes it away, and the sheet's own entry comes back", async () => {
-    await openDockTab(page, "clocks");
+    await openDockTab(page, "system");
     await expect(gmTable).toBeVisible({ timeout: 15_000 });
     await gmTable.getByTestId("rfs-table-clear").click();
     await expect(gmTable.getByTestId("rfs-table-none")).toBeVisible({

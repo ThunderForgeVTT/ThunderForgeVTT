@@ -548,7 +548,7 @@ export async function openGmTool(page: Page, tool: GmToolId): Promise<void> {
 
 /**
  * Open one of the right-hand dock's sections — `chat`, `actors`, `combat`,
- * `clocks`, `settings`.
+ * `system` (the game system's own, when it has one), `settings`.
  *
  * Same shape and same reason as `openGmTool`: the dock is a toggle, and its
  * sections are what "the sidebar" used to be.

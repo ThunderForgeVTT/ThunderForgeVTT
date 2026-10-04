@@ -9,7 +9,9 @@ export type DockSectionId =
   | "chat"
   | "actors"
   | "combat"
-  | "clocks"
+  // Whatever the world's game system puts in the dock; absent when it puts
+  // nothing there (spec 067).
+  | "system"
   // Spec 030: what the table has asked the Game Master to allow. Present only
   // for whoever runs the world.
   | "requests"
@@ -33,7 +35,7 @@ export interface WorldDockProps {
 
 /**
  * The Play view's right-hand dock: a permanent icon rail that expands into
- * one section at a time (Chat, Actors, Combat, Clocks & Timers, Settings).
+ * one section at a time (Chat, Actors, Combat, the game system's own, Settings).
  *
  * The rail is always visible and always the same width, so the canvas'
  * usable area only changes when a section is actually open — the icons

@@ -26,8 +26,8 @@
  * The fourth one is the interesting one. It did not mount a panel *for*
  * Genie — it printed an empty state for everyone else, which is the same
  * violation wearing the opposite sign. It now asks whether any pack filled
- * the `clocks` slot and prints the same empty state when none did, so the
- * comparison is deleted rather than moved.
+ * the slot, so the comparison is deleted rather than moved. Since spec 067
+ * that slot is named `dock`, and the dock shows no tab when nobody fills it.
  *
  * # Why a glob, and why that is not "loading a pack at runtime"
  *
@@ -72,6 +72,8 @@ import type { PanelSlot, PanelSlotProps } from "@thunderforge/host";
  */
 const DISCOVERED = import.meta.glob<{
   default: ComponentType<never>;
+  /** What a slot that shows a heading or a tab calls this panel. */
+  title?: unknown;
 }>("../../../../packs/systems/*/web/src/panels/*.tsx", { eager: true });
 
 function keyFromPath(modulePath: string): string | null {
@@ -85,7 +87,7 @@ function keyFromPath(modulePath: string): string | null {
  * `` `${systemId}:${slot}` `` to component.
  *
  * A pack may point two slot files at one component — Genie's `world-staging`
- * and `clocks` both export the session loop — and this map then holds the
+ * and `dock` both export the session loop — and this map then holds the
  * same reference under both keys, which is the intended shape rather than a
  * duplication to collapse.
  *
@@ -104,6 +106,19 @@ export const SYSTEM_PANELS: Record<
   }),
 );
 
+/**
+ * `` `${systemId}:${slot}` `` to the `title` a panel module exports, for the
+ * modules that export one. Anything but a non-empty string is no title.
+ */
+const PANEL_TITLES: Record<string, string> = Object.fromEntries(
+  Object.entries(DISCOVERED).flatMap(([modulePath, module]) => {
+    const key = keyFromPath(modulePath);
+    return key && typeof module.title === "string" && module.title.trim()
+      ? [[key, module.title.trim()]]
+      : [];
+  }),
+);
+
 export function panelKey(systemId: string, slot: PanelSlot): string {
   return `${systemId}:${slot}`;
 }
@@ -113,9 +128,9 @@ export function panelKey(systemId: string, slot: PanelSlot): string {
  * none.
  *
  * The absence is an answer, not an accident — the same call
- * `resolveActorSheet` makes. A world whose system fills no `clocks` slot has
- * no clocks, and the dock says so plainly; it does not get a substitute, and
- * it does not get an empty frame that reads as broken.
+ * `resolveActorSheet` makes. A world whose system fills no `dock` slot has
+ * no tab in the dock; it does not get a substitute, and it does not get an
+ * empty frame that reads as broken.
  *
  * A world with no system at all, a system that ships no panels, and an id
  * that matches nothing are one answer on screen, so they are one answer here.
@@ -129,4 +144,34 @@ export function resolvePanel<S extends PanelSlot>(
   }
   const found = SYSTEM_PANELS[panelKey(gameSystemId, slot)];
   return (found as ComponentType<PanelSlotProps[S]> | undefined) ?? null;
+}
+
+/**
+ * What a system calls the panel it contributes to a slot, or `null` where it
+ * contributes none or left it untitled. The caller owns the fallback wording.
+ */
+export function resolvePanelTitle(
+  gameSystemId: string | null | undefined,
+  slot: PanelSlot,
+): string | null {
+  if (!gameSystemId) {
+    return null;
+  }
+  return PANEL_TITLES[panelKey(gameSystemId, slot)] ?? null;
+}
+
+/** What the tab reads when a pack fills the slot and does not title it. */
+const UNTITLED = "Game system";
+
+/**
+ * The dock tab's label for this world's system, or `null` when its system
+ * fills no `dock` slot — in which case the dock shows no tab at all (spec 067
+ * FR-021). A tab that opens onto "this system has nothing here" told a table
+ * about a feature it does not have.
+ */
+export function systemDockTitle(gameSystemId: string | null): string | null {
+  if (!resolvePanel(gameSystemId, "dock")) {
+    return null;
+  }
+  return resolvePanelTitle(gameSystemId, "dock") ?? UNTITLED;
 }

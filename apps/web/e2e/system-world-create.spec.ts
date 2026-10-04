@@ -61,9 +61,11 @@ async function createWorldOn(
   return { worldId, offered };
 }
 
-for (const { systemId, sheet } of [
-  { systemId: "roll_for_shoes", sheet: "rfs-sheet" },
-  { systemId: "dnd5e", sheet: "dnd5e-actor-sheet" },
+// `dockTab` is what the system's own tab in the play dock reads, or `null`
+// for a system that puts nothing there and so gets no tab (spec 067 Story 2).
+for (const { systemId, sheet, dockTab } of [
+  { systemId: "roll_for_shoes", sheet: "rfs-sheet", dockTab: "Table" },
+  { systemId: "dnd5e", sheet: "dnd5e-actor-sheet", dockTab: null },
 ]) {
   test(`a world created as ${systemId} is one, and so are its characters`, async ({
     page,
@@ -139,6 +141,13 @@ for (const { systemId, sheet } of [
 
     await page.goto(`/world/${worldId}/play`);
     await openDockTab(page, "actors");
+    // The dock is up, so the tab's absence below is an answer, not a wait.
+    const systemTab = page.getByTestId("world-dock-tab-system");
+    if (dockTab) {
+      await expect(systemTab).toHaveAttribute("aria-label", dockTab);
+    } else {
+      await expect(systemTab).toHaveCount(0);
+    }
     // A Game Master's View opens the character in a new tab, so the map stays
     // in front of them; the sheet is read there, not in the dock.
     const [sheetTab] = await Promise.all([

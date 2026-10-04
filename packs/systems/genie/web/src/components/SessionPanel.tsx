@@ -18,7 +18,7 @@ export interface GenieSessionPanelProps {
    * Who is looking. Passed in rather than read from an auth hook: this
    * component is a pack's, and `@thunderforge/host` deliberately exports no
    * way to reach the session — the host tells a panel who is looking through
-   * its slot props (`WorldStagingPanelProps`, `ClocksPanelProps`).
+   * its slot props (`WorldStagingPanelProps`, `DockPanelProps`).
    */
   currentUserId?: string;
 }
