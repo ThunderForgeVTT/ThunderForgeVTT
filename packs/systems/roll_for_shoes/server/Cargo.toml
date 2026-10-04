@@ -38,6 +38,10 @@ async-graphql = { version = "7.2.1", features = [
 ] }
 chrono = { version = "0.4.45", features = ["serde"] }
 uuid = { version = "1.26.0", features = ["serde", "v7"] }
+# The Game Master's difficulty dice, in a world that rolls for difficulty, are
+# rolled server-side (`table/`). The generator is handed to the server's own
+# roll path; this crate resolves no dice itself.
+rand = "0.10.2"
 
 [dev-dependencies]
 # The server's shared fixtures — `insert_test_world`, `test_app_state`. Behind

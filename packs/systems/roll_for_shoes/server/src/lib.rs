@@ -15,11 +15,17 @@
 //! the two root fields that read and write it (`settings`, ADR-063 and
 //! ADR-108). The validators below still touch no database; only `settings`
 //! does, and a roll still goes down the same path every other system's takes.
+//!
+//! A second table followed for the same reason (`table`): what the Game
+//! Master says has to be beaten is said to the whole table, and a number
+//! that lives on each player's own sheet is not said to anyone.
 
 pub mod settings;
+pub mod table;
 pub mod validators;
 
 pub use settings::graphql::{RollForShoesSettingsMutation, RollForShoesSettingsQuery};
+pub use table::graphql::{RollForShoesTableMutation, RollForShoesTableQuery};
 
 #[cfg(test)]
 mod validators_tests;

@@ -148,7 +148,7 @@ test("a character starts with one skill, fails its way to XP, and spends it to l
   await expectNoAxeViolations(page, '[data-testid="rfs-sheet"]');
 });
 
-test("the sheet works in the play dock, where a player sits with no edit rights", async ({
+test("the sheet works in the play dock, where the player holding the character keeps it up to date", async ({
   page,
   browser,
 }) => {
@@ -196,9 +196,11 @@ test("the sheet works in the play dock, where a player sits with no edit rights"
     `claim refused: ${JSON.stringify(claim.errors ?? claim)}`,
   ).toBe(actorId);
 
-  // The dock mounts every pack sheet with `canEdit: false`. Roll for Shoes
-  // has no declarative fallback behind it, so if the sheet cannot cope with
-  // that the player is left with nothing during play.
+  // The dock mounts a pack's sheet with the viewer's real edit right — the
+  // same answer the full actor page gives. Roll for Shoes is mostly played
+  // with no map at all, so for this player the dock *is* their seat: a sheet
+  // they could read here and not change would be a character that cannot be
+  // kept up to date where it is played.
   await player.goto(`/world/${worldId}/play`);
   await player.getByTestId("world-dock-tab-actors").click();
   await player.getByTestId(`actor-view-${actorId}`).click();
@@ -213,13 +215,15 @@ test("the sheet works in the play dock, where a player sits with no edit rights"
     player.getByTestId(`rfs-skill-${STARTING_SKILL_ID}`),
   ).toBeVisible();
 
-  // Read-only means the description is text, not a box to type in.
-  await expect(player.locator('[data-testid="rfs-description"]')).toHaveCount(
-    1,
-  );
-  await expect(
-    player.locator('textarea[data-testid="rfs-description"]'),
-  ).toHaveCount(0);
+  // The claim made this player an Editor, so the description is a box to
+  // type in rather than text — and what is typed is written when the box is
+  // left, which is checked further down, once the sheet has been closed and
+  // opened again and can only be showing what the server holds.
+  const description = player.locator('textarea[data-testid="rfs-description"]');
+  await expect(description).toHaveCount(1);
+  await description.fill("Has never owned a pair of shoes.");
+  await description.blur();
+  await expect(player.getByTestId("rfs-error")).toHaveCount(0);
 
   // The dock is one narrow column. A sheet that overflows it is unusable
   // however correct its contents are.
@@ -267,6 +271,12 @@ test("the sheet works in the play dock, where a player sits with no edit rights"
     timeout: 15_000,
   });
   await expect(player.getByTestId("rfs-result")).toContainText(/fail/i);
+
+  // And the description is the character's now, not the closed sheet's: this
+  // mount began with nothing typed, so what it shows was read back.
+  await expect(
+    player.locator('textarea[data-testid="rfs-description"]'),
+  ).toHaveValue("Has never owned a pair of shoes.", { timeout: 15_000 });
 
   await expectNoAxeViolations(player, '[data-testid="rfs-sheet"]');
 });

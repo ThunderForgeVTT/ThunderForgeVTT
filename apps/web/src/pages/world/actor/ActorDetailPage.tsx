@@ -34,6 +34,7 @@ import { ActorStatBlockPanel } from "@/pages/world/actor/ActorStatBlockPanel";
 import { WorldAppearance } from "@/appearance/WorldAppearance";
 import { startActorAccessEventSync } from "@/engine/world/sync/actorAccess";
 import { subscribeToWorldEvents } from "@/engine/world/sync/subscriptionClient";
+import { mayEditActor } from "@/pages/world/actor/actorEditRight";
 import { PackActorSheet } from "@/pages/world/actor/PackActorSheet";
 import { SystemChecksPanel } from "@/pages/world/actor/SystemChecksPanel";
 import { resolvePanel } from "@/panels/systemPanels";
@@ -186,7 +187,7 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
     return <Navigate to={`/world/${worldId}/actor/${actorId}/view`} replace />;
   }
 
-  const canEdit = actor.myPermissionLevel !== "VIEWER";
+  const canEdit = mayEditActor(actor);
   /** Spec 044 FR-030: this caller is the player holding the character. */
   const heldByMe = !!user && actor.claimedBy?.userId === user.id;
 

@@ -17,11 +17,21 @@ inventory::submit! {
                 "updateRollForShoesWorldSettings",
                 r#"mutation { updateRollForShoesWorldSettings(input: { worldId: "{world}", difficultyMode: "free", tieSucceeds: false, statusesEnabled: false, skillSlotsEnabled: false, startingSkills: [] }) { worldId } }"#,
             ),
+            // Saying what has to be beaten, and taking it back, are moves in
+            // play — the thing a pause stops.
+            (
+                "setRollForShoesTableDifficulty",
+                r#"mutation { setRollForShoesTableDifficulty(input: { worldId: "{world}", target: 6 }) { worldId } }"#,
+            ),
+            (
+                "clearRollForShoesTableDifficulty",
+                r#"mutation { clearRollForShoesTableDifficulty(worldId: "{world}") { worldId } }"#,
+            ),
         ],
         not_world_scoped: &[],
         // What the settings panel and the character sheet read. Readable
         // while paused: pausing stops play, not looking.
-        reads: &["rollForShoesWorldSettings"],
+        reads: &["rollForShoesWorldSettings", "rollForShoesTableDifficulty"],
         // Nothing to seed. The read answers for a world with no row, and the
         // write creates it.
         seed: &[],

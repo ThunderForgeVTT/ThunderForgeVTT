@@ -40,6 +40,12 @@ export interface Attempt {
   bought: number;
   /** Whether the advancement this attempt earned has been answered. */
   advancementAnswered: boolean;
+  /**
+   * When it was rolled. Two rolls can fall identically, and this is what
+   * tells the sheet the second is a new one. Absent on an attempt remembered
+   * by a build from before it was recorded.
+   */
+  at?: number;
 }
 
 function signed(value: number): string {
@@ -87,6 +93,18 @@ export function boughtLine(who: string, attempt: Attempt): string {
 
 export function learnedLine(who: string, learned: Skill): string {
   return `${who} learns ${learned.name} (${learned.level}d6).`;
+}
+
+/**
+ * A skill changed by hand, said aloud.
+ *
+ * A hand edit can make a character better at something with no dice
+ * involved, and anyone who may edit the character can make one. The table
+ * is told for the same reason it is told about a roll: so that nobody has
+ * to take anybody's word for what the sheet says.
+ */
+export function byHandLine(who: string, what: string): string {
+  return `${who}'s skills were changed by hand: ${what}.`;
 }
 
 const SAY = `

@@ -7369,6 +7369,7 @@ dependencies = [
  "chrono",
  "diesel",
  "inventory",
+ "rand 0.10.2",
  "serde",
  "serde_json",
  "thunderforge-server",

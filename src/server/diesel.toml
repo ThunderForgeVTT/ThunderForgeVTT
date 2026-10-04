@@ -33,6 +33,7 @@ except_tables = [
   "world_genie_sessions",
   "world_genie_shop_listings",
   "world_genie_trade_proposals",
+  "world_roll_for_shoes_difficulty",
   "world_roll_for_shoes_settings",
 ]
 

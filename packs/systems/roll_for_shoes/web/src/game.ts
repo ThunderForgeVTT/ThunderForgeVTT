@@ -501,7 +501,10 @@ export function addStatus(
   if (!Number.isInteger(modifier)) {
     return { added: false, reason: "The modifier must be a whole number." };
   }
-  return { added: true, statuses: [...statuses, { id, name: trimmed, modifier }] };
+  return {
+    added: true,
+    statuses: [...statuses, { id, name: trimmed, modifier }],
+  };
 }
 
 /** Take a status off. Removing one that is not there is not an error. */
@@ -656,4 +659,321 @@ export function withBoughtSlot(
       ? (stored as Record<string, number>)
       : {};
   return { ...existing, [String(level)]: slots };
+}
+
+/* ------------------------------------------------------------------ *
+ * The table (theatre of the mind)
+ *
+ * Everything below serves a table that plays without a map: an
+ * advancement that cannot be rolled past, skills written and corrected by
+ * hand as they are discovered, and a list that stays readable once there
+ * are a lot of them.
+ * ------------------------------------------------------------------ */
+
+/** The part of an attempt that decides whether a new skill is still owed. */
+export interface AdvancementState {
+  faces: number[];
+  bought: number;
+  advancementAnswered: boolean;
+}
+
+/**
+ * Whether the last roll earned a new skill that nobody has named or declined.
+ *
+ * While this is true the sheet does not roll. The next roll would replace the
+ * attempt, and the advancement with it — and "discovering" a skill is the
+ * whole game, so losing one to an eager second click is the one mistake the
+ * sheet must make impossible. The player is asked to answer first; declining
+ * is an answer, and takes one click.
+ *
+ * Blocking rather than queueing, because there is nothing to queue: the rules
+ * give the new skill at the moment of the roll, about what was just attempted.
+ * A stack of unanswered prompts for attempts the table has moved past would
+ * be asking people to name things they no longer remember doing.
+ */
+export function advancementOwed(
+  attempt: AdvancementState | null | undefined,
+): boolean {
+  return (
+    !!attempt &&
+    !attempt.advancementAnswered &&
+    isAdvancement(attempt.faces, attempt.bought)
+  );
+}
+
+/**
+ * The skill an advancement grants, given the skills as they are *now*.
+ *
+ * The attempt remembers the skill as it was when it was rolled, and the sheet
+ * can sit open for a long time between the roll and the answer — long enough
+ * for the Game Master to have re-levelled or removed that skill by hand. The
+ * new skill is always one level above what was actually rolled. It hangs
+ * beneath the rolled skill when that skill is still there at that level, and
+ * otherwise stands on its own: the server refuses a skill that names a parent
+ * it is not exactly one level above, or one that is gone.
+ */
+export function grantSkillAmong(
+  skills: Skill[],
+  rolled: Skill,
+  name: string,
+  id: string,
+): GrantMade | GrantRefusal {
+  const granted = grantSkill(rolled, name, id);
+  if (!granted.granted) {
+    return granted;
+  }
+  const current = skills.find((skill) => skill.id === rolled.id);
+  if (current && current.level === rolled.level) {
+    return granted;
+  }
+  return { granted: true, skill: { ...granted.skill, parentId: null } };
+}
+
+export interface SkillsRefusal {
+  changed: false;
+  reason: string;
+}
+
+export interface SkillsChanged {
+  changed: true;
+  skills: Skill[];
+}
+
+export type SkillsEdit = SkillsChanged | SkillsRefusal;
+
+function wholeLevel(level: number): boolean {
+  return Number.isInteger(level) && level >= 1;
+}
+
+/**
+ * Rename a skill. The name is the only thing that moves.
+ *
+ * A skill's name is the table's to choose and to change — a misspelling, or a
+ * better word found two sessions later. As with a granted skill, any
+ * non-empty name is accepted and none is judged.
+ */
+export function renameSkill(
+  skills: Skill[],
+  id: string,
+  name: string,
+): SkillsEdit {
+  const trimmed = name.trim();
+  if (trimmed.length === 0) {
+    return { changed: false, reason: "A skill needs a name." };
+  }
+  if (!skills.some((skill) => skill.id === id)) {
+    return { changed: false, reason: "That skill is no longer on the sheet." };
+  }
+  return {
+    changed: true,
+    skills: skills.map((skill) =>
+      skill.id === id ? { ...skill, name: trimmed } : skill,
+    ),
+  };
+}
+
+/**
+ * Write a skill onto the sheet by hand.
+ *
+ * For the skill the dice did not give: one agreed at the table, one carried
+ * over from a paper sheet, one a pre-made character arrives with. Beneath a
+ * parent it sits exactly one level above that parent — `level` is not asked
+ * for and is ignored, because a lineage is only a lineage if each step is one
+ * level. With no parent it stands on its own at whatever level is given.
+ */
+export function addSkillByHand(
+  skills: Skill[],
+  name: string,
+  parentId: string | null,
+  level: number,
+  id: string,
+): SkillsEdit {
+  const trimmed = name.trim();
+  if (trimmed.length === 0) {
+    return { changed: false, reason: "Give the new skill a name." };
+  }
+  if (parentId !== null) {
+    const parent = skills.find((skill) => skill.id === parentId);
+    if (!parent) {
+      return {
+        changed: false,
+        reason: "The skill it grows out of is no longer on the sheet.",
+      };
+    }
+    return {
+      changed: true,
+      skills: [
+        ...skills,
+        { id, name: trimmed, level: parent.level + 1, parentId: parent.id },
+      ],
+    };
+  }
+  if (!wholeLevel(level)) {
+    return { changed: false, reason: "A skill's level is 1 or more." };
+  }
+  return {
+    changed: true,
+    skills: [...skills, { id, name: trimmed, level, parentId: null }],
+  };
+}
+
+/** A skill and everything that grew out of it, however far down. */
+function withDescendants(skills: Skill[], id: string): Set<string> {
+  const family = new Set<string>([id]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const skill of skills) {
+      if (
+        skill.parentId !== null &&
+        family.has(skill.parentId) &&
+        !family.has(skill.id)
+      ) {
+        family.add(skill.id);
+        grew = true;
+      }
+    }
+  }
+  return family;
+}
+
+/**
+ * Set a skill's level by hand.
+ *
+ * Everything that grew out of the skill moves by the same amount, so each of
+ * them is still one level above what it grew from. The skill itself stays
+ * beneath its own parent only if it still sits one level above it; otherwise
+ * it is cut loose and stands on its own, keeping its branch. That is the
+ * honest reading of a hand correction — "this is a 3" says what the skill is,
+ * not that its parent was wrong too.
+ */
+export function setSkillLevel(
+  skills: Skill[],
+  id: string,
+  level: number,
+): SkillsEdit {
+  if (!wholeLevel(level)) {
+    return { changed: false, reason: "A skill's level is 1 or more." };
+  }
+  const target = skills.find((skill) => skill.id === id);
+  if (!target) {
+    return { changed: false, reason: "That skill is no longer on the sheet." };
+  }
+  const shift = level - target.level;
+  if (shift === 0) {
+    return { changed: true, skills };
+  }
+  const family = withDescendants(skills, id);
+  const parent =
+    target.parentId === null
+      ? undefined
+      : skills.find((skill) => skill.id === target.parentId);
+  const keepsItsParent = parent !== undefined && level === parent.level + 1;
+
+  return {
+    changed: true,
+    skills: skills.map((skill) => {
+      if (!family.has(skill.id)) {
+        return skill;
+      }
+      const moved = { ...skill, level: skill.level + shift };
+      return skill.id === id && !keepsItsParent
+        ? { ...moved, parentId: null }
+        : moved;
+    }),
+  };
+}
+
+/**
+ * Take a skill off the sheet by hand.
+ *
+ * What grew out of it is kept, at the level it has, and stands on its own
+ * from then on: removing "Climb" should not quietly take "Climb the Clock
+ * Tower" with it, and the server refuses a skill that names a parent which is
+ * gone. The last skill cannot be removed — a sheet with none is read as a
+ * character nobody has opened yet, and would be handed the world's starting
+ * skills again on the next write.
+ */
+export function removeSkill(skills: Skill[], id: string): SkillsEdit {
+  if (!skills.some((skill) => skill.id === id)) {
+    return { changed: false, reason: "That skill is no longer on the sheet." };
+  }
+  if (skills.length <= 1) {
+    return {
+      changed: false,
+      reason: "A character keeps at least one skill. Rename this one instead.",
+    };
+  }
+  return {
+    changed: true,
+    skills: skills
+      .filter((skill) => skill.id !== id)
+      .map((skill) =>
+        skill.parentId === id ? { ...skill, parentId: null } : skill,
+      ),
+  };
+}
+
+/** How deep the lineage is drawn before further levels stop indenting. */
+export const DEEPEST_INDENT = 4;
+
+/** How many skills a sheet holds before it offers a way to find one. */
+export const FIND_SKILLS_FROM = 8;
+
+/**
+ * The lineage rows that match what the player typed, in lineage order.
+ *
+ * An empty search is every row. A match keeps its own depth — the row is
+ * still drawn where it sits in the lineage — but its ancestors are not pulled
+ * in with it: someone looking for "lockpick" in a list of thirty wants the
+ * roll button, not the family tree.
+ */
+export function findSkills(rows: LineageRow[], search: string): LineageRow[] {
+  const wanted = search.trim().toLocaleLowerCase();
+  if (wanted.length === 0) {
+    return rows;
+  }
+  return rows.filter(({ skill }) =>
+    skill.name.toLocaleLowerCase().includes(wanted),
+  );
+}
+
+/** What the Game Master has said has to be beaten, as the server holds it. */
+export interface TableDifficulty {
+  /** The number to beat; `null` when the Game Master has set none. */
+  target: number | null;
+  band: Band | null;
+  /** The Game Master's dice, when the server rolled them. */
+  gmDice: number[] | null;
+  /** Whether the person looking is the one who may set it. */
+  canSet: boolean;
+}
+
+export const NO_TABLE_DIFFICULTY: TableDifficulty = {
+  target: null,
+  band: null,
+  gmDice: null,
+  canSet: false,
+};
+
+/**
+ * What a roll is compared with.
+ *
+ * The Game Master's number when there is one — and then whatever the player
+ * typed is not consulted at all, which is the point of the Game Master
+ * holding it. With none set, the sheet's own entry, exactly as the core game
+ * has always read it: empty means nothing to beat.
+ */
+export function oppositionFor(
+  table: TableDifficulty,
+  typed: string,
+): number | null {
+  if (table.target !== null) {
+    return table.target;
+  }
+  if (typed.trim() === "") {
+    return null;
+  }
+  const entered = Number(typed);
+  return Number.isFinite(entered) ? entered : null;
 }

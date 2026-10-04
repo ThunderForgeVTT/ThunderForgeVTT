@@ -25,6 +25,11 @@ export interface RollResultProps {
   bought: number;
   xp: number;
   busy: boolean;
+  /**
+   * When this roll was made. A new roll has a new one, and that is what the
+   * result is keyed on: see the note on the section below.
+   */
+  rolledAt?: number;
   onSpendXp: () => void;
 }
 
@@ -55,6 +60,7 @@ export function RollResult({
   bought,
   xp,
   busy,
+  rolledAt,
   onSpendXp,
 }: RollResultProps) {
   const sixes = sixesShown(faces, bought);
@@ -71,8 +77,21 @@ export function RollResult({
       .map(({ index }) => index),
   );
 
+  // Two rolls of the same skill can fall identically, and a result that is
+  // replaced by its twin looks like a button that did nothing. So the result
+  // is keyed on the moment of the roll: a new roll remounts it, which replays
+  // the entrance, and the live region announces it to anyone not looking.
+  // The entrance is skipped for anyone who has asked for less motion; the
+  // announcement is not motion and stays.
   return (
-    <section className="grid gap-2">
+    <section
+      key={rolledAt ?? 0}
+      role="status"
+      aria-live="polite"
+      data-testid="rfs-roll-result"
+      data-rolled-at={rolledAt ?? 0}
+      className="grid gap-2 rounded-lg animate-in fade-in zoom-in-95 duration-500 motion-reduce:animate-none"
+    >
       <h3 className={cardTitleClass}>{skill.name}</h3>
 
       <div className="flex flex-wrap items-center gap-1.5">

@@ -15,14 +15,20 @@ import {
   BAND_TARGET,
   DEFAULT_SETTINGS,
   SYSTEM_ID,
+  addSkillByHand,
   addStatus,
+  advancementOwed,
   boughtSlotsAt,
   buySlot,
-  grantSkill,
+  grantSkillAmong,
   newSkillId,
   newStatusId,
+  oppositionFor,
+  removeSkill,
   removeStatus,
+  renameSkill,
   resolve,
+  setSkillLevel,
   skillsOf,
   slotCost,
   slotsAvailable,
@@ -33,13 +39,15 @@ import {
   xpOf,
   type Band,
   type Skill,
+  type SkillsEdit,
   type Status,
-  type Verdict,
   type WorldSettings,
 } from "./game.ts";
 import { fetchWorldSettings } from "./settings.ts";
+import { useTableDifficulty } from "./useTableDifficulty.ts";
 import {
   boughtLine,
+  byHandLine,
   learnedLine,
   recallAttempt,
   rememberAttempt,
@@ -53,6 +61,7 @@ import { DifficultyPicker } from "./components/DifficultyPicker.tsx";
 import { StatusList } from "./components/StatusList.tsx";
 import { RollResult } from "./components/RollResult.tsx";
 import { SkillLineage } from "./components/SkillLineage.tsx";
+import { TableDifficulty } from "./components/TableDifficulty.tsx";
 import {
   cardClass,
   cardTitleClass,
@@ -96,6 +105,15 @@ const ROLL_SKILL = `
   }
 `;
 
+/**
+ * Said wherever a roll is held back by an advancement nobody has answered.
+ *
+ * The next roll would replace the attempt and the new skill with it, so the
+ * sheet asks for the answer first. Declining is an answer.
+ */
+const OWED =
+  "A new skill is waiting. Name it or decline it before rolling again.";
+
 export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
   const { data, loading, refetch } = useActorSystemData(actor.id, SYSTEM_ID);
   const { updateTraits } = useUpdateTraitData(actor.id, SYSTEM_ID);
@@ -105,6 +123,10 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
   const [opposition, setOpposition] = useState("");
   const [band, setBand] = useState<Band | null>(null);
   const [gmDice, setGmDice] = useState<number[] | null>(null);
+  // What the Game Master has set for the whole table, if anything. While it
+  // is set, the three pieces of state above are not consulted and the fields
+  // that fill them are not drawn.
+  const table = useTableDifficulty(actor.worldId);
   // Begun from what this tab last rolled for this character: the dock
   // unmounts the sheet when its tab changes, and an advancement nobody has
   // answered yet must still be there when the player comes back.
@@ -165,12 +187,7 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
 
   // The dock draws this sheet in a short scrolling box, and the prompt is the
   // last thing in it: a new skill offered below the fold is a skill missed.
-  const offered =
-    attempt !== null &&
-    !attempt.advancementAnswered &&
-    attempt.faces.length > 0 &&
-    attempt.faces.filter((face) => face === 6).length + attempt.bought >=
-      attempt.faces.length;
+  const offered = advancementOwed(attempt);
   useEffect(() => {
     if (offered) {
       advancementRef.current?.scrollIntoView({ block: "nearest" });
@@ -283,11 +300,33 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
   };
 
   const roll = async (skill: Skill): Promise<void> => {
+    // The buttons are already dead while this is true; this is the same rule
+    // for anything that reaches here another way. A roll replaces the attempt,
+    // and the attempt is where an unanswered advancement lives.
+    if (offered) {
+      setError(OWED);
+      return;
+    }
     setError(null);
     setBusy(true);
-    const against = opposition.trim() === "" ? null : Number(opposition);
 
     try {
+      // Read again at the moment of the roll rather than trusting what the
+      // sheet last heard. The announcement of a change is best-effort, and a
+      // roll judged against the number before last is a wrong verdict in the
+      // world's chat. If the read is refused the roll does not happen: the
+      // sheet cannot tell "none set" from "could not ask", and guessing
+      // "none" would let a typed number stand in for the Game Master's.
+      let against: number | null;
+      try {
+        against = oppositionFor(await table.refresh(), opposition);
+      } catch {
+        setError(
+          "What has to be beaten could not be read, so nothing was rolled. Try again.",
+        );
+        return;
+      }
+
       // `faces` is the character's pool and nothing else. The Game Master's
       // dice live in their own state and never reach this array, which is what
       // keeps a six of theirs from earning anybody a skill (FR-014).
@@ -301,7 +340,7 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
         // character happens to have stored from a world that had — the setting
         // decides whether they apply, never whether they exist.
         statuses: settings.statusesEnabled ? statuses : [],
-        opposition: Number.isFinite(against) ? against : null,
+        opposition: against,
         tieSucceeds: settings.tieSucceeds,
       });
       const result = outcome.verdict;
@@ -315,6 +354,7 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
         result,
         bought: 0,
         advancementAnswered: false,
+        at: Date.now(),
       };
       setAttempt(made);
       await say(rollLine(actor.label, made));
@@ -403,7 +443,9 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
     }
     setError(null);
 
-    const granted = grantSkill(attempt.skill, name, newSkillId());
+    // Against the skills as they are now: the skill that was rolled may have
+    // been re-levelled or removed by hand while the prompt stood open.
+    const granted = grantSkillAmong(skills, attempt.skill, name, newSkillId());
     if (!granted.granted) {
       setError(granted.reason);
       return;
@@ -419,6 +461,39 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
       await refetch();
       setAttempt({ ...attempt, advancementAnswered: true });
       await say(learnedLine(actor.label, granted.skill));
+    } catch (thrown) {
+      reportRefusal(thrown);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * A change to the skills made by hand, written and then said.
+   *
+   * The whole lineage goes in one write, as every trait write here does, and
+   * the pure function that produced it has already kept it one the server
+   * will take — each child one level above its parent, something standing on
+   * its own. A refusal from the rule is shown without asking the server.
+   */
+  const writeSkills = async (edit: SkillsEdit, what: string): Promise<void> => {
+    setError(null);
+    if (!edit.changed) {
+      setError(edit.reason);
+      return;
+    }
+    if (edit.skills === skills) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await updateTraits({
+        ...traitData,
+        description: description ?? storedDescription,
+        skills: edit.skills,
+      });
+      await refetch();
+      await say(byHandLine(actor.label, what));
     } catch (thrown) {
       reportRefusal(thrown);
     } finally {
@@ -529,31 +604,118 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
         <SkillLineage
           skills={skills}
           busy={busy || loading || settingsState !== "ready"}
+          held={offered ? OWED : null}
           onRoll={(skill) => void roll(skill)}
+          canEdit={canEdit}
+          onRename={(skill, name) =>
+            void writeSkills(
+              renameSkill(skills, skill.id, name),
+              `${skill.name} is now called ${name.trim()}`,
+            )
+          }
+          onRelevel={(skill, level) =>
+            void writeSkills(
+              setSkillLevel(skills, skill.id, level),
+              `${skill.name} set to ${level}d6`,
+            )
+          }
+          onRemove={(skill) =>
+            void writeSkills(
+              removeSkill(skills, skill.id),
+              `${skill.name} removed`,
+            )
+          }
+          onAdd={(name, parentId, level) => {
+            const parent = skills.find((skill) => skill.id === parentId);
+            void writeSkills(
+              addSkillByHand(skills, name, parentId, level, newSkillId()),
+              `${name.trim()} added at ${parent ? parent.level + 1 : level}d6`,
+            );
+          }}
         />
 
-        {settings.difficultyMode === "free" ? null : (
-          <DifficultyPicker
-            mode={settings.difficultyMode}
-            chosen={band}
-            gmDice={gmDice}
-            busy={busy || loading || settingsState !== "ready"}
-            onChoose={(chosen) => void chooseBand(chosen)}
-          />
-        )}
+        {/*
+         * What has to be beaten. One of two things is drawn, never both.
+         *
+         * When the Game Master has set it for the table — or the person
+         * looking is the Game Master, who sets it from here — the table's
+         * difficulty is shown. A player sees a number and no field: the
+         * comparison uses the Game Master's number whatever the sheet holds,
+         * and a field that changed nothing would be a lie about that.
+         *
+         * When nothing is set, the sheet's own entry is here exactly as it
+         * was before the table had a difficulty at all, so a table that
+         * never uses this plays as it always did.
+         */}
+        {table.state === "failed" ? (
+          <p className={`${hintClass} mt-3`} data-testid="rfs-table-failed">
+            What has to be beaten could not be read.{" "}
+            <button
+              type="button"
+              className="underline"
+              onClick={() => void table.refresh().catch(() => undefined)}
+            >
+              Try again
+            </button>
+          </p>
+        ) : null}
 
-        <label className="mt-3 grid gap-1">
-          <span className={hintClass}>What has to be beaten</span>
-          <Input
-            type="number"
-            inputMode="numeric"
-            className={fieldClass}
-            placeholder="The Game Master&rsquo;s number"
-            data-testid="rfs-opposition"
-            value={opposition}
-            onChange={(event) => setOpposition(event.target.value)}
-          />
-        </label>
+        {table.difficulty.canSet || table.difficulty.target !== null ? (
+          <div className="mt-3">
+            <TableDifficulty
+              difficulty={table.difficulty}
+              mode={settings.difficultyMode}
+              busy={table.busy || settingsState !== "ready"}
+              refusal={table.refusal}
+              onSetNumber={(target) => void table.set({ target })}
+              onSetBand={(chosen) => void table.set({ band: chosen })}
+              onClear={() => void table.clear()}
+            />
+          </div>
+        ) : null}
+
+        {table.difficulty.target === null ? (
+          <>
+            {/*
+             * One control per meaning. The bands are how a Game Master says
+             * how hard a thing is, and a Game Master has them above, where
+             * choosing one sets it for the table. Drawing this picker for
+             * them as well would put two rows of the same four buttons on
+             * one sheet, one of which tells everybody and one of which tells
+             * nobody. So it is only drawn for someone who cannot set the
+             * table's difficulty — a player relaying what they were told —
+             * and the Game Master's own roll, with nothing set, uses the
+             * same typed number a player's does.
+             */}
+            {settings.difficultyMode === "free" ||
+            table.difficulty.canSet ? null : (
+              <DifficultyPicker
+                mode={settings.difficultyMode}
+                chosen={band}
+                gmDice={gmDice}
+                busy={busy || loading || settingsState !== "ready"}
+                onChoose={(chosen) => void chooseBand(chosen)}
+              />
+            )}
+
+            <label className="mt-3 grid gap-1">
+              <span className={hintClass}>
+                {table.difficulty.canSet
+                  ? "Or for this roll only"
+                  : "What has to be beaten"}
+              </span>
+              <Input
+                type="number"
+                inputMode="numeric"
+                className={fieldClass}
+                placeholder="The Game Master&rsquo;s number"
+                data-testid="rfs-opposition"
+                value={opposition}
+                onChange={(event) => setOpposition(event.target.value)}
+              />
+            </label>
+          </>
+        ) : null}
       </div>
 
       {settings.statusesEnabled ? (
@@ -580,6 +742,7 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
             bought={attempt.bought}
             xp={xp}
             busy={busy}
+            rolledAt={attempt.at}
             onSpendXp={() => void buyASix()}
           />
         </div>

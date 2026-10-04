@@ -109,7 +109,9 @@ async function setExtras(
 
 /** The faces currently drawn under a given test-id prefix, as numbers. */
 async function facesUnder(page: Page, prefix: string): Promise<number[]> {
-  const texts = await page.locator(`[data-testid^="${prefix}"]`).allInnerTexts();
+  const texts = await page
+    .locator(`[data-testid^="${prefix}"]`)
+    .allInnerTexts();
   return texts.map((text) => Number(text.trim()));
 }
 
@@ -123,37 +125,44 @@ test("the Game Master rolls for the opposition, and those dice are never the cha
   await page.goto(`/world/${worldId}/actor/${actorId}/edit`);
   await expect(page.getByTestId("rfs-sheet")).toBeVisible({ timeout: 15_000 });
 
-  // The picker only exists because this world asked for it. A world left alone
-  // never sees it, which is what spec 061's spec keeps proving.
-  await expect(page.getByTestId("rfs-difficulty-mode")).toBeVisible({
+  // The bands only exist because this world asked for them. A world left
+  // alone never sees them, which is what spec 061's spec keeps proving.
+  //
+  // This is the Game Master's sheet, so the bands are the table's: choosing
+  // one sets what every player at the table has to beat. The per-roll picker
+  // a player relays a band through is not drawn here as well — one control
+  // per meaning.
+  await expect(page.getByTestId("rfs-table-difficulty")).toBeVisible({
     timeout: 15_000,
   });
   for (const band of ["easy", "moderate", "hard", "veryHard"]) {
-    await expect(page.getByTestId(`rfs-band-${band}`)).toBeVisible();
+    await expect(page.getByTestId(`rfs-table-band-${band}`)).toBeVisible({
+      timeout: 15_000,
+    });
   }
+  await expect(page.getByTestId("rfs-difficulty-mode")).toHaveCount(0);
 
   // Very Hard is four dice — one per point of difficulty, exactly as a skill
-  // rolls one per level.
-  await page.getByTestId("rfs-band-veryHard").click();
-  const gmDice = page.locator('[data-testid^="rfs-gm-die-"]');
+  // rolls one per level. They are rolled by the server, once, when the band
+  // is chosen.
+  await page.getByTestId("rfs-table-band-veryHard").click();
+  const gmDice = page.locator('[data-testid^="rfs-table-gm-die-"]');
   await expect(gmDice).toHaveCount(4, { timeout: 15_000 });
 
-  const gmFaces = await facesUnder(page, "rfs-gm-die-");
+  const gmFaces = await facesUnder(page, "rfs-table-gm-die-");
   for (const face of gmFaces) {
     expect(Number.isInteger(face)).toBe(true);
     expect(face).toBeGreaterThanOrEqual(1);
     expect(face).toBeLessThanOrEqual(6);
   }
   const gmTotal = gmFaces.reduce((running, face) => running + face, 0);
-  expect(
-    Number((await page.getByTestId("rfs-gm-total").innerText()).trim()),
-  ).toBe(gmTotal);
-
-  // The band arrives at the opposition; it does not become a second one. The
-  // player can still read the number, and still change it (FR-011).
-  await expect(page.getByTestId("rfs-opposition")).toHaveValue(
+  // The dice arrive at the one number the table rolls against; they do not
+  // become a second opposition. And while it stands there is no field on the
+  // sheet to type a different one into.
+  await expect(page.getByTestId("rfs-table-target")).toHaveText(
     String(gmTotal),
   );
+  await expect(page.getByTestId("rfs-opposition")).toHaveCount(0);
 
   // FR-014, the reason the two sets of dice are drawn apart: the character
   // rolls one die for a level-1 skill, and it stays one however many the Game
@@ -164,16 +173,15 @@ test("the Game Master rolls for the opposition, and those dice are never the cha
   await expect(gmDice).toHaveCount(4);
 
   const characterFaces = await facesUnder(page, "rfs-die-");
-  expect(
-    Number((await page.getByTestId("rfs-total").innerText()).trim()),
-  ).toBe(characterFaces.reduce((running, face) => running + face, 0));
+  expect(Number((await page.getByTestId("rfs-total").innerText()).trim())).toBe(
+    characterFaces.reduce((running, face) => running + face, 0),
+  );
 
   // One d6 cannot beat four, whatever any of the five dice showed: the
   // Game Master's minimum is 4 and the character's maximum is 6 — so this is
   // only certain when the Game Master rolled above 6, and otherwise the page
   // is read rather than predicted.
-  const expected =
-    characterFaces[0]! > gmTotal ? /success/i : /fail/i;
+  const expected = characterFaces[0]! > gmTotal ? /success/i : /fail/i;
   await expect(page.getByTestId("rfs-result")).toContainText(expected);
 
   await expect(page.getByTestId("rfs-error")).toHaveCount(0);
@@ -188,25 +196,34 @@ test("a fixed number per band, with the typed number still there", async ({
 
   await page.goto(`/world/${worldId}/actor/${actorId}/edit`);
   await expect(page.getByTestId("rfs-sheet")).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByTestId("rfs-difficulty-mode")).toBeVisible({
+  await expect(page.getByTestId("rfs-table-band-easy")).toBeVisible({
     timeout: 15_000,
   });
 
-  // The four numbers the game names. Nothing is rolled for them.
+  // The four numbers the game names. Nothing is rolled for them. Each is set
+  // for the table, because this is the Game Master choosing.
   for (const [band, target] of [
     ["easy", "3"],
     ["moderate", "6"],
     ["hard", "9"],
     ["veryHard", "12"],
   ] as const) {
-    await page.getByTestId(`rfs-band-${band}`).click();
-    await expect(page.getByTestId("rfs-opposition")).toHaveValue(target);
+    await page.getByTestId(`rfs-table-band-${band}`).click();
+    await expect(page.getByTestId("rfs-table-target")).toHaveText(target, {
+      timeout: 15_000,
+    });
   }
-  await expect(page.locator('[data-testid^="rfs-gm-die-"]')).toHaveCount(0);
+  await expect(page.locator('[data-testid^="rfs-table-gm-die-"]')).toHaveCount(
+    0,
+  );
 
   // FR-011: a Game Master who wants to name a number can still name one, in
   // any mode, and the named one is what the roll is judged against.
-  await page.getByTestId("rfs-opposition").fill("99");
+  await page.getByTestId("rfs-table-number").fill("99");
+  await page.getByTestId("rfs-table-set").click();
+  await expect(page.getByTestId("rfs-table-target")).toHaveText("99", {
+    timeout: 15_000,
+  });
   await page.getByTestId(`rfs-roll-${STARTING_SKILL_ID}`).click();
   await expect(page.getByTestId("rfs-total")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId("rfs-result")).toContainText(/fail/i);
@@ -300,9 +317,9 @@ test("a status moves the total and leaves the dice alone", async ({ page }) => {
 
   // It reached the database: the row is drawn from what came back, not from
   // what was typed.
-  await expect(page.locator('[data-testid^="rfs-status-"]').first()).toBeVisible(
-    { timeout: 15_000 },
-  );
+  await expect(
+    page.locator('[data-testid^="rfs-status-"]').first(),
+  ).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId("rfs-statuses-total")).toContainText("100");
   await expect(page.getByTestId("rfs-error")).toHaveCount(0);
 
@@ -318,9 +335,9 @@ test("a status moves the total and leaves the dice alone", async ({ page }) => {
   expect(faces[0]).toBeLessThanOrEqual(6);
 
   await expect(page.getByTestId("rfs-modifier")).toContainText("100");
-  expect(
-    Number((await page.getByTestId("rfs-total").innerText()).trim()),
-  ).toBe(faces[0]! - 100);
+  expect(Number((await page.getByTestId("rfs-total").innerText()).trim())).toBe(
+    faces[0]! - 100,
+  );
 
   // A −100 status cannot produce a positive total, so this beat nothing —
   // true of every roll, whatever the die showed.
@@ -503,9 +520,7 @@ test("a full level tells the character there is no room, and 4 XP makes some", a
   ).toBe(true);
 
   // 4 XP for a level-2 slot: twice the level.
-  const before = Number(
-    (await page.getByTestId("rfs-xp").innerText()).trim(),
-  );
+  const before = Number((await page.getByTestId("rfs-xp").innerText()).trim());
   await page.getByTestId("rfs-buy-slot").click();
   await expect(page.getByTestId("rfs-xp")).toHaveText(String(before - 4), {
     timeout: 15_000,
@@ -521,7 +536,9 @@ test("a full level tells the character there is no room, and 4 XP makes some", a
   // character held five skills and now holds six.
   const skillRows = page.locator('[data-testid^="rfs-skill-"]');
   await expect(skillRows).toHaveCount(5);
-  await page.getByTestId("rfs-advancement-name").fill("Kick A Cellar Door Down");
+  await page
+    .getByTestId("rfs-advancement-name")
+    .fill("Kick A Cellar Door Down");
   await page.getByTestId("rfs-advancement-confirm").click();
   await expect(skillRows).toHaveCount(6, { timeout: 15_000 });
   await expect(page.getByTestId("rfs-error")).toHaveCount(0);
@@ -646,9 +663,13 @@ test("three Extras at once, and each one still means what it meant alone", async
   // Easy is 3, and nothing is rolled for it — a static target stays static
   // with a status on the character, because the status is the character's
   // side of the comparison and the target is the table's.
-  await page.getByTestId("rfs-band-easy").click();
-  await expect(page.getByTestId("rfs-opposition")).toHaveValue("3");
-  await expect(page.locator('[data-testid^="rfs-gm-die-"]')).toHaveCount(0);
+  await page.getByTestId("rfs-table-band-easy").click();
+  await expect(page.getByTestId("rfs-table-target")).toHaveText("3", {
+    timeout: 15_000,
+  });
+  await expect(page.locator('[data-testid^="rfs-table-gm-die-"]')).toHaveCount(
+    0,
+  );
 
   // Unlike every other loop in this file, this one cannot use the XP ledger to
   // tell it that a roll has landed: the outcome being hunted is a *success*,
@@ -671,16 +692,22 @@ test("three Extras at once, and each one still means what it meant alone", async
   for (let attempt = 1; attempt <= 60 && !sawTie; attempt += 1) {
     await page.evaluate(() => sessionStorage.clear());
     await page.reload();
-    await expect(page.getByTestId("rfs-sheet")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("rfs-sheet")).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page.getByTestId("rfs-total")).toHaveCount(0);
 
-    // The band is a per-roll choice, not a setting, so it is chosen again —
-    // and the target being 3 again after a reload is itself worth asserting.
-    await page.getByTestId("rfs-band-easy").click();
-    await expect(page.getByTestId("rfs-opposition")).toHaveValue("3");
+    // The Game Master set the band for the table, and the table's difficulty
+    // is the server's: it is not chosen again, and its still being 3 after a
+    // reload is itself worth asserting.
+    await expect(page.getByTestId("rfs-table-target")).toHaveText("3", {
+      timeout: 15_000,
+    });
 
     await page.getByTestId(`rfs-roll-${STARTING_SKILL_ID}`).click();
-    await expect(page.getByTestId("rfs-total")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("rfs-total")).toBeVisible({
+      timeout: 15_000,
+    });
 
     const faces = await facesUnder(page, "rfs-die-");
     expect(faces).toHaveLength(1);

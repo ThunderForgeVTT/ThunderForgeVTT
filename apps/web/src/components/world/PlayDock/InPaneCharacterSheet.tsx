@@ -9,6 +9,7 @@ import { rollDice } from "@/api/roll";
 import { triggerDiceRollAnimation } from "@/engine/bevy";
 import { RollResult } from "@/components/world/RollResult";
 import { useActorSystemData } from "@/hooks/useActorSystemData";
+import { mayEditActor } from "@/pages/world/actor/actorEditRight";
 import { resolveActorSheet } from "@/pages/world/actor/systemActorSheets";
 import type { WorldAbilityRecord } from "@/types/ability";
 import type { ActorAbilityEntryRecord } from "@/types/actorAbility";
@@ -38,9 +39,25 @@ import { abilityRolls, statRolls, type CharacterRoll } from "./characterRolls";
  * full page the first time a pack changed anything, and a player would be
  * looking at a different character to the one their GM sees.
  *
- * The sheet is mounted read-only. Editing is not forbidden in principle, but
- * a 22rem column during play is the wrong place to restat a character, and
- * `canEdit` there governs the same mutations the full page already offers.
+ * # Why the sheet is editable here, for whoever may edit it
+ *
+ * The sheet is mounted with the viewer's real edit right — `mayEditActor`,
+ * the same answer the full actor page gives, so the two cannot disagree. It
+ * used to be mounted read-only, on the reasoning that a 22rem column during
+ * play is the wrong place to restat a character. That holds for restatting
+ * and fails for play: a condition gained, a point spent, a skill just
+ * discovered are all changes to the sheet that happen *at the table*, and a
+ * player sent to another tab to record one has lost the map — the very thing
+ * this component exists to prevent. For a system played without a map at all
+ * the dock sheet is the whole of the player's seat, and read-only there meant
+ * a character that could not be kept up to date where it is played.
+ *
+ * Nothing is granted by this. A Viewer still gets a read-only sheet, and the
+ * server refuses a write the caller may not make whatever the sheet offered
+ * (Principle III). Unlike the full page there is no separate view and edit
+ * mode: the dock has no room for a second control whose only job is to
+ * unlock the first, and a pack's sheet decides for itself what is worth
+ * offering in place.
  *
  * # Why the rolls are separate from the sheet
  *
@@ -218,7 +235,7 @@ export function InPaneCharacterSheet({
             module-level registry keyed by a string. Writing the call out
             keeps the rule enforced everywhere else rather than disabled here.
           */}
-          {createElement(sheet, { actor, canEdit: false })}
+          {createElement(sheet, { actor, canEdit: mayEditActor(actor) })}
         </div>
       ) : (
         /*

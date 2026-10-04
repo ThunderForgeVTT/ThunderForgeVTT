@@ -206,7 +206,16 @@ pub const EVENT_CODE_OFFER_CHANGED: i32 = 30;
 /// Payload: `{"action": "changed", "actorId": <id>}`.
 pub const EVENT_CODE_ACTOR_ACCESS_CHANGED: i32 = 31;
 
-// 32 is spoken for by a branch that lands before this one.
+/// A game system's standing difficulty for the table changed.
+///
+/// Reserved here and written only by the pack that owns it, as code 15 is:
+/// the codes are one namespace across the product and every pack, and this
+/// list is the one place two features would find out they had chosen the
+/// same number. The server never records this event itself.
+///
+/// Payload: `{"action": "set" | "cleared"}`. Not the number — each client
+/// reads it again, and the read checks membership.
+pub const EVENT_CODE_TABLE_DIFFICULTY_CHANGED: i32 = 32;
 
 /// A scene's levels changed: one was added, renamed, reordered, given a new
 /// board, made the entry level, or removed.

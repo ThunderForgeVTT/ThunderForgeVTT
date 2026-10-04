@@ -1044,6 +1044,18 @@ type AppMutationRoot {
 	Set this world's optional rules. Game Master only.
 	"""
 	updateRollForShoesWorldSettings(input: UpdateRollForShoesWorldSettingsInput!): RollForShoesWorldSettings!
+	"""
+	Say what has to be beaten. Game Master only.
+	
+	In a world that rolls for difficulty, naming a band rolls the Game
+	Master's dice here, once, and stores what they came to.
+	"""
+	setRollForShoesTableDifficulty(input: SetRollForShoesTableDifficultyInput!): RollForShoesTableDifficulty!
+	"""
+	Take the difficulty away, handing each sheet back its own entry.
+	Game Master only.
+	"""
+	clearRollForShoesTableDifficulty(worldId: UUID!): RollForShoesTableDifficulty!
 }
 
 """
@@ -1833,6 +1845,13 @@ type AppQueryRoot {
 	error, which is what makes the whole feature opt-in.
 	"""
 	rollForShoesWorldSettings(worldId: UUID!): RollForShoesWorldSettings!
+	"""
+	What has to be beaten at this table right now.
+	
+	Any member may read: it is said aloud at the table, and a player
+	cannot roll without it.
+	"""
+	rollForShoesTableDifficulty(worldId: UUID!): RollForShoesTableDifficulty!
 }
 
 input AttachAbilityToActorInput {
@@ -6374,6 +6393,32 @@ input RollForShoesStartingSkillInput {
 	level: Int!
 }
 
+"""
+What every sheet at the table reads before a roll.
+"""
+type RollForShoesTableDifficulty {
+	worldId: UUID!
+	"""
+	The number to beat. `null` when the Game Master has set none, which is
+	when a sheet lets its player enter one.
+	"""
+	target: Int
+	"""
+	How hard the Game Master called it, when they called it by name.
+	"""
+	band: String
+	"""
+	The Game Master's dice, when the server rolled them. Sum to `target`.
+	"""
+	gmDice: [Int!]
+	"""
+	Whether the caller is the one who may set it. Asked of the server
+	rather than worked out by the sheet, which is told only who may edit
+	the character and that is a different question.
+	"""
+	canSet: Boolean!
+}
+
 type RollForShoesWorldSettings {
 	worldId: UUID!
 	"""
@@ -6451,6 +6496,16 @@ input SetLorePermissionInput {
 	loreEntryId: UUID!
 	userId: UUID!
 	level: ActorPermissionLevel!
+}
+
+"""
+Exactly one of `target` and `band`. See `table::plan` for what each means
+in each difficulty mode.
+"""
+input SetRollForShoesTableDifficultyInput {
+	worldId: UUID!
+	target: Int
+	band: String
 }
 
 input SetTokenDisclosureInput {

@@ -26,6 +26,7 @@ pub struct AppQueryRoot(
     thunderforge_server::graphql::QueryRoot,
     genie_server::GenieSessionQuery,
     roll_for_shoes_server::RollForShoesSettingsQuery,
+    roll_for_shoes_server::RollForShoesTableQuery,
 );
 
 /// Everything mutable, same shape.
@@ -34,6 +35,7 @@ pub struct AppMutationRoot(
     thunderforge_server::graphql::MutationRoot,
     genie_server::GenieSessionMutation,
     roll_for_shoes_server::RollForShoesSettingsMutation,
+    roll_for_shoes_server::RollForShoesTableMutation,
 );
 
 pub type AppSchema = async_graphql::Schema<
