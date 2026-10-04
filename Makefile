@@ -24,7 +24,7 @@ help:
 	@echo "  make seed             Seed local demo logins (admin/admin, user1/user1, user2/user2) + a ready-to-play world"
 	@echo "  make build            Production build (engine WASM + backend + frontend)"
 	@echo "  make clean            Remove build output (dist/)"
-	@echo "  make container        Build the all-in-one app image from an already-built tree"
+	@echo "  make container        Build the app images from source (docker compose build; no host toolchain needed)"
 	@echo "  make container-up     Start the whole app (app+postgres+rustfs+mailpit) detached on http://localhost:42080"
 	@echo "  make container-down   Stop it, keep the instance's data"
 	@echo "  make container-down-clean  Stop it and DELETE the instance (database, uploads, worlds)"
@@ -58,9 +58,9 @@ services-up:
 		echo "No .env found at repo root — copy .env.example to .env first (see .env.example)."; \
 		exit 1; \
 	fi
-	docker compose up -d
+	docker compose -f compose.dev.yml up -d
 	@echo "Waiting for postgres to accept connections..."
-	@until docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
+	@until docker compose -f compose.dev.yml exec -T postgres pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
 	@echo "postgres is ready."
 	@# rustfs holds every uploaded map and token image. The backend starts
 	@# without it and then fails per-request, which reads as "the asset is
@@ -87,10 +87,10 @@ services-up:
 	fi
 
 services-down:
-	docker compose stop
+	docker compose -f compose.dev.yml stop
 
 services-down-clean:
-	docker compose down -v
+	docker compose -f compose.dev.yml down -v
 
 migrate:
 	@command -v diesel >/dev/null 2>&1 || { \
@@ -128,34 +128,29 @@ build:
 clean:
 	pnpm clean
 
-# The whole app in containers, on a port block that collides with nothing:
-# http://localhost:42080. See compose.app.yml for why it is a second file
-# rather than a service added to compose.yml.
+# The whole app in containers, built from source, on a port block that
+# collides with nothing: http://localhost:42080. compose.yml is the install;
+# compose.dev.yml is the dependency stack a host-run `make dev` uses.
 #
-# The images package a build the host has already done. Staging the two
-# binaries into target/container/ and stripping them is what keeps the image
-# near 300MB instead of near 2GB — a debug `thunderforge` carries about 1.4GB
-# of symbols, and nothing in a container I click through needs them.
-container: build
-	@mkdir -p target/container
-	@install -m 755 target/debug/thunderforge target/container/thunderforge
-	@install -m 755 "$$(command -v diesel)" target/container/diesel
-	@strip target/container/thunderforge target/container/diesel
-	docker compose -f compose.app.yml build
+# Nothing here needs a host toolchain: the Dockerfile's build stage compiles
+# the engine, the client and the server itself. A cold build is long (see the
+# note in the Dockerfile); BuildKit cache mounts make the next one short.
+container:
+	docker compose build
 
 container-up:
-	docker compose -f compose.app.yml up -d
+	docker compose up -d
 	@echo "ThunderForge is coming up at http://localhost:42080"
 	@echo "Mailpit is at http://localhost:42825 — the instance starts unconfigured,"
 	@echo "so the first-run wizard greets you; its setup link is in the app log:"
-	@echo "  docker compose -f compose.app.yml logs app | grep /setup/"
+	@echo "  docker compose logs app | grep /setup/"
 
 container-down:
-	docker compose -f compose.app.yml down
+	docker compose down
 
 # Stops it and deletes the instance: database, uploads, worlds, the lot.
 container-down-clean:
-	docker compose -f compose.app.yml down -v
+	docker compose down -v
 
 # Trim cargo's build output without throwing away the warm cache: incremental
 # sessions no crate reads, cargo units unused for a week, and agent worktrees
@@ -233,7 +228,7 @@ bench-blob-store:
 	node scripts/bench-blob-store.mjs --browser=firefox
 
 test-mail:
-	docker compose up -d mailpit
+	docker compose -f compose.dev.yml up -d mailpit
 	cargo test -p thunderforge-server --lib mail::smtp_integration -- --ignored --test-threads=1
 
 # Load/torture tiers. Deliberately standalone: nothing depends on these and

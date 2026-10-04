@@ -1,0 +1,61 @@
+# The development stack: the dependencies a host-run `make dev` needs, on
+# their standard ports. The app itself runs on the host, from `pnpm dev`.
+#
+# This is not the install. `compose.yml` is — the whole app, built from
+# source, on a port block that collides with none of these.
+#
+#   make services-up        or   docker compose -f compose.dev.yml up -d
+services:
+  postgres:
+    container_name: thunderforge-postgres
+    image: postgres:18-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=thunderforge
+    ports:
+      - "5432:5432"
+    volumes:
+      - db:/var/lib/postgresql
+  # Spec 002: object storage for canvas image assets (paste-to-canvas +
+  # migrated map-import backgrounds). Dev-only root credentials — the
+  # server never hands these out; see docs/adrs/20260820-039-*.md and
+  # src/server/src/storage/rustfs.rs.
+  rustfs:
+    container_name: thunderforge-rustfs
+    image: rustfs/rustfs:1.0.0-rc.2
+    restart: always
+    environment:
+      - RUSTFS_ACCESS_KEY=${RUSTFS_ROOT_ACCESS_KEY:-thunderforge-rustfs-root}
+      - RUSTFS_SECRET_KEY=${RUSTFS_ROOT_SECRET_KEY:-thunderforge-rustfs-root-secret}
+    ports:
+      - "9000:9000"
+    volumes:
+      - rustfs_data:/data
+  # Spec 040 US4: a real SMTP server for the dev stack and for the mail tests.
+  #
+  # Mailpit speaks real SMTP on 1025 and exposes a JSON API on 8025 that a test
+  # reads the delivered message back from. It is here because the level of
+  # proof it provides is the one it is tempting to skip and the one where mail
+  # actually fails: a capturing transport proves the code around `lettre` and
+  # nothing about `lettre`, STARTTLS negotiation, or whether the From address
+  # is the one the operator set (research.md § R8).
+  #
+  # It stores messages in memory and forwards nothing anywhere. There is no
+  # configuration in which this container can deliver mail to a real person.
+  mailpit:
+    container_name: thunderforge-mailpit
+    image: axllent/mailpit:v1.21
+    restart: always
+    environment:
+      - MP_SMTP_AUTH_ACCEPT_ANY=1
+      - MP_SMTP_AUTH_ALLOW_INSECURE=1
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+volumes:
+  db:
+    driver: local
+  rustfs_data:
+    driver: local

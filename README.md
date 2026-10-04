@@ -18,11 +18,55 @@
 > I hope you find this project useful once I am able to finally release a working version of it.
 > This message isnt a cry for money, stars, or anything. Its a note that this might take some time as I am only one individual and I wanted to thank you all for the patients.
 
-An open source virtual tabletop that is currently purely a concept.
+An open source, self-hosted virtual tabletop. The whole app builds from
+source and stands up with one command.
+
+## Quick start
+
+You need Docker with the compose plugin and about ten minutes for the first
+build (it compiles the Rust server and the WebAssembly engine from source).
+
+```sh
+git clone https://github.com/ThunderForgeVTT/ThunderForgeVTT.git
+cd ThunderForgeVTT
+docker compose up -d --build
+docker compose logs app | grep /setup/
+```
+
+Open the setup link the last command prints. It runs the first-run wizard:
+your administrator account, who may join, and how the instance sends mail.
+After that the app is at **http://localhost:42080**.
+
+| Service      | Address                | What for                                            |
+| ------------ | ---------------------- | --------------------------------------------------- |
+| ThunderForge | http://localhost:42080 | the app                                             |
+| Mailpit      | http://localhost:42825 | every mail the instance sends, delivered nowhere    |
+| PostgreSQL   | localhost:42432        | the database (user `postgres`, password `password`) |
+| RustFS       | localhost:42900        | object storage for uploaded images                  |
+
+Everything is on the 42xxx port block so it collides with nothing a developer
+already runs. `THUNDERFORGE_PORT` moves the app, and `THUNDERFORGE_PUBLIC_URL`
+has to move with it; see the comments at the top of `compose.yml` for the
+other knobs, and for what is and is not a secret in that file.
+
+Useful afterwards:
+
+- `docker compose logs -f app` follows the server.
+- `docker compose down` stops the stack and keeps its data; `docker compose down -v` starts over from nothing.
+- Lost the setup link before finishing? Set `THUNDERFORGE_REGENERATE_SETUP_CODE=1`, restart the `app` service, and read the log again.
+
+### Developing
+
+`make dev` runs the server and the web app on the host against a smaller
+dependency stack (`compose.dev.yml`, on the standard 5432/9000/1025/8025
+ports). `make container` builds the two images above without starting them.
+See `docs/CONTRIBUTING.md` for the test suites and `AGENTS.md` for the
+architecture.
 
 ## Current Objective
 
-The current objective is to get a proof of concept going with the Rust backend and the pnpm-managed React/Vite frontend in apps/web.
+Get a group playing D&D 5th edition on it end to end: sign up, build a table,
+put characters on a map, roll, fight, and come back next week.
 
 ## Curious on whats happening
 
@@ -86,4 +130,4 @@ This project is a larger project inspired by many great providers such as Foundr
 
 ## License
 
-ThunderForgeVTT is licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0-or-later)](LICENSE). Self-hosting is always free, including for commercial/community use — the AGPL's only additional condition beyond ordinary open-source terms is that anyone who runs a *modified* version of this software as a network service must also make that modified source available to their users (AGPL §13). No further restriction exists.
+ThunderForgeVTT is licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0-or-later)](LICENSE). Self-hosting is always free, including for commercial/community use — the AGPL's only additional condition beyond ordinary open-source terms is that anyone who runs a _modified_ version of this software as a network service must also make that modified source available to their users (AGPL §13). No further restriction exists.
