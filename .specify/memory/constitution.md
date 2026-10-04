@@ -8,10 +8,9 @@ Sync Impact Report
   systems in `packs/`, and no code at a root `src/`. The four crates that
   lived under `src/` moved; paths in this file were updated to match.
 - Removed sections: none
-- Deferred TODOs: the check that enforces the rule before a commit (spec 065
-  User Story 2) and the extraction of shared web code out of `apps/web`
-  (User Story 4) are not yet built. Until the first lands, the rule is kept
-  by review.
+- Deferred TODOs: the extraction of shared web code out of `apps/web` (spec
+  065 User Story 4) is not yet built. The rule itself is enforced before every
+  commit by `scripts/check-layout.mjs` (User Story 2).
 
 Prior report (v1.3.0):
 - Version change: 1.2.0 → 1.3.0

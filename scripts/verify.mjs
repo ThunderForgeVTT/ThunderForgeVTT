@@ -39,7 +39,7 @@
  * to a widely-included header.
  *
  * So `.hooks/pre-commit` runs the flat-cost seven by id and `.hooks/pre-push`
- * runs all sixteen. The point of the split is not that the compiled checks
+ * runs all seventeen. The point of the split is not that the compiled checks
  * matter less; it is that a hook with an unbounded worst case teaches people
  * to pass `--no-verify`, and a gate that is routinely bypassed gates nothing.
  */
@@ -296,6 +296,21 @@ const steps = [
     command: fix
       ? ["node", "./scripts/check-e2e-slices.mjs", "--fix"]
       : ["node", "./scripts/check-e2e-slices.mjs"],
+  },
+  {
+    // Spec 065, FR-007 to FR-009. Binaries in `apps/`, Rust libraries in
+    // `crates/`, game systems in `packs/systems/<id>/`, and no app importing
+    // from another. Four crates once sat under a root `src/` because that is
+    // where the first one was put; this refuses the next one in the commit
+    // that adds it.
+    //
+    // Reads the workspace manifests and the apps' tracked sources, so it runs
+    // on every commit. Not affected by `--fix`: where a crate belongs is a
+    // judgement about what it is.
+    id: "layout",
+    name: "repository layout",
+    cwd: ".",
+    command: ["node", "./scripts/check-layout.mjs"],
   },
 ];
 

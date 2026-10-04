@@ -2,7 +2,7 @@
 #
 # The gates that cost the same every time.
 #
-# `scripts/verify.mjs` has sixteen checks and they fall into two cost classes.
+# `scripts/verify.mjs` has seventeen checks and they fall into two cost classes.
 # rustfmt, prettier, the node checkers and the file-length script read files
 # and exit — a few seconds together, and that figure does not move. clippy
 # and eslint compile, so their cost is bounded by what changed: sub-second on
@@ -33,4 +33,6 @@ node ./scripts/e2e/run-lock.mjs check --purpose="a commit"
 # second compiles the server to print the schema, so it waits for push.
 # `e2e-slices` reads the slice list and `git ls-files` in well under a
 # second, and an orphan spec is cheapest to catch in the commit that adds it.
-exec node ./scripts/verify.mjs --only=rust-fmt,web-fmt,registry,seam,graphql-ops,filelength,e2e-slices
+# `layout` reads the workspace manifests and the apps' sources, for the same
+# reason: a crate in the wrong place is cheapest to move before it is committed.
+exec node ./scripts/verify.mjs --only=rust-fmt,web-fmt,registry,seam,graphql-ops,filelength,e2e-slices,layout
