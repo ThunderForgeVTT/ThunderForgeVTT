@@ -721,6 +721,7 @@ pub(crate) async fn create_token_impl(
         return Err(Error::new("A token with no actor cannot be linked"));
     }
 
+    let systems_dir = state.directories.systems_dir.clone();
     let inserted_token = tokio::task::spawn_blocking(move || {
         use crate::schema::tokens;
 
@@ -805,7 +806,7 @@ pub(crate) async fn create_token_impl(
         // With its character's art, as every token read now carries it —
         // and its name in full: only a Game Master may create a token.
         let mut with_art =
-            crate::graphql::token_art::tokens_with_art(&mut conn, vec![token], true)?;
+            crate::graphql::token_art::tokens_with_art(&mut conn, vec![token], true, &systems_dir)?;
         Ok(with_art.remove(0))
     })
     .await

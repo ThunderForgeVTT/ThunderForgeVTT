@@ -283,6 +283,14 @@ pub const GATED: &[(&str, &str)] = &[
         r#"mutation { setActorArtLocked(actorId: "{actor}", locked: true) { __typename } }"#,
     ),
     (
+        "applyActorCondition",
+        r#"mutation { applyActorCondition(actorId: "{actor}", conditionId: "prone") { __typename } }"#,
+    ),
+    (
+        "clearActorCondition",
+        r#"mutation { clearActorCondition(actorId: "{actor}", conditionId: "prone") { __typename } }"#,
+    ),
+    (
         "advanceTurn",
         r#"mutation { advanceTurn(combatId: "{combat}") { __typename } }"#,
     ),

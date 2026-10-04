@@ -436,6 +436,29 @@ impl From<crate::models::Shape> for GraphQLShape {
     }
 }
 
+/// One condition a token's character is under, as the board needs it (spec
+/// 067 Story 4): which one, and the marker to draw. Nothing of the ruleset —
+/// what the condition is called and what it does is the system's to say
+/// (`worldSystemConditions`).
+#[derive(SimpleObject, Debug, Clone, PartialEq, Eq)]
+pub struct TokenCondition {
+    pub id: String,
+    /// The marker's shape, from the host's list.
+    pub glyph: String,
+    /// The marker's colour, as a token the client's theme resolves.
+    pub color: String,
+}
+
+impl From<pack_system_spec::conditions::SystemCondition> for TokenCondition {
+    fn from(condition: pack_system_spec::conditions::SystemCondition) -> Self {
+        Self {
+            id: condition.id,
+            glyph: condition.marker.glyph.as_str().to_string(),
+            color: condition.marker.color.as_str().to_string(),
+        }
+    }
+}
+
 #[derive(SimpleObject, Debug, Clone)]
 pub struct GraphQLToken {
     token_id: uuid::Uuid,
@@ -471,6 +494,10 @@ pub struct GraphQLToken {
     /// own. A copy's record itself is not sent: bars come from `tokenStatus`,
     /// which decides what each viewer may know.
     linked: bool,
+    /// Spec 067 Story 4: the declared conditions this token's character is
+    /// under, in the system's order. Empty for a token with no actor. Filled
+    /// by `graphql::token_art`, so it is sent to whoever is sent the token.
+    conditions: Vec<TokenCondition>,
 }
 
 /// A token's own written name: its `metadata.label`, when that is non-blank.
@@ -505,6 +532,7 @@ impl From<crate::models::Token> for GraphQLToken {
             photo_url: token.photo_url,
             token_type: token.token_type,
             linked: token.linked,
+            conditions: Vec::new(),
         }
     }
 }
@@ -524,6 +552,12 @@ impl GraphQLToken {
         {
             self.photo_url = Some(url);
         }
+        self
+    }
+
+    /// The conditions the token's character is under.
+    pub(crate) fn with_conditions(mut self, conditions: Vec<TokenCondition>) -> Self {
+        self.conditions = conditions;
         self
     }
 

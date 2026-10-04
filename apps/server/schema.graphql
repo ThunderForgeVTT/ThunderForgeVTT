@@ -187,6 +187,16 @@ type AppMutationRoot {
 	"""
 	setWorldSystemSetting(worldId: UUID!, key: String!, value: JSON!): WorldSystemSetting!
 	"""
+	Put a character under a condition its world's system declares. Game
+	Master only. Answers with every condition the character is now under.
+	"""
+	applyActorCondition(actorId: UUID!, conditionId: String!): [TokenCondition!]!
+	"""
+	Lift a condition from a character. Game Master only. Answers with
+	every condition the character is still under.
+	"""
+	clearActorCondition(actorId: UUID!, conditionId: String!): [TokenCondition!]!
+	"""
 	Set how much one token discloses about one resource.
 	
 	Per **token**, not per actor: two tokens of the same creature can
@@ -1842,6 +1852,11 @@ type AppQueryRoot {
 	declares none.
 	"""
 	worldSystemSettings(worldId: UUID!): [WorldSystemSetting!]!
+	"""
+	The conditions this world's game system declares, in its own order.
+	Empty when the world has no system or the system declares none.
+	"""
+	worldSystemConditions(worldId: UUID!): [WorldSystemCondition!]!
 	genieSession(worldId: UUID!): GraphQLGenieSession
 	"""
 	What the table has asked for with its wishes, oldest first (FR-014).
@@ -4954,6 +4969,12 @@ type GraphQLToken {
 	which decides what each viewer may know.
 	"""
 	linked: Boolean!
+	"""
+	Spec 067 Story 4: the declared conditions this token's character is
+	under, in the system's order. Empty for a token with no actor. Filled
+	by `graphql::token_art`, so it is sent to whoever is sent the token.
+	"""
+	conditions: [TokenCondition!]!
 }
 
 """
@@ -7065,6 +7086,24 @@ type TestMailResult {
 }
 
 """
+One condition a token's character is under, as the board needs it (spec
+067 Story 4): which one, and the marker to draw. Nothing of the ruleset —
+what the condition is called and what it does is the system's to say
+(`worldSystemConditions`).
+"""
+type TokenCondition {
+	id: String!
+	"""
+	The marker's shape, from the host's list.
+	"""
+	glyph: String!
+	"""
+	The marker's colour, as a token the client's theme resolves.
+	"""
+	color: String!
+}
+
+"""
 One token's footprint, in squares a side.
 """
 type TokenGrid {
@@ -7697,6 +7736,23 @@ type WorldStatistics {
 	The encounter in progress, or `null`.
 	"""
 	activeEncounter: ActiveEncounterSummary
+}
+
+"""
+One condition the world's system declares.
+"""
+type WorldSystemCondition {
+	id: String!
+	label: String!
+	description: String
+	"""
+	The marker's shape, from the host's list.
+	"""
+	glyph: String!
+	"""
+	The marker's colour, as a token the client's theme resolves.
+	"""
+	color: String!
 }
 
 """

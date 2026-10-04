@@ -54,6 +54,7 @@ pub use helpers::{
 };
 
 // Phase 4.9.Z Step 5: Query extraction into separate modules
+pub mod actor_conditions;
 pub mod exploration;
 pub mod queries;
 pub mod world_system_settings;
@@ -455,6 +456,8 @@ pub struct QueryRoot(
     // Spec 067: the settings a world's game system declares, with the value
     // the world plays by.
     world_system_settings::WorldSystemSettingsQuery,
+    // Spec 067: the conditions a world's game system declares.
+    actor_conditions::ActorConditionsQuery,
 );
 
 #[derive(MergedObject, Default)]
@@ -462,6 +465,7 @@ pub struct MutationRoot(
     // Spec 045 US7: turning a scene's memory on, and resetting it.
     exploration::ExplorationMutation,
     world_system_settings::WorldSystemSettingsMutation,
+    actor_conditions::ActorConditionsMutation,
     queries::token_status::TokenDisclosureMutation,
     WorldMutation,
     UserDataMutation,

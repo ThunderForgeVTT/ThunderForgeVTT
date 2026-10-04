@@ -44,16 +44,19 @@ pub struct EffectiveSetting {
 /// The settings a system declares, in form order. A system with no manifest,
 /// or no `settings` block, declares none.
 pub fn declarations_for_system(systems_dir: &str, system_id: &str) -> Vec<SystemSetting> {
+    manifest_of_system(systems_dir, system_id)
+        .map(|manifest| settings_from_manifest(&manifest))
+        .unwrap_or_default()
+}
+
+/// A system's manifest as it stands on disk, or `None` when there is none to
+/// read. What a system declares is read from here each time it is asked for.
+pub(crate) fn manifest_of_system(systems_dir: &str, system_id: &str) -> Option<Value> {
     let path = std::path::Path::new(systems_dir)
         .join(system_id)
         .join("system.json");
-    let Ok(text) = std::fs::read_to_string(path) else {
-        return Vec::new();
-    };
-    let Ok(manifest) = serde_json::from_str::<Value>(&text) else {
-        return Vec::new();
-    };
-    settings_from_manifest(&manifest)
+    let text = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str::<Value>(&text).ok()
 }
 
 /// Whether `value` may be stored for this setting: the declaration first,

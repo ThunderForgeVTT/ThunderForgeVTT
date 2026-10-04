@@ -283,6 +283,7 @@ impl SceneQuery {
 
         let user_id = auth_user.user_id;
         let is_admin = auth_user.is_admin;
+        let systems_dir = state.directories.systems_dir.clone();
         let tokens = tokio::task::spawn_blocking(move || {
             use crate::schema::tokens;
             let runs_the_world = crate::auth::world_membership::is_dm_of_scene(
@@ -311,7 +312,12 @@ impl SceneQuery {
             //
             // P7: and the read a player's canvas draws names from, so it is
             // the one that must not carry a name hidden from them.
-            crate::graphql::token_art::tokens_with_art(&mut conn, rows, runs_the_world)
+            crate::graphql::token_art::tokens_with_art(
+                &mut conn,
+                rows,
+                runs_the_world,
+                &systems_dir,
+            )
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?

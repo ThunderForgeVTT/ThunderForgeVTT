@@ -85,12 +85,15 @@ fn has_no_photo(photo_url: Option<&str>) -> bool {
 
 /// Tokens as GraphQL, as this viewer may see them: each one without a photo
 /// of its own given its character's token art, each one without a name of its
-/// own given its character's name, and a name hidden from players withheld
-/// unless the viewer runs the world.
+/// own given its character's name, a name hidden from players withheld unless
+/// the viewer runs the world, and each one carrying the conditions its
+/// character is under (spec 067 Story 4) — which is what makes a condition
+/// reach exactly the clients its token does.
 pub(crate) fn tokens_with_art(
     conn: &mut PgConnection,
     tokens: Vec<crate::models::Token>,
     viewer_runs_the_world: bool,
+    systems_dir: &str,
 ) -> QueryResult<Vec<GraphQLToken>> {
     let wanting_art: Vec<Uuid> = tokens
         .iter()
@@ -105,6 +108,9 @@ pub(crate) fn tokens_with_art(
         .filter_map(|token| token.actor_id)
         .collect();
     let names = character_names(conn, &wanting_name)?;
+
+    let with_actor: Vec<Uuid> = tokens.iter().filter_map(|token| token.actor_id).collect();
+    let conditions = crate::actor_conditions::held_by_actors(conn, systems_dir, &with_actor)?;
 
     // Whose names this viewer may read. A Game Master reads them all, so
     // nothing is loaded for one.
@@ -124,7 +130,14 @@ pub(crate) fn tokens_with_art(
                 .map(|asset_id| token_art_url(*asset_id));
             let fallback_name = actor.and_then(|actor_id| names.get(&actor_id).cloned());
             let may_read_name = readable.contains(&token.token_id);
+            let held = actor
+                .and_then(|actor_id| conditions.get(&actor_id).cloned())
+                .unwrap_or_default()
+                .into_iter()
+                .map(Into::into)
+                .collect();
             GraphQLToken::from(token)
+                .with_conditions(held)
                 .with_photo_fallback(fallback_art)
                 .with_name_fallback(fallback_name)
                 .for_viewer(viewer_runs_the_world, may_read_name)
@@ -146,6 +159,7 @@ pub(crate) async fn token_with_art(
         .db_pool
         .get()
         .map_err(|_| async_graphql::Error::new("Failed to get DB connection"))?;
+    let systems_dir = state.directories.systems_dir.clone();
     tokio::task::spawn_blocking(move || {
         let runs_the_world = crate::auth::world_membership::is_dm_of_scene(
             &mut conn,
@@ -153,7 +167,7 @@ pub(crate) async fn token_with_art(
             is_admin,
             token.scene_id,
         )?;
-        tokens_with_art(&mut conn, vec![token], runs_the_world)
+        tokens_with_art(&mut conn, vec![token], runs_the_world, &systems_dir)
     })
     .await
     .map_err(|_| async_graphql::Error::new("Failed to spawn blocking task"))?

@@ -402,7 +402,7 @@ fn names_reaching(conn: &mut PgConnection, t: &FightTable, user: Uuid) -> Vec<&'
         .select(crate::models::Token::as_select())
         .load::<crate::models::Token>(conn)
         .expect("the ogre's token");
-    let served = crate::graphql::token_art::tokens_with_art(conn, rows, runs_the_world)
+    let served = crate::graphql::token_art::tokens_with_art(conn, rows, runs_the_world, "")
         .expect("the board's tokens");
     // As text, so the question asked is the one that matters: does the name
     // appear anywhere in what this viewer is sent.

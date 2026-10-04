@@ -22,6 +22,7 @@
 #![recursion_limit = "512"]
 
 pub mod ability_vocabulary;
+pub mod actor_conditions;
 pub mod adapters;
 pub mod admin;
 pub mod assets_serve;

@@ -1049,6 +1049,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    world_actor_conditions (actor_id, condition_id) {
+        actor_id -> Uuid,
+        condition_id -> Text,
+        applied_by -> Nullable<Uuid>,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     world_actor_images (id) {
         id -> Uuid,
         actor_id -> Uuid,
@@ -1750,6 +1759,8 @@ diesel::joinable!(world_actor_abilities -> world_abilities (ability_id));
 diesel::joinable!(world_actor_abilities -> world_actors (actor_id));
 diesel::joinable!(world_actor_claims -> world_actors (actor_id));
 diesel::joinable!(world_actor_claims -> world_members (world_member_id));
+diesel::joinable!(world_actor_conditions -> users (applied_by));
+diesel::joinable!(world_actor_conditions -> world_actors (actor_id));
 diesel::joinable!(world_actor_images -> world_actors (actor_id));
 diesel::joinable!(world_actor_inventory -> world_actors (actor_id));
 diesel::joinable!(world_actor_inventory -> world_items (item_id));
@@ -1894,6 +1905,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     world_ability_shares,
     world_actor_abilities,
     world_actor_claims,
+    world_actor_conditions,
     world_actor_images,
     world_actor_inventory,
     world_actor_permissions,
