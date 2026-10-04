@@ -123,6 +123,23 @@ pub(crate) struct WorldTokenPayload {
     /// both of which mean "leave this alone" rather than "clear it".
     #[serde(default)]
     pub(crate) attributes: Option<std::collections::BTreeMap<String, i32>>,
+    /// The conditions the token's character is under, in the order to draw
+    /// them (spec 067 Story 4, `plugins/condition_markers.rs`).
+    ///
+    /// Optional for the reason `attributes` is: a positional update says
+    /// nothing about conditions, which means "leave them alone". An empty
+    /// list is the one that clears them.
+    #[serde(default)]
+    pub(crate) conditions: Option<Vec<ConditionPayload>>,
+}
+
+/// One condition as the board draws it: an identifier and its marker. The
+/// glyph and colour are names from the host's lists, not a ruleset's.
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct ConditionPayload {
+    pub(crate) id: String,
+    pub(crate) glyph: String,
+    pub(crate) color: String,
 }
 
 /// The colour a token is drawn in when it carries no art.

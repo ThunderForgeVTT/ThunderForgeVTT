@@ -3,6 +3,7 @@ pub mod background;
 pub mod cached_assets;
 pub mod camera;
 pub mod canvas_layer;
+pub mod condition_markers;
 pub mod context_menu;
 pub mod darkness;
 pub mod dice_roll;

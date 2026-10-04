@@ -90,7 +90,7 @@ impl Plugin for NameplatePlugin {
 
 /// A token's side in world units — the calculation `status_display` makes, so
 /// the name and the bars agree about where the token ends.
-fn token_side(grid: Option<&SceneGrid>, behaviour: Option<&TokenGridBehaviour>) -> f32 {
+pub(crate) fn token_side(grid: Option<&SceneGrid>, behaviour: Option<&TokenGridBehaviour>) -> f32 {
     let footprint = behaviour.map_or_else(Footprint::default, |b| b.footprint);
     grid.map_or(TOKEN_SIZE.x, |grid| footprint.world_size(grid.size))
 }

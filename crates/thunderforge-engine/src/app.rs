@@ -284,6 +284,13 @@ pub(crate) fn apply_external_commands(
                             text: token.label.clone(),
                             hidden_from_players: token.name_hidden,
                         });
+                    if let Some(conditions) = &token.conditions {
+                        commands.entity(existing_entity).insert(
+                            crate::plugins::condition_markers::TokenConditions::from_payload(
+                                conditions,
+                            ),
+                        );
+                    }
                     continue;
                 }
 
@@ -375,6 +382,13 @@ pub(crate) fn apply_external_commands(
                         text: token.label.clone(),
                         hidden_from_players: token.name_hidden,
                     });
+                if let Some(conditions) = &token.conditions {
+                    commands.entity(entity).insert(
+                        crate::plugins::condition_markers::TokenConditions::from_payload(
+                            conditions,
+                        ),
+                    );
+                }
 
                 // A token arriving after its status adopts it here, which is
                 // the other half of the ordering fix above.
