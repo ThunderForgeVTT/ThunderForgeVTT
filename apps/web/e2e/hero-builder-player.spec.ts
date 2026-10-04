@@ -289,19 +289,28 @@ test.describe("A player's own character (US5)", () => {
       await mirela.waitForLoadState("networkidle");
       await expect(mirela.getByTestId("actor-imagery-build")).toHaveCount(0);
 
-      // The grant never reached the sheet: a holder may not rename.
-      const renamed = await graphql<{ errors?: unknown[] }>(
-        tobin,
-        `
-          mutation ($input: UpdateActorInput!) {
-            updateActor(input: $input) {
-              id
+      // The art grant is its own thing, but holding is not: a claim makes
+      // the holder Editor of their character (spec 063), so they may rename
+      // it — and nobody else's. Mirela's release above took hers back.
+      const rename = (who: Page, actorId: string) =>
+        graphql<{ errors?: unknown[] }>(
+          who,
+          `
+            mutation ($input: UpdateActorInput!) {
+              updateActor(input: $input) {
+                id
+              }
             }
-          }
-        `,
-        { input: { actorId: tobinActor, label: "Renamed" } },
-      );
-      expect(renamed.errors?.length ?? 0).toBeGreaterThan(0);
+          `,
+          { input: { actorId, label: "Renamed" } },
+        );
+      expect((await rename(tobin, tobinActor)).errors?.length ?? 0).toBe(0);
+      expect(
+        (await rename(tobin, mirelaActor)).errors?.length ?? 0,
+      ).toBeGreaterThan(0);
+      expect(
+        (await rename(mirela, mirelaActor)).errors?.length ?? 0,
+      ).toBeGreaterThan(0);
     } finally {
       await mirela.context().close();
       await tobin.context().close();
