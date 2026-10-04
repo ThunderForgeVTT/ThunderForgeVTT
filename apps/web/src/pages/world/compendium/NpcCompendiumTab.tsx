@@ -15,9 +15,11 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { imageForRole, portraitOf } from "@/pages/world/actor/actorImagery";
 import {
+  LazyBestiaryDialog,
   LazyHeroBuilderDialog,
   LazyQuickNpcDialog,
 } from "@/pages/world/actor/heroBuilderLazy";
+import type { BestiaryMonster } from "@/pages/world/compendium/BestiaryDialog";
 import type { WorldActorRecord } from "@/types/actor";
 
 export interface NpcCompendiumTabProps {
@@ -88,6 +90,7 @@ export function NpcCompendiumTab({
   // Quick NPC is open. The builder's code loads only when one of them is set.
   const [buildingId, setBuildingId] = useState<string | null>(null);
   const [quickNpcOpen, setQuickNpcOpen] = useState(false);
+  const [bestiaryOpen, setBestiaryOpen] = useState(false);
   // Whether the imagery has answered, so a row is not called "lacking art"
   // in the moment before its art arrives.
   const [imagesLoaded, setImagesLoaded] = useState(false);
@@ -255,6 +258,29 @@ export function NpcCompendiumTab({
     );
     handleBuilt(actor.id, saved);
     onSelect(actor.id);
+  };
+
+  /**
+   * The bestiary made monsters (spec 047 FR-032). They arrive together, in
+   * one call, so the list grows by all of them rather than by whichever one
+   * a stale copy of it saw last; the first is selected.
+   */
+  const handleBestiary = (monsters: BestiaryMonster[]) => {
+    const next = [...(actors ?? []), ...monsters.map((made) => made.actor)];
+    setActors(next);
+    onRosterLoaded?.(next);
+    void indexActors(
+      worldId,
+      next
+        .filter((entry) => entry.isNpc)
+        .map((npc) => ({
+          id: npc.id,
+          label: npc.label,
+          description: npc.description,
+        })),
+    );
+    for (const made of monsters) handleBuilt(made.actor.id, made.images);
+    if (monsters[0]) onSelect(monsters[0].actor.id);
   };
 
   const buildingNpc = npcs.find((npc) => npc.id === buildingId) ?? null;
@@ -501,6 +527,16 @@ export function NpcCompendiumTab({
           >
             Quick NPC
           </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            icon="skull"
+            onClick={() => setBestiaryOpen(true)}
+            data-testid="bestiary"
+          >
+            Bestiary
+          </Button>
         </div>
       ) : null}
 
@@ -530,6 +566,17 @@ export function NpcCompendiumTab({
             worldId={worldId}
             onOpenChange={setQuickNpcOpen}
             onCreated={handleQuickNpc}
+          />
+        </Suspense>
+      ) : null}
+
+      {isGm && bestiaryOpen ? (
+        <Suspense fallback={null}>
+          <LazyBestiaryDialog
+            open
+            worldId={worldId}
+            onOpenChange={setBestiaryOpen}
+            onCreated={handleBestiary}
           />
         </Suspense>
       ) : null}

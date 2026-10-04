@@ -12,3 +12,7 @@ export const LazyHeroBuilderDialog = lazy(() => import("./HeroBuilderDialog"));
 export const LazyQuickNpcDialog = lazy(
   () => import("@/pages/world/compendium/QuickNpcDialog"),
 );
+
+export const LazyBestiaryDialog = lazy(
+  () => import("@/pages/world/compendium/BestiaryDialog"),
+);
