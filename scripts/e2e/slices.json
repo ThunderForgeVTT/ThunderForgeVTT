@@ -487,7 +487,7 @@
         }
       ],
       "paths": [
-        "apps/web/src/api/{gameSystems,interfacePacks,worldSystemSettings}.ts",
+        "apps/web/src/api/{actorConditions,gameSystems,interfacePacks,worldSystemSettings}.ts",
         "apps/web/src/components/game-systems/**",
         "apps/web/src/components/world/PlayDock/__tests__/systemSheetResolution.test.ts",
         "apps/web/src/host/**",
@@ -503,8 +503,9 @@
         "packs/systems/{basic-game-system,blades_in_the_dark,cypher_system,dnd5e,fate_core,pathfinder2e,roll_for_shoes,year_zero_engine}/**",
         "apps/server/src/system_packs.rs",
         "crates/thunderforge-server/src/graphql_world_default_system_tests.rs",
-        "crates/thunderforge-server/src/world_system_settings.rs",
-        "crates/thunderforge-server/src/graphql/{world_system_settings,world_system_settings_tests}.rs",
+        "crates/thunderforge-server/src/{actor_conditions,world_system_settings}.rs",
+        "crates/thunderforge-server/src/graphql/{actor_conditions,actor_conditions_tests,world_system_settings,world_system_settings_tests}.rs",
+        "crates/thunderforge-engine/src/plugins/{condition_markers,condition_markers_tests}.rs",
         "crates/thunderforge-server/src/{systems,systems_manifest_legal_enforcement_tests,systems_registry_tests,test_packs,content_patterns}.rs"
       ]
     },

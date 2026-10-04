@@ -461,6 +461,21 @@ if two conditions share an `id`, a label is blank, a marker is missing, or a
 glyph or colour is not on those lists. Give each condition a pairing no other
 has, so two markers on one token can be told apart.
 
+Declaring a condition is all a pack does. The host does the rest:
+
+- A Game Master right-clicks a character's token and chooses **Conditions…**,
+  which lists what you declared by your labels (`applyActorCondition`,
+  `clearActorCondition`). Any member may read the list
+  (`worldSystemConditions`); only a Game Master may change what a character
+  is under, and not while play is paused.
+- What a character is under travels on its tokens, so it reaches exactly the
+  seats those tokens reach: a creature hidden from the players has no marker
+  on their boards because it has no token there.
+- The board draws one small badge per condition along the token's bottom
+  edge, in the order you declared them.
+- A stored condition your manifest no longer declares is not drawn and not
+  deleted. Declare it again and the characters under it are as they were.
+
 ### Every key
 
 This is the whole list. `scripts/check-packs.mjs` reads it from here and refuses a
