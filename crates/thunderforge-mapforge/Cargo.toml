@@ -8,15 +8,11 @@ edition = "2024"
 repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
 license.workspace = true
 
-# A library plus a thin binary, mirroring `thunderforge-crucible`'s split:
-# all routing lives in the lib so tests can drive the router in-process, and
-# the binary only reads a port and serves.
+# A library only, mirroring `thunderforge-crucible`'s split: all routing
+# lives here so tests can drive the router in-process, and the binary that
+# reads a port and serves is `apps/mapforge-server`.
 [lib]
 crate-type = ["rlib"]
-
-[[bin]]
-name = "mapforge-server"
-path = "src/bin/mapforge-server.rs"
 
 [dependencies]
 axum = "0.8.9"

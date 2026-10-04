@@ -2,6 +2,8 @@
 resolver = "3"
 members = [
     "apps/server",
+    "apps/crucible-server",
+    "apps/mapforge-server",
     "crates/thunderforge-server", 
     "crates/thunderforge-core", 
     "crates/thunderforge-engine", 
