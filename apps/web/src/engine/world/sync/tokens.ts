@@ -95,6 +95,9 @@ function tokenRecordToWorldToken(record: TokenRecord): WorldToken {
     // What the token represents, which decides the colour the engine draws
     // it in when it has no art. See `thunderforge_canvas_core::token_kind`.
     tokenType: record.tokenType,
+    // Spec 067: what the character is under. Left out when the reply did not
+    // ask, which the engine reads as "no change".
+    ...(record.conditions ? { conditions: record.conditions } : {}),
   };
 }
 

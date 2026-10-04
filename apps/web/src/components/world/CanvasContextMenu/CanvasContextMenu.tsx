@@ -2,6 +2,10 @@ import { useEffect, useId, useRef, useState } from "react";
 import { getWorldAbilities } from "@/api/abilities";
 import { getActorAbilities } from "@/api/actorAbilities";
 import { getWorldActors } from "@/api/actors";
+import {
+  getWorldSystemConditions,
+  type WorldSystemCondition,
+} from "@/api/actorConditions";
 import { changeHitPoints } from "@/api/combat";
 import {
   createToken,
@@ -41,6 +45,7 @@ import {
   type CanvasMenuAction,
   type SheetAttack,
 } from "./canvasMenuActions";
+import { ConditionsDialog } from "./ConditionsDialog";
 import type { CanvasMenuRequest } from "./useCanvasContextMenu";
 
 export interface CanvasContextMenuProps {
@@ -63,6 +68,8 @@ interface Resolved {
   target: TokenRecord | null;
   attacker: TokenRecord | null;
   actions: CanvasMenuAction[];
+  /** What the world's system declares, for a Game Master on a character. */
+  conditions: WorldSystemCondition[];
 }
 
 type Follow =
@@ -75,6 +82,11 @@ type Follow =
     }
   | { kind: "hit-points"; change: HitPointChange; target: TokenRecord }
   | { kind: "remove"; target: TokenRecord }
+  | {
+      kind: "conditions";
+      target: TokenRecord;
+      declared: WorldSystemCondition[];
+    }
   | { kind: "place-token"; at: { x: number; y: number } };
 
 /** A torch: bright four squares out, dim to eight (20 ft / 40 ft in 5e). */
@@ -168,6 +180,12 @@ export function CanvasContextMenu({
         !isGameMaster && attacker?.actorId && target
           ? await sheetAttacks(worldId, attacker.actorId)
           : [];
+      // Spec 067: only a Game Master sets conditions, and only on a token
+      // standing for a character. A system that declares none offers none.
+      const conditions =
+        isGameMaster && target?.actorId
+          ? await getWorldSystemConditions(worldId).catch(() => [])
+          : [];
       const nameHidden =
         target !== null &&
         (target.nameVisibleToPlayers === false ||
@@ -178,8 +196,9 @@ export function CanvasContextMenu({
         nameHidden,
         attacker,
         attacks,
+        systemHasConditions: conditions.length > 0,
       });
-      return { request, tokens, target, attacker, actions };
+      return { request, tokens, target, attacker, actions, conditions };
     })()
       .then((answer) => {
         if (!active) return;
@@ -254,6 +273,16 @@ export function CanvasContextMenu({
         if (target) {
           followPending.current = true;
           setFollow({ kind: "remove", target });
+        }
+        return;
+      case "conditions":
+        if (target) {
+          followPending.current = true;
+          setFollow({
+            kind: "conditions",
+            target,
+            declared: resolved.conditions,
+          });
         }
         return;
       case "place-token":
@@ -407,6 +436,17 @@ export function CanvasContextMenu({
         <HitPointsDialog
           change={follow.change}
           target={follow.target}
+          onClose={endFollow}
+          onBack={giveFocusBack}
+        />
+      ) : null}
+
+      {follow?.kind === "conditions" && follow.target.actorId ? (
+        <ConditionsDialog
+          name={nameOf(follow.target)}
+          actorId={follow.target.actorId}
+          declared={follow.declared}
+          held={(follow.target.conditions ?? []).map((held) => held.id)}
           onClose={endFollow}
           onBack={giveFocusBack}
         />

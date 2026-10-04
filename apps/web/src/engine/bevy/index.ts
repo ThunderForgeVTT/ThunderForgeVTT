@@ -142,6 +142,8 @@ function installEngineProbe(wasm: BevyWasmModule): void {
   const tokenFootprints = (wasm as { token_footprints?: () => string })
     .token_footprints;
   const focusState = (wasm as { focus_state?: () => string }).focus_state;
+  const tokenConditions = (wasm as { token_conditions?: () => string })
+    .token_conditions;
   (window as unknown as Record<string, unknown>).__engineProbe = {
     // Owner decision 2026-09-15: what became of the last "look at this
     // creature" — moved, or refused and why. A refusal draws nothing by
@@ -154,6 +156,18 @@ function installEngineProbe(wasm: BevyWasmModule): void {
       cameraState
         ? (JSON.parse(cameraState()) as { x: number; y: number; scale: number })
         : null,
+    // Spec 067: the condition markers this canvas draws, by token. A token
+    // with none — or one this viewer was never sent — is absent.
+    tokenConditions: (): {
+      tokenId: string;
+      conditions: { id: string; glyph: string; color: string }[];
+    }[] =>
+      tokenConditions
+        ? (JSON.parse(tokenConditions()) as {
+            tokenId: string;
+            conditions: { id: string; glyph: string; color: string }[];
+          }[])
+        : [],
     // Playtest 2026-09-10 P7: the names this canvas draws — what a hidden
     // name's test has to ask a player's engine, rather than infer from pixels.
     nameplates: (): { tokenId: string; text: string; dimmed: boolean }[] =>

@@ -11,8 +11,10 @@ import type { TokenRecord } from "@/types/token";
  *   attacks (`makeAttack` is the attacker's controller's, spec 046 C1). On
  *   their own token, or on bare board, a player has nothing to do here.
  * - A **Game Master** may damage or heal a creature (`changeHitPoints`),
- *   make its token its actor or a copy (`setTokenLink`) — both only for a
- *   token standing for an actor — hide or show its name
+ *   make its token its actor or a copy (`setTokenLink`) and, when the
+ *   world's system declares any, set its conditions (`applyActorCondition`,
+ *   `clearActorCondition`) — all only for a token standing for an actor —
+ *   hide or show its name
  *   (`setTokenNameVisibility`) and remove it (`deleteToken`). On bare board,
  *   they may place a token or add a light there.
  */
@@ -28,6 +30,7 @@ export type CanvasMenuAction =
   | { kind: "damage" }
   | { kind: "heal" }
   | { kind: "link"; linked: boolean }
+  | { kind: "conditions" }
   | { kind: "name"; hidden: boolean }
   | { kind: "remove" }
   | { kind: "place-token" }
@@ -60,6 +63,8 @@ export function canvasMenuActions(options: {
   attacker: TokenRecord | null;
   /** That token's character's attacks. */
   attacks: SheetAttack[];
+  /** Whether the world's system declares any condition (spec 067). */
+  systemHasConditions?: boolean;
 }): CanvasMenuAction[] {
   const { viewer, target, nameHidden, attacker, attacks } = options;
 
@@ -74,6 +79,7 @@ export function canvasMenuActions(options: {
     if (target.actorId) {
       actions.push({ kind: "damage" }, { kind: "heal" });
       actions.push({ kind: "link", linked: !target.linked });
+      if (options.systemHasConditions) actions.push({ kind: "conditions" });
     }
     actions.push({ kind: "name", hidden: !nameHidden });
     actions.push({ kind: "remove" });
@@ -97,6 +103,8 @@ export function actionLabel(action: CanvasMenuAction, name: string): string {
       return action.linked
         ? "Link to its actor"
         : "Make it a copy of its actor";
+    case "conditions":
+      return "Conditions…";
     case "name":
       return action.hidden ? "Hide name from players" : "Show name to players";
     case "remove":

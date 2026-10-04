@@ -112,6 +112,32 @@ describe("the play field's right-click menu", () => {
     ).toEqual([{ kind: "name", hidden: false }, { kind: "remove" }]);
   });
 
+  it("offers a Game Master conditions only where the system declares some", () => {
+    const base = { viewer: gm, nameHidden: false, attacker: null, attacks: [] };
+    const kindsOf = (options: Parameters<typeof canvasMenuActions>[0]) =>
+      canvasMenuActions(options).map((action) => action.kind);
+
+    expect(
+      kindsOf({ ...base, target: goblin, systemHasConditions: true }),
+    ).toEqual(["damage", "heal", "link", "conditions", "name", "remove"]);
+    // A system with none, and a token that is no character, offer none.
+    expect(kindsOf({ ...base, target: goblin })).not.toContain("conditions");
+    expect(
+      kindsOf({ ...base, target: marker, systemHasConditions: true }),
+    ).not.toContain("conditions");
+    // Never a player, whatever the system declares.
+    expect(
+      kindsOf({
+        viewer: player,
+        target: goblin,
+        nameHidden: false,
+        attacker: aria,
+        attacks: [LONGSWORD],
+        systemHasConditions: true,
+      }),
+    ).not.toContain("conditions");
+  });
+
   it("offers a Game Master a token and a light on bare board", () => {
     expect(
       canvasMenuActions({

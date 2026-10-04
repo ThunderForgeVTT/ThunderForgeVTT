@@ -25,6 +25,11 @@ const TOKEN_FIELDS = `
   linked
   name
   nameVisibleToPlayers
+  conditions {
+    id
+    glyph
+    color
+  }
 `;
 
 /**

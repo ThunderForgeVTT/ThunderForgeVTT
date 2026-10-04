@@ -34,6 +34,12 @@ export type WorldToken = {
    * mean "leave this alone" rather than "clear it".
    */
   attributes?: Record<string, number> | null;
+  /**
+   * Spec 067: the conditions the token's character is under, for the engine
+   * to draw a marker for each. Optional like `attributes`: absent means
+   * "leave them alone", an empty list clears them.
+   */
+  conditions?: { id: string; glyph: string; color: string }[];
 };
 
 export type DoorState = "none" | "open" | "closed";

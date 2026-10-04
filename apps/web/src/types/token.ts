@@ -35,6 +35,23 @@ export interface TokenRecord {
   name?: string | null;
   /** Whether players may read the name. A Game Master always can. */
   nameVisibleToPlayers?: boolean;
+  /**
+   * Spec 067: the conditions the token's character is under, as the board
+   * draws them. Empty for a token with no actor. Absent only from a reply
+   * that did not ask.
+   */
+  conditions?: TokenCondition[];
+}
+
+/**
+ * One condition's marker: an identifier the world's system declares, a glyph
+ * and a colour token from the host's lists. What it is called and what it
+ * means are the system's (`worldSystemConditions`).
+ */
+export interface TokenCondition {
+  id: string;
+  glyph: string;
+  color: string;
 }
 
 /**
