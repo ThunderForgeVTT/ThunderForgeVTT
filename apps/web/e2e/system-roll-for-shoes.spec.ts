@@ -5,6 +5,7 @@ import {
   graphql,
   inviteAndJoinAsPlayer,
   registerAndCreateWorld,
+  setWorldSystem,
 } from "./fixtures/helpers";
 import { expect, test } from "./fixtures/test";
 
@@ -38,6 +39,7 @@ async function createCharacter(page: Page): Promise<{
     `E2E Roll for Shoes ${Date.now()}`,
     "e2erfs",
   );
+  await setWorldSystem(page, worldId, "roll_for_shoes");
   const actor = await graphql<{ data: { createActor: { id: string } } }>(
     page,
     `

@@ -68,8 +68,9 @@ pub async fn create_actor_impl(
     // hazard/prop/light_source require it to be null) — default to a
     // generic placeholder when the caller doesn't supply one, since this
     // feature doesn't ask the DM to pick a game system up front.
-    // An explicit choice wins; otherwise the actor takes its world's system,
-    // resolved below where a connection is available.
+    // The actor takes its world's system, resolved below where a connection
+    // is available. A caller may name one, but only the world's own: see the
+    // refusal there.
     //
     // It used to fall straight to "generic", which is a system nothing
     // declares — so every actor created through the compendium published no
@@ -81,20 +82,43 @@ pub async fn create_actor_impl(
     let description = input.description.clone();
 
     tokio::task::spawn_blocking(move || {
-        let game_system_id = Some(match requested_system_id {
-            Some(chosen) => chosen,
-            None => worlds::table
-                .filter(worlds::id.eq(world_id))
-                .select(worlds::game_system_id)
-                .first::<Option<String>>(&mut conn)
-                .ok()
-                .flatten()
+        let world_system_id = worlds::table
+            .filter(worlds::id.eq(world_id))
+            .select(worlds::game_system_id)
+            .first::<Option<String>>(&mut conn)
+            .ok()
+            .flatten();
+
+        // A character on a system its world does not play gets that system's
+        // sheet beside the world's session panel, rolls and statuses: two
+        // rulesets on one table, and nothing on screen says so. The app's own
+        // dialogs never name a system, so this only ever refuses a direct
+        // call — which is where the mismatch came from when it happened.
+        //
+        // A world that has chosen nothing has nothing to disagree with.
+        //
+        // TODO(system-conversion): bringing a character over from another
+        // system is wanted, as a deliberate conversion with its own flow (see
+        // MVP.md, Post-MVP). When that exists it is the way across; this
+        // refusal stays for everything else.
+        if let (Some(chosen), Some(world_system)) = (&requested_system_id, &world_system_id)
+            && chosen != world_system
+        {
+            return Err(format!(
+                "This world plays \"{world_system}\"; a character cannot be created \
+                 in it on \"{chosen}\""
+            ));
+        }
+
+        let game_system_id = Some(
+            requested_system_id
+                .or(world_system_id)
                 // A world that has itself chosen nothing. The DB check
                 // requires a non-null id for npc/character actors, so this is
                 // the placeholder of last resort rather than a default anyone
                 // picked.
                 .unwrap_or_else(|| "generic".to_string()),
-        });
+        );
 
         let scene_id = scenes::table
             .filter(scenes::world_id.eq(world_id))
@@ -493,6 +517,89 @@ mod tests {
         assert_eq!(actor.label, "Bo Jangles");
         assert_eq!(actor.scene_id, scene_id);
         assert!(actor.is_npc);
+    }
+
+    fn set_world_system(conn: &mut PgConnection, world_id: uuid::Uuid, system: &str) {
+        diesel::update(worlds::table.filter(worlds::id.eq(world_id)))
+            .set(worlds::game_system_id.eq(system))
+            .execute(conn)
+            .expect("set the world's system");
+    }
+
+    fn a_character_on(world_id: uuid::Uuid, system: Option<&str>) -> CreateActorInput {
+        CreateActorInput {
+            world_id,
+            label: "Barefoot".to_string(),
+            is_npc: false,
+            actor_type: None,
+            game_system_id: system.map(str::to_string),
+            description: None,
+        }
+    }
+
+    /// A character cannot be made on a system its world does not play, and
+    /// the refusal leaves nothing behind. Naming the world's own system, or
+    /// none, both land on the world's.
+    #[tokio::test]
+    async fn a_character_must_be_on_its_worlds_system() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        insert_test_scene(&mut conn, world_id, owner_id);
+        set_world_system(&mut conn, world_id, "roll_for_shoes");
+        drop(conn);
+
+        let refusal = create_actor_impl(
+            &state,
+            owner_id,
+            false,
+            a_character_on(world_id, Some("dnd5e")),
+        )
+        .await
+        .expect_err("a 5e character in a Roll for Shoes world");
+        assert!(
+            refusal.message.contains("roll_for_shoes") && refusal.message.contains("dnd5e"),
+            "the refusal names both systems: {}",
+            refusal.message
+        );
+
+        let mut conn = state.db_pool.get().unwrap();
+        let left_behind: i64 = world_actors::table
+            .filter(world_actors::world_id.eq(world_id))
+            .count()
+            .get_result(&mut conn)
+            .unwrap();
+        assert_eq!(left_behind, 0, "a refused character is not stored");
+        drop(conn);
+
+        for named in [Some("roll_for_shoes"), None] {
+            let actor = create_actor_impl(&state, owner_id, false, a_character_on(world_id, named))
+                .await
+                .expect("the world's own system is accepted");
+            assert_eq!(actor.game_system_id.as_deref(), Some("roll_for_shoes"));
+        }
+    }
+
+    /// A world that has chosen no system has nothing to disagree with.
+    #[tokio::test]
+    async fn a_world_without_a_system_takes_the_one_named() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        insert_test_scene(&mut conn, world_id, owner_id);
+        drop(conn);
+
+        let actor = create_actor_impl(
+            &state,
+            owner_id,
+            false,
+            a_character_on(world_id, Some("dnd5e")),
+        )
+        .await
+        .expect("nothing to conflict with");
+        assert_eq!(actor.game_system_id.as_deref(), Some("dnd5e"));
     }
 
     /// FR-019: a Player-role (non-DM) caller is rejected.

@@ -14,13 +14,13 @@ import { expect, test } from "./fixtures/test";
  *
  * Every other spec makes its world through `registerAndCreateWorld`, which
  * leaves the picker alone and so only ever proves the realm's default. This
- * one chooses. It asks three things of the choice, because each is a place
+ * one chooses. It asks these things of the choice, because each is a place
  * the system could be dropped on the way from the form to the table:
  *
  * - the **world** is stored on the system that was picked;
  * - a **character made without naming a system** — which is how the app's
  *   own dialogs make them — is on the world's system, not the realm's
- *   default;
+ *   default — and one that names a different system is refused;
  * - opening it from the **play dock** shows that system's sheet.
  *
  * The two systems below are the ones meant to be ready for a table full
@@ -110,6 +110,32 @@ for (const { systemId, sheet } of [
       `actor refused: ${JSON.stringify(actor.errors ?? actor)}`,
     ).toBe(systemId);
     const actorId = actor.data!.createActor!.id;
+
+    // Naming a system the world does not play is refused, not stored.
+    const other = systemId === "dnd5e" ? "roll_for_shoes" : "dnd5e";
+    const stray = await graphql<{
+      data?: { createActor?: { id: string } | null };
+      errors?: { message: string }[];
+    }>(
+      page,
+      `
+        mutation ($input: CreateActorInput!) {
+          createActor(input: $input) {
+            id
+          }
+        }
+      `,
+      {
+        input: {
+          worldId,
+          label: "Stray",
+          isNpc: false,
+          gameSystemId: other,
+        },
+      },
+    );
+    expect(stray.data?.createActor ?? null).toBeNull();
+    expect(stray.errors?.[0]?.message ?? "").toContain(other);
 
     await page.goto(`/world/${worldId}/play`);
     await openDockTab(page, "actors");

@@ -1,6 +1,10 @@
 import type { Page } from "@playwright/test";
 
-import { graphql, registerAndCreateWorld } from "./fixtures/helpers";
+import {
+  graphql,
+  registerAndCreateWorld,
+  setWorldSystem,
+} from "./fixtures/helpers";
 import { expect, test } from "./fixtures/test";
 
 /**
@@ -46,6 +50,7 @@ async function createCharacter(page: Page): Promise<{
     `E2E RfS Extras ${Date.now()}`,
     "e2erfsx",
   );
+  await setWorldSystem(page, worldId, "roll_for_shoes");
   const actor = await graphql<{ data: { createActor: { id: string } } }>(
     page,
     `

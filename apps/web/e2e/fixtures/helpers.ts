@@ -226,6 +226,40 @@ export async function registerAndCreateWorld(
 }
 
 /**
+ * Put a world on a game system, as its Game Master.
+ *
+ * `registerAndCreateWorld` leaves the create page's picker alone, so its world
+ * is on the realm's default. A spec about another system has to move the world
+ * before it makes a character: the server refuses a character on a system its
+ * world does not play.
+ */
+export async function setWorldSystem(
+  page: Page,
+  worldId: string,
+  gameSystemId: string,
+): Promise<void> {
+  const result = await graphql<{
+    data?: { updateWorldGameSystem?: { gameSystemId: string | null } };
+    errors?: { message: string }[];
+  }>(
+    page,
+    `
+      mutation ($input: UpdateWorldGameSystemInput!) {
+        updateWorldGameSystem(input: $input) {
+          gameSystemId
+        }
+      }
+    `,
+    { input: { worldId, gameSystemId } },
+  );
+  if (result.data?.updateWorldGameSystem?.gameSystemId !== gameSystemId) {
+    throw new Error(
+      `could not put the world on ${gameSystemId}: ${JSON.stringify(result.errors ?? result)}`,
+    );
+  }
+}
+
+/**
  * A GraphQL call made as the signed-in browser, but not *from* the page.
  *
  * # Why this does not use `page.evaluate`

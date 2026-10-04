@@ -515,6 +515,15 @@ maps. No cross-instance federation exists.
 
 **Marketplace.** Not started.
 
+**Converting a character between game systems.** Wanted, not started, and not
+for the first field tests. Today a character is always on its world's system:
+the server refuses to create one on any other, because a 5e sheet at a Roll for
+Shoes table is two rulesets with nothing on screen saying so. Conversion is the
+deliberate way across that line — bring a character from one system to another
+and say what carries over (name, portrait, notes) and what has to be rebuilt
+(everything the rules define). It needs its own spec; the refusal in
+`create_actor_impl` is marked `TODO(system-conversion)` where it would hook in.
+
 **Engine bundle size and load time.** Measured 2026-08-26. The dev-profile
 bundle had reached 220,099,904 bytes — and 71.3% of that (157MB) was the wasm
 `name` custom section, unmangled Rust and Bevy symbol names, not code. There
