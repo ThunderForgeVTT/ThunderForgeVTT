@@ -24,7 +24,7 @@ export const hintClass = "text-xs text-muted-foreground";
 
 /** `<input>`/`<select>` — matches the host app's own controls. */
 export const fieldClass =
-  "h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50";
+  "h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50";
 
 /** Multi-line variant of `fieldClass` (no fixed height). */
 export const textareaClass =
