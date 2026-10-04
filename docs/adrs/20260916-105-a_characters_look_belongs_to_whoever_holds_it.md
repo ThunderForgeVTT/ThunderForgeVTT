@@ -1,7 +1,7 @@
 # ADR-105: A Character's Look Belongs to Whoever Holds It
 
 **Date:** 2026-09-16
-**Status:** **ACCEPTED** 2026-09-21, once spec 044 Phase 5 proved it (tasks T071, T078 and T079: the server rules for every clause of B6, the player e2e, and the proof run). Proposed 2026-09-16 with spec 044 phase (c); the grant and its two withdrawals are the owner's (spec 044 clarifications).
+**Status:** **ACCEPTED** 2026-09-21, once spec 044 Phase 5 proved it (tasks T071, T078 and T079: the server rules for every clause of B6, the player e2e, and the proof run). Proposed 2026-09-16 with spec 044 phase (c); the grant and its two withdrawals are the owner's (spec 044 clarifications). **Superseded in part** 2026-10-03 by ADR-110: Decision 2 and the rejected alternative "Grant Editor on claim" no longer hold — a claim now grants Editor. The two withdrawals still bind the holder.
 **Participants:** ThunderForgeVTT Team
 **Related:** spec 044 (FR-030, FR-030a, FR-030b, FR-030c, FR-032, FR-033, FR-034, SC-010; contracts §5 B6), ADR-050 (permission declaration), spec 017 (actor claiming)
 

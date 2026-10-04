@@ -1135,6 +1135,10 @@ pub struct ActorPermission {
     pub level: String,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// Spec 063 FR-007: a claim created this row, rather than a Game Master
+    /// granting it by hand. Releasing the claim deletes the row only while
+    /// this is set, and a hand edit clears it (FR-008).
+    pub granted_by_claim: bool,
 }
 
 /// New actor permission for insertion/upsert.

@@ -1058,6 +1058,7 @@ diesel::table! {
         level -> Varchar,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        granted_by_claim -> Bool,
     }
 }
 

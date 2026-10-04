@@ -364,3 +364,92 @@ async fn a_game_master_may_remove_a_trusted_player() {
             .unwrap()
     );
 }
+
+// ===== Spec 063 US4 / FR-014: a claim's access leaves with the member =====
+
+/// A player who created and claimed a character is removed from the world:
+/// they hold no claim and no access to it afterwards, and being readmitted
+/// gives neither back until they claim again.
+///
+/// The claim goes by the cascade from `world_members` and the grant by
+/// `purge_member_grants`. Neither knows about the other, so the test is that
+/// the pair leaves nothing behind — a grant outliving its claim would be
+/// Editor that no release could ever find.
+#[tokio::test]
+async fn a_removed_claimant_keeps_neither_the_claim_nor_its_access() {
+    use crate::auth::actor_permissions::effective_actor_permission;
+    use crate::graphql::mutations_actor_claims::{claim_actor_impl, create_and_claim_actor_impl};
+    use crate::graphql::types::ActorPermissionLevel;
+    use crate::schema::{world_actor_claims, world_actor_permissions, world_actors, worlds};
+    use crate::test_support::insert_test_scene;
+
+    let state = test_app_state();
+    let (world_id, owner_id, player_id) = {
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        insert_test_scene(&mut conn, world_id, owner_id);
+        let player_id = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, player_id, "Player");
+        diesel::update(worlds::table.filter(worlds::id.eq(world_id)))
+            .set(worlds::allow_player_created_actors.eq(true))
+            .execute(&mut conn)
+            .unwrap();
+        (world_id, owner_id, player_id)
+    };
+
+    let claim = create_and_claim_actor_impl(&state, player_id, world_id, "Wren".into(), None)
+        .await
+        .expect("the player creates their character");
+    let actor_id = claim.actor_id;
+    assert_eq!(
+        effective_actor_permission(&state, player_id, false, actor_id)
+            .await
+            .unwrap(),
+        ActorPermissionLevel::Editor
+    );
+
+    remove_member_impl(&state, owner_id, world_id, player_id)
+        .await
+        .expect("removal should succeed");
+
+    let held = |conn: &mut PgConnection| -> (i64, i64) {
+        (
+            world_actor_claims::table
+                .filter(world_actor_claims::actor_id.eq(actor_id))
+                .count()
+                .get_result(conn)
+                .unwrap(),
+            world_actor_permissions::table
+                .filter(world_actor_permissions::actor_id.eq(actor_id))
+                .filter(world_actor_permissions::user_id.eq(player_id))
+                .count()
+                .get_result(conn)
+                .unwrap(),
+        )
+    };
+    let mut conn = state.db_pool.get().unwrap();
+    assert_eq!(held(&mut conn), (0, 0), "(claims, grants) after removal");
+
+    // Readmitted: an ordinary Player again, with nothing carried over.
+    insert_test_world_member(&mut conn, world_id, player_id, "Player");
+    assert_eq!(held(&mut conn), (0, 0), "(claims, grants) on readmission");
+    diesel::update(world_actors::table.filter(world_actors::id.eq(actor_id)))
+        .set(world_actors::available_for_claim.eq(true))
+        .execute(&mut conn)
+        .unwrap();
+    drop(conn);
+    assert_eq!(
+        effective_actor_permission(&state, player_id, false, actor_id)
+            .await
+            .unwrap(),
+        ActorPermissionLevel::Viewer
+    );
+
+    // Claiming again is what gives it back, and gives back the claim's own.
+    claim_actor_impl(&state, player_id, world_id, actor_id)
+        .await
+        .expect("the readmitted player claims the character again");
+    let mut conn = state.db_pool.get().unwrap();
+    assert_eq!(held(&mut conn), (1, 1));
+}

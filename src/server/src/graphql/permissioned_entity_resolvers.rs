@@ -105,6 +105,26 @@ pub(crate) async fn refuse_content_if_paused(
 /// reason the auth sibling gives: macro-generated items have no
 /// go-to-definition, so `set_actor_permission_impl` must be greppable to the
 /// line that declares it.
+///
+/// # The two optional parameters
+///
+/// `claim_flag` and `announce` are declared by a content type whose grants
+/// can be created by something other than this block. Today that is actors
+/// alone (spec 063, ADR-110): claiming a character writes an Editor row
+/// flagged as the claim's, and releasing the claim deletes that row while it
+/// is still flagged.
+///
+/// * `claim_flag` names the column carrying that flag. The upsert clears it
+///   in the same statement that sets the level, so a grant a Game Master has
+///   set by hand is theirs from that moment and a later release leaves it
+///   alone (FR-008). Same statement rather than a second one: between two,
+///   a release could land and delete the row the Game Master had just set.
+/// * `announce` is called after a grant is written or removed, so a member
+///   with the content open learns their access changed without reloading.
+///
+/// Optional, not defaulted: items, lore and abilities have no second writer
+/// of their grants, so they have no flag to clear and their columns do not
+/// exist. A type that omits both generates exactly what it did before.
 macro_rules! permissioned_entity_resolvers {
     (
         $(
@@ -132,6 +152,8 @@ macro_rules! permissioned_entity_resolvers {
                 short_noun: $short_noun:expr,
                 article: $article:expr,
                 list_doc: $list_doc:expr,
+                $(claim_flag: $claim_flag:ident,)?
+                $(announce: $announce:path,)?
             }
         ),* $(,)?
     ) => {
@@ -244,7 +266,7 @@ macro_rules! permissioned_entity_resolvers {
                         level: level.clone(),
                     };
 
-                    diesel::insert_into(crate::schema::$grants::table)
+                    let row = diesel::insert_into(crate::schema::$grants::table)
                         .values(&new_row)
                         .on_conflict((
                             crate::schema::$grants::$content_fk,
@@ -255,12 +277,23 @@ macro_rules! permissioned_entity_resolvers {
                             crate::schema::$grants::level.eq(level),
                             crate::schema::$grants::updated_at
                                 .eq(chrono::Utc::now().naive_utc()),
+                            // A fresh insert takes the column's default,
+                            // which already says "by hand"; only the update
+                            // arm has a flag to clear.
+                            $(
+                                crate::schema::$grants::$claim_flag.eq(false),
+                            )?
                         ))
                         .returning(<$row>::as_returning())
                         .get_result::<$row>(&mut conn)
                         .map_err(|e| {
                             format!(concat!("Failed to set ", $short_noun, " permission: {}"), e)
-                        })
+                        })?;
+
+                    $(
+                        $announce(&mut conn, world_id, content_id, caller_id);
+                    )?
+                    Ok::<_, String>(row)
                 })
                 .await
                 .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -292,7 +325,7 @@ macro_rules! permissioned_entity_resolvers {
                     .map_err(|_| Error::new("Failed to get DB connection"))?;
 
                 tokio::task::spawn_blocking(move || {
-                    diesel::delete(
+                    let removed = diesel::delete(
                         crate::schema::$grants::table
                             .filter(crate::schema::$grants::$content_fk.eq(content_id))
                             .filter(crate::schema::$grants::$user_fk.eq(user_id)),
@@ -301,7 +334,15 @@ macro_rules! permissioned_entity_resolvers {
                     .map(|rows| rows > 0)
                     .map_err(|e| {
                         format!(concat!("Failed to remove ", $short_noun, " permission: {}"), e)
-                    })
+                    })?;
+
+                    // Removing a grant that was not there changed nothing.
+                    $(
+                        if removed {
+                            $announce(&mut conn, world_id, content_id, caller_id);
+                        }
+                    )?
+                    Ok::<_, String>(removed)
                 })
                 .await
                 .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -442,6 +483,8 @@ permissioned_entity_resolvers! {
                    Viewer, which the client renders itself by combining this \
                    with the full `worldMembers` roster \
                    (contracts/actor-permissions.md).",
+        claim_flag: granted_by_claim,
+        announce: crate::world_events::announce_actor_access_changed,
     },
     item {
         input: SetItemPermissionInput,

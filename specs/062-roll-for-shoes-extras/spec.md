@@ -311,7 +311,8 @@ was created with.
 - **The player has no edit rights on the character.** Statuses, slot purchases
   and advancements are all writes; a player who has claimed a character but not
   been granted Editor cannot make them. This is a host limitation recorded
-  separately, not something this feature works around.
+  separately, not something this feature works around. *Closed since by
+  spec 063: a claim now grants Editor.*
 
 ## Requirements *(mandatory)*
 
@@ -433,7 +434,8 @@ was created with.
   `pnpm e2e:game-systems`.
 - **FR-045**: Where a specification drives a character from the play dock, it
   MUST grant the claiming player Editor on that character explicitly, because
-  claiming grants no write access today.
+  claiming grants no write access today. *Withdrawn by spec 063 (FR-020): a
+  claim grants Editor, and the proof must no longer grant it by hand.*
 
 ### Key Entities
 
@@ -521,7 +523,7 @@ was created with.
   the world's.
 - **Claiming a character granting write access to it.** Decided separately and
   needing its own host spec; this feature works within today's behaviour and its
-  proof grants Editor explicitly.
+  proof grants Editor explicitly. *That host spec is 063.*
 
 ## Dependencies
 

@@ -173,33 +173,10 @@ test("the sheet works in the play dock, where a player sits with no edit rights"
 
   const player = await inviteAndJoinAsPlayer(browser, page, worldId, "e2erfsp");
 
-  // Claiming records who is playing whom; it grants nothing. Writing to the
-  // character still needs Editor access on it, which is the Game Master's to
-  // give. Without this the roll works and the XP it earned is refused —
-  // rule 5, which is the whole of progression, silently lost.
-  const me = await graphql<{ data: { me: { id: string } } }>(
-    player,
-    `
-      query {
-        me {
-          id
-        }
-      }
-    `,
-    {},
-  );
-  await graphql(
-    page,
-    `
-      mutation ($input: SetActorPermissionInput!) {
-        setActorPermission(input: $input) {
-          level
-        }
-      }
-    `,
-    { input: { actorId, userId: me.data.me.id, level: "EDITOR" } },
-  );
-
+  // Claiming is all the player does. The claim grants them Editor on the
+  // character (spec 063), which is what lets the XP a failed roll earns be
+  // written — rule 5, the whole of progression. No grant by hand here: this
+  // test is the proof that none is needed.
   const claim = await graphql<{
     data?: { claimActor?: { actorId: string } };
     errors?: { message: string }[];

@@ -4,14 +4,14 @@ use crate::test_support::{
     test_app_state,
 };
 
-fn mark_available(conn: &mut PgConnection, actor_id: Uuid, available: bool) {
+pub(super) fn mark_available(conn: &mut PgConnection, actor_id: Uuid, available: bool) {
     diesel::update(world_actors::table.filter(world_actors::id.eq(actor_id)))
         .set(world_actors::available_for_claim.eq(available))
         .execute(conn)
         .expect("failed to mark actor availability");
 }
 
-fn insert_test_pc(
+pub(super) fn insert_test_pc(
     conn: &mut PgConnection,
     world_id: Uuid,
     scene_id: Uuid,
@@ -44,7 +44,7 @@ fn insert_test_pc(
 /// this rather than on what a mutation returned, because "exactly one
 /// player got the character" is a statement about the table — the same
 /// reason `mutations_pickup.rs` counts inventory rows.
-fn claimants_of(conn: &mut PgConnection, actor_id: Uuid) -> Vec<Uuid> {
+pub(super) fn claimants_of(conn: &mut PgConnection, actor_id: Uuid) -> Vec<Uuid> {
     world_actor_claims::table
         .filter(world_actor_claims::actor_id.eq(actor_id))
         .select(world_actor_claims::world_member_id)
@@ -62,7 +62,7 @@ fn characters_of(conn: &mut PgConnection, member_id: Uuid) -> Vec<Uuid> {
         .expect("failed to read claims")
 }
 
-fn member_id_of(conn: &mut PgConnection, world_id: Uuid, user_id: Uuid) -> Uuid {
+pub(super) fn member_id_of(conn: &mut PgConnection, world_id: Uuid, user_id: Uuid) -> Uuid {
     world_members::table
         .filter(world_members::world_id.eq(world_id))
         .filter(world_members::user_id.eq(user_id))
@@ -71,7 +71,7 @@ fn member_id_of(conn: &mut PgConnection, world_id: Uuid, user_id: Uuid) -> Uuid 
         .expect("failed to read world member")
 }
 
-fn error_code(error: &Error) -> String {
+pub(super) fn error_code(error: &Error) -> String {
     error
         .extensions
         .as_ref()
@@ -80,7 +80,7 @@ fn error_code(error: &Error) -> String {
         .unwrap_or_default()
 }
 
-fn set_allow_player_created(conn: &mut PgConnection, world_id: Uuid, allow: bool) {
+pub(super) fn set_allow_player_created(conn: &mut PgConnection, world_id: Uuid, allow: bool) {
     diesel::update(worlds::table.filter(worlds::id.eq(world_id)))
         .set(worlds::allow_player_created_actors.eq(allow))
         .execute(conn)

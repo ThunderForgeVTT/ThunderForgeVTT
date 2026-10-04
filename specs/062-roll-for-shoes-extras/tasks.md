@@ -240,6 +240,6 @@ Then US2 (difficulty), US4 (statuses), US5 (slots), US6 (starting skills), in th
 ## Notes
 
 - There is **no dice seed**. Every e2e assertion is built from what is true of every roll — one d6 cannot beat 6, four d6 cannot reach 25, a −100 status cannot yield a positive total.
-- A player driving the play dock needs Editor granted **explicitly**; claiming a character grants no write access today (FR-045). That host gap is its own spec.
+- A player driving the play dock needs Editor granted **explicitly**; claiming a character grants no write access today (FR-045). That host gap is its own spec: **spec 063**, which closes it and withdraws this constraint.
 - Assert `rfs-error` has count 0 wherever a write is expected to land. The sheet badges refusals rather than throwing, so a lost write otherwise reads as a disagreement about a number.
 - Read only the harness's `Totals:` line.

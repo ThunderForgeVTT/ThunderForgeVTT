@@ -216,7 +216,8 @@ measured 176s for 18 specs at its last recording, so there is room.
 
 - A player driving the play dock must be granted Editor on the character
   explicitly, because claiming grants no write access. Recorded separately as a
-  host change that has not happened yet.
+  host change that has not happened yet. It is now spec 063, which makes the
+  claim grant Editor.
 - The sheet reports a refused write in a badge rather than throwing, so every
   test that expects a write to land must also assert `rfs-error` has count 0.
   Without it a lost write reads as a disagreement about a number.

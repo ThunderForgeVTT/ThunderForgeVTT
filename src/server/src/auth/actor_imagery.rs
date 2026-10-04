@@ -1,20 +1,25 @@
-//! Spec 044 phase (c), contracts §5 B6, ADR-105: who may change an actor's
-//! portrait and token.
+//! Spec 044 phase (c), contracts §5 B6, ADR-105; spec 063, ADR-110: who may
+//! change an actor's portrait and token.
 //!
-//! # Why a right beside the ladder, not a rung on it
+//! # Why this still asks more than the ladder
 //!
 //! ADR-050's ladder (Viewer < Editor < Owner) answers "may this person change
-//! this actor". A player who holds a character resolves to Viewer on it, and
-//! granting them Editor would hand over the label, the sheet, the abilities
-//! and the inventory along with the picture. FR-030 gives them the picture
-//! and nothing else, so the grant lives here and is called by exactly two
-//! mutations, `uploadActorImage` and `removeActorImage`.
+//! this actor". Until spec 063 a player holding a character resolved to
+//! Viewer on it, and this module was the one right a claim conferred. A
+//! claim now grants Editor (ADR-110), so the ladder alone would say yes to
+//! every holder — and the two switches a Game Master has for withdrawing a
+//! holder's say over the look would stop binding the only people they were
+//! written for (spec 063 FR-009, FR-011).
+//!
+//! So the question here is not only how high the caller stands but how they
+//! got there. `world_actor_permissions.granted_by_claim` is the answer.
 //!
 //! # The rule
 //!
-//! Editor or above by the ladder may, always: a Game Master is untouched by
-//! either switch (FR-032). Otherwise the caller may when, and only when, all
-//! three hold:
+//! Editor or above **granted by hand** may, always, and so may a Game Master
+//! or an administrator: none is touched by either switch (FR-032, spec 063
+//! FR-010). Everybody else, including a holder whose Editor came from the
+//! claim, may when and only when all three hold:
 //!
 //! 1. they hold a live claim on the actor (`world_actor_claims`), which is
 //!    also how a player who created their own character holds it;
@@ -30,13 +35,15 @@ use uuid::Uuid;
 
 use crate::auth::actor_permissions::effective_actor_permission;
 use crate::graphql::types::ActorPermissionLevel;
-use crate::schema::{world_actor_claims, world_actors, world_members, worlds};
+use crate::schema::{
+    world_actor_claims, world_actor_permissions, world_actors, world_members, worlds,
+};
 use crate::state::AppState;
 
 /// Why a caller may not change an actor's imagery.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImageryRefusal {
-    /// Neither Editor on the actor nor the player holding it.
+    /// Neither granted Editor on the actor by hand nor the player holding it.
     NotHolder,
     /// The Game Master has turned the grant off for the whole world.
     WorldSettingOff,
@@ -121,18 +128,50 @@ pub async fn may_change_actor_imagery(
     actor_id: Uuid,
 ) -> GraphQLResult<Result<(), ImageryRefusal>> {
     let level = effective_actor_permission(state, user_id, is_admin, actor_id).await?;
-    if level.rank() >= ActorPermissionLevel::Editor.rank() {
+
+    // Owner is never a claim's doing. A claim grants Editor and no more, and
+    // a Game Master or administrator resolves to Owner before any row is
+    // read — so this also keeps a Game Master who happens to be bound to a
+    // character out of the holder's checks below.
+    if level.rank() >= ActorPermissionLevel::Owner.rank() {
         return Ok(Ok(()));
     }
+    let editor = level.rank() >= ActorPermissionLevel::Editor.rank();
 
     let mut conn = state
         .db_pool
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
-    tokio::task::spawn_blocking(move || holder_may_change_imagery(&mut conn, user_id, actor_id))
-        .await
-        .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to load actor"))
+    tokio::task::spawn_blocking(move || {
+        // Spec 063 FR-009: Editor the claim gave does not carry the
+        // unconditional right. A hand grant is never flagged and passes
+        // here; the holder is flagged and goes on to the same three checks
+        // they faced when a claim granted nothing.
+        if editor && !access_came_from_claim(&mut conn, user_id, actor_id)? {
+            return Ok(Ok(()));
+        }
+        holder_may_change_imagery(&mut conn, user_id, actor_id)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to load actor"))
+}
+
+/// Whether the caller's grant on this actor is one a claim created.
+///
+/// No row is `false`: there is nothing a claim could have created.
+fn access_came_from_claim(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    actor_id: Uuid,
+) -> QueryResult<bool> {
+    Ok(world_actor_permissions::table
+        .filter(world_actor_permissions::actor_id.eq(actor_id))
+        .filter(world_actor_permissions::user_id.eq(user_id))
+        .select(world_actor_permissions::granted_by_claim)
+        .first::<bool>(conn)
+        .optional()?
+        .unwrap_or(false))
 }
 
 /// [`may_change_actor_imagery`], refusing with the refusal's own message.

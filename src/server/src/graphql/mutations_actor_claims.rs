@@ -16,8 +16,11 @@ use crate::graphql::{
 };
 use crate::models::{ActorClaim, NewActorClaim, NewWorldActor, WorldActor, WorldMember};
 use crate::play_pause::gate::{GateError, refuse_if_paused, refuse_world_if_paused};
-use crate::schema::{users, world_actor_claims, world_actors, world_members, worlds};
+use crate::schema::{
+    users, world_actor_claims, world_actor_permissions, world_actors, world_members, worlds,
+};
 use crate::state::AppState;
+use crate::world_events::announce_actor_access_changed;
 
 /// The extension code the loser of a contested character receives.
 ///
@@ -117,6 +120,89 @@ fn bind_claim(
         .returning(ActorClaim::as_returning())
         .get_result::<ActorClaim>(conn)
         .optional()
+}
+
+/// Give the player who has just been bound to `actor_id` the access playing
+/// it requires (spec 063 FR-001 to FR-005, ADR-110).
+///
+/// Called by every writer immediately after its `bind_claim` returns a row,
+/// inside that writer's transaction, and nowhere else. That placement is the
+/// requirement rather than a convenience: a claim that committed without the
+/// grant is the defect this exists to fix, and a grant that committed
+/// without a claim is write access nobody decided to give (FR-002). A lost
+/// race returns no row from `bind_claim` and never reaches here.
+///
+/// One statement covering the three cases the spec separates:
+///
+/// * no row — insert Editor, flagged as the claim's;
+/// * a row below Editor — raise it to Editor and flag it, because the raise
+///   is what the release must take back;
+/// * a row at Editor or Owner — left exactly as it is, flag included. That
+///   access is the Game Master's and has to survive the release (FR-005,
+///   FR-013), so the claim must not take it over by flagging it.
+///
+/// "Below Editor" is written as "not Editor and not Owner" so that a level
+/// the resolver cannot parse, which it reads as Viewer, is raised like one.
+fn grant_claim_access(
+    conn: &mut PgConnection,
+    actor_id: Uuid,
+    user_id: Uuid,
+) -> Result<(), DieselError> {
+    let editor = ActorPermissionLevel::Editor.as_db_str();
+
+    let upsert = diesel::insert_into(world_actor_permissions::table)
+        .values((
+            world_actor_permissions::id.eq(Uuid::now_v7()),
+            world_actor_permissions::actor_id.eq(actor_id),
+            world_actor_permissions::user_id.eq(user_id),
+            world_actor_permissions::level.eq(editor),
+            world_actor_permissions::granted_by_claim.eq(true),
+        ))
+        .on_conflict((
+            world_actor_permissions::actor_id,
+            world_actor_permissions::user_id,
+        ))
+        .do_update()
+        .set((
+            world_actor_permissions::level.eq(editor),
+            world_actor_permissions::granted_by_claim.eq(true),
+            world_actor_permissions::updated_at.eq(chrono::Utc::now().naive_utc()),
+        ));
+    // Named through the trait: `QueryDsl::filter` is not offered on an
+    // insert, and this is the `WHERE` of the `DO UPDATE`.
+    diesel::query_dsl::methods::FilterDsl::filter(
+        upsert,
+        world_actor_permissions::level.ne_all([editor, ActorPermissionLevel::Owner.as_db_str()]),
+    )
+    .execute(conn)?;
+
+    Ok(())
+}
+
+/// Take back what [`grant_claim_access`] gave, and only that (FR-012,
+/// FR-013).
+///
+/// Deletes the row only while it is still flagged as the claim's. A hand
+/// grant made before the claim was never flagged; one made since cleared
+/// the flag (FR-008, in `permissioned_entity_resolvers`). Either way the row
+/// is the Game Master's by the time this runs and is not touched, whatever
+/// level it holds.
+///
+/// Deleted rather than lowered to what was there before: the only thing a
+/// claim can have raised is an explicit Viewer, and no row at all resolves
+/// to Viewer too.
+fn revoke_claim_access(
+    conn: &mut PgConnection,
+    actor_id: Uuid,
+    user_id: Uuid,
+) -> Result<usize, DieselError> {
+    diesel::delete(
+        world_actor_permissions::table
+            .filter(world_actor_permissions::actor_id.eq(actor_id))
+            .filter(world_actor_permissions::user_id.eq(user_id))
+            .filter(world_actor_permissions::granted_by_claim.eq(true)),
+    )
+    .execute(conn)
 }
 
 /// Which of the two unique constraints refused a `bind_claim`.
@@ -360,7 +446,7 @@ pub async fn claim_actor_impl(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
     let result = tokio::task::spawn_blocking(move || {
-        conn.transaction(|conn| -> Result<ActorClaim, ClaimError> {
+        let claim = conn.transaction(|conn| -> Result<ActorClaim, ClaimError> {
             let member = require_no_existing_claim(conn, world_id, user_id)?;
             refuse_if_paused(conn, world_id)?;
 
@@ -378,10 +464,18 @@ pub async fn claim_actor_impl(
             }
 
             match bind_claim(conn, actor.id, member.id)? {
-                Some(claim) => Ok(claim),
+                Some(claim) => {
+                    grant_claim_access(conn, actor.id, member.user_id)?;
+                    Ok(claim)
+                }
                 None => Err(explain_failed_bind(conn, actor.id)?),
             }
-        })
+        })?;
+
+        // After the commit, so nobody is told about access a rollback then
+        // takes away.
+        announce_actor_access_changed(&mut conn, world_id, claim.actor_id, user_id);
+        Ok::<_, ClaimError>(claim)
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -411,7 +505,7 @@ pub async fn create_and_claim_actor_impl(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
     let result = tokio::task::spawn_blocking(move || {
-        conn.transaction(|conn| -> Result<ActorClaim, ClaimError> {
+        let claim = conn.transaction(|conn| -> Result<ActorClaim, ClaimError> {
             let member = require_no_existing_claim(conn, world_id, user_id)?;
             refuse_if_paused(conn, world_id)?;
 
@@ -471,10 +565,16 @@ pub async fn create_and_claim_actor_impl(
             // point of FR-034; an "it cannot race here" shortcut is how
             // the three writers drifted apart in the first place.
             match bind_claim(conn, created.id, member.id)? {
-                Some(claim) => Ok(claim),
+                Some(claim) => {
+                    grant_claim_access(conn, created.id, member.user_id)?;
+                    Ok(claim)
+                }
                 None => Err(explain_failed_bind(conn, created.id)?),
             }
-        })
+        })?;
+
+        announce_actor_access_changed(&mut conn, world_id, claim.actor_id, user_id);
+        Ok::<_, ClaimError>(claim)
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -543,6 +643,12 @@ pub async fn set_actor_availability_impl(
 /// the row, and a mismatch is refused as `CLAIM_CHANGED` rather than
 /// quietly destroying a binding made in between. `None` keeps the original
 /// unconditional behaviour for callers that hold no such expectation.
+///
+/// Spec 063 FR-012: the release also takes back the access the claim gave,
+/// in one transaction with the delete. It ran as bare statements before,
+/// which was sound while there was one of them; with two, a failure between
+/// them would leave a player able to write to a character they no longer
+/// hold, which is the outcome FR-014 forbids by every route.
 pub async fn unclaim_actor_impl(
     state: &AppState,
     user_id: Uuid,
@@ -566,32 +672,61 @@ pub async fn unclaim_actor_impl(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
     let actor = tokio::task::spawn_blocking(move || {
-        let mut delete = diesel::delete(
-            world_actor_claims::table.filter(world_actor_claims::actor_id.eq(actor_id)),
-        )
-        .into_boxed();
+        let (actor, released) =
+            conn.transaction(|conn| -> Result<(WorldActor, bool), ClaimError> {
+                let mut delete = diesel::delete(
+                    world_actor_claims::table.filter(world_actor_claims::actor_id.eq(actor_id)),
+                )
+                .into_boxed();
 
-        if let Some(member_id) = expected_world_member_id {
-            delete = delete.filter(world_actor_claims::world_member_id.eq(member_id));
+                if let Some(member_id) = expected_world_member_id {
+                    delete = delete.filter(world_actor_claims::world_member_id.eq(member_id));
+                }
+
+                // The member each deleted claim belonged to, because that is
+                // whose access the claim created. Read from the delete itself
+                // rather than beforehand: a read-then-delete could revoke for
+                // a claim that a concurrent rebinding had already replaced.
+                let released_members = delete
+                    .returning(world_actor_claims::world_member_id)
+                    .get_results::<Uuid>(conn)
+                    .map_err(|e| {
+                        ClaimError::Message(format!("Failed to unclaim character: {e}"))
+                    })?;
+
+                // Zero rows with a stated expectation means the row moved on:
+                // the character is either free already or now played by
+                // somebody else. Either way the operator is looking at a stale
+                // screen, and the honest answer is to say so and let them
+                // re-read it.
+                if released_members.is_empty() && expected_world_member_id.is_some() {
+                    return Err(ClaimError::ClaimChanged);
+                }
+
+                for member_id in &released_members {
+                    let holder_id = world_members::table
+                        .filter(world_members::id.eq(member_id))
+                        .select(world_members::user_id)
+                        .first::<Uuid>(conn)?;
+                    revoke_claim_access(conn, actor_id, holder_id)?;
+                }
+
+                let actor = world_actors::table
+                    .filter(world_actors::id.eq(actor_id))
+                    .select(WorldActor::as_select())
+                    .first::<WorldActor>(conn)
+                    .map_err(|e| {
+                        ClaimError::Message(format!("Actor not found after unclaim: {e}"))
+                    })?;
+
+                Ok((actor, !released_members.is_empty()))
+            })?;
+
+        // Releasing a character nobody held changed nobody's access.
+        if released {
+            announce_actor_access_changed(&mut conn, actor.world_id, actor.id, user_id);
         }
-
-        let released = delete
-            .execute(&mut conn)
-            .map_err(|e| ClaimError::Message(format!("Failed to unclaim character: {e}")))?;
-
-        // Zero rows with a stated expectation means the row moved on: the
-        // character is either free already or now played by somebody else.
-        // Either way the operator is looking at a stale screen, and the
-        // honest answer is to say so and let them re-read it.
-        if released == 0 && expected_world_member_id.is_some() {
-            return Err(ClaimError::ClaimChanged);
-        }
-
-        world_actors::table
-            .filter(world_actors::id.eq(actor_id))
-            .select(WorldActor::as_select())
-            .first::<WorldActor>(&mut conn)
-            .map_err(|e| ClaimError::Message(format!("Actor not found after unclaim: {e}")))
+        Ok::<_, ClaimError>(actor)
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -647,48 +782,77 @@ pub async fn set_player_character_binding_impl(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
     let bound = tokio::task::spawn_blocking(move || {
-        conn.transaction(|conn| -> Result<Option<WorldActor>, ClaimError> {
-            let member: WorldMember = world_members::table
-                .filter(world_members::id.eq(world_member_id))
-                .filter(world_members::world_id.eq(world_id))
-                .select(WorldMember::as_select())
-                .first::<WorldMember>(conn)
-                .map_err(|_| "That player is not a member of this world".to_string())?;
+        let (bound, released) = conn.transaction(
+            |conn| -> Result<(Option<WorldActor>, Vec<Uuid>), ClaimError> {
+                let member: WorldMember = world_members::table
+                    .filter(world_members::id.eq(world_member_id))
+                    .filter(world_members::world_id.eq(world_id))
+                    .select(WorldMember::as_select())
+                    .first::<WorldMember>(conn)
+                    .map_err(|_| "That player is not a member of this world".to_string())?;
 
-            diesel::delete(
-                world_actor_claims::table.filter(world_actor_claims::world_member_id.eq(member.id)),
-            )
-            .execute(conn)?;
+                // Spec 063 FR-012: the old character's claim goes, and with it
+                // the access that claim gave. Inside this transaction, so a
+                // refused bind below restores both together.
+                let released = diesel::delete(
+                    world_actor_claims::table
+                        .filter(world_actor_claims::world_member_id.eq(member.id)),
+                )
+                .returning(world_actor_claims::actor_id)
+                .get_results::<Uuid>(conn)?;
+                for released_actor_id in &released {
+                    revoke_claim_access(conn, *released_actor_id, member.user_id)?;
+                }
 
-            let Some(actor_id) = actor_id else {
-                return Ok(None);
-            };
+                let Some(actor_id) = actor_id else {
+                    return Ok((None, released));
+                };
 
-            let actor = world_actors::table
-                .filter(world_actors::id.eq(actor_id))
-                .filter(world_actors::world_id.eq(world_id))
-                .select(WorldActor::as_select())
-                .first::<WorldActor>(conn)
-                .map_err(|_| "Character not found in this world".to_string())?;
+                let actor = world_actors::table
+                    .filter(world_actors::id.eq(actor_id))
+                    .filter(world_actors::world_id.eq(world_id))
+                    .select(WorldActor::as_select())
+                    .first::<WorldActor>(conn)
+                    .map_err(|_| "Character not found in this world".to_string())?;
 
-            if actor.is_npc {
-                return Err("An NPC cannot be given to a player".to_string().into());
-            }
+                if actor.is_npc {
+                    return Err("An NPC cannot be given to a player".to_string().into());
+                }
 
-            // The arbiter. A refusal here rolls back the release above, so
-            // a lost race leaves the player on the character they had
-            // rather than on nobody.
-            if bind_claim(conn, actor.id, member.id)?.is_none() {
-                return Err(explain_failed_bind(conn, actor.id)?);
-            }
+                // The arbiter. A refusal here rolls back the release above, so
+                // a lost race leaves the player on the character they had
+                // rather than on nobody.
+                if bind_claim(conn, actor.id, member.id)?.is_none() {
+                    return Err(explain_failed_bind(conn, actor.id)?);
+                }
 
-            // `available_for_claim` is deliberately left alone. It means
-            // "offered on the selection screen", and a GM handing out a
-            // character has not offered it to the room — flipping it true
-            // here would put the character on that screen the moment this
-            // binding was lifted.
-            Ok(Some(actor))
-        })
+                // FR-003: a binding from the players section is a claim like
+                // any other and carries the same rights. A player re-bound to
+                // the character they already had lost the flagged row a few
+                // lines up and gets it back here, so that case needs no branch.
+                grant_claim_access(conn, actor.id, member.user_id)?;
+
+                // `available_for_claim` is deliberately left alone. It means
+                // "offered on the selection screen", and a GM handing out a
+                // character has not offered it to the room — flipping it true
+                // here would put the character on that screen the moment this
+                // binding was lifted.
+                Ok((Some(actor), released))
+            },
+        )?;
+
+        // Both ends of a re-binding changed: the character let go of, and
+        // the one taken up. Once each, including when they are the same one.
+        let mut changed = released;
+        if let Some(actor) = &bound {
+            changed.push(actor.id);
+        }
+        changed.sort_unstable();
+        changed.dedup();
+        for changed_actor_id in changed {
+            announce_actor_access_changed(&mut conn, world_id, changed_actor_id, user_id);
+        }
+        Ok::<_, ClaimError>(bound)
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -817,3 +981,9 @@ impl ActorClaimQuery {
 #[cfg(test)]
 #[path = "mutations_actor_claims_tests.rs"]
 mod tests;
+
+// Spec 063's tests, in a file of their own: with them the file above ran
+// past the thousand-line limit.
+#[cfg(test)]
+#[path = "mutations_actor_claims_access_tests.rs"]
+mod access_tests;

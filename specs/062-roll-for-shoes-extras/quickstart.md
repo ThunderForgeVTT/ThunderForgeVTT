@@ -81,7 +81,8 @@ produce a positive total. Each scenario below is constructible that way.
 **A player needs Editor, not just a claim.** The play-dock path needs a second
 account that claims the character **and** is granted Editor on it — claiming
 grants no write access today (FR-045). That is a host gap recorded separately;
-until it closes, the test grants Editor explicitly.
+until it closes, the test grants Editor explicitly. Spec 063 closes it: a claim
+grants Editor, and the explicit grant comes out of the test.
 
 **Assert `rfs-error` is absent** wherever a write is expected to land. The sheet
 reports a refusal in a badge rather than throwing, so a lost write otherwise

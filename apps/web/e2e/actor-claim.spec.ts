@@ -376,3 +376,83 @@ test.describe("Spec 017 US3: the GM manages availability and claims", () => {
     await playerContext.close();
   });
 });
+
+test.describe("Spec 063: claiming a character lets its player edit it", () => {
+  /**
+   * The whole of the feature as a player meets it. Nobody opens the
+   * ownership block at any point: the claim is the only thing that happens
+   * between "may not edit" and "may", and the release the only thing between
+   * "may" and "may not".
+   *
+   * The release is watched from a page the player already has open. A reload
+   * would prove the server took the access back; not reloading proves the
+   * player is told.
+   */
+  test("the claimant saves an edit with no hand grant, and loses the edit page when the GM un-claims", async ({
+    browser,
+  }) => {
+    test.setTimeout(120_000);
+    const gmContext = await browser.newContext({
+      permissions: ["clipboard-read", "clipboard-write"],
+    });
+    const gmPage = await gmContext.newPage();
+    const worldId = await registerAndCreateWorld(
+      gmPage,
+      `E2E Claim Edits ${uniqueSuffix()}`,
+    );
+    const actorId = await createPcActor(
+      gmPage,
+      worldId,
+      `Editable ${uniqueSuffix()}`,
+    );
+    await markAvailable(gmPage, worldId, actorId);
+
+    const viewUrl = new RegExp(`/world/${worldId}/actor/${actorId}/view$`);
+    const editUrl = new RegExp(`/world/${worldId}/actor/${actorId}/edit$`);
+
+    const inviteCode = await generateInviteCode(gmPage, worldId);
+    const playerContext = await browser.newContext();
+    const playerPage = await playerContext.newPage();
+    await register(playerPage, freshCredentials("e2eclaimedit"));
+    await playerPage.goto(`/join/${inviteCode}`);
+    await playerPage.getByRole("button", { name: "Join Campaign" }).click();
+    await playerPage.waitForURL(new RegExp(`/world/${worldId}/actor-select$`), {
+      timeout: 15_000,
+    });
+
+    await playerPage
+      .getByTestId("available-actor-row")
+      .getByRole("button", { name: "Select" })
+      .click();
+    await playerPage.waitForURL(new RegExp(`/world/${worldId}$`), {
+      timeout: 15_000,
+    });
+
+    // After it: the edit route holds, and the server takes the save.
+    await playerPage.goto(`/world/${worldId}/actor/${actorId}/edit`);
+    const save = playerPage.getByRole("button", { name: "Save" });
+    await expect(save).toBeVisible({ timeout: 15_000 });
+    await expect(playerPage).toHaveURL(editUrl);
+    await save.click();
+    await expect(playerPage.getByText(/^saved\.?$/i)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // The GM releases the character while the player sits on the edit page.
+    await gmPage.goto(`/world/${worldId}/actor/${actorId}/view`);
+    const claimBlock = gmPage.getByTestId("actor-claim-block");
+    await claimBlock.getByRole("button", { name: "Un-claim" }).click();
+    await expect(claimBlock.locator('input[type="checkbox"]')).toBeVisible({
+      timeout: 10_000,
+    });
+
+    await expect(playerPage).toHaveURL(viewUrl, { timeout: 15_000 });
+
+    // And it stays taken: asking for the edit route again is refused again.
+    await playerPage.goto(`/world/${worldId}/actor/${actorId}/edit`);
+    await expect(playerPage).toHaveURL(viewUrl, { timeout: 15_000 });
+
+    await gmContext.close();
+    await playerContext.close();
+  });
+});

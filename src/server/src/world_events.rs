@@ -185,6 +185,52 @@ pub const EVENT_CODE_ATTACK_MADE: i32 = 29;
 /// Payload: `{"offerId": <id>}`.
 pub const EVENT_CODE_OFFER_CHANGED: i32 = 30;
 
+/// Who may write to a character changed (spec 063, ADR-110).
+///
+/// A claim now grants Editor and a release takes it back, so a player's
+/// ability to edit a sheet they already have open can appear or vanish under
+/// them. Nothing announced an access change before this, by any route: a
+/// Game Master's hand grant took effect on the server at once and on the
+/// player's page at their next reload.
+///
+/// Its own code rather than a reuse of `EVENT_CODE_ACTOR_SHEET_CHANGED`, for
+/// the reason that code gives for not reusing the token one: the sheet did
+/// not move, and every board listening for sheet changes would re-read
+/// status bars for nothing.
+///
+/// The payload names the character and **not** the person. Every member of
+/// the world receives every event, and who holds what on a character is the
+/// ownership block, which only the Game Master may read. Each client asks
+/// again what *it* may do, and the server answers per caller.
+///
+/// Payload: `{"action": "changed", "actorId": <id>}`.
+pub const EVENT_CODE_ACTOR_ACCESS_CHANGED: i32 = 31;
+
+/// Announce [`EVENT_CODE_ACTOR_ACCESS_CHANGED`] for one character.
+///
+/// One function for the five writers — claim, bind, release, hand set, hand
+/// remove — so the payload has one shape and none of them can add the user
+/// id the constant's comment explains is left out. Called after the write
+/// has committed, and best-effort like every other announcement: a failure
+/// is logged by `record_world_event` and costs a stale page, not the grant.
+pub fn announce_actor_access_changed(
+    conn: &mut PgConnection,
+    world_id: Uuid,
+    actor_id: Uuid,
+    caller_id: Uuid,
+) {
+    let _ = record_world_event(
+        conn,
+        world_id,
+        EVENT_CODE_ACTOR_ACCESS_CHANGED,
+        Some(serde_json::json!({
+            "action": "changed",
+            "actorId": actor_id,
+        })),
+        caller_id,
+    );
+}
+
 /// Record a world event to the audit trail and trigger NOTIFY for real-time sync.
 ///
 /// # Failures are logged here, not at the call sites

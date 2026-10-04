@@ -113,6 +113,7 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20260922-107](./20260922-107-a_feature_is_proven_by_a_declared_slice.md) | Accepted | A Feature Is Proven by a Declared Slice |
 | [20260923-108](./20260923-108-a_generic_world_settings_surface_is_deferred.md) | Accepted | A Generic World-Settings Surface Is Deferred, Not Rejected |
 | [20261002-109](./20261002-109-an_instance_states_whether_it_publishes.md) | Accepted | An Instance States Whether It Publishes, and That Statement Decides What It Is Asked For |
+| [20261003-110](./20261003-110-a_claim_grants_editor_and_takes_it_back.md) | Proposed | A Claim Grants Editor, and Takes It Back |
 
 > **Note (2026-08-19):** ADRs 020–024 originally collided with an unrelated "pack system" batch that reused the same day-020 through day-024 numbers. The world-domain ADRs (020–024 above) were committed first and are documented here; the colliding pack-system ADRs were renumbered to 026–030. See `docs/SYSTEM_HOOKS_API_GUIDE.md` and ADR-036's "Related Decisions" for the corrected references.
 

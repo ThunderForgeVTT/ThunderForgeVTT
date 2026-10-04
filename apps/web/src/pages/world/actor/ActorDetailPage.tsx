@@ -31,6 +31,8 @@ import { ActorInventoryPanel } from "@/pages/world/actor/ActorInventoryPanel";
 import { ActorLorePanel } from "@/pages/world/actor/ActorLorePanel";
 import { ActorOwnershipBlock } from "@/pages/world/actor/ActorOwnershipBlock";
 import { WorldAppearance } from "@/appearance/WorldAppearance";
+import { startActorAccessEventSync } from "@/engine/world/sync/actorAccess";
+import { subscribeToWorldEvents } from "@/engine/world/sync/subscriptionClient";
 import { PackActorSheet } from "@/pages/world/actor/PackActorSheet";
 import { SystemChecksPanel } from "@/pages/world/actor/SystemChecksPanel";
 import { resolvePanel } from "@/panels/systemPanels";
@@ -109,6 +111,43 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
 
     return () => {
       active = false;
+    };
+  }, [worldId, actorId]);
+
+  // Spec 063 SC-003: what this caller may do to the character can change
+  // while the page is open — they claim it, the Game Master releases it, or
+  // the ownership block is edited — and `myPermissionLevel` is read once
+  // above. The event says only that access to an actor changed, so the actor
+  // is read again and the server says what this caller now holds.
+  //
+  // Only the actor is replaced. The form fields are left alone: somebody
+  // losing or gaining access is no reason to discard what they have typed.
+  useEffect(() => {
+    let active = true;
+    const stop = startActorAccessEventSync(
+      {
+        onActorAccessChanged: (changedActorId) => {
+          if (changedActorId !== actorId) {
+            return;
+          }
+          void getActor(worldId, actorId)
+            .then((fresh) => {
+              if (active && fresh) {
+                setActor(fresh);
+              }
+            })
+            // A re-read that fails leaves the page as it was. The server
+            // still refuses whatever this caller may no longer do.
+            .catch(() => undefined);
+        },
+      },
+      // Not play: this page stays open to a world's members while its play
+      // is paused, as `WorldAppearance` explains for the same choice.
+      subscribeToWorldEvents(worldId, { announcePause: false }),
+    );
+    return () => {
+      active = false;
+      stop();
     };
   }, [worldId, actorId]);
 
@@ -496,16 +535,18 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
 
           Who is offered the controls is the server's answer, not this page's:
           `myMayChangeImagery` is B6 of spec 044 (ADR-105), the rule
-          `uploadActorImage` itself enforces — Editor or above, or the player
-          holding this character while the world allows it and the Game
-          Master has not locked its look. The server refuses the upload
+          `uploadActorImage` itself enforces — Editor or above granted by hand,
+          or the player holding this character while the world allows it and
+          the Game Master has not locked its look (the Editor a claim grants
+          does not get past either switch: spec 063 FR-009). The server refuses the upload
           regardless (Constitution Principle III); this only decides what is
           offered.
 
-          Both modes, since spec 044 phase (c). A player holding a character
-          resolves to Viewer on it and is redirected away from /edit, so the
-          view route is the only place their own character's look can be
-          changed. Everyone else sees the pictures without the controls.
+          Both modes, since spec 044 phase (c). A holder has been able to
+          reach /edit since spec 063 gave a claim Editor, but the view route
+          is where a player lands on their own character, and the look is as
+          much theirs to change there. Everyone else sees the pictures
+          without the controls.
         */}
         <div className="grid gap-3">
           <ActorImageryPanel

@@ -159,4 +159,70 @@ mod tests {
             "removed grant must not remain as an explicit row"
         );
     }
+
+    /// Spec 063: a hand edit of the ownership block is announced to the
+    /// world, so the player it concerns learns of it without reloading. An
+    /// edit that changed nothing announces nothing.
+    #[tokio::test]
+    async fn a_hand_edit_announces_the_access_change() {
+        use crate::schema::world_events;
+        use crate::world_events::EVENT_CODE_ACTOR_ACCESS_CHANGED;
+        use diesel::prelude::*;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let scene_id = crate::test_support::insert_test_scene(&mut conn, world_id, owner_id);
+        let actor_id =
+            crate::test_support::insert_test_actor(&mut conn, world_id, scene_id, owner_id);
+        let player_id = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, player_id, "Player");
+        drop(conn);
+
+        let announced = || -> Vec<serde_json::Value> {
+            let mut conn = state.db_pool.get().unwrap();
+            world_events::table
+                .filter(world_events::world_id.eq(world_id))
+                .filter(world_events::event_code.eq(EVENT_CODE_ACTOR_ACCESS_CHANGED))
+                .select(world_events::token_event)
+                .load::<Option<serde_json::Value>>(&mut conn)
+                .unwrap()
+                .into_iter()
+                .flatten()
+                .collect()
+        };
+
+        remove_actor_permission_impl(&state, owner_id, false, actor_id, player_id)
+            .await
+            .expect("removing a grant that is not there is not an error");
+        assert!(announced().is_empty(), "nothing was removed");
+
+        set_actor_permission_impl(
+            &state,
+            owner_id,
+            false,
+            SetActorPermissionInput {
+                actor_id,
+                user_id: player_id,
+                level: ActorPermissionLevel::Editor,
+            },
+        )
+        .await
+        .expect("DM should grant Editor");
+        assert_eq!(announced().len(), 1);
+
+        remove_actor_permission_impl(&state, owner_id, false, actor_id, player_id)
+            .await
+            .expect("DM should remove the grant");
+        let all = announced();
+        assert_eq!(all.len(), 2);
+        for payload in all {
+            assert_eq!(
+                payload,
+                serde_json::json!({ "action": "changed", "actorId": actor_id }),
+                "the payload names the character and nobody's user id"
+            );
+        }
+    }
 }
