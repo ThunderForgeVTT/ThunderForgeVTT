@@ -85,6 +85,7 @@ pub(super) fn gm_view(
     crate::graphql::queries::interactives::GraphQLInteractive {
         interactive_id: row.interactive_id,
         scene_id: row.scene_id,
+        level_id: row.level_id,
         subject_kind: row.subject_kind,
         subject_ref: row.subject_ref,
         geometry: row.geometry.map(Json),
@@ -326,6 +327,17 @@ pub(crate) async fn decide_request_impl(
                     )
                     .map_err(|e| Error::new(format!("Failed to perform effect: {e}")))?;
                     result.notices = performed.notices.clone();
+                    // Scene levels: an approved way between floors moves the
+                    // token that asked. One that has since been deleted has
+                    // nowhere to be moved from, and the approval stands.
+                    if crate::level_travel::is_travel(&loaded.row)
+                        && let Some(token_id) =
+                            crate::level_travel::traveller_of_request(&mut conn, request_id)
+                                .map_err(|_| Error::new("Failed to perform effect"))?
+                    {
+                        crate::level_travel::travel(&mut conn, token_id, &loaded.row, user_id)
+                            .map_err(|e| Error::new(e.to_string()))?;
+                    }
                     if let Some(subject) = performed.door {
                         // Through the one announcer, so an opened door reaches
                         // every board the same way a designated one does.

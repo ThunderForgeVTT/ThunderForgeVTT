@@ -206,6 +206,36 @@ pub const EVENT_CODE_OFFER_CHANGED: i32 = 30;
 /// Payload: `{"action": "changed", "actorId": <id>}`.
 pub const EVENT_CODE_ACTOR_ACCESS_CHANGED: i32 = 31;
 
+// 32 is spoken for by a branch that lands before this one.
+
+/// A scene's levels changed: one was added, renamed, reordered, given a new
+/// board, made the entry level, or removed.
+///
+/// Every member receives this and re-reads `sceneLevels`, which answers each
+/// of them only for the levels they may read. So the payload can name the
+/// level without telling a player anything: an id they cannot ask about.
+///
+/// Payload: `{"action": "created"|"updated"|"reordered"|"deleted",
+/// "scene_id": <id>, "level_id": <id|null>}`. `level_id` is null for a
+/// reorder, which concerns all of them.
+pub const EVENT_CODE_SCENE_LEVEL_CHANGED: i32 = 33;
+
+/// A token moved from one level of a scene to another — by the stairs, or by
+/// a Game Master's hand.
+///
+/// Its own code rather than `EVENT_CODE_TOKEN_CHANGED` alone, because the
+/// right reaction is different. A token that changed is re-read; a token that
+/// travelled may have left the level a client is showing, or arrived on it,
+/// or — for the player who controls it — changed which level they may read
+/// at all. A client re-reads its whole level, starting with `sceneLevels`.
+///
+/// The payload deliberately names neither level. Every member of the world
+/// receives every event, and where a token went is what a player on another
+/// floor is not told.
+///
+/// Payload: `{"token_id": <id>, "scene_id": <id>}`.
+pub const EVENT_CODE_TOKEN_TRAVELLED: i32 = 34;
+
 /// Announce [`EVENT_CODE_ACTOR_ACCESS_CHANGED`] for one character.
 ///
 /// One function for the five writers — claim, bind, release, hand set, hand

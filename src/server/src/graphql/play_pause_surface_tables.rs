@@ -188,6 +188,27 @@ pub const GATED: &[(&str, &str)] = &[
         "activateInteractive",
         r#"mutation { activateInteractive(interactiveId: "{interactive}") { __typename } }"#,
     ),
+    // --- scene levels -----------------------------------------------------
+    (
+        "createSceneLevel",
+        r#"mutation { createSceneLevel(input: { sceneId: "{scene}", name: "Loft" }) { __typename } }"#,
+    ),
+    (
+        "updateSceneLevel",
+        r#"mutation { updateSceneLevel(levelId: "{level}", input: { name: "Attic" }) { __typename } }"#,
+    ),
+    (
+        "reorderSceneLevels",
+        r#"mutation { reorderSceneLevels(sceneId: "{scene}", levelIds: ["{level}"]) { __typename } }"#,
+    ),
+    (
+        "deleteSceneLevel",
+        r#"mutation { deleteSceneLevel(levelId: "{level}") }"#,
+    ),
+    (
+        "moveTokensToLevel",
+        r#"mutation { moveTokensToLevel(tokenIds: ["{token}"], levelId: "{level}") { __typename } }"#,
+    ),
     (
         "approveRequest",
         r#"mutation { approveRequest(requestId: "{request}") { __typename } }"#,

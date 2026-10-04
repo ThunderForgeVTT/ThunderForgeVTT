@@ -9,6 +9,7 @@
 //! | Table | Copied | Why |
 //! |---|---|---|
 //! | `scenes` | yes | the place itself |
+//! | `scene_levels` | yes | the floors of the place; every copied row lands on the copy of the level it stood on |
 //! | `walls` | yes | the shape of the place — SC-008a names it |
 //! | `light_sources` | yes | how the place is lit — SC-008a names it |
 //! | `shapes` | yes | drawn scenery, by the same argument |
@@ -142,10 +143,17 @@ pub fn copy_scene(
         }
     }
 
+    // --- levels ---
+    let (level_map, entry_level) = copy_levels(conn, ctx, source_id, new_scene_id)?;
+    // Every row's level belongs to its own scene, so the map always answers;
+    // the entry level is only what a row falls back to if it somehow did not.
+    let level_of = |old: Uuid| level_map.get(&old).copied().unwrap_or(entry_level);
+
     // --- walls (SC-008a) ---
     let wall_rows = walls::table
         .filter(walls::scene_id.eq(source_id))
         .select((
+            walls::level_id,
             walls::x1,
             walls::y1,
             walls::x2,
@@ -158,6 +166,7 @@ pub fn copy_scene(
             walls::secret,
         ))
         .load::<(
+            Uuid,
             f64,
             f64,
             f64,
@@ -170,13 +179,25 @@ pub fn copy_scene(
             bool,
         )>(conn)?;
 
-    for (x1, y1, x2, y2, blocks_vision, blocks_movement, metadata, door_state, locked, secret) in
-        wall_rows
+    for (
+        level_id,
+        x1,
+        y1,
+        x2,
+        y2,
+        blocks_vision,
+        blocks_movement,
+        metadata,
+        door_state,
+        locked,
+        secret,
+    ) in wall_rows
     {
         diesel::insert_into(walls::table)
             .values((
                 walls::wall_id.eq(Uuid::now_v7()),
                 walls::scene_id.eq(new_scene_id),
+                walls::level_id.eq(level_of(level_id)),
                 walls::x1.eq(x1),
                 walls::y1.eq(y1),
                 walls::x2.eq(x2),
@@ -199,6 +220,7 @@ pub fn copy_scene(
     let light_rows = light_sources::table
         .filter(light_sources::scene_id.eq(source_id))
         .select((
+            light_sources::level_id,
             light_sources::x,
             light_sources::y,
             light_sources::radius,
@@ -209,6 +231,7 @@ pub fn copy_scene(
             light_sources::metadata,
         ))
         .load::<(
+            Uuid,
             f64,
             f64,
             f64,
@@ -219,11 +242,14 @@ pub fn copy_scene(
             Option<serde_json::Value>,
         )>(conn)?;
 
-    for (x, y, radius, bright_radius, intensity, color, casts_shadows, metadata) in light_rows {
+    for (level_id, x, y, radius, bright_radius, intensity, color, casts_shadows, metadata) in
+        light_rows
+    {
         diesel::insert_into(light_sources::table)
             .values((
                 light_sources::light_id.eq(Uuid::now_v7()),
                 light_sources::scene_id.eq(new_scene_id),
+                light_sources::level_id.eq(level_of(level_id)),
                 light_sources::x.eq(x),
                 light_sources::y.eq(y),
                 light_sources::radius.eq(radius),
@@ -247,6 +273,7 @@ pub fn copy_scene(
     let shape_rows = shapes::table
         .filter(shapes::scene_id.eq(source_id))
         .select((
+            shapes::level_id,
             shapes::kind,
             shapes::geometry,
             shapes::text,
@@ -255,6 +282,7 @@ pub fn copy_scene(
             shapes::metadata,
         ))
         .load::<(
+            Uuid,
             String,
             serde_json::Value,
             Option<String>,
@@ -263,11 +291,12 @@ pub fn copy_scene(
             Option<serde_json::Value>,
         )>(conn)?;
 
-    for (kind, geometry, text, style, visible_to_players, metadata) in shape_rows {
+    for (level_id, kind, geometry, text, style, visible_to_players, metadata) in shape_rows {
         diesel::insert_into(shapes::table)
             .values((
                 shapes::shape_id.eq(Uuid::now_v7()),
                 shapes::scene_id.eq(new_scene_id),
+                shapes::level_id.eq(level_of(level_id)),
                 shapes::kind.eq(kind),
                 shapes::geometry.eq(geometry),
                 shapes::text.eq(text),
@@ -319,6 +348,84 @@ pub fn copy_scene(
     ctx.scene_map.insert(source_id, new_scene_id);
     ctx.record("scene", new_scene_id, &name);
     Ok(())
+}
+
+/// The source scene's levels, rebuilt under the new scene.
+///
+/// Returns the map from each source level to its copy (and the new scene's
+/// entry level), which is what lets a
+/// wall, a light and a drawing land on the floor they came from rather than
+/// all collapsing onto the ground.
+///
+/// The new scene already has an entry level — the database made one the
+/// moment the scene row was inserted, and mirrored the scene's board onto it.
+/// So the source's entry level is *renamed onto* that row rather than
+/// inserted beside it, and only the other levels are new rows.
+fn copy_levels(
+    conn: &mut PgConnection,
+    ctx: &mut CopyContext,
+    source_id: Uuid,
+    new_scene_id: Uuid,
+) -> Result<(std::collections::HashMap<Uuid, Uuid>, Uuid), CopyError> {
+    use crate::models::SceneLevel;
+    use crate::schema::scene_levels;
+
+    let source_levels = scene_levels::table
+        .filter(scene_levels::scene_id.eq(source_id))
+        .order(scene_levels::sort_order.asc())
+        .select(SceneLevel::as_select())
+        .load::<SceneLevel>(conn)?;
+
+    let new_entry: Uuid = scene_levels::table
+        .filter(scene_levels::scene_id.eq(new_scene_id))
+        .filter(scene_levels::is_entry.eq(true))
+        .select(scene_levels::level_id)
+        .first(conn)?;
+
+    let now = chrono::Utc::now().naive_utc();
+    let mut map = std::collections::HashMap::new();
+    for level in source_levels {
+        if level.is_entry {
+            diesel::update(scene_levels::table.filter(scene_levels::level_id.eq(new_entry)))
+                .set((
+                    scene_levels::name.eq(&level.name),
+                    scene_levels::sort_order.eq(level.sort_order),
+                    scene_levels::hidden.eq(level.hidden),
+                ))
+                .execute(conn)?;
+            map.insert(level.level_id, new_entry);
+            continue;
+        }
+
+        let new_level_id = Uuid::now_v7();
+        diesel::insert_into(scene_levels::table)
+            .values((
+                scene_levels::level_id.eq(new_level_id),
+                scene_levels::scene_id.eq(new_scene_id),
+                scene_levels::name.eq(&level.name),
+                scene_levels::sort_order.eq(level.sort_order),
+                scene_levels::is_entry.eq(false),
+                scene_levels::hidden.eq(level.hidden),
+                scene_levels::background_image_path.eq(&level.background_image_path),
+                scene_levels::width.eq(level.width),
+                scene_levels::height.eq(level.height),
+                scene_levels::ambient_light.eq(&level.ambient_light),
+                scene_levels::created_by.eq(ctx.user_id),
+                scene_levels::updated_by.eq(ctx.user_id),
+                scene_levels::created_at.eq(now),
+                scene_levels::updated_at.eq(now),
+            ))
+            .execute(conn)?;
+        // Each floor's image, on the same terms as the scene's own.
+        if let Some(asset_id) = level.background_asset_id {
+            let copied = copy_background_asset(conn, ctx, asset_id, new_scene_id)?;
+            diesel::update(scene_levels::table.filter(scene_levels::level_id.eq(new_level_id)))
+                .set(scene_levels::background_asset_id.eq(copied))
+                .execute(conn)?;
+        }
+        map.insert(level.level_id, new_level_id);
+    }
+    Ok((map, new_entry))
 }
 
 /// A new asset row in the destination world, on the **same** `storage_path`.

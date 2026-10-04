@@ -138,6 +138,7 @@ impl LightSourceMutation {
 
         let light_id = uuid::Uuid::now_v7();
         let scene_id = input.scene_id;
+        let level_id = input.level_id;
         let x = input.x;
         let y = input.y;
         let radius = input.radius;
@@ -168,6 +169,8 @@ impl LightSourceMutation {
                 .values((
                     light_sources::light_id.eq(light_id),
                     light_sources::scene_id.eq(scene_id),
+                    // Left unset, the database puts it on the entry level.
+                    level_id.map(|level| light_sources::level_id.eq(level)),
                     light_sources::x.eq(x),
                     light_sources::y.eq(y),
                     light_sources::radius.eq(radius),

@@ -36,6 +36,7 @@ impl WallMutation {
 
         let wall_id = uuid::Uuid::now_v7();
         let scene_id = input.scene_id;
+        let level_id = input.level_id;
         let x1 = input.x1;
         let y1 = input.y1;
         let x2 = input.x2;
@@ -71,6 +72,8 @@ impl WallMutation {
                 .values((
                     walls::wall_id.eq(wall_id),
                     walls::scene_id.eq(scene_id),
+                    // Left unset, the database puts it on the entry level.
+                    level_id.map(|level| walls::level_id.eq(level)),
                     walls::x1.eq(x1),
                     walls::y1.eq(y1),
                     walls::x2.eq(x2),

@@ -158,6 +158,7 @@ fn creature(
 fn input(t: &Table, actor_id: Option<Uuid>, linked: Option<bool>) -> GraphQLCreateTokenInput {
     GraphQLCreateTokenInput {
         scene_id: t.scene_id,
+        level_id: None,
         actor_id,
         x: 0.0,
         y: 0.0,

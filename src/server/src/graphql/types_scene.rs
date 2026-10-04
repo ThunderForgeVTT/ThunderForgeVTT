@@ -306,6 +306,8 @@ impl GraphQLActorClaim {
 pub struct GraphQLWall {
     wall_id: uuid::Uuid,
     scene_id: uuid::Uuid,
+    /// Which of the scene's levels this stands on.
+    level_id: uuid::Uuid,
     x1: f64,
     y1: f64,
     x2: f64,
@@ -331,6 +333,7 @@ impl From<crate::models::Wall> for GraphQLWall {
         Self {
             wall_id: wall.wall_id,
             scene_id: wall.scene_id,
+            level_id: wall.level_id,
             x1: wall.x1,
             y1: wall.y1,
             x2: wall.x2,
@@ -353,6 +356,8 @@ impl From<crate::models::Wall> for GraphQLWall {
 pub struct GraphQLLightSource {
     light_id: uuid::Uuid,
     scene_id: uuid::Uuid,
+    /// Which of the scene's levels this stands on.
+    level_id: uuid::Uuid,
     x: f64,
     y: f64,
     /// How far the light reaches at all: its dim reach, in world units.
@@ -375,6 +380,7 @@ impl From<crate::models::LightSource> for GraphQLLightSource {
         Self {
             light_id: light.light_id,
             scene_id: light.scene_id,
+            level_id: light.level_id,
             x: light.x,
             y: light.y,
             radius: light.radius,
@@ -396,6 +402,8 @@ impl From<crate::models::LightSource> for GraphQLLightSource {
 pub struct GraphQLShape {
     shape_id: uuid::Uuid,
     scene_id: uuid::Uuid,
+    /// Which of the scene's levels this stands on.
+    level_id: uuid::Uuid,
     kind: GraphQLShapeKind,
     geometry: Json<serde_json::Value>,
     text: Option<String>,
@@ -413,6 +421,7 @@ impl From<crate::models::Shape> for GraphQLShape {
         Self {
             shape_id: shape.shape_id,
             scene_id: shape.scene_id,
+            level_id: shape.level_id,
             kind: GraphQLShapeKind::from_db_str(&shape.kind),
             geometry: Json(shape.geometry),
             text: shape.text,
@@ -431,6 +440,8 @@ impl From<crate::models::Shape> for GraphQLShape {
 pub struct GraphQLToken {
     token_id: uuid::Uuid,
     scene_id: uuid::Uuid,
+    /// Which of the scene's levels this stands on.
+    level_id: uuid::Uuid,
     actor_id: Option<uuid::Uuid>,
     x: f64,
     y: f64,
@@ -480,6 +491,7 @@ impl From<crate::models::Token> for GraphQLToken {
             name_visible_to_players: token.name_visible_to_players,
             token_id: token.token_id,
             scene_id: token.scene_id,
+            level_id: token.level_id,
             actor_id: token.actor_id,
             x: token.x,
             y: token.y,
@@ -554,6 +566,8 @@ impl GraphQLToken {
 pub struct GraphQLFogMask {
     fog_id: uuid::Uuid,
     scene_id: uuid::Uuid,
+    /// Which of the scene's levels this stands on.
+    level_id: uuid::Uuid,
     bitmap_data_base64: String,
     version: i32,
     width: i32,
@@ -568,6 +582,7 @@ impl From<crate::models::FogMask> for GraphQLFogMask {
         Self {
             fog_id: fog.fog_id,
             scene_id: fog.scene_id,
+            level_id: fog.level_id,
             bitmap_data_base64: fog.bitmap_data_base64(),
             version: fog.version,
             width: fog.width,

@@ -6,8 +6,8 @@ use crate::schema::{
     interactives, light_sources, login_two_factor_challenges, lore_disassociation_notices,
     lore_exported_entries, lore_fidelity_notes, lore_pending_incoming_changes,
     lore_repository_connections, lore_sync_runs, oauth_authorization_sessions,
-    oauth_link_challenges, oauth_providers, scene_state_fingerprints, scenes, shapes, tokens,
-    user_oauth_accounts, user_recovery_codes, user_sessions, users, walls, world_abilities,
+    oauth_link_challenges, oauth_providers, scene_levels, scene_state_fingerprints, scenes, shapes,
+    tokens, user_oauth_accounts, user_recovery_codes, user_sessions, users, walls, world_abilities,
     world_ability_effects, world_ability_permissions, world_ability_shares, world_actor_abilities,
     world_actor_claims, world_actor_images, world_actor_inventory, world_actor_permissions,
     world_actor_shares, world_actor_system_data, world_actors, world_authoring_tool_grants,
@@ -726,6 +726,9 @@ pub struct Wall {
     pub locked: bool,
     /// Not drawn for players until revealed. Presentation only.
     pub secret: bool,
+    /// The level of the scene this stands on. Never null: see the
+    /// `scene_levels` migration.
+    pub level_id: uuid::Uuid,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
@@ -742,6 +745,9 @@ pub struct NewWall {
     pub metadata: Option<serde_json::Value>,
     pub created_by: uuid::Uuid,
     pub updated_by: uuid::Uuid,
+    /// `None` leaves it to the `fill_entry_level` trigger, which puts the row
+    /// on its scene's entry level.
+    pub level_id: Option<uuid::Uuid>,
 }
 
 #[derive(AsChangeset, Debug, Clone, Serialize, Deserialize)]
@@ -781,6 +787,9 @@ pub struct Interactive {
     pub updated_by: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// The level of the scene this stands on. Never null: see the
+    /// `scene_levels` migration.
+    pub level_id: uuid::Uuid,
 }
 
 #[derive(AsChangeset, Debug, Clone, Default)]
@@ -810,6 +819,36 @@ pub struct InteractionRequest {
     pub updated_by: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// The token the request is about, when it is about one (travel).
+    pub token_id: Option<uuid::Uuid>,
+}
+
+// ========== Scene levels ==========
+
+/// One level of a scene: a board of its own, in a stack the scene orders.
+///
+/// The entry level's board columns are kept equal to its scene's by a
+/// database trigger, so the scene's own columns still answer every reader
+/// that predates levels.
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = scene_levels)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct SceneLevel {
+    pub level_id: uuid::Uuid,
+    pub scene_id: uuid::Uuid,
+    pub name: String,
+    pub sort_order: i32,
+    pub is_entry: bool,
+    pub hidden: bool,
+    pub background_image_path: Option<String>,
+    pub background_asset_id: Option<uuid::Uuid>,
+    pub width: i32,
+    pub height: i32,
+    pub ambient_light: String,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
 }
 
 // ========== LightSource Models (native canvas authoring) ==========
@@ -835,6 +874,9 @@ pub struct LightSource {
     /// How far the light is bright (spec 045 FR-061). `radius` is how far it
     /// reaches at all: its dim reach. Never beyond it.
     pub bright_radius: f64,
+    /// The level of the scene this stands on. Never null: see the
+    /// `scene_levels` migration.
+    pub level_id: uuid::Uuid,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
@@ -852,6 +894,9 @@ pub struct NewLightSource {
     pub created_by: uuid::Uuid,
     pub updated_by: uuid::Uuid,
     pub bright_radius: f64,
+    /// `None` leaves it to the `fill_entry_level` trigger, which puts the row
+    /// on its scene's entry level.
+    pub level_id: Option<uuid::Uuid>,
 }
 
 #[derive(AsChangeset, Debug, Clone, Serialize, Deserialize)]
@@ -887,6 +932,9 @@ pub struct Shape {
     pub updated_by: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// The level of the scene this stands on. Never null: see the
+    /// `scene_levels` migration.
+    pub level_id: uuid::Uuid,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
@@ -901,6 +949,9 @@ pub struct NewShape {
     pub metadata: Option<serde_json::Value>,
     pub created_by: uuid::Uuid,
     pub updated_by: uuid::Uuid,
+    /// `None` leaves it to the `fill_entry_level` trigger, which puts the row
+    /// on its scene's entry level.
+    pub level_id: Option<uuid::Uuid>,
 }
 
 #[derive(AsChangeset, Debug, Clone, Serialize, Deserialize)]
@@ -950,6 +1001,9 @@ pub struct Token {
     /// An unlinked copy's own `resource_data`-shaped record, seeded from its
     /// actor when placed. Always `None` on a linked token (a CHECK says so).
     pub system_data: Option<serde_json::Value>,
+    /// The level of the scene this stands on. Never null: see the
+    /// `scene_levels` migration.
+    pub level_id: uuid::Uuid,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
@@ -967,6 +1021,9 @@ pub struct NewToken {
     pub photo_url: Option<String>,
     /// `None` takes the column default, which is `character`.
     pub token_type: Option<String>,
+    /// `None` leaves it to the `fill_entry_level` trigger, which puts the row
+    /// on its scene's entry level.
+    pub level_id: Option<uuid::Uuid>,
 }
 
 #[derive(AsChangeset, Debug, Clone, Serialize, Deserialize)]
@@ -1008,6 +1065,9 @@ pub struct FogMask {
     pub updated_by: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// The level of the scene this stands on. Never null: see the
+    /// `scene_levels` migration.
+    pub level_id: uuid::Uuid,
 }
 
 #[derive(Insertable, Debug, Clone)]
@@ -1019,6 +1079,9 @@ pub struct NewFogMask {
     pub width: i32,
     pub height: i32,
     pub updated_by: uuid::Uuid,
+    /// `None` leaves it to the `fill_entry_level` trigger, which puts the row
+    /// on its scene's entry level.
+    pub level_id: Option<uuid::Uuid>,
 }
 
 #[derive(AsChangeset, Debug, Clone)]
@@ -1057,6 +1120,7 @@ impl NewFogMask {
             width,
             height,
             updated_by,
+            level_id: None,
         })
     }
 }

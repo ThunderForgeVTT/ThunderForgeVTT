@@ -533,6 +533,7 @@ impl SceneMutation {
         let now = Utc::now().naive_utc();
 
         let scene_id = input.scene_id;
+        let requested_level = input.level_id;
         let bitmap_data_base64 = input.bitmap_data_base64;
         let width = input.width;
         let height = input.height;
@@ -545,10 +546,23 @@ impl SceneMutation {
                 .decode(&bitmap_data_base64)
                 .map_err(|_| DieselError::NotFound)?;
 
+            // Fog is one mask per level. A level named here must be one of
+            // this scene's; none named means the entry level, which is what
+            // every scene's fog was before a scene had more than one floor.
+            let level_id = match requested_level {
+                Some(level) => crate::schema::scene_levels::table
+                    .filter(crate::schema::scene_levels::level_id.eq(level))
+                    .filter(crate::schema::scene_levels::scene_id.eq(scene_id))
+                    .select(crate::schema::scene_levels::level_id)
+                    .first::<uuid::Uuid>(&mut conn)?,
+                None => crate::auth::level_visibility::entry_level(&mut conn, scene_id)?,
+            };
+
             diesel::insert_into(fog_masks::table)
                 .values((
                     fog_masks::fog_id.eq(uuid::Uuid::now_v7()),
                     fog_masks::scene_id.eq(scene_id),
+                    fog_masks::level_id.eq(level_id),
                     fog_masks::bitmap_data.eq(&bitmap_bytes),
                     fog_masks::version.eq(1),
                     fog_masks::width.eq(width),
@@ -557,7 +571,7 @@ impl SceneMutation {
                     fog_masks::created_at.eq(now),
                     fog_masks::updated_at.eq(now),
                 ))
-                .on_conflict(fog_masks::scene_id)
+                .on_conflict((fog_masks::scene_id, fog_masks::level_id))
                 .do_update()
                 .set((
                     fog_masks::bitmap_data.eq(&bitmap_bytes),

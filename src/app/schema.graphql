@@ -372,7 +372,31 @@ type AppMutationRoot {
 	Every refusal is decided at the server, from stored state. A client
 	that draws the button anyway is told no.
 	"""
-	activateInteractive(interactiveId: UUID!): GraphQLActivationResult!
+	activateInteractive(interactiveId: UUID!, tokenId: UUID): GraphQLActivationResult!
+	"""
+	Add a level above the scene's others. A scene has at most 12.
+	"""
+	createSceneLevel(input: GraphQLCreateSceneLevelInput!): GraphQLSceneLevel!
+	"""
+	Rename a level, hide it, change its board, or make it the entry.
+	"""
+	updateSceneLevel(levelId: UUID!, input: GraphQLUpdateSceneLevelInput!): GraphQLSceneLevel!
+	"""
+	Put the scene's levels in the order given, lowest first. `levelIds`
+	names every level of the scene exactly once.
+	"""
+	reorderSceneLevels(sceneId: UUID!, levelIds: [UUID!]!): [GraphQLSceneLevel!]!
+	"""
+	Delete a level and the walls, lights, shapes, interactives and fog on
+	it. Refused for the last level, for the entry level, and while any
+	token stands on it. Returns the deleted level's id.
+	"""
+	deleteSceneLevel(levelId: UUID!): UUID!
+	"""
+	Carry tokens to another level of their scene. With `x` and `y` they
+	are set down around that point; without, each keeps its position.
+	"""
+	moveTokensToLevel(tokenIds: [UUID!]!, levelId: UUID!, x: Float, y: Float): [GraphQLToken!]!
 	"""
 	Create a new token on a scene (scene owner only)
 	
@@ -1082,22 +1106,22 @@ type AppQueryRoot {
 	adminBootstrapSettings: GraphQLAdminBootstrapSettings
 	scenes(worldId: UUID!): [GraphQLScene!]!
 	scene(sceneId: UUID!): GraphQLScene
-	tokens(sceneId: UUID!): [GraphQLToken!]!
-	fogMask(sceneId: UUID!): GraphQLFogMask
-	walls(sceneId: UUID!): [GraphQLWall!]!
+	tokens(sceneId: UUID!, levelId: UUID): [GraphQLToken!]!
+	fogMask(sceneId: UUID!, levelId: UUID): GraphQLFogMask
+	walls(sceneId: UUID!, levelId: UUID): [GraphQLWall!]!
 	"""
 	Returns all light sources for the scene. Light effects are
 	player-visible by nature (FR-005) — there is no GM-only light data,
 	so any authenticated scene participant may read this list.
 	"""
-	lightSources(sceneId: UUID!): [GraphQLLightSource!]!
+	lightSources(sceneId: UUID!, levelId: UUID): [GraphQLLightSource!]!
 	"""
 	Shapes drawn on a scene's canvas (native canvas authoring). Returns
 	every shape to the scene owner/GM; returns only
 	`visible_to_players = true` shapes to any other authenticated
 	scene participant (FR-009: players never see GM-only shapes).
 	"""
-	shapes(sceneId: UUID!): [GraphQLShape!]!
+	shapes(sceneId: UUID!, levelId: UUID): [GraphQLShape!]!
 	"""
 	Every token on a scene, with each one's resources reduced to what this
 	viewer is entitled to see.
@@ -1157,7 +1181,13 @@ type AppQueryRoot {
 	"""
 	Every interactive on a scene, as this viewer may know it.
 	"""
-	interactives(sceneId: UUID!): [GraphQLInteractive!]!
+	interactives(sceneId: UUID!, levelId: UUID): [GraphQLInteractive!]!
+	"""
+	The levels of a scene, lowest first. A Game Master sees all of them;
+	a player sees the ones they have a token on, or the entry level when
+	they have none.
+	"""
+	sceneLevels(sceneId: UUID!): [GraphQLSceneLevel!]!
 	"""
 	The tool ids the caller may author with in this world.
 	
@@ -3240,6 +3270,11 @@ type GraphQLContentInventory {
 input GraphQLCreateInteractiveInput {
 	sceneId: UUID!
 	"""
+	Which level it goes on. Omitted: its subject's level, and for a
+	region the scene's entry level.
+	"""
+	levelId: UUID
+	"""
 	`prop`, `door` or `region`.
 	"""
 	subjectKind: String!
@@ -3275,6 +3310,10 @@ Input for creating a new light source
 """
 input GraphQLCreateLightSourceInput {
 	sceneId: UUID!
+	"""
+	Which level it goes on. Omitted: the scene's entry level.
+	"""
+	levelId: UUID
 	x: Float!
 	y: Float!
 	"""
@@ -3309,11 +3348,34 @@ input GraphQLCreateSceneInput {
 	metadata: JSON
 }
 
+input GraphQLCreateSceneLevelInput {
+	sceneId: UUID!
+	name: String!
+	hidden: Boolean
+	"""
+	Left out: the scene's own size.
+	"""
+	width: Int
+	height: Int
+	"""
+	`bright`, `dim` or `dark`. Left out: the scene's own.
+	"""
+	ambientLight: String
+	"""
+	An image already uploaded to this world.
+	"""
+	backgroundAssetId: UUID
+}
+
 """
 Input for creating a new shape
 """
 input GraphQLCreateShapeInput {
 	sceneId: UUID!
+	"""
+	Which level it goes on. Omitted: the scene's entry level.
+	"""
+	levelId: UUID
 	kind: GraphQLShapeKind!
 	geometry: JSON!
 	text: String
@@ -3327,6 +3389,10 @@ Input for creating a new token on a scene
 """
 input GraphQLCreateTokenInput {
 	sceneId: UUID!
+	"""
+	Which level it goes on. Omitted: the scene's entry level.
+	"""
+	levelId: UUID
 	actorId: UUID
 	x: Float!
 	y: Float!
@@ -3355,6 +3421,10 @@ Input for creating a new wall
 """
 input GraphQLCreateWallInput {
 	sceneId: UUID!
+	"""
+	Which level it goes on. Omitted: the scene's entry level.
+	"""
+	levelId: UUID
 	x1: Float!
 	y1: Float!
 	x2: Float!
@@ -3587,6 +3657,10 @@ type GraphQLExportMyDataPayload {
 type GraphQLFogMask {
 	fogId: UUID!
 	sceneId: UUID!
+	"""
+	Which of the scene's levels this stands on.
+	"""
+	levelId: UUID!
 	bitmapDataBase64: String!
 	version: Int!
 	width: Int!
@@ -3714,6 +3788,10 @@ One authored interactive, reduced to what this viewer has a use for.
 type GraphQLInteractive {
 	interactiveId: UUID!
 	sceneId: UUID!
+	"""
+	Which of the scene's levels it is on.
+	"""
+	levelId: UUID!
 	subjectKind: String!
 	subjectRef: UUID
 	"""
@@ -3887,6 +3965,10 @@ type GraphQLItemShareLink {
 type GraphQLLightSource {
 	lightId: UUID!
 	sceneId: UUID!
+	"""
+	Which of the scene's levels this stands on.
+	"""
+	levelId: UUID!
 	x: Float!
 	y: Float!
 	"""
@@ -4617,6 +4699,46 @@ type GraphQLSceneExploration {
 }
 
 """
+One level of a scene.
+"""
+type GraphQLSceneLevel {
+	levelId: UUID!
+	sceneId: UUID!
+	name: String!
+	"""
+	Position among the scene's levels, lowest floor first.
+	"""
+	sortOrder: Int!
+	"""
+	The level a scene opens on, and the one a thing is placed on when
+	nobody names another. Exactly one per scene.
+	"""
+	isEntry: Boolean!
+	"""
+	A Game Master's note that the floor is not ready. It is not what
+	keeps players out — see `auth::level_visibility`.
+	"""
+	hidden: Boolean!
+	backgroundAssetId: UUID
+	"""
+	Where the level's background can be fetched, when it has one. Built
+	exactly as `Scene.backgroundUrl` is.
+	"""
+	backgroundUrl: String
+	width: Int!
+	height: Int!
+	"""
+	`bright`, `dim` or `dark`.
+	"""
+	ambientLight: String!
+	"""
+	How many tokens stand on the level. Game Master only; `null` for
+	anyone else.
+	"""
+	tokenCount: Int
+}
+
+"""
 What a distance on a scene is measured in: how much one grid square is
 worth in its game system's units, what those units are called, and how many
 world units wide a square is.
@@ -4644,6 +4766,10 @@ type GraphQLSceneUnits {
 type GraphQLShape {
 	shapeId: UUID!
 	sceneId: UUID!
+	"""
+	Which of the scene's levels this stands on.
+	"""
+	levelId: UUID!
 	kind: GraphQLShapeKind!
 	geometry: JSON!
 	text: String
@@ -4737,6 +4863,10 @@ type GraphQLSystemManifest {
 type GraphQLToken {
 	tokenId: UUID!
 	sceneId: UUID!
+	"""
+	Which of the scene's levels this stands on.
+	"""
+	levelId: UUID!
 	actorId: UUID
 	x: Float!
 	y: Float!
@@ -4849,6 +4979,10 @@ Input for updating fog of war mask
 """
 input GraphQLUpdateFogMaskInput {
 	sceneId: UUID!
+	"""
+	Which level it goes on. Omitted: the scene's entry level.
+	"""
+	levelId: UUID
 	bitmapDataBase64: String!
 	width: Int!
 	height: Int!
@@ -4910,6 +5044,33 @@ input GraphQLUpdateSceneInput {
 	untouched.
 	"""
 	summaryMarkdown: String
+}
+
+"""
+Every field is optional; one left out is left as it is.
+"""
+input GraphQLUpdateSceneLevelInput {
+	name: String
+	hidden: Boolean
+	width: Int
+	height: Int
+	"""
+	`bright`, `dim` or `dark`.
+	"""
+	ambientLight: String
+	"""
+	An image already uploaded to this world.
+	"""
+	backgroundAssetId: UUID
+	"""
+	Remove the background. Wins over `backgroundAssetId`.
+	"""
+	clearBackground: Boolean
+	"""
+	`true` makes this the scene's entry level. There is no un-making one:
+	name another level the entry instead.
+	"""
+	makeEntry: Boolean
 }
 
 """
@@ -5039,6 +5200,10 @@ type GraphQLValueTrack {
 type GraphQLWall {
 	wallId: UUID!
 	sceneId: UUID!
+	"""
+	Which of the scene's levels this stands on.
+	"""
+	levelId: UUID!
 	x1: Float!
 	y1: Float!
 	x2: Float!

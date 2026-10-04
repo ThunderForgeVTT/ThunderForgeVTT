@@ -19,6 +19,19 @@
 //!
 //! When multi-scene navigation lands, it performs this effect. Nothing here
 //! changes.
+//!
+//! # Travel between levels is the complete one
+//!
+//! `nav.travel` moves a token between the levels of *one* scene, and it does
+//! move it. A transition is a pair of interactives — a stairwell region on
+//! each floor, a trapdoor and the ladder under it — each naming the other as
+//! its partner. A token that walks into one, or whose player clicks one, is
+//! put down at the other.
+//!
+//! The declaration is all that lives here. Who may travel, where exactly they
+//! land and who is told are the server's to decide, because a level is also a
+//! privacy boundary and a client cannot be the one to say which side of it a
+//! token is on.
 
 use crate::interaction::{ConfigField, ConfigFieldKind, EffectDeclaration, SubjectKind};
 
@@ -31,9 +44,48 @@ pub const SCENE: &str = "scene";
 /// The configuration key carrying the destination.
 pub const DESTINATION_KEY: &str = "destination";
 
+/// The effect id for travelling between the levels of a scene.
+pub const TRAVEL: &str = "nav.travel";
+
+/// What a travel partner reference points at.
+pub const INTERACTIVE: &str = "interactive";
+
+/// The configuration key carrying the partner: the interactive, usually on
+/// another level, that a traveller arrives at.
+pub const PARTNER_KEY: &str = "partner";
+
 /// What navigation contributes to the registry.
+///
+/// `nav.request_scene` stays first: it is the older of the two and its tests
+/// address it by position.
 pub fn effects() -> Vec<EffectDeclaration> {
-    vec![EffectDeclaration {
+    vec![request_scene(), travel()]
+}
+
+fn travel() -> EffectDeclaration {
+    EffectDeclaration {
+        id: TRAVEL.to_string(),
+        label: String::from("Travel to another level"),
+        description: String::from(
+            "Moves whoever walks in, or clicks, to the partner you choose — stairs, a ladder, a trapdoor. Give the partner the same effect pointing back for a way that works in both directions.",
+        ),
+        // A door is offered here where `nav.request_scene` withholds it: a
+        // trapdoor and a hatch are doors, and they are exactly how a table
+        // expects to change floors.
+        subject_kinds: vec![SubjectKind::Prop, SubjectKind::Door, SubjectKind::Region],
+        config: vec![ConfigField {
+            key: PARTNER_KEY.to_string(),
+            label: String::from("Arrives at"),
+            kind: ConfigFieldKind::Reference {
+                of: INTERACTIVE.to_string(),
+            },
+            required: true,
+        }],
+    }
+}
+
+fn request_scene() -> EffectDeclaration {
+    EffectDeclaration {
         id: REQUEST_SCENE.to_string(),
         label: String::from("Ask to travel to another scene"),
         description: String::from(
@@ -52,7 +104,12 @@ pub fn effects() -> Vec<EffectDeclaration> {
             },
             required: true,
         }],
-    }]
+    }
+}
+
+/// The partner a configured travel arrives at.
+pub fn partner_of(config: &serde_json::Value) -> Option<&str> {
+    config.get(PARTNER_KEY)?.as_str()
 }
 
 /// Where a configured request would go.
@@ -87,6 +144,22 @@ mod tests {
         assert!(
             validate_config(declaration, &serde_json::json!({ "destination": "s-1" })).is_empty()
         );
+    }
+
+    #[test]
+    fn level_travel_names_a_partner_and_may_sit_on_any_subject() {
+        let declaration = effects()
+            .into_iter()
+            .find(|d| d.id == TRAVEL)
+            .expect("declared");
+        assert_eq!(declaration.namespace(), "nav");
+        for kind in [SubjectKind::Prop, SubjectKind::Door, SubjectKind::Region] {
+            assert!(declaration.subject_kinds.contains(&kind));
+        }
+        assert!(!validate_config(&declaration, &serde_json::json!({})).is_empty());
+        let config = serde_json::json!({ "partner": "i-2" });
+        assert!(validate_config(&declaration, &config).is_empty());
+        assert_eq!(partner_of(&config), Some("i-2"));
     }
 
     #[test]

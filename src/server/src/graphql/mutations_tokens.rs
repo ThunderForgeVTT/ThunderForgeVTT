@@ -423,7 +423,7 @@ impl TokenMutation {
         let updated_token = tokio::task::spawn_blocking(move || {
             use crate::schema::tokens;
 
-            let token = diesel::update(tokens::table.filter(tokens::token_id.eq(token_id)))
+            let mut token = diesel::update(tokens::table.filter(tokens::token_id.eq(token_id)))
                 .set((tokens::x.eq(x), tokens::y.eq(y)))
                 .returning(crate::models::Token::as_returning())
                 .get_result(&mut conn)?;
@@ -455,6 +455,22 @@ impl TokenMutation {
                     })),
                     user_id,
                 );
+            }
+
+            // Scene levels: the move stands, and now the stairs get a say.
+            // A token that walked into a way between floors is set down at
+            // the other end (`level_travel`); the row returned is where it is.
+            let is_gm = crate::auth::world_membership::is_dm_of_scene(
+                &mut conn,
+                user_id,
+                is_admin,
+                token.scene_id,
+            )
+            .unwrap_or(false);
+            if let Ok(Some(crate::level_travel::Arrival::Travelled(arrived))) =
+                crate::level_travel::on_entering(&mut conn, &token, from, user_id, is_gm)
+            {
+                token = *arrived;
             }
 
             Ok::<_, DieselError>(token)
@@ -682,6 +698,7 @@ pub(crate) async fn create_token_impl(
 
     let token_id = uuid::Uuid::now_v7();
     let scene_id = input.scene_id;
+    let level_id = input.level_id;
     let actor_id = input.actor_id;
     let x = input.x;
     let y = input.y;
@@ -748,6 +765,8 @@ pub(crate) async fn create_token_impl(
             .values((
                 tokens::token_id.eq(token_id),
                 tokens::scene_id.eq(scene_id),
+                // Left unset, the database puts it on the entry level.
+                level_id.map(|level| tokens::level_id.eq(level)),
                 tokens::actor_id.eq(actor_id),
                 tokens::x.eq(x),
                 tokens::y.eq(y),
@@ -841,6 +860,9 @@ async fn judge_against_walls(
     use thunderforge_canvas_core::Vec2;
 
     let scene_id = existing.scene_id;
+    // Only the walls of the floor the token is on. The cellar's walls are not
+    // in the way of somebody crossing the room above it.
+    let level_id = existing.level_id;
     let mut conn = state
         .db_pool
         .get()
@@ -849,6 +871,7 @@ async fn judge_against_walls(
         use crate::schema::walls;
         walls::table
             .filter(walls::scene_id.eq(scene_id))
+            .filter(walls::level_id.eq(level_id))
             .select(crate::models::Wall::as_select())
             .load::<crate::models::Wall>(&mut conn)
     })

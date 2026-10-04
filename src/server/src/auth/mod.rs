@@ -62,6 +62,10 @@ pub mod world_membership;
 /// answer identically.
 pub mod scene_visibility;
 
+/// Scene levels: which floor of a scene a viewer may read — a Game Master
+/// any, a player only one their own token stands on.
+pub mod level_visibility;
+
 /// Spec 010: actor ownership/permission enforcement (`require_actor_permission`,
 /// `is_dm_of_world`).
 /// Spec 027 (US5): the single declaration of every permissioned content type,

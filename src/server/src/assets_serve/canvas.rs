@@ -131,6 +131,13 @@ async fn serve_canvas_asset(
         .runs_the_world();
         let visible = asset_scene_visible(&mut conn, is_dm, scene_id)
             .map_err(|e| WorldMembershipError::Database(e.to_string()))?;
+        // Scene levels: a floor's background is readable exactly when the
+        // floor is. Refused the same way as a hidden scene's, below.
+        let visible = visible
+            && crate::auth::level_visibility::asset_level_readable(
+                &mut conn, user_id, is_dm, asset_id,
+            )
+            .map_err(|e| WorldMembershipError::Database(e.to_string()))?;
         Ok::<bool, WorldMembershipError>(visible)
     })
     .await;

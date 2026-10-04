@@ -85,6 +85,8 @@ impl GraphQLDoorState {
 #[derive(InputObject, Debug, Clone)]
 pub struct GraphQLCreateWallInput {
     pub scene_id: Uuid,
+    /// Which level it goes on. Omitted: the scene's entry level.
+    pub level_id: Option<Uuid>,
     pub x1: f64,
     pub y1: f64,
     pub x2: f64,
@@ -114,6 +116,8 @@ pub struct GraphQLUpdateWallInput {
 #[derive(InputObject, Debug, Clone)]
 pub struct GraphQLCreateLightSourceInput {
     pub scene_id: Uuid,
+    /// Which level it goes on. Omitted: the scene's entry level.
+    pub level_id: Option<Uuid>,
     pub x: f64,
     pub y: f64,
     /// How far the light reaches at all: its dim reach, in world units.
@@ -185,6 +189,8 @@ impl GraphQLShapeKind {
 #[derive(InputObject, Debug, Clone)]
 pub struct GraphQLCreateShapeInput {
     pub scene_id: Uuid,
+    /// Which level it goes on. Omitted: the scene's entry level.
+    pub level_id: Option<Uuid>,
     pub kind: GraphQLShapeKind,
     pub geometry: Json<serde_json::Value>,
     pub text: Option<String>,
@@ -356,6 +362,8 @@ pub struct GraphQLDeleteWorldPayload {
 #[derive(InputObject, Debug, Clone)]
 pub struct GraphQLCreateTokenInput {
     pub scene_id: Uuid,
+    /// Which level it goes on. Omitted: the scene's entry level.
+    pub level_id: Option<Uuid>,
     pub actor_id: Option<Uuid>,
     pub x: f64,
     pub y: f64,
@@ -402,6 +410,8 @@ pub struct GraphQLUpdateTokenInput {
 #[derive(InputObject, Debug, Clone)]
 pub struct GraphQLUpdateFogMaskInput {
     pub scene_id: Uuid,
+    /// Which level it goes on. Omitted: the scene's entry level.
+    pub level_id: Option<Uuid>,
     pub bitmap_data_base64: String,
     pub width: i32,
     pub height: i32,

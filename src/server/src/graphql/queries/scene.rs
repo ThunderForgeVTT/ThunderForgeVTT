@@ -164,6 +164,7 @@ pub async fn shapes_impl(
     user_id: uuid::Uuid,
     is_admin: bool,
     scene_id: uuid::Uuid,
+    level_id: Option<uuid::Uuid>,
 ) -> GraphQLResult<Vec<crate::models::Shape>> {
     // 🔐 SECURITY: Get the world_id from the scene, then verify access
     let world_id = get_world_id_from_scene(state, scene_id).await?;
@@ -195,16 +196,26 @@ pub async fn shapes_impl(
     tokio::task::spawn_blocking(move || {
         use crate::schema::shapes;
 
+        // One level at a time, and only one this viewer may read.
+        let Some(level_id) = crate::auth::level_visibility::level_for_read(
+            &mut conn, user_id, is_dm, scene_id, level_id,
+        )?
+        else {
+            return Ok(Vec::new());
+        };
+
         // The DM (world Owner or GM) sees every shape; anyone else only
         // sees shapes explicitly flagged visible to players.
         if is_dm {
             shapes::table
                 .filter(shapes::scene_id.eq(scene_id))
+                .filter(shapes::level_id.eq(level_id))
                 .select(crate::models::Shape::as_select())
                 .load::<crate::models::Shape>(&mut conn)
         } else {
             shapes::table
                 .filter(shapes::scene_id.eq(scene_id))
+                .filter(shapes::level_id.eq(level_id))
                 .filter(shapes::visible_to_players.eq(true))
                 .select(crate::models::Shape::as_select())
                 .load::<crate::models::Shape>(&mut conn)
@@ -250,6 +261,10 @@ impl SceneQuery {
         &self,
         ctx: &Context<'_>,
         scene_id: uuid::Uuid,
+        // The level to read. Omitted: the viewer's own — the entry level,
+        // or the one their token stands on. A level the viewer may not read
+        // is answered as empty.
+        level_id: Option<uuid::Uuid>,
     ) -> GraphQLResult<Vec<GraphQLToken>> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
@@ -270,8 +285,24 @@ impl SceneQuery {
         let is_admin = auth_user.is_admin;
         let tokens = tokio::task::spawn_blocking(move || {
             use crate::schema::tokens;
+            let runs_the_world = crate::auth::world_membership::is_dm_of_scene(
+                &mut conn, user_id, is_admin, scene_id,
+            )?;
+            // One level at a time, and for a player only a level their own
+            // token stands on: who is upstairs is not downstairs' business.
+            let Some(level_id) = crate::auth::level_visibility::level_for_read(
+                &mut conn,
+                user_id,
+                runs_the_world,
+                scene_id,
+                level_id,
+            )?
+            else {
+                return Ok(Vec::new());
+            };
             let rows = tokens::table
                 .filter(tokens::scene_id.eq(scene_id))
+                .filter(tokens::level_id.eq(level_id))
                 .select(crate::models::Token::as_select())
                 .load::<crate::models::Token>(&mut conn)?;
             // Playtest 2026-09-10 P1: a token with no photo of its own shows
@@ -280,9 +311,6 @@ impl SceneQuery {
             //
             // P7: and the read a player's canvas draws names from, so it is
             // the one that must not carry a name hidden from them.
-            let runs_the_world = crate::auth::world_membership::is_dm_of_scene(
-                &mut conn, user_id, is_admin, scene_id,
-            )?;
             crate::graphql::token_art::tokens_with_art(&mut conn, rows, runs_the_world)
         })
         .await
@@ -296,6 +324,10 @@ impl SceneQuery {
         &self,
         ctx: &Context<'_>,
         scene_id: uuid::Uuid,
+        // The level to read. Omitted: the viewer's own — the entry level,
+        // or the one their token stands on. A level the viewer may not read
+        // is answered as empty.
+        level_id: Option<uuid::Uuid>,
     ) -> GraphQLResult<Option<GraphQLFogMask>> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
@@ -317,10 +349,21 @@ impl SceneQuery {
             .get()
             .map_err(|_| Error::new("Failed to get DB connection"))?;
 
+        let user_id = auth_user.user_id;
+        let is_admin = auth_user.is_admin;
         let fog_mask = tokio::task::spawn_blocking(move || {
             use crate::schema::fog_masks;
+            // Fog is kept per level: what was explored upstairs says nothing
+            // about the cellar.
+            let Some(level_id) = crate::auth::level_visibility::level_for_viewer(
+                &mut conn, user_id, is_admin, scene_id, level_id,
+            )?
+            else {
+                return Ok(None);
+            };
             fog_masks::table
                 .filter(fog_masks::scene_id.eq(scene_id))
+                .filter(fog_masks::level_id.eq(level_id))
                 .select(crate::models::FogMask::as_select())
                 .first::<crate::models::FogMask>(&mut conn)
                 .optional()
@@ -336,6 +379,10 @@ impl SceneQuery {
         &self,
         ctx: &Context<'_>,
         scene_id: uuid::Uuid,
+        // The level to read. Omitted: the viewer's own — the entry level,
+        // or the one their token stands on. A level the viewer may not read
+        // is answered as empty.
+        level_id: Option<uuid::Uuid>,
     ) -> GraphQLResult<Vec<GraphQLWall>> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
@@ -352,10 +399,19 @@ impl SceneQuery {
             .get()
             .map_err(|_| Error::new("Failed to get DB connection"))?;
 
+        let user_id = auth_user.user_id;
+        let is_admin = auth_user.is_admin;
         let walls = tokio::task::spawn_blocking(move || {
             use crate::schema::walls;
+            let Some(level_id) = crate::auth::level_visibility::level_for_viewer(
+                &mut conn, user_id, is_admin, scene_id, level_id,
+            )?
+            else {
+                return Ok(Vec::new());
+            };
             walls::table
                 .filter(walls::scene_id.eq(scene_id))
+                .filter(walls::level_id.eq(level_id))
                 .select(crate::models::Wall::as_select())
                 .load::<crate::models::Wall>(&mut conn)
         })
@@ -373,6 +429,10 @@ impl SceneQuery {
         &self,
         ctx: &Context<'_>,
         scene_id: uuid::Uuid,
+        // The level to read. Omitted: the viewer's own — the entry level,
+        // or the one their token stands on. A level the viewer may not read
+        // is answered as empty.
+        level_id: Option<uuid::Uuid>,
     ) -> GraphQLResult<Vec<GraphQLLightSource>> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
@@ -389,10 +449,19 @@ impl SceneQuery {
             .get()
             .map_err(|_| Error::new("Failed to get DB connection"))?;
 
+        let user_id = auth_user.user_id;
+        let is_admin = auth_user.is_admin;
         let lights = tokio::task::spawn_blocking(move || {
             use crate::schema::light_sources;
+            let Some(level_id) = crate::auth::level_visibility::level_for_viewer(
+                &mut conn, user_id, is_admin, scene_id, level_id,
+            )?
+            else {
+                return Ok(Vec::new());
+            };
             light_sources::table
                 .filter(light_sources::scene_id.eq(scene_id))
+                .filter(light_sources::level_id.eq(level_id))
                 .select(crate::models::LightSource::as_select())
                 .load::<crate::models::LightSource>(&mut conn)
         })
@@ -411,11 +480,22 @@ impl SceneQuery {
         &self,
         ctx: &Context<'_>,
         scene_id: uuid::Uuid,
+        // The level to read. Omitted: the viewer's own — the entry level,
+        // or the one their token stands on. A level the viewer may not read
+        // is answered as empty.
+        level_id: Option<uuid::Uuid>,
     ) -> GraphQLResult<Vec<GraphQLShape>> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
 
-        let shapes = shapes_impl(state, auth_user.user_id, auth_user.is_admin, scene_id).await?;
+        let shapes = shapes_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            scene_id,
+            level_id,
+        )
+        .await?;
 
         Ok(shapes.into_iter().map(GraphQLShape::from).collect())
     }
@@ -681,7 +761,7 @@ mod tests {
         insert_test_shape(&mut conn, scene_id, owner_id, false);
         drop(conn);
 
-        let shapes = shapes_impl(&state, owner_id, false, scene_id)
+        let shapes = shapes_impl(&state, owner_id, false, scene_id, None)
             .await
             .expect("owner should be able to list shapes");
 
@@ -710,7 +790,7 @@ mod tests {
         insert_test_shape(&mut conn, scene_id, owner_id, false);
         drop(conn);
 
-        let shapes = shapes_impl(&state, gm_id, false, scene_id)
+        let shapes = shapes_impl(&state, gm_id, false, scene_id, None)
             .await
             .expect("a GM should be able to list shapes");
 
@@ -737,7 +817,7 @@ mod tests {
         insert_test_shape(&mut conn, scene_id, owner_id, false);
         drop(conn);
 
-        let shapes = shapes_impl(&state, player_id, false, scene_id)
+        let shapes = shapes_impl(&state, player_id, false, scene_id, None)
             .await
             .expect("world member should be able to list shapes");
 

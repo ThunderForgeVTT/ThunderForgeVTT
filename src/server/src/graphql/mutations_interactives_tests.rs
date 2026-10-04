@@ -32,6 +32,7 @@ fn seat_a_table() -> Table {
 fn a_prop(scene_id: Uuid, subject: Uuid) -> GraphQLCreateInteractiveInput {
     GraphQLCreateInteractiveInput {
         scene_id,
+        level_id: None,
         subject_kind: String::from("prop"),
         subject_ref: Some(subject),
         geometry: None,

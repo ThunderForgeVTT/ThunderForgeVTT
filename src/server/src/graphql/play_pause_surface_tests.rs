@@ -347,6 +347,12 @@ async fn seed(
         |v| &v["sceneId"]
     );
     make!(
+        "level",
+        "createSceneLevel",
+        r#"mutation { createSceneLevel(input: { sceneId: "{scene}", name: "Seeded" }) { levelId } }"#,
+        |v| &v["levelId"]
+    );
+    make!(
         "token",
         "createToken",
         r#"mutation { createToken(input: { sceneId: "{scene}", x: 0, y: 0 }) { tokenId } }"#,

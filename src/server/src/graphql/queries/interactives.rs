@@ -61,6 +61,8 @@ pub struct GraphQLEffectDeclaration {
 pub struct GraphQLInteractive {
     pub interactive_id: Uuid,
     pub scene_id: Uuid,
+    /// Which of the scene's levels it is on.
+    pub level_id: Uuid,
     pub subject_kind: String,
     pub subject_ref: Option<Uuid>,
     /// The region's area. Game Master only — a region is not an annotation and
@@ -209,6 +211,9 @@ impl InteractiveQuery {
         &self,
         ctx: &Context<'_>,
         scene_id: Uuid,
+        // The level to read. Omitted: the viewer's own. A level the viewer
+        // may not read is answered as empty.
+        level_id: Option<Uuid>,
     ) -> GraphQLResult<Vec<GraphQLInteractive>> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
@@ -238,8 +243,23 @@ impl InteractiveQuery {
             }
             let runs_the_world = actor.runs_the_world();
 
-            let rows = crate::interaction::for_scene(&mut conn, scene_id)
-                .map_err(|e| Error::new(format!("Failed to load interactives: {e}")))?;
+            let Some(level_id) = crate::auth::level_visibility::level_for_read(
+                &mut conn,
+                user_id,
+                runs_the_world,
+                scene_id,
+                level_id,
+            )
+            .map_err(|_| Error::new("Failed to load interactives"))?
+            else {
+                return Ok(Vec::new());
+            };
+
+            let rows: Vec<_> = crate::interaction::for_scene(&mut conn, scene_id)
+                .map_err(|e| Error::new(format!("Failed to load interactives: {e}")))?
+                .into_iter()
+                .filter(|row| row.level_id == level_id)
+                .collect();
 
             // Every locked wall in the scene, in one read rather than per row.
             let locked_walls: std::collections::HashSet<Uuid> = walls::table
@@ -290,6 +310,7 @@ fn to_graphql(
     GraphQLInteractive {
         interactive_id: row.interactive_id,
         scene_id: row.scene_id,
+        level_id: row.level_id,
         subject_kind: row.subject_kind,
         subject_ref: row.subject_ref,
         geometry: if runs_the_world {

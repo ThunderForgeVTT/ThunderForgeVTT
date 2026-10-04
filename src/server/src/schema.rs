@@ -299,6 +299,7 @@ diesel::table! {
         updated_by -> Uuid,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        level_id -> Uuid,
     }
 }
 
@@ -408,6 +409,7 @@ diesel::table! {
         updated_by -> Uuid,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        token_id -> Nullable<Uuid>,
     }
 }
 
@@ -428,6 +430,7 @@ diesel::table! {
         updated_by -> Uuid,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        level_id -> Uuid,
     }
 }
 
@@ -465,6 +468,7 @@ diesel::table! {
         created_at -> Timestamp,
         updated_at -> Timestamp,
         bright_radius -> Float8,
+        level_id -> Uuid,
     }
 }
 
@@ -715,6 +719,26 @@ diesel::table! {
 }
 
 diesel::table! {
+    scene_levels (level_id) {
+        level_id -> Uuid,
+        scene_id -> Uuid,
+        name -> Text,
+        sort_order -> Int4,
+        is_entry -> Bool,
+        hidden -> Bool,
+        background_image_path -> Nullable<Text>,
+        background_asset_id -> Nullable<Uuid>,
+        width -> Int4,
+        height -> Int4,
+        ambient_light -> Text,
+        created_by -> Uuid,
+        updated_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     scene_preview_images (id) {
         id -> Uuid,
         scene_id -> Uuid,
@@ -775,6 +799,7 @@ diesel::table! {
         updated_by -> Uuid,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        level_id -> Uuid,
     }
 }
 
@@ -834,6 +859,7 @@ diesel::table! {
         name_visible_to_players -> Bool,
         linked -> Bool,
         system_data -> Nullable<Jsonb>,
+        level_id -> Uuid,
     }
 }
 
@@ -927,6 +953,7 @@ diesel::table! {
         door_state -> Text,
         locked -> Bool,
         secret -> Bool,
+        level_id -> Uuid,
     }
 }
 
@@ -1643,6 +1670,7 @@ diesel::joinable!(instance_invitations -> users (created_by));
 diesel::joinable!(instance_setting_changes -> users (changed_by));
 diesel::joinable!(interaction_requests -> interactives (interactive_id));
 diesel::joinable!(interaction_requests -> scenes (scene_id));
+diesel::joinable!(interaction_requests -> tokens (token_id));
 diesel::joinable!(interactives -> scenes (scene_id));
 diesel::joinable!(light_sources -> scenes (scene_id));
 diesel::joinable!(light_sources -> tokens (attached_token_id));
@@ -1670,6 +1698,8 @@ diesel::joinable!(policies -> worlds (world_id));
 diesel::joinable!(retired_token_health -> tokens (token_id));
 diesel::joinable!(scene_exploration_resets -> scenes (scene_id));
 diesel::joinable!(scene_exploration_resets -> users (user_id));
+diesel::joinable!(scene_levels -> canvas_image_assets (background_asset_id));
+diesel::joinable!(scene_levels -> scenes (scene_id));
 diesel::joinable!(scene_state_fingerprints -> scenes (scene_id));
 diesel::joinable!(scene_state_fingerprints -> users (updated_by));
 diesel::joinable!(scenes -> users (owner_id));
@@ -1812,6 +1842,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     policies,
     retired_token_health,
     scene_exploration_resets,
+    scene_levels,
     scene_preview_images,
     scene_state_fingerprints,
     scenes,

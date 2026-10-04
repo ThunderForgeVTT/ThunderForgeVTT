@@ -300,10 +300,19 @@ fn authorized_current(
         .load(conn)
         .map_err(|e| WorldSyncPlanError::Database(e.to_string()))?;
 
+    // Scene levels: the background of a floor the caller may not read is
+    // dropped too, by the rule the asset route itself asks.
+    let withheld =
+        crate::auth::level_visibility::withheld_backgrounds(conn, user_id, is_dm, &visible_scenes)
+            .map_err(|e| WorldSyncPlanError::Database(e.to_string()))?;
+
     for (asset_id, scene_id, content_hash, byte_size) in assets {
         if let Some(scene_id) = scene_id
             && !visible_scene_set.contains(&scene_id)
         {
+            continue;
+        }
+        if withheld.contains(&asset_id) {
             continue;
         }
         current.insert(

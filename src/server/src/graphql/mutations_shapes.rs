@@ -39,6 +39,7 @@ impl ShapeMutation {
 
         let shape_id = uuid::Uuid::now_v7();
         let scene_id = input.scene_id;
+        let level_id = input.level_id;
         let kind = input.kind.as_db_str().to_string();
         let geometry = input.geometry.0;
         let text = input.text;
@@ -63,6 +64,8 @@ impl ShapeMutation {
                 .values((
                     shapes::shape_id.eq(shape_id),
                     shapes::scene_id.eq(scene_id),
+                    // Left unset, the database puts it on the entry level.
+                    level_id.map(|level| shapes::level_id.eq(level)),
                     shapes::kind.eq(&kind),
                     shapes::geometry.eq(&geometry),
                     shapes::text.eq(&text),

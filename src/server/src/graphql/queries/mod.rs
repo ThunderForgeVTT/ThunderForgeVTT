@@ -23,6 +23,7 @@ pub mod item;
 /// words a client must show before it can publish, and the archive an old
 /// agreement resolves through.
 pub mod legal;
+pub mod levels;
 pub mod lore;
 // Spec 034: `loreRepositoryConnection`, `loreSyncRuns`,
 // `instanceRepositoryIntegration`.

@@ -200,6 +200,7 @@ mod tests {
             name_visible_to_players: visible,
             linked: false,
             system_data: None,
+            level_id: Uuid::now_v7(),
         }
     }
 

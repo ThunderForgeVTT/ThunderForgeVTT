@@ -31,6 +31,9 @@ use crate::world_events::{
 #[derive(InputObject, Debug, Clone)]
 pub struct GraphQLCreateInteractiveInput {
     pub scene_id: Uuid,
+    /// Which level it goes on. Omitted: its subject's level, and for a
+    /// region the scene's entry level.
+    pub level_id: Option<Uuid>,
     /// `prop`, `door` or `region`.
     pub subject_kind: String,
     /// The token for a prop, the wall for a door. Omitted for a region.
@@ -290,13 +293,17 @@ impl InteractiveMutation {
         &self,
         ctx: &Context<'_>,
         interactive_id: Uuid,
+        // Which token is acting. Needed by an effect that moves somebody — a
+        // ladder to another level — and ignored by every other.
+        token_id: Option<Uuid>,
     ) -> GraphQLResult<GraphQLActivationResult> {
         let auth_user = authenticated_user(ctx)?;
-        activate_interactive_impl(
+        activate_interactive_as(
             app_state(ctx)?,
             auth_user.user_id,
             auth_user.is_admin,
             interactive_id,
+            token_id,
         )
         .await
     }
@@ -318,6 +325,7 @@ pub(crate) async fn create_interactive_impl(
         .map_err(|errors| Error::new(describe(&errors)))?;
 
     let scene_id = input.scene_id;
+    let level_id = input.level_id;
     let now = Utc::now().naive_utc();
     let interactive_id = Uuid::now_v7();
     let subject_kind = input.subject_kind.clone();
@@ -343,6 +351,9 @@ pub(crate) async fn create_interactive_impl(
             .values((
                 interactives::interactive_id.eq(interactive_id),
                 interactives::scene_id.eq(scene_id),
+                // Left unset, the database places it: on its subject's
+                // level, or the entry level for a region.
+                level_id.map(|level| interactives::level_id.eq(level)),
                 interactives::subject_kind.eq(&subject_kind),
                 interactives::subject_ref.eq(subject_ref),
                 interactives::geometry.eq(&geometry),
@@ -534,11 +545,23 @@ pub(crate) async fn reset_interactive_impl(
     Ok(gm_view(row))
 }
 
+#[cfg(test)]
 pub(crate) async fn activate_interactive_impl(
     state: &crate::state::AppState,
     user_id: Uuid,
     is_admin: bool,
     interactive_id: Uuid,
+) -> GraphQLResult<GraphQLActivationResult> {
+    activate_interactive_as(state, user_id, is_admin, interactive_id, None).await
+}
+
+/// Activation, naming the token that acts.
+pub(crate) async fn activate_interactive_as(
+    state: &crate::state::AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    interactive_id: Uuid,
+    token_id: Option<Uuid>,
 ) -> GraphQLResult<GraphQLActivationResult> {
     let mut conn = state
         .db_pool
@@ -561,6 +584,35 @@ pub(crate) async fn activate_interactive_impl(
         let outcome = loaded.outcome(runs_the_world);
         let mut result = GraphQLActivationResult::from_outcome(outcome);
 
+        // Scene levels. A way between floors has to know who is going, and
+        // it is settled before anything is claimed or raised. A *region* is
+        // walked into, not clicked: the server sees that move land
+        // (`level_travel::on_entering`), so a click on one does nothing.
+        let travels = crate::level_travel::is_travel(&loaded.row);
+        if travels && loaded.row.subject_kind == "region" {
+            return Ok(GraphQLActivationResult::from_outcome(
+                ActivationOutcome::NoEffect,
+            ));
+        }
+        let traveller = if travels
+            && matches!(
+                outcome,
+                ActivationOutcome::Performed | ActivationOutcome::Requested
+            ) {
+            Some(
+                crate::level_travel::traveller_for_click(
+                    &mut conn,
+                    &loaded.row,
+                    token_id,
+                    user_id,
+                    is_admin,
+                )
+                .map_err(Error::new)?,
+            )
+        } else {
+            None
+        };
+
         match outcome {
             ActivationOutcome::Requested => {
                 let request_id = crate::interaction::raise_request(
@@ -570,6 +622,10 @@ pub(crate) async fn activate_interactive_impl(
                     user_id,
                 )
                 .map_err(|e| Error::new(format!("Failed to raise request: {e}")))?;
+                if let Some(token_id) = traveller {
+                    crate::level_travel::remember_traveller(&mut conn, request_id, token_id)
+                        .map_err(|_| Error::new("Failed to raise request"))?;
+                }
                 result.request_id = Some(request_id);
                 let _ = record_world_event(
                     &mut conn,
@@ -600,6 +656,11 @@ pub(crate) async fn activate_interactive_impl(
                 }
                 result.effect_id = loaded.row.effect_id.clone();
                 result.effect_config = loaded.row.effect_config.clone().map(Json);
+
+                if let Some(token_id) = traveller {
+                    crate::level_travel::travel(&mut conn, token_id, &loaded.row, user_id)
+                        .map_err(|e| Error::new(e.to_string()))?;
+                }
 
                 // The authoritative half. The engine applies the same change
                 // locally for responsiveness, but a door that only swung in
@@ -672,6 +733,7 @@ pub(crate) async fn activate_interactive_impl(
 
 #[path = "mutations_interactives_support.rs"]
 mod support;
+pub(crate) use support::decide_request_impl;
 use support::*;
 
 #[cfg(test)]

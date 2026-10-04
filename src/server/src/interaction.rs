@@ -449,6 +449,7 @@ mod tests {
             updated_by: Uuid::nil(),
             created_at: chrono::Utc::now().naive_utc(),
             updated_at: chrono::Utc::now().naive_utc(),
+            level_id: Uuid::nil(),
         };
         let before = row.clone();
         let loaded = LoadedInteractive {
@@ -518,6 +519,7 @@ mod tests {
             updated_by: Uuid::nil(),
             created_at: chrono::Utc::now().naive_utc(),
             updated_at: chrono::Utc::now().naive_utc(),
+            level_id: Uuid::nil(),
         };
         let loaded = LoadedInteractive {
             row,
