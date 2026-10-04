@@ -183,6 +183,10 @@ type AppMutationRoot {
 	"""
 	resetSceneExploration(sceneId: UUID!, forUser: UUID): Int!
 	"""
+	Set one of this world's system settings. Game Master only.
+	"""
+	setWorldSystemSetting(worldId: UUID!, key: String!, value: JSON!): WorldSystemSetting!
+	"""
 	Set how much one token discloses about one resource.
 	
 	Per **token**, not per actor: two tokens of the same creature can
@@ -1827,6 +1831,12 @@ type AppQueryRoot {
 	looking through administrator access.
 	"""
 	worldStatistics(worldId: UUID!): WorldStatistics!
+	"""
+	The settings this world's game system declares, each with the value
+	the world plays by. Empty when the world has no system or the system
+	declares none.
+	"""
+	worldSystemSettings(worldId: UUID!): [WorldSystemSetting!]!
 	genieSession(worldId: UUID!): GraphQLGenieSession
 	"""
 	What the table has asked for with its wishes, oldest first (FR-014).
@@ -7611,6 +7621,34 @@ type WorldStatistics {
 	The encounter in progress, or `null`.
 	"""
 	activeEncounter: ActiveEncounterSummary
+}
+
+"""
+One setting the world's system declares, and what this world plays by.
+"""
+type WorldSystemSetting {
+	key: String!
+	label: String!
+	description: String
+	"""
+	`boolean`, `integer`, `choice` or `text`.
+	"""
+	kind: String!
+	options: [WorldSystemSettingOption!]!
+	min: Int
+	max: Int
+	maxLength: Int
+	defaultValue: JSON!
+	value: JSON!
+	"""
+	True when nothing usable is stored and `value` is the default.
+	"""
+	isDefault: Boolean!
+}
+
+type WorldSystemSettingOption {
+	value: String!
+	label: String!
 }
 
 """
