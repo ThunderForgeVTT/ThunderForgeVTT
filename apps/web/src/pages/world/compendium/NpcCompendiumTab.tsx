@@ -24,6 +24,8 @@ import type { WorldActorRecord } from "@/types/actor";
 
 export interface NpcCompendiumTabProps {
   worldId: string;
+  /** The world's game system, for the bestiary to say what it will write. */
+  gameSystemId?: string | null;
   onSelect: (actorId: string) => void;
   selectedActorId: string | null;
   /** DM/GM-only — gates the "New NPC" link (FR-006, spec 010 precedent). */
@@ -58,6 +60,7 @@ export interface NpcCompendiumTabProps {
  */
 export function NpcCompendiumTab({
   worldId,
+  gameSystemId,
   onSelect,
   selectedActorId,
   isGm,
@@ -575,6 +578,7 @@ export function NpcCompendiumTab({
           <LazyBestiaryDialog
             open
             worldId={worldId}
+            gameSystemId={gameSystemId}
             onOpenChange={setBestiaryOpen}
             onCreated={handleBestiary}
           />

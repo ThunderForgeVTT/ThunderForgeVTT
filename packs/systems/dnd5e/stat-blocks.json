@@ -1,0 +1,924 @@
+{
+  "source": "System Reference Document 5.2.1",
+  "licenseName": "CC-BY-4.0",
+  "note": "Creature statistics from the SRD 5.2.1, under the attribution this pack's system.json carries in legal.attributionText. hitPoints is the average the SRD prints beside hitDice. Distances are feet.",
+  "blocks": [
+    {
+      "id": "goblin-warrior",
+      "name": "Goblin Warrior",
+      "bestiary": "goblin",
+      "size": "small",
+      "creatureType": "Fey (Goblinoid)",
+      "alignment": "Chaotic Neutral",
+      "armorClass": 15,
+      "hitPoints": 10,
+      "hitDice": "3d6",
+      "speed": {
+        "walk": 30
+      },
+      "abilities": {
+        "strength": 8,
+        "dexterity": 15,
+        "constitution": 10,
+        "intelligence": 10,
+        "wisdom": 8,
+        "charisma": 8
+      },
+      "savingThrows": [],
+      "skills": {
+        "stealth": "expertise"
+      },
+      "senses": {
+        "darkvision": 60
+      },
+      "languages": [
+        "Common",
+        "Goblin"
+      ],
+      "challenge": "1/4",
+      "traits": [
+        {
+          "name": "Nimble Escape",
+          "text": "Bonus Action: the goblin takes the Disengage or Hide action."
+        }
+      ],
+      "attacks": [
+        {
+          "name": "Scimitar",
+          "toHit": 4,
+          "damage": "1d6+2",
+          "reach": 5,
+          "range": null,
+          "text": "Slashing. Deals an extra 1d4 Slashing if the attack roll had Advantage."
+        },
+        {
+          "name": "Shortbow",
+          "toHit": 4,
+          "damage": "1d6+2",
+          "reach": null,
+          "range": [
+            80,
+            320
+          ],
+          "text": "Piercing. Deals an extra 1d4 Piercing if the attack roll had Advantage."
+        }
+      ]
+    },
+    {
+      "id": "hobgoblin-warrior",
+      "name": "Hobgoblin Warrior",
+      "bestiary": "hobgoblin",
+      "size": "medium",
+      "creatureType": "Fey (Goblinoid)",
+      "alignment": "Lawful Evil",
+      "armorClass": 18,
+      "hitPoints": 11,
+      "hitDice": "2d8+2",
+      "speed": {
+        "walk": 30
+      },
+      "abilities": {
+        "strength": 13,
+        "dexterity": 12,
+        "constitution": 12,
+        "intelligence": 10,
+        "wisdom": 10,
+        "charisma": 9
+      },
+      "savingThrows": [],
+      "skills": {},
+      "senses": {
+        "darkvision": 60
+      },
+      "languages": [
+        "Common",
+        "Goblin"
+      ],
+      "challenge": "1/2",
+      "traits": [
+        {
+          "name": "Pack Tactics",
+          "text": "The hobgoblin has Advantage on an attack roll against a creature if at least one of its allies is within 5 feet of the creature and the ally doesn't have the Incapacitated condition."
+        }
+      ],
+      "attacks": [
+        {
+          "name": "Longsword",
+          "toHit": 3,
+          "damage": "2d10+1",
+          "reach": 5,
+          "range": null,
+          "text": "Slashing."
+        },
+        {
+          "name": "Longbow",
+          "toHit": 3,
+          "damage": "1d8+1+3d4",
+          "reach": null,
+          "range": [
+            150,
+            600
+          ],
+          "text": "1d8+1 Piercing plus 3d4 Poison."
+        }
+      ]
+    },
+    {
+      "id": "bugbear-warrior",
+      "name": "Bugbear Warrior",
+      "bestiary": "bugbear",
+      "size": "medium",
+      "creatureType": "Fey (Goblinoid)",
+      "alignment": "Chaotic Evil",
+      "armorClass": 14,
+      "hitPoints": 33,
+      "hitDice": "6d8+6",
+      "speed": {
+        "walk": 30
+      },
+      "abilities": {
+        "strength": 15,
+        "dexterity": 14,
+        "constitution": 13,
+        "intelligence": 8,
+        "wisdom": 11,
+        "charisma": 9
+      },
+      "savingThrows": [],
+      "skills": {
+        "stealth": "expertise",
+        "survival": "proficient"
+      },
+      "senses": {
+        "darkvision": 60
+      },
+      "languages": [
+        "Common",
+        "Goblin"
+      ],
+      "challenge": "1",
+      "traits": [
+        {
+          "name": "Abduct",
+          "text": "The bugbear needn't spend extra movement to move a creature it is grappling."
+        }
+      ],
+      "attacks": [
+        {
+          "name": "Grab",
+          "toHit": 4,
+          "damage": "2d6+2",
+          "reach": 10,
+          "range": null,
+          "text": "Bludgeoning. A Medium or smaller target has the Grappled condition (escape DC 12)."
+        },
+        {
+          "name": "Light Hammer",
+          "toHit": 4,
+          "damage": "3d4+2",
+          "reach": 10,
+          "range": [
+            20,
+            60
+          ],
+          "text": "Bludgeoning. Has Advantage if the target is Grappled by the bugbear. Melee reach 10 ft., or thrown."
+        }
+      ]
+    },
+    {
+      "id": "kobold-warrior",
+      "name": "Kobold Warrior",
+      "bestiary": "kobold",
+      "size": "small",
+      "creatureType": "Dragon",
+      "alignment": "Neutral",
+      "armorClass": 14,
+      "hitPoints": 7,
+      "hitDice": "3d6-3",
+      "speed": {
+        "walk": 30
+      },
+      "abilities": {
+        "strength": 7,
+        "dexterity": 15,
+        "constitution": 9,
+        "intelligence": 8,
+        "wisdom": 7,
+        "charisma": 8
+      },
+      "savingThrows": [],
+      "skills": {},
+      "senses": {
+        "darkvision": 60
+      },
+      "languages": [
+        "Common",
+        "Draconic"
+      ],
+      "challenge": "1/8",
+      "traits": [
+        {
+          "name": "Pack Tactics",
+          "text": "The kobold has Advantage on an attack roll against a creature if at least one of its allies is within 5 feet of the creature and the ally doesn't have the Incapacitated condition."
+        },
+        {
+          "name": "Sunlight Sensitivity",
+          "text": "While in sunlight, the kobold has Disadvantage on ability checks and attack rolls."
+        }
+      ],
+      "attacks": [
+        {
+          "name": "Dagger",
+          "toHit": 4,
+          "damage": "1d4+2",
+          "reach": 5,
+          "range": [
+            20,
+            60
+          ],
+          "text": "Piercing. Melee, or thrown."
+        }
+      ]
+    },
+    {
+      "id": "gnoll-warrior",
+      "name": "Gnoll Warrior",
+      "bestiary": "gnoll",
+      "size": "medium",
+      "creatureType": "Fiend",
+      "alignment": "Chaotic Evil",
+      "armorClass": 15,
+      "hitPoints": 27,
+      "hitDice": "6d8",
+      "speed": {
+        "walk": 30
+      },
+      "abilities": {
+        "strength": 14,
+        "dexterity": 12,
+        "constitution": 11,
+        "intelligence": 6,
+        "wisdom": 10,
+        "charisma": 7
+      },
+      "savingThrows": [],
+      "skills": {},
+      "senses": {
+        "darkvision": 60
+      },
+      "languages": [
+        "Gnoll"
+      ],
+      "challenge": "1/2",
+      "traits": [
+        {
+          "name": "Rampage",
+          "text": "Bonus Action, once per day: immediately after dealing damage to a creature that is already Bloodied, the gnoll moves up to half its Speed and makes one Rend attack."
+        }
+      ],
+      "attacks": [
+        {
+          "name": "Rend",
+          "toHit": 4,
+          "damage": "1d6+2",
+          "reach": 5,
+          "range": null,
+          "text": "Piercing."
+        },
+        {
+          "name": "Bone Bow",
+          "toHit": 3,
+          "damage": "1d10+1",
+          "reach": null,
+          "range": [
+            150,
+            600
+          ],
+          "text": "Piercing."
+        }
+      ]
+    },
+    {
+      "id": "ogre",
+      "name": "Ogre",
+      "bestiary": "ogre",
+      "size": "large",
+      "creatureType": "Giant",
+      "alignment": "Chaotic Evil",
+      "armorClass": 11,
+      "hitPoints": 68,
+      "hitDice": "8d10+24",
+      "speed": {
+        "walk": 40
+      },
+      "abilities": {
+        "strength": 19,
+        "dexterity": 8,
+        "constitution": 16,
+        "intelligence": 5,
+        "wisdom": 7,
+        "charisma": 7
+      },
+      "savingThrows": [],
+      "skills": {},
+      "senses": {
+        "darkvision": 60
+      },
+      "languages": [
+        "Common",
+        "Giant"
+      ],
+      "challenge": "2",
+      "traits": [],
+      "attacks": [
+        {
+          "name": "Greatclub",
+          "toHit": 6,
+          "damage": "2d8+4",
+          "reach": 5,
+          "range": null,
+          "text": "Bludgeoning."
+        },
+        {
+          "name": "Javelin",
+          "toHit": 6,
+          "damage": "2d6+4",
+          "reach": 5,
+          "range": [
+            30,
+            120
+          ],
+          "text": "Piercing. Melee, or thrown."
+        }
+      ]
+    },
+    {
+      "id": "troll",
+      "name": "Troll",
+      "bestiary": "troll",
+      "size": "large",
+      "creatureType": "Giant",
+      "alignment": "Chaotic Evil",
+      "armorClass": 15,
+      "hitPoints": 94,
+      "hitDice": "9d10+45",
+      "speed": {
+        "walk": 30
+      },
+      "abilities": {
+        "strength": 18,
+        "dexterity": 13,
+        "constitution": 20,
+        "intelligence": 7,
+        "wisdom": 9,
+        "charisma": 7
+      },
+      "savingThrows": [],
+      "skills": {
+        "perception": "expertise"
+      },
+      "senses": {
+        "darkvision": 60
+      },
+      "languages": [
+        "Giant"
+      ],
+      "challenge": "5",
+      "traits": [
+        {
+          "name": "Loathsome Limbs",
+          "text": "Four times per day: if the troll ends any turn Bloodied and took 15 or more Slashing damage during that turn, one of its limbs is severed and becomes a Troll Limb."
+        },
+        {
+          "name": "Regeneration",
+          "text": "The troll regains 15 Hit Points at the start of each of its turns. If it takes Acid or Fire damage, this trait doesn't function on its next turn. The troll dies only if it starts its turn with 0 Hit Points and doesn't regenerate."
+        }
+      ],
+      "attacks": [
+        {
+          "name": "Rend",
+          "toHit": 7,
+          "damage": "2d6+4",
+          "reach": 10,
+          "range": null,
+          "text": "Slashing."
+        }
+      ],
+      "multiattack": [
+        "Rend",
+        "Rend",
+        "Rend"
+      ]
+    },
+    {
+      "id": "skeleton",
+      "name": "Skeleton",
+      "bestiary": "skeleton",
+      "size": "medium",
+      "creatureType": "Undead",
+      "alignment": "Lawful Evil",
+      "armorClass": 14,
+      "hitPoints": 13,
+      "hitDice": "2d8+4",
+      "speed": {
+        "walk": 30
+      },
+      "abilities": {
+        "strength": 10,
+        "dexterity": 16,
+        "constitution": 15,
+        "intelligence": 6,
+        "wisdom": 8,
+        "charisma": 5
+      },
+      "savingThrows": [],
+      "skills": {},
+      "senses": {
+        "darkvision": 60
+      },
+      "languages": [
+        "Understands Common plus one other language but can't speak"
+      ],
+      "challenge": "1/4",
+      "traits": [
+        {
+          "name": "Vulnerabilities and Immunities",
+          "text": "Vulnerable to Bludgeoning. Immune to Poison; Exhaustion, Poisoned."
+        }
+      ],
+      "attacks": [
+        {
+          "name": "Shortsword",
+          "toHit": 5,
+          "damage": "1d6+3",
+          "reach": 5,
+          "range": null,
+          "text": "Piercing."
+        },
+        {
+          "name": "Shortbow",
+          "toHit": 5,
+          "damage": "1d6+3",
+          "reach": null,
+          "range": [
+            80,
+            320
+          ],
+          "text": "Piercing."
+        }
+      ]
+    },
+    {
+      "id": "zombie",
+      "name": "Zombie",
+      "bestiary": "zombie",
+      "size": "medium",
+      "creatureType": "Undead",
+      "alignment": "Neutral Evil",
+      "armorClass": 8,
+      "hitPoints": 15,
+      "hitDice": "2d8+6",
+      "speed": {
+        "walk": 20
+      },
+      "abilities": {
+        "strength": 13,
+        "dexterity": 6,
+        "constitution": 16,
+        "intelligence": 3,
+        "wisdom": 6,
+        "charisma": 5
+      },
+      "savingThrows": [
+        "wisdom"
+      ],
+      "skills": {},
+      "senses": {
+        "darkvision": 60
+      },
+      "languages": [
+        "Understands Common plus one other language but can't speak"
+      ],
+      "challenge": "1/4",
+      "traits": [
+        {
+          "name": "Undead Fortitude",
+          "text": "If damage reduces the zombie to 0 Hit Points, it makes a Constitution saving throw (DC 5 plus the damage taken) unless the damage is Radiant or from a Critical Hit. On a successful save, the zombie drops to 1 Hit Point instead."
+        },
+        {
+          "name": "Immunities",
+          "text": "Immune to Poison; Exhaustion, Poisoned."
+        }
+      ],
+      "attacks": [
+        {
+          "name": "Slam",
+          "toHit": 3,
+          "damage": "1d8+1",
+          "reach": 5,
+          "range": null,
+          "text": "Bludgeoning."
+        }
+      ]
+    },
+    {
+      "id": "ghoul",
+      "name": "Ghoul",
+      "bestiary": "ghoul",
+      "size": "medium",
+      "creatureType": "Undead",
+      "alignment": "Chaotic Evil",
+      "armorClass": 12,
+      "hitPoints": 22,
+      "hitDice": "5d8",
+      "speed": {
+        "walk": 30
+      },
+      "abilities": {
+        "strength": 13,
+        "dexterity": 15,
+        "constitution": 10,
+        "intelligence": 7,
+        "wisdom": 10,
+        "charisma": 6
+      },
+      "savingThrows": [],
+      "skills": {},
+      "senses": {
+        "darkvision": 60
+      },
+      "languages": [
+        "Common"
+      ],
+      "challenge": "1",
+      "traits": [
+        {
+          "name": "Immunities",
+          "text": "Immune to Poison; Charmed, Exhaustion, Poisoned."
+        }
+      ],
+      "attacks": [
+        {
+          "name": "Bite",
+          "toHit": 4,
+          "damage": "1d6+2+1d6",
+          "reach": 5,
+          "range": null,
+          "text": "1d6+2 Piercing plus 1d6 Necrotic."
+        },
+        {
+          "name": "Claw",
+          "toHit": 4,
+          "damage": "1d4+2",
+          "reach": 5,
+          "range": null,
+          "text": "Slashing. If the target is a creature that isn't an Undead or elf, it is subjected to: Constitution saving throw DC 10. Failure: the target has the Paralyzed condition until the end of its next turn."
+        }
+      ],
+      "multiattack": [
+        "Bite",
+        "Bite"
+      ]
+    },
+    {
+      "id": "dire-wolf",
+      "name": "Dire Wolf",
+      "bestiary": "dire-wolf",
+      "size": "large",
+      "creatureType": "Beast",
+      "alignment": "Unaligned",
+      "armorClass": 14,
+      "hitPoints": 22,
+      "hitDice": "3d10+6",
+      "speed": {
+        "walk": 50
+      },
+      "abilities": {
+        "strength": 17,
+        "dexterity": 15,
+        "constitution": 15,
+        "intelligence": 3,
+        "wisdom": 12,
+        "charisma": 7
+      },
+      "savingThrows": [],
+      "skills": {
+        "perception": "expertise",
+        "stealth": "proficient"
+      },
+      "senses": {
+        "darkvision": 60
+      },
+      "languages": [],
+      "challenge": "1",
+      "traits": [
+        {
+          "name": "Pack Tactics",
+          "text": "The wolf has Advantage on an attack roll against a creature if at least one of its allies is within 5 feet of the creature and the ally doesn't have the Incapacitated condition."
+        }
+      ],
+      "attacks": [
+        {
+          "name": "Bite",
+          "toHit": 5,
+          "damage": "1d10+3",
+          "reach": 5,
+          "range": null,
+          "text": "Piercing. A Large or smaller target has the Prone condition."
+        }
+      ]
+    },
+    {
+      "id": "brown-bear",
+      "name": "Brown Bear",
+      "bestiary": "brown-bear",
+      "size": "large",
+      "creatureType": "Beast",
+      "alignment": "Unaligned",
+      "armorClass": 11,
+      "hitPoints": 22,
+      "hitDice": "3d10+6",
+      "speed": {
+        "walk": 40,
+        "climb": 30
+      },
+      "abilities": {
+        "strength": 17,
+        "dexterity": 12,
+        "constitution": 15,
+        "intelligence": 2,
+        "wisdom": 13,
+        "charisma": 7
+      },
+      "savingThrows": [],
+      "skills": {
+        "perception": "proficient"
+      },
+      "senses": {
+        "darkvision": 60
+      },
+      "languages": [],
+      "challenge": "1",
+      "traits": [],
+      "attacks": [
+        {
+          "name": "Bite",
+          "toHit": 5,
+          "damage": "1d8+3",
+          "reach": 5,
+          "range": null,
+          "text": "Piercing."
+        },
+        {
+          "name": "Claw",
+          "toHit": 5,
+          "damage": "1d4+3",
+          "reach": 5,
+          "range": null,
+          "text": "Slashing. A Large or smaller target has the Prone condition."
+        }
+      ],
+      "multiattack": [
+        "Bite",
+        "Claw"
+      ]
+    },
+    {
+      "id": "giant-spider",
+      "name": "Giant Spider",
+      "bestiary": "giant-spider",
+      "size": "large",
+      "creatureType": "Beast",
+      "alignment": "Unaligned",
+      "armorClass": 14,
+      "hitPoints": 26,
+      "hitDice": "4d10+4",
+      "speed": {
+        "walk": 30,
+        "climb": 30
+      },
+      "abilities": {
+        "strength": 14,
+        "dexterity": 16,
+        "constitution": 12,
+        "intelligence": 2,
+        "wisdom": 11,
+        "charisma": 4
+      },
+      "savingThrows": [],
+      "skills": {
+        "stealth": "expertise"
+      },
+      "senses": {
+        "darkvision": 60
+      },
+      "languages": [],
+      "challenge": "1",
+      "traits": [
+        {
+          "name": "Spider Climb",
+          "text": "The spider can climb difficult surfaces, including along ceilings, without needing to make an ability check."
+        },
+        {
+          "name": "Web Walker",
+          "text": "The spider ignores movement restrictions caused by webs, and it knows the location of any other creature in contact with the same web."
+        },
+        {
+          "name": "Web (Recharge 5-6)",
+          "text": "Dexterity saving throw DC 13, one creature the spider can see within 60 feet. Failure: the target has the Restrained condition until the web is destroyed (AC 10; HP 5; Vulnerability to Fire damage; Immunity to Poison and Psychic damage)."
+        }
+      ],
+      "attacks": [
+        {
+          "name": "Bite",
+          "toHit": 5,
+          "damage": "1d8+3+2d6",
+          "reach": 5,
+          "range": null,
+          "text": "1d8+3 Piercing plus 2d6 Poison."
+        }
+      ]
+    },
+    {
+      "id": "owlbear",
+      "name": "Owlbear",
+      "bestiary": "owlbear",
+      "size": "large",
+      "creatureType": "Monstrosity",
+      "alignment": "Unaligned",
+      "armorClass": 13,
+      "hitPoints": 59,
+      "hitDice": "7d10+21",
+      "speed": {
+        "walk": 40,
+        "climb": 40
+      },
+      "abilities": {
+        "strength": 20,
+        "dexterity": 12,
+        "constitution": 17,
+        "intelligence": 3,
+        "wisdom": 12,
+        "charisma": 7
+      },
+      "savingThrows": [],
+      "skills": {
+        "perception": "expertise"
+      },
+      "senses": {
+        "darkvision": 60
+      },
+      "languages": [],
+      "challenge": "3",
+      "traits": [],
+      "attacks": [
+        {
+          "name": "Rend",
+          "toHit": 7,
+          "damage": "2d8+5",
+          "reach": 5,
+          "range": null,
+          "text": "Slashing."
+        }
+      ],
+      "multiattack": [
+        "Rend",
+        "Rend"
+      ]
+    },
+    {
+      "id": "imp",
+      "name": "Imp",
+      "bestiary": "imp",
+      "size": "tiny",
+      "creatureType": "Fiend (Devil)",
+      "alignment": "Lawful Evil",
+      "armorClass": 13,
+      "hitPoints": 21,
+      "hitDice": "6d4+6",
+      "speed": {
+        "walk": 20,
+        "fly": 40
+      },
+      "abilities": {
+        "strength": 6,
+        "dexterity": 17,
+        "constitution": 13,
+        "intelligence": 11,
+        "wisdom": 12,
+        "charisma": 14
+      },
+      "savingThrows": [],
+      "skills": {
+        "deception": "proficient",
+        "insight": "proficient",
+        "stealth": "proficient"
+      },
+      "senses": {
+        "darkvision": 120
+      },
+      "languages": [
+        "Common",
+        "Infernal"
+      ],
+      "challenge": "1",
+      "traits": [
+        {
+          "name": "Magic Resistance",
+          "text": "The imp has Advantage on saving throws against spells and other magical effects."
+        },
+        {
+          "name": "Resistances and Immunities",
+          "text": "Resistant to Cold. Immune to Fire, Poison; Poisoned. Its Darkvision is unimpeded by magical Darkness."
+        },
+        {
+          "name": "Shape-Shift",
+          "text": "The imp shape-shifts to resemble a rat (Speed 20 ft.), a raven (20 ft., Fly 60 ft.), or a spider (20 ft., Climb 20 ft.), or it returns to its true form. Its statistics are the same in each form, except for its Speed."
+        },
+        {
+          "name": "Invisibility",
+          "text": "The imp casts Invisibility on itself, requiring no spell components and using Charisma as the spellcasting ability."
+        }
+      ],
+      "attacks": [
+        {
+          "name": "Sting",
+          "toHit": 5,
+          "damage": "1d6+3+2d6",
+          "reach": 5,
+          "range": null,
+          "text": "1d6+3 Piercing plus 2d6 Poison."
+        }
+      ]
+    },
+    {
+      "id": "white-dragon-wyrmling",
+      "name": "White Dragon Wyrmling",
+      "bestiary": "white-dragon-wyrmling",
+      "size": "medium",
+      "creatureType": "Dragon (Chromatic)",
+      "alignment": "Chaotic Evil",
+      "armorClass": 16,
+      "hitPoints": 32,
+      "hitDice": "5d8+10",
+      "speed": {
+        "walk": 30,
+        "burrow": 15,
+        "fly": 60,
+        "swim": 30
+      },
+      "abilities": {
+        "strength": 14,
+        "dexterity": 10,
+        "constitution": 14,
+        "intelligence": 5,
+        "wisdom": 10,
+        "charisma": 11
+      },
+      "savingThrows": [
+        "dexterity",
+        "wisdom"
+      ],
+      "skills": {
+        "perception": "expertise",
+        "stealth": "proficient"
+      },
+      "senses": {
+        "blindsight": 10,
+        "darkvision": 60
+      },
+      "languages": [
+        "Draconic"
+      ],
+      "challenge": "2",
+      "traits": [
+        {
+          "name": "Ice Walk",
+          "text": "The dragon can move across and climb icy surfaces without needing to make an ability check. Difficult Terrain composed of ice or snow costs it no extra movement."
+        },
+        {
+          "name": "Cold Breath (Recharge 5-6)",
+          "text": "Constitution saving throw DC 12, each creature in a 15-foot Cone. Failure: 5d8 Cold damage. Success: half damage."
+        },
+        {
+          "name": "Immunities",
+          "text": "Immune to Cold."
+        }
+      ],
+      "attacks": [
+        {
+          "name": "Rend",
+          "toHit": 4,
+          "damage": "1d8+2+1d4",
+          "reach": 5,
+          "range": null,
+          "text": "1d8+2 Slashing plus 1d4 Cold."
+        }
+      ],
+      "multiattack": [
+        "Rend",
+        "Rend"
+      ]
+    }
+  ]
+}

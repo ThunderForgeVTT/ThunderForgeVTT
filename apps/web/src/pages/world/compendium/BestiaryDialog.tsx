@@ -12,7 +12,12 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button/Button";
 import { Input } from "@/components/ui/input";
+import { applyStatBlock } from "@/pages/world/actor/applyStatBlock";
 import { saveBuiltHero, savedImages } from "@/pages/world/actor/saveBuiltHero";
+import {
+  resolveStatBlocks,
+  statBlockForCreature,
+} from "@/pages/world/actor/systemStatBlocks";
 import type { WorldActorRecord } from "@/types/actor";
 import { declaredSizesOf, sizeCategoryOf, slotKey } from "@/utils/sizeCategory";
 
@@ -32,6 +37,18 @@ import { declaredSizesOf, sizeCategoryOf, slotKey } from "@/utils/sizeCategory";
  * system declares that size; a system with no sizes, or without this one, is
  * left alone rather than given a value it never declared.
  *
+ * # Where the numbers come from
+ *
+ * Not from here. The bestiary is drawings and a size; it holds no statistic
+ * and must not (`packages/heroes/src/bestiary.ts`). But the world's game
+ * system may publish a stat block for the creature (`systemStatBlocks.ts`),
+ * and when it does each monster made here gets it: hit points, defence,
+ * scores and its attacks, so six goblins can fight the moment they exist.
+ * Every one gets the same block, with the average hit points the block
+ * prints; a Game Master who wants them different edits the sheet. A system
+ * with no block for the creature leaves the numbers to the Game Master, as
+ * this dialog always did.
+ *
  * # Why a failure keeps what was made
  *
  * As with Quick NPC: a monster that exists without its art, or without its
@@ -46,6 +63,12 @@ export interface BestiaryMonster {
 
 export interface BestiaryDialogProps {
   worldId: string;
+  /**
+   * The world's game system, when the caller knows it. Only used to say,
+   * before anything is made, whether the creature will come with statistics;
+   * what is written goes by each actor's own system.
+   */
+  gameSystemId?: string | null;
   open: boolean;
   onOpenChange(open: boolean): void;
   /** Every monster that now exists, once, after the last one is made. */
@@ -55,6 +78,28 @@ export interface BestiaryDialogProps {
 const MAX_NAME = 80;
 /** A pack is an encounter's worth; a horde is made by pressing twice. */
 const MAX_COUNT = 12;
+
+/**
+ * Puts the system's stat block for this creature on the actor, if it has
+ * one. `applied` is whether the block's numbers are on the sheet; the size is
+ * among them, so the caller need not write it again.
+ */
+async function writeStatBlock(
+  actor: WorldActorRecord,
+  slug: string,
+): Promise<{ applied: boolean; complaints: string[] }> {
+  const block = statBlockForCreature(actor.gameSystemId, slug);
+  const plan = block
+    ? resolveStatBlocks(actor.gameSystemId)?.plan(block.id, null)
+    : null;
+  if (!plan || !actor.gameSystemId) {
+    return { applied: false, complaints: [] };
+  }
+  return applyStatBlock(
+    { id: actor.id, worldId: actor.worldId, gameSystemId: actor.gameSystemId },
+    plan,
+  );
+}
 
 /** Writes the creature's size where the actor's system keeps sizes. Returns
  * a complaint, or null when it was written or the system declares none. */
@@ -82,6 +127,7 @@ async function writeSize(
 
 export default function BestiaryDialog({
   worldId,
+  gameSystemId,
   open,
   onOpenChange,
   onCreated,
@@ -95,6 +141,7 @@ export default function BestiaryDialog({
 
   const entry = BESTIARY.find((candidate) => candidate.slug === slug)!;
   const trimmed = name.trim();
+  const statBlock = statBlockForCreature(gameSystemId, slug);
 
   // One spec per monster, each from its own seed derived from the shared one
   // (the derivation `monsterPack` uses), so six goblins are six goblins and
@@ -145,9 +192,14 @@ export default function BestiaryDialog({
             }`,
           );
         }
-        const sizeProblem = spec.size
-          ? await writeSize(actor, spec.size)
-          : null;
+        const statBlock = await writeStatBlock(actor, slug);
+        for (const complaint of statBlock.complaints) {
+          complaints.push(`${spec.name}: ${complaint}`);
+        }
+        const sizeProblem =
+          spec.size && !statBlock.applied
+            ? await writeSize(actor, spec.size)
+            : null;
         if (sizeProblem) {
           complaints.push(
             `${spec.name} was created without its size: ${sizeProblem}`,
@@ -269,6 +321,19 @@ export default function BestiaryDialog({
                 {specs[0]!.size ?? "medium"}
               </span>
             </p>
+
+            {statBlock ? (
+              <p
+                className="text-sm text-muted-foreground"
+                data-testid="bestiary-stat-block"
+              >
+                Comes with the {statBlock.name} stat block: {statBlock.summary}.{" "}
+                {count > 1
+                  ? "Each one gets the same numbers, with average hit points."
+                  : "Hit points are the average."}{" "}
+                You can change any of it on the sheet.
+              </p>
+            ) : null}
 
             <div
               className="flex flex-wrap gap-2"

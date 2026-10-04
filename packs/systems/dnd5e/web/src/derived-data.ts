@@ -32,6 +32,25 @@ export function calculateProficiencyBonus(level: number): number {
 }
 
 /**
+ * Proficiency bonus by challenge rating, for a creature with no level.
+ *
+ * The monster table: one step every four ratings, and it does not stop at a
+ * character's six. Fractions are text ("1/4") and all sit in the first band.
+ * `null` for anything that is not a rating the book prints, so a caller can
+ * fall back to the level. Mirrors `proficiency_bonus_for_challenge` in
+ * `server/src/rules.rs`, which is the one a roll uses.
+ */
+export function calculateProficiencyBonusForChallenge(
+  challenge: string,
+): number | null {
+  if (["0", "1/8", "1/4", "1/2"].includes(challenge)) return 2;
+  if (!/^[1-9]\d?$/.test(challenge)) return null;
+  const rating = Number(challenge);
+  if (rating > 30) return null;
+  return 2 + Math.floor((rating - 1) / 4);
+}
+
+/**
  * Calculate skill bonus
  *
  * Formula: abilityModifier + (isProficient ? proficiencyBonus : 0)
@@ -39,7 +58,7 @@ export function calculateProficiencyBonus(level: number): number {
 export function calculateSkillBonus(
   abilityModifier: number,
   isProficient: boolean,
-  proficiencyBonus: number
+  proficiencyBonus: number,
 ): number {
   return abilityModifier + (isProficient ? proficiencyBonus : 0);
 }
@@ -52,7 +71,7 @@ export function calculateSkillBonus(
 export function calculateSavingThrow(
   abilityModifier: number,
   hasProficiency: boolean,
-  proficiencyBonus: number
+  proficiencyBonus: number,
 ): number {
   return abilityModifier + (hasProficiency ? proficiencyBonus : 0);
 }
@@ -68,7 +87,10 @@ export function calculateSavingThrow(
  * @param spellLevel - Spell level (0 = cantrips, 1-8 = spell levels)
  * @returns Maximum spell slots available
  */
-export function calculateMaxSpellSlots(characterLevel: number, spellLevel: number): number {
+export function calculateMaxSpellSlots(
+  characterLevel: number,
+  spellLevel: number,
+): number {
   // Cantrips are unlimited
   if (spellLevel === 0) {
     return -1; // Sentinel value for "unlimited"
@@ -119,7 +141,7 @@ export function calculateMaxSpellSlots(characterLevel: number, spellLevel: numbe
 export function calculateAttackBonus(
   abilityModifier: number,
   isProficient: boolean,
-  proficiencyBonus: number
+  proficiencyBonus: number,
 ): number {
   return abilityModifier + (isProficient ? proficiencyBonus : 0);
 }
@@ -133,7 +155,7 @@ export function calculateAttackBonus(
  */
 export function getAbilityModifier(
   abilities: Record<string, number>,
-  abilityName: string
+  abilityName: string,
 ): number {
   const score = abilities[abilityName.toLowerCase()];
   if (!score) return 0;
@@ -147,7 +169,7 @@ export function getAbilityModifier(
  * @returns Object with ability modifiers
  */
 export function getAllAbilityModifiers(
-  abilities: Record<string, number>
+  abilities: Record<string, number>,
 ): Record<string, number> {
   return {
     strength: calculateAbilityModifier(abilities.strength || 10),
@@ -165,7 +187,10 @@ export function getAllAbilityModifiers(
  * Formula: (class_hit_die / 2 + 1) + constitution_modifier
  * Minimum increase is 1 HP per level
  */
-export function calculateHitPointIncrease(classDiceSize: number, conModifier: number): number {
+export function calculateHitPointIncrease(
+  classDiceSize: number,
+  conModifier: number,
+): number {
   const baseIncrease = Math.floor(classDiceSize / 2) + 1;
   return Math.max(1, baseIncrease + conModifier);
 }
@@ -180,7 +205,7 @@ export function calculateHitPointIncrease(classDiceSize: number, conModifier: nu
 export function calculateMaxHitPoints(
   level: number,
   classDiceSize: number,
-  conModifier: number
+  conModifier: number,
 ): number {
   // Level 1 HP: full hit die + CON modifier
   let hp = classDiceSize + conModifier;
@@ -201,7 +226,10 @@ export function calculateMaxHitPoints(
  * Formula: baseAC + dexterityModifier
  * (Assumes light or no armor which adds DEX to AC)
  */
-export function calculateArmorClass(baseAC: number, dexterityModifier: number): number {
+export function calculateArmorClass(
+  baseAC: number,
+  dexterityModifier: number,
+): number {
   return baseAC + dexterityModifier;
 }
 

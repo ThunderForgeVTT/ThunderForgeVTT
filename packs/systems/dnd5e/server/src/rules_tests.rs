@@ -291,3 +291,86 @@ fn derived_values_follow_the_manifests_ability_order_not_the_alphabet() {
         "5e's abilities are ordered by the book, not by their spelling"
     );
 }
+
+fn text(id: &str, value: &str) -> DeclaredValue {
+    DeclaredValue {
+        value: DeclaredValueKind::Text(value.to_string()),
+        ..stored(id, 0)
+    }
+}
+
+/// The monster table, at every step and on both sides of each.
+#[test]
+fn a_challenge_rating_gives_the_proficiency_bonus_the_book_prints() {
+    for (rating, bonus) in [
+        ("0", 2),
+        ("1/8", 2),
+        ("1/4", 2),
+        ("1/2", 2),
+        ("1", 2),
+        ("4", 2),
+        ("5", 3),
+        ("8", 3),
+        ("9", 4),
+        ("12", 4),
+        ("13", 5),
+        ("16", 5),
+        ("17", 6),
+        ("20", 6),
+        ("21", 7),
+        ("24", 7),
+        ("25", 8),
+        ("28", 8),
+        ("29", 9),
+        ("30", 9),
+    ] {
+        assert_eq!(
+            proficiency_bonus_for_challenge(rating),
+            Some(bonus),
+            "challenge {rating}"
+        );
+    }
+    for nonsense in ["", "31", "-1", "1/3", "0.25", "five"] {
+        assert_eq!(
+            proficiency_bonus_for_challenge(nonsense),
+            None,
+            "{nonsense:?}"
+        );
+    }
+}
+
+/// A goblin has no level. Its skills and saves used to derive to nothing at
+/// all, so a Game Master rolling Stealth for it got the bare modifier.
+#[test]
+fn a_creature_with_no_level_derives_from_its_challenge_rating() {
+    let goblin = DeclaredValues::new([
+        stored("strength", 8),
+        stored("dexterity", 15),
+        stored("constitution", 10),
+        stored("intelligence", 10),
+        stored("wisdom", 8),
+        stored("charisma", 8),
+        text(CHALLENGE, "1/4"),
+        list(SKILL_PROFICIENCIES, &["stealth"]),
+        list(SKILL_EXPERTISE, &["stealth"]),
+    ]);
+    let derived = rules().derive(&goblin);
+
+    assert_eq!(value_of(&derived, "proficiencyBonus"), Some(2));
+    assert_eq!(value_of(&derived, &skill_id("stealth")), Some(6));
+    assert_eq!(value_of(&derived, "passivePerception"), Some(9));
+}
+
+/// A sheet with both is a character; the level wins.
+#[test]
+fn a_level_is_read_before_a_challenge_rating() {
+    let both = DeclaredValues::new([
+        stored("dexterity", 10),
+        stored(LEVEL, 1),
+        text(CHALLENGE, "30"),
+    ]);
+    assert_eq!(
+        value_of(&rules().derive(&both), "proficiencyBonus"),
+        Some(2)
+    );
+}

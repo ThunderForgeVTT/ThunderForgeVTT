@@ -16,6 +16,11 @@ import { must } from "../playtest/table";
  *     sizes, so the board gives its token four squares. A monster has no
  *     class and no level, and the 5e validator used to refuse a traits slot
  *     without them, which would have refused this write.
+ *  3. Each of them can fight. The pack's stat block for the creature is
+ *     written onto every actor made — hit points, armour class, challenge
+ *     rating — and its attacks are abilities the actor knows, so a goblin
+ *     made here is a goblin the combat flow can run, not a portrait with a
+ *     blank sheet. Three goblins share one Scimitar ability between them.
  */
 
 interface ImageRow {
@@ -64,6 +69,9 @@ test.describe("Bestiary (spec 047)", () => {
     await expect(dialog.getByTestId("bestiary-name")).toHaveValue("Goblin");
     await expect(dialog.getByTestId("bestiary-size")).toHaveText("small");
     await dialog.getByTestId("bestiary-count").fill("3");
+    await expect(dialog.getByTestId("bestiary-stat-block")).toContainText(
+      "AC 15, 10 hit points, CR 1/4",
+    );
     await expect(
       dialog
         .getByTestId("bestiary-preview")
@@ -127,24 +135,79 @@ test.describe("Bestiary (spec 047)", () => {
     }
     expect(faces.size).toBe(3);
 
-    const sizeOf = async (actorId: string) => {
+    const sheetOf = async (actorId: string) => {
       const { actorSystemData } = await must<{
-        actorSystemData: { traitData: { size?: string } | null } | null;
+        actorSystemData: {
+          abilityData: Record<string, unknown> | null;
+          resourceData: Record<string, unknown> | null;
+          proficiencyData: Record<string, unknown> | null;
+          traitData: Record<string, unknown> | null;
+        } | null;
       }>(
         page,
         `query ($actorId: UUID!) {
-          actorSystemData(actorId: $actorId) { traitData }
+          actorSystemData(actorId: $actorId) {
+            abilityData resourceData proficiencyData traitData
+          }
         }`,
         { actorId },
       );
-      return actorSystemData?.traitData?.size ?? null;
+      return actorSystemData;
+    };
+    const attacksOf = async (actorId: string) => {
+      const { actorAbilities } = await must<{
+        actorAbilities: { abilityId: string; abilityName: string }[];
+      }>(
+        page,
+        `query ($actorId: UUID!) {
+          actorAbilities(actorId: $actorId) { abilityId abilityName }
+        }`,
+        { actorId },
+      );
+      return actorAbilities;
     };
     const grunk = worldActors.find((actor) => actor.label === "Grunk")!;
     expect(grunk.images.map((row) => row.role).sort()).toEqual([
       "portrait",
       "token",
     ]);
-    expect(await sizeOf(grunk.id)).toBe("large");
-    expect(await sizeOf(goblins[0]!.id)).toBe("small");
+    const ogre = await sheetOf(grunk.id);
+    expect(ogre?.traitData?.size).toBe("large");
+    expect(ogre?.traitData?.challenge).toBe("2");
+    expect(ogre?.resourceData).toMatchObject({ max_hp: 68, current_hp: 68 });
+    expect(ogre?.abilityData).toMatchObject({ armor_class: 11, strength: 19 });
+
+    // Every goblin, not just the first: the same printed numbers on each.
+    const scimitars = new Set<string>();
+    for (const goblin of goblins) {
+      const sheet = await sheetOf(goblin.id);
+      expect(sheet?.traitData?.size, goblin.label).toBe("small");
+      expect(sheet?.traitData?.challenge, goblin.label).toBe("1/4");
+      // A monster still has no level: its proficiency bonus is its rating's.
+      expect(sheet?.traitData, goblin.label).not.toHaveProperty("level");
+      expect(sheet?.resourceData, goblin.label).toMatchObject({
+        max_hp: 10,
+        current_hp: 10,
+      });
+      expect(sheet?.abilityData, goblin.label).toMatchObject({
+        armor_class: 15,
+        dexterity: 15,
+      });
+      expect(sheet?.proficiencyData?.skill_expertise, goblin.label).toEqual([
+        "stealth",
+      ]);
+
+      const attacks = await attacksOf(goblin.id);
+      expect(
+        attacks.map((attack) => attack.abilityName).sort(),
+        goblin.label,
+      ).toEqual(["Scimitar (Goblin Warrior)", "Shortbow (Goblin Warrior)"]);
+      scimitars.add(
+        attacks.find((attack) => attack.abilityName.startsWith("Scimitar"))!
+          .abilityId,
+      );
+    }
+    // One ability in the world, known by three goblins.
+    expect(scimitars.size).toBe(1);
   });
 });

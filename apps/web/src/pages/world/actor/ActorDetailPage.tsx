@@ -30,6 +30,7 @@ import { ActorImageryPanel } from "@/pages/world/actor/ActorImageryPanel";
 import { ActorInventoryPanel } from "@/pages/world/actor/ActorInventoryPanel";
 import { ActorLorePanel } from "@/pages/world/actor/ActorLorePanel";
 import { ActorOwnershipBlock } from "@/pages/world/actor/ActorOwnershipBlock";
+import { ActorStatBlockPanel } from "@/pages/world/actor/ActorStatBlockPanel";
 import { WorldAppearance } from "@/appearance/WorldAppearance";
 import { startActorAccessEventSync } from "@/engine/world/sync/actorAccess";
 import { subscribeToWorldEvents } from "@/engine/world/sync/subscriptionClient";
@@ -77,6 +78,9 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
   const [isUpdatingUnique, setIsUpdatingUnique] = useState(false);
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
   const [isUpdatingArtLock, setIsUpdatingArtLock] = useState(false);
+  // Bumped when a stat block is applied: the sheet and the ability list
+  // each fetched once on mount, and both are now out of date.
+  const [sheetVersion, setSheetVersion] = useState(0);
   const { isGm: isDm } = useWorldRole(worldId, world);
   const { user } = useAuth();
 
@@ -610,13 +614,24 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
           const sheet = resolveActorSheet(actor.gameSystemId);
           return sheet ? (
             createElement(sheet, {
+              key: sheetVersion,
               actor,
               canEdit: canEdit && mode === "edit",
             })
           ) : (
-            <PackActorSheet actorId={actorId} />
+            <PackActorSheet key={sheetVersion} actorId={actorId} />
           );
         })()}
+
+        {/* GM-only, NPC-only: put one of the system's stat blocks on this
+            creature. Nothing renders for a system that ships none; which
+            systems do is found by `systemStatBlocks.ts`, not written here. */}
+        {isDm && actor.isNpc && mode === "edit" ? (
+          <ActorStatBlockPanel
+            actor={actor}
+            onApplied={() => setSheetVersion((version) => version + 1)}
+          />
+        ) : null}
 
         {/* Spec 036 US3b (FR-036): rolling a check from the sheet. Renders
             nothing at all for a system that declares none, which is seven of
@@ -634,6 +649,7 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
             any ability — and, matching inventory, it is available from the view
             route rather than gated on `mode === "edit"`. */}
         <ActorAbilitiesPanel
+          key={sheetVersion}
           actorId={actorId}
           worldId={worldId}
           gameSystemId={actor.gameSystemId}

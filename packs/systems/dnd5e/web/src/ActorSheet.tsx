@@ -9,10 +9,12 @@ import {
   calculateAbilityModifier,
   calculateMaxSpellSlots,
   calculateProficiencyBonus,
+  calculateProficiencyBonusForChallenge,
 } from "./derived-data.ts";
 import {
   DND5E_ABILITIES,
   DND5E_ALIGNMENTS,
+  DND5E_CHALLENGE_RATINGS,
   DND5E_CLASSES,
   DND5E_SHEET_REGIONS,
   DND5E_SIZES,
@@ -39,18 +41,46 @@ type Slot =
   | "spell_data";
 
 /**
- * Columns a region takes, by the span it declares. One column below `md`
- * whatever a region asks for, so a 375px phone reads the sheet top to bottom
- * in the declared order. Full literal strings: Tailwind only builds classes
- * it finds verbatim.
+ * Columns a region takes, by the span it declares. One column in a narrow
+ * sheet whatever a region asks for, so a 375px phone and the play dock read
+ * it top to bottom in the declared order. Full literal strings: Tailwind only
+ * builds classes it finds verbatim.
+ *
+ * **Container queries, not viewport ones** (`@md:`, not `md:`). The sheet is
+ * mounted in two places: the actor page, and the play dock, which is about
+ * 22rem wide on a monitor of any size. Asked about the viewport, the sheet
+ * laid itself out in three columns inside that dock, each a few characters
+ * wide. What it has to fit is the box it was given, so that is what it asks.
  */
 const SPAN_CLASS: Record<SheetRegion["span"], string> = {
   1: "",
-  2: "md:col-span-2",
-  3: "md:col-span-2 lg:col-span-3",
+  2: "@md:col-span-2",
+  3: "@md:col-span-2 @xl:col-span-3",
 };
 
 const SPELL_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
+
+/**
+ * The game's ceiling for an ability score, and the validator's. A character's
+ * own progression stops at 20, but a belt can carry one past it and a giant
+ * starts there, so the sheet does not refuse what the server accepts.
+ */
+const MAX_SCORE = 30;
+/** Likewise for a spell save DC: 8 is the formula's floor. */
+const MAX_SAVE_DC = 30;
+
+/** The speeds and senses beside the walk speed and darkvision, in feet. */
+const OTHER_SPEEDS = [
+  { key: "speed_fly", label: "Fly" },
+  { key: "speed_swim", label: "Swim" },
+  { key: "speed_climb", label: "Climb" },
+  { key: "speed_burrow", label: "Burrow" },
+] as const;
+const OTHER_SENSES = [
+  { key: "blindsight", label: "Blindsight" },
+  { key: "tremorsense", label: "Tremorsense" },
+  { key: "truesight", label: "Truesight" },
+] as const;
 
 function num(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
@@ -137,14 +167,24 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
   const scores = Object.fromEntries(
     DND5E_ABILITIES.map((a) => [
       a.id,
-      clamp(num(abilityData[a.id], 10), 1, 20),
+      clamp(num(abilityData[a.id], 10), 1, MAX_SCORE),
     ]),
   ) as Record<AbilityId, number>;
   const mod = (ability: AbilityId) => calculateAbilityModifier(scores[ability]);
   const level = clamp(num(traitData.level, 1), 1, 20);
   const className = str(traitData.class);
   const classDecl = DND5E_CLASSES.find((c) => c.name === className);
-  const proficiencyBonus = calculateProficiencyBonus(level);
+  // A creature has a challenge rating where a character has a level, and the
+  // rules read the rating only when no level is stored (`rules.rs`). The
+  // sheet follows the same order so the bonus it shows is the one a roll
+  // will use.
+  const challenge = str(traitData.challenge);
+  const hasLevel = typeof traitData.level === "number";
+  const challengeBonus = hasLevel
+    ? null
+    : calculateProficiencyBonusForChallenge(challenge);
+  const isCreature = challengeBonus !== null;
+  const proficiencyBonus = challengeBonus ?? calculateProficiencyBonus(level);
   const saveProficiencies = idList(proficiencyData.saving_throw_proficiencies);
   const skillProficiencies = idList(proficiencyData.skill_proficiencies);
   // Expertise rides on proficiency, as it does in `rules.rs`: an id stored
@@ -203,8 +243,29 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
     write("ability_data", { ...abilityData, ...scores, ...patch });
   const writeResources = (patch: Json) =>
     write("resource_data", { ...resourceData, max_hp: maxHp, ...patch });
-  const writeTraits = (patch: Json) =>
-    write("trait_data", { ...traitData, class: className, level, ...patch });
+  // A creature is written without the class and level a character's slot
+  // always carries: storing level 1 on a goblin would take its proficiency
+  // bonus away from its challenge rating. Judged on what the write leaves
+  // behind, so giving a blank sheet a challenge rating makes a creature of it.
+  const writeTraits = (patch: Json) => {
+    const nextChallenge =
+      "challenge" in patch ? str(patch.challenge) : challenge;
+    const staysCreature =
+      !hasLevel &&
+      !("level" in patch) &&
+      calculateProficiencyBonusForChallenge(nextChallenge) !== null;
+    return write("trait_data", {
+      ...traitData,
+      ...(staysCreature ? {} : { class: className, level }),
+      ...patch,
+    });
+  };
+  /** Drop the level so the challenge rating sets the proficiency bonus. */
+  const useChallengeRating = () => {
+    const { level: _level, class: _class, ...rest } = traitData;
+    return write("trait_data", rest);
+  };
+
   const writeProficiencies = (patch: Json) =>
     write("proficiency_data", {
       ...proficiencyData,
@@ -220,7 +281,7 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
       ...(spellAbility ? { spellcasting_ability: spellAbility } : {}),
       ...(spellSaveDc !== null
         ? {
-            spell_save_dc: clamp(spellSaveDc, 8, 20),
+            spell_save_dc: clamp(spellSaveDc, 8, MAX_SAVE_DC),
             spell_attack_bonus: spellAttack,
           }
         : {}),
@@ -240,7 +301,7 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
       await write("spell_data", {
         ...spellData,
         spellcasting_ability: spellAbility,
-        spell_save_dc: clamp(8 + pb + mod(spellAbility), 8, 20),
+        spell_save_dc: clamp(8 + pb + mod(spellAbility), 8, MAX_SAVE_DC),
         spell_attack_bonus: pb + mod(spellAbility),
       });
     }
@@ -256,7 +317,7 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
         spell_save_dc: clamp(
           8 + proficiencyBonus + mod(decl.spellcasting),
           8,
-          20,
+          MAX_SAVE_DC,
         ),
         spell_attack_bonus: proficiencyBonus + mod(decl.spellcasting),
       });
@@ -264,14 +325,14 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
   };
 
   const handleScoreChange = async (ability: AbilityId, value: number) => {
-    const next = clamp(value, 1, 20);
+    const next = clamp(value, 1, MAX_SCORE);
     await writeAbilities({ [ability]: next });
     if (spellAbility === ability) {
       const m = calculateAbilityModifier(next);
       await write("spell_data", {
         ...spellData,
         spellcasting_ability: spellAbility,
-        spell_save_dc: clamp(8 + proficiencyBonus + m, 8, 20),
+        spell_save_dc: clamp(8 + proficiencyBonus + m, 8, MAX_SAVE_DC),
         spell_attack_bonus: proficiencyBonus + m,
       });
     }
@@ -351,6 +412,65 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
                 {signed(proficiencyBonus)}
               </span>
             </Fact>
+            {canEdit || challenge ? (
+              <div className="grid grid-cols-2 gap-3">
+                <Field
+                  id="dnd5e-challenge"
+                  label="Challenge"
+                  canEdit={canEdit}
+                  display={challenge || "—"}
+                >
+                  <select
+                    id="dnd5e-challenge"
+                    className={fieldClass}
+                    data-testid="dnd5e-challenge-select"
+                    value={challenge}
+                    disabled={isPending}
+                    onChange={(event) =>
+                      void writeTraits({
+                        challenge: event.target.value || null,
+                      })
+                    }
+                  >
+                    <option value="">—</option>
+                    {DND5E_CHALLENGE_RATINGS.map((rating) => (
+                      <option key={rating} value={rating}>
+                        {rating}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <TextField
+                  id="dnd5e-creature-type"
+                  label="Creature type"
+                  canEdit={canEdit}
+                  value={str(traitData.creature_type)}
+                  onCommit={(v) => writeTraits({ creature_type: v || null })}
+                />
+              </div>
+            ) : null}
+            {canEdit && challenge ? (
+              <div className="grid gap-1" data-testid="dnd5e-challenge-hint">
+                <p className={hintClass}>
+                  {isCreature
+                    ? "A creature: the proficiency bonus comes from the challenge rating. Setting a level makes it follow the level instead."
+                    : "A level is set, so the proficiency bonus follows the level, not the challenge rating."}
+                </p>
+                {isCreature ? null : (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="justify-self-start"
+                    data-testid="dnd5e-use-challenge"
+                    disabled={isPending}
+                    onClick={() => void useChallengeRating()}
+                  >
+                    Use the challenge rating
+                  </Button>
+                )}
+              </div>
+            ) : null}
             <TextField
               id="dnd5e-race"
               label="Race"
@@ -437,7 +557,7 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
 
       case "abilities":
         return (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 @md:grid-cols-3 @xl:grid-cols-6">
             {DND5E_ABILITIES.map((ability) => {
               const id = `dnd5e-score-${ability.id}`;
               const proficient = saveProficiencies.includes(ability.id);
@@ -466,7 +586,7 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
                       className={`${fieldClass} w-16 text-center tabular-nums`}
                       value={scores[ability.id]}
                       min={1}
-                      max={20}
+                      max={MAX_SCORE}
                       disabled={isPending}
                       ariaLabel={`${ability.label} score`}
                       onCommit={(v) => handleScoreChange(ability.id, v)}
@@ -681,6 +801,38 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
                 step={30}
                 onCommit={(v) => writeTraits({ darkvision: Math.max(0, v) })}
               />
+              <div
+                className="grid grid-cols-2 gap-3"
+                data-testid="dnd5e-other-movement"
+              >
+                {[...OTHER_SPEEDS, ...OTHER_SENSES]
+                  // Read-only, a creature that cannot fly has no fly speed
+                  // to show; editing, every one is offered.
+                  .filter(({ key }) => canEdit || num(traitData[key], 0) > 0)
+                  .map(({ key, label }) => (
+                    <NumberField
+                      key={key}
+                      id={`dnd5e-${key.replace("_", "-")}`}
+                      label={`${label} (ft.)`}
+                      canEdit={canEdit}
+                      value={num(traitData[key], 0)}
+                      min={0}
+                      step={5}
+                      onCommit={(v) => writeTraits({ [key]: Math.max(0, v) })}
+                    />
+                  ))}
+              </div>
+              {canEdit || str(resourceData.hit_dice) ? (
+                <TextField
+                  id="dnd5e-hit-dice-formula"
+                  label="Hit point dice"
+                  canEdit={canEdit}
+                  value={str(resourceData.hit_dice)}
+                  onCommit={(v) =>
+                    writeResources({ hit_dice: v.trim() || null })
+                  }
+                />
+              ) : null}
               <div className="grid gap-1">
                 <div>
                   <label
@@ -754,7 +906,7 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
               </p>
             ) : null}
             <ul
-              className="grid gap-1 sm:grid-cols-2"
+              className="grid gap-1 @md:grid-cols-2"
               data-testid="dnd5e-skill-list"
             >
               {DND5E_SKILLS.map((skill) => {
@@ -897,7 +1049,7 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
                       spell_save_dc: clamp(
                         8 + proficiencyBonus + mod(next),
                         8,
-                        20,
+                        MAX_SAVE_DC,
                       ),
                       spell_attack_bonus: proficiencyBonus + mod(next),
                     });
@@ -952,7 +1104,7 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
                     </Button>
                   ) : null}
                 </div>
-                <ul className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-9">
+                <ul className="grid grid-cols-3 gap-2 @md:grid-cols-5 @xl:grid-cols-9">
                   {SPELL_LEVELS.map((n) => {
                     const key = `level_${n}`;
                     const max = Math.max(
@@ -1091,7 +1243,7 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
 
       case "features":
         return (
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 @md:grid-cols-2">
             <ListField
               id="dnd5e-traits"
               label="Features & traits"
@@ -1127,42 +1279,44 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
   };
 
   return (
-    <div
-      className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3"
-      data-testid="dnd5e-actor-sheet"
-      data-editable={canEdit ? "true" : "false"}
-      aria-busy={isPending}
-    >
-      {error ? (
-        <p
-          role="alert"
-          className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive md:col-span-2 lg:col-span-3"
-          data-testid="dnd5e-sheet-error"
-        >
-          {error}
-        </p>
-      ) : null}
-      {DND5E_SHEET_REGIONS.map((region) => (
-        <section
-          key={region.id}
-          aria-labelledby={`dnd5e-region-${region.id}`}
-          className={`${cardClass} grid content-start gap-3 ${SPAN_CLASS[region.span]}`}
-          data-testid={`dnd5e-region-${region.id}`}
-          data-region={region.id}
-          data-span={region.span}
-        >
-          <header className="grid gap-0.5">
-            <h2
-              id={`dnd5e-region-${region.id}`}
-              className={sectionHeadingClass}
-            >
-              {region.title}
-            </h2>
-            <p className={hintClass}>{region.blurb}</p>
-          </header>
-          {regionBody(region)}
-        </section>
-      ))}
+    <div className="@container">
+      <div
+        className="grid grid-cols-1 gap-4 @md:grid-cols-2 @xl:grid-cols-3"
+        data-testid="dnd5e-actor-sheet"
+        data-editable={canEdit ? "true" : "false"}
+        aria-busy={isPending}
+      >
+        {error ? (
+          <p
+            role="alert"
+            className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive @md:col-span-2 @xl:col-span-3"
+            data-testid="dnd5e-sheet-error"
+          >
+            {error}
+          </p>
+        ) : null}
+        {DND5E_SHEET_REGIONS.map((region) => (
+          <section
+            key={region.id}
+            aria-labelledby={`dnd5e-region-${region.id}`}
+            className={`${cardClass} grid content-start gap-3 ${SPAN_CLASS[region.span]}`}
+            data-testid={`dnd5e-region-${region.id}`}
+            data-region={region.id}
+            data-span={region.span}
+          >
+            <header className="grid gap-0.5">
+              <h2
+                id={`dnd5e-region-${region.id}`}
+                className={sectionHeadingClass}
+              >
+                {region.title}
+              </h2>
+              <p className={hintClass}>{region.blurb}</p>
+            </header>
+            {regionBody(region)}
+          </section>
+        ))}
+      </div>
     </div>
   );
 }

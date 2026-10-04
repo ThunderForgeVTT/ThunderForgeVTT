@@ -47,7 +47,13 @@ pub fn declared_size_ids() -> &'static [String] {
 // ability_data Validators
 // ============================================================================
 
-/// Validates D&D 5e ability scores (1-20 range)
+/// Validates D&D 5e ability scores (1-30 range).
+///
+/// Thirty, not twenty. Twenty is where a *character's* own progression stops;
+/// the game's ceiling for any creature is thirty, an ogre's Strength is 19 and
+/// a giant's 25. While this refused 21 a bestiary creature's stat block could
+/// not be written at all, and neither could a character wearing a belt that
+/// sets Strength past its cap.
 pub fn validate_ability_data(data: &serde_json::Value) -> Result<(), ValidationError> {
     let obj = data.as_object().ok_or(ValidationError {
         field: "ability_data".to_string(),
@@ -73,10 +79,10 @@ pub fn validate_ability_data(data: &serde_json::Value) -> Result<(), ValidationE
                 message: "must be an integer".to_string(),
             })?;
 
-        if !(1..=20).contains(&value) {
+        if !(1..=30).contains(&value) {
             return Err(ValidationError {
                 field: format!("ability_data.{}", ability),
-                message: "must be between 1 and 20".to_string(),
+                message: "must be between 1 and 30".to_string(),
             });
         }
     }
@@ -162,8 +168,147 @@ pub fn validate_resource_data(data: &serde_json::Value) -> Result<(), Validation
         }
     }
 
+    // What the sheet tracks beside the hit points. All optional, so a sheet
+    // saved before any of these was checked is still a sheet.
+    optional_whole(obj, "resource_data", "hit_dice_used", 0, i64::MAX)?;
+    optional_whole(obj, "resource_data", "death_save_successes", 0, 3)?;
+    optional_whole(obj, "resource_data", "death_save_failures", 0, 3)?;
+
+    // The dice a creature's hit points are rolled from ("3d6", "8d10+24"): a
+    // stat block's own notation, kept so a Game Master can roll a monster's
+    // hit points instead of taking the average.
+    if let Some(hit_dice) = obj.get("hit_dice").filter(|v| !v.is_null()) {
+        let text = hit_dice.as_str().ok_or(ValidationError {
+            field: "resource_data.hit_dice".to_string(),
+            message: "must be a string or null".to_string(),
+        })?;
+        if !is_hit_dice(text) {
+            return Err(ValidationError {
+                field: "resource_data.hit_dice".to_string(),
+                message: "must read like 3d6 or 8d10+24".to_string(),
+            });
+        }
+    }
+
     Ok(())
 }
+
+/// `3d6`, `8d10+24`, `3d6-3`: a count, a die, and at most one flat modifier.
+fn is_hit_dice(text: &str) -> bool {
+    let text = text.trim();
+    let Some((count, rest)) = text.split_once('d') else {
+        return false;
+    };
+    let (die, modifier) = match rest.find(['+', '-']) {
+        Some(at) => (&rest[..at], Some(&rest[at + 1..])),
+        None => (rest, None),
+    };
+    let whole = |part: &str| {
+        !part.is_empty() && part.len() <= 4 && part.bytes().all(|b| b.is_ascii_digit())
+    };
+    whole(count) && whole(die) && modifier.is_none_or(whole)
+}
+
+/// An optional whole number within `min..=max`. Absent or null is fine.
+fn optional_whole(
+    obj: &serde_json::Map<String, serde_json::Value>,
+    slot: &str,
+    key: &str,
+    min: i64,
+    max: i64,
+) -> Result<(), ValidationError> {
+    let Some(value) = obj.get(key).filter(|v| !v.is_null()) else {
+        return Ok(());
+    };
+    let field = format!("{slot}.{key}");
+    let number = value.as_i64().ok_or(ValidationError {
+        field: field.clone(),
+        message: "must be a whole number".to_string(),
+    })?;
+    if number < min {
+        return Err(ValidationError {
+            field,
+            message: if min == 0 {
+                "cannot be negative".to_string()
+            } else {
+                format!("must be at least {min}")
+            },
+        });
+    }
+    if number > max {
+        return Err(ValidationError {
+            field,
+            message: format!("must be at most {max}"),
+        });
+    }
+    Ok(())
+}
+
+/// An optional distance: a number, never negative. Not held to a whole
+/// number, because the board converts these to cells and has always accepted
+/// whatever number was stored.
+fn optional_distance(
+    obj: &serde_json::Map<String, serde_json::Value>,
+    slot: &str,
+    key: &str,
+) -> Result<(), ValidationError> {
+    let Some(value) = obj.get(key).filter(|v| !v.is_null()) else {
+        return Ok(());
+    };
+    let field = format!("{slot}.{key}");
+    let number = value.as_f64().ok_or(ValidationError {
+        field: field.clone(),
+        message: "must be a number".to_string(),
+    })?;
+    if number < 0.0 {
+        return Err(ValidationError {
+            field,
+            message: "cannot be negative".to_string(),
+        });
+    }
+    Ok(())
+}
+
+/// An optional piece of text. Absent or null is fine.
+fn optional_text(
+    obj: &serde_json::Map<String, serde_json::Value>,
+    slot: &str,
+    key: &str,
+) -> Result<(), ValidationError> {
+    match obj.get(key) {
+        Some(value) if !value.is_string() && !value.is_null() => Err(ValidationError {
+            field: format!("{slot}.{key}"),
+            message: "must be a string or null".to_string(),
+        }),
+        _ => Ok(()),
+    }
+}
+
+/// The challenge ratings a stat block may carry, as the book prints them.
+///
+/// Text, because three of them are fractions and a fraction stored as a
+/// float is a number nobody can read back off a sheet.
+pub const CHALLENGE_RATINGS: [&str; 34] = [
+    "0", "1/8", "1/4", "1/2", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13",
+    "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29",
+    "30",
+];
+
+/// The distances this pack keeps in `trait_data`: the speeds its manifest
+/// declares under `movement`, the senses, and a carried light.
+const TRAIT_DISTANCES: [&str; 11] = [
+    "speed_walk",
+    "speed_fly",
+    "speed_swim",
+    "speed_climb",
+    "speed_burrow",
+    "darkvision",
+    "blindsight",
+    "tremorsense",
+    "truesight",
+    "light_bright",
+    "light_dim",
+];
 
 // ============================================================================
 // proficiency_data Validators
@@ -245,11 +390,29 @@ pub fn validate_proficiency_data(data: &serde_json::Value) -> Result<(), Validat
             message: "must be an integer".to_string(),
         })?;
 
-        if !(2..=6).contains(&bonus) {
+        // Six is a level-twenty character's; a challenge-thirty creature's is nine.
+        if !(2..=9).contains(&bonus) {
             return Err(ValidationError {
                 field: "proficiency_data.proficiency_bonus".to_string(),
-                message: "must be between 2 and 6 (character levels 1-20)".to_string(),
+                message: "must be between 2 and 9".to_string(),
             });
+        }
+    }
+
+    // The plain lists the sheet keeps beside the skills: what armour, weapons
+    // and tools a character is trained with.
+    for key in ["armor", "weapons", "tools"] {
+        if let Some(list) = obj.get(key).filter(|v| !v.is_null()) {
+            let items = list.as_array().ok_or(ValidationError {
+                field: format!("proficiency_data.{key}"),
+                message: "must be an array of strings".to_string(),
+            })?;
+            if let Some(i) = items.iter().position(|item| !item.is_string()) {
+                return Err(ValidationError {
+                    field: format!("proficiency_data.{key}[{i}]"),
+                    message: "must be a string".to_string(),
+                });
+            }
         }
     }
 
@@ -452,6 +615,42 @@ pub fn validate_trait_data(data: &serde_json::Value) -> Result<(), ValidationErr
         }
     }
 
+    // A creature's challenge rating. It stands where a character's level
+    // does: the rules read the proficiency bonus from it when there is no
+    // level (`rules.rs`).
+    if let Some(challenge) = obj.get("challenge").filter(|v| !v.is_null()) {
+        let value = challenge.as_str().ok_or(ValidationError {
+            field: "trait_data.challenge".to_string(),
+            message: "must be a string or null".to_string(),
+        })?;
+        if !CHALLENGE_RATINGS.contains(&value) {
+            return Err(ValidationError {
+                field: "trait_data.challenge".to_string(),
+                message: "must be a challenge rating: 0, 1/8, 1/4, 1/2, or 1 to 30".to_string(),
+            });
+        }
+    }
+
+    // Speeds, senses and a carried light, in feet. The board reads the walk
+    // speed, darkvision and the light (`movement` and `vision` in the
+    // manifest); the rest are the sheet's.
+    for key in TRAIT_DISTANCES {
+        optional_distance(obj, "trait_data", key)?;
+    }
+
+    optional_whole(obj, "trait_data", "experience", 0, i64::MAX)?;
+    for key in ["alignment", "creature_type", "notes"] {
+        optional_text(obj, "trait_data", key)?;
+    }
+    if let Some(inspiration) = obj.get("inspiration").filter(|v| !v.is_null()) {
+        if !inspiration.is_boolean() {
+            return Err(ValidationError {
+                field: "trait_data.inspiration".to_string(),
+                message: "must be true or false".to_string(),
+            });
+        }
+    }
+
     // Validate traits array (if present)
     if let Some(traits_val) = obj.get("traits") {
         let _traits = traits_val.as_array().ok_or(ValidationError {
@@ -513,10 +712,12 @@ pub fn validate_spell_data(data: &serde_json::Value) -> Result<(), ValidationErr
             message: "must be an integer".to_string(),
         })?;
 
-        if !(8..=20).contains(&dc) {
+        // Eight is the floor the formula has; thirty leaves room for a
+        // creature whose casting ability is past a character's cap.
+        if !(8..=30).contains(&dc) {
             return Err(ValidationError {
                 field: "spell_data.spell_save_dc".to_string(),
-                message: "must be between 8 and 20".to_string(),
+                message: "must be between 8 and 30".to_string(),
             });
         }
     }
@@ -565,10 +766,14 @@ pub fn validate_spell_data(data: &serde_json::Value) -> Result<(), ValidationErr
         }
     }
 
-    // Validate spell_slots (if present)
-    if let Some(slots_val) = obj.get("spell_slots") {
+    // Slots per day, and how many of them are spent. The same nine levels and
+    // the same rule for both: a whole number, never negative.
+    for key in ["spell_slots", "spell_slots_used"] {
+        let Some(slots_val) = obj.get(key).filter(|v| !v.is_null()) else {
+            continue;
+        };
         let slots = slots_val.as_object().ok_or(ValidationError {
-            field: "spell_data.spell_slots".to_string(),
+            field: format!("spell_data.{key}"),
             message: "must be a JSON object".to_string(),
         })?;
 
@@ -580,19 +785,19 @@ pub fn validate_spell_data(data: &serde_json::Value) -> Result<(), ValidationErr
         for (level_key, slot_count_val) in slots {
             if !valid_levels.contains(&level_key.as_str()) {
                 return Err(ValidationError {
-                    field: format!("spell_data.spell_slots.{}", level_key),
+                    field: format!("spell_data.{key}.{level_key}"),
                     message: "invalid spell level (must be level_1 through level_9)".to_string(),
                 });
             }
 
             let slot_count = slot_count_val.as_i64().ok_or(ValidationError {
-                field: format!("spell_data.spell_slots.{}", level_key),
+                field: format!("spell_data.{key}.{level_key}"),
                 message: "must be an integer".to_string(),
             })?;
 
             if slot_count < 0 {
                 return Err(ValidationError {
-                    field: format!("spell_data.spell_slots.{}", level_key),
+                    field: format!("spell_data.{key}.{level_key}"),
                     message: "cannot be negative".to_string(),
                 });
             }
@@ -633,276 +838,6 @@ pub fn validate_spell_data_for_registry(data: &serde_json::Value) -> Result<(), 
     validate_spell_data(data).map_err(|e| e.to_string())
 }
 
-// ============================================================================
-// Tests
-// ============================================================================
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn armor_class_is_optional_a_whole_number_and_never_negative() {
-        let with = |armor_class: serde_json::Value| {
-            json!({
-                "strength": 10, "dexterity": 12, "constitution": 14,
-                "intelligence": 9, "wisdom": 16, "charisma": 11,
-                "armor_class": armor_class
-            })
-        };
-        assert!(validate_ability_data(&with(json!(15))).is_ok());
-        assert!(validate_ability_data(&with(json!(0))).is_ok());
-        let negative = validate_ability_data(&with(json!(-1))).unwrap_err();
-        assert_eq!(negative.field, "ability_data.armor_class");
-        assert!(validate_ability_data(&with(json!("15"))).is_err());
-        assert!(validate_ability_data(&with(json!(12.5))).is_err());
-    }
-
-    #[test]
-    fn test_validate_ability_data_valid() {
-        let data = json!({
-            "strength": 10,
-            "dexterity": 12,
-            "constitution": 14,
-            "intelligence": 9,
-            "wisdom": 16,
-            "charisma": 11
-        });
-        assert!(validate_ability_data(&data).is_ok());
-    }
-
-    /// **The boundaries themselves**, written as literals.
-    ///
-    /// A mutation audit on 2026-09-02 narrowed this rule from 1-20 to 2-19 and
-    /// all thirty-seven tests in this pack still passed: the accept fixture
-    /// uses 9 to 16, and the reject cases sit outside both ends, so the two
-    /// scores the rule actually names were never supplied. One is a real
-    /// character — a 20 is the cap a player spends their whole progression
-    /// reaching — and the rule refusing it would be discovered at a table.
-    ///
-    /// Literals rather than the range's own bounds: a test written against the
-    /// constant asserts the rule accepts whatever the rule is written against,
-    /// which is true of every range and catches nothing. That mistake was made
-    /// and caught while fixing this same class of bug in `yze-server`.
-    #[test]
-    fn ability_data_accepts_the_exact_ends_of_the_range() {
-        let at = |score: i64| {
-            json!({
-                "strength": score, "dexterity": score, "constitution": score,
-                "intelligence": score, "wisdom": score, "charisma": score
-            })
-        };
-
-        assert!(
-            validate_ability_data(&at(1)).is_ok(),
-            "the lowest score the rule names must be accepted by it"
-        );
-        assert!(
-            validate_ability_data(&at(20)).is_ok(),
-            "and a 20 is where a character's whole progression ends up"
-        );
-    }
-
-    #[test]
-    fn test_validate_ability_data_out_of_range() {
-        let data = json!({
-            "strength": 21,
-            "dexterity": 12,
-            "constitution": 14,
-            "intelligence": 9,
-            "wisdom": 16,
-            "charisma": 11
-        });
-        assert!(validate_ability_data(&data).is_err());
-    }
-
-    #[test]
-    fn test_validate_ability_data_zero() {
-        let data = json!({
-            "strength": 0,
-            "dexterity": 12,
-            "constitution": 14,
-            "intelligence": 9,
-            "wisdom": 16,
-            "charisma": 11
-        });
-        assert!(validate_ability_data(&data).is_err());
-    }
-
-    #[test]
-    fn test_validate_resource_data_valid() {
-        let data = json!({
-            "max_hp": 32,
-            "current_hp": 28,
-            "temporary_hp": 5
-        });
-        assert!(validate_resource_data(&data).is_ok());
-    }
-
-    #[test]
-    fn test_validate_resource_data_missing_max_hp() {
-        let data = json!({"current_hp": 28});
-        assert!(validate_resource_data(&data).is_err());
-    }
-
-    #[test]
-    fn test_validate_resource_data_negative_current_hp() {
-        let data = json!({
-            "max_hp": 32,
-            "current_hp": -5
-        });
-        assert!(validate_resource_data(&data).is_err());
-    }
-
-    #[test]
-    fn test_validate_proficiency_data_valid_skills() {
-        let data = json!({
-            "skill_proficiencies": {
-                "acrobatics": true,
-                "arcana": false
-            }
-        });
-        assert!(validate_proficiency_data(&data).is_ok());
-    }
-
-    #[test]
-    fn test_validate_proficiency_data_invalid_skill() {
-        let data = json!({
-            "skill_proficiencies": {
-                "invalid_skill": true
-            }
-        });
-        assert!(validate_proficiency_data(&data).is_err());
-    }
-
-    #[test]
-    fn proficiency_data_accepts_the_list_the_rules_read() {
-        // The shape `rules.rs` and the roll-check bindings actually consult.
-        let data = json!({
-            "skill_proficiencies": ["stealth", "perception"],
-            "saving_throw_proficiencies": ["dexterity"]
-        });
-        assert!(validate_proficiency_data(&data).is_ok());
-    }
-
-    #[test]
-    fn proficiency_data_accepts_expertise_and_rejects_an_unknown_skill_in_it() {
-        let data = json!({
-            "skill_proficiencies": ["stealth"],
-            "skill_expertise": ["stealth"]
-        });
-        assert!(validate_proficiency_data(&data).is_ok());
-        let unknown = json!({ "skill_expertise": ["lockpicking"] });
-        assert!(validate_proficiency_data(&unknown).is_err());
-    }
-
-    #[test]
-    fn proficiency_data_rejects_an_unknown_id_in_either_shape() {
-        let as_list = json!({ "skill_proficiencies": ["lockpicking"] });
-        assert!(validate_proficiency_data(&as_list).is_err());
-        let as_map = json!({ "saving_throw_proficiencies": { "luck": true } });
-        assert!(validate_proficiency_data(&as_map).is_err());
-        let as_number = json!({ "skill_proficiencies": 3 });
-        assert!(validate_proficiency_data(&as_number).is_err());
-        let not_a_string = json!({ "skill_proficiencies": [7] });
-        assert!(validate_proficiency_data(&not_a_string).is_err());
-    }
-
-    #[test]
-    fn test_validate_trait_data_valid() {
-        let data = json!({
-            "class": "Wizard",
-            "level": 5,
-            "race": "Elf",
-            "feats": ["War Caster"]
-        });
-        assert!(validate_trait_data(&data).is_ok());
-    }
-
-    #[test]
-    fn a_monster_has_a_size_and_neither_class_nor_level() {
-        // What the bestiary writes: the size alone.
-        assert!(validate_trait_data(&json!({ "size": "large" })).is_ok());
-        assert!(validate_trait_data(&json!({ "level": 5 })).is_ok());
-        // Present is still checked.
-        let class = validate_trait_data(&json!({ "class": 3 })).unwrap_err();
-        assert_eq!(class.field, "trait_data.class");
-        let level = validate_trait_data(&json!({ "level": "five" })).unwrap_err();
-        assert_eq!(level.field, "trait_data.level");
-        let low = validate_trait_data(&json!({ "size": "large", "level": 0 })).unwrap_err();
-        assert_eq!(low.field, "trait_data.level");
-    }
-
-    #[test]
-    fn size_is_optional_and_one_of_the_manifests_declared_sizes() {
-        assert_eq!(
-            declared_size_ids(),
-            ["tiny", "small", "medium", "large", "huge", "gargantuan"],
-            "the ids come from combat.sizes in system.json"
-        );
-        let with =
-            |size: serde_json::Value| json!({ "class": "monster", "level": 1, "size": size });
-        for size in declared_size_ids() {
-            assert!(validate_trait_data(&with(json!(size))).is_ok(), "{size}");
-        }
-        assert!(validate_trait_data(&with(serde_json::Value::Null)).is_ok());
-        assert!(validate_trait_data(&json!({ "class": "monster", "level": 1 })).is_ok());
-        let unknown = validate_trait_data(&with(json!("colossal"))).unwrap_err();
-        assert_eq!(unknown.field, "trait_data.size");
-        let not_text = validate_trait_data(&with(json!(2))).unwrap_err();
-        assert_eq!(not_text.field, "trait_data.size");
-    }
-
-    #[test]
-    fn legendary_actions_are_optional_whole_and_never_negative() {
-        let with = |legendary: serde_json::Value| json!({ "class": "monster", "level": 1, "legendary_actions": legendary });
-        assert!(validate_trait_data(&with(json!(3))).is_ok());
-        assert!(validate_trait_data(&with(json!(0))).is_ok());
-        assert!(validate_trait_data(&with(serde_json::Value::Null)).is_ok());
-        let negative = validate_trait_data(&with(json!(-1))).unwrap_err();
-        assert_eq!(negative.field, "trait_data.legendary_actions");
-        let fraction = validate_trait_data(&with(json!(1.5))).unwrap_err();
-        assert_eq!(fraction.field, "trait_data.legendary_actions");
-        let text = validate_trait_data(&with(json!("three"))).unwrap_err();
-        assert_eq!(text.field, "trait_data.legendary_actions");
-    }
-
-    #[test]
-    fn test_validate_trait_data_invalid_level() {
-        let data = json!({
-            "class": "Wizard",
-            "level": 21
-        });
-        assert!(validate_trait_data(&data).is_err());
-    }
-
-    #[test]
-    fn test_validate_spell_data_valid() {
-        let data = json!({
-            "spellcasting_ability": "intelligence",
-            "spell_save_dc": 14,
-            "cantrips_known": ["Fire Bolt"],
-            "spells_known": ["Magic Missile"],
-            "spell_slots": {
-                "level_1": 4,
-                "level_2": 2
-            }
-        });
-        assert!(validate_spell_data(&data).is_ok());
-    }
-
-    #[test]
-    fn test_validate_spell_data_invalid_ability() {
-        let data = json!({
-            "spellcasting_ability": "invalid_ability"
-        });
-        assert!(validate_spell_data(&data).is_err());
-    }
-
-    #[test]
-    fn test_validate_spell_data_invalid_dc() {
-        let data = json!({"spell_save_dc": 25});
-        assert!(validate_spell_data(&data).is_err());
-    }
-}
+#[path = "validators_tests.rs"]
+mod tests;

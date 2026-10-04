@@ -1,7 +1,12 @@
 import type { Locator, Page } from "@playwright/test";
 
 import { expectNoAxeViolations } from "./fixtures/axe";
-import { freshCredentials, graphql, register } from "./fixtures/helpers";
+import {
+  freshCredentials,
+  graphql,
+  inviteAndJoinAsPlayer,
+  register,
+} from "./fixtures/helpers";
 import { expect, test } from "./fixtures/test";
 
 /**
@@ -19,6 +24,12 @@ import { expect, test } from "./fixtures/test";
  *     This test rolls Stealth through `rollCheck` and checks the arithmetic.
  *  4. Hit points, a spellcasting ability and notes write through their slots.
  *  5. The view route is read-only: the same regions, nothing to change.
+ *  6. A player who claimed the character changes its numbers themselves —
+ *     a score, hit points, a proficiency — with no Game Master in the loop,
+ *     and finds them there after a reload.
+ *  7. A Game Master gives an existing NPC a stat block from its own page, is
+ *     asked before a second one replaces the first, and can then change any
+ *     number by hand on the same sheet.
  */
 
 const REGION_ORDER = [
@@ -389,4 +400,202 @@ test("the 5e sheet lays out, derives, persists, and its proficiencies reach the 
     "Wanted in Waterdeep under another name.",
   );
   await expectNoAxeViolations(page, '[data-testid="dnd5e-actor-sheet"]');
+});
+
+test("a player who claimed the character edits its sheet, and the edits persist", async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(180_000);
+  const { worldId, actorId } = await createFifthEditionCharacter(page);
+  await graphql(
+    page,
+    `
+      mutation ($actorId: UUID!) {
+        setActorAvailability(actorId: $actorId, available: true) {
+          id
+        }
+      }
+    `,
+    { actorId },
+  );
+
+  // A second account at the table: the server refuses a claim from the Game
+  // Master, and the point here is what a *player* is allowed to do.
+  const player = await inviteAndJoinAsPlayer(browser, page, worldId, "e2e5ep");
+  const claim = await graphql<GqlResult<{ claimActor: { actorId: string } }>>(
+    player,
+    `
+      mutation ($worldId: UUID!, $actorId: UUID!) {
+        claimActor(worldId: $worldId, actorId: $actorId) {
+          actorId
+        }
+      }
+    `,
+    { worldId, actorId },
+  );
+  expect(
+    claim.data?.claimActor?.actorId,
+    `claim refused: ${JSON.stringify(claim.errors ?? claim)}`,
+  ).toBe(actorId);
+
+  await player.goto(`/world/${worldId}/actor/${actorId}/edit`);
+  const sheet = player.getByTestId("dnd5e-actor-sheet");
+  await expect(sheet).toBeVisible({ timeout: 15_000 });
+  await expect(sheet).toHaveAttribute("data-editable", "true");
+
+  // A score past a character's own ceiling: a belt of giant strength is 21
+  // and up, and the sheet used to stop at 20.
+  await setNumber(player, "dnd5e-score-strength-input", 21);
+  await expect(player.getByTestId("dnd5e-mod-strength")).toHaveText("+5", {
+    timeout: 15_000,
+  });
+  await setNumber(player, "dnd5e-score-wisdom-input", 14);
+  await expect(player.getByTestId("dnd5e-mod-wisdom")).toHaveText("+2", {
+    timeout: 15_000,
+  });
+  await setNumber(player, "dnd5e-max-hp-input", 27);
+  await setNumber(player, "dnd5e-current-hp-input", 19);
+  await expect(player.getByTestId("dnd5e-current-hp-input")).toHaveValue("19", {
+    timeout: 15_000,
+  });
+  await player.getByTestId("dnd5e-skill-perception-proficient").check();
+  await expect(player.getByTestId("dnd5e-skill-perception-bonus")).toHaveText(
+    "+4",
+    { timeout: 15_000 },
+  );
+  await setNumber(player, "dnd5e-speed-fly-input", 30);
+
+  // The server's copy, asked for by the Game Master: what the player typed
+  // is what the table has.
+  await expect
+    .poll(async () => (await systemData(page, actorId))?.traitData?.speed_fly, {
+      timeout: 15_000,
+    })
+    .toBe(30);
+  const stored = await systemData(page, actorId);
+  expect(stored?.abilityData).toMatchObject({ strength: 21, wisdom: 14 });
+  expect(stored?.resourceData).toMatchObject({ max_hp: 27, current_hp: 19 });
+  expect(stored?.proficiencyData?.skill_proficiencies).toContain("perception");
+
+  await player.reload();
+  await expect(sheet).toBeVisible({ timeout: 15_000 });
+  await expect(player.getByTestId("dnd5e-score-strength-input")).toHaveValue(
+    "21",
+  );
+  await expect(player.getByTestId("dnd5e-score-wisdom-input")).toHaveValue(
+    "14",
+  );
+  await expect(player.getByTestId("dnd5e-max-hp-input")).toHaveValue("27");
+  await expect(player.getByTestId("dnd5e-current-hp-input")).toHaveValue("19");
+  await expect(
+    player.getByTestId("dnd5e-skill-perception-proficient"),
+  ).toBeChecked();
+  await expect(player.getByTestId("dnd5e-skill-perception-bonus")).toHaveText(
+    "+4",
+  );
+  await expect(player.getByTestId("dnd5e-speed-fly-input")).toHaveValue("30");
+  // Applying a stat block is the Game Master's; a player is not offered it.
+  await expect(player.getByTestId("actor-stat-block")).toHaveCount(0);
+  await player.context().close();
+});
+
+test("a Game Master applies a stat block to an existing NPC, then edits it by hand", async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const { worldId } = await createFifthEditionCharacter(page);
+  const made = await graphql<GqlResult<{ createActor: { id: string } }>>(
+    page,
+    `
+      mutation ($input: CreateActorInput!) {
+        createActor(input: $input) {
+          id
+        }
+      }
+    `,
+    {
+      input: {
+        worldId,
+        label: "The Thing Under the Bridge",
+        isNpc: true,
+        gameSystemId: "dnd5e",
+      },
+    },
+  );
+  const npcId = made.data?.createActor?.id;
+  if (!npcId) {
+    throw new Error(`could not create an NPC: ${JSON.stringify(made)}`);
+  }
+
+  await page.goto(`/world/${worldId}/actor/${npcId}/edit`);
+  await expect(page.getByTestId("dnd5e-actor-sheet")).toBeVisible({
+    timeout: 15_000,
+  });
+  const panel = page.getByTestId("actor-stat-block");
+  await expect(panel).toBeVisible({ timeout: 15_000 });
+
+  // A blank sheet has nothing to lose, so nothing is asked.
+  await panel.getByTestId("actor-stat-block-select").selectOption("troll");
+  await panel.getByTestId("actor-stat-block-apply").click();
+  await expect(panel.getByTestId("actor-stat-block-status")).toContainText(
+    "Troll applied",
+    { timeout: 30_000 },
+  );
+  await expect(panel.getByTestId("actor-stat-block-problems")).toHaveCount(0);
+  const troll = await systemData(page, npcId);
+  expect(troll?.resourceData).toMatchObject({ max_hp: 94, current_hp: 94 });
+  expect(troll?.abilityData).toMatchObject({ armor_class: 15, strength: 18 });
+  expect(troll?.traitData).toMatchObject({ challenge: "5", size: "large" });
+  // Challenge 5 is a +3 bonus, read off the rating: a troll has no level.
+  await expect(page.getByTestId("dnd5e-proficiency-bonus")).toHaveText("+3", {
+    timeout: 15_000,
+  });
+  await expect(page.getByTestId("dnd5e-max-hp-input")).toHaveValue("94");
+  await expect(page.getByTestId("actor-abilities-panel")).toContainText(
+    "Rend (Troll)",
+  );
+
+  // A second block would overwrite the first, so this time it asks; backing
+  // out changes nothing.
+  await panel.getByTestId("actor-stat-block-select").selectOption("ogre");
+  await panel.getByTestId("actor-stat-block-apply").click();
+  await expect(panel.getByTestId("actor-stat-block-confirm")).toBeVisible({
+    timeout: 15_000,
+  });
+  await panel.getByTestId("actor-stat-block-cancel").click();
+  await expect(panel.getByTestId("actor-stat-block-confirm")).toHaveCount(0);
+  expect((await systemData(page, npcId))?.resourceData?.max_hp).toBe(94);
+
+  await panel.getByTestId("actor-stat-block-apply").click();
+  await panel.getByTestId("actor-stat-block-replace").click();
+  await expect(panel.getByTestId("actor-stat-block-status")).toContainText(
+    "Ogre applied",
+    { timeout: 30_000 },
+  );
+  const ogre = await systemData(page, npcId);
+  expect(ogre?.resourceData).toMatchObject({ max_hp: 68, current_hp: 68 });
+  expect(ogre?.abilityData).toMatchObject({ armor_class: 11 });
+  expect(ogre?.traitData?.challenge).toBe("2");
+
+  // A tougher ogre than the book's: the numbers are the Game Master's now.
+  await expect(page.getByTestId("dnd5e-max-hp-input")).toHaveValue("68", {
+    timeout: 15_000,
+  });
+  await setNumber(page, "dnd5e-max-hp-input", 80);
+  await expect
+    .poll(async () => (await systemData(page, npcId))?.resourceData?.max_hp, {
+      timeout: 15_000,
+    })
+    .toBe(80);
+  // Still a creature after a hand edit: no level crept into the slot.
+  await page.getByTestId("dnd5e-challenge-select").selectOption("3");
+  await expect
+    .poll(async () => (await systemData(page, npcId))?.traitData?.challenge, {
+      timeout: 15_000,
+    })
+    .toBe("3");
+  expect((await systemData(page, npcId))?.traitData).not.toHaveProperty(
+    "level",
+  );
 });

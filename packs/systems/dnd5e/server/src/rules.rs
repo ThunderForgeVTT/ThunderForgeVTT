@@ -24,6 +24,8 @@ use thunderforge_canvas_core::system_rules::{
 
 /// Where a character's level is stored, inside `trait_data`.
 const LEVEL: &str = "level";
+/// Where a creature's challenge rating is stored, inside `trait_data`.
+const CHALLENGE: &str = "challenge";
 /// Which skills the character is proficient in, inside `proficiency_data`.
 const SKILL_PROFICIENCIES: &str = "skill_proficiencies";
 /// Which of those skills the character has expertise in, likewise. Expertise
@@ -64,6 +66,30 @@ pub fn proficiency_bonus(level: i32) -> Option<i32> {
         13..=16 => Some(5),
         17..=20 => Some(6),
         _ => None,
+    }
+}
+
+/// Proficiency bonus by challenge rating, for a creature that has no level.
+///
+/// The book's other table: a monster's bonus climbs one step every four
+/// challenge ratings and does not stop at a character's six. The rating is
+/// text because three of them are fractions (`"1/4"`), and every fraction
+/// sits in the first band. Anything that is not a rating the book prints
+/// yields none, for the same reason an unknown level does.
+pub fn proficiency_bonus_for_challenge(challenge: &str) -> Option<i32> {
+    match challenge {
+        "0" | "1/8" | "1/4" | "1/2" => Some(2),
+        whole => match whole.parse::<i32>().ok()? {
+            1..=4 => Some(2),
+            5..=8 => Some(3),
+            9..=12 => Some(4),
+            13..=16 => Some(5),
+            17..=20 => Some(6),
+            21..=24 => Some(7),
+            25..=28 => Some(8),
+            29..=30 => Some(9),
+            _ => None,
+        },
     }
 }
 
@@ -262,8 +288,18 @@ impl SystemRules for DnD5eRules {
         }
 
         // Level drives the proficiency bonus, and without it nothing that
-        // depends on proficiency can be computed at all.
-        let bonus = stored.integer(LEVEL).and_then(proficiency_bonus);
+        // depends on proficiency can be computed at all. A creature has a
+        // challenge rating where a character has a level, and the rating is
+        // read only when there is no level: a sheet carrying both is a
+        // character somebody also rated, and the level is the one the player
+        // is counting on.
+        let bonus = match stored.integer(LEVEL) {
+            Some(level) => proficiency_bonus(level),
+            None => stored.get(CHALLENGE).and_then(|value| match &value.value {
+                DeclaredValueKind::Text(rating) => proficiency_bonus_for_challenge(rating),
+                _ => None,
+            }),
+        };
         if let Some(bonus) = bonus {
             out.push(derived(
                 "proficiencyBonus".to_string(),

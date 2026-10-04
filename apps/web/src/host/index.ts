@@ -40,6 +40,17 @@
  * beside the exports themselves, and it is worth reading before adding a
  * fourth category.
  *
+ * **Contracts, as types.** `ActorSheetProps`, the panel slots, and
+ * `StatBlockSource` are the shapes a pack's default exports must have for the
+ * host to find and use them. A type hands a pack nothing it can call, so these
+ * are not a fourth category of reach: they are the host saying what it will
+ * ask a pack for. `StatBlockSource` is the newest, and it is deliberately the
+ * narrowest kind of contribution there is. A pack that knows its game's
+ * creatures answers with *data* (which slots to write, which attacks to make)
+ * and the host does the writing through its own API with the current user's
+ * permissions. The pack is never handed the ability API to do it itself,
+ * which is why applying a stat block needed a type here and no new function.
+ *
  * # What does not
  *
  * Routing, authentication, the world store, the engine bridge, anything
@@ -185,6 +196,75 @@ export function subscribeToWorldEvents(
 export interface ActorSheetProps {
   actor: import("@/types/actor").WorldActorRecord;
   canEdit: boolean;
+}
+
+/**
+ * # Stat blocks a pack contributes
+ *
+ * A system that prints creatures (a goblin with an armour class, hit points
+ * and a scimitar) may put a `StatBlockSource` at
+ * `packs/systems/<id>/web/src/StatBlocks.ts`. `systemStatBlocks.ts` finds it.
+ *
+ * The pack never writes anything. It says what applying a block *would*
+ * write, and `applyStatBlock.ts` does it: system-data slots through
+ * `updateActorSystemData`, attacks as world abilities attached to the actor.
+ * So the host needs to know nothing about what a creature is in any game,
+ * and the pack needs no authority it does not already lack.
+ */
+
+/** The four slots a stat block may write, whole, keyed as the write API is. */
+export type StatBlockSlots = Partial<
+  Record<
+    "ability_data" | "resource_data" | "proficiency_data" | "trait_data",
+    Record<string, unknown>
+  >
+>;
+
+/** One attack a creature can make, as the ability the host should create. */
+export interface StatBlockAttackPlan {
+  /** Unique within the plan; what another entry's `parts` refers to. */
+  key: string;
+  /** The world ability's name. */
+  name: string;
+  description: string;
+  /** A type in the world's ability vocabulary. */
+  classification: string;
+  /** Dice for the attack roll, or null for an entry that only groups others. */
+  attackRoll: string | null;
+  /** Dice for the damage, or null likewise. */
+  damage: string | null;
+  /** In the system's own distance unit. */
+  reach: number | null;
+  rangeNormal: number | null;
+  rangeLong: number | null;
+  /** Keys of the entries one use of this makes, in order: a multiattack. */
+  parts: string[];
+}
+
+export interface StatBlockPlan {
+  /** The block's own name, for messages. */
+  name: string;
+  slots: StatBlockSlots;
+  attacks: StatBlockAttackPlan[];
+}
+
+export interface StatBlockSummary {
+  id: string;
+  name: string;
+  /** The bestiary creature this block is for, by slug, when there is one. */
+  bestiary: string | null;
+  /** One line of the numbers a Game Master picks by. */
+  summary: string;
+}
+
+export interface StatBlockSource {
+  blocks: StatBlockSummary[];
+  /**
+   * What applying a block would write. `current` is what the actor holds
+   * now, so a pack can keep what a block has no opinion on (a Game Master's
+   * notes) rather than erase it. Null for a block this source does not have.
+   */
+  plan(id: string, current: StatBlockSlots | null): StatBlockPlan | null;
 }
 
 /**

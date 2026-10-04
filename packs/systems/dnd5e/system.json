@@ -729,42 +729,42 @@
   },
   "data_types": {
     "ability_data": {
-      "description": "Base ability scores for D&D 5e (standard 1-20 range)",
+      "description": "Base ability scores for D&D 5e (1-30: a character stops at 20, a creature may not)",
       "properties": {
         "strength": {
           "type": "integer",
           "min": 1,
-          "max": 20,
+          "max": 30,
           "label": "Strength"
         },
         "dexterity": {
           "type": "integer",
           "min": 1,
-          "max": 20,
+          "max": 30,
           "label": "Dexterity"
         },
         "constitution": {
           "type": "integer",
           "min": 1,
-          "max": 20,
+          "max": 30,
           "label": "Constitution"
         },
         "intelligence": {
           "type": "integer",
           "min": 1,
-          "max": 20,
+          "max": 30,
           "label": "Intelligence"
         },
         "wisdom": {
           "type": "integer",
           "min": 1,
-          "max": 20,
+          "max": 30,
           "label": "Wisdom"
         },
         "charisma": {
           "type": "integer",
           "min": 1,
-          "max": 20,
+          "max": 30,
           "label": "Charisma"
         },
         "armor_class": {
@@ -800,7 +800,29 @@
           "type": "integer",
           "min": 0,
           "label": "Temporary HP"
-        }
+        },
+          "hit_dice": {
+            "type": "string",
+            "label": "Hit Dice",
+            "description": "The dice a creature's hit points are rolled from, as a stat block prints them: 3d6, 8d10+24."
+          },
+          "hit_dice_used": {
+            "type": "integer",
+            "min": 0,
+            "label": "Hit Dice Spent"
+          },
+          "death_save_successes": {
+            "type": "integer",
+            "min": 0,
+            "max": 3,
+            "label": "Death Save Successes"
+          },
+          "death_save_failures": {
+            "type": "integer",
+            "min": 0,
+            "max": 3,
+            "label": "Death Save Failures"
+          }
       },
       "required": [
         "max_hp"
@@ -900,6 +922,27 @@
             }
           }
         },
+          "armor": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Armor the character is trained with"
+          },
+          "weapons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Weapons the character is trained with"
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Tools the character is trained with"
+          },
         "languages": {
           "type": "array",
           "items": {
@@ -910,7 +953,7 @@
         "proficiency_bonus": {
           "type": "integer",
           "min": 2,
-          "max": 6
+          "max": 9
         }
       }
     },
@@ -975,7 +1018,131 @@
           "minimum": 0,
           "label": "Legendary Actions",
           "description": "How many legendary actions the creature may take each round, at the end of other creatures' turns. Declared in combat.legendary; the tracker shows how many remain and refills them at the start of the creature's turn. None recorded, or 0, is a creature with none."
-        }
+        },
+          "challenge": {
+            "type": "string",
+            "enum": [
+              "0",
+              "1/8",
+              "1/4",
+              "1/2",
+              "1",
+              "2",
+              "3",
+              "4",
+              "5",
+              "6",
+              "7",
+              "8",
+              "9",
+              "10",
+              "11",
+              "12",
+              "13",
+              "14",
+              "15",
+              "16",
+              "17",
+              "18",
+              "19",
+              "20",
+              "21",
+              "22",
+              "23",
+              "24",
+              "25",
+              "26",
+              "27",
+              "28",
+              "29",
+              "30"
+            ],
+            "label": "Challenge Rating",
+            "description": "A creature's challenge rating, as the book prints it. It stands where a character's level does: with no level recorded, the proficiency bonus is read from this."
+          },
+          "creature_type": {
+            "type": "string",
+            "label": "Creature Type"
+          },
+          "experience": {
+            "type": "integer",
+            "min": 0,
+            "label": "Experience Points"
+          },
+          "inspiration": {
+            "type": "boolean",
+            "label": "Heroic Inspiration"
+          },
+          "notes": {
+            "type": "string",
+            "label": "Notes"
+          },
+          "speed_walk": {
+            "type": "number",
+            "min": 0,
+            "label": "Speed",
+            "description": "Feet a turn. Declared as this system's walk speed in movement."
+          },
+          "speed_fly": {
+            "type": "number",
+            "min": 0,
+            "label": "Fly Speed",
+            "description": "Feet a turn."
+          },
+          "speed_swim": {
+            "type": "number",
+            "min": 0,
+            "label": "Swim Speed",
+            "description": "Feet a turn."
+          },
+          "speed_climb": {
+            "type": "number",
+            "min": 0,
+            "label": "Climb Speed",
+            "description": "Feet a turn."
+          },
+          "speed_burrow": {
+            "type": "number",
+            "min": 0,
+            "label": "Burrow Speed",
+            "description": "Feet a turn."
+          },
+          "darkvision": {
+            "type": "number",
+            "min": 0,
+            "label": "Darkvision",
+            "description": "Feet. Declared as this system's darkvision in vision."
+          },
+          "blindsight": {
+            "type": "number",
+            "min": 0,
+            "label": "Blindsight",
+            "description": "Feet. Recorded for the sheet; the board has no rule for it."
+          },
+          "tremorsense": {
+            "type": "number",
+            "min": 0,
+            "label": "Tremorsense",
+            "description": "Feet. Recorded for the sheet; the board has no rule for it."
+          },
+          "truesight": {
+            "type": "number",
+            "min": 0,
+            "label": "Truesight",
+            "description": "Feet. Recorded for the sheet; the board has no rule for it."
+          },
+          "light_bright": {
+            "type": "number",
+            "min": 0,
+            "label": "Bright Light",
+            "description": "Feet of bright light a carried light sheds. Declared in vision.carriedLight."
+          },
+          "light_dim": {
+            "type": "number",
+            "min": 0,
+            "label": "Dim Light",
+            "description": "Feet of dim light beyond the bright. Declared in vision.carriedLight."
+          }
       }
     },
     "spell_data": {
@@ -996,7 +1163,7 @@
         "spell_save_dc": {
           "type": "integer",
           "min": 8,
-          "max": 20
+          "max": 30
         },
         "spell_attack_bonus": {
           "type": "integer"
@@ -1018,6 +1185,48 @@
         "spell_slots": {
           "type": "object",
           "description": "Spell slots per level (1-9)",
+          "properties": {
+            "level_1": {
+              "type": "integer",
+              "min": 0
+            },
+            "level_2": {
+              "type": "integer",
+              "min": 0
+            },
+            "level_3": {
+              "type": "integer",
+              "min": 0
+            },
+            "level_4": {
+              "type": "integer",
+              "min": 0
+            },
+            "level_5": {
+              "type": "integer",
+              "min": 0
+            },
+            "level_6": {
+              "type": "integer",
+              "min": 0
+            },
+            "level_7": {
+              "type": "integer",
+              "min": 0
+            },
+            "level_8": {
+              "type": "integer",
+              "min": 0
+            },
+            "level_9": {
+              "type": "integer",
+              "min": 0
+            }
+          }
+        },
+        "spell_slots_used": {
+          "type": "object",
+          "description": "Spell slots spent per level (1-9)",
           "properties": {
             "level_1": {
               "type": "integer",

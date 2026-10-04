@@ -98,6 +98,15 @@ export const DND5E_SIZES = [
   "gargantuan",
 ] as const;
 
+/** Challenge ratings as the book prints them; the validator's own list. */
+export const DND5E_CHALLENGE_RATINGS = [
+  "0",
+  "1/8",
+  "1/4",
+  "1/2",
+  ...Array.from({ length: 30 }, (_, i) => String(i + 1)),
+];
+
 export const DND5E_ALIGNMENTS = [
   "Lawful Good",
   "Neutral Good",

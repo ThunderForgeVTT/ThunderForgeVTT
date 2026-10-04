@@ -13,6 +13,9 @@
 //!   - Used for derived data calculations on engine/web
 //!   - Never stored in database
 //!
+//! - **stat_blocks.rs**: SRD creature stat blocks, and where each line of one
+//!   is stored so the combat flow can use it
+//!
 //! - **validators.rs**: Validation for system-specific JSONB data (Phase 4.8.1)
 //!   - Validates ability_data, resource_data, proficiency_data, trait_data, spell_data
 //!   - Manifest-driven schema from system.json
@@ -27,12 +30,14 @@ pub mod loader;
 pub mod models;
 pub mod rules;
 pub mod srd;
+pub mod stat_blocks;
 pub mod validators;
 
 pub use loader::register_dnd5e_mutations;
 pub use models::{AbilityScores, DnD5eActorData, DnD5eItemData, Proficiencies};
-pub use rules::{ability_modifier, proficiency_bonus, DnD5eRules};
+pub use rules::{ability_modifier, proficiency_bonus, proficiency_bonus_for_challenge, DnD5eRules};
 pub use srd::{get_class, get_skill, get_spell_slots};
+pub use stat_blocks::{stat_blocks, StatBlock};
 pub use validators::{
     validate_ability_data, validate_ability_data_for_registry, validate_proficiency_data,
     validate_proficiency_data_for_registry, validate_resource_data,

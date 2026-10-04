@@ -175,6 +175,7 @@ export function WorldCompendiumPage({
               <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
                 <NpcCompendiumTab
                   worldId={worldId}
+                  gameSystemId={gameSystemId}
                   onSelect={setSelectedActorId}
                   selectedActorId={selectedActorId}
                   isGm={isGm}
