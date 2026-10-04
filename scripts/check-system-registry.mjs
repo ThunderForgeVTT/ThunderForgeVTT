@@ -46,15 +46,26 @@
  * convenience, which is a check nobody trusts.
  */
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const repoRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
+
+/** The directories directly under `dir` that hold a `src/`, as those `src/` paths. */
+function sourceRootsUnder(dir) {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .map((entry) => path.join(dir, entry, "src"))
+    .filter((src) => existsSync(src) && statSync(src).isDirectory());
+}
 
 /** Read the bundled system ids from the packs themselves, never a list here. */
-function bundledSystemIds() {
-  const systemsDir = path.join(repoRoot, "packs", "systems");
+function bundledSystemIds(root) {
+  const systemsDir = path.join(root, "packs", "systems");
   return readdirSync(systemsDir).filter((entry) =>
     statSync(path.join(systemsDir, entry)).isDirectory(),
   );
@@ -67,17 +78,29 @@ function bundledSystemIds() {
  * `#[cfg(test)]` modules, stripped below, and sibling `*_tests.rs` files
  * wired with `#[path]`, excluded here.
  */
-function sharedServerSources() {
+function sharedRustSources(root) {
   // Two roots since the crate split: `crates/thunderforge-server` is the server as a library
   // and `apps/server` is the binary that composes it with the packs. Both are
   // shared code, and the binary is *especially* worth scanning — it is the one
   // place that legitimately knows packs exist, which makes it the comfortable
   // place for knowledge that should not be there. Missing it would have left
   // the rule enforced on the larger half and unenforced on the tempting one.
+  //
+  // Three more since spec 066 (FR-006): the engine and the two crates it
+  // shares with the server. ADR-062 says a pack extends the engine with data,
+  // never code, and a `match system_id { "dnd5e" => ...` in the engine is the
+  // shape breaking that would take. Nothing there names a system today, which
+  // is the cheapest moment to make it a rule. And every app, not one: a
+  // second binary is as tempting a place as the first.
   const roots = [
-    path.join(repoRoot, "crates", "thunderforge-server", "src"),
-    path.join(repoRoot, "apps", "server", "src"),
-  ];
+    ...[
+      "thunderforge-server",
+      "thunderforge-engine",
+      "thunderforge-core",
+      "thunderforge-canvas-core",
+    ].map((crate) => path.join(root, "crates", crate, "src")),
+    ...sourceRootsUnder(path.join(root, "apps")),
+  ].filter((dir) => existsSync(dir));
   const out = [];
   const walk = (dir) => {
     for (const entry of readdirSync(dir)) {
@@ -89,7 +112,7 @@ function sharedServerSources() {
       }
     }
   };
-  for (const root of roots) walk(root);
+  for (const dir of roots) walk(dir);
   return out.filter((file) => {
     const name = path.basename(file);
     return (
@@ -113,7 +136,7 @@ function sharedServerSources() {
 }
 
 /**
- * Shared web code: `apps/web/src`.
+ * Shared web code: every app's `src/` and every package's.
  *
  * FR-029 was written about the server, and for a long time the check was too.
  * That was not a considered scope — it was just where the violation had been
@@ -122,12 +145,19 @@ function sharedServerSources() {
  * rule enforced on one half and unenforced on the other is how a rule becomes
  * a thing people remember about the backend.
  *
+ * It was `apps/web/src` alone until spec 066. `packages/` holds what the apps
+ * share, which makes it more shared than any one of them, and it was outside
+ * the rule only because it did not exist when the rule was written.
+ *
  * Excluded, for the same reasons as the Rust side: a pack's own web code (a
  * pack naming itself is the point), and tests, which must name a system to
  * assert anything about one.
  */
-function sharedWebSources() {
-  const root = path.join(repoRoot, "apps", "web", "src");
+function sharedWebSources(root) {
+  const roots = [
+    ...sourceRootsUnder(path.join(root, "apps")),
+    ...sourceRootsUnder(path.join(root, "packages")),
+  ];
   const out = [];
   const walk = (dir) => {
     for (const entry of readdirSync(dir)) {
@@ -140,7 +170,7 @@ function sharedWebSources() {
       }
     }
   };
-  walk(root);
+  for (const dir of roots) walk(dir);
   return out;
 }
 
@@ -330,79 +360,94 @@ function namesSystemInPath(relativePath, ids) {
   return ids.filter((id) => haystack.includes(flattened(id)));
 }
 
-const ids = bundledSystemIds();
-const failures = [];
-const stale = new Set(KNOWN.keys());
+/**
+ * Every place shared code under `root` names a bundled system.
+ *
+ * Returns the ids it looked for, the failures as printable lines, and the
+ * `known` entries that no longer excuse anything.
+ */
+export function registryViolations(root, known = KNOWN) {
+  const ids = bundledSystemIds(root);
+  const failures = [];
+  const stale = new Set(known.keys());
 
-for (const file of [...sharedServerSources(), ...sharedWebSources()]) {
-  const source = withoutTests(readFileSync(file, "utf8"));
-  const relative = path.relative(repoRoot, file);
+  for (const file of [...sharedRustSources(root), ...sharedWebSources(root)]) {
+    const source = withoutTests(readFileSync(file, "utf8"));
+    const relative = path.relative(root, file);
 
-  for (const id of namesSystemInPath(relative, ids)) {
-    const known = KNOWN.get(relative);
-    if (known && known.id === id) {
-      stale.delete(relative);
-      continue;
-    }
-    failures.push(`${relative} is named for "${id}"`);
-  }
-
-  source.split("\n").forEach((line, index) => {
-    for (const id of ids) {
-      // Quoted, so a path fragment or a word in prose does not trip it — the
-      // violation being hunted is code that *decides* something per system.
-      if (!line.includes(`"${id}"`)) {
-        continue;
-      }
-      const known = KNOWN.get(relative);
-      if (known && known.id === id) {
+    for (const id of namesSystemInPath(relative, ids)) {
+      const excused = known.get(relative);
+      if (excused && excused.id === id) {
         stale.delete(relative);
         continue;
       }
-      failures.push(`${relative}:${index + 1} names "${id}"`);
+      failures.push(`${relative} is named for "${id}"`);
     }
-  });
-}
 
-if (failures.length > 0) {
-  process.stdout.write(
-    `[system-registry] shared server and web code must not name a game system.\n` +
-      `A pack declares what it contributes; nothing here lists them.\n\n`,
-  );
-  for (const failure of failures) {
-    process.stdout.write(`  ${failure}\n`);
+    source.split("\n").forEach((line, index) => {
+      for (const id of ids) {
+        // Quoted, so a path fragment or a word in prose does not trip it — the
+        // violation being hunted is code that *decides* something per system.
+        if (!line.includes(`"${id}"`)) {
+          continue;
+        }
+        const excused = known.get(relative);
+        if (excused && excused.id === id) {
+          stale.delete(relative);
+          continue;
+        }
+        failures.push(`${relative}:${index + 1} names "${id}"`);
+      }
+    });
   }
-  process.stdout.write(
-    `\nIf this is a genuine exception it goes in the linkage module for its\n` +
-      `side — system_packs.rs on the server — with a reason, not behind a\n` +
-      `widened check. On the web there is no such module: a pack contributes\n` +
-      `by shipping a file the host discovers.\n\n` +
-      `  a character sheet   packs/systems/<id>/web/src/ActorSheet.tsx\n` +
-      `  a panel             packs/systems/<id>/web/src/panels/<slot>.tsx\n\n` +
-      `Slots and their props are declared in @thunderforge/host (PanelSlot,\n` +
-      `PanelSlotProps); systemActorSheets.ts and systemPanels.ts are what\n` +
-      `find them. See spec 032 FR-029, ADR-061 and ADR-066.\n`,
-  );
-  process.exit(1);
+  return { ids, failures, stale };
 }
 
-// A known violation that has been fixed must leave the list, or the list
-// becomes a place exceptions go to be forgotten.
-if (stale.size > 0) {
-  process.stdout.write(
-    `[system-registry] these no longer violate anything and should be removed\n` +
-      `from KNOWN in this script:\n`,
-  );
-  for (const entry of stale) {
-    process.stdout.write(`  ${entry}\n`);
+function main() {
+  const { ids, failures, stale } = registryViolations(repoRoot);
+
+  if (failures.length > 0) {
+    process.stdout.write(
+      `[system-registry] shared server, engine and web code must not name a game system.\n` +
+        `A pack declares what it contributes; nothing here lists them.\n\n`,
+    );
+    for (const failure of failures) {
+      process.stdout.write(`  ${failure}\n`);
+    }
+    process.stdout.write(
+      `\nIf this is a genuine exception it goes in the linkage module for its\n` +
+        `side — system_packs.rs on the server — with a reason, not behind a\n` +
+        `widened check. On the web there is no such module: a pack contributes\n` +
+        `by shipping a file the host discovers.\n\n` +
+        `  a character sheet   packs/systems/<id>/web/src/ActorSheet.tsx\n` +
+        `  a panel             packs/systems/<id>/web/src/panels/<slot>.tsx\n\n` +
+        `Slots and their props are declared in @thunderforge/host (PanelSlot,\n` +
+        `PanelSlotProps); systemActorSheets.ts and systemPanels.ts are what\n` +
+        `find them. See spec 032 FR-029, ADR-061 and ADR-066.\n`,
+    );
+    process.exit(1);
   }
-  process.exit(1);
+
+  // A known violation that has been fixed must leave the list, or the list
+  // becomes a place exceptions go to be forgotten.
+  if (stale.size > 0) {
+    process.stdout.write(
+      `[system-registry] these no longer violate anything and should be removed\n` +
+        `from KNOWN in this script:\n`,
+    );
+    for (const entry of stale) {
+      process.stdout.write(`  ${entry}\n`);
+    }
+    process.exit(1);
+  }
+
+  process.stdout.write(
+    `[system-registry] no shared server, engine or web file quotes or is named for any\n` +
+      `                  of: ${ids.join(", ")}\n` +
+      (KNOWN.size === 0
+        ? `                  and nothing is exempted.\n`
+        : `                  (${KNOWN.size} known violation(s) outstanding)\n`),
+  );
 }
 
-process.stdout.write(
-  `[system-registry] no shared server or web file quotes or is named for any\n` +
-    `                  of: ${ids.join(", ")}\n` +
-    (KNOWN.size === 0
-      ? `                  and nothing is exempted.\n`
-      : `                  (${KNOWN.size} known violation(s) outstanding)\n`),
-);
+if (process.argv[1] === fileURLToPath(import.meta.url)) main();

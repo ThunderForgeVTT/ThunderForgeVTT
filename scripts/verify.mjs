@@ -39,7 +39,7 @@
  * to a widely-included header.
  *
  * So `.hooks/pre-commit` runs the flat-cost seven by id and `.hooks/pre-push`
- * runs all seventeen. The point of the split is not that the compiled checks
+ * runs all eighteen. The point of the split is not that the compiled checks
  * matter less; it is that a hook with an unbounded worst case teaches people
  * to pass `--no-verify`, and a gate that is routinely bypassed gates nothing.
  */
@@ -311,6 +311,21 @@ const steps = [
     name: "repository layout",
     cwd: ".",
     command: ["node", "./scripts/check-layout.mjs"],
+  },
+  {
+    // Spec 066, FR-005. A pack is `system.json` and at most a server crate, a
+    // web half the host can find something in, seed content, a README and
+    // data its own crate reads. Seven packs once carried an engine crate
+    // nothing loaded and five a web package nothing mounted, each copied from
+    // the pack before; this refuses the shape in the commit that adds it.
+    //
+    // Reads `git ls-files` and a handful of manifests, so it runs on every
+    // commit. Not affected by `--fix`: what a stray directory should become
+    // is a judgement about what it was for.
+    id: "packs",
+    name: "system pack shape",
+    cwd: ".",
+    command: ["node", "./scripts/check-packs.mjs"],
   },
 ];
 
