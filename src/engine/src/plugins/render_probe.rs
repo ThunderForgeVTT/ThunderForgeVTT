@@ -265,6 +265,9 @@ pub struct EngineStats {
     pub lights: usize,
     pub walls: usize,
     pub tokens: usize,
+    /// Tokens whose furniture is withheld because they are outside the padded
+    /// view. A subset of `tokens`, never subtracted from it.
+    pub tokens_culled: usize,
     /// Wall-shadow quads the lighting layer built — one per (light,
     /// vision-blocking wall) pair that casts one. The term that grows as
     /// lights x walls, the first thing to check when a scene gets heavy, and
@@ -288,7 +291,7 @@ fn publish_engine_stats(
     diagnostics: Res<DiagnosticsStore>,
     mut stats: ResMut<EngineStats>,
     sprites: Query<(), With<Sprite>>,
-    tokens: Query<(), With<crate::TokenIdentity>>,
+    tokens: Query<&crate::plugins::ViewportCull, With<crate::TokenIdentity>>,
     light_set: Option<Res<crate::resources::LightSet>>,
     wall_set: Option<Res<crate::resources::WallSet>>,
     shadows: Option<Res<crate::plugins::darkness::ShadowStats>>,
@@ -313,6 +316,7 @@ fn publish_engine_stats(
 
     stats.sprites = sprites.iter().count();
     stats.tokens = tokens.iter().count();
+    stats.tokens_culled = tokens.iter().filter(|cull| cull.culled).count();
     stats.lights = light_set.map_or(0, |set| set.lights().len());
     stats.walls = wall_set.map_or(0, |set| set.walls().len());
     // Counted where the quads are built — see `ShadowStats` for why it is no
@@ -326,6 +330,7 @@ fn publish_engine_stats(
         slot.fps = stats.fps;
         slot.sprites = stats.sprites;
         slot.tokens = stats.tokens;
+        slot.tokens_culled = stats.tokens_culled;
         slot.lights = stats.lights;
         slot.walls = stats.walls;
         slot.shadow_quads = stats.shadow_quads;

@@ -80,17 +80,17 @@ pub(crate) fn fall_back_when_token_art_fails(
     }
 }
 
-/// A token whose position or footprint changed this frame.
-type MovedOrResized = (
-    With<TokenIdentity>,
-    Or<(Changed<Transform>, Changed<TokenGridBehaviour>)>,
-);
-
 /// Snaps tokens to the grid.
 ///
-/// Runs only on tokens whose transform or footprint changed, so a settled
-/// board costs nothing. Snapping is skipped entirely on a gridless scene and
-/// whenever the scene-wide switch is off.
+/// Acts only on tokens whose transform or footprint changed, so a settled
+/// board costs a comparison per token and nothing else. Snapping is skipped
+/// entirely on a gridless scene and whenever the scene-wide switch is off.
+///
+/// A new grid, or snapping being switched back on, re-snaps every token. That
+/// used to happen by accident: selection feedback wrote every token's
+/// transform every frame, so every token looked moved on every frame and this
+/// system never actually went quiet. Now that it does, the two things that
+/// change the answer for the whole board are asked about by name.
 ///
 /// A changed footprint re-snaps (spec 046 T076): a token arrives, is snapped
 /// as one square, and is told a moment later by `set_token_grid` that it is a
@@ -112,7 +112,10 @@ pub(crate) fn snap_tokens_to_grid(
     enabled: Res<GridSnapEnabled>,
     mut placed: Local<HashMap<Entity, (Vec2, Vec2)>>,
     mut removed: RemovedComponents<TokenIdentity>,
-    mut tokens: Query<(Entity, &mut Transform, Option<&TokenGridBehaviour>), MovedOrResized>,
+    mut tokens: Query<
+        (Entity, &mut Transform, Option<Ref<TokenGridBehaviour>>),
+        With<TokenIdentity>,
+    >,
 ) {
     for entity in removed.read() {
         placed.remove(&entity);
@@ -121,8 +124,14 @@ pub(crate) fn snap_tokens_to_grid(
         return;
     }
 
+    let snap_everything = grid.is_changed() || enabled.is_changed();
     for (entity, mut transform, behaviour) in tokens.iter_mut() {
-        let behaviour = behaviour.copied().unwrap_or_default();
+        let moved_or_resized =
+            transform.is_changed() || behaviour.as_ref().is_some_and(|b| b.is_changed());
+        if !snap_everything && !moved_or_resized {
+            continue;
+        }
+        let behaviour = behaviour.map(|b| *b).unwrap_or_default();
         if !behaviour.snap {
             continue;
         }
@@ -135,7 +144,7 @@ pub(crate) fn snap_tokens_to_grid(
         let snapped = grid.snap_footprint(put_at, behaviour.footprint);
         placed.insert(entity, (put_at, snapped));
 
-        // Guarded because this query is driven by `Changed<Transform>` and
+        // Guarded because this system is driven by a changed transform and
         // writing the transform re-triggers it. Without the comparison an
         // already-snapped token would mark itself changed every frame, and the
         // system would never go quiet.

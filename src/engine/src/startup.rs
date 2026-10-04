@@ -105,6 +105,11 @@ pub fn start(canvas_selector: &str) {
         .add_plugins(TokenPlugin)
         .add_plugins(CameraPlugin)
         .add_plugins(SelectionPlugin) // Phase 4.7.E1: Token Selection
+        // Tokens outside the padded view carry no name and no bars. Before
+        // the two plugins that draw them only for reading order: they run
+        // after `TokenCullSet` wherever it is registered, and without this
+        // line every token is simply always present.
+        .add_plugins(plugins::TokenCullingPlugin)
         // Spec 029: bars and counters above tokens. Independently removable —
         // taking this line out leaves every other plugin working, which is
         // what Constitution II asks of a plugin.

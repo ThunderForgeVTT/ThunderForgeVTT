@@ -22,7 +22,11 @@ pub(crate) const TOKEN_SIZE: Vec2 = Vec2::new(96.0, 96.0);
 #[derive(Component)]
 pub(crate) struct PlayerToken;
 
+/// Every token carries a `ViewportCull`, so the plugins that draw a token's
+/// furniture can ask one question of any token without caring which path
+/// spawned it (`plugins/token_culling.rs`).
 #[derive(Component)]
+#[require(crate::plugins::token_culling::ViewportCull)]
 pub(crate) struct TokenIdentity(pub(crate) String);
 
 #[derive(Resource, Default)]
@@ -485,6 +489,12 @@ pub(crate) enum ExternalCommand {
     SetRenderProbe {
         enabled: bool,
     },
+    /// Turns viewport culling of token furniture on or off
+    /// (`plugins/token_culling.rs`). On by default; a command so the same
+    /// board can be measured both ways in one session.
+    SetTokenCulling {
+        enabled: bool,
+    },
     /// Spec 014 (US4): the per-die final values from a `rollDice`
     /// response, already authoritative — this command only ever tells
     /// `DiceRollPlugin` what to animate toward, never asks it to decide
@@ -507,6 +517,10 @@ pub(crate) struct EngineStatsSnapshot {
     pub fps: f64,
     pub sprites: usize,
     pub tokens: usize,
+    /// Tokens whose name and bars are withheld because they are outside the
+    /// padded view (`plugins/token_culling.rs`). Always counted in `tokens`
+    /// as well: a culled token still exists.
+    pub tokens_culled: usize,
     pub lights: usize,
     pub walls: usize,
     pub shadow_quads: usize,

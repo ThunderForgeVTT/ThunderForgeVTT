@@ -415,14 +415,18 @@
     },
     {
       "name": "engine-limits",
-      "summary": "Engine frame-rate sweeps, both measured-lane specs (specs/029-in-engine-status-displays, specs/046-a-fight-that-resolves)",
-      "own": ["engine-limits.spec.ts", "engine-status-limits.spec.ts"],
+      "summary": "Engine frame-rate sweeps and viewport culling, measured-lane specs (specs/029-in-engine-status-displays, specs/046-a-fight-that-resolves)",
+      "own": [
+        "engine-limits.spec.ts",
+        "engine-status-limits.spec.ts",
+        "engine-token-culling.spec.ts"
+      ],
       "neighbours": [],
       "paths": [
-        "crates/thunderforge-canvas-core/src/{frame_trace,texture_budget,resource_display,resource_display_tests}.rs",
+        "crates/thunderforge-canvas-core/src/{frame_trace,texture_budget,resource_display,resource_display_tests,viewport}.rs",
         "scripts/status-capacity-metrics.mjs",
         "src/engine/Cargo.toml",
-        "src/engine/src/plugins/{mod,frame_trace,status_display,token,nameplate}.rs",
+        "src/engine/src/plugins/{mod,frame_trace,status_display,token,nameplate,token_culling,token_culling_tests}.rs",
         "src/engine/src/resources/mod.rs",
         "src/engine/src/systems/{mod,token,token_loader,sync,event_dispatcher}.rs",
         "src/engine/src/{app,lib,startup,components,derived_data,payloads,sdk}.rs"

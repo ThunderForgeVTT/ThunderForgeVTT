@@ -43,6 +43,7 @@ pub mod texture_budget;
 pub mod token_art;
 pub mod token_kind;
 pub mod token_stack;
+pub mod viewport;
 pub mod vision;
 pub mod vision_declaration;
 pub mod wall;

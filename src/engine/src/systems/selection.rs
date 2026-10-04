@@ -16,14 +16,23 @@ pub(crate) fn render_selection_feedback(
     // have covered every token in a dark scene.
     let layer = crate::resources::CanvasLayer::Tokens.z();
     for (identity, mut sprite, mut transform) in sprite_query.iter_mut() {
-        if selected_token.is_selected(&identity.0) {
-            // Selected token: opaque, on top
-            sprite.color = sprite.color.with_alpha(1.0);
-            transform.translation.z = layer + 1.0;
+        // Selected token: opaque, on top. Unselected: slightly transparent.
+        let (alpha, z) = if selected_token.is_selected(&identity.0) {
+            (1.0, layer + 1.0)
         } else {
-            // Unselected token: slightly transparent
-            sprite.color = sprite.color.with_alpha(0.85);
-            transform.translation.z = layer;
+            (0.85, layer)
+        };
+        // Compared before writing. This runs every frame over every token,
+        // and an unconditional write marked every `Transform` and `Sprite`
+        // changed every frame — so every system keyed on a token having moved
+        // (snapping, the move detector, viewport culling) ran for the whole
+        // board on every frame, and every sprite was re-extracted to the
+        // render world, whether or not anything had happened.
+        if sprite.color.alpha() != alpha {
+            sprite.color = sprite.color.with_alpha(alpha);
+        }
+        if transform.translation.z != z {
+            transform.translation.z = z;
         }
     }
 }

@@ -11,12 +11,23 @@
 //! players from every client but a Game Master's (`graphql::token_art`), so a
 //! player's engine never has the text to draw. A Game Master's does, and draws
 //! it dimmed: they see every name, and can tell which ones the table cannot.
+//!
+//! # Only for tokens someone could see
+//!
+//! A name is two text entities, and on a board of thousands that is thousands
+//! of entities laid out, transformed and visibility-tested every frame for
+//! names far off-screen. A token outside the padded view
+//! (`plugins::token_culling`) has no nameplate at all; it gets one back when it
+//! comes within a quarter of a screen of the edge, before it can be seen.
+//! `token_nameplates()` is unaffected — it reports what a viewer is entitled
+//! to read, from the data, not which plates happen to be built.
 
 use bevy::prelude::*;
 
 use crate::TOKEN_SIZE;
 use crate::TokenIdentity;
 use crate::plugins::status_display::{Appearance, TokenStatus};
+use crate::plugins::token_culling::{TokenCullSet, ViewportCull};
 use crate::resources::{SceneGrid, TokenGridBehaviour};
 use thunderforge_canvas_core::grid::Footprint;
 
@@ -68,7 +79,11 @@ impl Plugin for NameplatePlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (draw_changed_names, place_names, mirror_nameplates).chain(),
+            (draw_changed_names, place_names, mirror_nameplates)
+                .chain()
+                // So a token that arrives off-screen is culled before its
+                // name is built, not built and torn down a frame later.
+                .after(TokenCullSet),
         );
     }
 }
@@ -109,6 +124,7 @@ fn name_color(hidden_from_players: bool, shadow: bool) -> Color {
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn draw_changed_names(
     mut commands: Commands,
     grid: Option<Res<SceneGrid>>,
@@ -119,19 +135,31 @@ fn draw_changed_names(
             Option<&DrawnName>,
             Option<&Children>,
             Option<&TokenGridBehaviour>,
+            Option<&ViewportCull>,
         ),
-        Changed<TokenName>,
+        Or<(Changed<TokenName>, Changed<ViewportCull>)>,
     >,
     plates: Query<(), With<Nameplate>>,
 ) {
-    for (token, name, drawn, children, behaviour) in &changed {
-        if drawn.is_some_and(|d| d.0 == *name) {
+    for (token, name, drawn, children, behaviour, cull) in &changed {
+        let culled = cull.is_some_and(|c| c.culled);
+        // Nothing drawn and nothing to draw; or drawn, and drawn from this.
+        if culled && drawn.is_none() {
+            continue;
+        }
+        if !culled && drawn.is_some_and(|d| d.0 == *name) {
             continue;
         }
         if let Some(children) = children {
             for child in children.iter().filter(|c| plates.contains(*c)) {
                 commands.entity(child).despawn();
             }
+        }
+        if culled {
+            // Forgotten as well as removed, so coming back into view finds
+            // "never drawn" and builds it — from whatever the name is by then.
+            commands.entity(token).remove::<DrawnName>();
+            continue;
         }
         commands.entity(token).insert(DrawnName(name.clone()));
 

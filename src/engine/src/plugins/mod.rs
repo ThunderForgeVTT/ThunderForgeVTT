@@ -27,6 +27,7 @@ pub mod selection_filter;
 pub mod shape;
 pub mod status_display;
 pub mod token;
+pub mod token_culling;
 pub mod wall;
 
 pub use background::BackgroundPlugin;
@@ -53,4 +54,5 @@ pub use selection::SelectionPlugin;
 pub use shape::ShapePlugin;
 pub use status_display::{ResolvedResource, StatusDisplayPlugin, TokenStatus};
 pub use token::TokenPlugin;
+pub use token_culling::{TokenCullSet, TokenCulling, TokenCullingPlugin, ViewportCull};
 pub use wall::WallPlugin;

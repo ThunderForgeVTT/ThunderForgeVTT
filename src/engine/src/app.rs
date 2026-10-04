@@ -140,6 +140,7 @@ pub(crate) struct SceneParams<'w, 's> {
     camera: Option<ResMut<'w, CameraManager>>,
     grid_snap: Option<ResMut<'w, GridSnapEnabled>>,
     units: Option<ResMut<'w, crate::systems::token_move::SceneUnits>>,
+    token_culling: Option<ResMut<'w, plugins::TokenCulling>>,
     camera_viewport: Query<'w, 's, &'static Camera, With<Camera2d>>,
 }
 
@@ -782,6 +783,16 @@ pub(crate) fn apply_external_commands(
             ExternalCommand::SetLightingOverlay { enabled } => {
                 if let Some(overlay) = scene.lighting_overlay.as_deref_mut() {
                     overlay.0 = enabled;
+                }
+            }
+            ExternalCommand::SetTokenCulling { enabled } => {
+                if let Some(culling) = scene.token_culling.as_deref_mut() {
+                    // Compared first: the culling system reads this every
+                    // frame, and a repeated command should not look like a
+                    // change.
+                    if culling.enabled != enabled {
+                        culling.enabled = enabled;
+                    }
                 }
             }
             ExternalCommand::SetRenderProbe { enabled } => {

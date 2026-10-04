@@ -282,6 +282,9 @@ pub(crate) fn parse_command(input: &str) -> Option<ExternalCommand> {
         "set_render_probe" => Some(ExternalCommand::SetRenderProbe {
             enabled: value.get("enabled")?.as_bool()?,
         }),
+        "set_token_culling" => Some(ExternalCommand::SetTokenCulling {
+            enabled: value.get("enabled")?.as_bool()?,
+        }),
         "set_is_game_master" => Some(ExternalCommand::SetIsGameMaster {
             is_game_master: value.get("isGameMaster")?.as_bool()?,
         }),
