@@ -1,3 +1,4 @@
+import { markSetupJustFinished } from "@/pages/admin/components/AfterSetupCard";
 import { useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { SEO } from "@/components/seo/SEO";
@@ -31,6 +32,9 @@ export default function SetupCallbackPage({
     }
 
     if (searchParams.get("oauth") === "success") {
+      // Before completion is reported: the route redirects by itself the
+      // moment setup stops being required, and may beat the navigation below.
+      markSetupJustFinished();
       void onSetupComplete()
         .then(() => {
           navigate("/admin?bootstrap=complete", { replace: true });

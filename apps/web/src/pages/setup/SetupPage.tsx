@@ -1,3 +1,4 @@
+import { markSetupJustFinished } from "@/pages/admin/components/AfterSetupCard";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { getCurrentSession } from "@/services/auth";
@@ -437,6 +438,9 @@ export default function SetupPage({
     // in which to bounce. Failure is not fatal: the session is whatever the
     // server says it is, and `/admin` will say so.
     await refreshAuthenticatedSession().catch(() => null);
+    // Before completion is reported: the route redirects by itself the
+    // moment setup stops being required, and may beat the navigation below.
+    markSetupJustFinished();
     await onSetupComplete();
     navigate("/admin?bootstrap=complete", { replace: true });
   };

@@ -16,12 +16,19 @@ import { Card } from "@/components/ui/card/Card";
  * chose on the Access step, so this says it in those terms and links to where
  * it is done.
  *
- * # Why it keys off the address rather than off storage
+ * # Why it keys off a mark setup leaves, and not only the address
  *
- * `?bootstrap=complete` is what both setup landings navigate with. Dismissing
- * the card removes the parameter, so a reload or a bookmark of what is left
- * does not bring it back — and nothing is written to the browser or the
- * server to remember a notice that is only ever relevant for a minute.
+ * `?bootstrap=complete` is what both setup landings navigate with, and it is
+ * not enough on its own. The moment setup stops being required the setup
+ * route redirects to the public home by itself, and that redirect can win
+ * the race with the landing's own navigation — the operator arrives on
+ * `/admin` with no parameter, and the card never showed. So the landings also
+ * leave a mark in this tab's session storage (`markSetupJustFinished`) before
+ * they report completion, and either one shows the card.
+ *
+ * Dismissing the card removes both, so a reload or a bookmark does not bring
+ * it back. Session storage rather than anything longer-lived: the notice is
+ * only relevant to the tab that just finished setup.
  *
  * # Why a failed policy read still shows the card
  *
@@ -41,9 +48,31 @@ const NEXT_STEP: Record<InstanceAccessSettings["policy"], string> = {
 const WHATEVER_THE_POLICY =
   "You are the only person with an account here. Access is where you decide who may create one, and where you issue the invitations that let your players in.";
 
+const JUST_FINISHED_KEY = "thunderforge-setup-just-finished";
+
+/** Called by a setup landing before it reports setup complete. */
+export function markSetupJustFinished(): void {
+  try {
+    sessionStorage.setItem(JUST_FINISHED_KEY, "1");
+  } catch {
+    // No storage: the address parameter is then the only signal, as before.
+  }
+}
+
+function markedJustFinished(): boolean {
+  try {
+    return sessionStorage.getItem(JUST_FINISHED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 export function AfterSetupCard() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const justFinished = searchParams.get("bootstrap") === "complete";
+  const [dismissed, setDismissed] = useState(false);
+  const justFinished =
+    !dismissed &&
+    (searchParams.get("bootstrap") === "complete" || markedJustFinished());
   const [policy, setPolicy] = useState<InstanceAccessSettings["policy"] | null>(
     null,
   );
@@ -72,6 +101,12 @@ export function AfterSetupCard() {
   }
 
   const dismiss = () => {
+    try {
+      sessionStorage.removeItem(JUST_FINISHED_KEY);
+    } catch {
+      // Nothing was stored, so there is nothing to forget.
+    }
+    setDismissed(true);
     const next = new URLSearchParams(searchParams);
     next.delete("bootstrap");
     setSearchParams(next, { replace: true });
