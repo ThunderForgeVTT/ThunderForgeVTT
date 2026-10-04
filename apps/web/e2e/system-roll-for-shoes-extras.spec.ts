@@ -655,10 +655,12 @@ test("three Extras at once, and each one still means what it meant alone", async
   // and successes pay nothing, so the ledger stands still exactly when the
   // interesting thing happens.
   //
-  // So the page is reloaded before each roll. A rolled attempt lives in
-  // component state, which a reload discards, leaving no result on screen at
-  // all — and "no result, then a result" is a signal that cannot be satisfied
-  // by the previous roll's dice the way "the total matches the face" can.
+  // So the page is reloaded before each roll, with the remembered attempt
+  // forgotten first. The sheet keeps the last attempt for the browser tab so
+  // that closing it loses nothing; clearing that and reloading leaves no
+  // result on screen at all — and "no result, then a result" is a signal that
+  // cannot be satisfied by the previous roll's dice the way "the total matches
+  // the face" can.
 
   // One d6, less two, against 3. The total lands between −1 and 4, so the
   // three outcomes are all reachable and which one this roll took is dictated
@@ -667,6 +669,7 @@ test("three Extras at once, and each one still means what it meant alone", async
   let sawTie = false;
   let xp = 0;
   for (let attempt = 1; attempt <= 60 && !sawTie; attempt += 1) {
+    await page.evaluate(() => sessionStorage.clear());
     await page.reload();
     await expect(page.getByTestId("rfs-sheet")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId("rfs-total")).toHaveCount(0);
