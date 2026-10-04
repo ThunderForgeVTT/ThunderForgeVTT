@@ -181,9 +181,10 @@ client and is absent for a client who cannot see the token.
 
 - **FR-030**: The manifest keys the host reads are a written list in the
   pack contract. `check-packs` refuses a top-level key outside it.
-- **FR-031**: The seven single-pack roll keys are restated as `checks`
-  entries where the dice grammar can express them, and removed where it
-  cannot, with the reason recorded in that pack's research digest.
+- **FR-031**: The single-pack roll keys (six, on audit) are restated as
+  `checks` entries where the dice grammar and the bindings can express them,
+  and removed where they cannot, with the reason recorded in ADR-074's
+  amendment — the packs' research digests are not committed.
 - **FR-032**: A pack's contribution MAY supply a roll adjudicator: given a
   check's id, the dice result and the world's effective settings, it returns
   an outcome the host stores with the roll and shows to the table. It is
@@ -231,6 +232,15 @@ client and is absent for a client who cannot see the token.
     (success, failure, tie, critical success, critical failure) and the
     pack's own label for it. The outcome is stored with the roll itself,
     written once when the server makes the roll; it has no table of its own.
+    The adjudicator is a pure function: the facts of a roll and a context
+    value in, verdict and label out. `rollCheck` calls it for a manifest
+    check. A pack whose roll is not a manifest check gathers the context
+    itself: Roll for Shoes contributes one mutation that reads the skill's
+    level, the character's statuses, the Game Master's target and the
+    world's tie rule on the server, rolls through the host, and calls that
+    same function. The failure XP is awarded by the server in the same
+    transaction as the verdict; the chat line stays in the sheet, built
+    from the server's answer.
   - **Story 4.** A condition lives on the actor. It follows the character
     across scenes and is drawn on every token of that actor, for whoever may
     see that token. A token with no actor behind it carries no condition.

@@ -74,6 +74,52 @@ export function panelSlots(source) {
     : [];
 }
 
+/**
+ * The contract, which carries the list of keys a manifest may have. Read from
+ * there rather than repeated here, so the document an author reads and the
+ * list they are held to cannot drift apart.
+ */
+export const CONTRACT = "packs/systems/README.md";
+
+/** Every `key` between the contract's `<!-- manifest-keys -->` markers. */
+export function manifestKeys(contract) {
+  const listed =
+    /<!-- manifest-keys -->([\s\S]*?)<!-- \/manifest-keys -->/.exec(contract);
+  if (!listed) return [];
+  return listed[1]
+    .split("\n")
+    .filter((line) => line.startsWith("|"))
+    .flatMap((row) =>
+      [...row.split("|")[1].matchAll(/`([^`]+)`/g)].map((match) => match[1]),
+    );
+}
+
+/** Problems with one manifest's top-level keys. */
+function keyProblems(manifest, source, keys) {
+  let declared;
+  try {
+    declared = JSON.parse(source);
+  } catch {
+    declared = null;
+  }
+  if (declared === null || typeof declared !== "object") {
+    return [`${manifest}: is not a JSON object, so nothing can read it`];
+  }
+  const unlisted = Object.keys(declared).filter((key) => !keys.includes(key));
+  if (unlisted.length === 0) return [];
+  if (keys.length === 0) {
+    return [
+      `${manifest}: cannot be checked, because no manifest-keys list was found in ${CONTRACT}`,
+    ];
+  }
+  return unlisted.map(
+    (key) =>
+      `${manifest}: "${key}" is not a key the contract describes, so nothing reads it. ` +
+      `A manifest carries what ${CONTRACT} lists under "Every key"; ` +
+      `describe it there with what reads it, or take it out`,
+  );
+}
+
 /** Top-level entries any pack may have. Anything else must earn its place. */
 const LISTED = new Set([
   "system.json",
@@ -121,6 +167,7 @@ export function packProblems(files, read) {
       .map((line) => line.trim()),
   ]);
   const slots = panelSlots(read(SLOT_SOURCE));
+  const keys = manifestKeys(read(CONTRACT));
   const problems = [];
 
   for (const [id, inside] of [...packs].sort(([a], [b]) =>
@@ -132,6 +179,14 @@ export function packProblems(files, read) {
     if (!inside.includes("system.json")) {
       problems.push(
         `${pack}: a system pack must have a system.json; a directory without one is not a pack`,
+      );
+    } else {
+      problems.push(
+        ...keyProblems(
+          `${pack}/system.json`,
+          read(`${pack}/system.json`),
+          keys,
+        ),
       );
     }
 

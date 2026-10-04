@@ -31,7 +31,7 @@ import {
 
 /** Declares `checks`. Dexterity 16 is +3 under the rules the pack declares. */
 const WITH_CHECKS = "dnd5e";
-/** Declares none — its `actionRoll` is a different question (ADR-074). */
+/** Declares none: its action roll needs a rating the sheet does not publish. */
 const WITHOUT_CHECKS = "blades_in_the_dark";
 
 interface RollRecord {
@@ -210,9 +210,8 @@ test.describe("Spec 036 US3b: rolling a check from the sheet", () => {
       timeout: 30_000,
     });
 
-    // FR-037. Not a disabled button and not an explanation — nothing. Blades
-    // has an `actionRoll` in its manifest, and this is the assertion that
-    // stops anybody deciding that is close enough to a check to render.
+    // FR-037. Not a disabled button and not an explanation — nothing. A
+    // system that declares no checks is offered none.
     await expect(page.getByTestId("system-checks")).toHaveCount(0);
   });
 });

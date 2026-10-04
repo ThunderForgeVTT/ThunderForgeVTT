@@ -450,20 +450,18 @@ fn a_declared_check_is_read_whole_off_the_manifest() {
     );
 }
 
-/// FR-037. Seven of the eight bundled packs are this case today, and a sheet
+/// FR-037. Seven of the nine bundled packs are this case today, and a sheet
 /// for one of them offers no check at all.
 #[test]
 fn a_pack_declaring_no_checks_offers_none_rather_than_failing() {
     let manifest = serde_json::json!({
         "id": "example",
-        "title": "A system with a core mechanic and no checks block",
-        "coreCheck": "1d20+modifier"
+        "title": "A system with no checks block"
     });
 
     assert!(
         checks_from_manifest(&manifest).is_empty(),
-        "a pack's own core-mechanic key is not this contract, and its absence \
-         is not an error"
+        "declaring no checks is a complete answer, and not an error"
     );
 }
 

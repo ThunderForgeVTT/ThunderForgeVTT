@@ -111,7 +111,6 @@
       "label": "Perception"
     }
   },
-  "coreCheck": "1d20+modifier",
   "legal": {
     "licenseName": "Open RPG Creative License (ORC)",
     "attributionText": "Pathfinder Player Core 2 / Pathfinder Monster Core \u00a9 2024, Paizo Inc.; licensed under the ORC License located at the Library of Congress at TX 9-307-067 and available online at various locations including paizo.com/orclicense, azoralaw.com/orclicense, and others. All warranties are disclaimed as set forth therein.",

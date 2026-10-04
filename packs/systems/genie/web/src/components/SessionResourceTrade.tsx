@@ -51,7 +51,7 @@ export interface SessionResourceTradeProps {
   myActorId: string;
   /** The current player's own holdings only (data-model.md: one row per (session, actor, resourceType)). */
   myHoldings: GenieResourceHoldingData[];
-  /** The manifest's declared Session Resource types (`system.json`'s `sessionResources`), e.g. insight/favor/essence. */
+  /** Genie's Session Resource types, e.g. insight/favor/essence. */
   resourceTypes: { key: string; label: string }[];
   /** Other party members this player can propose a trade to. */
   partyMembers: GeniePartyMemberOption[];

@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  CONTRACT,
   DISCOVERED_WEB_ENTRIES,
   LINKAGES,
   SLOT_SOURCE,
+  manifestKeys,
   packProblems,
   panelSlots,
 } from "../check-packs.mjs";
@@ -156,6 +158,89 @@ test("a panel is refused when the slot list cannot be read, rather than passed u
   );
   assert.equal(problems.length, 1);
   assert.ok(problems[0].includes(SLOT_SOURCE));
+});
+
+/** The contract's key list, as `packs/systems/README.md` writes it. */
+const KEYS = `
+Prose that mentions \`notAKey\` is not the list.
+
+<!-- manifest-keys -->
+
+| Key                | Read by                  |
+| ------------------ | ------------------------ |
+| \`id\`             | The host.                |
+| \`author\`, \`url\`  | Nothing; provenance.     |
+| \`checks\`         | The host, to \`roll\` it. |
+
+<!-- /manifest-keys -->
+
+\`alsoNotAKey\` comes after it.
+`;
+
+test("the manifest keys are read from the contract's own list", () => {
+  assert.deepEqual(manifestKeys(KEYS), ["id", "author", "url", "checks"]);
+  assert.deepEqual(manifestKeys("a contract with no list"), []);
+});
+
+test("a manifest key the contract does not list is refused", () => {
+  const problems = packProblems(
+    ...tree(
+      wholePack({
+        [CONTRACT]: KEYS,
+        "packs/systems/shoes/system.json": JSON.stringify({
+          id: "shoes",
+          checks: [],
+          coreCheck: "1d20+modifier",
+        }),
+      }),
+    ),
+  );
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /^packs\/systems\/shoes\/system\.json: /);
+  assert.ok(problems[0].includes('"coreCheck"'));
+  assert.ok(problems[0].includes(CONTRACT));
+});
+
+test("a manifest of listed keys passes", () => {
+  const problems = packProblems(
+    ...tree(
+      wholePack({
+        [CONTRACT]: KEYS,
+        "packs/systems/shoes/system.json": JSON.stringify({
+          id: "shoes",
+          author: "someone",
+          checks: [],
+        }),
+      }),
+    ),
+  );
+  assert.deepEqual(problems, []);
+});
+
+test("a manifest's keys are refused when the list cannot be read, rather than passed unchecked", () => {
+  const problems = packProblems(
+    ...tree(
+      wholePack({
+        [CONTRACT]: "a contract with no list",
+        "packs/systems/shoes/system.json": JSON.stringify({ id: "shoes" }),
+      }),
+    ),
+  );
+  assert.equal(problems.length, 1);
+  assert.ok(problems[0].includes(CONTRACT));
+});
+
+test("a manifest that is not a JSON object is refused", () => {
+  const problems = packProblems(
+    ...tree(
+      wholePack({
+        [CONTRACT]: KEYS,
+        "packs/systems/shoes/system.json": "{ not json",
+      }),
+    ),
+  );
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /^packs\/systems\/shoes\/system\.json: /);
 });
 
 test("a server crate the application does not link is refused", () => {

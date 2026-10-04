@@ -69,7 +69,7 @@ repository and in the build.
 | `title`                    | What a person reads in a picker.                               |
 | `version`                  | The pack's own version.                                        |
 | `description`              | One paragraph, shown beside the title.                         |
-| `author`, `url`, `license` | Provenance.                                                    |
+| `author`, `url`, `license` | Provenance, for a person reading the file. Nothing reads them. |
 | `compatibility`            | `{ "minimum", "verified", "maximum" }` — product versions.     |
 | `legal`                    | See [Legal metadata](#legal-metadata). Required, and enforced. |
 
@@ -374,19 +374,21 @@ Three rules worth knowing before you write one:
   than rolled short.
 - **Declaring none is a complete answer.** A system with no sheet-initiated
   rolls offers no button, and that is a fact about the ruleset rather than an
-  omission. Seven of the eight bundled packs ship this way today.
+  omission. Seven of the nine bundled packs ship this way today.
 
 `formula` is not validated when the manifest is read — the crate that parses
 manifests compiles for `wasm32` and does not depend on the dice engine. A
 formula that does not parse is refused at roll time, and a test walks every
 bundled pack so a shipped one cannot carry a broken formula.
 
-**`checks` is not your core resolution mechanic.** If your manifest also has a
-`coreCheck`, `actionRoll`, `taskResolution`, `ladderRoll`, `skillRoll` or the
-like, keep it: that key says _how this system resolves things_, and it is read
-by your own crate. `checks` says _what this character's sheet may roll_. They
-answer different questions, and in some systems the answers happen to look
-alike.
+**State your system's roll here or nowhere.** Six packs once described their
+core roll under a key of their own — `coreCheck`, `actionRoll`,
+`taskResolution`, `ladderRoll`, `skillRoll`, `manifestationRoll` — and
+nothing read any of them. A roll the bindings can express is a `checks`
+entry; one they cannot (the number it needs is not a value the sheet
+publishes) is rolled by your own web code through the host's `rollDice`, and
+is not written in the manifest at all. ADR-074's amendment records what
+became of each.
 
 ### `settings`
 
@@ -432,13 +434,40 @@ If a value needs a check the table above cannot express, give your
 `SystemContribution` a `world_setting` function; it runs after the declared
 check and its message is shown to the Game Master.
 
-### Anything else
+### Every key
 
-A manifest may carry keys this document does not describe. Genie's
-`wishPoints`, Fate's `ladder`, Cypher's `taskResolution` and Pathfinder's
-`coreCheck` are each read by that pack's own crate and by nothing else. They
-are the pack's business, and shared code neither reads them nor knows they
-are there.
+This is the whole list. `scripts/check-packs.mjs` reads it from here and refuses a
+manifest with a top-level key that is not in it: a key nothing reads is a
+promise nobody keeps, and the place to find that out is before it ships.
+
+<!-- manifest-keys -->
+
+| Key                                    | Read by                                                                      |
+| -------------------------------------- | ---------------------------------------------------------------------------- |
+| `id`, `title`, `version`               | The host, wherever a system is listed or chosen.                             |
+| `description`, `template`              | The host's system picker.                                                    |
+| `compatibility`, `legal`               | The host, when the manifest is installed and when it is served.              |
+| `author`, `url`, `license`             | Nothing. Provenance, kept for a person reading the file.                     |
+| `data_types`                           | The host, to check `combat` and `appearance` name fields that exist.         |
+| `abilities`, `resources`, `movement`   | The host: the values a sheet, a token and a check may read.                  |
+| `sheet`, `groups`                      | The host: what the declared sheet draws, and how it is arranged.             |
+| `vision`                               | The host: the senses a token may be given.                                   |
+| `turnStructure`, `combat`              | The host's combat tracker.                                                   |
+| `appearance`                           | The host's hero builder.                                                     |
+| `checks`                               | The host's `rollCheck`.                                                      |
+| `settings`                             | The host's world settings.                                                   |
+| `contentPatterns`                      | The host's book import.                                                      |
+| `abilityVocabulary`, `abilityFacets`   | The host's ability editor. `abilityFacets` is the older spelling.            |
+| `skills`                               | Your own rules, if they publish a value per skill (5e's do). Not the host.   |
+| `conditions`                           | Nothing yet. Spec 067 Story 4 makes it the host's.                           |
+| `wishPoints`                           | Genie's rules.                                                               |
+| `startingSkills`                       | Roll for Shoes' crate.                                                       |
+
+<!-- /manifest-keys -->
+
+The last two are one pack's own. A key of your own is allowed on the same
+terms: your crate reads it, and it is added to this table in the change that
+introduces it, naming the reader.
 
 ## What a bundled pack may contribute
 

@@ -5,6 +5,7 @@
 **Participants:** ThunderForgeVTT Team
 **Extends:** ADR-044 (Dice Rolling Engine — Shared Crate and Server-Authoritative Trust Boundary)
 **Related:** spec 032 (a sheet is what a system declares), spec 036 US3b
+**Amended:** 2026-10-04 by spec 067 Story 3 — see the last section
 
 ---
 
@@ -140,3 +141,35 @@ A client that names a formula names the outcome's distribution.
   drops an undeclared derivation: it is a build-time mistake in a bundled
   pack, not something a player at a table can act on, and a button that cannot
   be rolled is worse than no button.
+
+---
+
+## Amendment, 2026-10-04 (spec 067 Story 3): the per-pack roll keys are gone
+
+"The six existing per-pack keys are left exactly as they are" rested on those
+keys being "a fact about the ruleset that other things read". An audit of
+every reader found that nothing read any of them: no host code, no pack crate,
+no web code. Each pack's crate opens its manifest only to check `id`. A key
+nothing reads is not a contract, so `scripts/check-packs.mjs` now refuses a
+top-level manifest key the pack contract does not list, and the six went one
+of two ways.
+
+| Pack | Key | What became of it | Why |
+| --- | --- | --- | --- |
+| cypher_system | `taskResolution` | Restated: a `task` check, `1d20` | The roll binds nothing, so the grammar and the bindings express it whole. The target (difficulty × 3) is the Game Master's and was never in the formula. |
+| pathfinder2e | `coreCheck` | Removed | `modifier` is ability + proficiency + level + bonuses, summed. The sheet publishes ability modifiers and no such total, so no binding can supply it. |
+| blades_in_the_dark | `actionRoll` | Removed | Action ratings are not a published value, and a rating of zero rolls `2d6kl1`, which one formula cannot say. |
+| fate_core | `ladderRoll` | Removed | A skill is a positional slot with a player-chosen name (`skill1`…), so a check cannot name the skill it rolls. |
+| year_zero_engine | `skillRoll` | Removed | Skill levels are not a published value; only the attribute half of the pool could be bound. |
+| genie | `manifestationRoll` | Removed | The keep count is a parse-time literal the player chooses per roll; the pack's own button builds the formula and rolls it through `rollDice`. |
+
+Four more keys were read by nothing and went with them: Cypher's
+`proficiencyTiers`, Fate's `ladder`, Genie's `sessionResources` (the pack's
+web code names the three itself) and 5e's `spellSlots` (the pack's crate
+holds the table in `srd.rs`).
+
+The reasons are recorded here rather than in each pack's research digest,
+because those digests are not committed (`docs/source_guidelines.md`).
+
+A removed roll comes back as a `checks` entry the day its pack publishes the
+value it needs.

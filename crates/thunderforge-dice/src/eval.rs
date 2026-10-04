@@ -786,8 +786,8 @@ mod tests {
         assert_eq!(result.kind, ResolutionKind::SuccessCount(1));
     }
 
-    /// packs/systems/pathfinder2e system pack: confirms the pack's
-    /// `system.json` "coreCheck" formula (`1d20+modifier`) is a real,
+    /// packs/systems/pathfinder2e system pack: confirms the system's
+    /// core check (`1d20+modifier`) is a real,
     /// resolvable formula in this engine's grammar. `modifier` here
     /// stands in for PF2e's already-summed total (ability modifier +
     /// proficiency bonus + any circumstance/status/item bonuses —
@@ -818,8 +818,8 @@ mod tests {
         assert_eq!(result.dice[0].final_value, 15);
     }
 
-    /// packs/systems/cypher_system: confirms `system.json`'s
-    /// `taskResolution.formula` ("1d20") is a real, resolvable formula.
+    /// packs/systems/cypher_system: confirms the formula of the `task`
+    /// check in `system.json` ("1d20") is a real, resolvable formula.
     /// The Cypher System's target number (difficulty * 3) is dynamic per
     /// roll (the GM sets difficulty 1-10 per task), and this grammar's
     /// only success-threshold notation (`cs{cond}`) requires a literal
@@ -847,8 +847,8 @@ mod tests {
         );
     }
 
-    /// packs/systems/blades_in_the_dark: confirms `system.json`'s
-    /// `actionRoll.formula` ("(rating)d6kh1") is a real, resolvable
+    /// packs/systems/blades_in_the_dark: confirms the system's action
+    /// roll ("(rating)d6kh1") is a real, resolvable
     /// formula for Blades' core action roll — roll a pool of d6s equal to
     /// the action rating (bound via the `rating` placeholder) and take
     /// the single highest die. The zero-rating special case (2d6, keep
@@ -876,7 +876,7 @@ mod tests {
         assert_eq!(result.kind, ResolutionKind::Total(5.0));
     }
 
-    /// packs/systems/year_zero_engine: confirms `system.json`'s `skillRoll.formula`
+    /// packs/systems/year_zero_engine: confirms the system's skill roll
     /// (`"(attribute+skill)d6cs>=6"`) is a real, resolvable formula in this engine's
     /// grammar, and that it implements YZE's core dice-pool mechanic (standard d6-pool
     /// variant): roll a pool of Base Dice (attribute) + Skill Dice (skill), all d6,

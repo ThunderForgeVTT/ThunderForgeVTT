@@ -23,10 +23,8 @@ export interface GenieSessionPanelProps {
   currentUserId?: string;
 }
 
-/** Genie's `sessionResources` block (`packs/systems/genie/system.json`) —
- * stable manifest content, hardcoded here rather than an extra manifest
- * fetch (`TokenPanel.tsx`'s `getGameSystemManifest` pattern would work
- * too, but is more code for 3 fixed keys/labels). */
+/** Genie's three Session Resources. They are the pack's own and are named
+ * here; the manifest does not carry them, because nothing would read them. */
 const GENIE_SESSION_RESOURCE_TYPES = [
   { key: "insight", label: "Insight" },
   { key: "favor", label: "Favor" },

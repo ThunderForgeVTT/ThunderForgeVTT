@@ -75,10 +75,6 @@
       "label": "Sway"
     }
   },
-  "actionRoll": {
-    "formula": "(rating)d6kh1",
-    "description": "Blades in the Dark action/resistance/fortune roll: roll a pool of d6s equal to the relevant action rating (bound via the `rating` placeholder) and take the single highest die. Special case not expressible in one formula string: a rating of 0 instead rolls 2d6 and takes the LOWEST die (application logic should send a fixed \"2d6kl1\" formula when the rating is 0, rather than binding `rating` to 0)."
-  },
   "legal": {
     "licenseName": "Creative Commons Attribution 3.0 Unported (CC BY 3.0)",
     "attributionText": "This work is based on Blades in the Dark (found at http://bladesinthedark.com/), product of One Seven Design, developed and authored by John Harper, and licensed for our use under the Creative Commons Attribution 3.0 Unported license (http://creativecommons.org/licenses/by/3.0/).",

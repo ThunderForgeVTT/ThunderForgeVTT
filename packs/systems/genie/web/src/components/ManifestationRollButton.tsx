@@ -44,8 +44,7 @@ export interface ManifestationRollButtonProps {
 /**
  * Genie Manifestation Roll button — spec 018 User Story 1 (T018).
  *
- * Builds `packs/systems/genie/system.json`'s `manifestationRoll.formula`
- * template for this character's skill rating and chosen keep count, then
+ * Builds Genie's Manifestation Roll formula for this character's skill rating and chosen keep count, then
  * hands it to the caller-supplied `onRoll` (the actual `rollDice`
  * mutation call).
  *

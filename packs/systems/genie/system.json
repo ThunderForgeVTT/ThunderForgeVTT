@@ -39,17 +39,6 @@
     }
   },
   "skills": {},
-  "sessionResources": {
-    "insight": {
-      "label": "Insight"
-    },
-    "favor": {
-      "label": "Favor"
-    },
-    "essence": {
-      "label": "Essence"
-    }
-  },
   "wishPoints": {
     "1": [
       2
@@ -135,10 +124,6 @@
       "label": "Favored",
       "description": "The Genie currently holds a Patron's blessing, granting an edge on Manifestation rolls until the favor lapses or is spent."
     }
-  },
-  "manifestationRoll": {
-    "formula": "(skill)d6kh{keep}x=6cs>=4",
-    "description": "Roll a pool of d6s equal to the relevant skill rating (bound via the 'skill' placeholder at roll time), keep the top N dice (substitute the literal keep count for '{keep}' before sending, since kh's count is a parse-time literal in crates/thunderforge-dice's grammar, not a runtime placeholder), explode on 6, count successes at 4+."
   },
   "legal": {
     "licenseName": "ThunderForgeVTT Original Content",

@@ -34,13 +34,13 @@ description: "Task list for What a Pack May Reach"
 - [X] T021 [US2] Rename the slot `clocks` to `dock`; a panel module's optional `title` export reaches the dock tab; no tab when unfilled (FR-020, FR-021)
 - [X] T022 [US2] Roll for Shoes' dock panel is titled "Table"; Genie's "Clocks"
 - [X] T023 [US2] The pack contract's slot table (FR-023)
-- [ ] T024 [US2] Proof, and the `game-systems` slice from main
+- [X] T024 [US2] Proof, and the `game-systems` slice from main
 
 ## Phase 3: Rules (Story 3)
 
 - [X] T030 [US3] Confirm with the owner: the adjudicator's signature and where an outcome is stored — verdict plus label, stored with the roll
-- [ ] T031 [US3] `check-packs`: refuse a top-level manifest key outside the contract's list (FR-030)
-- [ ] T032 [US3] Restate or remove the seven single-pack roll keys (FR-031)
+- [X] T031 [US3] `check-packs`: refuse a top-level manifest key outside the contract's list (FR-030)
+- [X] T032 [US3] Restate or remove the six single-pack roll keys, and the four other keys nothing read (FR-031)
 - [ ] T033 [US3] The roll adjudicator on `SystemContribution`; Roll for Shoes' outcome decided on the server (FR-032, FR-033)
 - [ ] T034 [US3] Proof
 
