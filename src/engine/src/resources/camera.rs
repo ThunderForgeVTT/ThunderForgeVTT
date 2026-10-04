@@ -55,6 +55,22 @@ impl CameraManager {
         self.target_translation += delta;
     }
 
+    /// Move to an absolute position, in world units. Either axis may be
+    /// omitted to leave it where it is heading.
+    ///
+    /// Moves the target, as `pan` does, so the camera glides there and — the
+    /// part that matters — stays. `advance` eases `translation` toward
+    /// `target_translation` every frame; a move that wrote only `translation`
+    /// would be pulled back to wherever the target had been left.
+    pub fn move_to(&mut self, x: Option<f32>, y: Option<f32>) {
+        if let Some(x) = x {
+            self.target_translation.x = x;
+        }
+        if let Some(y) = y {
+            self.target_translation.y = y;
+        }
+    }
+
     /// Pan by a delta with no glide — for a drag, where the map has to stay
     /// under the pointer.
     ///
@@ -181,6 +197,25 @@ mod tests {
         let cam = CameraManager::default();
         assert_eq!(cam.translation, Vec2::ZERO);
         assert_eq!(cam.scale, 1.0);
+    }
+
+    /// `set_camera` used to write `translation` alone, and the next frames
+    /// eased the camera back to the untouched target.
+    #[test]
+    fn move_to_stays_where_it_was_sent() {
+        let mut cam = CameraManager::default();
+        cam.move_to(Some(1795.5), Some(-400.0));
+        for _ in 0..600 {
+            cam.advance(1.0 / 60.0);
+        }
+        assert_eq!(cam.translation, Vec2::new(1795.5, -400.0));
+
+        // An omitted axis is left alone.
+        cam.move_to(None, Some(10.0));
+        for _ in 0..600 {
+            cam.advance(1.0 / 60.0);
+        }
+        assert_eq!(cam.translation, Vec2::new(1795.5, 10.0));
     }
 
     #[test]

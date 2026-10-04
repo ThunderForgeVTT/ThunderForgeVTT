@@ -679,12 +679,11 @@ pub(crate) fn apply_external_commands(
             }
             ExternalCommand::SetCamera { x, y, zoom } => {
                 if let Some(camera_mgr) = scene.camera.as_deref_mut() {
-                    if let Some(x) = x {
-                        camera_mgr.translation.x = x;
-                    }
-                    if let Some(y) = y {
-                        camera_mgr.translation.y = y;
-                    }
+                    // Through the target, like the zoom below. Writing
+                    // `translation` moved the camera for one frame and left
+                    // `target_translation` where it was, so `advance` eased
+                    // it straight back: a pan that undid itself in ~150ms.
+                    camera_mgr.move_to(x, y);
                     if let Some(zoom) = zoom {
                         camera_mgr.set_zoom(zoom);
                     }

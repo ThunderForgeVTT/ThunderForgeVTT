@@ -96,6 +96,8 @@ interface Sample {
   fps: number;
   frameTimeMs: number;
   sprites: number;
+  /** Tokens the engine itself reports as culled (`engine_stats`). */
+  culled: number;
   /** Tokens with bars actually built. */
   withBars: number;
   /** Tokens with a nameplate actually built. */
@@ -258,6 +260,7 @@ async function sampleSteadyState(
     fps: Math.round(mid.fps),
     frameTimeMs: Number(mid.frameTimeMs.toFixed(2)),
     sprites: last?.sprites ?? 0,
+    culled: last?.tokensCulled ?? 0,
     withBars: rows.filter((row) => row.barWidth !== null).length,
     withNames: rows.filter((row) => row.nameY !== null).length,
     samples: readings.length,
@@ -569,6 +572,7 @@ test("token culling: off-screen tokens carry nothing, and panning never finds on
         `fps=${String(sample.fps).padStart(3)} ` +
         `frame=${String(sample.frameTimeMs).padStart(7)}ms ` +
         `sprites=${String(sample.sprites).padStart(5)} ` +
+        `culled=${String(sample.culled).padStart(4)} ` +
         `withBars=${String(sample.withBars).padStart(4)} ` +
         `withNames=${String(sample.withNames).padStart(4)} ` +
         `samples=${sample.samples}`,

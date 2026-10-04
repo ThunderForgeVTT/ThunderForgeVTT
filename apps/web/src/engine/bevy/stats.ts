@@ -21,6 +21,12 @@ export interface EngineStats {
   fps: number;
   sprites: number;
   tokens: number;
+  /**
+   * Tokens whose name and bars are withheld because they are outside the
+   * padded view. Counted in `tokens` as well — a culled token still exists.
+   * Zero from a bundle that predates culling.
+   */
+  tokensCulled: number;
   lights: number;
   walls: number;
   shadowQuads: number;
@@ -69,6 +75,7 @@ export async function readEngineStats(): Promise<EngineStats | null> {
       frameTimeMs,
       sprites: count(raw.sprites),
       tokens: count(raw.tokens),
+      tokensCulled: count(raw.tokens_culled),
       lights: count(raw.lights),
       walls: count(raw.walls),
       shadowQuads: count(raw.shadow_quads),

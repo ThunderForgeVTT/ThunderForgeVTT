@@ -425,6 +425,7 @@
       "paths": [
         "crates/thunderforge-canvas-core/src/{frame_trace,texture_budget,resource_display,resource_display_tests,viewport}.rs",
         "scripts/status-capacity-metrics.mjs",
+        "scripts/token-culling-metrics.mjs",
         "src/engine/Cargo.toml",
         "src/engine/src/plugins/{mod,frame_trace,status_display,token,nameplate,token_culling,token_culling_tests}.rs",
         "src/engine/src/resources/mod.rs",
