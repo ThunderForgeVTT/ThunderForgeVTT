@@ -59,6 +59,21 @@ const DISCOVERED = [
   /^web\/src\/panels\/[^/]+\.tsx$/,
 ];
 
+/**
+ * Where the host declares its panel slots. The list is read from there rather
+ * than repeated here, so a slot added to the host is one a pack may fill the
+ * moment it exists, and one removed is refused the moment it is gone.
+ */
+export const SLOT_SOURCE = "apps/web/src/host/index.ts";
+
+/** The members of `export type PanelSlot = | "a" | "b";` in the host's source. */
+export function panelSlots(source) {
+  const declared = /export type PanelSlot =([^;]*);/.exec(source);
+  return declared
+    ? [...declared[1].matchAll(/"([^"]+)"/g)].map((match) => match[1])
+    : [];
+}
+
 /** Top-level entries any pack may have. Anything else must earn its place. */
 const LISTED = new Set([
   "system.json",
@@ -105,6 +120,7 @@ export function packProblems(files, read) {
       .split("\n")
       .map((line) => line.trim()),
   ]);
+  const slots = panelSlots(read(SLOT_SOURCE));
   const problems = [];
 
   for (const [id, inside] of [...packs].sort(([a], [b]) =>
@@ -152,6 +168,17 @@ export function packProblems(files, read) {
       problems.push(
         `${pack}/web: the host finds nothing in it. It looks for ${DISCOVERED_WEB_ENTRIES.join(", ")}; ` +
           `a pack with none of these has no web/ and its sheet is drawn from the manifest`,
+      );
+    }
+
+    for (const file of inside) {
+      const panel = /^web\/src\/panels\/([^/]+)\.tsx$/.exec(file);
+      if (!panel || slots.includes(panel[1])) continue;
+      problems.push(
+        slots.length === 0
+          ? `${pack}/${file}: cannot be checked, because no PanelSlot list was found in ${SLOT_SOURCE}`
+          : `${pack}/${file}: "${panel[1]}" is not a panel slot, so the host never mounts it. ` +
+              `The slots are ${slots.join(", ")}`,
       );
     }
 

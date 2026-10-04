@@ -4,7 +4,9 @@ import { test } from "node:test";
 import {
   DISCOVERED_WEB_ENTRIES,
   LINKAGES,
+  SLOT_SOURCE,
   packProblems,
+  panelSlots,
 } from "../check-packs.mjs";
 
 const [LINKAGE, TEST_LINKAGE] = LINKAGES;
@@ -13,6 +15,16 @@ const [LINKAGE, TEST_LINKAGE] = LINKAGES;
 function tree(files) {
   return [Object.keys(files), (file) => files[file] ?? ""];
 }
+
+/** The host's slot list, as `apps/web/src/host/index.ts` writes it. */
+const HOST = `
+export type PanelSlot =
+  | "npc-detail"
+  | "world-staging"
+  | "dock";
+
+export interface Unrelated {}
+`;
 
 /** A pack shaped like Roll for Shoes: a manifest, a server crate, a web half. */
 function wholePack(extra = {}) {
@@ -28,6 +40,7 @@ function wholePack(extra = {}) {
     "packs/systems/shoes/web/src/components/Roll.tsx": "",
     [LINKAGE]: "use shoes_server as _;\n",
     [TEST_LINKAGE]: "use shoes_server as _;\n",
+    [SLOT_SOURCE]: HOST,
     ...extra,
   };
 }
@@ -97,7 +110,7 @@ test("a web directory the host finds nothing in is refused, naming what it looks
 
 for (const [entry, file] of [
   ["a stat block source", "web/src/StatBlocks.ts"],
-  ["a panel", "web/src/panels/clocks.tsx"],
+  ["a panel", "web/src/panels/dock.tsx"],
 ]) {
   test(`${entry} alone is enough for a web directory`, () => {
     const files = wholePack({ [`packs/systems/shoes/${file}`]: "" });
@@ -108,10 +121,41 @@ for (const [entry, file] of [
 
 test("a panel in a subdirectory is not one the host finds", () => {
   const files = wholePack({
-    "packs/systems/shoes/web/src/panels/deep/clocks.tsx": "",
+    "packs/systems/shoes/web/src/panels/deep/dock.tsx": "",
   });
   delete files["packs/systems/shoes/web/src/ActorSheet.tsx"];
   assert.equal(packProblems(...tree(files)).length, 1);
+});
+
+test("the slot list is read from the host's own declaration", () => {
+  assert.deepEqual(panelSlots(HOST), ["npc-detail", "world-staging", "dock"]);
+  assert.deepEqual(panelSlots("export const nothing = 1;"), []);
+});
+
+test("a panel named for a slot the host does not have is refused", () => {
+  const problems = packProblems(
+    ...tree(wholePack({ "packs/systems/shoes/web/src/panels/clocks.tsx": "" })),
+  );
+  assert.equal(problems.length, 1);
+  assert.match(
+    problems[0],
+    /^packs\/systems\/shoes\/web\/src\/panels\/clocks\.tsx: /,
+  );
+  for (const slot of ["npc-detail", "world-staging", "dock"])
+    assert.ok(problems[0].includes(slot), slot);
+});
+
+test("a panel is refused when the slot list cannot be read, rather than passed unchecked", () => {
+  const problems = packProblems(
+    ...tree(
+      wholePack({
+        "packs/systems/shoes/web/src/panels/dock.tsx": "",
+        [SLOT_SOURCE]: "",
+      }),
+    ),
+  );
+  assert.equal(problems.length, 1);
+  assert.ok(problems[0].includes(SLOT_SOURCE));
 });
 
 test("a server crate the application does not link is refused", () => {
