@@ -150,6 +150,144 @@ test("a character starts with one skill, fails its way to XP, and spends it to l
   await expectNoAxeViolations(page, '[data-testid="rfs-sheet"]');
 });
 
+/**
+ * Spec 067 Story 3: the verdict and the experience are the server's.
+ *
+ * Called without the sheet, because the claim is about what a client cannot
+ * do. The mutation has no field for a pool, a total or a result; this proves
+ * the rest — that a failure is paid where the roll is recorded, that the
+ * record carries the verdict, and who is refused.
+ */
+const ROLL_SKILL = `
+  mutation ($input: RollForShoesRollSkillInput!) {
+    rollForShoesRollSkill(input: $input) {
+      roll {
+        formula
+        dice { finalValue }
+        outcome { verdict label }
+      }
+      total
+      opposition
+      xpAwarded
+      xp
+    }
+  }
+`;
+
+interface SkillRollAnswer {
+  data?: {
+    rollForShoesRollSkill: {
+      roll: {
+        formula: string;
+        dice: { finalValue: number }[];
+        outcome: { verdict: string; label: string } | null;
+      };
+      total: number;
+      opposition: number | null;
+      xpAwarded: number;
+      xp: number;
+    } | null;
+  };
+  errors?: { message: string }[];
+}
+
+test("the server judges a skill roll, pays a failure, and keeps the verdict with the roll", async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  const { worldId, actorId } = await createCharacter(page);
+  const input = (extra: Record<string, unknown>) => ({
+    input: { worldId, actorId, skillId: STARTING_SKILL_ID, ...extra },
+  });
+
+  // One d6 cannot beat 6, so this fails whatever is rolled.
+  const failed = await graphql<SkillRollAnswer>(
+    page,
+    ROLL_SKILL,
+    input({ opposition: 6 }),
+  );
+  const roll = failed.data?.rollForShoesRollSkill;
+  expect(roll, JSON.stringify(failed.errors ?? failed)).toBeTruthy();
+  expect(roll!.roll.formula).toBe("1d6");
+  expect(roll!.roll.dice).toHaveLength(1);
+  expect(roll!.roll.outcome).toEqual({ verdict: "FAILURE", label: "Failure" });
+  expect(roll!.xpAwarded).toBe(1);
+  expect(roll!.xp).toBe(1);
+
+  // Paid on the server: the sheet was never open, and the experience is there.
+  const stored = await graphql<{
+    data: { actorSystemData: { resourceData: { xp: number } } | null };
+  }>(
+    page,
+    `
+      query ($actorId: UUID!) {
+        actorSystemData(actorId: $actorId) {
+          resourceData
+        }
+      }
+    `,
+    { actorId },
+  );
+  expect(stored.data.actorSystemData?.resourceData.xp).toBe(1);
+
+  // With nothing to beat, the roll is made and not judged, and pays nothing.
+  const unopposed = await graphql<SkillRollAnswer>(page, ROLL_SKILL, input({}));
+  expect(unopposed.data?.rollForShoesRollSkill?.roll.outcome).toBeNull();
+  expect(unopposed.data?.rollForShoesRollSkill?.xp).toBe(1);
+
+  // The world's roll history carries the verdict beside each roll.
+  const history = await graphql<{
+    data: {
+      worldRollRecords: {
+        resolution: { outcome: { verdict: string } | null };
+      }[];
+    };
+  }>(
+    page,
+    `
+      query ($worldId: UUID!) {
+        worldRollRecords(worldId: $worldId) {
+          resolution {
+            outcome {
+              verdict
+            }
+          }
+        }
+      }
+    `,
+    { worldId },
+  );
+  const verdicts = history.data.worldRollRecords.map(
+    (record) => record.resolution.outcome?.verdict ?? null,
+  );
+  expect(verdicts).toHaveLength(2);
+  expect(verdicts).toContain("FAILURE");
+  expect(verdicts).toContain(null);
+
+  // A skill the character does not have is refused, and nothing is rolled.
+  const madeUp = await graphql<SkillRollAnswer>(
+    page,
+    ROLL_SKILL,
+    input({ skillId: "made-up", opposition: 6 }),
+  );
+  expect(madeUp.data?.rollForShoesRollSkill ?? null).toBeNull();
+  expect(madeUp.errors?.[0]?.message ?? "").toContain("no such skill");
+
+  // A player who does not hold the character cannot roll it for experience.
+  const player = await inviteAndJoinAsPlayer(browser, page, worldId, "e2erfsv");
+  const notTheirs = await graphql<SkillRollAnswer>(
+    player,
+    ROLL_SKILL,
+    input({ opposition: 6 }),
+  );
+  expect(notTheirs.data?.rollForShoesRollSkill ?? null).toBeNull();
+  expect(notTheirs.errors?.length ?? 0).toBeGreaterThan(0);
+
+  const after = await graphql<SkillRollAnswer>(page, ROLL_SKILL, input({}));
+  expect(after.data?.rollForShoesRollSkill?.xp).toBe(1);
+});
+
 test("the sheet works in the play dock, where the player holding the character keeps it up to date", async ({
   page,
   browser,

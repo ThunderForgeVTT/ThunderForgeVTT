@@ -23,11 +23,9 @@ import {
   grantSkillAmong,
   newSkillId,
   newStatusId,
-  oppositionFor,
   removeSkill,
   removeStatus,
   renameSkill,
-  resolve,
   setSkillLevel,
   skillsOf,
   slotCost,
@@ -35,12 +33,12 @@ import {
   spendXp,
   statusesOf,
   withBoughtSlot,
-  xpAward,
   xpOf,
   type Band,
   type Skill,
   type SkillsEdit,
   type Status,
+  type Verdict,
   type WorldSettings,
 } from "./game.ts";
 import { fetchWorldSettings } from "./settings.ts";
@@ -92,6 +90,48 @@ interface DieOutcome {
 interface RollResolution {
   dice: DieOutcome[];
   resultValue: number;
+}
+
+/** A skill roll as the server made and judged it (spec 067 Story 3). */
+interface SkillRoll {
+  roll: {
+    dice: DieOutcome[];
+    /** Null when there was nothing to beat. */
+    outcome: { verdict: string; label: string } | null;
+  };
+  modifier: number;
+  total: number;
+  opposition: number | null;
+  xpAwarded: number;
+}
+
+/**
+ * The server's roll. The sheet names the skill and never its level, and sends
+ * what the player typed only as what they say has to be beaten: the server
+ * reads the level, the statuses, the tie rule and the Game Master's number
+ * itself, judges, and pays a failure its experience with the roll's record.
+ */
+const ROLL_FOR_SHOES_SKILL = `
+  mutation RollForShoesSkill($input: RollForShoesRollSkillInput!) {
+    rollForShoesRollSkill(input: $input) {
+      roll {
+        dice { numericSides rolls kept finalValue }
+        outcome { verdict label }
+      }
+      modifier
+      total
+      opposition
+      xpAwarded
+    }
+  }
+`;
+
+/** The host's verdict as this sheet's three words for a roll. */
+function verdictOf(outcome: SkillRoll["roll"]["outcome"]): Verdict {
+  if (outcome === null) {
+    return "unjudged";
+  }
+  return outcome.verdict === "SUCCESS" ? "success" : "failure";
 }
 
 const ROLL_SKILL = `
@@ -311,47 +351,32 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
     setBusy(true);
 
     try {
-      // Read again at the moment of the roll rather than trusting what the
-      // sheet last heard. The announcement of a change is best-effort, and a
-      // roll judged against the number before last is a wrong verdict in the
-      // world's chat. If the read is refused the roll does not happen: the
-      // sheet cannot tell "none set" from "could not ask", and guessing
-      // "none" would let a typed number stand in for the Game Master's.
-      let against: number | null;
-      try {
-        against = oppositionFor(await table.refresh(), opposition);
-      } catch {
-        setError(
-          "What has to be beaten could not be read, so nothing was rolled. Try again.",
-        );
-        return;
-      }
+      // The sheet sends what the player typed and nothing it worked out.
+      // What has to be beaten is read on the server at the moment of the
+      // roll, so a Game Master's number this sheet has not heard about yet
+      // still wins, and the answer says which number was used.
+      const typed = opposition.trim() === "" ? null : Number(opposition);
+      const { rollForShoesRollSkill: rolled } = await postGraphQL<{
+        rollForShoesRollSkill: SkillRoll;
+      }>(ROLL_FOR_SHOES_SKILL, {
+        input: {
+          worldId: actor.worldId,
+          actorId: actor.id,
+          skillId: skill.id,
+          opposition: typed !== null && Number.isFinite(typed) ? typed : null,
+        },
+      });
 
       // `faces` is the character's pool and nothing else. The Game Master's
       // dice live in their own state and never reach this array, which is what
       // keeps a six of theirs from earning anybody a skill (FR-014).
-      const { faces } = await rollPool("LEVEL", skill.level);
-      // Every roll goes through the one resolver, whatever this world has
-      // turned on. With nothing on it is spec 061's comparison exactly, and
-      // `game.test.ts` checks that exhaustively rather than by example.
-      const outcome = resolve({
-        faces,
-        // A world that has not turned statuses on rolls with none, whatever a
-        // character happens to have stored from a world that had — the setting
-        // decides whether they apply, never whether they exist.
-        statuses: settings.statusesEnabled ? statuses : [],
-        opposition: against,
-        tieSucceeds: settings.tieSucceeds,
-      });
-      const result = outcome.verdict;
-
       const made: Attempt = {
         skill,
-        faces,
-        total: outcome.total,
-        modifier: outcome.modifier,
-        opposition: against,
-        result,
+        faces: rolled.roll.dice.map((die) => die.finalValue),
+        total: rolled.total,
+        modifier: rolled.modifier,
+        opposition: rolled.opposition,
+        result: verdictOf(rolled.roll.outcome),
         bought: 0,
         advancementAnswered: false,
         at: Date.now(),
@@ -359,10 +384,10 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
       setAttempt(made);
       await say(rollLine(actor.label, made));
 
-      // Failure is the only thing that pays, and it pays whatever else the
-      // roll did — a roll can fail and earn a new skill in the same breath.
-      if (xpAward(result) > 0) {
-        await updateResources({ ...resourceData, xp: xp + xpAward(result) });
+      // Failure is the only thing that pays, and the server has already paid
+      // it — a roll can fail and earn a new skill in the same breath. The
+      // sheet only reads the experience back.
+      if (rolled.xpAwarded > 0) {
         await refetch();
       }
     } catch (thrown) {
