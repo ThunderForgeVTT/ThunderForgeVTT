@@ -147,6 +147,16 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
   const proficiencyBonus = calculateProficiencyBonus(level);
   const saveProficiencies = idList(proficiencyData.saving_throw_proficiencies);
   const skillProficiencies = idList(proficiencyData.skill_proficiencies);
+  // Expertise rides on proficiency, as it does in `rules.rs`: an id stored
+  // here without the proficiency beside it doubles nothing.
+  const skillExpertise = idList(proficiencyData.skill_expertise).filter((id) =>
+    skillProficiencies.includes(id),
+  );
+  const skillBonus = (skill: { id: string; ability: AbilityId }) =>
+    mod(skill.ability) +
+    (skillProficiencies.includes(skill.id)
+      ? proficiencyBonus * (skillExpertise.includes(skill.id) ? 2 : 1)
+      : 0);
 
   const maxHp = Math.max(1, num(resourceData.max_hp, 10));
   const currentHp = clamp(num(resourceData.current_hp, maxHp), 0, maxHp);
@@ -173,9 +183,7 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
   const slotUsed = (spellData.spell_slots_used ?? {}) as Json;
 
   const passivePerception =
-    10 +
-    mod("wisdom") +
-    (skillProficiencies.includes("perception") ? proficiencyBonus : 0);
+    10 + skillBonus({ id: "perception", ability: "wisdom" });
 
   const write = async (slot: Slot, payload: Json) => {
     setPending(true);
@@ -201,6 +209,7 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
     write("proficiency_data", {
       ...proficiencyData,
       skill_proficiencies: skillProficiencies,
+      skill_expertise: skillExpertise,
       saving_throw_proficiencies: saveProficiencies,
       proficiency_bonus: proficiencyBonus,
       ...patch,
@@ -738,14 +747,20 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
       case "skills":
         return (
           <div className="grid gap-3">
+            {canEdit ? (
+              <p className={hintClass}>
+                First box: proficient. Second box: expertise, which doubles the
+                proficiency bonus.
+              </p>
+            ) : null}
             <ul
               className="grid gap-1 sm:grid-cols-2"
               data-testid="dnd5e-skill-list"
             >
               {DND5E_SKILLS.map((skill) => {
                 const proficient = skillProficiencies.includes(skill.id);
-                const bonus =
-                  mod(skill.ability) + (proficient ? proficiencyBonus : 0);
+                const expert = skillExpertise.includes(skill.id);
+                const bonus = skillBonus(skill);
                 const id = `dnd5e-skill-${skill.id}`;
                 const abbreviation = DND5E_ABILITIES.find(
                   (a) => a.id === skill.ability,
@@ -756,25 +771,48 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
                     className="flex items-center gap-2 rounded-md px-1 py-0.5 text-sm hover:bg-muted/40"
                     data-testid={id}
                     data-proficient={proficient ? "true" : "false"}
+                    data-expertise={expert ? "true" : "false"}
                   >
                     {canEdit ? (
-                      <OptimisticCheckbox
-                        id={id}
-                        testId={`${id}-proficient`}
-                        checked={proficient}
-                        disabled={isPending}
-                        onToggle={() =>
-                          writeProficiencies({
-                            skill_proficiencies: toggleId(
-                              skillProficiencies,
-                              skill.id,
-                            ),
-                          })
-                        }
-                      />
+                      <>
+                        <OptimisticCheckbox
+                          id={id}
+                          testId={`${id}-proficient`}
+                          checked={proficient}
+                          disabled={isPending}
+                          onToggle={() =>
+                            // Dropping the proficiency drops the expertise
+                            // that rode on it.
+                            writeProficiencies({
+                              skill_proficiencies: toggleId(
+                                skillProficiencies,
+                                skill.id,
+                              ),
+                              skill_expertise: proficient
+                                ? skillExpertise.filter((x) => x !== skill.id)
+                                : skillExpertise,
+                            })
+                          }
+                        />
+                        <OptimisticCheckbox
+                          id={`${id}-expertise`}
+                          testId={`${id}-expertise`}
+                          checked={expert}
+                          disabled={isPending || !proficient}
+                          ariaLabel={`Expertise in ${skill.label}`}
+                          onToggle={() =>
+                            writeProficiencies({
+                              skill_expertise: toggleId(
+                                skillExpertise,
+                                skill.id,
+                              ),
+                            })
+                          }
+                        />
+                      </>
                     ) : (
                       <span className="w-3 text-center" aria-hidden="true">
-                        {proficient ? "●" : "○"}
+                        {expert ? "◆" : proficient ? "●" : "○"}
                       </span>
                     )}
                     <span
@@ -789,7 +827,9 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
                     >
                       {skill.label}
                       {!canEdit && proficient ? (
-                        <span className="sr-only"> (proficient)</span>
+                        <span className="sr-only">
+                          {expert ? " (expertise)" : " (proficient)"}
+                        </span>
                       ) : null}
                     </label>
                     <span className={`${hintClass} tracking-wider`}>
@@ -811,10 +851,10 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
               <Fact label="Passive Investigation">
                 <span className="tabular-nums">
                   {10 +
-                    mod("intelligence") +
-                    (skillProficiencies.includes("investigation")
-                      ? proficiencyBonus
-                      : 0)}
+                    skillBonus({
+                      id: "investigation",
+                      ability: "intelligence",
+                    })}
                 </span>
               </Fact>
             </div>

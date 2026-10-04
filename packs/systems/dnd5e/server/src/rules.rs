@@ -26,6 +26,10 @@ use thunderforge_canvas_core::system_rules::{
 const LEVEL: &str = "level";
 /// Which skills the character is proficient in, inside `proficiency_data`.
 const SKILL_PROFICIENCIES: &str = "skill_proficiencies";
+/// Which of those skills the character has expertise in, likewise. Expertise
+/// doubles the proficiency bonus, so it only counts on a skill that is also in
+/// [`SKILL_PROFICIENCIES`]: an id listed here alone adds nothing.
+const SKILL_EXPERTISE: &str = "skill_expertise";
 /// Which saving throws, likewise.
 const SAVE_PROFICIENCIES: &str = "saving_throw_proficiencies";
 /// The skill a passive score is read from.
@@ -286,7 +290,13 @@ impl SystemRules for DnD5eRules {
                 continue;
             };
             let proficient = Self::is_proficient(stored, SKILL_PROFICIENCIES, &skill.id);
-            let total = modifier + if proficient { bonus } else { 0 };
+            let expert = proficient && Self::is_proficient(stored, SKILL_EXPERTISE, &skill.id);
+            let total = modifier
+                + match (proficient, expert) {
+                    (true, true) => bonus * 2,
+                    (true, false) => bonus,
+                    _ => 0,
+                };
             out.push(derived(skill_id(&skill.id), skill.label.clone(), total));
 
             if skill.id == PERCEPTION {

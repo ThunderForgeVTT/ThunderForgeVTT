@@ -869,6 +869,13 @@
             }
           }
         },
+        "skill_expertise": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ids of proficient skills whose proficiency bonus is doubled"
+        },
         "saving_throw_proficiencies": {
           "type": "object",
           "description": "Saving throw proficiency flags",
@@ -969,11 +976,7 @@
           "label": "Legendary Actions",
           "description": "How many legendary actions the creature may take each round, at the end of other creatures' turns. Declared in combat.legendary; the tracker shows how many remain and refills them at the start of the creature's turn. None recorded, or 0, is a creature with none."
         }
-      },
-      "required": [
-        "class",
-        "level"
-      ]
+      }
     },
     "spell_data": {
       "description": "Spellcasting information for casters",

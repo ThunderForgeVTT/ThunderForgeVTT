@@ -241,6 +241,34 @@ test("the 5e sheet lays out, derives, persists, and its proficiencies reach the 
     "Stealth must be DEX +3 plus proficiency +3 at level 5",
   ).toBe(6);
 
+  // Expertise waits on proficiency, then doubles it: +3 and +3 twice. The
+  // roll is asked for while the box is ticked, and it is unticked again so
+  // the rest of this test reads the plain proficient +6.
+  await expect(
+    page.getByTestId("dnd5e-skill-acrobatics-expertise"),
+  ).toBeDisabled();
+  await page.getByTestId("dnd5e-skill-stealth-expertise").check();
+  await expect(page.getByTestId("dnd5e-skill-stealth-bonus")).toHaveText("+9", {
+    timeout: 10_000,
+  });
+  const withExpertise = await systemData(page, actorId);
+  expect(withExpertise?.proficiencyData?.skill_expertise).toEqual(["stealth"]);
+  const expert = await graphql<GqlResult<{ rollCheck: Resolution }>>(
+    page,
+    ROLL_CHECK,
+    { worldId, actorId, checkId: "stealth" },
+  );
+  expect(expert.errors).toBeFalsy();
+  expect(
+    expert.data!.rollCheck.resultValue -
+      expert.data!.rollCheck.dice[0].finalValue,
+    "expert Stealth must be DEX +3 plus twice proficiency +3 at level 5",
+  ).toBe(9);
+  await page.getByTestId("dnd5e-skill-stealth-expertise").uncheck();
+  await expect(page.getByTestId("dnd5e-skill-stealth-bonus")).toHaveText("+6", {
+    timeout: 10_000,
+  });
+
   // A save proficiency goes the same way.
   await page.getByTestId("dnd5e-save-dexterity").check();
   await expect(page.getByTestId("dnd5e-save-dexterity-bonus")).toHaveText(

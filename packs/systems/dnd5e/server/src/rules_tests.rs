@@ -148,6 +148,30 @@ fn a_skill_keys_off_the_ability_the_manifest_names() {
     assert_eq!(value_of(&values, "skillArcana"), Some(-1));
 }
 
+/// Expertise doubles the proficiency bonus: the level-5 Rogue's Stealth is
+/// 3 + 3 + 3. It rides on proficiency, so an id listed as expertise alone
+/// earns nothing, and the passive score follows the doubled skill.
+#[test]
+fn expertise_doubles_the_bonus_only_on_a_proficient_skill() {
+    let character = DeclaredValues::new([
+        stored("dexterity", 16),
+        stored("wisdom", 12),
+        stored(LEVEL, 5),
+        list(SKILL_PROFICIENCIES, &["stealth", "perception"]),
+        list(SKILL_EXPERTISE, &["stealth", "perception", "acrobatics"]),
+        list(SAVE_PROFICIENCIES, &["dexterity"]),
+    ]);
+    let values = rules().derive(&character);
+    assert_eq!(value_of(&values, "skillStealth"), Some(9));
+    // Wisdom +1, proficiency +3 twice.
+    assert_eq!(value_of(&values, "skillPerception"), Some(7));
+    assert_eq!(value_of(&values, "passivePerception"), Some(17));
+    // Acrobatics is not proficient, so expertise in it is worth nothing.
+    assert_eq!(value_of(&values, "skillAcrobatics"), Some(3));
+    // A save has no expertise to take.
+    assert_eq!(value_of(&values, "saveDexterity"), Some(6));
+}
+
 #[test]
 fn the_passive_score_is_ten_plus_the_skill() {
     let values = rules().derive(&a_character());

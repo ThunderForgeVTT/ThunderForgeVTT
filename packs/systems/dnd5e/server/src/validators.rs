@@ -208,6 +208,18 @@ pub fn validate_proficiency_data(data: &serde_json::Value) -> Result<(), Validat
         )?;
     }
 
+    // Validate skill_expertise (if present). Same ids as the skills; whether
+    // an expert skill is also a proficient one is the rules' business, which
+    // simply ignore expertise that proficiency does not back.
+    if let Some(expertise_val) = obj.get("skill_expertise") {
+        validate_proficiency_set(
+            expertise_val,
+            "proficiency_data.skill_expertise",
+            &valid_skills,
+            "unknown skill name",
+        )?;
+    }
+
     // Validate saving_throw_proficiencies (if present)
     if let Some(saves_val) = obj.get("saving_throw_proficiencies") {
         let valid_abilities = [
@@ -330,29 +342,32 @@ pub fn validate_trait_data(data: &serde_json::Value) -> Result<(), ValidationErr
         message: "must be a JSON object".to_string(),
     })?;
 
-    // class is required
-    let _class = obj
-        .get("class")
-        .and_then(|v| v.as_str())
-        .ok_or(ValidationError {
-            field: "trait_data.class".to_string(),
-            message: "must be a string".to_string(),
-        })?;
+    // class and level are checked when present, not demanded. A monster has
+    // neither, and it still has a size, which lives in this slot and is what
+    // the board reads its footprint from: demanding a class would refuse the
+    // one field a bestiary creature needs written. The rules already derive
+    // nothing proficiency-based for a sheet without a level.
+    if let Some(class_val) = obj.get("class") {
+        if !class_val.is_string() && !class_val.is_null() {
+            return Err(ValidationError {
+                field: "trait_data.class".to_string(),
+                message: "must be a string".to_string(),
+            });
+        }
+    }
 
-    // level is required
-    let level = obj
-        .get("level")
-        .and_then(|v| v.as_i64())
-        .ok_or(ValidationError {
+    if let Some(level_val) = obj.get("level").filter(|v| !v.is_null()) {
+        let level = level_val.as_i64().ok_or(ValidationError {
             field: "trait_data.level".to_string(),
             message: "must be an integer".to_string(),
         })?;
 
-    if !(1..=20).contains(&level) {
-        return Err(ValidationError {
-            field: "trait_data.level".to_string(),
-            message: "must be between 1 and 20".to_string(),
-        });
+        if !(1..=20).contains(&level) {
+            return Err(ValidationError {
+                field: "trait_data.level".to_string(),
+                message: "must be between 1 and 20".to_string(),
+            });
+        }
     }
 
     // Validate optional fields
@@ -772,6 +787,17 @@ mod tests {
     }
 
     #[test]
+    fn proficiency_data_accepts_expertise_and_rejects_an_unknown_skill_in_it() {
+        let data = json!({
+            "skill_proficiencies": ["stealth"],
+            "skill_expertise": ["stealth"]
+        });
+        assert!(validate_proficiency_data(&data).is_ok());
+        let unknown = json!({ "skill_expertise": ["lockpicking"] });
+        assert!(validate_proficiency_data(&unknown).is_err());
+    }
+
+    #[test]
     fn proficiency_data_rejects_an_unknown_id_in_either_shape() {
         let as_list = json!({ "skill_proficiencies": ["lockpicking"] });
         assert!(validate_proficiency_data(&as_list).is_err());
@@ -795,9 +821,17 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_trait_data_missing_class() {
-        let data = json!({"level": 5});
-        assert!(validate_trait_data(&data).is_err());
+    fn a_monster_has_a_size_and_neither_class_nor_level() {
+        // What the bestiary writes: the size alone.
+        assert!(validate_trait_data(&json!({ "size": "large" })).is_ok());
+        assert!(validate_trait_data(&json!({ "level": 5 })).is_ok());
+        // Present is still checked.
+        let class = validate_trait_data(&json!({ "class": 3 })).unwrap_err();
+        assert_eq!(class.field, "trait_data.class");
+        let level = validate_trait_data(&json!({ "level": "five" })).unwrap_err();
+        assert_eq!(level.field, "trait_data.level");
+        let low = validate_trait_data(&json!({ "size": "large", "level": 0 })).unwrap_err();
+        assert_eq!(low.field, "trait_data.level");
     }
 
     #[test]
