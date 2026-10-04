@@ -131,6 +131,7 @@ pub mod vision_profiles;
 pub mod world;
 pub mod world_events;
 pub mod world_hooks;
+pub mod world_system_settings;
 
 /// Modules reach this as `crate::AppState`, which `main.rs` used to provide at
 /// its own crate root.

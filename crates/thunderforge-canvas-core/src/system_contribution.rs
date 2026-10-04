@@ -50,6 +50,13 @@ pub type ValidatorFn = fn(&serde_json::Value) -> Result<(), String>;
 /// [`SystemContribution::refine_content`].
 pub type ContentRefineFn = fn(&mut ContentEntry, &[ContentSourceLine]);
 
+/// Checks one world setting beyond what its declaration can say.
+///
+/// Receives the setting's key and the value a Game Master submitted, after
+/// the manifest's own declaration has already allowed it. A refusal is shown
+/// to that Game Master, so it is written for them.
+pub type SettingValidatorFn = fn(&str, &serde_json::Value) -> Result<(), String>;
+
 pub type RulesFn = fn(&serde_json::Value) -> Box<dyn SystemRules>;
 
 /// Everything one game system pack contributes.
@@ -82,6 +89,12 @@ pub struct SystemContribution {
     /// what the shared reader produced and the lines it came from, and may
     /// fill in [`ContentEntry::extras`].
     pub refine_content: Option<ContentRefineFn>,
+    /// A further check on a world setting (spec 067 FR-007).
+    ///
+    /// A manifest declares a setting's type, bounds and options, and for most
+    /// settings that is the whole rule. This is for the rest: a value that is
+    /// well-typed and still not one this ruleset can be played with.
+    pub world_setting: Option<SettingValidatorFn>,
 }
 
 impl SystemContribution {
@@ -99,6 +112,7 @@ impl SystemContribution {
             spell_data: None,
             rules: None,
             refine_content: None,
+            world_setting: None,
         }
     }
 }

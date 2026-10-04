@@ -56,6 +56,7 @@ pub use helpers::{
 // Phase 4.9.Z Step 5: Query extraction into separate modules
 pub mod exploration;
 pub mod queries;
+pub mod world_system_settings;
 pub use queries::{
     AbilityQuery, AbilityVocabularyQuery, ActorQuery, AdminQuery, HealthcheckQuery, InventoryQuery,
     InviteQuery, ItemQuery, LoreQuery, LoreSyncQuery, ModerationQuery, RollQuery, SceneQuery,
@@ -451,12 +452,16 @@ pub struct QueryRoot(
     // `worldStatistics(worldId)` — a world by its figures, counted where the
     // rows are so the dashboard's cost does not grow with the campaign.
     queries::WorldStatisticsQuery,
+    // Spec 067: the settings a world's game system declares, with the value
+    // the world plays by.
+    world_system_settings::WorldSystemSettingsQuery,
 );
 
 #[derive(MergedObject, Default)]
 pub struct MutationRoot(
     // Spec 045 US7: turning a scene's memory on, and resetting it.
     exploration::ExplorationMutation,
+    world_system_settings::WorldSystemSettingsMutation,
     queries::token_status::TokenDisclosureMutation,
     WorldMutation,
     UserDataMutation,

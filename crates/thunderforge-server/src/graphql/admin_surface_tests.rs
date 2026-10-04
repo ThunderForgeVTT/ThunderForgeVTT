@@ -264,6 +264,11 @@ const OPERATOR_SHAPED_BUT_NOT_ADMIN: &[&str] = &[
     // was right and the classification was wrong, which is the direction this
     // test is most useful in.
     "instanceRepositoryIntegration",
+    // Spec 067: how one world plays its game system. Scoped to the world it
+    // names — any member reads, its Game Master writes — and nothing about
+    // the instance. `world_system_settings_tests` holds both halves.
+    "worldSystemSettings",
+    "setWorldSystemSetting",
 ];
 
 /// Root fields any signed-in account may reach. Listed, not tested here: what

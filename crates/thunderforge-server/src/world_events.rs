@@ -245,6 +245,18 @@ pub const EVENT_CODE_SCENE_LEVEL_CHANGED: i32 = 33;
 /// Payload: `{"token_id": <id>, "scene_id": <id>}`.
 pub const EVENT_CODE_TOKEN_TRAVELLED: i32 = 34;
 
+/// A Game Master changed one of the settings the world's game system
+/// declares (spec 067).
+///
+/// The payload names the key and not the value. Settings are readable by
+/// every member, so the value is no secret — it is left out because the
+/// convention here is "the event says what to re-read", and a client that
+/// re-reads `worldSystemSettings` gets the declaration's verdict on the
+/// value along with it.
+///
+/// Payload: `{"key": <setting id>}`.
+pub const EVENT_CODE_WORLD_SYSTEM_SETTING_CHANGED: i32 = 35;
+
 /// Announce [`EVENT_CODE_ACTOR_ACCESS_CHANGED`] for one character.
 ///
 /// One function for the five writers — claim, bind, release, hand set, hand

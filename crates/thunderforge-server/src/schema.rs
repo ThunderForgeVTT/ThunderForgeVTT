@@ -1632,6 +1632,31 @@ diesel::table! {
 }
 
 diesel::table! {
+    world_system_setting_changes (id) {
+        id -> Int8,
+        world_id -> Uuid,
+        system_id -> Text,
+        key -> Text,
+        old_value -> Nullable<Jsonb>,
+        new_value -> Jsonb,
+        changed_by -> Nullable<Uuid>,
+        changed_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    world_system_settings (world_id, system_id, key) {
+        world_id -> Uuid,
+        system_id -> Text,
+        key -> Text,
+        value -> Jsonb,
+        updated_by -> Nullable<Uuid>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     worlds (id) {
         id -> Uuid,
         name -> Varchar,
@@ -1796,6 +1821,8 @@ diesel::joinable!(world_play_pause_triggers -> world_play_pauses (pause_id));
 diesel::joinable!(world_play_pauses -> world_play_pause_requests (request_id));
 diesel::joinable!(world_roll_records -> users (triggered_by));
 diesel::joinable!(world_roll_records -> worlds (world_id));
+diesel::joinable!(world_system_setting_changes -> worlds (world_id));
+diesel::joinable!(world_system_settings -> worlds (world_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     account_notices,
@@ -1902,5 +1929,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     world_play_pause_triggers,
     world_play_pauses,
     world_roll_records,
+    world_system_setting_changes,
+    world_system_settings,
     worlds,
 );

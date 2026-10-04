@@ -677,6 +677,11 @@ pub const GATED: &[(&str, &str)] = &[
         "removeMember",
         r#"mutation { removeMember(worldId: "{world}", userId: "{player}") }"#,
     ),
+    // --- spec 067: a world's system settings ------------------------------
+    (
+        "setWorldSystemSetting",
+        r#"mutation { setWorldSystemSetting(worldId: "{world}", key: "any", value: true) { __typename } }"#,
+    ),
 ];
 
 /// Who calls a gated field.
