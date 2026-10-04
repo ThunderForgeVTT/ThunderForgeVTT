@@ -119,6 +119,12 @@ pub fn router() -> Router<AppState> {
         // (FR-006), and the one place setup finishes (FR-002a).
         .route("/authentication/setup/settings", post(setup_settings))
         .route("/authentication/setup/complete", post(setup_complete))
+        // The ticket a first administrator with no usable password enrols
+        // with. Dead once setup completes; see the module header.
+        .route(
+            "/authentication/setup/enrolment-ticket",
+            post(setup_enrolment_ticket::setup_enrolment_ticket),
+        )
         .route(
             "/authentication/setup/oauth/{provider_key}/start",
             post(admin_setup_oauth_start),
@@ -244,6 +250,11 @@ pub(crate) mod setup_requirements;
 pub(crate) mod admin_setup;
 pub(crate) use admin_setup::*;
 
+/// The enrolment ticket for a first administrator who has no password to
+/// authorise enrolment with (one bootstrapped through a sign-in provider).
+#[path = "setup_enrolment_ticket.rs"]
+pub(crate) mod setup_enrolment_ticket;
+
 /// Spec 039 US8: what the person becoming an operator is told, and the record
 /// that they were. Its own module so `admin_setup.rs` stays under the gate.
 #[path = "operator_acknowledgement.rs"]
@@ -269,6 +280,9 @@ pub mod session_registry;
 /// seam between enrolment, verification, policy and the rest.
 pub(crate) mod two_factor;
 pub(crate) use two_factor::*;
+// The one piece of it the binary calls: the startup reset is asked for through
+// the environment, so it runs from `main` rather than from a route.
+pub use two_factor::startup_reset::{StartupReset, apply_startup_second_factor_reset};
 
 #[path = "oauth.rs"]
 pub(crate) mod oauth;
@@ -321,6 +335,12 @@ mod second_sign_in_tests;
 #[cfg(test)]
 #[path = "enrolment_at_login_tests.rs"]
 mod enrolment_at_login_tests;
+
+/// The first administrator's password is held to the rule every other
+/// account's is, by the server and not only by the wizard.
+#[cfg(test)]
+#[path = "first_admin_password_tests.rs"]
+mod first_admin_password_tests;
 
 /// Spec 041 FR-028: an instance is not set up until its first administrator
 /// holds a confirmed second factor — and what that deliberately does not do to

@@ -34,10 +34,11 @@ import {
  * and the way that shows up is **not** a refusal to finish setup: the notice
  * and prose settings are `RequiredFor(capability)`, not `RequiredAtSetup`, so
  * an operator can finish and come back. What FR-030 forbids is pretending.
- * So this walk deliberately leaves the legal prose unwritten, and asserts that
- * the review says so, that readiness reports the terms capability as
- * applicable-but-unavailable, and that `/legal/terms` shows the unwritten
- * blocks as unwritten rather than inventing text over the operator's name.
+ * So this walk writes one piece of legal prose and deliberately leaves the
+ * other two unwritten, and asserts that the review says so, that readiness
+ * does not call the optional ones a gap, and that `/legal/terms` carries the
+ * one that was written, word for word, and nothing at all for the two that
+ * were not — rather than inventing text over the operator's name.
  */
 
 test.describe("Spec 052 FR-061: a public instance is told what publishing obliges", () => {
@@ -51,6 +52,7 @@ test.describe("Spec 052 FR-061: a public instance is told what publishing oblige
     const operatorName = `The Open Table ${suffix}`;
     const operatorEmail = `operator-${suffix}@thunderforge.org`;
     const noticeEmail = `notices-${suffix}@thunderforge.org`;
+    const communityAddendum = `Table talk stays at the table (${suffix}).`;
 
     await openWizard(page);
     await createFirstAdministrator(page, {
@@ -157,15 +159,20 @@ test.describe("Spec 052 FR-061: a public instance is told what publishing oblige
       .fill(noticeEmail);
     await advanceFrom(page, "settings-copyright-notices");
 
-    // 5. The legal prose, with its own reason — and deliberately left
-    //    unwritten. FR-030: what is not answered is not served, and nothing
-    //    is composed on the operator's behalf.
+    // 5. The legal prose, with its own reason. One block is written and two
+    //    are deliberately left. FR-030: what is not answered is not served,
+    //    and nothing is composed on the operator's behalf — and what *is*
+    //    answered has to reach the page, which it did not until the terms
+    //    page started reading these.
     const proseStep = page.getByTestId("setup-step-settings-legal-prose");
     await expect(proseStep).toBeVisible({ timeout: 30_000 });
     await expect(page.getByTestId("setup-group-explainer")).toContainText(
       "Leave a field blank and that page simply is not served",
     );
-    await page.getByTestId("setup-skip-step").click();
+    await page
+      .getByTestId("setup-setting-legal.community_addendum")
+      .fill(communityAddendum);
+    await advanceFrom(page, "settings-legal-prose");
 
     // 6. Support, which completion does require, then everything optional.
     await walkTo(page, "settings-support");
@@ -289,11 +296,18 @@ test.describe("Spec 052 FR-061: a public instance is told what publishing oblige
       // substituted — no `[OPERATOR — ...]` marker survives — and the optional
       // prose it skipped produced no text at all, not a composed stand-in.
       //
-      // The skipped age statement is not looked for here because nothing
-      // renders it yet: `legal.minimum_age_statement` is declared, asked for
-      // and stored, and no surface reads it. The wizard's review step named it
-      // as unwritten above, which is the only place it is currently reported.
+      // The prose is the same two halves. What the operator wrote is on the
+      // page as they wrote it, and the age statement they skipped has no
+      // card — not a marker, not a default.
       await stranger.goto("/legal/terms");
+      await expect(
+        stranger.getByTestId("legal-operator-prose-community-addendum"),
+        "the community rules the operator wrote at setup are on the terms page",
+      ).toContainText(communityAddendum);
+      await expect(
+        stranger.getByTestId("legal-operator-prose-minimum-age-statement"),
+        "prose nobody wrote renders nothing",
+      ).toHaveCount(0);
       const terms_html = await stranger.content();
       expect(
         terms_html,

@@ -35,6 +35,14 @@ export interface LegalDocumentPageProps {
    * would make the exception the awkward one.
    */
   afterProse?: ReactNode;
+  /**
+   * Rendered between the document and `afterProse`, as cards of its own.
+   *
+   * For what an operator wrote to go with this document. It is a slot that
+   * brings its own cards, not a section list, because it may be nothing at
+   * all: an operator who wrote nothing must not leave an empty card behind.
+   */
+  operatorProse?: ReactNode;
 }
 
 export function LegalDocumentPage({
@@ -42,6 +50,7 @@ export function LegalDocumentPage({
   title,
   seo,
   afterProse,
+  operatorProse,
 }: LegalDocumentPageProps) {
   const sections = legalSections(slug);
   const intro = sections.find((s) => s.heading === null);
@@ -78,6 +87,8 @@ export function LegalDocumentPage({
               <LegalProse body={section.body} />
             </Card>
           ))}
+
+          {operatorProse}
 
           {afterProse ? (
             <Card surface="stone" className="grid gap-3 p-6">

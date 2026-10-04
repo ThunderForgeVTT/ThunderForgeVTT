@@ -159,6 +159,45 @@ audit trail makes that acceptable. What it leaves behind is an account with no
 factor — a state the product already understands — and the person enrols again
 from their own screen, with a secret only they ever see.
 
+### When the person who lost everything is the only administrator
+
+That route needs an administrator to call it. An instance with one
+administrator who has lost both the authenticator and the codes has nobody to
+ask, and before this existed the answer was the database edit this section
+opens by ruling out.
+
+Set `THUNDERFORGE_RESET_ADMIN_SECOND_FACTOR` to that administrator's username
+and restart the `app` service:
+
+```sh
+THUNDERFORGE_RESET_ADMIN_SECOND_FACTOR=alice docker compose up -d app
+```
+
+At startup the instance clears that account's factor, pending enrolment and
+recovery codes in the same transaction the route uses, writes the same
+`reset_by_operator` event — with no actor, because nobody signed in to do it —
+tells the account holder, and logs what it did at `warn`. It is the same reset,
+reached by somebody who can set the instance's environment instead of somebody
+who can sign in. Like the route, it cannot enrol and cannot issue codes: the
+administrator signs in with their password and is taken through enrolling
+again.
+
+It does nothing, and says so in the log, when the username matches no account,
+when the account is not an administrator, or when there is nothing to clear.
+An ordinary account is never reset this way — an administrator who can sign in
+uses the route for that.
+
+**Remove the variable once it has worked.** It is applied on every start for as
+long as it is set, so leaving it in place clears whatever that administrator
+enrols next the next time the instance restarts. The log line says this each
+time it acts.
+
+Anybody who can set this variable can already read the database and the
+instance secret. It hands them nothing they did not have; it makes the thing
+they could already do audited and notified.
+
+### Where the route lives
+
 The route lives in `auth::admin_router()`, which `main.rs` wraps in
 `require_admin_user` as a **layer**. A route added to that router is guarded by
 having been added to it; `admin_routes_tests` fails if an admin path is

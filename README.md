@@ -54,6 +54,7 @@ Useful afterwards:
 - `docker compose logs -f app` follows the server.
 - `docker compose down` stops the stack and keeps its data; `docker compose down -v` starts over from nothing.
 - Lost the setup link before finishing? Set `THUNDERFORGE_REGENERATE_SETUP_CODE=1`, restart the `app` service, and read the log again.
+- The only administrator lost their authenticator and their recovery codes? Set `THUNDERFORGE_RESET_ADMIN_SECOND_FACTOR=<their username>`, restart the `app` service, sign in and enrol again — then remove the variable. See [docs/SECOND_FACTOR.md](docs/SECOND_FACTOR.md).
 
 ### Developing
 

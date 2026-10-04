@@ -51,6 +51,10 @@ pub enum Capability {
     /// The instance can store and serve an uploaded file at all \u{2014} a map, a
     /// token, a portrait, a feedback attachment.
     StoreAssets,
+    /// The instance is deployed in a way that is safe to reach from another
+    /// machine. No declaration belongs to it: what it reports is about how the
+    /// process was started, not about a setting (`readiness::deployment`).
+    DeploySafely,
 }
 
 impl Capability {
@@ -63,6 +67,7 @@ impl Capability {
             Capability::SyncLore => "sync_lore",
             Capability::Feedback => "feedback",
             Capability::StoreAssets => "store_assets",
+            Capability::DeploySafely => "deploy_safely",
         }
     }
 
@@ -75,6 +80,7 @@ impl Capability {
             Capability::SyncLore => "Synchronise lore with a repository",
             Capability::Feedback => "Raise feedback on the project's repository",
             Capability::StoreAssets => "Store and serve uploaded files",
+            Capability::DeploySafely => "Be safe to reach from another machine",
         }
     }
 
@@ -91,6 +97,7 @@ impl Capability {
             Capability::SyncLore,
             Capability::Feedback,
             Capability::StoreAssets,
+            Capability::DeploySafely,
         ]
     }
 }

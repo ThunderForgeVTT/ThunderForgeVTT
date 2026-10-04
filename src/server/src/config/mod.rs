@@ -14,12 +14,39 @@ pub struct Config {
     pub secure_cookies: bool,
 }
 
+/// What `THUNDERFORGE_SECRET` falls back to when it is unset, before encoding.
+///
+/// Public by being in this file. It exists so that `cargo run` works on a
+/// laptop, and an instance still using it has session cookies and stored
+/// credentials protected by a key anybody can read here.
+const FALLBACK_SECRET_PLAINTEXT: &str =
+    "Change me to something complex, overall it should be unique and greater than 64 characters.";
+
+/// The default `compose.yml` supplies for `THUNDERFORGE_SECRET`, verbatim.
+///
+/// Just as public, and the one a real deployment is far more likely to be
+/// running with: `docker compose up` works without setting anything. A test
+/// reads `compose.yml` and fails if the two drift apart.
+const COMPOSE_DEFAULT_SECRET: &str = "dGh1bmRlcmZvcmdlIGxvY2FsIGV4cGxvcmF0aW9uIGluc3RhbmNlIG9ubHksIG5vdCBhIGRlcGxveW1lbnQgc2VjcmV0IDAxMjM0NTY3ODk=";
+
 impl Config {
+    /// Whether the secret is one this project ships, rather than one the
+    /// operator chose.
+    ///
+    /// Answers yes or no and nothing else. Readiness reports it, and readiness
+    /// never names a value — least of all this one.
+    pub fn secret_is_shipped_default(&self) -> bool {
+        let secret = self.secret.trim();
+        secret == COMPOSE_DEFAULT_SECRET
+            || secret == general_purpose::STANDARD.encode(FALLBACK_SECRET_PLAINTEXT)
+    }
+
     pub fn from_env() -> Config {
         let secret = std::env::var("THUNDERFORGE_SECRET").unwrap_or_else(|_| {
-            general_purpose::STANDARD.encode(
-                "Change me to something complex, overall it should be unique and greater than 64 characters.",
-            )
+            // Silent on purpose: this runs before logging is configured, and
+            // in every test. The readiness report is where an operator is
+            // told (`readiness::deployment`).
+            general_purpose::STANDARD.encode(FALLBACK_SECRET_PLAINTEXT)
         });
         let data_path = std::env::var("THUNDERFORGE_DATA_PATH").unwrap_or_else(|_| {
             std::env::current_dir()
@@ -131,5 +158,45 @@ impl Directories {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn config(secret: &str) -> Config {
+        Config {
+            secret: secret.to_string(),
+            data_path: String::new(),
+            secure_cookies: false,
+        }
+    }
+
+    #[test]
+    fn both_shipped_secrets_are_recognised_and_a_chosen_one_is_not() {
+        assert!(
+            config(&general_purpose::STANDARD.encode(FALLBACK_SECRET_PLAINTEXT))
+                .secret_is_shipped_default()
+        );
+        assert!(config(COMPOSE_DEFAULT_SECRET).secret_is_shipped_default());
+        assert!(
+            !config("b3BlcmF0b3ItY2hvc2VuLXNlY3JldC1vcGVyYXRvci1jaG9zZW4tc2VjcmV0")
+                .secret_is_shipped_default()
+        );
+    }
+
+    /// The constant is a copy of a line in another file, and a copy drifts.
+    #[test]
+    fn the_compose_default_is_the_one_compose_ships() {
+        let compose = std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../compose.yml"),
+        )
+        .expect("compose.yml is at the repository root");
+        assert!(
+            compose.contains(&format!("THUNDERFORGE_SECRET:-{COMPOSE_DEFAULT_SECRET}}}")),
+            "compose.yml's default secret changed and `COMPOSE_DEFAULT_SECRET` did not, so \
+             readiness no longer recognises an instance running on the shipped one"
+        );
     }
 }

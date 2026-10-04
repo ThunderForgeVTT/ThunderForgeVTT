@@ -3,6 +3,9 @@ import { useReducer, useState } from "react";
 import {
   beginTwoFactorEnrolment,
   confirmTwoFactorEnrolment,
+  requestSetupEnrolmentTicket,
+  TwoFactorRequestError,
+  type TwoFactorEnrolmentCredentials,
 } from "@/api/twoFactor";
 import { Button } from "@/components/ui/button/Button";
 import { Input } from "@/components/ui/input";
@@ -29,28 +32,36 @@ import {
  *
  * **It needed no new prop.** The props it already exposes (`onAbandon`,
  * `acknowledgeLabel`, `acknowledgedNotice`, `isBusy`) covered every difference
- * this entrance has. `@/api/twoFactor`'s `TwoFactorEnrolmentCredentials`
- * likewise already names first-run setup as a user of its
- * `{ username, password }` shape, so no API change was needed either.
+ * this entrance has, and `@/api/twoFactor`'s `TwoFactorEnrolmentCredentials`
+ * already had both shapes this step presents.
  *
- * # The password, and the OAuth hole
+ * # The password, and the administrator who has none
  *
  * `setup/start` and `setup/confirm` authorise with the account password, which
- * the account step hands over for the length of one pass. An administrator
- * bootstrapped through OAuth has no password to hand over and no login
- * challenge either — there is no third authorisation shape, and inventing one
- * here would be designing spec 041's contract from inside 040, which
- * `contracts/setup.md` rule 4 explicitly forbids.
+ * the account step hands over for the length of one pass, or with an enrolment
+ * ticket. An administrator bootstrapped through a sign-in provider has no
+ * password to hand over, and for a long time had no ticket either: this step
+ * told them to "sign in once" to enrol, and `/login` redirects to `/setup`
+ * while setup is open. Setup needed the factor and the factor needed setup to
+ * be over.
  *
- * What this step does about that is say so: it explains that the second factor
- * is enrolled at the first sign-in instead (041 FR-019's entrance), rather
- * than pretending to offer a flow it cannot start. Tried and rejected:
- * re-prompting for a password on this step, which for an OAuth account is a
- * password that does not exist.
+ * So when there is no password in hand, this step asks the server for a
+ * ticket (`requestSetupEnrolmentTicket`). The server gives one for the
+ * bootstrap code and this browser's session together, and only while setup is
+ * open — it is the ticket a sign-in mints, from a second place, and not a
+ * third way to authorise enrolment. The ticket is kept for the pass: `start`
+ * does not spend it, `confirm` does.
+ *
+ * The password form stays as the other way through. A local administrator who
+ * reopened setup in a browser that holds no session — a different machine, or
+ * cookies cleared — is refused a ticket, and still has the password they
+ * chose.
  */
 export interface SecondFactorStepProps {
   /** The account the account step created, when it created one locally. */
   credentials: { username: string; password: string } | null;
+  /** The bootstrap code, which a ticket is asked for with. */
+  adminCode: string;
   /** Already confirmed — a resumed pass, or an enrolment done elsewhere. */
   confirmed: boolean;
   onConfirmed: () => void;
@@ -58,6 +69,7 @@ export interface SecondFactorStepProps {
 
 export function SecondFactorStep({
   credentials,
+  adminCode,
   confirmed,
   onConfirmed,
 }: SecondFactorStepProps) {
@@ -67,6 +79,10 @@ export function SecondFactorStep({
   );
   const [code, setCode] = useState("");
   const [reentered, setReentered] = useState({ username: "", password: "" });
+  // What `start` was authorised with, kept so `confirm` presents the same
+  // proof. A ticket is minted once per pass and spent by the confirmation.
+  const [authorisedWith, setAuthorisedWith] =
+    useState<TwoFactorEnrolmentCredentials | null>(null);
 
   if (confirmed) {
     return (
@@ -83,32 +99,38 @@ export function SecondFactorStep({
   }
 
   // The account step hands its credentials over in memory, and a reload or a
-  // resumed setup loses them. The administrator still exists and still has
-  // the password they chose, so it is asked for again here rather than
-  // leaving them at a step that cannot proceed.
-  const using =
+  // resumed setup loses them. A password typed again here is used if there is
+  // one; otherwise the server is asked for a ticket, which is the only way
+  // through for an administrator who never had a password.
+  const withPassword =
     credentials ??
     (reentered.username.trim() && reentered.password
       ? { username: reentered.username.trim(), password: reentered.password }
       : null);
 
   const onBegin = async () => {
-    if (!using) {
-      return;
-    }
     dispatch({ type: "start" });
     setCode("");
+    setAuthorisedWith(null);
 
     try {
+      const using =
+        withPassword ?? (await requestSetupEnrolmentTicket(adminCode.trim()));
       const enrolment = await beginTwoFactorEnrolment(using);
+      setAuthorisedWith(using);
       dispatch({ type: "started", enrolment });
     } catch (error) {
       dispatch({
         type: "startFailed",
         message:
-          error instanceof Error
-            ? error.message
-            : "Could not start two-factor setup.",
+          // No session in this browser, so no ticket. Say what to do about
+          // it rather than repeating the server's description of the cause.
+          error instanceof TwoFactorRequestError &&
+          error.status === "unauthenticated"
+            ? "This browser is not signed in as the administrator. Enter the administrator's username and password below, or start setup again from the browser you created the administrator in."
+            : error instanceof Error
+              ? error.message
+              : "Could not start two-factor setup.",
       });
     }
   };
@@ -116,6 +138,7 @@ export function SecondFactorStep({
   const onConfirm = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    const using = authorisedWith;
     if (state.step !== "provisioning" || !using) {
       return;
     }
@@ -168,8 +191,10 @@ export function SecondFactorStep({
               className="grid max-w-sm gap-3"
             >
               <p className="text-sm text-muted-foreground">
-                Setup was reopened, so confirm the administrator you created:
-                enrolment is authorised with that account&rsquo;s password.
+                Setup was reopened. If this browser is still signed in as the
+                administrator you created, you can go straight on. If it is not,
+                confirm that administrator here: enrolment is then authorised
+                with the account&rsquo;s password.
               </p>
               <label className="grid gap-1 text-sm font-medium">
                 Administrator username
@@ -196,8 +221,9 @@ export function SecondFactorStep({
               </label>
               <p className="text-sm text-muted-foreground">
                 An administrator created through a sign-in provider has no
-                password here. Sign in once through that provider and the
-                instance will take you through enrolling a second factor.
+                password here. Leave both fields empty and continue: this
+                browser is already signed in as that administrator, and that
+                together with the setup code is what authorises enrolment.
               </p>
             </div>
           )}
@@ -207,7 +233,7 @@ export function SecondFactorStep({
               type="button"
               variant="primary"
               icon="shield"
-              disabled={state.step === "starting" || !using}
+              disabled={state.step === "starting"}
               onClick={() => void onBegin()}
             >
               {state.step === "starting"

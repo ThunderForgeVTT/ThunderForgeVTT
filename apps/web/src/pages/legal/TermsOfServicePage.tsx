@@ -1,4 +1,5 @@
 import { LegalEnquiryForm } from "@/components/legal/LegalEnquiryForm";
+import { OperatorTermsProse } from "@/components/legal/OperatorTermsProse";
 import { LegalDocumentPage } from "@/pages/legal/LegalDocumentPage";
 import type { SeoConfig } from "@/types/seo";
 
@@ -16,6 +17,7 @@ export default function TermsOfServicePage() {
       slug="terms-of-service"
       title="Terms of Service"
       seo={termsOfServiceSeo}
+      operatorProse={<OperatorTermsProse />}
       afterProse={
         <LegalEnquiryForm
           kind="TERMS"

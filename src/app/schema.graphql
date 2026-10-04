@@ -1567,7 +1567,7 @@ type AppQueryRoot {
 	Unlike the four anonymous share reads above, this one is **not** rate
 	limited, and the difference is the reason those are: a share code is
 	unguessable only while the number of guesses is bounded, and this query
-	takes no argument to guess. It returns the same six values to everybody,
+	takes no argument to guess. It returns the same nine values to everybody,
 	which is exactly what the published legal pages already show.
 	"""
 	publishedOperatorValues: PublishedOperatorValues!
@@ -6003,14 +6003,14 @@ type PlayPauseSpan {
 }
 
 """
-The six operator values the published legal pages render.
+The operator values the published legal pages render.
 
 **Deliberately unauthenticated**, per spec 039's FR-056 and
 `contracts/legal-rendering.md` rule 4: somebody who needs to serve a
 copyright notice on this instance has no account here, and a notice contact
 that can only be read from inside is not a notice contact.
 
-Six values and nothing else. The type is a closed struct rather than a
+Nine values and nothing else. The type is a closed struct rather than a
 lookup by key, so "expose one more setting" is a code change with a
 reviewer, not a string a caller supplies. The test at the bottom of this
 module asserts the field list against `contracts/legal-rendering.md`'s
@@ -6028,6 +6028,9 @@ type PublishedOperatorValues {
 	noticeContactName: String
 	noticeContactEmail: String
 	noticeContactPostalAddress: String
+	legalTermsChangeNotice: String
+	legalCommunityAddendum: String
+	legalMinimumAgeStatement: String
 }
 
 """

@@ -198,6 +198,13 @@ impl EnrolmentAuthorisationError {
 /// with the password alone over `/2fa/setup/start`, so nothing is widened —
 /// but it is not narrowed either, and closing it is FR-012's and US3's work,
 /// not this module's.
+///
+/// **The second place a ticket is minted.** First-run setup mints the same
+/// row for an administrator who has no password to present
+/// (`setup_enrolment_ticket`), on the bootstrap code and that account's own
+/// session together, and only while setup is open. Nothing here changed for
+/// it: the ticket is spent the same way and fenced the same way, and this
+/// function still knows two shapes and refuses everything else.
 pub(crate) async fn authorise_enrolment(
     state: &AppState,
     username: Option<&str>,

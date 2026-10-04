@@ -85,6 +85,14 @@ services:
       # Plain http on localhost cannot carry a Secure cookie. Set it to true
       # once the instance sits behind TLS.
       THUNDERFORGE_SECURE_COOKIES: ${THUNDERFORGE_SECURE_COOKIES:-false}
+      # The way back in for a sole administrator who has lost both their
+      # authenticator and their recovery codes: set it to their username for
+      # one start, then unset it. Empty, which is the default, does nothing.
+      # See docs/SECOND_FACTOR.md.
+      THUNDERFORGE_RESET_ADMIN_SECOND_FACTOR: ${THUNDERFORGE_RESET_ADMIN_SECOND_FACTOR:-}
+      # Reissue the first-run setup link into the log when the first one was
+      # lost before setup finished. Set it for one start, then unset it.
+      THUNDERFORGE_REGENERATE_SETUP_CODE: ${THUNDERFORGE_REGENERATE_SETUP_CODE:-}
       # Where uploads go. These are also declared settings since spec 064, and
       # the environment wins over a stored answer — which is why the wizard
       # will show them as fixed by this deployment rather than asking.

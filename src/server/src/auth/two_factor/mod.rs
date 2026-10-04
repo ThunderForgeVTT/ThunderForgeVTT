@@ -18,6 +18,7 @@
 //! - [`disable`] — the deliberate way **off** (FR-012, FR-014).
 //! - [`recovery`] — the codes for when the authenticator is gone (US2).
 //! - [`operator_reset`] — when the codes are gone too (FR-024, FR-025).
+//! - [`startup_reset`] — and when the only operator is the one who lost them.
 //! - [`throttle`] — how many wrong answers an account gets (FR-017).
 //! - [`events`] — what happened to a factor, and who did it (FR-015).
 //!
@@ -57,6 +58,10 @@ pub(crate) use requirement::*;
 /// has lost both their authenticator and their recovery codes. Admin-only, and
 /// recorded with the operator's own id against it.
 pub(crate) mod operator_reset;
+
+/// The same reset for the one person no operator can help: the instance's only
+/// administrator. Asked for through the environment, at startup.
+pub(crate) mod startup_reset;
 
 /// Spec 041 FR-017: repeated incorrect codes are limited **per account**, not
 /// merely per address. See the module header for why the difference matters.

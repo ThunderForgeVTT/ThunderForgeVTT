@@ -66,7 +66,10 @@ export interface Substituted {
 4. **Values reach the client through an unauthenticated query**, because spec
    039's FR-056 requires the notice contact be discoverable by anyone who
    needs to file a notice, without an account. Only the six declared tokens
-   are exposed by it; nothing else about the instance's configuration is.
+   are exposed by it, and the three pieces of operator prose the terms page
+   renders beside the document (`legal.terms_change_notice`,
+   `legal.community_addendum`, `legal.minimum_age_statement`); nothing else
+   about the instance's configuration is.
 5. **The DMCA agent designation reads the same settings** instead of JSX
    literals. Name, postal address and electronic contact become
    `notice.contact_name`, `notice.contact_postal_address`,

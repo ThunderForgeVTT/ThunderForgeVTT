@@ -89,11 +89,19 @@ pub struct ReadinessReport {
     pub source_flips: Vec<SourceFlip>,
 }
 
+/// How the process was started, as distinct from how the instance is
+/// configured: the shipped secret, and cookies a browser will send in clear.
+pub mod deployment;
+
 /// The whole report, for one request.
 pub async fn report(state: &AppState) -> Result<ReadinessReport, String> {
     let settings = resolve_all(state).await?;
     let sync_problems = registration_from_env().err().unwrap_or_default();
-    let capabilities = assess(&settings, &sync_problems);
+    let mut capabilities = assess(&settings, &sync_problems);
+    deployment::apply(
+        &mut capabilities,
+        &deployment::DeploymentFacts::of(&state.config),
+    );
     let source_flips = flips_since_last_boot(state, &settings).await;
 
     Ok(ReadinessReport {

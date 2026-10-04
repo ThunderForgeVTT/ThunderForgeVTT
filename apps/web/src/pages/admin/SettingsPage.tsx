@@ -26,6 +26,7 @@ import {
 } from "@/api/instanceAccess";
 import { AccessPanel } from "./components/AccessPanel";
 import { AdminSectionShell } from "./components/AdminSectionShell";
+import { AfterSetupCard } from "./components/AfterSetupCard";
 import { DiskUsageChart } from "./components/DiskUsageChart";
 import { GitHubAppsPanel } from "./components/GitHubAppsPanel";
 import { InstanceSettingsPanel } from "./components/InstanceSettingsPanel";
@@ -325,6 +326,8 @@ export default function SettingsPage({
               when it reported no navigation — every link led to the same
               screen, so nothing appeared to happen. */}
           <div className="grid gap-5">
+            {/* Renders nothing except on the landing setup navigates to. */}
+            {section === "overview" ? <AfterSetupCard /> : null}
             {section === "overview" ? (
               <section className="grid gap-3" id="overview">
                 <div className="flex items-start justify-between gap-4">

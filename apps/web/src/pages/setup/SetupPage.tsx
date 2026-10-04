@@ -72,10 +72,13 @@ import { cn } from "@/lib/utils";
  *
  * The one thing that cannot be recovered from storage is the password of a
  * locally created administrator, which the second-factor step needs to
- * authorise enrolment. A reload between creating the account and enrolling
- * therefore means signing in and enrolling there instead — which is spec 041
- * FR-019's entrance, and is the same place an OAuth-bootstrapped administrator
- * ends up. Storing the password to avoid that was considered and rejected.
+ * authorise enrolment. Storing it to survive a reload was considered and
+ * rejected. What a reload leaves instead is the session the account step
+ * issued, and the second-factor step asks the server for an enrolment ticket
+ * on that session and the bootstrap code together — the same way through an
+ * administrator bootstrapped through a sign-in provider takes, who never had
+ * a password to lose. "Sign in and enrol there" used to be the answer for
+ * both and was a dead end: `/login` redirects here while setup is open.
  *
  * # FR-009 in one sentence
  *
@@ -591,6 +594,7 @@ export default function SetupPage({
             {current?.kind === "second-factor" ? (
               <SecondFactorStep
                 credentials={credentials}
+                adminCode={adminCode}
                 confirmed={secondFactorConfirmed}
                 onConfirmed={() => {
                   setSecondFactorConfirmed(true);

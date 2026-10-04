@@ -41,7 +41,11 @@ const API_BASE = "/api";
 export type TwoFactorEnrolmentCredentials =
   /** Account settings and first-run setup. */
   | { username: string; password: string }
-  /** A sign-in that requires enrolment: the challenge it was just handed. */
+  /**
+   * A sign-in that requires enrolment: the challenge it was just handed. Also
+   * first-run setup for an administrator with no password to give, which asks
+   * for the same ticket through `requestSetupEnrolmentTicket`.
+   */
   | { challengeId: string };
 
 /**
@@ -154,6 +158,51 @@ function normalizeQr(qr: SetupStartPayload["qr"]): TwoFactorQrMatrix | null {
   }
 
   return { size: qr.size, modules: rows };
+}
+
+/**
+ * Ask for an enrolment ticket for the administrator first-run setup created.
+ *
+ * `setup/start` and `setup/confirm` take a password or a ticket and nothing
+ * else. An administrator bootstrapped through a sign-in provider has no
+ * password anybody knows, and the only other place a ticket is minted is a
+ * sign-in — which redirects back to setup for as long as setup is open. This
+ * is the way out of that circle.
+ *
+ * The server hands the ticket over only for the bootstrap code *and* this
+ * browser's session together, and only while setup is open, so this is not "a
+ * session may enrol": on a finished instance the route answers
+ * `setup_complete` to everybody. The result is the `{ challengeId }` shape the
+ * two calls below already take.
+ */
+export async function requestSetupEnrolmentTicket(
+  adminCode: string,
+): Promise<TwoFactorEnrolmentCredentials> {
+  const response = await fetch(
+    `${API_BASE}/authentication/setup/enrolment-ticket`,
+    {
+      method: "POST",
+      credentials: "same-origin",
+      headers: withCsrf({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ admin_code: adminCode }),
+    },
+  );
+
+  const payload = await readJson<{
+    status?: string;
+    message?: string;
+    login_two_factor_challenge_id?: string | null;
+  }>(response);
+
+  const challengeId = payload?.login_two_factor_challenge_id ?? null;
+  if (!response.ok || !challengeId) {
+    throw new TwoFactorRequestError(
+      payload?.status ?? "error",
+      payload?.message || "Could not start two-factor setup.",
+    );
+  }
+
+  return { challengeId };
 }
 
 /**

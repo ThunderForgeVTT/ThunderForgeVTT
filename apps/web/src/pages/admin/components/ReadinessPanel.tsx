@@ -67,6 +67,10 @@ interface GapDestination {
   label: string;
 }
 
+function isDeploymentGap(gap: ReadinessGap): boolean {
+  return gap.settingKey.startsWith("deployment.");
+}
+
 function destinationFor(
   gap: ReadinessGap,
   setting: ResolvedSetting | undefined,
@@ -74,6 +78,12 @@ function destinationFor(
   // FR-009. No link to a control that is not there — a dead end dressed as a
   // call to action is worse than no call to action.
   if (setting && !setting.editable) {
+    return null;
+  }
+  // How the process was started — its signing secret, whether its cookies
+  // are marked secure. These are not settings and no screen writes them; the
+  // gap names the variable, and the answer is to set it and restart.
+  if (isDeploymentGap(gap)) {
     return null;
   }
   const group = setting ? groupOf(asRequiredSetting(setting)) : null;
@@ -165,7 +175,9 @@ function CapabilityCard({
                   >
                     {setting?.fixedBy
                       ? `Fixed by ${setting.fixedBy}. Change it where that variable is set — this instance cannot.`
-                      : "Not set from this screen. It is written through another surface."}
+                      : isDeploymentGap(gap)
+                        ? "Set where this instance is started — its environment or compose file — and restart it. No screen here can change it."
+                        : "Not set from this screen. It is written through another surface."}
                   </p>
                 )}
               </li>

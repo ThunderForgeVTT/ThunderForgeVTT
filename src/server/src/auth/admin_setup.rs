@@ -479,10 +479,6 @@ pub(crate) async fn admin_setup_basic(
     State(state): State<AppState>,
     Json(request): Json<AdminSetupBasicRequest>,
 ) -> (StatusCode, Json<OAuthResponse>) {
-    if let Err(resp) = ensure_admin_setup_code_valid(&state, &request.admin_code).await {
-        return resp;
-    }
-
     let username = request.username.trim().to_string();
     let email = request.email.trim().to_lowercase();
     let operator_version = request
@@ -490,12 +486,13 @@ pub(crate) async fn admin_setup_basic(
         .terms_version_id
         .trim()
         .to_string();
-    if username.is_empty() || email.is_empty() || request.password.is_empty() {
-        return error_response(
-            StatusCode::BAD_REQUEST,
-            "invalid_request",
-            "Username, email, and password are required",
-        );
+    // The rule every other account is held to, and the wizard only stated it.
+    // Before the code: it reads no state, so it discloses nothing.
+    if let Err(message) = validate_registration_input(&username, &email, &request.password) {
+        return error_response(StatusCode::BAD_REQUEST, "invalid_request", &message);
+    }
+    if let Err(resp) = ensure_admin_setup_code_valid(&state, &request.admin_code).await {
+        return resp;
     }
 
     let password_hash = match hash_password(&request.password) {

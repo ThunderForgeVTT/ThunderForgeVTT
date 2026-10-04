@@ -43,6 +43,9 @@ const QUERY = `
       noticeContactName
       noticeContactEmail
       noticeContactPostalAddress
+      legalTermsChangeNotice
+      legalCommunityAddendum
+      legalMinimumAgeStatement
     }
   }
 `;
@@ -55,12 +58,41 @@ interface PublishedOperatorValuesData {
     noticeContactName: string | null;
     noticeContactEmail: string | null;
     noticeContactPostalAddress: string | null;
+    legalTermsChangeNotice: string | null;
+    legalCommunityAddendum: string | null;
+    legalMinimumAgeStatement: string | null;
   } | null;
 }
 
-const NONE: OperatorValues = {};
+/**
+ * The prose an operator wrote for their own terms.
+ *
+ * Kept apart from `OperatorValues` on purpose. Those are *tokens*: each one
+ * has a place in a shipped document and a marker to show while unset. These
+ * have neither — they are whole paragraphs, they belong to no `{{token}}`, and
+ * an unwritten one renders nothing at all rather than a marker. Folding them
+ * into the token set would have given each a marker it must never show.
+ */
+export interface OperatorProse {
+  termsChangeNotice: string;
+  communityAddendum: string;
+  minimumAgeStatement: string;
+}
 
-let inFlight: Promise<OperatorValues> | null = null;
+interface Published {
+  values: OperatorValues;
+  prose: OperatorProse;
+}
+
+const NONE: OperatorValues = {};
+const NO_PROSE: OperatorProse = {
+  termsChangeNotice: "",
+  communityAddendum: "",
+  minimumAgeStatement: "",
+};
+const NOTHING: Published = { values: NONE, prose: NO_PROSE };
+
+let inFlight: Promise<Published> | null = null;
 
 /**
  * Fetch the values, resolving to `{}` for any failure.
@@ -71,6 +103,15 @@ let inFlight: Promise<OperatorValues> | null = null;
  * far smaller problem than re-querying on every card.
  */
 export function fetchPublishedOperatorValues(): Promise<OperatorValues> {
+  return fetchPublished().then((published) => published.values);
+}
+
+/** The operator's own prose, from the same single request. */
+export function fetchPublishedOperatorProse(): Promise<OperatorProse> {
+  return fetchPublished().then((published) => published.prose);
+}
+
+function fetchPublished(): Promise<Published> {
   // `/api/graphql/public`, not `/api/graphql`. The default endpoint is wrapped
   // in `require_authenticated_user`, so this query — whose entire reason for
   // existing is that the reader has no account — came back 401 and the legal
@@ -87,9 +128,9 @@ export function fetchPublishedOperatorValues(): Promise<OperatorValues> {
     .then((data) => {
       const v = data.publishedOperatorValues;
       if (!v) {
-        return NONE;
+        return NOTHING;
       }
-      return {
+      const values = {
         "operator.name": v.operatorName,
         "operator.contact_email": v.operatorContactEmail,
         "operator.jurisdiction": v.operatorJurisdiction,
@@ -97,8 +138,16 @@ export function fetchPublishedOperatorValues(): Promise<OperatorValues> {
         "notice.contact_email": v.noticeContactEmail,
         "notice.contact_postal_address": v.noticeContactPostalAddress,
       } satisfies OperatorValues;
+      return {
+        values,
+        prose: {
+          termsChangeNotice: (v.legalTermsChangeNotice ?? "").trim(),
+          communityAddendum: (v.legalCommunityAddendum ?? "").trim(),
+          minimumAgeStatement: (v.legalMinimumAgeStatement ?? "").trim(),
+        },
+      };
     })
-    .catch(() => NONE);
+    .catch(() => NOTHING);
   return inFlight;
 }
 
@@ -131,4 +180,28 @@ export function usePublishedOperatorValues(): OperatorValues {
   }, []);
 
   return values;
+}
+
+/**
+ * The operator's own prose, starting empty.
+ *
+ * Empty is also what a failure and an operator who wrote nothing resolve to,
+ * and all three render the same way: nothing.
+ */
+export function usePublishedOperatorProse(): OperatorProse {
+  const [prose, setProse] = useState<OperatorProse>(NO_PROSE);
+
+  useEffect(() => {
+    let isActive = true;
+    void fetchPublishedOperatorProse().then((next) => {
+      if (isActive) {
+        setProse(next);
+      }
+    });
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  return prose;
 }

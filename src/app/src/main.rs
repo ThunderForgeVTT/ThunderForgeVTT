@@ -544,6 +544,10 @@ async fn run() {
     thunderforge_server::auth::ensure_admin_bootstrap_code(&app_state)
         .await
         .expect("Failed to initialize bootstrap admin setup state");
+    // The way back in for a sole administrator who has lost their second
+    // factor and their recovery codes. A no-op unless the operator asked for
+    // it through the environment, and never fatal.
+    thunderforge_server::auth::apply_startup_second_factor_reset(&app_state).await;
     thunderforge_server::admin::ensure_admin_defaults(&app_state)
         .await
         .expect("Failed to initialize admin configuration state");

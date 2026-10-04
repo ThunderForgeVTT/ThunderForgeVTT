@@ -37,14 +37,14 @@ pub fn caller_id(ctx: &Context<'_>) -> String {
         .unwrap_or_else(|| "unknown".to_string())
 }
 
-/// The six operator values the published legal pages render.
+/// The operator values the published legal pages render.
 ///
 /// **Deliberately unauthenticated**, per spec 039's FR-056 and
 /// `contracts/legal-rendering.md` rule 4: somebody who needs to serve a
 /// copyright notice on this instance has no account here, and a notice contact
 /// that can only be read from inside is not a notice contact.
 ///
-/// Six values and nothing else. The type is a closed struct rather than a
+/// Nine values and nothing else. The type is a closed struct rather than a
 /// lookup by key, so "expose one more setting" is a code change with a
 /// reviewer, not a string a caller supplies. The test at the bottom of this
 /// module asserts the field list against `contracts/legal-rendering.md`'s
@@ -62,19 +62,30 @@ pub struct PublishedOperatorValues {
     pub notice_contact_name: Option<String>,
     pub notice_contact_email: Option<String>,
     pub notice_contact_postal_address: Option<String>,
+    // The three pieces of prose an operator writes for their own terms. They
+    // were collected at setup and published nowhere: an operator filled them
+    // in and the terms page went on showing none of it. Plain comments, not
+    // doc comments, because a doc comment here becomes a description in the
+    // committed SDL.
+    pub legal_terms_change_notice: Option<String>,
+    pub legal_community_addendum: Option<String>,
+    pub legal_minimum_age_statement: Option<String>,
 }
 
 /// The settings keys, in the order the fields above declare them.
 ///
 /// One array read by both the resolver and its test, so the query cannot come
 /// to expose a key the contract does not list without the test noticing.
-const PUBLISHED_KEYS: [&str; 6] = [
+const PUBLISHED_KEYS: [&str; 9] = [
     "operator.name",
     "operator.contact_email",
     "operator.jurisdiction",
     "notice.contact_name",
     "notice.contact_email",
     "notice.contact_postal_address",
+    "legal.terms_change_notice",
+    "legal.community_addendum",
+    "legal.minimum_age_statement",
 ];
 
 #[derive(Default)]
@@ -88,7 +99,7 @@ impl PublishedOperatorValuesQuery {
     /// Unlike the four anonymous share reads above, this one is **not** rate
     /// limited, and the difference is the reason those are: a share code is
     /// unguessable only while the number of guesses is bounded, and this query
-    /// takes no argument to guess. It returns the same six values to everybody,
+    /// takes no argument to guess. It returns the same nine values to everybody,
     /// which is exactly what the published legal pages already show.
     async fn published_operator_values(
         &self,
@@ -108,6 +119,9 @@ impl PublishedOperatorValuesQuery {
             notice_contact_name: value(PUBLISHED_KEYS[3]),
             notice_contact_email: value(PUBLISHED_KEYS[4]),
             notice_contact_postal_address: value(PUBLISHED_KEYS[5]),
+            legal_terms_change_notice: value(PUBLISHED_KEYS[6]),
+            legal_community_addendum: value(PUBLISHED_KEYS[7]),
+            legal_minimum_age_statement: value(PUBLISHED_KEYS[8]),
         })
     }
 }
@@ -117,7 +131,8 @@ mod published_operator_values_tests {
     use super::*;
 
     /// Every key this query reads is declared, is not secret, and is one of the
-    /// six `contracts/legal-rendering.md` names.
+    /// six `contracts/legal-rendering.md` names or the three pieces of legal
+    /// prose the terms page renders beside them.
     ///
     /// The secrecy assertion is the one that matters: this resolver answers
     /// anybody at all, and a declaration marked secret reaching it would put an
@@ -125,7 +140,7 @@ mod published_operator_values_tests {
     /// against the registry rather than against the six names, so it stays true
     /// if a declaration's `secret` flag is ever changed.
     #[test]
-    fn only_the_six_declared_operator_values_are_published() {
+    fn only_the_declared_operator_values_are_published() {
         for key in PUBLISHED_KEYS {
             let d = crate::settings::registry::declaration(key)
                 .unwrap_or_else(|| panic!("`{key}` is not a declared setting"));
@@ -137,14 +152,14 @@ mod published_operator_values_tests {
     }
 
     /// The query is registered under the name the client uses, and the type it
-    /// answers with carries **exactly** the six fields — no more.
+    /// answers with carries **exactly** the nine fields — no more.
     ///
     /// Read out of the real SDL rather than counted off the struct: a test that
     /// counted a literal I typed here would agree with itself forever. A
-    /// seventh field would be a seventh value published to anybody with the
+    /// tenth field would be a tenth value published to anybody with the
     /// URL, which is the whole risk of an unauthenticated query.
     #[test]
-    fn the_published_type_carries_the_six_values_and_nothing_else() {
+    fn the_published_type_carries_the_nine_values_and_nothing_else() {
         let schema = async_graphql::Schema::build(
             crate::graphql::QueryRoot::default(),
             crate::graphql::MutationRoot::default(),
@@ -180,9 +195,13 @@ mod published_operator_values_tests {
                 "noticeContactName: String",
                 "noticeContactEmail: String",
                 "noticeContactPostalAddress: String",
+                "legalTermsChangeNotice: String",
+                "legalCommunityAddendum: String",
+                "legalMinimumAgeStatement: String",
             ],
             "the unauthenticated operator query publishes something other than \
-             the six values `contracts/legal-rendering.md` declares"
+             the six values `contracts/legal-rendering.md` declares and the \
+             three pieces of operator prose the terms page renders"
         );
     }
 }

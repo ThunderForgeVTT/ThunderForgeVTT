@@ -239,6 +239,65 @@ test.describe("Spec 040 US1: from an empty database to a contactable instance", 
     // what this run would otherwise keep passing through.
     await expect(page).toHaveURL(/\/admin(\?|$)/);
 
+    // The landing says what comes next. Setup used to end on a dashboard for
+    // an instance with one account and nothing naming how a second person
+    // gets in; the card names it, in the terms of the access policy this
+    // instance has, and links to where invitations are issued.
+    const afterSetup = page.getByTestId("after-setup-card");
+    await expect(afterSetup).toBeVisible({ timeout: 30_000 });
+    await expect(afterSetup).toContainText("invite your players");
+    await expect(page.getByTestId("after-setup-invite-link")).toHaveAttribute(
+      "href",
+      "/admin/access",
+    );
+    // Dismissing it is permanent for this landing: the parameter that showed
+    // it is gone from the address, so a reload does not bring it back.
+    await page.getByTestId("after-setup-dismiss").click();
+    await expect(afterSetup).toHaveCount(0);
+    await expect(page).not.toHaveURL(/bootstrap=complete/);
+    await expect(page).toHaveURL(/\/admin(\?|$)/);
+
+    // The enrolment ticket setup can hand an administrator who has no
+    // password is a setup-time thing only. This browser is signed in as an
+    // administrator and still holds the code, which is the most anybody could
+    // ever present — and on a finished instance it is refused, because the
+    // code stopped being valid when setup completed. Without this the route
+    // would be "a session may enrol a second factor", which it must not be.
+    const lateTicket = await page.evaluate(async (adminCode) => {
+      const csrf =
+        document.cookie
+          .split("; ")
+          .find((cookie) => cookie.startsWith("csrf_token="))
+          ?.slice("csrf_token=".length) ?? "";
+      const response = await fetch(
+        "/api/authentication/setup/enrolment-ticket",
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "Content-Type": "application/json",
+            "x-csrf-token": decodeURIComponent(csrf),
+          },
+          body: JSON.stringify({ admin_code: adminCode }),
+        },
+      );
+      const body = (await response.json().catch(() => null)) as {
+        status?: string;
+        login_two_factor_challenge_id?: string | null;
+      } | null;
+      return {
+        http: response.status,
+        status: body?.status ?? null,
+        ticket: body?.login_two_factor_challenge_id ?? null,
+      };
+    }, code);
+    expect(
+      lateTicket.ticket,
+      "no enrolment ticket is minted once setup is complete",
+    ).toBeNull();
+    expect(lateTicket.http).toBe(409);
+    expect(lateTicket.status).toBe("setup_complete");
+
     // Spec 039 FR-043: the acknowledgement is on record — who, and which
     // version — in the same table a sharing agreement is, and of the words
     // this build ships.
