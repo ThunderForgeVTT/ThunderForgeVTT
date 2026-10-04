@@ -325,7 +325,12 @@
     {
       "name": "combat",
       "summary": "Combat, dice and checks (specs/014-dice-rolling-engine, specs/046-a-fight-that-resolves, specs/056-placing-and-reaching-things-on-a-map)",
-      "own": ["combat-", "dice-roll.spec.ts", "roll-check.spec.ts"],
+      "own": [
+        "combat-",
+        "dice-roll.spec.ts",
+        "dnd5e-sheet.spec.ts",
+        "roll-check.spec.ts"
+      ],
       "neighbours": [
         {
           "spec": "token-attributes.spec.ts",

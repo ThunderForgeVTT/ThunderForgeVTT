@@ -261,7 +261,11 @@ fn every_shipped_pack_either_declares_usable_checks_or_none_at_all() {
 #[tokio::test]
 async fn the_5e_checks_bind_only_to_values_that_system_actually_publishes() {
     let checks = checks_for_system(&packs(), "dnd5e");
-    assert_eq!(checks.len(), 24, "six abilities and eighteen skills");
+    assert_eq!(
+        checks.len(),
+        30,
+        "six abilities, six saving throws and eighteen skills"
+    );
 
     let slots = ActorSlots {
         ability_data: Some(serde_json::json!({

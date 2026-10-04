@@ -200,37 +200,16 @@ pub fn validate_proficiency_data(data: &serde_json::Value) -> Result<(), Validat
 
     // Validate skill_proficiencies (if present)
     if let Some(skills_val) = obj.get("skill_proficiencies") {
-        let skills = skills_val.as_object().ok_or(ValidationError {
-            field: "proficiency_data.skill_proficiencies".to_string(),
-            message: "must be a JSON object".to_string(),
-        })?;
-
-        for (skill_name, proficient) in skills {
-            // Check if skill name is valid
-            if !valid_skills.contains(&skill_name.as_str()) {
-                return Err(ValidationError {
-                    field: format!("proficiency_data.skill_proficiencies.{}", skill_name),
-                    message: "unknown skill name".to_string(),
-                });
-            }
-
-            // Check if value is boolean
-            if !proficient.is_boolean() {
-                return Err(ValidationError {
-                    field: format!("proficiency_data.skill_proficiencies.{}", skill_name),
-                    message: "must be a boolean".to_string(),
-                });
-            }
-        }
+        validate_proficiency_set(
+            skills_val,
+            "proficiency_data.skill_proficiencies",
+            &valid_skills,
+            "unknown skill name",
+        )?;
     }
 
     // Validate saving_throw_proficiencies (if present)
     if let Some(saves_val) = obj.get("saving_throw_proficiencies") {
-        let saves = saves_val.as_object().ok_or(ValidationError {
-            field: "proficiency_data.saving_throw_proficiencies".to_string(),
-            message: "must be a JSON object".to_string(),
-        })?;
-
         let valid_abilities = [
             "strength",
             "dexterity",
@@ -239,22 +218,12 @@ pub fn validate_proficiency_data(data: &serde_json::Value) -> Result<(), Validat
             "wisdom",
             "charisma",
         ];
-
-        for (ability, proficient) in saves {
-            if !valid_abilities.contains(&ability.as_str()) {
-                return Err(ValidationError {
-                    field: format!("proficiency_data.saving_throw_proficiencies.{}", ability),
-                    message: "invalid ability name".to_string(),
-                });
-            }
-
-            if !proficient.is_boolean() {
-                return Err(ValidationError {
-                    field: format!("proficiency_data.saving_throw_proficiencies.{}", ability),
-                    message: "must be a boolean".to_string(),
-                });
-            }
-        }
+        validate_proficiency_set(
+            saves_val,
+            "proficiency_data.saving_throw_proficiencies",
+            &valid_abilities,
+            "invalid ability name",
+        )?;
     }
 
     // Validate proficiency_bonus (if present)
@@ -290,6 +259,63 @@ pub fn validate_proficiency_data(data: &serde_json::Value) -> Result<(), Validat
         }
     }
 
+    Ok(())
+}
+
+/// A set of proficiencies, in either shape a sheet may store it.
+///
+/// Two shapes are accepted on purpose. The manifest's `data_types` block and
+/// the original validator described an object of booleans
+/// (`{"stealth": true}`), and that is what the first sheet wrote. The rules
+/// (`rules.rs`), the roll-check bindings and the server's own tests read a
+/// **list of ids** (`["stealth"]`) — because `declared_values.rs` skips nested
+/// objects when it flattens a slot, so a map of booleans never reached
+/// `is_proficient` at all. A proficiency saved in the documented shape was
+/// silently worth nothing on a roll.
+///
+/// The list is the shape that works end to end, and is what the pack's own
+/// sheet now writes. The map is still accepted so nothing already stored is
+/// refused on its next save.
+fn validate_proficiency_set(
+    value: &serde_json::Value,
+    field: &str,
+    valid: &[&str],
+    unknown_message: &str,
+) -> Result<(), ValidationError> {
+    if let Some(items) = value.as_array() {
+        for (i, item) in items.iter().enumerate() {
+            let id = item.as_str().ok_or(ValidationError {
+                field: format!("{field}[{i}]"),
+                message: "must be a string".to_string(),
+            })?;
+            if !valid.contains(&id) {
+                return Err(ValidationError {
+                    field: format!("{field}.{id}"),
+                    message: unknown_message.to_string(),
+                });
+            }
+        }
+        return Ok(());
+    }
+
+    let entries = value.as_object().ok_or(ValidationError {
+        field: field.to_string(),
+        message: "must be a list of ids or a JSON object of booleans".to_string(),
+    })?;
+    for (id, proficient) in entries {
+        if !valid.contains(&id.as_str()) {
+            return Err(ValidationError {
+                field: format!("{field}.{id}"),
+                message: unknown_message.to_string(),
+            });
+        }
+        if !proficient.is_boolean() {
+            return Err(ValidationError {
+                field: format!("{field}.{id}"),
+                message: "must be a boolean".to_string(),
+            });
+        }
+    }
     Ok(())
 }
 
@@ -733,6 +759,28 @@ mod tests {
             }
         });
         assert!(validate_proficiency_data(&data).is_err());
+    }
+
+    #[test]
+    fn proficiency_data_accepts_the_list_the_rules_read() {
+        // The shape `rules.rs` and the roll-check bindings actually consult.
+        let data = json!({
+            "skill_proficiencies": ["stealth", "perception"],
+            "saving_throw_proficiencies": ["dexterity"]
+        });
+        assert!(validate_proficiency_data(&data).is_ok());
+    }
+
+    #[test]
+    fn proficiency_data_rejects_an_unknown_id_in_either_shape() {
+        let as_list = json!({ "skill_proficiencies": ["lockpicking"] });
+        assert!(validate_proficiency_data(&as_list).is_err());
+        let as_map = json!({ "saving_throw_proficiencies": { "luck": true } });
+        assert!(validate_proficiency_data(&as_map).is_err());
+        let as_number = json!({ "skill_proficiencies": 3 });
+        assert!(validate_proficiency_data(&as_number).is_err());
+        let not_a_string = json!({ "skill_proficiencies": [7] });
+        assert!(validate_proficiency_data(&not_a_string).is_err());
     }
 
     #[test]

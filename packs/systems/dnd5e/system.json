@@ -217,6 +217,78 @@
       }
     },
     {
+      "id": "saveStrength",
+      "label": "Strength Save",
+      "group": "saves",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "saveStrength"
+        }
+      }
+    },
+    {
+      "id": "saveDexterity",
+      "label": "Dexterity Save",
+      "group": "saves",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "saveDexterity"
+        }
+      }
+    },
+    {
+      "id": "saveConstitution",
+      "label": "Constitution Save",
+      "group": "saves",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "saveConstitution"
+        }
+      }
+    },
+    {
+      "id": "saveIntelligence",
+      "label": "Intelligence Save",
+      "group": "saves",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "saveIntelligence"
+        }
+      }
+    },
+    {
+      "id": "saveWisdom",
+      "label": "Wisdom Save",
+      "group": "saves",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "saveWisdom"
+        }
+      }
+    },
+    {
+      "id": "saveCharisma",
+      "label": "Charisma Save",
+      "group": "saves",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "saveCharisma"
+        }
+      }
+    },
+    {
       "id": "acrobatics",
       "label": "Acrobatics",
       "group": "skills",

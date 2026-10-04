@@ -139,3 +139,15 @@ export const dnd5eSystemManifest: DnD5eSystemManifest = {
 };
 
 export default dnd5eSystemManifest;
+
+// The data-connected actor sheet the host mounts on the actor's edit and view
+// routes and in the play dock. The host finds it by this file's sibling path
+// (`apps/web/src/pages/world/actor/systemActorSheets.ts`), not through this
+// export; re-exported so a direct consumer can reach it like any component.
+export { default as ActorSheet } from './ActorSheet';
+export {
+  DND5E_ABILITIES,
+  DND5E_CLASSES,
+  DND5E_SHEET_REGIONS,
+  DND5E_SKILLS,
+} from './sheet-regions';
