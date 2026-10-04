@@ -5,6 +5,7 @@ import {
   confirmTwoFactorEnrolment,
 } from "@/api/twoFactor";
 import { Button } from "@/components/ui/button/Button";
+import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { TwoFactorEnrolmentSteps } from "@/components/security/TwoFactorEnrolmentSteps";
 import {
@@ -65,6 +66,7 @@ export function SecondFactorStep({
     initialTwoFactorEnrolmentState,
   );
   const [code, setCode] = useState("");
+  const [reentered, setReentered] = useState({ username: "", password: "" });
 
   if (confirmed) {
     return (
@@ -80,28 +82,25 @@ export function SecondFactorStep({
     );
   }
 
-  if (!credentials) {
-    return (
-      <div data-testid="setup-second-factor-deferred" className="grid gap-3">
-        <StatusBadge variant="warning">
-          This administrator has no password for this instance to check.
-        </StatusBadge>
-        <p className="text-sm text-muted-foreground">
-          Enrolment here is authorised with the account password, and an
-          administrator created through an OAuth provider does not have one.
-          Sign in once and the instance will take you through enrolling a second
-          factor then. Setup cannot be completed until that has happened.
-        </p>
-      </div>
-    );
-  }
+  // The account step hands its credentials over in memory, and a reload or a
+  // resumed setup loses them. The administrator still exists and still has
+  // the password they chose, so it is asked for again here rather than
+  // leaving them at a step that cannot proceed.
+  const using =
+    credentials ??
+    (reentered.username.trim() && reentered.password
+      ? { username: reentered.username.trim(), password: reentered.password }
+      : null);
 
   const onBegin = async () => {
+    if (!using) {
+      return;
+    }
     dispatch({ type: "start" });
     setCode("");
 
     try {
-      const enrolment = await beginTwoFactorEnrolment(credentials);
+      const enrolment = await beginTwoFactorEnrolment(using);
       dispatch({ type: "started", enrolment });
     } catch (error) {
       dispatch({
@@ -117,7 +116,7 @@ export function SecondFactorStep({
   const onConfirm = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (state.step !== "provisioning") {
+    if (state.step !== "provisioning" || !using) {
       return;
     }
 
@@ -132,7 +131,7 @@ export function SecondFactorStep({
     dispatch({ type: "submitCode" });
 
     try {
-      const confirmation = await confirmTwoFactorEnrolment(credentials, code);
+      const confirmation = await confirmTwoFactorEnrolment(using, code);
       setCode("");
       dispatch({ type: "confirmed", confirmation });
     } catch (error) {
@@ -163,13 +162,52 @@ export function SecondFactorStep({
               <StatusBadge variant="danger">{state.error}</StatusBadge>
             </div>
           ) : null}
+          {credentials ? null : (
+            <div
+              data-testid="setup-second-factor-reenter"
+              className="grid max-w-sm gap-3"
+            >
+              <p className="text-sm text-muted-foreground">
+                Setup was reopened, so confirm the administrator you created:
+                enrolment is authorised with that account&rsquo;s password.
+              </p>
+              <label className="grid gap-1 text-sm font-medium">
+                Administrator username
+                <Input
+                  data-testid="setup-second-factor-username"
+                  autoComplete="username"
+                  value={reentered.username}
+                  onChange={(event) =>
+                    setReentered({ ...reentered, username: event.target.value })
+                  }
+                />
+              </label>
+              <label className="grid gap-1 text-sm font-medium">
+                Password
+                <Input
+                  data-testid="setup-second-factor-password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={reentered.password}
+                  onChange={(event) =>
+                    setReentered({ ...reentered, password: event.target.value })
+                  }
+                />
+              </label>
+              <p className="text-sm text-muted-foreground">
+                An administrator created through a sign-in provider has no
+                password here. Sign in once through that provider and the
+                instance will take you through enrolling a second factor.
+              </p>
+            </div>
+          )}
           <div>
             <Button
               data-testid="setup-second-factor-start"
               type="button"
               variant="primary"
               icon="shield"
-              disabled={state.step === "starting"}
+              disabled={state.step === "starting" || !using}
               onClick={() => void onBegin()}
             >
               {state.step === "starting"

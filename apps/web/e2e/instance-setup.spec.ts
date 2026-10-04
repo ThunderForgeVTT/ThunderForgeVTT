@@ -164,18 +164,35 @@ test.describe("Spec 040 US1: from an empty database to a contactable instance", 
     //    is driven by the registry, so a declaration added later appears here
     //    without this file being edited.
     const secondFactor = page.getByTestId("setup-step-second-factor");
-    for (let guard = 0; guard < 10; guard += 1) {
-      if (await secondFactor.isVisible().catch(() => false)) {
-        break;
+    const walkToSecondFactor = async () => {
+      for (let guard = 0; guard < 12; guard += 1) {
+        if (await secondFactor.isVisible().catch(() => false)) {
+          break;
+        }
+        const skip = page.getByTestId("setup-skip-step");
+        if (await skip.isVisible().catch(() => false)) {
+          await skip.click();
+          continue;
+        }
+        await page.getByTestId("setup-next").click();
       }
-      const skip = page.getByTestId("setup-skip-step");
-      if (await skip.isVisible().catch(() => false)) {
-        await skip.click();
-        continue;
-      }
-      await page.getByTestId("setup-next").click();
-    }
-    await expect(secondFactor).toBeVisible({ timeout: 30_000 });
+      await expect(secondFactor).toBeVisible({ timeout: 30_000 });
+    };
+    await walkToSecondFactor();
+
+    // 6a. An operator who reloads here — or comes back tomorrow — has lost
+    //     the password the account step held in memory. The step asks for it
+    //     again rather than stranding them at a step that cannot proceed.
+    await page.reload();
+    await expect(page.getByTestId("setup-next")).toBeVisible({
+      timeout: 30_000,
+    });
+    await walkToSecondFactor();
+    await expect(page.getByTestId("setup-second-factor-start")).toBeDisabled();
+    await page
+      .getByTestId("setup-second-factor-username")
+      .fill(`admin${suffix}`);
+    await page.getByTestId("setup-second-factor-password").fill(adminPassword);
 
     // 7. FR-002a: setup will not complete without a confirmed second factor.
     //    This is spec 041's flow, reused rather than reimplemented.
