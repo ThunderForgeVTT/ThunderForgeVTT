@@ -66,4 +66,4 @@ tests between them, none in the default members, so that number does not move.
 
 - [X] T040 `cargo check --all-targets`, `make lint`, `make test-rust` — 1,867 passed, as at the baseline
 - [X] T041 `pnpm --filter @thunderforge/web typecheck`, web unit tests (727 passed), `pnpm test:scripts` (129 passed)
-- [ ] T042 From the main checkout after the fast-forward: the system e2e slices
+- [X] T042 From the main checkout after the fast-forward: the system e2e slices — `game-systems` 29 passed, `tokens` 23 passed
