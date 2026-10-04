@@ -4,6 +4,7 @@ pub mod content_patterns;
 pub mod contrast;
 pub mod interface;
 pub mod layout;
+pub mod settings;
 
 use schemars::{JsonSchema, schema_for};
 use serde::{Deserialize, Serialize};
@@ -124,6 +125,11 @@ pub struct SystemManifest {
     /// `appearance.rs`.
     #[serde(default)]
     pub appearance: Option<appearance::SystemAppearance>,
+
+    /// What a table may choose about how it plays (spec 067). A world's
+    /// answers live in one shared table; see `settings.rs`.
+    #[serde(default)]
+    pub settings: Option<Vec<settings::SystemSetting>>,
 }
 
 /// A system's `vision` block, mirroring
@@ -276,6 +282,7 @@ pub fn validate_system_manifest(json_string: &str) -> Result<(), String> {
     validate_vision_content(&instance)?;
     combat::validate_combat_content(&instance)?;
     appearance::validate_appearance_content(&instance)?;
+    settings::validate_settings_content(&instance)?;
     content_patterns::validate_content_patterns(&instance)
 }
 
