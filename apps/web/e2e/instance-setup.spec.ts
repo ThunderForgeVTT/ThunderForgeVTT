@@ -210,12 +210,16 @@ test.describe("Spec 040 US1: from an empty database to a contactable instance", 
     expect(await recoveryCodes.count()).toBe(10);
     await page.getByTestId("two-factor-acknowledge-codes").click();
 
-    await expect(page.getByTestId("setup-second-factor-confirmed")).toBeVisible(
-      {
-        timeout: 30_000,
-      },
-    );
-    await advanceFrom(page, "second-factor");
+    // A reopened setup resumes at the first step still owed, so once the
+    // factor is confirmed it goes on to the review by itself; a setup walked
+    // in one sitting pauses on the confirmation first. Either is the factor
+    // having been taken.
+    const confirmedNotice = page.getByTestId("setup-second-factor-confirmed");
+    const review = page.getByTestId("setup-step-review");
+    await expect(confirmedNotice.or(review)).toBeVisible({ timeout: 30_000 });
+    if (await confirmedNotice.isVisible()) {
+      await advanceFrom(page, "second-factor");
+    }
 
     // 8. The review says what is still unset rather than implying it is done.
     await expect(page.getByTestId("setup-step-review")).toBeVisible({
