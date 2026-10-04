@@ -286,7 +286,9 @@ another app and find none. Build each app alone and pass its own slice.
   better than it was.
 - The constitution asks for an ADR before architecturally significant work.
   This restructuring needs one, written during planning, recording the three
-  homes and the reason `packs/` is its own.
+  homes and the reason `packs/` is its own. It is
+  [ADR-111](../../docs/adrs/20261004-111-four_homes_and_why_packs_is_its_own.md),
+  which also fixes Story 4 after the first field test.
 - No feature flag applies: a directory layout cannot be switched at runtime.
 - Code splitting of the web bundle and the feature-flag practice are separate
   pieces of work and are not part of this spec.
