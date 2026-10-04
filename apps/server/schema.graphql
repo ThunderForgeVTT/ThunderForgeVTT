@@ -1045,6 +1045,11 @@ type AppMutationRoot {
 	declineResourceTrade(proposalId: UUID!): GraphQLGenieTradeProposal!
 	spendResourceOnPuzzleClock(clockId: UUID!, actorId: UUID!, resourceType: String!, quantity: Int!): GraphQLGeniePuzzleClock!
 	"""
+	Roll one of a character's skills. The server reads the level, rolls,
+	judges, and pays a failure its experience.
+	"""
+	rollForShoesRollSkill(input: RollForShoesRollSkillInput!): RollForShoesSkillRoll!
+	"""
 	Set this world's optional rules. Game Master only.
 	"""
 	updateRollForShoesWorldSettings(input: UpdateRollForShoesWorldSettingsInput!): RollForShoesWorldSettings!
@@ -4605,6 +4610,17 @@ type GraphQLResourceEntry {
 	label: String
 }
 
+"""
+A roll as its system's adjudicator judged it.
+"""
+type GraphQLRollOutcome {
+	verdict: RollVerdict!
+	"""
+	The verdict in the system's own words.
+	"""
+	label: String!
+}
+
 type GraphQLRollRecord {
 	id: UUID!
 	worldId: UUID!
@@ -4625,6 +4641,11 @@ type GraphQLRollResolution {
 	The total, or the success count, per `result_kind`.
 	"""
 	resultValue: Float!
+	"""
+	How the world's system judged the roll. Null when nothing judged it:
+	the system has no adjudicator, or there was nothing to judge against.
+	"""
+	outcome: GraphQLRollOutcome
 }
 
 type GraphQLScene {
@@ -6393,6 +6414,50 @@ input RollDiceInput {
 	bindings: [PlaceholderBindingInput!]
 }
 
+input RollForShoesRollSkillInput {
+	worldId: UUID!
+	actorId: UUID!
+	"""
+	The skill's id on this character's sheet.
+	"""
+	skillId: String!
+	"""
+	What the player says has to be beaten. Read only when the Game Master
+	has set no difficulty for the table; theirs wins.
+	"""
+	opposition: Float
+}
+
+"""
+A skill roll as the server made and judged it.
+"""
+type RollForShoesSkillRoll {
+	"""
+	The roll, with its outcome — null when nothing was to be beaten.
+	"""
+	roll: GraphQLRollResolution!
+	"""
+	The statuses' modifiers that counted, summed.
+	"""
+	modifier: Int!
+	"""
+	The dice and the modifier together: the number that was judged.
+	"""
+	total: Float!
+	"""
+	What it was judged against, whoever named it.
+	"""
+	opposition: Float
+	"""
+	The experience this roll earned.
+	"""
+	xpAwarded: Int!
+	"""
+	The character's experience after it.
+	"""
+	xp: Int!
+}
+
 type RollForShoesStartingSkill {
 	name: String!
 	level: Int!
@@ -6447,6 +6512,17 @@ type RollForShoesWorldSettings {
 enum RollResultKind {
 	TOTAL
 	SUCCESS_COUNT
+}
+
+"""
+How a roll came out, from the host's closed list (spec 067 FR-032).
+"""
+enum RollVerdict {
+	SUCCESS
+	FAILURE
+	TIE
+	CRITICAL_SUCCESS
+	CRITICAL_FAILURE
 }
 
 """

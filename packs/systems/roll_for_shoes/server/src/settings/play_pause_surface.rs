@@ -5,7 +5,7 @@
 //! each gated document against a paused world as its Game Master and as a site
 //! admin who is a member.
 
-use thunderforge_server::play_pause::surface::PackSurface;
+use thunderforge_server::play_pause::surface::{PackSurface, SeedStep};
 
 inventory::submit! {
     PackSurface {
@@ -27,13 +27,32 @@ inventory::submit! {
                 "clearRollForShoesTableDifficulty",
                 r#"mutation { clearRollForShoesTableDifficulty(worldId: "{world}") { worldId } }"#,
             ),
+            // A roll is play, and a failed one pays experience.
+            (
+                "rollForShoesRollSkill",
+                r#"mutation { rollForShoesRollSkill(input: { worldId: "{world}", actorId: "{actor}", skillId: "starting-skill", opposition: 6 }) { total } }"#,
+            ),
         ],
         not_world_scoped: &[],
         // What the settings panel and the character sheet read. Readable
         // while paused: pausing stops play, not looking.
         reads: &["rollForShoesWorldSettings", "rollForShoesTableDifficulty"],
-        // Nothing to seed. The read answers for a world with no row, and the
-        // write creates it.
-        seed: &[],
+        // The settings need no seed: the read answers for a world with no
+        // row, and the write creates it. A roll names a character.
+        seed: &[
+            // An actor needs a scene to stand in.
+            SeedStep {
+                key: "scene",
+                field: "createScene",
+                document: r#"mutation { createScene(input: { worldId: "{world}", name: "Seeded" }) { sceneId } }"#,
+                pick: "/sceneId",
+            },
+            SeedStep {
+                key: "actor",
+                field: "createActor",
+                document: r#"mutation { createActor(input: { worldId: "{world}", label: "Roller", isNpc: false }) { id } }"#,
+                pick: "/id",
+            },
+        ],
     }
 }

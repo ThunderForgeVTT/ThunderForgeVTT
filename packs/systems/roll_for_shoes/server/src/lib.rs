@@ -20,10 +20,12 @@
 //! Master says has to be beaten is said to the whole table, and a number
 //! that lives on each player's own sheet is not said to anyone.
 
+pub mod roll;
 pub mod settings;
 pub mod table;
 pub mod validators;
 
+pub use roll::graphql::RollForShoesRollMutation;
 pub use settings::graphql::{RollForShoesSettingsMutation, RollForShoesSettingsQuery};
 pub use table::graphql::{RollForShoesTableMutation, RollForShoesTableQuery};
 
@@ -87,6 +89,8 @@ pub fn starting_skills() -> Vec<(String, i64)> {
 // This pack declares what it contributes; nothing in shared server code names
 // it, lists it, or wires these validators (spec 032, FR-029).
 //
+// It judges its own rolls (spec 067 FR-032): beat the opposition or fail.
+//
 // Every other field is absent, and each absence is the ruleset's answer rather
 // than an omission: the game has no attributes, no proficiencies and no magic
 // system, and it derives nothing — a skill's dice pool *is* its level, and XP
@@ -95,6 +99,7 @@ inventory::submit! {
     thunderforge_canvas_core::system_contribution::SystemContribution {
         resource_data: Some(validators::validate_resource_data_for_registry),
         trait_data: Some(validators::validate_trait_data_for_registry),
+        adjudicate: Some(roll::adjudicate),
         ..thunderforge_canvas_core::system_contribution::SystemContribution::new(SYSTEM_ID)
     }
 }

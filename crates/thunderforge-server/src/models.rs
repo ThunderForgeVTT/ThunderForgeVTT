@@ -1791,6 +1791,8 @@ pub struct RollRecord {
     pub result_kind: String,
     pub result_value: f64,
     pub created_at: chrono::DateTime<chrono::Utc>,
+    /// How the system's adjudicator judged it; `None` when nothing did.
+    pub outcome: Option<serde_json::Value>,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
@@ -1803,6 +1805,7 @@ pub struct NewRollRecord {
     pub detail: serde_json::Value,
     pub result_kind: String,
     pub result_value: f64,
+    pub outcome: Option<serde_json::Value>,
 }
 
 // ============================================================================

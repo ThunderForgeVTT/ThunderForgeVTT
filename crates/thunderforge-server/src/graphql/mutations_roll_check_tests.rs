@@ -555,3 +555,84 @@ fn the_schema_offers_a_check_by_name_and_no_way_to_name_a_roll() {
         "a published check names itself and does not publish its dice"
     );
 }
+
+/// Spec 067 FR-032: an adjudicator that says back what it was shown.
+fn echo(
+    facts: &thunderforge_canvas_core::system_contribution::RollFacts<'_>,
+    context: &serde_json::Value,
+) -> Option<RollOutcome> {
+    Some(RollOutcome {
+        verdict: thunderforge_canvas_core::system_contribution::Verdict::Tie,
+        label: format!(
+            "{} {:?} {} {}",
+            facts.check, facts.dice, facts.total, context["inspiration"]
+        ),
+    })
+}
+
+/// A manifest check's adjudicator is shown the check's id, the dice that
+/// counted, the total, and what this world plays by — the stored answer where
+/// there is one and the declared default where there is not.
+#[tokio::test]
+async fn a_checks_adjudicator_is_shown_the_roll_and_the_worlds_settings() {
+    use thunderforge_dice::{DieOutcome, DieSides, ResolutionKind};
+
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let owner_id = insert_test_user(&mut conn);
+    let world_id = insert_test_world(&mut conn, owner_id);
+
+    let declarations = || world_system_settings::declarations_for_system(&packs(), "dnd5e");
+    assert!(
+        declarations()
+            .iter()
+            .any(|setting| setting.id == "inspiration"),
+        "5e declares the setting this test reads"
+    );
+    let die = |final_value: i64, kept: bool| DieOutcome {
+        sides: DieSides::Numeric(20),
+        rolls: vec![final_value],
+        kept,
+        final_value,
+    };
+    let resolution = RollResolution {
+        formula: "2d20kh1".to_string(),
+        dice: vec![die(4, false), die(17, true)],
+        kind: ResolutionKind::Total(17.0),
+    };
+
+    let by_default = judge_check(
+        &mut conn,
+        echo,
+        world_id,
+        "dnd5e",
+        declarations(),
+        "strength",
+        &resolution,
+    )
+    .expect("judged")
+    .expect("the adjudicator answered");
+    assert_eq!(by_default.label, "strength [17] 17 true");
+
+    world_system_settings::write(
+        &mut conn,
+        world_id,
+        "dnd5e",
+        "inspiration",
+        &serde_json::json!(false),
+        owner_id,
+    )
+    .expect("the setting stores");
+    let once_set = judge_check(
+        &mut conn,
+        echo,
+        world_id,
+        "dnd5e",
+        declarations(),
+        "strength",
+        &resolution,
+    )
+    .expect("judged")
+    .expect("the adjudicator answered");
+    assert_eq!(once_set.label, "strength [17] 17 false");
+}

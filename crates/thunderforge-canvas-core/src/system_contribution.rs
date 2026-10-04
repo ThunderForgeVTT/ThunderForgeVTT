@@ -59,6 +59,53 @@ pub type SettingValidatorFn = fn(&str, &serde_json::Value) -> Result<(), String>
 
 pub type RulesFn = fn(&serde_json::Value) -> Box<dyn SystemRules>;
 
+/// How a roll came out, in the host's words.
+///
+/// A closed list, because the host draws and stores these and a pack's own
+/// word for one would be a word nothing else could read. What the pack calls
+/// the result is [`RollOutcome::label`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Verdict {
+    Success,
+    Failure,
+    Tie,
+    CriticalSuccess,
+    CriticalFailure,
+}
+
+/// What was rolled, as an adjudicator sees it.
+#[derive(Debug, Clone, Copy)]
+pub struct RollFacts<'a> {
+    /// The check's id: a manifest `checks` entry, or a pack's own name for a
+    /// roll its own mutation makes.
+    pub check: &'a str,
+    /// The final value of every die that counted, in the order rolled.
+    pub dice: &'a [i64],
+    /// What the formula came to.
+    pub total: f64,
+}
+
+/// A roll, judged. Stored with the roll and shown to the table.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct RollOutcome {
+    pub verdict: Verdict,
+    /// The verdict in the system's own words.
+    pub label: String,
+}
+
+/// Judges a roll (spec 067 FR-032).
+///
+/// Pure, as `derive` is: the roll and a context value in, a verdict out, and
+/// no database. For a manifest check the context is the world's effective
+/// system settings, keyed by setting id. A pack whose roll needs more than
+/// that — a target, a modifier — gathers it in its own mutation and passes
+/// its own context to this same function.
+///
+/// `None` is "not judged": there was nothing to judge the roll against. It
+/// is not a failure, and the host stores no outcome for it.
+pub type AdjudicatorFn = fn(&RollFacts<'_>, &serde_json::Value) -> Option<RollOutcome>;
+
 /// Everything one game system pack contributes.
 ///
 /// Every field beyond `id` is optional because the systems genuinely differ:
@@ -95,6 +142,10 @@ pub struct SystemContribution {
     /// settings that is the whole rule. This is for the rest: a value that is
     /// well-typed and still not one this ruleset can be played with.
     pub world_setting: Option<SettingValidatorFn>,
+    /// Judges this system's rolls. A system without one has rolls that are
+    /// rolled and recorded and never judged, which is every system before
+    /// spec 067.
+    pub adjudicate: Option<AdjudicatorFn>,
 }
 
 impl SystemContribution {
@@ -113,6 +164,7 @@ impl SystemContribution {
             rules: None,
             refine_content: None,
             world_setting: None,
+            adjudicate: None,
         }
     }
 }

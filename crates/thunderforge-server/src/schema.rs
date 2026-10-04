@@ -1628,6 +1628,7 @@ diesel::table! {
         result_kind -> Text,
         result_value -> Float8,
         created_at -> Timestamptz,
+        outcome -> Nullable<Jsonb>,
     }
 }
 
@@ -1821,7 +1822,9 @@ diesel::joinable!(world_play_pause_triggers -> world_play_pauses (pause_id));
 diesel::joinable!(world_play_pauses -> world_play_pause_requests (request_id));
 diesel::joinable!(world_roll_records -> users (triggered_by));
 diesel::joinable!(world_roll_records -> worlds (world_id));
+diesel::joinable!(world_system_setting_changes -> users (changed_by));
 diesel::joinable!(world_system_setting_changes -> worlds (world_id));
+diesel::joinable!(world_system_settings -> users (updated_by));
 diesel::joinable!(world_system_settings -> worlds (world_id));
 
 diesel::allow_tables_to_appear_in_same_query!(

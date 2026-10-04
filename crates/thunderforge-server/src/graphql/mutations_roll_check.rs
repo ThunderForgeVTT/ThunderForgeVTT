@@ -41,15 +41,23 @@ use uuid::Uuid;
 use crate::auth::actor_permissions::require_actor_permission;
 use crate::auth::world_membership::require_world_member;
 use crate::declared_values::{ActorSlots, declared_values_for_actor};
-use crate::graphql::mutations_roll::{PlaceholderBindingInput, RollDiceInput, roll_dice_impl};
+use crate::graphql::mutations_roll::{
+    PlaceholderBindingInput, RollDiceInput, kept_dice, roll_and_settle, roll_value,
+};
 use crate::graphql::types::{ActorPermissionLevel, GraphQLRollResolution};
 use crate::graphql::{app_state, authenticated_user};
 use crate::play_pause::gate::refuse_world_if_paused;
 use crate::schema::{world_actor_system_data, world_actors, worlds};
 use crate::state::AppState;
+use crate::world_system_settings;
+use pack_system_spec::settings::SystemSetting;
+use thunderforge_canvas_core::system_contribution::{
+    AdjudicatorFn, RollFacts, RollOutcome, contribution_for,
+};
 use thunderforge_canvas_core::system_rules::{
     CheckBinding, CheckDeclaration, DeclaredValues, checks_from_manifest,
 };
+use thunderforge_dice::RollResolution;
 
 /// What a sheet is told about a check: enough to draw a button, and no more.
 ///
@@ -189,6 +197,38 @@ fn world_system(conn: &mut PgConnection, world_id: Uuid) -> Result<String, Error
         .ok_or_else(|| Error::new("This world has no game system, so it declares no checks"))
 }
 
+/// A manifest check, shown to its system's adjudicator.
+///
+/// The context is what this table plays by: the world's effective system
+/// settings, keyed by setting id. That is all the host knows to hand over. A
+/// roll that is judged against more — a target, a modifier off the sheet —
+/// is a pack's own mutation, which gathers it and calls the same function.
+pub fn judge_check(
+    conn: &mut PgConnection,
+    adjudicate: AdjudicatorFn,
+    world_id: Uuid,
+    system_id: &str,
+    declarations: Vec<SystemSetting>,
+    check_id: &str,
+    resolution: &RollResolution,
+) -> Result<Option<RollOutcome>, String> {
+    let settings = world_system_settings::read_effective(conn, world_id, system_id, declarations)
+        .map_err(|_| "Failed to read this world's system settings".to_string())?;
+    let context = serde_json::Value::Object(
+        settings
+            .into_iter()
+            .map(|setting| (setting.declaration.id, setting.value))
+            .collect(),
+    );
+    let dice = kept_dice(resolution);
+    let facts = RollFacts {
+        check: check_id,
+        dice: &dice,
+        total: roll_value(resolution),
+    };
+    Ok(adjudicate(&facts, &context))
+}
+
 /// Testable core of `RollCheckMutation::roll_check`.
 ///
 /// The order is the point, and it is the same order `roll_dice_impl` uses:
@@ -256,8 +296,15 @@ pub async fn roll_check_impl<R: rand::Rng>(
     ));
     let bindings = bindings_for_check(check, &values).map_err(Error::new)?;
 
-    // And now the ordinary path, with a formula the client never saw.
-    roll_dice_impl(
+    // And now the ordinary path, with a formula the client never saw. If the
+    // system judges its rolls (spec 067 FR-032), its adjudicator is shown the
+    // result and what this table plays by, and the verdict is stored with the
+    // roll. A system without one is rolled and recorded as before.
+    let adjudicate = contribution_for(&system_id).and_then(|pack| pack.adjudicate);
+    let declarations =
+        world_system_settings::declarations_for_system(&state.directories.systems_dir, &system_id);
+    let check_id = check.id.clone();
+    roll_and_settle(
         state,
         user_id,
         RollDiceInput {
@@ -266,8 +313,24 @@ pub async fn roll_check_impl<R: rand::Rng>(
             bindings: Some(bindings),
         },
         rng,
+        move |conn, resolution| {
+            let Some(adjudicate) = adjudicate else {
+                return Ok((None, ()));
+            };
+            let judged = judge_check(
+                conn,
+                adjudicate,
+                world_id,
+                &system_id,
+                declarations,
+                &check_id,
+                resolution,
+            )?;
+            Ok((judged, ()))
+        },
     )
     .await
+    .map(|(resolution, ())| resolution)
 }
 
 #[derive(Default)]

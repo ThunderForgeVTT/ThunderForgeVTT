@@ -298,6 +298,7 @@ fn roll_and_record<R: Rng>(
             detail,
             result_kind: kind.to_string(),
             result_value: value,
+            outcome: None,
         })
         .returning(world_roll_records::id)
         .get_result::<Uuid>(conn)?;

@@ -317,7 +317,10 @@ fn resolution_of(row: &RollRecord) -> GraphQLRollResolution {
             dice: Vec::new(),
             kind: ResolutionKind::Total(row.result_value),
         });
-    GraphQLRollResolution::from(&resolution)
+    GraphQLRollResolution {
+        outcome: super::types_dice::stored_outcome(row),
+        ..GraphQLRollResolution::from(&resolution)
+    }
 }
 
 fn missing_roll() -> GraphQLRollResolution {

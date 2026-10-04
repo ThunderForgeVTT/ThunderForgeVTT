@@ -34,6 +34,7 @@ pub struct AppQueryRoot(
 pub struct AppMutationRoot(
     thunderforge_server::graphql::MutationRoot,
     genie_server::GenieSessionMutation,
+    roll_for_shoes_server::RollForShoesRollMutation,
     roll_for_shoes_server::RollForShoesSettingsMutation,
     roll_for_shoes_server::RollForShoesTableMutation,
 );

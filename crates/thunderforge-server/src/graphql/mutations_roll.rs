@@ -21,7 +21,8 @@ use crate::models::NewRollRecord;
 use crate::play_pause::gate::refuse_if_paused;
 use crate::schema::world_roll_records;
 use crate::state::AppState;
-use thunderforge_dice::{DiceFormula, FormulaError, ResolutionKind};
+use thunderforge_canvas_core::system_contribution::RollOutcome;
+use thunderforge_dice::{DiceFormula, FormulaError, ResolutionKind, RollResolution};
 
 #[derive(InputObject, Debug, Clone)]
 pub struct PlaceholderBindingInput {
@@ -51,6 +52,50 @@ pub async fn roll_dice_impl<R: rand::Rng>(
     input: RollDiceInput,
     rng: &mut R,
 ) -> GraphQLResult<GraphQLRollResolution> {
+    roll_and_settle(state, user_id, input, rng, |_, _| Ok((None, ())))
+        .await
+        .map(|(resolution, ())| resolution)
+}
+
+/// Why a settled roll left nothing behind.
+enum Unsettled {
+    /// The settle step refused, in words for the caller.
+    Refused(String),
+    Database,
+}
+
+impl From<diesel::result::Error> for Unsettled {
+    fn from(_: diesel::result::Error) -> Self {
+        Unsettled::Database
+    }
+}
+
+/// `roll_dice_impl`, with what follows from the roll decided in the same
+/// transaction as its record (spec 067 FR-032).
+///
+/// `settle` sees the resolved roll and answers with how it came out — what a
+/// system's adjudicator returned, or `None` — and anything of its own the
+/// caller wants back. It runs on the connection the record is written on, so
+/// a consequence it writes (experience for a failed roll) and the record that
+/// justifies it both land or neither does. If it refuses, no row is written
+/// and the refusal is the caller's error.
+///
+/// The dice are still rolled here and nowhere else: `settle` is handed the
+/// result and has no way to change it.
+pub async fn roll_and_settle<R, T, F>(
+    state: &AppState,
+    user_id: Uuid,
+    input: RollDiceInput,
+    rng: &mut R,
+    settle: F,
+) -> GraphQLResult<(GraphQLRollResolution, T)>
+where
+    R: rand::Rng,
+    T: Send + 'static,
+    F: FnOnce(&mut PgConnection, &RollResolution) -> Result<(Option<RollOutcome>, T), String>
+        + Send
+        + 'static,
+{
     let mut conn = state
         .db_pool
         .get()
@@ -90,7 +135,7 @@ pub async fn roll_dice_impl<R: rand::Rng>(
         serde_json::to_value(&bindings).ok()
     };
 
-    let new_record = NewRollRecord {
+    let mut new_record = NewRollRecord {
         world_id: input.world_id,
         triggered_by: user_id,
         formula: resolution.formula.clone(),
@@ -98,22 +143,58 @@ pub async fn roll_dice_impl<R: rand::Rng>(
         detail,
         result_kind: result_kind.to_string(),
         result_value,
+        outcome: None,
     };
 
     let mut conn = state
         .db_pool
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
-    tokio::task::spawn_blocking(move || {
-        diesel::insert_into(world_roll_records::table)
-            .values(&new_record)
-            .execute(&mut conn)
+    let (resolution, outcome, settled) = tokio::task::spawn_blocking(move || {
+        conn.transaction::<_, Unsettled, _>(|conn| {
+            let (outcome, settled) = settle(conn, &resolution).map_err(Unsettled::Refused)?;
+            new_record.outcome = outcome
+                .as_ref()
+                .and_then(|outcome| serde_json::to_value(outcome).ok());
+            diesel::insert_into(world_roll_records::table)
+                .values(&new_record)
+                .execute(conn)?;
+            Ok((resolution, outcome, settled))
+        })
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to record roll"))?;
+    .map_err(|unsettled| match unsettled {
+        Unsettled::Refused(why) => Error::new(why),
+        Unsettled::Database => Error::new("Failed to record roll"),
+    })?;
 
-    Ok(GraphQLRollResolution::from(&resolution))
+    Ok((
+        GraphQLRollResolution {
+            outcome: outcome.as_ref().map(Into::into),
+            ..GraphQLRollResolution::from(&resolution)
+        },
+        settled,
+    ))
+}
+
+/// A resolved roll as an adjudicator is shown it: the dice that counted, in
+/// the order rolled, and what the formula came to.
+pub fn kept_dice(resolution: &RollResolution) -> Vec<i64> {
+    resolution
+        .dice
+        .iter()
+        .filter(|die| die.kept)
+        .map(|die| die.final_value)
+        .collect()
+}
+
+/// What the formula came to, a total or a success count alike.
+pub fn roll_value(resolution: &RollResolution) -> f64 {
+    match resolution.kind {
+        ResolutionKind::Total(value) => value,
+        ResolutionKind::SuccessCount(count) => count as f64,
+    }
 }
 
 #[derive(Default)]
@@ -241,6 +322,131 @@ mod tests {
             .get_result(&mut conn)
             .unwrap();
         assert_eq!(count, 1);
+    }
+
+    fn one_d20(world_id: Uuid) -> RollDiceInput {
+        RollDiceInput {
+            world_id,
+            formula: "1d20".to_string(),
+            bindings: None,
+        }
+    }
+
+    /// Spec 067 FR-032: what the settle step says is stored with the roll and
+    /// answered with it, and what else it returns comes back to the caller.
+    #[tokio::test]
+    async fn a_settled_roll_stores_its_outcome_with_the_record() {
+        use thunderforge_canvas_core::system_contribution::Verdict;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let (resolution, seen) = roll_and_settle(
+            &state,
+            owner_id,
+            one_d20(world_id),
+            &mut StepRng::new(0, 1),
+            |_, resolution| {
+                Ok((
+                    Some(RollOutcome {
+                        verdict: Verdict::CriticalSuccess,
+                        label: "Nailed it".to_string(),
+                    }),
+                    roll_value(resolution),
+                ))
+            },
+        )
+        .await
+        .expect("the roll settles");
+
+        let outcome = resolution.outcome.expect("the outcome is answered");
+        assert_eq!(
+            outcome.verdict,
+            crate::graphql::types::RollVerdict::CriticalSuccess
+        );
+        assert_eq!(outcome.label, "Nailed it");
+        assert_eq!(seen, resolution.result_value, "settle saw the real roll");
+
+        let mut conn = state.db_pool.get().unwrap();
+        let stored: Option<serde_json::Value> = world_roll_records::table
+            .filter(world_roll_records::world_id.eq(world_id))
+            .select(world_roll_records::outcome)
+            .first(&mut conn)
+            .unwrap();
+        assert_eq!(
+            stored,
+            Some(serde_json::json!({ "verdict": "critical_success", "label": "Nailed it" }))
+        );
+    }
+
+    /// A plain `rollDice` is judged by nobody, and says so with a null rather
+    /// than a made-up verdict.
+    #[tokio::test]
+    async fn a_plain_roll_stores_no_outcome() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let resolution =
+            roll_dice_impl(&state, owner_id, one_d20(world_id), &mut StepRng::new(0, 1))
+                .await
+                .expect("a member rolls");
+        assert!(resolution.outcome.is_none());
+
+        let mut conn = state.db_pool.get().unwrap();
+        let stored: Option<serde_json::Value> = world_roll_records::table
+            .filter(world_roll_records::world_id.eq(world_id))
+            .select(world_roll_records::outcome)
+            .first(&mut conn)
+            .unwrap();
+        assert_eq!(stored, None);
+    }
+
+    /// The record and what follows from it land together: a settle step that
+    /// refuses leaves no roll behind, and takes its own writes with it.
+    #[tokio::test]
+    async fn a_refused_settle_leaves_no_record_and_undoes_its_own_writes() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let refused = roll_and_settle(
+            &state,
+            owner_id,
+            one_d20(world_id),
+            &mut StepRng::new(0, 1),
+            move |conn, _| -> Result<(Option<RollOutcome>, ()), String> {
+                diesel::update(crate::schema::worlds::table.find(world_id))
+                    .set(crate::schema::worlds::name.eq("Written and then refused"))
+                    .execute(conn)
+                    .map_err(|e| e.to_string())?;
+                Err("Not today".to_string())
+            },
+        )
+        .await
+        .expect_err("the settle step refused");
+        assert_eq!(refused.message, "Not today");
+
+        let mut conn = state.db_pool.get().unwrap();
+        let count: i64 = world_roll_records::table
+            .filter(world_roll_records::world_id.eq(world_id))
+            .count()
+            .get_result(&mut conn)
+            .unwrap();
+        assert_eq!(count, 0);
+        let name: String = crate::schema::worlds::table
+            .find(world_id)
+            .select(crate::schema::worlds::name)
+            .first(&mut conn)
+            .unwrap();
+        assert_ne!(name, "Written and then refused");
     }
 
     #[tokio::test]

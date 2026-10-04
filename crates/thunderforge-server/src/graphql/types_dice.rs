@@ -3,6 +3,7 @@
 use async_graphql::SimpleObject;
 
 use crate::models::RollRecord;
+use thunderforge_canvas_core::system_contribution::{RollOutcome, Verdict};
 use thunderforge_dice::{DieSides, ResolutionKind, RollResolution};
 
 #[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq, Debug)]
@@ -46,6 +47,53 @@ pub enum RollResultKind {
     SuccessCount,
 }
 
+/// How a roll came out, from the host's closed list (spec 067 FR-032).
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq, Debug)]
+pub enum RollVerdict {
+    Success,
+    Failure,
+    Tie,
+    CriticalSuccess,
+    CriticalFailure,
+}
+
+impl From<Verdict> for RollVerdict {
+    fn from(verdict: Verdict) -> Self {
+        match verdict {
+            Verdict::Success => RollVerdict::Success,
+            Verdict::Failure => RollVerdict::Failure,
+            Verdict::Tie => RollVerdict::Tie,
+            Verdict::CriticalSuccess => RollVerdict::CriticalSuccess,
+            Verdict::CriticalFailure => RollVerdict::CriticalFailure,
+        }
+    }
+}
+
+/// A roll as its system's adjudicator judged it.
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLRollOutcome {
+    pub verdict: RollVerdict,
+    /// The verdict in the system's own words.
+    pub label: String,
+}
+
+impl From<&RollOutcome> for GraphQLRollOutcome {
+    fn from(outcome: &RollOutcome) -> Self {
+        GraphQLRollOutcome {
+            verdict: outcome.verdict.into(),
+            label: outcome.label.clone(),
+        }
+    }
+}
+
+/// The outcome stored with a roll, when one was and it still reads.
+pub fn stored_outcome(row: &RollRecord) -> Option<GraphQLRollOutcome> {
+    let stored = row.outcome.clone()?;
+    serde_json::from_value::<RollOutcome>(stored)
+        .ok()
+        .map(|outcome| GraphQLRollOutcome::from(&outcome))
+}
+
 #[derive(SimpleObject, Debug, Clone)]
 pub struct GraphQLRollResolution {
     /// The resolved formula (original source; see `RollResolution::formula`
@@ -55,6 +103,9 @@ pub struct GraphQLRollResolution {
     pub result_kind: RollResultKind,
     /// The total, or the success count, per `result_kind`.
     pub result_value: f64,
+    /// How the world's system judged the roll. Null when nothing judged it:
+    /// the system has no adjudicator, or there was nothing to judge against.
+    pub outcome: Option<GraphQLRollOutcome>,
 }
 
 impl From<&RollResolution> for GraphQLRollResolution {
@@ -72,6 +123,7 @@ impl From<&RollResolution> for GraphQLRollResolution {
                 .collect(),
             result_kind,
             result_value,
+            outcome: None,
         }
     }
 }
@@ -102,7 +154,10 @@ impl From<RollRecord> for GraphQLRollRecord {
             id: row.id,
             world_id: row.world_id,
             triggered_by: row.triggered_by,
-            resolution: GraphQLRollResolution::from(&resolution),
+            resolution: GraphQLRollResolution {
+                outcome: stored_outcome(&row),
+                ..GraphQLRollResolution::from(&resolution)
+            },
             created_at: row.created_at.to_rfc3339(),
         }
     }
