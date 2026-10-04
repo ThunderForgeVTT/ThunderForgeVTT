@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   GraphQLRequestError,
   Input,
@@ -19,7 +19,6 @@ import {
   boughtSlotsAt,
   buySlot,
   grantSkill,
-  isAdvancement,
   newSkillId,
   newStatusId,
   removeStatus,
@@ -39,6 +38,16 @@ import {
   type WorldSettings,
 } from "./game.ts";
 import { fetchWorldSettings } from "./settings.ts";
+import {
+  boughtLine,
+  learnedLine,
+  recallAttempt,
+  rememberAttempt,
+  rollLine,
+  tellTheTable,
+  watchSheet,
+  type Attempt,
+} from "./table.ts";
 import { AdvancementPrompt } from "./components/AdvancementPrompt.tsx";
 import { DifficultyPicker } from "./components/DifficultyPicker.tsx";
 import { StatusList } from "./components/StatusList.tsx";
@@ -66,20 +75,6 @@ import {
  *
  * The game is public domain (CC0 1.0), by Ben Wray — rollforshoes.com.
  */
-
-interface Attempt {
-  skill: Skill;
-  faces: number[];
-  total: number;
-  /** What the statuses came to for this roll; already inside `total`. */
-  modifier: number;
-  opposition: number | null;
-  result: Verdict;
-  /** Dice bought with experience, this attempt. */
-  bought: number;
-  /** Whether the advancement this attempt earned has been answered. */
-  advancementAnswered: boolean;
-}
 
 interface DieOutcome {
   finalValue: number;
@@ -110,32 +105,93 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
   const [opposition, setOpposition] = useState("");
   const [band, setBand] = useState<Band | null>(null);
   const [gmDice, setGmDice] = useState<number[] | null>(null);
-  const [attempt, setAttempt] = useState<Attempt | null>(null);
+  // Begun from what this tab last rolled for this character: the dock
+  // unmounts the sheet when its tab changes, and an advancement nobody has
+  // answered yet must still be there when the player comes back.
+  const [attempt, setAttemptState] = useState<Attempt | null>(() =>
+    recallAttempt(actor.id),
+  );
+  const setAttempt = (next: Attempt | null): void => {
+    rememberAttempt(actor.id, next);
+    setAttemptState(next);
+  };
+  // `loading` until the world's rules are known, `failed` when they could not
+  // be read. Neither rolls: see the effect below.
+  const [settingsState, setSettingsState] = useState<
+    "loading" | "ready" | "failed"
+  >("loading");
+  const [settingsTry, setSettingsTry] = useState(0);
+  const advancementRef = useRef<HTMLDivElement | null>(null);
   const [description, setDescription] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Read once, when the sheet opens. The settings describe how the table
-  // plays, not what this character is, so they do not change under a roll —
-  // and a failed read leaves the defaults in place, which is the core game.
-  // It is deliberately not an error the player sees: a world that has never
-  // configured anything and a world whose settings could not be read want the
-  // same sheet.
+  // Read when the sheet opens. The settings describe how the table plays, not
+  // what this character is, so they do not change under a roll.
+  //
+  // A failed read is said, and holds the sheet. It used to fall back to the
+  // core game in silence, on the reasoning that an unconfigured world and an
+  // unreadable one want the same sheet — but they do not: a character nobody
+  // has opened yet is given this world's starting skills on first write, and
+  // writing the core game's `Do Anything` into a world that starts people
+  // elsewhere is permanent. The server answers an unconfigured world with the
+  // defaults itself, so a failure here is only ever a failure.
   useEffect(() => {
     let cancelled = false;
     void fetchWorldSettings(actor.worldId)
       .then((stored) => {
         if (!cancelled) {
           setSettings(stored);
+          setSettingsState("ready");
         }
       })
       .catch(() => {
-        // Deliberately silent; see above.
+        if (!cancelled) {
+          setSettingsState("failed");
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [actor.worldId]);
+  }, [actor.worldId, settingsTry]);
+
+  // Someone else with this character open — the Game Master, usually — writes
+  // whole slots, as this sheet does. Re-reading on the server's word keeps the
+  // next write here from being made over a copy that is already stale.
+  useEffect(
+    () => watchSheet(actor.worldId, actor.id, () => void refetch()),
+    [actor.worldId, actor.id, refetch],
+  );
+
+  // The dock draws this sheet in a short scrolling box, and the prompt is the
+  // last thing in it: a new skill offered below the fold is a skill missed.
+  const offered =
+    attempt !== null &&
+    !attempt.advancementAnswered &&
+    attempt.faces.length > 0 &&
+    attempt.faces.filter((face) => face === 6).length + attempt.bought >=
+      attempt.faces.length;
+  useEffect(() => {
+    if (offered) {
+      advancementRef.current?.scrollIntoView({ block: "nearest" });
+    }
+  }, [offered]);
+
+  /**
+   * Say it in the world's chat. A refusal is shown, and changes nothing else:
+   * the dice were the server's and the sheet has them.
+   */
+  const say = async (line: string): Promise<void> => {
+    try {
+      await tellTheTable(actor.worldId, line);
+    } catch (thrown) {
+      setError(
+        `The table was not told: ${
+          thrown instanceof Error ? thrown.message : "the message was refused."
+        }`,
+      );
+    }
+  };
 
   const traitData = (data?.trait_data ?? {}) as Record<string, unknown>;
   const resourceData = (data?.resource_data ?? {}) as Record<string, unknown>;
@@ -218,9 +274,7 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
     try {
       const { faces } = await rollPool("BAND", BAND_DICE[chosen]);
       setGmDice(faces);
-      setOpposition(
-        String(faces.reduce((running, face) => running + face, 0)),
-      );
+      setOpposition(String(faces.reduce((running, face) => running + face, 0)));
     } catch (thrown) {
       reportRefusal(thrown);
     } finally {
@@ -252,7 +306,7 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
       });
       const result = outcome.verdict;
 
-      setAttempt({
+      const made: Attempt = {
         skill,
         faces,
         total: outcome.total,
@@ -261,7 +315,9 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
         result,
         bought: 0,
         advancementAnswered: false,
-      });
+      };
+      setAttempt(made);
+      await say(rollLine(actor.label, made));
 
       // Failure is the only thing that pays, and it pays whatever else the
       // roll did — a roll can fail and earn a new skill in the same breath.
@@ -297,7 +353,9 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
       await refetch();
       // The verdict, the total and the experience this roll awarded are all
       // untouched. Only the count of bought dice moves.
-      setAttempt({ ...attempt, bought: spend.bought });
+      const boughtInto = { ...attempt, bought: spend.bought };
+      setAttempt(boughtInto);
+      await say(boughtLine(actor.label, boughtInto));
     } catch (thrown) {
       reportRefusal(thrown);
     } finally {
@@ -360,6 +418,7 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
       });
       await refetch();
       setAttempt({ ...attempt, advancementAnswered: true });
+      await say(learnedLine(actor.label, granted.skill));
     } catch (thrown) {
       reportRefusal(thrown);
     } finally {
@@ -367,10 +426,7 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
     }
   };
 
-  const advancementOffered =
-    attempt !== null &&
-    !attempt.advancementAnswered &&
-    isAdvancement(attempt.faces, attempt.bought);
+  const advancementOffered = offered;
 
   // Where the new skill would sit, and whether there is room for it there.
   //
@@ -421,6 +477,26 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
         </StatusBadge>
       ) : null}
 
+      {settingsState === "failed" ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge variant="danger" data-testid="rfs-settings-failed">
+            This world&rsquo;s rules could not be read, so nothing can be rolled
+            yet.
+          </StatusBadge>
+          <button
+            type="button"
+            className="text-sm underline"
+            data-testid="rfs-settings-retry"
+            onClick={() => {
+              setSettingsState("loading");
+              setSettingsTry((tries) => tries + 1);
+            }}
+          >
+            Try again
+          </button>
+        </div>
+      ) : null}
+
       <div className={cardClass}>
         <div className="flex items-baseline justify-between gap-3">
           <h2 className={cardTitleClass}>{actor.label}</h2>
@@ -452,7 +528,7 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
       <div className={cardClass}>
         <SkillLineage
           skills={skills}
-          busy={busy || loading}
+          busy={busy || loading || settingsState !== "ready"}
           onRoll={(skill) => void roll(skill)}
         />
 
@@ -461,7 +537,7 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
             mode={settings.difficultyMode}
             chosen={band}
             gmDice={gmDice}
-            busy={busy || loading}
+            busy={busy || loading || settingsState !== "ready"}
             onChoose={(chosen) => void chooseBand(chosen)}
           />
         )}
@@ -485,7 +561,7 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
           <StatusList
             statuses={statuses}
             canEdit={canEdit}
-            busy={busy || loading}
+            busy={busy || loading || settingsState !== "ready"}
             onAdd={(name, modifier) => void addAStatus(name, modifier)}
             onRemove={(id) => void writeStatuses(removeStatus(statuses, id))}
           />
@@ -510,7 +586,7 @@ export function ActorSheet({ actor, canEdit }: ActorSheetProps) {
       ) : null}
 
       {advancementOffered && attempt ? (
-        <div className={cardClass}>
+        <div className={cardClass} ref={advancementRef}>
           <AdvancementPrompt
             parent={attempt.skill}
             busy={busy}

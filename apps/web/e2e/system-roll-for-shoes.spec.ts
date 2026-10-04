@@ -228,6 +228,12 @@ test("the sheet works in the play dock, where a player sits with no edit rights"
   );
   expect(overflow).toBeLessThanOrEqual(1);
 
+  // The Game Master is at the table too, reading the chat. A roll is a public
+  // act; they should not have to take the player's word for it.
+  await page.goto(`/world/${worldId}/play`);
+  await page.getByTestId("world-dock-tab-chat").click();
+  await expect(page.getByTestId("chat-panel")).toBeVisible({ timeout: 15_000 });
+
   // Rolling is the one thing a player must still be able to do here.
   await player.getByTestId("rfs-opposition").fill("6");
   await player.getByTestId(`rfs-roll-${STARTING_SKILL_ID}`).click();
@@ -245,6 +251,22 @@ test("the sheet works in the play dock, where a player sits with no edit rights"
   await expect(player.getByTestId("rfs-xp")).toHaveText("1", {
     timeout: 15_000,
   });
+
+  // The roll was said where everybody reads, dice and all.
+  await expect(
+    page.getByTestId("chat-message").filter({
+      hasText: /Barefoot rolls Do Anything \(1d6\): \d against 6 — fails/,
+    }),
+  ).toHaveCount(1, { timeout: 20_000 });
+
+  // The dock unmounts the sheet when the player looks away. The attempt — and
+  // with it any advancement still unanswered — must be there on return.
+  await player.getByTestId("in-pane-sheet-dismiss").click();
+  await player.getByTestId(`actor-view-${actorId}`).click();
+  await expect(player.getByTestId("rfs-total")).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(player.getByTestId("rfs-result")).toContainText(/fail/i);
 
   await expectNoAxeViolations(player, '[data-testid="rfs-sheet"]');
 });

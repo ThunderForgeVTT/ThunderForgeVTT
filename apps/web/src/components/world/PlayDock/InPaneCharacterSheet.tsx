@@ -239,47 +239,57 @@ export function InPaneCharacterSheet({
         </p>
       )}
 
-      <section className="grid gap-1.5" data-testid="in-pane-sheet-rolls">
-        <h3 className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-          Rolls
-        </h3>
-        {rolls.length === 0 ? (
-          <p
-            className="text-xs text-muted-foreground"
-            data-testid="in-pane-sheet-no-rolls"
-          >
-            Nothing on this character carries a formula to roll yet.
-          </p>
-        ) : (
-          <ul className="grid gap-1">
-            {rolls.map((roll) => (
-              <li key={roll.key}>
-                <button
-                  type="button"
-                  disabled={
-                    rolling !== null ||
-                    (roll.attackAbilityId !== undefined && !attackerToken)
-                  }
-                  title={
-                    roll.attackAbilityId !== undefined && !attackerToken
-                      ? `${actor.label} has no token on this scene to attack from`
-                      : undefined
-                  }
-                  onClick={() => void handleRoll(roll)}
-                  data-testid={`in-pane-roll-${roll.key}`}
-                  data-attack={roll.attackAbilityId ? "true" : undefined}
-                  className="flex w-full items-center gap-2 rounded border border-border px-2 py-1 text-left text-xs transition-colors hover:bg-muted disabled:opacity-60"
-                >
-                  <span className="min-w-0 flex-1 truncate">{roll.label}</span>
-                  <span className="text-muted-foreground tabular-nums">
-                    {rolling === roll.key ? "Rolling…" : roll.formula}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {/*
+        A system that draws its own sheet and rolls from it (Roll for Shoes)
+        has nothing here, and an empty box under a working sheet reads as
+        something broken. The section is for what the sheet does not offer;
+        it says "nothing" only when there is no sheet to have offered it.
+      */}
+      {sheet && rolls.length === 0 ? null : (
+        <section className="grid gap-1.5" data-testid="in-pane-sheet-rolls">
+          <h3 className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+            Rolls
+          </h3>
+          {rolls.length === 0 ? (
+            <p
+              className="text-xs text-muted-foreground"
+              data-testid="in-pane-sheet-no-rolls"
+            >
+              Nothing on this character carries a formula to roll yet.
+            </p>
+          ) : (
+            <ul className="grid gap-1">
+              {rolls.map((roll) => (
+                <li key={roll.key}>
+                  <button
+                    type="button"
+                    disabled={
+                      rolling !== null ||
+                      (roll.attackAbilityId !== undefined && !attackerToken)
+                    }
+                    title={
+                      roll.attackAbilityId !== undefined && !attackerToken
+                        ? `${actor.label} has no token on this scene to attack from`
+                        : undefined
+                    }
+                    onClick={() => void handleRoll(roll)}
+                    data-testid={`in-pane-roll-${roll.key}`}
+                    data-attack={roll.attackAbilityId ? "true" : undefined}
+                    className="flex w-full items-center gap-2 rounded border border-border px-2 py-1 text-left text-xs transition-colors hover:bg-muted disabled:opacity-60"
+                  >
+                    <span className="min-w-0 flex-1 truncate">
+                      {roll.label}
+                    </span>
+                    <span className="text-muted-foreground tabular-nums">
+                      {rolling === roll.key ? "Rolling…" : roll.formula}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
       {attacking?.attackAbilityId && attackerToken ? (
         <AttackFlow
