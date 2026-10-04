@@ -11,17 +11,6 @@
     "verified": "0.1.0",
     "maximum": "1.0.0"
   },
-  "esmodules": [
-    "web/dist/index.js"
-  ],
-  "styles": [
-    "web/dist/index.css"
-  ],
-  "packages": {
-    "server": "./server",
-    "engine": "./engine",
-    "web": "./web"
-  },
   "abilities": {
     "might": {
       "label": "Might"

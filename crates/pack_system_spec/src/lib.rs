@@ -55,11 +55,27 @@ pub struct SystemManifest {
     pub id: String,
     pub title: String,
     pub description: Option<String>,
-    pub authors: Vec<Author>,
     pub version: String,
     pub compatibility: Compatibility,
+    /// Accepted and ignored.
+    ///
+    /// `authors`, `esmodules`, `styles` and `packs` were required until spec
+    /// 066, in the shape of another product's module manifest. Nothing has
+    /// ever read them: no build produces the files the last three name, and
+    /// the contract in `packs/systems/README.md` documents `author`, which is
+    /// what every bundled manifest carries. Requiring them meant a pack
+    /// written to the contract was refused on install, and no bundled
+    /// manifest passed the validation an installed one must.
+    ///
+    /// They default to empty rather than being removed, so a manifest written
+    /// against the old schema still installs.
+    #[serde(default)]
+    pub authors: Vec<Author>,
+    #[serde(default)]
     pub esmodules: Vec<String>,
+    #[serde(default)]
     pub styles: Vec<String>,
+    #[serde(default)]
     pub packs: Vec<String>,
     pub media: Option<HashMap<String, String>>,
     pub manifest: Option<String>,
@@ -325,10 +341,10 @@ fn validate_vision_content(instance: &serde_json::Value) -> Result<(), String> {
 /// `validate_system_manifest`) because `crates/thunderforge-server/src/systems.rs`'s
 /// `get_system_manifest` handler serves bundled packs' `system.json`
 /// straight off disk as untyped JSON — it never runs the full
-/// `SystemManifest` schema (bundled packs like `dnd5e` don't conform to
-/// that schema's `authors`/`packs` shape, which was designed for the
-/// admin-upload/install flow), but still needs to enforce the `legal`
-/// requirement on the path that actually delivers manifests to a GM.
+/// `SystemManifest` schema, which belongs to the admin-upload/install flow —
+/// but still needs to enforce the `legal` requirement on the path that
+/// actually delivers manifests to a GM. (Bundled manifests do pass the full
+/// schema since spec 066; `bundled_manifests_tests` holds them to it.)
 pub fn validate_legal_content(instance: &serde_json::Value) -> Result<(), String> {
     let legal = instance
         .get("legal")
@@ -352,6 +368,9 @@ pub fn validate_legal_content(instance: &serde_json::Value) -> Result<(), String
 
     Ok(())
 }
+
+#[cfg(test)]
+mod bundled_manifests_tests;
 
 #[cfg(test)]
 mod tests {

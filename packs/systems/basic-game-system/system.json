@@ -12,12 +12,6 @@
     "verified": "0.1.0",
     "maximum": "1.0.0"
   },
-  "esmodules": [
-    "module/main.mjs"
-  ],
-  "styles": [
-    "styles/main.css"
-  ],
   "abilities": {
     "strength": {
       "label": "Strength",
