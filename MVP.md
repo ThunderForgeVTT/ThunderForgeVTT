@@ -271,8 +271,10 @@ resolve their own sets under their own names.
 **What is genuinely still open**, and it is narrower than "where do rules
 execute":
 
-1. **Engine-side rules.** `packs/systems/*/engine/` crates cannot be loaded
-   into a running wasm engine the way server crates link into the binary.
+1. **Engine-side rules.** A pack cannot load code into a running wasm engine
+   the way its server crate links into the binary. ADR-062 decided packs extend
+   the engine with data, and spec 066 removed the `engine/` crates that nothing
+   ever loaded.
 2. **Validation is not enforcement.** Rejecting a bad ability score is not the
    same as gating movement on a computed speed. See Phase 5's open item.
 3. ~~**A vestigial trait.**~~ Resolved by spec 032: `crates/thunderforge-engine/src/systems/core.rs`
@@ -594,8 +596,9 @@ engine; that is the one the budget is stated in.
 - **Open — per-pack lazy loading.** WASM has no dynamic code-splitting
   analogous to JS `import()`. A workspace split alone will not shrink the
   shipped `.wasm` unless each piece compiles to its own binary, fetched and
-  instantiated over a stable JS-glue boundary. The natural seam is
-  `packs/systems/*/engine` — a world needs only its active system. Real
+  instantiated over a stable JS-glue boundary. The natural seam would be
+  per system — a world needs only its active system — but no pack carries
+  engine code today (ADR-062, spec 066). Real
   architectural work, and at 4.92MB brotli the case is still much weaker than
   it looked — though 18.5% closer than it was before spec 031.
 - **Open — Bevy feature trim.** `bevy_ui`/`bevy_ui_render` are unused (the

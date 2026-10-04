@@ -1,7 +1,7 @@
 //! D&D 5e Server Package
 //!
 //! Backend implementation for D&D 5e ruleset for ThunderForgeVTT.
-//! Provides data models, SRD reference data, validators, and GraphQL mutation registration.
+//! Provides data models, SRD reference data and validators.
 //!
 //! ## Architecture
 //!
@@ -20,20 +20,16 @@
 //!   - Validates ability_data, resource_data, proficiency_data, trait_data, spell_data
 //!   - Manifest-driven schema from system.json
 //!   - Zero database migrations when adding new systems
-//!
-//! - **loader.rs**: GraphQL registration (Phase 4.6 integration)
-//!   - Called on server startup
-//!   - Injects D&D 5e mutations into core router
 
 pub mod content_refine;
-pub mod loader;
 pub mod models;
+#[cfg(test)]
+mod registration_tests;
 pub mod rules;
 pub mod srd;
 pub mod stat_blocks;
 pub mod validators;
 
-pub use loader::register_dnd5e_mutations;
 pub use models::{AbilityScores, DnD5eActorData, DnD5eItemData, Proficiencies};
 pub use rules::{ability_modifier, proficiency_bonus, proficiency_bonus_for_challenge, DnD5eRules};
 pub use srd::{get_class, get_skill, get_spell_slots};

@@ -183,7 +183,7 @@ lint-host:
 	cargo clippy --workspace --exclude thunderforge_engine --all-targets -- -D warnings
 
 lint-wasm:
-	cargo clippy -p thunderforge_engine -p thunderforge_cache_browser -p thunderforge_opfs -p dnd5e-engine \
+	cargo clippy -p thunderforge_engine -p thunderforge_cache_browser -p thunderforge_opfs \
 		--target wasm32-unknown-unknown --all-targets -- -D warnings
 
 check-file-length:

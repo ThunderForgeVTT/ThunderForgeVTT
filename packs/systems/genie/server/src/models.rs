@@ -30,7 +30,7 @@ pub struct GenieProficiencyData {
 
 /// Active conditions plus (for player characters only) a Patron/lineage link
 /// (data-model.md `condition_data` / `patron_lore_entry_id`) — reused as the
-/// registry's `trait_data` slot (see loader.rs), since the shared
+/// registry's `trait_data` slot (see lib.rs), since the shared
 /// `SystemValidators` struct has no dedicated condition-data slot.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GenieTraitData {

@@ -1,16 +1,16 @@
 //! Genie Server Package
 //!
 //! Backend implementation for the Genie house system (spec 018-genie-house-system).
-//! Mirrors packs/systems/dnd5e/server's architecture: models.rs (base data), validators.rs
-//! (system-specific JSONB validation), loader.rs (GraphQL registration).
+//! Mirrors packs/systems/dnd5e/server's architecture: models.rs (base data) and validators.rs
+//! (system-specific JSONB validation).
 
-pub mod loader;
 pub mod models;
+#[cfg(test)]
+mod registration_tests;
 pub mod rules;
 pub mod session;
 pub mod validators;
 
-pub use loader::register_genie_mutations;
 pub use models::{GenieAbilityData, GenieProficiencyData, GenieResourceData, GenieTraitData};
 pub use rules::{GenieRules, WISH_POINTS_FOR_LEVEL};
 pub use session::{GenieSessionMutation, GenieSessionQuery};

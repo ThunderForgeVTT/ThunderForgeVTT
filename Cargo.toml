@@ -26,19 +26,12 @@ members = [
     "crates/thunderforge-repo-host",
     "crates/thunderforge-pg-sockets",
     "packs/systems/dnd5e/server",
-    "packs/systems/dnd5e/engine",
     "packs/systems/genie/server",
-    "packs/systems/genie/engine",
     "packs/systems/pathfinder2e/server",
-    "packs/systems/pathfinder2e/engine",
     "packs/systems/cypher_system/server",
-    "packs/systems/cypher_system/engine",
     "packs/systems/fate_core/server",
-    "packs/systems/fate_core/engine",
     "packs/systems/blades_in_the_dark/server",
-    "packs/systems/blades_in_the_dark/engine",
     "packs/systems/year_zero_engine/server",
-    "packs/systems/year_zero_engine/engine",
     "packs/systems/roll_for_shoes/server"
 ]
 default-members = ["apps/server", "crates/thunderforge-server", "crates/thunderforge-core"]

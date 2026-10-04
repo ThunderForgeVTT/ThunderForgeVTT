@@ -2,14 +2,13 @@
 //!
 //! Backend implementation for Year Zero Engine (research digest:
 //! research/system_year_zero_engine.json). Mirrors packs/systems/dnd5e/server's
-//! architecture: models.rs (base data), validators.rs (JSONB validation),
-//! loader.rs (GraphQL registration).
+//! architecture: models.rs (base data) and validators.rs (JSONB validation).
 
-pub mod loader;
 pub mod models;
+#[cfg(test)]
+mod registration_tests;
 pub mod validators;
 
-pub use loader::register_mutations;
 pub use models::{AbilityData, ProficiencyData, ResourceData, TraitData};
 pub use validators::{
     validate_ability_data, validate_ability_data_for_registry, validate_proficiency_data,
