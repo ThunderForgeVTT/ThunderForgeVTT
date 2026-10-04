@@ -9,9 +9,14 @@ import { closeTable, openTable, placeCast, sitDown } from "../playtest/table";
  * Conditions on the board (spec 067 Story 4).
  *
  * A system declares its conditions and a marker for each; a Game Master puts
- * a character under one from the right-click menu; every seat that may see
- * the character's token has the marker drawn on it, and a seat that may not
- * see the token is sent nothing about it.
+ * a character under one from the right-click menu; every seat that is sent
+ * the character's token has the marker drawn on it.
+ *
+ * That includes a creature the Game Master has not shown the players: its
+ * token is on their board, nameless, and so is its marker — a condition goes
+ * where the token goes, no further and no less. That someone who is sent no
+ * token is sent no condition is the server's to prove
+ * (`graphql/actor_conditions_tests.rs`).
  *
  * What is drawn is asked of each engine (`__engineProbe.tokenConditions`),
  * not inferred from the store: the marker is the claim.
@@ -72,8 +77,8 @@ test("a condition a Game Master applies is drawn for every seat that may see the
       at: { x: 0, y: 0 },
       tokenType: "npc",
     });
-    // A creature the players have not been shown: its token never reaches
-    // Aria's client, so neither may anything about it.
+    // A creature the players have not been shown: nameless on their board,
+    // but on it.
     const lurker = await placeCast(table, {
       label: "Lurker",
       at: { x: 192, y: 0 },
@@ -83,12 +88,11 @@ test("a condition a Game Master applies is drawn for every seat that may see the
 
     await sitDown(table, table.gm);
     await sitDown(table, aria.page);
-    await expect
-      .poll(() => storeCounts(table.gm), { timeout: 20_000 })
-      .toMatchObject({ tokens: 2 });
-    await expect
-      .poll(() => storeCounts(aria.page), { timeout: 20_000 })
-      .toMatchObject({ tokens: 1 });
+    for (const client of [table.gm, aria.page]) {
+      await expect
+        .poll(() => storeCounts(client), { timeout: 20_000 })
+        .toMatchObject({ tokens: 2 });
+    }
 
     const poisoned = [{ id: "poisoned", glyph: "dot", color: "danger" }];
 
@@ -129,7 +133,7 @@ test("a condition a Game Master applies is drawn for every seat that may see the
       await aria.page.keyboard.press("Escape");
     });
 
-    await test.step("a condition on a creature the players cannot see is drawn for the Game Master alone", async () => {
+    await test.step("a creature the players have not been shown carries its marker wherever its token is drawn", async () => {
       const dialog = await openConditions(table.gm, lurker.tokenId);
       await dialog.getByTestId("canvas-menu-condition-poisoned").click();
       await expect(
@@ -137,14 +141,11 @@ test("a condition a Game Master applies is drawn for every seat that may see the
       ).toBeChecked();
       await dialog.getByTestId("canvas-menu-conditions-done").click();
 
-      await expect
-        .poll(() => markersOn(table.gm, lurker.tokenId), { timeout: 20_000 })
-        .toEqual(poisoned);
-      // Aria's client was told a token changed and read again; the lurker is
-      // still not hers to see, with or without its marker.
-      await aria.page.waitForTimeout(3_000);
-      expect(await markersOn(aria.page, lurker.tokenId)).toBeNull();
-      expect(await storeCounts(aria.page)).toMatchObject({ tokens: 1 });
+      for (const client of [table.gm, aria.page]) {
+        await expect
+          .poll(() => markersOn(client, lurker.tokenId), { timeout: 20_000 })
+          .toEqual(poisoned);
+      }
     });
 
     await test.step("lifting it removes the marker from both canvases", async () => {

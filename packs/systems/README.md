@@ -469,8 +469,9 @@ Declaring a condition is all a pack does. The host does the rest:
   (`worldSystemConditions`); only a Game Master may change what a character
   is under, and not while play is paused.
 - What a character is under travels on its tokens, so it reaches exactly the
-  seats those tokens reach: a creature hidden from the players has no marker
-  on their boards because it has no token there.
+  seats those tokens reach. A creature the Game Master has not shown the
+  players is still on their board, nameless, and its marker is drawn there
+  too; someone who is sent no token is sent no condition.
 - The board draws one small badge per condition along the token's bottom
   edge, in the order you declared them.
 - A stored condition your manifest no longer declares is not drawn and not
