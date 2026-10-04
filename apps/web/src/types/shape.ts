@@ -3,6 +3,8 @@ export type ShapeKind = "STROKE" | "RECT" | "ELLIPSE" | "LINE" | "TEXT";
 export interface ShapeRecord {
   shapeId: string;
   sceneId: string;
+  /** The level of the scene this stands on. */
+  levelId: string;
   kind: ShapeKind;
   geometry: Record<string, unknown>;
   text: string | null;
@@ -17,6 +19,8 @@ export interface ShapeRecord {
 
 export interface CreateShapeInput {
   sceneId: string;
+  /** Omitted, the level this browser is showing; failing that, the entry level. */
+  levelId?: string;
   kind: ShapeKind;
   geometry: Record<string, unknown>;
   text?: string;

@@ -119,6 +119,17 @@ export async function applyLightWorldEvent(
       "sync",
     );
   }
+
+  // Scene levels: a carried light goes with its bearer when they change
+  // level, and the upserts above only ever add. The light this event names,
+  // absent from what was just read, has left the level being shown.
+  if (
+    lightId &&
+    !lights.some((light) => light.lightId === lightId) &&
+    worldStore.getState().lights[lightId]
+  ) {
+    worldStore.dispatch({ type: "remove_light", lightId }, "sync");
+  }
 }
 
 /**

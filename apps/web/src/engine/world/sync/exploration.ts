@@ -18,6 +18,28 @@ import {
   writeExploration,
 } from "@/services/exploredAreas";
 
+/**
+ * Which floor of a scene a memory belongs to.
+ *
+ * What a player has explored of the tavern is not what they have explored of
+ * the rooms above it, so the browser keeps one map per scene *and* level.
+ * `null` is a scene whose levels could not be read, which is remembered under
+ * the scene alone, as every scene was before levels existed.
+ */
+export interface ExplorationLevel {
+  levelId: string;
+  /**
+   * Whether this is the level the scene opens on — the one a map kept before
+   * levels existed was a map of. See `loadExploration`.
+   */
+  isEntry: boolean;
+}
+
+/** The scene half of the storage key: the scene, and the level when known. */
+function memoryOf(sceneId: string, level?: ExplorationLevel | null): string {
+  return level ? `${sceneId}:${level.levelId}` : sceneId;
+}
+
 /** A Game Master reset the fog (`world_events` code 27). */
 export const EXPLORATION_RESET_EVENT_CODE = 27;
 
@@ -60,6 +82,7 @@ export async function loadExploration(
   userId: string,
   worldId: string,
   sceneId: string,
+  level?: ExplorationLevel | null,
 ): Promise<number> {
   const engine = await import("@/engine/bevy");
   let scene: SceneExploration;
@@ -78,13 +101,26 @@ export async function loadExploration(
     return scene.mine;
   }
 
-  const stored = await readExploration(userId, worldId, sceneId);
+  const memory = memoryOf(sceneId, level);
+  // A map kept before a scene had levels was kept under the scene alone, and
+  // it was a map of what is now the entry level. Read it there when this
+  // level has nothing of its own, so a player's first visit after levels
+  // arrived does not cost them everything they had explored. The next save
+  // writes it under the level, and from then on that copy is the one read.
+  const stored =
+    (await readExploration(userId, worldId, memory)) ??
+    (level?.isEntry ? await readExploration(userId, worldId, sceneId) : null);
   if (!stored || stored.epoch < scene.mine) {
     // Either nothing kept, or kept under an older epoch — a reset happened
     // while this browser was away. Both mean the same thing to the engine.
     await engine.setExploredCells([]);
     if (stored) {
-      await forgetExploration(userId, worldId, sceneId);
+      await forgetExploration(userId, worldId, memory);
+      if (level?.isEntry) {
+        // And the copy from before levels, or it would be read back as this
+        // level's on the next visit and undo the reset.
+        await forgetExploration(userId, worldId, sceneId);
+      }
     }
     return scene.mine;
   }
@@ -106,13 +142,20 @@ export async function saveExploration(
   worldId: string,
   sceneId: string,
   epoch: number,
+  level?: ExplorationLevel | null,
 ): Promise<boolean> {
   const engine = await import("@/engine/bevy");
   const cells = await engine.exploredCells();
   if (cells.length === 0) {
     return false;
   }
-  return writeExploration(userId, worldId, sceneId, cells, epoch);
+  return writeExploration(
+    userId,
+    worldId,
+    memoryOf(sceneId, level),
+    cells,
+    epoch,
+  );
 }
 
 type WorldEventLike = { event_code?: number; eventCode?: number };
@@ -131,10 +174,11 @@ export async function applyExplorationWorldEvent(
   worldId: string,
   sceneId: string,
   event: WorldEventLike,
+  level?: ExplorationLevel | null,
 ): Promise<number | null> {
   const code = event.event_code ?? event.eventCode;
   if (code !== EXPLORATION_RESET_EVENT_CODE) {
     return null;
   }
-  return loadExploration(userId, worldId, sceneId);
+  return loadExploration(userId, worldId, sceneId, level);
 }

@@ -1,6 +1,8 @@
 export interface LightRecord {
   lightId: string;
   sceneId: string;
+  /** The level of the scene this stands on. */
+  levelId: string;
   x: number;
   y: number;
   /** How far the light reaches at all — its dim reach — in world units. */
@@ -20,6 +22,8 @@ export interface LightRecord {
 
 export interface CreateLightInput {
   sceneId: string;
+  /** Omitted, the level this browser is showing; failing that, the entry level. */
+  levelId?: string;
   x: number;
   y: number;
   radius: number;

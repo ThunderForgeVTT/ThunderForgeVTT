@@ -15,6 +15,7 @@ import {
   onPlacementCancelled,
   onPlacementConfirmed,
 } from "@/engine/bevy";
+import type { SceneLevel } from "@/api/levels";
 import { getWorldLoreEntries } from "@/api/lore";
 import {
   InteractionAuthor,
@@ -25,6 +26,12 @@ import type { WorldStore } from "@/engine/world/store";
 import { refreshInteractives } from "@/engine/world/sync/interactives";
 import type { WorldLight, WorldWall } from "@/engine/world/types";
 import { placeAuthoredProp, type PropDraft } from "./placeAuthoredProp";
+import {
+  TRAVEL_EFFECT_ID,
+  linkBack,
+  travelChoices,
+  type LevelInteractives,
+} from "./travelPartners";
 
 /**
  * The GM's rail panel for interactive elements (spec 030).
@@ -63,7 +70,15 @@ export interface InteractionToolProps {
   selectedWallId: string | null;
   walls: Record<string, WorldWall>;
   lights: Record<string, WorldLight>;
+  /**
+   * The scene's levels, lowest first, so a transition can be pointed at
+   * something on another floor. Optional: without it the picker offers only
+   * what is on the level being viewed.
+   */
+  levels?: SceneLevel[];
 }
+
+const NO_LEVELS: SceneLevel[] = [];
 
 export function InteractionTool({
   worldStore,
@@ -73,8 +88,14 @@ export function InteractionTool({
   selectedWallId,
   walls,
   lights,
+  levels = NO_LEVELS,
 }: InteractionToolProps) {
   const [interactives, setInteractives] = useState<Interactive[]>([]);
+  /** Every level's interactives: what a transition may arrive at. */
+  const [everywhere, setEverywhere] = useState<LevelInteractives[]>([]);
+  /** "Link both ways": also point the partner back at what is being saved. */
+  const [bothWays, setBothWays] = useState(true);
+  const [linked, setLinked] = useState<string | null>(null);
   const [lore, setLore] = useState<ReferenceChoice[]>([]);
   const [problem, setProblem] = useState<string | null>(null);
   /** Whether a carry this panel began is still in flight. */
@@ -126,6 +147,35 @@ export function InteractionTool({
     };
   }, [sceneId]);
 
+  // What a transition may arrive at: every level's interactives, not only
+  // this one's — stairs lead somewhere else. Read level by level because the
+  // server answers `interactives` one level at a time, and re-read whenever
+  // this level's own list changes, which is when something was just saved.
+  useEffect(() => {
+    if (levels.length === 0) {
+      return;
+    }
+    let cancelled = false;
+    Promise.all(
+      levels.map(async (level) => ({
+        level,
+        interactives: await getInteractives(sceneId, level.levelId),
+      })),
+    )
+      .then((read) => {
+        if (!cancelled) setEverywhere(read);
+      })
+      .catch(() => {
+        // The picker falls back to this level's own list (below). A Game
+        // Master can still link two things on one floor, and is told nothing
+        // false about the others.
+        if (!cancelled) setEverywhere([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sceneId, levels, interactives]);
+
   useEffect(() => {
     let cancelled = false;
     getWorldLoreEntries(worldId)
@@ -175,8 +225,16 @@ export function InteractionTool({
         label: `Light ${light.id.slice(0, 8)}`,
       })),
       loreEntry: lore,
+      // Scene levels: where a transition arrives. Never itself — stairs that
+      // lead to the step you are standing on are not stairs.
+      interactive: travelChoices(
+        everywhere.length > 0 && levels.length > 0
+          ? everywhere
+          : [{ level: null, interactives }],
+        existing?.interactiveId ?? null,
+      ),
     }),
-    [walls, lights, lore],
+    [walls, lights, lore, everywhere, levels, interactives, existing],
   );
 
   const save = useCallback(
@@ -188,9 +246,11 @@ export function InteractionTool({
     }) => {
       if (!subject) return;
       setProblem(null);
+      setLinked(null);
       try {
+        let saved: Interactive;
         if (existing) {
-          await updateInteractive(existing.interactiveId, {
+          saved = await updateInteractive(existing.interactiveId, {
             effectId: draft.effectId,
             effectConfig: draft.effectConfig,
             activation: draft.activation,
@@ -198,7 +258,7 @@ export function InteractionTool({
             clearEffect: draft.effectId === null,
           });
         } else {
-          await createInteractive({
+          saved = await createInteractive({
             sceneId,
             subjectKind: subject.kind,
             subjectRef: subject.ref,
@@ -209,6 +269,20 @@ export function InteractionTool({
             fireMode: draft.fireMode,
           });
         }
+        if (bothWays) {
+          const outcome = await linkBack(
+            { updateInteractive },
+            saved,
+            everywhere.length > 0
+              ? everywhere.flatMap((each) => each.interactives)
+              : interactives,
+          );
+          if (outcome.kind === "linked") {
+            setLinked("Linked both ways.");
+          } else if (outcome.kind === "refused") {
+            setProblem(outcome.message);
+          }
+        }
         await reload();
       } catch {
         // Said out loud: the server refuses configuration that does not match
@@ -217,7 +291,7 @@ export function InteractionTool({
         setProblem("That could not be saved.");
       }
     },
-    [existing, reload, sceneId, subject],
+    [bothWays, everywhere, existing, interactives, reload, sceneId, subject],
   );
 
   const remove = useCallback(async () => {
@@ -332,6 +406,23 @@ export function InteractionTool({
           references={references}
           onSave={(draft) => void save(draft)}
           onDelete={existing ? () => void remove() : undefined}
+          beforeSave={({ effectId }) =>
+            effectId === TRAVEL_EFFECT_ID ? (
+              <label
+                htmlFor="interaction-link-both-ways"
+                className="flex items-center gap-2 text-xs"
+              >
+                <input
+                  id="interaction-link-both-ways"
+                  type="checkbox"
+                  data-testid="interaction-link-both-ways"
+                  checked={bothWays}
+                  onChange={(event) => setBothWays(event.target.checked)}
+                />
+                Link both ways — the other end leads back here
+              </label>
+            ) : null
+          }
         />
       ) : (
         <>
@@ -386,6 +477,12 @@ export function InteractionTool({
         <Button variant="ghost" onClick={() => void reload()}>
           Fired once already — reset it from the list
         </Button>
+      ) : null}
+
+      {linked ? (
+        <p role="status" className="text-xs" data-testid="interaction-linked">
+          {linked}
+        </p>
       ) : null}
 
       {problem ? (

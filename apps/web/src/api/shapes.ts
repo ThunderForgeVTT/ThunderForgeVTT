@@ -1,4 +1,5 @@
 import { postGraphQL } from "@/api/graphqlClient";
+import { onViewedLevel, viewedLevelId } from "@/api/viewedLevel";
 import type {
   CreateShapeInput,
   ShapeRecord,
@@ -8,6 +9,7 @@ import type {
 const SHAPE_FIELDS = `
   shapeId
   sceneId
+  levelId
   kind
   geometry
   text
@@ -43,17 +45,24 @@ type DeleteShapeMutation = {
  * carries the changed shape's id and scene, so on receipt we re-fetch
  * this list rather than trying to reconstruct a shape from the notify
  * payload alone.
+ *
+ * Scene levels: answers for one level — the one named, else the one this
+ * browser is showing (`viewedLevel.ts`), else whichever the server opens on.
+ * A level this viewer may not read answers empty rather than failing.
  */
-export function getShapes(sceneId: string): Promise<ShapeRecord[]> {
+export function getShapes(
+  sceneId: string,
+  levelId?: string,
+): Promise<ShapeRecord[]> {
   return postGraphQL<ShapesQuery>(
     `
-      query SceneShapes($sceneId: UUID!) {
-        shapes(sceneId: $sceneId) {
+      query SceneShapes($sceneId: UUID!, $levelId: UUID) {
+        shapes(sceneId: $sceneId, levelId: $levelId) {
           ${SHAPE_FIELDS}
         }
       }
     `,
-    { sceneId },
+    { sceneId, levelId: levelId ?? viewedLevelId(sceneId) },
   ).then((data) => data.shapes);
 }
 
@@ -66,7 +75,7 @@ export function createShape(input: CreateShapeInput): Promise<ShapeRecord> {
         }
       }
     `,
-    { input },
+    { input: onViewedLevel(input) },
   ).then((data) => data.createShape);
 }
 

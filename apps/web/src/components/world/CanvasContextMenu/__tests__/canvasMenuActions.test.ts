@@ -10,6 +10,7 @@ function token(overrides: Partial<TokenRecord>): TokenRecord {
   return {
     tokenId: "t",
     sceneId: "s",
+    levelId: "l",
     actorId: "a",
     x: 0,
     y: 0,

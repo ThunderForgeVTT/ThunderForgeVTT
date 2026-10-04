@@ -743,13 +743,16 @@
         }
       ],
       "paths": [
-        "apps/web/src/api/{scenes,exploration}.ts",
+        "apps/web/src/api/{scenes,exploration,levels,viewedLevel}.ts",
         "apps/web/src/components/campaign/**",
+        "apps/web/src/components/canvas-tools/InteractionTool/travelPartners.ts",
+        "apps/web/src/components/world/LevelTabs/**",
         "apps/web/src/components/world/SceneSwitcher/**",
-        "apps/web/src/engine/world/sync/{scenes,exploration}.ts",
+        "apps/web/src/engine/world/sync/{scenes,exploration,levels}.ts",
         "apps/web/src/layouts/world-layout/WorldStagingPage.tsx",
         "apps/web/src/pages/world/WorldStagingRoutePage.tsx",
         "apps/web/src/pages/world/scenes/**",
+        "apps/web/src/pages/world/useSceneLevels.ts",
         "apps/web/src/services/exploredAreas.ts",
         "apps/web/src/types/scene.ts",
         "crates/thunderforge-canvas-core/src/party.rs",

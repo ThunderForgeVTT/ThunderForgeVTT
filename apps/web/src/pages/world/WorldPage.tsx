@@ -135,6 +135,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import { useWorldMembers } from "@/hooks/useWorldMembers";
 import { useSceneUnits } from "@/hooks/useSceneUnits";
+import { useSceneLevels } from "@/pages/world/useSceneLevels";
+import { LevelTabs } from "@/components/world/LevelTabs";
+import type { SceneLevel } from "@/api/levels";
 import { WallTool } from "@/components/canvas-tools/WallTool";
 import { LightingTool } from "@/components/canvas-tools/LightingTool";
 import { ShapeTool } from "@/components/canvas-tools/ShapeTool";
@@ -614,6 +617,36 @@ export default function WorldPage() {
   const retrySceneLoad = useCallback(() => {
     setSceneLoadGeneration((generation) => generation + 1);
   }, []);
+
+  // Scene levels: which floor of the scene is on the board.
+  //
+  // The engine is shown one level at a time and knows nothing of the others,
+  // so changing level is a reload of the board — the same despawn, grant and
+  // re-fetch a retry of the scene performs, which is why the switch is handed
+  // the retry. By the time it runs the hook has already told the api layer
+  // which level is wanted (`api/viewedLevel.ts`), so every loader below asks
+  // for the new floor without being told.
+  const {
+    levels: sceneLevelList,
+    level: sceneLevel,
+    settled: sceneLevelSettled,
+    onWorldEvent: onLevelWorldEvent,
+    actions: levelActions,
+  } = useSceneLevels({
+    worldId: id,
+    sceneId,
+    userId: user?.id ?? null,
+    isGm: isSceneOwner,
+    onSwitch: retrySceneLoad,
+  });
+  // For the world-event loop, which lives as long as the scene does and must
+  // not be torn down and reopened every time a token count changes.
+  const sceneLevelRef = useRef<SceneLevel | null>(null);
+  const sceneLevelListRef = useRef<readonly SceneLevel[]>(sceneLevelList);
+  useEffect(() => {
+    sceneLevelRef.current = sceneLevel;
+    sceneLevelListRef.current = sceneLevelList;
+  }, [sceneLevel, sceneLevelList]);
   // The scene being played, fetched by id when the list does not carry it.
   //
   // `scenes(worldId:)` filters hidden scenes out for non-GMs (spec 022
@@ -647,12 +680,22 @@ export default function WorldPage() {
   // Playtest 2026-09-10 P9: a scene's light as last heard — from a change
   // event or this Game Master's own control — ahead of the scene list, which
   // is fetched once and would otherwise go on holding the old level.
+  //
+  // Scene levels: the light is the *level's* now, and the level list is
+  // re-read whenever a level changes — so what was last heard is trusted only
+  // until the list it was heard against is replaced. `against` is that list;
+  // a newer one carries the server's own answer and outranks it. Without that
+  // an old "last heard" would go on masking a light another Game Master has
+  // since changed, and would follow this one from floor to floor.
   const [ambientBySceneId, setAmbientBySceneId] = useState<
-    Record<string, AmbientLevel>
+    Record<string, { level: AmbientLevel; against: readonly SceneLevel[] }>
   >({});
+  const heardAmbient = sceneId ? ambientBySceneId[sceneId] : undefined;
   const sceneAmbient: AmbientLevel =
-    (sceneId ? ambientBySceneId[sceneId] : undefined) ??
-    asAmbientLevel(selectedScene?.ambientLight);
+    (heardAmbient?.against === sceneLevelList
+      ? heardAmbient.level
+      : undefined) ??
+    asAmbientLevel(sceneLevel?.ambientLight ?? selectedScene?.ambientLight);
 
   useEffect(() => {
     if (!id) {
@@ -1107,18 +1150,27 @@ export default function WorldPage() {
   // per step. A session that ends unsaved loses a few seconds of walking,
   // which a player recovers by standing still.
   const explorationEpoch = useRef(0);
+  const explorationLevelId = sceneLevel?.levelId ?? null;
+  const explorationLevelIsEntry = sceneLevel?.isEntry ?? false;
   useEffect(() => {
-    if (!engineReady || !id || !sceneId || !user?.id) {
+    // Scene levels: what a player has explored is remembered per floor, so
+    // this waits to be told which floor. Starting on the scene's own key and
+    // moving to the level's a moment later would save the first under the
+    // second's name on the way out.
+    if (!engineReady || !id || !sceneId || !user?.id || !sceneLevelSettled) {
       return;
     }
     const userId = user.id;
     const worldId = id;
     const scene = sceneId;
+    const level = explorationLevelId
+      ? { levelId: explorationLevelId, isEntry: explorationLevelIsEntry }
+      : undefined;
     let stopped = false;
 
     void import("@/engine/world/sync/exploration").then(
       async ({ loadExploration }) => {
-        const epoch = await loadExploration(userId, worldId, scene);
+        const epoch = await loadExploration(userId, worldId, scene, level);
         if (!stopped) {
           explorationEpoch.current = epoch;
         }
@@ -1128,7 +1180,13 @@ export default function WorldPage() {
     const timer = window.setInterval(() => {
       void import("@/engine/world/sync/exploration").then(
         ({ saveExploration }) =>
-          saveExploration(userId, worldId, scene, explorationEpoch.current),
+          saveExploration(
+            userId,
+            worldId,
+            scene,
+            explorationEpoch.current,
+            level,
+          ),
       );
     }, 10_000);
 
@@ -1139,10 +1197,24 @@ export default function WorldPage() {
       // not cost the walk that led to leaving it.
       void import("@/engine/world/sync/exploration").then(
         ({ saveExploration }) =>
-          saveExploration(userId, worldId, scene, explorationEpoch.current),
+          saveExploration(
+            userId,
+            worldId,
+            scene,
+            explorationEpoch.current,
+            level,
+          ),
       );
     };
-  }, [engineReady, id, sceneId, user?.id]);
+  }, [
+    engineReady,
+    id,
+    sceneId,
+    user?.id,
+    sceneLevelSettled,
+    explorationLevelId,
+    explorationLevelIsEntry,
+  ]);
 
   // Spec 045 FR-013/FR-015: when the engine stops a move at a wall, say so.
   //
@@ -1244,7 +1316,12 @@ export default function WorldPage() {
    * only-once code path as the untested one.
    */
   useEffect(() => {
-    if (!sceneId || !bridgeReady) {
+    // Scene levels: nothing is loaded until it is known which level to load.
+    // Every loader behind the grant asks for "the level on screen", and
+    // before that is settled the answer would be the server's default — the
+    // entry level — which for a player standing upstairs is a floor they are
+    // answered nothing for, loaded and then thrown away.
+    if (!sceneId || !bridgeReady || !sceneLevelSettled) {
       return;
     }
     // One transition per scene per attempt. Without this, the engine finishing
@@ -1279,6 +1356,7 @@ export default function WorldPage() {
     bridgeReady,
     engineReady,
     sceneLoadGranted,
+    sceneLevelSettled,
   ]);
 
   /**
@@ -1312,6 +1390,15 @@ export default function WorldPage() {
     }
     void completeSceneTransition();
   }, [sceneLoadGranted, sceneLoadState]);
+
+  // The level's board, as plain values rather than the level itself: the level
+  // list is re-read on every token that arrives or leaves (a Game Master's
+  // tabs count them), and a new object for an unchanged floor must not send
+  // the engine its map again.
+  const hasLevelBoard = sceneLevel !== null;
+  const levelBackgroundUrl = sceneLevel?.backgroundUrl ?? null;
+  const levelWidth = sceneLevel?.width;
+  const levelHeight = sceneLevel?.height;
 
   useEffect(() => {
     // Gated on the engine's grant (see `sceneLoadGrant`): the background and
@@ -1347,6 +1434,12 @@ export default function WorldPage() {
       return;
     }
 
+    const boardBackgroundUrl = hasLevelBoard
+      ? levelBackgroundUrl
+      : selectedScene.backgroundUrl;
+    const boardWidth = levelWidth ?? selectedScene.width;
+    const boardHeight = levelHeight ?? selectedScene.height;
+
     // Switching scenes re-points the engine's background sprite at the
     // newly-selected scene's imported map art (null clears it for a scene
     // with no import). worldStore.dispatch's generic bindWorldStore
@@ -1361,12 +1454,17 @@ export default function WorldPage() {
     // `backgroundUrl` (GraphQLScene, graphql.rs) is the fetchable URL for
     // whichever mechanism actually populated the scene, computed
     // server-side — use that here instead.
+    //
+    // Scene levels: the art and its extent are the *level's*. The scene's own
+    // are its entry level's, and a player standing on any other floor is
+    // refused them outright — so the scene's are used only when no level
+    // could be read at all.
     worldStore.dispatch(
       {
         type: "set_scene_background",
-        backgroundImagePath: selectedScene.backgroundUrl,
-        width: selectedScene.width,
-        height: selectedScene.height,
+        backgroundImagePath: boardBackgroundUrl,
+        width: boardWidth,
+        height: boardHeight,
         worldId: id,
       },
       "ui",
@@ -1388,8 +1486,8 @@ export default function WorldPage() {
         // centred on the origin, so an origin-anchored grid only lines up with
         // the art when the map is an even number of cells across — a coin
         // flip, and wrong for half this project's own example maps.
-        mapWidth: selectedScene.width,
-        mapHeight: selectedScene.height,
+        mapWidth: boardWidth,
+        mapHeight: boardHeight,
         visible: true,
       },
       "ui",
@@ -1402,13 +1500,13 @@ export default function WorldPage() {
     // surface "the background asset is unreachable" per FR-013 rather
     // than leaving the canvas silently blank).
     const generation = sceneLoadGeneration;
-    if (!selectedScene.backgroundUrl) {
+    if (!boardBackgroundUrl) {
       markSceneResourceLoaded("background", generation);
       return;
     }
 
     let cancelled = false;
-    void fetch(selectedScene.backgroundUrl, {
+    void fetch(boardBackgroundUrl, {
       method: "HEAD",
       credentials: "same-origin",
     })
@@ -1442,6 +1540,10 @@ export default function WorldPage() {
     sceneLoadGeneration,
     markSceneResourceLoaded,
     markSceneResourceFailed,
+    hasLevelBoard,
+    levelBackgroundUrl,
+    levelWidth,
+    levelHeight,
   ]);
 
   useEffect(() => {
@@ -1566,6 +1668,16 @@ export default function WorldPage() {
     // its despawn — see `sceneLoadGrant` above.
     if (!sceneId || !bridgeReady || !sceneLoadGranted) {
       return;
+    }
+
+    // Chrome's own copy of the previous board's lights, cleared for the same
+    // reason as the walls, tokens and shapes loops. It was the one loader
+    // without such a loop, and a level switch is what made that matter: the
+    // floor left behind and the floor arrived at are one scene, so nothing
+    // else would ever take the old floor's lights out of the Lights panel.
+    // `"sync"` source, so the light bridge never calls `deleteLight`.
+    for (const lightId of Object.keys(worldStore.getState().lights)) {
+      worldStore.dispatch({ type: "remove_light", lightId }, "sync");
     }
 
     const lightsGeneration = sceneLoadGeneration;
@@ -1761,6 +1873,10 @@ export default function WorldPage() {
         while (!cancelled) {
           const { value: event, done } = await iterator.next();
           if (done || cancelled || !event) break;
+          // Scene levels: a level changed, or a token changed floor. Told
+          // first and not awaited — it re-reads which level this viewer is on
+          // and reloads the board itself if the answer moved.
+          onLevelWorldEvent(event);
           await Promise.all([
             applyWallWorldEvent(worldStore, sceneId, event),
             applyTokenWorldEvent(worldStore, sceneId, event),
@@ -1786,21 +1902,36 @@ export default function WorldPage() {
           if (user?.id) {
             const epoch = await import("@/engine/world/sync/exploration").then(
               ({ applyExplorationWorldEvent }) =>
-                applyExplorationWorldEvent(user.id, id, sceneId, event),
+                applyExplorationWorldEvent(
+                  user.id,
+                  id,
+                  sceneId,
+                  event,
+                  sceneLevelRef.current
+                    ? {
+                        levelId: sceneLevelRef.current.levelId,
+                        isEntry: sceneLevelRef.current.isEntry,
+                      }
+                    : undefined,
+                ),
             );
             if (epoch !== null) {
               explorationEpoch.current = epoch;
             }
           }
-          const ambient = applySceneLightingWorldEvent(
-            worldStore,
-            sceneId,
-            event,
-          );
+          // Scene levels: the scene's own light is its entry level's. On
+          // any other floor a change to it is news about a board this client
+          // is not showing, and applying it would relight the wrong one.
+          const shownLevel = sceneLevelRef.current;
+          const ambient =
+            shownLevel === null || shownLevel.isEntry
+              ? applySceneLightingWorldEvent(worldStore, sceneId, event)
+              : null;
           if (ambient) {
+            const against = sceneLevelListRef.current;
             setAmbientBySceneId((current) => ({
               ...current,
-              [sceneId]: ambient,
+              [sceneId]: { level: ambient, against },
             }));
           }
           // The approval queue is server state, so a nudge on the bus is all
@@ -1819,7 +1950,7 @@ export default function WorldPage() {
     // `user?.id` because the exploration handler above resets *this
     // player's* fog: a subscription that outlived a change of user would
     // carry the previous one's id and reset the wrong person's map.
-  }, [id, sceneId, bridgeReady, worldStore, user?.id]);
+  }, [id, sceneId, bridgeReady, worldStore, user?.id, onLevelWorldEvent]);
 
   // Playtest 2026-09-10 P9: hand the engine the scene's light. Nothing did,
   // so every scene rendered in daylight and no wall ever cast a shadow.
@@ -1836,13 +1967,28 @@ export default function WorldPage() {
         return;
       }
       const previous = sceneAmbient;
-      setAmbientBySceneId((current) => ({ ...current, [sceneId]: level }));
+      const against = sceneLevelList;
+      setAmbientBySceneId((current) => ({
+        ...current,
+        [sceneId]: { level, against },
+      }));
+      if (sceneLevel) {
+        // Scene levels: the control lights the floor on the board, not the
+        // scene. No rollback to write — the level list is re-read whether the
+        // server agreed or refused, and a re-read list outranks what was set
+        // here a moment ago (see `ambientBySceneId`).
+        void levelActions.setAmbient(sceneLevel.levelId, level);
+        return;
+      }
       updateSceneAmbientLight(sceneId, level).catch((error: unknown) => {
         console.error("Failed to change the scene's light:", error);
-        setAmbientBySceneId((current) => ({ ...current, [sceneId]: previous }));
+        setAmbientBySceneId((current) => ({
+          ...current,
+          [sceneId]: { level: previous, against },
+        }));
       });
     },
-    [sceneId, sceneAmbient],
+    [sceneId, sceneAmbient, sceneLevel, sceneLevelList, levelActions],
   );
 
   // Spec 045 US7: the Game Master's two controls — whether this scene
@@ -1943,7 +2089,11 @@ export default function WorldPage() {
    * bridge engine-detected triggers back to the server, which decides.
    */
   useEffect(() => {
-    if (!sceneId || !bridgeReady) {
+    // Scene levels: gated on the engine's grant like the other loaders, and
+    // re-run by the load generation. Interactives are per level, and a level
+    // switch changes neither `sceneId` nor `bridgeReady` — without the grant
+    // in this list the new floor's stairs would never be read.
+    if (!sceneId || !bridgeReady || !sceneLoadGranted) {
       return;
     }
 
@@ -1967,7 +2117,7 @@ export default function WorldPage() {
       // would let a background tab's stale positions fire a region.
       setScenePlaying(worldStore, false);
     };
-  }, [sceneId, bridgeReady, worldStore]);
+  }, [sceneId, bridgeReady, worldStore, sceneLoadGranted, sceneLoadGeneration]);
 
   /**
    * Which character the person at this keyboard is playing.
@@ -2876,6 +3026,7 @@ export default function WorldPage() {
                           selectedWallId={worldState.selectedWallId}
                           walls={worldState.walls}
                           lights={worldState.lights}
+                          levels={sceneLevelList}
                         />
                       ),
                     },
@@ -2907,6 +3058,20 @@ export default function WorldPage() {
                * found the dice roller's Roll button under it at the bottom
                * left, and the Game Master's tool flyout over it at the top
                * left. The open dock covers the right. */}
+              {/* Scene levels: which floor this is. Top centre — the Game
+               * Master's tool flyout has the top left, the open dock the
+               * right, and the table feed the bottom. It renders nothing for
+               * a player on a scene with one level, so a scene made before
+               * levels existed looks exactly as it did. */}
+              <div className="pointer-events-none absolute top-3 left-1/2 z-[1040] flex max-w-[50%] -translate-x-1/2 justify-center">
+                <LevelTabs
+                  levels={sceneLevelList}
+                  level={sceneLevel}
+                  isGm={isSceneOwner}
+                  selectedTokenIds={worldState.selectedTokenIds}
+                  actions={levelActions}
+                />
+              </div>
               {id ? (
                 <div
                   className="pointer-events-none absolute bottom-3 left-1/2 z-[1040] flex w-80 max-w-[40%] -translate-x-1/2 flex-col-reverse gap-2"

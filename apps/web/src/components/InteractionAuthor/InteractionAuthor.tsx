@@ -1,11 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { Button } from "@/components/ui/button/Button";
 import { Panel } from "@/components/ui/panel/Panel";
 import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -50,6 +58,12 @@ import { helpersFor, missingRequiredFields } from "./effectHelpers";
 export interface ReferenceChoice {
   id: string;
   label: string;
+  /**
+   * A heading to list this choice under, when the caller's choices fall into
+   * kinds worth telling apart — the stairs a traveller may arrive at, under
+   * the level each is on. Choices with no group are listed bare, as before.
+   */
+  group?: string;
 }
 
 export interface InteractionAuthorProps {
@@ -86,6 +100,16 @@ export interface InteractionAuthorProps {
    * to be.
    */
   saveLabel?: string;
+  /**
+   * Something the caller wants said or asked just above the save control,
+   * given the effect currently chosen.
+   *
+   * A slot rather than a field, because what belongs here is the caller's
+   * knowledge and not the registry's: "also point the partner back at this"
+   * is a second write to a second interactive, which this panel — one
+   * interactive on one subject — has no business knowing how to make.
+   */
+  beforeSave?: (draft: { effectId: string | null }) => ReactNode;
 }
 
 const ACTIVATION_OPTIONS = [
@@ -109,6 +133,7 @@ export function InteractionAuthor({
   onSave,
   onDelete,
   saveLabel = "Save",
+  beforeSave,
 }: InteractionAuthorProps) {
   const [registry, setRegistry] = useState<EffectDeclaration[] | null>(null);
   const [effectId, setEffectId] = useState<string>(
@@ -297,6 +322,8 @@ export function InteractionAuthor({
         </p>
       )}
 
+      {beforeSave?.({ effectId: effectId === NO_EFFECT ? null : effectId })}
+
       <Button
         onClick={save}
         disabled={missing.length > 0}
@@ -311,6 +338,28 @@ export function InteractionAuthor({
       )}
     </Panel>
   );
+}
+
+/**
+ * Choices in the order given, gathered under their headings.
+ *
+ * A group appears where its first member did, so a caller that lists levels
+ * lowest first gets them lowest first.
+ */
+function groupChoices(
+  choices: ReferenceChoice[],
+): { group: string | null; members: ReferenceChoice[] }[] {
+  const groups: { group: string | null; members: ReferenceChoice[] }[] = [];
+  for (const choice of choices) {
+    const group = choice.group ?? null;
+    const into = groups.find((each) => each.group === group);
+    if (into) {
+      into.members.push(choice);
+    } else {
+      groups.push({ group, members: [choice] });
+    }
+  }
+  return groups;
 }
 
 /**
@@ -383,11 +432,24 @@ function ConfigInput({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {choices.map((choice) => (
-                <SelectItem key={choice.id} value={choice.id}>
-                  {choice.label}
-                </SelectItem>
-              ))}
+              {groupChoices(choices).map(({ group, members }) =>
+                group === null ? (
+                  members.map((choice) => (
+                    <SelectItem key={choice.id} value={choice.id}>
+                      {choice.label}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectGroup key={group}>
+                    <SelectLabel>{group}</SelectLabel>
+                    {members.map((choice) => (
+                      <SelectItem key={choice.id} value={choice.id}>
+                        {choice.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ),
+              )}
             </SelectContent>
           </Select>
         </>

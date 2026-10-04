@@ -24,6 +24,7 @@ function token(over: Partial<TokenRecord> = {}): TokenRecord {
   return {
     tokenId: "token-1",
     sceneId: "scene-1",
+    levelId: "level-1",
     actorId: null,
     x: 0,
     y: 0,

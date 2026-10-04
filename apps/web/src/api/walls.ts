@@ -1,4 +1,5 @@
 import { postGraphQL } from "@/api/graphqlClient";
+import { onViewedLevel, viewedLevelId } from "@/api/viewedLevel";
 import type {
   CreateWallInput,
   UpdateWallInput,
@@ -8,6 +9,7 @@ import type {
 const WALL_FIELDS = `
   wallId
   sceneId
+  levelId
   x1
   y1
   x2
@@ -46,17 +48,24 @@ type DeleteWallMutation = {
  * engine/world/sync/walls.ts): the world_events NOTIFY payload only
  * carries the changed wall's id and scene, so on receipt we re-fetch this
  * list rather than trying to reconstruct a wall from the notify payload.
+ *
+ * Scene levels: answers for one level — the one named, else the one this
+ * browser is showing (`viewedLevel.ts`), else whichever the server opens on.
+ * A level this viewer may not read answers empty rather than failing.
  */
-export function getWalls(sceneId: string): Promise<WallRecord[]> {
+export function getWalls(
+  sceneId: string,
+  levelId?: string,
+): Promise<WallRecord[]> {
   return postGraphQL<WallsQuery>(
     `
-      query SceneWalls($sceneId: UUID!) {
-        walls(sceneId: $sceneId) {
+      query SceneWalls($sceneId: UUID!, $levelId: UUID) {
+        walls(sceneId: $sceneId, levelId: $levelId) {
           ${WALL_FIELDS}
         }
       }
     `,
-    { sceneId },
+    { sceneId, levelId: levelId ?? viewedLevelId(sceneId) },
   ).then((data) => data.walls);
 }
 
@@ -69,7 +78,7 @@ export function createWall(input: CreateWallInput): Promise<WallRecord> {
         }
       }
     `,
-    { input },
+    { input: onViewedLevel(input) },
   ).then((data) => data.createWall);
 }
 

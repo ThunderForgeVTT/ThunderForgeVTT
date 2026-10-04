@@ -1,4 +1,5 @@
 import { postGraphQL } from "@/api/graphqlClient";
+import { onViewedLevel, viewedLevelId } from "@/api/viewedLevel";
 import type {
   CreateTokenInput,
   TokenRecord,
@@ -8,6 +9,7 @@ import type {
 const TOKEN_FIELDS = `
   tokenId
   sceneId
+  levelId
   actorId
   x
   y
@@ -68,17 +70,24 @@ type DeleteTokenMutation = {
  * engine/world/sync/tokens.ts): the world_events NOTIFY payload only
  * carries the changed token's id and scene, so on receipt we re-fetch this
  * list rather than trying to reconstruct a token from the notify payload.
+ *
+ * Scene levels: answers for one level — the one named, else the one this
+ * browser is showing (`viewedLevel.ts`), else whichever the server opens on.
+ * A level this viewer may not read answers empty rather than failing.
  */
-export function getTokens(sceneId: string): Promise<TokenRecord[]> {
+export function getTokens(
+  sceneId: string,
+  levelId?: string,
+): Promise<TokenRecord[]> {
   return postGraphQL<TokensQuery>(
     `
-      query SceneTokens($sceneId: UUID!) {
-        tokens(sceneId: $sceneId) {
+      query SceneTokens($sceneId: UUID!, $levelId: UUID) {
+        tokens(sceneId: $sceneId, levelId: $levelId) {
           ${TOKEN_FIELDS}
         }
       }
     `,
-    { sceneId },
+    { sceneId, levelId: levelId ?? viewedLevelId(sceneId) },
   ).then((data) => data.tokens);
 }
 
@@ -91,7 +100,7 @@ export function createToken(input: CreateTokenInput): Promise<TokenRecord> {
         }
       }
     `,
-    { input },
+    { input: onViewedLevel(input) },
   ).then((data) => data.createToken);
 }
 

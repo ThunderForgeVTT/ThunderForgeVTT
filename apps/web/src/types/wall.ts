@@ -3,6 +3,8 @@ export type DoorState = "NONE" | "OPEN" | "CLOSED";
 export interface WallRecord {
   wallId: string;
   sceneId: string;
+  /** The level of the scene this stands on. */
+  levelId: string;
   x1: number;
   y1: number;
   x2: number;
@@ -23,6 +25,8 @@ export interface WallRecord {
 
 export interface CreateWallInput {
   sceneId: string;
+  /** Omitted, the level this browser is showing; failing that, the entry level. */
+  levelId?: string;
   x1: number;
   y1: number;
   x2: number;

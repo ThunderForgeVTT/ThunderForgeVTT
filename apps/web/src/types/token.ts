@@ -7,6 +7,8 @@
 export interface TokenRecord {
   tokenId: string;
   sceneId: string;
+  /** The level of the scene this stands on. */
+  levelId: string;
   actorId: string | null;
   x: number;
   y: number;
@@ -54,6 +56,8 @@ export const TOKEN_TYPES: { value: TokenType; label: string }[] = [
 
 export interface CreateTokenInput {
   sceneId: string;
+  /** Omitted, the level this browser is showing; failing that, the entry level. */
+  levelId?: string;
   actorId?: string;
   x: number;
   y: number;

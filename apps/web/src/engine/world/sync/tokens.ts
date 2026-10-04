@@ -181,6 +181,20 @@ export async function applyTokenWorldEvent(
     );
   }
 
+  // Scene levels: the token this event names is not in what was just read,
+  // and is on this board. It has left the level being shown — walked onto the
+  // stairs, or was put on another floor — and the upserts above cannot say
+  // so, because they only ever add. Only the named token is taken off, never
+  // "everything the read did not mention": the store also holds tokens the
+  // engine made that the server has not answered for yet.
+  if (
+    tokenId &&
+    !tokens.some((token) => token.tokenId === tokenId) &&
+    worldStore.getState().tokens[tokenId]
+  ) {
+    worldStore.dispatch({ type: "remove_token", tokenId }, "sync");
+  }
+
   // Spec 045 US6: and how far each of them sees, which its game system
   // decides; spec 046 US4: and how many squares each fills. After the tokens,
   // because the engine attaches both to a token it already holds — named

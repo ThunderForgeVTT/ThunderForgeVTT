@@ -113,8 +113,10 @@ export async function applyInteractiveWorldEvent(
 export async function activateAndApply(
   worldStore: WorldStore,
   interactiveId: string,
+  /** Who is doing it, for a transition between levels. See the api call. */
+  tokenId?: string | null,
 ): Promise<ActivationResult> {
-  const result = await activateInteractive(interactiveId);
+  const result = await activateInteractive(interactiveId, tokenId);
 
   if (result.outcome === "performed" && result.effectId) {
     worldStore.dispatch(

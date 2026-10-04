@@ -1,5 +1,6 @@
 import { postGraphQL } from "./graphqlClient";
 import { createToken } from "./tokens";
+import { onViewedLevel, viewedLevelId } from "./viewedLevel";
 import type { TokenRecord } from "@/types/token";
 
 /**
@@ -68,6 +69,8 @@ export interface EffectDeclaration {
 export interface Interactive {
   interactiveId: string;
   sceneId: string;
+  /** The level of the scene this stands on. */
+  levelId: string;
   subjectKind: SubjectKind;
   subjectRef: string | null;
   geometry: unknown | null;
@@ -104,6 +107,7 @@ export interface ActivationResult {
 const INTERACTIVE_FIELDS = `
   interactiveId
   sceneId
+  levelId
   subjectKind
   subjectRef
   geometry
@@ -133,18 +137,27 @@ export async function getEffectRegistry(): Promise<EffectDeclaration[]> {
   return payload?.effectRegistry ?? [];
 }
 
-export async function getInteractives(sceneId: string): Promise<Interactive[]> {
+/**
+ * One level's interactives: the level named, else the one this browser is
+ * showing (`viewedLevel.ts`), else whichever the server opens on.
+ */
+export async function getInteractives(
+  sceneId: string,
+  levelId?: string,
+): Promise<Interactive[]> {
   const payload = await postGraphQL<{ interactives: Interactive[] }>(
-    `query ($sceneId: UUID!) {
-      interactives(sceneId: $sceneId) { ${INTERACTIVE_FIELDS} }
+    `query ($sceneId: UUID!, $levelId: UUID) {
+      interactives(sceneId: $sceneId, levelId: $levelId) { ${INTERACTIVE_FIELDS} }
     }`,
-    { sceneId },
+    { sceneId, levelId: levelId ?? viewedLevelId(sceneId) },
   );
   return payload?.interactives ?? [];
 }
 
 export interface CreateInteractiveInput {
   sceneId: string;
+  /** Omitted, the level this browser is showing; failing that, the entry level. */
+  levelId?: string;
   subjectKind: SubjectKind;
   subjectRef?: string | null;
   geometry?: unknown;
@@ -162,7 +175,7 @@ export async function createInteractive(
     `mutation ($input: GraphQLCreateInteractiveInput!) {
       createInteractive(input: $input) { ${INTERACTIVE_FIELDS} }
     }`,
-    { input },
+    { input: onViewedLevel(input) },
   );
   return payload.createInteractive;
 }
@@ -227,12 +240,18 @@ export async function resetInteractive(
  */
 export async function activateInteractive(
   interactiveId: string,
+  /**
+   * Which token is doing it. Only a transition between levels needs to know —
+   * a trapdoor has to be told who is going down it — and every other effect
+   * ignores it.
+   */
+  tokenId?: string | null,
 ): Promise<ActivationResult> {
   const payload = await postGraphQL<{
     activateInteractive: ActivationResult;
   }>(
-    `mutation ($id: UUID!) {
-      activateInteractive(interactiveId: $id) {
+    `mutation ($id: UUID!, $tokenId: UUID) {
+      activateInteractive(interactiveId: $id, tokenId: $tokenId) {
         outcome
         reason
         requestId
@@ -241,7 +260,7 @@ export async function activateInteractive(
         notices
       }
     }`,
-    { id: interactiveId },
+    { id: interactiveId, tokenId: tokenId ?? undefined },
   );
   return payload.activateInteractive;
 }

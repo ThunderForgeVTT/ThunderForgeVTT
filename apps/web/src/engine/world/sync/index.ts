@@ -82,6 +82,19 @@ export {
 } from "./offlineQueue";
 export { parseSceneLaunchedEvent } from "./scenes";
 export {
+  boardKey,
+  entryLevel,
+  levelEventKind,
+  pickedLevel,
+  playerSeesLevelName,
+  resolveLevelView,
+  SCENE_LEVEL_CHANGED_EVENT_CODE,
+  TOKEN_TRAVELLED_EVENT_CODE,
+  type LevelEventKind,
+  type LevelView,
+  type LevelViewer,
+} from "./levels";
+export {
   applyPlayPanelWorldEvent,
   startPlayPanelEventSync,
   CHAT_MESSAGE_EVENT_CODE,

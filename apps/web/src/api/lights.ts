@@ -1,4 +1,5 @@
 import { postGraphQL } from "@/api/graphqlClient";
+import { onViewedLevel, viewedLevelId } from "@/api/viewedLevel";
 import type {
   CreateLightInput,
   LightRecord,
@@ -9,6 +10,7 @@ import type {
 const LIGHT_FIELDS = `
   lightId
   sceneId
+  levelId
   x
   y
   radius
@@ -46,17 +48,24 @@ type DeleteLightMutation = {
  * engine/world/sync/lights.ts): the world_events NOTIFY payload only
  * carries the changed light's id and scene, so on receipt we re-fetch this
  * list rather than trying to reconstruct a light from the notify payload.
+ *
+ * Scene levels: answers for one level — the one named, else the one this
+ * browser is showing (`viewedLevel.ts`), else whichever the server opens on.
+ * A level this viewer may not read answers empty rather than failing.
  */
-export function getLights(sceneId: string): Promise<LightRecord[]> {
+export function getLights(
+  sceneId: string,
+  levelId?: string,
+): Promise<LightRecord[]> {
   return postGraphQL<LightsQuery>(
     `
-      query SceneLights($sceneId: UUID!) {
-        lightSources(sceneId: $sceneId) {
+      query SceneLights($sceneId: UUID!, $levelId: UUID) {
+        lightSources(sceneId: $sceneId, levelId: $levelId) {
           ${LIGHT_FIELDS}
         }
       }
     `,
-    { sceneId },
+    { sceneId, levelId: levelId ?? viewedLevelId(sceneId) },
   ).then((data) => data.lightSources);
 }
 
@@ -69,7 +78,7 @@ export function createLight(input: CreateLightInput): Promise<LightRecord> {
         }
       }
     `,
-    { input },
+    { input: onViewedLevel(input) },
   ).then((data) => data.createLightSource);
 }
 
