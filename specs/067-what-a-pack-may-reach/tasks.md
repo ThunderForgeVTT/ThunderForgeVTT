@@ -47,7 +47,7 @@ description: "Task list for What a Pack May Reach"
 ## Phase 4: Conditions (Story 4)
 
 - [X] T040 [US4] Confirm with the owner: a condition lives on the token or on the actor behind it — on the actor
-- [ ] T041 [US4] `conditions` in the manifest; Genie's restated, 5e's declared (FR-040, FR-043)
+- [X] T041 [US4] `conditions` in the manifest; Genie's restated, 5e's declared (FR-040, FR-043)
 - [ ] T042 [US4] Apply and clear, per-viewer delivery through the world store (FR-041, FR-042)
 - [ ] T043 [US4] The engine draws a marker from identifier and marker alone (FR-042)
 - [ ] T044 [US4] Proof

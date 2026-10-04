@@ -434,6 +434,33 @@ If a value needs a check the table above cannot express, give your
 `SystemContribution` a `world_setting` function; it runs after the declared
 check and its message is shown to the Game Master.
 
+### `conditions`
+
+```json
+"conditions": [
+  {
+    "id": "poisoned",
+    "label": "Poisoned",
+    "description": "Disadvantage on attack rolls and ability checks.",
+    "marker": { "glyph": "dot", "color": "danger" }
+  }
+]
+```
+
+The states a character can be in that the table needs to see at a glance. A
+condition lives on the **character**, not on one token: it follows the
+character from scene to scene, and is drawn on every token of theirs for
+whoever may see that token.
+
+The marker is data, never art (ADR-062). `glyph` is one of the shapes the
+board can compose — `dot`, `ring`, `bar`, `cross`, `split`, `corner` — named
+for what is drawn rather than what it means, and `color` is one of the
+board's tokens — `danger`, `warning`, `positive`, `info`, `arcane`,
+`neutral`. The meaning is yours and lives in the label. A manifest is refused
+if two conditions share an `id`, a label is blank, a marker is missing, or a
+glyph or colour is not on those lists. Give each condition a pairing no other
+has, so two markers on one token can be told apart.
+
 ### Every key
 
 This is the whole list. `scripts/check-packs.mjs` reads it from here and refuses a
@@ -459,7 +486,7 @@ promise nobody keeps, and the place to find that out is before it ships.
 | `contentPatterns`                      | The host's book import.                                                      |
 | `abilityVocabulary`, `abilityFacets`   | The host's ability editor. `abilityFacets` is the older spelling.            |
 | `skills`                               | Your own rules, if they publish a value per skill (5e's do). Not the host.   |
-| `conditions`                           | Nothing yet. Spec 067 Story 4 makes it the host's.                           |
+| `conditions`                           | The host: the states a character may be in, and the marker the board draws.  |
 | `wishPoints`                           | Genie's rules.                                                               |
 | `startingSkills`                       | Roll for Shoes' crate.                                                       |
 

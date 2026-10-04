@@ -1,5 +1,6 @@
 pub mod appearance;
 pub mod combat;
+pub mod conditions;
 pub mod content_patterns;
 pub mod contrast;
 pub mod interface;
@@ -130,6 +131,11 @@ pub struct SystemManifest {
     /// answers live in one shared table; see `settings.rs`.
     #[serde(default)]
     pub settings: Option<Vec<settings::SystemSetting>>,
+
+    /// The states a character may be in that the board can show (spec 067
+    /// Story 4); see `conditions.rs`.
+    #[serde(default)]
+    pub conditions: Option<Vec<conditions::SystemCondition>>,
 }
 
 /// A system's `vision` block, mirroring
@@ -283,6 +289,7 @@ pub fn validate_system_manifest(json_string: &str) -> Result<(), String> {
     combat::validate_combat_content(&instance)?;
     appearance::validate_appearance_content(&instance)?;
     settings::validate_settings_content(&instance)?;
+    conditions::validate_conditions_content(&instance)?;
     content_patterns::validate_content_patterns(&instance)
 }
 

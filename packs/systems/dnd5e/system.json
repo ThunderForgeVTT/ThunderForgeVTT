@@ -1286,5 +1286,142 @@
         "binds": "item"
       }
     ]
-  }
+  },
+  "conditions": [
+    {
+      "id": "blinded",
+      "label": "Blinded",
+      "description": "Cannot see. Attacks against the creature have Advantage and its own attacks have Disadvantage.",
+      "marker": {
+        "glyph": "cross",
+        "color": "neutral"
+      }
+    },
+    {
+      "id": "charmed",
+      "label": "Charmed",
+      "description": "Cannot attack or target the charmer with harmful effects, and the charmer has Advantage on social checks against it.",
+      "marker": {
+        "glyph": "dot",
+        "color": "arcane"
+      }
+    },
+    {
+      "id": "deafened",
+      "label": "Deafened",
+      "description": "Cannot hear, and fails any check that needs hearing.",
+      "marker": {
+        "glyph": "bar",
+        "color": "neutral"
+      }
+    },
+    {
+      "id": "exhaustion",
+      "label": "Exhaustion",
+      "description": "Worn down in levels: each level lowers d20 rolls and Speed, and the sixth is death.",
+      "marker": {
+        "glyph": "split",
+        "color": "warning"
+      }
+    },
+    {
+      "id": "frightened",
+      "label": "Frightened",
+      "description": "Disadvantage on checks and attacks while the source of its fear is in sight, and cannot move closer to it.",
+      "marker": {
+        "glyph": "corner",
+        "color": "warning"
+      }
+    },
+    {
+      "id": "grappled",
+      "label": "Grappled",
+      "description": "Speed is 0 and attacks against anyone but the grappler have Disadvantage.",
+      "marker": {
+        "glyph": "ring",
+        "color": "warning"
+      }
+    },
+    {
+      "id": "incapacitated",
+      "label": "Incapacitated",
+      "description": "Cannot take actions, Bonus Actions or Reactions, and loses Concentration.",
+      "marker": {
+        "glyph": "cross",
+        "color": "warning"
+      }
+    },
+    {
+      "id": "invisible",
+      "label": "Invisible",
+      "description": "Cannot be seen without special senses. Its attacks have Advantage and attacks against it have Disadvantage.",
+      "marker": {
+        "glyph": "ring",
+        "color": "info"
+      }
+    },
+    {
+      "id": "paralyzed",
+      "label": "Paralyzed",
+      "description": "Incapacitated and unable to move. Fails Strength and Dexterity saves, and a hit from within 5 feet is a Critical Hit.",
+      "marker": {
+        "glyph": "cross",
+        "color": "danger"
+      }
+    },
+    {
+      "id": "petrified",
+      "label": "Petrified",
+      "description": "Turned to an inanimate substance: Incapacitated, unaware, and resistant to all damage.",
+      "marker": {
+        "glyph": "split",
+        "color": "neutral"
+      }
+    },
+    {
+      "id": "poisoned",
+      "label": "Poisoned",
+      "description": "Disadvantage on attack rolls and ability checks.",
+      "marker": {
+        "glyph": "dot",
+        "color": "danger"
+      }
+    },
+    {
+      "id": "prone",
+      "label": "Prone",
+      "description": "On the ground. Can only crawl, attacks with Disadvantage, and is easier to hit from within 5 feet.",
+      "marker": {
+        "glyph": "bar",
+        "color": "info"
+      }
+    },
+    {
+      "id": "restrained",
+      "label": "Restrained",
+      "description": "Speed is 0. Attacks against it have Advantage, its own have Disadvantage, and so do its Dexterity saves.",
+      "marker": {
+        "glyph": "ring",
+        "color": "danger"
+      }
+    },
+    {
+      "id": "stunned",
+      "label": "Stunned",
+      "description": "Incapacitated, fails Strength and Dexterity saves, and attacks against it have Advantage.",
+      "marker": {
+        "glyph": "corner",
+        "color": "danger"
+      }
+    },
+    {
+      "id": "unconscious",
+      "label": "Unconscious",
+      "description": "Incapacitated and Prone, unaware, and drops what it holds. A hit from within 5 feet is a Critical Hit.",
+      "marker": {
+        "glyph": "split",
+        "color": "danger"
+      }
+    }
+  ]
 }
