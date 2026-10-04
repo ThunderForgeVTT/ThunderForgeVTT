@@ -308,11 +308,21 @@ test.describe("Spec 052 FR-061: a public instance is told what publishing oblige
         stranger.getByTestId("legal-operator-prose-minimum-age-statement"),
         "prose nobody wrote renders nothing",
       ).toHaveCount(0);
+      // Read after the assertions above have waited for the document to
+      // render: read any earlier, this is the empty shell and passes on
+      // nothing. Only the value markers are looked for. The drafts also carry
+      // `[OPERATOR — ...]` markers for judgements no field collects, and
+      // those stay until a human replaces them (legal/README.md).
       const terms_html = await stranger.content();
-      expect(
-        terms_html,
-        "an answered operator value is substituted, never left as a marker",
-      ).not.toContain("[OPERATOR —");
+      for (const marker of [
+        "[OPERATOR — name and, if applicable, legal entity]",
+        "[OPERATOR — email address]",
+      ]) {
+        expect(
+          terms_html,
+          "an answered operator value is substituted, never left as a marker",
+        ).not.toContain(marker);
+      }
 
       // An open instance admits a stranger without an invitation — the other
       // half of what the Access step promised.

@@ -181,18 +181,18 @@ test.describe("Spec 040 US1: from an empty database to a contactable instance", 
     await walkToSecondFactor();
 
     // 6a. An operator who reloads here — or comes back tomorrow — has lost
-    //     the password the account step held in memory. The step asks for it
-    //     again rather than stranding them at a step that cannot proceed.
+    //     the password the account step held in memory. The browser is still
+    //     signed in as the administrator setup created, so the step asks the
+    //     server for an enrolment ticket against the setup code rather than
+    //     stranding them: nothing has to be typed again. (The password form
+    //     is the fallback for a browser with no session, and stays on offer.)
     await page.reload();
     await expect(page.getByTestId("setup-next")).toBeVisible({
       timeout: 30_000,
     });
     await walkToSecondFactor();
-    await expect(page.getByTestId("setup-second-factor-start")).toBeDisabled();
-    await page
-      .getByTestId("setup-second-factor-username")
-      .fill(`admin${suffix}`);
-    await page.getByTestId("setup-second-factor-password").fill(adminPassword);
+    await expect(page.getByTestId("setup-second-factor-reenter")).toBeVisible();
+    await expect(page.getByTestId("setup-second-factor-start")).toBeEnabled();
 
     // 7. FR-002a: setup will not complete without a confirmed second factor.
     //    This is spec 041's flow, reused rather than reimplemented.
