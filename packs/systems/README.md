@@ -18,10 +18,29 @@ what decides.
 packs/systems/<pack-id>/
 ├── system.json      # required — everything below is declared here
 ├── server/          # optional — a Rust crate, bundled packs only
-├── engine/          # optional — a Rust crate, bundled packs only
-├── web/             # optional
-└── seed-content/    # optional
+├── web/             # optional — only with something the host mounts
+├── seed-content/    # optional
+└── README.md        # optional
 ```
+
+That is the whole list. A pack may also keep a data file beside its manifest
+when its own `server/` crate reads it by name, as 5e keeps `stat-blocks.json`.
+`scripts/check-packs.mjs` runs before every commit and refuses anything else,
+naming the pack and the entry.
+
+**There is no `engine/`.** A pack extends the engine with data, not code
+(ADR-062): the engine is one WebAssembly binary, nothing can load a second
+crate into it in the browser, and what a system needs from it — bars,
+movement, vision, turn structure — it declares in the manifest. Seven packs
+once carried an engine crate; nothing ever depended on one, and spec 066
+removed them.
+
+**`web/` exists only when the host mounts something from it**: at least one
+of `web/src/ActorSheet.tsx`, `web/src/StatBlocks.ts` or
+`web/src/panels/<slot>.tsx`. Those three paths are the ones `apps/web` globs
+at build time, and a file anywhere else is reached only if one of them
+imports it. A pack with none of them has no `web/`, and its sheet is drawn
+from the manifest.
 
 `system.json` alone makes a working pack. Every bundled system renders a
 usable character sheet from its manifest and nothing else (SC-012) — the base
@@ -57,7 +76,8 @@ repository and in the build.
 `template: true` declares that the pack is a starting point rather than a
 ruleset. A template is **not offered** as a system a world can be bound to.
 `basic-game-system` in this directory declares it, and is the pack to copy
-when starting a new one.
+when starting a new one. It is a manifest and nothing else, which is the
+smallest pack there is.
 
 ### Legal metadata — required, and enforced
 
@@ -382,7 +402,7 @@ A bundled pack may carry `server/`, a Rust crate that submits a
 `SystemContribution` through `inventory`. Nothing collects it by name — the
 server discovers what is linked (FR-029), and
 `scripts/check-system-registry.mjs` fails the build if a system identifier
-appears anywhere in shared server code.
+appears anywhere in shared server, engine or web code.
 
 ```rust
 inventory::submit! {
@@ -474,21 +494,56 @@ leaves it alone. ADR-108 records why there is not yet a generic per-world
 settings surface to use instead, and what the next pack to want one should do.
 Roll for Shoes' `server/src/settings/` is the worked example.
 
-### The one line outside your directory
+### What you touch outside your directory
 
-SC-004 says adding a system touches only that system's own pack directory,
-and there is exactly one honest exception. A statically linked Rust crate
-that nothing references is never linked, and its `inventory` submissions
-vanish with it — measured, not assumed. So a bundled pack with a `server/`
-crate needs:
+SC-004 says adding a system touches only that system's own pack directory. A
+pack that is only a manifest meets it exactly: drop the directory in and the
+product offers it. A pack with a `web/` half meets it too, because the pnpm
+workspace, the type-check and the host's globs all find `packs/systems/*/web`
+by pattern.
 
-- one `use <pack> as _;` line in `apps/server/src/system_packs.rs`, and
-- one dependency in `crates/thunderforge-server/Cargo.toml`.
+A `server/` crate does not, and the list below is every file it costs. None
+of them can be discovered, and each entry says why.
 
-Both are build-graph facts: they say a crate exists and should be linked, and
-say nothing about what it contains, so they cannot drift out of step with
-your pack the way a validator list can. **A pack with no `server/` crate
-needs neither** — drop the directory in and the product offers it.
+**Any pack with a `server/` crate:**
+
+| File                                              | What you add                         | Why it cannot be found for you                                                                                    |
+| ------------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `Cargo.toml` (repository root)                    | the crate, in `members`              | Cargo builds what the workspace lists.                                                                            |
+| `apps/server/Cargo.toml`                          | one dependency                       | A crate the binary does not depend on is not compiled into it.                                                    |
+| `apps/server/src/system_packs.rs`                 | one `use <pack> as _;` line          | A statically linked crate nothing references is never linked, and its `inventory` submissions vanish with it.     |
+| `crates/thunderforge-server/Cargo.toml`           | one dev-dependency                   | The server library's tests are their own binary, and link nothing on their own.                                   |
+| `crates/thunderforge-server/src/test_packs.rs`    | one `use <pack> as _;` line          | The same fact as above, for that test binary.                                                                     |
+
+These are build-graph facts: they say a crate exists and should be linked,
+and say nothing about what it contains, so they cannot drift out of step with
+your pack the way a validator list can. The linker fact was measured, not
+assumed — a binary depending on a submitting crate without naming a symbol
+from it collected an empty set in debug and in release.
+`scripts/check-packs.mjs` refuses a `server/` crate either linkage module
+does not name.
+
+`apps/server/src/system_packs.rs` also holds a test listing every bundled
+system by id. Add yours to it: that list is the assertion that a deleted
+`use` line fails loudly, not the mechanism that finds the pack.
+
+**A pack that adds GraphQL root fields, as well:**
+
+| File                              | What you add                                    | Why                                                                                         |
+| --------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `apps/server/src/schema_roots.rs` | your query, mutation and subscription types     | The schema's roots are one merged Rust type, and a type has to be named to be merged.       |
+
+**A pack that owns tables (ADR-063), as well:**
+
+| File                                               | What you add                              | Why                                                                                               |
+| -------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `crates/thunderforge-server/migrations/<stamp>_…/` | the migration that creates them           | One database has one ordered migration history, and the server runs it at start.                  |
+| `diesel.toml` (repository root)                    | a pattern in `except_tables`              | Shared schema generation would otherwise write your tables into the server's `schema.rs`.         |
+| `crates/thunderforge-server/diesel.toml`           | each table in `except_tables`             | The same, for the copy of the configuration the crate's own tooling reads.                        |
+
+Genie and Roll for Shoes each touch every file in all three tables, and are
+the worked examples. Moving a pack's migrations into the pack is the
+remaining step ADR-063 describes; until it is taken, this is the cost.
 
 ## How to check a pack
 

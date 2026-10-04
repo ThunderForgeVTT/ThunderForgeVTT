@@ -32,6 +32,7 @@ before, and the copies kept parts the product stopped reading.
 | ---- | ----- | ---- | ------------ |
 | An engine crate | 7 packs (all but Roll for Shoes) | 1,091 lines, 7 workspace members | Nothing. No crate depends on one, so none reaches the browser. ADR-062 says none should. |
 | A web package with no discovered entry | Blades, Cypher, Fate, Pathfinder, Year Zero | 1,804 lines, 5 pnpm packages | Nothing. The host finds `ActorSheet.tsx`, `StatBlocks.ts` and `panels/*.tsx`; these ship `components/CharacterSheet.tsx` and an `index.ts`. Their sheets are drawn from the manifest. |
+| Web files no discovered entry imports | 5e | 989 lines: `index.ts`, `schema.ts` (an RxDB schema), four components | Nothing. 5e's `ActorSheet.tsx` is the sheet and imports none of them. Found while implementing; the audit had assumed they were reached. |
 | `server/src/loader.rs` | 7 packs | a no-op `register_mutations()` | Nothing calls it. Its comment cites a `register_system()` that spec 032 deleted. The two tests in the file are real and stay. |
 | `esmodules`, `styles`, `packages` in `system.json` | every pack | 3 keys each | Nothing loads from them. They name `web/dist/index.js`, which no build produces. |
 | The template, `basic-game-system` | 1 pack | `module/main.mjs`, a rollup config, a stylesheet | Nothing. The contract says to copy it, and it has the shape of a different product's modules. |
@@ -48,8 +49,9 @@ Two smaller things are out of line with the contract itself:
   `crates/thunderforge-server/migrations/`, and its table in two
   `diesel.toml` files. Genie and Roll for Shoes both do all of it.
 - `scripts/check-system-registry.mjs` keeps system names out of shared
-  **server** code. Shared web and engine code name none today, and nothing
-  keeps it so.
+  server code and out of `apps/web/src`. The other apps, `packages/` and the
+  engine crates name none today, and nothing keeps it so. (The audit said the
+  check covered the server only. It was wrong about `apps/web/src`.)
 
 ## What this spec does not do
 
@@ -192,9 +194,9 @@ Shoes touch, file for file; `check-pack-docs.mjs` still passes.
   covered there, it moves to the dice crate's tests rather than vanishing.
 - **Genie's `index.ts`.** `apps/web` imports it by alias, so it is read and
   stays. Only an `index.ts` nothing imports is removed.
-- **5e and Genie keep `components/CharacterSheet.tsx`** where their
-  `ActorSheet.tsx` imports it. The rule is reachability from a discovered
-  entry, not a file name.
+- **Genie keeps `components/CharacterSheet.tsx`** because its
+  `ActorSheet.tsx` imports it. 5e's is imported by nothing and goes. The rule
+  is reachability from a discovered entry, not a file name.
 - **The lockfile.** Removing five pnpm packages changes `pnpm-lock.yaml`.
   That is one regenerated file in the same commit as the removal.
 - **The wasm lint** names `dnd5e-engine`. It is updated in the commit that
@@ -214,10 +216,11 @@ Shoes touch, file for file; `check-pack-docs.mjs` still passes.
   behave after this change as they did before it.
 - **FR-005**: A check MUST run before every commit and refuse: a pack entry
   the contract does not list; a `web/` with no discovered entry; a `server/`
-  crate the application does not link; a system directory with no
-  `system.json`.
+  crate that the application, or the server library's test binary, does
+  not link; a system directory with no `system.json`.
 - **FR-006**: The registry check MUST refuse a system identifier in shared
-  web source (`apps/*/src`, `packages/*/src`) and shared engine source
+  web source (`apps/*/src`, `packages/*/src`, where it covered `apps/web/src`
+  alone) and shared engine source
   (`crates/thunderforge-engine`, `crates/thunderforge-core`,
   `crates/thunderforge-canvas-core`), with the same exemptions for tests and
   fixtures it already allows in server source.
@@ -226,6 +229,12 @@ Shoes touch, file for file; `check-pack-docs.mjs` still passes.
 - **FR-008**: `esmodules`, `styles` and `packages` MUST be optional in the
   manifest schema, absent from every bundled manifest, and ignored when an
   installed manifest carries them.
+- **FR-008a**: Every bundled manifest MUST pass the validation an installed
+  manifest must. Found while implementing FR-008: the schema also required
+  `authors` and `packs`, the contract documents `author`, and so a pack
+  written to the contract was refused on install while no bundled manifest
+  was ever held to the schema. Both are optional now, and a test walks every
+  bundled manifest through the install validator.
 - **FR-009**: The contract MUST list every file outside a pack's directory
   that a bundled pack touches, split by what the pack contributes.
 - **FR-010**: The contract MUST describe the pack shape as it is: no
