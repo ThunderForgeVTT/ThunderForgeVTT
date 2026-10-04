@@ -130,6 +130,21 @@ export { getActorInventory } from "@/api/inventory";
 export { useResetOnChange } from "@/hooks/useResetOnChange";
 
 /**
+ * A world's answers to the settings its system declares (spec 067).
+ *
+ * A pack declares a setting in its manifest's `settings` block and the host
+ * stores it, draws its control and announces a change. This is how the pack's
+ * own surfaces read it back: `valueOf("key")`, kept current while the page is
+ * open. It reads what any member of the world may read.
+ */
+export { useWorldSystemSettings } from "@/hooks/useWorldSystemSettings";
+export type { WorldSystemSettingsHandle } from "@/hooks/useWorldSystemSettings";
+export type {
+  WorldSystemSetting,
+  WorldSystemSettingValue,
+} from "@/api/worldSystemSettings";
+
+/**
  * The GraphQL caller, and the world-events feed.
  *
  * These two are the widest things on this list, and they are here for the

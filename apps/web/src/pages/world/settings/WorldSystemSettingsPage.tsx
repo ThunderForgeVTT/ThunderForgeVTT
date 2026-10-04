@@ -47,6 +47,7 @@ import { CompendiumOverviewSettingsCard } from "@/pages/world/settings/Compendiu
 import { LoreRepositoryCard } from "@/pages/world/settings/LoreRepositoryCard";
 import { PlayPauseHistoryCard } from "@/pages/world/settings/PlayPauseHistoryCard";
 import { WorldAppearanceSettingsCard } from "@/pages/world/settings/WorldAppearanceSettingsCard";
+import { WorldSystemSettingsCard } from "@/pages/world/settings/WorldSystemSettingsCard";
 import type { WorldRecord } from "@/types/world";
 import { GRID_TYPE_OPTIONS, gridTypeLabel } from "@/utils/gridType";
 
@@ -648,6 +649,14 @@ export default function WorldSystemSettingsPage() {
                 promise FR-036b forbids for an unconfigured instance. */}
             {role === "Owner" ? <LoreRepositoryCard worldId={worldId} /> : null}
           </SettingsSection>
+
+          {/* Spec 067: the settings the world's system declares, drawn by the
+              host from the declaration. Above the pack's own panel, which is
+              for what a declared setting cannot say. Mounted for players
+              too — they read what the table plays by. */}
+          {world.gameSystemId ? (
+            <WorldSystemSettingsCard worldId={worldId} isGm={isGm} />
+          ) : null}
 
           {/* Whatever the world's system contributes to its own settings.
               This was an inline card behind a comparison of
