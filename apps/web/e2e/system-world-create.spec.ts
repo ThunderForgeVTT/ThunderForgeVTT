@@ -21,7 +21,7 @@ import { expect, test } from "./fixtures/test";
  * - a **character made without naming a system** — which is how the app's
  *   own dialogs make them — is on the world's system, not the realm's
  *   default;
- * - the **play dock** mounts that system's sheet for it.
+ * - opening it from the **play dock** shows that system's sheet.
  *
  * The two systems below are the ones meant to be ready for a table full
  * time. A realm that does not offer one fails the test rather than skipping
@@ -113,7 +113,12 @@ for (const { systemId, sheet } of [
 
     await page.goto(`/world/${worldId}/play`);
     await openDockTab(page, "actors");
-    await page.getByTestId(`actor-view-${actorId}`).click();
-    await expect(page.getByTestId(sheet)).toBeVisible({ timeout: 15_000 });
+    // A Game Master's View opens the character in a new tab, so the map stays
+    // in front of them; the sheet is read there, not in the dock.
+    const [sheetTab] = await Promise.all([
+      page.waitForEvent("popup"),
+      page.getByTestId(`actor-view-${actorId}`).click(),
+    ]);
+    await expect(sheetTab.getByTestId(sheet)).toBeVisible({ timeout: 15_000 });
   });
 }
