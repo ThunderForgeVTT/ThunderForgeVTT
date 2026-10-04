@@ -1420,21 +1420,31 @@ test.describe("Scene-load loading/error feedback (US4, T031/T033)", () => {
     // populated whichever mechanism put the art there — so overwriting the
     // old field left the scene with no background at all, and no
     // background is exactly the case that produces no error to assert on.
+    //
+    // The same thing happened again with scene levels: the board's art is
+    // the *level's* `backgroundUrl` now, and the scene's is read only when
+    // no level could be. So the level list is overwritten too — the scene
+    // list alone left the board with a level that has no art, and again
+    // nothing to fail.
     const FAKE_BG_PATH = "/assets/e2e-fake-background-for-scene-load-test.png";
     let bgAssetShouldSucceed = false;
 
     await page.route("**/api/graphql", async (route, request) => {
       const postData = request.postData() ?? "";
-      if (!postData.includes("scenes(") && !postData.includes("scenes {")) {
+      if (
+        !postData.includes("scenes(") &&
+        !postData.includes("scenes {") &&
+        !postData.includes("sceneLevels(")
+      ) {
         await route.fallback();
         return;
       }
       const response = await route.fetch();
       const json = await response.json();
-      const sceneList = json?.data?.scenes;
-      if (Array.isArray(sceneList)) {
-        for (const scene of sceneList) {
-          scene.backgroundUrl = FAKE_BG_PATH;
+      for (const list of [json?.data?.scenes, json?.data?.sceneLevels]) {
+        if (!Array.isArray(list)) continue;
+        for (const record of list) {
+          record.backgroundUrl = FAKE_BG_PATH;
         }
       }
       await route.fulfill({ response, json });
