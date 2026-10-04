@@ -12,7 +12,7 @@
  * 1. Inbound: the server emits a generic `world_events` NOTIFY
  *    (subscription field `worldEventsCreated(worldId)`) with
  *    `eventCode = 11` for any light source create/update/delete
- *    (src/server/src/world_events.rs::EVENT_CODE_LIGHT_SOURCE_CHANGED).
+ *    (crates/thunderforge-server/src/world_events.rs::EVENT_CODE_LIGHT_SOURCE_CHANGED).
  *    The notify payload only carries `{ action, lightId, sceneId }` — not
  *    the full light — so `applyLightWorldEvent` re-fetches the scene's
  *    lights via GraphQL (api/lights.ts#getLights) and dispatches

@@ -1,7 +1,7 @@
 //! The GraphQL for the table's standing difficulty.
 //!
 //! One read and two writes, merged into the application's schema roots in
-//! `src/app/src/schema_roots.rs` beside the settings fields.
+//! `apps/server/src/schema_roots.rs` beside the settings fields.
 //!
 //! Unlike a settings change, these writes **are** announced: a difficulty the
 //! Game Master sets is something every player is waiting on right now, with a

@@ -1,6 +1,6 @@
 //! The table that holds what the Game Master has said has to be beaten.
 //!
-//! Declared here rather than in `src/server/src/schema.rs`, per ADR-063, for
+//! Declared here rather than in `crates/thunderforge-server/src/schema.rs`, per ADR-063, for
 //! the reason `settings/schema.rs` gives: a pack owns the tables it writes.
 //! Both `diesel.toml` files keep it out of the server's generated schema.
 

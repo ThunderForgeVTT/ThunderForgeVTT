@@ -10,7 +10,7 @@
  * system's word for it, and six independent readers is six chances to disagree
  * about something they are required to agree on.
  *
- * The server now assembles the answer — `src/server/src/ability_vocabulary.rs`
+ * The server now assembles the answer — `crates/thunderforge-server/src/ability_vocabulary.rs`
  * — because it needs the same vocabulary to make refusals the browser cannot
  * (FR-013, FR-019, FR-023), and assembling it twice in two languages is how
  * the two come to differ. This module fetches that answer and reads it.

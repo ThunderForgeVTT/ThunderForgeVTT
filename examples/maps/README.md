@@ -9,8 +9,8 @@ DungeonDraft project file. **That image is not always a PNG**: `demo.dd2vtt`'s
 is genuinely WebP (verified via magic bytes: `RIFF....WEBP`), while
 `chamber-of-echoing-grief.dd2vtt`'s is a genuine PNG (`\x89PNG\r\n\x1a\n`) —
 an earlier draft of this doc assumed PNG-only, which broke real imports
-(`src/server/src/map_import.rs`'s `detect_image_extension` now accepts
-both, and `src/engine/Cargo.toml` enables Bevy's `"webp"` feature to
+(`crates/thunderforge-server/src/map_import.rs`'s `detect_image_extension` now accepts
+both, and `crates/thunderforge-engine/Cargo.toml` enables Bevy's `"webp"` feature to
 render either).
 
 **Provenance / license note**: all files in this directory were pulled

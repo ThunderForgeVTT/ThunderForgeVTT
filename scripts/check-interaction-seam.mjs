@@ -40,7 +40,7 @@ const repoRoot = path.resolve(
 );
 
 /** The file that must know nothing about what an effect does. */
-const GUARDED = "src/engine/src/plugins/interaction.rs";
+const GUARDED = "crates/thunderforge-engine/src/plugins/interaction.rs";
 
 /**
  * Subsystems the core must not name.

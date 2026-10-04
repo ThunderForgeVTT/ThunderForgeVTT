@@ -237,7 +237,7 @@ const steps = [
   {
     // The web speaks to the server in hand-written query strings, so a field
     // renamed in Rust compiled, passed every Rust test and broke a button.
-    // This half prints the merged schema and holds `src/app/schema.graphql`
+    // This half prints the merged schema and holds `apps/server/schema.graphql`
     // to it, so the operations check below reads the server as it is and a
     // schema change is a line in the review diff.
     //

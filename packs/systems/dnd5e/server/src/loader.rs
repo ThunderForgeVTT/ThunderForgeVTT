@@ -11,7 +11,7 @@
 /// # Example
 ///
 /// ```ignore
-/// // In src/server/src/main.rs or graphql setup
+/// // In crates/thunderforge-server/src/main.rs or graphql setup
 /// let mut router = Router::new();
 /// dnd5e_server::register_dnd5e_mutations(&mut router);
 /// ```

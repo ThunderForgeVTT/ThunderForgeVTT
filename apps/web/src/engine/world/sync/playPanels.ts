@@ -1,7 +1,7 @@
 /**
  * playPanels.ts — live-sync inbound half for the Play view's Chat and
  * Combat panels (`world_events` codes 17 and 18, see
- * `src/server/src/world_events.rs`).
+ * `crates/thunderforge-server/src/world_events.rs`).
  *
  * Both event codes follow this codebase's established "notify carries an
  * id, the client re-fetches" convention (`tokens.ts`/`walls.ts`), and for

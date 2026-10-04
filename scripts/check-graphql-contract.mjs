@@ -14,7 +14,7 @@
  *
  * - `--schema` prints the merged schema from the app crate (the
  *   `thunderforge-schema` binary: no database, no server) and compares it with
- *   the committed `src/app/schema.graphql`. A schema change therefore shows up
+ *   the committed `apps/server/schema.graphql`. A schema change therefore shows up
  *   in the review diff, and a stale file fails. With `--fix` it rewrites the
  *   file. It compiles, so its cost is whatever `cargo build` costs today.
  *
@@ -73,7 +73,7 @@ const ts = webRequire("typescript");
 const { buildSchema, findBreakingChanges, parse, Source, validate } =
   webRequire("graphql");
 
-const SDL_PATH = "src/app/schema.graphql";
+const SDL_PATH = "apps/server/schema.graphql";
 const args = process.argv.slice(2);
 const fix = args.includes("--fix");
 const schemaMode = args.includes("--schema");

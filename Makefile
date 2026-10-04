@@ -97,7 +97,7 @@ migrate:
 		echo "diesel-cli not found. Install it with: cargo install diesel_cli --no-default-features --features postgres"; \
 		exit 1; \
 	}
-	cd src/server && diesel migration run
+	cd crates/thunderforge-server && diesel migration run
 
 # Local demo logins and a world that is ready to play, so a fresh clone can
 # be tested by a person instead of only by the e2e suite.
@@ -119,7 +119,7 @@ seed:
 	@# database that is running perfectly well. Naming the port when the URL
 	@# omits one makes this agree with the application rather than with
 	@# whatever the local libpq was compiled to prefer.
-	@url="$(DATABASE_URL)"; 	case "$$url" in 		*@*:[0-9]*/*) ;; 		*) url=$$(printf '%s' "$$url" | sed -E 's#@([^:/@]+)/#@\1:5432/#') ;; 	esac; 	psql "$$url" -q -v ON_ERROR_STOP=1 -f src/server/seeds/demo_accounts.sql
+	@url="$(DATABASE_URL)"; 	case "$$url" in 		*@*:[0-9]*/*) ;; 		*) url=$$(printf '%s' "$$url" | sed -E 's#@([^:/@]+)/#@\1:5432/#') ;; 	esac; 	psql "$$url" -q -v ON_ERROR_STOP=1 -f crates/thunderforge-server/seeds/demo_accounts.sql
 	@echo "Seeded: admin/admin (site admin), user1/user1 (GM), user2/user2 (player), with a world ready to play."
 
 build:
@@ -192,7 +192,7 @@ check-file-length:
 # `cargo test`, with the stack the server crate needs.
 #
 # Tests use their own database, `thunderforge_test` (TEST_DATABASE_URL names
-# another), created and migrated on demand by src/server/src/test_support.rs,
+# another), created and migrated on demand by crates/thunderforge-server/src/test_support.rs,
 # which refuses the development database and the e2e shards'. That is what
 # makes this safe beside an e2e run: they used to share the development
 # database's global settings rows, and a `cargo test` turned a green run red.

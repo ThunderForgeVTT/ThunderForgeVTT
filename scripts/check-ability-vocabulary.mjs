@@ -18,7 +18,7 @@
  * The four built-ins — `spell`, `feat`, `power`, `talent` — are the
  * application's own and may be named in application code. They are permanently
  * authorable (FR-017) and something has to define them;
- * `src/server/src/ability_vocabulary.rs` is where.
+ * `crates/thunderforge-server/src/ability_vocabulary.rs` is where.
  *
  * Everything a *pack* declares is that pack's business. If `enchantment`
  * appears as a literal in shared server or web code, some shared thing has
@@ -81,8 +81,8 @@ function packDeclaredTypeIds() {
  */
 function sharedSources() {
   const roots = [
-    path.join(repoRoot, "src", "server", "src"),
-    path.join(repoRoot, "src", "app", "src"),
+    path.join(repoRoot, "crates", "thunderforge-server", "src"),
+    path.join(repoRoot, "apps", "server", "src"),
     path.join(repoRoot, "apps", "web", "src"),
   ];
   const out = [];

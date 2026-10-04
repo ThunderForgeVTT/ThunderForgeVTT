@@ -90,7 +90,7 @@ const MAX_UNDO_STACK: usize = 50;
 /// Shape list plus a bounded per-session undo stack (research.md §4),
 /// mirroring `WallSet`. Plain data, no Bevy `Resource` derive —
 /// `thunderforge_engine` wraps this in a `Resource` newtype
-/// (`src/engine/src/resources/shape.rs`) so Bevy's change-detection still
+/// (`crates/thunderforge-engine/src/resources/shape.rs`) so Bevy's change-detection still
 /// works transparently on `ResMut` access.
 #[derive(Debug, Clone, Default)]
 pub struct ShapeSet {

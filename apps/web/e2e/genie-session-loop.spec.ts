@@ -4,7 +4,7 @@ import { test, expect } from "./fixtures/demo-world";
  * Spec 018 (Genie) User Story 7, quickstart.md Scenarios 8-9: the GM
  * session loop — Session Wish Pool and Doom/Puzzle Clocks. Previously
  * blocked (tasks.md T059/T063): the backend
- * (`src/server/src/graphql/{queries/genie_session,mutations_genie_session}.rs`)
+ * (`crates/thunderforge-server/src/graphql/{queries/genie_session,mutations_genie_session}.rs`)
  * was fully implemented and tested, but nothing in apps/web ever called
  * it — see `GenieSessionPanel`/`useGenieSession`, added to close that gap.
  *

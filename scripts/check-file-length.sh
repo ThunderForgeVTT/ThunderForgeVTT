@@ -13,8 +13,8 @@ set -euo pipefail
 MAX_LINES=1000
 
 EXEMPT=(
-  "src/server/src/schema.rs"   # diesel print_schema output — regenerated, never hand-edited
-  "src/server/src/models.rs"   # Queryable/Insertable structs only, no logic to split out
+  "crates/thunderforge-server/src/schema.rs"   # diesel print_schema output — regenerated, never hand-edited
+  "crates/thunderforge-server/src/models.rs"   # Queryable/Insertable structs only, no logic to split out
 )
 
 cd "$(git rev-parse --show-toplevel)"

@@ -2,7 +2,7 @@
 // mirroring types/wall.ts's shape. Distinct from the legacy world-scoped
 // `WorldToken` GraphQL type (types.ts's `WorldToken`/`GraphQLWorldToken`) —
 // this is the modern per-scene token persisted via TokenMutation
-// (src/server/src/graphql/mutations_tokens.rs).
+// (crates/thunderforge-server/src/graphql/mutations_tokens.rs).
 
 export interface TokenRecord {
   tokenId: string;

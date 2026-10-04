@@ -33,7 +33,7 @@ function slice(name, own, { neighbours = [], paths = [] } = {}) {
 
 const LIST = {
   crossCutting: [
-    { glob: "src/app/schema.graphql", why: "every client speaks this schema" },
+    { glob: "apps/server/schema.graphql", why: "every client speaks this schema" },
     // Deliberately overlaps the status slice's glob below: the precedence
     // test needs a path both could claim.
     { glob: "apps/web/src/components/ui/**", why: "shared UI primitives" },
@@ -41,18 +41,18 @@ const LIST = {
   slices: [
     slice("combat", ["combat-"], {
       neighbours: ["status-display.spec.ts"],
-      paths: ["src/server/src/combat/**"],
+      paths: ["crates/thunderforge-server/src/combat/**"],
     }),
     slice("status", ["status-"], {
       paths: [
         "apps/web/src/components/StatusPanel/**",
         "apps/web/src/components/**",
-        "src/server/src/status_display.rs",
+        "crates/thunderforge-server/src/status_display.rs",
       ],
     }),
     slice("tokens", ["token-"], {
       neighbours: ["status-display.spec.ts"],
-      paths: ["src/server/src/status_display.rs"],
+      paths: ["crates/thunderforge-server/src/status_display.rs"],
     }),
   ],
 };
@@ -74,7 +74,7 @@ describe("isSpecPath and normalisePath", () => {
 
 describe("lookupPath", () => {
   test("cross-cutting answers the full suite, with its reason", () => {
-    const answer = lookupPath("src/app/schema.graphql", LIST);
+    const answer = lookupPath("apps/server/schema.graphql", LIST);
     assert.equal(answer.kind, "crossCutting");
     assert.equal(answer.why, "every client speaks this schema");
     assert.deepEqual(answer.slices, []);
@@ -107,7 +107,7 @@ describe("lookupPath", () => {
   });
 
   test("a path glob names every slice that claims it", () => {
-    const answer = lookupPath("src/server/src/status_display.rs", LIST);
+    const answer = lookupPath("crates/thunderforge-server/src/status_display.rs", LIST);
     assert.equal(answer.kind, "slice");
     assert.deepEqual(answer.slices, ["status", "tokens"]);
   });
@@ -124,7 +124,7 @@ describe("lookupPath", () => {
     for (const path of [
       "docs/CONTRIBUTING.md",
       "specs/060-a-slice-for-every-feature/tasks.md",
-      "src/server/README.md",
+      "crates/thunderforge-server/README.md",
       ".specify/templates/plan-template.md",
       "marketing/perf.json",
     ]) {
@@ -143,10 +143,10 @@ describe("lookupPaths", () => {
   test("the run is each slice once, in name order", () => {
     const result = lookupPaths(
       [
-        "src/server/src/status_display.rs",
+        "crates/thunderforge-server/src/status_display.rs",
         "apps/web/e2e/status-display.spec.ts",
-        "src/server/src/combat/turn.rs",
-        "./src/server/src/combat/turn.rs",
+        "crates/thunderforge-server/src/combat/turn.rs",
+        "./crates/thunderforge-server/src/combat/turn.rs",
       ],
       LIST,
     );
@@ -159,7 +159,7 @@ describe("lookupPaths", () => {
 
   test("one cross-cutting path asks for the full suite, slices still listed", () => {
     const result = lookupPaths(
-      ["src/app/schema.graphql", "src/server/src/combat/turn.rs"],
+      ["apps/server/schema.graphql", "crates/thunderforge-server/src/combat/turn.rs"],
       LIST,
     );
     assert.equal(result.fullSuite, true);

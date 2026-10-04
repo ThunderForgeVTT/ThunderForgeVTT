@@ -53,7 +53,7 @@ import type { TwoFactorStatus } from "@/types/twoFactor";
  * client half of that is `TwoFactorQrCode`, drawn by the shared
  * `TwoFactorEnrolmentSteps` this panel renders (FR-001a: one flow, three
  * entrances — this is the account-settings one, and the sign-in entrance is
- * `LoginView`). The server half landed on 2026-09-09 (`src/server/src/qr.rs`);
+ * `LoginView`). The server half landed on 2026-09-09 (`crates/thunderforge-server/src/qr.rs`);
  * until then `two_factor_setup_start` returned `{status, message,
  * otpauth_url}` and this panel had a fallback for it.
  *
@@ -284,7 +284,7 @@ export function TwoFactorEnrolmentPanel() {
  * FR-005 — whether a second factor is in force, and when it was confirmed.
  *
  * This can genuinely fail to be answerable. `contracts/enrolment.md` specifies
- * `GET /api/authentication/2fa/status`, and `src/server/src/auth/mod.rs` does
+ * `GET /api/authentication/2fa/status`, and `crates/thunderforge-server/src/auth/mod.rs` does
  * not route it; no GraphQL field carries an account's own two-factor state
  * either. So `readTwoFactorStatus` resolves to `null` and this says it cannot
  * tell, which is the honest thing to say and better than a badge that means

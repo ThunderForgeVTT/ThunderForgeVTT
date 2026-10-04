@@ -41,7 +41,7 @@ impl Default for GenieSystem {
 /// server/React-owned world state, not canvas simulation state, per Constitution
 /// Principle I and plan.md's Constitution Check. This plugin only covers what
 /// belongs in the ECS layer — none of that yet beyond the shared `grid.rs`
-/// gridless-interaction change (src/engine/src/plugins/grid.rs, spec 018 US2),
+/// gridless-interaction change (crates/thunderforge-engine/src/plugins/grid.rs, spec 018 US2),
 /// which is not Genie-specific code.
 pub struct GeniePlugin;
 

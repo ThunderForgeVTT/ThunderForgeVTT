@@ -1,6 +1,6 @@
 //! Real-time world-event delivery: who gets woken, and when the cursor moves.
 //!
-//! Extracted from `src/server/src/network/listener.rs` and the global
+//! Extracted from `crates/thunderforge-server/src/network/listener.rs` and the global
 //! broadcast channel it fed, for the same reason `thunderforge-opfs` was
 //! extracted from the cache: the decisions worth testing were welded to I/O
 //! that only exists at runtime, so they had no tests at all.

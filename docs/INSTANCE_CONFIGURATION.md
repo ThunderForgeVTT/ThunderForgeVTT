@@ -38,7 +38,7 @@ downgraded and upgraded again keeps their values.
 
 ## Adding a setting
 
-One declaration in `src/server/src/settings/registry.rs`. That is the whole of
+One declaration in `crates/thunderforge-server/src/settings/registry.rs`. That is the whole of
 it — precedence, redaction, validation, readiness and the admin screen all
 follow from the declaration, and none of them needs editing.
 

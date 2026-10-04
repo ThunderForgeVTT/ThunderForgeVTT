@@ -19,7 +19,7 @@ crate-type = ["rlib"]
 # cached credential is close enough to expiry to refresh, validate that a grant
 # covers exactly one repository — and every one of them is reachable here
 # without a network round trip or a registered application. The one actual HTTP
-# call, the installation-token exchange, lives in `src/server/src/repo_host.rs`.
+# call, the installation-token exchange, lives in `crates/thunderforge-server/src/repo_host.rs`.
 #
 # That is not tidiness. It is what makes the refresh-window arithmetic and the
 # scope validation testable at all: `cargo test -p thunderforge_repo_host` must

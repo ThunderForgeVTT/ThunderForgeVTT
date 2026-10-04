@@ -2703,7 +2703,7 @@ export default function WorldPage() {
   // is already persisted by the time AssetPasteTool calls this (the
   // GraphQL mutation already succeeded) — this just tells the engine to
   // spawn it. `path` points at the authenticated `/canvas-assets/{id}`
-  // proxy route (src/server/src/canvas_assets_serve.rs), not RustFS
+  // proxy route (crates/thunderforge-server/src/canvas_assets_serve.rs), not RustFS
   // directly: RustFS is private per-campaign storage, so the browser can
   // never fetch from it directly — this proxy is what makes a pasted
   // image (or, latently, a migrated background) actually renderable at

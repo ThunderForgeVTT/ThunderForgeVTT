@@ -1,4 +1,4 @@
-// Play-view Combat (src/server/src/graphql/mutations_combat.rs).
+// Play-view Combat (crates/thunderforge-server/src/graphql/mutations_combat.rs).
 //
 // Every mutation returns the whole combat, already in turn order — this
 // client never sorts combatants itself. Turn order is defined once,

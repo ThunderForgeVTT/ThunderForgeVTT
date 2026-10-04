@@ -4,7 +4,7 @@
  * half — Session Wish Pool, Doom Clock, Puzzle Clocks, and Session
  * Resource trades. Mirrors the exact shape of `walls.ts`/`tokens.ts`'s
  * "inbound" responsibility, but for `eventCode = 15`
- * (`src/server/src/world_events.rs::EVENT_CODE_GENIE_SESSION_STATE`)
+ * (`crates/thunderforge-server/src/world_events.rs::EVENT_CODE_GENIE_SESSION_STATE`)
  * rather than a scene-scoped canvas primitive.
  *
  * Per data-model.md's `world_events` section and

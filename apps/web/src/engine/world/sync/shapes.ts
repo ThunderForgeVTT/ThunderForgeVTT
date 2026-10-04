@@ -8,7 +8,7 @@
  * 1. Inbound: the server emits a generic `world_events` NOTIFY
  *    (subscription field `worldEventsCreated(worldId)`) with
  *    `eventCode = 12` for any shape create/update/delete
- *    (src/server/src/world_events.rs::EVENT_CODE_SHAPE_CHANGED). The
+ *    (crates/thunderforge-server/src/world_events.rs::EVENT_CODE_SHAPE_CHANGED). The
  *    notify payload only carries `{ action, shapeId, sceneId }` — not the
  *    full shape — so `applyShapeWorldEvent` re-fetches the scene's shapes
  *    via GraphQL (api/shapes.ts#getShapes) and dispatches

@@ -34,7 +34,7 @@ import { codeForConfirmingAnEnrolment } from "./fixtures/totp";
  * taking a shortcut past a UI: the UI does not exist. See the report at the
  * bottom of this comment.
  *
- * The pieces, read out of `src/server/src/auth/two_factor.rs`:
+ * The pieces, read out of `crates/thunderforge-server/src/auth/two_factor.rs`:
  *
  *   - `POST /authentication/2fa/setup/start` — username + password *or* a
  *     `challenge_id` from the login response, no session needed. Generates 20

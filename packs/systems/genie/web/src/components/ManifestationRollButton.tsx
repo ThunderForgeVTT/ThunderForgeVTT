@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 /** A single `PlaceholderBindingInput` entry, matching the `rollDice`
- * mutation's `bindings` field shape (`src/server/src/graphql/mutations_roll.rs`'s
+ * mutation's `bindings` field shape (`crates/thunderforge-server/src/graphql/mutations_roll.rs`'s
  * `PlaceholderBindingInput { name, value }`; see `apps/web/src/types/roll.ts`'s
  * `PlaceholderBinding` for the app-side equivalent). Declared locally
  * rather than imported from `apps/web` so this system pack has no
@@ -31,7 +31,7 @@ export interface ManifestationRollButtonProps {
   disabled?: boolean;
   /**
    * Performs the actual `rollDice` GraphQL mutation
-   * (`src/server/src/graphql/mutations_roll.rs`, wired client-side via
+   * (`crates/thunderforge-server/src/graphql/mutations_roll.rs`, wired client-side via
    * `apps/web/src/api/roll.ts`'s `rollDice(worldId, formula, bindings)`).
    * Injected rather than called directly so this package never imports
    * from `apps/web` — the host app supplies the real mutation call.

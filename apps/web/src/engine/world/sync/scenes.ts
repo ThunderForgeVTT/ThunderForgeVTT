@@ -12,7 +12,7 @@
 
 import type { WorldEventLike } from "./subscriptionClient";
 
-/** `src/server/src/world_events.rs::EVENT_CODE_SCENE_LAUNCHED`. */
+/** `crates/thunderforge-server/src/world_events.rs::EVENT_CODE_SCENE_LAUNCHED`. */
 const SCENE_LAUNCHED_EVENT_CODE = 16;
 
 /**

@@ -25,7 +25,7 @@ import { test, expect, type Page } from "./fixtures/test";
  *   (apps/web/src/hooks/useActorSystemData.ts) replaced that with a
  *   direct GraphQL fetch against the new `actorSystemData(actorId)`
  *   query (apps/web/src/api/actorSystemData.ts,
- *   src/server/src/graphql/queries/actor.rs's `actor_system_data_impl`),
+ *   crates/thunderforge-server/src/graphql/queries/actor.rs's `actor_system_data_impl`),
  *   so `resolveSizeFootprint` (apps/web/src/utils/sizeCategory.ts,
  *   unit-tested in apps/web/src/utils/__tests__/sizeCategory.test.ts) now
  *   receives real trait_data in the running app. This test previously

@@ -339,7 +339,7 @@ Using PostgreSQL's native NOTIFY/LISTEN eliminates external dependencies and lev
 ##### 1. Multiplex Single LISTEN Connection
 
 ```rust
-// src/server/src/pubsub/mod.rs
+// crates/thunderforge-server/src/pubsub/mod.rs
 
 pub struct PubSubBackplane {
     broadcast_tx: broadcast::Sender<WorldEvent>,
@@ -514,10 +514,10 @@ EXECUTE FUNCTION notify_world_event();
 
 ## Implementation Checklist
 
-- [ ] Shared core models (no Diesel/network deps) in `src/core/src/models/`
-- [ ] Adapter layer (Diesel ↔ Core conversion) in `src/server/src/adapters.rs`
-- [ ] PostgreSQL pub/sub backplane in `src/server/src/pubsub/`
-- [ ] Axum load shedding middleware in `src/server/src/middleware/`
+- [ ] Shared core models (no Diesel/network deps) in `crates/thunderforge-core/src/models/`
+- [ ] Adapter layer (Diesel ↔ Core conversion) in `crates/thunderforge-server/src/adapters.rs`
+- [ ] PostgreSQL pub/sub backplane in `crates/thunderforge-server/src/pubsub/`
+- [ ] Axum load shedding middleware in `crates/thunderforge-server/src/middleware/`
 - [ ] GraphQL mutations for all game actions
 - [ ] GraphQL subscriptions for real-time sync
 - [ ] Bevy GraphQL client abstraction
@@ -584,8 +584,8 @@ send_backlog_to_client(backlog).await?;
 
 - [ADR-000: Durable Objects via GraphQL Event-Driven Sync](docs/adrs/20260501-000-durable_objects_with_graphql_event_driven_sync.md)
 - [Implementation Guide](docs/IMPLEMENTATION_GUIDE.md)
-- [Core Models](src/core/src/models/)
-- [Server Adapters](src/server/src/adapters.rs)
+- [Core Models](crates/thunderforge-core/src/models/)
+- [Server Adapters](crates/thunderforge-server/src/adapters.rs)
 
 ---
 

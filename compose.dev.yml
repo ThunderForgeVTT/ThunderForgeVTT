@@ -21,7 +21,7 @@ services:
   # Spec 002: object storage for canvas image assets (paste-to-canvas +
   # migrated map-import backgrounds). Dev-only root credentials — the
   # server never hands these out; see docs/adrs/20260820-039-*.md and
-  # src/server/src/storage/rustfs.rs.
+  # crates/thunderforge-server/src/storage/rustfs.rs.
   rustfs:
     container_name: thunderforge-rustfs
     image: rustfs/rustfs:1.0.0-rc.2

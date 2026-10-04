@@ -1,6 +1,6 @@
 //! The rows Genie's session loop reads and writes.
 //!
-//! Moved out of `src/server/src/models.rs` with the tables they describe
+//! Moved out of `crates/thunderforge-server/src/models.rs` with the tables they describe
 //! (spec 032, ADR-063). The server has no reason to hold a struct for a Doom
 //! Clock, and holding one is what made `models.rs` a place every ruleset
 //! eventually adds to.

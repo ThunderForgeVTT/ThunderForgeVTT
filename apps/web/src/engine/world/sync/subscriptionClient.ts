@@ -3,9 +3,9 @@
  *
  * The frontend half of live cross-client sync. The backend has had a
  * fully working real-time stack this whole time — a Postgres listener
- * broadcasting onto a channel (src/server/src/network/listener.rs), a
+ * broadcasting onto a channel (crates/thunderforge-server/src/network/listener.rs), a
  * `worldEventsCreated(worldId)` GraphQL subscription off that channel
- * (src/server/src/graphql.rs's `SubscriptionRoot`), and a mounted axum
+ * (crates/thunderforge-server/src/graphql.rs's `SubscriptionRoot`), and a mounted axum
  * WebSocket route at `/api/ws` (async-graphql-axum's `GraphQLWebSocket`,
  * `main.rs`) — but nothing in this app ever opened a WebSocket to it.
  * Every `apply*WorldEvent`/`start*EventSync` pair in this directory

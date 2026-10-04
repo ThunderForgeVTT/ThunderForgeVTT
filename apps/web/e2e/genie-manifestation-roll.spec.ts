@@ -105,7 +105,7 @@ test.describe("Spec 018 Scenario 1: the Manifestation roll exercises keep/drop +
     );
 
     // Genie is the server-side default (prepare_world_input,
-    // src/server/src/graphql/helpers.rs) for a world created with no system
+    // crates/thunderforge-server/src/graphql/helpers.rs) for a world created with no system
     // selected, and re-picking the running system asks nothing (8339da8). So
     // the world is moved to 5E through the API first — it is empty, so no
     // acknowledgement is needed — and the "review the legal notice before

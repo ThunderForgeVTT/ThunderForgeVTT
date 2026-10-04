@@ -43,7 +43,7 @@ export const ADMIN_SECOND_FACTOR_PATH = path.join(
 
 const SEED_SQL_PATH = path.join(
   __dirname,
-  "../../../../src/server/seeds/e2e_demo.sql",
+  "../../../../crates/thunderforge-server/seeds/e2e_demo.sql",
 );
 
 export const DEMO_USER = {
@@ -70,7 +70,7 @@ export interface DemoWorld {
 const DEMO_WORLD_ID = "00000000-0000-0000-0000-0000000000f0";
 const DEMO_WORLD_NAME = "Genie Demo World";
 
-/** Applies src/server/seeds/e2e_demo.sql against the dev Postgres
+/** Applies crates/thunderforge-server/seeds/e2e_demo.sql against the dev Postgres
  * container. Idempotent — safe to run every test run, including against
  * a database that was just `docker compose down -v`'d and re-migrated. */
 function applySeedSql(): void {

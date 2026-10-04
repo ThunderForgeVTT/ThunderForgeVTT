@@ -145,8 +145,8 @@ COPY --from=build /out/diesel /usr/local/bin/diesel
 # diesel-cli reads one directory per invocation, named relative to the config
 # it finds in the working directory. Keeping that pair together in its own
 # place means the entrypoint does not have to reproduce the repository layout.
-COPY src/server/diesel.toml /srv/thunderforge/migrate/diesel.toml
-COPY src/server/migrations /srv/thunderforge/migrate/migrations
+COPY crates/thunderforge-server/diesel.toml /srv/thunderforge/migrate/diesel.toml
+COPY crates/thunderforge-server/migrations /srv/thunderforge/migrate/migrations
 
 # The game-system and interface packs the server lists at boot — `packs/` in
 # the repository is what `scripts/dev.mjs` symlinks into `data/packs/` on a

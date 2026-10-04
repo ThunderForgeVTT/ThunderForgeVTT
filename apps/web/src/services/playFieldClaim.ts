@@ -12,7 +12,7 @@
  *
  * There is no "claim" mutation. Opening the `playField` subscription takes the
  * table; closing it releases, with no timeout and nothing on the server to
- * reap — see `src/server/src/graphql/mutations_play_field.rs`. So the lifetime
+ * reap — see `crates/thunderforge-server/src/graphql/mutations_play_field.rs`. So the lifetime
  * of the subscription *is* the lifetime of the claim, and everything here is
  * about starting one, stopping it, and telling anybody who cares what the
  * server last said.

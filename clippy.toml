@@ -11,7 +11,7 @@ too-many-lines-threshold = 100
 # they touch, and Query's own type (tuples of component refs plus
 # With<T>/Without<T> filters) is inherently "complex" by clippy's generic
 # metric — both defaults (7 args / threshold 250) fire constantly on
-# ordinary, correctly-scoped Bevy systems in src/engine and the game-system
+# ordinary, correctly-scoped Bevy systems in crates/thunderforge-engine and the game-system
 # packs, not on anything that's actually hard to read. Raised, not
 # disabled, so a genuinely oversized system/type still gets flagged.
 too-many-arguments-threshold = 10

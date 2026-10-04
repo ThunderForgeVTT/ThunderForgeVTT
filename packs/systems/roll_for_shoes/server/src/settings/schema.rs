@@ -1,11 +1,11 @@
 //! The one table this pack owns.
 //!
-//! Declared here rather than in `src/server/src/schema.rs`, per ADR-063: a
+//! Declared here rather than in `crates/thunderforge-server/src/schema.rs`, per ADR-063: a
 //! pack owns the tables it writes. Both `diesel.toml` files list this table
 //! under `except_tables`, so `diesel print_schema` never adds a second
 //! declaration of it to the server's generated schema.
 //!
-//! The migration that creates it still lives in `src/server/migrations/` —
+//! The migration that creates it still lives in `crates/thunderforge-server/migrations/` —
 //! Diesel reads one migrations directory per invocation, and splitting that is
 //! a separate decision from owning the declaration.
 

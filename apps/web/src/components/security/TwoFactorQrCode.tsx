@@ -27,7 +27,7 @@ const QUIET_ZONE_MODULES = 4;
  * without noticing, and much easier to be obviously correct about.
  *
  * Nothing renders this today: `two_factor_setup_start` does not send a `qr`
- * field yet (`src/server/src/auth/two_factor.rs`). It is reached the moment
+ * field yet (`crates/thunderforge-server/src/auth/two_factor.rs`). It is reached the moment
  * one arrives, which is why `TwoFactorEnrolmentPanel` asks for it
  * conditionally rather than assuming either answer.
  */

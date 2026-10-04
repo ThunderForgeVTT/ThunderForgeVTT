@@ -8,7 +8,7 @@
  * # Why this exists
  *
  * Until `cargo test` got its own database (`thunderforge_test`, see
- * `src/server/src/test_support.rs`), every database-backed test wrote into the
+ * `crates/thunderforge-server/src/test_support.rs`), every database-backed test wrote into the
  * development database and nothing took the rows away. By 2026-09-15 that was
  * about 232,000 test users and the worlds, scenes, tokens and everything else
  * hung off them. Tests no longer add to it; this removes what is there.

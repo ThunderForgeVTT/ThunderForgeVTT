@@ -30,7 +30,7 @@ Neither is restated here.
 
 | Crate | What it holds | Where it runs |
 |---|---|---|
-| [`crates/thunderforge-cache-core`](../crates/thunderforge-cache-core) | Every rule the server and the client must agree on. No I/O. | Compiled into **both** the server binary (`src/server`) and the engine WASM bundle (`src/engine`). |
+| [`crates/thunderforge-cache-core`](../crates/thunderforge-cache-core) | Every rule the server and the client must agree on. No I/O. | Compiled into **both** the server binary (`crates/thunderforge-server`) and the engine WASM bundle (`crates/thunderforge-engine`). |
 | [`crates/thunderforge-cache-browser`](../crates/thunderforge-cache-browser) | The I/O only a browser can perform: OPFS blobs, a WebCrypto key, IndexedDB records, WebRTC data channels. | The engine's WASM bundle only. |
 
 ### Why two, and not one
@@ -308,7 +308,7 @@ Stated because a document that only lists strengths is not trusted twice.
 
 - **Conflict marks live in process.** `conflict::resolve` needs to know what
   already landed on an item and who put it there; that memory is an
-  in-process map in `src/server/src/graphql/mutations_reconcile.rs`, and **a
+  in-process map in `crates/thunderforge-server/src/graphql/mutations_reconcile.rs`, and **a
   server restart forgets it**. Two players reconnecting either side of a
   restart both apply, and the later one silently wins on last-write. The
   window is the minutes between one client reconnecting and the next, and the

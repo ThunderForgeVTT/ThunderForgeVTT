@@ -11,7 +11,7 @@
  * used is not a hero field, so a spec that carries one is refused, not
  * stored.
  *
- * The server holds a copy, `src/server/src/heroes/hero_spec_schema.json`,
+ * The server holds a copy, `crates/thunderforge-server/src/heroes/hero_spec_schema.json`,
  * written by `pnpm -F @thunderforge/heroes run schema`. `schema.test.ts`
  * fails when that copy differs from this one, so the two cannot drift.
  *

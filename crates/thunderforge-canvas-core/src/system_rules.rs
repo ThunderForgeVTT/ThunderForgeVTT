@@ -3,15 +3,15 @@
 //! # Why this is here and not in the engine
 //!
 //! It was in the engine, and it was also in a pack, and the two had drifted.
-//! `src/engine/src/systems/core.rs` declared a `GameSystem` trait;
+//! `crates/thunderforge-engine/src/systems/core.rs` declared a `GameSystem` trait;
 //! `packs/systems/dnd5e/engine/src/plugin.rs` declared a `GameSystemTrait`
 //! carrying the comment "should match the one in
-//! `src/engine/src/systems/core.rs` — Re-defined here to avoid cross-package
+//! `crates/thunderforge-engine/src/systems/core.rs` — Re-defined here to avoid cross-package
 //! dependency". By the time both were read together they shared exactly one
 //! method name, and nothing depended on either.
 //!
 //! The duplication had a stated cause, and this crate is the cure for it:
-//! `src/engine/Cargo.toml` and `src/server/Cargo.toml` both already depend on
+//! `crates/thunderforge-engine/Cargo.toml` and `crates/thunderforge-server/Cargo.toml` both already depend on
 //! `thunderforge_canvas_core`, and it is the only crate both of them have. It
 //! is also where this codebase has twice put rules of exactly this kind, for
 //! the same reason each time — its tests execute natively, and the engine

@@ -70,7 +70,7 @@
     },
     {
       "kind": "url_credential",
-      "why": "How a presigned storage URL leaks. Not hypothetical: src/server/src/storage/rustfs.rs mints per-call STS credentials scoped to one key, and a failing asset fetch logs the URL that carried them. The leading ? or & is consumed because Rust's regex has no lookbehind, so the separator cannot be matched without being taken.",
+      "why": "How a presigned storage URL leaks. Not hypothetical: crates/thunderforge-server/src/storage/rustfs.rs mints per-call STS credentials scoped to one key, and a failing asset fetch logs the URL that carried them. The leading ? or & is consumed because Rust's regex has no lookbehind, so the separator cannot be matched without being taken.",
       "pattern": "[?&](?:token|access_token|key|sig|signature|x-amz-signature|x-amz-credential|x-amz-security-token)=[^&\\s\"'<>]+",
       "ignore_case": true,
       "replacement": "[redacted: signed url]"

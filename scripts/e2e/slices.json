@@ -2,7 +2,7 @@
   "$comment": "One owner per spec; see docs/CONTRIBUTING.md 'Proving a change'. Checked by scripts/check-e2e-slices.mjs.",
   "crossCutting": [
     {
-      "glob": "src/app/schema.graphql",
+      "glob": "apps/server/schema.graphql",
       "why": "every client speaks this schema"
     },
     {
@@ -10,11 +10,11 @@
       "why": "the generated SDK bindings every engine command and display is typed against"
     },
     {
-      "glob": "src/server/src/auth/**",
+      "glob": "crates/thunderforge-server/src/auth/**",
       "why": "every spec signs in through it"
     },
     {
-      "glob": "src/server/src/auth_middleware.rs",
+      "glob": "crates/thunderforge-server/src/auth_middleware.rs",
       "why": "every signed-in request passes through it"
     },
     {
@@ -26,35 +26,35 @@
       "why": "world membership and scene visibility, which the auth checks every world page passes"
     },
     {
-      "glob": "src/server/seeds/{demo_accounts,e2e_demo}.sql",
+      "glob": "crates/thunderforge-server/seeds/{demo_accounts,e2e_demo}.sql",
       "why": "the template database and demo sign-in every run starts from"
     },
     {
-      "glob": "src/server/src/schema.rs",
+      "glob": "crates/thunderforge-server/src/schema.rs",
       "why": "the database schema every query is written against"
     },
     {
-      "glob": "src/server/migrations/**",
+      "glob": "crates/thunderforge-server/migrations/**",
       "why": "schema history every slice reads"
     },
     {
-      "glob": "src/server/src/{lib,graphql,models,db_types,state,pubsub,world_events}.rs",
+      "glob": "crates/thunderforge-server/src/{lib,graphql,models,db_types,state,pubsub,world_events}.rs",
       "why": "server wiring every request, model and world event goes through"
     },
     {
-      "glob": "src/server/src/graphql/{types,input_types,helpers,subscriptions}.rs",
+      "glob": "crates/thunderforge-server/src/graphql/{types,input_types,helpers,subscriptions}.rs",
       "why": "GraphQL types and the subscription every client listens on"
     },
     {
-      "glob": "src/server/Cargo.toml",
+      "glob": "crates/thunderforge-server/Cargo.toml",
       "why": "the server's features and dependencies, which every stack is built with"
     },
     {
-      "glob": "src/app/Cargo.toml",
+      "glob": "apps/server/Cargo.toml",
       "why": "the server binary every stack runs"
     },
     {
-      "glob": "src/app/src/{main,schema_roots}.rs",
+      "glob": "apps/server/src/{main,schema_roots}.rs",
       "why": "the server binary every stack runs, and the roots of its schema"
     },
     {
@@ -163,18 +163,18 @@
         "crates/thunderforge-axum-oauth/**",
         "crates/thunderforge-axum-oidc/**",
         "scripts/oauth-stub.mjs",
-        "src/core/**",
-        "src/server/src/admin/two_factor_operations.rs",
-        "src/server/src/config/oauth_env.rs",
-        "src/server/src/graphql/mutations_invites*.rs",
-        "src/server/src/graphql/mutations_standing.rs",
-        "src/server/src/graphql/mutations_user_data.rs",
-        "src/server/src/graphql/queries/{standing,standing_tests,user,invite}.rs",
-        "src/server/src/graphql/two_factor_coverage_tests.rs",
-        "src/server/src/graphql/{mutations_sessions,session_lifetime,anonymous}.rs",
-        "src/server/src/moderation/standing*.rs",
-        "src/server/src/users/**",
-        "src/server/src/{session,crypto,qr}.rs"
+        "crates/thunderforge-core/**",
+        "crates/thunderforge-server/src/admin/two_factor_operations.rs",
+        "crates/thunderforge-server/src/config/oauth_env.rs",
+        "crates/thunderforge-server/src/graphql/mutations_invites*.rs",
+        "crates/thunderforge-server/src/graphql/mutations_standing.rs",
+        "crates/thunderforge-server/src/graphql/mutations_user_data.rs",
+        "crates/thunderforge-server/src/graphql/queries/{standing,standing_tests,user,invite}.rs",
+        "crates/thunderforge-server/src/graphql/two_factor_coverage_tests.rs",
+        "crates/thunderforge-server/src/graphql/{mutations_sessions,session_lifetime,anonymous}.rs",
+        "crates/thunderforge-server/src/moderation/standing*.rs",
+        "crates/thunderforge-server/src/users/**",
+        "crates/thunderforge-server/src/{session,crypto,qr}.rs"
       ]
     },
     {
@@ -215,13 +215,13 @@
         "apps/web/src/types/{actor,actorShare,actorAbility}.ts",
         "apps/web/src/utils/__tests__/raceOnSheet.test.ts",
         "apps/web/src/utils/raceOnSheet.ts",
-        "src/server/src/assets_serve/actor.rs",
-        "src/server/src/graphql/mutations_actor*.rs",
-        "src/server/src/graphql/mutations_play_field.rs",
-        "src/server/src/graphql/permissioned_entity_resolvers.rs",
-        "src/server/src/graphql/queries/actor.rs",
-        "src/server/src/graphql/types_actors.rs",
-        "src/server/src/{play_field,sheet,sheet_tests,adapters}.rs"
+        "crates/thunderforge-server/src/assets_serve/actor.rs",
+        "crates/thunderforge-server/src/graphql/mutations_actor*.rs",
+        "crates/thunderforge-server/src/graphql/mutations_play_field.rs",
+        "crates/thunderforge-server/src/graphql/permissioned_entity_resolvers.rs",
+        "crates/thunderforge-server/src/graphql/queries/actor.rs",
+        "crates/thunderforge-server/src/graphql/types_actors.rs",
+        "crates/thunderforge-server/src/{play_field,sheet,sheet_tests,adapters}.rs"
       ]
     },
     {
@@ -240,7 +240,7 @@
         "apps/web/src/pages/world/compendium/{BookListTab.tsx,worldBooks.ts}",
         "apps/web/src/services/{bookImport,pdfReader}.ts",
         "crates/thunderforge-pdf/**",
-        "src/server/src/library/book_list*.rs"
+        "crates/thunderforge-server/src/library/book_list*.rs"
       ]
     },
     {
@@ -277,17 +277,17 @@
         "crates/thunderforge-canvas-core/src/{wall,wall_tests,wall_room_and_clear_tests,shape,grid,grid_footprint_tests,camera,snapping,measure}.rs",
         "crates/thunderforge-mapforge/**",
         "examples/maps/**",
-        "src/engine/src/grid/**",
-        "src/engine/src/plugins/{shape,wall,background,canvas_layer,grid,camera,context_menu,authoring_mode,render_probe}.rs",
-        "src/engine/src/resources/{background,background_cache,canvas_layer,grid,shape,wall,camera}.rs",
-        "src/engine/src/systems/{background,shape,wall,wall_tests,camera_focus}.rs",
-        "src/engine/src/transforms/**",
-        "src/server/src/assets_serve/{mod,canvas}.rs",
-        "src/server/src/graphql/mutations_{shapes,walls,assets,authoring_tools}.rs",
-        "src/server/src/graphql/queries/authoring_tools.rs",
-        "src/server/src/map_import/**",
-        "src/server/src/static_files/**",
-        "src/server/src/storage/**"
+        "crates/thunderforge-engine/src/grid/**",
+        "crates/thunderforge-engine/src/plugins/{shape,wall,background,canvas_layer,grid,camera,context_menu,authoring_mode,render_probe}.rs",
+        "crates/thunderforge-engine/src/resources/{background,background_cache,canvas_layer,grid,shape,wall,camera}.rs",
+        "crates/thunderforge-engine/src/systems/{background,shape,wall,wall_tests,camera_focus}.rs",
+        "crates/thunderforge-engine/src/transforms/**",
+        "crates/thunderforge-server/src/assets_serve/{mod,canvas}.rs",
+        "crates/thunderforge-server/src/graphql/mutations_{shapes,walls,assets,authoring_tools}.rs",
+        "crates/thunderforge-server/src/graphql/queries/authoring_tools.rs",
+        "crates/thunderforge-server/src/map_import/**",
+        "crates/thunderforge-server/src/static_files/**",
+        "crates/thunderforge-server/src/storage/**"
       ]
     },
     {
@@ -313,13 +313,13 @@
         "apps/web/src/pages/{collection-share,world-collections,ability-share,item-share}/**",
         "apps/web/src/types/{collection,abilityShare,itemShare}.ts",
         "examples/maps/demo.dd2vtt",
-        "src/server/src/collections/**",
-        "src/server/src/compendium/{collections,collections_tests,origin,origin_tests}.rs",
-        "src/server/src/graphql/mutations_{collections,collection_shares,shelf_collections,library,ability_shares,item_shares,sync_back}*.rs",
-        "src/server/src/graphql/{share_codes,share_rate_limit,publishing_gate}.rs",
-        "src/server/src/library/**",
-        "src/server/src/users/library_deletion_tests.rs",
-        "src/server/src/{publishing,publishing_tests,attestation,attestation_tests,content}.rs"
+        "crates/thunderforge-server/src/collections/**",
+        "crates/thunderforge-server/src/compendium/{collections,collections_tests,origin,origin_tests}.rs",
+        "crates/thunderforge-server/src/graphql/mutations_{collections,collection_shares,shelf_collections,library,ability_shares,item_shares,sync_back}*.rs",
+        "crates/thunderforge-server/src/graphql/{share_codes,share_rate_limit,publishing_gate}.rs",
+        "crates/thunderforge-server/src/library/**",
+        "crates/thunderforge-server/src/users/library_deletion_tests.rs",
+        "crates/thunderforge-server/src/{publishing,publishing_tests,attestation,attestation_tests,content}.rs"
       ]
     },
     {
@@ -354,12 +354,12 @@
         "crates/thunderforge-canvas-core/src/{system_rules,system_rules_tests}.rs",
         "crates/thunderforge-dice/**",
         "packs/systems/dnd5e/**",
-        "src/engine/src/plugins/dice_roll.rs",
-        "src/server/src/combat/**",
-        "src/server/src/graphql/mutations_{combat,attacks,roll}*.rs",
-        "src/server/src/graphql/queries/{attacks,roll}.rs",
-        "src/server/src/graphql/types_{attacks,dice}.rs",
-        "src/server/src/turn_structure*.rs"
+        "crates/thunderforge-engine/src/plugins/dice_roll.rs",
+        "crates/thunderforge-server/src/combat/**",
+        "crates/thunderforge-server/src/graphql/mutations_{combat,attacks,roll}*.rs",
+        "crates/thunderforge-server/src/graphql/queries/{attacks,roll}.rs",
+        "crates/thunderforge-server/src/graphql/types_{attacks,dice}.rs",
+        "crates/thunderforge-server/src/turn_structure*.rs"
       ]
     },
     {
@@ -382,9 +382,9 @@
         "apps/web/src/services/playFieldClaim.ts",
         "apps/web/src/types/chat.ts",
         "crates/thunderforge-presence/**",
-        "src/server/src/graphql/mutations_chat.rs",
-        "src/server/src/markdown/**",
-        "src/server/src/play_field.rs"
+        "crates/thunderforge-server/src/graphql/mutations_chat.rs",
+        "crates/thunderforge-server/src/markdown/**",
+        "crates/thunderforge-server/src/play_field.rs"
       ]
     },
     {
@@ -406,11 +406,11 @@
         "apps/web/src/pages/world/{compendium,ability,item}/**",
         "apps/web/src/types/{ability,item,inventory}.ts",
         "apps/web/src/utils/effectLabels.ts",
-        "src/server/src/compendium/**",
-        "src/server/src/graphql/mutations_{abilities,ability_permissions,actor_abilities,item_abilities,item_permissions,item_prices,items,compendium,inventory}*.rs",
-        "src/server/src/graphql/queries/{ability,ability_vocabulary,compendium,compendium_tests,item,inventory}.rs",
-        "src/server/src/graphql/types_{abilities,items}.rs",
-        "src/server/src/{ability_vocabulary,ability_vocabulary_tests,declared_values,declared_values_tests}.rs"
+        "crates/thunderforge-server/src/compendium/**",
+        "crates/thunderforge-server/src/graphql/mutations_{abilities,ability_permissions,actor_abilities,item_abilities,item_permissions,item_prices,items,compendium,inventory}*.rs",
+        "crates/thunderforge-server/src/graphql/queries/{ability,ability_vocabulary,compendium,compendium_tests,item,inventory}.rs",
+        "crates/thunderforge-server/src/graphql/types_{abilities,items}.rs",
+        "crates/thunderforge-server/src/{ability_vocabulary,ability_vocabulary_tests,declared_values,declared_values_tests}.rs"
       ]
     },
     {
@@ -426,11 +426,11 @@
         "crates/thunderforge-canvas-core/src/{frame_trace,texture_budget,resource_display,resource_display_tests,viewport}.rs",
         "scripts/status-capacity-metrics.mjs",
         "scripts/token-culling-metrics.mjs",
-        "src/engine/Cargo.toml",
-        "src/engine/src/plugins/{mod,frame_trace,status_display,token,nameplate,token_culling,token_culling_tests}.rs",
-        "src/engine/src/resources/mod.rs",
-        "src/engine/src/systems/{mod,token,token_loader,sync,event_dispatcher}.rs",
-        "src/engine/src/{app,lib,startup,components,derived_data,payloads,sdk}.rs"
+        "crates/thunderforge-engine/Cargo.toml",
+        "crates/thunderforge-engine/src/plugins/{mod,frame_trace,status_display,token,nameplate,token_culling,token_culling_tests}.rs",
+        "crates/thunderforge-engine/src/resources/mod.rs",
+        "crates/thunderforge-engine/src/systems/{mod,token,token_loader,sync,event_dispatcher}.rs",
+        "crates/thunderforge-engine/src/{app,lib,startup,components,derived_data,payloads,sdk}.rs"
       ]
     },
     {
@@ -446,15 +446,15 @@
         "crates/thunderforge-canvas-core/Cargo.toml",
         "crates/thunderforge-canvas-core/src/{lib,frame_trace,seam_probe,texture_budget}.rs",
         "examples/maps/**",
-        "src/engine/Cargo.toml",
-        "src/engine/src/network/**",
-        "src/engine/src/plugins/cached_assets*.rs",
-        "src/engine/src/plugins/cached_assets/**",
-        "src/engine/src/plugins/darkness.wgsl",
-        "src/engine/src/plugins/{mod,frame_trace,seam_probe,websocket_plugin,lighting,lighting_overlay,darkness,interaction,interaction_marker}.rs",
-        "src/engine/src/resources/mod.rs",
-        "src/engine/src/systems/{mod,mutation_sender,optimistic,sync,event_dispatcher,presence,conflict_visualization,tests_f1_unit,tests_f2_f4_integration}.rs",
-        "src/engine/src/{app,lib,startup,components,derived_data,payloads,sdk,sync_test,integration_tests}.rs"
+        "crates/thunderforge-engine/Cargo.toml",
+        "crates/thunderforge-engine/src/network/**",
+        "crates/thunderforge-engine/src/plugins/cached_assets*.rs",
+        "crates/thunderforge-engine/src/plugins/cached_assets/**",
+        "crates/thunderforge-engine/src/plugins/darkness.wgsl",
+        "crates/thunderforge-engine/src/plugins/{mod,frame_trace,seam_probe,websocket_plugin,lighting,lighting_overlay,darkness,interaction,interaction_marker}.rs",
+        "crates/thunderforge-engine/src/resources/mod.rs",
+        "crates/thunderforge-engine/src/systems/{mod,mutation_sender,optimistic,sync,event_dispatcher,presence,conflict_visualization,tests_f1_unit,tests_f2_f4_integration}.rs",
+        "crates/thunderforge-engine/src/{app,lib,startup,components,derived_data,payloads,sdk,sync_test,integration_tests}.rs"
       ]
     },
     {
@@ -471,9 +471,9 @@
         "apps/web/src/services/feedback*.ts",
         "config/feedback-redaction.json",
         "scripts/github-stub.mjs",
-        "src/server/src/assets_serve/feedback.rs",
-        "src/server/src/feedback/**",
-        "src/server/src/{github_apps,github_apps_tests}.rs"
+        "crates/thunderforge-server/src/assets_serve/feedback.rs",
+        "crates/thunderforge-server/src/feedback/**",
+        "crates/thunderforge-server/src/{github_apps,github_apps_tests}.rs"
       ]
     },
     {
@@ -500,9 +500,9 @@
         "crates/thunderforge-canvas-core/src/{system_contribution,content_entry,content_patterns}.rs",
         "crates/thunderforge-content/**",
         "packs/systems/{basic-game-system,blades_in_the_dark,cypher_system,dnd5e,fate_core,pathfinder2e,roll_for_shoes,year_zero_engine}/**",
-        "src/app/src/system_packs.rs",
-        "src/server/src/graphql_world_default_system_tests.rs",
-        "src/server/src/{systems,systems_manifest_legal_enforcement_tests,systems_registry_tests,test_packs,content_patterns}.rs"
+        "apps/server/src/system_packs.rs",
+        "crates/thunderforge-server/src/graphql_world_default_system_tests.rs",
+        "crates/thunderforge-server/src/{systems,systems_manifest_legal_enforcement_tests,systems_registry_tests,test_packs,content_patterns}.rs"
       ]
     },
     {
@@ -540,8 +540,8 @@
         "crates/thunderforge-canvas-core/src/token_art.rs",
         "packages/hero-builder/**",
         "packages/heroes/**",
-        "src/server/src/graphql/token_art.rs",
-        "src/server/src/heroes/**"
+        "crates/thunderforge-server/src/graphql/token_art.rs",
+        "crates/thunderforge-server/src/heroes/**"
       ],
       "standalone": "pnpm -F @thunderforge/hero-builder-app test:e2e"
     },
@@ -571,14 +571,14 @@
         "apps/web/src/types/admin.ts",
         "config/realm-defaults.json",
         "scripts/github-stub.mjs",
-        "src/server/src/admin.rs",
-        "src/server/src/config/mod.rs",
-        "src/server/src/graphql/mutations_github_apps*.rs",
-        "src/server/src/graphql/queries/{admin,healthcheck}.rs",
-        "src/server/src/graphql/{admin_types,admin_surface_tests,disabled_surface_tests,mutations_admin,mutations_instance_access,operator_acknowledgement}.rs",
-        "src/server/src/mail/**",
-        "src/server/src/settings/**",
-        "src/server/src/{github_apps,github_apps_tests,instance_identity,readiness,notices}.rs"
+        "crates/thunderforge-server/src/admin.rs",
+        "crates/thunderforge-server/src/config/mod.rs",
+        "crates/thunderforge-server/src/graphql/mutations_github_apps*.rs",
+        "crates/thunderforge-server/src/graphql/queries/{admin,healthcheck}.rs",
+        "crates/thunderforge-server/src/graphql/{admin_types,admin_surface_tests,disabled_surface_tests,mutations_admin,mutations_instance_access,operator_acknowledgement}.rs",
+        "crates/thunderforge-server/src/mail/**",
+        "crates/thunderforge-server/src/settings/**",
+        "crates/thunderforge-server/src/{github_apps,github_apps_tests,instance_identity,readiness,notices}.rs"
       ]
     },
     {
@@ -604,10 +604,10 @@
         "apps/web/src/engine/world/sync/interactives.ts",
         "crates/thunderforge-canvas-core/src/interaction*.rs",
         "scripts/check-interaction-seam.mjs",
-        "src/engine/src/plugins/{interaction,interaction_marker}.rs",
-        "src/server/src/graphql/mutations_interactives*.rs",
-        "src/server/src/graphql/queries/interactives.rs",
-        "src/server/src/{interaction,door_effects}.rs"
+        "crates/thunderforge-engine/src/plugins/{interaction,interaction_marker}.rs",
+        "crates/thunderforge-server/src/graphql/mutations_interactives*.rs",
+        "crates/thunderforge-server/src/graphql/queries/interactives.rs",
+        "crates/thunderforge-server/src/{interaction,door_effects}.rs"
       ]
     },
     {
@@ -635,13 +635,13 @@
         "apps/web/src/hooks/useSceneUnits.ts",
         "apps/web/src/types/light.ts",
         "crates/thunderforge-canvas-core/src/{lighting,vision,vision_declaration,vision_declaration_tests,shadow_map}.rs",
-        "src/engine/src/plugins/darkness.wgsl",
-        "src/engine/src/plugins/{lighting,lighting_overlay,darkness}.rs",
-        "src/engine/src/resources/{lighting,vision}.rs",
-        "src/engine/src/systems/{lighting,lighting_edit,lighting_tests,lighting_vision}.rs",
-        "src/server/src/graphql/mutations_lighting.rs",
-        "src/server/src/graphql/queries/token_vision.rs",
-        "src/server/src/{light_effects,vision_profiles,vision_profiles_tests}.rs"
+        "crates/thunderforge-engine/src/plugins/darkness.wgsl",
+        "crates/thunderforge-engine/src/plugins/{lighting,lighting_overlay,darkness}.rs",
+        "crates/thunderforge-engine/src/resources/{lighting,vision}.rs",
+        "crates/thunderforge-engine/src/systems/{lighting,lighting_edit,lighting_tests,lighting_vision}.rs",
+        "crates/thunderforge-server/src/graphql/mutations_lighting.rs",
+        "crates/thunderforge-server/src/graphql/queries/token_vision.rs",
+        "crates/thunderforge-server/src/{light_effects,vision_profiles,vision_profiles_tests}.rs"
       ]
     },
     {
@@ -659,15 +659,15 @@
         "crates/thunderforge-canvas-core/src/lore_link.rs",
         "crates/thunderforge-repo-host/**",
         "scripts/github-stub.mjs",
-        "src/engine/src/plugins/lore_link.rs",
-        "src/server/src/assets_serve/lore.rs",
-        "src/server/src/graphql/mutations_lore*.rs",
-        "src/server/src/graphql/queries/{lore,lore_sync}.rs",
-        "src/server/src/graphql/types_lore.rs",
-        "src/server/src/lore_sync/**",
-        "src/server/src/markdown/**",
-        "src/server/src/repo_host/**",
-        "src/server/src/{repo_host,repo_host_tests}.rs"
+        "crates/thunderforge-engine/src/plugins/lore_link.rs",
+        "crates/thunderforge-server/src/assets_serve/lore.rs",
+        "crates/thunderforge-server/src/graphql/mutations_lore*.rs",
+        "crates/thunderforge-server/src/graphql/queries/{lore,lore_sync}.rs",
+        "crates/thunderforge-server/src/graphql/types_lore.rs",
+        "crates/thunderforge-server/src/lore_sync/**",
+        "crates/thunderforge-server/src/markdown/**",
+        "crates/thunderforge-server/src/repo_host/**",
+        "crates/thunderforge-server/src/{repo_host,repo_host_tests}.rs"
       ]
     },
     {
@@ -689,12 +689,12 @@
         "apps/web/src/pages/admin/components/{CaseAgreement,LegalEnquiriesPanel,TerminationPanel}.tsx",
         "apps/web/src/pages/{legal,counter}/**",
         "apps/web/src/types/moderation.ts",
-        "src/server/src/graphql/adoption_surface_tests.rs",
-        "src/server/src/graphql/queries/{moderation,legal,legal_tests}.rs",
-        "src/server/src/graphql/{mutations_moderation,types_moderation}.rs",
-        "src/server/src/lore_sync/takedown_hook.rs",
-        "src/server/src/moderation/**",
-        "src/server/src/{legal,legal_intake}/**"
+        "crates/thunderforge-server/src/graphql/adoption_surface_tests.rs",
+        "crates/thunderforge-server/src/graphql/queries/{moderation,legal,legal_tests}.rs",
+        "crates/thunderforge-server/src/graphql/{mutations_moderation,types_moderation}.rs",
+        "crates/thunderforge-server/src/lore_sync/takedown_hook.rs",
+        "crates/thunderforge-server/src/moderation/**",
+        "crates/thunderforge-server/src/{legal,legal_intake}/**"
       ]
     },
     {
@@ -720,11 +720,11 @@
         "apps/web/src/pages/admin/PlayPausesPage.tsx",
         "apps/web/src/pages/world/settings/PlayPauseHistoryCard.tsx",
         "apps/web/src/pages/world/{PlayPausedPage.tsx,playPauseStatus.ts,__tests__/playPauseStatus.test.ts}",
-        "src/app/src/play_pause_surface_tests.rs",
-        "src/server/src/graphql/queries/play_pause*.rs",
-        "src/server/src/graphql/{mutations_play_pause,play_pause_}*.rs",
-        "src/server/src/moderation/play_pause_hook_tests.rs",
-        "src/server/src/play_pause/**"
+        "apps/server/src/play_pause_surface_tests.rs",
+        "crates/thunderforge-server/src/graphql/queries/play_pause*.rs",
+        "crates/thunderforge-server/src/graphql/{mutations_play_pause,play_pause_}*.rs",
+        "crates/thunderforge-server/src/moderation/play_pause_hook_tests.rs",
+        "crates/thunderforge-server/src/play_pause/**"
       ]
     },
     {
@@ -757,13 +757,13 @@
         "apps/web/src/types/scene.ts",
         "crates/thunderforge-canvas-core/src/party.rs",
         "examples/maps/**",
-        "src/engine/src/plugins/{scene,scene_transition,exploration,exploration_tests}.rs",
-        "src/engine/src/resources/scene_data.rs",
-        "src/server/src/assets_serve/scene.rs",
-        "src/server/src/collections/scene_copy.rs",
-        "src/server/src/graphql/queries/scene.rs",
-        "src/server/src/graphql/{mutations_scenes,types_scene,exploration,mutations_party}.rs",
-        "src/server/src/{exploration,exploration_tests,scene_fingerprint}.rs"
+        "crates/thunderforge-engine/src/plugins/{scene,scene_transition,exploration,exploration_tests}.rs",
+        "crates/thunderforge-engine/src/resources/scene_data.rs",
+        "crates/thunderforge-server/src/assets_serve/scene.rs",
+        "crates/thunderforge-server/src/collections/scene_copy.rs",
+        "crates/thunderforge-server/src/graphql/queries/scene.rs",
+        "crates/thunderforge-server/src/graphql/{mutations_scenes,types_scene,exploration,mutations_party}.rs",
+        "crates/thunderforge-server/src/{exploration,exploration_tests,scene_fingerprint}.rs"
       ]
     },
     {
@@ -784,9 +784,9 @@
         "apps/web/src/engine/world/sync/tokenStatus.ts",
         "crates/thunderforge-canvas-core/src/{resource_display,resource_display_tests}.rs",
         "scripts/status-capacity-metrics.mjs",
-        "src/engine/src/plugins/status_display.rs",
-        "src/server/src/graphql/queries/token_status.rs",
-        "src/server/src/status_display.rs"
+        "crates/thunderforge-engine/src/plugins/status_display.rs",
+        "crates/thunderforge-server/src/graphql/queries/token_status.rs",
+        "crates/thunderforge-server/src/status_display.rs"
       ]
     },
     {
@@ -824,15 +824,15 @@
         "apps/web/src/pages/world/usePlaceActorTokens.ts",
         "apps/web/src/types/token.ts",
         "crates/thunderforge-canvas-core/src/{token_art,token_kind,token_stack,movement,movement_budget,navigation,item,attributes}.rs",
-        "src/engine/src/movement.rs",
-        "src/engine/src/plugins/{token,nameplate,navigation,selection,selection_filter,item,placement}.rs",
-        "src/engine/src/resources/{token_grid,selection}.rs",
-        "src/engine/src/systems/{token,token_grid,token_loader,token_move,token_sync_d2,selection}.rs",
-        "src/server/src/attributes.rs",
-        "src/server/src/graphql/mutations_{tokens,token_links,pickup}*.rs",
-        "src/server/src/graphql/queries/{token_attributes,token_grid}.rs",
-        "src/server/src/graphql/world_tokens_retired_tests.rs",
-        "src/server/src/movement/**"
+        "crates/thunderforge-engine/src/movement.rs",
+        "crates/thunderforge-engine/src/plugins/{token,nameplate,navigation,selection,selection_filter,item,placement}.rs",
+        "crates/thunderforge-engine/src/resources/{token_grid,selection}.rs",
+        "crates/thunderforge-engine/src/systems/{token,token_grid,token_loader,token_move,token_sync_d2,selection}.rs",
+        "crates/thunderforge-server/src/attributes.rs",
+        "crates/thunderforge-server/src/graphql/mutations_{tokens,token_links,pickup}*.rs",
+        "crates/thunderforge-server/src/graphql/queries/{token_attributes,token_grid}.rs",
+        "crates/thunderforge-server/src/graphql/world_tokens_retired_tests.rs",
+        "crates/thunderforge-server/src/movement/**"
       ]
     },
     {
@@ -846,8 +846,8 @@
         "crates/thunderforge-pg-sockets/**",
         "crates/thunderforge-pg/**",
         "scripts/torture*.mjs",
-        "src/server/src/network/**",
-        "src/server/src/peer_signaling/**"
+        "crates/thunderforge-server/src/network/**",
+        "crates/thunderforge-server/src/peer_signaling/**"
       ]
     },
     {
@@ -868,11 +868,11 @@
         "crates/thunderforge-cache-core/**",
         "crates/thunderforge-opfs/**",
         "examples/maps/**",
-        "src/engine/src/plugins/cached_assets*.rs",
-        "src/engine/src/plugins/cached_assets/**",
-        "src/server/src/graphql/queries/world_sync_plan.rs",
-        "src/server/src/peer_signaling/**",
-        "src/server/src/scene_fingerprint.rs"
+        "crates/thunderforge-engine/src/plugins/cached_assets*.rs",
+        "crates/thunderforge-engine/src/plugins/cached_assets/**",
+        "crates/thunderforge-server/src/graphql/queries/world_sync_plan.rs",
+        "crates/thunderforge-server/src/peer_signaling/**",
+        "crates/thunderforge-server/src/scene_fingerprint.rs"
       ]
     },
     {
@@ -896,8 +896,8 @@
         "crates/thunderforge-cache-browser/**",
         "crates/thunderforge-cache-core/**",
         "crates/thunderforge-opfs/**",
-        "src/server/src/graphql/queries/world_sync_plan.rs",
-        "src/server/src/peer_signaling/**"
+        "crates/thunderforge-server/src/graphql/queries/world_sync_plan.rs",
+        "crates/thunderforge-server/src/peer_signaling/**"
       ]
     },
     {
@@ -935,13 +935,13 @@
         "apps/web/src/utils/env.ts",
         "packs/interface/**",
         "scripts/seed-demo-art.mjs",
-        "src/core/**",
-        "src/engine/src/network/**",
-        "src/engine/src/plugins/websocket_plugin.rs",
-        "src/server/src/graphql/queries/{mod,world_events_since,world_statistics,world_statistics_tests,world_content}.rs",
-        "src/server/src/graphql/{mutations_worlds,mutations_heartbeat,mutations_reconcile,mutations_reconcile_tests}.rs",
-        "src/server/src/world/**",
-        "src/server/src/{world_hooks,interface_packs,interface_packs_tests,interface_packs_integration_tests,graphql_world_interface_pack_tests,graphql_tests}.rs"
+        "crates/thunderforge-core/**",
+        "crates/thunderforge-engine/src/network/**",
+        "crates/thunderforge-engine/src/plugins/websocket_plugin.rs",
+        "crates/thunderforge-server/src/graphql/queries/{mod,world_events_since,world_statistics,world_statistics_tests,world_content}.rs",
+        "crates/thunderforge-server/src/graphql/{mutations_worlds,mutations_heartbeat,mutations_reconcile,mutations_reconcile_tests}.rs",
+        "crates/thunderforge-server/src/world/**",
+        "crates/thunderforge-server/src/{world_hooks,interface_packs,interface_packs_tests,interface_packs_integration_tests,graphql_world_interface_pack_tests,graphql_tests}.rs"
       ]
     }
   ]

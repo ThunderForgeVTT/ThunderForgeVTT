@@ -25,7 +25,7 @@ const ROOT = path.resolve(__dirname, "..");
 const PORT = 5181;
 const BASE = `http://localhost:${PORT}`;
 
-/** Bevy's ClearColor in `src/engine/src/lib.rs`, as 8-bit sRGB. */
+/** Bevy's ClearColor in `crates/thunderforge-engine/src/lib.rs`, as 8-bit sRGB. */
 const CLEAR_COLOR = [34, 40, 49];
 /** Above this share of one colour, the canvas is considered blank. */
 const FLAT_THRESHOLD = 0.98;

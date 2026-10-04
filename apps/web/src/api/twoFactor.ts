@@ -301,7 +301,7 @@ export async function confirmTwoFactorEnrolment(
  *
  * Resolves to `null` when the instance cannot answer. `GET
  * /api/authentication/2fa/status` is specified in `contracts/enrolment.md`
- * but is not routed in `src/server/src/auth/mod.rs`, and no other endpoint or
+ * but is not routed in `crates/thunderforge-server/src/auth/mod.rs`, and no other endpoint or
  * GraphQL field exposes an account's own two-factor state — `PublicUser`
  * carries id, username, email, role, is_admin and timestamps and nothing
  * else. So on this instance the call 404s and the panel says it cannot tell,

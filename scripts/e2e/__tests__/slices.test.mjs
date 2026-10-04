@@ -168,7 +168,7 @@ describe("resolveSlice", () => {
 describe("validateSlices", () => {
   const valid = () => ({
     $comment: "fixture",
-    crossCutting: [{ glob: "src/app/schema.graphql", why: "every client" }],
+    crossCutting: [{ glob: "apps/server/schema.graphql", why: "every client" }],
     slices: [slice("alpha", ["alpha-"]), slice("beta", ["beta-"])],
   });
 
@@ -256,12 +256,12 @@ describe("matchPath", () => {
   test("returns the first matching glob, or null", () => {
     const globs = [
       "apps/web/src/features/combat/**",
-      "src/server/src/combat/**",
+      "crates/thunderforge-server/src/combat/**",
     ];
     assert.equal(
-      matchPath("src/server/src/combat/attack/mod.rs", globs),
-      "src/server/src/combat/**",
+      matchPath("crates/thunderforge-server/src/combat/attack/mod.rs", globs),
+      "crates/thunderforge-server/src/combat/**",
     );
-    assert.equal(matchPath("src/server/src/auth/mod.rs", globs), null);
+    assert.equal(matchPath("crates/thunderforge-server/src/auth/mod.rs", globs), null);
   });
 });

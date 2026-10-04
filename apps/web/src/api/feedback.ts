@@ -6,7 +6,7 @@
  *
  * `submitFeedback`, `feedbackDestinationNotice` and their types are specified
  * in `specs/037-in-app-feedback/contracts/feedback.md` and **are not
- * implemented in `src/server` at the time of writing**. Everything below posts
+ * implemented in `crates/thunderforge-server` at the time of writing**. Everything below posts
  * exactly what that contract declares, so the day the resolvers land nothing
  * in this app changes — no component knows the shape of the request, and no
  * component will need editing when the field names become real.

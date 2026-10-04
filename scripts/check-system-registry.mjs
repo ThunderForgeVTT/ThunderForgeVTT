@@ -21,7 +21,7 @@
  *
  * # What is allowed, and why
  *
- * `src/app/src/system_packs.rs` is exempt. It holds one `use <pack> as _;`
+ * `apps/server/src/system_packs.rs` is exempt. It holds one `use <pack> as _;`
  * line per bundled pack, and those lines are load-bearing for a reason that
  * was measured rather than assumed: a statically linked Rust crate nothing
  * references is never linked, and its `inventory` submissions vanish with it.
@@ -68,15 +68,15 @@ function bundledSystemIds() {
  * wired with `#[path]`, excluded here.
  */
 function sharedServerSources() {
-  // Two roots since the crate split: `src/server` is the server as a library
-  // and `src/app` is the binary that composes it with the packs. Both are
+  // Two roots since the crate split: `crates/thunderforge-server` is the server as a library
+  // and `apps/server` is the binary that composes it with the packs. Both are
   // shared code, and the binary is *especially* worth scanning — it is the one
   // place that legitimately knows packs exist, which makes it the comfortable
   // place for knowledge that should not be there. Missing it would have left
   // the rule enforced on the larger half and unenforced on the tempting one.
   const roots = [
-    path.join(repoRoot, "src", "server", "src"),
-    path.join(repoRoot, "src", "app", "src"),
+    path.join(repoRoot, "crates", "thunderforge-server", "src"),
+    path.join(repoRoot, "apps", "server", "src"),
   ];
   const out = [];
   const walk = (dir) => {

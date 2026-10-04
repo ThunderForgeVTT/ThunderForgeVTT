@@ -324,7 +324,7 @@ const MAX_UNDO_STACK: usize = 50;
 /// of walls per scene) doesn't justify a BVH/grid.
 ///
 /// Plain data, no Bevy `Resource` derive — `thunderforge_engine` wraps
-/// this in a `Resource` newtype (`src/engine/src/resources/wall.rs`) so
+/// this in a `Resource` newtype (`crates/thunderforge-engine/src/resources/wall.rs`) so
 /// Bevy's change-detection still works transparently on `ResMut` access.
 #[derive(Debug, Clone, Default)]
 pub struct WallSet {

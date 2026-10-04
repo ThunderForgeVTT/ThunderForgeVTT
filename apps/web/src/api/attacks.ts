@@ -1,5 +1,5 @@
 // Spec 046: attacks, offers and auto-apply
-// (src/server/src/graphql/mutations_attacks.rs, queries/attacks.rs).
+// (crates/thunderforge-server/src/graphql/mutations_attacks.rs, queries/attacks.rs).
 //
 // The server rolls, judges and redacts. Nothing here computes a result, a hit
 // or a name: every answer is the server's, built for the person asking.

@@ -1,6 +1,6 @@
 /**
  * actorAccess.ts — live-sync inbound half for who may edit a character
- * (`world_events` code 31, see `src/server/src/world_events.rs`; spec 063).
+ * (`world_events` code 31, see `crates/thunderforge-server/src/world_events.rs`; spec 063).
  *
  * Same shape as `appearance.ts`: the notify says *that* access to an actor
  * changed, and the client re-reads the actor. Here the payload could not say

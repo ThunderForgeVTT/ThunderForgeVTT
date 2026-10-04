@@ -15,7 +15,7 @@ be showing.
 Two surfaces answer it:
 
 - **Token-attached bars**, drawn by the engine
-  (`src/engine/src/plugins/status_display.rs`). They track the token's
+  (`crates/thunderforge-engine/src/plugins/status_display.rs`). They track the token's
   position, scale with the camera, and reorder with other entities.
 - **A corner panel** for the selected token, drawn in React
   (`apps/web/src/components/StatusPanel/StatusPanel.tsx`). It is screen-space
@@ -42,7 +42,7 @@ declares.
 
 A system declares resources in its `system.json`, under a top-level
 `resources` array. The server reads it in `declarations_for_system`
-(`src/server/src/status_display.rs`) from the installed systems directory.
+(`crates/thunderforge-server/src/status_display.rs`) from the installed systems directory.
 
 ```jsonc
 {
@@ -181,7 +181,7 @@ So disclosure is **part of the model, not a filter over it**. The server
 resolves what each viewer may see and sends only that; a client is never sent a
 figure it may not display — not sent and hidden, **not sent**. A UI that
 conceals a field the API still returns is a UI, not a permission. The
-resolution happens in `resolve_token` (`src/server/src/status_display.rs`) and
+resolution happens in `resolve_token` (`crates/thunderforge-server/src/status_display.rs`) and
 the reduction in `disclose`.
 
 The wire type is tagged on `disclosure`, so each state's payload carries
@@ -313,7 +313,7 @@ component carried a `token_type` nothing drew, and `WorldTokenPayload` did not
 deserialize `health`/`maxHealth` although the client had been sending both
 since spec 004.
 
-Commands carry an integer `sdkVersion` (`SDK_VERSION` in `src/engine/src/lib.rs`,
+Commands carry an integer `sdkVersion` (`SDK_VERSION` in `crates/thunderforge-engine/src/lib.rs`,
 currently 1). A mismatch is rejected outright with a reported error and applies
 nothing.
 

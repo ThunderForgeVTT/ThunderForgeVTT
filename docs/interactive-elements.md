@@ -66,11 +66,11 @@ Adding one takes three things and touches nothing else:
    subjects it attaches to, and typed configuration fields. See
    `wall.rs::interaction_effects` or, for the smallest possible example,
    `seam_probe.rs`.
-2. **One line** in `contributions()` in `src/server/src/interaction.rs`, plus a
+2. **One line** in `contributions()` in `crates/thunderforge-server/src/interaction.rs`, plus a
    performer there if the effect changes anything that outlives the click.
 3. **One Bevy plugin with one system** that reads `InteractionActivated` and
    handles the identifiers it declared, ignoring the rest. See
-   `src/engine/src/plugins/lore_link.rs` — it is about forty lines including
+   `crates/thunderforge-engine/src/plugins/lore_link.rs` — it is about forty lines including
    its documentation.
 
 Nothing in the interaction core changes. If it ever has to,
@@ -114,7 +114,7 @@ Bevy message is fire-and-forget and cannot report that nobody listened.
   so its tests compile and never execute — the same constraint that put spec
   029's resource model there.
 - **Authority** lives at the GraphQL boundary
-  (`src/server/src/graphql/mutations_interactives.rs`). Every refusal is
+  (`crates/thunderforge-server/src/graphql/mutations_interactives.rs`). Every refusal is
   decided from stored state. "A player cannot open a locked door" is the rule
   most likely to be implemented by not drawing the button, which passes every
   screen test and fails the moment anybody calls the mutation directly — so it
@@ -220,10 +220,10 @@ interactives can be.
 | --------------------------------- | ---------------------------------------------------- |
 | Rules, registry, activation table | `crates/thunderforge-canvas-core/src/interaction.rs` |
 | Doors, and what they contribute   | `crates/thunderforge-canvas-core/src/wall.rs`        |
-| Dispatch, triggers, hit-testing   | `src/engine/src/plugins/interaction.rs`              |
+| Dispatch, triggers, hit-testing   | `crates/thunderforge-engine/src/plugins/interaction.rs`              |
 | The smallest possible contributor | `crates/thunderforge-canvas-core/src/seam_probe.rs`  |
-| Authorization and persistence     | `src/server/src/graphql/mutations_interactives.rs`   |
-| Registry assembly, requests       | `src/server/src/interaction.rs`                      |
+| Authorization and persistence     | `crates/thunderforge-server/src/graphql/mutations_interactives.rs`   |
+| Registry assembly, requests       | `crates/thunderforge-server/src/interaction.rs`                      |
 | Authoring UI                      | `apps/web/src/components/InteractionAuthor/`         |
 | The GM's queue                    | `apps/web/src/components/ApprovalQueue/`             |
 | End-to-end proof                  | `apps/web/e2e/interactive-*.spec.ts`                 |

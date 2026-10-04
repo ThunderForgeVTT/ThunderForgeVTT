@@ -28,7 +28,7 @@ declare global {
  * Fixtures: examples/maps/demo.dd2vtt (8 line_of_sight polygons -> 31
  * walls, 2 doors, 12 lights) and examples/maps/chamber-of-echoing-grief.dd2vtt
  * (1 polygon -> 4 walls, 0 doors, 0 lights) — counts verified directly
- * against the parser in src/server/src/map_import.rs's own tests, and
+ * against the parser in crates/thunderforge-server/src/map_import.rs's own tests, and
  * asserted here via the exact UI text MapImportTool renders after a
  * successful import (no backdoor API calls — this is what a GM sees).
  */

@@ -17,7 +17,7 @@ export type WallDoorState = "none" | "open" | "closed";
 
 /**
  * Type definition for a wall record (mirrors the GraphQL `Wall` type,
- * src/server/src/graphql.rs).
+ * crates/thunderforge-server/src/graphql.rs).
  */
 export interface WorldWallDoc {
   wallId: string;

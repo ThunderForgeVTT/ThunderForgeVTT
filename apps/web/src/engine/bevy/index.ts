@@ -1278,7 +1278,7 @@ export async function beginTokenPlacement(actorId: string): Promise<boolean> {
  * Carry something that is not an actor's token, to be placed by a left click.
  *
  * The same gesture as `beginTokenPlacement`, and deliberately the same machine
- * (`src/engine/src/plugins/placement.rs`): a second one would have to re-derive
+ * (`crates/thunderforge-engine/src/plugins/placement.rs`): a second one would have to re-derive
  * snapping, the preview, and abandoning the carry when the tool or the scene
  * changes. `reference` is opaque to the engine and comes back on the drop.
  *

@@ -5,7 +5,7 @@
  * returns. They are deliberately a little wider than what the server sends
  * today, in exactly one direction: `qr` and `secret` are optional. That was
  * once because the server did not send them; since 2026-09-09 it does
- * (`src/server/src/qr.rs`), and they stay optional because
+ * (`crates/thunderforge-server/src/qr.rs`), and they stay optional because
  * `contracts/enrolment.md` rule 6 says a failure to build the QR is not a
  * failure to enrol. Nothing in the flow requires either — see
  * `TwoFactorQrMatrix` below.
@@ -67,7 +67,7 @@ export interface TwoFactorConfirmation {
  * What the account holder's own security page reads (FR-005).
  *
  * `GET /api/authentication/2fa/status` is specified in
- * `contracts/enrolment.md` but is not routed in `src/server/src/auth/mod.rs`
+ * `contracts/enrolment.md` but is not routed in `crates/thunderforge-server/src/auth/mod.rs`
  * yet, so `readTwoFactorStatus` resolves to `null` on this instance rather
  * than throwing. The page says so instead of guessing.
  */

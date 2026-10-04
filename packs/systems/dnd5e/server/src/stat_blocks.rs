@@ -25,7 +25,7 @@
 //! | Traits, bonus actions, saves-or-suffer | `trait_data.traits`, one line each | the sheet: a Game Master reads them |
 //!
 //! **An attack is not a field.** It is a world ability attached to the actor,
-//! which is what the attack flow rolls (`src/server/src/combat/weapon.rs`):
+//! which is what the attack flow rolls (`crates/thunderforge-server/src/combat/weapon.rs`):
 //!
 //! * one `ATTACK_ROLL` effect whose formula is `1d20+4`: the to-hit, as the
 //!   block prints it, already holding the proficiency bonus;

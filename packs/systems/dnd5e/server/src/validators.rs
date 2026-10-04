@@ -811,7 +811,7 @@ pub fn validate_spell_data(data: &serde_json::Value) -> Result<(), ValidationErr
 // Registry Adapters: Convert ValidationError -> String
 // ============================================================================
 // These functions wrap the validators to return Result<(), String> for use
-// in the generic system registry (src/server/src/systems/mod.rs)
+// in the generic system registry (crates/thunderforge-server/src/systems/mod.rs)
 
 /// Adapter: validate_ability_data for registry
 pub fn validate_ability_data_for_registry(data: &serde_json::Value) -> Result<(), String> {

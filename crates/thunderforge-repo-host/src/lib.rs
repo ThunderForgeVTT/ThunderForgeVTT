@@ -186,7 +186,7 @@ pub struct GrantedPermission {
 /// The server POSTs to `url` with `assertion` as its bearer credential and
 /// hands the response body back to [`RepoHost::credential_from_exchange`]. It
 /// does not parse the response, does not know what an installation is, and
-/// does not construct the URL — which is what keeps `src/server` from growing
+/// does not construct the URL — which is what keeps `crates/thunderforge-server` from growing
 /// host knowledge one convenience at a time.
 #[derive(Clone, PartialEq, Eq)]
 pub struct TokenExchange {

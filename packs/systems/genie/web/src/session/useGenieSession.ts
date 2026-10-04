@@ -121,7 +121,7 @@ export interface UseGenieSessionResult {
    * offer an empty dropdown for both (owner, 2026-09-15).
    *
    * Not filtered here. A hidden NPC never reaches this list, because the
-   * server withheld it (`src/server/src/auth/npc_visibility.rs`); a Game
+   * server withheld it (`crates/thunderforge-server/src/auth/npc_visibility.rs`); a Game
    * Master gets theirs because the server sent them.
    */
   sessionActors: WorldActorRecord[];

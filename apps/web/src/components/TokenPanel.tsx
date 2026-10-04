@@ -45,7 +45,7 @@ interface TokenPanelProps {
  *
  * Spec 004 / ADR-040: rewired off the legacy world-scoped `world_tokens`
  * table onto the same `tokens` table the canvas engine renders/drags
- * (src/server/src/graphql/mutations_tokens.rs) — moving a token here and
+ * (crates/thunderforge-server/src/graphql/mutations_tokens.rs) — moving a token here and
  * dragging it on the canvas are now the same row, not two disconnected
  * ones. Bulk create/delete and linking remain GM-only; a
  * non-GM player only ever sees/edits their own primary token's photo.

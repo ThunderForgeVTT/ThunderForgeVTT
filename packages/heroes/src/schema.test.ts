@@ -108,7 +108,7 @@ describe("HERO_SPEC_SCHEMA", () => {
     assert.equal(
       stored,
       heroSpecSchemaText(),
-      "src/server/src/heroes/hero_spec_schema.json is stale: run `pnpm -F @thunderforge/heroes run schema`",
+      "crates/thunderforge-server/src/heroes/hero_spec_schema.json is stale: run `pnpm -F @thunderforge/heroes run schema`",
     );
   });
 

@@ -10,7 +10,7 @@
 //! [`RepoHost`](crate::RepoHost): the URL a user is handed off to, the shape
 //! of the installation payload that comes back, the endpoint the assertion is
 //! traded at. What does not live here is any HTTP — see
-//! `src/server/src/repo_host.rs`.
+//! `crates/thunderforge-server/src/repo_host.rs`.
 //!
 //! # The two permissions, and why the second one is not an oversight
 //!

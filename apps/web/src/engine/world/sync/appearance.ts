@@ -1,6 +1,6 @@
 /**
  * appearance.ts — live-sync inbound half for a world's interface pack
- * (`world_events` code 23, see `src/server/src/world_events.rs`).
+ * (`world_events` code 23, see `crates/thunderforge-server/src/world_events.rs`).
  *
  * Same shape as `playPanels.ts`, and for the same reason: the notify says
  * *that* the pack changed, and the client re-resolves. The payload does carry

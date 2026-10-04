@@ -410,7 +410,7 @@ test.describe("T060: a targeted pack dresses the sheet and nothing else", () => 
  * before storing it, so the product refuses to create that state on purpose;
  * it arises only from a pack being removed from a deployment after the fact.
  * Simulating that means moving files under a running server, so it is proved
- * in `src/server/src/interface_packs_integration_tests.rs` against a
+ * in `crates/thunderforge-server/src/interface_packs_integration_tests.rs` against a
  * temporary packs directory instead.
  */
 test.describe("T061: one wording for an unset pack binding", () => {

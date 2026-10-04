@@ -29,7 +29,7 @@ import { sceneIds } from "./fixtures/world-cache";
  * is where it is observable. The *disclosure* assertions do not live here:
  * checking the screen would pass against a client that received a value and
  * chose not to draw it, so those are wire-level tests in
- * `src/server/src/status_display.rs`. This file proves the pipeline carries
+ * `crates/thunderforge-server/src/status_display.rs`. This file proves the pipeline carries
  * what it should; those prove it never carries what it should not.
  */
 

@@ -30,14 +30,14 @@ The pattern has bitten this repository repeatedly:
 
 | Finding | Fixed in | Mutation now fails |
 |---|---|---|
-| 1. Deny-by-default never tested | `src/core/src/policies/mod.rs` | ✓ `Default` → `Allow` |
-| 2. Rate-limit bypass tested a copy | `src/server/src/auth_middleware.rs` | ✓ `bypass_requested` → `true` |
+| 1. Deny-by-default never tested | `crates/thunderforge-core/src/policies/mod.rs` | ✓ `Default` → `Allow` |
+| 2. Rate-limit bypass tested a copy | `crates/thunderforge-server/src/auth_middleware.rs` | ✓ `bypass_requested` → `true` |
 | 5. Boundary-blind validators (3 packs) | `yze`, `genie`, `dnd5e` validators | ✓ range narrowed one step each end |
-| 7. Name promised coverage it lacked | `src/core/src/policies/mod.rs` | ✓ `remove` gutted to a no-op |
+| 7. Name promised coverage it lacked | `crates/thunderforge-core/src/policies/mod.rs` | ✓ `remove` gutted to a no-op |
 | Web: `missing` reported for a loaded pack | `appearance-context.test.ts` | ✓ `missing = requestedId` |
 | Web: CSRF never asserted | `api/__tests__/graphqlClient.test.ts` | ✓ both `withCsrf(...)` call sites stripped |
 | 6. Vacuous e2e absence assertions | seven spec files | nine replaced/removed; **all 35 tests re-run green** |
-| 3. Engine suite never built | `src/engine/` — see below | **done: 0 tests → 192, all passing** |
+| 3. Engine suite never built | `crates/thunderforge-engine/` — see below | **done: 0 tests → 192, all passing** |
 | 4. Green ticks asserting nothing | `tests_f1_unit.rs`, `tests_f2_f4_integration.rs` | deleted |
 | 8. Fifteen empty test bodies | 7 packs × server + engine, `map_import` | ✓ submission removed; ✓ `rules` dropped; ✓ plugin reads an uninserted resource |
 
@@ -50,7 +50,7 @@ class of bug is itself prone to it.
 
 ## Confirmed, ranked
 
-### 1. Deny-by-default is never tested — `src/core/src/policies/mod.rs`
+### 1. Deny-by-default is never tested — `crates/thunderforge-core/src/policies/mod.rs`
 
 `it_should_deny_on_default` claims the authorisation primitive denies by
 default. **Mutation**: `Default for Policy` changed to `effect: Allow`. **All
@@ -61,7 +61,7 @@ the effect. Every test that would observe `can_i == true` is commented out.
 The authorisation primitive can be wholly inverted with a green suite. Fix
 first.
 
-### 2. The rate-limit bypass test tests a copy of the code — `src/server/src/auth_middleware.rs`
+### 2. The rate-limit bypass test tests a copy of the code — `crates/thunderforge-server/src/auth_middleware.rs`
 
 `the_bypass_stays_shut_unless_the_variable_says_otherwise` defines a local
 closure that **re-implements** the env-var parsing and asserts against that.
@@ -125,7 +125,7 @@ Two of them sit **directly beside a comment congratulating the file for
 avoiding exactly this**. The comment guards `new-npc-link`, which does still
 exist; the adjacent line is the vacuous one.
 
-### 7. A name promising coverage the body lacks — `src/core/src/policies/mod.rs`
+### 7. A name promising coverage the body lacks — `crates/thunderforge-core/src/policies/mod.rs`
 
 `it_should_modify_amd_remove_existing_access_when_resource_found` never calls
 `remove`. **Mutation**: `Policy::remove` gutted to a no-op — this test passed.

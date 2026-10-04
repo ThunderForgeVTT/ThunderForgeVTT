@@ -2,7 +2,7 @@
  * tokens.ts
  * Scene-scoped token sync: mirrors walls.ts's shape (inbound NOTIFY-refetch,
  * outbound mutation bridge) but for the modern `tokens` table
- * (src/server/src/graphql/mutations_tokens.rs), which is what actually
+ * (crates/thunderforge-server/src/graphql/mutations_tokens.rs), which is what actually
  * persists tokens across a page reload. The legacy `world_tokens`/RxDB
  * path (formerly this directory's index.ts#startWorldSync) has been
  * removed as dead code: it wrote to an RxDB-only collection nothing read
@@ -15,7 +15,7 @@
  * 1. Inbound: the server emits a generic `world_events` NOTIFY
  *    (subscription field `worldEventsCreated(worldId)`) with
  *    `eventCode = 14` for any token create/update/delete
- *    (src/server/src/world_events.rs::EVENT_CODE_TOKEN_CHANGED). The
+ *    (crates/thunderforge-server/src/world_events.rs::EVENT_CODE_TOKEN_CHANGED). The
  *    notify payload only carries `{ action, tokenId, sceneId }` — not the
  *    full token — so `applyTokenWorldEvent` re-fetches the scene's tokens
  *    via GraphQL (api/tokens.ts#getTokens) and dispatches `upsert_token`/
@@ -23,7 +23,7 @@
  *
  * 2. Outbound: unlike walls/lights/shapes, the Bevy engine already owns
  *    click-drag-to-move for tokens end-to-end (engine's
- *    `handle_token_drag` in src/engine/src/systems/selection.rs) and
+ *    `handle_token_drag` in crates/thunderforge-engine/src/systems/selection.rs) and
  *    emits *generic* `upsert_token`/`remove_token` commands directly —
  *    there is no separate "create_token intent" vs "confirmed upsert"
  *    distinction the way there is for walls/lights/shapes, because the

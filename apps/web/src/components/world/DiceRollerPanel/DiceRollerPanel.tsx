@@ -28,7 +28,7 @@ export interface DiceRollerPanelProps {
  * never blocks or hides a resolved roll).
  */
 // Mirrors `SETTLE_DURATION_SECS` in
-// `src/engine/src/plugins/dice_roll.rs` — kept in sync manually since
+// `crates/thunderforge-engine/src/plugins/dice_roll.rs` — kept in sync manually since
 // the two live in separate build targets with no shared config.
 const ANIMATION_REVEAL_MS = 1200;
 

@@ -22,7 +22,7 @@ import type { ResourceDefinition } from "./ResourceDefinition";
 /**
  * The contract version this bundle speaks.
  *
- * Must match `SDK_VERSION` in `src/engine/src/lib.rs`. A mismatch makes the
+ * Must match `SDK_VERSION` in `crates/thunderforge-engine/src/lib.rs`. A mismatch makes the
  * engine refuse the command outright and report it, rather than applying the
  * part it happened to understand.
  */

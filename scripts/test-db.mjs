@@ -8,7 +8,7 @@
  * # Why this exists
  *
  * Tests have their own database, `thunderforge_test` by default
- * (`src/server/src/test_support.rs` has the rule and the reasons). The test
+ * (`crates/thunderforge-server/src/test_support.rs` has the rule and the reasons). The test
  * harness creates and migrates it on demand, so this is only needed to start
  * clean: after a migration was edited in place, or to shed the rows every run
  * leaves behind. `make test-db-reset` runs it.
@@ -113,7 +113,7 @@ function reset() {
   psql(maintenance, `DROP DATABASE IF EXISTS "${name}" WITH (FORCE);`);
   psql(maintenance, `CREATE DATABASE "${name}";`);
   execFileSync("diesel", ["migration", "run"], {
-    cwd: join(ROOT, "src/server"),
+    cwd: join(ROOT, "crates/thunderforge-server"),
     env: { ...process.env, DATABASE_URL: withExplicitPort(url) },
     stdio: ["ignore", "ignore", "inherit"],
   });

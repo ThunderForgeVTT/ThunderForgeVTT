@@ -29,7 +29,7 @@ use uuid::Uuid;
 ///
 /// The router is generic, so the only thing that makes its memory cost
 /// concrete is the payload the server actually pushes through it. This
-/// mirrors `src/server/src/models.rs:370` field for field; `token_event` is
+/// mirrors `crates/thunderforge-server/src/models.rs:370` field for field; `token_event` is
 /// the one heap-carrying field, and is filled with a realistic token-move
 /// document rather than left empty.
 #[derive(Clone, Debug)]
@@ -204,7 +204,7 @@ fn fan_out_cost_by_subscriber_count() {
 #[test]
 #[ignore = "a measurement, not an assertion; see the module docs"]
 fn relay_absorb_cost_for_a_full_poll_batch() {
-    const BATCH: i64 = 256; // POLL_BATCH_SIZE, src/server/src/network/listener.rs:60
+    const BATCH: i64 = 256; // POLL_BATCH_SIZE, crates/thunderforge-server/src/network/listener.rs:60
 
     let now = chrono::Utc::now().naive_utc();
     // Settled rows: older than COMMIT_GRACE, so the cursor passes all of them,

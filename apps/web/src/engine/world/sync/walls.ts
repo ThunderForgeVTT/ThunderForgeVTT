@@ -11,7 +11,7 @@
  * 1. Inbound (T007): the server emits a generic `world_events` NOTIFY
  *    (subscription field `worldEventsCreated(worldId)`) with
  *    `eventCode = 10` for any wall create/update/delete
- *    (src/server/src/world_events.rs::EVENT_CODE_WALL_CHANGED). The
+ *    (crates/thunderforge-server/src/world_events.rs::EVENT_CODE_WALL_CHANGED). The
  *    notify payload only carries `{ action, wallId, sceneId }` — not the
  *    full wall — so `applyWallWorldEvent` re-fetches the scene's walls
  *    via GraphQL (api/walls.ts#getWalls) and dispatches `upsert_wall`/

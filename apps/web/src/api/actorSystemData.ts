@@ -3,7 +3,7 @@ import { postGraphQL } from "@/api/graphqlClient";
 /**
  * Read counterpart to `updateActorSystemData` (spec 018 fix): the
  * `actorSystemData(actorId)` GraphQL query — see
- * src/server/src/graphql/queries/actor.rs's `actor_system_data_impl` for
+ * crates/thunderforge-server/src/graphql/queries/actor.rs's `actor_system_data_impl` for
  * why this was missing and what it's a fix for (no query path ever existed
  * to read an actor's ability/resource/proficiency/trait_data back, only a
  * mutation to write it; the client-side RxDB collection that was supposed

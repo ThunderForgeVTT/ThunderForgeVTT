@@ -470,7 +470,7 @@ async function main() {
   // migration fails here, named, rather than inside a journey.
   await runCommand("diesel migration run", {
     name: "migrate",
-    cwd: join(ROOT_DIR, "src/server"),
+    cwd: join(ROOT_DIR, "crates/thunderforge-server"),
     prefix: "journeys",
     env: { DATABASE_URL: databaseUrl },
   });
@@ -496,7 +496,7 @@ async function main() {
     ],
     {
       input: readFileSync(
-        join(ROOT_DIR, "src/server/seeds/demo_accounts.sql"),
+        join(ROOT_DIR, "crates/thunderforge-server/seeds/demo_accounts.sql"),
         "utf-8",
       ),
       stdio: ["pipe", "ignore", "inherit"],

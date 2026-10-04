@@ -15,7 +15,7 @@ import * as twoFactorApi from "../twoFactor";
  *
  * The interesting cases here are all ones where the contract
  * (`specs/041-two-factor-enrolment/contracts/enrolment.md`) is ahead of
- * `src/server/src/auth/two_factor.rs`: no `secret` field, no `qr` matrix, no
+ * `crates/thunderforge-server/src/auth/two_factor.rs`: no `secret` field, no `qr` matrix, no
  * `/2fa/status` route. Each has a test proving the flow still works, because
  * "the QR is a convenience, the secret is the credential" (contract rule 6)
  * has to be true in the code and not only in the prose.
@@ -234,7 +234,7 @@ describe("readTwoFactorStatus (FR-005)", () => {
 
   it("answers null on an instance whose server does not route it yet", async () => {
     // Which is every instance today: `/authentication/2fa/status` is in the
-    // contract and not in `src/server/src/auth/mod.rs`. The panel says it
+    // contract and not in `crates/thunderforge-server/src/auth/mod.rs`. The panel says it
     // cannot tell rather than claiming two-factor is off.
     stubFetch(new Response("Not Found", { status: 404 }));
     await expect(readTwoFactorStatus()).resolves.toBe(null);

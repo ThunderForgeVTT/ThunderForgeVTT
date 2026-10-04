@@ -1,10 +1,10 @@
 [workspace]
 resolver = "3"
 members = [
-    "src/app",
-    "src/server", 
-    "src/core", 
-    "src/engine", 
+    "apps/server",
+    "crates/thunderforge-server", 
+    "crates/thunderforge-core", 
+    "crates/thunderforge-engine", 
     "crates/pack_system_spec",
     "crates/thunderforge-axum-auth-core",
     "crates/thunderforge-axum-oauth",
@@ -39,7 +39,7 @@ members = [
     "packs/systems/year_zero_engine/engine",
     "packs/systems/roll_for_shoes/server"
 ]
-default-members = ["src/app", "src/server", "src/core"]
+default-members = ["apps/server", "crates/thunderforge-server", "crates/thunderforge-core"]
 
 [workspace.package]
 # Relicensed from BSD 3-Clause to AGPL-3.0-or-later (2026-08-25) — see
@@ -53,7 +53,7 @@ license = "AGPL-3.0-or-later"
 # codebase before enabling (`cargo clippy --workspace --all-targets -- -W
 # clippy::<lint>` per lint, checked for zero/near-zero existing violations) —
 # each member crate must add `[lints] workspace = true` to inherit these
-# (see src/server/Cargo.toml etc. for the pattern). Deliberately NOT
+# (see crates/thunderforge-server/Cargo.toml etc. for the pattern). Deliberately NOT
 # included: `clippy::unwrap_used`/`expect_used` (300+/171 existing hits —
 # real value, but a repo-wide cleanup of that size is its own follow-up, not
 # something to silently gate CI on) and `clippy::print_stderr` (107 hits,

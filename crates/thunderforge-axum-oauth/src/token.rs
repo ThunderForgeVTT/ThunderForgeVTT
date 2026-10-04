@@ -37,7 +37,7 @@ pub enum TokenParseError {
     ///
     /// A *missing* `access_token` is a `Malformed` — serde stops there,
     /// and the message it produces ("missing field `access_token`") is the
-    /// one `src/server` has always logged for that case. An **empty** one
+    /// one `crates/thunderforge-server` has always logged for that case. An **empty** one
     /// deserializes cleanly and would otherwise be sent as a bearer token,
     /// turning a broken token response into a confusing 401 from the
     /// userinfo endpoint one step later.
@@ -47,7 +47,7 @@ pub enum TokenParseError {
 impl std::fmt::Display for TokenParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            // Matches the message `src/server`'s token exchange has always
+            // Matches the message `crates/thunderforge-server`'s token exchange has always
             // returned, so operator-facing logs do not change wording.
             TokenParseError::Malformed(detail) => {
                 write!(f, "Invalid token response format: {detail}")

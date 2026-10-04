@@ -99,7 +99,7 @@ is a judgement about the feature, so the check never guesses it.
 ### The test database
 
 `cargo test` never touches the development database. Database-backed tests use
-`thunderforge_test`, which the test harness (`src/server/src/test_support.rs`)
+`thunderforge_test`, which the test harness (`crates/thunderforge-server/src/test_support.rs`)
 creates and migrates the first time a test asks for it. `TEST_DATABASE_URL`
 names a different one; without it, the name in `DATABASE_URL` is swapped for
 `thunderforge_test`. The harness refuses the development database and the e2e

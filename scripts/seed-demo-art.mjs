@@ -24,7 +24,7 @@ const DEFAULT_API = "http://127.0.0.1:30000/api";
 const DEMO_WORLD = "00000000-0000-0000-0000-0000000000b0";
 const DEMO_GM = { identifier: "user1", password: "user1" };
 
-/** Which seeded actor wears which hero — see `src/server/seeds/demo_accounts.sql`. */
+/** Which seeded actor wears which hero — see `crates/thunderforge-server/seeds/demo_accounts.sql`. */
 const PARTY = {
   "00000000-0000-0000-0000-0000000000c1": "sir-pip",
   "00000000-0000-0000-0000-0000000000c2": "mira-starweave",

@@ -3,7 +3,7 @@
 //! # Why this is an enum and not a list of strings
 //!
 //! Provider support used to be two independent string tables in
-//! `src/server/src/config/oauth_env.rs`: a `KNOWN_PRESETS` array that decided
+//! `crates/thunderforge-server/src/config/oauth_env.rs`: a `KNOWN_PRESETS` array that decided
 //! which env-var names were recognised, and a `preset_for()` `match` with a
 //! `_ => None` arm that decided what those names meant. Nothing connected
 //! them. Adding a provider to one and forgetting the other compiled cleanly
@@ -21,7 +21,7 @@
 //! checked against the same exhaustive match in the tests below, so it cannot
 //! silently omit a variant either.
 //!
-//! `src/server/src/auth/mod.rs` has a companion test that walks
+//! `crates/thunderforge-server/src/auth/mod.rs` has a companion test that walks
 //! [`ProviderKind::ALL`], resolves each one from synthetic env vars, and
 //! asserts the resulting `provider_key` reaches a live route — closing the
 //! last gap between "declared" and "actually reachable in production".
@@ -124,7 +124,7 @@ impl ProviderKind {
 
     /// Endpoints, scopes, label and protocol.
     ///
-    /// URLs and scopes mirror `src/server/migrations/`
+    /// URLs and scopes mirror `crates/thunderforge-server/migrations/`
     /// `2026-05-02-021115-0002_seed_oauth_providers_and_credentials_fields`
     /// exactly — keep in sync if that migration's seed data ever changes.
     pub fn preset(self) -> Preset {

@@ -1,10 +1,10 @@
 //! Spec 014: a standalone, zero-Bevy/zero-wasm-bindgen dice-formula
-//! grammar and RNG-agnostic evaluator, importable natively (`src/server`)
-//! and under `wasm32-unknown-unknown` (`src/engine`) with no
+//! grammar and RNG-agnostic evaluator, importable natively (`crates/thunderforge-server`)
+//! and under `wasm32-unknown-unknown` (`crates/thunderforge-engine`) with no
 //! target-specific code inside the crate itself (research.md §3). The
 //! evaluator's `resolve()` takes an injected `RngCore` and never reaches
 //! for its own entropy — the caller that supplies a real,
-//! OS-entropy-backed RNG (only `src/server`'s `rollDice` mutation) is
+//! OS-entropy-backed RNG (only `crates/thunderforge-server`'s `rollDice` mutation) is
 //! the sole source of an authoritative roll (FR-001).
 
 mod ast;

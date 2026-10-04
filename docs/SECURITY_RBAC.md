@@ -11,7 +11,7 @@
 This document previously described a three-tier OWNER/EDITOR/VIEWER RBAC
 system (`world_collaborators`/`permission_grants` tables, `RbacEngine`,
 `CollaboratorMutation`, audit logging via `audit_logs`) as "✅ IMPLEMENTED."
-That was inaccurate: `src/server/src/rbac.rs` and `src/server/src/audit.rs`
+That was inaccurate: `crates/thunderforge-server/src/rbac.rs` and `crates/thunderforge-server/src/audit.rs`
 existed on disk but were never included in the module tree (no `mod rbac;`
 / `mod audit;` in `main.rs`), the tables they referenced (`world_collaborators`,
 `audit_logs`) were never migrated, and their one real call site (world
@@ -33,7 +33,7 @@ two mechanisms:
    always read, write, and delete it and its contents.
 2. **Membership** — the `world_members` table, populated when a user
    accepts an invite (`world_invites` → `InviteMutation::join_world` in
-   `src/server/src/graphql/mutations_invites.rs`). A `world_members` row
+   `crates/thunderforge-server/src/graphql/mutations_invites.rs`). A `world_members` row
    for `(world_id, user_id)` grants that user visibility into the world
    (role stored as a string, e.g. `"Owner"`, `"GM"`, `"Player"` — no
    fine-grained permission hierarchy beyond membership itself today).
@@ -46,7 +46,7 @@ membership — see "Known gap" below.
 
 ## Known gap: world creation doesn't insert an owner `world_members` row
 
-`create_world` (`src/server/src/graphql.rs`) inserts a `worlds` row with
+`create_world` (`crates/thunderforge-server/src/graphql.rs`) inserts a `worlds` row with
 `created_by` set, but does **not** insert a corresponding `world_members`
 row for the creator. This is the same gap the deleted `RbacEngine::
 assign_creator_as_owner` was meant to close and never did. Every read
@@ -59,7 +59,7 @@ control, not a fix.
 
 ## Core functions
 
-### `require_world_member` (`src/server/src/auth/world_membership.rs`)
+### `require_world_member` (`crates/thunderforge-server/src/auth/world_membership.rs`)
 
 Added for spec 002 (canvas image assets), but is the general-purpose
 membership guard: given a `PgConnection`, `user_id`, and `world_id`,
@@ -70,7 +70,7 @@ by `uploadCanvasImage` and `canvasImageAssetsForScene`
 (`graphql/mutations_assets.rs`).
 
 ### `load_visible_world_by_id` / `require_visible_world`
-(`src/server/src/graphql/helpers.rs`)
+(`crates/thunderforge-server/src/graphql/helpers.rs`)
 
 The general read-path guard for world/scene/token/wall/shape/light
 queries in `graphql/queries/scene.rs` and `graphql/queries/user.rs`.
@@ -106,9 +106,9 @@ not addressed by this document.
 ## Testing
 
 Regression tests for the access-control fix live in
-`src/server/src/graphql/helpers.rs` (`mod tests`) and require a live
+`crates/thunderforge-server/src/graphql/helpers.rs` (`mod tests`) and require a live
 Postgres (the test database, `thunderforge_test` — see
-`src/server/src/test_support.rs` — on the server from `compose.yml`). Related coverage:
+`crates/thunderforge-server/src/test_support.rs` — on the server from `compose.yml`). Related coverage:
 - `graphql/mutations_walls.rs`, `mutations_shapes.rs`,
   `mutations_tokens.rs`, `mutations_lighting.rs`: `*_scoped_to_scene_owner`
   tests for the scene-ownership write checks.

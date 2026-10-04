@@ -92,7 +92,7 @@ pub enum SyncError {
 
 /// The `extensions.code` `worldSyncPlan` attaches when it refuses a caller.
 ///
-/// Set by `to_graphql_error` in `src/server/src/graphql/queries/world_sync_plan.rs`
+/// Set by `to_graphql_error` in `crates/thunderforge-server/src/graphql/queries/world_sync_plan.rs`
 /// and asserted by that module's own tests, so it is part of the contract
 /// rather than an accident of formatting.
 const FORBIDDEN_CODE: &str = "FORBIDDEN";

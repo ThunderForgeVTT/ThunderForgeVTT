@@ -9,7 +9,7 @@ import type {
 // `/api/graphql` sits behind a router-level auth gate, so the one mutation
 // that must be reachable by an anonymous rights holder (FR-002) is served
 // from a separate, unauthenticated route. See `graphql_public_handler` in
-// `src/server/src/main.rs`.
+// `crates/thunderforge-server/src/main.rs`.
 const GRAPHQL_PUBLIC_ENDPOINT = "/api/graphql/public";
 
 const MODERATION_ACTION_FIELDS = `

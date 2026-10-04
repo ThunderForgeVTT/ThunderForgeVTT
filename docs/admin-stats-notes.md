@@ -3,7 +3,7 @@
 Written 2026-09-15, after checking each tile against the database.
 
 Every tile is a real reading, taken when the page loads. Five are
-`count(*)` on one table (`src/server/src/admin.rs`, `load_admin_stats`), and
+`count(*)` on one table (`crates/thunderforge-server/src/admin.rs`, `load_admin_stats`), and
 storage walks the data directory and adds up file sizes
 (`recalculate_disk_usage`). Nothing is cached, estimated or sampled.
 

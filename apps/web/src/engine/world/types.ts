@@ -404,7 +404,7 @@ export type DeleteShapeCommand = {
 // canvas-image-asset slice of store state; bindWorldStore's generic
 // forwarder still relays this to the engine's apply_world_command the
 // same way create_wall/etc. intents are, which is all spawning the
-// placed-image sprite needs (src/engine/src/systems/background.rs's
+// placed-image sprite needs (crates/thunderforge-engine/src/systems/background.rs's
 // sync_placed_canvas_images).
 export type UpsertCanvasImageAssetCommand = {
   type: "upsert_canvas_image_asset";

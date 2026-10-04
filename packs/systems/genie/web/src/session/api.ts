@@ -2,8 +2,8 @@ import { postGraphQL } from "@thunderforge/host";
 
 /**
  * Genie session-loop GraphQL client — spec 018 User Story 7. The backend
- * (src/server/src/graphql/queries/genie_session.rs,
- * src/server/src/graphql/mutations_genie_session.rs) has always had full
+ * (crates/thunderforge-server/src/graphql/queries/genie_session.rs,
+ * crates/thunderforge-server/src/graphql/mutations_genie_session.rs) has always had full
  * query/mutation support for this; nothing in apps/web ever called it.
  * apps/web/src/engine/world/sync/genieSession.ts (inbound world_events
  * NOTIFY dispatch) intentionally doesn't do this fetching itself — this

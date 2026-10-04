@@ -1,0 +1,568 @@
+use async_graphql::{Error, Json, MergedObject, Result as GraphQLResult, Schema};
+use base64::Engine;
+use chrono::Utc;
+use diesel::prelude::*;
+use diesel::result::Error as DieselError;
+
+use crate::admin::{
+    load_admin_stats, recalculate_disk_usage as calculate_disk_usage,
+    update_manifest_key as persist_manifest_key, update_oauth_provider as persist_oauth_provider,
+    update_two_factor_policy as persist_two_factor_policy,
+};
+use crate::auth::world_membership::require_world_member;
+use crate::models::{
+    World,
+    WorldActor,
+    // Policy - disabled pending schema
+};
+use crate::schema::{world_actors, worlds}; // policies disabled
+use crate::state::AppState;
+// Phase 4.8.1: dnd5e_server will be loaded at runtime via game system registry
+
+// Phase 4.9.Z Step 1: Core entity types extracted to separate module
+pub mod types;
+pub use types::{GraphQLMyWorldEntry, GraphQLUser, GraphQLWorld, GraphQLWorldEvent};
+
+// Phase 4.9.Z Step 2: Admin types extracted to separate module
+pub mod admin_types;
+pub use admin_types::{
+    GraphQLAdminAccount, GraphQLAdminBootstrapSettings, GraphQLAdminStats,
+    GraphQLAdminWelcomeSummary, GraphQLAuthSecuritySettings, GraphQLOAuthProvider,
+    GraphQLOAuthProviderConfigInput, GraphQLStorageConnectionReport, GraphQLSystemManifest,
+    GraphQLTwoFactorCoverage,
+};
+
+// Phase 4.9.Z Step 3: Input & utility types extracted to separate module
+pub mod input_types;
+pub use input_types::{
+    GraphQLCreateLightSourceInput, GraphQLCreateSceneInput, GraphQLCreateShapeInput,
+    GraphQLCreateTokenInput, GraphQLCreateWallInput, GraphQLCreateWorldInput,
+    GraphQLDeleteMyDataPayload, GraphQLDeleteWorldPayload, GraphQLDoorState, GraphQLExportManifest,
+    GraphQLExportMyDataPayload, GraphQLPlaceholderDomainObject, GraphQLPlayersOnlineList,
+    GraphQLShapeKind, GraphQLUpdateFogMaskInput, GraphQLUpdateLightSourceInput,
+    GraphQLUpdateSceneInput, GraphQLUpdateShapeInput, GraphQLUpdateTokenInput,
+    GraphQLUpdateWallInput,
+};
+
+// Phase 4.9.Z Step 4a: Helper functions extracted to separate module
+pub mod helpers;
+pub use helpers::{
+    admin_user, app_state, authenticated_user, get_world_id_from_scene, load_all_worlds,
+    load_owned_world_event_by_id, load_owned_world_events, load_owned_worlds,
+    load_visible_world_by_id, normalize_world_name, prepare_world_input, require_visible_world,
+    validate_world_name, world_write_error,
+};
+
+// Phase 4.9.Z Step 5: Query extraction into separate modules
+pub mod exploration;
+pub mod queries;
+pub use queries::{
+    AbilityQuery, AbilityVocabularyQuery, ActorQuery, AdminQuery, HealthcheckQuery, InventoryQuery,
+    InviteQuery, ItemQuery, LoreQuery, LoreSyncQuery, ModerationQuery, RollQuery, SceneQuery,
+    UserQuery, WorldContentQuery, WorldEventsSinceQuery, WorldSyncPlanQuery,
+};
+
+// Phase 4.10.B: Invite & Membership mutations for multiplayer campaigns
+// Spec 026: content collections — authoring, and (separately) sharing.
+pub mod anonymous;
+pub mod mutations_collection_shares;
+pub mod mutations_collections;
+// Spec 049 US2/US3: `createCompendiumFromImport`, `removeCompendium` and the
+// pre-upload hash check. Everything a browser review decided is decided again
+// here, because a review that happened in a browser is not a permission.
+pub mod mutations_compendium;
+// Spec 049 Phase 13 / spec 050 FR-007 to FR-009c: collections on the shelf —
+// authored content beside the books read in, and the one kind that downloads.
+pub mod mutations_shelf_collections;
+// Spec 049 Phase 15 / spec 050 FR-100 to FR-105: a world's changes synced back
+// to its collection, shown first and confirmed by stamp.
+pub mod mutations_sync_back;
+// Spec 040 US5: `githubApplications`, `setGithubApplication` and
+// `checkGithubApplication` — one application for everything, or one per
+// subsystem, and which acts for what. Resolution itself is `crate::github_apps`.
+pub mod mutations_github_apps;
+pub mod mutations_instance_access;
+pub mod mutations_invites;
+pub mod mutations_play_field;
+// Spec 051 US1: `pauseWorldPlay` — an operator stopping a world's live play.
+// Operator-only, and never gated: acting on a paused world is its purpose.
+pub mod mutations_play_pause;
+pub mod mutations_sessions;
+pub mod permissioned_entity_resolvers;
+pub mod share_codes;
+pub mod share_rate_limit;
+pub use mutations_invites::InviteMutation;
+
+// Phase 6: Wall mutations (vision-blocking scene geometry)
+pub mod mutations_interactives; // Spec 030: interactive elements
+pub mod mutations_levels; // Scene levels: the floors of one scene
+pub mod mutations_walls;
+pub use mutations_walls::WallMutation;
+
+// Native canvas authoring: light source mutations
+pub mod mutations_library;
+pub mod mutations_lighting;
+pub use mutations_lighting::LightSourceMutation;
+
+// Native canvas authoring: shape (stroke/rect/ellipse/line/text) mutations
+pub mod mutations_shapes;
+pub use mutations_shapes::ShapeMutation;
+
+// Native canvas authoring: scene-scoped token mutations
+pub mod mutations_heartbeat;
+pub mod mutations_reconcile;
+pub mod mutations_tokens;
+// Playtest 2026-09-10 P1: a token without a photo shows its character's art.
+pub(crate) mod token_art;
+pub use mutations_heartbeat::{HeartbeatMutation, PresenceQuery};
+pub use mutations_reconcile::ReconcileMutation;
+pub use mutations_tokens::TokenMutation;
+
+// Spec 002: canvas image asset storage (RustFS)
+pub mod mutations_assets;
+pub use mutations_assets::{AssetMutation, AssetQuery};
+
+// Spec 010: actor creation/field-editing mutations
+pub mod mutations_actors;
+pub use mutations_actors::ActorMutation;
+
+// Spec 010: the actor "ownership block" (Viewer/Editor/Owner grants)
+pub mod mutations_actor_permissions;
+pub use mutations_actor_permissions::{ActorPermissionMutation, ActorPermissionQuery};
+
+// Spec 010: actor sharing and cross-world deep copy
+pub mod mutations_actor_images; // Spec 031: portrait/token imagery, rows keyed by role
+pub mod mutations_actor_shares;
+pub use mutations_actor_shares::{ActorShareMutation, ActorShareQuery};
+
+// Spec 012: lore entry creation/editing/deletion/restore mutations
+pub mod mutations_lore;
+pub use mutations_lore::LoreMutation;
+
+// Spec 012: the lore entry "ownership block" (Viewer/Editor/Owner grants)
+pub mod mutations_lore_permissions;
+pub use mutations_lore_permissions::{LorePermissionMutation, LorePermissionQuery};
+
+// Spec 031 (FR-038): the lore tree and its tags — move, tag, untag
+pub mod mutations_lore_tree;
+
+// Spec 012: paste/drop image upload for lore entries
+pub mod mutations_lore_images;
+pub use mutations_lore_images::LoreImageMutation;
+
+// Spec 034: establishing, acknowledging and removing a world's repository
+// connection. Nothing here writes to a world's lore.
+pub mod mutations_lore_sync;
+pub use mutations_lore_sync::LoreSyncMutation;
+
+// Spec 013: item creation/field-editing/deletion and effect CRUD
+pub mod mutations_abilities;
+pub mod mutations_ability_permissions;
+pub mod mutations_ability_shares;
+pub mod mutations_actor_abilities;
+pub mod mutations_items;
+pub use mutations_abilities::AbilityMutation;
+pub use mutations_ability_permissions::{AbilityPermissionMutation, AbilityPermissionQuery};
+pub use mutations_ability_shares::{AbilityShareMutation, AbilityShareQuery};
+pub use mutations_actor_abilities::{ActorAbilityMutation, ActorAbilityQuery};
+pub use mutations_items::ItemMutation;
+
+// Spec 013: the item "ownership block" (Viewer/Editor/Owner grants)
+pub mod mutations_item_abilities;
+pub mod mutations_item_permissions;
+pub mod mutations_item_prices; // Spec 031: the GM's presentational price note
+pub use mutations_item_permissions::{ItemPermissionMutation, ItemPermissionQuery};
+
+// Spec 013: item sharing and cross-world deep copy
+pub mod mutations_item_shares;
+pub use mutations_item_shares::{ItemShareMutation, ItemShareQuery};
+
+// Spec 013: actor inventory (Item + quantity, permissioned via the actor)
+pub mod mutations_inventory;
+pub use mutations_inventory::InventoryMutation;
+
+// Spec 031: taking a placed item off the map into an inventory — one
+// transaction, exactly one winner.
+pub mod mutations_pickup;
+pub use mutations_pickup::PickupMutation;
+
+// Spec 031 (T032b, FR-046): `setAuthoringToolGrant` — a Game Master handing
+// one player one authoring tool.
+pub mod mutations_authoring_tools;
+pub use mutations_authoring_tools::AuthoringToolMutation;
+
+// Spec 031 (T055, FR-019): `bringPartyToScene` — the party's characters get a
+// token in the destination, and no character gets a second one.
+pub mod mutations_party;
+pub use mutations_party::PartyMutation;
+
+// Spec 015: DMCA notice-and-takedown moderation mutations
+pub mod mutations_moderation;
+pub use mutations_moderation::ModerationMutation;
+// Spec 039 US7: the appeal, and the two decisions only an administrator makes.
+pub mod mutations_standing;
+pub use mutations_standing::StandingMutation;
+// Spec 039 T085 (FR-044): a changed operator statement is acknowledged again.
+pub mod operator_acknowledgement;
+
+pub mod mutations_roll;
+pub use mutations_roll::RollMutation;
+
+// Spec 036 US3b: `rollCheck` — a check a sheet names and the server resolves.
+// A sibling of `mutations_roll` rather than part of it, because it produces
+// nothing itself: it looks a check up, substitutes the actor's own numbers,
+// and hands the result to the module above, which stays the only path a roll
+// comes from (ADR-044).
+pub mod mutations_roll_check;
+pub use mutations_roll_check::{RollCheckMutation, RollCheckQuery};
+
+// Spec 018's Genie session loop used to be declared here — thirteen
+// mutations and the queries beside them, 2,763 lines of one ruleset's rules
+// in shared server code. It lives in `packs/systems/genie/server` now, which
+// is where a pack's behaviour belongs (spec 032 FR-004, ADR-063). The
+// binary merges what packs contribute into the schema roots; this file does
+// not know they exist.
+
+// Play-view Chat + Combat. Both are built on the existing `world_events`
+// bus rather than a separate transport — see each module's doc comment.
+pub mod mutations_chat;
+pub use mutations_chat::{ChatMutation, ChatQuery};
+pub mod mutations_combat;
+pub use mutations_combat::{CombatMutation, CombatQuery};
+// Spec 046: the Game Master's Damage and Heal.
+pub mod mutations_combat_hit_points;
+// Spec 046 US6: a lair in the turn order.
+pub mod mutations_combat_lair;
+// Spec 046 (ADR-102): linked tokens, unlinked copies, unique NPCs.
+pub mod mutations_token_links;
+// Spec 046 (ADR-101): an attack aimed at something, and its offer.
+pub mod mutations_attacks;
+
+// Spec 017: actor "available for claiming" flag, atomic claiming,
+// player-created characters, and GM un-claim.
+pub mod mutations_actor_claims;
+pub use mutations_actor_claims::{ActorClaimMutation, ActorClaimQuery};
+
+// Admin types are now in admin_types.rs module (Phase 4.9.Z Step 2)
+
+#[path = "graphql/types_scene.rs"]
+pub mod types_scene;
+pub use types_scene::*;
+
+#[path = "graphql/mutations_actor_system_data.rs"]
+pub mod mutations_actor_system_data;
+pub use mutations_actor_system_data::*;
+
+#[path = "graphql/mutations_scenes.rs"]
+pub mod mutations_scenes;
+pub use mutations_scenes::*;
+
+#[path = "graphql/mutations_worlds.rs"]
+pub mod mutations_worlds;
+pub use mutations_worlds::*;
+
+#[path = "graphql/mutations_user_data.rs"]
+pub mod mutations_user_data;
+pub use mutations_user_data::*;
+
+#[path = "graphql/mutations_admin.rs"]
+pub mod mutations_admin;
+pub use mutations_admin::*;
+
+/// Every operator-scoped GraphQL field refuses a non-administrator, and a
+/// field nobody classified fails the build. The GraphQL counterpart to
+/// `auth::admin_routes_tests` — see that module and the 2026-09-09 audit.
+#[cfg(test)]
+#[path = "graphql/admin_surface_tests.rs"]
+mod admin_surface_tests;
+
+// Spec 039 T067: what a disabled account can still reach — exactly the
+// allowlist, and no more.
+#[cfg(test)]
+#[path = "graphql/adoption_surface_tests.rs"]
+mod adoption_surface_tests;
+#[cfg(test)]
+mod disabled_surface_tests;
+
+/// Spec 036 FR-010: a subscription stops when the session behind it does.
+/// Separate from `subscriptions` so the rule can be tested without opening a
+/// socket, and so every stream reaches for the same one.
+#[path = "graphql/session_lifetime.rs"]
+pub mod session_lifetime;
+
+#[path = "graphql/subscriptions.rs"]
+pub mod subscriptions;
+pub use subscriptions::*;
+
+/// Spec 051 T021: every world-scoped subscription refuses a paused world, and
+/// one already open ends with the pause.
+#[cfg(test)]
+#[path = "graphql/play_pause_stream_tests.rs"]
+mod play_pause_stream_tests;
+
+/// Spec 051 T027: every root mutation and subscription is gated against a
+/// paused world, or says why it is not.
+#[cfg(test)]
+#[path = "graphql/play_pause_surface_tests.rs"]
+mod play_pause_surface_tests;
+
+/// The world-scoped token routes, which checked no membership, stay removed.
+#[cfg(test)]
+#[path = "graphql/world_tokens_retired_tests.rs"]
+mod world_tokens_retired_tests;
+
+/// The tables that test reads, public to dependent crates' tests so the app
+/// crate can hold the schema merged with the packs' fields to the same list
+/// (spec 051 T074).
+#[cfg(any(test, feature = "test-support"))]
+#[path = "graphql/play_pause_surface_tables.rs"]
+pub mod play_pause_surface_tables;
+
+// Empty placeholder in the mutation root — the world_collaborators-based
+// RBAC mutations this was meant to hold were never built; world/scene
+// authorization instead runs through world_members (see
+// crates/thunderforge-server/src/auth/world_membership.rs).
+#[derive(async_graphql::MergedObject, Default)]
+pub struct CollaboratorMutation;
+
+#[derive(MergedObject, Default)]
+pub struct QueryRoot(
+    PresenceQuery,
+    HealthcheckQuery,
+    UserQuery,
+    AdminQuery,
+    SceneQuery,
+    queries::token_status::TokenStatusQuery,
+    queries::token_attributes::TokenAttributesQuery,
+    // Spec 045 US6: `tokenVision(sceneId)` — how far each token sees, as its
+    // game system declares it.
+    queries::token_vision::TokenVisionQuery,
+    // Spec 046 US4: `tokenGrid(sceneId)` — how many squares each token fills,
+    // as its game system declares sizes.
+    queries::token_grid::TokenGridQuery,
+    // Spec 045 US7: `sceneExploration(sceneId)` — whether a scene remembers,
+    // and the epoch this viewer's stored map must be at or above.
+    exploration::ExplorationQuery,
+    // Spec 030: `effectRegistry` and `interactives(sceneId)`.
+    queries::interactives::InteractiveQuery,
+    // Scene levels: `sceneLevels(sceneId)`.
+    queries::levels::SceneLevelQuery,
+    // Spec 031: `authoringTools(worldId)` — which tools the caller may use.
+    queries::AuthoringToolsQuery,
+    InviteQuery,
+    // Spec 039: the sharing terms and their archive. On the query root because
+    // every publishing path's dialog reads it, and because an operator handling
+    // a notice reaches an archived version through it.
+    queries::LegalDocumentQuery,
+    // Spec 039 US5: where an account stands, and what it has been told.
+    queries::StandingQuery,
+    // Spec 039 US8: what this instance's operator took on.
+    operator_acknowledgement::OperatorAcknowledgementQuery,
+    AssetQuery,
+    ActorQuery,
+    ActorPermissionQuery,
+    ActorShareQuery,
+    mutations_instance_access::InstanceAccessQuery,
+    // Spec 040 US5: every GitHub application scope, and how each subsystem
+    // currently resolves.
+    mutations_github_apps::GithubAppQuery,
+    // Spec 040: every setting, its source, its history, and what this
+    // instance is not ready for.
+    crate::settings::graphql::InstanceSettingsQuery,
+    // Spec 040 US4: whether this instance can send mail, and what it has
+    // failed to send. Declared by `mail/graphql.rs` for the reason that file
+    // gives.
+    crate::mail::graphql::MailQuery,
+    // Spec 037 US5: `mySubmissions` and `feedbackDestinationNotice` — the
+    // caller's own feedback and where it goes.
+    crate::feedback::graphql::FeedbackQuery,
+    // Spec 037 FR-021: `undeliveredFeedback`, administrators only.
+    crate::feedback::graphql::FeedbackAdminQuery,
+    // Terms disputes and privacy requests: the operator's intake queue.
+    // Takedowns are not here — they are moderation cases, because they are
+    // the only one of the three that disables content.
+    crate::legal_intake::graphql::LegalEnquiryQuery,
+    // Spec 036 US3b: `systemChecks(worldId)` — what a sheet may offer.
+    RollCheckQuery,
+    // Spec 036 US4: the sessions a person holds, now that they may hold several.
+    mutations_play_field::PlayFieldQuery,
+    mutations_sessions::SessionQuery,
+    LoreQuery,
+    LorePermissionQuery,
+    // Spec 034: the world's repository connection, its runs, and whether this
+    // instance can offer the feature at all.
+    LoreSyncQuery,
+    AbilityQuery,
+    AbilityVocabularyQuery,
+    WorldContentQuery,
+    mutations_item_abilities::ItemAbilityQuery,
+    AbilityPermissionQuery,
+    AbilityShareQuery,
+    // Spec 026: a world's own collections. The ONLY listing surface here.
+    mutations_collections::CollectionQuery,
+    // Spec 026: `sharedCollection` — the anonymous read (ADR-070).
+    mutations_collection_shares::CollectionShareQuery,
+    // Spec 040 US1 / spec 039 FR-056: `publishedOperatorValues` — the six
+    // values the published legal pages render, readable without an account
+    // because somebody serving a copyright notice does not have one.
+    anonymous::PublishedOperatorValuesQuery,
+    ActorAbilityQuery,
+    ItemQuery,
+    ItemPermissionQuery,
+    ItemShareQuery,
+    InventoryQuery,
+    ModerationQuery,
+    RollQuery,
+    ActorClaimQuery,
+    ChatQuery,
+    CombatQuery,
+    // Spec 046: `attack`, `sceneAttacks`, `pendingOffers`, `previewAttack`,
+    // each answered per viewer.
+    queries::attacks::AttackQuery,
+    // Spec 028: `worldSyncPlan` — what a returning client must fetch and
+    // discard for one world.
+    WorldSyncPlanQuery,
+    // `worldEventsSince` — what a client missed while its socket was down.
+    // Live delivery is at-most-once by construction, so the durable record is
+    // what a reconnecting client asks, not the wire it just lost.
+    WorldEventsSinceQuery,
+    // Spec 028 (T086): `peerSessions` — who else is reachable right now.
+    crate::peer_signaling::PeerSignalingQuery,
+    // Spec 049 US3 / spec 050 US1: `myLibrary`, `compendium`,
+    // `compendiumEntries` — an account's own shelf. No world-scoped read
+    // exists, deliberately: a world reaches a compendium through the book
+    // list spec 050 adds, not through this.
+    queries::CompendiumQuery,
+    // Spec 049 FR-047: `compendiumForFileHash` — asked with a hash and
+    // nothing else, before any of a book is sent.
+    mutations_compendium::CompendiumImportQuery,
+    // Spec 050 FR-009a: `downloadShelfCollection` — a collection as JSON; a
+    // book read in is refused.
+    mutations_shelf_collections::ShelfCollectionQuery,
+    // Spec 050 US3: `worldBookList` (which every member reads),
+    // `compendiumsOfferedToWorld` and `worldCompendiumEntries` — the book
+    // list, and the fetch that is the only way content reaches a world.
+    mutations_library::LibraryWorldQuery,
+    // Spec 050 FR-103: `worldSyncBackPlan` — what a sync back would do.
+    mutations_sync_back::SyncBackQuery,
+    // Spec 051: the pause record and the worlds an operator might pause
+    // (operators), and `worldPlayState` — *that and when* (members).
+    queries::PlayPauseQuery,
+    // `worldStatistics(worldId)` — a world by its figures, counted where the
+    // rows are so the dashboard's cost does not grow with the campaign.
+    queries::WorldStatisticsQuery,
+);
+
+#[derive(MergedObject, Default)]
+pub struct MutationRoot(
+    // Spec 045 US7: turning a scene's memory on, and resetting it.
+    exploration::ExplorationMutation,
+    queries::token_status::TokenDisclosureMutation,
+    WorldMutation,
+    UserDataMutation,
+    AdminMutation,
+    SceneMutation,
+    ActorSystemDataMutation,
+    mutations_item_abilities::ItemAbilityMutation,
+    CollaboratorMutation,
+    InviteMutation,
+    WallMutation,
+    LightSourceMutation,
+    ShapeMutation,
+    // Spec 030: authoring, activation and approval for interactive elements.
+    mutations_interactives::InteractiveMutation,
+    mutations_levels::SceneLevelMutation,
+    TokenMutation,
+    AssetMutation,
+    ActorMutation,
+    ActorPermissionMutation,
+    ActorShareMutation,
+    mutations_instance_access::InstanceAccessMutation,
+    // Spec 040 US5: `setGithubApplication` (which parses the key on save) and
+    // `checkGithubApplication` (which is the only thing here that touches a
+    // network, deliberately and only when an operator asks).
+    mutations_github_apps::GithubAppMutation,
+    crate::settings::graphql::InstanceSettingsMutation,
+    // Spec 040 US4: `sendTestMail` and `retryOutboxMessage`.
+    crate::mail::graphql::MailMutation,
+    // Spec 037: `submitFeedback`, and an operator's abandon/resume.
+    crate::feedback::graphql::FeedbackMutation,
+    // `submitLegalEnquiry` — the one unauthenticated write in this product
+    // that stores prose, and rate limited accordingly.
+    crate::legal_intake::graphql::LegalEnquiryMutation,
+    mutations_sessions::SessionMutation,
+    mutations_actor_images::ActorImageMutation,
+    LoreMutation,
+    LorePermissionMutation,
+    LoreImageMutation,
+    mutations_lore_tree::LoreTreeMutation,
+    LoreSyncMutation,
+    AbilityMutation,
+    AbilityPermissionMutation,
+    AbilityShareMutation,
+    // Spec 026: gather artifacts into a named collection.
+    mutations_collections::CollectionMutation,
+    mutations_collection_shares::CollectionShareMutation,
+    // Spec 049 US2/US3: committing a reviewed book, and taking one back off
+    // the shelf.
+    mutations_compendium::CompendiumMutation,
+    // Spec 050 FR-007: starting a collection on the shelf and writing it.
+    mutations_shelf_collections::ShelfCollectionMutation,
+    // Spec 050 US3: switching a book on for a world and off again. The one
+    // mechanism, whether a Game Master ticks it at creation or later.
+    mutations_library::LibraryWorldMutation,
+    // Spec 050 FR-100: `syncBackToCollection`, only with a plan's stamp.
+    mutations_sync_back::SyncBackMutation,
+    ActorAbilityMutation,
+    ItemMutation,
+    ItemPermissionMutation,
+    ItemShareMutation,
+    mutations_item_prices::ItemPriceMutation,
+    InventoryMutation,
+    PickupMutation,
+    PartyMutation,
+    ModerationMutation,
+    StandingMutation,
+    operator_acknowledgement::OperatorAcknowledgementMutation,
+    RollMutation,
+    // Spec 036 US3b: `rollCheck(worldId, actorId, checkId)`.
+    RollCheckMutation,
+    ActorClaimMutation,
+    // Spec 031 (FR-046): per-player authoring tool grants.
+    AuthoringToolMutation,
+    ChatMutation,
+    CombatMutation,
+    // Spec 046 FR-014: `changeHitPoints`.
+    mutations_combat_hit_points::CombatHitPointsMutation,
+    // Spec 046 US6: `addLairCombatant`.
+    mutations_combat_lair::CombatLairMutation,
+    // Spec 046 US1/US2: `makeAttack`, `resolveOffer`, auto-apply, and what an
+    // ability or item is as an attack.
+    mutations_attacks::AttackMutation,
+    ReconcileMutation,
+    HeartbeatMutation,
+    // Spec 028 (T086): `sendPeerSignal` — the post box.
+    crate::peer_signaling::PeerSignalingMutation,
+    // Spec 051 US1: `pauseWorldPlay`.
+    mutations_play_pause::PlayPauseMutation,
+);
+
+pub type AppSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;
+
+#[cfg(test)]
+#[path = "graphql_tests.rs"]
+mod tests;
+
+#[cfg(test)]
+#[path = "graphql_world_default_system_tests.rs"]
+mod world_default_system_tests;
+
+#[cfg(test)]
+#[path = "graphql_world_interface_pack_tests.rs"]
+mod world_interface_pack_tests;
+
+/// Spec 041 FR-021 / SC-007: what an operator can see about second-factor
+/// coverage, and what they deliberately cannot.
+#[cfg(test)]
+#[path = "graphql/two_factor_coverage_tests.rs"]
+mod two_factor_coverage_tests;

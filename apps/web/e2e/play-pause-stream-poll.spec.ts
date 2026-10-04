@@ -47,7 +47,7 @@ import { pauseWorldAsOperator } from "./fixtures/playPause";
  * tick.
  */
 
-/** `LIVENESS_POLL` in `src/server/src/graphql/session_lifetime.rs`. */
+/** `LIVENESS_POLL` in `crates/thunderforge-server/src/graphql/session_lifetime.rs`. */
 const LIVENESS_POLL_MS = 5_000;
 
 /**

@@ -88,7 +88,7 @@ export type ValueOrigin = "stored" | "derived";
  * One value a system publishes, in the shape the server actually sends.
  *
  * This is `GraphQLDeclaredValue` from
- * `src/server/src/graphql/queries/token_attributes.rs`, not the richer
+ * `crates/thunderforge-server/src/graphql/queries/token_attributes.rs`, not the richer
  * `DeclaredValue` of the engine SDK: `value` has already been rendered to a
  * string server-side, on purpose, so that no surface has to invent a
  * formatting of its own.

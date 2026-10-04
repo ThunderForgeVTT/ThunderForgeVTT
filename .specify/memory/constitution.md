@@ -1,5 +1,19 @@
 <!--
 Sync Impact Report
+- Version change: 1.3.0 → 1.4.0
+- Modified principles: n/a
+- Added sections: Technology & Architecture Constraints gained the
+  repository layout rule (spec 065-a-place-for-everything): entry points in
+  `apps/`, Rust libraries in `crates/`, web libraries in `packages/`, game
+  systems in `packs/`, and no code at a root `src/`. The four crates that
+  lived under `src/` moved; paths in this file were updated to match.
+- Removed sections: none
+- Deferred TODOs: the check that enforces the rule before a commit (spec 065
+  User Story 2) and the extraction of shared web code out of `apps/web`
+  (User Story 4) are not yet built. Until the first lands, the rule is kept
+  by review.
+
+Prior report (v1.3.0):
 - Version change: 1.2.0 → 1.3.0
 - Modified principles: n/a
 - Added sections: Principle VI "Every Feature Is Proven by Its Own Slice".
@@ -75,7 +89,7 @@ the ECS layer removes that class of bug permanently and keeps performance
 ### II. Plugin-Modular Engine Architecture
 Every new engine capability (drawing tools, walls, lighting, fog, selection,
 etc.) MUST ship as a self-contained Bevy `Plugin` with its own module under
-`src/engine/src/plugins/`, its own `systems/*` and `resources/*` where state
+`crates/thunderforge-engine/src/plugins/`, its own `systems/*` and `resources/*` where state
 is non-trivial, and a narrow public surface re-exported through
 `systems/mod.rs` / `resources/mod.rs`. Plugins MUST be independently
 addable/removable from the `App` builder in `lib.rs` without editing each
@@ -189,8 +203,24 @@ and one agent or contributor can own it end to end.
   (`apps/web/src/components/ui/`, `apps/web/src/styles/`) built on Radix
   primitives. New UI chrome around the Bevy canvas (toolbars, tool panels,
   property inspectors) belongs in this layer, not inside the engine crate.
-- Migrations: Diesel migrations under `src/server/migrations/`, one directory
-  per change, with paired `up.sql`/`down.sql`.
+- Migrations: Diesel migrations under
+  `crates/thunderforge-server/migrations/`, one directory per change, with
+  paired `up.sql`/`down.sql`.
+- Repository layout (spec `065-a-place-for-everything`). Everything has one
+  of four homes, and there is no `src/` at the repository root:
+  - `apps/` holds entry points: the server binary (`apps/server`) and the web
+    apps. An app composes libraries and SHOULD hold little else.
+  - `crates/` holds Rust libraries, including the server library
+    (`crates/thunderforge-server`), the shared models
+    (`crates/thunderforge-core`) and the engine
+    (`crates/thunderforge-engine`).
+  - `packages/` holds web libraries that more than one app needs.
+  - `packs/` holds game systems. A system keeps its server crate, engine
+    crate and web package together under `packs/systems/<id>/`, because it
+    is one ruleset, not a general library.
+
+  A new crate or package MUST be created in the home that fits it. No app may
+  import from another app.
 
 ## Development Workflow
 
@@ -260,4 +290,4 @@ Compliance is reviewed at PR/change-review time. Any deviation from
 Principle I (ECS owns simulation) or Principle III (ownership enforcement)
 requires explicit justification recorded in the associated ADR or spec.
 
-**Version**: 1.3.0 | **Ratified**: 2026-08-20 | **Last Amended**: 2026-09-22
+**Version**: 1.4.0 | **Ratified**: 2026-08-20 | **Last Amended**: 2026-10-04

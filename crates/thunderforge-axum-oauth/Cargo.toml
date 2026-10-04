@@ -15,7 +15,7 @@ crate-type = ["rlib"]
 # authorization-code + PKCE flow is a sequence of pure transformations —
 # build a URL, compare a `state`, derive a challenge, parse a token response
 # — and every one of them is reachable here without a network round trip or
-# a provider account. `reqwest` stays in `src/server`, which owns the two
+# a provider account. `reqwest` stays in `crates/thunderforge-server`, which owns the two
 # actual HTTP calls (token exchange and userinfo).
 [dependencies]
 base64 = "0.23.1"

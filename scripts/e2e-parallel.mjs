@@ -376,7 +376,7 @@ async function provisionTemplate() {
   const templateUrl = `postgres://${DB_USER}:password@localhost:5432/${TEMPLATE_DB}`;
   await runCommand("diesel migration run", {
     name: "migrate template",
-    cwd: join(ROOT_DIR, "src/server"),
+    cwd: join(ROOT_DIR, "crates/thunderforge-server"),
     prefix: "e2e",
     env: { DATABASE_URL: templateUrl },
   });
@@ -385,8 +385,8 @@ async function provisionTemplate() {
   // (demo_accounts) and Playwright's own global setup applies e2e_demo. The
   // latter is idempotent and will run again per shard; having it here too
   // means a shard starts from the same place a developer's stack does.
-  psqlFile(TEMPLATE_DB, "src/server/seeds/demo_accounts.sql");
-  psqlFile(TEMPLATE_DB, "src/server/seeds/e2e_demo.sql");
+  psqlFile(TEMPLATE_DB, "crates/thunderforge-server/seeds/demo_accounts.sql");
+  psqlFile(TEMPLATE_DB, "crates/thunderforge-server/seeds/e2e_demo.sql");
   log("e2e", "Template ready.");
 }
 
@@ -407,7 +407,7 @@ async function provisionFirstRunTemplate() {
 
   await runCommand("diesel migration run", {
     name: "migrate first-run template",
-    cwd: join(ROOT_DIR, "src/server"),
+    cwd: join(ROOT_DIR, "crates/thunderforge-server"),
     prefix: "e2e",
     env: {
       DATABASE_URL: `postgres://${DB_USER}:password@localhost:5432/${FIRST_RUN_TEMPLATE_DB}`,

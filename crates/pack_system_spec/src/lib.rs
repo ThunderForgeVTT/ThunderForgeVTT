@@ -322,7 +322,7 @@ fn validate_vision_content(instance: &serde_json::Value) -> Result<(), String> {
 /// object whose required `licenseName`/`attributionText` are empty or
 /// whitespace-only, even though the JSON Schema above already guarantees
 /// they're present and string-typed. `pub` (not just used internally by
-/// `validate_system_manifest`) because `src/server/src/systems.rs`'s
+/// `validate_system_manifest`) because `crates/thunderforge-server/src/systems.rs`'s
 /// `get_system_manifest` handler serves bundled packs' `system.json`
 /// straight off disk as untyped JSON — it never runs the full
 /// `SystemManifest` schema (bundled packs like `dnd5e` don't conform to

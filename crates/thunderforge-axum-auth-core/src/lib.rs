@@ -5,7 +5,7 @@
 //! which is why these rules can be hammered by proptest rather than only
 //! reached through an HTTP round trip that needs Postgres running.
 //!
-//! The HTTP handlers in `src/server/src/auth/` stay where the state is and
+//! The HTTP handlers in `crates/thunderforge-server/src/auth/` stay where the state is and
 //! call in here for every decision. See `docs/CLIENT_WORLD_CACHE.md` for the
 //! precedent this split follows.
 

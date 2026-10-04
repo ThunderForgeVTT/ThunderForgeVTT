@@ -18,7 +18,7 @@ crate-type = ["rlib"]
 # applied to. That is what lets them be exercised by plain `cargo test`
 # (and by proptest) instead of only through a live HTTP handler with a
 # database behind it. The moment something here needs a connection pool, a
-# request, or a cookie jar, it belongs in `src/server` instead — that
+# request, or a cookie jar, it belongs in `crates/thunderforge-server` instead — that
 # boundary is this crate's entire value (same reasoning as the
 # `thunderforge-cache-core` split, docs/CLIENT_WORLD_CACHE.md).
 [dependencies]

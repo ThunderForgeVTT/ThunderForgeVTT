@@ -18,7 +18,7 @@ export type ShapeKind = "STROKE" | "RECT" | "ELLIPSE" | "LINE" | "TEXT";
 
 /**
  * Type definition for a shape record (mirrors the GraphQL `Shape` type,
- * src/server/src/graphql.rs).
+ * crates/thunderforge-server/src/graphql.rs).
  */
 export interface WorldShapeDoc {
   shapeId: string;

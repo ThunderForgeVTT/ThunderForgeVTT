@@ -15,7 +15,7 @@
 //! that, carried out: the tables are declared here, the rows are described
 //! here, and the mutations that move them are contributed from here.
 //!
-//! Nothing in `src/server` mentions any of it now.
+//! Nothing in `crates/thunderforge-server` mentions any of it now.
 
 pub mod models;
 pub mod mutations;

@@ -1,6 +1,6 @@
 /**
  * sceneLighting.ts — a scene's ambient light, live (playtest 2026-09-10 P9;
- * `world_events` code 25, see `src/server/src/world_events.rs`).
+ * `world_events` code 25, see `crates/thunderforge-server/src/world_events.rs`).
  *
  * The Game Master sets a scene bright, dim or dark, and every client in that
  * scene hands the level to the engine, which draws its darkness layer from it

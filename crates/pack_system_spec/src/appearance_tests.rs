@@ -71,7 +71,7 @@ fn shipped(system: &str) -> String {
 }
 
 /// Bundled manifests are served block by block rather than through the
-/// upload schema (`src/server/src/systems.rs`), so they are held to the
+/// upload schema (`crates/thunderforge-server/src/systems.rs`), so they are held to the
 /// block's own check, as `combat_tests.rs` holds Genie's sizes.
 #[test]
 fn the_shipped_manifests_pass() {

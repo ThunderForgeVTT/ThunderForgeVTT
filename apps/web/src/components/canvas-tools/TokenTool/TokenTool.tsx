@@ -51,7 +51,7 @@ const ROTATE_STEP_DEGREES = 30;
  *
  * Resize/rotate were shipped in an earlier session as keyboard-only
  * shortcuts (`]`/`[` resize, `,`/`.` rotate — see
- * `src/engine/src/systems/selection.rs`'s `handle_token_resize_rotate_keyboard`)
+ * `crates/thunderforge-engine/src/systems/selection.rs`'s `handle_token_resize_rotate_keyboard`)
  * with no UI surface at all, which meant a GM had no way to discover or
  * verify the capability existed. This panel closes that gap: it displays
  * the selected token's current scale/rotation and offers equivalent

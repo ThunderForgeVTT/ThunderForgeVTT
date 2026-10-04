@@ -44,7 +44,7 @@ export function freshCredentials(prefix: string): Credentials {
 }
 
 /** Logs in an already-existing user (e.g. the SQL-seeded demo user from
- * src/server/seeds/e2e_demo.sql) by identifier (username or email) +
+ * crates/thunderforge-server/seeds/e2e_demo.sql) by identifier (username or email) +
  * password. */
 export async function login(
   page: Page,

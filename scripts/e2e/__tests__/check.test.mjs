@@ -39,7 +39,7 @@ const SPECS = [
 
 const TRACKED = [
   "apps/web/src/features/combat/CombatPanel.tsx",
-  "src/app/schema.graphql",
+  "apps/server/schema.graphql",
   "package.json",
 ];
 
@@ -67,7 +67,7 @@ function run(change = {}) {
   const slices = change.slices ?? SLICES;
   return checkSlices({
     document: {
-      crossCutting: [{ glob: "src/app/schema.graphql", why: "every client" }],
+      crossCutting: [{ glob: "apps/server/schema.graphql", why: "every client" }],
       slices,
       ...change.document,
     },
@@ -151,12 +151,12 @@ describe("checkSlices", () => {
       run({
         document: {
           crossCutting: [
-            { glob: "src/server/migrations/**", why: "schema history" },
+            { glob: "crates/thunderforge-server/migrations/**", why: "schema history" },
           ],
         },
       }),
       [
-        'cross-cutting "src/server/migrations/**" matches no tracked file — fix or remove it in scripts/e2e/slices.json',
+        'cross-cutting "crates/thunderforge-server/migrations/**" matches no tracked file — fix or remove it in scripts/e2e/slices.json',
       ],
     );
   });

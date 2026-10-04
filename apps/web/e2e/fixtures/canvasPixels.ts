@@ -19,7 +19,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
  */
 
 /**
- * `ClearColor(Color::srgb(0.133, 0.157, 0.192))` in `src/engine/src/lib.rs`,
+ * `ClearColor(Color::srgb(0.133, 0.157, 0.192))` in `crates/thunderforge-engine/src/lib.rs`,
  * converted to 8-bit sRGB. This is the "empty canvas" colour — the flat
  * blue-grey you see when the engine is running but drawing nothing.
  */

@@ -16,7 +16,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 export const ROOT_DIR = join(__dirname, "..");
-const ENGINE_DIR = join(ROOT_DIR, "src/engine");
+const ENGINE_DIR = join(ROOT_DIR, "crates/thunderforge-engine");
 const ENGINE_SRC_DIR = join(ENGINE_DIR, "src");
 const ENGINE_CARGO_TOML = join(ENGINE_DIR, "Cargo.toml");
 const ENGINE_PKG_DIR = join(ROOT_DIR, "dist/engine");
@@ -197,7 +197,7 @@ function getEngineInputsHash(profile = engineProfile()) {
   hashFile(hash, ENGINE_CARGO_TOML);
   hashDirectoryRecursive(hash, ENGINE_SRC_DIR);
 
-  // The engine is not only `src/engine`. It compiles `crates/thunderforge-*`
+  // The engine is not only `crates/thunderforge-engine`. It compiles `crates/thunderforge-*`
   // in, and editing one of those used to leave this hash unchanged: the dev
   // loop would report "Engine is up to date, skipping build" and serve the
   // previous wasm. Every cache change lives in those crates, so the whole of
@@ -280,7 +280,7 @@ export async function buildEngine({
   log("engine", `Building WebAssembly engine (${profile}${optNote})...`);
   // Bevy prints "<Enable the debug feature to see the name>" in place of every
   // system, component and resource name unless `bevy/debug` is on — see the
-  // `debug-names` feature in `src/engine/Cargo.toml`. It rides the dev profile
+  // `debug-names` feature in `crates/thunderforge-engine/Cargo.toml`. It rides the dev profile
   // and only the dev profile: the names are string data that survives the
   // symbol stripping the release build depends on, and the dev bundle is 71%
   // unmangled symbols already, so this is free exactly where it is useful.

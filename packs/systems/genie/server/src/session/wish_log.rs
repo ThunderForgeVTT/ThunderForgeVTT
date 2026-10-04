@@ -50,7 +50,7 @@ pub struct GraphQLGenieWishEntry {
 ///
 /// `world_events` is the audit trail, not a cache: rows are kept for the life
 /// of the world (they are deleted only with their author's account,
-/// `src/server/src/users/mod.rs`). So the history already exists, correctly,
+/// `crates/thunderforge-server/src/users/mod.rs`). So the history already exists, correctly,
 /// and a new table would be a second copy of it. This query is the read that
 /// was missing, not a new place to write.
 ///

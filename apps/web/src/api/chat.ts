@@ -1,4 +1,4 @@
-// Play-view Chat (src/server/src/graphql/mutations_chat.rs).
+// Play-view Chat (crates/thunderforge-server/src/graphql/mutations_chat.rs).
 //
 // GM-only messages are filtered server-side, so anything this module
 // receives is already safe to render for the current viewer — there is no

@@ -2,7 +2,7 @@
 # see https://diesel.rs/guides/configuring-diesel-cli
 
 [print_schema]
-file = "src/server/src/schema.rs"
+file = "crates/thunderforge-server/src/schema.rs"
 custom_type_derives = ["diesel::query_builder::QueryId"]
 # Tables a system pack owns are in the dev database and deliberately absent
 # from the server's schema — the server does not know a pack exists (spec 032,
@@ -17,4 +17,4 @@ filter = { except_tables = [
 ] }
 
 [migrations_directory]
-dir = "src/server/migrations"
+dir = "crates/thunderforge-server/migrations"

@@ -18,7 +18,7 @@
 
 /**
  * Type definition for a scene-scoped token record (mirrors the GraphQL
- * `GraphQLToken` type, src/server/src/graphql.rs).
+ * `GraphQLToken` type, crates/thunderforge-server/src/graphql.rs).
  */
 export interface WorldSceneTokenDoc {
   tokenId: string;

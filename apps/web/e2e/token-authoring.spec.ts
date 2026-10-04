@@ -497,7 +497,7 @@ async function dragCanvas(
 
 /** Screen-space offset (from canvas center) of the selected token's
  * resize handle at a given `scale`, matching
- * `src/engine/src/systems/token.rs`'s `resize_handle_world_pos` exactly:
+ * `crates/thunderforge-engine/src/systems/token.rs`'s `resize_handle_world_pos` exactly:
  * the token's bottom-right corner (`(half.x, -half.y)` in world space at
  * rotation 0), converted to screen space per `worldToScreenOffset`'s sign
  * convention (screen dy is the negation of world y). `TOKEN_SIZE` (96)
@@ -979,7 +979,7 @@ test.describe("Canvas-native token drag (US1, T008/T009)", () => {
  * stand-in (`]`/`[`/`,`/`.`, still available as a secondary path per
  * `handle_token_resize_rotate_keyboard`'s doc comment) with actual
  * draggable handle sprites (`TokenResizeHandle`/`TokenRotateHandle` in
- * `src/engine/src/systems/token.rs`), closing the interaction-affordance
+ * `crates/thunderforge-engine/src/systems/token.rs`), closing the interaction-affordance
  * gap with walls/shapes.
  */
 test.describe("Token resize/rotate (US1, spec 006 T001-T003)", () => {

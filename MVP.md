@@ -33,7 +33,7 @@ So each phase below says what was checked and when. `[x] Done`,
 ### [x] Phase 1 — User login
 
 Username/password, OAuth, two-factor, sessions, admin bootstrap
-(`src/server/src/auth/`, `src/server/src/users/`).
+(`crates/thunderforge-server/src/auth/`, `crates/thunderforge-server/src/users/`).
 
 Spec 007 added deploy-time OAuth configuration by environment variable
 (`OAUTH_<PROVIDER>_CLIENT_ID` and friends) alongside the admin panel; env vars
@@ -189,7 +189,7 @@ stand-in with real canvas-rendered resize and rotate handles.
 **Closed since the last pass**: tokens now have a kind.
 `thunderforge_canvas_core::token_kind::TokenKind` defines Character, NPC,
 Vehicle and Object, parsed server-side (`parse_token_kind`) and rendered with a
-per-kind palette in the engine (`token_kind_color`, `src/engine/src/lib.rs`).
+per-kind palette in the engine (`token_kind_color`, `crates/thunderforge-engine/src/lib.rs`).
 The "no distinct token type or visual representation" gap this document
 recorded is gone.
 
@@ -202,13 +202,13 @@ the staging page, and share-and-deep-copy of an actor into another of your own
 worlds.
 
 **Done — stats reach the canvas.** Spec 029 draws a token's resources as bars
-above it (`src/engine/src/plugins/status_display.rs`) and shows the selected
+above it (`crates/thunderforge-engine/src/plugins/status_display.rs`) and shows the selected
 token's in a viewer-chosen corner (`StatusPanel.tsx`). Which resources exist is
 declared by `system.json`, never hard-coded — four real systems ship
 declarations (Genie, D&D 5e, Pathfinder 2e, Blades in the Dark), and the engine
 understands none of them, which is precisely what the four-system e2e exists to
 prove. Coarsening for viewers not entitled to exact figures happens
-server-side (`src/server/src/status_display.rs`), so a withheld value never
+server-side (`crates/thunderforge-server/src/status_display.rs`), so a withheld value never
 reaches the client. See `docs/status-displays.md`.
 
 Capacity was measured, not assumed (SC-006): **3,200 tokens at 30fps with
@@ -218,7 +218,7 @@ into `marketing/engine-status-capacity.json`, never transcribed.
 
 **Still open — nothing acts on a computed stat.** `DerivedStats.movement_speed`
 exists and is written, and `grep` finds no reader anywhere
-(`src/engine/src/components.rs:172` is the only hit outside its own writes).
+(`crates/thunderforge-engine/src/components.rs:172` is the only hit outside its own writes).
 Movement is _modelled_ but not _enforced_: `movement_budget::cost_path` is
 implemented and unit-tested, while `PlannedPath` still charges one cell per
 step and no caller consults the cost. Gating movement on a computed speed
@@ -249,7 +249,7 @@ No level concept exists in the schema or the engine. Not started.
 ### [~] Phase 8 — Game system integration
 
 Shipped: the system package install and manifest-serving pipeline
-(`src/server/src/systems.rs`), a registry with eight pack crates, and
+(`crates/thunderforge-server/src/systems.rs`), a registry with eight pack crates, and
 server-side per-system validators that already enforce real rules — Pathfinder
 2e rejects an ability value outside `-5..=10` because it stores modifiers where
 D&D 5e stores raw scores.
@@ -275,7 +275,7 @@ execute":
    into a running wasm engine the way server crates link into the binary.
 2. **Validation is not enforcement.** Rejecting a bad ability score is not the
    same as gating movement on a computed speed. See Phase 5's open item.
-3. ~~**A vestigial trait.**~~ Resolved by spec 032: `src/engine/src/systems/core.rs`
+3. ~~**A vestigial trait.**~~ Resolved by spec 032: `crates/thunderforge-engine/src/systems/core.rs`
    is gone, and the one contract a system implements is
    `thunderforge_canvas_core::system_rules::SystemRules` — in the crate both the
    engine and the server already depend on, and the only one whose tests execute

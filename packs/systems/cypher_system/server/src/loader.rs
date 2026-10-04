@@ -7,7 +7,7 @@
 
 pub fn register_mutations() {
     // No system-specific mutations yet — actor data validation is
-    // registered via register_system() in src/server/src/systems.rs.
+    // registered via register_system() in crates/thunderforge-server/src/systems.rs.
 }
 #[cfg(test)]
 mod tests {

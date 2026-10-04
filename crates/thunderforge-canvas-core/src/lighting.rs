@@ -253,7 +253,7 @@ const MAX_UNDO_STACK: usize = 50;
 /// doesn't justify a spatial index.
 ///
 /// Plain data, no Bevy `Resource` derive — `thunderforge_engine` wraps this
-/// in a `Resource` newtype (`src/engine/src/resources/lighting.rs`) so
+/// in a `Resource` newtype (`crates/thunderforge-engine/src/resources/lighting.rs`) so
 /// Bevy's change-detection still works transparently on `ResMut` access.
 #[derive(Debug, Clone, Default)]
 pub struct LightSet {

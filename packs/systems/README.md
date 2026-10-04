@@ -468,7 +468,7 @@ every other caller does, through `postGraphQL` from `@thunderforge/host`;
 per-system settings, so a pack storing its own reads them itself.
 
 **A pack that stores settings of its own owns the table they live in**
-(ADR-063), declares it in a migration under `src/server/migrations/`, and adds
+(ADR-063), declares it in a migration under `crates/thunderforge-server/migrations/`, and adds
 it to `except_tables` in both `diesel.toml` files so shared schema generation
 leaves it alone. ADR-108 records why there is not yet a generic per-world
 settings surface to use instead, and what the next pack to want one should do.
@@ -482,8 +482,8 @@ that nothing references is never linked, and its `inventory` submissions
 vanish with it — measured, not assumed. So a bundled pack with a `server/`
 crate needs:
 
-- one `use <pack> as _;` line in `src/app/src/system_packs.rs`, and
-- one dependency in `src/server/Cargo.toml`.
+- one `use <pack> as _;` line in `apps/server/src/system_packs.rs`, and
+- one dependency in `crates/thunderforge-server/Cargo.toml`.
 
 Both are build-graph facts: they say a crate exists and should be linked, and
 say nothing about what it contains, so they cannot drift out of step with

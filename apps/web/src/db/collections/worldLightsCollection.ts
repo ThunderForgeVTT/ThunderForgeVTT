@@ -15,7 +15,7 @@
 
 /**
  * Type definition for a light source record (mirrors the GraphQL
- * `LightSource` type, src/server/src/graphql.rs).
+ * `LightSource` type, crates/thunderforge-server/src/graphql.rs).
  */
 export interface WorldLightDoc {
   lightId: string;

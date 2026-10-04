@@ -2,7 +2,7 @@
 //!
 //! # The problem this replaces
 //!
-//! `src/server/src/systems.rs` carried seven `register_*_system` functions,
+//! `crates/thunderforge-server/src/systems.rs` carried seven `register_*_system` functions,
 //! each naming a system id as a string literal and wiring five validator
 //! function pointers by hand, all called from one `GAME_SYSTEMS` initialiser
 //! that already had a `// In future phases: register_coc7e_system(...)`
@@ -24,7 +24,7 @@
 //! collected an empty set, in debug and release alike; adding `use pack as _;`
 //! collected everything.
 //!
-//! So `src/server/src/system_packs.rs` holds one `use <pack> as _;` line per
+//! So `crates/thunderforge-server/src/system_packs.rs` holds one `use <pack> as _;` line per
 //! bundled pack, and `Cargo.toml` holds one dependency. Those two lines are
 //! build-graph facts: they say a crate exists and should be linked, and they
 //! say nothing about what it contains. They cannot drift out of step with a
@@ -123,7 +123,7 @@ mod tests {
     ///
     /// Deliberately thin: what matters is that a *pack* crate's submission
     /// arrives, and only a binary linking one can show that. That is
-    /// `src/server/src/system_packs.rs`'s test.
+    /// `crates/thunderforge-server/src/system_packs.rs`'s test.
     #[test]
     fn a_contribution_defaults_to_contributing_nothing_but_its_name() {
         let bare = SystemContribution::new("bare");

@@ -10,7 +10,7 @@
 //! only ever compile-check, never run.
 //!
 //! `thunderforge_engine` wraps these types in thin Bevy `Resource`
-//! newtypes (see `src/engine/src/resources/wall.rs`) rather than
+//! newtypes (see `crates/thunderforge-engine/src/resources/wall.rs`) rather than
 //! reimplementing the logic — the engine crate is the ECS/rendering
 //! shell, this crate is the tested core underneath it.
 

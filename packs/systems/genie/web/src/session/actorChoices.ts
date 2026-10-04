@@ -63,7 +63,7 @@ function byName(a: ActorChoice, b: ActorChoice): number {
  *
  * Whatever reaches here is already what the viewer may see — the server
  * withholds a hidden NPC from a player at the data boundary
- * (`src/server/src/auth/npc_visibility.rs`), so this must not filter
+ * (`crates/thunderforge-server/src/auth/npc_visibility.rs`), so this must not filter
  * again. A Game Master sees their hidden NPCs here precisely because the
  * server sent them.
  */

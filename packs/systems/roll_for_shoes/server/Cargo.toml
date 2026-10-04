@@ -22,7 +22,7 @@ inventory = "0.3"
 tokio = { version = "1.53", features = ["full"] }
 thunderforge_canvas_core = { path = "../../../../crates/thunderforge-canvas-core" }
 
-thunderforge-server = { path = "../../../../src/server" }
+thunderforge-server = { path = "../../../../crates/thunderforge-server" }
 diesel = { version = "2.3.12", features = [
   "postgres",
   "r2d2",
@@ -46,7 +46,7 @@ rand = "0.10.2"
 [dev-dependencies]
 # The server's shared fixtures — `insert_test_world`, `test_app_state`. Behind
 # a feature so a normal build never compiles them.
-thunderforge-server = { path = "../../../../src/server", features = [
+thunderforge-server = { path = "../../../../crates/thunderforge-server", features = [
   "test-support",
 ] }
 
