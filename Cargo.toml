@@ -69,6 +69,11 @@ print_stdout = "warn"        # a server should log via `tracing`, not println!
 exit = "warn"                # std::process::exit() would kill the whole server, not just a request
 large_enum_variant = "warn"  # one oversized variant silently bloats every value of the enum
 mem_forget = "warn"          # near-always a bug outside FFI/leak-on-purpose cases
+# Off, not by taste: clippy 1.99 attributes the `Self { field: field }` that
+# diesel's `QueryableByName` derive expands to (diesel_derives 2.3) to the
+# struct's own field, where no attribute on the struct can reach it. Every such
+# derive fails `-D warnings`. Remove once the derive stops tripping it.
+redundant_field_names = "allow"
 
 # Image codecs, optimised even in a debug build.
 #

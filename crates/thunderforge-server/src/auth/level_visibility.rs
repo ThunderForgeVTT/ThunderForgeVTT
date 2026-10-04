@@ -254,6 +254,7 @@ pub fn withheld_backgrounds(
     scene_ids: &[Uuid],
 ) -> QueryResult<std::collections::HashSet<Uuid>> {
     use crate::schema::scene_levels;
+    use std::collections::hash_map::Entry;
     use std::collections::{HashMap, HashSet};
 
     if is_gm {
@@ -274,8 +275,8 @@ pub fn withheld_backgrounds(
     let mut withheld = HashSet::new();
     for (level_id, scene_id, asset_id) in floors {
         let Some(asset_id) = asset_id else { continue };
-        if !may_read.contains_key(&scene_id) {
-            may_read.insert(scene_id, readable_levels(conn, user_id, false, scene_id)?);
+        if let Entry::Vacant(unread) = may_read.entry(scene_id) {
+            unread.insert(readable_levels(conn, user_id, false, scene_id)?);
         }
         if may_read[&scene_id].contains(&level_id) {
             allowed.insert(asset_id);
