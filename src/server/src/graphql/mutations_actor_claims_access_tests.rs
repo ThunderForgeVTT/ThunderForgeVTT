@@ -220,6 +220,38 @@ async fn a_created_character_is_editable_by_its_creator() {
     assert!(may_write(&state, stage.player_id, claim.actor_id).await);
 }
 
+/// A character a player makes for themselves plays the world's game. It
+/// used to be made as "generic", which no pack declares, so in a Roll for
+/// Shoes world it had no sheet and refused every write as a system mismatch.
+#[tokio::test]
+async fn a_created_character_takes_its_worlds_system() {
+    let state = test_app_state();
+    let stage = a_stage(&state);
+    let mut conn = state.db_pool.get().unwrap();
+    set_allow_player_created(&mut conn, stage.world_id, true);
+    diesel::update(worlds::table.filter(worlds::id.eq(stage.world_id)))
+        .set(worlds::game_system_id.eq("roll_for_shoes"))
+        .execute(&mut conn)
+        .unwrap();
+
+    let claim = create_and_claim_actor_impl(
+        &state,
+        stage.player_id,
+        stage.world_id,
+        "Wren".to_string(),
+        None,
+    )
+    .await
+    .expect("the player creates a character");
+
+    let system: Option<String> = world_actors::table
+        .filter(world_actors::id.eq(claim.actor_id))
+        .select(world_actors::game_system_id)
+        .first(&mut conn)
+        .unwrap();
+    assert_eq!(system.as_deref(), Some("roll_for_shoes"));
+}
+
 /// FR-002 and the "refused claim" edge case: a claim that is refused grants
 /// nothing, whether it lost to another player or was never allowed.
 #[tokio::test]

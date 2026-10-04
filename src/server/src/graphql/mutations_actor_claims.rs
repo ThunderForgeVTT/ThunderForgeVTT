@@ -509,10 +509,10 @@ pub async fn create_and_claim_actor_impl(
             let member = require_no_existing_claim(conn, world_id, user_id)?;
             refuse_if_paused(conn, world_id)?;
 
-            let allow: bool = worlds::table
+            let (allow, world_system): (bool, Option<String>) = worlds::table
                 .filter(worlds::id.eq(world_id))
-                .select(worlds::allow_player_created_actors)
-                .first::<bool>(conn)
+                .select((worlds::allow_player_created_actors, worlds::game_system_id))
+                .first(conn)
                 .map_err(|_| "World not found".to_string())?;
 
             if !allow {
@@ -532,7 +532,14 @@ pub async fn create_and_claim_actor_impl(
                 world_id,
                 scene_id,
                 actor_type: "character".to_string(),
-                game_system_id: Some("generic".to_string()),
+                // The world's system, as `createActor` gives a Game
+                // Master's actor. This used to be "generic" outright, a
+                // system nothing declares: a player who made their own
+                // character in a Roll for Shoes world got no sheet, and every
+                // write to it was refused as a system mismatch. "generic" is
+                // only the placeholder for a world that has chosen nothing,
+                // because the DB check wants a non-null id for a character.
+                game_system_id: Some(world_system.unwrap_or_else(|| "generic".to_string())),
                 label: name,
                 created_by: user_id,
                 owned_by: user_id,
