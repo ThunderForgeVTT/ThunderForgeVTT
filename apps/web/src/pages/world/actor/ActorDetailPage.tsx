@@ -615,12 +615,15 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
           const sheet = resolveActorSheet(actor.gameSystemId);
           return sheet ? (
             createElement(sheet, {
-              key: sheetVersion,
+              // Prefixed: the abilities panel below is a sibling that also
+              // remounts on `sheetVersion`, and two siblings with one key
+              // left the old sheet on the page beside the new one.
+              key: `sheet-${sheetVersion}`,
               actor,
               canEdit: canEdit && mode === "edit",
             })
           ) : (
-            <PackActorSheet key={sheetVersion} actorId={actorId} />
+            <PackActorSheet key={`sheet-${sheetVersion}`} actorId={actorId} />
           );
         })()}
 
@@ -650,7 +653,7 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
             any ability — and, matching inventory, it is available from the view
             route rather than gated on `mode === "edit"`. */}
         <ActorAbilitiesPanel
-          key={sheetVersion}
+          key={`abilities-${sheetVersion}`}
           actorId={actorId}
           worldId={worldId}
           gameSystemId={actor.gameSystemId}

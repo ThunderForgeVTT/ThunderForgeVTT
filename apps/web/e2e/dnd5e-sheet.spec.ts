@@ -381,9 +381,21 @@ test("the 5e sheet lays out, derives, persists, and its proficiencies reach the 
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - window.innerWidth,
   );
+  // Named in the failure, because "32" alone does not say what is too wide.
+  const tooWide = await page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>("body *")]
+      .filter((el) => el.getBoundingClientRect().right > window.innerWidth + 1)
+      .slice(0, 12)
+      .map(
+        (el) =>
+          `${el.tagName.toLowerCase()}[${el.dataset.testid ?? el.id}] ${Math.round(
+            el.getBoundingClientRect().right,
+          )}px .${String(el.className).slice(0, 60)}`,
+      ),
+  );
   expect(
     overflow,
-    "the page must not scroll sideways at 375px",
+    `the page must not scroll sideways at 375px; past the edge: ${tooWide.join(" | ")}`,
   ).toBeLessThanOrEqual(0);
   await expectNoAxeViolations(page, '[data-testid="dnd5e-actor-sheet"]');
 
