@@ -388,6 +388,50 @@ by your own crate. `checks` says _what this character's sheet may roll_. They
 answer different questions, and in some systems the answers happen to look
 alike.
 
+### `settings`
+
+What a table may choose about how it plays your system: a house rule on or
+off, a number of something, one of a few modes. Declare each choice and the
+host does the rest — it stores a world's answer, draws the control on the
+world's System settings page for the Game Master, shows it read-only to
+players, and tells every open client when it changes. You write no migration,
+no GraphQL and no panel.
+
+| `type`    | A world's answer is     | Extra keys                               |
+| --------- | ----------------------- | ---------------------------------------- |
+| `boolean` | on or off               |                                          |
+| `integer` | a whole number          | `min`, `max`                             |
+| `choice`  | one of `options`        | `options`: a list of `{ value, label }`  |
+| `text`    | a line of text          | `maxLength` (500 when absent)            |
+
+```json
+"settings": [
+  { "id": "inspiration", "label": "Heroic Inspiration",
+    "description": "Show Inspiration on character sheets.",
+    "type": "boolean", "default": true }
+]
+```
+
+`id`, `label`, `type` and `default` are required; `description` and `order`
+(lower first; ties keep the order written) are optional. A pack is refused if
+two settings share an `id`, a `choice` has no `options`, or a `default` is not
+a value its own declaration allows.
+
+**A world that has never answered plays by `default`.** So does a world whose
+stored answer you have since stopped allowing, and a setting you remove simply
+stops being read — its rows are kept, and come back if you restore it. Changing
+a `default` therefore changes every world that never chose.
+
+Read a setting from your web code with `useWorldSystemSettings(worldId)` from
+`@thunderforge/host`: `valueOf("inspiration")` is the world's answer, kept
+current while the page is open, and `undefined` until the first read lands.
+5e's `web/src/ActorSheet.tsx` is the worked example. Server code reads the same
+value with `thunderforge_server::world_system_settings::effective_value`.
+
+If a value needs a check the table above cannot express, give your
+`SystemContribution` a `world_setting` function; it runs after the declared
+check and its message is shown to the Game Master.
+
 ### Anything else
 
 A manifest may carry keys this document does not describe. Genie's
@@ -474,25 +518,32 @@ world's system.
 | `npc-detail`     | The actor page, below inventory and abilities, for an NPC | `NpcDetailPanelProps`     |
 | `world-staging`  | The pre-session staging page, below session notes          | `WorldStagingPanelProps`  |
 | `world-settings` | The world's system-settings page                           | `WorldSettingsPanelProps` |
-| `clocks`         | The clocks dock                                            | `ClocksPanelProps`        |
+| `dock`           | The play dock, as a tab of its own                         | `DockPanelProps`          |
 
 The slot names and their props are declared in `apps/web/src/host/index.ts`
 (`PanelSlot`, `PanelSlotProps`), and the registry is typed against them — a
-`panels/clocks.tsx` written for staging's props fails to compile rather than
-failing at a table. **A file named for a slot that does not exist is silently
-never rendered**, so check the spelling against that list.
+`panels/dock.tsx` written for staging's props fails to compile rather than
+failing at a table. **A file named for a slot that does not exist is refused**
+by `scripts/check-packs.mjs`, which reads the slot list from that same
+declaration and names every slot in its message.
+
+A `dock` panel may also `export const title = "…"`, which is what its tab in
+the play dock reads; without one the tab reads "Game system". A system that
+fills no `dock` slot gets no tab, so a pack never has to draw an empty state.
 
 A panel gets its props and nothing else. It reaches the server the same way
 every other caller does, through `postGraphQL` from `@thunderforge/host`;
 `world-settings` in particular is handed the `WorldRecord`, which carries no
 per-system settings, so a pack storing its own reads them itself.
 
-**A pack that stores settings of its own owns the table they live in**
-(ADR-063), declares it in a migration under `crates/thunderforge-server/migrations/`, and adds
-it to `except_tables` in both `diesel.toml` files so shared schema generation
-leaves it alone. ADR-108 records why there is not yet a generic per-world
-settings surface to use instead, and what the next pack to want one should do.
-Roll for Shoes' `server/src/settings/` is the worked example.
+**Declare a setting before you store one.** A choice a table makes about how
+it plays belongs in your manifest's [`settings`](#settings) block, which needs
+no table and no panel. A pack whose settings that block cannot express owns
+the table they live in (ADR-063), declares it in a migration under
+`crates/thunderforge-server/migrations/`, and adds it to `except_tables` in
+both `diesel.toml` files so shared schema generation leaves it alone. Roll for
+Shoes' `server/src/settings/` predates the `settings` block and is the worked
+example of that second route.
 
 ### What you touch outside your directory
 

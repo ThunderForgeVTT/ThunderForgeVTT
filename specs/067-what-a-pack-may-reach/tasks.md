@@ -16,29 +16,29 @@ description: "Task list for What a Pack May Reach"
 
 ## Phase 1: Settings (Story 1)
 
-- [ ] T001 [US1] `crates/pack_system_spec/src/settings.rs`: the `settings` block — declaration, per-type value check, lenient reader, strict validation wired into `validate_system_manifest` (FR-001, FR-002)
-- [ ] T002 [US1] Migration `world_system_settings` and `world_system_setting_changes`; `schema.rs` (FR-003, FR-004)
-- [ ] T003 [US1] `SystemContribution::world_setting`, the pack's own validator (FR-007)
-- [ ] T004 [US1] `crates/thunderforge-server/src/world_system_settings.rs`: effective read, inert stale rows, transactional write with its change row, `effective_value` for server code (FR-003, FR-008, FR-011)
-- [ ] T005 [US1] `worldSystemSettings` / `setWorldSystemSetting`, event code 35, the pause-surface entry (FR-005, FR-006, FR-009)
-- [ ] T006 [US1] Web: `api/worldSystemSettings.ts`, `useWorldSystemSettings` (reads, writes, re-reads on event 35), exported from `@thunderforge/host` (FR-009, FR-011)
-- [ ] T007 [US1] Web: the generic form on the world's System settings page, above the pack's `world-settings` panel (FR-010)
-- [ ] T008 [US1] The first setting: 5e declares `inspiration` (on by default; a table that does not award it turns it off), and its sheet shows the Inspiration control only when the world plays with it (FR-013)
-- [ ] T009 [US1] e2e in the `game-systems` slice: a Game Master turns Inspiration off, a player's open sheet loses the control without a reload, a player cannot change it
-- [ ] T010 [US1] The pack contract documents `settings`; ADR-112 records the shared table and marks ADR-108's deferral closed
-- [ ] T011 [US1] Proof: `make test-rust`, web unit, `pnpm test:scripts`, `make lint`, the pre-commit checks; the slice from main
+- [X] T001 [US1] `crates/pack_system_spec/src/settings.rs`: the `settings` block — declaration, per-type value check, lenient reader, strict validation wired into `validate_system_manifest` (FR-001, FR-002)
+- [X] T002 [US1] Migration `world_system_settings` and `world_system_setting_changes`; `schema.rs` (FR-003, FR-004)
+- [X] T003 [US1] `SystemContribution::world_setting`, the pack's own validator (FR-007)
+- [X] T004 [US1] `crates/thunderforge-server/src/world_system_settings.rs`: effective read, inert stale rows, transactional write with its change row, `effective_value` for server code (FR-003, FR-008, FR-011)
+- [X] T005 [US1] `worldSystemSettings` / `setWorldSystemSetting`, event code 35, the pause-surface entry (FR-005, FR-006, FR-009)
+- [X] T006 [US1] Web: `api/worldSystemSettings.ts`, `useWorldSystemSettings` (reads, writes, re-reads on event 35), exported from `@thunderforge/host` (FR-009, FR-011)
+- [X] T007 [US1] Web: the generic form on the world's System settings page, above the pack's `world-settings` panel (FR-010)
+- [X] T008 [US1] The first setting: 5e declares `inspiration` (on by default; a table that does not award it turns it off), and its sheet shows the Inspiration control only when the world plays with it (FR-013)
+- [X] T009 [US1] e2e in the `game-systems` slice: a Game Master turns Inspiration off, a player's open sheet loses the control without a reload, a player cannot change it
+- [X] T010 [US1] The pack contract documents `settings`; ADR-112 records the shared table and marks ADR-108's deferral closed
+- [X] T011 [US1] Proof: `make test-rust`, web unit, `pnpm test:scripts`, `make lint`, the pre-commit checks; the slice from main
 
 ## Phase 2: Panel slots (Story 2)
 
-- [ ] T020 [US2] `scripts/check-packs.mjs`: refuse a `panels/` file whose name is not a slot, reading the slot list from `apps/web/src/host/index.ts`; test first (FR-022)
-- [ ] T021 [US2] Rename the slot `clocks` to `dock`; a panel module's optional `title` export reaches the dock tab; no tab when unfilled (FR-020, FR-021)
-- [ ] T022 [US2] Roll for Shoes' dock panel is titled "Table"; Genie's "Clocks"
-- [ ] T023 [US2] The pack contract's slot table (FR-023)
+- [X] T020 [US2] `scripts/check-packs.mjs`: refuse a `panels/` file whose name is not a slot, reading the slot list from `apps/web/src/host/index.ts`; test first (FR-022)
+- [X] T021 [US2] Rename the slot `clocks` to `dock`; a panel module's optional `title` export reaches the dock tab; no tab when unfilled (FR-020, FR-021)
+- [X] T022 [US2] Roll for Shoes' dock panel is titled "Table"; Genie's "Clocks"
+- [X] T023 [US2] The pack contract's slot table (FR-023)
 - [ ] T024 [US2] Proof, and the `game-systems` slice from main
 
 ## Phase 3: Rules (Story 3)
 
-- [ ] T030 [US3] Confirm with the owner: the adjudicator's signature and where an outcome is stored
+- [X] T030 [US3] Confirm with the owner: the adjudicator's signature and where an outcome is stored — verdict plus label, stored with the roll
 - [ ] T031 [US3] `check-packs`: refuse a top-level manifest key outside the contract's list (FR-030)
 - [ ] T032 [US3] Restate or remove the seven single-pack roll keys (FR-031)
 - [ ] T033 [US3] The roll adjudicator on `SystemContribution`; Roll for Shoes' outcome decided on the server (FR-032, FR-033)
@@ -46,7 +46,7 @@ description: "Task list for What a Pack May Reach"
 
 ## Phase 4: Conditions (Story 4)
 
-- [ ] T040 [US4] Confirm with the owner: a condition lives on the token or on the actor behind it
+- [X] T040 [US4] Confirm with the owner: a condition lives on the token or on the actor behind it — on the actor
 - [ ] T041 [US4] `conditions` in the manifest; Genie's restated, 5e's declared (FR-040, FR-043)
 - [ ] T042 [US4] Apply and clear, per-viewer delivery through the world store (FR-041, FR-042)
 - [ ] T043 [US4] The engine draws a marker from identifier and marker alone (FR-042)

@@ -6,6 +6,9 @@ table `world_roll_for_shoes_settings` with its migration, its `except_tables` en
 in both `diesel.toml` files, its two contributed root fields and the `PackSurface`
 classification that `play_pause_surface_tests` genuinely exercises (T012), with
 `scripts/check-system-registry.mjs` green on an empty `KNOWN` list.
+**Closed by** [ADR-112](./20261004-112-a_world_s_system_settings_are_declared_rows.md)
+(2026-10-04): the deferral below has ended. The generic surface exists, and the
+pack-owned tables this ADR describes stay where they are.
 **Participants:** ThunderForgeVTT Team
 **Related:** [ADR-063](./20260903-063-a_pack_owns_the_tables_it_writes.md) (the governing
 storage decision and the threshold quoted below), [ADR-091](./20260907-091-instance_configuration_is_rows.md)

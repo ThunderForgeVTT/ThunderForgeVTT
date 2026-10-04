@@ -224,11 +224,17 @@ client and is absent for a client who cannot see the token.
   the actor's or scene's own data and is out of scope.
 - A setting is public to the world's members. A secret a Game Master keeps
   from players is not a setting.
-- Stories 3 and 4 are described at the level the survey supports. Each gets
-  its design confirmed with the owner before its first task starts: the
-  adjudicator's exact signature and where an outcome is stored (Story 3),
-  and whether a condition lives on the token or on the actor behind it
-  (Story 4). Stories 1 and 2 do not wait on either.
+- Stories 3 and 4 were described at the level the survey supports, and each
+  had its design confirmed with the owner before its first task. Decided
+  2026-10-04:
+  - **Story 3.** The adjudicator returns a verdict from a closed host list
+    (success, failure, tie, critical success, critical failure) and the
+    pack's own label for it. The outcome is stored with the roll itself,
+    written once when the server makes the roll; it has no table of its own.
+  - **Story 4.** A condition lives on the actor. It follows the character
+    across scenes and is drawn on every token of that actor, for whoever may
+    see that token. A token with no actor behind it carries no condition.
+    Where FR-041 and FR-042 say "on a token", read "on the token's actor".
 
 ## What this spec does not do
 
