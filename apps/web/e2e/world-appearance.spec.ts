@@ -224,13 +224,23 @@ interface SystemUnderTest {
 /**
  * Three rulesets whose sheets are shaped differently on purpose.
  *
- * 5e tracks speeds and derives modifiers; Fate has no abilities at all and
- * counts stress in boxes; Cypher's damage track is named states with no boxes
- * to count. If one renderer draws all three from their manifests alone, the
- * format carries what it claims to (SC-012).
+ * Pathfinder tracks speeds and derives modifiers; Fate has no abilities at
+ * all and counts stress in boxes; Cypher's damage track is named states with
+ * no boxes to count. If one renderer draws all three from their manifests
+ * alone, the format carries what it claims to (SC-012).
+ *
+ * Pathfinder stands where 5e stood until 2026-10-03. 5e now ships a sheet of
+ * its own, which the host mounts whatever the interface pack, so a 5e actor
+ * no longer reaches this renderer and could not be evidence about it. The
+ * claim is about systems with no sheet written for them, and these three
+ * have none.
  */
 const SYSTEMS: SystemUnderTest[] = [
-  { id: "dnd5e", title: "5E System Core", expects: ["Walk"] },
+  {
+    id: "pathfinder2e",
+    title: "Pathfinder Second Edition",
+    expects: ["Speed"],
+  },
   { id: "fate_core", title: "Fate Core", expects: ["Stress"] },
   { id: "cypher_system", title: "Cypher System", expects: ["Damage Track"] },
 ];
