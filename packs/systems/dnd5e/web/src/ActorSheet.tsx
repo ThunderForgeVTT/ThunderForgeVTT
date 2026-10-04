@@ -3,6 +3,7 @@ import {
   Button,
   updateActorSystemData,
   useActorSystemData,
+  useWorldSystemSettings,
   type ActorSheetProps,
 } from "@thunderforge/host";
 import {
@@ -209,6 +210,12 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
   const darkvision = num(traitData.darkvision, 0);
   const experience = Math.max(0, num(traitData.experience, 0));
   const inspiration = traitData.inspiration === true;
+  // A table that does not award Inspiration turns it off in the world's
+  // settings. Shown until the read lands and when it fails: the declared
+  // default is on, and a control that flickers in is worse than one that
+  // leaves.
+  const playsInspiration =
+    useWorldSystemSettings(actor.worldId).valueOf("inspiration") !== false;
 
   const spellAbility = (str(spellData.spellcasting_ability) ||
     classDecl?.spellcasting ||
@@ -533,25 +540,27 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
                 </select>
               </Field>
             </div>
-            <div className="flex items-center gap-2">
-              {canEdit ? (
-                <OptimisticCheckbox
-                  id="dnd5e-inspiration"
-                  testId="dnd5e-inspiration"
-                  checked={inspiration}
-                  disabled={isPending}
-                  onToggle={() => writeTraits({ inspiration: !inspiration })}
-                />
-              ) : (
-                <span aria-hidden="true">{inspiration ? "★" : "☆"}</span>
-              )}
-              <label
-                htmlFor={canEdit ? "dnd5e-inspiration" : undefined}
-                className="text-sm"
-              >
-                Inspiration{canEdit ? "" : inspiration ? ": yes" : ": no"}
-              </label>
-            </div>
+            {playsInspiration ? (
+              <div className="flex items-center gap-2">
+                {canEdit ? (
+                  <OptimisticCheckbox
+                    id="dnd5e-inspiration"
+                    testId="dnd5e-inspiration"
+                    checked={inspiration}
+                    disabled={isPending}
+                    onToggle={() => writeTraits({ inspiration: !inspiration })}
+                  />
+                ) : (
+                  <span aria-hidden="true">{inspiration ? "★" : "☆"}</span>
+                )}
+                <label
+                  htmlFor={canEdit ? "dnd5e-inspiration" : undefined}
+                  className="text-sm"
+                >
+                  Inspiration{canEdit ? "" : inspiration ? ": yes" : ": no"}
+                </label>
+              </div>
+            ) : null}
           </div>
         );
 

@@ -1381,6 +1381,15 @@
       "order": 4
     }
   },
+  "settings": [
+    {
+      "id": "inspiration",
+      "label": "Heroic Inspiration",
+      "description": "Show Inspiration on character sheets. Turn it off if your table does not award it.",
+      "type": "boolean",
+      "default": true
+    }
+  ],
   "sheet": [
     {
       "id": "notes",

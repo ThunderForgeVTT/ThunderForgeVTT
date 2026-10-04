@@ -23,7 +23,7 @@ description: "Task list for What a Pack May Reach"
 - [ ] T005 [US1] `worldSystemSettings` / `setWorldSystemSetting`, event code 35, the pause-surface entry (FR-005, FR-006, FR-009)
 - [ ] T006 [US1] Web: `api/worldSystemSettings.ts`, `useWorldSystemSettings` (reads, writes, re-reads on event 35), exported from `@thunderforge/host` (FR-009, FR-011)
 - [ ] T007 [US1] Web: the generic form on the world's System settings page, above the pack's `world-settings` panel (FR-010)
-- [ ] T008 [US1] The first setting: 5e declares `inspiration` (on by default — Inspiration is the rule the 5e books mark optional), and its sheet shows the Inspiration control only when the world plays with it (FR-013)
+- [ ] T008 [US1] The first setting: 5e declares `inspiration` (on by default; a table that does not award it turns it off), and its sheet shows the Inspiration control only when the world plays with it (FR-013)
 - [ ] T009 [US1] e2e in the `game-systems` slice: a Game Master turns Inspiration off, a player's open sheet loses the control without a reload, a player cannot change it
 - [ ] T010 [US1] The pack contract documents `settings`; ADR-112 records the shared table and marks ADR-108's deferral closed
 - [ ] T011 [US1] Proof: `make test-rust`, web unit, `pnpm test:scripts`, `make lint`, the pre-commit checks; the slice from main
