@@ -29,6 +29,7 @@ pub mod shape;
 pub mod status_display;
 pub mod token;
 pub mod token_culling;
+pub mod touch;
 pub mod wall;
 
 pub use background::BackgroundPlugin;

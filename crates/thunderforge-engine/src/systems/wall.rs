@@ -6,7 +6,6 @@
 use std::collections::HashMap;
 
 use bevy::prelude::*;
-use bevy::window::PrimaryWindow;
 use serde_json::json;
 use thunderforge_canvas_core::snapping::SnapRule;
 
@@ -147,12 +146,11 @@ impl WallChainState {
 /// helper (not exported from that module, so duplicated here rather than
 /// changing that module's visibility for an unrelated feature).
 fn cursor_world_position(
-    windows: &Query<&Window, With<PrimaryWindow>>,
+    pointer: &crate::plugins::touch::Pointer,
     camera_query: &Query<(&Camera, &GlobalTransform)>,
 ) -> Option<Vec2> {
-    let window = windows.iter().next()?;
     let (camera, camera_transform) = camera_query.iter().next()?;
-    let cursor_px = window.cursor_position()?;
+    let cursor_px = pointer.position()?;
     camera
         .viewport_to_world_2d(camera_transform, cursor_px)
         .ok()
@@ -283,7 +281,7 @@ fn emit_door(start: Vec2, end: Vec2, world_id: &str) {
 /// raised the threshold to 10 for, arrived at from the other side.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn handle_wall_input(
-    windows: Query<&Window, With<PrimaryWindow>>,
+    pointer: crate::plugins::touch::Pointer,
     camera_query: Query<(&Camera, &GlobalTransform)>,
     mouse_button: Res<ButtonInput<MouseButton>>,
     mut wall_set: ResMut<WallSet>,
@@ -300,7 +298,7 @@ pub(crate) fn handle_wall_input(
         return;
     }
 
-    let Some(cursor) = cursor_world_position(&windows, &camera_query) else {
+    let Some(cursor) = cursor_world_position(&pointer, &camera_query) else {
         return;
     };
 

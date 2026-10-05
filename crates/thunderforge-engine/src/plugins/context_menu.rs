@@ -48,7 +48,6 @@
 //! the engine decided a right-click had happened.
 
 use bevy::prelude::*;
-use bevy::window::PrimaryWindow;
 use serde_json::json;
 use thunderforge_canvas_core::grid::Footprint;
 use thunderforge_canvas_core::token_stack::{StackCandidate, tokens_at};
@@ -130,7 +129,7 @@ fn suppress_browser_menu(mut suppressed: ResMut<MenuSuppressed>) {
 /// wanders back to its start is still a drag.
 fn report_right_click(
     mouse_button: Res<ButtonInput<MouseButton>>,
-    windows: Query<&Window, With<PrimaryWindow>>,
+    pointer: crate::plugins::touch::Pointer,
     camera_query: Query<(&Camera, &GlobalTransform)>,
     tokens: Query<(
         &Transform,
@@ -141,10 +140,7 @@ fn report_right_click(
     grid: Option<Res<SceneGrid>>,
     mut press: Local<Option<(Vec2, f32)>>,
 ) {
-    let cursor = windows
-        .single()
-        .ok()
-        .and_then(|window| window.cursor_position());
+    let cursor = pointer.position();
 
     if mouse_button.just_pressed(MouseButton::Right) {
         *press = cursor.map(|at| (at, 0.0));

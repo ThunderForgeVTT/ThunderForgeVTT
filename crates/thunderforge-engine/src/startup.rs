@@ -104,6 +104,9 @@ pub fn start(canvas_selector: &str) {
         .add_plugins(GridPlugin)
         .add_plugins(TokenPlugin)
         .add_plugins(CameraPlugin)
+        // Fingers, translated into the mouse every plugin here already reads
+        // (spec 069).
+        .add_plugins(plugins::touch::TouchInputPlugin)
         .add_plugins(SelectionPlugin) // Phase 4.7.E1: Token Selection
         // Tokens outside the padded view carry no name and no bars. Before
         // the two plugins that draw them only for reading order: they run

@@ -13,7 +13,6 @@
 //! mechanism.
 
 use bevy::prelude::*;
-use bevy::window::PrimaryWindow;
 use serde_json::json;
 
 use crate::resources::{
@@ -73,12 +72,11 @@ pub(crate) struct TokenDragState {
 /// rather than changing a shared helper's visibility for an unrelated
 /// feature, matching the codebase's established convention.
 fn cursor_world_position(
-    windows: &Query<&Window, With<PrimaryWindow>>,
+    pointer: &crate::plugins::touch::Pointer,
     camera_query: &Query<(&Camera, &GlobalTransform)>,
 ) -> Option<Vec2> {
-    let window = windows.iter().next()?;
     let (camera, camera_transform) = camera_query.iter().next()?;
-    let cursor_px = window.cursor_position()?;
+    let cursor_px = pointer.position()?;
     camera
         .viewport_to_world_2d(camera_transform, cursor_px)
         .ok()
@@ -153,7 +151,7 @@ fn token_half_diagonal() -> f32 {
 // walls are.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn handle_token_drag(
-    windows: Query<&Window, With<PrimaryWindow>>,
+    pointer: crate::plugins::touch::Pointer,
     camera_query: Query<(&Camera, &GlobalTransform)>,
     mouse_button: Res<ButtonInput<MouseButton>>,
     mut token_query: Query<(&mut Transform, &TokenIdentity, Option<&TokenGridBehaviour>)>,
@@ -172,7 +170,7 @@ pub(crate) fn handle_token_drag(
         return;
     }
 
-    let Some(cursor_world) = cursor_world_position(&windows, &camera_query) else {
+    let Some(cursor_world) = cursor_world_position(&pointer, &camera_query) else {
         return;
     };
 
@@ -330,7 +328,7 @@ pub(crate) fn handle_token_drag(
 /// cursor distance from the token center instead of key presses
 /// (research.md §2).
 pub(crate) fn handle_token_resize_drag(
-    windows: Query<&Window, With<PrimaryWindow>>,
+    pointer: crate::plugins::touch::Pointer,
     camera_query: Query<(&Camera, &GlobalTransform)>,
     mouse_button: Res<ButtonInput<MouseButton>>,
     mut token_query: Query<(&mut Transform, &TokenIdentity)>,
@@ -343,7 +341,7 @@ pub(crate) fn handle_token_resize_drag(
         return;
     }
 
-    let Some(cursor) = cursor_world_position(&windows, &camera_query) else {
+    let Some(cursor) = cursor_world_position(&pointer, &camera_query) else {
         return;
     };
 
@@ -417,7 +415,7 @@ pub(crate) fn handle_token_resize_drag(
 /// continuously (not in fixed steps), computed from cursor angle relative
 /// to the token center, independent of any concurrent resize.
 pub(crate) fn handle_token_rotate_drag(
-    windows: Query<&Window, With<PrimaryWindow>>,
+    pointer: crate::plugins::touch::Pointer,
     camera_query: Query<(&Camera, &GlobalTransform)>,
     mouse_button: Res<ButtonInput<MouseButton>>,
     mut token_query: Query<(&mut Transform, &TokenIdentity)>,
@@ -430,7 +428,7 @@ pub(crate) fn handle_token_rotate_drag(
         return;
     }
 
-    let Some(cursor) = cursor_world_position(&windows, &camera_query) else {
+    let Some(cursor) = cursor_world_position(&pointer, &camera_query) else {
         return;
     };
 

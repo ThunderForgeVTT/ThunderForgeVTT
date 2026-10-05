@@ -28,7 +28,6 @@
 use std::collections::HashMap;
 
 use bevy::prelude::*;
-use bevy::window::PrimaryWindow;
 use serde_json::{Value, json};
 
 use crate::resources::{
@@ -117,12 +116,11 @@ impl ShapeDragState {
 /// authoring system module keeps its own copy rather than changing that
 /// module's visibility for an unrelated feature).
 fn cursor_world_position(
-    windows: &Query<&Window, With<PrimaryWindow>>,
+    pointer: &crate::plugins::touch::Pointer,
     camera_query: &Query<(&Camera, &GlobalTransform)>,
 ) -> Option<Vec2> {
-    let window = windows.iter().next()?;
     let (camera, camera_transform) = camera_query.iter().next()?;
-    let cursor_px = window.cursor_position()?;
+    let cursor_px = pointer.position()?;
     camera
         .viewport_to_world_2d(camera_transform, cursor_px)
         .ok()
@@ -277,7 +275,7 @@ pub(crate) fn handle_shape_tool_selection(
 /// draw-tools (mirrors wall's T016 zero-length rejection); a plain click
 /// with no tool active still selects the shape under the cursor.
 pub(crate) fn handle_shape_input(
-    windows: Query<&Window, With<PrimaryWindow>>,
+    pointer: crate::plugins::touch::Pointer,
     camera_query: Query<(&Camera, &GlobalTransform)>,
     mouse_button: Res<ButtonInput<MouseButton>>,
     mut shape_set: ResMut<ShapeSet>,
@@ -291,7 +289,7 @@ pub(crate) fn handle_shape_input(
         return;
     }
 
-    let Some(cursor) = cursor_world_position(&windows, &camera_query) else {
+    let Some(cursor) = cursor_world_position(&pointer, &camera_query) else {
         return;
     };
 

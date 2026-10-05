@@ -43,7 +43,6 @@
 //! one that has to be taken back.
 
 use bevy::prelude::*;
-use bevy::window::PrimaryWindow;
 use serde_json::json;
 use thunderforge_canvas_core::grid::Footprint;
 use thunderforge_canvas_core::snapping::SnapRule;
@@ -177,14 +176,14 @@ fn begin_requested_placement(
 
 /// Follow the cursor, snapped.
 fn follow_cursor(
-    windows: Query<&Window, With<PrimaryWindow>>,
+    pointer: crate::plugins::touch::Pointer,
     camera_query: Query<(&Camera, &GlobalTransform)>,
     grid: Res<SceneGrid>,
     snap_enabled: Res<GridSnapEnabled>,
     mut carried: ResMut<CarriedToken>,
     mut preview: Query<&mut Transform, With<PlacementPreview>>,
 ) {
-    let Some(cursor) = cursor_world_position(&windows, &camera_query) else {
+    let Some(cursor) = cursor_world_position(&pointer, &camera_query) else {
         return;
     };
 
@@ -300,11 +299,10 @@ fn carry_is_live(carried: Res<CarriedToken>) -> bool {
 /// Duplicated from the other canvas-authoring modules, which each keep their
 /// own copy rather than widening `systems/selection.rs`'s visibility.
 fn cursor_world_position(
-    windows: &Query<&Window, With<PrimaryWindow>>,
+    pointer: &crate::plugins::touch::Pointer,
     camera_query: &Query<(&Camera, &GlobalTransform)>,
 ) -> Option<Vec2> {
-    let window = windows.single().ok()?;
-    let cursor = window.cursor_position()?;
+    let cursor = pointer.position()?;
     let (camera, camera_transform) = camera_query.iter().next()?;
     camera.viewport_to_world_2d(camera_transform, cursor).ok()
 }

@@ -7,7 +7,6 @@
 use std::collections::HashMap;
 
 use bevy::prelude::*;
-use bevy::window::PrimaryWindow;
 use serde_json::{Value, json};
 use thunderforge_canvas_core::snapping::SnapRule;
 
@@ -136,12 +135,11 @@ impl LightDragState {
 /// duplicated from `systems/wall.rs`/`systems/selection.rs`'s private
 /// helper of the same name/shape (not exported from those modules).
 fn cursor_world_position(
-    windows: &Query<&Window, With<PrimaryWindow>>,
+    pointer: &crate::plugins::touch::Pointer,
     camera_query: &Query<(&Camera, &GlobalTransform)>,
 ) -> Option<Vec2> {
-    let window = windows.iter().next()?;
     let (camera, camera_transform) = camera_query.iter().next()?;
-    let cursor_px = window.cursor_position()?;
+    let cursor_px = pointer.position()?;
     camera
         .viewport_to_world_2d(camera_transform, cursor_px)
         .ok()
@@ -258,7 +256,7 @@ pub(crate) fn click_would_place_a_light(cursor: Vec2, lights: &[LightSource]) ->
 }
 
 pub(crate) fn preview_light_at_cursor(
-    windows: Query<&Window, With<PrimaryWindow>>,
+    pointer: crate::plugins::touch::Pointer,
     camera_query: Query<(&Camera, &GlobalTransform)>,
     light_set: Res<LightSet>,
     is_gm: Res<IsGameMaster>,
@@ -269,7 +267,7 @@ pub(crate) fn preview_light_at_cursor(
     if !is_gm.0 {
         return;
     }
-    let Some(cursor) = cursor_world_position(&windows, &camera_query) else {
+    let Some(cursor) = cursor_world_position(&pointer, &camera_query) else {
         return;
     };
 
@@ -298,7 +296,7 @@ pub(crate) fn preview_light_at_cursor(
 /// never itself produce a zero-radius light; the guard here is defensive
 /// in case that default is ever changed to something caller-supplied.
 pub(crate) fn handle_light_input(
-    windows: Query<&Window, With<PrimaryWindow>>,
+    pointer: crate::plugins::touch::Pointer,
     camera_query: Query<(&Camera, &GlobalTransform)>,
     mouse_button: Res<ButtonInput<MouseButton>>,
     mut light_set: ResMut<LightSet>,
@@ -313,7 +311,7 @@ pub(crate) fn handle_light_input(
         return;
     }
 
-    let Some(cursor) = cursor_world_position(&windows, &camera_query) else {
+    let Some(cursor) = cursor_world_position(&pointer, &camera_query) else {
         return;
     };
 

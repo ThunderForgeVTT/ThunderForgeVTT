@@ -2,7 +2,6 @@ use crate::resources::{CameraManager, SelectedLight};
 use crate::systems::camera_focus::{LastFocus, PanDragActive, PendingFocus, apply_requested_focus};
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
-use bevy::window::PrimaryWindow;
 use thunderforge_canvas_core::camera::{drag_pan, is_drag, wheel_notches};
 
 pub struct CameraPlugin;
@@ -97,16 +96,13 @@ struct DragPan {
 /// the hand holding it is not being dragged.
 fn handle_drag_pan(
     mouse_button: Res<ButtonInput<MouseButton>>,
-    windows: Query<&Window, With<PrimaryWindow>>,
+    pointer: crate::plugins::touch::Pointer,
     mut camera_mgr: ResMut<CameraManager>,
     // Published so `camera_focus` can stand aside for a hand on the mouse.
     mut active: ResMut<PanDragActive>,
     mut drag: Local<DragPan>,
 ) {
-    let cursor = windows
-        .single()
-        .ok()
-        .and_then(|window| window.cursor_position());
+    let cursor = pointer.position();
 
     if let Some(button) = drag.button {
         if !mouse_button.pressed(button) {
@@ -225,7 +221,7 @@ fn handle_mouse_wheel_zoom(
     mut wheel_events: MessageReader<MouseWheel>,
     mut camera_mgr: ResMut<CameraManager>,
     selected_light: Res<SelectedLight>,
-    windows: Query<&Window, With<PrimaryWindow>>,
+    pointer: crate::plugins::touch::Pointer,
     cameras: Query<(&Camera, &GlobalTransform), With<Camera2d>>,
 ) {
     if selected_light.get_selected().is_some() {
@@ -242,14 +238,10 @@ fn handle_mouse_wheel_zoom(
     // zooming. With no cursor position available — pointer outside the window,
     // or no window at all — fall back to a plain centre zoom rather than
     // skipping the input.
-    let anchor = windows
-        .single()
-        .ok()
-        .and_then(|window| window.cursor_position())
-        .and_then(|cursor| {
-            let (camera, camera_transform) = cameras.single().ok()?;
-            camera.viewport_to_world_2d(camera_transform, cursor).ok()
-        });
+    let anchor = pointer.position().and_then(|cursor| {
+        let (camera, camera_transform) = cameras.single().ok()?;
+        camera.viewport_to_world_2d(camera_transform, cursor).ok()
+    });
 
     match anchor {
         Some(anchor) => camera_mgr.zoom_toward(anchor, scroll),
@@ -262,6 +254,7 @@ mod tests {
     use super::*;
     use bevy::input::ButtonState;
     use bevy::input::mouse::MouseButtonInput;
+    use bevy::window::PrimaryWindow;
 
     // A prior version of this test tried to call `handle_keyboard_camera_shortcuts`
     // directly with `.into()`-converted `Res`/`ResMut` values, which isn't

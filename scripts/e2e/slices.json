@@ -278,7 +278,7 @@
         "crates/thunderforge-mapforge/**",
         "examples/maps/**",
         "crates/thunderforge-engine/src/grid/**",
-        "crates/thunderforge-engine/src/plugins/{shape,wall,background,canvas_layer,grid,camera,context_menu,authoring_mode,render_probe}.rs",
+        "crates/thunderforge-engine/src/plugins/{shape,wall,background,canvas_layer,grid,camera,context_menu,authoring_mode,render_probe,touch,touch_tests}.rs",
         "crates/thunderforge-engine/src/resources/{background,background_cache,canvas_layer,grid,shape,wall,camera}.rs",
         "crates/thunderforge-engine/src/systems/{background,shape,wall,wall_tests,camera_focus}.rs",
         "crates/thunderforge-engine/src/transforms/**",
