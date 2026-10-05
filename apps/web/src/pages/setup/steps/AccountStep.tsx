@@ -429,36 +429,36 @@ export function AccountStep({
         </div>
       </form>
 
-      <section className="grid gap-4 border-t border-border pt-6">
-        <div className="grid gap-1">
-          <h3 className="text-sm font-semibold">
-            Or bootstrap from a provider this instance already trusts
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            The first administrator can come from a configured OAuth provider
-            instead of a local password.
-          </p>
-        </div>
+      {providers.length > 0 ? (
+        <section className="grid gap-4 border-t border-border pt-6">
+          <div className="grid gap-1">
+            <h3 className="text-sm font-semibold">
+              Or bootstrap from a provider this instance already trusts
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              The first administrator can come from a configured OAuth provider
+              instead of a local password.
+            </p>
+          </div>
 
-        <Field
-          label="Preferred username"
-          htmlFor="setup-oauth-username"
-          accent="Optional"
-          hint="Leave blank to inherit the provider's identity."
-        >
-          <Input
-            data-testid="setup-oauth-username"
-            id="setup-oauth-username"
-            name="oauthUsername"
-            autoComplete="username"
-            value={oauthUsername}
-            onChange={(event) => setOauthUsername(event.target.value)}
-          />
-        </Field>
+          <Field
+            label="Preferred username"
+            htmlFor="setup-oauth-username"
+            accent="Optional"
+            hint="Leave blank to inherit the provider's identity."
+          >
+            <Input
+              data-testid="setup-oauth-username"
+              id="setup-oauth-username"
+              name="oauthUsername"
+              autoComplete="username"
+              value={oauthUsername}
+              onChange={(event) => setOauthUsername(event.target.value)}
+            />
+          </Field>
 
-        <div className="grid gap-3">
-          {providers.length > 0 ? (
-            providers.map((provider) => (
+          <div className="grid gap-3">
+            {providers.map((provider) => (
               <Button
                 key={provider.provider_key}
                 data-testid={`setup-oauth-start-${provider.provider_key}`}
@@ -476,17 +476,10 @@ export function AccountStep({
                   ? `Opening ${provider.display_name}...`
                   : `Continue with ${provider.display_name}`}
               </Button>
-            ))
-          ) : (
-            <div data-testid="setup-oauth-unavailable">
-              <StatusBadge variant="warning">
-                No OAuth providers are configured, so the local account above is
-                the way in.
-              </StatusBadge>
-            </div>
-          )}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {failure ? (
         <div data-testid="setup-account-error">
