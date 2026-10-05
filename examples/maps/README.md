@@ -13,13 +13,12 @@ an earlier draft of this doc assumed PNG-only, which broke real imports
 both, and `crates/thunderforge-engine/Cargo.toml` enables Bevy's `"webp"` feature to
 render either).
 
-**Provenance / license note**: all files in this directory were pulled
-from a local, personal map-asset collection (`vtt-maps`, cherry-picked
-2026-08-21 for spec 003) for use as parser/editor test fixtures.
-DungeonDraft map packs are frequently sold/licensed for personal use and
-are not generally redistributable — do not assume these are safe to
-publish, re-share, or ship inside a public release artifact without
-confirming the original license. Treat this directory as dev/test-only.
+**Provenance / license note**: these maps are the project owner's own
+work, published at <https://github.com/mbround18/vtt-maps> under a Creative
+Commons licence; the licence owner is MBRound18 (confirmed by the owner,
+2026-10-05). They were cherry-picked from that collection on 2026-08-21 for
+spec 003. They may be shipped — spec 074 ships them in the demo — and wherever
+they are, they carry attribution to MBRound18 and that repository.
 
 ## Files
 
