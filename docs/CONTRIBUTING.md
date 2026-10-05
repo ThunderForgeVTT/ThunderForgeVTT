@@ -147,6 +147,68 @@ cargo process is working in the checkout, and it never touches anything outside
 one-line note when the build output has grown enough to be worth it.
 `--root=<path>` points it at another checkout.
 
+## Feature flags
+
+A feature can be merged before it is switched on. A flag is how: a boolean
+instance setting in the `Features` group, resolved per request, so an
+administrator changes it from the instance's settings and the next request
+plays by it — no rebuild, no restart. The environment beats the instance's
+stored value, which beats the declared default, exactly as for every other
+setting ([Instance configuration](INSTANCE_CONFIGURATION.md)).
+
+Flags are for the instance as a whole. There are no per-user or per-world
+flags, percentages or experiments. A compile-time switch
+(`#[cfg(debug_assertions)]`, `import.meta.env.DEV`) is for local development
+only and never decides what a deployed instance offers.
+
+### When a feature takes one
+
+- It will be merged before it is finished, and must not be reachable until
+  it is. Declare it with a default of `false`.
+- It is finished, but an operator has a real reason to run without it: it
+  costs something, it carries a legal or moderation burden, or it is new
+  enough that switching it off must not need a deploy. Declare it with a
+  default of `true`.
+
+A bug fix, a refactor, or a change with one right answer does not take a
+flag. Neither does anything a world's Game Master should decide; that is a
+world setting.
+
+### Declaring one
+
+1. **Declare it** in
+   `crates/thunderforge-server/src/settings/registry/declarations.rs`:
+   `Kind::Bool`, `group: "Features"`, a key `feature.<name>`, an environment
+   variable `THUNDERFORGE_FEATURE_<NAME>`, and a default. `what_to_set` and
+   `what_is_limited` are what the administrator reads; write them for that
+   reader.
+2. **List it** in `FEATURES` in `settings/features.rs`, saying whether a
+   visitor who is not signed in may know it. A test refuses a flag that is
+   declared and not listed, or listed and not declared.
+3. **Enforce it on the server**, at the mutation or query that does the
+   thing: `settings::flag_on(state, features::YOUR_FLAG).await?`, and refuse
+   with a sentence that says an administrator can switch it on. Hiding a
+   control is a courtesy; this is the rule.
+4. **Hide the control** in the web app with `useFeatureFlag(key)` from
+   `@/hooks/useFeatureFlag`, with the key exported from
+   `@/api/featureFlags`. It reads as off until the server has answered. No
+   component reads the environment or a build constant to decide what to
+   show.
+5. **Document the variable** in `.env.example`, and regenerate the schema if
+   you touched it (`node scripts/check-graphql-contract.mjs --schema --fix`).
+6. **Prove both halves** end to end, as
+   `apps/web/e2e/instance-feature-flags.spec.ts` does for the first flag:
+   off, the control is gone and the server refuses; on, both come back.
+
+### Removing one
+
+A flag that defaults to `false` is a promise to finish. When the feature is
+on by default and has been through a release that way, either delete the
+flag — declaration, `FEATURES` entry, `flag_on` call, `useFeatureFlag` call
+and the `.env.example` line, in one commit — or say in its declaration why
+an operator keeps the switch. A stored value for a removed flag is an inert
+row and needs no migration.
+
 ## Commits
 
 When comitting, its fine to have short commits or using or own style but this repository uses squash and merge for pull requests.

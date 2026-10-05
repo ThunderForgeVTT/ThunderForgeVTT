@@ -160,7 +160,7 @@ both change without a restart or a reload of the server.
 - **FR-013** The web app reads flags once per session start and on the
   administrator's change, and exposes them through one hook. No component
   reads the environment or a build-time constant to decide what to show.
-- **FR-014** `CONTRIBUTING.md` says when a feature takes a flag, how to
+- **FR-014** `docs/CONTRIBUTING.md` says when a feature takes a flag, how to
   declare one, and when to remove it.
 - **FR-015** The first flag guards a real feature, chosen with the owner.
 
