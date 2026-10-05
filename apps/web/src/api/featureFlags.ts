@@ -28,6 +28,9 @@ import { postGraphQL } from "@/api/graphqlClient";
 /** Guards reading a source book into a library (spec 049). */
 export const FEATURE_BOOK_IMPORT = "feature.book_import";
 
+/** Whether this instance offers the demo at `/demo/` (spec 074). Public. */
+export const FEATURE_DEMO = "feature.demo";
+
 /** The settings group a flag is declared in, as the server names it. */
 export const FEATURES_GROUP = "Features";
 

@@ -27,6 +27,11 @@
 
 use crate::config::Directories;
 use crate::errors::handler_404;
+use crate::settings::features::{DEMO, flag_on};
+use crate::state::AppState;
+use axum::extract::{Request, State};
+use axum::middleware::Next;
+use axum::response::{IntoResponse, Response};
 use axum::{Router, routing::get_service};
 use std::path::Path;
 use tower_http::services::{ServeDir, ServeFile};
@@ -54,6 +59,55 @@ where
         ))
     } else {
         router.fallback(handler_404)
+    }
+}
+
+/// The demo (spec 074), at `/demo`.
+///
+/// A second client, built apart from the first and served the same way: its
+/// files, and its own `index.html` for any path under `/demo` that is not
+/// one. A server started without `--demo-dir`, or pointed at a directory with
+/// nothing built in it, mounts nothing, and `/demo` falls to whatever answers
+/// every other unknown path.
+///
+/// Whether the instance offers it is not decided here; see
+/// [`require_demo_offered`].
+pub fn demo_router<S>(directories: &Directories) -> Router<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    let Some(demo) = directories.demo_files.as_deref().map(Path::new) else {
+        return Router::new();
+    };
+    let index = demo.join("index.html");
+    if !index.is_file() {
+        return Router::new();
+    }
+    Router::new().nest_service(
+        "/demo",
+        get_service(
+            ServeDir::new(demo)
+                .append_index_html_on_directories(true)
+                .fallback(ServeFile::new(index)),
+        ),
+    )
+}
+
+/// Answers "not found" for the demo while the instance does not offer it
+/// (spec 074 FR-015).
+///
+/// Asked per request, because the flag is a setting and an administrator
+/// switching it must not need a restart. Off is the default and the answer
+/// when the setting cannot be read.
+pub async fn require_demo_offered(
+    State(state): State<AppState>,
+    request: Request,
+    next: Next,
+) -> Response {
+    if flag_on(&state, DEMO).await.unwrap_or(false) {
+        next.run(request).await
+    } else {
+        handler_404().await.into_response()
     }
 }
 

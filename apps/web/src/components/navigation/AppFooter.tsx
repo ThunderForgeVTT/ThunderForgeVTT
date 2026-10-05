@@ -2,9 +2,12 @@ import { Link } from "react-router-dom";
 import { Container } from "@/components/ui/container/Container";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
 import {
+  DEMO_LINK,
   SITE_LINK_GROUPS,
   type SiteLinkGroup,
 } from "@/components/navigation/siteLinks";
+import { FEATURE_DEMO } from "@/api/featureFlags";
+import { useFeatureFlag } from "@/hooks/useFeatureFlag";
 
 /**
  * The site footer.
@@ -38,7 +41,12 @@ import {
  * are not: one is a legal document and the other is a diagnostic.
  */
 
-function LinkColumn({ heading, links, testId }: SiteLinkGroup) {
+function LinkColumn({
+  heading,
+  links,
+  testId,
+  offersDemo,
+}: SiteLinkGroup & { offersDemo: boolean }) {
   return (
     <nav className="grid gap-2" aria-label={heading} data-testid={testId}>
       <h2 className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
@@ -55,12 +63,23 @@ function LinkColumn({ heading, links, testId }: SiteLinkGroup) {
             </Link>
           </li>
         ))}
+        {offersDemo ? (
+          <li>
+            <a
+              href={DEMO_LINK.to}
+              className="text-sm text-muted-foreground transition-colors hover:text-foreground hover:underline"
+            >
+              {DEMO_LINK.label}
+            </a>
+          </li>
+        ) : null}
       </ul>
     </nav>
   );
 }
 
 export function AppFooter() {
+  const demoOffered = useFeatureFlag(FEATURE_DEMO);
   return (
     <footer className="pb-8" data-testid="app-footer">
       <Container>
@@ -85,7 +104,13 @@ export function AppFooter() {
           </div>
 
           {SITE_LINK_GROUPS.map((group) => (
-            <LinkColumn key={group.heading} {...group} />
+            <LinkColumn
+              key={group.heading}
+              {...group}
+              offersDemo={
+                demoOffered && group.testId === "footer-instance-links"
+              }
+            />
           ))}
         </div>
       </Container>

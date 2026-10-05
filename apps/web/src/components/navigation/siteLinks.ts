@@ -28,10 +28,7 @@ export const SITE_LINK_GROUPS: readonly SiteLinkGroup[] = [
   {
     heading: "This instance",
     testId: "footer-instance-links",
-    links: [
-      { label: "System status", to: "/status" },
-      { label: "Enter demo workspace", to: "/world/demo-world/play" },
-    ],
+    links: [{ label: "System status", to: "/status" }],
   },
   {
     heading: "Legal",
@@ -50,13 +47,24 @@ export const SITE_LINK_GROUPS: readonly SiteLinkGroup[] = [
 ];
 
 /**
+ * The demo (spec 074): a world anybody can open and run, kept in their own
+ * browser.
+ *
+ * Not in the list above, for two reasons. It is drawn only on an instance
+ * that offers it (`FEATURE_DEMO`), which a constant cannot know. And it is
+ * not a route of this app: `/demo/` is a second client served beside this
+ * one, so it is an `href` and a page load, never a router `to`.
+ */
+export const DEMO_LINK: SiteLink = {
+  label: "Enter demo workspace",
+  to: "/demo/",
+};
+
+/**
  * The groups worth showing to somebody who is mid-session.
  *
- * "Enter demo workspace" is dropped: offering it to a person already at a
- * table is at best noise and at worst a way to lose the game they are in.
+ * The demo is never among them: offering it to a person already at a table
+ * is at best noise and at worst a way to lose the game they are in.
  */
 export const IN_SESSION_LINK_GROUPS: readonly SiteLinkGroup[] =
-  SITE_LINK_GROUPS.map((group) => ({
-    ...group,
-    links: group.links.filter((link) => link.to !== "/world/demo-world/play"),
-  })).filter((group) => group.links.length > 0);
+  SITE_LINK_GROUPS;

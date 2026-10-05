@@ -8,7 +8,10 @@ import { Dropdown } from "@/components/ui/dropdown/Dropdown";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
 import type { FantasyIconName } from "@/components/ui/fantasy-icon/FantasyIcon";
 import { ThemeToggle } from "@/components/navigation/ThemeToggle";
+import { DEMO_LINK } from "@/components/navigation/siteLinks";
+import { FEATURE_DEMO } from "@/api/featureFlags";
 import { useAuth } from "@/hooks/useAuth";
+import { useFeatureFlag } from "@/hooks/useFeatureFlag";
 
 export interface HeaderNavItem {
   to: string;
@@ -25,6 +28,45 @@ interface AppHeaderProps {
 export function AppHeader({ brandHref, navItems }: AppHeaderProps) {
   const navigate = useNavigate();
   const { isAdmin, isAuthenticated, logout, user } = useAuth();
+  // The demo is a second client served beside this one, so entering it is a
+  // page load, and it is offered only where the instance offers it.
+  const demoOffered = useFeatureFlag(FEATURE_DEMO);
+  const demoItems = demoOffered
+    ? [
+        {
+          label: DEMO_LINK.label,
+          icon: "spark" as const,
+          onSelect: () => window.location.assign(DEMO_LINK.to),
+        },
+      ]
+    : [];
+  const menuItems = isAuthenticated
+    ? [
+        {
+          label: isAdmin ? "Open admin command center" : "Open welcome hall",
+          icon: isAdmin ? ("crown" as const) : ("scene" as const),
+          onSelect: () => navigate(isAdmin ? "/admin" : "/welcome"),
+        },
+        {
+          label: "World archive",
+          icon: "worlds" as const,
+          onSelect: () => navigate("/worlds"),
+        },
+        {
+          label: "Your account",
+          icon: "settings" as const,
+          onSelect: () => navigate("/settings/account"),
+        },
+        ...demoItems,
+        {
+          label: "Sign out",
+          icon: "arrow-left" as const,
+          onSelect: () => {
+            void logout().then(() => navigate("/login"));
+          },
+        },
+      ]
+    : demoItems;
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur-sm">
@@ -77,66 +119,29 @@ export function AppHeader({ brandHref, navItems }: AppHeaderProps) {
 
         <div className="flex items-center gap-3">
           <ThemeToggle />
-          <Dropdown
-            trigger={
-              <Button variant="ghost" size="sm" icon="rune">
-                Menu
-              </Button>
-            }
-            /*
-             * Signed out, this menu offers the demo and nothing else.
-             *
-             * It used to offer the welcome hall, the world archive and system
-             * settings to everybody, and all three are behind authentication —
-             * so a visitor who had never signed in was given three doors that
-             * bounce them to `/login` and one that works. Signing in is not
-             * missing from the header as a result: the primary nav carries
-             * Login and Register for exactly this visitor (`AppRoutes.tsx`),
-             * which is why there is deliberately no sign-in entry duplicated
-             * here.
-             */
-            items={
-              isAuthenticated
-                ? [
-                    {
-                      label: isAdmin
-                        ? "Open admin command center"
-                        : "Open welcome hall",
-                      icon: isAdmin ? ("crown" as const) : ("scene" as const),
-                      onSelect: () => navigate(isAdmin ? "/admin" : "/welcome"),
-                    },
-                    {
-                      label: "World archive",
-                      icon: "worlds" as const,
-                      onSelect: () => navigate("/worlds"),
-                    },
-                    {
-                      label: "Your account",
-                      icon: "settings" as const,
-                      onSelect: () => navigate("/settings/account"),
-                    },
-                    {
-                      label: "Enter demo workspace",
-                      icon: "spark" as const,
-                      onSelect: () => navigate("/world/demo-world/play"),
-                    },
-                    {
-                      label: "Sign out",
-                      icon: "arrow-left" as const,
-                      onSelect: () => {
-                        void logout().then(() => navigate("/login"));
-                      },
-                    },
-                  ]
-                : [
-                    {
-                      label: "Enter demo workspace",
-                      icon: "spark" as const,
-                      onSelect: () => navigate("/world/demo-world/play"),
-                    },
-                  ]
-            }
-          />
+          {/*
+           * Signed out, this menu offers the demo and nothing else, and where
+           * the instance offers no demo there is no menu.
+           *
+           * It used to offer the welcome hall, the world archive and system
+           * settings to everybody, and all three are behind authentication —
+           * so a visitor who had never signed in was given three doors that
+           * bounce them to `/login` and one that works. Signing in is not
+           * missing from the header as a result: the primary nav carries
+           * Login and Register for exactly this visitor (`AppRoutes.tsx`),
+           * which is why there is deliberately no sign-in entry duplicated
+           * here.
+           */}
+          {menuItems.length > 0 ? (
+            <Dropdown
+              trigger={
+                <Button variant="ghost" size="sm" icon="rune">
+                  Menu
+                </Button>
+              }
+              items={menuItems}
+            />
+          ) : null}
           {/* Only for somebody who actually is somebody. This block used to
               render "Archmage" and the role "Member" to a signed-out visitor,
               which is a made-up name and a membership they do not have sitting

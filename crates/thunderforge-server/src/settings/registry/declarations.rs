@@ -27,7 +27,7 @@ const NONE: &[Validator] = &[];
 const MAIL_SECURITY: &[&str] = &["none", "starttls", "implicit"];
 const ACCESS_POLICIES: &[&str] = &["open", "invite_only", "closed"];
 
-pub(super) static DECLARATIONS: [SettingDeclaration; 40] = [
+pub(super) static DECLARATIONS: [SettingDeclaration; 41] = [
     // -- What kind of instance this is --------------------------------------
     //
     // First, and deliberately. Spec 052 US1/US2: what an operator is asked for
@@ -813,5 +813,22 @@ pub(super) static DECLARATIONS: [SettingDeclaration; 40] = [
         what_is_limited: "Nobody can import a book. Books already imported stay on their shelves and in their worlds.",
         group: "Features",
         since: "0.68",
+    },
+    SettingDeclaration {
+        key: "feature.demo",
+        kind: Kind::Bool,
+        backing: Backing::Row,
+        env_var: Some("THUNDERFORGE_FEATURE_DEMO"),
+        env_aliases: &[],
+        requirement: Requirement::Optional,
+        setup: SetupVisibility::Offered,
+        secret: false,
+        default: Some("false"),
+        validators: &[Validator::BoolLike],
+        capability: None,
+        what_to_set: "Whether anyone, signed in or not, may open the demo world at /demo. It runs in their browser and writes nothing to this instance.",
+        what_is_limited: "There is no demo: /demo is not found and nothing links to it.",
+        group: "Features",
+        since: "0.74",
     },
 ];

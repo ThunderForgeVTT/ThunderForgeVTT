@@ -1,4 +1,4 @@
-use super::router;
+use super::{demo_router, router};
 use crate::config::Directories;
 use axum::Router;
 use axum::body::Body;
@@ -92,4 +92,51 @@ async fn a_server_with_no_client_built_still_answers_not_found_as_json() {
         get(&app, "/assets/map.png").await,
         (StatusCode::OK, "an upload".to_owned())
     );
+}
+
+fn build_demo(root: &Path) -> Directories {
+    let demo = root.join("demo");
+    fs::create_dir_all(demo.join("maps")).unwrap();
+    fs::write(demo.join("index.html"), "the demo").unwrap();
+    fs::write(demo.join("maps").join("NOTICE.txt"), "whose maps").unwrap();
+    directories(root).with_demo_files(demo.to_str().unwrap().to_owned())
+}
+
+#[tokio::test]
+async fn the_demo_is_a_second_client_under_its_own_path() {
+    let root = tempfile::tempdir().unwrap();
+    build_client(root.path());
+    let directories = build_demo(root.path());
+    let app: Router = demo_router(&directories).merge(router(&directories));
+
+    for path in ["/demo", "/demo/", "/demo/world/demo/play"] {
+        assert_eq!(
+            get(&app, path).await,
+            (StatusCode::OK, "the demo".to_owned()),
+            "{path}"
+        );
+    }
+    assert_eq!(
+        get(&app, "/demo/maps/NOTICE.txt").await,
+        (StatusCode::OK, "whose maps".to_owned())
+    );
+    // And the first client is still the first client.
+    assert_eq!(
+        get(&app, "/world/abc/play").await,
+        (StatusCode::OK, "the client".to_owned())
+    );
+}
+
+#[tokio::test]
+async fn a_server_not_told_where_a_demo_is_has_none() {
+    let root = tempfile::tempdir().unwrap();
+    let app: Router =
+        demo_router(&directories(root.path())).merge(router(&directories(root.path())));
+    assert_eq!(get(&app, "/demo/").await.0, StatusCode::NOT_FOUND);
+
+    // Named, but nothing built in it.
+    let empty = directories(root.path())
+        .with_demo_files(root.path().join("demo").to_str().unwrap().to_owned());
+    let app: Router = demo_router(&empty).merge(router(&empty));
+    assert_eq!(get(&app, "/demo/").await.0, StatusCode::NOT_FOUND);
 }

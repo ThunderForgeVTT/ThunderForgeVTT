@@ -37,6 +37,9 @@ pub const FEATURES_GROUP: &str = "Features";
 /// Importing a source book into an account's library (spec 049).
 pub const BOOK_IMPORT: &str = "feature.book_import";
 
+/// Offering the demo at `/demo` to anyone who asks (spec 074).
+pub const DEMO: &str = "feature.demo";
+
 /// One flag, and who may be told how it is set.
 #[derive(Debug, Clone, Copy)]
 pub struct Feature {
@@ -47,10 +50,17 @@ pub struct Feature {
 }
 
 /// Every flag this instance has.
-pub const FEATURES: &[Feature] = &[Feature {
-    key: BOOK_IMPORT,
-    public: false,
-}];
+pub const FEATURES: &[Feature] = &[
+    Feature {
+        key: BOOK_IMPORT,
+        public: false,
+    },
+    // Public: the sign-in page draws the link, and a stranger is who it is for.
+    Feature {
+        key: DEMO,
+        public: true,
+    },
+];
 
 /// Whether a flag is on, given everything already resolved.
 ///

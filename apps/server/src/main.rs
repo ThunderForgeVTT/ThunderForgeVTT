@@ -223,6 +223,12 @@ struct Cli {
     )]
     static_dir: Option<String>,
     #[arg(
+        long,
+        env = "DEMO_DIR",
+        help = "Where the built demo is served from, at /demo (default: no demo)"
+    )]
+    demo_dir: Option<String>,
+    #[arg(
         short,
         long,
         default_value = "redis://127.0.0.1/",
@@ -357,6 +363,9 @@ async fn run() {
     let mut directories = Directories::from(String::from(&config.data_path));
     if let Some(static_dir) = cli.static_dir {
         directories = directories.with_static_files(static_dir);
+    }
+    if let Some(demo_dir) = cli.demo_dir {
+        directories = directories.with_demo_files(demo_dir);
     }
     directories.create_if_not_present();
 
@@ -731,6 +740,14 @@ async fn run() {
         )
         // The uploads, the client's bundle, and the client itself for any
         // path that is none of the above. See `static_files`.
+        // The demo comes first: `/demo` is a second client, and the first
+        // one's fallback would otherwise answer for it.
+        .merge(
+            thunderforge_server::static_files::demo_router(&directories).layer(from_fn_with_state(
+                app_state.clone(),
+                thunderforge_server::static_files::require_demo_offered,
+            )),
+        )
         .merge(thunderforge_server::static_files::router(&directories))
         .with_state(app_state.clone())
         .layer(from_fn(

@@ -89,6 +89,9 @@ pub struct Directories {
     pub(crate) world_basedir: String,
     pub(crate) modules_basedir: String,
     pub(crate) static_files: String,
+    /// The built demo (spec 074), when this server was started with one.
+    #[serde(default)]
+    pub(crate) demo_files: Option<String>,
     pub(crate) asset_directory: String,
     pub(crate) databases_basedir: String,
     pub(crate) systems_dir: String,
@@ -130,6 +133,7 @@ impl From<String> for Directories {
             world_basedir: String::from(&base_dir.join("worlds").to_str().unwrap().to_owned()),
             modules_basedir: String::from(&base_dir.join("modules").to_str().unwrap().to_owned()),
             static_files: String::from(&base_dir.join("client").to_str().unwrap().to_owned()),
+            demo_files: None,
             asset_directory: String::from(&base_dir.join("assets").to_str().unwrap().to_owned()),
             systems_dir: String::from(&systems_dir.to_str().unwrap().to_owned()),
             interface_packs_dir: String::from(&interface_packs_dir.to_str().unwrap().to_owned()),
@@ -144,6 +148,15 @@ impl Directories {
     /// data directory is a volume that would hide it.
     pub fn with_static_files(mut self, static_dir: String) -> Self {
         self.static_files = static_dir;
+        self
+    }
+
+    /// Serve the demo from `demo_dir` (spec 074 FR-015).
+    ///
+    /// There is no default: a server that was not told where a demo is has
+    /// none, whatever the instance's setting says.
+    pub fn with_demo_files(mut self, demo_dir: String) -> Self {
+        self.demo_files = Some(demo_dir);
         self
     }
 

@@ -24,15 +24,19 @@ import { expect, test } from "./fixtures/test";
 test.describe("The shell, to somebody who has never signed in", () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test("the menu offers the demo and nothing that would bounce them to a sign-in", async ({
+  test("an instance that offers no demo offers a stranger no menu, and no door that bounces them to a sign-in", async ({
     page,
   }) => {
+    // Spec 074: the demo is off unless the operator switches it on, and the
+    // demo was the only thing this menu had for somebody signed out. The
+    // instance that does offer it is `demo-offered.spec.ts`.
     await page.goto("/login");
-    await page.getByRole("button", { name: "Menu" }).click();
+    await expect(page.getByTestId("footer-legal-links")).toBeVisible();
 
-    await expect(page.getByRole("menuitem")).toHaveText([
+    await expect(page.getByRole("button", { name: "Menu" })).toHaveCount(0);
+    await expect(page.getByTestId("app-footer")).not.toContainText(
       "Enter demo workspace",
-    ]);
+    );
   });
 
   test("no name or membership is asserted for somebody who has none", async ({
