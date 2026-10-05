@@ -255,7 +255,7 @@ export async function openProviderEditor(page: Page, displayName: string) {
     .locator('[data-testid^="oauth-provider-row-"]')
     .filter({ hasText: displayName })
     .first();
-  const toggle = row.getByRole("button", { name: /^(Edit|Done)$/ });
+  const toggle = row.getByRole("button", { name: /^(Configure|Edit|Done)$/ });
   if ((await toggle.getAttribute("aria-expanded")) !== "true") {
     await toggle.click();
   }

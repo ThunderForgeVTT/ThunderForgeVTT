@@ -398,7 +398,7 @@ async function openProviderEditor(
   page: Page,
   row: ReturnType<typeof providerRows>,
 ) {
-  const toggle = row.getByRole("button", { name: /^(Edit|Done)$/ });
+  const toggle = row.getByRole("button", { name: /^(Configure|Edit|Done)$/ });
   if ((await toggle.getAttribute("aria-expanded")) !== "true") {
     await toggle.click();
   }

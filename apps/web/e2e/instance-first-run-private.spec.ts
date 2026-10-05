@@ -397,5 +397,9 @@ test.describe("Spec 052 FR-060: a private instance, set up without a legal depar
       values?.noticeContactEmail ?? null,
       "a private instance publishes no notice contact",
     ).toBeNull();
+    expect(
+      values?.operatorName ?? null,
+      "an instance strangers cannot join does not tell one who runs it",
+    ).toBeNull();
   });
 });
