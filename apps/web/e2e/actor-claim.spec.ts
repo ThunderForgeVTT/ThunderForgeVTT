@@ -228,8 +228,12 @@ test.describe("Spec 017 US1: a joining player picks a GM-designated character", 
 
     // And the Players page says who took it.
     await gmPage.goto(`/world/${worldId}/players`);
+    // The card's own line, not the picker beside it: every picker lists
+    // every character, taken or not.
     await expect(
-      gmPage.locator('[data-testid^="player-character-"]', { hasText: name }),
+      gmPage
+        .locator('dl[data-testid^="player-character-"]')
+        .getByRole("link", { name, exact: true }),
     ).toBeVisible({ timeout: 10_000 });
 
     await gmContext.close();
