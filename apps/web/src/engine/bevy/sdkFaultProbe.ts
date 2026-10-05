@@ -22,7 +22,10 @@
  * module is dropped from a production bundle entirely.
  */
 
-type CommandSink = { apply_world_command?: (json: string) => void };
+type CommandSink = {
+  apply_world_command?: (json: string) => void;
+  debug_panic?: () => void;
+};
 
 /**
  * Hand the engine a raw payload. Answers whether it could be delivered —
@@ -41,4 +44,29 @@ export async function injectRawEngineCommand(
   } catch {
     return false;
   }
+}
+
+/**
+ * Make the engine panic (spec 070). Answers whether it could be asked —
+ * a release engine exports no such thing — not whether the page noticed,
+ * which is what the caller is there to find out.
+ *
+ * The same kind of thing as the function above: a real panic in the real
+ * engine, reported through the real hook.
+ */
+export async function crashEngine(): Promise<boolean> {
+  if (!import.meta.env.DEV) return false;
+  let engine: CommandSink;
+  try {
+    engine = (await import("@thunderforge/engine/engine")) as CommandSink;
+  } catch {
+    return false;
+  }
+  if (!engine.debug_panic) return false;
+  try {
+    engine.debug_panic();
+  } catch {
+    // The trap, surfacing as a RuntimeError. Expected: it is the crash.
+  }
+  return true;
 }

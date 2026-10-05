@@ -493,3 +493,18 @@ pub(crate) fn classify_command(input: &str) -> Result<ExternalCommand, SdkError>
         command: command_type,
     })
 }
+
+/// Panic, on purpose (spec 070).
+///
+/// What the page does when the engine dies can only be proven by an engine
+/// that dies, and nothing the application sends makes this one panic. Fault
+/// injection, as `sdkFaultProbe.ts` is on the other side of the boundary: a
+/// real panic through the real hook, not a simulated notice.
+///
+/// Debug builds only. A release engine does not export it, so there is no
+/// way to ask a shipped board to crash.
+#[cfg(debug_assertions)]
+#[wasm_bindgen]
+pub fn debug_panic() {
+    panic!("debug_panic: the engine was asked to crash");
+}

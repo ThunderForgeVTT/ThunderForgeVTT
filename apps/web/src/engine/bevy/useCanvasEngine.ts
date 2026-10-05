@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { EngineMountOptions } from "./types";
+import { useEngineStopped, type EngineStopReason } from "./engineStopped";
 import {
   mountEngine,
   type EngineLoadProgress,
@@ -38,6 +39,10 @@ interface UseCanvasEngineResult {
    * remounts, so a transient network failure does not require a page reload.
    */
   retry: () => void;
+  /** Spec 070: why a board that had started is no longer running — the
+   * engine panicked, or the browser took its graphics context. `null` while
+   * it runs. Nothing in the page can undo it; a reload can. */
+  stopped: EngineStopReason | null;
 }
 
 /**
@@ -81,6 +86,7 @@ export function useCanvasEngine(
   );
   const [error, setError] = useState<Error | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const stopped = useEngineStopped();
 
   const retry = useCallback(() => {
     setError(null);
@@ -213,5 +219,6 @@ export function useCanvasEngine(
     loadProgress,
     error,
     retry,
+    stopped,
   };
 }

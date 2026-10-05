@@ -2,6 +2,34 @@
 
 use super::*;
 
+/// The DOM event the page is sent when the engine panics (spec 070).
+///
+/// `apps/web/src/engine/bevy/engineStopped.ts` listens for it by this name.
+#[cfg(target_arch = "wasm32")]
+const ENGINE_STOPPED_EVENT: &str = "thunderforge:engine-stopped";
+
+/// Say so when the engine dies.
+///
+/// A panic in wasm is a trap: the frame loop never runs again, the canvas
+/// keeps its last picture, and every later call into the module throws. The
+/// message went to the console and nowhere a person at the table would look,
+/// so a crashed board was a board that had quietly stopped answering. The
+/// console message is kept; the page is now told as well, and it is the page
+/// that tells the person (a notice is chrome).
+///
+/// Called once: `start` returns early on a second call.
+#[cfg(target_arch = "wasm32")]
+fn install_panic_hook() {
+    std::panic::set_hook(Box::new(|info| {
+        console_error_panic_hook::hook(info);
+        if let Some(window) = web_sys::window()
+            && let Ok(event) = web_sys::Event::new(ENGINE_STOPPED_EVENT)
+        {
+            let _ = window.dispatch_event(&event);
+        }
+    }));
+}
+
 /// Boot the engine against a canvas.
 ///
 /// Browser-only, because its app-builder body inserts `network::GraphQLClient`,
@@ -16,7 +44,7 @@ pub fn start(canvas_selector: &str) {
         return;
     }
 
-    console_error_panic_hook::set_once();
+    install_panic_hook();
 
     let tracker = network::mutations::MutationTracker::new();
 

@@ -128,6 +128,7 @@ interface ReconcileReportState {
 }
 import { useCanvasEngine } from "@/engine/bevy/useCanvasEngine";
 import { EngineLoader } from "@/components/engine/EngineLoader";
+import { EngineStopped } from "@/components/engine/EngineStopped";
 import { BoardLoading } from "@/components/engine/BoardLoading";
 import { getWorld } from "@/api/world";
 import { getScene, getScenes, updateSceneAmbientLight } from "@/api/scenes";
@@ -826,6 +827,7 @@ export default function WorldPage() {
     loadProgress,
     error: engineError,
     retry: retryEngine,
+    stopped: engineStopped,
   } = useCanvasEngine({
     worldId: id,
     canvasSelector: `#${canvasContainerId}`,
@@ -3170,6 +3172,25 @@ export default function WorldPage() {
                     error={engineError}
                     className={LOADING_PLATE}
                     onRetry={retryEngine}
+                  />
+                </div>
+              )}
+              {/* Spec 070: a board that was running and is not any more. The
+                canvas keeps its last frame, so without this a dead board
+                looks like a live one that ignores you. */}
+              {engineStopped && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "50%",
+                    left: "50%",
+                    transform: "translate(-50%, -50%)",
+                    zIndex: 1000,
+                  }}
+                >
+                  <EngineStopped
+                    reason={engineStopped}
+                    className={LOADING_PLATE}
                   />
                 </div>
               )}
