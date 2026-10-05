@@ -1,4 +1,4 @@
-.PHONY: clean-builds test-db-reset dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-rust test-mail bench-blob-store test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean container container-up container-down container-down-clean
+.PHONY: push clean-builds test-db-reset dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-rust test-mail bench-blob-store test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean container container-up container-down container-down-clean
 
 # Loads DATABASE_URL (and anything else) from the repo-root .env for targets
 # that shell out to tools which don't read it themselves (diesel-cli).
@@ -28,6 +28,7 @@ help:
 	@echo "  make container-up     Start the whole app (app+postgres+rustfs+mailpit) detached on http://localhost:42080"
 	@echo "  make container-down   Stop it, keep the instance's data"
 	@echo "  make container-down-clean  Stop it and DELETE the instance (database, uploads, worlds)"
+	@echo "  make push             Push the dev image (IMAGE) and restart its deployment (KUBE_CONTEXT/KUBE_NAMESPACE/DEPLOY)"
 	@echo "  make clean-builds     Show what old cargo output and finished worktrees can go (ARGS=--apply deletes it)"
 	@echo "  make format           Run prettier + cargo fmt"
 	@echo "  make lint             Run cargo clippy (-D warnings) plus the file-length check"
@@ -151,6 +152,18 @@ container-down:
 # Stops it and deletes the instance: database, uploads, worlds, the lot.
 container-down-clean:
 	docker compose down -v
+
+# Ship the image that `docker build --target server -t $(IMAGE) .` left behind
+# and roll the dev deployment onto it. Prints the pushed digest first so it can
+# be checked against `docker image inspect` before the pods move.
+IMAGE ?= mbround18/thunderforgevtt:develop
+KUBE_CONTEXT ?= default
+KUBE_NAMESPACE ?= thunderforge-dev
+DEPLOY ?= thunderforge
+push:
+	docker push $(IMAGE)
+	kubectl --context $(KUBE_CONTEXT) -n $(KUBE_NAMESPACE) rollout restart deploy/$(DEPLOY)
+	kubectl --context $(KUBE_CONTEXT) -n $(KUBE_NAMESPACE) rollout status deploy/$(DEPLOY) --timeout=5m
 
 # Trim cargo's build output without throwing away the warm cache: incremental
 # sessions no crate reads, cargo units unused for a week, and agent worktrees
