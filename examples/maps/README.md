@@ -14,8 +14,8 @@ both, and `crates/thunderforge-engine/Cargo.toml` enables Bevy's `"webp"` featur
 render either).
 
 **Provenance / license note**: these maps are the project owner's own
-work, published at <https://github.com/mbround18/vtt-maps> under a Creative
-Commons licence; the licence owner is MBRound18 (confirmed by the owner,
+work, published at <https://github.com/mbround18/vtt-maps> under CC BY 4.0
+(Creative Commons Attribution 4.0); the licence owner is MBRound18 (confirmed by the owner,
 2026-10-05). They were cherry-picked from that collection on 2026-08-21 for
 spec 003. They may be shipped — spec 074 ships them in the demo — and wherever
 they are, they carry attribution to MBRound18 and that repository.

@@ -93,8 +93,8 @@ That is the work, and it is the part to keep honest (FR-009, FR-010).
   demo is offered.
 - **The demo's maps are the example maps, all of them.** The owner confirmed
   on 2026-10-05 that the maps in `examples/maps` are the owner's own work, published
-  at <https://github.com/mbround18/vtt-maps> under a Creative Commons licence,
-  licence owner MBRound18. Each real map there becomes a scene of the demo
+  at <https://github.com/mbround18/vtt-maps> under CC BY 4.0, licence owner
+  MBRound18. Each real map there becomes a scene of the demo
   world. This reverses the earlier dev-fixtures-only note, which was written
   before the licence was confirmed. The hand-written synthetic fixture is a
   parser test and is not a map.
@@ -173,7 +173,7 @@ That is the work, and it is the part to keep honest (FR-009, FR-010).
 ### Attribution
 
 - **FR-018** The demo credits the maps where a visitor will see it: a line on
-  the demo's standing notice or its about page naming MBRound18, the licence
+  the demo's standing notice or its about page naming MBRound18, CC BY 4.0
   and <https://github.com/mbround18/vtt-maps>, and the same credit on each
   scene made from one. A notice file carrying the same text ships in the
   demo's static directory beside the maps.
@@ -206,12 +206,9 @@ That is the work, and it is the part to keep honest (FR-009, FR-010).
 
 ## Open questions for the owner
 
-1. **Which Creative Commons licence, exactly?** The source repository has no
-   licence file as of 2026-10-05, so GitHub reports none. The credit has to
-   name one (CC BY 4.0 is assumed until told otherwise), and a `LICENSE` in
-   `vtt-maps` would make the grant visible to everybody else too. If any map
-   was built from a third-party DungeonDraft asset pack, that pack's own
-   terms still apply to it and are worth a look before it ships.
+1. **Does any map use a third-party DungeonDraft asset pack?** If one does,
+   that pack's own terms still apply to the exported image and are worth a
+   look before it ships.
 2. **Does the demo world carry a Roll for Shoes table as well as 5e**, or is
    one system enough for a first cut?
 
