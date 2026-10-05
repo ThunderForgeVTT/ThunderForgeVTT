@@ -49,9 +49,14 @@ pub mod alignment;
 mod ambient;
 mod geometry;
 mod image;
+mod offline;
 mod parse;
 mod types;
 mod warnings;
+
+pub use geometry::{LightInsert, WallInsert};
+pub use offline::{OfflineImport, import_offline};
+pub use types::MapImportError;
 
 use ambient::ambient_level;
 use geometry::*;

@@ -30,12 +30,21 @@ name = "thunderforge-schema"
 path = "src/bin/print_schema.rs"
 required-features = ["schema-sdl"]
 
+# The example maps as the demo serves them (spec 074). Behind a feature for
+# the same reason; see the file's own header.
+[[bin]]
+name = "thunderforge-demo-maps"
+path = "src/bin/demo_maps.rs"
+required-features = ["demo-maps"]
+
 [features]
 default = ["seam-probe"]
 # Forwarded to the library, whose `seam_probe` contributor this gates.
 seam-probe = ["thunderforge-server/seam-probe"]
 # Builds `thunderforge-schema`. Enables nothing in any dependency.
 schema-sdl = []
+# Builds `thunderforge-demo-maps`. Enables nothing in any dependency.
+demo-maps = []
 
 [dependencies]
 thunderforge-server = { path = "../../crates/thunderforge-server", default-features = false }
@@ -75,6 +84,8 @@ tracing-bunyan-formatter = "0.3.10"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 uuid = { version = "1.26.0", features = ["serde", "v7"] }
 serde = { version = "1.0.229", features = ["derive"] }
+# `thunderforge-demo-maps` writes its listing with it; the tests already did.
+serde_json = "1.0.151"
 reqwest = { version = "0.13.4", default-features = false, features = [
   "form",
   "json",
@@ -97,7 +108,6 @@ thunderforge-server = { path = "../../crates/thunderforge-server", default-featu
 ] }
 chrono = "0.4.45"
 futures-util = "0.3.34"
-serde_json = "1.0.151"
 
 # Linked for their `inventory::submit!` blocks alone — see `system_packs.rs`.
 [dependencies.dnd5e_server]
