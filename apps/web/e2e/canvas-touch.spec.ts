@@ -61,7 +61,7 @@ async function slide(
   }
 }
 
-test("a board is played with fingers: drag a token, pan and pinch the map, hold for the menu", async ({
+test("a board is played with fingers: drag a token, hold for the menu, pan and pinch the map", async ({
   page,
 }) => {
   test.setTimeout(4 * 60_000);
@@ -103,6 +103,23 @@ test("a board is played with fingers: drag a token, pan and pinch the map, hold 
         message: "the token follows the finger east",
       })
       .toBeGreaterThan(before!.x + 100);
+  });
+
+  // Before the camera moves: a token panned and zoomed off the board is not
+  // under anybody's finger.
+  await test.step("a finger held still on a token opens its menu", async () => {
+    const at = await tokenPosition(page, tokenId);
+    const on = await boardToScreen(page, at!);
+    await touchDown(cdp, [on]);
+    await page.waitForTimeout(900);
+    await touches(cdp, []);
+
+    const menu = page.getByTestId("canvas-menu");
+    await expect(menu).toBeVisible({ timeout: 10_000 });
+    // And holding did not drag it anywhere.
+    expect(await tokenPosition(page, tokenId)).toEqual(at);
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
   });
 
   const box = await canvasBox(page);
@@ -153,19 +170,5 @@ test("a board is played with fingers: drag a token, pan and pinch the map, hold 
     await expect
       .poll(async () => (await camera(page))!.scale, { timeout: 10_000 })
       .toBeCloseTo(before.scale / 2, 1);
-  });
-
-  await test.step("a finger held still on a token opens its menu", async () => {
-    const at = await tokenPosition(page, tokenId);
-    const on = await boardToScreen(page, at!);
-    await touchDown(cdp, [on]);
-    await page.waitForTimeout(900);
-    await touches(cdp, []);
-
-    await expect(page.getByTestId("canvas-menu")).toBeVisible({
-      timeout: 10_000,
-    });
-    // And holding did not drag it anywhere.
-    expect(await tokenPosition(page, tokenId)).toEqual(at);
   });
 });
