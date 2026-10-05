@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { Input } from "@/components/ui/input";
+import { NewCharacterCard } from "@/pages/world/players/NewCharacterCard";
 import { filterPlayers } from "@/pages/world/players/playerFilter";
 import { describeStanding } from "@/pages/world/players/playerStanding";
 import type { WorldActorRecord } from "@/types/actor";
@@ -234,6 +235,13 @@ export function PlayersPage({ worldId, isGm }: PlayersPageProps) {
             : "See who's playing what character in this world."}
         </p>
       </header>
+
+      {isGm ? (
+        <NewCharacterCard
+          worldId={worldId}
+          onCreated={(actor) => setCharacters((current) => [...current, actor])}
+        />
+      ) : null}
 
       <Input
         placeholder="Search players by name, role or character…"

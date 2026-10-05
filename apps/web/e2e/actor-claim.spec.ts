@@ -183,6 +183,59 @@ test.describe("Spec 017 US1: a joining player picks a GM-designated character", 
     await secondContext.close();
   });
 
+  // Until this, the only way to a claimable character was the one
+  // `createPcActor` takes: make a creature, edit it into a player character,
+  // then offer it from a third screen.
+  test("the Game Master names a character on the Players page and a joining player claims it", async ({
+    browser,
+  }) => {
+    const gmContext = await browser.newContext({
+      permissions: ["clipboard-read", "clipboard-write"],
+    });
+    const gmPage = await gmContext.newPage();
+    const worldId = await registerAndCreateWorld(
+      gmPage,
+      `E2E Named To Claim ${uniqueSuffix()}`,
+    );
+
+    const name = `Cass ${uniqueSuffix()}`;
+    await gmPage.goto(`/world/${worldId}/players`);
+    await gmPage.getByTestId("new-character-name").fill(name);
+    await gmPage.getByTestId("new-character-submit").click();
+    await expect(gmPage.getByTestId("new-character-made")).toHaveText(
+      `${name} is ready to be claimed.`,
+      { timeout: 10_000 },
+    );
+    await expect(gmPage.getByTestId("new-character-name")).toHaveValue("");
+
+    const inviteCode = await generateInviteCode(gmPage, worldId);
+    const playerContext = await browser.newContext();
+    const playerPage = await playerContext.newPage();
+    await register(playerPage, freshCredentials("e2eclaimnamed"));
+    await playerPage.goto(`/join/${inviteCode}`);
+    await playerPage.getByRole("button", { name: "Join Campaign" }).click();
+    await playerPage.waitForURL(new RegExp(`/world/${worldId}/actor-select$`), {
+      timeout: 15_000,
+    });
+
+    const rows = playerPage.getByTestId("available-actor-row");
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText(name);
+    await rows.first().getByRole("button", { name: "Select" }).click();
+    await playerPage.waitForURL(new RegExp(`/world/${worldId}$`), {
+      timeout: 15_000,
+    });
+
+    // And the Players page says who took it.
+    await gmPage.goto(`/world/${worldId}/players`);
+    await expect(
+      gmPage.locator('[data-testid^="player-character-"]', { hasText: name }),
+    ).toBeVisible({ timeout: 10_000 });
+
+    await gmContext.close();
+    await playerContext.close();
+  });
+
   test("two players racing to claim the same character: exactly one wins", async ({
     browser,
   }) => {
