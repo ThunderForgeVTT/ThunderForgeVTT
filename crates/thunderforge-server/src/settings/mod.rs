@@ -34,6 +34,7 @@
 //! rather than a sixth mechanism.
 
 pub mod changes;
+pub mod features;
 pub mod graphql;
 pub mod registry;
 pub mod resolver;
@@ -46,6 +47,7 @@ pub mod validate;
 #[path = "settings_migration_tests.rs"]
 mod settings_migration_tests;
 
+pub use features::flag_on;
 pub use registry::{Backing, Capability, Kind, Requirement, SettingDeclaration, declarations};
 pub use resolver::{Resolved, Settings, Source, resolve, resolve_all};
 

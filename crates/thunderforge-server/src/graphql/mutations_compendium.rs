@@ -332,6 +332,15 @@ pub async fn create_compendium_from_import_impl(
     owner: Uuid,
     input: CreateCompendiumFromImportInput,
 ) -> GraphQLResult<GraphQLCompendium> {
+    // Spec 068: the instance may have switched importing off. Asked here and
+    // not only in the web app, which merely stops offering the control.
+    if !crate::settings::flag_on(state, crate::settings::features::BOOK_IMPORT).await? {
+        return Err(refusal(
+            "Importing a source book is switched off on this instance. An administrator can \
+             switch it on under Features in the instance's settings.",
+        ));
+    }
+
     // Check two. The manifest is the authority on what this system declares;
     // the payload only says which manifest to open. A system that declares
     // nothing is refused with a reason rather than defaulted to anything —

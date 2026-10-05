@@ -132,7 +132,7 @@ pub fn placeholder_problem(declaration: &SettingDeclaration, value: &str) -> Opt
     validate(declaration, value).err()
 }
 
-fn parse_bool(value: &str) -> Option<bool> {
+pub(crate) fn parse_bool(value: &str) -> Option<bool> {
     match value.trim().to_ascii_lowercase().as_str() {
         "1" | "true" | "yes" | "on" => Some(true),
         "0" | "false" | "no" | "off" => Some(false),

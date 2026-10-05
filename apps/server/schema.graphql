@@ -1422,6 +1422,11 @@ type AppQueryRoot {
 	"""
 	instanceReadiness: InstanceReadiness!
 	"""
+	Which features are switched on. Anyone may ask; a visitor who has not
+	signed in is told only the flags declared public.
+	"""
+	featureFlags: [FeatureFlag!]!
+	"""
 	Whether this instance can send mail, and what to set if it cannot.
 	Administrators only.
 	"""
@@ -2505,6 +2510,11 @@ Why a combatant is out of the fight (spec 046 C8).
 enum DownedBy {
 	HIT_POINTS
 	GAME_MASTER
+}
+
+type FeatureFlag {
+	key: String!
+	on: Boolean!
 }
 
 """

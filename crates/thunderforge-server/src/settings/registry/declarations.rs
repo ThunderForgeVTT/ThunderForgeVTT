@@ -27,7 +27,7 @@ const NONE: &[Validator] = &[];
 const MAIL_SECURITY: &[&str] = &["none", "starttls", "implicit"];
 const ACCESS_POLICIES: &[&str] = &["open", "invite_only", "closed"];
 
-pub(super) static DECLARATIONS: [SettingDeclaration; 39] = [
+pub(super) static DECLARATIONS: [SettingDeclaration; 40] = [
     // -- What kind of instance this is --------------------------------------
     //
     // First, and deliberately. Spec 052 US1/US2: what an operator is asked for
@@ -791,5 +791,27 @@ pub(super) static DECLARATIONS: [SettingDeclaration; 39] = [
         what_is_limited: "Maps, tokens, portraits and attachments cannot be stored or served. Play without images is unaffected.",
         group: "Storage",
         since: "0.64",
+    },
+    // --- Features (spec 068) ---------------------------------------------
+    //
+    // A flag is a boolean setting in this group, listed in
+    // `settings::features::FEATURES`. See that file for the rule and for how
+    // to add one; `docs/CONTRIBUTING.md` says when a feature should take one.
+    SettingDeclaration {
+        key: "feature.book_import",
+        kind: Kind::Bool,
+        backing: Backing::Row,
+        env_var: Some("THUNDERFORGE_FEATURE_BOOK_IMPORT"),
+        env_aliases: &[],
+        requirement: Requirement::Optional,
+        setup: SetupVisibility::Offered,
+        secret: false,
+        default: Some("true"),
+        validators: &[Validator::BoolLike],
+        capability: None,
+        what_to_set: "Whether members may read a source book into their library.",
+        what_is_limited: "Nobody can import a book. Books already imported stay on their shelves and in their worlds.",
+        group: "Features",
+        since: "0.68",
     },
 ];

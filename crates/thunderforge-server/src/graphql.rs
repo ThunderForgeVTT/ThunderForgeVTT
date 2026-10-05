@@ -371,6 +371,8 @@ pub struct QueryRoot(
     // Spec 040: every setting, its source, its history, and what this
     // instance is not ready for.
     crate::settings::graphql::InstanceSettingsQuery,
+    // Spec 068: which features are switched on, for anyone who may know.
+    crate::settings::features::FeatureFlagsQuery,
     // Spec 040 US4: whether this instance can send mail, and what it has
     // failed to send. Declared by `mail/graphql.rs` for the reason that file
     // gives.
