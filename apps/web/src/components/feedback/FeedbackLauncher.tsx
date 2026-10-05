@@ -32,7 +32,7 @@ import { MessageSquarePlusIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { setSubmitterEmail } from "@/services/feedbackRedaction";
-import { FeedbackDialog } from "./FeedbackDialog";
+import { LazyFeedbackDialog } from "./LazyFeedbackDialog";
 
 export function FeedbackLauncher() {
   const { isAuthenticated, user } = useAuth();
@@ -92,7 +92,7 @@ export function FeedbackLauncher() {
         survives, and it survives in `sessionStorage` (FR-005), not here.
       */}
       {open ? (
-        <FeedbackDialog
+        <LazyFeedbackDialog
           open={open}
           onOpenChange={setOpen}
           pathname={location.pathname}

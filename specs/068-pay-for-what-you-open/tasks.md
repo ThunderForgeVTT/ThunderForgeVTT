@@ -22,7 +22,7 @@ description: "Task list for Pay for What You Open"
 ## Phase 2: The splits (Story 1)
 
 - [X] T003 [US1] The three static CodeMirror imports go behind `React.lazy` with a read-only fallback: `SceneSummaryEditor`, `LoreMarkdownEditor` (two callers) (FR-002, FR-003)
-- [ ] T004 [US1] The feedback dialog loads on press, from the launcher and from the help panel; log capture stays in the entry (FR-001)
+- [X] T004 [US1] The feedback dialog loads on press, from the launcher and from the help panel; log capture stays in the entry (FR-001)
 - [X] T005 [US1] A boundary for a dynamic import that fails, used by every `lazy` this spec adds (FR-007)
 - [ ] T006 [US1] System panels and sheets: one chunk per system; slot presence and titles known without loading it (FR-004, FR-005)
 - [ ] T007 [US1] The board's authoring tools load when opened (FR-006)

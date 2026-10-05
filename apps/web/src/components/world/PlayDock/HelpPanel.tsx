@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLocation } from "react-router-dom";
 import { MessageSquarePlusIcon } from "lucide-react";
 import { AboutLinks } from "@/components/navigation/AboutInstance";
-import { FeedbackDialog } from "@/components/feedback/FeedbackDialog";
+import { LazyFeedbackDialog } from "@/components/feedback/LazyFeedbackDialog";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -65,7 +65,7 @@ export function HelpPanel() {
         evidence it gathers lives exactly as long as the form does.
       */}
       {feedbackOpen ? (
-        <FeedbackDialog
+        <LazyFeedbackDialog
           open={feedbackOpen}
           onOpenChange={setFeedbackOpen}
           pathname={location.pathname}
