@@ -559,6 +559,60 @@ mod wall_stop_tests {
         assert_eq!(x_of(&app, token), HOME, "a closed one is");
     }
 
+    /// What `apply_external_commands` does with a queued `upsert_token`:
+    /// put the token where the application last read it from the server.
+    #[derive(Resource)]
+    struct ReadBack(f32);
+
+    fn apply_read_back(
+        read_back: Res<ReadBack>,
+        mut tokens: Query<&mut Transform, With<PlayerControlled>>,
+    ) {
+        for mut transform in &mut tokens {
+            transform.translation.x = read_back.0;
+        }
+    }
+
+    #[test]
+    fn a_read_back_queued_in_the_frame_of_a_key_press_does_not_undo_the_step() {
+        // Spec 068 T010. The read-back says where the token stood when it was
+        // sent, which is where it still stands when the key goes down. Applied
+        // after the step it put the token back; applied before, it changes
+        // nothing. Added in this order and left unordered, the scheduler runs
+        // the step first and this fails; only the declared order saves it.
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.insert_resource(SceneGrid::from_server("square", CELL, Vec2::ZERO));
+        app.insert_resource(ActiveWorld("world-test".to_string()));
+        app.init_resource::<MovementPlan>();
+        app.init_resource::<ButtonInput<KeyCode>>();
+        app.insert_resource(WallSet::default());
+        app.insert_resource(ReadBack(HOME));
+        app.add_systems(
+            Update,
+            apply_read_back.in_set(crate::app::ExternalCommandsApplied),
+        );
+        app.add_systems(
+            Update,
+            handle_token_movement_input.after(crate::app::ExternalCommandsApplied),
+        );
+        let token = app
+            .world_mut()
+            .spawn((
+                Transform::from_xyz(HOME, HOME, 0.0),
+                TokenIdentity("token-1".to_string()),
+                PlayerControlled,
+            ))
+            .id();
+
+        press(&mut app, KeyCode::KeyA);
+        assert_eq!(
+            x_of(&app, token),
+            HOME - CELL,
+            "the step stands: the read-back was the past, the key the present"
+        );
+    }
+
     #[test]
     fn a_route_cannot_be_planned_through_a_wall() {
         let (mut app, _token) = table(vec![wall_to_the_east(true)]);

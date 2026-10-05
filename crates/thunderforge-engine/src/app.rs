@@ -163,6 +163,19 @@ pub(crate) struct InteractionParams<'w> {
 // systems; this one is past it by being the seam itself, and the related
 // parameters are already bundled into `SystemParam` structs like
 // `InteractionParams`.
+/// What the application sent since the last frame has been applied.
+///
+/// Anything that reads this frame's input and moves a token runs after this
+/// set. Left unordered, a read-back of a token's position — queued a moment
+/// before a key was pressed, and true when it was sent — could be applied
+/// after the step in the same frame: the token went back a cell on this
+/// canvas while the application, which had already heard the step, kept the
+/// new one. The next key press was then measured from the old cell and asked
+/// the server for a square the token already stood on (spec 068 T010, the
+/// walk that lost a step).
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct ExternalCommandsApplied;
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn apply_external_commands(
     mut commands: Commands,

@@ -183,7 +183,11 @@ pub fn start(canvas_selector: &str) {
         // `spawn_demo_tokens`, and a world session never does.
         .add_systems(
             Update,
-            (apply_external_commands, move_player, emit_player_state),
+            (
+                apply_external_commands.in_set(crate::app::ExternalCommandsApplied),
+                move_player,
+                emit_player_state,
+            ),
         )
         // The `GridPosition`-based movement path is NOT registered.
         //

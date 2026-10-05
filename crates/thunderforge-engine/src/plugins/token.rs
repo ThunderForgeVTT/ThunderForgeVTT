@@ -62,7 +62,10 @@ impl Plugin for TokenPlugin {
                 sync_token_visuals,
                 draw_movement_plan,
             )
-                .chain(),
+                .chain()
+                // A position the application queued this frame is the past;
+                // the key pressed this frame is the present. See the set.
+                .after(crate::app::ExternalCommandsApplied),
         );
         // Spec 046: what each token fills as drawn, for the engine probe.
         app.add_systems(
