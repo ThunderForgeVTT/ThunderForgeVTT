@@ -138,6 +138,15 @@ impl From<String> for Directories {
 }
 
 impl Directories {
+    /// Serve the web client from `static_dir` rather than `<data>/client`.
+    ///
+    /// The client is not data: an image carries it beside the binary, and the
+    /// data directory is a volume that would hide it.
+    pub fn with_static_files(mut self, static_dir: String) -> Self {
+        self.static_files = static_dir;
+        self
+    }
+
     pub fn create_if_not_present(&self) {
         let directories = vec![
             &self.asset_directory,

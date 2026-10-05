@@ -213,6 +213,12 @@ struct Cli {
     #[arg(short, long, help = "Where do you want ThunderForgeVTT to store data?")]
     data_path: Option<String>,
     #[arg(
+        long,
+        env = "STATIC_DIR",
+        help = "Where the built web client is served from (default: <data-path>/client)"
+    )]
+    static_dir: Option<String>,
+    #[arg(
         short,
         long,
         default_value = "redis://127.0.0.1/",
@@ -344,7 +350,10 @@ async fn run() {
         config.data_path = data_path;
     }
 
-    let directories = Directories::from(String::from(&config.data_path));
+    let mut directories = Directories::from(String::from(&config.data_path));
+    if let Some(static_dir) = cli.static_dir {
+        directories = directories.with_static_files(static_dir);
+    }
     directories.create_if_not_present();
 
     // Use 10000 buffer size for broadcast channel to allow backpressure handling
@@ -706,10 +715,14 @@ async fn run() {
                 .nest(
                     "/interface-packs",
                     thunderforge_server::interface_packs::router(),
-                ),
+                )
+                // An unknown path under `/api` is a JSON 404, whatever the
+                // client's fallback below does with every other path.
+                .fallback(thunderforge_server::errors::handler_404),
         )
+        // The uploads, the client's bundle, and the client itself for any
+        // path that is none of the above. See `static_files`.
         .merge(thunderforge_server::static_files::router(&directories))
-        .fallback(thunderforge_server::errors::handler_404)
         .with_state(app_state.clone())
         .layer(from_fn(
             thunderforge_server::auth_middleware::rate_limit_auth_requests,
