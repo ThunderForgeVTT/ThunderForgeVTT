@@ -94,8 +94,13 @@ async function playerMap(
           const keys = store.getAllKeys();
           const values = store.getAll();
           tx.oncomplete = () => {
-            const index = (keys.result as string[]).findIndex((key) =>
-              key.endsWith(`:${world}:${scene}`),
+            // Kept per scene and level since scenes had levels; under the
+            // scene alone before that, and still when its levels cannot be
+            // read. This journey's scene has one level, so either is its map.
+            const index = (keys.result as string[]).findIndex(
+              (key) =>
+                key.endsWith(`:${world}:${scene}`) ||
+                key.includes(`:${world}:${scene}:`),
             );
             db.close();
             if (index < 0) {
