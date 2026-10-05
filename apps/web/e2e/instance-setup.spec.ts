@@ -102,6 +102,10 @@ test.describe("Spec 040 US1: from an empty database to a contactable instance", 
     //     this one are the fork proper.
     const accessStep = page.getByTestId("setup-step-settings-access");
     await expect(accessStep).toBeVisible({ timeout: 30_000 });
+    // Open, because this case goes on to read the operator's name as a
+    // stranger: an instance that is not open keeps that from someone with no
+    // session.
+    await page.getByTestId("setup-access-consequence-open").click();
     await page
       .getByTestId("setup-setting-instance.publishes_beyond_world")
       .check();

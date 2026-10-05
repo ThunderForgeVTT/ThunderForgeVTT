@@ -251,6 +251,27 @@ pub async fn require_authenticated_user_even_if_disabled(
     Ok(next.run(request).await)
 }
 
+/// The public GraphQL transport's one question about its caller: is there a
+/// live session behind this request?
+///
+/// Never refuses, and never inserts the user — see `SignedInCaller`.
+pub async fn note_signed_in_caller(
+    State(state): State<AppState>,
+    cookies: Cookies,
+    mut request: Request,
+    next: Next,
+) -> Response {
+    let signed_in = resolve_authenticated_user(&state, &cookies)
+        .await
+        .is_ok_and(|user| !user.disabled);
+
+    request
+        .extensions_mut()
+        .insert(crate::graphql::anonymous::SignedInCaller(signed_in));
+
+    next.run(request).await
+}
+
 pub async fn require_admin_user(
     State(state): State<AppState>,
     cookies: Cookies,

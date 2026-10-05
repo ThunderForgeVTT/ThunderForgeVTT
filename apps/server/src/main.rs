@@ -76,6 +76,7 @@ async fn graphql_handler(
 /// `sharedAbility`, `sharedItem` and `sharedActor` (ADR-071).
 async fn graphql_public_handler(
     Extension(schema): Extension<AppSchema>,
+    Extension(signed_in): Extension<thunderforge_server::graphql::anonymous::SignedInCaller>,
     headers: axum::http::HeaderMap,
     req: GraphQLRequest,
 ) -> GraphQLResponse {
@@ -86,7 +87,10 @@ async fn graphql_public_handler(
     let caller = thunderforge_server::graphql::anonymous::AnonymousCaller(
         thunderforge_server::auth_middleware::client_ip(&headers),
     );
-    schema.execute(req.into_inner().data(caller)).await.into()
+    schema
+        .execute(req.into_inner().data(caller).data(signed_in))
+        .await
+        .into()
 }
 
 async fn graphql_ws_handler(
@@ -662,8 +666,13 @@ async fn run() {
 
     // Spec 015 (FR-002): deliberately NOT wrapped in
     // `require_authenticated_user` — see `graphql_public_handler`'s docs.
-    let public_graphql_router =
-        Router::new().route("/graphql/public", post(graphql_public_handler));
+    let public_graphql_router = Router::new()
+        .route("/graphql/public", post(graphql_public_handler))
+        // Admits everybody; records only whether a session came with them.
+        .route_layer(from_fn_with_state(
+            app_state.clone(),
+            thunderforge_server::auth_middleware::note_signed_in_caller,
+        ));
 
     let api_router = Router::new()
         .route("/healthz", get(liveness_handler))

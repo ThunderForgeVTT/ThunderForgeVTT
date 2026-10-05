@@ -130,6 +130,12 @@ function fetchPublished(): Promise<Published> {
       if (!v) {
         return NOTHING;
       }
+      // An instance that is not open keeps the operator from a caller with no
+      // session, so an answer without one is not kept: the same reader asks
+      // again once they have signed in, without having to reload the page.
+      if (!v.operatorName) {
+        inFlight = null;
+      }
       const values = {
         "operator.name": v.operatorName,
         "operator.contact_email": v.operatorContactEmail,

@@ -95,6 +95,10 @@ extend type Query {
   The six values the published legal pages render. Deliberately unauthenticated
   (spec 039 FR-056): somebody who needs to file a notice has no account here.
   Null for a value the operator has not set — the page then shows its marker.
+  Also null, for the three operator.* values only, when the caller has no
+  session and the access policy is not `open` (owner's decision, 2026-10-05):
+  an instance strangers cannot join does not tell a stranger who runs it. The
+  notice contact is answered to everybody on every instance.
   """
   publishedOperatorValues: PublishedOperatorValues!
 }

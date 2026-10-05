@@ -21,6 +21,26 @@ use async_graphql::Context;
 #[derive(Clone, Debug)]
 pub struct AnonymousCaller(pub String);
 
+/// Whether the caller of the public transport holds a live session.
+///
+/// Deliberately **not** an `AuthenticatedUser`. Putting one into the public
+/// transport's context would open every authenticated resolver through a route
+/// that carries none of `/api/graphql`'s layers. This says one bit, and the
+/// only reader is `published_operator_values`.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SignedInCaller(pub bool);
+
+/// Whether the operator's own name, address and jurisdiction are kept from
+/// this caller.
+///
+/// The project owner's rule, 2026-10-05: an instance that is not open to
+/// sign-ups does not tell somebody with no account who runs it. Unset reads as
+/// `invite_only`, the shipped default. The notice contact is not covered by
+/// this — see `published_operator_values`.
+fn withholds_operator(access_policy: Option<&str>, signed_in: bool) -> bool {
+    !signed_in && access_policy != Some("open")
+}
+
 /// The caller identity to rate-limit against, for a resolver that does not
 /// authenticate.
 ///
@@ -96,6 +116,14 @@ impl PublishedOperatorValuesQuery {
     /// **Deliberately unauthenticated** — spec 039 FR-056. Do not add
     /// `authenticated_user(ctx)?` here.
     ///
+    /// One narrowing, which is not a refusal: on an instance that is not open
+    /// to sign-ups, the three `operator.*` values are null for a caller with
+    /// no session (`withholds_operator`). The notice contact and the operator's
+    /// prose are answered to everybody on every instance — a share link works
+    /// for whoever holds it whatever the access policy is, so FR-056's reader
+    /// exists on an invite-only instance too, and an operator who filled the
+    /// contact in did so to be reachable.
+    ///
     /// Unlike the four anonymous share reads above, this one is **not** rate
     /// limited, and the difference is the reason those are: a share code is
     /// unguessable only while the number of guesses is bounded, and this query
@@ -112,10 +140,24 @@ impl PublishedOperatorValuesQuery {
 
         let value = |key: &str| settings.value(key).map(str::to_string);
 
+        let signed_in = ctx
+            .data_opt::<SignedInCaller>()
+            .is_some_and(|caller| caller.0)
+            || ctx
+                .data_opt::<crate::auth_middleware::AuthenticatedUser>()
+                .is_some();
+        let operator = |key: &str| {
+            if withholds_operator(settings.value("instance.access_policy"), signed_in) {
+                None
+            } else {
+                value(key)
+            }
+        };
+
         Ok(PublishedOperatorValues {
-            operator_name: value(PUBLISHED_KEYS[0]),
-            operator_contact_email: value(PUBLISHED_KEYS[1]),
-            operator_jurisdiction: value(PUBLISHED_KEYS[2]),
+            operator_name: operator(PUBLISHED_KEYS[0]),
+            operator_contact_email: operator(PUBLISHED_KEYS[1]),
+            operator_jurisdiction: operator(PUBLISHED_KEYS[2]),
             notice_contact_name: value(PUBLISHED_KEYS[3]),
             notice_contact_email: value(PUBLISHED_KEYS[4]),
             notice_contact_postal_address: value(PUBLISHED_KEYS[5]),
@@ -129,6 +171,24 @@ impl PublishedOperatorValuesQuery {
 #[cfg(test)]
 mod published_operator_values_tests {
     use super::*;
+
+    /// Who runs an instance is told to a stranger only where strangers may
+    /// join. Every other pairing answers.
+    #[test]
+    fn the_operator_is_withheld_from_a_stranger_unless_the_instance_is_open() {
+        for policy in [Some("invite_only"), Some("closed"), None] {
+            assert!(
+                withholds_operator(policy, false),
+                "{policy:?} told somebody with no account who runs it"
+            );
+            assert!(
+                !withholds_operator(policy, true),
+                "{policy:?} hid the operator from a member"
+            );
+        }
+        assert!(!withholds_operator(Some("open"), false));
+        assert!(!withholds_operator(Some("open"), true));
+    }
 
     /// Every key this query reads is declared, is not secret, and is one of the
     /// six `contracts/legal-rendering.md` names or the three pieces of legal
