@@ -109,7 +109,8 @@ RUN pnpm -F @thunderforge/web run build
 
 # The server, release profile, stripped: a debug binary carries about 1.4GB of
 # symbols and nothing in a container needs them. Copied out of the cache mount
-# in the same step, because the mount is gone once the step ends.
+# in the same step, because the mount is gone once the step ends. The same
+# step runs the demo's map importer, a second binary of the same crate.
 RUN --mount=type=cache,target=/usr/local/cargo/registry,id=thunderforge-cargo-registry \
   --mount=type=cache,target=/build/target,id=thunderforge-cargo-target \
   cargo build --release -p thunderforge \
@@ -117,7 +118,14 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,id=thunderforge-cargo-re
   && install -m 755 target/release/thunderforge /out/thunderforge \
   && strip /out/thunderforge \
   && install -m 755 /usr/local/cargo/bin/diesel /out/diesel \
-  && strip /out/diesel
+  && strip /out/diesel \
+  && cargo run --release -q -p thunderforge --bin thunderforge-demo-maps \
+  --features demo-maps -- examples/maps apps/demo/public/maps
+
+# The demo (spec 074), written to data/demo: static files and nothing else.
+# Its scenes are the example maps the step above just imported, which is why
+# it is built after the server and not beside the client.
+RUN pnpm -F @thunderforge/demo run build
 
 # --- the server ---------------------------------------------------------------
 #
@@ -152,13 +160,18 @@ COPY packs /srv/thunderforge/data/packs
 # and not under the data directory.
 COPY --from=build /build/data/client /srv/thunderforge/client
 
+# The built demo (spec 074 FR-016). Served at `/demo` only while the instance
+# setting `feature.demo` is on; off by default.
+COPY --from=build /build/data/demo /srv/thunderforge/demo
+
 COPY scripts/container-entrypoint.sh /usr/local/bin/thunderforge-entrypoint
 # Belt and braces: COPY carries the host's mode, and a script that arrives
 # without the execute bit fails at `docker run`, not at `docker build`.
 RUN chmod 0755 /usr/local/bin/thunderforge-entrypoint
 
 ENV THUNDERFORGE_DATA_PATH=/srv/thunderforge/data \
-  STATIC_DIR=/srv/thunderforge/client
+  STATIC_DIR=/srv/thunderforge/client \
+  DEMO_DIR=/srv/thunderforge/demo
 EXPOSE 30000
 
 ENTRYPOINT ["/usr/local/bin/thunderforge-entrypoint"]

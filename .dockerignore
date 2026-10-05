@@ -18,9 +18,6 @@ data/
 .env.*
 !.env.example
 
-# Not redistributable, and not read by any build step: dev and test fixtures.
-example/
-
 # Irrelevant to a build.
 .git/
 .github/

@@ -24,6 +24,11 @@ function buildDicebearUrl(
   return `${DICEBEAR_BASE}/${style}/${format}?${searchParams.toString()}`;
 }
 
+/** The picture a token with no art of its own is given. */
+export function tokenFallbackArt(seed: string): string {
+  return buildDicebearUrl("adventurer-neutral", seed, "svg");
+}
+
 async function downloadFromUrl(url: string, filename: string) {
   const response = await fetch(url);
   const blob = await response.blob();

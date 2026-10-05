@@ -1,0 +1,5 @@
+# Written by `pnpm run maps` (the importer, over examples/maps) and
+# `pnpm run static` (the packs' own manifests, and the maps' notice).
+public/maps/
+public/packs/
+test-results/

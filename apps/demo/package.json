@@ -1,0 +1,35 @@
+{
+  "name": "@thunderforge/demo",
+  "version": "1.0.0",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "scripts": {
+    "maps": "cargo run --release -q -p thunderforge --bin thunderforge-demo-maps --features demo-maps -- ../../examples/maps public/maps",
+    "static": "node ./scripts/prepare-static.mjs",
+    "build": "pnpm run static && vite build",
+    "dev": "pnpm run static && vite",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "format": "prettier --check \"{index.html,vite.config.mts,playwright.config.ts,credit.json,world.json,src/**/*.{ts,tsx,css},e2e/**/*.ts,scripts/**/*.mjs}\"",
+    "e2e": "pnpm run build && playwright test"
+  },
+  "dependencies": {
+    "graphql": "^16.14.2",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "react-helmet-async": "^2.0.5",
+    "react-router-dom": "^7.18.3",
+    "sonner": "^2.0.8"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@tailwindcss/vite": "^4.2.4",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "prettier": "^3.6.2",
+    "tailwindcss": "4.2.4",
+    "typescript": "6.0.3",
+    "vite": "^8.0.10"
+  }
+}

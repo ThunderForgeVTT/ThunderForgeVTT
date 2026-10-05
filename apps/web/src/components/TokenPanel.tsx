@@ -22,6 +22,7 @@ import {
 import { TOKEN_TYPES, type TokenRecord, type TokenType } from "../types/token";
 import { TokenDisclosureControl } from "./TokenDisclosureControl";
 import { getTokenStatus, type TokenStatus } from "@/api/tokenStatus";
+import { tokenFallbackArt } from "@/hooks/useAvatar";
 import type { WorldActorRecord } from "../types/actor";
 import "../styles/TokenPanel.scss";
 
@@ -315,8 +316,7 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
   );
 
   const getTokenAvatar = (token: TokenRecord): string =>
-    token.photoUrl ??
-    `https://api.dicebear.com/9.x/adventurer-neutral/svg?seed=${token.tokenId}`;
+    token.photoUrl ?? tokenFallbackArt(token.tokenId);
 
   /** GM-only (spec 046 FR-016): make a token its actor, or a copy of it. */
   const handleSetLink = useCallback(

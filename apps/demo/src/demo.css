@@ -1,0 +1,7 @@
+/*
+  The web app's stylesheet, whole. Tailwind only looks for class names under
+  the directory it is built from, which here is `apps/demo`; the pages the
+  demo draws are in `apps/web/src`, so it is told to look there too.
+*/
+@import "../../web/src/styles/globals.css";
+@source "../../web/src";

@@ -52,7 +52,15 @@ export const ALLOWED_MISFITS = new Map([]);
  * each pair is named here, so a new pair is refused while the known ones
  * are worked down.
  */
-export const ALLOWED_CROSS_APP = new Map([]);
+export const ALLOWED_CROSS_APP = new Map([
+  [
+    "demo -> web",
+    "spec 074: the demo renders the web app's own pages over an in-page " +
+      "backend, by importing apps/web/src (mostly through its `@` alias, " +
+      "which this check does not see). Owner's decision, 2026-10-05, until " +
+      "spec 065 Story 4 extracts the web source into packages/.",
+  ],
+]);
 
 /** The `members = [...]` list of a workspace manifest. */
 export function workspaceMembers(manifest) {
@@ -217,7 +225,8 @@ function main() {
     problems.push("src/: the repository root has no src/ directory");
   }
   if (problems.length > 0) {
-    for (const problem of problems) process.stderr.write(`[layout] ${problem}\n`);
+    for (const problem of problems)
+      process.stderr.write(`[layout] ${problem}\n`);
     process.stderr.write(
       `\n${problems.length} layout problem(s). See specs/065-a-place-for-everything/spec.md.\n`,
     );
