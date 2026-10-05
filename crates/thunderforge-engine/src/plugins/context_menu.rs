@@ -36,8 +36,9 @@
 //! # What the engine reports, and what it does not
 //!
 //! A single `canvas_context_menu` event per right-click, carrying where it
-//! happened, which tokens were under it and which wall or door was (spec
-//! 071). Chrome opens the menu, because a menu is chrome.
+//! happened, which tokens were under it, which wall or door was (spec 071)
+//! and, for a Game Master, which light and which drawing (spec 073). Chrome
+//! opens the menu, because a menu is chrome.
 //!
 //! The event carries the pointer's screen position as well as its world
 //! position, which is the one place this plugin comes close to Constitution
@@ -47,14 +48,21 @@
 //! open at the pointer, and only the engine knows where the pointer was when
 //! the engine decided a right-click had happened.
 
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use serde_json::json;
 use thunderforge_canvas_core::grid::Footprint;
+use thunderforge_canvas_core::lighting::LightSource;
 use thunderforge_canvas_core::token_stack::{StackCandidate, tokens_at};
 use thunderforge_canvas_core::wall::{DoorState, Wall};
 
 use crate::emit_event;
-use crate::resources::{CameraManager, IsGameMaster, SceneGrid, TokenGridBehaviour, WallSet};
+use crate::resources::{
+    CameraManager, IsGameMaster, LightSet, SceneGrid, Shape, ShapeKind, ShapeSet,
+    TokenGridBehaviour, WallSet,
+};
+use crate::systems::lighting::LIGHT_GRAB_RADIUS;
+use crate::systems::shape::{ELLIPSE_SEGMENTS, ellipse_outline_points};
 use crate::systems::wall::distance_point_to_segment;
 use crate::{TOKEN_SIZE, TokenIdentity};
 
@@ -86,6 +94,115 @@ pub(crate) fn wall_under(walls: &[Wall], at: Vec2, reach: f32, is_gm: bool) -> O
         .filter(|(_, distance, _)| *distance <= reach)
         .min_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)))
         .map(|(_, _, wall)| wall)
+}
+
+/// The placed light a right-click at `at` is about, if any: the nearest whose
+/// marker is within `reach`.
+///
+/// Only a light somebody placed and left where it is. A carried light is a
+/// game system's and has no marker, and one fastened to a token is drawn on
+/// that token, where the click is about the token.
+pub(crate) fn light_under(lights: &[LightSource], at: Vec2, reach: f32) -> Option<&LightSource> {
+    lights
+        .iter()
+        .filter(|light| !light.is_carried() && light.attached_token_id.is_none())
+        .map(|light| (at.distance(light.position()), light))
+        .filter(|(distance, _)| *distance <= reach)
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .map(|(_, light)| light)
+}
+
+fn number(geometry: &serde_json::Value, key: &str) -> f32 {
+    geometry[key].as_f64().unwrap_or(0.0) as f32
+}
+
+/// How far `at` is from the nearest of `points` joined end to end.
+fn distance_to_path(points: &[Vec2], at: Vec2) -> f32 {
+    match points {
+        [] => f32::INFINITY,
+        [only] => at.distance(*only),
+        _ => points
+            .windows(2)
+            .map(|pair| distance_point_to_segment(at, pair[0], pair[1]))
+            .fold(f32::INFINITY, f32::min),
+    }
+}
+
+/// How far `at` is from a box, and nothing at all inside it.
+fn distance_to_box(at: Vec2, centre: Vec2, half: Vec2) -> f32 {
+    ((at - centre).abs() - half).max(Vec2::ZERO).length()
+}
+
+/// The size of the letters a text drawing is set in, and about how wide one
+/// of them comes out (`systems::shape`).
+const TEXT_HEIGHT: f32 = 20.0;
+const TEXT_ADVANCE: f32 = 10.0;
+
+/// How far `at` is from what a drawing puts on the board.
+///
+/// From its ink, as it is drawn (`systems::shape::sync_shape_visuals`): a
+/// rectangle is filled, so anywhere on it is on it; an ellipse, a line and a
+/// freehand stroke are outlines, and the board inside an ellipse is still
+/// board.
+fn distance_to_shape(shape: &Shape, at: Vec2) -> f32 {
+    let g = &shape.geometry;
+    match shape.kind {
+        ShapeKind::Rect => {
+            let half = Vec2::new(number(g, "w"), number(g, "h")).max(Vec2::ONE) / 2.0;
+            let corner = Vec2::new(number(g, "x"), number(g, "y"));
+            distance_to_box(at, corner + half, half)
+        }
+        ShapeKind::Ellipse => {
+            let half = Vec2::new(number(g, "w"), number(g, "h")).max(Vec2::ONE) / 2.0;
+            let corner = Vec2::new(number(g, "x"), number(g, "y"));
+            let outline = ellipse_outline_points(corner + half, half.x, half.y, ELLIPSE_SEGMENTS);
+            distance_to_path(&outline, at)
+        }
+        ShapeKind::Line => distance_point_to_segment(
+            at,
+            Vec2::new(number(g, "x1"), number(g, "y1")),
+            Vec2::new(number(g, "x2"), number(g, "y2")),
+        ),
+        ShapeKind::Stroke => {
+            let points: Vec<Vec2> = g["points"]
+                .as_array()
+                .map(|points| {
+                    points
+                        .iter()
+                        .filter_map(|point| {
+                            let pair = point.as_array()?;
+                            Some(Vec2::new(
+                                pair.first()?.as_f64()? as f32,
+                                pair.get(1)?.as_f64()? as f32,
+                            ))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            distance_to_path(&points, at)
+        }
+        ShapeKind::Text => {
+            // Set centred on its point. The width is an estimate: nothing
+            // here has measured the glyphs, and a menu does not need it to.
+            let letters = shape.text.as_deref().map_or(0, |text| text.chars().count());
+            let half = Vec2::new(letters.max(1) as f32 * TEXT_ADVANCE, TEXT_HEIGHT) / 2.0;
+            distance_to_box(at, Vec2::new(number(g, "x"), number(g, "y")), half)
+        }
+    }
+}
+
+/// The drawing a right-click at `at` is about, if any: the nearest within
+/// `reach`, and of two as near as each other the one drawn later, which is
+/// the one on top.
+pub(crate) fn shape_under(shapes: &[Shape], at: Vec2, reach: f32) -> Option<&Shape> {
+    shapes
+        .iter()
+        .map(|shape| (distance_to_shape(shape, at), shape))
+        .filter(|(distance, _)| *distance <= reach)
+        // `min_by` keeps the first of equals, so the later-drawn go first.
+        .rev()
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .map(|(_, shape)| shape)
 }
 
 /// Whether the browser menu has already been suppressed.
@@ -151,6 +268,17 @@ fn suppress_browser_menu(mut suppressed: ResMut<MenuSuppressed>) {
     suppressed.0 = bind_context_menu_suppression();
 }
 
+/// What is laid on the board that a right-click might be about.
+///
+/// `Option`, all three: this plugin is addable without walls, lights or
+/// drawings, and then a right-click is simply never about one.
+#[derive(SystemParam)]
+struct Board<'w> {
+    walls: Option<Res<'w, WallSet>>,
+    lights: Option<Res<'w, LightSet>>,
+    shapes: Option<Res<'w, ShapeSet>>,
+}
+
 /// Report a right-click, with what was under it.
 ///
 /// On **release**, and only if the pointer did not travel: right-drag pans
@@ -170,9 +298,7 @@ fn report_right_click(
         Option<&Visibility>,
     )>,
     grid: Option<Res<SceneGrid>>,
-    // `Option`, all three: this plugin is addable without walls or a camera
-    // manager, and then a right-click is simply never about a wall.
-    walls: Option<Res<WallSet>>,
+    board: Board,
     is_gm: Option<Res<IsGameMaster>>,
     camera_mgr: Option<Res<CameraManager>>,
     mut press: Local<Option<(Vec2, f32)>>,
@@ -232,11 +358,33 @@ fn report_right_click(
         })
         .collect();
 
+    let game_master = is_gm.is_some_and(|gm| gm.0);
     let reach = WALL_REACH_PX * camera_mgr.map_or(1.0, |camera| camera.scale);
-    let wall_id = walls.as_ref().and_then(|walls| {
-        wall_under(walls.walls(), world, reach, is_gm.is_some_and(|gm| gm.0))
-            .map(|wall| wall.id.clone())
+    let wall_id = board.walls.as_ref().and_then(|walls| {
+        wall_under(walls.walls(), world, reach, game_master).map(|wall| wall.id.clone())
     });
+    // Lights and drawings are a Game Master's to change, and only a Game
+    // Master is told one was clicked: to anybody else a light's marker is not
+    // drawn at all, and a drawing has nothing to offer.
+    //
+    // A light's marker is a fixed size on the board, not on the screen, so
+    // zoomed in it is bigger than the reach of a wall and is grabbed by the
+    // same radius a left-click grabs it by.
+    let light_id = board
+        .lights
+        .as_ref()
+        .filter(|_| game_master)
+        .and_then(|lights| {
+            light_under(lights.lights(), world, reach.max(LIGHT_GRAB_RADIUS))
+                .map(|light| light.id.clone())
+        });
+    let shape_id = board
+        .shapes
+        .as_ref()
+        .filter(|_| game_master)
+        .and_then(|shapes| {
+            shape_under(shapes.shapes(), world, reach).map(|shape| shape.id.clone())
+        });
 
     emit_event(json!({
         "type": "canvas_context_menu",
@@ -252,6 +400,10 @@ fn report_right_click(
         // doorway is reported with the door; which the menu is about is
         // chrome's to say.
         "wallId": wall_id,
+        // The placed light and the drawing within reach, or null, and always
+        // null for anybody but a Game Master (spec 073).
+        "lightId": light_id,
+        "shapeId": shape_id,
     }));
 }
 

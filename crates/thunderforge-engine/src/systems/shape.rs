@@ -772,14 +772,14 @@ pub(crate) fn sync_shape_visuals(
 /// Segment count for the ellipse polygon approximation (T018). High enough
 /// to read as a smooth curve at typical scene zoom levels, low enough to
 /// stay well within the per-shape entity counts `Stroke` already produces.
-const ELLIPSE_SEGMENTS: usize = 32;
+pub(crate) const ELLIPSE_SEGMENTS: usize = 32;
 
 /// Closed-loop points tracing an ellipse centered at `center` with
 /// semi-axes `rx`/`ry`, `segments` points around the loop plus the
 /// closing point back to the start (T018: real ellipse geometry instead
 /// of the old rectangle placeholder, rendered via the same
 /// sprite-segment-chain technique `Stroke` uses).
-fn ellipse_outline_points(center: Vec2, rx: f32, ry: f32, segments: usize) -> Vec<Vec2> {
+pub(crate) fn ellipse_outline_points(center: Vec2, rx: f32, ry: f32, segments: usize) -> Vec<Vec2> {
     (0..=segments)
         .map(|i| {
             let t = (i as f32 / segments as f32) * std::f32::consts::TAU;

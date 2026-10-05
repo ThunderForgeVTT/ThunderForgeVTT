@@ -39,7 +39,7 @@ const DEFAULT_LIGHT_INTENSITY: f32 = 1.0;
 /// fixed value (not scaled by the light's own radius) so tiny and huge
 /// lights are equally easy to grab, mirroring `wall.rs`'s
 /// `ENDPOINT_GRAB_RADIUS` fixed-pixel approach.
-const LIGHT_GRAB_RADIUS: f32 = 15.0;
+pub(crate) const LIGHT_GRAB_RADIUS: f32 = 15.0;
 
 /// The placement preview's rings: warm, and plainly provisional.
 ///
