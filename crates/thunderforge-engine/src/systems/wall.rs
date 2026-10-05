@@ -158,7 +158,7 @@ fn cursor_world_position(
 
 /// Shortest distance from `point` to the segment `a`-`b`. Pure/testable —
 /// used for wall body hit-testing (select-by-click).
-fn distance_point_to_segment(point: Vec2, a: Vec2, b: Vec2) -> f32 {
+pub(crate) fn distance_point_to_segment(point: Vec2, a: Vec2, b: Vec2) -> f32 {
     let ab = b - a;
     let len_sq = ab.length_squared();
     if len_sq <= f32::EPSILON {

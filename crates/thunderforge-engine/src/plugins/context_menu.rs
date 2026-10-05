@@ -36,8 +36,8 @@
 //! # What the engine reports, and what it does not
 //!
 //! A single `canvas_context_menu` event per right-click, carrying where it
-//! happened and which tokens were under it. Chrome opens the menu, because a
-//! menu is chrome.
+//! happened, which tokens were under it and which wall or door was (spec
+//! 071). Chrome opens the menu, because a menu is chrome.
 //!
 //! The event carries the pointer's screen position as well as its world
 //! position, which is the one place this plugin comes close to Constitution
@@ -51,10 +51,42 @@ use bevy::prelude::*;
 use serde_json::json;
 use thunderforge_canvas_core::grid::Footprint;
 use thunderforge_canvas_core::token_stack::{StackCandidate, tokens_at};
+use thunderforge_canvas_core::wall::{DoorState, Wall};
 
 use crate::emit_event;
-use crate::resources::{SceneGrid, TokenGridBehaviour};
+use crate::resources::{CameraManager, IsGameMaster, SceneGrid, TokenGridBehaviour, WallSet};
+use crate::systems::wall::distance_point_to_segment;
 use crate::{TOKEN_SIZE, TokenIdentity};
+
+/// How near a wall a right-click has to land to be about it, in screen pixels.
+///
+/// On the screen and not on the board: a wall is drawn a few pixels wide at
+/// any zoom, and a reach in world units would be a hair's width zoomed out.
+const WALL_REACH_PX: f32 = 10.0;
+
+/// The wall or door a right-click at `at` is about, if any.
+///
+/// A Game Master may be asking about any wall. Anybody else is only ever
+/// asking about a door they are shown: a plain wall has nothing to offer them,
+/// and a secret door reported here would say where it is (spec 030 US4).
+///
+/// A door beats a plain wall within reach, however near the wall: where a
+/// door meets the wall it is set in, the click is about the door.
+pub(crate) fn wall_under(walls: &[Wall], at: Vec2, reach: f32, is_gm: bool) -> Option<&Wall> {
+    walls
+        .iter()
+        .filter(|wall| is_gm || (wall.door_state != DoorState::None && !wall.secret))
+        .map(|wall| {
+            (
+                wall.door_state == DoorState::None,
+                distance_point_to_segment(at, wall.start(), wall.end()),
+                wall,
+            )
+        })
+        .filter(|(_, distance, _)| *distance <= reach)
+        .min_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)))
+        .map(|(_, _, wall)| wall)
+}
 
 /// Whether the browser menu has already been suppressed.
 ///
@@ -138,6 +170,11 @@ fn report_right_click(
         Option<&Visibility>,
     )>,
     grid: Option<Res<SceneGrid>>,
+    // `Option`, all three: this plugin is addable without walls or a camera
+    // manager, and then a right-click is simply never about a wall.
+    walls: Option<Res<WallSet>>,
+    is_gm: Option<Res<IsGameMaster>>,
+    camera_mgr: Option<Res<CameraManager>>,
     mut press: Local<Option<(Vec2, f32)>>,
 ) {
     let cursor = pointer.position();
@@ -195,6 +232,12 @@ fn report_right_click(
         })
         .collect();
 
+    let reach = WALL_REACH_PX * camera_mgr.map_or(1.0, |camera| camera.scale);
+    let wall_id = walls.as_ref().and_then(|walls| {
+        wall_under(walls.walls(), world, reach, is_gm.is_some_and(|gm| gm.0))
+            .map(|wall| wall.id.clone())
+    });
+
     emit_event(json!({
         "type": "canvas_context_menu",
         "worldX": world.x,
@@ -205,6 +248,10 @@ fn report_right_click(
         // rather than a missing one: it is what tells chrome to offer the
         // scene's menu instead of a token's.
         "tokenIds": tokens_at(&candidates, world),
+        // The wall or door within reach, or null. A token standing in a
+        // doorway is reported with the door; which the menu is about is
+        // chrome's to say.
+        "wallId": wall_id,
     }));
 }
 
@@ -222,3 +269,7 @@ impl Plugin for ContextMenuPlugin {
             .add_systems(Update, (suppress_browser_menu, report_right_click));
     }
 }
+
+#[cfg(test)]
+#[path = "context_menu_tests.rs"]
+mod tests;

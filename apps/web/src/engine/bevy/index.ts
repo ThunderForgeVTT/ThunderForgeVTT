@@ -606,6 +606,9 @@ export function onAuthoringToolRevoked(
  * `screenX`/`screenY` are the pointer in CSS pixels from the canvas's own
  * top-left corner, where the press was; `worldX`/`worldY` are the same point
  * on the board. An empty `tokenIds` is a right-click on bare board.
+ *
+ * `wallId` is the wall or door within reach of the pointer (spec 071): any
+ * wall for a Game Master, and for anybody else only a door they are shown.
  */
 export interface CanvasContextMenuEvent {
   type: "canvas_context_menu";
@@ -614,6 +617,7 @@ export interface CanvasContextMenuEvent {
   screenX: number;
   screenY: number;
   tokenIds: string[];
+  wallId?: string | null;
 }
 
 function asCanvasContextMenu(event: unknown): CanvasContextMenuEvent | null {
