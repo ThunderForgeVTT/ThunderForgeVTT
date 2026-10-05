@@ -20,7 +20,6 @@ const AdminSettingsPage = lazy(pageLoaders.adminSettings);
 const AdminModerationReviewPage = lazy(pageLoaders.adminModerationReview);
 const SetupPage = lazy(pageLoaders.setup);
 const SetupCallbackPage = lazy(pageLoaders.setupCallback);
-const CounterPage = lazy(pageLoaders.counter);
 const WelcomePage = lazy(pageLoaders.welcome);
 const WorldListPage = lazy(pageLoaders.worldList);
 const CreateWorldPage = lazy(pageLoaders.createWorld);
@@ -76,6 +75,7 @@ const FeedbackSettingsPage = lazy(
 const LibraryPage = lazy(() => import("@/pages/library/LibraryPage"));
 const SecuritySettingsPage = lazy(pageLoaders.securitySettings);
 const StandingPage = lazy(pageLoaders.standing);
+const AccountSettingsPage = lazy(pageLoaders.accountSettings);
 const JoinWorldPage = lazy(pageLoaders.joinWorld);
 const NotFoundPage = lazy(pageLoaders.notFound);
 
@@ -213,10 +213,7 @@ export default function AppRoutes({
     isAuthenticated && !isLoading ? authenticatedHome : "/login";
 
   const navItems: readonly HeaderNavItem[] = setupRequired
-    ? [
-        { to: "/setup", label: "Setup", prefetch: "setup", icon: "settings" },
-        { to: "/counter", label: "Status", prefetch: "counter", icon: "scene" },
-      ]
+    ? [{ to: "/setup", label: "Setup", prefetch: "setup", icon: "settings" }]
     : isAuthenticated && isAdmin
       ? [
           {
@@ -224,12 +221,6 @@ export default function AppRoutes({
             label: "Admin",
             prefetch: "adminSettings",
             icon: "crown",
-          },
-          {
-            to: "/counter",
-            label: "Preview",
-            prefetch: "counter",
-            icon: "scene",
           },
           {
             to: "/worlds",
@@ -245,12 +236,6 @@ export default function AppRoutes({
               label: "Welcome",
               prefetch: "welcome",
               icon: "scene",
-            },
-            {
-              to: "/counter",
-              label: "Preview",
-              prefetch: "counter",
-              icon: "spark",
             },
             {
               to: "/worlds",
@@ -585,14 +570,6 @@ export default function AppRoutes({
           }
         />
         <Route
-          path="/counter"
-          element={
-            <RequireAuthenticated>
-              {renderLazyPage(<CounterPage />, "Loading dashboard")}
-            </RequireAuthenticated>
-          }
-        />
-        <Route
           path="/worlds"
           element={
             <RequireAuthenticated>
@@ -896,6 +873,15 @@ export default function AppRoutes({
                 <SecuritySettingsPage />,
                 "Loading account security",
               )}
+            </RequireAuthenticated>
+          }
+        />
+        {/* Spec 074 FR-001: export, deletion and sign-out, under the account. */}
+        <Route
+          path="/settings/account"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<AccountSettingsPage />, "Loading your account")}
             </RequireAuthenticated>
           }
         />

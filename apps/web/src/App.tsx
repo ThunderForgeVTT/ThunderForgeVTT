@@ -24,8 +24,8 @@ export default function App() {
 
     schedulePagePrefetch(
       setupStatus.setup_required
-        ? ["setup", "setupCallback", "counter"]
-        : ["login", "signup", "counter"],
+        ? ["setup", "setupCallback"]
+        : ["login", "signup"],
     );
   }, [setupStatus]);
 

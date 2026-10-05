@@ -229,6 +229,15 @@ export default function WelcomePage() {
                   <Link to="/settings/standing">Account standing</Link>
                 </Button>
               </Card>
+              <Card surface="stone" className="grid gap-3 p-6">
+                <h3 className="text-lg font-semibold">Your data</h3>
+                <p className="text-muted-foreground">
+                  Download everything this account holds, or delete the account.
+                </p>
+                <Button asChild variant="secondary">
+                  <Link to="/settings/account">Your account</Link>
+                </Button>
+              </Card>
             </div>
           </section>
         </main>

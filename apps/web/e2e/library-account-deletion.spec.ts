@@ -233,7 +233,7 @@ test("deleting an account from its page leaves zero bytes of its library", async
   }
 
   // Deleted from the page a person uses, which says what it will do.
-  await page.goto("/counter");
+  await page.goto("/settings/account");
   await page.getByRole("button", { name: "Delete account" }).click();
   await expect(page.getByTestId("delete-account-consequence")).toContainText(
     "Nothing of your library is kept",

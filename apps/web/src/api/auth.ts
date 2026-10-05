@@ -240,7 +240,7 @@ export function getCurrentSession(): Promise<AuthSessionResponse> {
 
 export function startOAuthLogin(
   providerKey: string,
-  returnTo = "/counter",
+  returnTo = "/welcome",
   options: { invitation?: string } = {},
 ): void {
   if (typeof window === "undefined") {

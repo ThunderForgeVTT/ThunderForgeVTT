@@ -111,9 +111,9 @@ export function AppHeader({ brandHref, navItems }: AppHeaderProps) {
                       onSelect: () => navigate("/worlds"),
                     },
                     {
-                      label: "System settings",
+                      label: "Your account",
                       icon: "settings" as const,
-                      onSelect: () => navigate(isAdmin ? "/admin" : "/counter"),
+                      onSelect: () => navigate("/settings/account"),
                     },
                     {
                       label: "Enter demo workspace",
