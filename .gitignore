@@ -227,3 +227,7 @@ Thumbs.db
 # Spec 043 benchmark output is appended to measurements.md by the tool;
 # raw per-run artefacts are not worth committing.
 specs/043-worker-blob-store/raw/
+
+# Deployment files for the owner's own dev cluster. A real chart comes later;
+# until then these are local and may hold generated credentials.
+k8s/
