@@ -582,6 +582,7 @@ test.describe("Hand-drawn wall authoring (US1)", () => {
   test("a 3-point click chain, ended with Enter, creates a 2-segment wall that survives a reload", async ({
     page,
   }) => {
+    test.setTimeout(180_000);
     await registerAndCreateWorld(page, `E2E Wall Chain ${uniqueSuffix()}`);
     await createScene(page, "Wall Chain Scene");
     await waitForEngineReady(page, "walls");
@@ -621,6 +622,7 @@ test.describe("Hand-drawn wall authoring (US1)", () => {
   test("Escape mid-chain cancels the wall with nothing persisted", async ({
     page,
   }) => {
+    test.setTimeout(180_000);
     await registerAndCreateWorld(page, `E2E Wall Cancel ${uniqueSuffix()}`);
     await createScene(page, "Wall Cancel Scene");
     await waitForEngineReady(page, "walls");
@@ -638,6 +640,10 @@ test.describe("Hand-drawn wall authoring (US1)", () => {
   test("toggling a wall to a door and deleting it both persist", async ({
     page,
   }) => {
+    // Three engine loads and a world of its own: a passing run was measured at
+    // 29.8 seconds against the 30-second default this test used to run under,
+    // and it timed out the first time the machine was a little slower.
+    test.setTimeout(180_000);
     await registerAndCreateWorld(
       page,
       `E2E Wall Door Delete ${uniqueSuffix()}`,
@@ -715,6 +721,7 @@ test.describe("Wall sync across sessions (US1, T012)", () => {
   test("a wall created in one session is selectable in a second, independent session viewing the same scene", async ({
     browser,
   }) => {
+    test.setTimeout(180_000);
     const contextA = await browser.newContext();
     const pageA = await contextA.newPage();
     await registerAndCreateWorld(pageA, `E2E Wall Sync ${uniqueSuffix()}`);
@@ -766,6 +773,7 @@ test.describe("Wall sync across sessions (US1, T012)", () => {
   test("a session's own wall does not double-apply, flicker or revert when its event echoes back", async ({
     browser,
   }) => {
+    test.setTimeout(180_000);
     const context = await browser.newContext();
     const page = await context.newPage();
     await registerAndCreateWorld(page, `E2E Echo ${uniqueSuffix()}`);
