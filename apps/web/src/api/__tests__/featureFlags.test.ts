@@ -39,6 +39,14 @@ describe("feature flags", () => {
   beforeEach(forgetFeatureFlags);
   afterEach(() => vi.unstubAllGlobals());
 
+  it("asks the route a visitor can reach when nobody is signed in", async () => {
+    const fetchMock = answerWith([], ON);
+    await loadFeatureFlags(null);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/graphql/public");
+    await loadFeatureFlags("account-1");
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/graphql");
+  });
+
   it("reads every flag as unknown before the server has answered", () => {
     expect(currentFeatureFlags()["feature.book_import"]).toBeUndefined();
   });

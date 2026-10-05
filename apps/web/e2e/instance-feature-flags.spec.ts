@@ -154,10 +154,19 @@ test.describe("Spec 068: a feature the instance can switch off", () => {
   test("a visitor is told only the public flags, and this one is not public", async ({
     page,
   }) => {
+    // `/api/graphql` turns a visitor away before any resolver runs; this is
+    // the route the app itself asks when nobody is signed in.
     await page.goto("/login");
-    const result = await graphql<{
-      data?: { featureFlags: { key: string; on: boolean }[] };
-    }>(page, "query { featureFlags { key on } }", {});
+    const result = await page.evaluate(async () => {
+      const response = await fetch("/api/graphql/public", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: "query { featureFlags { key on } }" }),
+      });
+      return (await response.json()) as {
+        data?: { featureFlags: { key: string; on: boolean }[] };
+      };
+    });
     expect(result.data?.featureFlags).toBeDefined();
     expect(
       result.data?.featureFlags.map((flag) => flag.key) ?? [],

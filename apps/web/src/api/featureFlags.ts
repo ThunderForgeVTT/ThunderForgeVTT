@@ -33,10 +33,23 @@ export const FEATURES_GROUP = "Features";
 
 export type FeatureFlags = Readonly<Record<string, boolean>>;
 
-export async function fetchFeatureFlags(): Promise<FeatureFlags> {
+/**
+ * `/api/graphql` turns away anybody without a session before a resolver
+ * runs, so a visitor asks the route that does not (spec 015). The resolver
+ * is the same one and tells them only the public flags.
+ */
+const GRAPHQL_PUBLIC_ENDPOINT = "/api/graphql/public";
+
+export async function fetchFeatureFlags(
+  who: string | null,
+): Promise<FeatureFlags> {
   const data = await postGraphQL<{
     featureFlags: { key: string; on: boolean }[];
-  }>(`query FeatureFlags { featureFlags { key on } }`);
+  }>(
+    `query FeatureFlags { featureFlags { key on } }`,
+    undefined,
+    who === null ? { endpoint: GRAPHQL_PUBLIC_ENDPOINT } : {},
+  );
   return Object.fromEntries(
     data.featureFlags.map((flag) => [flag.key, flag.on]),
   );
@@ -64,7 +77,7 @@ async function ask(who: string | null): Promise<void> {
   const mine = ++asked;
   answeredFor = who;
   try {
-    const answer = await fetchFeatureFlags();
+    const answer = await fetchFeatureFlags(who);
     if (mine !== asked) return;
     flags = answer;
   } catch {
