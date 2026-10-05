@@ -137,6 +137,7 @@ import { useWorldRole } from "@/hooks/useWorldRole";
 import { useWorldMembers } from "@/hooks/useWorldMembers";
 import { useSceneUnits } from "@/hooks/useSceneUnits";
 import { useSceneLevels } from "@/pages/world/useSceneLevels";
+import { createDoubleTap } from "@/pages/world/doubleTap";
 import { LevelTabs } from "@/components/world/LevelTabs";
 import type { SceneLevel } from "@/api/levels";
 import {
@@ -962,7 +963,11 @@ export default function WorldPage() {
   // the engine: two clicks that fast routinely land in one Bevy frame, where
   // the second press is lost outright, while the DOM's `dblclick` is exact.
   useEffect(() => {
-    const onDoubleClick = (event: MouseEvent) => {
+    const onDoubleClick = (event: {
+      target: EventTarget | null;
+      clientX: number;
+      clientY: number;
+    }) => {
       if (!(event.target instanceof HTMLCanvasElement)) return;
       const stack = facets.selection.disambiguate();
       if (!stack) {
@@ -990,9 +995,32 @@ export default function WorldPage() {
       });
     };
 
+    // A finger's two taps are not a `dblclick` over the canvas — see
+    // `doubleTap.ts` — so they are counted, and answered the same way. Should
+    // a browser send the `dblclick` as well, it asks for what is already so.
+    const taps = createDoubleTap();
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.pointerType !== "touch" || !event.isPrimary) return;
+      taps.down({ x: event.clientX, y: event.clientY, at: event.timeStamp });
+    };
+    const onPointerUp = (event: PointerEvent) => {
+      if (event.pointerType !== "touch" || !event.isPrimary) return;
+      if (
+        taps.up({ x: event.clientX, y: event.clientY, at: event.timeStamp })
+      ) {
+        onDoubleClick(event);
+      }
+    };
+
     window.addEventListener("dblclick", onDoubleClick, { capture: true });
+    window.addEventListener("pointerdown", onPointerDown, { capture: true });
+    window.addEventListener("pointerup", onPointerUp, { capture: true });
     return () => {
       window.removeEventListener("dblclick", onDoubleClick, { capture: true });
+      window.removeEventListener("pointerdown", onPointerDown, {
+        capture: true,
+      });
+      window.removeEventListener("pointerup", onPointerUp, { capture: true });
       facets.stop();
     };
   }, [facets, worldStore]);
