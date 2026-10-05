@@ -99,8 +99,12 @@ That is the work, and it is the part to keep honest (FR-009, FR-010).
 - **The demo's maps are the seven example maps**, and no others from the
   owner's library. The owner confirmed
   on 2026-10-05 that the maps in `examples/maps` are the owner's own work, published
-  at <https://github.com/mbround18/vtt-maps> under CC BY 4.0, licence owner
-  MBRound18. Each real map there becomes a scene of the demo
+  at <https://github.com/mbround18/vtt-maps> under CC BY-SA 4.0 (the
+  repository's `LICENSE`, settled 2026-10-05), licence owner MBRound18. The
+  owner's catalog is <https://vtt-maps.dnd-apps.dev/catalog>, and the demo
+  links to it beside the credit. ShareAlike means the copies the demo ships,
+  resized and re-encoded, are offered under the same licence, and the
+  notice beside them says so. Each real map there becomes a scene of the demo
   world. This reverses the earlier dev-fixtures-only note, which was written
   before the licence was confirmed. The hand-written synthetic fixture is a
   parser test and is not a map.
@@ -179,8 +183,8 @@ That is the work, and it is the part to keep honest (FR-009, FR-010).
 ### Attribution
 
 - **FR-018** The demo credits the maps where a visitor will see it: a line on
-  the demo's standing notice or its about page naming MBRound18, CC BY 4.0
-  and <https://github.com/mbround18/vtt-maps>, and the same credit on each
+  the demo's standing notice or its about page naming MBRound18, CC BY-SA 4.0,
+  <https://github.com/mbround18/vtt-maps> and the catalog, and the same credit on each
   scene made from one. A notice file carrying the same text ships in the
   demo's static directory beside the maps.
 - **FR-019** `examples/maps/README.md` states the confirmed provenance and

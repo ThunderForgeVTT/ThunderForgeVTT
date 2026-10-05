@@ -14,11 +14,13 @@ both, and `crates/thunderforge-engine/Cargo.toml` enables Bevy's `"webp"` featur
 render either).
 
 **Provenance / license note**: these maps are the project owner's own
-work, published at <https://github.com/mbround18/vtt-maps> under CC BY 4.0
-(Creative Commons Attribution 4.0); the licence owner is MBRound18 (confirmed by the owner,
-2026-10-05). They were cherry-picked from that collection on 2026-08-21 for
+work, published at <https://github.com/mbround18/vtt-maps> under CC BY-SA 4.0
+(Creative Commons Attribution-ShareAlike 4.0, the repository's `LICENSE`); the
+licence owner is MBRound18 (confirmed by the owner, 2026-10-05). The owner's
+catalog of maps is at <https://vtt-maps.dnd-apps.dev/catalog>. They were cherry-picked from that collection on 2026-08-21 for
 spec 003. They may be shipped — spec 074 ships them in the demo — and wherever
-they are, they carry attribution to MBRound18 and that repository.
+they are, they carry attribution to MBRound18 and that repository, and any
+resized or re-encoded copy is offered under the same licence (ShareAlike).
 
 ## Files
 
@@ -116,16 +118,16 @@ hand-crafted/synthetic fixture, not a real-world file:
 
 ## Mapping to ThunderForgeVTT entities (see `specs/001-bevy-canvas-authoring/data-model.md`)
 
-| UVTT field | Maps to |
-|---|---|
-| `image` (decoded) | Scene background layer asset |
-| `resolution.map_size` × `resolution.pixels_per_grid` | Scene `width`/`height` (px) |
-| `resolution.pixels_per_grid` | Scene `grid_size`, with imported geometry scaled if the target scene already has a different `grid_size` |
-| `line_of_sight[]` polygons | `Wall` segments (each consecutive point pair → one wall row), `blocks_vision = true`, `blocks_movement = false` by default |
-| `objects_line_of_sight[]` | Same as above, tagged as object-sourced in `metadata` (movement-blocking left to the GM to confirm) |
-| `portals[]` | `Wall` segments with door fields set (`door_state = closed`/`open` from `closed`) |
-| `lights[]` | `LightSource` rows (`range` → `radius`, `color` ARGB → stored color, `shadows` → whether occlusion applies) |
-| `environment.ambient_light` | Scene-level ambient light default (outside any `LightSource`) |
+| UVTT field                                           | Maps to                                                                                                                    |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `image` (decoded)                                    | Scene background layer asset                                                                                               |
+| `resolution.map_size` × `resolution.pixels_per_grid` | Scene `width`/`height` (px)                                                                                                |
+| `resolution.pixels_per_grid`                         | Scene `grid_size`, with imported geometry scaled if the target scene already has a different `grid_size`                   |
+| `line_of_sight[]` polygons                           | `Wall` segments (each consecutive point pair → one wall row), `blocks_vision = true`, `blocks_movement = false` by default |
+| `objects_line_of_sight[]`                            | Same as above, tagged as object-sourced in `metadata` (movement-blocking left to the GM to confirm)                        |
+| `portals[]`                                          | `Wall` segments with door fields set (`door_state = closed`/`open` from `closed`)                                          |
+| `lights[]`                                           | `LightSource` rows (`range` → `radius`, `color` ARGB → stored color, `shadows` → whether occlusion applies)                |
+| `environment.ambient_light`                          | Scene-level ambient light default (outside any `LightSource`)                                                              |
 
 Coordinates in `line_of_sight`/`portals`/`lights` are in **grid units**,
 not pixels — multiply by `pixels_per_grid` (or the target scene's

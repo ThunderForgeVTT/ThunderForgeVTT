@@ -137,7 +137,7 @@ test("the demo opens on a world's dashboard, with the visitor as its Game Master
   );
   // FR-018: whose maps these are, on the page.
   await expect(page.getByTestId("demo-notice")).toContainText("MBRound18");
-  await expect(page.getByTestId("demo-notice")).toContainText("CC BY 4.0");
+  await expect(page.getByTestId("demo-notice")).toContainText("CC BY-SA 4.0");
   await expect(
     page
       .getByRole("link", { name: /enter world/i })

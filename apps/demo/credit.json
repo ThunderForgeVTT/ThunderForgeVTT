@@ -1,6 +1,7 @@
 {
   "author": "MBRound18",
-  "licence": "CC BY 4.0",
-  "licenceUrl": "https://creativecommons.org/licenses/by/4.0/",
-  "source": "https://github.com/mbround18/vtt-maps"
+  "licence": "CC BY-SA 4.0",
+  "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+  "source": "https://github.com/mbround18/vtt-maps",
+  "catalog": "https://vtt-maps.dnd-apps.dev/catalog"
 }

@@ -7,4 +7,4 @@ import credit from "../credit.json";
  */
 export const MAP_CREDIT = credit;
 
-export const MAP_CREDIT_LINE = `Map by ${credit.author}, ${credit.licence}. ${credit.source}`;
+export const MAP_CREDIT_LINE = `Map by ${credit.author}, ${credit.licence}. ${credit.source} — more at ${credit.catalog}`;

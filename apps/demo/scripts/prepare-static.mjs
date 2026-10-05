@@ -80,8 +80,10 @@ await writeFile(
     `The maps in this directory are by ${credit.author},`,
     `licensed under ${credit.licence} (${credit.licenceUrl}).`,
     `Source: ${credit.source}`,
+    `More of them: ${credit.catalog}`,
     "",
     "They were resized and re-encoded to fit a scene; nothing else was changed.",
+    `These copies are offered under the same licence, ${credit.licence}.`,
     "",
   ].join("\n"),
 );

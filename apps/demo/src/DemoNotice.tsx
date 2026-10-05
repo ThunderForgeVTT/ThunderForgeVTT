@@ -66,6 +66,15 @@ export function DemoNotice() {
         >
           {MAP_CREDIT.licence}
         </a>
+        {" · "}
+        <a
+          href={MAP_CREDIT.catalog}
+          target="_blank"
+          rel="noreferrer"
+          className="underline underline-offset-2"
+        >
+          more maps
+        </a>
       </span>
     </aside>
   );
