@@ -24,7 +24,7 @@ help:
 	@echo "  make seed             Seed local demo logins (admin/admin, user1/user1, user2/user2) + a ready-to-play world"
 	@echo "  make build            Production build (engine WASM + backend + frontend)"
 	@echo "  make clean            Remove build output (dist/)"
-	@echo "  make container        Build the app images from source (docker compose build; no host toolchain needed)"
+	@echo "  make container        Build the app image from source (docker compose build; no host toolchain needed)"
 	@echo "  make container-up     Start the whole app (app+postgres+rustfs+mailpit) detached on http://localhost:42080"
 	@echo "  make container-down   Stop it, keep the instance's data"
 	@echo "  make container-down-clean  Stop it and DELETE the instance (database, uploads, worlds)"

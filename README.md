@@ -60,7 +60,7 @@ Useful afterwards:
 
 `make dev` runs the server and the web app on the host against a smaller
 dependency stack (`compose.dev.yml`, on the standard 5432/9000/1025/8025
-ports). `make container` builds the two images above without starting them.
+ports). `make container` builds the app image without starting it.
 See `docs/CONTRIBUTING.md` for the test suites and `AGENTS.md` for the
 architecture.
 

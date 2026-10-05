@@ -1,35 +1,28 @@
 # syntax=docker/dockerfile:1.7
 #
-# The whole of ThunderForge, built from source, in two images.
+# The whole of ThunderForge, built from source, in one image.
 #
 #   docker compose up -d --build
 #
 # is the entire install. The `build` stage below compiles everything the
 # repository contains — the Bevy engine and the PDF reader to WebAssembly, the
 # React client to a static bundle, and the Axum server to a release binary —
-# and the two runtime stages package only what runs:
+# and the runtime stage packages only what runs: the binary, diesel-cli for
+# migrations, the game-system and interface packs it reads at boot, and the
+# client bundle as a directory beside them.
 #
-#   server   the binary, diesel-cli for migrations, and the game-system and
-#            interface packs it reads at boot
-#   web      nginx serving the client bundle and proxying `/api` to the server
+# # The client is a directory, not part of the binary
 #
-# # Why the client is a second image rather than the server's static mount
+# The server serves the bundle from `STATIC_DIR`, a path read at runtime, so
+# the same binary runs with any client build and a rebuilt client does not
+# mean a recompiled server. It sits outside the data directory on purpose:
+# that directory is where an instance's volumes mount, and a volume over
+# `data/` would hide a client stored inside it.
 #
-# `static_files::router` does mount `data/client` as the server's fallback, so
-# a single container looks like it should work. It does not, for two reasons
-# that have gone unnoticed because every development and test run serves the
-# frontend from vite instead:
-#
-#   1. The bundle asks for `/assets/entry/*.js`, `/assets/chunks/*.js` and
-#      `/assets/static/*.css`, and `/assets` is `nest_service`d to the *upload*
-#      directory — so every script and stylesheet 404s.
-#   2. `main.rs` applies `.fallback(errors::handler_404)` after merging that
-#      router, which replaces the client fallback, so `/` 404s as JSON too.
-#
-# A reverse proxy in front is what a deployment wants regardless: it is the one
-# place that can try the bundle first and hand everything else to the backend,
-# which is exactly what the `/assets` collision needs. See
-# scripts/container-nginx.conf.
+# There used to be a second, nginx image in front, because the server could
+# not serve its own client: `/assets` was the upload directory alone, so the
+# bundle's scripts were 404s, and an unknown path was a JSON 404 rather than
+# the client. Both are fixed in `static_files`, and one process is the app.
 #
 # # Build time
 #
@@ -155,18 +148,17 @@ COPY crates/thunderforge-server/migrations /srv/thunderforge/migrate/migrations
 # discard an instance's state.
 COPY packs /srv/thunderforge/data/packs
 
+# The built client. See the note at the top of this file on why it is here
+# and not under the data directory.
+COPY --from=build /build/data/client /srv/thunderforge/client
+
 COPY scripts/container-entrypoint.sh /usr/local/bin/thunderforge-entrypoint
 # Belt and braces: COPY carries the host's mode, and a script that arrives
 # without the execute bit fails at `docker run`, not at `docker build`.
 RUN chmod 0755 /usr/local/bin/thunderforge-entrypoint
 
-ENV THUNDERFORGE_DATA_PATH=/srv/thunderforge/data
+ENV THUNDERFORGE_DATA_PATH=/srv/thunderforge/data \
+  STATIC_DIR=/srv/thunderforge/client
 EXPOSE 30000
 
 ENTRYPOINT ["/usr/local/bin/thunderforge-entrypoint"]
-
-# --- the client ---------------------------------------------------------------
-FROM nginx:1.27-alpine AS web
-
-COPY scripts/container-nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /build/data/client /usr/share/nginx/html

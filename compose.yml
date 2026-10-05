@@ -34,28 +34,8 @@
 name: thunderforge-app
 
 services:
-  # The one address to remember. Everything else in this file is reachable
-  # only from inside the compose network, which is the other half of "no port
-  # conflicts".
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: web
-    image: thunderforge-web:local
-    container_name: thunderforge-app-web
-    restart: unless-stopped
-    depends_on:
-      app:
-        condition: service_started
-    ports:
-      - "${THUNDERFORGE_PORT:-42080}:80"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 6
-
+  # The one address to remember: the server, which serves the client too.
+  # Everything else in this file is published only for a look inside.
   app:
     build:
       context: .
@@ -64,6 +44,8 @@ services:
     image: thunderforge-app:local
     container_name: thunderforge-app
     restart: unless-stopped
+    ports:
+      - "${THUNDERFORGE_PORT:-42080}:30000"
     depends_on:
       postgres:
         condition: service_healthy
