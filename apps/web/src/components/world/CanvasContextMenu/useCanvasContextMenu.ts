@@ -3,6 +3,7 @@ import {
   boardCentre,
   boardPointToClient,
   onCanvasContextMenu,
+  type CanvasContextMenuEvent,
 } from "@/engine/bevy";
 import type { WorldStore } from "@/engine/world/store";
 
@@ -19,6 +20,10 @@ export interface CanvasMenuRequest {
    * standing in a doorway is what somebody right-clicking there means.
    */
   wallId: string | null;
+  /** The placed light it is about, when it is about one (spec 073). */
+  lightId: string | null;
+  /** The drawing it is about, when it is about one (spec 073). */
+  shapeId: string | null;
   /** A second right-click on the same door, straight after the first. */
   doubled: boolean;
   /** Where focus goes back to when the menu, and anything it opened, closes. */
@@ -53,6 +58,36 @@ export function isDoubleRightClick(
     Math.hypot(next.at.x - previous.at.x, next.at.y - previous.at.y) <=
       DOUBLE_CLICK_PX
   );
+}
+
+/** The one thing a right-click is about, of everything that was under it. */
+export interface MenuSubject {
+  tokenId: string | null;
+  lightId: string | null;
+  wallId: string | null;
+  shapeId: string | null;
+}
+
+/**
+ * Which of the things under a right-click it is about: at most one.
+ *
+ * The smaller and the more deliberate thing to aim at wins. A token first,
+ * as it always has. Then a light, whose marker is a dot somebody has to mean
+ * to hit. Then a wall or a door, a line. A drawing last: a rectangle can
+ * cover a whole room, and everything standing in the room is still there to
+ * be clicked.
+ */
+export function menuSubjectOf(
+  event: Pick<
+    CanvasContextMenuEvent,
+    "tokenIds" | "wallId" | "lightId" | "shapeId"
+  >,
+): MenuSubject {
+  const tokenId = event.tokenIds[0] ?? null;
+  const lightId = tokenId ? null : (event.lightId ?? null);
+  const wallId = tokenId || lightId ? null : (event.wallId ?? null);
+  const shapeId = tokenId || lightId || wallId ? null : (event.shapeId ?? null);
+  return { tokenId, lightId, wallId, shapeId };
 }
 
 const TEXT_ENTRY = new Set(["INPUT", "TEXTAREA", "SELECT"]);
@@ -96,8 +131,7 @@ export function useCanvasContextMenu(
         x: (box?.left ?? 0) + event.screenX,
         y: (box?.top ?? 0) + event.screenY,
       };
-      const tokenId = event.tokenIds[0] ?? null;
-      const wallId = tokenId ? null : (event.wallId ?? null);
+      const { tokenId, lightId, wallId, shapeId } = menuSubjectOf(event);
       const click = wallId ? { wallId, at, time: performance.now() } : null;
       const doubled =
         click !== null && isDoubleRightClick(lastWallClick, click);
@@ -109,6 +143,8 @@ export function useCanvasContextMenu(
         world: { x: event.worldX, y: event.worldY },
         tokenId,
         wallId,
+        lightId,
+        shapeId,
         doubled,
         returnFocus: canvas ?? null,
         serial,
@@ -155,6 +191,8 @@ export function useCanvasContextMenu(
           world,
           tokenId: selected?.id ?? null,
           wallId: null,
+          lightId: null,
+          shapeId: null,
           doubled: false,
           returnFocus,
           serial,

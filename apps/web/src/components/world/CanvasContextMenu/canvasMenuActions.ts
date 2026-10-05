@@ -1,5 +1,5 @@
 import type { TokenRecord } from "@/types/token";
-import type { WorldWall } from "@/engine/world/types";
+import type { WorldLight, WorldShape, WorldWall } from "@/engine/world/types";
 
 /**
  * What the play field's right-click menu offers, decided from who is asking
@@ -19,7 +19,8 @@ import type { WorldWall } from "@/engine/world/types";
  *   (`setTokenNameVisibility`) and remove it (`deleteToken`). On bare board,
  *   they may place a token or add a light there.
  *
- * On a wall or a door (spec 071), see `doorMenuActions`.
+ * On a wall or a door (spec 071), see `doorMenuActions`. On a light or a
+ * drawing (spec 073), see `lightMenuActions` and `shapeMenuActions`.
  */
 
 /** One attack the viewer's character can make, from its sheet. */
@@ -38,7 +39,18 @@ export type CanvasMenuAction =
   | { kind: "remove" }
   | { kind: "place-token" }
   | { kind: "add-light" }
-  | DoorMenuAction;
+  | DoorMenuAction
+  | LightMenuAction
+  | ShapeMenuAction;
+
+export type LightMenuAction =
+  | { kind: "light-power"; on: boolean }
+  | { kind: "light-shadows"; casts: boolean }
+  | { kind: "light-remove" };
+
+export type ShapeMenuAction =
+  | { kind: "shape-visibility"; visible: boolean }
+  | { kind: "shape-remove" };
 
 export type DoorMenuAction =
   | { kind: "door-state"; open: boolean }
@@ -162,6 +174,65 @@ export function wallName(wall: WorldWall): string {
   return wall.secret ? "Hidden door" : "Door";
 }
 
+/** The id prefix of a light a game system says a token carries. */
+const CARRIED_LIGHT = "carried:";
+
+/**
+ * What a right-click on a placed light offers (spec 073).
+ *
+ * A **Game Master** may put it out or light it again, say whether walls stop
+ * it, and remove it. Nobody else is offered anything: a light is the Game
+ * Master's to change. Nor is anything offered on a light a game system hangs
+ * from a token — that one is the sheet's, and changing it here would be
+ * undone the next time the sheet spoke.
+ */
+export function lightMenuActions(options: {
+  viewer: CanvasMenuViewer;
+  light: WorldLight;
+}): LightMenuAction[] {
+  const { viewer, light } = options;
+  if (!viewer.isGameMaster || light.id.startsWith(CARRIED_LIGHT)) return [];
+  return [
+    { kind: "light-power", on: !(light.intensity > 0) },
+    { kind: "light-shadows", casts: !light.castsShadows },
+    { kind: "light-remove" },
+  ];
+}
+
+/**
+ * What a right-click on a drawing offers (spec 073).
+ *
+ * A **Game Master** may show it to the players or keep it to themselves, and
+ * remove it. Nobody else is offered anything.
+ */
+export function shapeMenuActions(options: {
+  viewer: CanvasMenuViewer;
+  shape: WorldShape;
+}): ShapeMenuAction[] {
+  const { viewer, shape } = options;
+  if (!viewer.isGameMaster) return [];
+  return [
+    { kind: "shape-visibility", visible: !shape.visibleToPlayers },
+    { kind: "shape-remove" },
+  ];
+}
+
+/** What the menu calls a drawing. */
+export function shapeName(shape: WorldShape): string {
+  switch (shape.kind) {
+    case "rect":
+      return "Rectangle";
+    case "ellipse":
+      return "Ellipse";
+    case "line":
+      return "Line";
+    case "text":
+      return "Text";
+    case "stroke":
+      return "Drawing";
+  }
+}
+
 /** What a person reads on the item. */
 export function actionLabel(action: CanvasMenuAction, name: string): string {
   switch (action.kind) {
@@ -197,6 +268,16 @@ export function actionLabel(action: CanvasMenuAction, name: string): string {
       return "Show it to the table";
     case "door-designate":
       return action.isDoor ? "Make this a door" : "Make it an ordinary wall";
+    case "light-power":
+      return action.on ? "Light it" : "Put it out";
+    case "light-shadows":
+      return action.casts ? "Stop at walls" : "Shine through walls";
+    case "light-remove":
+      return "Remove this light";
+    case "shape-visibility":
+      return action.visible ? "Show to players" : "Hide from players";
+    case "shape-remove":
+      return "Remove from the board";
   }
 }
 

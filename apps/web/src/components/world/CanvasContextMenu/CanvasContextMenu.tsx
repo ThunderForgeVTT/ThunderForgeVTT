@@ -31,7 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { didApply, type TokenControlFacet } from "@/engine/world/facets";
 import type { WorldStore } from "@/engine/world/store";
-import type { WorldWall } from "@/engine/world/types";
+import type { WorldLight, WorldShape, WorldWall } from "@/engine/world/types";
 import type { WorldActorRecord } from "@/types/actor";
 import type { HitPointChange } from "@/types/combat";
 import type { SceneUnits } from "@/types/light";
@@ -44,6 +44,9 @@ import {
   attackerTokenOf,
   canvasMenuActions,
   doorMenuActions,
+  lightMenuActions,
+  shapeMenuActions,
+  shapeName,
   wallName,
   type CanvasMenuAction,
   type SheetAttack,
@@ -76,6 +79,37 @@ interface Resolved {
   conditions: WorldSystemCondition[];
   /** The wall or door it is about, when it is about one (spec 071). */
   wall: WorldWall | null;
+  /** The light or the drawing it is about, when it is about one (spec 073). */
+  light: WorldLight | null;
+  shape: WorldShape | null;
+}
+
+/** A menu about something that is not a token. */
+function about(
+  request: CanvasMenuRequest,
+  actions: CanvasMenuAction[],
+  thing: Partial<Pick<Resolved, "wall" | "light" | "shape">>,
+): Resolved {
+  return {
+    request,
+    tokens: [],
+    target: null,
+    attacker: null,
+    actions,
+    conditions: [],
+    wall: null,
+    light: null,
+    shape: null,
+    ...thing,
+  };
+}
+
+/** What the menu calls what it is about, when that is not a token. */
+function thingName(resolved: Resolved): string | null {
+  if (resolved.light) return "Light";
+  if (resolved.wall) return wallName(resolved.wall);
+  if (resolved.shape) return shapeName(resolved.shape);
+  return null;
 }
 
 /** How long after the menu opens a right-click on it is still the second click. */
@@ -177,6 +211,21 @@ export function CanvasContextMenu({
     returnFocus.current = request.returnFocus;
     let active = true;
     (async () => {
+      const viewer = { isGameMaster, userId };
+      const light = request.lightId
+        ? (worldStore.getState().lights[request.lightId] ?? null)
+        : null;
+      if (light) {
+        const actions = lightMenuActions({ viewer, light });
+        if (actions.length > 0) return about(request, actions, { light });
+      }
+      const shape = request.shapeId
+        ? (worldStore.getState().shapes[request.shapeId] ?? null)
+        : null;
+      if (shape) {
+        const actions = shapeMenuActions({ viewer, shape });
+        if (actions.length > 0) return about(request, actions, { shape });
+      }
       const wall =
         !request.tokenId && request.wallId
           ? (worldStore.getState().walls[request.wallId] ?? null)
@@ -198,22 +247,8 @@ export function CanvasContextMenu({
           !isGameMaster && isDoor && !wall.locked
             ? (await doorInteractive(sceneId, wall.id))?.canActivate === true
             : false;
-        const actions = doorMenuActions({
-          viewer: { isGameMaster, userId },
-          wall,
-          canOpen,
-        });
-        if (actions.length > 0) {
-          return {
-            request,
-            tokens: [],
-            target: null,
-            attacker: null,
-            actions,
-            conditions: [],
-            wall,
-          };
-        }
+        const actions = doorMenuActions({ viewer, wall, canOpen });
+        if (actions.length > 0) return about(request, actions, { wall });
         // Nothing to offer on it: it is board, as far as this viewer goes.
       }
       const tokens = await getTokens(sceneId);
@@ -240,7 +275,7 @@ export function CanvasContextMenu({
         (target.nameVisibleToPlayers === false ||
           worldStore.getState().tokens[target.tokenId]?.nameHidden === true);
       const actions = canvasMenuActions({
-        viewer: { isGameMaster, userId },
+        viewer,
         target,
         nameHidden,
         attacker,
@@ -255,6 +290,8 @@ export function CanvasContextMenu({
         actions,
         conditions,
         wall: null,
+        light: null,
+        shape: null,
       };
     })()
       .then((answer) => {
@@ -410,6 +447,60 @@ export function CanvasContextMenu({
           if (problem) setNotice(problem);
         }
         return;
+      // A light and a drawing are the world store's (AGENTS.md §2): an intent
+      // goes in, and what the server made of it comes back to every board.
+      case "light-power":
+        if (resolved.light) {
+          worldStore.dispatch(
+            {
+              type: "update_light",
+              lightId: resolved.light.id,
+              changes: { intensity: action.on ? 1 : 0 },
+            },
+            "ui",
+          );
+        }
+        return;
+      case "light-shadows":
+        if (resolved.light) {
+          worldStore.dispatch(
+            {
+              type: "update_light",
+              lightId: resolved.light.id,
+              changes: { castsShadows: action.casts },
+            },
+            "ui",
+          );
+        }
+        return;
+      case "light-remove":
+        if (resolved.light) {
+          worldStore.dispatch(
+            { type: "delete_light", lightId: resolved.light.id },
+            "ui",
+          );
+        }
+        return;
+      case "shape-visibility":
+        if (resolved.shape) {
+          worldStore.dispatch(
+            {
+              type: "update_shape",
+              shapeId: resolved.shape.id,
+              changes: { visibleToPlayers: action.visible },
+            },
+            "ui",
+          );
+        }
+        return;
+      case "shape-remove":
+        if (resolved.shape) {
+          worldStore.dispatch(
+            { type: "delete_shape", shapeId: resolved.shape.id },
+            "ui",
+          );
+        }
+        return;
     }
   };
 
@@ -418,8 +509,9 @@ export function CanvasContextMenu({
     giveFocusBack();
   };
 
-  const menuLabel = resolved?.wall
-    ? `${wallName(resolved.wall)} actions`
+  const thing = resolved ? thingName(resolved) : null;
+  const menuLabel = thing
+    ? `${thing} actions`
     : resolved?.target
       ? `Actions for ${nameOf(resolved.target)}`
       : "Board actions";
@@ -478,17 +570,19 @@ export function CanvasContextMenu({
             }}
           >
             <DropdownMenuLabel>
-              {resolved.wall
-                ? wallName(resolved.wall)
-                : resolved.target
-                  ? nameOf(resolved.target)
-                  : "Here"}
+              {thing ?? (resolved.target ? nameOf(resolved.target) : "Here")}
             </DropdownMenuLabel>
             {resolved.actions.map((action) => (
               <DropdownMenuItem
                 key={actionTestId(action)}
                 data-testid={actionTestId(action)}
-                variant={action.kind === "remove" ? "destructive" : "default"}
+                variant={
+                  action.kind === "remove" ||
+                  action.kind === "light-remove" ||
+                  action.kind === "shape-remove"
+                    ? "destructive"
+                    : "default"
+                }
                 disabled={action.kind === "door-locked"}
                 onSelect={() => {
                   void choose(action);

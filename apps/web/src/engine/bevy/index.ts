@@ -618,6 +618,10 @@ export interface CanvasContextMenuEvent {
   screenY: number;
   tokenIds: string[];
   wallId?: string | null;
+  /** The placed light under the pointer; a Game Master's only (spec 073). */
+  lightId?: string | null;
+  /** The drawing under the pointer; a Game Master's only (spec 073). */
+  shapeId?: string | null;
 }
 
 function asCanvasContextMenu(event: unknown): CanvasContextMenuEvent | null {
