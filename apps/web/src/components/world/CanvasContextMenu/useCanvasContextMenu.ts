@@ -14,6 +14,13 @@ export interface CanvasMenuRequest {
   world: { x: number; y: number };
   /** The token it is about, or `null` for bare board. */
   tokenId: string | null;
+  /**
+   * The wall or door it is about, when it is not about a token: a token
+   * standing in a doorway is what somebody right-clicking there means.
+   */
+  wallId: string | null;
+  /** A second right-click on the same door, straight after the first. */
+  doubled: boolean;
   /** Where focus goes back to when the menu, and anything it opened, closes. */
   returnFocus: HTMLElement | null;
   /** Bumped per request, so asking twice at one spot is two requests. */
@@ -21,6 +28,32 @@ export interface CanvasMenuRequest {
 }
 
 let serial = 0;
+
+/** How soon, and how near, a second right-click is the same gesture. */
+const DOUBLE_CLICK_MS = 500;
+const DOUBLE_CLICK_PX = 12;
+
+/** One right-click on a wall, as the next one needs to remember it. */
+export interface WallClick {
+  wallId: string;
+  at: { x: number; y: number };
+  /** Milliseconds, from any one clock. */
+  time: number;
+}
+
+/** Whether `next` is the second half of a double right-click begun by `previous`. */
+export function isDoubleRightClick(
+  previous: WallClick | null,
+  next: WallClick,
+): boolean {
+  return (
+    previous !== null &&
+    previous.wallId === next.wallId &&
+    next.time - previous.time <= DOUBLE_CLICK_MS &&
+    Math.hypot(next.at.x - previous.at.x, next.at.y - previous.at.y) <=
+      DOUBLE_CLICK_PX
+  );
+}
 
 const TEXT_ENTRY = new Set(["INPUT", "TEXTAREA", "SELECT"]);
 
@@ -55,17 +88,28 @@ export function useCanvasContextMenu(
 
   useEffect(() => {
     if (!enabled) return;
+    let lastWallClick: WallClick | null = null;
     return onCanvasContextMenu((event) => {
       const canvas = document.querySelector<HTMLCanvasElement>("canvas");
       const box = canvas?.getBoundingClientRect();
+      const at = {
+        x: (box?.left ?? 0) + event.screenX,
+        y: (box?.top ?? 0) + event.screenY,
+      };
+      const tokenId = event.tokenIds[0] ?? null;
+      const wallId = tokenId ? null : (event.wallId ?? null);
+      const click = wallId ? { wallId, at, time: performance.now() } : null;
+      const doubled =
+        click !== null && isDoubleRightClick(lastWallClick, click);
+      // A third click starts over rather than doubling the second.
+      lastWallClick = doubled ? null : click;
       serial += 1;
       setRequest({
-        at: {
-          x: (box?.left ?? 0) + event.screenX,
-          y: (box?.top ?? 0) + event.screenY,
-        },
+        at,
         world: { x: event.worldX, y: event.worldY },
-        tokenId: event.tokenIds[0] ?? null,
+        tokenId,
+        wallId,
+        doubled,
         returnFocus: canvas ?? null,
         serial,
       });
@@ -110,6 +154,8 @@ export function useCanvasContextMenu(
           at,
           world,
           tokenId: selected?.id ?? null,
+          wallId: null,
+          doubled: false,
           returnFocus,
           serial,
         });

@@ -1,4 +1,5 @@
 import type { TokenRecord } from "@/types/token";
+import type { WorldWall } from "@/engine/world/types";
 
 /**
  * What the play field's right-click menu offers, decided from who is asking
@@ -17,6 +18,8 @@ import type { TokenRecord } from "@/types/token";
  *   hide or show its name
  *   (`setTokenNameVisibility`) and remove it (`deleteToken`). On bare board,
  *   they may place a token or add a light there.
+ *
+ * On a wall or a door (spec 071), see `doorMenuActions`.
  */
 
 /** One attack the viewer's character can make, from its sheet. */
@@ -34,7 +37,17 @@ export type CanvasMenuAction =
   | { kind: "name"; hidden: boolean }
   | { kind: "remove" }
   | { kind: "place-token" }
-  | { kind: "add-light" };
+  | { kind: "add-light" }
+  | DoorMenuAction;
+
+export type DoorMenuAction =
+  | { kind: "door-state"; open: boolean }
+  /** Said, not offered: the one thing a player may know about a locked door. */
+  | { kind: "door-locked" }
+  | { kind: "door-lock"; locked: boolean }
+  | { kind: "door-gm-lock" }
+  | { kind: "door-reveal" }
+  | { kind: "door-designate"; isDoor: boolean };
 
 export interface CanvasMenuViewer {
   isGameMaster: boolean;
@@ -90,6 +103,65 @@ export function canvasMenuActions(options: {
   return attacks.map((attack) => ({ kind: "attack", attack }));
 }
 
+/**
+ * Shut, locked and hidden: to the table it is wall.
+ *
+ * Not a fourth state — the three things it is made of are stored apart (spec
+ * 030), and this only names having all of them at once.
+ */
+export function isGmLocked(wall: WorldWall): boolean {
+  return (
+    wall.doorState === "closed" && wall.locked === true && wall.secret === true
+  );
+}
+
+/**
+ * What a right-click on a wall or a door offers (spec 071).
+ *
+ * - A **Game Master** on a door may open or shut it, lock or unlock it, lock
+ *   it as a wall (`door-gm-lock`: shut, locked and hidden from the table),
+ *   show a hidden one to the table, and make it an ordinary wall again. On a
+ *   plain wall they may make it a door.
+ * - A **player** on a door may open or shut it when its interactive lets them
+ *   (`canOpen`), and is told a locked one is locked rather than offered
+ *   something the server would refuse. The engine never reports them a plain
+ *   wall or a hidden door; neither offers anything here if one arrives.
+ */
+export function doorMenuActions(options: {
+  viewer: CanvasMenuViewer;
+  wall: WorldWall;
+  /** Whether this viewer's activation of the door would do anything. */
+  canOpen: boolean;
+}): DoorMenuAction[] {
+  const { viewer, wall, canOpen } = options;
+  const isDoor = wall.doorState !== "none";
+
+  if (!viewer.isGameMaster) {
+    if (!isDoor || wall.secret) return [];
+    if (wall.locked) return [{ kind: "door-locked" }];
+    return canOpen
+      ? [{ kind: "door-state", open: wall.doorState !== "open" }]
+      : [];
+  }
+
+  if (!isDoor) return [{ kind: "door-designate", isDoor: true }];
+
+  const actions: DoorMenuAction[] = [
+    { kind: "door-state", open: wall.doorState !== "open" },
+    { kind: "door-lock", locked: !wall.locked },
+  ];
+  if (!isGmLocked(wall)) actions.push({ kind: "door-gm-lock" });
+  if (wall.secret) actions.push({ kind: "door-reveal" });
+  actions.push({ kind: "door-designate", isDoor: false });
+  return actions;
+}
+
+/** What the menu calls the thing that was right-clicked. */
+export function wallName(wall: WorldWall): string {
+  if (wall.doorState === "none") return "Wall";
+  return wall.secret ? "Hidden door" : "Door";
+}
+
 /** What a person reads on the item. */
 export function actionLabel(action: CanvasMenuAction, name: string): string {
   switch (action.kind) {
@@ -113,6 +185,18 @@ export function actionLabel(action: CanvasMenuAction, name: string): string {
       return "Place a token here…";
     case "add-light":
       return "Add a light here";
+    case "door-state":
+      return action.open ? "Open" : "Close";
+    case "door-locked":
+      return "Locked";
+    case "door-lock":
+      return action.locked ? "Lock" : "Unlock";
+    case "door-gm-lock":
+      return "Lock as a wall";
+    case "door-reveal":
+      return "Show it to the table";
+    case "door-designate":
+      return action.isDoor ? "Make this a door" : "Make it an ordinary wall";
   }
 }
 

@@ -31,6 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { didApply, type TokenControlFacet } from "@/engine/world/facets";
 import type { WorldStore } from "@/engine/world/store";
+import type { WorldWall } from "@/engine/world/types";
 import type { WorldActorRecord } from "@/types/actor";
 import type { HitPointChange } from "@/types/combat";
 import type { SceneUnits } from "@/types/light";
@@ -42,10 +43,13 @@ import {
   actionTestId,
   attackerTokenOf,
   canvasMenuActions,
+  doorMenuActions,
+  wallName,
   type CanvasMenuAction,
   type SheetAttack,
 } from "./canvasMenuActions";
 import { ConditionsDialog } from "./ConditionsDialog";
+import { doorInteractive, performDoorAction } from "./doorActions";
 import type { CanvasMenuRequest } from "./useCanvasContextMenu";
 
 export interface CanvasContextMenuProps {
@@ -70,7 +74,12 @@ interface Resolved {
   actions: CanvasMenuAction[];
   /** What the world's system declares, for a Game Master on a character. */
   conditions: WorldSystemCondition[];
+  /** The wall or door it is about, when it is about one (spec 071). */
+  wall: WorldWall | null;
 }
+
+/** How long after the menu opens a right-click on it is still the second click. */
+const SECOND_CLICK_MS = 500;
 
 type Follow =
   | {
@@ -159,6 +168,7 @@ export function CanvasContextMenu({
   // Held apart from `request`, which the page clears as soon as the menu
   // closes — before a dialog an item opened has finished and needs it.
   const returnFocus = useRef<HTMLElement | null>(null);
+  const openedAt = useRef(0);
 
   // Ask what this right-click is before showing anything: the menu must not
   // offer an action and then discover it had no business offering it.
@@ -167,6 +177,45 @@ export function CanvasContextMenu({
     returnFocus.current = request.returnFocus;
     let active = true;
     (async () => {
+      const wall =
+        !request.tokenId && request.wallId
+          ? (worldStore.getState().walls[request.wallId] ?? null)
+          : null;
+      if (wall) {
+        const isDoor = wall.doorState !== "none";
+        if (request.doubled && isGameMaster && isDoor) {
+          // A double right-click: the first opened the menu, and this one
+          // locks the door as a wall without asking again.
+          const problem = await performDoorAction(
+            { kind: "door-gm-lock" },
+            wall,
+            { worldStore, sceneId, isGameMaster },
+          );
+          if (active && problem) setNotice(problem);
+          return null;
+        }
+        const canOpen =
+          !isGameMaster && isDoor && !wall.locked
+            ? (await doorInteractive(sceneId, wall.id))?.canActivate === true
+            : false;
+        const actions = doorMenuActions({
+          viewer: { isGameMaster, userId },
+          wall,
+          canOpen,
+        });
+        if (actions.length > 0) {
+          return {
+            request,
+            tokens: [],
+            target: null,
+            attacker: null,
+            actions,
+            conditions: [],
+            wall,
+          };
+        }
+        // Nothing to offer on it: it is board, as far as this viewer goes.
+      }
       const tokens = await getTokens(sceneId);
       const target = request.tokenId
         ? (tokens.find((token) => token.tokenId === request.tokenId) ?? null)
@@ -198,7 +247,15 @@ export function CanvasContextMenu({
         attacks,
         systemHasConditions: conditions.length > 0,
       });
-      return { request, tokens, target, attacker, actions, conditions };
+      return {
+        request,
+        tokens,
+        target,
+        attacker,
+        actions,
+        conditions,
+        wall: null,
+      };
     })()
       .then((answer) => {
         if (!active) return;
@@ -206,6 +263,7 @@ export function CanvasContextMenu({
           onDone();
           return;
         }
+        openedAt.current = performance.now();
         setResolved(answer);
       })
       .catch(() => {
@@ -337,6 +395,21 @@ export function CanvasContextMenu({
         );
         return;
       }
+      case "door-state":
+      case "door-locked":
+      case "door-lock":
+      case "door-gm-lock":
+      case "door-reveal":
+      case "door-designate":
+        if (resolved.wall && sceneId) {
+          const problem = await performDoorAction(action, resolved.wall, {
+            worldStore,
+            sceneId,
+            isGameMaster,
+          });
+          if (problem) setNotice(problem);
+        }
+        return;
     }
   };
 
@@ -345,9 +418,11 @@ export function CanvasContextMenu({
     giveFocusBack();
   };
 
-  const menuLabel = resolved?.target
-    ? `Actions for ${nameOf(resolved.target)}`
-    : "Board actions";
+  const menuLabel = resolved?.wall
+    ? `${wallName(resolved.wall)} actions`
+    : resolved?.target
+      ? `Actions for ${nameOf(resolved.target)}`
+      : "Board actions";
 
   return (
     <>
@@ -377,6 +452,22 @@ export function CanvasContextMenu({
           <DropdownMenuContent
             data-testid="canvas-menu"
             className="w-auto min-w-48"
+            onContextMenu={(event) => {
+              // Never the browser's menu over ours.
+              event.preventDefault();
+              // The second half of a double right-click that landed on the
+              // menu the first half opened, rather than on the board beside
+              // it. `timeStamp` is on the clock `openedAt` was read from.
+              if (
+                isGameMaster &&
+                resolved.wall &&
+                resolved.wall.doorState !== "none" &&
+                event.timeStamp - openedAt.current <= SECOND_CLICK_MS
+              ) {
+                void choose({ kind: "door-gm-lock" });
+                close();
+              }
+            }}
             onCloseAutoFocus={(event) => {
               event.preventDefault();
               if (followPending.current) {
@@ -387,13 +478,18 @@ export function CanvasContextMenu({
             }}
           >
             <DropdownMenuLabel>
-              {resolved.target ? nameOf(resolved.target) : "Here"}
+              {resolved.wall
+                ? wallName(resolved.wall)
+                : resolved.target
+                  ? nameOf(resolved.target)
+                  : "Here"}
             </DropdownMenuLabel>
             {resolved.actions.map((action) => (
               <DropdownMenuItem
                 key={actionTestId(action)}
                 data-testid={actionTestId(action)}
                 variant={action.kind === "remove" ? "destructive" : "default"}
+                disabled={action.kind === "door-locked"}
                 onSelect={() => {
                   void choose(action);
                 }}
