@@ -99,6 +99,10 @@ it to the table; hides a note meant only for them; removes a scribble.
   or Drawing.
 - **FR-006** Every change is an intent into the world store. The menu makes
   no network call of its own for a light or a drawing.
+- **FR-007** A drawing hidden from the players leaves their boards at once.
+  A player is never sent a hidden drawing, so when a shape event names a
+  drawing the server no longer returns, the shape sync drops it. Before
+  this spec the drawing stayed on a player's board until they reloaded.
 
 ## Success Criteria
 

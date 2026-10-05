@@ -149,6 +149,14 @@ export async function applyShapeWorldEvent(
       "sync",
     );
   }
+
+  // A player is never sent a hidden drawing, so one the Game Master has just
+  // hidden is missing from the answer rather than marked. Only the drawing
+  // the event names is dropped: another missing one may be a drawing this
+  // client has made and the server has not yet answered for.
+  if (shapeId && !shapes.some((shape) => shape.shapeId === shapeId)) {
+    worldStore.dispatch({ type: "remove_shape", shapeId }, "sync");
+  }
 }
 
 /**
