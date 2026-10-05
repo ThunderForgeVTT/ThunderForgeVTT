@@ -4,7 +4,12 @@ import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { AccessConsequences } from "@/pages/setup/steps/AccessConsequences";
 import { DesignatedAgentNotice } from "@/pages/setup/steps/DesignatedAgentNotice";
 import { SettingField } from "@/pages/setup/steps/SettingField";
-import { settingLabel, type SetupStep } from "@/services/instanceSetup";
+import { ExtrasSections } from "@/pages/setup/steps/ExtrasSections";
+import {
+  LEFTOVERS_STEP_ID,
+  settingLabel,
+  type SetupStep,
+} from "@/services/instanceSetup";
 import type { StorageConnectionReport } from "@/types/admin";
 
 /**
@@ -61,6 +66,34 @@ function mentionsAccessPolicy(step: SetupStep): boolean {
   );
 }
 
+/** Does this step ask who operates the instance? */
+function mentionsOperator(step: SetupStep): boolean {
+  return step.settings.some((setting) => setting.key === "operator.name");
+}
+
+/** Does this step collect the mail server? */
+function mentionsMail(step: SetupStep): boolean {
+  return step.askable.some((setting) => setting.key === "mail.host");
+}
+
+const ACCESS_POLICY = "instance.access_policy";
+const PUBLISHES = "instance.publishes_beyond_world";
+
+/**
+ * Resend, over the SMTP it already speaks.
+ *
+ * Not a second mail adapter: Resend accepts SMTP with the API key as the
+ * password, so "use Resend" is five answers this step can give for the
+ * operator, leaving the two only they know.
+ */
+const RESEND_PRESET: Record<string, string> = {
+  "mail.enabled": "true",
+  "mail.host": "smtp.resend.com",
+  "mail.port": "465",
+  "mail.security": "implicit",
+  "mail.username": "resend",
+};
+
 /** As the server reads a boolean setting's value. */
 function isTruthy(value: string | undefined): boolean {
   return ["true", "1", "yes", "on"].includes(
@@ -97,6 +130,19 @@ export function SettingsStep({
     }
   };
 
+  const asks = (key: string) =>
+    step.askable.some((setting) => setting.key === key);
+  const policy = values[ACCESS_POLICY] || "invite_only";
+  const publishes = isTruthy(values[PUBLISHES]);
+  // The rule `publishedOperatorValues` applies on the server.
+  const isPrivate = policy !== "open";
+  // The two access answers are given by pressing their cards.
+  const fields = mentionsAccessPolicy(step)
+    ? step.askable.filter(
+        (setting) => setting.key !== ACCESS_POLICY && setting.key !== PUBLISHES,
+      )
+    : step.askable;
+
   return (
     <div className="grid gap-6">
       {/*
@@ -117,16 +163,91 @@ export function SettingsStep({
 
       {mentionsAccessPolicy(step) ? (
         <AccessConsequences
-          policy={values["instance.access_policy"]}
-          publishes={isTruthy(values["instance.publishes_beyond_world"])}
+          policy={values[ACCESS_POLICY]}
+          publishes={publishes}
+          onPolicy={
+            asks(ACCESS_POLICY)
+              ? (value) => onChange(ACCESS_POLICY, value)
+              : undefined
+          }
+          onPublishes={
+            asks(PUBLISHES)
+              ? (value) => onChange(PUBLISHES, value ? "true" : "false")
+              : undefined
+          }
         />
+      ) : null}
+
+      {mentionsOperator(step) ? (
+        <p
+          data-testid="setup-operator-visibility"
+          data-visibility={isPrivate ? "members" : "public"}
+          className="rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground"
+        >
+          {isPrivate
+            ? "Sign-ups here are not open, so none of this is shown to anyone who is not signed in. Your members see it on the terms and privacy pages."
+            : "This instance is open to sign-ups, so these are shown on its public legal pages, where somebody with no account can find who to write to."}
+        </p>
+      ) : null}
+
+      {mentionsNoticeContact(step) ? (
+        <p
+          data-testid="setup-notice-duty"
+          data-policy={policy}
+          className={
+            policy === "open"
+              ? "rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm"
+              : "rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground"
+          }
+        >
+          {policy === "open"
+            ? "This instance is open: anyone may sign up and share what they upload, copyrighted or Creative Commons-licensed material included. Leaving this blank means nobody can reach you about it, and you are the one answerable for copyright (DMCA) notices about what is shared from here. You can still skip it, but fill it in before you let strangers in."
+            : "Optional while only people you invited can join. You can skip this step and come back to it in the admin area; what is left blank is simply not served. Unlike who runs this instance, a contact you do give here is public, because a share link works for people with no account. It stops being optional in practice if you ever open sign-ups to everyone."}
+        </p>
       ) : null}
 
       {mentionsNoticeContact(step) ? <DesignatedAgentNotice /> : null}
 
-      {step.askable.length > 0 ? (
+      {mentionsMail(step) ? (
+        <section
+          data-testid="setup-mail-resend"
+          className="grid gap-2 rounded-lg border border-border p-3 text-sm"
+        >
+          <h3 className="font-semibold">Sending through Resend?</h3>
+          <p className="text-muted-foreground">
+            This fills in Resend&rsquo;s server details for you. You then paste
+            a Resend API key as the password, and give a from address at a
+            domain you have verified with Resend.
+          </p>
+          <div>
+            <Button
+              type="button"
+              variant="secondary"
+              data-testid="setup-mail-resend-apply"
+              onClick={() => {
+                for (const [key, value] of Object.entries(RESEND_PRESET)) {
+                  if (asks(key)) {
+                    onChange(key, value);
+                  }
+                }
+              }}
+            >
+              Use Resend
+            </Button>
+          </div>
+        </section>
+      ) : null}
+
+      {step.id === LEFTOVERS_STEP_ID ? (
+        <ExtrasSections
+          step={step}
+          values={values}
+          errors={errors}
+          onChange={onChange}
+        />
+      ) : fields.length > 0 ? (
         <div className="grid gap-4">
-          {step.askable.map((setting) => (
+          {fields.map((setting) => (
             <SettingField
               key={setting.key}
               setting={setting}
@@ -136,7 +257,7 @@ export function SettingsStep({
             />
           ))}
         </div>
-      ) : (
+      ) : step.askable.length > 0 ? null : (
         <StatusBadge variant="info">
           Everything on this step is already set by the environment. There is
           nothing to answer here.
@@ -182,7 +303,7 @@ export function SettingsStep({
         </section>
       ) : null}
 
-      {step.fixed.length > 0 ? (
+      {step.fixed.length > 0 && step.id !== LEFTOVERS_STEP_ID ? (
         /*
          * FR-009: told it is fixed, and where it comes from — never offered as
          * an editable field. An edit here would be refused by the server with

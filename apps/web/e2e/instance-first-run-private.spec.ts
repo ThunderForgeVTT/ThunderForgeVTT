@@ -98,9 +98,7 @@ test.describe("Spec 052 FR-060: a private instance, set up without a legal depar
       page.getByTestId("setup-access-consequence-invite_only"),
     ).toContainText("Recommended");
 
-    await page
-      .getByTestId("setup-setting-instance.access_policy")
-      .selectOption("invite_only");
+    await page.getByTestId("setup-access-consequence-invite_only").click();
     await expect(
       page.getByTestId("setup-access-consequence-invite_only"),
       "the chosen policy is marked as chosen, not merely listed",
@@ -191,6 +189,8 @@ test.describe("Spec 052 FR-060: a private instance, set up without a legal depar
     //    time somebody uploads a map.
     const extras = page.getByTestId("setup-step-settings-anything-else");
     await expect(extras).toBeVisible({ timeout: 30_000 });
+    // Each group of extras is a section that stays closed until it is opened.
+    await page.getByTestId("setup-extras-toggle-storage").click();
     for (const [key, value] of Object.entries(STORAGE_DEFAULTS)) {
       const field = page.getByTestId(`setup-setting-${key}`);
       if (await field.isVisible().catch(() => false)) {

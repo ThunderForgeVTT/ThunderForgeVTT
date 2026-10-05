@@ -186,9 +186,9 @@ const GROUP_LABELS: Record<string, string> = {
  * may want and none of them is a question this instance needs answered to run.
  * Four more screens that look mandatory is how a wizard stops being read.
  */
-const LEFTOVERS_STEP_TITLE = "Anything else you meant to set";
+const LEFTOVERS_STEP_TITLE = "Optional extras";
 
-const LEFTOVERS_STEP_ID = "settings-anything-else";
+export const LEFTOVERS_STEP_ID = "settings-anything-else";
 
 /**
  * Why a group is being asked about, for the groups where "why" is the
@@ -212,6 +212,11 @@ const GROUP_EXPLAINERS: Record<string, string> = {
   "Legal prose":
     "Also because this instance publishes beyond a world: people who are not at your table need to be able to read what they are agreeing to before they join. Leave a field blank and that page simply is not served — nothing is invented on your behalf.",
   Mail: "Without a mail server this instance cannot send an invitation, a password reset or a verification link. You can leave it blank and hand out invite links yourself.",
+  "GitHub applications":
+    "Up to three GitHub Apps: one for syncing a world\u2019s lore to a repository, one for filing in-app feedback as issues, and a global one either of those falls back to. Leave all of it blank unless you have created the app it asks about.",
+  Realm:
+    "How this instance introduces itself: its name, its welcome message and the defaults a new world starts with.",
+  Features: "Things that are off until you turn them on.",
   Storage:
     "Maps, tokens and portraits are kept in an S3-compatible object store. The shipped defaults point at a local RustFS, which is right for a self-hosted instance running the bundled stack and wrong for anything else.",
 };
@@ -316,10 +321,29 @@ export function requirementLabel(setting: RequiredSetting): string {
   if (isOptional(setting)) {
     return "Optional";
   }
-  return setting.requirement === "REQUIRED_FOR"
-    ? "Needed for a feature"
-    : "Required";
+  if (setting.requirement === "REQUIRED_FOR") {
+    const purpose = CAPABILITY_PURPOSES[setting.capability ?? ""];
+    return purpose ? `Optional · ${purpose}` : "Optional";
+  }
+  return "Required";
 }
+
+/**
+ * What a `REQUIRED_FOR` setting is for, in the operator's words.
+ *
+ * "Needed for a feature" said that something depended on the field and not
+ * what, on every field it appeared beside. Setup finishes without any of
+ * these, so the honest word is "Optional", followed by the one thing that
+ * will not work until it is filled in.
+ */
+const CAPABILITY_PURPOSES: Record<string, string> = {
+  send_mail: "needed to send mail",
+  store_assets: "needed to keep uploads",
+  publish_beyond_world: "needed once you share publicly",
+  publish_terms: "needed once you share publicly",
+  sync_lore: "needed to sync lore with GitHub",
+  feedback: "needed for in-app feedback",
+};
 
 /**
  * Whether this setting gets a step of its own.
@@ -413,7 +437,7 @@ export function buildSetupSteps({
     skipped: leftovers.every(isFixedByEnvironment),
     complete: true,
     explainer:
-      "None of this is needed to start playing, and every one of it can be changed later in the admin area. It is here because this is the moment an operator remembers the thing they meant to configure.",
+      "None of this is needed to start playing, and all of it can be changed later in the admin area. Open only the sections you care about; the rest can stay closed.",
   };
 
   // Providers sit after the settings groups and before the extras: by this

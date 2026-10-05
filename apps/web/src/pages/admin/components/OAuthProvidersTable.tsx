@@ -114,14 +114,14 @@ export function OAuthProvidersTable({
               <td className="px-3 py-3">
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant={provider.configured ? "ghost" : "secondary"}
                   size="sm"
                   aria-expanded={open}
                   aria-controls={`oauth-provider-editor-${provider.id}`}
                   data-testid={`oauth-provider-toggle-${provider.id}`}
                   onClick={() => setOpenId(open ? null : provider.id)}
                 >
-                  {open ? "Done" : "Edit"}
+                  {open ? "Done" : provider.configured ? "Edit" : "Configure"}
                 </Button>
               </td>
             </tr>,

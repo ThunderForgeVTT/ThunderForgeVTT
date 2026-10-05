@@ -651,10 +651,13 @@ export default function SetupPage({
               {current?.kind === "settings" &&
               current.askable.length > 0 &&
               current.askable.every(
-                (setting) => setting.requirement === "OPTIONAL",
+                (setting) =>
+                  setting.requirement === "OPTIONAL" ||
+                  setting.requirement === "REQUIRED_FOR",
               ) ? (
-                /* FR-003: an entirely optional step may be walked past, and
-                 * the review will then say what was left unset. */
+                /* FR-003: a step with nothing completion insists on may be
+                 * walked past, and the review will then say what was left
+                 * unset. `REQUIRED_FOR` counts: it gates a feature, not setup. */
                 <Button
                   data-testid="setup-skip-step"
                   type="button"

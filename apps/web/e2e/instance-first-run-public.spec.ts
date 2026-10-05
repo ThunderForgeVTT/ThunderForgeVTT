@@ -64,9 +64,7 @@ test.describe("Spec 052 FR-061: a public instance is told what publishing oblige
     const accessStep = page.getByTestId("setup-step-settings-access");
     await expect(accessStep).toBeVisible({ timeout: 30_000 });
 
-    await page
-      .getByTestId("setup-setting-instance.access_policy")
-      .selectOption("open");
+    await page.getByTestId("setup-access-consequence-open").click();
     await expect(
       page.getByTestId("setup-access-consequence-open"),
     ).toHaveAttribute("data-chosen", "true");
