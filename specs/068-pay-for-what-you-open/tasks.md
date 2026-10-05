@@ -8,7 +8,7 @@ description: "Task list for Pay for What You Open"
 
 **Tests**: written with the code they hold. Each story ends on the e2e slices its changes touch, run from the main checkout.
 
-**Baseline** (commit `0314d369`, `vite build`): 152 chunks, 2,569,524 bytes raw. Entry static closure 504,029 raw / 138,941 brotli. Beyond the entry: scene detail 818,729 / 196,025; the board 487,458 / 124,083; world staging 234,266 / 64,397; compendium 173,258 / 48,724.
+**Baseline** (commit `0314d369`, `vite build`): 152 chunks, 2,569,524 bytes raw. Entry static closure 504,029 raw / 138,941 brotli. Beyond the entry: scene detail 818,729 / 196,025; the board 487,458 / 124,083; world staging 234,266 / 64,397; compendium 173,258 / 48,724; a lore entry 842,344 / 201,618.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -16,8 +16,8 @@ description: "Task list for Pay for What You Open"
 
 ## Phase 1: The measure (Story 1)
 
-- [ ] T001 [US1] `scripts/check-bundle-budget.mjs`: follow static imports from the entry and from named route chunks in a build directory, report raw and brotli, fail over budget or on a forbidden module; its own tests under `pnpm test:scripts` (FR-009)
-- [ ] T002 [US1] Budgets recorded from the baseline, so the check passes before anything is split and every later task lowers a number
+- [X] T001 [US1] `scripts/check-bundle-budget.mjs`: follow static imports from the entry and from named route chunks in a build directory, report raw and brotli, fail over budget or on a forbidden module; its own tests under `pnpm test:scripts` (FR-009)
+- [X] T002 [US1] Budgets recorded from the baseline, so the check passes before anything is split and every later task lowers a number
 
 ## Phase 2: The splits (Story 1)
 
