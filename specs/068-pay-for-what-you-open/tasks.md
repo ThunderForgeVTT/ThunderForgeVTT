@@ -28,13 +28,13 @@ description: "Task list for Pay for What You Open"
 - [X] T007 [US1] The board's authoring tools load when opened (FR-006)
 - [X] T008 [US1] `manualChunks` loses the tldraw/RxDB/RxJS rule (FR-008)
 - [X] T009 [US1] Budgets lowered to what the build now measures; CodeMirror and the six authoring tools on the forbidden list (SC-001 – SC-004). Measured, brotli: entry 131,608; scene detail 20,036; the board 95,749; world staging 39,940; compendium 50,979; a lore entry 26,196
-- [ ] T010 [US1] Proof: web unit, `pnpm test:scripts`, `make lint`; the slices that cover scenes, lore, feedback, the board and game systems, from main (SC-005)
+- [X] T010 [US1] Proof: web unit, `pnpm test:scripts`, `make lint`; the slices that cover scenes, lore, feedback, the board and game systems, from main (SC-005). Scenes, lore, feedback, game-systems, genie, canvas, interactive and lighting pass. Lighting first failed about one run in three at `carried-light.spec.ts`: a walk lost a step. The splits did not cause it, they changed a board's timing enough to show it — the engine applied the web app's queued commands and read the frame's keys in no declared order, so a position read-back could undo a step in the frame it was taken. Ordered in `e7bb5575`; eight runs of the spec and the slice pass
 
 ## Phase 3: Flags (Story 2)
 
-- [ ] T011 [US2] The first flag chosen with the owner (FR-015)
-- [ ] T012 [US2] Registry: a `Features` group, a public marker, `settings::flag_on` (FR-010, FR-011)
-- [ ] T013 [US2] `featureFlags` read, public to anyone and whole to a member (FR-012)
-- [ ] T014 [US2] Web: `api/featureFlags.ts`, `useFeatureFlag`, refreshed on the administrator's change (FR-013)
-- [ ] T015 [US2] The first flag wired on the server and in the web app, with its e2e (SC-006)
-- [ ] T016 [US2] `CONTRIBUTING.md`: when a feature takes a flag, how to declare one, when to remove it (FR-014)
+- [X] T011 [US2] The first flag chosen with the owner (FR-015): source-book import, `feature.book_import`, on by default (owner, 2026-10-04)
+- [X] T012 [US2] Registry: a `Features` group, a public marker, `settings::flag_on` (FR-010, FR-011)
+- [X] T013 [US2] `featureFlags` read, public to anyone and whole to a member (FR-012)
+- [X] T014 [US2] Web: `api/featureFlags.ts`, `useFeatureFlag`, refreshed on the administrator's change (FR-013)
+- [X] T015 [US2] The first flag wired on the server and in the web app, with its e2e (SC-006). `instance-feature-flags.spec.ts`; the instance (42), book-import (17) and collections (30) slices pass. The e2e found that a visitor could not reach the read at all — it now goes to `/api/graphql/public`
+- [X] T016 [US2] `docs/CONTRIBUTING.md`: when a feature takes a flag, how to declare one, when to remove it (FR-014)
