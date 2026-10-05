@@ -81,6 +81,12 @@ pub fn start(canvas_selector: &str) {
         // `assets_serve::canvas`.
         .add_plugins(
             DefaultPlugins
+                .build()
+                // Bevy's panic handler installs its own hook as the app is
+                // built, over the one `install_panic_hook` set a few lines
+                // up — which logged the panic and told the page nothing
+                // (spec 070; found by the e2e that panics for real).
+                .disable::<bevy::app::PanicHandlerPlugin>()
                 .set(AssetPlugin {
                     unapproved_path_mode: UnapprovedPathMode::Allow,
                     ..default()
