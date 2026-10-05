@@ -40,9 +40,21 @@
  * packs may contribute behaviour because their code is reviewed and compiled
  * here; outside code is not executed at all.
  *
- * `eager: true` for the same reason too — these components are in the bundle
- * and already paid for, so a promise per module would only make every caller
- * async for nothing.
+ * # Why each panel is its own download
+ *
+ * Until spec 068 the glob was `eager`, on the argument that these components
+ * were "in the bundle and already paid for". They were paid for by everyone:
+ * a table playing one system downloaded every system's panels, 98 kB of them,
+ * to open the board. The glob is lazy now, so the build still sees every
+ * panel and still ships exactly those, and a browser fetches the ones the
+ * world it opened can mount.
+ *
+ * Callers did not become async for it. Which panels exist is the glob's keys,
+ * known without loading anything; what `resolvePanel` hands back is a
+ * component that fetches its own code when it is first rendered (`onDemand`).
+ * The one thing that does need the module is the name a pack gives its dock
+ * tab, which rides on the slot file — `useSystemDockTitle` loads that one
+ * file, for the system on the board.
  *
  * # Why a slot vocabulary, where the sheet needed none
  *
@@ -58,8 +70,9 @@
  * difference from the sheet is the vocabulary, not the path.
  */
 
-import type { ComponentType } from "react";
+import { useEffect, useState, type ComponentType } from "react";
 import type { PanelSlot, PanelSlotProps } from "@thunderforge/host";
+import { onDemand } from "@/components/ui/lazy-boundary/onDemand";
 
 /**
  * Every bundled pack's panels, keyed by the pack directory name — which *is*
@@ -70,11 +83,23 @@ import type { PanelSlot, PanelSlotProps } from "@thunderforge/host";
  * which slot each module fills; `resolvePanel` is where the slot and its
  * props meet, and the cast is confined to that one function.
  */
-const DISCOVERED = import.meta.glob<{
+interface PanelModule {
   default: ComponentType<never>;
   /** What a slot that shows a heading or a tab calls this panel. */
   title?: unknown;
-}>("../../../../packs/systems/*/web/src/panels/*.tsx", { eager: true });
+}
+
+const DISCOVERED = import.meta.glob<PanelModule>(
+  "../../../../packs/systems/*/web/src/panels/*.tsx",
+);
+
+/** `` `${systemId}:${slot}` `` to what fetches that slot file. */
+const LOADERS: Record<string, () => Promise<PanelModule>> = Object.fromEntries(
+  Object.entries(DISCOVERED).flatMap(([modulePath, load]) => {
+    const key = keyFromPath(modulePath);
+    return key ? [[key, load]] : [];
+  }),
+);
 
 function keyFromPath(modulePath: string): string | null {
   const match = /packs\/systems\/([^/]+)\/web\/src\/panels\/([^/]+)\.tsx$/.exec(
@@ -84,12 +109,13 @@ function keyFromPath(modulePath: string): string | null {
 }
 
 /**
- * `` `${systemId}:${slot}` `` to component.
+ * `` `${systemId}:${slot}` `` to a component that loads that slot's panel
+ * when it is first rendered.
  *
  * A pack may point two slot files at one component — Genie's `world-staging`
- * and `dock` both export the session loop — and this map then holds the
- * same reference under both keys, which is the intended shape rather than a
- * duplication to collapse.
+ * and `dock` both export the session loop. Each key here has its own loader,
+ * and the two load one module's worth of code: `loadPanel` is where that
+ * identity can be seen.
  *
  * Nothing validates that a slot name is in `PanelSlot`. A pack that ships
  * `panels/wherever.tsx` gets an entry nobody ever looks up, which is
@@ -100,24 +126,25 @@ export const SYSTEM_PANELS: Record<
   string,
   ComponentType<never>
 > = Object.fromEntries(
-  Object.entries(DISCOVERED).flatMap(([modulePath, module]) => {
-    const key = keyFromPath(modulePath);
-    return key ? [[key, module.default]] : [];
-  }),
+  Object.entries(LOADERS).map(([key, load]) => [
+    key,
+    onDemand(load, "This game system's panel"),
+  ]),
 );
 
 /**
- * `` `${systemId}:${slot}` `` to the `title` a panel module exports, for the
- * modules that export one. Anything but a non-empty string is no title.
+ * The slot file a system ships for a slot, fetched; `null` where it ships
+ * none. For what needs the module itself rather than something to mount.
  */
-const PANEL_TITLES: Record<string, string> = Object.fromEntries(
-  Object.entries(DISCOVERED).flatMap(([modulePath, module]) => {
-    const key = keyFromPath(modulePath);
-    return key && typeof module.title === "string" && module.title.trim()
-      ? [[key, module.title.trim()]]
-      : [];
-  }),
-);
+export function loadPanel(
+  gameSystemId: string | null | undefined,
+  slot: PanelSlot,
+): Promise<PanelModule> | null {
+  if (!gameSystemId) {
+    return null;
+  }
+  return LOADERS[panelKey(gameSystemId, slot)]?.() ?? null;
+}
 
 export function panelKey(systemId: string, slot: PanelSlot): string {
   return `${systemId}:${slot}`;
@@ -149,15 +176,16 @@ export function resolvePanel<S extends PanelSlot>(
 /**
  * What a system calls the panel it contributes to a slot, or `null` where it
  * contributes none or left it untitled. The caller owns the fallback wording.
+ *
+ * Anything but a non-empty string is no title.
  */
-export function resolvePanelTitle(
+export async function loadPanelTitle(
   gameSystemId: string | null | undefined,
   slot: PanelSlot,
-): string | null {
-  if (!gameSystemId) {
-    return null;
-  }
-  return PANEL_TITLES[panelKey(gameSystemId, slot)] ?? null;
+): Promise<string | null> {
+  const module = await loadPanel(gameSystemId, slot);
+  const title = module?.title;
+  return typeof title === "string" && title.trim() ? title.trim() : null;
 }
 
 /** What the tab reads when a pack fills the slot and does not title it. */
@@ -169,9 +197,41 @@ const UNTITLED = "Game system";
  * FR-021). A tab that opens onto "this system has nothing here" told a table
  * about a feature it does not have.
  */
-export function systemDockTitle(gameSystemId: string | null): string | null {
+export async function systemDockTitle(
+  gameSystemId: string | null,
+): Promise<string | null> {
   if (!resolvePanel(gameSystemId, "dock")) {
     return null;
   }
-  return resolvePanelTitle(gameSystemId, "dock") ?? UNTITLED;
+  // A panel that did not arrive still has a tab: opening it is where the
+  // person is told, by the boundary the panel sits in.
+  const title = await loadPanelTitle(gameSystemId, "dock").catch(() => null);
+  return title ?? UNTITLED;
+}
+
+/**
+ * `systemDockTitle` for a component: `null` while the system's dock file is
+ * on its way, and for good when the system fills no `dock` slot. The tab
+ * appears with its name rather than appearing and then being renamed.
+ */
+export function useSystemDockTitle(gameSystemId: string | null): string | null {
+  const [known, setKnown] = useState<{
+    gameSystemId: string | null;
+    title: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    let current = true;
+    void systemDockTitle(gameSystemId).then((title) => {
+      if (current) {
+        setKnown({ gameSystemId, title });
+      }
+    });
+    return () => {
+      current = false;
+    };
+  }, [gameSystemId]);
+
+  // What was learned about another system is not this one's title.
+  return known?.gameSystemId === gameSystemId ? known.title : null;
 }

@@ -20,11 +20,11 @@
  * version of what `inventory` does on the server — the linker finds the
  * contributions, and no list has to be kept in step with reality.
  *
- * `eager: true` matters for a reason beyond convenience. The lazy form hands
- * back a promise per module, which would make `resolveActorSheet` async and
- * ripple through every caller — for a set of components already in the bundle
- * and already paid for. Eager keeps the lookup synchronous, which is what it
- * honestly is.
+ * The glob is lazy (spec 068): a browser fetches the sheet of the system it
+ * is looking at and no other. It was `eager` once, to keep
+ * `resolveActorSheet` synchronous — and it still is. Which systems ship a
+ * sheet is the glob's keys; what comes back is a component that fetches its
+ * own code the first time it is rendered (`onDemand`), so no caller changed.
  *
  * # What this replaced
  *
@@ -35,8 +35,10 @@
  * that check now scans this directory so it cannot quietly come back.
  */
 
-import type { ComponentType } from "react";
+import { createElement, type ComponentType } from "react";
 import type { ActorSheetProps } from "@thunderforge/host";
+import { onDemand } from "@/components/ui/lazy-boundary/onDemand";
+import { Loader } from "@/components/ui/loader/Loader";
 
 export type { ActorSheetProps };
 
@@ -47,7 +49,7 @@ export type { ActorSheetProps };
  */
 const DISCOVERED = import.meta.glob<{
   default: ComponentType<ActorSheetProps>;
-}>("../../../../../../packs/systems/*/web/src/ActorSheet.tsx", { eager: true });
+}>("../../../../../../packs/systems/*/web/src/ActorSheet.tsx");
 
 function systemIdFromPath(modulePath: string): string | null {
   const match = /packs\/systems\/([^/]+)\/web\/src\/ActorSheet\.tsx$/.exec(
@@ -60,9 +62,20 @@ export const SYSTEM_ACTOR_SHEETS: Record<
   string,
   ComponentType<ActorSheetProps>
 > = Object.fromEntries(
-  Object.entries(DISCOVERED).flatMap(([modulePath, module]) => {
+  Object.entries(DISCOVERED).flatMap(([modulePath, load]) => {
     const systemId = systemIdFromPath(modulePath);
-    return systemId ? [[systemId, module.default]] : [];
+    return systemId
+      ? [
+          [
+            systemId,
+            onDemand(
+              load,
+              "The character sheet",
+              createElement(Loader, { label: "Loading the character sheet" }),
+            ),
+          ],
+        ]
+      : [];
   }),
 );
 

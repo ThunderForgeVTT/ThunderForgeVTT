@@ -3,8 +3,8 @@
   "routes": {
     "SceneDetailRoutePage": { "brotli": 20500 },
     "LoreEntryDetailPage": { "brotli": 26700 },
-    "WorldPage": { "brotli": 130500 },
-    "WorldStagingRoutePage": { "brotli": 67500 },
+    "WorldPage": { "brotli": 103000 },
+    "WorldStagingRoutePage": { "brotli": 40500 },
     "WorldCompendiumRoutePage": { "brotli": 52000 }
   },
   "forbidden": [

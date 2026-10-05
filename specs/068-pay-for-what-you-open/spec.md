@@ -131,12 +131,12 @@ both change without a restart or a reload of the server.
   component is reached through `React.lazy`.
 - **FR-003** While an editor loads, the text it will edit is shown read-only
   in its place, at the editor's size.
-- **FR-004** A system's panels and sheets are one chunk per system, loaded for
-  the system of the world being opened. What a pack's author writes does not
-  change.
-- **FR-005** What is known about a system before its chunk arrives — whether
-  it fills a slot, and what it calls the panel there — is known without
-  loading it.
+- **FR-004** A system's panels and sheets are chunks of their own, loaded
+  only for the system of the world being opened and only where one is
+  mounted. What a pack's author writes does not change.
+- **FR-005** Whether a system fills a slot is known without loading anything.
+  What it calls its dock panel is read from that system's own dock file,
+  fetched with the board; the tab appears once, already named.
 - **FR-006** The Game Master's authoring tools on the board load when one is
   opened.
 - **FR-007** A dynamic import that fails is caught at the boundary that asked

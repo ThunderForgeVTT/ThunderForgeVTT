@@ -24,7 +24,7 @@ description: "Task list for Pay for What You Open"
 - [X] T003 [US1] The three static CodeMirror imports go behind `React.lazy` with a read-only fallback: `SceneSummaryEditor`, `LoreMarkdownEditor` (two callers) (FR-002, FR-003)
 - [X] T004 [US1] The feedback dialog loads on press, from the launcher and from the help panel; log capture stays in the entry (FR-001)
 - [X] T005 [US1] A boundary for a dynamic import that fails, used by every `lazy` this spec adds (FR-007)
-- [ ] T006 [US1] System panels and sheets: one chunk per system; slot presence and titles known without loading it (FR-004, FR-005)
+- [X] T006 [US1] System panels and sheets: chunks of their own, fetched for the world's system where one is mounted; slot presence known without loading, the dock title from that system's dock file (FR-004, FR-005)
 - [ ] T007 [US1] The board's authoring tools load when opened (FR-006)
 - [ ] T008 [US1] `manualChunks` loses the tldraw/RxDB/RxJS rule (FR-008)
 - [ ] T009 [US1] Budgets lowered to what the build now measures; CodeMirror on the forbidden list for every route (SC-001 – SC-004)

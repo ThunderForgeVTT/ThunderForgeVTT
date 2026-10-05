@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  loadPanel,
+  loadPanelTitle,
   panelKey,
   resolvePanel,
-  resolvePanelTitle,
   SYSTEM_PANELS,
+  systemDockTitle,
 } from "@/panels/systemPanels";
 
 /**
@@ -55,13 +57,26 @@ describe("systemPanels", () => {
    * Asserted as reference identity, not as "both are functions": a refactor
    * that forked them into two near-identical components would pass the weaker
    * check, and noticing that is the point.
+   *
+   * The identity is the loaded modules' (spec 068): what `resolvePanel`
+   * returns is a loader per slot, and two loaders are two functions whatever
+   * they load.
    */
-  it("lets one component fill two slots", () => {
-    const staging = resolvePanel("genie", "world-staging");
-    const dock = resolvePanel("genie", "dock");
+  it("lets one component fill two slots", async () => {
+    const staging = await loadPanel("genie", "world-staging");
+    const dock = await loadPanel("genie", "dock");
 
-    expect(staging).not.toBeNull();
-    expect(dock).toBe(staging);
+    expect(staging?.default).toBeTypeOf("function");
+    expect(dock?.default).toBe(staging?.default);
+  });
+
+  /**
+   * Spec 068 FR-005: whether a system fills a slot is known from the build's
+   * list of files, so nothing has to be fetched to decide a page's layout.
+   */
+  it("fetches nothing for a slot a system does not fill", () => {
+    expect(loadPanel("a-system-with-no-panels", "dock")).toBeNull();
+    expect(loadPanel(null, "dock")).toBeNull();
   });
 
   /**
@@ -90,11 +105,17 @@ describe("systemPanels", () => {
    * title rides on the slot file, not the component, so Genie's shared
    * session loop is titled in the dock and untitled on the staging page.
    */
-  it("reads the title a panel module exports", () => {
-    expect(resolvePanelTitle("genie", "dock")).toBe("Clocks");
-    expect(resolvePanelTitle("roll_for_shoes", "dock")).toBe("Table");
-    expect(resolvePanelTitle("genie", "world-staging")).toBeNull();
-    expect(resolvePanelTitle("a-system-with-no-panels", "dock")).toBeNull();
-    expect(resolvePanelTitle(null, "dock")).toBeNull();
+  it("reads the title a panel module exports", async () => {
+    expect(await loadPanelTitle("genie", "dock")).toBe("Clocks");
+    expect(await loadPanelTitle("roll_for_shoes", "dock")).toBe("Table");
+    expect(await loadPanelTitle("genie", "world-staging")).toBeNull();
+    expect(await loadPanelTitle("a-system-with-no-panels", "dock")).toBeNull();
+    expect(await loadPanelTitle(null, "dock")).toBeNull();
+  });
+
+  it("names the dock tab, and offers none to a system with no dock panel", async () => {
+    expect(await systemDockTitle("genie")).toBe("Clocks");
+    expect(await systemDockTitle("a-system-with-no-panels")).toBeNull();
+    expect(await systemDockTitle(null)).toBeNull();
   });
 });

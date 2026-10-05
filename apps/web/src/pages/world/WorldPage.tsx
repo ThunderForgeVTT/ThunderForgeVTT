@@ -175,7 +175,7 @@ import { CombatPanel } from "@/components/world/PlayDock/CombatPanel";
 import { AttackLog } from "@/components/world/PlayDock/AttackLog/AttackLog";
 import { OfferPrompt } from "@/components/world/PlayDock/OfferPrompt/OfferPrompt";
 import { SystemDockPanel } from "@/components/world/PlayDock/SystemDockPanel";
-import { systemDockTitle } from "@/panels/systemPanels";
+import { useSystemDockTitle } from "@/panels/systemPanels";
 import { SettingsPanel } from "@/components/world/PlayDock/SettingsPanel";
 import { HelpPanel } from "@/components/world/PlayDock/HelpPanel";
 import type { CanvasImageAsset } from "@/api/assets";
@@ -2739,7 +2739,7 @@ export default function WorldPage() {
     [id],
   );
 
-  const systemDockLabel = systemDockTitle(world?.gameSystemId ?? null);
+  const systemDockLabel = useSystemDockTitle(world?.gameSystemId ?? null);
   const dockSections: DockSection[] = [
     {
       id: "chat",
