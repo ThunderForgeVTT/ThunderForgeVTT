@@ -138,11 +138,14 @@ import { useSceneUnits } from "@/hooks/useSceneUnits";
 import { useSceneLevels } from "@/pages/world/useSceneLevels";
 import { LevelTabs } from "@/components/world/LevelTabs";
 import type { SceneLevel } from "@/api/levels";
-import { WallTool } from "@/components/canvas-tools/WallTool";
-import { LightingTool } from "@/components/canvas-tools/LightingTool";
-import { ShapeTool } from "@/components/canvas-tools/ShapeTool";
-import { AssetPasteTool } from "@/components/canvas-tools/AssetPasteTool";
-import { TokenTool } from "@/components/canvas-tools/TokenTool";
+import {
+  AssetPasteTool,
+  InteractionTool,
+  LightingTool,
+  ShapeTool,
+  TokenTool,
+  WallTool,
+} from "@/pages/world/gmTools";
 import { TokenPanel } from "@/components/TokenPanel";
 import { DiceRollerPanel } from "@/components/world/DiceRollerPanel/DiceRollerPanel";
 import { startCanvasKeyboardRouting } from "@/engine/canvasKeyboard";
@@ -154,7 +157,6 @@ import {
 import { TokenStackPicker } from "@/components/canvas-tools/TokenStackPicker";
 import { CanvasContextMenu } from "@/components/world/CanvasContextMenu/CanvasContextMenu";
 import { useCanvasContextMenu } from "@/components/world/CanvasContextMenu/useCanvasContextMenu";
-import { InteractionTool } from "@/components/canvas-tools/InteractionTool";
 import { ApprovalQueue } from "@/components/ApprovalQueue";
 import {
   GmToolRail,

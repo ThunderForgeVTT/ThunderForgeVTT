@@ -85,14 +85,6 @@ export default defineConfig({
             return "react";
           }
 
-          if (
-            id.includes("/tldraw/") ||
-            id.includes("/rxdb/") ||
-            id.includes("/rxjs/")
-          ) {
-            return "collaboration";
-          }
-
           return undefined;
         },
         entryFileNames: "assets/entry/[name]-[hash].js",

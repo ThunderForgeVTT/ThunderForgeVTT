@@ -25,9 +25,9 @@ description: "Task list for Pay for What You Open"
 - [X] T004 [US1] The feedback dialog loads on press, from the launcher and from the help panel; log capture stays in the entry (FR-001)
 - [X] T005 [US1] A boundary for a dynamic import that fails, used by every `lazy` this spec adds (FR-007)
 - [X] T006 [US1] System panels and sheets: chunks of their own, fetched for the world's system where one is mounted; slot presence known without loading, the dock title from that system's dock file (FR-004, FR-005)
-- [ ] T007 [US1] The board's authoring tools load when opened (FR-006)
-- [ ] T008 [US1] `manualChunks` loses the tldraw/RxDB/RxJS rule (FR-008)
-- [ ] T009 [US1] Budgets lowered to what the build now measures; CodeMirror on the forbidden list for every route (SC-001 – SC-004)
+- [X] T007 [US1] The board's authoring tools load when opened (FR-006)
+- [X] T008 [US1] `manualChunks` loses the tldraw/RxDB/RxJS rule (FR-008)
+- [X] T009 [US1] Budgets lowered to what the build now measures; CodeMirror and the six authoring tools on the forbidden list (SC-001 – SC-004). Measured, brotli: entry 131,608; scene detail 20,036; the board 95,749; world staging 39,940; compendium 50,979; a lore entry 26,196
 - [ ] T010 [US1] Proof: web unit, `pnpm test:scripts`, `make lint`; the slices that cover scenes, lore, feedback, the board and game systems, from main (SC-005)
 
 ## Phase 3: Flags (Story 2)

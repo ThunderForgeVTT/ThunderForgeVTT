@@ -1,11 +1,23 @@
 {
-  "entry": { "brotli": 133500 },
+  "entry": {
+    "brotli": 133500
+  },
   "routes": {
-    "SceneDetailRoutePage": { "brotli": 20500 },
-    "LoreEntryDetailPage": { "brotli": 26700 },
-    "WorldPage": { "brotli": 103000 },
-    "WorldStagingRoutePage": { "brotli": 40500 },
-    "WorldCompendiumRoutePage": { "brotli": 52000 }
+    "SceneDetailRoutePage": {
+      "brotli": 20500
+    },
+    "LoreEntryDetailPage": {
+      "brotli": 26700
+    },
+    "WorldPage": {
+      "brotli": 97000
+    },
+    "WorldStagingRoutePage": {
+      "brotli": 40500
+    },
+    "WorldCompendiumRoutePage": {
+      "brotli": 52000
+    }
   },
   "forbidden": [
     {
@@ -16,6 +28,36 @@
         "MarkdownCodeEditor"
       ],
       "why": "CodeMirror is 178 kB brotli. Reach an editor through React.lazy, inside a LazyBoundary."
+    },
+    {
+      "source": "src/components/canvas-tools/WallTool/WallTool.tsx",
+      "only": [],
+      "why": "Only a Game Master can open an authoring tool. Reach it through pages/world/gmTools.ts, so a player's board does not carry it."
+    },
+    {
+      "source": "src/components/canvas-tools/LightingTool/LightingTool.tsx",
+      "only": [],
+      "why": "Only a Game Master can open an authoring tool. Reach it through pages/world/gmTools.ts, so a player's board does not carry it."
+    },
+    {
+      "source": "src/components/canvas-tools/ShapeTool/ShapeTool.tsx",
+      "only": [],
+      "why": "Only a Game Master can open an authoring tool. Reach it through pages/world/gmTools.ts, so a player's board does not carry it."
+    },
+    {
+      "source": "src/components/canvas-tools/TokenTool/TokenTool.tsx",
+      "only": [],
+      "why": "Only a Game Master can open an authoring tool. Reach it through pages/world/gmTools.ts, so a player's board does not carry it."
+    },
+    {
+      "source": "src/components/canvas-tools/InteractionTool/InteractionTool.tsx",
+      "only": [],
+      "why": "Only a Game Master can open an authoring tool. Reach it through pages/world/gmTools.ts, so a player's board does not carry it."
+    },
+    {
+      "source": "src/components/canvas-tools/AssetPasteTool/AssetPasteTool.tsx",
+      "only": [],
+      "why": "Only a Game Master can open an authoring tool. Reach it through pages/world/gmTools.ts, so a player's board does not carry it."
     }
   ]
 }
