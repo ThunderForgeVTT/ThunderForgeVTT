@@ -9,6 +9,7 @@ import {
   type ResolvedSetting,
   type SettingChange,
 } from "@/api/instanceSettings";
+import { FEATURES_GROUP, refreshFeatureFlags } from "@/api/featureFlags";
 import {
   groupOf,
   groupTitle,
@@ -72,6 +73,7 @@ const GROUP_ORDER = [
   "Realm",
   "Support",
   "Access",
+  "Features",
   "Mail",
 ];
 
@@ -422,6 +424,10 @@ export function InstanceSettingsPanel() {
           )
         : current,
     );
+    // Spec 068 FR-013: the person who flipped a flag sees it take.
+    if (updated.group === FEATURES_GROUP) {
+      void refreshFeatureFlags();
+    }
   }, []);
 
   if (error) {

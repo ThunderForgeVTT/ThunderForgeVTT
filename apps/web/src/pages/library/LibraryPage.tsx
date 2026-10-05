@@ -14,6 +14,8 @@ import {
   saveFile,
   type ShelfCollectionDownload,
 } from "@/api/shelfCollections";
+import { FEATURE_BOOK_IMPORT } from "@/api/featureFlags";
+import { useFeatureFlag } from "@/hooks/useFeatureFlag";
 import type { SeoConfig } from "@/types/seo";
 import { BookBrowser } from "./BookBrowser";
 import { CollectionVersions } from "./CollectionVersions";
@@ -51,6 +53,7 @@ export const libraryPageSeo: SeoConfig = {
 
 export function LibraryPage() {
   const { compendiumId } = useParams<{ compendiumId: string }>();
+  const mayImport = useFeatureFlag(FEATURE_BOOK_IMPORT);
   const [shelf, setShelf] = useState<LibraryBook[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [removing, setRemoving] = useState<RemovalReport | null>(null);
@@ -103,7 +106,7 @@ export function LibraryPage() {
             </p>
           </header>
 
-          <ImportBook onImported={read} />
+          {mayImport && <ImportBook onImported={read} />}
           <NewCollection onCreated={read} />
 
           {downloaded && (
