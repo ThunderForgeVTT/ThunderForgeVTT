@@ -122,6 +122,37 @@ test("a board is played with fingers: drag a token, hold for the menu, pan and p
     await expect(menu).toBeHidden();
   });
 
+  await test.step("two taps on a token pin its panel, and a finger moves it", async () => {
+    const at = await tokenPosition(page, tokenId);
+    const on = await boardToScreen(page, at!);
+    for (let tap = 0; tap < 2; tap += 1) {
+      await touchDown(cdp, [on]);
+      await page.waitForTimeout(60);
+      await touches(cdp, []);
+      await page.waitForTimeout(90);
+    }
+
+    const panel = page.getByTestId("status-panel");
+    await expect(panel).toBeVisible({ timeout: 10_000 });
+    expect(await tokenPosition(page, tokenId)).toEqual(at);
+
+    const grip = (await page.getByLabel("Move status panel").boundingBox())!;
+    const from = { x: grip.x + 20, y: grip.y + grip.height / 2 };
+    const to = { x: from.x - 160, y: from.y - 90 };
+    const before = (await panel.boundingBox())!;
+    await touchDown(cdp, [from]);
+    await page.waitForTimeout(80);
+    await slide(page, cdp, [from], [to]);
+    await touches(cdp, []);
+    await expect
+      .poll(async () => (await panel.boundingBox())!.x, { timeout: 5_000 })
+      .toBeLessThan(before.x - 100);
+    expect((await panel.boundingBox())!.y).toBeLessThan(before.y - 50);
+
+    await page.getByLabel("Unpin status panel").click();
+    await expect(panel).toHaveCount(0);
+  });
+
   const box = await canvasBox(page);
   // Clear of the dock and the token, on bare board.
   const left = { x: box.x + box.width / 2 - 60, y: box.y + box.height - 220 };
