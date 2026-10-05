@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { Loader } from "@/components/ui/loader/Loader";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
-import { LoreMarkdownEditor } from "@/pages/world/lore/LoreMarkdownEditor";
+import { LazyLoreMarkdownEditor } from "@/pages/world/lore/LazyLoreMarkdownEditor";
 import type { LoreEntryRecord } from "@/types/lore";
 
 export interface CompendiumOverviewSettingsCardProps {
@@ -157,7 +157,7 @@ export function CompendiumOverviewSettingsCard({
         </StatusBadge>
       ) : (
         <>
-          <LoreMarkdownEditor
+          <LazyLoreMarkdownEditor
             loreEntryId={entry.id}
             worldId={worldId}
             value={content}

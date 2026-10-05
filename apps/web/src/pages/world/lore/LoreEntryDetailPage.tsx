@@ -13,7 +13,7 @@ import { Loader } from "@/components/ui/loader/Loader";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { ModeratedContentBanner } from "@/components/world/ModeratedContentBanner";
 import { useWorldRole } from "@/hooks/useWorldRole";
-import { LoreMarkdownEditor } from "@/pages/world/lore/LoreMarkdownEditor";
+import { LazyLoreMarkdownEditor } from "@/pages/world/lore/LazyLoreMarkdownEditor";
 import { LoreMarkdownRenderer } from "@/pages/world/lore/LoreMarkdownRenderer";
 import { LoreOrganisationPanel } from "@/pages/world/lore/LoreOrganisationPanel";
 import { LoreOwnershipBlock } from "@/pages/world/lore/LoreOwnershipBlock";
@@ -273,7 +273,7 @@ export default function LoreEntryDetailPage({
                 />
               </Field>
               <Field label="Content" htmlFor="lore-entry-content">
-                <LoreMarkdownEditor
+                <LazyLoreMarkdownEditor
                   loreEntryId={entry.id}
                   worldId={worldId}
                   value={content}

@@ -1,11 +1,21 @@
 {
   "entry": { "brotli": 141000 },
   "routes": {
-    "SceneDetailRoutePage": { "brotli": 199000 },
-    "LoreEntryDetailPage": { "brotli": 205000 },
+    "SceneDetailRoutePage": { "brotli": 20500 },
+    "LoreEntryDetailPage": { "brotli": 25500 },
     "WorldPage": { "brotli": 126000 },
     "WorldStagingRoutePage": { "brotli": 66000 },
     "WorldCompendiumRoutePage": { "brotli": 50000 }
   },
-  "forbidden": []
+  "forbidden": [
+    {
+      "source": "node_modules/@codemirror/",
+      "only": [
+        "SceneSummaryEditor",
+        "LoreMarkdownEditor",
+        "MarkdownCodeEditor"
+      ],
+      "why": "CodeMirror is 178 kB brotli. Reach an editor through React.lazy, inside a LazyBoundary."
+    }
+  ]
 }

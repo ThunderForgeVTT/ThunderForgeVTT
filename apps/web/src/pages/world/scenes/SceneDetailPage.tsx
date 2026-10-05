@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, useEffect, useState } from "react";
 import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -13,13 +13,22 @@ import { Loader } from "@/components/ui/loader/Loader";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { MapImportTool } from "@/components/canvas-tools/MapImportTool/MapImportTool";
 import { LoreMarkdownRenderer } from "@/pages/world/lore/LoreMarkdownRenderer";
-import { SceneSummaryEditor } from "@/pages/world/scenes/SceneSummaryEditor";
+import { EditorLoading } from "@/components/ui/lazy-boundary/EditorLoading";
+import { LazyBoundary } from "@/components/ui/lazy-boundary/LazyBoundary";
 import {
   bringPartyToScene,
   describeArrival,
 } from "@/pages/world/scenes/bringParty";
 import { preloadScene } from "@/services/scenePreload";
 import type { SceneRecord } from "@/types/scene";
+
+// Spec 068 FR-002: the summary editor is CodeMirror, and most visits to a
+// scene's page are to read it or to launch it.
+const SceneSummaryEditor = lazy(() =>
+  import("@/pages/world/scenes/SceneSummaryEditor").then((module) => ({
+    default: module.SceneSummaryEditor,
+  })),
+);
 
 export interface SceneDetailPageProps {
   worldId: string;
@@ -349,11 +358,16 @@ export function SceneDetailPage({
             <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
               Summary
             </h2>
-            <SceneSummaryEditor
-              value={summaryDraft}
-              onChange={setSummaryDraft}
-              disabled={isSavingSummary}
-            />
+            <LazyBoundary
+              what="The editor"
+              fallback={<EditorLoading value={summaryDraft} />}
+            >
+              <SceneSummaryEditor
+                value={summaryDraft}
+                onChange={setSummaryDraft}
+                disabled={isSavingSummary}
+              />
+            </LazyBoundary>
             <div className="flex items-center gap-3">
               <Button
                 onClick={() => void handleSaveSummary()}
