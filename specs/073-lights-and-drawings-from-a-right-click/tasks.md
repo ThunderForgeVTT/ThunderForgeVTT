@@ -12,4 +12,4 @@ description: "Task list for Lights and Drawings From a Right-Click"
 - [x] T004 Web: the menu carries out what it offered as world-store intents (FR-006)
 - [x] T005 `docs/guides/lights-and-drawings.md`
 - [x] T007 Web: the shape sync drops a drawing the server stops returning, with its test (FR-007)
-- [ ] T006 Proof from main: `canvas-light-and-drawing-menu.spec.ts`; the canvas, lighting and interactive slices (SC-001, SC-002)
+- [x] T006 Proof from main, 2026-10-05: `canvas-light-and-drawing-menu.spec.ts` passes; lighting 8 of 8; interactive 12 of 12; canvas 34 of 35, the one failure being `canvas-authoring.spec.ts:638` (a wall toggled to a door and deleted), which uses no right-click, light or drawing and passed with the rest of its file, 15 of 15, when run alone. That failure is not root-caused (SC-001, SC-002)
