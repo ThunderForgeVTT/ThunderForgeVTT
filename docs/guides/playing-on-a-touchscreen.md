@@ -2,13 +2,14 @@
 
 The board works under fingers on a tablet or a phone.
 
-| Do this | To do this |
-| --- | --- |
-| Touch a token and drag | Move it |
-| Touch a token | Select it |
-| Hold a finger still for half a second, then lift | Open the menu for whatever is under it |
-| Drag two fingers | Move the map |
-| Spread or pinch two fingers | Zoom in or out |
+| Do this                                          | To do this                                                       |
+| ------------------------------------------------ | ---------------------------------------------------------------- |
+| Touch a token and drag                           | Move it                                                          |
+| Touch a token                                    | Select it                                                        |
+| Tap a token twice                                | Pin its status panel, which a finger can then drag by its header |
+| Hold a finger still for half a second, then lift | Open the menu for whatever is under it                           |
+| Drag two fingers                                 | Move the map                                                     |
+| Spread or pinch two fingers                      | Zoom in or out                                                   |
 
 One finger never moves the map — it moves what it touches, or draws with the
 tool you have open. Use two to look around.

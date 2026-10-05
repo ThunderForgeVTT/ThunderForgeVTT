@@ -105,15 +105,9 @@ async function panelAt(page: Page): Promise<{ x: number; y: number }> {
   return { x: Math.round(box.x), y: Math.round(box.y) };
 }
 
-test("a double-click pins the status panel, which is dragged, outlives the selection, closes, and reopens where it was left", async ({
-  page,
-}) => {
-  test.setTimeout(4 * 60_000);
-
-  page.on("pageerror", (error) => {
-    console.log(`[browser] uncaught: ${error.message}`);
-  });
-
+/** A table open on the board, with one token at the origin that has
+ * resources to show. Answers the token's id. */
+async function boardWithAToken(page: Page): Promise<string> {
   const suffix = uniqueSuffix();
   const worldId = await registerAndCreateWorld(page, `Placement ${suffix}`);
 
@@ -199,6 +193,19 @@ test("a double-click pins the status panel, which is dragged, outlives the selec
 
   await page.goto(`/world/${worldId}/play`);
   await waitForEngineReady(page);
+  return tokenId;
+}
+
+test("a double-click pins the status panel, which is dragged, outlives the selection, closes, and reopens where it was left", async ({
+  page,
+}) => {
+  test.setTimeout(4 * 60_000);
+
+  page.on("pageerror", (error) => {
+    console.log(`[browser] uncaught: ${error.message}`);
+  });
+
+  const tokenId = await boardWithAToken(page);
 
   // FR-010a: selecting the token is not a request for a panel — its bars
   // above it are its display.
@@ -265,4 +272,64 @@ test("a double-click pins the status panel, which is dragged, outlives the selec
   console.log(
     `[placement] pinned_on_dblclick=true dragged=true outlived_selection=true reopened_where_left=true`,
   );
+});
+
+test("two taps of a finger pin the status panel, and a finger drags it", async ({
+  page,
+}) => {
+  test.setTimeout(4 * 60_000);
+
+  const tokenId = await boardWithAToken(page);
+  await selectOriginToken(page, tokenId);
+
+  // Real touches, dispatched the way a touchscreen's are (spec 069). Over
+  // the board they arrive as pointer events and no `dblclick`, which is why
+  // a double-click alone left a tablet with no way to pin a panel.
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Emulation.setTouchEmulationEnabled", {
+    enabled: true,
+    maxTouchPoints: 5,
+  });
+  const finger = (type: "touchStart" | "touchMove", x: number, y: number) =>
+    cdp.send("Input.dispatchTouchEvent", {
+      type,
+      touchPoints: [{ x, y, id: 0 }],
+    });
+  const lift = () =>
+    cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+
+  const centre = await canvasCentre(page);
+  for (let tap = 0; tap < 2; tap += 1) {
+    await finger("touchStart", centre.x, centre.y);
+    await page.waitForTimeout(60);
+    await lift();
+    await page.waitForTimeout(90);
+  }
+
+  const panel = page.locator(PANEL);
+  await expect(panel).toBeVisible({ timeout: 15_000 });
+  await expect(panel).toContainText("7 / 12");
+  const opened = await panelAt(page);
+
+  const grip = await page.getByLabel("Move status panel").boundingBox();
+  if (!grip) throw new Error("the handle must be on screen to be dragged");
+  const from = { x: grip.x + 20, y: grip.y + grip.height / 2 };
+  await finger("touchStart", from.x, from.y);
+  await page.waitForTimeout(80);
+  for (let step = 1; step <= 8; step += 1) {
+    await finger(
+      "touchMove",
+      from.x - (300 * step) / 8,
+      from.y - (150 * step) / 8,
+    );
+    await page.waitForTimeout(40);
+  }
+  await lift();
+  await expect
+    .poll(async () => (await panelAt(page)).x, { timeout: 5_000 })
+    .toBeLessThan(opened.x - 250);
+  expect((await panelAt(page)).y).toBeLessThan(opened.y - 100);
+
+  await page.getByLabel("Unpin status panel").click();
+  await expect(panel).toHaveCount(0);
 });
