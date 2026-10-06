@@ -214,6 +214,25 @@ test("a token dragged across the board is saved where it was left", async () => 
   expect(Math.abs(after.y - to.y)).toBeLessThan(117);
 });
 
+test("a Game Master's keyboard walks the token they selected", async () => {
+  // The Game Master owns no token, so until 2026-10-05 WASD moved nothing on
+  // their board. Now the keys follow the single selected token, and the step
+  // is saved the way a drag is.
+  const before = (await currentScene()).tokens[0];
+  await expect(async () => {
+    await clickBoard({ x: before.x, y: before.y });
+    await page.waitForTimeout(150);
+    await page.keyboard.press("KeyD");
+    await expect
+      .poll(async () => (await currentScene()).tokens[0].x, { timeout: 3_000 })
+      .toBeGreaterThan(before.x);
+  }).toPass({ timeout: 60_000 });
+  const after = (await currentScene()).tokens[0];
+  // One cell east, give or take the snap a dragged token may still owe.
+  expect(after.x - before.x).toBeLessThanOrEqual(117 * 1.5);
+  expect(Math.abs(after.y - before.y)).toBeLessThan(117);
+});
+
 test("the ambush is on the board: two heroes a player owns, five monsters only the Game Master sees", async () => {
   const actors = await cast();
   expect(actors.map((a) => a.label).sort()).toEqual([

@@ -331,9 +331,19 @@ pub fn movement_state() -> String {
 /// reason to say it again — which is what the playtest saw when this was a
 /// one-shot: the key still moved nothing. Remembering the name and reconciling
 /// each frame makes arrival order stop mattering.
+///
+/// # A selected token comes first
+///
+/// When exactly one token is selected, the keys walk *it*, and the player's
+/// own token only when nothing is. A Game Master owns no token and before this
+/// had no keyboard at all (found in the demo, 2026-10-05); a player who
+/// selects a token that is not theirs is answered by the server the same way
+/// their drag of it is — the step emits the same `upsert_token` — so no
+/// permission is decided here that is not already decided for a drag.
 pub(crate) fn reconcile_controlled_token(
     mut commands: Commands,
     mut controlled: ResMut<ControlledToken>,
+    selected: Option<Res<crate::resources::SelectedToken>>,
     grid: Option<Res<SceneGrid>>,
     tokens: Query<(Entity, &TokenIdentity, &Transform)>,
     tagged: Query<Entity, With<PlayerControlled>>,
@@ -345,7 +355,14 @@ pub(crate) fn reconcile_controlled_token(
         controlled.set_if_neq(ControlledToken(request));
     }
 
-    let found = controlled.0.as_deref().and_then(|wanted| {
+    let selected_one = selected
+        .as_deref()
+        .map(|selected| selected.selected_ids())
+        .filter(|ids| ids.len() == 1)
+        .and_then(|ids| ids.first())
+        .map(String::as_str);
+    let wanted = selected_one.or(controlled.0.as_deref());
+    let found = wanted.and_then(|wanted| {
         tokens
             .iter()
             .find(|(_, identity, _)| identity.0 == wanted)
@@ -657,6 +674,67 @@ mod wall_stop_tests {
             Some(0),
             "west then east retracts to the origin; the third step would \
              cross the wall and is refused, leaving the route as it was"
+        );
+    }
+
+    /// Two tokens, neither tagged: the viewer's own is named through
+    /// `ControlledToken`, the other is merely selected.
+    fn two_tokens() -> (App, Entity, Entity) {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.init_resource::<ControlledToken>();
+        app.init_resource::<crate::resources::SelectedToken>();
+        app.add_systems(Update, reconcile_controlled_token);
+        let own = app
+            .world_mut()
+            .spawn((Transform::default(), TokenIdentity("own".to_string())))
+            .id();
+        let other = app
+            .world_mut()
+            .spawn((Transform::default(), TokenIdentity("other".to_string())))
+            .id();
+        app.world_mut().resource_mut::<ControlledToken>().0 = Some("own".to_string());
+        (app, own, other)
+    }
+
+    fn tagged(app: &App, token: Entity) -> bool {
+        app.world().get::<PlayerControlled>(token).is_some()
+    }
+
+    #[test]
+    fn the_keys_follow_a_single_selected_token_and_fall_back_to_the_players_own() {
+        let (mut app, own, other) = two_tokens();
+        app.update();
+        assert!(
+            tagged(&app, own) && !tagged(&app, other),
+            "nothing selected: the player's own"
+        );
+
+        app.world_mut()
+            .resource_mut::<crate::resources::SelectedToken>()
+            .select("other".to_string());
+        app.update();
+        assert!(
+            !tagged(&app, own) && tagged(&app, other),
+            "one selected: that one"
+        );
+
+        app.world_mut()
+            .resource_mut::<crate::resources::SelectedToken>()
+            .select_stack(vec!["own".to_string(), "other".to_string()]);
+        app.update();
+        assert!(
+            tagged(&app, own) && !tagged(&app, other),
+            "a stack is nobody's keyboard"
+        );
+
+        app.world_mut()
+            .resource_mut::<crate::resources::SelectedToken>()
+            .deselect();
+        app.update();
+        assert!(
+            tagged(&app, own) && !tagged(&app, other),
+            "deselected: the player's own again"
         );
     }
 }
