@@ -9,7 +9,7 @@ use std::sync::{Mutex, OnceLock};
 use bevy::asset::{AssetPlugin, UnapprovedPathMode};
 use bevy::prelude::*;
 #[cfg(target_arch = "wasm32")]
-use bevy::window::{Window, WindowPlugin, WindowResolution};
+use bevy::window::{Window, WindowPlugin};
 use js_sys::Function;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};

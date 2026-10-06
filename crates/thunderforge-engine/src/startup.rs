@@ -96,7 +96,7 @@ pub fn start(canvas_selector: &str) {
                         canvas: Some(canvas_selector.to_owned()),
                         fit_canvas_to_parent: true,
                         focused: true,
-                        resolution: WindowResolution::new(ARENA_WIDTH as u32, ARENA_HEIGHT as u32),
+                        resolution: initial_resolution(),
                         title: "ThunderForge Engine".into(),
                         ..default()
                     }),
@@ -275,4 +275,31 @@ pub fn start(canvas_selector: &str) {
             ),
         )
         .run();
+}
+
+/// The window's size until `fit_canvas_to_parent` measures the real one.
+///
+/// winit creates the surface at this size times the device pixel ratio
+/// before the canvas is measured, so on a 2048px device at a pixel ratio of
+/// 2 the arena's 1280x720 became a 2560x1440 surface and `Surface::configure`
+/// panicked (LibreWolf, 2026-10-05). WebGL2 guarantees 2048 and wgpu refuses
+/// less, so a logical size under `2048 / ratio` fits every device the engine
+/// can start on. The page's own cap on the canvas takes over from there.
+fn initial_resolution() -> bevy::window::WindowResolution {
+    let ratio = device_pixel_ratio().max(1.0);
+    let ceiling = ((2048.0 / ratio).floor() - 2.0).max(1.0);
+    bevy::window::WindowResolution::new(
+        ARENA_WIDTH.min(ceiling) as u32,
+        ARENA_HEIGHT.min(ceiling) as u32,
+    )
+}
+
+#[cfg(target_arch = "wasm32")]
+fn device_pixel_ratio() -> f32 {
+    web_sys::window().map_or(1.0, |window| window.device_pixel_ratio() as f32)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn device_pixel_ratio() -> f32 {
+    1.0
 }
