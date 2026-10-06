@@ -243,9 +243,13 @@ Counted on 2026-10-06:
 - Should the quick tools lay walls as one wall per cell edge *always*, or
   only when snapping is on? The decision above is only when on; a free box
   is four walls.
-- Should wall-to-wall snapping also catch the *middle* of an existing wall
-  (a T-junction), splitting it, or only its endpoints? The decision above
-  is endpoints only; a T splits nothing.
+- ~~Should wall-to-wall snapping also catch the *middle* of an existing wall
+  (a T-junction), splitting it, or only its endpoints?~~ Answered by the
+  owner 2026-10-06, in two parts. A drag that *crosses* an existing wall at
+  a corner is fine as it is — "if someone's creating 4 rooms that's super
+  common" — and splits nothing. A wall that *ends* on an existing wall
+  "creates a join, really, so we can build the concept of a structure":
+  that is spec 078, and its first requirement is now built.
 - A snapped light on a wall: which side does it hang? The decision above
   puts it on the line and lights both sides. If a sconce should light only
   the room it faces, that is an offset and a facing, and a different spec.
