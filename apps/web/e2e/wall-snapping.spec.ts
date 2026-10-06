@@ -194,10 +194,8 @@ test.describe("Snapping (spec 077)", () => {
     // x in [-640, 640] and y in [-360, 360], so the free wall goes left.
     await openGmTool(page, "walls");
     await page.getByTestId("wall-primitive-segment").click();
-    // The engine hears keys through the canvas: a click gives it focus, and
-    // Escape discards the one-point chain that click began.
-    await clickBoard(page, { x: -500, y: -300 });
-    await page.keyboard.press("Escape");
+    // Keys reach the engine from the window (`engine/canvasKeyboard.ts`),
+    // so no click is needed first — and Escape would now put the tool down.
     await page.keyboard.press("s");
     await expect(snap).toHaveAttribute("data-enabled", "false");
     await dragBoard(page, { x: -400, y: -200 }, { x: -270, y: -110 });

@@ -246,28 +246,24 @@ async function waitForEngineReady(
   await expect(canvas).toBeVisible({ timeout: 15_000 });
   await page.waitForTimeout(3_000);
 
-  // Opened *before* the focusing click below, not after. Clicking a rail
-  // button leaves keyboard focus on it, and this file drives the engine's
-  // shape sub-tools with bare number keys — which never reach it if a DOM
-  // button is holding focus. The corner click restores focus to the canvas.
-  if (tool) {
-    await openGmTool(page, tool);
-  }
-
   await canvas.scrollIntoViewIfNeeded();
   const box = await canvas.boundingBox();
   if (box) {
     // Deliberately a corner far from where test geometry is placed
     // (offsets used elsewhere in this file stay within roughly ±220 of
     // center), so this focusing click can't accidentally select/move
-    // something a test cares about. It still counts as a wall-chain
-    // click-without-drag though (systems/wall.rs's FR-001 point-add), so
-    // press Escape right after to discard that phantom single-point
-    // "chain" — otherwise a test's real first chain click would silently
-    // become its second point.
+    // something a test cares about. It happens under the select tool,
+    // before any tool opens, so it adds no wall-chain point; it used to
+    // come after, with an Escape to discard that point, and Escape now
+    // returns to the select tool (owner request 2026-10-06). Keys reach the
+    // engine from the window (`engine/canvasKeyboard.ts`), so the rail
+    // button that opens the tool may keep focus.
     await page.mouse.click(box.x + box.width - 40, box.y + box.height - 40);
-    await page.keyboard.press("Escape");
     await page.waitForTimeout(200);
+  }
+
+  if (tool) {
+    await openGmTool(page, tool);
   }
 }
 

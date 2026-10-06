@@ -342,8 +342,14 @@ export async function ensureSidebarOpen(page: Page): Promise<void> {
   if (await switcher.isVisible().catch(() => false)) {
     return;
   }
+  // Escape deselects a token, or — with nothing selected, on the select
+  // tool — opens Settings itself (owner request 2026-10-06), so look again
+  // before clicking the tab, which would close what Escape opened.
   await page.keyboard.press("Escape");
   await page.waitForTimeout(200);
+  if (await switcher.isVisible().catch(() => false)) {
+    return;
+  }
   await page.getByTestId("world-dock-tab-settings").dispatchEvent("click");
   await expect(switcher).toBeVisible({ timeout: 10_000 });
 }
@@ -498,8 +504,10 @@ export async function waitForEngineReady(page: Page): Promise<void> {
   await canvas.scrollIntoViewIfNeeded();
   const box = await canvas.boundingBox();
   if (box) {
+    // A focusing click only. Under the select tool a click on empty board
+    // deselects and nothing more, and Escape is not a no-op any longer: on
+    // the select tool it opens Settings (owner request 2026-10-06).
     await page.mouse.click(box.x + box.width - 40, box.y + box.height - 40);
-    await page.keyboard.press("Escape");
     await page.waitForTimeout(200);
   }
 }

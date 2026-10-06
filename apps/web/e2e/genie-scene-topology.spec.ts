@@ -110,6 +110,9 @@ async function ensureSidebarOpen(page: Page): Promise<void> {
   // toggle button underneath a stray force-click.
   await page.keyboard.press("Escape");
   await page.waitForTimeout(200);
+  if (await switcher.isVisible().catch(() => false)) {
+    return;
+  }
   // Dispatched rather than clicked. This dates from a real layering bug:
   // the old bottom-left "Tools" toggle sat under the dice-roller panel's
   // text input, and even a `force: true` click (which still routes through
@@ -134,7 +137,6 @@ async function waitForEngineReady(page: Page): Promise<void> {
   const box = await canvas.boundingBox();
   if (box) {
     await page.mouse.click(box.x + box.width - 40, box.y + box.height - 40);
-    await page.keyboard.press("Escape");
     await page.waitForTimeout(200);
   }
 }

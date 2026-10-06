@@ -150,7 +150,11 @@ import {
 } from "@/pages/world/gmTools";
 import { TokenPanel } from "@/components/TokenPanel";
 import { DiceRollerPanel } from "@/components/world/DiceRollerPanel/DiceRollerPanel";
-import { startCanvasKeyboardRouting } from "@/engine/canvasKeyboard";
+import {
+  isInOverlay,
+  isTextEntry,
+  startCanvasKeyboardRouting,
+} from "@/engine/canvasKeyboard";
 import { installWorldProbe } from "@/engine/world/probe";
 import {
   createWorldFacets,
@@ -172,6 +176,7 @@ import { getMyActorClaim } from "@/api/actorClaims";
 import {
   WorldDock,
   type DockSection,
+  type DockSectionId,
 } from "@/components/world/PlayDock/WorldDock";
 import { ChatPanel } from "@/components/world/PlayDock/ChatPanel";
 import { ActorsPanel } from "@/components/world/PlayDock/ActorsPanel";
@@ -948,6 +953,42 @@ export default function WorldPage() {
   // clicked again. See `engine/canvasKeyboard.ts` for why winit makes this
   // necessary.
   useEffect(() => startCanvasKeyboardRouting(), []);
+
+  // Escape, anywhere on the play view, puts the tool down (owner request
+  // 2026-10-06): with an authoring tool open it returns to Select; on Select
+  // already — or for a player, who has no rail — it opens the Settings
+  // section, and closes it again if it is what is open. A selected token is
+  // the exception: the engine's Escape deselects it, and that is the whole
+  // press. Menus, dialogs and text fields keep their own Escape; a key one of
+  // them has already claimed, or that lands while one is open, is theirs.
+  const [openDockSectionId, setOpenDockSectionId] =
+    useState<DockSectionId | null>(null);
+  useEffect(() => {
+    if (playView !== "playing") return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (isTextEntry(event.target) || isInOverlay(event.target)) return;
+      if (
+        document.querySelector(
+          '[role="menu"], [role="dialog"], [role="alertdialog"]',
+        )
+      ) {
+        return;
+      }
+      if (
+        isSceneOwner &&
+        effectiveGmToolId !== null &&
+        effectiveGmToolId !== "select"
+      ) {
+        setOpenGmToolId("select");
+        return;
+      }
+      if (worldStore.getState().selectedTokenIds.length > 0) return;
+      setOpenDockSectionId((open) => (open === "settings" ? null : "settings"));
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [playView, isSceneOwner, effectiveGmToolId, worldStore]);
 
   // Development-only introspection for the world store; see
   // `engine/world/probe.ts`. Compiled out of production builds.
@@ -3093,7 +3134,13 @@ export default function WorldPage() {
               />
             ) : null
           }
-          dock={<WorldDock sections={dockSections} />}
+          dock={
+            <WorldDock
+              sections={dockSections}
+              openSectionId={openDockSectionId}
+              onOpenSectionIdChange={setOpenDockSectionId}
+            />
+          }
           canvas={
             <div
               ref={containerRef}

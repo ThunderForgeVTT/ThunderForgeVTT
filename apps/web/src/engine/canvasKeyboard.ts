@@ -51,7 +51,7 @@ const TEXT_ENTRY_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT"]);
  * ordinary letters (WASD), so forwarding while a text field has focus would
  * walk a token across the map every time someone wrote a chat message.
  */
-function isTextEntry(target: EventTarget | null): boolean {
+export function isTextEntry(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
     return false;
   }
@@ -68,7 +68,7 @@ function isTextEntry(target: EventTarget | null): boolean {
  * and Escape, and the arrow keys walk a token. Forwarded, choosing "Damage"
  * with the down arrow would also step the Game Master's selected token south.
  */
-function isInOverlay(target: EventTarget | null): boolean {
+export function isInOverlay(target: EventTarget | null): boolean {
   return (
     target instanceof Element &&
     target.closest('[role="menu"], [role="dialog"], [role="alertdialog"]') !==

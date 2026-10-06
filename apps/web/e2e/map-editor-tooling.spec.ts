@@ -238,7 +238,6 @@ async function waitForEngineReady(page: Page, tool?: GmToolId): Promise<void> {
   const box = await canvas.boundingBox();
   if (box) {
     await page.mouse.click(box.x + box.width - 40, box.y + box.height - 40);
-    await page.keyboard.press("Escape");
     await page.waitForTimeout(200);
   }
 }

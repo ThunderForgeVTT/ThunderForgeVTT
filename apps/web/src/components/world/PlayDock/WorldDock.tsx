@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import {
   FantasyIcon,
   type FantasyIconName,
@@ -29,8 +29,9 @@ export interface DockSection {
 
 export interface WorldDockProps {
   sections: DockSection[];
-  /** Section to open on first render. Omit to start collapsed. */
-  defaultSectionId?: DockSectionId;
+  /** The open section; `null` is collapsed. */
+  openSectionId: DockSectionId | null;
+  onOpenSectionIdChange: (id: DockSectionId | null) => void;
 }
 
 /**
@@ -46,17 +47,20 @@ export interface WorldDockProps {
  * would keep five of them running against a world the GM is only looking
  * at through one. The trade-off is that switching sections refetches, which
  * for these payload sizes is cheaper than the alternative.
+ *
+ * Which section is open belongs to the page: Escape on the select tool
+ * opens Settings from outside this component (owner request 2026-10-06).
  */
-export function WorldDock({ sections, defaultSectionId }: WorldDockProps) {
-  const [openSectionId, setOpenSectionId] = useState<DockSectionId | null>(
-    defaultSectionId ?? null,
-  );
-
+export function WorldDock({
+  sections,
+  openSectionId,
+  onOpenSectionIdChange: setOpenSectionId,
+}: WorldDockProps) {
   const openSection =
     sections.find((section) => section.id === openSectionId) ?? null;
 
   const toggle = (id: DockSectionId) => {
-    setOpenSectionId((current) => (current === id ? null : id));
+    setOpenSectionId(openSectionId === id ? null : id);
   };
 
   return (

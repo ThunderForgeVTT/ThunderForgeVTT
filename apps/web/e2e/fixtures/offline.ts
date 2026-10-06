@@ -91,7 +91,6 @@ export async function waitForEngineReady(page: Page): Promise<void> {
     // Clear of the dock's icon rail and the dice bar, so the click reaches
     // the engine and gives the canvas focus (see token-authoring.spec.ts).
     await page.mouse.click(box.x + box.width - 200, box.y + 120);
-    await page.keyboard.press("Escape");
     await page.waitForTimeout(200);
   }
 }
