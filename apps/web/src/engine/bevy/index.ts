@@ -416,11 +416,35 @@ async function fetchWasmWithProgress(
   });
 }
 
+/**
+ * The engine is built for WebGL2 and nothing else. A browser that will not
+ * hand one out (WebGL switched off, a blocklisted driver, a hardened profile)
+ * used to find that out at the end of a 50 MB download, as a panic in
+ * `create_surface` with a dead canvas behind it. Ask a throwaway canvas first;
+ * the answer is the same one the engine would get, and it costs nothing.
+ */
+export function webgl2Unavailable(doc: Document = document): string | null {
+  let context: unknown = null;
+  try {
+    context = doc.createElement("canvas").getContext("webgl2");
+  } catch {
+    context = null;
+  }
+  if (context) return null;
+  return (
+    "This browser is not offering WebGL2, which the board needs to draw. " +
+    "It may be switched off in the browser's settings or blocked for this " +
+    "graphics driver; turning it on or using another browser will fix it."
+  );
+}
+
 export async function mountEngine(
   options: EngineMountOptions,
   onStageChange?: (stage: EngineLoadStage) => void,
   onProgress?: EngineLoadListener,
 ): Promise<void> {
+  const unavailable = webgl2Unavailable();
+  if (unavailable) throw new Error(unavailable);
   onStageChange?.("downloading");
   const module = await getWasmModule(onProgress);
   // FR-031: "starting" is a distinct phase, not the tail of the download.
