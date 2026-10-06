@@ -738,3 +738,63 @@ fn a_gargantuan_creature_half_behind_a_pillar_is_seen() {
         &grid, hero, h, tarrasque, t, &walls
     ));
 }
+
+// Spec 078 FR-001: a wall ending on another wall joins it.
+
+fn set_with(walls: Vec<Wall>) -> WallSet {
+    let mut set = WallSet::default();
+    for w in walls {
+        set.upsert(w);
+    }
+    set
+}
+
+#[test]
+fn join_target_finds_the_middle_of_a_wall_within_the_radius() {
+    let set = set_with(vec![wall("w", 0.0, 0.0, 100.0, 0.0)]);
+    let join = set.join_target(Vec2::new(40.0, 5.0), 12.0).expect("a join");
+    assert_eq!(join.wall_id, "w");
+    assert!(join.at.distance(Vec2::new(40.0, 0.0)) < 1e-4);
+    assert!(set.join_target(Vec2::new(40.0, 20.0), 12.0).is_none());
+}
+
+#[test]
+fn join_target_leaves_corners_and_doors_alone() {
+    let mut door = wall("d", 0.0, 50.0, 100.0, 50.0);
+    door.door_state = DoorState::Closed;
+    let set = set_with(vec![wall("w", 0.0, 0.0, 100.0, 0.0), door]);
+    // On the wall's own end: already a corner, nothing to split.
+    assert!(set.join_target(Vec2::new(100.0, 0.0), 12.0).is_none());
+    assert!(set.join_target(Vec2::new(0.5, 0.0), 12.0).is_none());
+    // On the door's middle: a door is one opening.
+    assert!(set.join_target(Vec2::new(50.0, 50.0), 12.0).is_none());
+}
+
+#[test]
+fn join_target_picks_the_nearest_wall() {
+    let set = set_with(vec![
+        wall("far", 0.0, 10.0, 100.0, 10.0),
+        wall("near", 0.0, -3.0, 100.0, -3.0),
+    ]);
+    assert_eq!(
+        set.join_target(Vec2::new(50.0, 0.0), 12.0).unwrap().wall_id,
+        "near"
+    );
+}
+
+#[test]
+fn split_at_keeps_the_id_and_hands_back_the_remainder() {
+    let mut w = wall("w", 0.0, 0.0, 100.0, 0.0);
+    w.blocks_movement = true;
+    let set = set_with(vec![w]);
+    let split = set.split_at("w", Vec2::new(40.0, 0.0)).expect("a split");
+    assert_eq!(split.shortened.id, "w");
+    assert_eq!(split.shortened.end(), Vec2::new(40.0, 0.0));
+    assert_eq!(split.shortened.start(), Vec2::new(0.0, 0.0));
+    assert!(split.shortened.blocks_movement);
+    assert_eq!(
+        split.remainder,
+        (Vec2::new(40.0, 0.0), Vec2::new(100.0, 0.0))
+    );
+    assert!(set.split_at("missing", Vec2::ZERO).is_none());
+}

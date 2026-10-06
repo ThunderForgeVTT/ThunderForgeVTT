@@ -243,7 +243,7 @@ fn nearest_within(
         })
 }
 
-fn closest_point_on_segment(point: Vec2, a: Vec2, b: Vec2) -> Vec2 {
+pub(crate) fn closest_point_on_segment(point: Vec2, a: Vec2, b: Vec2) -> Vec2 {
     let ab = b - a;
     let len_sq = ab.length_squared();
     if len_sq <= f32::EPSILON {

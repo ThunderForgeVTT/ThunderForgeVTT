@@ -1,7 +1,7 @@
-//! Wall authoring input, rendering sync, undo, and vision-occlusion systems
+//! Wall authoring input, rendering sync, and vision-occlusion systems
 //! (T012-T014, T016 of specs/001-bevy-canvas-authoring/tasks.md).
 //!
-//! Wiring: see `plugins/wall.rs`'s `WallPlugin`.
+//! Wiring: see `plugins/wall.rs`'s `WallPlugin`. Undo is `wall_undo.rs`.
 
 use std::collections::HashMap;
 
@@ -14,7 +14,7 @@ use crate::resources::{
     WallPrimitive, WallSet,
 };
 use crate::systems::wall_draw::{
-    emit_planned, planned_walls, snap_radius, undo_created, wall_anchors, world_per_pixel,
+    emit_planned, join_endpoint, planned_walls, snap_radius, wall_anchors, world_per_pixel,
 };
 use crate::{ActiveWorld, emit_event};
 
@@ -403,6 +403,7 @@ pub(crate) fn handle_wall_input(
                 // raw cursor when the drag began.
                 let radius = snap_radius(&camera_query);
                 let anchors = wall_anchors(&wall_set, None);
+                let raw_start = start;
                 let start = rule.vertex_among(start, anchors.iter().copied(), radius);
                 let end = rule.vertex_among(cursor, anchors, radius);
 
@@ -444,6 +445,16 @@ pub(crate) fn handle_wall_input(
                     // first click seeds the chain; nothing is emitted
                     // until it explicitly ends (Enter) or is cancelled
                     // (Escape) — see `handle_wall_keyboard_toggles`.
+                    // Spec 078: a click near a wall's middle lands on it;
+                    // the split waits for the commit, so a cancelled chain
+                    // leaves the wall whole.
+                    let end = if snap_enabled.0 {
+                        wall_set
+                            .join_target(cursor, radius)
+                            .map_or(end, |join| join.at)
+                    } else {
+                        end
+                    };
                     chain.points.push(end);
                     return;
                 }
@@ -456,6 +467,22 @@ pub(crate) fn handle_wall_input(
                     chain.points.push(end);
                     return;
                 }
+
+                // Spec 078 FR-001: an end in the middle of another wall
+                // joins it, splitting that wall there. Only with snapping
+                // on: off means the point goes exactly where it was put.
+                // The raw pointer decides, not the snapped corner: a wall
+                // ranks above a corner (spec 077), and a corner 30 units
+                // from the wall says nothing about where the hand was.
+                let mut land = |raw: Vec2, snapped: Vec2| {
+                    if snap_enabled.0 && wall_set.join_target(raw, radius).is_some() {
+                        join_endpoint(&mut wall_set, &active_world.0, raw, radius)
+                    } else {
+                        snapped
+                    }
+                };
+                let start = land(raw_start, start);
+                let end = land(cursor, end);
 
                 // Spec 077 FR-005/FR-008: along the grid, one wall per cell
                 // edge, when snapping is on; one free wall when it is off.
@@ -501,6 +528,11 @@ pub(crate) fn handle_wall_input(
     }
 }
 
+/// How far a committed chain end may sit from the wall it was landed on
+/// and still split it: the landing already snapped it there, so this only
+/// absorbs float noise.
+const JOIN_COMMIT_TOLERANCE: f32 = 0.05;
+
 /// T012: keybound toggles for the selected wall's `blocks_vision` /
 /// `blocks_movement` / door-state, plus Delete to remove it. GM-only,
 /// same gating as `handle_wall_input`.
@@ -535,6 +567,20 @@ pub(crate) fn handle_wall_keyboard_toggles(
         }
         if keyboard.just_pressed(KeyCode::Enter) || keyboard.just_pressed(KeyCode::NumpadEnter) {
             let points = std::mem::take(&mut chain.points);
+            // Spec 078 FR-001: the chain's ends were put on the walls they
+            // were clicked near; now that it commits, split those walls.
+            // The tolerance is "exactly there": the landing already happened.
+            if let (Some(first), Some(last)) = (points.first(), points.last())
+                && points.len() >= 2
+            {
+                join_endpoint(
+                    &mut wall_set,
+                    &active_world.0,
+                    *first,
+                    JOIN_COMMIT_TOLERANCE,
+                );
+                join_endpoint(&mut wall_set, &active_world.0, *last, JOIN_COMMIT_TOLERANCE);
+            }
             for pair in points.windows(2) {
                 emit_event(json!({
                     "type": "create_wall",
@@ -640,110 +686,6 @@ pub(crate) fn handle_wall_keyboard_toggles(
             "wallId": wall_id,
             "worldId": active_world.0,
         }));
-    }
-}
-
-/// T014: wall undo. Ctrl+Z pops `WallSet`'s undo stack and re-issues the
-/// inverse mutation through the same outbound-event path a normal edit
-/// uses (research.md §4) — applied locally first (optimistic), then
-/// emitted so other clients converge once the server confirms it.
-pub(crate) fn handle_wall_undo(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mut wall_set: ResMut<WallSet>,
-    is_gm: Res<IsGameMaster>,
-    active_world: Res<ActiveWorld>,
-) {
-    if !is_gm.0 {
-        return;
-    }
-
-    let ctrl = keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight);
-    if !ctrl || !keyboard.just_pressed(KeyCode::KeyZ) {
-        return;
-    }
-
-    let Some(edit) = wall_set.pop_undo() else {
-        return;
-    };
-
-    match edit {
-        WallEdit::Move {
-            wall_id,
-            prior_x1,
-            prior_y1,
-            prior_x2,
-            prior_y2,
-        } => {
-            if let Some(mut wall) = wall_set.get(&wall_id).cloned() {
-                wall.x1 = prior_x1;
-                wall.y1 = prior_y1;
-                wall.x2 = prior_x2;
-                wall.y2 = prior_y2;
-                wall_set.upsert(wall);
-            }
-            emit_event(json!({
-                "type": "update_wall",
-                "wallId": wall_id,
-                "changes": { "x1": prior_x1, "y1": prior_y1, "x2": prior_x2, "y2": prior_y2 },
-                "worldId": active_world.0,
-            }));
-        }
-        WallEdit::DoorToggle {
-            wall_id,
-            prior_door_state,
-        } => {
-            if let Some(mut wall) = wall_set.get(&wall_id).cloned() {
-                wall.door_state = prior_door_state;
-                wall_set.upsert(wall);
-            }
-            emit_event(json!({
-                "type": "update_wall",
-                "wallId": wall_id,
-                "changes": { "doorState": prior_door_state.as_str() },
-                "worldId": active_world.0,
-            }));
-        }
-        WallEdit::FlagsToggle {
-            wall_id,
-            prior_blocks_vision,
-            prior_blocks_movement,
-        } => {
-            if let Some(mut wall) = wall_set.get(&wall_id).cloned() {
-                wall.blocks_vision = prior_blocks_vision;
-                wall.blocks_movement = prior_blocks_movement;
-                wall_set.upsert(wall);
-            }
-            emit_event(json!({
-                "type": "update_wall",
-                "wallId": wall_id,
-                "changes": {
-                    "blocksVision": prior_blocks_vision,
-                    "blocksMovement": prior_blocks_movement,
-                },
-                "worldId": active_world.0,
-            }));
-        }
-        WallEdit::Created { endpoints } => {
-            undo_created(&mut wall_set, &active_world.0, &endpoints);
-        }
-        WallEdit::Delete { deleted } => {
-            // Re-creates the wall; the server assigns a new id (the
-            // original id cannot be resurrected — see the module's
-            // scope note on optimistic reconciliation).
-            emit_event(json!({
-                "type": "create_wall",
-                "wall": {
-                    "x1": deleted.x1,
-                    "y1": deleted.y1,
-                    "x2": deleted.x2,
-                    "y2": deleted.y2,
-                    "blocksVision": deleted.blocks_vision,
-                    "blocksMovement": deleted.blocks_movement,
-                    "doorState": deleted.door_state.as_str(),
-                },
-                "worldId": active_world.0,
-            }));
-        }
     }
 }
 

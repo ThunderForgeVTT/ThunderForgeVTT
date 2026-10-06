@@ -7,9 +7,10 @@ use crate::resources::{
     WallSet,
 };
 use crate::systems::wall::{
-    handle_door_effects, handle_wall_input, handle_wall_keyboard_toggles, handle_wall_undo,
+    handle_door_effects, handle_wall_input, handle_wall_keyboard_toggles,
     init_wall_systems_resources, sync_wall_visuals,
 };
+use crate::systems::wall_undo::handle_wall_undo;
 
 /// Wires up wall authoring (T011-T014): the `WallSet` resource, GM-only
 /// input systems (create/select/move-endpoint/delete/toggle), undo, the

@@ -318,7 +318,38 @@ pub enum WallEdit {
     /// walk along the grid, or one segment). The server named them, so undo
     /// finds them by their endpoints and re-issues `delete_wall` for each.
     Created { endpoints: Vec<(Vec2, Vec2)> },
+    /// A wall was split where another wall ended on it (spec 078 FR-001).
+    /// The wall kept its id and was shortened to `prior.0 → at`; the rest,
+    /// `at → prior.1`, was created as a new wall the server named. Undo
+    /// re-issues `update_wall` with the prior endpoints and deletes the
+    /// remainder by its endpoints.
+    Split {
+        wall_id: String,
+        prior: (Vec2, Vec2),
+        remainder: (Vec2, Vec2),
+    },
 }
+
+/// Where a wall ending on another wall meets it (spec 078 FR-001): the wall
+/// and the point on it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WallJoin {
+    pub wall_id: String,
+    pub at: Vec2,
+}
+
+/// Two walls sharing a point: the shortened original and the remainder.
+/// The remainder has no id until the server names it, so it is endpoints.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WallSplit {
+    pub shortened: Wall,
+    pub remainder: (Vec2, Vec2),
+}
+
+/// How near `at` may be to a wall's own end and still count as the middle:
+/// nearer than this, the two walls already meet at a corner, and splitting
+/// would leave a sliver.
+const JOIN_END_MARGIN: f32 = 1.0;
 
 const MAX_UNDO_STACK: usize = 50;
 
@@ -347,6 +378,49 @@ impl WallSet {
 
     pub fn get(&self, id: &str) -> Option<&Wall> {
         self.walls.iter().find(|w| w.id == id)
+    }
+
+    /// The wall `point` lands in the middle of, within `radius`, and where
+    /// on it (spec 078 FR-001). Ending a wall there joins the two into one
+    /// structure, so the caller splits the found wall at `at`.
+    ///
+    /// A wall's own ends are not joins: two walls meeting at a corner already
+    /// meet, and `vertex_among` has had its say by the time this is asked.
+    /// Doors are never split — a door is one opening, and a wall ending on
+    /// it lands on its nearer end instead, which this leaves to the caller.
+    pub fn join_target(&self, point: Vec2, radius: f32) -> Option<WallJoin> {
+        self.walls
+            .iter()
+            .filter(|wall| wall.door_state == DoorState::None)
+            .filter_map(|wall| {
+                let at = crate::snapping::closest_point_on_segment(point, wall.start(), wall.end());
+                let d = at.distance(point);
+                let in_middle = at.distance(wall.start()) > JOIN_END_MARGIN
+                    && at.distance(wall.end()) > JOIN_END_MARGIN;
+                (d <= radius && in_middle).then_some((
+                    d,
+                    WallJoin {
+                        wall_id: wall.id.clone(),
+                        at,
+                    },
+                ))
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(_, join)| join)
+    }
+
+    /// Split `wall_id` at `at`: the original keeps its id and its start, the
+    /// remainder runs from `at` to the original end with the same flags.
+    /// `None` when the wall is not in the set.
+    pub fn split_at(&self, wall_id: &str, at: Vec2) -> Option<WallSplit> {
+        let wall = self.get(wall_id)?;
+        let mut shortened = wall.clone();
+        shortened.x2 = at.x;
+        shortened.y2 = at.y;
+        Some(WallSplit {
+            shortened,
+            remainder: (at, wall.end()),
+        })
     }
 
     fn index_of(&self, id: &str) -> Option<usize> {

@@ -55,6 +55,7 @@ pub mod wall;
 /// What a wall gesture lays down and its preview — split from `wall` to
 /// keep that file within the length limit (spec 077).
 pub mod wall_draw;
+pub mod wall_undo;
 
 #[cfg(test)]
 mod tests_f1_unit;

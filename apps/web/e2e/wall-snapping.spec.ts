@@ -210,5 +210,38 @@ test.describe("Snapping (spec 077)", () => {
     // The button and the key agree, and the button flips it back.
     await snap.click();
     await expect(snap).toHaveAttribute("data-enabled", "true");
+
+    // --- Spec 078: a wall ending on the free wall joins it -----------------
+    // The free wall runs (-400,-200)→(-270,-110); its midpoint is
+    // (-335,-155). A snapped drag from a grid corner below it, let go a few
+    // pixels off that midpoint, lands on the wall and splits it there: the
+    // free wall now ends at the join, and a remainder runs from the join to
+    // the free wall's old end.
+    const [freeWall] = free;
+    const mid = { x: -335, y: -155 };
+    await dragBoard(page, { x: -320, y: -256 }, { x: mid.x + 4, y: mid.y - 4 });
+    await expect
+      .poll(
+        async () =>
+          (await sceneWalls(page, sceneId)).some(
+            (w) =>
+              w.wallId !== freeWall.wallId &&
+              Math.hypot(w.x2 + 270, w.y2 + 110) < 1 &&
+              Math.hypot(w.x1 - mid.x, w.y1 - mid.y) < 6,
+          ),
+        {
+          message: "the remainder runs from the join to the old end",
+          timeout: 30_000,
+        },
+      )
+      .toBe(true);
+    const joined = (await sceneWalls(page, sceneId)).find(
+      (w) => w.wallId === freeWall.wallId,
+    )!;
+    expect(
+      Math.hypot(joined.x2 - mid.x, joined.y2 - mid.y),
+      "the free wall now ends at the join",
+    ).toBeLessThan(6);
+    expect(Math.hypot(joined.x1 + 400, joined.y1 + 200)).toBeLessThan(3);
   });
 });
