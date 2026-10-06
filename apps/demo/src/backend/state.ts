@@ -12,7 +12,7 @@ import { buildSeed, type MapListing, type Viewer } from "../seed/world";
 export type Row = Record<string, unknown>;
 
 export interface DemoState {
-  version: 2;
+  version: 3;
   world: Row & { id: string; activeSceneId: string | null };
   scenes: Row[];
   levels: Row[];
@@ -28,13 +28,15 @@ export interface DemoState {
   systemData: Row[];
   /** Whose view the page renders; the session answers with this member. */
   viewer: Viewer;
+  /** The hero the seeded player is playing (spec 023); they own both. */
+  claimedActorId: string | null;
   /** Background asset id → the static file under `maps/` that is its bytes. */
   assets: Record<string, { file: string; byteSize: number }>;
   nextEventId: number;
 }
 
 /** Versioned, so a later shape of the world does not read an earlier one. */
-const STORAGE_KEY = "thunderforge-demo:v2";
+const STORAGE_KEY = "thunderforge-demo:v3";
 const SAVE_AFTER_MS = 250;
 
 let state: DemoState | null = null;
@@ -53,7 +55,7 @@ function readSaved(): DemoState | null {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const saved = JSON.parse(raw) as DemoState;
-    return saved.version === 2 ? saved : null;
+    return saved.version === 3 ? saved : null;
   } catch {
     // Storage that cannot be read is the same as storage with nothing in it.
     return null;

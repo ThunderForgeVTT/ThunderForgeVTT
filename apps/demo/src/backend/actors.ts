@@ -59,7 +59,45 @@ export function actorRow(state: DemoState, actor: Row): Row {
     ...actor,
     myPermissionLevel: mine,
     myMayChangeImagery: mine !== "VIEWER",
+    claimedBy:
+      actor.id === state.claimedActorId
+        ? {
+            id: playerMemberId(state),
+            worldId: state.world.id,
+            userId: DEMO_PLAYER.id,
+            username: DEMO_PLAYER.username,
+          }
+        : null,
   };
+}
+
+/** The seeded player's membership id, as `members` in handlers numbers it. */
+export function playerMemberId(state: DemoState): string {
+  return `${state.world.id.slice(0, -1)}2`;
+}
+
+/** `GraphQLActorClaim` for the hero the player is playing, if any. */
+export function claimRow(state: DemoState): Row | null {
+  const actor = state.actors.find((a) => a.id === state.claimedActorId);
+  if (!actor) return null;
+  return {
+    actorId: actor.id,
+    worldMemberId: playerMemberId(state),
+    claimedByUserId: DEMO_PLAYER.id,
+    claimedAt: state.world.createdAt,
+    actor: actorRow(state, actor),
+  };
+}
+
+/** The player takes up a hero; a claim only ever moves between the two. */
+export function claim(state: DemoState, actorId: string): Row {
+  const actor = findActor(state, actorId);
+  if (actor.isNpc || actor.availableForClaim !== true) {
+    throw new GraphQLError("That character cannot be claimed");
+  }
+  state.claimedActorId = actorId;
+  markChanged();
+  return claimRow(state) as Row;
 }
 
 export function findActor(state: DemoState, actorId: string): Row {

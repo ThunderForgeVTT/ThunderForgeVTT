@@ -128,7 +128,7 @@ export function buildSeed(maps: MapListing[], base: string): DemoState {
   const stamp = { createdAt: SEEDED_AT, updatedAt: SEEDED_AT };
   const by = { createdBy: DEMO_USER.id, updatedBy: DEMO_USER.id };
   const state: DemoState = {
-    version: 2,
+    version: 3,
     world: {
       id: DEMO_WORLD_ID,
       name: "A World To Try",
@@ -164,6 +164,7 @@ export function buildSeed(maps: MapListing[], base: string): DemoState {
     systemData: [],
     assets: {},
     viewer: "gm",
+    claimedActorId: null,
     nextEventId: 1,
   };
 
@@ -186,7 +187,8 @@ export function buildSeed(maps: MapListing[], base: string): DemoState {
       createdBy: DEMO_USER.id,
       ownedBy: owner,
       ...stamp,
-      availableForClaim: false,
+      // Spec 017: the heroes may be claimed; the player ships with one.
+      availableForClaim: !member.isNpc,
       isUnique: member.isUnique,
       visibleToPlayers: member.visibleToPlayers,
       artLocked: false,
@@ -210,6 +212,10 @@ export function buildSeed(maps: MapListing[], base: string): DemoState {
       ...stamp,
     });
   });
+  // The player arrives already playing the fighter, so "view as player"
+  // opens on a character and not on a choice.
+  state.claimedActorId =
+    (state.actors.find((a) => a.castKey === "fighter")?.id as string) ?? null;
 
   let wall = 0;
   let light = 0;

@@ -371,12 +371,24 @@ test("as a player, the heroes are theirs and the ambush is not yet there to see"
   await expect(page.getByTestId("demo-viewer")).toContainText(
     "Viewing as a player",
   );
+  // A player's dashboard: no owner's controls, and no "not part of the demo"
+  // for anything it asks on the way in.
+  await expect(page.getByRole("button", { name: "Delete world" })).toHaveCount(
+    0,
+  );
+  await expect(page.getByText("Not part of the demo")).toHaveCount(0);
   const seen = await cast();
   expect(seen.map((a) => a.label).sort()).toEqual([
     "Brannoc Stoneward",
     "Elowen Vire",
   ]);
   expect(seen.every((a) => a.myPermissionLevel === "OWNER")).toBe(true);
+  // And they arrive already playing the fighter (spec 023), not choosing.
+  const claim = await ask<{ myActorClaim: { actor: { label: string } } }>(
+    "query ($worldId: UUID!) { myActorClaim(worldId: $worldId) { actorId actor { label } } }",
+    { worldId: WORLD_ID },
+  );
+  expect(claim.body.data?.myActorClaim.actor.label).toBe("Brannoc Stoneward");
   const ambush = (await scenes()).find((s) => s.name === "Grassy Path Ambush");
   if (!ambush) throw new Error("Grassy Path Ambush is a scene of the demo");
   const tokens = await ask<{ tokens: { tokenId: string }[] }>(

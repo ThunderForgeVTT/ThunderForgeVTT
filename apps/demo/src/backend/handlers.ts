@@ -15,6 +15,8 @@ import {
   CHECKS,
   CONDITIONS,
   actorRow,
+  claim,
+  claimRow,
   findActor,
   rollCheck,
   systemDataOf,
@@ -71,7 +73,12 @@ function withLevelCounts(state: DemoState, level: Row): Row {
 }
 
 function worldRow(state: DemoState): Row {
-  return state.world;
+  if (viewerIsGm(state)) return state.world;
+  return {
+    ...state.world,
+    description:
+      "A table of your own, seen as one of its players. Nothing you do here leaves this browser.",
+  };
 }
 
 /** The two members: the Game Master who made the world, and one player. */
@@ -88,7 +95,9 @@ function members(state: DemoState): Row[] {
     updatedAt: at,
     claimedActor: null,
   });
-  return [row(DEMO_USER, "Owner", 1), row(DEMO_PLAYER, "Player", 2)];
+  const player = row(DEMO_PLAYER, "Player", 2);
+  player.claimedActor = claimRow(state)?.actor ?? null;
+  return [row(DEMO_USER, "Owner", 1), player];
 }
 
 function viewerRole(state: DemoState): string {
@@ -205,6 +214,8 @@ export const queries: Record<string, Handler> = {
   world: ({ id }) =>
     id === demoState().world.id ? worldRow(demoState()) : null,
   worldMembers: () => members(demoState()),
+  worldMember: ({ userId }) =>
+    members(demoState()).find((m) => m.userId === userId) ?? null,
   worldInvites: () => [],
   worldPlayState: () => ({ paused: false, pausedAt: null, history: [] }),
   worldStatistics: () => {
@@ -230,7 +241,18 @@ export const queries: Record<string, Handler> = {
       .filter((actor) => String(actor.label).toLowerCase().includes(needle))
       .map((actor) => actorRow(state, actor));
   },
-  availableActors: () => [],
+  availableActors: () => {
+    const state = demoState();
+    return visibleActors(state)
+      .filter(
+        (a) => a.availableForClaim === true && a.id !== state.claimedActorId,
+      )
+      .map((a) => actorRow(state, a));
+  },
+  myActorClaim: () => {
+    const state = demoState();
+    return viewerIsGm(state) ? null : claimRow(state);
+  },
   actorSystemData: ({ actorId }) => {
     const state = demoState();
     findActor(state, actorId);
@@ -293,7 +315,6 @@ export const queries: Record<string, Handler> = {
     "interactions",
   ],
   pendingOffers: () => [],
-  myActorClaim: () => null,
   peerSessions: () => [],
   loreEntry: ({ slug }) =>
     demoState().lore.find((entry) => entry.slug === slug) ?? null,
@@ -555,5 +576,13 @@ export const mutations: Record<string, Handler> = {
     return actorRow(state, actor);
   },
   updateActorSystemData: ({ input }) => updateSystemData(input),
+  claimActor: ({ actorId }) => claim(demoState(), actorId),
+  unclaimActor: ({ actorId }) => {
+    const state = demoState();
+    const actor = findActor(state, actorId);
+    if (state.claimedActorId === actorId) state.claimedActorId = null;
+    markChanged();
+    return actorRow(state, actor);
+  },
   rollCheck: (args) => rollCheck(args),
 };
