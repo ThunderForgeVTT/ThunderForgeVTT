@@ -1630,6 +1630,14 @@ type AppQueryRoot {
 	**Deliberately unauthenticated** — spec 039 FR-056. Do not add
 	`authenticated_user(ctx)?` here.
 	
+	One narrowing, which is not a refusal: on an instance that is not open
+	to sign-ups, the three `operator.*` values are null for a caller with
+	no session (`withholds_operator`). The notice contact and the operator's
+	prose are answered to everybody on every instance — a share link works
+	for whoever holds it whatever the access policy is, so FR-056's reader
+	exists on an invite-only instance too, and an operator who filled the
+	contact in did so to be reachable.
+	
 	Unlike the four anonymous share reads above, this one is **not** rate
 	limited, and the difference is the reason those are: a share code is
 	unguessable only while the number of guesses is bounded, and this query
