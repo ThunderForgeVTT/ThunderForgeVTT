@@ -56,8 +56,8 @@ Counted on 2026-10-05:
   token's line of sight the map is not shown, in every ambient light. Light
   still governs how far and how well: in a dim or dark scene the lit area
   within line of sight is what is seen, as today.
-- **Unseen is dark; remembered is faint.** Where the viewer has never seen is
-  drawn as darkness. Where exploration is on and the viewer has seen is drawn
+- **Unseen is black; remembered is faint.** Where the viewer has never seen is
+  drawn opaque black (owner decision 2026-10-06, settling the question below). Where exploration is on and the viewer has seen is drawn
   as the exploration layer draws it today (faint, under the live view). A
   scene with exploration off remembers nothing, as today.
 - **A Game Master's board follows their selection.** With exactly one token
@@ -152,9 +152,9 @@ Counted on 2026-10-05:
 
 - The darkness sheet (`plugins/darkness.rs`, `darkness.wgsl`) carries one
   more shadow-map row, `SIGHT_ROW`, for the viewer's own line of sight; the
-  shader draws a fragment outside it in the scene's darkness tint at no less
-  than `UNSEEN_STRENGTH` (0.92) before it consults any light, so a light the
-  viewer cannot see lights nothing (FR-003). The sheet is spawned in a bright
+  shader draws a fragment outside it opaque black (`UNSEEN`) before it
+  consults any light, so a light the viewer cannot see lights nothing
+  (FR-003). The sheet is spawned in a bright
   scene whenever someone looks through a token.
 - One resource, `Eyes` (`systems/lighting_vision.rs`), names the viewing
   token for illumination and darkness alike: a Game Master's single selected
@@ -174,10 +174,8 @@ Counted on 2026-10-05:
 
 ## Open questions for the owner
 
-- Darkness for the unseen: pure black, or the same colour as a dark scene's
-  darkness (which has a hint of blue in it today)? Black is the usual
-  tabletop answer and reads as "not there"; one colour everywhere is one
-  less thing to explain.
+- ~~Darkness for the unseen: pure black, or the scene's darkness tint?~~
+  Decided 2026-10-06: black.
 - Should a Game Master looking through a token also *hear* as it — see the
   chat and rolls a player would — or is this strictly the board? The
   decision above is strictly the board.

@@ -16,9 +16,9 @@
 //
 // Sight (spec 076): when this client looks through a token, `sight` names
 // where it stands and row SIGHT_ROW holds how far it sees in each direction.
-// A fragment past that is unseen — drawn as the darkest darkness, whatever
-// lights fall on it — in a bright scene as in a dark one. Light says how far
-// and how well; walls say where at all.
+// A fragment past that is unseen — drawn black, whatever lights fall on it —
+// in a bright scene as in a dark one. Light says how far and how well; walls
+// say where at all.
 
 #import bevy_sprite::mesh2d_vertex_output::VertexOutput
 
@@ -30,9 +30,10 @@ const MAX_LIGHTS: u32 = 128u;
 const SHADOW_BINS: u32 = 512u;
 // Must match SIGHT_ROW in plugins/darkness.rs: the row after the lights'.
 const SIGHT_ROW: u32 = 128u;
-// How dark the unseen is drawn: as dark as a dark scene's unlit ground
-// (`darkness_strength(Dark)`), never darker than the scene itself already is.
-const UNSEEN_STRENGTH: f32 = 0.92;
+// What the unseen is drawn as: black, opaque (owner decision 2026-10-06).
+// Not the scene's own darkness tint — "not there" is a different thing from
+// "dark", and reads as one. What exploration remembers draws above this.
+const UNSEEN: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 1.0);
 const PI: f32 = 3.14159265;
 const TAU: f32 = 6.28318531;
 
@@ -73,8 +74,7 @@ fn fragment(mesh: VertexOutput) -> @location(0) vec4<f32> {
     if (darkness.sight.w > 0.0) {
         let offset = world - darkness.sight.xy;
         if (length(offset) > reach(SIGHT_ROW, offset, darkness.sight.z) + 1.0) {
-            let alpha = max(darkness.ambient.a, UNSEEN_STRENGTH);
-            return vec4<f32>(darkness.ambient.rgb, alpha);
+            return UNSEEN;
         }
     }
 
