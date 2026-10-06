@@ -65,8 +65,12 @@ pub enum WallPrimitive {
     Segment,
     /// Four walls closing a rectangle between the drag's two corners.
     Room,
-    /// One wall, already a closed door.
+    /// One wall, already a closed door — or, clicked on an existing wall,
+    /// that wall made one (spec 077 FR-016).
     Door,
+    /// The ring of walls around a circle dragged from centre to radius
+    /// (spec 077 FR-013): cell edges when snapping is on, chords when off.
+    Circle,
 }
 
 impl WallPrimitive {
@@ -81,6 +85,7 @@ impl WallPrimitive {
             "segment" => Some(Self::Segment),
             "room" => Some(Self::Room),
             "door" => Some(Self::Door),
+            "circle" => Some(Self::Circle),
             _ => None,
         }
     }
@@ -91,6 +96,7 @@ impl WallPrimitive {
             Self::Segment => "segment",
             Self::Room => "room",
             Self::Door => "door",
+            Self::Circle => "circle",
         }
     }
 }

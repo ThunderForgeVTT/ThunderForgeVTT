@@ -18,6 +18,7 @@ use crate::systems::lighting_vision::{
     Eyes, PartyEyes, mirror_carried_lights, mirror_dim_tokens, mirror_hidden_tokens,
     mirror_marked_tokens, mirror_placed_lights, mirror_token_vision,
 };
+use crate::systems::wall_draw::snap_radius;
 use crate::{ActiveWorld, TokenIdentity, emit_event};
 use thunderforge_canvas_core::vision::{
     AmbientLight, Illumination, ResolvedLight, Rgb, Visibility as Perceived, VisionProfile,
@@ -255,6 +256,15 @@ pub(crate) fn click_would_place_a_light(cursor: Vec2, lights: &[LightSource]) ->
         .any(|light| !light.is_carried() && cursor.distance(light.position()) <= LIGHT_GRAB_RADIUS)
 }
 
+/// Every wall as a segment, for `SnapRule::point_near_walls`.
+fn wall_segments(walls: &crate::resources::WallSet) -> Vec<(Vec2, Vec2)> {
+    walls
+        .walls()
+        .iter()
+        .map(|wall| (wall.start(), wall.end()))
+        .collect()
+}
+
 pub(crate) fn preview_light_at_cursor(
     pointer: crate::plugins::touch::Pointer,
     camera_query: Query<(&Camera, &GlobalTransform)>,
@@ -262,6 +272,7 @@ pub(crate) fn preview_light_at_cursor(
     is_gm: Res<IsGameMaster>,
     scene_grid: Res<crate::resources::grid::SceneGrid>,
     snap_enabled: Res<crate::resources::token_grid::GridSnapEnabled>,
+    walls: Res<crate::resources::WallSet>,
     mut gizmos: Gizmos,
 ) {
     if !is_gm.0 {
@@ -275,7 +286,12 @@ pub(crate) fn preview_light_at_cursor(
         return;
     }
 
-    let at = SnapRule::new(scene_grid.0, snap_enabled.0).cell(cursor);
+    // The same candidate the click will choose (spec 077 FR-019).
+    let at = SnapRule::new(scene_grid.0, snap_enabled.0).point_near_walls(
+        cursor,
+        wall_segments(&walls),
+        snap_radius(&camera_query),
+    );
     gizmos
         .circle_2d(at, DEFAULT_LIGHT_BRIGHT_RADIUS, PREVIEW_BRIGHT)
         .resolution(PREVIEW_SEGMENTS);
@@ -295,6 +311,8 @@ pub(crate) fn preview_light_at_cursor(
 /// creation always uses a positive default radius, so a plain click can
 /// never itself produce a zero-radius light; the guard here is defensive
 /// in case that default is ever changed to something caller-supplied.
+/// One parameter per Query/Res the interaction reads, as `handle_wall_input`.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn handle_light_input(
     pointer: crate::plugins::touch::Pointer,
     camera_query: Query<(&Camera, &GlobalTransform)>,
@@ -306,6 +324,7 @@ pub(crate) fn handle_light_input(
     active_world: Res<ActiveWorld>,
     scene_grid: Res<crate::resources::grid::SceneGrid>,
     snap_enabled: Res<crate::resources::token_grid::GridSnapEnabled>,
+    walls: Res<crate::resources::WallSet>,
 ) {
     if !is_gm.0 {
         return;
@@ -317,8 +336,12 @@ pub(crate) fn handle_light_input(
 
     // FR-024/FR-025: one rule, built from the scene's own grid, used by both
     // the placement path and the move path below. Built once here so the two
-    // cannot end up asking different questions.
+    // cannot end up asking different questions. Spec 077 FR-018: a light
+    // lands on a wall's corner, then a wall, then the cell, whichever is
+    // nearest within the screen-space radius.
     let snap_rule = SnapRule::new(scene_grid.0, snap_enabled.0);
+    let radius = snap_radius(&camera_query);
+    let segments = wall_segments(&walls);
 
     if mouse_button.just_pressed(MouseButton::Left) {
         // A carried light is its character's sheet's, not the Game Master's to
@@ -352,7 +375,7 @@ pub(crate) fn handle_light_input(
         // canvas obeys (spec 031 FR-024/FR-025). A light is a point, so the
         // centre is the right lattice for it — walls use vertices instead,
         // because a wall runs *between* cells rather than through one.
-        let placed = snap_rule.cell(cursor);
+        let placed = snap_rule.point_near_walls(cursor, segments.iter().copied(), radius);
 
         emit_event(json!({
             "type": "create_light",
@@ -383,7 +406,7 @@ pub(crate) fn handle_light_input(
             // a raw cursor position sits off-lattice, so the same lamp lands
             // in a different place depending on whether it was placed there or
             // dragged there — which is the inconsistency FR-025 is about.
-            let moved = snap_rule.cell(cursor);
+            let moved = snap_rule.point_near_walls(cursor, segments.iter().copied(), radius);
             let mut updated = light;
             updated.x = moved.x;
             updated.y = moved.y;

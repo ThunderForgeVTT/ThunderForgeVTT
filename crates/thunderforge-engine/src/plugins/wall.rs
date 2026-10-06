@@ -63,6 +63,19 @@ impl Plugin for WallPlugin {
 
         app.add_systems(OnExit(AuthoringMode::Walls), abandon_wall_gesture);
 
+        // Spec 077: the snapping switch's key and its report. Registered here
+        // because the wall tool is its first customer; the resource is shared
+        // with every placement, and `init_resource` above keeps this plugin
+        // addable on its own.
+        app.add_systems(
+            Update,
+            (
+                crate::systems::grid_snap::toggle_grid_snap_on_s,
+                crate::systems::grid_snap::report_grid_snap,
+            )
+                .chain(),
+        );
+
         app.add_systems(
             Update,
             (
@@ -91,6 +104,9 @@ impl Plugin for WallPlugin {
                     .run_if(crate::plugins::authoring_mode::authoring_tool_allowed(
                         AuthoringMode::Walls,
                     )),
+                // Spec 077 FR-006: the walls the held gesture will lay down,
+                // from the same plan the release emits.
+                crate::systems::wall_draw::preview_wall_drag.run_if(in_state(AuthoringMode::Walls)),
                 handle_wall_keyboard_toggles,
                 handle_wall_undo,
                 // Spec 030: doors, contributed to the interaction seam. Reads

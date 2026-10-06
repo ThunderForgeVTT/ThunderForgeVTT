@@ -70,6 +70,7 @@ pub(crate) fn handle_token_movement_input(
     mut plan: ResMut<MovementPlan>,
     active_world: Res<ActiveWorld>,
     walls: Res<crate::resources::wall::WallSet>,
+    mode: Option<Res<State<crate::plugins::authoring_mode::AuthoringMode>>>,
     mut owned: Query<
         (&mut Transform, &TokenIdentity, Option<&TokenGridBehaviour>),
         With<PlayerControlled>,
@@ -128,6 +129,17 @@ pub(crate) fn handle_token_movement_input(
     let Some(step) = pressed_step(&keyboard) else {
         return;
     };
+    // Under an authoring tool `S` is the snapping switch (spec 077 FR-002),
+    // so a step south by that key is not a step there. The arrow keys still
+    // are; only the letter is spoken for.
+    if step == Step::South
+        && keyboard.just_pressed(KeyCode::KeyS)
+        && !mode
+            .as_deref()
+            .is_none_or(crate::systems::grid_snap::s_walks_token)
+    {
+        return;
+    }
     MOVE_PRESSES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
     // Gridless scenes have no cells to step between, so keyboard movement

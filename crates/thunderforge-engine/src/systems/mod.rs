@@ -31,6 +31,8 @@ pub mod background;
 pub mod camera_focus;
 pub mod conflict_visualization;
 pub mod event_dispatcher;
+/// The snapping switch's key and its report to the page (spec 077).
+pub mod grid_snap;
 pub mod lighting;
 /// Resizing, toggling, deleting and undoing a placed light — split from
 /// `lighting` to keep that file within the length limit.
@@ -50,6 +52,9 @@ pub mod token_loader;
 pub mod token_move;
 pub mod token_sync_d2;
 pub mod wall;
+/// What a wall gesture lays down and its preview — split from `wall` to
+/// keep that file within the length limit (spec 077).
+pub mod wall_draw;
 
 #[cfg(test)]
 mod tests_f1_unit;
