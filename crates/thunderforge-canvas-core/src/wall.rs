@@ -314,6 +314,10 @@ pub enum WallEdit {
     /// full prior state (note: the re-created wall gets a *new* server-
     /// assigned id, it cannot resurrect the original id).
     Delete { deleted: Wall },
+    /// One gesture created these walls (spec 077 FR-015: a box, a circle, a
+    /// walk along the grid, or one segment). The server named them, so undo
+    /// finds them by their endpoints and re-issues `delete_wall` for each.
+    Created { endpoints: Vec<(Vec2, Vec2)> },
 }
 
 const MAX_UNDO_STACK: usize = 50;

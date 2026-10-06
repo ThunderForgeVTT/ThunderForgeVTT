@@ -155,6 +155,59 @@ impl SnapRule {
 
     /// The cell a position belongs to, for callers that need the address
     /// rather than the world point.
+    /// Whether the Game Master's switch is on, grid or no grid.
+    ///
+    /// Snapping to *walls* needs no lattice (spec 077 FR-004), so it asks
+    /// this rather than [`Self::is_active`]: on a gridless scene a light still
+    /// finds a corner, and with the switch off nothing finds anything.
+    pub fn enabled(&self) -> bool {
+        self.enabled
+    }
+
+    /// A wall endpoint: the nearest of `anchors` within `radius`, else the
+    /// lattice corner (spec 077 FR-009).
+    ///
+    /// `anchors` are the endpoints of the walls already drawn, so a room
+    /// drawn against another closes on the other's corner rather than on
+    /// the grid corner a few units away. `radius` is in world units; the
+    /// caller derives it from [`SNAP_RADIUS_PIXELS`] at the current zoom so
+    /// the gesture is the same at every zoom (FR-010).
+    pub fn vertex_among(
+        &self,
+        world: Vec2,
+        anchors: impl IntoIterator<Item = Vec2>,
+        radius: f32,
+    ) -> Vec2 {
+        if !self.enabled {
+            return world;
+        }
+        nearest_within(world, anchors, radius).unwrap_or_else(|| self.vertex(world))
+    }
+
+    /// Where a light lands: the nearest wall endpoint within `radius`, else
+    /// the nearest point on a wall within it, else the cell centre (spec 077
+    /// FR-018). A corner beats a wall's middle at equal distance because a
+    /// sconce in a corner is the commoner want, and because the two are
+    /// never equidistant except at the corner itself.
+    pub fn point_near_walls(
+        &self,
+        world: Vec2,
+        walls: impl IntoIterator<Item = (Vec2, Vec2)> + Clone,
+        radius: f32,
+    ) -> Vec2 {
+        if !self.enabled {
+            return world;
+        }
+        let endpoints = walls.clone().into_iter().flat_map(|(a, b)| [a, b]);
+        if let Some(corner) = nearest_within(world, endpoints, radius) {
+            return corner;
+        }
+        let on_walls = walls
+            .into_iter()
+            .map(|(a, b)| closest_point_on_segment(world, a, b));
+        nearest_within(world, on_walls, radius).unwrap_or_else(|| self.cell(world))
+    }
+
     pub fn cell_address(&self, world: Vec2) -> Cell {
         self.grid.world_to_cell(world)
     }
@@ -171,9 +224,108 @@ impl SnapRule {
     }
 }
 
+/// How near, on screen, a point must be to a wall or a corner to land on it:
+/// one radius for every candidate kind (spec 077 FR-010). In pixels, so the
+/// engine turns it into world units at the camera's zoom before asking.
+pub const SNAP_RADIUS_PIXELS: f32 = 12.0;
+
+fn nearest_within(
+    world: Vec2,
+    candidates: impl IntoIterator<Item = Vec2>,
+    radius: f32,
+) -> Option<Vec2> {
+    candidates
+        .into_iter()
+        .filter(|c| c.distance_squared(world) <= radius * radius)
+        .min_by(|a, b| {
+            a.distance_squared(world)
+                .total_cmp(&b.distance_squared(world))
+        })
+}
+
+fn closest_point_on_segment(point: Vec2, a: Vec2, b: Vec2) -> Vec2 {
+    let ab = b - a;
+    let len_sq = ab.length_squared();
+    if len_sq <= f32::EPSILON {
+        return a;
+    }
+    let t = ((point - a).dot(ab) / len_sq).clamp(0.0, 1.0);
+    a + ab * t
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_wall_endpoint_within_the_radius_beats_the_grid_corner() {
+        let rule = SnapRule::new(grid(GridKind::Square, 50.0), true);
+        let corner = Vec2::new(53.0, 47.0);
+        // Near the lattice corner (50, 50) and nearer the wall's end.
+        assert_eq!(
+            rule.vertex_among(Vec2::new(52.0, 48.0), [corner], 10.0),
+            corner
+        );
+        // Out of reach: the lattice corner.
+        assert_eq!(
+            rule.vertex_among(Vec2::new(52.0, 48.0), [Vec2::new(90.0, 90.0)], 10.0),
+            Vec2::new(50.0, 50.0)
+        );
+        // Switched off: untouched.
+        let off = SnapRule::new(grid(GridKind::Square, 50.0), false);
+        assert_eq!(
+            off.vertex_among(Vec2::new(52.0, 48.0), [corner], 10.0),
+            Vec2::new(52.0, 48.0)
+        );
+    }
+
+    #[test]
+    fn a_light_prefers_a_corner_then_a_wall_then_the_cell() {
+        let rule = SnapRule::new(grid(GridKind::Square, 50.0), true);
+        let wall = (Vec2::new(0.0, 0.0), Vec2::new(100.0, 0.0));
+        // Beside the wall's middle: onto the wall.
+        assert_eq!(
+            rule.point_near_walls(Vec2::new(40.0, 6.0), [wall], 10.0),
+            Vec2::new(40.0, 0.0)
+        );
+        // Near its end: onto the end, even though the wall's line is nearer.
+        assert_eq!(
+            rule.point_near_walls(Vec2::new(97.0, 4.0), [wall], 10.0),
+            Vec2::new(100.0, 0.0)
+        );
+        // Far from any wall: the cell centre, as before.
+        assert_eq!(
+            rule.point_near_walls(Vec2::new(40.0, 40.0), [wall], 10.0),
+            Vec2::new(25.0, 25.0)
+        );
+        // Gridless, the switch on: walls still catch, and nothing else moves.
+        let gridless = SnapRule::new(grid(GridKind::Gridless, 50.0), true);
+        assert_eq!(
+            gridless.point_near_walls(Vec2::new(40.0, 6.0), [wall], 10.0),
+            Vec2::new(40.0, 0.0)
+        );
+        assert_eq!(
+            gridless.point_near_walls(Vec2::new(40.0, 40.0), [wall], 10.0),
+            Vec2::new(40.0, 40.0)
+        );
+    }
+
+    #[test]
+    fn the_radius_is_the_callers_and_scales_with_zoom() {
+        let rule = SnapRule::new(grid(GridKind::Square, 50.0), true);
+        let corner = Vec2::new(60.0, 60.0);
+        let at = Vec2::new(52.0, 52.0);
+        // Zoomed in, a pixel is a tenth of a unit: 12px reach is 1.2 units.
+        assert_eq!(
+            rule.vertex_among(at, [corner], SNAP_RADIUS_PIXELS * 0.1),
+            Vec2::new(50.0, 50.0)
+        );
+        // Zoomed out, a pixel is two units: 12px reach is 24 units.
+        assert_eq!(
+            rule.vertex_among(at, [corner], SNAP_RADIUS_PIXELS * 2.0),
+            corner
+        );
+    }
 
     fn grid(kind: GridKind, size: f32) -> GridSpec {
         GridSpec {

@@ -175,8 +175,9 @@ impl GridSpec {
     }
 
     /// A usable spacing, guarding against a zero or negative size arriving
-    /// from outside. Every conversion below divides by this.
-    fn safe_size(&self) -> f32 {
+    /// from outside. Every conversion below divides by this, and so does
+    /// `wall_layout`, which walks the lattice at this pitch.
+    pub fn safe_size(&self) -> f32 {
         if self.size.is_finite() && self.size > f32::EPSILON {
             self.size
         } else {

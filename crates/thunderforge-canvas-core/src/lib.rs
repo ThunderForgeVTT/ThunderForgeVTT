@@ -47,6 +47,7 @@ pub mod viewport;
 pub mod vision;
 pub mod vision_declaration;
 pub mod wall;
+pub mod wall_layout;
 
 /// The vector type this crate's geometry speaks.
 ///
