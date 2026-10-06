@@ -33,11 +33,17 @@ proof named beside it has been run.
 
 ## Still to do
 
-- [ ] T020 Characters: actors in the seed, a sheet that opens, a roll
-      (FR-005, the rest of SC-002).
+- [x] T020 Characters: actors in the seed, a sheet that opens, a roll
+      (FR-005, the rest of SC-002). Done 2026-10-05: five actors in
+      `seed/cast.ts` (two heroes, three 5e stat blocks), Grassy Path Ambush
+      opens on the encounter, the fighter's sheet shows his modifiers and
+      `rollCheck` resolves Athletics as die + 5. The demo also seeds a player
+      who already holds the fighter, behind "View as player" on the notice.
 - [ ] T021 Shapes, token placement from the actors pane, chat, and switching
       scenes on the board, each proved the way T012 proves the rest. SC-009
-      today opens each scene's page, not each scene's board.
+      today opens each scene's page, not each scene's board. Scene switching
+      is answered (`launchScene`) and the door test uses it, but through the
+      API, not the board's own control.
 - [ ] T022 A map the visitor adds stays in the browser (FR-014).
 - [ ] T023 Walk every page a Game Master can reach and decide, entry by
       entry, absent or "not part of the demo" (FR-013).
