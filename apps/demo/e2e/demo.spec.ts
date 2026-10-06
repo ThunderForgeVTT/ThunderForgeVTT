@@ -298,6 +298,80 @@ test("a wall is drawn with the wall tool", async () => {
     .toBe(before + 1);
 });
 
+/** Spec 076: what the engine shows of the map at a board point. */
+async function sightAt(point: { x: number; y: number }) {
+  return page.evaluate(
+    ([x, y]) =>
+      (
+        window as unknown as {
+          __engineProbe?: {
+            sight?: (
+              x: number,
+              y: number,
+            ) => { looking: boolean; seen: boolean };
+          };
+        }
+      ).__engineProbe?.sight?.(x, y) ?? { looking: false, seen: true },
+    [point.x, point.y] as const,
+  );
+}
+
+test("a wall across the road hides the road beyond it: for the player always, for the Game Master through a selected token", async () => {
+  // Spec 076 FR-014. The fighter is wherever the drag and the keyboard left
+  // him; the wall goes up a cell and a half east of him, and the road beyond
+  // it is the far side.
+  const fighter = (await currentScene()).tokens[0];
+  const wallX = fighter.x + 117 * 1.5;
+  const near = { x: fighter.x + 40, y: fighter.y };
+  const far = { x: fighter.x + 117 * 3, y: fighter.y };
+  const walls = (await currentScene()).walls.length;
+  // The wall tool is still open from the wall before; a click would close it.
+  if (!(await page.getByTestId("gm-tool-panel-walls").isVisible())) {
+    await page.getByTestId("gm-tool-walls").click();
+  }
+  await expect(page.getByTestId("gm-tool-panel-walls")).toBeVisible();
+  await clickBoard({ x: wallX, y: fighter.y + 200 });
+  await page.waitForTimeout(300);
+  await clickBoard({ x: wallX, y: fighter.y - 200 });
+  await page.waitForTimeout(300);
+  await page.keyboard.press("Enter");
+  await expect
+    .poll(async () => (await currentScene()).walls.length)
+    .toBe(walls + 1);
+  await page.keyboard.press("Escape");
+
+  // The Game Master: everything until a token is selected.
+  await expect.poll(() => sightAt(far)).toEqual({ looking: false, seen: true });
+  await clickBoard({ x: fighter.x, y: fighter.y });
+  await expect
+    .poll(() => sightAt(far), { timeout: 10_000 })
+    .toEqual({ looking: true, seen: false });
+  expect(await sightAt(near)).toEqual({ looking: true, seen: true });
+  // Escape, and the board is the Game Master's again.
+  await page.keyboard.press("Escape");
+  await expect
+    .poll(() => sightAt(far), { timeout: 10_000 })
+    .toEqual({ looking: false, seen: true });
+
+  // The player sees through the fighter with nothing selected.
+  await page.getByRole("button", { name: "View as player" }).click();
+  await expect(page.getByTestId("demo-viewer")).toContainText(
+    "Viewing as a player",
+  );
+  await expect(page.locator("canvas")).toBeVisible({ timeout: 60_000 });
+  await expect
+    .poll(() => sightAt(far), { timeout: 30_000 })
+    .toEqual({ looking: true, seen: false });
+  expect(await sightAt(near)).toEqual({ looking: true, seen: true });
+  await page.getByRole("button", { name: "View as Game Master" }).click();
+  await expect(page.getByTestId("demo-viewer")).toContainText(
+    "Viewing as the Game Master",
+  );
+  await expect(page.getByTestId("gm-tool-walls")).toBeVisible({
+    timeout: 60_000,
+  });
+});
+
 test("a door is opened from its own menu, on a scene the Game Master switched to", async () => {
   // The ambush is in open country. The Proving Ground has doors; launching
   // it is the same announcement a server makes, and the play field follows.

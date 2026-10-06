@@ -76,6 +76,14 @@ pub(crate) fn handle_token_movement_input(
     >,
 ) {
     MOVE_RUNS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    // Before the token is found: the same Escape lets go of a selected token
+    // (spec 076 FR-008), and a Game Master who planned a route for it has no
+    // token of their own to fall back to — the route would outlive the hand
+    // that drew it.
+    if keyboard.just_pressed(KeyCode::Escape) {
+        plan.path = None;
+        return;
+    }
     let Ok((mut transform, identity, behaviour)) = owned.single_mut() else {
         // No owned token — nothing to move. A spectator or GM view lands here.
         return;
@@ -83,11 +91,6 @@ pub(crate) fn handle_token_movement_input(
 
     let footprint = behaviour.copied().unwrap_or_default().footprint;
     let current = transform.translation.truncate();
-
-    if keyboard.just_pressed(KeyCode::Escape) {
-        plan.path = None;
-        return;
-    }
 
     // Commit.
     if keyboard.just_pressed(KeyCode::Space) {

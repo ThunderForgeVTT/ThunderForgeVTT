@@ -50,6 +50,51 @@ pub(crate) fn apply_requested_viewer(mut viewer: ResMut<ViewerToken>) {
     }
 }
 
+/// Whose eyes the board is drawn through this frame (spec 076).
+///
+/// Resolved once by [`resolve_eyes`] and read by everything that draws a point
+/// of view — the illumination pass, the darkness sheet — so the two never
+/// disagree about who is looking.
+///
+/// A player's eyes are their own token (`ViewerToken`), whatever they have
+/// selected. A Game Master's are nobody's, unless exactly one token is
+/// selected: then the board is that token's view (FR-006), and
+/// `through_selection` says so, because a Game Master looking through a token
+/// is drawn as a player would be — FR-033's marks are for the other question
+/// (FR-010). Escape, a click on empty board or a stack of two gives the Game
+/// Master their own board back (FR-007, FR-008).
+#[derive(Resource, Default, Debug, Clone, PartialEq)]
+pub(crate) struct Eyes {
+    pub token: Option<String>,
+    pub through_selection: bool,
+}
+
+pub(crate) fn resolve_eyes(
+    is_gm: Option<Res<crate::resources::IsGameMaster>>,
+    selected: Option<Res<crate::resources::SelectedToken>>,
+    viewer: Option<Res<ViewerToken>>,
+    mut eyes: ResMut<Eyes>,
+) {
+    let game_master = is_gm.is_some_and(|gm| gm.0);
+    let resolved = if game_master {
+        let one = selected
+            .as_deref()
+            .map(|selected| selected.selected_ids())
+            .filter(|ids| ids.len() == 1)
+            .and_then(|ids| ids.first().cloned());
+        Eyes {
+            through_selection: one.is_some(),
+            token: one,
+        }
+    } else {
+        Eyes {
+            token: viewer.and_then(|viewer| viewer.0.clone()),
+            through_selection: false,
+        }
+    };
+    eyes.set_if_neq(resolved);
+}
+
 /// The tokens the table's players see through — the party's eyes.
 ///
 /// Only a Game Master's client is told these, and only to answer FR-033: which

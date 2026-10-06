@@ -12,6 +12,12 @@ interface ImportMetaEnv {
    * § R12 wants the server's own version recorded beside it.
    */
   readonly VITE_APP_VERSION?: string;
+  /**
+   * Spec 076 FR-014: "1" installs `window.__engineProbe` in a production
+   * build, for the demo's e2e, which has no development build to test. Not
+   * set by any shipped build.
+   */
+  readonly VITE_ENGINE_PROBE?: string;
 }
 
 interface ImportMeta {

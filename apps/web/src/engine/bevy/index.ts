@@ -123,10 +123,15 @@ const state: EngineState = {
  * see the store. Playtest 2026-09-10 P3: a pan happens in the engine and
  * nowhere else, so a test has to be able to ask the engine where the camera
  * is. Development only, like the world probe: `import.meta.env.DEV` is a
- * constant, so none of this reaches a production bundle.
+ * constant, so none of this reaches a production bundle. The one exception
+ * is a build made with `VITE_ENGINE_PROBE=1`, which the demo's e2e asks for
+ * (spec 076 FR-014) because the demo is only ever a production build; the
+ * image builds the demo itself, so that build never ships.
  */
 function installEngineProbe(wasm: BevyWasmModule): void {
-  if (!import.meta.env.DEV || typeof window === "undefined") return;
+  const wanted =
+    import.meta.env.DEV || import.meta.env.VITE_ENGINE_PROBE === "1";
+  if (!wanted || typeof window === "undefined") return;
   const cameraState = (wasm as { camera_state?: () => string }).camera_state;
   const tokenNameplates = (wasm as { token_nameplates?: () => string })
     .token_nameplates;
@@ -144,7 +149,18 @@ function installEngineProbe(wasm: BevyWasmModule): void {
   const focusState = (wasm as { focus_state?: () => string }).focus_state;
   const tokenConditions = (wasm as { token_conditions?: () => string })
     .token_conditions;
+  const sightProbe = (
+    wasm as { sight_probe?: (x: number, y: number) => string }
+  ).sight_probe;
   (window as unknown as Record<string, unknown>).__engineProbe = {
+    // Spec 076 FR-013: what the darkness sheet shows of the map at a world
+    // point. `looking` is whether this canvas sees through a token at all;
+    // `seen` is whether that token's line of sight reaches the point. The
+    // engine answers from the row it uploaded, with the shader's arithmetic.
+    sight: (x: number, y: number): { looking: boolean; seen: boolean } =>
+      sightProbe
+        ? (JSON.parse(sightProbe(x, y)) as { looking: boolean; seen: boolean })
+        : { looking: false, seen: true },
     // Owner decision 2026-09-15: what became of the last "look at this
     // creature" — moved, or refused and why. A refusal draws nothing by
     // design, so without this it cannot be told from a bug.

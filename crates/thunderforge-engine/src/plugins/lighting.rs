@@ -14,7 +14,7 @@ use crate::systems::lighting_edit::{
     handle_light_undo,
 };
 use crate::systems::lighting_vision::{
-    PartyEyes, ViewerToken, apply_requested_party_eyes, apply_requested_viewer,
+    Eyes, PartyEyes, ViewerToken, apply_requested_party_eyes, apply_requested_viewer, resolve_eyes,
 };
 
 /// Wires up light authoring (T036-T039, T041): the `LightSet` resource,
@@ -56,6 +56,9 @@ impl Plugin for LightingPlugin {
             .init_resource::<WallSet>()
             // Playtest 2026-09-10 P9: whose eyes this client sees through.
             .init_resource::<ViewerToken>()
+            // Spec 076: whose eyes the board is drawn through this frame,
+            // resolved from the viewer and a Game Master's selection.
+            .init_resource::<Eyes>()
             // Spec 045 FR-033: whose eyes the *table* sees through, so a Game
             // Master's board can mark what the party cannot see.
             .init_resource::<PartyEyes>()
@@ -117,6 +120,7 @@ impl Plugin for LightingPlugin {
                 sync_light_visuals,
                 apply_requested_viewer,
                 apply_requested_party_eyes,
+                resolve_eyes,
                 // After selection feedback, which sets every token's base
                 // alpha each frame. The two ran in no set order, so whether a
                 // token in the dark was drawn dimmed depended on which went

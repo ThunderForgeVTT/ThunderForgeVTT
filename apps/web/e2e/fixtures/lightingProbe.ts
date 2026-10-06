@@ -52,7 +52,15 @@ export type EngineProbe = {
   carriedLights?: () => CarriedLight[];
   tokenFootprints?: () => { tokenId: string }[];
   placedLights?: () => PlacedLight[];
+  sight?: (x: number, y: number) => Sight;
 };
+
+/**
+ * Spec 076: what the darkness sheet shows of the map at a world point.
+ * `looking` is whether this canvas sees through a token at all; `seen` is
+ * whether that token's line of sight reaches the point.
+ */
+export type Sight = { looking: boolean; seen: boolean };
 
 /** A light a Game Master placed, with the reaches this engine lights by. */
 export type PlacedLight = { lightId: string; bright: number; dim: number };
@@ -103,6 +111,24 @@ export async function hiddenTokens(page: Page): Promise<string[]> {
       (
         window as unknown as { __engineProbe?: EngineProbe }
       ).__engineProbe?.hiddenTokens?.() ?? [],
+  );
+}
+
+/**
+ * Spec 076 FR-013: whether the viewer sees the world point `(x, y)`. A
+ * canvas without the probe, or nobody looking through a token, sees all.
+ */
+export async function sightAt(
+  page: Page,
+  x: number,
+  y: number,
+): Promise<Sight> {
+  return page.evaluate(
+    ([x, y]) =>
+      (
+        window as unknown as { __engineProbe?: EngineProbe }
+      ).__engineProbe?.sight?.(x, y) ?? { looking: false, seen: true },
+    [x, y] as const,
   );
 }
 

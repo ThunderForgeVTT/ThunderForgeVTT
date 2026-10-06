@@ -2,7 +2,7 @@
 
 **Feature Branch**: `076-sight`
 **Created**: 2026-10-05
-**Status**: Draft
+**Status**: Implemented 2026-10-06 (engine, web and demo e2e); open questions below still stand
 **Input**: The owner, running the demo on 2026-10-05: "walls dont obscure vision like expected" (with Foundry's vision screenshots as the picture of expected), then "both" views, "if a gm clicks on a token the view should be as the token", and "if the gm hits esc it should take em back to gm view".
 
 ## Why
@@ -147,6 +147,30 @@ Counted on 2026-10-05:
 - **SC-004** `pnpm playtest --only=dungeon-crawl` and the full web e2e suite
   stay green; the crawl's vision steps are rewritten where they asserted
   that a bright scene is fully visible.
+
+## How it was built (2026-10-06)
+
+- The darkness sheet (`plugins/darkness.rs`, `darkness.wgsl`) carries one
+  more shadow-map row, `SIGHT_ROW`, for the viewer's own line of sight; the
+  shader draws a fragment outside it in the scene's darkness tint at no less
+  than `UNSEEN_STRENGTH` (0.92) before it consults any light, so a light the
+  viewer cannot see lights nothing (FR-003). The sheet is spawned in a bright
+  scene whenever someone looks through a token.
+- One resource, `Eyes` (`systems/lighting_vision.rs`), names the viewing
+  token for illumination and darkness alike: a Game Master's single selected
+  token, else `ViewerToken`. Exploration still keys on `ViewerToken` only, so
+  a Game Master's glance through a monster remembers nothing for anyone.
+- Escape clears the token selection (`clear_token_selection_on_escape`) and
+  tells the page so; the keyboard's token and the sight token are the same
+  resource (FR-011).
+- The proof reads the row the shader reads: `sight_probe(x, y)` (
+  `plugins/darkness_probe.rs`) answers with the shader's own bin and unpack
+  arithmetic, and `window.__engineProbe.sight` exposes it. The demo is only
+  ever a production build, so its e2e builds with `VITE_ENGINE_PROBE=1`; the
+  image builds the demo itself and never carries the probe.
+- The sight row has `SHADOW_BINS` (512) directions, so at the far reach of a
+  large view a wall's edge is a little coarse angularly. Accepted; raise the
+  bins if it is ever seen at the table.
 
 ## Open questions for the owner
 

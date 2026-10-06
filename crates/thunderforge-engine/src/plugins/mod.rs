@@ -6,6 +6,7 @@ pub mod canvas_layer;
 pub mod condition_markers;
 pub mod context_menu;
 pub mod darkness;
+pub mod darkness_probe;
 pub mod dice_roll;
 pub mod exploration;
 pub mod frame_trace;

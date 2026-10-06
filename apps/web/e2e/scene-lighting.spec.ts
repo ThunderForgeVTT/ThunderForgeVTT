@@ -12,10 +12,12 @@ import {
   hiddenTokens,
   luminanceAt,
   shadowQuads,
+  sightAt,
   storeCounts,
   wallCount,
   zoomOutTo,
 } from "./fixtures/lightingProbe";
+import { clickBoard } from "./fixtures/boardPointer";
 
 /**
  * Playtest 2026-09-10 P9: "walls aren't shading properly".
@@ -381,6 +383,37 @@ test.describe("Scene light (playtest 2026-09-10 P9)", () => {
       await hiddenTokens(page),
       "the Game Master's canvas hides no token behind a wall",
     ).not.toContain(npcTokenId);
+
+    // Spec 076 FR-001, FR-013: the wall bounds the player's map too, bright
+    // scene or not. The far side of the wall is unseen; the near side seen.
+    await expect
+      .poll(() => sightAt(player, 200, 0), {
+        timeout: 15_000,
+        message: "the player's map stops at the wall",
+      })
+      .toEqual({ looking: true, seen: false });
+    expect(await sightAt(player, -100, 0)).toEqual({
+      looking: true,
+      seen: true,
+    });
+
+    // FR-006 to FR-008: the Game Master looks through the player's token by
+    // selecting it, and Escape gives them their own board back.
+    expect(await sightAt(page, 200, 0)).toEqual({ looking: false, seen: true });
+    await expect(async () => {
+      await clickBoard(page, { x: -200, y: 0 });
+      await expect
+        .poll(() => sightAt(page, 200, 0), { timeout: 3_000 })
+        .toEqual({ looking: true, seen: false });
+    }).toPass({ timeout: 30_000 });
+    expect(await sightAt(page, -100, 0)).toEqual({ looking: true, seen: true });
+    await page.keyboard.press("Escape");
+    await expect
+      .poll(() => sightAt(page, 200, 0), {
+        timeout: 15_000,
+        message: "Escape returns the Game Master's board",
+      })
+      .toEqual({ looking: false, seen: true });
 
     // Take the wall away, and the player's token can see the NPC again —
     // live, over the event channel, without a reload.

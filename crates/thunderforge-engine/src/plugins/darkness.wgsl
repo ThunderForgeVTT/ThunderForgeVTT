@@ -13,6 +13,12 @@
 // light — and only from that light, so a room lit from both sides stays lit
 // behind each wall. Shadows used to be quads painted over the whole layer,
 // which darkened every light's pool alike.
+//
+// Sight (spec 076): when this client looks through a token, `sight` names
+// where it stands and row SIGHT_ROW holds how far it sees in each direction.
+// A fragment past that is unseen — drawn as the darkest darkness, whatever
+// lights fall on it — in a bright scene as in a dark one. Light says how far
+// and how well; walls say where at all.
 
 #import bevy_sprite::mesh2d_vertex_output::VertexOutput
 
@@ -22,6 +28,11 @@
 // three iterations regardless of this ceiling.
 const MAX_LIGHTS: u32 = 128u;
 const SHADOW_BINS: u32 = 512u;
+// Must match SIGHT_ROW in plugins/darkness.rs: the row after the lights'.
+const SIGHT_ROW: u32 = 128u;
+// How dark the unseen is drawn: as dark as a dark scene's unlit ground
+// (`darkness_strength(Dark)`), never darker than the scene itself already is.
+const UNSEEN_STRENGTH: f32 = 0.92;
 const PI: f32 = 3.14159265;
 const TAU: f32 = 6.28318531;
 
@@ -30,6 +41,9 @@ struct Darkness {
     ambient: vec4<f32>,
     // x = number of active lights.
     params: vec4<f32>,
+    // xy = the viewer's position, z = the sight row's reach, w = 1 while
+    // looking through a token.
+    sight: vec4<f32>,
     // xy = world position, z = bright radius, w = dim radius.
     lights: array<vec4<f32>, 128>,
     // rgb = light colour, a = intensity.
@@ -54,6 +68,15 @@ fn reach(i: u32, offset: vec2<f32>, dim: f32) -> f32 {
 @fragment
 fn fragment(mesh: VertexOutput) -> @location(0) vec4<f32> {
     let world = mesh.world_position.xy;
+
+    // Out of the viewer's sight: unseen, before any light is asked.
+    if (darkness.sight.w > 0.0) {
+        let offset = world - darkness.sight.xy;
+        if (length(offset) > reach(SIGHT_ROW, offset, darkness.sight.z) + 1.0) {
+            let alpha = max(darkness.ambient.a, UNSEEN_STRENGTH);
+            return vec4<f32>(darkness.ambient.rgb, alpha);
+        }
+    }
 
     // How much this fragment is lit, 0..1. Lights combine with `max`, never by
     // adding: two overlapping dim lights do not make bright light. This

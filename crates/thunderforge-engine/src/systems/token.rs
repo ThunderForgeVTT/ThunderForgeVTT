@@ -105,6 +105,25 @@ fn emit_token_selection(token_id: Option<&str>) {
     }));
 }
 
+/// Escape lets go of the selected token (spec 076 FR-008).
+///
+/// Until spec 076 a token stayed selected until empty board was clicked, and
+/// Escape only cancelled gestures. Now that a Game Master's board follows
+/// their selection, Escape is the way back to their own board — and the same
+/// press still cancels a planned route (`token_move.rs`), which belongs to
+/// the token being let go of.
+pub(crate) fn clear_token_selection_on_escape(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut selected_token: ResMut<SelectedToken>,
+) {
+    if !keyboard.just_pressed(KeyCode::Escape) || selected_token.selected_ids().is_empty() {
+        return;
+    }
+    selected_token.deselect();
+    emit_token_selection(None);
+    emit_stack_selection(&[]);
+}
+
 /// World-space position of the resize handle: the token's bottom-right
 /// corner, accounting for the token's current scale and rotation.
 fn resize_handle_world_pos(transform: &Transform) -> Vec2 {
@@ -648,5 +667,37 @@ mod tests {
         let transform = Transform::IDENTITY;
         let dist = resize_handle_world_pos(&transform).length();
         assert!((dist - token_half_diagonal()).abs() < 1e-4);
+    }
+
+    /// Spec 076 FR-008: Escape lets go of the selected token.
+    #[test]
+    fn escape_lets_go_of_the_selected_token() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.init_resource::<ButtonInput<KeyCode>>();
+        app.init_resource::<SelectedToken>();
+        app.add_systems(Update, clear_token_selection_on_escape);
+
+        app.world_mut()
+            .resource_mut::<SelectedToken>()
+            .select("goblin".to_string());
+        app.update();
+        assert!(
+            app.world()
+                .resource::<SelectedToken>()
+                .is_selected("goblin")
+        );
+
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::Escape);
+        app.update();
+        assert!(
+            app.world()
+                .resource::<SelectedToken>()
+                .selected_ids()
+                .is_empty(),
+            "Escape is the way back to the Game Master's board"
+        );
     }
 }

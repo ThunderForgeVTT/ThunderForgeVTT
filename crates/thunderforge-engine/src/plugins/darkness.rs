@@ -32,8 +32,18 @@
 //! camera once, and a pan left the rest unshadowed until something else
 //! changed.
 //!
-//! The whole layer is inert while ambient light is `Bright` and, in that case,
-//! is not spawned at all — an unconfigured scene renders exactly as before.
+//! # Sight (spec 076)
+//!
+//! Light says how far and how well; walls say where at all. When this client
+//! looks through a token (`Eyes`), the token's own line of sight has a row in
+//! the same shadow map, after the lights' rows, and a fragment past that reach
+//! is drawn as unseen whatever lights fall on it: a lantern in a sealed room
+//! lights nothing of the viewer's map (FR-003). The row's reach is the far
+//! corner of the view, so the row is as precise as the view is close.
+//!
+//! The whole layer is inert while ambient light is `Bright` and nobody is
+//! looking through a token and, in that case, is not spawned at all — an
+//! unconfigured scene renders exactly as before.
 
 use std::collections::HashMap;
 
@@ -46,11 +56,13 @@ use bevy::render::render_resource::{
 use bevy::shader::ShaderRef;
 use bevy::sprite_render::{AlphaMode2d, Material2d, Material2dPlugin};
 
+use super::darkness_probe;
 use crate::TokenIdentity;
 use crate::resources::{CanvasLayer, LightSet, SceneAmbient, WallSet};
 #[cfg(test)]
 use crate::systems::lighting::effective_light_position;
 use crate::systems::lighting::live_light_position;
+use crate::systems::lighting_vision::Eyes;
 use thunderforge_canvas_core::lighting::LightSource;
 use thunderforge_canvas_core::vision::{Illumination, Rgb, shadow_map_row};
 
@@ -72,6 +84,23 @@ pub const MAX_LIGHTS: usize = 128;
 /// a 600-unit radius, and the whole map is 256KB.
 pub const SHADOW_BINS: usize = 512;
 
+/// The shadow map's last row: the viewer's own line of sight (spec 076). Must
+/// match `SIGHT_ROW` in `darkness.wgsl`.
+pub const SIGHT_ROW: usize = MAX_LIGHTS;
+
+/// The sight row's reach is rounded up to this, so a pan does not recompute it
+/// every frame; and never below it, so a viewer at the edge of a small view
+/// still sees across it.
+const SIGHT_REACH_STEP: f32 = 1024.0;
+
+/// The sight row's reach when there is no camera to measure a view from.
+const SIGHT_REACH_FALLBACK: f32 = 4096.0;
+
+/// The darkness sheet's extent while sight bounds the map: the engine is not
+/// told how big the map is, and what the viewer cannot see must be covered to
+/// the map's last pixel — one quad, whatever its size.
+const SIGHT_COVERAGE: f32 = 32_768.0;
+
 /// Margin added around the camera's view when culling, in world units.
 ///
 /// A light just off-screen still spills its pool into view. Culling to the
@@ -89,6 +118,9 @@ pub struct DarknessUniform {
     pub ambient: Vec4,
     /// x = active light count.
     pub params: Vec4,
+    /// xy = the viewer's position, z = the sight row's reach, w = 1 while
+    /// someone is looking through a token, else 0 (spec 076).
+    pub sight: Vec4,
     /// xy = world position, z = bright radius, w = dim radius.
     pub lights: [Vec4; MAX_LIGHTS],
     /// rgb = colour, a = intensity.
@@ -100,6 +132,7 @@ impl Default for DarknessUniform {
         Self {
             ambient: Vec4::new(0.0, 0.0, 0.0, 0.0),
             params: Vec4::ZERO,
+            sight: Vec4::ZERO,
             lights: [Vec4::ZERO; MAX_LIGHTS],
             light_colors: [Vec4::ZERO; MAX_LIGHTS],
         }
@@ -200,6 +233,8 @@ struct ShadowMap {
     rows: HashMap<String, CachedRow>,
     /// Which light each texture row belongs to, in upload order.
     layout: Vec<String>,
+    /// The viewer's line of sight, in `SIGHT_ROW` (spec 076).
+    sight: Option<CachedRow>,
 }
 
 pub struct DarknessPlugin;
@@ -357,15 +392,34 @@ fn unshadowed_row() -> Vec<u8> {
     [255u8, 255, 0, 255].repeat(SHADOW_BINS)
 }
 
+/// How far the sight row has to reach for `origin` to see every corner of
+/// `view` — rounded up, so a pan recomputes the row only when it crosses a
+/// step.
+fn sight_reach(origin: Vec2, view: Option<Rect>) -> f32 {
+    let Some(view) = view else {
+        return SIGHT_REACH_FALLBACK;
+    };
+    let farthest = [
+        view.min,
+        view.max,
+        Vec2::new(view.min.x, view.max.y),
+        Vec2::new(view.max.x, view.min.y),
+    ]
+    .into_iter()
+    .map(|corner| corner.distance(origin))
+    .fold(0.0, f32::max);
+    (farthest / SIGHT_REACH_STEP).ceil().max(1.0) * SIGHT_REACH_STEP
+}
+
 fn new_shadow_image() -> Image {
     Image::new(
         Extent3d {
             width: SHADOW_BINS as u32,
-            height: MAX_LIGHTS as u32,
+            height: (MAX_LIGHTS + 1) as u32,
             depth_or_array_layers: 1,
         },
         TextureDimension::D2,
-        unshadowed_row().repeat(MAX_LIGHTS),
+        unshadowed_row().repeat(MAX_LIGHTS + 1),
         TextureFormat::Rgba8Unorm,
         RenderAssetUsages::RENDER_WORLD | RenderAssetUsages::MAIN_WORLD,
     )
@@ -382,6 +436,7 @@ fn sync_darkness(
     mut images: ResMut<Assets<Image>>,
     mut shadows: ResMut<ShadowMap>,
     mut stats: ResMut<ShadowStats>,
+    eyes: Option<Res<Eyes>>,
     tokens: Query<(&Transform, &TokenIdentity)>,
     cameras: Query<(&Projection, &GlobalTransform), With<Camera2d>>,
     mut existing: Query<
@@ -395,9 +450,20 @@ fn sync_darkness(
     );
     let strength = darkness_strength(ambient.level);
 
-    // A bright scene has no darkness to draw. Despawn rather than render a
-    // fully-transparent quad every frame.
-    if strength <= 0.0 {
+    let positions: HashMap<String, Vec2> = tokens
+        .iter()
+        .map(|(transform, identity)| (identity.0.clone(), transform.translation.truncate()))
+        .collect();
+    // Where the viewer stands, if this client looks through a token (spec
+    // 076). A token named but not in the scene is nobody's eyes.
+    let sight_origin = eyes
+        .as_ref()
+        .and_then(|eyes| eyes.token.as_deref())
+        .and_then(|id| positions.get(id).copied());
+
+    // A bright scene with nobody looking through a token has no darkness to
+    // draw. Despawn rather than render a fully-transparent quad every frame.
+    if strength <= 0.0 && sight_origin.is_none() {
         for (entity, _, _) in existing.iter() {
             commands.entity(entity).despawn();
         }
@@ -408,13 +474,10 @@ fn sync_darkness(
         // as they were.
         shadows.rows.clear();
         shadows.layout.clear();
+        shadows.sight = None;
+        darkness_probe::mirror_sight(None);
         return;
     }
-
-    let positions: HashMap<String, Vec2> = tokens
-        .iter()
-        .map(|(transform, identity)| (identity.0.clone(), transform.translation.truncate()))
-        .collect();
     let placed: Vec<Placed> = light_set
         .lights()
         .iter()
@@ -506,6 +569,57 @@ fn sync_darkness(
         }
     }
     uniform.params.x = in_view.len() as f32;
+
+    // The viewer's own line of sight, cached like a light's row: recomputed
+    // when the viewer moves, the view's reach steps, or a wall near them
+    // changes.
+    match sight_origin {
+        Some(origin) => {
+            let reach = sight_reach(origin, view);
+            let walls = match &shadows.sight {
+                Some(row)
+                    if !walls_changed && row.key.position.distance(origin) <= MOVE_EPSILON =>
+                {
+                    row.key.walls
+                }
+                _ => walls_near(origin, reach, &wall_set),
+            };
+            let key = RowKey {
+                position: origin,
+                radius: reach,
+                casts_shadows: true,
+                walls,
+            };
+            if !shadows
+                .sight
+                .as_ref()
+                .is_some_and(|row| row.key.still_holds_for(&key))
+            {
+                let row = shadow_map_row(origin, reach, &wall_set, SHADOW_BINS);
+                shadows.sight = Some(CachedRow {
+                    key,
+                    texels: pack_row(&row.distances, reach),
+                    casting_walls: row.casting_walls,
+                });
+                rows_changed = true;
+            }
+            uniform.sight = Vec4::new(origin.x, origin.y, reach, 1.0);
+            if let Some(row) = &shadows.sight {
+                darkness_probe::mirror_sight(Some(darkness_probe::SightRow {
+                    origin,
+                    reach,
+                    texels: row.texels.clone(),
+                }));
+            }
+        }
+        None => {
+            if shadows.sight.take().is_some() {
+                rows_changed = true;
+                darkness_probe::mirror_sight(None);
+            }
+        }
+    }
+
     stats.casting_pairs = in_view
         .iter()
         .filter_map(|p| shadows.rows.get(&p.light.id))
@@ -529,13 +643,20 @@ fn sync_darkness(
             }
         }
         texels.resize(SHADOW_BINS * MAX_LIGHTS * 4, 255);
+        match &shadows.sight {
+            Some(row) => texels.extend_from_slice(&row.texels),
+            None => texels.extend_from_slice(&unshadowed_row()),
+        }
         if let Some(mut target) = images.get_mut(&image) {
             target.data = Some(texels);
         }
         shadows.layout = in_view.iter().map(|p| p.light.id.clone()).collect();
     }
 
-    let (center, extent) = coverage(&placed, &positions);
+    let (center, mut extent) = coverage(&placed, &positions);
+    if sight_origin.is_some() {
+        extent = extent.max(SIGHT_COVERAGE);
+    }
     let translation = center.extend(CanvasLayer::darkness_z());
 
     if let Some((_, material_handle, mut transform)) = existing.iter_mut().next() {
@@ -600,6 +721,61 @@ mod tests {
         let row = unshadowed_row();
         assert_eq!(row.len(), SHADOW_BINS * 4);
         assert!((unpack(&row[..4], 600.0) - 600.0).abs() < 1e-3);
+    }
+
+    /// Spec 076 FR-012: in a bright scene — no light is consulted here at
+    /// all — a viewer's sight row stops at a wall and reaches past its end.
+    #[test]
+    fn the_sight_row_stops_at_a_wall_and_reaches_past_its_end() {
+        use thunderforge_canvas_core::wall::{DoorState, Wall};
+        let mut walls = WallSet::default();
+        walls.upsert(Wall {
+            id: "w1".to_string(),
+            x1: 50.0,
+            y1: -10.0,
+            x2: 50.0,
+            y2: 10.0,
+            blocks_vision: true,
+            blocks_movement: false,
+            door_state: DoorState::None,
+            locked: false,
+            secret: false,
+        });
+        let view = Rect {
+            min: Vec2::splat(-500.0),
+            max: Vec2::splat(500.0),
+        };
+        let reach = sight_reach(Vec2::ZERO, Some(view));
+        assert_eq!(reach, SIGHT_REACH_STEP, "one step covers a 500-unit view");
+
+        let row = shadow_map_row(Vec2::ZERO, reach, &walls, SHADOW_BINS);
+        let texels = pack_row(&row.distances, reach);
+        // The bins `darkness.wgsl`'s `reach` reads for due east and due
+        // north: floor((angle + PI) / TAU * SHADOW_BINS).
+        let east = SHADOW_BINS / 2;
+        let north = SHADOW_BINS * 3 / 4;
+        let behind = unpack(&texels[east * 4..east * 4 + 4], reach);
+        let beside = unpack(&texels[north * 4..north * 4 + 4], reach);
+        assert!(
+            (49.0..=51.0).contains(&behind),
+            "east, the wall stops sight at x = 50: {behind}"
+        );
+        assert!(
+            (beside - reach).abs() < 1.0,
+            "north, nothing stops it: {beside}"
+        );
+    }
+
+    #[test]
+    fn the_sight_reach_steps_up_to_cover_the_far_corner_of_the_view() {
+        let view = Rect {
+            min: Vec2::new(-3000.0, -100.0),
+            max: Vec2::new(100.0, 100.0),
+        };
+        let reach = sight_reach(Vec2::ZERO, Some(view));
+        assert!(reach >= Vec2::new(-3000.0, -100.0).length());
+        assert_eq!(reach % SIGHT_REACH_STEP, 0.0);
+        assert_eq!(sight_reach(Vec2::ZERO, None), SIGHT_REACH_FALLBACK);
     }
 
     #[test]

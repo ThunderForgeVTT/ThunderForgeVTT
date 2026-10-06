@@ -147,11 +147,13 @@ mod apply_light_illumination_tests {
     use crate::TokenIdentity;
     use crate::resources::lighting::LightSet as EngineLightSet;
     use crate::resources::wall::WallSet as EngineWallSet;
+    use crate::systems::lighting_vision::{Eyes, ViewerToken, resolve_eyes};
     use thunderforge_canvas_core::wall::{DoorState as CoreDoorState, Wall as CoreWall};
 
     fn app_with_blocking_wall_and_token(token_pos: Vec2) -> App {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins);
+        app.init_resource::<Eyes>();
 
         let mut wall_set = EngineWallSet::default();
         wall_set.upsert(CoreWall {
@@ -192,7 +194,7 @@ mod apply_light_illumination_tests {
             Visibility::Inherited,
         ));
 
-        app.add_systems(Update, apply_light_illumination);
+        app.add_systems(Update, (resolve_eyes, apply_light_illumination).chain());
         app
     }
 
@@ -365,6 +367,7 @@ mod marks_for_the_game_master {
     use crate::TokenIdentity;
     use crate::resources::lighting::LightSet as EngineLightSet;
     use crate::resources::wall::WallSet as EngineWallSet;
+    use crate::systems::lighting_vision::{Eyes, ViewerToken, resolve_eyes};
     use thunderforge_canvas_core::wall::{DoorState as CoreDoorState, Wall as CoreWall};
 
     /// A bright scene with a vision-blocking wall at x = 50, a hero west of
@@ -376,6 +379,8 @@ mod marks_for_the_game_master {
     fn table(monster_at: Vec2) -> App {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins);
+        app.init_resource::<Eyes>();
+        app.init_resource::<crate::resources::SelectedToken>();
 
         let mut wall_set = EngineWallSet::default();
         wall_set.upsert(CoreWall {
@@ -408,8 +413,69 @@ mod marks_for_the_game_master {
             ));
         }
 
-        app.add_systems(Update, apply_light_illumination);
+        app.add_systems(Update, (resolve_eyes, apply_light_illumination).chain());
         app
+    }
+
+    fn visibility_of(app: &mut App, id: &str) -> Visibility {
+        let mut query = app.world_mut().query::<(&TokenIdentity, &Visibility)>();
+        query
+            .iter(app.world())
+            .find(|(identity, _)| identity.0 == id)
+            .map(|(_, visibility)| *visibility)
+            .unwrap()
+    }
+
+    /// Spec 076 FR-006, FR-007, FR-010: with one token selected, a Game
+    /// Master's board is that token's view — the hero behind the wall is
+    /// gone, not marked — and letting go of it brings their own board back.
+    #[test]
+    fn a_game_master_with_one_token_selected_sees_as_it_does() {
+        let mut app = table(Vec2::new(100.0, 0.0));
+        app.update();
+        assert_eq!(visibility_of(&mut app, "hero"), Visibility::Inherited);
+        assert_eq!(marked(&mut app), vec!["monster".to_string()]);
+
+        app.world_mut()
+            .resource_mut::<crate::resources::SelectedToken>()
+            .select("monster".to_string());
+        app.update();
+        assert_eq!(
+            visibility_of(&mut app, "hero"),
+            UNLIT_VISIBILITY,
+            "through the monster's eyes the hero is behind the wall"
+        );
+        assert_eq!(visibility_of(&mut app, "monster"), Visibility::Inherited);
+        assert!(
+            marked(&mut app).is_empty(),
+            "FR-033's marks are for the other question"
+        );
+
+        app.world_mut()
+            .resource_mut::<crate::resources::SelectedToken>()
+            .select_stack(vec!["monster".to_string(), "hero".to_string()]);
+        app.update();
+        assert_eq!(visibility_of(&mut app, "hero"), Visibility::Inherited);
+        assert_eq!(
+            marked(&mut app),
+            vec!["monster".to_string()],
+            "a stack is nobody's eyes"
+        );
+
+        app.world_mut()
+            .resource_mut::<crate::resources::SelectedToken>()
+            .select("monster".to_string());
+        app.update();
+        app.world_mut()
+            .resource_mut::<crate::resources::SelectedToken>()
+            .deselect();
+        app.update();
+        assert_eq!(visibility_of(&mut app, "hero"), Visibility::Inherited);
+        assert_eq!(
+            marked(&mut app),
+            vec!["monster".to_string()],
+            "deselected: the table's board"
+        );
     }
 
     fn marked(app: &mut App) -> Vec<String> {

@@ -15,7 +15,7 @@ use crate::resources::{
     TokenVision, WallSet,
 };
 use crate::systems::lighting_vision::{
-    PartyEyes, ViewerToken, mirror_carried_lights, mirror_dim_tokens, mirror_hidden_tokens,
+    Eyes, PartyEyes, mirror_carried_lights, mirror_dim_tokens, mirror_hidden_tokens,
     mirror_marked_tokens, mirror_placed_lights, mirror_token_vision,
 };
 use crate::{ActiveWorld, TokenIdentity, emit_event};
@@ -565,13 +565,15 @@ fn resolve_light(light: &LightSource, positions: &HashMap<String, Vec2>) -> Opti
 /// - **Facing is honoured**, so a vision cone actually restricts what its
 ///   owner sees.
 ///
-/// The observer is the token this client sees the board through: the local
-/// player's own, as the application names it (`ViewerToken`). A Game Master
-/// has none — there is no single point of view to occlude from, so occlusion
-/// and facing are skipped — and loses no token to the dark: one a player
-/// could not see is drawn dimmed for them instead. A GM sees the board, not
-/// one character's slice of it, and a token they cannot find is one they
-/// cannot run.
+/// The observer is the token this client sees the board through, as
+/// `resolve_eyes` names it (spec 076): the local player's own, as the
+/// application set it (`ViewerToken`). A Game Master has none — there is no
+/// single point of view to occlude from, so occlusion and facing are skipped
+/// — and loses no token to the dark: one a player could not see is drawn
+/// dimmed for them instead. A GM sees the board, not one character's slice of
+/// it, and a token they cannot find is one they cannot run. Unless they ask
+/// for that slice: with one token selected, a Game Master is drawn exactly
+/// as a player looking through it would be (spec 076 FR-006, FR-010).
 ///
 /// Playtest 2026-09-10 P9: the observer used to be whichever entity carried
 /// `PlayerToken`, which is the engine's own demo token, spawned in every
@@ -587,7 +589,7 @@ pub(crate) fn apply_light_illumination(
     wall_set: Res<WallSet>,
     ambient: Option<Res<SceneAmbient>>,
     is_gm: Option<Res<IsGameMaster>>,
-    viewer: Option<Res<ViewerToken>>,
+    eyes: Option<Res<Eyes>>,
     party_eyes: Option<Res<PartyEyes>>,
     token_positions: Query<(&Transform, &TokenIdentity, Option<&TokenVision>)>,
     mut tokens: Query<(
@@ -606,9 +608,9 @@ pub(crate) fn apply_light_illumination(
 
     // Nothing to resolve in a lit scene with no lights — unless someone is
     // looking through a token, whose walls hide things in daylight too.
-    let game_master = is_gm.as_ref().is_some_and(|gm| gm.0);
-    let sees_through_a_token =
-        !game_master && viewer.as_ref().is_some_and(|viewer| viewer.0.is_some());
+    let eyes = eyes.as_deref().cloned().unwrap_or_default();
+    let game_master = is_gm.as_ref().is_some_and(|gm| gm.0) && !eyes.through_selection;
+    let sees_through_a_token = !game_master && eyes.token.is_some();
     // Nor for a Game Master with a party to compare against: in a bright
     // scene FR-030 still applies, so a wall still hides a token from the
     // table, and the mark that says so is still owed (FR-033). Returning
@@ -698,9 +700,8 @@ pub(crate) fn apply_light_illumination(
     let observer = if game_master {
         None
     } else {
-        viewer
-            .as_ref()
-            .and_then(|viewer| viewer.0.as_deref())
+        eyes.token
+            .as_deref()
             .and_then(|id| {
                 token_positions
                     .iter()

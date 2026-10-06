@@ -2,8 +2,9 @@ use bevy::prelude::*;
 
 use crate::resources::{DraggingToken, GridSnapEnabled, IsGameMaster, SelectedToken};
 use crate::systems::token::{
-    handle_token_drag, handle_token_resize_drag, handle_token_resize_rotate_keyboard,
-    handle_token_rotate_drag, init_token_systems_resources, sync_token_visuals,
+    clear_token_selection_on_escape, handle_token_drag, handle_token_resize_drag,
+    handle_token_resize_rotate_keyboard, handle_token_rotate_drag, init_token_systems_resources,
+    sync_token_visuals,
 };
 use crate::systems::token_grid::{size_tokens_to_grid, snap_tokens_to_grid};
 use crate::systems::token_move::{
@@ -47,6 +48,9 @@ impl Plugin for TokenPlugin {
                 handle_token_rotate_drag,
                 handle_token_drag,
                 handle_token_resize_rotate_keyboard,
+                // Spec 076 FR-008, before the keyboard's token is chosen, so
+                // the frame Escape is pressed already walks nobody's.
+                clear_token_selection_on_escape,
                 // Before sizing/snapping, so a move resolves to its final cell
                 // in the same frame the key was pressed.
                 crate::systems::token_move::reconcile_controlled_token,
