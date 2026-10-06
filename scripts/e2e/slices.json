@@ -245,11 +245,12 @@
     },
     {
       "name": "canvas",
-      "summary": "Map authoring on the canvas, drawn walls and board loading (specs/001-bevy-canvas-authoring, specs/002-canvas-authoring-asset-storage, specs/003-dd2vtt-map-fidelity, specs/045-token-movement-and-vision, specs/059-a-map-that-arrives-in-pieces); owns canvas-authoring (measured lane) and token-movement-walls by exact name, since walls are canvas behaviour",
+      "summary": "Map authoring on the canvas, drawn walls and board loading (specs/001-bevy-canvas-authoring, specs/002-canvas-authoring-asset-storage, specs/003-dd2vtt-map-fidelity, specs/045-token-movement-and-vision, specs/059-a-map-that-arrives-in-pieces, specs/077-snapping); owns canvas-authoring (measured lane) and token-movement-walls by exact name, since walls are canvas behaviour",
       "own": [
         "canvas-",
         "map-editor-tooling.spec.ts",
         "drawn-walls-block.spec.ts",
+        "wall-snapping.spec.ts",
         "token-movement-walls.spec.ts",
         "board-loading.spec.ts",
         "screenshot.spec.ts"

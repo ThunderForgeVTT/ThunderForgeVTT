@@ -2,7 +2,7 @@
 
 **Feature Branch**: `077-snapping`
 **Created**: 2026-10-06
-**Status**: Draft
+**Status**: Implemented 2026-10-06 (FR-024 demo e2e and SC-004 measurement pending)
 **Input**: The owner, running the demo on 2026-10-06: "one thing we're missing is snapping like building walls on the gridlines or lights, and using the S key or a button to turn snapping on or off … for lights I like it snaps to squares but I want the ability to snap to walls or corners too, and for wall building being able to chase gridlines would be huge, and we could add quick tools like box or circle for walls … and we could really improve it by having wall segments be each straight on the grid when snapping, allowing you to click and turn one into a door for faster room building."
 
 ## Why
@@ -203,6 +203,40 @@ Counted on 2026-10-06:
   one-per-edge rule is revisited before the spec is marked implemented.
 - **SC-005** The full web e2e suite, `pnpm playtest --only=dungeon-crawl`
   and the demo e2e stay green.
+
+## How it was built
+
+- **Geometry in core** (`thunderforge-canvas-core/src/wall_layout.rs`):
+  `grid_walk` (the L, long leg first), `box_edges`, `circle_edges` (the
+  rasterised ring, closed), `circle_chords` with `chords_for(radius,
+  chord_length)` for the free circle. `snapping.rs` gained
+  `SnapRule::vertex_among` (a wall endpoint within the radius beats the grid
+  corner) and `point_near_walls` (endpoint, then nearest point on a wall,
+  then the cell), with `SNAP_RADIUS_PIXELS = 12` named once (FR-010).
+- **One plan for preview and release** (`engine/systems/wall_draw.rs`):
+  `planned_walls(primitive, rule, start, end, pixel)` is asked by the
+  preview system while the button is held and by `handle_wall_input` on
+  release, so FR-006 holds by construction. `emit_planned` sends one
+  `create_wall` per segment and pushes one `WallEdit::Created` (FR-015);
+  undo deletes by endpoints.
+- **The switch** (`engine/systems/grid_snap.rs`, `GmToolRail/SnapToggle.tsx`):
+  `S` toggles `GridSnapEnabled` under any authoring tool and is left to
+  WASD under Select; the engine reports `grid_snap_changed` on every change,
+  and the rail's button only subscribes and asks, so key and button cannot
+  disagree (SC-003).
+- **The walls tool** offers Segment, Box, Circle and Door as a radiogroup
+  (`wall-primitive-*`), replacing a toggle that armed nothing. With Door
+  chosen, a press within `WALL_SELECT_DISTANCE` of a wall sets it closed and
+  emits `update_wall`; the drag never starts (FR-016).
+- **Lights** ask `point_near_walls` in both the preview and the click, with
+  the radius converted at the camera's zoom (FR-018, FR-019).
+- **Proof**: core and engine unit tests (FR-021, FR-022);
+  `e2e/wall-snapping.spec.ts` is FR-023 verbatim — ten cell-edge walls from
+  a 3×2 box drag, a door by click, a light on the corner, `S` and a free
+  diagonal. `drawn-walls-block.spec.ts` now turns snapping off first, since
+  its four-wall room is the free case.
+- **Not yet**: FR-024's demo e2e, and SC-004's 80-wall frame-time
+  measurement against spec 028's budget.
 
 ## Open questions for the owner
 

@@ -68,9 +68,10 @@ async function setWallPrimitive(page: Page, primitive: string): Promise<void> {
     )) as typeof import("../src/engine/bevy/index");
     return bevy.setWallPrimitive(p);
   }, primitive);
-  expect(recognised, `the engine should know the "${primitive}" primitive`).toBe(
-    true,
-  );
+  expect(
+    recognised,
+    `the engine should know the "${primitive}" primitive`,
+  ).toBe(true);
 }
 
 /** A real press-move-release across the canvas, offsets from its centre. */
@@ -118,6 +119,14 @@ test.describe("Drawn walls stop a player (owner decision 2026-09-15)", () => {
     await launchSceneByName(page, worldId, "Drawn Room");
     await waitForEngineReady(page);
     await openGmTool(page, "walls");
+
+    // Snapping off (spec 077): with it on, a room is one wall per cell edge
+    // and a drag walks the grid; this spec is about what free walls do.
+    await page.getByTestId("gm-snap-toggle").click();
+    await expect(page.getByTestId("gm-snap-toggle")).toHaveAttribute(
+      "data-enabled",
+      "false",
+    );
 
     // --- A room, drawn with the tool ------------------------------------
     await setWallPrimitive(page, "room");
