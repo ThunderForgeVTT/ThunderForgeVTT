@@ -431,10 +431,15 @@ export function webgl2Unavailable(doc: Document = document): string | null {
     context = null;
   }
   if (context) return null;
+  // Nothing a page can ask for: there is no permission prompt for WebGL.
+  // Privacy builds of Firefox (LibreWolf, Tor Browser, a hardened user.js)
+  // turn it off as an anti-fingerprinting default, so say where the switch is.
   return (
     "This browser is not offering WebGL2, which the board needs to draw. " +
-    "It may be switched off in the browser's settings or blocked for this " +
-    "graphics driver; turning it on or using another browser will fix it."
+    "Privacy-focused browsers such as LibreWolf turn it off by default: " +
+    'look for "Enable WebGL" in the browser\'s own settings, or set ' +
+    "webgl.disabled to false in about:config, then reload. A blocklisted " +
+    "graphics driver can also be the cause; another browser will tell."
   );
 }
 
