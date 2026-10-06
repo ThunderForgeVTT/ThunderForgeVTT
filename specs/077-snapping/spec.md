@@ -2,7 +2,7 @@
 
 **Feature Branch**: `077-snapping`
 **Created**: 2026-10-06
-**Status**: Implemented 2026-10-06 (FR-024 demo e2e and SC-004 measurement pending)
+**Status**: Implemented 2026-10-06 (SC-004 measurement pending)
 **Input**: The owner, running the demo on 2026-10-06: "one thing we're missing is snapping like building walls on the gridlines or lights, and using the S key or a button to turn snapping on or off … for lights I like it snaps to squares but I want the ability to snap to walls or corners too, and for wall building being able to chase gridlines would be huge, and we could add quick tools like box or circle for walls … and we could really improve it by having wall segments be each straight on the grid when snapping, allowing you to click and turn one into a door for faster room building."
 
 ## Why
@@ -235,8 +235,14 @@ Counted on 2026-10-06:
   a 3×2 box drag, a door by click, a light on the corner, `S` and a free
   diagonal. `drawn-walls-block.spec.ts` now turns snapping off first, since
   its four-wall room is the free case.
-- **Not yet**: FR-024's demo e2e, and SC-004's 80-wall frame-time
-  measurement against spec 028's budget.
+- **FR-024** on the demo (`apps/demo/e2e/demo.spec.ts`): a Room drag puts
+  a box of cell-edge walls around the fighter, the Door primitive makes the
+  west edge a closed door, and the road outside is seen only once that door
+  is opened from its menu. Writing it found that Escape was dead after any
+  click on the board (the engine marks every key it hears as
+  default-prevented); fixed in `WorldPage.tsx`.
+- **Not yet**: SC-004's 80-wall frame-time measurement against spec 028's
+  budget.
 
 ## Open questions for the owner
 

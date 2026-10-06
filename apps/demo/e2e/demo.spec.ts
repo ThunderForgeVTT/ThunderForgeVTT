@@ -372,6 +372,113 @@ test("a wall across the road hides the road beyond it: for the player always, fo
   });
 });
 
+/** A press, a move, a release between two board points. */
+async function dragBoard(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+) {
+  const a = await toScreen(from);
+  const b = await toScreen(to);
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.waitForTimeout(120);
+  await page.mouse.move(b.x, b.y, { steps: 12 });
+  await page.waitForTimeout(120);
+  await page.mouse.up();
+}
+
+test("a box of walls goes up around the fighter, one edge becomes a door, and the road outside is seen only through it", async () => {
+  // Spec 077 FR-024. The fighter stands in the middle of a cell, so its
+  // corners are half a cell from him. A Box drag aimed a little inside two
+  // corners, two cells apart, is eight walls on the grid (one per cell
+  // edge); the Door primitive turns the west edge beside him into a closed
+  // door; spec 076's probe says what he sees of the road west of the box
+  // through the door closed, then open.
+  const scene = await currentScene();
+  const fighter = scene.tokens[0];
+  const grid = await ask<{ scene: { gridSize: number } }>(
+    "query ($sceneId: UUID!) { scene(sceneId: $sceneId) { gridSize } }",
+    { sceneId: scene.sceneId },
+  );
+  const cell = grid.body.data?.scene.gridSize;
+  if (!cell) throw new Error("the ambush has a grid");
+  const half = cell / 2;
+  const west = fighter.x - half - cell;
+  const east = fighter.x + half;
+  const south = fighter.y - half;
+  const north = fighter.y + half + cell;
+  const before = scene.walls;
+
+  await page.getByTestId("gm-tool-walls").click();
+  await expect(page.getByTestId("gm-tool-panel-walls")).toBeVisible();
+  await expect(page.getByTestId("gm-snap-toggle")).toHaveAttribute(
+    "data-enabled",
+    "true",
+  );
+  await page.getByTestId("wall-primitive-room").click();
+  await dragBoard({ x: west + 9, y: south + 9 }, { x: east - 9, y: north - 9 });
+  await expect
+    .poll(async () => (await currentScene()).walls.length)
+    .toBe(before.length + 8);
+  const box = (await currentScene()).walls.filter(
+    (w) => !before.some((b) => b.wallId === w.wallId),
+  );
+  for (const wall of box) {
+    expect(Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1)).toBeCloseTo(
+      cell,
+      0,
+    );
+  }
+
+  // The west edge at the fighter's height becomes a door, creating nothing.
+  const edge = box.find(
+    (w) =>
+      Math.abs(w.x1 - west) < 1 &&
+      Math.abs(w.x2 - west) < 1 &&
+      Math.min(w.y1, w.y2) < fighter.y &&
+      Math.max(w.y1, w.y2) > fighter.y,
+  );
+  if (!edge) throw new Error("the box has a west edge beside the fighter");
+  await page.getByTestId("wall-primitive-door").click();
+  await clickBoard({ x: west, y: fighter.y });
+  await expect
+    .poll(
+      async () =>
+        (await currentScene()).walls.find((w) => w.wallId === edge.wallId)
+          ?.doorState,
+    )
+    .toBe("CLOSED");
+  expect((await currentScene()).walls.length).toBe(before.length + 8);
+
+  // Through the fighter, the road west of the box is behind the closed door.
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("gm-tool-panel-walls")).toBeHidden();
+  const road = { x: west - 150, y: fighter.y };
+  await clickBoard({ x: fighter.x, y: fighter.y });
+  await expect
+    .poll(() => sightAt(road), { timeout: 10_000 })
+    .toEqual({ looking: true, seen: false });
+
+  // Open the door from its menu, look again: the road is there.
+  await clickBoard({ x: west, y: fighter.y }, "right");
+  await page.getByRole("menuitem", { name: "Open", exact: true }).click();
+  await expect
+    .poll(
+      async () =>
+        (await currentScene()).walls.find((w) => w.wallId === edge.wallId)
+          ?.doorState,
+    )
+    .toBe("OPEN");
+  await clickBoard({ x: fighter.x, y: fighter.y });
+  await expect
+    .poll(() => sightAt(road), { timeout: 10_000 })
+    .toEqual({ looking: true, seen: true });
+  await page.keyboard.press("Escape");
+  await expect
+    .poll(() => sightAt(road), { timeout: 10_000 })
+    .toEqual({ looking: false, seen: true });
+});
+
 test("a door is opened from its own menu, on a scene the Game Master switched to", async () => {
   // The ambush is in open country. The Proving Ground has doors; launching
   // it is the same announcement a server makes, and the play field follows.

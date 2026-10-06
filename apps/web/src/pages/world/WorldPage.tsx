@@ -961,12 +961,22 @@ export default function WorldPage() {
   // the exception: the engine's Escape deselects it, and that is the whole
   // press. Menus, dialogs and text fields keep their own Escape; a key one of
   // them has already claimed, or that lands while one is open, is theirs.
+  // The canvas is not one of them: the engine's winit calls `preventDefault`
+  // on every key it hears, to stop the browser's own handling, so a press
+  // with the canvas focused — any time after a click on the board — arrives
+  // here already "prevented" without anyone having claimed it.
   const [openDockSectionId, setOpenDockSectionId] =
     useState<DockSectionId | null>(null);
   useEffect(() => {
     if (playView !== "playing") return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (event.key !== "Escape") return;
+      if (
+        event.defaultPrevented &&
+        !(event.target instanceof HTMLCanvasElement)
+      ) {
+        return;
+      }
       if (isTextEntry(event.target) || isInOverlay(event.target)) return;
       if (
         document.querySelector(

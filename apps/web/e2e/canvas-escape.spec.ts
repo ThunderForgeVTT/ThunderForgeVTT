@@ -1,4 +1,5 @@
 import { test, expect } from "./fixtures/test";
+import { clickBoard } from "./fixtures/boardPointer";
 import {
   launchSceneByName,
   openGmTool,
@@ -33,6 +34,10 @@ test.describe("Escape puts the tool down", () => {
     );
 
     await expect(dock).toHaveAttribute("data-open-section", "");
+    // A click on the board first: the canvas then holds focus and the engine
+    // marks every key it hears as default-prevented, which must not swallow
+    // the press (this is how a GM mostly arrives at Escape).
+    await clickBoard(page, { x: 0, y: 0 });
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("gm-tool-panel-walls")).toBeHidden();
     await expect(page.getByTestId("gm-tool-select")).toHaveAttribute(
