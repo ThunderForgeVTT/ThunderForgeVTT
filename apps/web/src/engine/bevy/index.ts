@@ -599,6 +599,24 @@ export interface MovementBlockedEvent {
   at: { x: number; y: number };
 }
 
+/**
+ * The engine's snapping switch moved (spec 077). Fired for every change —
+ * the `S` key, `setGridSnap`, the first frame — so the rail's button reads
+ * the engine's state rather than remembering its own.
+ */
+export interface GridSnapChangedEvent {
+  type: "grid_snap_changed";
+  enabled: boolean;
+}
+
+function asGridSnapChanged(event: unknown): GridSnapChangedEvent | null {
+  const candidate = event as { type?: unknown; enabled?: unknown };
+  return candidate.type === "grid_snap_changed" &&
+    typeof candidate.enabled === "boolean"
+    ? (event as GridSnapChangedEvent)
+    : null;
+}
+
 function asMovementBlocked(event: unknown): MovementBlockedEvent | null {
   const candidate = event as { type?: unknown };
   return candidate.type === "movement_blocked"
@@ -855,6 +873,22 @@ export function onMovementBlocked(
   };
 }
 
+const gridSnapListeners = new Set<(event: GridSnapChangedEvent) => void>();
+
+/**
+ * Subscribe to the snapping switch (spec 077 FR-001). Returns the
+ * unsubscribe. The engine reports its state on its first frame, so a
+ * listener attached before the engine starts hears the initial value too.
+ */
+export function onGridSnapChanged(
+  listener: (event: GridSnapChangedEvent) => void,
+): () => void {
+  gridSnapListeners.add(listener);
+  return () => {
+    gridSnapListeners.delete(listener);
+  };
+}
+
 const openLoreListeners = new Set<(event: OpenLoreEvent) => void>();
 
 /**
@@ -1028,6 +1062,20 @@ export async function bindWorldStore(worldStore: WorldStore): Promise<void> {
         // Nor is a move stopped at a wall. Nothing changed — that is what it
         // reports — so there is no world state to put anywhere; it exists to
         // tell the player why their token did not move.
+        // Nor is the snapping switch: it is the Game Master's for the
+        // session, never scene data (spec 077).
+        const snap = asGridSnapChanged(parsed);
+        if (snap) {
+          for (const listener of gridSnapListeners) {
+            try {
+              listener(snap);
+            } catch {
+              // One bad listener must not stop the others hearing about this.
+            }
+          }
+          return;
+        }
+
         const blocked = asMovementBlocked(parsed);
         if (blocked) {
           for (const listener of movementBlockedListeners) {
@@ -1225,8 +1273,26 @@ export async function setActiveShapeTool(kind: string): Promise<boolean> {
 }
 
 /**
+ * Turn the engine's snapping switch on or off (spec 077 FR-001). Session
+ * state like `setIsGameMaster`, never synced; the engine answers with
+ * `grid_snap_changed`, which is where the rail reads the result. Never
+ * throws.
+ */
+export async function setGridSnap(enabled: boolean): Promise<void> {
+  try {
+    const module = await getWasmModule();
+    module.apply_world_command?.(
+      JSON.stringify({ type: "set_grid_snap", enabled }),
+    );
+  } catch {
+    // A bundle without the switch keeps snapping on, as it always has.
+  }
+}
+
+/**
  * Tell the engine what a drag with the wall tool draws — `"segment"`,
- * `"room"` (four walls between two corners) or `"door"` (a closed door).
+ * `"room"` (four walls between two corners), `"circle"` (a ring from centre
+ * to radius) or `"door"` (a closed door; spec 077 FR-011).
  *
  * The engine has offered all three since spec 031 FR-026, but nothing in the
  * web app asked for anything but the default segment, so a Game Master can

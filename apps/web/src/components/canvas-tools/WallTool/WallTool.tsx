@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button/Button";
 import { Panel } from "@/components/ui/panel/Panel";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -10,6 +10,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { setWallPrimitive } from "@/engine/bevy";
+import { cn } from "@/lib/utils";
 import type { WorldStore } from "@/engine/world/store";
 import type { DoorState, WorldWall } from "@/engine/world/types";
 
@@ -18,6 +20,27 @@ export interface WallToolProps {
   walls: Record<string, WorldWall>;
   selectedWallId: string | null;
 }
+
+/**
+ * What a drag with the wall tool draws (spec 077 FR-011). The ids are the
+ * engine's `WallPrimitive` names; Box is the engine's `room`.
+ */
+export const WALL_PRIMITIVES = [
+  {
+    id: "segment",
+    label: "Segment",
+    hint: "Drag a wall; click-click-Enter for a chain",
+  },
+  { id: "room", label: "Box", hint: "Drag corner to corner" },
+  { id: "circle", label: "Circle", hint: "Drag from centre to radius" },
+  {
+    id: "door",
+    label: "Door",
+    hint: "Drag a door, or click a wall to make it one",
+  },
+] as const;
+
+export type WallPrimitiveId = (typeof WALL_PRIMITIVES)[number]["id"];
 
 const DOOR_STATE_OPTIONS: { value: DoorState; label: string }[] = [
   { value: "none", label: "Not a door" },
@@ -35,20 +58,28 @@ const DOOR_STATE_OPTIONS: { value: DoorState; label: string }[] = [
  * tools). This component itself renders unconditionally once mounted, so
  * it must never be mounted for a non-owner session.
  *
- * Drawing itself (click-drag to create a wall segment on the canvas) is
- * implemented engine-side (Bevy, T011-T012) and is out of this
- * component's scope; toggling "draw mode" here only signals intent by
- * dispatching a `set_wall_draw_mode`-shaped local UI state today, ready
- * to be observed by the engine bridge once that lands.
+ * Drawing itself (click-drag to create a wall on the canvas) is engine-side
+ * (Bevy, T011-T012); this panel chooses *what* a drag draws — a segment, a
+ * box, a circle or a door (spec 077 FR-011) — through `setWallPrimitive`,
+ * and resets it to the segment when the tool closes so the next time the
+ * tool opens a drag means what it meant the first time.
  */
 export function WallTool({ worldStore, walls, selectedWallId }: WallToolProps) {
-  const [drawMode, setDrawMode] = useState(false);
+  const [primitive, setPrimitive] = useState<WallPrimitiveId>("segment");
 
   const selectedWall = selectedWallId ? walls[selectedWallId] : null;
 
-  const toggleDrawMode = useCallback(() => {
-    setDrawMode((active) => !active);
+  const choosePrimitive = useCallback((id: WallPrimitiveId) => {
+    setPrimitive(id);
+    void setWallPrimitive(id);
   }, []);
+
+  useEffect(
+    () => () => {
+      void setWallPrimitive("segment");
+    },
+    [],
+  );
 
   const updateSelectedWall = useCallback(
     (
@@ -83,15 +114,35 @@ export function WallTool({ worldStore, walls, selectedWallId }: WallToolProps) {
 
   return (
     <div className="grid gap-3" data-testid="wall-tool">
-      <Button
-        type="button"
-        variant={drawMode ? "primary" : "secondary"}
-        icon="shield"
-        onClick={toggleDrawMode}
-        aria-pressed={drawMode}
+      <div
+        role="radiogroup"
+        aria-label="Wall shape"
+        className="grid grid-cols-4 gap-1"
+        data-testid="wall-primitive-picker"
       >
-        {drawMode ? "Drawing walls" : "Draw wall"}
-      </Button>
+        {WALL_PRIMITIVES.map((option) => {
+          const active = option.id === primitive;
+          return (
+            <button
+              key={option.id}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              title={option.hint}
+              data-testid={`wall-primitive-${option.id}`}
+              onClick={() => choosePrimitive(option.id)}
+              className={cn(
+                "rounded-md px-1 py-1.5 text-xs font-medium transition-colors",
+                active
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
 
       {selectedWall ? (
         <Panel variant="stone" className="grid gap-3">

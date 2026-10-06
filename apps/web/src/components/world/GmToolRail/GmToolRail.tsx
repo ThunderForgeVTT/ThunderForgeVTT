@@ -4,6 +4,7 @@ import {
   type FantasyIconName,
 } from "@/components/ui/fantasy-icon/FantasyIcon";
 import { cn } from "@/lib/utils";
+import { SnapToggle } from "./SnapToggle";
 
 /**
  * Every tool the rail can offer, in rail order.
@@ -117,6 +118,10 @@ export function GmToolRail({
             </button>
           );
         })}
+        {/* Spec 077 FR-001: the snapping switch, whenever a tool that
+            places things is open. Select arms nothing to snap, and `S`
+            walks the token there. */}
+        {openToolId !== null && openToolId !== "select" ? <SnapToggle /> : null}
       </nav>
 
       {openTool && openTool.content !== null ? (
