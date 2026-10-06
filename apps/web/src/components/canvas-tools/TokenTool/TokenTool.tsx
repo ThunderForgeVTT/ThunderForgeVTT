@@ -190,7 +190,15 @@ export function TokenTool({
   }, [picking, sceneId]);
 
   if (!selected || !selectedToken) {
-    return null;
+    // Say so rather than draw a bare header: an empty pane read as broken
+    // in the demo (2026-10-05).
+    return (
+      <Panel variant="stone" data-testid="token-tool-empty">
+        <p className="text-sm text-muted-foreground">
+          Select a token on the board to size, turn or change its art.
+        </p>
+      </Panel>
+    );
   }
 
   const currentScale = selectedToken.scale ?? 1;

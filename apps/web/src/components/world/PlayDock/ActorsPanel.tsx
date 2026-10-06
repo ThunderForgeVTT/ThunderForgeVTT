@@ -52,7 +52,10 @@ function Folder({
   emptyLabel,
 }: FolderProps) {
   return (
-    <section>
+    // min-w-0: a grid item's minimum width is otherwise its content's, so
+    // one row whose buttons outrun the pane pushed every row under the dock's
+    // rail instead of truncating its label (seen in the demo, 2026-10-05).
+    <section className="min-w-0">
       <button
         type="button"
         onClick={onToggle}
@@ -403,7 +406,9 @@ export function ActorsPanel({
     return (
       <li
         key={actor.id}
-        className="flex items-center gap-2 rounded-lg border border-border px-2 py-1.5"
+        // min-w-0 for the same reason as the folder: a grid row is as wide
+        // as its content unless told it may be narrower.
+        className="flex min-w-0 items-center gap-2 rounded-lg border border-border px-2 py-1.5"
       >
         <FantasyIcon name={actor.isNpc ? "skull" : "shield"} size={14} />
         <span className="min-w-0 flex-1">
