@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { webgl2Unavailable } from "../index";
+import { boardSizeCeiling, webgl2Unavailable } from "../index";
 
 function documentWhoseCanvasGives(context: unknown): Document {
   return {
@@ -25,5 +25,24 @@ describe("webgl2Unavailable", () => {
       }),
     } as unknown as Document;
     expect(webgl2Unavailable(doc)).toMatch(/WebGL2/);
+  });
+});
+
+describe("boardSizeCeiling", () => {
+  const gl = (maxTextureSize: number) => ({
+    MAX_TEXTURE_SIZE: 0x0d33,
+    getParameter: (name: number) => (name === 0x0d33 ? maxTextureSize : null),
+  });
+
+  it("divides the texture limit by the device pixel ratio, with a margin", () => {
+    expect(boardSizeCeiling(documentWhoseCanvasGives(gl(2048)), 1)).toBe(2046);
+    expect(boardSizeCeiling(documentWhoseCanvasGives(gl(2048)), 2)).toBe(1022);
+    expect(boardSizeCeiling(documentWhoseCanvasGives(gl(16384)), 1.25)).toBe(
+      13105,
+    );
+  });
+
+  it("has no answer without WebGL2", () => {
+    expect(boardSizeCeiling(documentWhoseCanvasGives(null), 1)).toBeNull();
   });
 });

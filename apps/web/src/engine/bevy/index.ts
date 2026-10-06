@@ -424,13 +424,7 @@ async function fetchWasmWithProgress(
  * the answer is the same one the engine would get, and it costs nothing.
  */
 export function webgl2Unavailable(doc: Document = document): string | null {
-  let context: unknown = null;
-  try {
-    context = doc.createElement("canvas").getContext("webgl2");
-  } catch {
-    context = null;
-  }
-  if (context) return null;
+  if (probeWebgl2(doc)) return null;
   // Nothing a page can ask for: there is no permission prompt for WebGL.
   // Privacy builds of Firefox (LibreWolf, Tor Browser, a hardened user.js)
   // turn it off as an anti-fingerprinting default, so say where the switch is.
@@ -441,6 +435,39 @@ export function webgl2Unavailable(doc: Document = document): string | null {
     "webgl.disabled to false in about:config, then reload. A blocklisted " +
     "graphics driver can also be the cause; another browser will tell."
   );
+}
+
+function probeWebgl2(doc: Document): WebGL2RenderingContext | null {
+  try {
+    return doc.createElement("canvas").getContext("webgl2");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The widest the board may be, in CSS pixels, on this device.
+ *
+ * A GPU has a largest texture it will make, and the canvas the engine draws
+ * into is one. WebGL2 guarantees only 2048px; phones, integrated chips and
+ * hardened browsers stop there, and a 2560px window on one of them panicked
+ * the engine in `Surface::configure`. The engine cannot shrink its own
+ * canvas — on the web the backing store is the element's CSS size times the
+ * device pixel ratio, set by the windowing layer — so the page keeps the
+ * element within the limit instead. `null` when there is no WebGL2 to ask,
+ * which `webgl2Unavailable` reports in words.
+ */
+export function boardSizeCeiling(
+  doc: Document = document,
+  pixelRatio: number = window.devicePixelRatio || 1,
+): number | null {
+  const gl = probeWebgl2(doc);
+  if (!gl) return null;
+  const limit = Number(gl.getParameter(gl.MAX_TEXTURE_SIZE));
+  if (!Number.isFinite(limit) || limit <= 0) return null;
+  // Two pixels under the exact quotient, so a fractional ratio rounding the
+  // backing store up cannot land one pixel over the limit.
+  return Math.max(1, Math.floor(limit / pixelRatio) - 2);
 }
 
 export async function mountEngine(

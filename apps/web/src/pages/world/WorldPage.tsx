@@ -829,6 +829,7 @@ export default function WorldPage() {
     error: engineError,
     retry: retryEngine,
     stopped: engineStopped,
+    sizeCeiling: boardSizeCeiling,
   } = useCanvasEngine({
     worldId: id,
     canvasSelector: `#${canvasContainerId}`,
@@ -863,12 +864,28 @@ export default function WorldPage() {
   useEffect(() => {
     playViewRef.current = playView;
   }, [playView]);
+  // The canvas's largest allowed CSS size, same ref pattern: the styling
+  // callback runs from a MutationObserver, outside React's render.
+  const boardSizeCeilingRef = useRef(boardSizeCeiling);
+  useEffect(() => {
+    boardSizeCeilingRef.current = boardSizeCeiling;
+  }, [boardSizeCeiling]);
 
   const applyCanvasVisibility = useCallback((canvas: HTMLCanvasElement) => {
     if (playViewRef.current === "playing") {
       canvas.style.display = "";
       canvas.style.position = "fixed";
       canvas.style.inset = "0";
+      // A surface wider than the device's largest texture does not draw, it
+      // panics (`Surface::configure`, seen on a 2048px device in a 2560px
+      // window). The windowing layer sizes the backing store from this
+      // element's CSS box times the pixel ratio, so the cap has to be here,
+      // on the canvas itself, not on the container that never holds it.
+      // `inset: 0` with `margin: auto` centres the smaller box.
+      const ceiling = boardSizeCeilingRef.current;
+      canvas.style.maxWidth = ceiling === null ? "" : `${ceiling}px`;
+      canvas.style.maxHeight = ceiling === null ? "" : `${ceiling}px`;
+      canvas.style.margin = ceiling === null ? "" : "auto";
     } else {
       canvas.style.display = "none";
     }
@@ -923,7 +940,7 @@ export default function WorldPage() {
     if (canvas) {
       applyCanvasVisibility(canvas);
     }
-  }, [playView, engineReady, applyCanvasVisibility]);
+  }, [playView, engineReady, boardSizeCeiling, applyCanvasVisibility]);
 
   // Keyboard input is routed to the canvas from the window rather than
   // relying on the canvas holding focus — clicking any control in the dock

@@ -235,3 +235,31 @@ fn signing_back_in_reopens_the_backing_store() {
     );
     assert_eq!(cache.readiness, Readiness::Opening);
 }
+
+fn blank_image(width: u32, height: u32) -> Image {
+    use bevy::asset::RenderAssetUsages;
+    let dynamic = image::DynamicImage::new_rgba8(width, height);
+    Image::from_dynamic(dynamic, true, RenderAssetUsages::default())
+}
+
+/// A 4080px map on a device whose textures stop at 2048 keeps its aspect
+/// and lands inside the ceiling; one that already fits is untouched.
+#[test]
+fn an_oversize_image_is_resampled_under_the_texture_ceiling() {
+    let fitted = fit_under_texture_ceiling(blank_image(4080, 2295), Some(2048), "map.webp")
+        .expect("resampled");
+    assert_eq!((fitted.width(), fitted.height()), (2048, 1152));
+    assert!(fitted.texture_descriptor.format.is_srgb());
+
+    let tall = fit_under_texture_ceiling(blank_image(1000, 3000), Some(2048), "tall.webp")
+        .expect("resampled");
+    assert_eq!((tall.width(), tall.height()), (682, 2048));
+
+    let kept =
+        fit_under_texture_ceiling(blank_image(2048, 2048), Some(2048), "fits.webp").expect("kept");
+    assert_eq!((kept.width(), kept.height()), (2048, 2048));
+
+    let unknown =
+        fit_under_texture_ceiling(blank_image(4080, 2295), None, "native.webp").expect("kept");
+    assert_eq!((unknown.width(), unknown.height()), (4080, 2295));
+}

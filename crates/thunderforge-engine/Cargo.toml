@@ -123,6 +123,10 @@ gloo-net = { version = "0.7", features = ["http"] }
 wasm-bindgen-futures = "0.4"
 futures-util = "0.3"
 once_cell = "1.21"
+# Resampling an image the adapter cannot take whole (`cached_assets::
+# fit_under_texture_ceiling`). The same crate Bevy decodes with, so this adds
+# nothing to the build; `default-features = false` keeps it that way.
+image = { version = "0.25", default-features = false }
 uuid = { version = "1.26.0", features = ["serde"] }
 
 # The DOM, for the one thing the engine cannot do through Bevy: cancelling the

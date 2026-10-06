@@ -106,8 +106,15 @@ pub struct CachedAssetsPlugin;
 
 impl Plugin for CachedAssetsPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<CanvasAssetCache>()
-            .add_systems(Update, (drain_control_queue, drain_deliveries).chain());
+        app.init_resource::<CanvasAssetCache>().add_systems(
+            Update,
+            (
+                drain_control_queue,
+                drain_deliveries,
+                fit_images_under_texture_ceiling,
+            )
+                .chain(),
+        );
     }
 }
 
@@ -742,6 +749,93 @@ fn decode_image(bytes: &[u8], extension: &str) -> Result<Image, String> {
         RenderAssetUsages::default(),
     )
     .map_err(|err| err.to_string())
+}
+
+/// Shrink every image the GPU could not take whole, before it sees one.
+///
+/// Runs in `Update`, after `drain_deliveries`, which is the window between
+/// an image entering `Assets<Image>` (the cache path, just before this; the
+/// `AssetServer` path, in `PreUpdate`) and the render world learning of it
+/// (`AssetEvent`s go out in `PostUpdate`, extraction after). An image over
+/// the ceiling is replaced in place, so what the render world first extracts
+/// is already the fitted one. Idempotent and cheap: the scan reads a width
+/// and a height per image, and an image it has fitted no longer qualifies.
+///
+/// Native tests build no render device, and then there is no ceiling to
+/// apply, which is what makes `fit_under_texture_ceiling` the unit to test.
+fn fit_images_under_texture_ceiling(
+    mut images: ResMut<Assets<Image>>,
+    device: Option<Res<bevy::render::renderer::RenderDevice>>,
+) {
+    let Some(device) = device else {
+        return;
+    };
+    let ceiling = device.limits().max_texture_dimension_2d;
+    let oversize: Vec<AssetId<Image>> = images
+        .iter()
+        .filter(|(_, image)| image.width() > ceiling || image.height() > ceiling)
+        .map(|(id, _)| id)
+        .collect();
+    for id in oversize {
+        let Some(mut slot) = images.get_mut(id) else {
+            continue;
+        };
+        let taken = core::mem::take(&mut *slot);
+        let label = format!("{id:?}");
+        match fit_under_texture_ceiling(taken, Some(ceiling), &label) {
+            Ok(fitted) => *slot = fitted,
+            // The original is gone and nothing can be drawn in its place;
+            // the GPU would have refused it anyway. Leaving the 1x1
+            // placeholder keeps the render world alive.
+            Err(err) => warn!(target: "cached_assets", "{err}"),
+        }
+    }
+}
+
+/// Shrink an image the GPU could not take whole.
+///
+/// WebGL2 guarantees a texture of only 2048px a side; 4096 is common on
+/// integrated and mobile hardware, and every example map is wider than
+/// either. Handing wgpu a texture over `max_texture_dimension_2d` is a
+/// validation error that kills the render world, so an image over the
+/// adapter's ceiling is resampled to fit before it becomes a texture. The
+/// background sprite draws at the scene's own size (`custom_size`), so the
+/// map still covers the board; it is only softer on that device.
+///
+/// This is a stopgap, not the design: it throws away the detail the device
+/// could have shown one piece at a time. The tile pyramid in
+/// `thunderforge-mapforge` is the answer that keeps it, and once the engine
+/// draws from tiles this function has nothing left to shrink.
+fn fit_under_texture_ceiling(
+    image: Image,
+    ceiling: Option<u32>,
+    url: &str,
+) -> Result<Image, String> {
+    let Some(ceiling) = ceiling else {
+        return Ok(image);
+    };
+    let (width, height) = (image.width(), image.height());
+    if width <= ceiling && height <= ceiling {
+        return Ok(image);
+    }
+    let scale = ceiling as f64 / width.max(height) as f64;
+    let fitted_width = ((width as f64 * scale).floor() as u32).clamp(1, ceiling);
+    let fitted_height = ((height as f64 * scale).floor() as u32).clamp(1, ceiling);
+    let is_srgb = image.texture_descriptor.format.is_srgb();
+    let usage = image.asset_usage;
+    let dynamic = image
+        .try_into_dynamic()
+        .map_err(|err| format!("could not resample {url}: {err}"))?;
+    let resampled = dynamic.resize_exact(
+        fitted_width,
+        fitted_height,
+        image::imageops::FilterType::Triangle,
+    );
+    warn!(
+        target: "cached_assets",
+        "{url}: {width}x{height} exceeds this device's {ceiling}px texture ceiling; drawn at {fitted_width}x{fitted_height}",
+    );
+    Ok(Image::from_dynamic(resampled, is_srgb, usage))
 }
 
 #[cfg(not(target_arch = "wasm32"))]

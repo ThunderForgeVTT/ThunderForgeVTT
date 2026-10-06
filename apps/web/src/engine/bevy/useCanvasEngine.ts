@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { EngineMountOptions } from "./types";
 import { useEngineStopped, type EngineStopReason } from "./engineStopped";
 import {
+  boardSizeCeiling,
   mountEngine,
   type EngineLoadProgress,
   type EngineLoadStage,
@@ -43,6 +44,14 @@ interface UseCanvasEngineResult {
    * engine panicked, or the browser took its graphics context. `null` while
    * it runs. Nothing in the page can undo it; a reload can. */
   stopped: EngineStopReason | null;
+  /**
+   * The most the board's container may measure, in CSS pixels, before the
+   * canvas inside it would exceed this device's largest texture (see
+   * `boardSizeCeiling`). `null` until measured or when the device has no
+   * WebGL2. Apply it as `maxWidth`/`maxHeight` on the element `containerRef`
+   * points at; a board wider than this does not render, it panics.
+   */
+  sizeCeiling: number | null;
 }
 
 /**
@@ -87,6 +96,16 @@ export function useCanvasEngine(
   const [error, setError] = useState<Error | null>(null);
   const [attempt, setAttempt] = useState(0);
   const stopped = useEngineStopped();
+  const [sizeCeiling, setSizeCeiling] = useState<number | null>(null);
+
+  // Measured on mount and again on every window resize, because browser zoom
+  // changes the device pixel ratio and arrives as a resize.
+  useEffect(() => {
+    const measure = () => setSizeCeiling(boardSizeCeiling());
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
 
   const retry = useCallback(() => {
     setError(null);
@@ -220,5 +239,6 @@ export function useCanvasEngine(
     error,
     retry,
     stopped,
+    sizeCeiling,
   };
 }
