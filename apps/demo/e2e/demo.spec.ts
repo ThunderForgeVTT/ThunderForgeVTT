@@ -11,6 +11,15 @@ import { expect, test, type Page } from "@playwright/test";
 
 const WORLD_ID = "d0000000-0000-4000-0002-000000000001";
 
+type Actor = {
+  id: string;
+  label: string;
+  isNpc: boolean;
+  ownedBy: string;
+  visibleToPlayers: boolean;
+  myPermissionLevel: string;
+};
+
 type Scene = {
   sceneId: string;
   name: string;
@@ -60,9 +69,15 @@ async function scenes(): Promise<{ sceneId: string; name: string }[]> {
   return answer.body.data.scenes;
 }
 
-/** The first scene, as the demo's backend holds it now. */
-async function firstScene(): Promise<Scene> {
-  const [scene] = await scenes();
+/** The scene the play field is showing, as the demo's backend holds it now. */
+async function currentScene(): Promise<Scene> {
+  const world = await ask<{ world: { activeSceneId: string } }>(
+    "query ($id: UUID!) { world(id: $id) { activeSceneId } }",
+    { id: WORLD_ID },
+  );
+  const active = world.body.data?.world.activeSceneId;
+  const scene = (await scenes()).find((s) => s.sceneId === active);
+  if (!scene) throw new Error("no scene is active");
   const answer = await ask<Omit<Scene, "sceneId" | "name">>(
     `query ($sceneId: UUID!) {
       walls(sceneId: $sceneId) { wallId doorState x1 y1 x2 y2 }
@@ -74,6 +89,20 @@ async function firstScene(): Promise<Scene> {
   if (!answer.body.data) throw new Error(JSON.stringify(answer.body.errors));
   return { ...scene, ...answer.body.data };
 }
+
+async function cast(): Promise<Actor[]> {
+  const answer = await ask<{ worldActors: Actor[] }>(
+    `query ($worldId: UUID!) { worldActors(worldId: $worldId) {
+      id label isNpc ownedBy visibleToPlayers myPermissionLevel
+    } }`,
+    { worldId: WORLD_ID },
+  );
+  if (!answer.body.data) throw new Error(JSON.stringify(answer.body.errors));
+  return answer.body.data.worldActors;
+}
+
+/** Where the fighter stands when the demo ships: on the road, mid-map. */
+const FIGHTER_START = { x: -297.5, y: 85 };
 
 /**
  * Board coordinates to the screen, at the camera a scene opens with: centred
@@ -162,7 +191,7 @@ test("Enter world leads to a play field with the engine running", async () => {
 });
 
 test("a token dragged across the board is saved where it was left", async () => {
-  const before = (await firstScene()).tokens[0];
+  const before = (await currentScene()).tokens[0];
   const from = { x: before.x, y: before.y };
   const to = { x: before.x + 117 * 3, y: before.y - 117 * 2 };
   // The engine takes a while to be ready for a pointer after the canvas
@@ -177,30 +206,93 @@ test("a token dragged across the board is saved where it was left", async () => 
     await page.waitForTimeout(150);
     await page.mouse.up();
     await expect
-      .poll(async () => (await firstScene()).tokens[0].x, { timeout: 3_000 })
+      .poll(async () => (await currentScene()).tokens[0].x, { timeout: 3_000 })
       .not.toBe(before.x);
   }).toPass({ timeout: 90_000 });
-  const after = (await firstScene()).tokens[0];
+  const after = (await currentScene()).tokens[0];
   expect(Math.abs(after.x - to.x)).toBeLessThan(117);
   expect(Math.abs(after.y - to.y)).toBeLessThan(117);
 });
 
+test("the ambush is on the board: two heroes a player owns, five monsters only the Game Master sees", async () => {
+  const actors = await cast();
+  expect(actors.map((a) => a.label).sort()).toEqual([
+    "Brannoc Stoneward",
+    "Dire Wolf",
+    "Elowen Vire",
+    "Goblin Warrior",
+    "Hobgoblin Warrior",
+  ]);
+  const heroes = actors.filter((a) => !a.isNpc);
+  expect(heroes).toHaveLength(2);
+  expect(heroes.every((a) => a.ownedBy !== actors[2].ownedBy)).toBe(true);
+  expect(actors.filter((a) => a.isNpc).every((a) => !a.visibleToPlayers)).toBe(
+    true,
+  );
+  expect(actors.every((a) => a.myPermissionLevel === "OWNER")).toBe(true);
+  expect((await currentScene()).tokens).toHaveLength(7);
+});
+
+test("the fighter's sheet opens with his numbers, and a check rolls from them", async () => {
+  const fighter = (await cast()).find((a) => a.label === "Brannoc Stoneward");
+  if (!fighter) throw new Error("the fighter is in the cast");
+  await page.goto(`/demo/world/${WORLD_ID}/actor/${fighter.id}/edit`);
+  await expect(page.getByTestId("dnd5e-actor-sheet")).toBeVisible();
+  await expect(page.getByTestId("dnd5e-mod-strength")).toHaveText("+3");
+  // Athletics: +3 Strength, proficient at third level.
+  await expect(page.getByTestId("dnd5e-skill-athletics-bonus")).toHaveText(
+    "+5",
+  );
+  const rolled = await ask<{
+    rollCheck: { resultValue: number; dice: { finalValue: number }[] };
+  }>(
+    `mutation ($worldId: UUID!, $actorId: UUID!, $checkId: String!) {
+      rollCheck(worldId: $worldId, actorId: $actorId, checkId: $checkId) {
+        formula resultKind resultValue dice { finalValue kept }
+      }
+    }`,
+    { worldId: WORLD_ID, actorId: fighter.id, checkId: "athletics" },
+  );
+  if (!rolled.body.data) throw new Error(JSON.stringify(rolled.body.errors));
+  const { resultValue, dice } = rolled.body.data.rollCheck;
+  expect(dice[0].finalValue).toBeGreaterThanOrEqual(1);
+  expect(dice[0].finalValue).toBeLessThanOrEqual(20);
+  expect(resultValue).toBe(dice[0].finalValue + 5);
+  await page.goto(`/demo/world/${WORLD_ID}/play`);
+  await expect(page.locator("canvas")).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByTestId("gm-tool-walls")).toBeVisible({
+    timeout: 60_000,
+  });
+});
+
 test("a wall is drawn with the wall tool", async () => {
-  const before = (await firstScene()).walls.length;
+  const before = (await currentScene()).walls.length;
   await page.getByTestId("gm-tool-walls").click();
   await expect(page.getByTestId("gm-tool-panel-walls")).toBeVisible();
-  await clickBoard({ x: -300, y: -400 });
+  await clickBoard({ x: -300, y: 300 });
   await page.waitForTimeout(300);
-  await clickBoard({ x: -100, y: -400 });
+  await clickBoard({ x: -100, y: 300 });
   await page.waitForTimeout(300);
   await page.keyboard.press("Enter");
   await expect
-    .poll(async () => (await firstScene()).walls.length)
+    .poll(async () => (await currentScene()).walls.length)
     .toBe(before + 1);
 });
 
-test("a door is opened from its own menu", async () => {
-  const door = (await firstScene()).walls.find(
+test("a door is opened from its own menu, on a scene the Game Master switched to", async () => {
+  // The ambush is in open country. The Proving Ground has doors; launching
+  // it is the same announcement a server makes, and the play field follows.
+  const ground = (await scenes()).find((s) => s.name === "The Proving Ground");
+  if (!ground) throw new Error("The Proving Ground is a scene of the demo");
+  await ask(
+    "mutation ($worldId: UUID!, $sceneId: UUID!) { launchScene(worldId: $worldId, sceneId: $sceneId) { id } }",
+    { worldId: WORLD_ID, sceneId: ground.sceneId },
+  );
+  await expect
+    .poll(async () => (await currentScene()).name)
+    .toBe("The Proving Ground");
+  await expect(page.locator("canvas")).toBeVisible({ timeout: 60_000 });
+  const door = (await currentScene()).walls.find(
     (wall) => wall.doorState === "CLOSED",
   );
   if (!door) throw new Error("the first scene ships with a closed door");
@@ -213,30 +305,30 @@ test("a door is opened from its own menu", async () => {
   await expect
     .poll(
       async () =>
-        (await firstScene()).walls.find((wall) => wall.wallId === door.wallId)
+        (await currentScene()).walls.find((wall) => wall.wallId === door.wallId)
           ?.doorState,
     )
     .toBe("OPEN");
 });
 
 test("a light is placed with the light tool", async () => {
-  const before = (await firstScene()).lightSources.length;
+  const before = (await currentScene()).lightSources.length;
   await page.getByTestId("gm-tool-lights").click();
   await expect(page.getByTestId("gm-tool-panel-lights")).toBeVisible();
-  await clickBoard({ x: 300, y: -350 });
+  await clickBoard({ x: 300, y: 250 });
   await expect
-    .poll(async () => (await firstScene()).lightSources.length)
+    .poll(async () => (await currentScene()).lightSources.length)
     .toBe(before + 1);
 });
 
 test("what the visitor did is still there after a reload", async () => {
-  const before = await firstScene();
+  const before = await currentScene();
   await page.reload();
   await expect(page.locator("canvas")).toBeVisible({ timeout: 60_000 });
   await expect(page.getByTestId("gm-tool-walls")).toBeVisible({
     timeout: 60_000,
   });
-  const after = await firstScene();
+  const after = await currentScene();
   expect(after.walls.length).toBe(before.walls.length);
   expect(after.lightSources.length).toBe(before.lightSources.length);
   expect(after.tokens[0]).toEqual(before.tokens[0]);
@@ -273,19 +365,58 @@ test("something the demo does not do says so, and is not a connection error", as
   await expect(page.getByText("Not part of the demo")).toBeVisible();
 });
 
+test("as a player, the heroes are theirs and the ambush is not yet there to see", async () => {
+  await page.goto(`/demo/world/${WORLD_ID}`);
+  await page.getByRole("button", { name: "View as player" }).click();
+  await expect(page.getByTestId("demo-viewer")).toContainText(
+    "Viewing as a player",
+  );
+  const seen = await cast();
+  expect(seen.map((a) => a.label).sort()).toEqual([
+    "Brannoc Stoneward",
+    "Elowen Vire",
+  ]);
+  expect(seen.every((a) => a.myPermissionLevel === "OWNER")).toBe(true);
+  const ambush = (await scenes()).find((s) => s.name === "Grassy Path Ambush");
+  if (!ambush) throw new Error("Grassy Path Ambush is a scene of the demo");
+  const tokens = await ask<{ tokens: { tokenId: string }[] }>(
+    "query ($sceneId: UUID!) { tokens(sceneId: $sceneId) { tokenId } }",
+    { sceneId: ambush.sceneId },
+  );
+  expect(tokens.body.data?.tokens).toHaveLength(2);
+  // And the play field is a player's: a board with no Game Master's tools.
+  await page.goto(`/demo/world/${WORLD_ID}/play`);
+  await expect(page.locator("canvas")).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByTestId("gm-tool-walls")).toHaveCount(0);
+  await page.getByRole("button", { name: "View as Game Master" }).click();
+  await expect(page.getByTestId("demo-viewer")).toContainText(
+    "Viewing as the Game Master",
+  );
+  expect(await cast()).toHaveLength(5);
+});
+
 test("Start over restores the world the demo shipped with", async () => {
   await page.goto(`/demo/world/${WORLD_ID}`);
   await page.getByRole("button", { name: "Start over" }).click();
   await expect(page).toHaveURL(new RegExp(`/demo/world/${WORLD_ID}$`));
   await expect
     .poll(async () => {
-      const scene = await firstScene().catch(() => null);
+      const scene = await currentScene().catch(() => null);
       return (
         scene && {
-          open: scene.walls.filter((wall) => wall.doorState === "OPEN").length,
+          name: scene.name,
           x: scene.tokens[0].x,
+          y: scene.tokens[0].y,
         }
       );
     })
-    .toEqual({ open: 0, x: 58.5 });
+    .toEqual({ name: "Grassy Path Ambush", ...FIGHTER_START });
+  const ground = (await scenes()).find((s) => s.name === "The Proving Ground");
+  const answer = await ask<{ walls: { doorState: string }[] }>(
+    "query ($sceneId: UUID!) { walls(sceneId: $sceneId) { doorState } }",
+    { sceneId: ground!.sceneId },
+  );
+  expect(
+    answer.body.data?.walls.filter((w) => w.doorState === "OPEN"),
+  ).toHaveLength(0);
 });

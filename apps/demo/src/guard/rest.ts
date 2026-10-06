@@ -5,7 +5,7 @@
  * files. An address that is not in this table is not part of the demo.
  */
 import { demoState } from "../backend/state";
-import { DEMO_USER } from "../seed/world";
+import { viewerUser } from "../backend/actors";
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -26,16 +26,18 @@ export function answerRest(
   const reads = method === "GET" || method === "HEAD";
 
   if (reads && path === "/api/authentication/session") {
-    const at = demoState().world.createdAt as string;
+    const state = demoState();
+    const at = state.world.createdAt as string;
+    const user = viewerUser(state);
     return json({
       status: "authenticated",
       message: "This is the demo. Nobody is signed in to anything.",
       session: {
         authenticated: true,
         user: {
-          id: DEMO_USER.id,
-          username: DEMO_USER.username,
-          email: DEMO_USER.email,
+          id: user.id,
+          username: user.username,
+          email: user.email,
           role: "user",
           is_admin: false,
           created_at: at,

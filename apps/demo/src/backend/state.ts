@@ -7,12 +7,12 @@
  * be one (`AGENTS.md`; spec 074 FR-012): this is one object, written to the
  * browser's own storage as JSON by the few lines at the bottom.
  */
-import { buildSeed, type MapListing } from "../seed/world";
+import { buildSeed, type MapListing, type Viewer } from "../seed/world";
 
 export type Row = Record<string, unknown>;
 
 export interface DemoState {
-  version: 1;
+  version: 2;
   world: Row & { id: string; activeSceneId: string | null };
   scenes: Row[];
   levels: Row[];
@@ -22,13 +22,19 @@ export interface DemoState {
   shapes: Row[];
   lore: Row[];
   chat: Row[];
+  /** `GraphQLWorldActor` rows, plus `castKey` for the demo's own use. */
+  actors: Row[];
+  /** One `GraphQLActorSystemData` row per actor that has any. */
+  systemData: Row[];
+  /** Whose view the page renders; the session answers with this member. */
+  viewer: Viewer;
   /** Background asset id → the static file under `maps/` that is its bytes. */
   assets: Record<string, { file: string; byteSize: number }>;
   nextEventId: number;
 }
 
 /** Versioned, so a later shape of the world does not read an earlier one. */
-const STORAGE_KEY = "thunderforge-demo:v1";
+const STORAGE_KEY = "thunderforge-demo:v2";
 const SAVE_AFTER_MS = 250;
 
 let state: DemoState | null = null;
@@ -47,7 +53,7 @@ function readSaved(): DemoState | null {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const saved = JSON.parse(raw) as DemoState;
-    return saved.version === 1 ? saved : null;
+    return saved.version === 2 ? saved : null;
   } catch {
     // Storage that cannot be read is the same as storage with nothing in it.
     return null;
@@ -93,6 +99,26 @@ function saveNow(): void {
 export function markChanged(): void {
   if (saveTimer) return;
   saveTimer = setTimeout(saveNow, SAVE_AFTER_MS);
+}
+
+/**
+ * Who the page is rendering for, before the world is necessarily loaded: the
+ * notice bar draws on the first paint, and the saved answer is what the
+ * session will report once it is.
+ */
+export function currentViewer(): Viewer {
+  return state?.viewer ?? readSaved()?.viewer ?? "gm";
+}
+
+/**
+ * Who the page is rendering for. Saved at once: the caller reloads the page
+ * so the real client asks who it is afresh, and the answer must be waiting.
+ */
+export function setViewer(viewer: Viewer): void {
+  if (!state) state = readSaved();
+  if (!state) return;
+  state.viewer = viewer;
+  saveNow();
 }
 
 /** FR-007: forget what this browser changed. The next load is the seed. */

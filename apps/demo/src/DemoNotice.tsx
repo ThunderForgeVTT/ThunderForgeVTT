@@ -1,13 +1,14 @@
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { NOT_IN_DEMO_EVENT } from "./backend/notInDemo";
-import { forgetSavedWorld } from "./backend/state";
+import { currentViewer, forgetSavedWorld, setViewer } from "./backend/state";
 import { MAP_CREDIT } from "./credit";
 
 /**
  * FR-006, FR-018: on every page, what this is, how to undo it, and whose
  * maps these are. FR-009: and the one notice for anything the demo does not
- * do.
+ * do. And the view switcher: the same world as its Game Master or as the
+ * player who owns the two heroes, rendered by the real client for that member.
  */
 export function DemoNotice() {
   const told = useRef(new Set<string>());
@@ -26,6 +27,12 @@ export function DemoNotice() {
     return () => window.removeEventListener(NOT_IN_DEMO_EVENT, onRefused);
   }, []);
 
+  const asPlayer = currentViewer() === "player";
+  const switchView = () => {
+    setViewer(asPlayer ? "gm" : "player");
+    window.location.reload();
+  };
+
   const startOver = () => {
     forgetSavedWorld();
     window.location.assign(import.meta.env.BASE_URL);
@@ -39,6 +46,16 @@ export function DemoNotice() {
     >
       <span>
         <strong>Demo.</strong> Nothing is saved anywhere but this browser.
+      </span>
+      <span data-testid="demo-viewer">
+        Viewing as {asPlayer ? "a player" : "the Game Master"}.{" "}
+        <button
+          type="button"
+          onClick={switchView}
+          className="text-primary font-medium underline underline-offset-2"
+        >
+          {asPlayer ? "View as Game Master" : "View as player"}
+        </button>
       </span>
       <button
         type="button"

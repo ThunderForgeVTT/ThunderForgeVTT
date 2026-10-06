@@ -10,7 +10,19 @@
  * asked, records the event a server would have broadcast, and returns the row.
  */
 import { GraphQLError } from "graphql";
-import { DEMO_USER, newToken } from "../seed/world";
+import { DEMO_PLAYER, DEMO_USER, newToken, tokenOf } from "../seed/world";
+import {
+  CHECKS,
+  CONDITIONS,
+  actorRow,
+  findActor,
+  rollCheck,
+  systemDataOf,
+  tokenVisible,
+  updateSystemData,
+  viewerIsGm,
+  visibleActors,
+} from "./actors";
 import { EVENT, now, record } from "./events";
 import { demoState, markChanged, type DemoState, type Row } from "./state";
 
@@ -62,18 +74,25 @@ function worldRow(state: DemoState): Row {
   return state.world;
 }
 
-function member(state: DemoState): Row {
-  return {
-    id: state.world.id,
+/** The two members: the Game Master who made the world, and one player. */
+function members(state: DemoState): Row[] {
+  const at = state.world.createdAt;
+  const row = (user: typeof DEMO_USER, role: string, n: number): Row => ({
+    id: `${state.world.id.slice(0, -1)}${n}`,
     worldId: state.world.id,
-    userId: DEMO_USER.id,
-    username: DEMO_USER.username,
-    role: "Owner",
-    joinedAt: state.world.createdAt,
-    createdAt: state.world.createdAt,
-    updatedAt: state.world.createdAt,
+    userId: user.id,
+    username: user.username,
+    role,
+    joinedAt: at,
+    createdAt: at,
+    updatedAt: at,
     claimedActor: null,
-  };
+  });
+  return [row(DEMO_USER, "Owner", 1), row(DEMO_PLAYER, "Player", 2)];
+}
+
+function viewerRole(state: DemoState): string {
+  return viewerIsGm(state) ? "Owner" : "Player";
 }
 
 /**
@@ -178,26 +197,51 @@ export const queries: Record<string, Handler> = {
   }),
 
   // The world and who is in it.
-  myWorldsWithRole: () => [{ role: "Owner", world: worldRow(demoState()) }],
+  myWorldsWithRole: () => {
+    const state = demoState();
+    return [{ role: viewerRole(state), world: worldRow(state) }];
+  },
   myLibrary: () => [],
   world: ({ id }) =>
     id === demoState().world.id ? worldRow(demoState()) : null,
-  worldMembers: () => [member(demoState())],
+  worldMembers: () => members(demoState()),
   worldInvites: () => [],
   worldPlayState: () => ({ paused: false, pausedAt: null, history: [] }),
   worldStatistics: () => {
     const state = demoState();
     return {
       scenes: state.scenes.length,
-      members: 1,
-      membersWithCharacter: 0,
-      characters: 0,
-      npcs: 0,
+      members: 2,
+      membersWithCharacter: 1,
+      characters: state.actors.filter((a) => !a.isNpc).length,
+      npcs: state.actors.filter((a) => a.isNpc).length,
       tokens: state.tokens.length,
       activeEncounter: null,
     };
   },
-  worldActors: () => [],
+  worldActors: () => {
+    const state = demoState();
+    return visibleActors(state).map((actor) => actorRow(state, actor));
+  },
+  searchActors: ({ query }) => {
+    const state = demoState();
+    const needle = String(query ?? "").toLowerCase();
+    return visibleActors(state)
+      .filter((actor) => String(actor.label).toLowerCase().includes(needle))
+      .map((actor) => actorRow(state, actor));
+  },
+  availableActors: () => [],
+  actorSystemData: ({ actorId }) => {
+    const state = demoState();
+    findActor(state, actorId);
+    return systemDataOf(state, actorId);
+  },
+  actorAbilities: () => [],
+  actorInventory: () => [],
+  worldItems: () => [],
+  worldAbilities: () => [],
+  worldSystemConditions: () => CONDITIONS,
+  systemChecks: () => CHECKS,
   worldCollections: () => [],
   worldChatMessages: () => demoState().chat,
   worldSystemSettings: () => [
@@ -273,7 +317,10 @@ export const queries: Record<string, Handler> = {
   sceneAttacks: () => [],
   sceneExploration: () => ({ enabled: false, epoch: 0, mine: 0 }),
   walls: (args) => onLevel(demoState().walls, args),
-  tokens: (args) => onLevel(demoState().tokens, args),
+  tokens: (args) => {
+    const state = demoState();
+    return onLevel(state.tokens, args).filter((t) => tokenVisible(state, t));
+  },
   lightSources: (args) => onLevel(demoState().lights, args),
   shapes: (args) => onLevel(demoState().shapes, args),
   interactives: (args) =>
@@ -451,28 +498,62 @@ export const mutations: Record<string, Handler> = {
   updateShape: ({ shapeId, input }) => shapes.update(shapeId, given(input)),
   deleteShape: ({ shapeId }) => shapes.remove(shapeId),
 
-  createToken: ({ input }) =>
-    tokens.create(
+  createToken: ({ input }) => {
+    const state = demoState();
+    const actor = input.actorId ? findActor(state, input.actorId) : null;
+    return tokens.create(
       newToken({
         tokenId: crypto.randomUUID(),
         sceneId: input.sceneId,
-        levelId: levelFor(demoState(), input.sceneId, input.levelId),
+        levelId: levelFor(state, input.sceneId, input.levelId),
         x: input.x,
         y: input.y,
         at: now(),
-        rest: given({
-          rotation: input.rotation,
-          scale: input.scale,
-          metadata: input.metadata,
-          tokenType: input.tokenType,
-          linked: input.linked,
-        }),
+        rest: {
+          ...(actor ? tokenOf(actor, input.metadata?.label) : {}),
+          ...given({
+            rotation: input.rotation,
+            scale: input.scale,
+            metadata: input.metadata,
+            tokenType: input.tokenType,
+            linked: input.linked,
+          }),
+        },
       }),
-    ),
+    );
+  },
   updateToken: ({ tokenId, input }) => tokens.update(tokenId, given(input)),
   moveOwnToken: ({ tokenId, x, y }) => tokens.update(tokenId, { x, y }),
   deleteToken: ({ tokenId }) => tokens.remove(tokenId),
   setTokenNameVisibility: ({ tokenId, visible }) =>
     tokens.update(tokenId, { nameVisibleToPlayers: visible }),
   setTokenLink: ({ tokenId, linked }) => tokens.update(tokenId, { linked }),
+
+  // The cast and their sheets. Only the data moves; no world event is
+  // announced, as the real server announces none for a sheet edit either.
+  updateActor: ({ input: { actorId, ...fields } }) => {
+    const state = demoState();
+    const actor = findActor(state, actorId);
+    Object.assign(actor, given(fields), { updatedAt: now() });
+    markChanged();
+    return actorRow(state, actor);
+  },
+  setActorVisibleToPlayers: ({ actorId, visible }) => {
+    const state = demoState();
+    const actor = findActor(state, actorId);
+    actor.visibleToPlayers = visible;
+    actor.updatedAt = now();
+    markChanged();
+    return actorRow(state, actor);
+  },
+  setActorUnique: ({ actorId, unique }) => {
+    const state = demoState();
+    const actor = findActor(state, actorId);
+    actor.isUnique = unique;
+    actor.updatedAt = now();
+    markChanged();
+    return actorRow(state, actor);
+  },
+  updateActorSystemData: ({ input }) => updateSystemData(input),
+  rollCheck: (args) => rollCheck(args),
 };
