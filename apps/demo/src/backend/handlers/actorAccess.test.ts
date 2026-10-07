@@ -44,10 +44,14 @@ describe("the ownership block", () => {
       { actorId, userId: DEMO_PLAYER.id, level: "EDITOR" },
     ]);
 
-    expect((await must(REMOVE, { actorId, userId: DEMO_PLAYER.id }))
-      .removeActorPermission).toBe(true);
-    expect((await must(REMOVE, { actorId, userId: DEMO_PLAYER.id }))
-      .removeActorPermission).toBe(false);
+    expect(
+      (await must(REMOVE, { actorId, userId: DEMO_PLAYER.id }))
+        .removeActorPermission,
+    ).toBe(true);
+    expect(
+      (await must(REMOVE, { actorId, userId: DEMO_PLAYER.id }))
+        .removeActorPermission,
+    ).toBe(false);
     expect(refused).toEqual([]);
   });
 
@@ -98,7 +102,9 @@ describe("the world's lore, read from a character", () => {
       const entry = worldLoreEntries.find(
         (e: { slug: string }) => e.slug === "road-notes",
       );
-      expect(entry.myPermissionLevel).toBe(viewer === "gm" ? "OWNER" : "VIEWER");
+      expect(entry.myPermissionLevel).toBe(
+        viewer === "gm" ? "OWNER" : "VIEWER",
+      );
       expect(entry.renderedHtml).toContain(
         '<a class="lore-link" href="/world/',
       );
@@ -106,8 +112,9 @@ describe("the world's lore, read from a character", () => {
       const brannoc = worldActors.find(
         (a: { label: string }) => a.label === "Brannoc Stoneward",
       );
-      expect(brannoc.loreLinkedFrom.map((e: { title: string }) => e.title))
-        .toContain("Road Notes");
+      expect(
+        brannoc.loreLinkedFrom.map((e: { title: string }) => e.title),
+      ).toContain("Road Notes");
     }
     expect(refused).toEqual([]);
   });

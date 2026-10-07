@@ -7,7 +7,8 @@ import { ask, freshWorld, must, refused, viewAs } from "../testing/world";
 import { DEMO_PLAYER } from "../../seed/world";
 import { demoState } from "../state";
 
-const ENTRY = "id title slug content currentRevisionId parentId tags renderedHtml myPermissionLevel";
+const ENTRY =
+  "id title slug content currentRevisionId parentId tags renderedHtml myPermissionLevel";
 const LIST = `query ($worldId: UUID!) { worldLoreEntries(worldId: $worldId) { ${ENTRY} } }`;
 const ONE = `query ($worldId: UUID!, $slug: String!) { loreEntry(worldId: $worldId, slug: $slug) { ${ENTRY} linkedFrom { title } } }`;
 const CREATE = `mutation ($input: CreateLoreEntryInput!) { createLoreEntry(input: $input) { ${ENTRY} } }`;
@@ -104,8 +105,11 @@ describe("editing", () => {
     expect(stale.errors?.[0]?.extensions?.code).toBe("CONFLICT");
 
     const { loreEntryRevisions } = await must(REVISIONS, { id: entry.id });
-    expect(loreEntryRevisions.map((r: { contentMarkdown: string }) => r.contentMarkdown))
-      .toEqual(["second", "first"]);
+    expect(
+      loreEntryRevisions.map(
+        (r: { contentMarkdown: string }) => r.contentMarkdown,
+      ),
+    ).toEqual(["second", "first"]);
 
     const oldest = loreEntryRevisions[1];
     const restored = (await must(RESTORE, { revisionId: oldest.id }))
@@ -119,7 +123,9 @@ describe("editing", () => {
   it("renames an entry and its slug follows", async () => {
     const entry = await create("Draft");
     const renamed = (
-      await must(UPDATE, { input: { loreEntryId: entry.id, title: "Final Copy" } })
+      await must(UPDATE, {
+        input: { loreEntryId: entry.id, title: "Final Copy" },
+      })
     ).updateLoreEntry;
     expect(renamed.slug).toBe("final-copy");
   });
@@ -128,7 +134,9 @@ describe("editing", () => {
     const parent = await create("Parent");
     const child = await create("Child");
     await must(MOVE, { input: { loreEntryId: child.id, parentId: parent.id } });
-    expect(await must(DELETE, { id: parent.id })).toEqual({ deleteLoreEntry: true });
+    expect(await must(DELETE, { id: parent.id })).toEqual({
+      deleteLoreEntry: true,
+    });
     const left = demoState().lore.find((e) => e.id === child.id)!;
     expect(left.parentId).toBeNull();
   });
@@ -152,7 +160,9 @@ describe("the tree", () => {
 describe("tags", () => {
   it("are tidied, kept once, sorted, and refused when empty", async () => {
     const entry = await create("Tagged");
-    await must(ADD_TAG, { input: { loreEntryId: entry.id, tag: "  Old   Road " } });
+    await must(ADD_TAG, {
+      input: { loreEntryId: entry.id, tag: "  Old   Road " },
+    });
     await must(ADD_TAG, { input: { loreEntryId: entry.id, tag: "old road" } });
     const { addLoreTag } = await must(ADD_TAG, {
       input: { loreEntryId: entry.id, tag: "Bandits" },
@@ -180,15 +190,22 @@ describe("link targets", () => {
       "The Grassy Path",
       "The Stoneward Oath",
     ]);
-    const heroes = (await must(TARGETS, { worldId: worldId(), prefix: "brann" }))
-      .loreLinkTargets;
-    expect(heroes).toMatchObject([{ title: "Brannoc Stoneward", kind: "ACTOR" }]);
+    const heroes = (
+      await must(TARGETS, { worldId: worldId(), prefix: "brann" })
+    ).loreLinkTargets;
+    expect(heroes).toMatchObject([
+      { title: "Brannoc Stoneward", kind: "ACTOR" },
+    ]);
 
-    const hobgoblin = demoState().actors.find((a) => a.castKey === "hobgoblin")!;
+    const hobgoblin = demoState().actors.find(
+      (a) => a.castKey === "hobgoblin",
+    )!;
     const prefix = String(hobgoblin.label).slice(0, 3);
     const gmSees = (await must(TARGETS, { worldId: worldId(), prefix }))
       .loreLinkTargets;
-    expect(gmSees.some((t: { id: string }) => t.id === hobgoblin.id)).toBe(true);
+    expect(gmSees.some((t: { id: string }) => t.id === hobgoblin.id)).toBe(
+      true,
+    );
     viewAs("player");
     const playerSees = (await must(TARGETS, { worldId: worldId(), prefix }))
       .loreLinkTargets;
@@ -203,13 +220,18 @@ describe("a player", () => {
     const entry = await create("Player Notes", "hello");
     viewAs("player");
     const list = (await must(LIST, { worldId: worldId() })).worldLoreEntries;
-    expect(list.every((e: { myPermissionLevel: string }) => e.myPermissionLevel === "VIEWER"))
-      .toBe(true);
+    expect(
+      list.every(
+        (e: { myPermissionLevel: string }) => e.myPermissionLevel === "VIEWER",
+      ),
+    ).toBe(true);
 
     const write = await ask(CREATE, {
       input: { worldId: worldId(), title: "Mine" },
     });
-    expect(write.errors?.[0]?.message).toMatch(/^Only the DM \(Owner or GM\) may/);
+    expect(write.errors?.[0]?.message).toMatch(
+      /^Only the DM \(Owner or GM\) may/,
+    );
 
     const edit = await ask(UPDATE, {
       input: { loreEntryId: entry.id, title: "Theirs" },
@@ -224,7 +246,9 @@ describe("a player", () => {
     });
     viewAs("player");
     const allowed = (
-      await must(UPDATE, { input: { loreEntryId: entry.id, title: "Shared Notes" } })
+      await must(UPDATE, {
+        input: { loreEntryId: entry.id, title: "Shared Notes" },
+      })
     ).updateLoreEntry;
     expect(allowed.myPermissionLevel).toBe("EDITOR");
     const remove = await ask(DELETE, { id: entry.id });

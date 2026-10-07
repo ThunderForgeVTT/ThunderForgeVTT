@@ -34,7 +34,10 @@ describe("the book importer's upload", () => {
   it("is answered as a refused request, not thrown at", async () => {
     let told = 0;
     const Xhr = refusingXmlHttpRequest(
-      () => JSON.stringify({ errors: [{ message: "Importing a book is not part of the demo." }] }),
+      () =>
+        JSON.stringify({
+          errors: [{ message: "Importing a book is not part of the demo." }],
+        }),
       () => {
         told += 1;
       },

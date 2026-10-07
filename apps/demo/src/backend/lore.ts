@@ -44,7 +44,10 @@ const markdown = new Marked({
     // comrak with `unsafe` off omits raw HTML, and ammonia drops the comment
     // it leaves behind: the tags go, and the text around them stays.
     html: () => "",
-    link(this: { parser: { parseInline(t: Tokens.Generic[]): string } }, token) {
+    link(
+      this: { parser: { parseInline(t: Tokens.Generic[]): string } },
+      token,
+    ) {
       const text = this.parser.parseInline(token.tokens);
       if (!SAFE_HREF.test(token.href)) return text;
       const title = token.title ? ` title="${escapeHtml(token.title)}"` : "";
@@ -156,7 +159,11 @@ export function renderLore(
 }
 
 /** The server's slug: ASCII, lower case, hyphens, unique in the world. */
-export function slugFor(state: DemoState, title: string, self?: string): string {
+export function slugFor(
+  state: DemoState,
+  title: string,
+  self?: string,
+): string {
   const base =
     title
       .normalize("NFKD")

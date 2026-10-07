@@ -27,10 +27,7 @@ const MAX_TAG = 64;
 const LINK_TARGET_LIMIT = 20;
 
 function forbidden(message: string, code?: string): never {
-  throw new GraphQLError(
-    message,
-    code ? { extensions: { code } } : undefined,
-  );
+  throw new GraphQLError(message, code ? { extensions: { code } } : undefined);
 }
 
 function grants(entry: Row): Row[] {
@@ -50,16 +47,17 @@ export function loreLevel(state: DemoState, entry: Row): Level {
   return (own?.level as Level | undefined) ?? "VIEWER";
 }
 
-function findEntry(state: DemoState, id: string, missing = "Lore entry not found"): Row {
+function findEntry(
+  state: DemoState,
+  id: string,
+  missing = "Lore entry not found",
+): Row {
   return state.lore.find((e) => e.id === id) ?? forbidden(missing);
 }
 
 function need(state: DemoState, entry: Row, level: Level, code?: string): void {
   if (LEVELS.indexOf(loreLevel(state, entry)) < LEVELS.indexOf(level)) {
-    forbidden(
-      "You do not have sufficient permission on this lore entry",
-      code,
-    );
+    forbidden("You do not have sufficient permission on this lore entry", code);
   }
 }
 
@@ -199,7 +197,9 @@ export const loreQueries: Record<string, Handler> = {
   },
   loreLinkTargets: ({ prefix }) => {
     const state = demoState();
-    const wanted = String(prefix ?? "").trim().toLowerCase();
+    const wanted = String(prefix ?? "")
+      .trim()
+      .toLowerCase();
     const starts = (text: unknown) =>
       String(text).toLowerCase().startsWith(wanted);
     return [
@@ -308,7 +308,10 @@ export const loreMutations: Record<string, Handler> = {
       // Walk up from the new parent: meeting the entry means a loop.
       for (let at: Row | undefined = parent; at; ) {
         if (at.id === entry.id) {
-          forbidden("that move would put the entry inside itself", "LORE_CYCLE");
+          forbidden(
+            "that move would put the entry inside itself",
+            "LORE_CYCLE",
+          );
         }
         at = at.parentId
           ? state.lore.find((e) => e.id === at!.parentId)

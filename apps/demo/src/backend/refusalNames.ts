@@ -25,12 +25,18 @@ const EXACT: Record<string, string> = {
 const FAMILIES: Array<[RegExp, string]> = [
   [/invite/i, "Invite links"],
   [/combat|encounter|initiative|attack|damage/i, "Combat"],
-  [/loreRepository|loreSync|loreIncoming|lorePending/i, "Syncing lore with a repository"],
+  [
+    /loreRepository|loreSync|loreIncoming|lorePending/i,
+    "Syncing lore with a repository",
+  ],
   [/github|repository/i, "Connected repositories"],
   [/lore/i, "Lore"],
   [/compendium|book|collection|library/i, "The compendium library"],
   [/moderation|report|appeal|case/i, "Moderation"],
-  [/account|password|email|profile|avatar|session|login|signup|twoFactor|totp|passkey/i, "Your account"],
+  [
+    /account|password|email|profile|avatar|session|login|signup|twoFactor|totp|passkey/i,
+    "Your account",
+  ],
   [/upload|asset|image|portrait/i, "Uploads"],
   [/status|health|metric/i, "The system status page"],
   [/admin|operator|instance/i, "Instance administration"],
