@@ -9,6 +9,7 @@ import type { FantasyIconName } from "@/components/ui/fantasy-icon/FantasyIcon";
 import { RuneDivider } from "@/components/ui/rune-divider/RuneDivider";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { cn } from "@/lib/utils";
+import { IN_DEMO } from "@/lib/demoBuild";
 import type { SeoConfig } from "@/types/seo";
 import { AppFooter } from "@/components/navigation/AppFooter";
 
@@ -125,6 +126,42 @@ function useStatusPoll() {
 }
 
 export default function StatusPage() {
+  return IN_DEMO ? <DemoStatusPage /> : <LiveStatusPage />;
+}
+
+/**
+ * Spec 074 FR-013: the demo runs in the reader's browser, so there is no
+ * instance to poll. Saying so beats a row of services marked Down.
+ */
+function DemoStatusPage() {
+  return (
+    <>
+      <SEO {...statusPageSeo} />
+      <main className="min-h-full py-12 pb-16">
+        <Container className="grid max-w-2xl gap-6">
+          <h1 className="text-3xl leading-none font-semibold text-balance sm:text-4xl">
+            ThunderForge instance status
+          </h1>
+          <Card className="grid gap-3 p-6" data-testid="status-demo">
+            <StatusBadge variant="info">Running in your browser</StatusBadge>
+            <p className="text-sm text-muted-foreground">
+              This demo has no server behind it, so there are no services to
+              check. A ThunderForge instance shows its own status here.
+            </p>
+            <div>
+              <Button variant="secondary" icon="worlds" asChild>
+                <Link to="/">Home</Link>
+              </Button>
+            </div>
+          </Card>
+        </Container>
+      </main>
+      <AppFooter />
+    </>
+  );
+}
+
+function LiveStatusPage() {
   const { services, fetchState, lastChecked, recheck } = useStatusPoll();
 
   const rows = FANTASY_SERVICES.map((fantasy) => {

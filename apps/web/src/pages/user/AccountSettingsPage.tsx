@@ -7,6 +7,7 @@ import { Container } from "@/components/ui/container/Container";
 import { Dialog } from "@/components/ui/dialog/Dialog";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { useAuth } from "@/hooks/useAuth";
+import { IN_DEMO } from "@/lib/demoBuild";
 import type { SeoConfig } from "@/types/seo";
 
 export const accountSettingsPageSeo: SeoConfig = {
@@ -93,95 +94,118 @@ export function AccountSettingsPage() {
             </p>
           </header>
 
-          <Card surface="stone" className="grid gap-4 p-6">
-            <div className="grid gap-1">
-              <h2 className="text-xl font-semibold">Your data</h2>
+          {/* Spec 074 FR-013: the demo visitor has no account to export, end
+              or delete; what the demo holds stays in this browser. */}
+          {IN_DEMO ? (
+            <Card
+              surface="stone"
+              className="grid gap-1 p-6"
+              data-testid="account-demo"
+            >
+              <h2 className="text-xl font-semibold">A demo visitor</h2>
               <p className="text-muted-foreground">
-                Everything this account holds here, as a file you keep.
+                The demo keeps what you make in this browser, not in an account.
+                A ThunderForge instance lets you export your data, sign out and
+                delete your account from here.
               </p>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <Button
-                variant="secondary"
-                icon="actors"
-                disabled={isExporting !== null}
-                onClick={() => void downloadExport("json")}
-              >
-                {isExporting === "json"
-                  ? "Preparing JSON..."
-                  : "Download JSON export"}
-              </Button>
-              <Button
-                variant="secondary"
-                icon="inventory"
-                disabled={isExporting !== null}
-                onClick={() => void downloadExport("zip")}
-              >
-                {isExporting === "zip"
-                  ? "Preparing ZIP..."
-                  : "Download ZIP export"}
-              </Button>
-            </div>
-          </Card>
-
-          <Card surface="stone" className="grid gap-4 p-6">
-            <div className="grid gap-1">
-              <h2 className="text-xl font-semibold">Sign out</h2>
-              <p className="text-muted-foreground">
-                Ends this session on this device. Your account and everything in
-                it stay as they are.
-              </p>
-            </div>
-            <div>
-              <Button
-                variant="secondary"
-                icon="arrow-left"
-                onClick={() => void signOut()}
-              >
-                Sign out
-              </Button>
-            </div>
-          </Card>
-
-          <Card surface="stone" className="grid gap-4 p-6">
-            <div className="grid gap-1">
-              <h2 className="text-xl font-semibold">Delete this account</h2>
-              <p className="text-muted-foreground">
-                Permanent. Download an export first if you want to keep
-                anything.
-              </p>
-            </div>
-            <div>
-              <Dialog
-                trigger={
-                  <Button variant="danger" icon="skull" disabled={isDeleting}>
-                    {isDeleting ? "Deleting account..." : "Delete account"}
-                  </Button>
-                }
-                title="Permanently delete this account?"
-                description="This deletes your profile, sign-ins and sessions, every world you created, and your whole library: every book you read in and every collection you wrote. Players in your worlds keep their characters, which are copied to their own accounts first."
-                footer={
+            </Card>
+          ) : (
+            <>
+              <Card surface="stone" className="grid gap-4 p-6">
+                <div className="grid gap-1">
+                  <h2 className="text-xl font-semibold">Your data</h2>
+                  <p className="text-muted-foreground">
+                    Everything this account holds here, as a file you keep.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-3">
                   <Button
-                    variant="danger"
-                    icon="skull"
-                    disabled={isDeleting}
-                    onClick={() => void permanentlyDeleteAccount()}
+                    variant="secondary"
+                    icon="actors"
+                    disabled={isExporting !== null}
+                    onClick={() => void downloadExport("json")}
                   >
-                    {isDeleting ? "Deleting..." : "Delete permanently"}
+                    {isExporting === "json"
+                      ? "Preparing JSON..."
+                      : "Download JSON export"}
                   </Button>
-                }
-              >
-                {/* Spec 050 FR-062 to FR-064: what is true, not what is
+                  <Button
+                    variant="secondary"
+                    icon="inventory"
+                    disabled={isExporting !== null}
+                    onClick={() => void downloadExport("zip")}
+                  >
+                    {isExporting === "zip"
+                      ? "Preparing ZIP..."
+                      : "Download ZIP export"}
+                  </Button>
+                </div>
+              </Card>
+
+              <Card surface="stone" className="grid gap-4 p-6">
+                <div className="grid gap-1">
+                  <h2 className="text-xl font-semibold">Sign out</h2>
+                  <p className="text-muted-foreground">
+                    Ends this session on this device. Your account and
+                    everything in it stay as they are.
+                  </p>
+                </div>
+                <div>
+                  <Button
+                    variant="secondary"
+                    icon="arrow-left"
+                    onClick={() => void signOut()}
+                  >
+                    Sign out
+                  </Button>
+                </div>
+              </Card>
+
+              <Card surface="stone" className="grid gap-4 p-6">
+                <div className="grid gap-1">
+                  <h2 className="text-xl font-semibold">Delete this account</h2>
+                  <p className="text-muted-foreground">
+                    Permanent. Download an export first if you want to keep
+                    anything.
+                  </p>
+                </div>
+                <div>
+                  <Dialog
+                    trigger={
+                      <Button
+                        variant="danger"
+                        icon="skull"
+                        disabled={isDeleting}
+                      >
+                        {isDeleting ? "Deleting account..." : "Delete account"}
+                      </Button>
+                    }
+                    title="Permanently delete this account?"
+                    description="This deletes your profile, sign-ins and sessions, every world you created, and your whole library: every book you read in and every collection you wrote. Players in your worlds keep their characters, which are copied to their own accounts first."
+                    footer={
+                      <Button
+                        variant="danger"
+                        icon="skull"
+                        disabled={isDeleting}
+                        onClick={() => void permanentlyDeleteAccount()}
+                      >
+                        {isDeleting ? "Deleting..." : "Delete permanently"}
+                      </Button>
+                    }
+                  >
+                    {/* Spec 050 FR-062 to FR-064: what is true, not what is
                     reassuring. There is no shared store behind the library, so
                     nothing of it is kept anywhere once this is done. */}
-                <p data-testid="delete-account-consequence">
-                  This cannot be undone. Nothing of your library is kept
-                  anywhere afterwards: there is no shared copy of any book to
-                  keep.
-                </p>
-              </Dialog>
-            </div>
-          </Card>
+                    <p data-testid="delete-account-consequence">
+                      This cannot be undone. Nothing of your library is kept
+                      anywhere afterwards: there is no shared copy of any book
+                      to keep.
+                    </p>
+                  </Dialog>
+                </div>
+              </Card>
+            </>
+          )}
 
           {status ? <StatusBadge>{status}</StatusBadge> : null}
         </div>

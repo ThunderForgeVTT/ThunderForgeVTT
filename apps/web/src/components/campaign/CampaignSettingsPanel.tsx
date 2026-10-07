@@ -13,6 +13,7 @@ import { Loader } from "@/components/ui/loader/Loader";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { inviteStateLabel } from "@/db/collections/worldInvitesCollection";
 import { useWorldInvites } from "@/hooks/useWorldInvites";
+import { IN_DEMO } from "@/lib/demoBuild";
 
 interface CampaignSettingsPanelProps {
   worldId: string;
@@ -194,161 +195,164 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
           <StatusBadge variant="danger">{displayError}</StatusBadge>
         )}
 
-        {/* Invite Players Section */}
-        <div className="grid gap-3">
-          <h3 className="font-semibold">Invite Players</h3>
-          <p className="text-sm text-muted-foreground">
-            Generate join links to share with other players. Each link allows a
-            specific number of joins.
-          </p>
-
-          <Button
-            onClick={() => void handleGenerateInvite()}
-            disabled={isGenerating}
-            icon="link"
-            className="justify-self-start"
-          >
-            {isGenerating ? "Generating..." : "Generate Join Link"}
-          </Button>
-
-          {invitesLoading ? (
-            <Loader label="Loading invites..." />
-          ) : invites.length === 0 ? (
+        {/* Invite Players Section. Spec 074 FR-013: not in the demo, whose
+            world lives in one browser and so has no one to invite. */}
+        {IN_DEMO ? null : (
+          <div className="grid gap-3">
+            <h3 className="font-semibold">Invite Players</h3>
             <p className="text-sm text-muted-foreground">
-              No active invites yet. Generate one to get started.
+              Generate join links to share with other players. Each link allows
+              a specific number of joins.
             </p>
-          ) : (
-            <div className="grid gap-3" data-testid="invite-link-list">
-              {invites.map((invite) => {
-                const isBusy = busyInviteId === invite.id;
-                const isRevoked = invite.state === "REVOKED";
-                return (
-                  <div
-                    key={invite.id}
-                    className="grid gap-3 rounded-lg border border-border p-4"
-                    data-testid="invite-link-row"
-                    data-invite-state={invite.state}
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      {/* Spec 027 (FR-010): the real state, not a bare
+
+            <Button
+              onClick={() => void handleGenerateInvite()}
+              disabled={isGenerating}
+              icon="link"
+              className="justify-self-start"
+            >
+              {isGenerating ? "Generating..." : "Generate Join Link"}
+            </Button>
+
+            {invitesLoading ? (
+              <Loader label="Loading invites..." />
+            ) : invites.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No active invites yet. Generate one to get started.
+              </p>
+            ) : (
+              <div className="grid gap-3" data-testid="invite-link-list">
+                {invites.map((invite) => {
+                  const isBusy = busyInviteId === invite.id;
+                  const isRevoked = invite.state === "REVOKED";
+                  return (
+                    <div
+                      key={invite.id}
+                      className="grid gap-3 rounded-lg border border-border p-4"
+                      data-testid="invite-link-row"
+                      data-invite-state={invite.state}
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Spec 027 (FR-010): the real state, not a bare
                           "3/10 uses" string. Before this, a revoked link
                           rendered identically to a working one, and anything
                           unusable was labelled "Expired" regardless of why. */}
-                      {/* Wrapped rather than passing `data-testid` to
+                        {/* Wrapped rather than passing `data-testid` to
                           StatusBadge: that component takes only children,
                           variant and className, so extra props are silently
                           dropped and the hook never reaches the DOM. */}
-                      <span data-testid="invite-link-state">
-                        <StatusBadge variant={stateVariant(invite.state)}>
-                          {inviteStateLabel(invite.state)}
-                        </StatusBadge>
-                      </span>
-                      <span className="text-sm text-muted-foreground">
-                        {invite.remaining_uses === null ||
-                        invite.remaining_uses === undefined
-                          ? `${invite.used_count} joins`
-                          : `${invite.remaining_uses} of ${invite.max_uses} uses left`}
-                      </span>
-                      {invite.rotated_from && (
-                        <span className="text-xs text-muted-foreground italic">
-                          replaced an earlier link
+                        <span data-testid="invite-link-state">
+                          <StatusBadge variant={stateVariant(invite.state)}>
+                            {inviteStateLabel(invite.state)}
+                          </StatusBadge>
                         </span>
-                      )}
-                    </div>
+                        <span className="text-sm text-muted-foreground">
+                          {invite.remaining_uses === null ||
+                          invite.remaining_uses === undefined
+                            ? `${invite.used_count} joins`
+                            : `${invite.remaining_uses} of ${invite.max_uses} uses left`}
+                        </span>
+                        {invite.rotated_from && (
+                          <span className="text-xs text-muted-foreground italic">
+                            replaced an earlier link
+                          </span>
+                        )}
+                      </div>
 
-                    <div className="flex flex-wrap gap-2">
-                      <Input
-                        type="text"
-                        readOnly
-                        value={generateInviteUrl(invite.invite_code)}
-                        aria-label="Invite link"
-                      />
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={isRevoked}
-                        onClick={() => void copyLink(invite.invite_code)}
-                        icon={
-                          copiedCode === invite.invite_code ? "check" : "copy"
-                        }
-                      >
-                        {copiedCode === invite.invite_code
-                          ? "Copied!"
-                          : "Copy link"}
-                      </Button>
-                      {/* Refresh works on an expired or exhausted link too —
+                      <div className="flex flex-wrap gap-2">
+                        <Input
+                          type="text"
+                          readOnly
+                          value={generateInviteUrl(invite.invite_code)}
+                          aria-label="Invite link"
+                        />
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={isRevoked}
+                          onClick={() => void copyLink(invite.invite_code)}
+                          icon={
+                            copiedCode === invite.invite_code ? "check" : "copy"
+                          }
+                        >
+                          {copiedCode === invite.invite_code
+                            ? "Copied!"
+                            : "Copy link"}
+                        </Button>
+                        {/* Refresh works on an expired or exhausted link too —
                           a GM can always revive a dead one. Only an already
                           revoked link has nothing left to rotate. */}
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={isBusy || isRevoked}
-                        onClick={() => void handleRotate(invite.id)}
-                        icon="spark"
-                        data-testid="invite-link-refresh"
-                      >
-                        {isBusy ? "Working…" : "Refresh"}
-                      </Button>
-                      {!isRevoked &&
-                        (confirmingRevokeId === invite.id ? (
-                          <>
-                            <Button
-                              variant="danger"
-                              size="sm"
-                              disabled={isBusy}
-                              onClick={() => void handleRevoke(invite.id)}
-                              data-testid="invite-link-revoke-confirm"
-                            >
-                              Revoke permanently
-                            </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={isBusy || isRevoked}
+                          onClick={() => void handleRotate(invite.id)}
+                          icon="spark"
+                          data-testid="invite-link-refresh"
+                        >
+                          {isBusy ? "Working…" : "Refresh"}
+                        </Button>
+                        {!isRevoked &&
+                          (confirmingRevokeId === invite.id ? (
+                            <>
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                disabled={isBusy}
+                                onClick={() => void handleRevoke(invite.id)}
+                                data-testid="invite-link-revoke-confirm"
+                              >
+                                Revoke permanently
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={isBusy}
+                                onClick={() => setConfirmingRevokeId(null)}
+                              >
+                                Cancel
+                              </Button>
+                            </>
+                          ) : (
                             <Button
                               variant="ghost"
                               size="sm"
                               disabled={isBusy}
-                              onClick={() => setConfirmingRevokeId(null)}
+                              onClick={() => setConfirmingRevokeId(invite.id)}
+                              data-testid="invite-link-revoke"
                             >
-                              Cancel
+                              Revoke
                             </Button>
-                          </>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={isBusy}
-                            onClick={() => setConfirmingRevokeId(invite.id)}
-                            data-testid="invite-link-revoke"
-                          >
-                            Revoke
-                          </Button>
-                        ))}
-                    </div>
+                          ))}
+                      </div>
 
-                    {confirmingRevokeId === invite.id && (
-                      <p className="text-xs text-muted-foreground">
-                        This cannot be undone. Anyone who already joined with
-                        this link keeps their place — only future joins are
-                        stopped.
-                      </p>
-                    )}
-
-                    <div className="flex gap-4 text-xs text-muted-foreground">
-                      <span>
-                        Created:{" "}
-                        {new Date(invite.created_at).toLocaleDateString()}
-                      </span>
-                      {invite.expires_at && (
-                        <span>
-                          Expires:{" "}
-                          {new Date(invite.expires_at).toLocaleDateString()}
-                        </span>
+                      {confirmingRevokeId === invite.id && (
+                        <p className="text-xs text-muted-foreground">
+                          This cannot be undone. Anyone who already joined with
+                          this link keeps their place — only future joins are
+                          stopped.
+                        </p>
                       )}
+
+                      <div className="flex gap-4 text-xs text-muted-foreground">
+                        <span>
+                          Created:{" "}
+                          {new Date(invite.created_at).toLocaleDateString()}
+                        </span>
+                        {invite.expires_at && (
+                          <span>
+                            Expires:{" "}
+                            {new Date(invite.expires_at).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Spec 017 (FR-007): player-created character setting */}
         <div className="grid gap-3">

@@ -2,6 +2,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { prefetchPage } from "@/routes/pageLoaders";
 import type { PrefetchablePage } from "@/routes/pageLoaders";
 import { cn } from "@/lib/utils";
+import { IN_DEMO } from "@/lib/demoBuild";
 import { Avatar } from "@/components/ui/avatar/Avatar";
 import { Button } from "@/components/ui/button/Button";
 import { Dropdown } from "@/components/ui/dropdown/Dropdown";
@@ -58,13 +59,19 @@ export function AppHeader({ brandHref, navItems }: AppHeaderProps) {
           onSelect: () => navigate("/settings/account"),
         },
         ...demoItems,
-        {
-          label: "Sign out",
-          icon: "arrow-left" as const,
-          onSelect: () => {
-            void logout().then(() => navigate("/login"));
-          },
-        },
+        // Spec 074 FR-013: the demo visitor never signed in, so there is no
+        // session to end.
+        ...(IN_DEMO
+          ? []
+          : [
+              {
+                label: "Sign out",
+                icon: "arrow-left" as const,
+                onSelect: () => {
+                  void logout().then(() => navigate("/login"));
+                },
+              },
+            ]),
       ]
     : demoItems;
 

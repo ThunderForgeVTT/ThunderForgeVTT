@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { postGraphQL } from "@/api/graphqlClient";
+import { IN_DEMO } from "@/lib/demoBuild";
 
 /** The anonymous transport, as `api/collections.ts` and four others name it. */
 const GRAPHQL_PUBLIC_ENDPOINT = "/api/graphql/public";
@@ -122,6 +123,12 @@ function fetchPublished(): Promise<Published> {
   // Found by the first-run e2e; the five other anonymous readers
   // (`collections`, `abilityShares`, `itemShares`, `actorShares`,
   // `moderation`) already name this endpoint, and this is now the sixth.
+  // Spec 074 FR-013: the demo has no operator. Its legal pages show the
+  // unset markers, which is the truth, without asking a server that is not
+  // there.
+  if (IN_DEMO) {
+    return Promise.resolve(NOTHING);
+  }
   inFlight ??= postGraphQL<PublishedOperatorValuesData>(QUERY, undefined, {
     endpoint: GRAPHQL_PUBLIC_ENDPOINT,
   })

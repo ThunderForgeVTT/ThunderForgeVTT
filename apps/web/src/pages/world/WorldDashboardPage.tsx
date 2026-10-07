@@ -13,6 +13,7 @@ import { Loader } from "@/components/ui/loader/Loader";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { PlayPausedBanner } from "@/components/world/PlayPausedBanner";
 import { useAuth } from "@/hooks/useAuth";
+import { IN_DEMO } from "@/lib/demoBuild";
 import { useActorClaimGate } from "@/hooks/useActorClaimGate";
 import { CampaignSettingsPanel } from "@/components/campaign/CampaignSettingsPanel";
 import type { SeoConfig } from "@/types/seo";
@@ -174,14 +175,19 @@ export default function WorldDashboardPage() {
                   <Button variant="secondary" icon="settings" disabled>
                     Manage settings
                   </Button>
-                  <Button
-                    variant="danger"
-                    icon="skull"
-                    onClick={() => void handleDelete()}
-                    disabled={isDeleting}
-                  >
-                    {isDeleting ? "Deleting..." : "Delete world"}
-                  </Button>
+                  {/* Spec 074 FR-013: the demo has the one world, kept in
+                      this browser; deleting or adding worlds is an instance's
+                      business. */}
+                  {IN_DEMO ? null : (
+                    <Button
+                      variant="danger"
+                      icon="skull"
+                      onClick={() => void handleDelete()}
+                      disabled={isDeleting}
+                    >
+                      {isDeleting ? "Deleting..." : "Delete world"}
+                    </Button>
+                  )}
                 </div>
               </section>
 
@@ -273,19 +279,23 @@ export default function WorldDashboardPage() {
                     >
                       Enter the live workspace
                     </Link>
-                    <Link
-                      to="/worlds/create"
-                      className="text-primary underline-offset-4 hover:underline"
-                    >
-                      Create another world
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={() => void handleDelete()}
-                      className="text-left text-destructive underline-offset-4 hover:underline"
-                    >
-                      Permanently delete this world
-                    </button>
+                    {IN_DEMO ? null : (
+                      <>
+                        <Link
+                          to="/worlds/create"
+                          className="text-primary underline-offset-4 hover:underline"
+                        >
+                          Create another world
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => void handleDelete()}
+                          className="text-left text-destructive underline-offset-4 hover:underline"
+                        >
+                          Permanently delete this world
+                        </button>
+                      </>
+                    )}
                   </div>
                 </Card>
               </section>

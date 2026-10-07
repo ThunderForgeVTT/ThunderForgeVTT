@@ -53,6 +53,7 @@ export default defineConfig({
         __dirname,
         "src/overrides/useAvatar.ts",
       ),
+      "@/lib/demoBuild": path.resolve(__dirname, "src/overrides/demoBuild.ts"),
       "@": path.resolve(web, "src"),
       "@thunderforge/host": path.resolve(web, "src/host/index.ts"),
       "@thunderforge/genie": path.resolve(

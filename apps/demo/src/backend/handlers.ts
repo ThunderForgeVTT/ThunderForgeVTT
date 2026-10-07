@@ -32,6 +32,7 @@ import {
 } from "./handlers/actorAccess";
 import { loreMutations, loreQueries } from "./handlers/lore";
 import { catchUpQueries } from "./handlers/catchUp";
+import { worldMutations } from "./handlers/world";
 import { demoState, markChanged, type DemoState, type Row } from "./state";
 
 type Args = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -576,5 +577,6 @@ export const mutations: Record<string, Handler> = {
   rollCheck: (args) => rollCheck(args),
 
   ...loreMutations,
+  ...worldMutations,
   ...actorAccessMutations,
 };

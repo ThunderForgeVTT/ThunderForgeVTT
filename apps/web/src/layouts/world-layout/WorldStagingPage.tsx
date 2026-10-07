@@ -4,6 +4,7 @@ import { resolvePanel } from "@/panels/systemPanels";
 import { SessionNotesPanel } from "@/components/world/SessionNotesPanel/SessionNotesPanel";
 import { SessionSetupInviteLink } from "@/components/world/SessionSetupInviteLink";
 import type { WorldRecord } from "@/types/world";
+import { IN_DEMO } from "@/lib/demoBuild";
 
 export interface WorldStagingPageProps {
   worldId: string;
@@ -96,7 +97,8 @@ export function WorldStagingPage({
 
       {/* Spec 023: the roster itself lives in its own Players sidebar
        * section now — this stays just the invite link. */}
-      {isGm ? (
+      {/* Spec 074 FR-013: the demo's world has no one to invite. */}
+      {isGm && !IN_DEMO ? (
         <Panel
           variant="stone"
           className="grid gap-2 rounded-xl border border-border sm:max-w-xs"

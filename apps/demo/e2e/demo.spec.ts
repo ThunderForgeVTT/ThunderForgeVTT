@@ -56,7 +56,10 @@ async function ask<T>(query: string, variables: object = {}) {
     [query, variables] as const,
   ) as Promise<{
     status: number;
-    body: { data?: T; errors?: { message?: string; extensions?: { code?: string } }[] };
+    body: {
+      data?: T;
+      errors?: { message?: string; extensions?: { code?: string } }[];
+    };
   }>;
 }
 
@@ -383,6 +386,55 @@ test("the compendium's Books tab says the world holds no books, rather than refu
     "true",
   );
   await page.waitForLoadState("networkidle");
+  expect(await refusedSoFar()).toEqual([]);
+  await expect(page.getByText("Not part of the demo")).toHaveCount(0);
+});
+
+test("controls that only a real instance has are not offered, and session notes are kept", async () => {
+  // FR-013: offered and then refused is worse than not offered.
+  await page.goto(`/demo/world/${WORLD_ID}`);
+  await expect(
+    page.getByRole("link", { name: /enter world/i }).first(),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Delete world" })).toHaveCount(
+    0,
+  );
+  await expect(page.getByText("Create another world")).toHaveCount(0);
+  await expect(page.getByText("Permanently delete this world")).toHaveCount(0);
+  await expect(page.getByText("Generate Join Link")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Menu" }).click();
+  await expect(
+    page.getByRole("menuitem", { name: "World archive" }),
+  ).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Sign out" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  await page.goto("/demo/settings/account");
+  await expect(page.getByTestId("account-demo")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /delete account/i }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /download/i })).toHaveCount(0);
+
+  await page.goto("/demo/status");
+  await expect(page.getByTestId("status-demo")).toContainText(
+    "Running in your browser",
+  );
+
+  await page.goto(`/demo/world/${WORLD_ID}/staging`);
+  await expect(page.getByTestId("session-setup-invite-link")).toHaveCount(0);
+  const notes = page.getByTestId("session-notes-editor").locator(".cm-content");
+  await notes.click();
+  await page.keyboard.type("The goblins owe the party a cart.");
+  await page.getByTestId("session-notes-save-button").click();
+  await expect(page.getByText("Saved.")).toBeVisible();
+  const saved = await ask<{ world: { sessionNotes: string } }>(
+    `query ($id: UUID!) { world(id: $id) { sessionNotes } }`,
+    { id: WORLD_ID },
+  );
+  expect(saved.body.data?.world.sessionNotes).toContain("owe the party a cart");
+
   expect(await refusedSoFar()).toEqual([]);
   await expect(page.getByText("Not part of the demo")).toHaveCount(0);
 });
