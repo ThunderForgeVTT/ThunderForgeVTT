@@ -6,6 +6,7 @@ import type { Handler } from "./common";
 import { diceMutations, diceQueries } from "./dice";
 import { levelMutations, levelQueries } from "./levels";
 import { lightingMutations, lightingQueries } from "./lighting";
+import { sceneMutations, sceneQueries } from "./scenes";
 import { tokenSheetQueries } from "./tokenSheets";
 
 export const areaQueries: Record<string, Handler> = {
@@ -13,10 +14,12 @@ export const areaQueries: Record<string, Handler> = {
   ...lightingQueries,
   ...levelQueries,
   ...tokenSheetQueries,
+  ...sceneQueries,
 };
 
 export const areaMutations: Record<string, Handler> = {
   ...diceMutations,
   ...lightingMutations,
   ...levelMutations,
+  ...sceneMutations,
 };

@@ -154,6 +154,190 @@ function updateLevel(levelId: string, input: Args): Row {
   return levelRow(state, level);
 }
 
+const MAX_LEVELS_PER_SCENE = 12;
+
+function createLevel(input: Args): Row {
+  const state = demoState();
+  const sceneId = input.sceneId as string;
+  const scene = sceneOf(state, sceneId);
+  authorize(state);
+  const name = checkedName(String(input.name ?? ""));
+  checkedSize(input.width, input.height);
+  const light = checkedLight(input.ambientLight);
+  checkedBackground(state, input.backgroundAssetId);
+  const existing = levelsOf(state, sceneId);
+  if (existing.length >= MAX_LEVELS_PER_SCENE) {
+    refuse("A scene has at most 12 levels");
+  }
+  const top = existing.reduce(
+    (highest, l) => Math.max(highest, (l.sortOrder as number) + 1),
+    0,
+  );
+  const asset = (input.backgroundAssetId as string | null | undefined) ?? null;
+  const level: Row = {
+    levelId: crypto.randomUUID(),
+    sceneId,
+    name,
+    sortOrder: top,
+    isEntry: false,
+    hidden: input.hidden ?? false,
+    backgroundAssetId: asset,
+    backgroundUrl: backgroundUrlOf(asset),
+    width: input.width ?? scene.width,
+    height: input.height ?? scene.height,
+    ambientLight: light ?? scene.ambientLight,
+  };
+  state.levels.push(level);
+  announce(sceneId, "created", level.levelId as string);
+  markChanged();
+  return levelRow(state, level);
+}
+
+function reorderLevels(sceneId: string, ordered: string[]): Row[] {
+  const state = demoState();
+  sceneOf(state, sceneId);
+  authorize(state);
+  const current = levelsOf(state, sceneId)
+    .map((l) => l.levelId as string)
+    .sort();
+  const named = [...ordered].sort();
+  if (
+    current.length !== named.length ||
+    current.some((id, i) => id !== named[i])
+  ) {
+    refuse("Name every level of the scene once, in the order you want");
+  }
+  ordered.forEach((levelId, position) => {
+    loadLevel(state, levelId).sortOrder = position;
+  });
+  announce(sceneId, "reordered", null);
+  markChanged();
+  return levelsOf(state, sceneId).map((l) => levelRow(state, l));
+}
+
+/** Walls, lights and shapes go with the floor, by foreign key. */
+function deleteLevel(levelId: string): string {
+  const state = demoState();
+  const level = loadLevel(state, levelId);
+  const sceneId = level.sceneId as string;
+  authorize(state);
+  if (levelsOf(state, sceneId).length <= 1) {
+    refuse("A scene keeps at least one level");
+  }
+  if (level.isEntry) {
+    refuse(
+      "This is the scene's entry level. Make another level the entry before deleting it",
+    );
+  }
+  if (state.tokens.some((t) => t.levelId === levelId)) {
+    refuse("Move the tokens off this level before deleting it");
+  }
+  const off = (row: Row) => row.levelId !== levelId;
+  state.walls = state.walls.filter(off);
+  state.lights = state.lights.filter(off);
+  state.shapes = state.shapes.filter(off);
+  state.levels = state.levels.filter(off);
+  announce(sceneId, "deleted", levelId);
+  markChanged();
+  return levelId;
+}
+
+/** `level_travel::free_spot`: the point, else the nearest free grid step. */
+export function freeSpot(
+  centre: [number, number],
+  step: number,
+  taken: Array<[number, number]>,
+): [number, number] {
+  const near = step / 2;
+  const isFree = ([x, y]: [number, number]) =>
+    !taken.some(
+      ([ox, oy]) => Math.abs(ox - x) < near && Math.abs(oy - y) < near,
+    );
+  if (isFree(centre)) return centre;
+  for (let ring = 1; ring <= 2; ring += 1) {
+    for (let dy = -ring; dy <= ring; dy += 1) {
+      for (let dx = -ring; dx <= ring; dx += 1) {
+        if (Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;
+        const spot: [number, number] = [
+          centre[0] + dx * step,
+          centre[1] + dy * step,
+        ];
+        if (isFree(spot)) return spot;
+      }
+    }
+  }
+  return centre;
+}
+
+/** The Game Master's lift (`scene_levels::move_tokens_to_level`). */
+function moveTokensToLevel(args: Args): Row[] {
+  const { tokenIds, levelId, x, y } = args as {
+    tokenIds: string[];
+    levelId: string;
+    x?: number | null;
+    y?: number | null;
+  };
+  if ((x == null) !== (y == null)) refuse("Give both x and y, or neither");
+  const state = demoState();
+  const level = loadLevel(state, levelId);
+  const sceneId = level.sceneId as string;
+  authorize(state);
+  if (tokenIds.length === 0) return [];
+  const at: [number, number] | null = x != null && y != null ? [x, y] : null;
+  if (at && (!Number.isFinite(at[0]) || !Number.isFinite(at[1]))) {
+    refuse("That is not a place on the level");
+  }
+  const moving = tokenIds.map(
+    (id) =>
+      state.tokens.find((t) => t.tokenId === id && t.sceneId === sceneId) ??
+      refuse("Every token must be in the same scene as the level"),
+  );
+  const step = Math.max(1, sceneOf(state, sceneId).gridSize as number);
+  const taken: Array<[number, number]> = state.tokens
+    .filter(
+      (t) => t.levelId === levelId && !tokenIds.includes(t.tokenId as string),
+    )
+    .map((t) => [t.x as number, t.y as number]);
+  const stamp = now();
+  for (const token of moving) {
+    token.levelId = levelId;
+    if (at) {
+      const [fx, fy] = freeSpot(at, step, taken);
+      taken.push([fx, fy]);
+      token.x = fx;
+      token.y = fy;
+    }
+    token.updatedAt = stamp;
+    const carried = state.lights.filter(
+      (l) => l.attachedTokenId === token.tokenId,
+    );
+    for (const light of carried) {
+      light.levelId = levelId;
+      light.x = token.x;
+      light.y = token.y;
+    }
+    // `level_travel::announce`.
+    record(EVENT.tokenTravelled, {
+      token_id: token.tokenId,
+      scene_id: sceneId,
+    });
+    record(EVENT.token, {
+      action: "updated",
+      token_id: token.tokenId,
+      scene_id: sceneId,
+    });
+    if (carried.length > 0) {
+      record(EVENT.light, { action: "updated", scene_id: sceneId });
+    }
+  }
+  markChanged();
+  return moving;
+}
+
+function now(): string {
+  return new Date().toISOString();
+}
+
 export const levelQueries: Record<string, Handler> = {
   sceneLevels: ({ sceneId }) => {
     const state = demoState();
@@ -162,5 +346,10 @@ export const levelQueries: Record<string, Handler> = {
 };
 
 export const levelMutations: Record<string, Handler> = {
+  createSceneLevel: ({ input }) => createLevel(input),
   updateSceneLevel: ({ levelId, input }) => updateLevel(levelId, input),
+  reorderSceneLevels: ({ sceneId, levelIds }) =>
+    reorderLevels(sceneId, levelIds),
+  deleteSceneLevel: ({ levelId }) => deleteLevel(levelId),
+  moveTokensToLevel: (args) => moveTokensToLevel(args),
 };
