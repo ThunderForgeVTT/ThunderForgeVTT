@@ -55,7 +55,7 @@ export function ApprovalQueue({
       // anything" and "I could not find out" look identical if both render as
       // an empty list, and only one of them is a reason to look at the logs.
       setRequests(null);
-      setProblem("Could not read what the table has asked for.");
+      setProblem("Could not read the players' requests.");
     }
   }, [sceneId]);
 
@@ -70,7 +70,7 @@ export function ApprovalQueue({
       .catch(() => {
         if (cancelled) return;
         setRequests(null);
-        setProblem("Could not read what the table has asked for.");
+        setProblem("Could not read the players' requests.");
       });
     return () => {
       cancelled = true;
@@ -109,7 +109,7 @@ export function ApprovalQueue({
   if (requests === null) {
     return (
       <Panel>
-        <h3>Asked for</h3>
+        <h3>Player requests</h3>
         {problem && <p role="alert">{problem}</p>}
       </Panel>
     );
@@ -117,7 +117,7 @@ export function ApprovalQueue({
 
   return (
     <Panel>
-      <h3>Asked for</h3>
+      <h3>Player requests</h3>
 
       {requests.length === 0 && <p>Nothing is waiting on you.</p>}
 

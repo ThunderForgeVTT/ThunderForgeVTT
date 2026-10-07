@@ -2927,7 +2927,7 @@ export default function WorldPage() {
       ? [
           {
             id: "requests" as const,
-            label: "Asked for",
+            label: "Player requests",
             icon: "quill" as const,
             content: (
               <ApprovalQueue

@@ -53,19 +53,22 @@ export function SettingsPanel({
 
   return (
     <div className="grid gap-5" data-testid="settings-panel">
-      <section className="grid gap-2">
-        <h3 className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-          Scenes
-        </h3>
-        <SceneSwitcher
-          worldId={worldId}
-          scenes={scenes}
-          sceneId={sceneId}
-          onSceneChange={onSceneChange}
-          onSceneCreated={onSceneCreated}
-          canCreateScene={isGm}
-        />
-      </section>
+      {/* The GM chooses the scene; a player follows the one the GM launched. */}
+      {isGm ? (
+        <section className="grid gap-2">
+          <h3 className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+            Scenes
+          </h3>
+          <SceneSwitcher
+            worldId={worldId}
+            scenes={scenes}
+            sceneId={sceneId}
+            onSceneChange={onSceneChange}
+            onSceneCreated={onSceneCreated}
+            canCreateScene
+          />
+        </section>
+      ) : null}
 
       {isGm && sceneId ? (
         <section className="grid gap-2 border-t border-border pt-4">

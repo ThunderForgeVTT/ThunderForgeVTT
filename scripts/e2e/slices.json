@@ -330,6 +330,7 @@
         "combat-",
         "dice-roll.spec.ts",
         "dnd5e-sheet.spec.ts",
+        "play-panels-by-role.spec.ts",
         "roll-check.spec.ts"
       ],
       "neighbours": [

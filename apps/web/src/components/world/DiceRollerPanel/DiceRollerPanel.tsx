@@ -5,6 +5,9 @@ import { RollVisibilityPicker } from "@/components/world/RollVisibility/RollVisi
 import { useRollVisibility } from "@/components/world/RollVisibility/useRollVisibility";
 import type { RollResolutionRecord } from "@/types/roll";
 
+import { D20Icon } from "./D20Icon";
+import { DiceFormulaHelp } from "./DiceFormulaHelp";
+
 export interface DiceRollerPanelProps {
   worldId: string;
   /**
@@ -96,9 +99,21 @@ export function DiceRollerPanel({
           type="button"
           onClick={() => void handleRoll()}
           disabled={isRolling}
+          aria-label={isRolling ? "Rolling…" : "Roll"}
+          title="Roll"
+          style={{
+            display: "grid",
+            placeItems: "center",
+            background: "transparent",
+            border: "none",
+            padding: 0,
+            cursor: isRolling ? "wait" : "pointer",
+            opacity: isRolling ? 0.6 : 1,
+          }}
         >
-          {isRolling ? "Rolling…" : "Roll"}
+          <D20Icon size={28} />
         </button>
+        <DiceFormulaHelp />
       </div>
       <RollVisibilityPicker
         isGm={isGameMaster}

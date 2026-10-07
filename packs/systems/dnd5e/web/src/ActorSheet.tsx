@@ -419,7 +419,9 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
                 {signed(proficiencyBonus)}
               </span>
             </Fact>
-            {canEdit || challenge ? (
+            {/* A character has a level, not a challenge rating or a creature
+                type; a challenge already stored still shows. */}
+            {(actor.isNpc && canEdit) || challenge ? (
               <div className="grid grid-cols-2 gap-3">
                 <Field
                   id="dnd5e-challenge"

@@ -178,6 +178,9 @@ test("the 5e sheet lays out, derives, persists, and its proficiencies reach the 
   const sheet = page.getByTestId("dnd5e-actor-sheet");
   await expect(sheet).toBeVisible({ timeout: 15_000 });
   await expect(sheet).toHaveAttribute("data-editable", "true");
+  // A character has a level: no challenge rating, no creature type.
+  await expect(page.getByTestId("dnd5e-challenge-select")).toHaveCount(0);
+  await expect(sheet.locator("#dnd5e-creature-type")).toHaveCount(0);
 
   // 1. The regions, in reading order, each a named section with a heading.
   const ids = await sheet
