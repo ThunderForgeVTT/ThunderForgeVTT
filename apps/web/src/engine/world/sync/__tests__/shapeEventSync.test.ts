@@ -12,16 +12,19 @@ import type { ShapeRecord } from "@/types/shape";
  */
 
 const getShapes = vi.fn();
+const updateShape = vi.fn();
+const deleteShape = vi.fn();
 
 vi.mock("@/api/shapes", () => ({
   createShape: vi.fn(),
-  updateShape: vi.fn(),
-  deleteShape: vi.fn(),
+  updateShape: (...args: unknown[]) => updateShape(...args),
+  deleteShape: (...args: unknown[]) => deleteShape(...args),
   getShapes: (...args: unknown[]) => getShapes(...args),
 }));
 
 const { createWorldStore } = await import("../../store");
-const { applyShapeWorldEvent } = await import("../shapes");
+const { applyShapeWorldEvent, startShapeMutationBridge } =
+  await import("../shapes");
 
 const SCENE = "scene-1";
 
@@ -79,5 +82,80 @@ describe("applyShapeWorldEvent", () => {
     getShapes.mockResolvedValueOnce([record("a")]);
     await applyShapeWorldEvent(store, SCENE, updated("a"));
     expect(Object.keys(store.getState().shapes).sort()).toEqual(["a", "b"]);
+  });
+});
+
+/**
+ * A refused edit puts the drawing back (spec 082 FR-006). The engine moves a
+ * drawing as it is dragged, before the server has answered; when the server
+ * says no — it is somebody else's — the board must show it where it was.
+ */
+describe("startShapeMutationBridge rolls back a refusal", () => {
+  beforeEach(() => {
+    updateShape.mockReset();
+    deleteShape.mockReset();
+  });
+
+  function storeHolding() {
+    const store = createWorldStore({ worldId: "world-1" });
+    store.dispatch(
+      {
+        type: "upsert_shape",
+        shape: {
+          id: "a",
+          sceneId: SCENE,
+          kind: "rect",
+          geometry: { x: 0, y: 0, w: 10, h: 10 },
+          text: null,
+          style: null,
+          visibleToPlayers: true,
+          createdBy: "gm",
+        },
+      },
+      "sync",
+    );
+    const restored: unknown[] = [];
+    store.subscribe((event) => {
+      if (event.command.type === "upsert_shape" && event.source === "sync") {
+        restored.push(event.command.shape);
+      }
+    });
+    return { store, restored };
+  }
+
+  it("restores the drawing when an update is refused", async () => {
+    const { store, restored } = storeHolding();
+    const before = store.getState().shapes.a;
+    updateShape.mockRejectedValueOnce(new Error("Shape not found"));
+    startShapeMutationBridge(store, SCENE);
+    store.dispatch(
+      {
+        type: "update_shape",
+        shapeId: "a",
+        changes: { geometry: { x: 50, y: 50, w: 10, h: 10 } },
+      },
+      "bevy",
+    );
+    await vi.waitFor(() => expect(restored).toEqual([before]));
+    expect(store.getState().shapes.a).toEqual(before);
+  });
+
+  it("restores the drawing when a delete answers false", async () => {
+    const { store, restored } = storeHolding();
+    const before = store.getState().shapes.a;
+    deleteShape.mockResolvedValueOnce(false);
+    startShapeMutationBridge(store, SCENE);
+    store.dispatch({ type: "delete_shape", shapeId: "a" }, "ui");
+    await vi.waitFor(() => expect(restored).toEqual([before]));
+    expect(store.getState().shapes.a).toEqual(before);
+  });
+
+  it("restores the drawing when a delete is refused outright", async () => {
+    const { store, restored } = storeHolding();
+    const before = store.getState().shapes.a;
+    deleteShape.mockRejectedValueOnce(new Error("refused"));
+    startShapeMutationBridge(store, SCENE);
+    store.dispatch({ type: "delete_shape", shapeId: "a" }, "ui");
+    await vi.waitFor(() => expect(restored).toEqual([before]));
   });
 });

@@ -126,7 +126,8 @@ becomes ready. It fills a `ViewerUserId(Option<String>)` resource. The
 engine's `Shape` (canvas-core) gains `created_by: Option<String>`, filled
 from `WorldShapePayload.createdBy`.
 
-The engine's rule, as a pure function in `systems/shape.rs` so a host test
+The engine's rule, as a pure function in `systems/shape_authority.rs` (its
+own file: `systems/shape.rs` is near the line limit) so a host test
 reaches it:
 
 ```rust

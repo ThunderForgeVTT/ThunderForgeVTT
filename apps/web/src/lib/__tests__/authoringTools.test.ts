@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { permittedTools, reconcileOpenTool } from "@/lib/authoringTools";
+import {
+  permittedTools,
+  railTools,
+  reconcileOpenTool,
+} from "@/lib/authoringTools";
 import type { GmToolId } from "@/components/world/GmToolRail/GmToolRail";
 
 const rail: { id: GmToolId }[] = [
@@ -56,5 +60,24 @@ describe("reconcileOpenTool", () => {
 
   it("waits rather than guessing while unresolved", () => {
     expect(reconcileOpenTool("walls", null)).toBe("walls");
+  });
+});
+
+describe("railTools", () => {
+  it("gives an owner the whole rail before the answer arrives", () => {
+    expect(railTools(rail, null, true)).toHaveLength(rail.length);
+  });
+
+  it("gives a player nothing until the answer arrives", () => {
+    // Spec 082: a player now has a rail, but which tools it holds is the
+    // server's answer. Showing the owner's six for a moment would offer
+    // tools a player does not hold.
+    expect(railTools(rail, null, false)).toEqual([]);
+  });
+
+  it("gives a player the tools they hold", () => {
+    expect(
+      railTools(rail, ["select", "shapes"], false).map((t) => t.id),
+    ).toEqual(["select", "shapes"]);
   });
 });

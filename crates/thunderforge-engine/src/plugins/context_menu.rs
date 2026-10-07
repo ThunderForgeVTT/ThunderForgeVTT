@@ -59,10 +59,11 @@ use thunderforge_canvas_core::wall::{DoorState, Wall};
 use crate::emit_event;
 use crate::resources::{
     CameraManager, IsGameMaster, LightSet, SceneGrid, Shape, ShapeKind, ShapeSet,
-    TokenGridBehaviour, WallSet,
+    TokenGridBehaviour, ViewerUserId, WallSet,
 };
 use crate::systems::lighting::LIGHT_GRAB_RADIUS;
 use crate::systems::shape::{ELLIPSE_SEGMENTS, ellipse_outline_points};
+use crate::systems::shape_authority::may_edit_shape;
 use crate::systems::wall::distance_point_to_segment;
 use crate::{TOKEN_SIZE, TokenIdentity};
 
@@ -277,6 +278,8 @@ struct Board<'w> {
     walls: Option<Res<'w, WallSet>>,
     lights: Option<Res<'w, LightSet>>,
     shapes: Option<Res<'w, ShapeSet>>,
+    /// Who is looking, so a player is told only of their own drawings.
+    viewer: Option<Res<'w, ViewerUserId>>,
 }
 
 /// Report a right-click, with what was under it.
@@ -363,9 +366,11 @@ fn report_right_click(
     let wall_id = board.walls.as_ref().and_then(|walls| {
         wall_under(walls.walls(), world, reach, game_master).map(|wall| wall.id.clone())
     });
-    // Lights and drawings are a Game Master's to change, and only a Game
-    // Master is told one was clicked: to anybody else a light's marker is not
-    // drawn at all, and a drawing has nothing to offer.
+    // Lights are a Game Master's to change, and only a Game Master is told
+    // one was clicked: to anybody else a light's marker is not drawn at all.
+    // A drawing is reported to whoever may edit it — a Game Master, or the
+    // player who drew it (spec 082) — and one they may not is not under the
+    // pointer at all, so the click falls through to what lies beneath.
     //
     // A light's marker is a fixed size on the board, not on the screen, so
     // zoomed in it is bigger than the reach of a wall and is grabbed by the
@@ -378,13 +383,16 @@ fn report_right_click(
             light_under(lights.lights(), world, reach.max(LIGHT_GRAB_RADIUS))
                 .map(|light| light.id.clone())
         });
-    let shape_id = board
-        .shapes
-        .as_ref()
-        .filter(|_| game_master)
-        .and_then(|shapes| {
-            shape_under(shapes.shapes(), world, reach).map(|shape| shape.id.clone())
-        });
+    let viewer = board.viewer.as_ref().and_then(|viewer| viewer.0.as_deref());
+    let shape_id = board.shapes.as_ref().and_then(|shapes| {
+        let editable: Vec<Shape> = shapes
+            .shapes()
+            .iter()
+            .filter(|shape| may_edit_shape(game_master, viewer, shape))
+            .cloned()
+            .collect();
+        shape_under(&editable, world, reach).map(|shape| shape.id.clone())
+    });
 
     emit_event(json!({
         "type": "canvas_context_menu",
@@ -400,8 +408,9 @@ fn report_right_click(
         // doorway is reported with the door; which the menu is about is
         // chrome's to say.
         "wallId": wall_id,
-        // The placed light and the drawing within reach, or null, and always
-        // null for anybody but a Game Master (spec 073).
+        // The placed light within reach, or null, and always null for
+        // anybody but a Game Master (spec 073). The drawing within reach that
+        // this viewer may edit, or null (spec 082).
         "lightId": light_id,
         "shapeId": shape_id,
     }));

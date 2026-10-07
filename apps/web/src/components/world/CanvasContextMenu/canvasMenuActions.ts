@@ -228,14 +228,19 @@ export function lightMenuActions(options: {
  * What a right-click on a drawing offers (spec 073).
  *
  * A **Game Master** may show it to the players or keep it to themselves, and
- * remove it. Nobody else is offered anything.
+ * remove it. A **player** may remove a drawing they made (spec 082), and
+ * never hide it: a player's drawing is always on every board. Anybody else's
+ * drawing offers a player nothing.
  */
 export function shapeMenuActions(options: {
   viewer: CanvasMenuViewer;
   shape: WorldShape;
 }): ShapeMenuAction[] {
   const { viewer, shape } = options;
-  if (!viewer.isGameMaster) return [];
+  if (!viewer.isGameMaster) {
+    const own = viewer.userId !== null && shape.createdBy === viewer.userId;
+    return own ? [{ kind: "shape-remove" }] : [];
+  }
   return [
     { kind: "shape-visibility", visible: !shape.visibleToPlayers },
     { kind: "shape-remove" },

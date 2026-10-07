@@ -102,8 +102,20 @@ describe("shapeMenuActions", () => {
     expect(labels(actions)[0]).toBe("Hide from players");
   });
 
-  it("offers a player nothing", () => {
+  it("offers a player nothing on a drawing that is not theirs", () => {
     expect(shapeMenuActions({ viewer: player, shape: shape() })).toEqual([]);
+    expect(
+      shapeMenuActions({ viewer: player, shape: shape({ createdBy: "gm" }) }),
+    ).toEqual([]);
+  });
+
+  it("offers a player their own drawing removed, but never hidden (spec 082)", () => {
+    expect(
+      shapeMenuActions({
+        viewer: player,
+        shape: shape({ createdBy: "player", visibleToPlayers: true }),
+      }),
+    ).toEqual([{ kind: "shape-remove" }]);
   });
 
   it("names a drawing for what it is", () => {

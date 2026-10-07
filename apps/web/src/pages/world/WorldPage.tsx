@@ -100,7 +100,7 @@ import {
   triggerDiceRollAnimation,
 } from "@/engine/bevy";
 import { useAuthoringTools } from "@/hooks/useAuthoringTools";
-import { permittedTools, reconcileOpenTool } from "@/lib/authoringTools";
+import { railTools, reconcileOpenTool } from "@/lib/authoringTools";
 import { usePlaceActorTokens } from "./usePlaceActorTokens";
 import {
   getPeerTransferState,
@@ -463,6 +463,18 @@ export default function WorldPage() {
   const effectiveGmToolId = reconcileOpenTool(openGmToolId, allowedTools);
 
   /**
+   * Whether this viewer has a rail at all. A Game Master always does; a
+   * player does once the server says which tools they hold, and by default
+   * that is Select and Shapes (spec 082).
+   */
+  const hasToolRail =
+    railTools(
+      GM_TOOL_IDS.map((toolId) => ({ id: toolId })),
+      allowedTools,
+      isSceneOwner,
+    ).length > 0;
+
+  /**
    * Tell the engine which tool is armed, whenever that changes.
    *
    * This state decides which flyout renders — that is chrome's business. It is
@@ -481,14 +493,13 @@ export default function WorldPage() {
    * on empty map only deselects.
    */
   useEffect(() => {
-    // Only a Game Master arms a tool. The rail itself is already gated on
-    // `isSceneOwner`, and every engine input system checks `IsGameMaster`
-    // independently — this is the third layer, and it is here because a mode
-    // request is a message chrome sends, and chrome should not be sending it
-    // on a player's behalf at all. Defence in depth, not the only defence.
-    if (!isSceneOwner) return;
+    // Only someone with a rail arms a tool: a Game Master, or a player once
+    // the server has said which tools they hold (spec 082). The engine
+    // refuses a mode outside that answer regardless, and the server refuses
+    // the write — this is the third layer, not the only one.
+    if (!hasToolRail) return;
     void setAuthoringMode(effectiveGmToolId ?? "select");
-  }, [isSceneOwner, effectiveGmToolId]);
+  }, [hasToolRail, effectiveGmToolId]);
 
   // Playtest 2026-09-10 P1: the actors pane's Place creates a token where it
   // is dropped. `selectedSceneId`, not `sceneId`: the alias is declared
@@ -990,7 +1001,7 @@ export default function WorldPage() {
         return;
       }
       if (
-        isSceneOwner &&
+        hasToolRail &&
         effectiveGmToolId !== null &&
         effectiveGmToolId !== "select"
       ) {
@@ -1002,7 +1013,7 @@ export default function WorldPage() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [playView, isSceneOwner, effectiveGmToolId, worldStore]);
+  }, [playView, hasToolRail, effectiveGmToolId, worldStore]);
 
   // Development-only introspection for the world store; see
   // `engine/world/probe.ts`. Compiled out of production builds.
@@ -1172,10 +1183,13 @@ export default function WorldPage() {
       return;
     }
 
-    void import("@/engine/bevy").then(({ setIsGameMaster }) =>
-      setIsGameMaster(isSceneOwner),
-    );
-  }, [engineReady, isSceneOwner]);
+    // Spec 082: and who is looking, so a player's board offers a handle
+    // only on the drawings they made.
+    void import("@/engine/bevy").then(({ setIsGameMaster, setViewerUser }) => {
+      setIsGameMaster(isSceneOwner);
+      setViewerUser(user?.id ?? null);
+    });
+  }, [engineReady, isSceneOwner, user?.id]);
 
   // Playtest 2026-09-10 P9: a player sees the board through their own token —
   // their primary one, else any they own — so walls hide what it cannot see.
@@ -3061,7 +3075,7 @@ export default function WorldPage() {
         <WorldLayout
           worldId={id}
           toolRail={
-            isSceneOwner && sceneId ? (
+            hasToolRail && sceneId ? (
               <GmToolRail
                 openToolId={effectiveGmToolId}
                 onOpenToolChange={setOpenGmToolId}
@@ -3069,7 +3083,7 @@ export default function WorldPage() {
                 // may not use is not offered. A greyed-out button still tells
                 // them the tool exists and invites them to ask why it does not
                 // work.
-                tools={permittedTools(
+                tools={railTools(
                   [
                     {
                       id: "select",
@@ -3132,6 +3146,7 @@ export default function WorldPage() {
                           selectedShapeId={worldState.selectedShapeId}
                           sceneId={sceneId}
                           canvasContainerRef={containerRef}
+                          isGm={isSceneOwner}
                         />
                       ),
                     },
@@ -3170,6 +3185,7 @@ export default function WorldPage() {
                     },
                   ],
                   allowedTools,
+                  isSceneOwner,
                 )}
               />
             ) : null

@@ -52,27 +52,27 @@ as named below.
 
 ### Server
 
-- [ ] T010 [US1] [US2] Tests `crates/thunderforge-server/src/graphql/mutations_shapes_tests.rs` (move the file's `mod tests` there, `#[path]`): a player creates a shape (`created_by` = player, `visible_to_players` true even when asked false); a player updates and deletes their own; a player's update on the GM's and on player B's shape errors and its delete answers `false`, rows and events unchanged; a player's update cannot set `visible_to_players` false; a revoked player's create is refused; a non-member is refused; the GM's paths unchanged; a paused scene refuses a player's create
-- [ ] T011 [US1] [US2] `createShape`, `updateShape`, `deleteShape` in `crates/thunderforge-server/src/graphql/mutations_shapes.rs` call `shape_authority` in place of `is_dm_of_scene`; `Creator` forces `visible_to_players` (R4); refusals keep today's answers
+- [x] T010 [US1] [US2] Tests `crates/thunderforge-server/src/graphql/mutations_shapes_tests.rs` (move the file's `mod tests` there, `#[path]`): a player creates a shape (`created_by` = player, `visible_to_players` true even when asked false); a player updates and deletes their own; a player's update on the GM's and on player B's shape errors and its delete answers `false`, rows and events unchanged; a player's update cannot set `visible_to_players` false; a revoked player's create is refused; a non-member is refused; the GM's paths unchanged; a paused scene refuses a player's create
+- [x] T011 [US1] [US2] `createShape`, `updateShape`, `deleteShape` in `crates/thunderforge-server/src/graphql/mutations_shapes.rs` call `shape_authority` in place of `is_dm_of_scene`; `Creator` forces `visible_to_players` (R4); refusals keep today's answers
 
 ### Engine
 
-- [ ] T011a [US2] Tests in `crates/thunderforge-engine/src/systems/shape_authority.rs` `mod tests`: `may_edit_shape` for a GM, the creator, another viewer, no viewer, a shape with no creator; a viewer whose allow list lacks `shapes` cannot enter the Shapes mode (`tool_is_allowed`)
-- [ ] T012 [US2] `crates/thunderforge-engine/src/systems/shape_authority.rs`: `may_edit_shape` (R7); replace the `IsGameMaster` gates in `systems/shape.rs` (`handle_shape_tool_selection`, `handle_shape_input`, `handle_shape_keyboard_toggles`, `handle_shape_undo`) and `plugins/context_menu.rs` as the table in contracts/engine-viewer.md says; hit-testing skips shapes the viewer may not edit; `sync_shape_visuals` keeps its GM tint
-- [ ] T013 [US2] `make lint` (host and wasm32) passes with the engine change
+- [x] T011a [US2] Tests in `crates/thunderforge-engine/src/systems/shape_authority.rs` `mod tests`: `may_edit_shape` for a GM, the creator, another viewer, no viewer, a shape with no creator; a viewer whose allow list lacks `shapes` cannot enter the Shapes mode (`tool_is_allowed`)
+- [x] T012 [US2] `crates/thunderforge-engine/src/systems/shape_authority.rs`: `may_edit_shape` (R7); replace the `IsGameMaster` gates in `systems/shape.rs` (`handle_shape_tool_selection`, `handle_shape_input`, `handle_shape_keyboard_toggles`, `handle_shape_undo`) and `plugins/context_menu.rs` as the table in contracts/engine-viewer.md says; hit-testing skips shapes the viewer may not edit; `sync_shape_visuals` keeps its GM tint. Also (contracts' "shape context menu" row): the web's `shapeMenuActions` offers a player Remove on their own drawing
+- [x] T013 [US2] `make lint` (host and wasm32) passes with the engine change
 
 ### Web
 
-- [ ] T014 [P] [US1] Tests in `apps/web/src/lib/__tests__/authoringTools.test.ts`: `railTools(tools, allowed, isOwner)`: an owner with `null` sees all; a non-owner with `null` sees none; a non-owner with `["select","shapes"]` sees those two
-- [ ] T015 [US1] `railTools` in `apps/web/src/lib/authoringTools.ts`; `WorldPage.tsx` renders `GmToolRail` when `sceneId` and `railTools(…)` is non-empty (around line 3064); Escape-to-Select for anyone with a rail (around line 993); `setViewerUser(user?.id ?? null)` in the effect at around line 1176; `AssetPasteTool` stays owner-only
-- [ ] T016 [US1] `ShapeTool.tsx` takes `isGm`; hides the visible-to-players toggle for a player (FR-015); `submitText` dispatches `create_shape` instead of calling `createShape` (FR-014)
-- [ ] T017 [US2] Tests in `apps/web/src/engine/world/sync/__tests__/shapeEventSync.test.ts`: a refused `update_shape` or `delete_shape` restores the shape as the store held it before the command
-- [ ] T018 [US2] Rollback in `startShapeMutationBridge` (`apps/web/src/engine/world/sync/shapes.ts`): cache the shape before sending, restore it with source `"sync"` on a refusal (an error, or `deleteShape` answering `false`)
+- [x] T014 [P] [US1] Tests in `apps/web/src/lib/__tests__/authoringTools.test.ts`: `railTools(tools, allowed, isOwner)`: an owner with `null` sees all; a non-owner with `null` sees none; a non-owner with `["select","shapes"]` sees those two
+- [x] T015 [US1] `railTools` in `apps/web/src/lib/authoringTools.ts`; `WorldPage.tsx` renders `GmToolRail` when `sceneId` and `railTools(…)` is non-empty (around line 3064); Escape-to-Select for anyone with a rail (around line 993); `setViewerUser(user?.id ?? null)` in the effect at around line 1176; `AssetPasteTool` stays owner-only
+- [x] T016 [US1] `ShapeTool.tsx` takes `isGm`; hides the visible-to-players toggle for a player (FR-015); `submitText` dispatches `create_shape` instead of calling `createShape` (FR-014)
+- [x] T017 [US2] Tests in `apps/web/src/engine/world/sync/__tests__/shapeEventSync.test.ts`: a refused `update_shape` or `delete_shape` restores the shape as the store held it before the command
+- [x] T018 [US2] Rollback in `startShapeMutationBridge` (`apps/web/src/engine/world/sync/shapes.ts`): cache the shape before sending, restore it with source `"sync"` on a refusal (an error, or `deleteShape` answering `false`)
 
 ### E2E
 
-- [ ] T019 [US1] [US2] `apps/web/e2e/canvas-shapes-by-players.spec.ts`, first tests: a GM and two players in three contexts, no grant rows; the player's rail shows exactly Select and Shapes; player A draws and both other boards show it, `shapes` answers `createdBy` = A; player A's direct `updateShape`/`deleteShape` on the GM's and B's shapes are refused and the rows are unchanged (SC-002); player A moves their own shape. Check whether `apps/web/e2e/map-editor-tooling.spec.ts` asserts a player has no rail and update it
-- [ ] T020 [US1] [US2] `pnpm e2e:canvas` green
+- [x] T019 [US1] [US2] `apps/web/e2e/canvas-shapes-by-players.spec.ts`, first tests: a GM and two players in three contexts, no grant rows; the player's rail shows exactly Select and Shapes; player A draws and both other boards show it, `shapes` answers `createdBy` = A; player A's direct `updateShape`/`deleteShape` on the GM's and B's shapes are refused and the rows are unchanged (SC-002); player A moves their own shape. Check whether `apps/web/e2e/map-editor-tooling.spec.ts` asserts a player has no rail and update it
+- [x] T020 [US1] [US2] `pnpm e2e:canvas` green — 2026-10-07: 22 passed, 1 skipped (`canvas-engine-stopped` panic test, release engine exports no `debug_panic`)
 
 **Checkpoint**: MVP. Players draw, and touch only their own.
 
@@ -80,7 +80,7 @@ as named below.
 
 ## Phase 4: US3 — the GM clears the board (P1)
 
-- [ ] T021 [US3] Tests in `crates/thunderforge-server/src/graphql/mutations_shapes_tests.rs`: `clearShapes` with no filter (every level), another scene untouched, one `deleted` event per shape in the same transaction, the count; as a player → `NotFound`, nothing deleted
+- [ ] T021 [US3] Tests in `crates/thunderforge-server/src/graphql/mutations_clear_shapes_tests.rs` (its own file, beside the mutation): `clearShapes` with no filter (every level), another scene untouched, one `deleted` event per shape in the same transaction, the count; as a player → `NotFound`, nothing deleted
 - [ ] T022 [US3] `clearShapes` in `crates/thunderforge-server/src/graphql/mutations_clear_shapes.rs` (R5), DM only via `shape_authority`, `refuse_scene_if_paused`; register it in the mutation root
 - [ ] T023 [US3] Add `clearShapes` to GATED in `crates/thunderforge-server/src/graphql/play_pause_surface_tables.rs`; regenerate `apps/thunderforge/schema.graphql` (`node scripts/check-graphql-contract.mjs --schema --fix`)
 - [ ] T024 [P] [US3] Tests in `shapeEventSync.test.ts`: `clear_shapes` sends `clearShapes(sceneId, createdBy)` and removes nothing locally; the `deleted` events remove the shapes

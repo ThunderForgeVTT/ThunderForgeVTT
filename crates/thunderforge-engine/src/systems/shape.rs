@@ -30,10 +30,12 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 use serde_json::{Value, json};
 
+use crate::plugins::authoring_mode::{AuthoringMode, tool_is_allowed};
 use crate::resources::{
     ActiveShapeTool, CanvasLayer, IsGameMaster, SelectedShape, Shape, ShapeEdit, ShapeKind,
-    ShapeSet,
+    ShapeSet, ViewerUserId,
 };
+use crate::systems::shape_authority::viewer_may_edit;
 use crate::{ActiveWorld, emit_event};
 
 /// Rendered height (px) of a stroke/line segment's thin sprite, same
@@ -244,13 +246,13 @@ fn shape_color(shape: &Shape, selected: bool) -> Color {
 
 /// T053: toolbar-driven tool selection via number keys 1-5 (Stroke, Rect,
 /// Ellipse, Line, Text respectively), Escape clears the active tool back
-/// to plain select/move mode. GM-only, same gating as wall input.
+/// to plain select/move mode. Anybody who holds the Shapes tool (spec 082:
+/// players do by default).
 pub(crate) fn handle_shape_tool_selection(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut active_tool: ResMut<ActiveShapeTool>,
-    is_gm: Res<IsGameMaster>,
 ) {
-    if !is_gm.0 {
+    if !tool_is_allowed(AuthoringMode::Shapes) {
         return;
     }
 
@@ -270,7 +272,9 @@ pub(crate) fn handle_shape_tool_selection(
 }
 
 /// T053: click-drag to draw with the active tool, or (with no active tool)
-/// click to select and drag to move an existing shape. GM-only. A
+/// click to select and drag to move an existing shape. Anybody holding the
+/// Shapes tool draws; only a drawing the viewer may edit
+/// (`shape_authority::may_edit_shape`) is selected or moved. A
 /// press-and-release without meaningfully dragging/moving is rejected for
 /// draw-tools (mirrors wall's T016 zero-length rejection); a plain click
 /// with no tool active still selects the shape under the cursor.
@@ -283,9 +287,10 @@ pub(crate) fn handle_shape_input(
     active_tool: Res<ActiveShapeTool>,
     mut drag: ResMut<ShapeDragState>,
     is_gm: Res<IsGameMaster>,
+    viewer: Option<Res<ViewerUserId>>,
     active_world: Res<ActiveWorld>,
 ) {
-    if !is_gm.0 {
+    if !tool_is_allowed(AuthoringMode::Shapes) {
         return;
     }
 
@@ -324,9 +329,12 @@ pub(crate) fn handle_shape_input(
         }
 
         // No active tool: select-by-click, or start a move-drag if the
-        // click lands on the already-selected shape.
+        // click lands on the already-selected shape. A drawing this viewer
+        // may not edit is not there as far as the click is concerned.
         for shape in shape_set.shapes() {
-            if cursor.distance(shape_anchor(shape)) <= SHAPE_SELECT_DISTANCE {
+            if cursor.distance(shape_anchor(shape)) <= SHAPE_SELECT_DISTANCE
+                && viewer_may_edit(&is_gm, viewer.as_deref(), shape)
+            {
                 selected_shape.select(shape.id.clone());
                 emit_shape_selection(Some(&shape.id));
                 drag.mode = ShapeDragMode::Moving {
@@ -442,7 +450,8 @@ pub(crate) fn handle_shape_input(
 }
 
 /// T053: keybound restyle (palette cycle) and Delete/Backspace to remove
-/// the selected shape. GM-only, same gating as `handle_shape_input`.
+/// the selected shape, when the viewer may edit it. The visibility toggle is
+/// a Game Master's alone: a player's drawing is always on every board.
 ///
 /// Keybinds (chosen to avoid existing bindings — `lib.rs`/`plugins/camera.rs`
 /// and `systems/wall.rs`'s `V`/`B`/`O`):
@@ -454,15 +463,18 @@ pub(crate) fn handle_shape_keyboard_toggles(
     mut shape_set: ResMut<ShapeSet>,
     mut selected_shape: ResMut<SelectedShape>,
     is_gm: Res<IsGameMaster>,
+    viewer: Option<Res<ViewerUserId>>,
     active_world: Res<ActiveWorld>,
 ) {
-    if !is_gm.0 {
-        return;
-    }
-
     let Some(shape_id) = selected_shape.get_selected().cloned() else {
         return;
     };
+    let editable = shape_set
+        .get(&shape_id)
+        .is_some_and(|shape| viewer_may_edit(&is_gm, viewer.as_deref(), shape));
+    if !editable {
+        return;
+    }
 
     if keyboard.just_pressed(KeyCode::KeyC) {
         if let Some(shape) = shape_set.get(&shape_id).cloned() {
@@ -491,7 +503,7 @@ pub(crate) fn handle_shape_keyboard_toggles(
         return;
     }
 
-    if keyboard.just_pressed(KeyCode::KeyP) {
+    if keyboard.just_pressed(KeyCode::KeyP) && is_gm.0 {
         if let Some(shape) = shape_set.get(&shape_id).cloned() {
             let prior_visible_to_players = shape.visible_to_players;
             let mut updated = shape;
@@ -533,10 +545,11 @@ pub(crate) fn handle_shape_keyboard_toggles(
 pub(crate) fn handle_shape_undo(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut shape_set: ResMut<ShapeSet>,
-    is_gm: Res<IsGameMaster>,
     active_world: Res<ActiveWorld>,
 ) {
-    if !is_gm.0 {
+    // The stack holds only this viewer's own edits, so holding the tool is
+    // the whole check.
+    if !tool_is_allowed(AuthoringMode::Shapes) {
         return;
     }
 

@@ -45,6 +45,7 @@ pub mod optimistic;
 pub mod presence;
 pub mod selection;
 pub mod shape;
+pub mod shape_authority;
 pub mod sync;
 pub mod token;
 pub mod token_grid;

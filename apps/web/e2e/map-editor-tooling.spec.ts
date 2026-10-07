@@ -545,7 +545,7 @@ test.describe("Non-GM player sees no authoring controls (US1, T006)", () => {
   // same-account second session can make — is finally reachable.
   test.describe.configure({ timeout: 120_000 });
 
-  test("a joined non-owner player never sees wall/shape authoring tools, only their effects", async ({
+  test("a joined non-owner player never sees the GM's authoring tools, only their effects", async ({
     browser,
   }) => {
     const gmContext = await browser.newContext();
@@ -593,20 +593,21 @@ test.describe("Non-GM player sees no authoring controls (US1, T006)", () => {
     await player.goto(`/world/${worldId}/play`);
     await expect(player.locator("canvas")).toBeVisible({ timeout: 60_000 });
 
-    await expect(
-      player.getByTestId("gm-tool-rail"),
-      "a player must not be offered the GM tool rail",
-    ).toHaveCount(0);
+    // Spec 082: a player holds Select and Shapes by default, so a player
+    // has a rail — with those two and nothing the Game Master authors.
+    await expect(player.getByTestId("gm-tool-rail")).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(player.getByTestId("gm-tool-select")).toBeVisible();
+    await expect(player.getByTestId("gm-tool-shapes")).toBeVisible();
     await expect(player.getByTestId("wall-tool")).toHaveCount(0);
 
-    // Not merely hidden behind a closed rail: the panels themselves are
-    // absent, which is what `WorldPage.tsx`'s `isSceneOwner` gate does.
-    for (const tool of [
-      "lighting-tool",
-      "shape-tool",
-      "token-tool",
-      "interaction-tool",
-    ]) {
+    // Not merely hidden behind a closed rail: the buttons and panels are
+    // absent, which is what `railTools` in `WorldPage.tsx` does.
+    for (const tool of ["walls", "lights", "tokens", "interactions"]) {
+      await expect(player.getByTestId(`gm-tool-${tool}`)).toHaveCount(0);
+    }
+    for (const tool of ["lighting-tool", "token-tool", "interaction-tool"]) {
       await expect(player.getByTestId(tool)).toHaveCount(0);
     }
 

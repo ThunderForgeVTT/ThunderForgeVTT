@@ -217,6 +217,18 @@ export function startShapeMutationBridge(
   worldStore: WorldStore,
   sceneId: string,
 ): () => void {
+  /**
+   * Put a drawing back as the store held it before a refused edit (spec 082
+   * FR-006). The engine moves or removes a drawing as soon as it is touched;
+   * a player's edit of somebody else's drawing is refused by the server, and
+   * the board must not go on showing the refused version.
+   */
+  const restore = (before: WorldShape | undefined) => {
+    if (before) {
+      worldStore.dispatch({ type: "upsert_shape", shape: before }, "sync");
+    }
+  };
+
   const unsubscribe = worldStore.subscribe((event) => {
     // Avoid reacting to our own confirmed dispatches.
     if (event.source === "sync") {
@@ -249,6 +261,7 @@ export function startShapeMutationBridge(
 
     if (command.type === "update_shape") {
       const { shapeId, changes } = command;
+      const before = worldStore.getState().shapes[shapeId];
       void updateShape(shapeId, {
         geometry: changes.geometry,
         text: changes.text ?? undefined,
@@ -263,20 +276,26 @@ export function startShapeMutationBridge(
         })
         .catch((error) => {
           console.error("Failed to update shape:", error);
+          restore(before);
         });
       return;
     }
 
     if (command.type === "delete_shape") {
       const { shapeId } = command;
+      const before = worldStore.getState().shapes[shapeId];
       void deleteShape(shapeId)
         .then((ok) => {
           if (ok) {
             worldStore.dispatch({ type: "remove_shape", shapeId }, "sync");
+          } else {
+            // The server's "no" to a delete is `false`, not an error.
+            restore(before);
           }
         })
         .catch((error) => {
           console.error("Failed to delete shape:", error);
+          restore(before);
         });
     }
   });

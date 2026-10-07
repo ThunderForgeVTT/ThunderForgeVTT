@@ -31,6 +31,23 @@ export function permittedTools<T extends { id: GmToolId }>(
 }
 
 /**
+ * The rail this viewer is offered (spec 082).
+ *
+ * A player holds Select and Shapes by default, so a player has a rail too.
+ * Before the answer arrives an owner keeps the whole rail, for the reason
+ * `ResolvedTools` gives; a player gets nothing yet, because the owner's rail
+ * would offer tools a player does not hold.
+ */
+export function railTools<T extends { id: GmToolId }>(
+  tools: readonly T[],
+  allowed: ResolvedTools,
+  isOwner: boolean,
+): T[] {
+  if (allowed === null && !isOwner) return [];
+  return permittedTools(tools, allowed);
+}
+
+/**
  * Which tool the rail should have open, given what the viewer may use.
  *
  * A tool that has just been taken away must not stay open — the flyout would

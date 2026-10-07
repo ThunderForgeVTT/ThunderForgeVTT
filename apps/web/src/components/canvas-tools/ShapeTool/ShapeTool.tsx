@@ -4,7 +4,6 @@ import { Panel } from "@/components/ui/panel/Panel";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { createShape } from "@/api/shapes";
 import { getCameraState, setActiveShapeTool } from "@/engine/bevy";
 import { screenToWorld } from "@/engine/bevy/screenToWorld";
 import type { WorldStore } from "@/engine/world/store";
@@ -25,6 +24,12 @@ export interface ShapeToolProps {
    * line) draw entirely engine-side, exactly like WallTool's draw mode.
    */
   canvasContainerRef?: RefObject<HTMLDivElement | null>;
+  /**
+   * Whether the viewer is the Game Master. Only a Game Master hides a
+   * drawing from the players; a player's drawing is always on every board
+   * (spec 082 FR-015), so a player is not offered the toggle.
+   */
+  isGm?: boolean;
 }
 
 type DrawTool = "none" | "freehand" | "rect" | "ellipse" | "line" | "text";
@@ -63,9 +68,10 @@ type TextPlacement = {
  * small style panel for the currently selected shape (color, "visible to
  * players" toggle), per specs/001-bevy-canvas-authoring T059.
  *
- * GM-only: the caller (WorldPage) is responsible for only rendering this
- * component for the scene owner (FR-009 — players never see authoring
- * tools), exactly like WallTool's gating.
+ * The Game Master and any player holding the Shapes tool see it (spec 082);
+ * WorldPage renders it from the viewer's rail. A player edits only their own
+ * drawings — the engine offers no handle on anybody else's, and the server
+ * refuses the write regardless.
  *
  * Drawing itself (freehand strokes, rect/ellipse/line click-drag) is
  * implemented engine-side (Bevy): selecting a sub-tool here only signals
@@ -74,8 +80,8 @@ type TextPlacement = {
  * mode toggle. The text tool is the one exception: since the engine
  * doesn't handle in-canvas text input, this component itself listens for
  * a click on the canvas container while "text" is active, and dispatches
- * the create_shape (kind TEXT) mutation directly rather than waiting on
- * an engine-emitted event.
+ * `create_shape` (kind text) into the store itself rather than waiting on
+ * an engine-emitted event; the shape bridge sends it (spec 082 FR-014).
  */
 export function ShapeTool({
   worldStore,
@@ -83,6 +89,7 @@ export function ShapeTool({
   selectedShapeId,
   sceneId,
   canvasContainerRef,
+  isGm = false,
 }: ShapeToolProps) {
   const [activeTool, setActiveTool] = useState<DrawTool>("none");
   const [textPlacement, setTextPlacement] = useState<TextPlacement | null>(
@@ -90,7 +97,6 @@ export function ShapeTool({
   );
   const [textValue, setTextValue] = useState("");
   const [textVisibleToPlayers, setTextVisibleToPlayers] = useState(false);
-  const [textSubmitting, setTextSubmitting] = useState(false);
 
   const selectedShape = selectedShapeId ? shapes[selectedShapeId] : null;
 
@@ -174,41 +180,30 @@ export function ShapeTool({
       return;
     }
 
-    setTextSubmitting(true);
-    void createShape({
-      sceneId,
-      kind: "TEXT",
-      geometry: { x: textPlacement.x, y: textPlacement.y },
-      text: textValue.trim(),
-      visibleToPlayers: textVisibleToPlayers,
-    })
-      .then((created) => {
-        worldStore.dispatch(
-          {
-            type: "upsert_shape",
-            shape: {
-              id: created.shapeId,
-              sceneId: created.sceneId,
-              kind: "text",
-              geometry: created.geometry,
-              text: created.text,
-              style: created.style,
-              visibleToPlayers: created.visibleToPlayers,
-              createdBy: created.createdBy ?? null,
-            },
-          },
-          "sync",
-        );
-      })
-      .catch((error) => {
-        console.error("Failed to create text shape:", error);
-      })
-      .finally(() => {
-        setTextSubmitting(false);
-        setTextPlacement(null);
-        setTextValue("");
-      });
-  }, [sceneId, textPlacement, textValue, textVisibleToPlayers, worldStore]);
+    // Into the store like every other drawing: the shape bridge sends the
+    // mutation and the confirmed shape comes back as `upsert_shape`.
+    worldStore.dispatch(
+      {
+        type: "create_shape",
+        shape: {
+          kind: "text",
+          geometry: { x: textPlacement.x, y: textPlacement.y },
+          text: textValue.trim(),
+          visibleToPlayers: isGm ? textVisibleToPlayers : true,
+        },
+      },
+      "ui",
+    );
+    setTextPlacement(null);
+    setTextValue("");
+  }, [
+    isGm,
+    sceneId,
+    textPlacement,
+    textValue,
+    textVisibleToPlayers,
+    worldStore,
+  ]);
 
   const updateSelectedShape = useCallback(
     (changes: Partial<Pick<WorldShape, "visibleToPlayers" | "style">>) => {
@@ -294,24 +289,26 @@ export function ShapeTool({
             placeholder="Enter label text"
             autoFocus
           />
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="shape-text-visible"
-              checked={textVisibleToPlayers}
-              onCheckedChange={(checked) =>
-                setTextVisibleToPlayers(checked === true)
-              }
-            />
-            <Label htmlFor="shape-text-visible">Visible to players</Label>
-          </div>
+          {isGm ? (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="shape-text-visible"
+                checked={textVisibleToPlayers}
+                onCheckedChange={(checked) =>
+                  setTextVisibleToPlayers(checked === true)
+                }
+              />
+              <Label htmlFor="shape-text-visible">Visible to players</Label>
+            </div>
+          ) : null}
           <div className="flex gap-2">
             <Button
               type="button"
               variant="primary"
               onClick={submitText}
-              disabled={textSubmitting || !textValue.trim()}
+              disabled={!textValue.trim()}
             >
-              {textSubmitting ? "Adding..." : "Add text"}
+              Add text
             </Button>
             <Button
               type="button"
@@ -356,16 +353,20 @@ export function ShapeTool({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="shape-visible-to-players"
-              checked={selectedShape.visibleToPlayers}
-              onCheckedChange={(checked) =>
-                updateSelectedShape({ visibleToPlayers: checked === true })
-              }
-            />
-            <Label htmlFor="shape-visible-to-players">Visible to players</Label>
-          </div>
+          {isGm ? (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="shape-visible-to-players"
+                checked={selectedShape.visibleToPlayers}
+                onCheckedChange={(checked) =>
+                  updateSelectedShape({ visibleToPlayers: checked === true })
+                }
+              />
+              <Label htmlFor="shape-visible-to-players">
+                Visible to players
+              </Label>
+            </div>
+          ) : null}
 
           <Button
             type="button"

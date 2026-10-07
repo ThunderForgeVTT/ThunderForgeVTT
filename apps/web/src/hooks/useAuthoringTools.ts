@@ -21,9 +21,10 @@ import type { ResolvedTools } from "@/lib/authoringTools";
  * *offered*.
  *
  * The engine is left unrestricted for the moment before the answer arrives,
- * which is safe only because it is not the sole gate either: every authoring
- * input system still checks `IsGameMaster`, so the window cannot hand a player
- * a tool. It exists so a Game Master's rail does not flicker on every load.
+ * which is safe only because it is not the sole gate either: the server
+ * refuses the write, a player has no rail until the answer arrives
+ * (`railTools`), and the engine offers a player a handle only on their own
+ * drawings. It exists so a Game Master's rail does not flicker on every load.
  */
 export function useAuthoringTools(worldId: string): ResolvedTools {
   const [allowed, setAllowed] = useState<ResolvedTools>(null);
