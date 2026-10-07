@@ -265,6 +265,10 @@ pub const EVENT_CODE_ROLL_MADE: i32 = 36;
 /// Spec 081: the GM showed a hidden roll to the table. Same payload, with the
 /// roll's original visibility; every member refetches and animates it.
 pub const EVENT_CODE_ROLL_REVEALED: i32 = 37;
+/// Spec 082: a Game Master gave a player an authoring tool or took one
+/// away. The player's rail re-reads `authoringTools` on it, so a revoked
+/// tool goes without a reload (SC-005). Payload: `{"userId": <the player>}`.
+pub const EVENT_CODE_AUTHORING_TOOLS_CHANGED: i32 = 38;
 
 /// The whole payload of a roll event (FR-002).
 pub fn roll_event_payload(

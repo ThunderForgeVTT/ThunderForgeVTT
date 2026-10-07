@@ -146,8 +146,9 @@ export function AuthoringToolGrantsCard({
       <div>
         <h3 className="text-lg font-semibold">Player authoring tools</h3>
         <p className="text-sm text-muted-foreground">
-          By default only you author the map. Give a player a tool here and it
-          appears in their rail; take it back and it stops working for them
+          Players select and draw by default; everything else on the map is
+          yours. Give a player a tool here and it appears in their rail; take
+          one away, Select and Shapes included, and it stops working for them
           immediately.
         </p>
       </div>

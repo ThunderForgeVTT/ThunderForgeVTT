@@ -224,3 +224,15 @@ The handlers move to `apps/demo/src/backend/handlers/shapes.ts` with a
 - **Rollback**: the shape mutation bridge logs a refused update or delete
   and does nothing else, so a refused move stays on the mover's board. It
   now restores the shape from the server on a refusal (AGENTS.md §4).
+
+## R12. The rail hears a revocation (found while implementing)
+
+**Decision**: `setAuthoringToolGrant` records `EVENT_CODE_AUTHORING_TOOLS_CHANGED`
+(38) with `{"userId": <the player>}` in the same transaction as the write.
+`useAuthoringTools` watches the world's events and asks `authoringTools`
+again when one arrives.
+
+**Why**: SC-005 needs a revoked tool to leave the player's rail without a
+reload. The plan had nothing to carry the change: the rail asked once, on
+mount, and a grant change wrote no event. The event says only whose tools
+changed, as the settings event does, and each client asks for its own.

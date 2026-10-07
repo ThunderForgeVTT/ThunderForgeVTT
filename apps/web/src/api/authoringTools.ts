@@ -1,4 +1,5 @@
 import { postGraphQL } from "./graphqlClient";
+import { subscribeToWorldEvents } from "@/engine/world/sync";
 import {
   GM_TOOL_IDS,
   type GmToolId,
@@ -42,13 +43,14 @@ export async function getAuthoringTools(worldId: string): Promise<GmToolId[]> {
 }
 
 /**
- * What one member of a world has been *granted*, for the Game Master looking
- * at the toggles (spec 031 FR-046).
+ * The tools one member of a world may use, for the Game Master looking at
+ * the toggles (spec 031 FR-046).
  *
  * Not the same question as `getAuthoringTools`, which answers "what may I
- * use" and folds in a Game Master's implicit everything. A member absent from
- * this list holds nothing, which is the server's default (FR-045) rather than
- * a gap in the response.
+ * use" for the caller. Each list is the member's effective tools: since spec
+ * 082 a player holds Select and Shapes until a Game Master takes them away,
+ * so a member with no grant rows reads as those two, not as nothing. Every
+ * member who does not run the world is listed.
  */
 export interface MemberAuthoringTools {
   worldMemberId: string;
@@ -88,8 +90,9 @@ export async function getAuthoringToolGrants(
 }
 
 /**
- * Grant or revoke one tool for one member. Returns that member's grants after
- * the write — the table's answer, not the click's.
+ * Grant or revoke one tool for one member. Returns the tools that member may
+ * use after the write — the table's answer, not the click's. Revoking Select
+ * or Shapes, which a player holds by default, records that it was taken away.
  *
  * The refusal lives on the server (`is_dm_of_world`), per Constitution
  * Principle III; hiding this card from a player is chrome, and a player
@@ -114,4 +117,46 @@ export async function setAuthoringToolGrant(input: {
   );
 
   return (payload?.setAuthoringToolGrant ?? []).filter(isGmToolId);
+}
+
+/** The server's code for "a player's authoring tools changed" (spec 082). */
+export const AUTHORING_TOOLS_CHANGED = 38;
+
+/**
+ * Call `onChanged` whenever a Game Master gives or takes away a player's
+ * tool in this world. Returns the function that stops watching.
+ *
+ * The event says only whose tools changed; the listener asks again, and the
+ * server answers for the caller (SC-005). The stream never routes the page on
+ * a pause, which is the play view's own subscription's job.
+ */
+export function watchAuthoringTools(
+  worldId: string,
+  onChanged: () => void,
+): () => void {
+  const iterator = subscribeToWorldEvents(worldId, { announcePause: false })[
+    Symbol.asyncIterator
+  ]();
+  let stopped = false;
+
+  void (async () => {
+    try {
+      while (!stopped) {
+        const { value: event, done } = await iterator.next();
+        if (done || stopped || !event) {
+          break;
+        }
+        if ((event.event_code ?? event.eventCode) === AUTHORING_TOOLS_CHANGED) {
+          onChanged();
+        }
+      }
+    } catch (error) {
+      console.error("Authoring tools sync error:", error);
+    }
+  })();
+
+  return () => {
+    stopped = true;
+    void iterator.return?.();
+  };
 }

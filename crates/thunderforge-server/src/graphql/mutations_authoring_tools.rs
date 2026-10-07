@@ -36,6 +36,7 @@ use crate::models::{NewWorldAuthoringToolGrant, NewWorldAuthoringToolRevocation}
 use crate::play_pause::gate::refuse_if_paused;
 use crate::schema::{world_authoring_tool_grants, world_authoring_tool_revocations, world_members};
 use crate::state::AppState;
+use crate::world_events::{EVENT_CODE_AUTHORING_TOOLS_CHANGED, record_world_event};
 
 /// What this membership may use, in declaration order: spec 082's defaults
 /// less what was revoked, plus what was granted.
@@ -97,11 +98,11 @@ pub async fn set_authoring_tool_grant_impl(
             // Game Master of one world edit a membership of another simply by
             // naming it, since the DM check above is about `world_id` and this
             // row is the only thing that ties the two together.
-            let member_id = world_members::table
+            let (member_id, member_user_id) = world_members::table
                 .filter(world_members::id.eq(world_member_id))
                 .filter(world_members::world_id.eq(world_id))
-                .select(world_members::id)
-                .first::<Uuid>(conn)?;
+                .select((world_members::id, world_members::user_id))
+                .first::<(Uuid, Uuid)>(conn)?;
 
             // Spec 082: a default tool is held until revoked, so taking it
             // away writes a revocation and handing it back deletes one. The
@@ -162,6 +163,17 @@ pub async fn set_authoring_tool_grant_impl(
                     .execute(conn)?;
                 }
             }
+
+            // Spec 082 SC-005: the player's rail re-asks on this, so a tool
+            // taken away goes without a reload.
+            record_world_event(
+                conn,
+                world_id,
+                EVENT_CODE_AUTHORING_TOOLS_CHANGED,
+                Some(serde_json::json!({ "userId": member_user_id })),
+                caller_id,
+            )
+            .map_err(|_| diesel::result::Error::RollbackTransaction)?;
 
             member_tools(conn, member_id)
         })
@@ -591,6 +603,47 @@ mod tests {
             .expect("count");
         assert_eq!(left, 0, "handing a default back deletes its revocation");
         assert!(rows_for(&mut conn, member_id).is_empty());
+    }
+
+    /// Spec 082 SC-005: every change is told to the world, naming whose tools
+    /// changed, so that player's rail re-asks without a reload.
+    #[tokio::test]
+    async fn a_change_tells_the_world_whose_tools_changed() {
+        use crate::schema::world_events;
+        use crate::world_events::EVENT_CODE_AUTHORING_TOOLS_CHANGED;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let player_id = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, player_id, "Player");
+        let member_id = member_id_of(&mut conn, world_id, player_id);
+        drop(conn);
+
+        for granted in [false, true] {
+            set_authoring_tool_grant_impl(
+                &state,
+                owner_id,
+                false,
+                world_id,
+                member_id,
+                "shapes".to_string(),
+                granted,
+            )
+            .await
+            .expect("write");
+        }
+
+        let mut conn = state.db_pool.get().unwrap();
+        let told = world_events::table
+            .filter(world_events::world_id.eq(world_id))
+            .filter(world_events::event_code.eq(EVENT_CODE_AUTHORING_TOOLS_CHANGED))
+            .select(world_events::token_event)
+            .load::<Option<serde_json::Value>>(&mut conn)
+            .expect("events");
+        let who = serde_json::json!({ "userId": player_id });
+        assert_eq!(told, vec![Some(who.clone()), Some(who)]);
     }
 
     /// Granting twice is one row, not two — the settings page's toggle is a

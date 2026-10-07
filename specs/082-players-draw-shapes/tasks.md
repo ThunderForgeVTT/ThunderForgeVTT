@@ -103,7 +103,7 @@ as named below.
 
 - [x] T032 [US5] (done with Phase 2: the defaults broke these tests, so they moved with it) Tests in `crates/thunderforge-server/src/graphql/mutations_authoring_tools.rs` `mod tests`: `granted: false` for `shapes` writes a revocation and the answer drops it; `granted: true` removes it; a non-default tool behaves as today; `authoringToolGrants` lists every non-DM member with effective tools (a member with no rows shows Select and Shapes); update the existing asserts around lines 260, 313 and 458
 - [x] T033 [US5] `set_authoring_tool_grant_impl` writes revocations for a default tool (data-model.md table) and answers effective tools; `authoringToolGrants` in `queries/authoring_tools.rs` answers effective tools per member
-- [ ] T034 [US5] `AuthoringToolGrantsCard.tsx` reads the effective lists; intro text says players select and draw by default; update the doc comment in `apps/web/src/api/authoringTools.ts`
+- [x] T034 [US5] `AuthoringToolGrantsCard.tsx` reads the effective lists; intro text says players select and draw by default; update the doc comment in `apps/web/src/api/authoringTools.ts`. Also (R12, found while implementing): `setAuthoringToolGrant` records event 38 and `useAuthoringTools` re-asks on it, which SC-005 needs and no task carried
 - [ ] T035 [US5] E2E: the GM unticks Shapes; the player's rail drops it without a reload and their `createShape` is refused; ticking it again restores both, and the shapes they drew earlier are untouched
 
 ---

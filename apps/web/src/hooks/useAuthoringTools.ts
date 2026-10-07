@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getAuthoringTools } from "@/api/authoringTools";
+import { getAuthoringTools, watchAuthoringTools } from "@/api/authoringTools";
 import {
   clearAllowedAuthoringTools,
   setAllowedAuthoringTools,
@@ -32,7 +32,7 @@ export function useAuthoringTools(worldId: string): ResolvedTools {
   useEffect(() => {
     let cancelled = false;
 
-    void (async () => {
+    const ask = async () => {
       try {
         const tools = await getAuthoringTools(worldId);
         if (cancelled) return;
@@ -55,10 +55,17 @@ export function useAuthoringTools(worldId: string): ResolvedTools {
         // The engine keeps whatever it was last told, and the server refuses
         // the write regardless.
       }
-    })();
+    };
+
+    void ask();
+    // Spec 082 SC-005: a Game Master giving or taking a tool tells the
+    // world, and the rail asks again, so a revoked tool goes without a
+    // reload.
+    const stopWatching = watchAuthoringTools(worldId, () => void ask());
 
     return () => {
       cancelled = true;
+      stopWatching();
     };
   }, [worldId]);
 

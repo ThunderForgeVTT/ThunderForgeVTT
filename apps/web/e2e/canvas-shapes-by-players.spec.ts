@@ -421,3 +421,100 @@ test("the GM clears one player's drawings, and the rest stay", async ({
     await playerB.context().close();
   }
 });
+
+test("the GM takes Shapes away and gives it back, without a reload", async ({
+  page: gm,
+  browser,
+}) => {
+  test.setTimeout(6 * 60_000);
+
+  const worldId = await registerAndCreateWorld(
+    gm,
+    `Take the pen ${uniqueSuffix()}`,
+  );
+  const active = await gql<{ world?: { activeSceneId: string | null } }>(
+    gm,
+    `query ($id: UUID!) { world(id: $id) { activeSceneId } }`,
+    { id: worldId },
+  );
+  const [firstScene] = await sceneIds(gm, worldId);
+  const sceneId = active.world?.activeSceneId ?? firstScene;
+
+  const player = await inviteAndJoinAsPlayer(browser, gm, worldId, "e2etake");
+
+  try {
+    const playerId = await userIdOf(player);
+    const members = await gql<{
+      worldMembers: { id: string; userId: string }[];
+    }>(
+      gm,
+      `query ($worldId: UUID!) { worldMembers(worldId: $worldId) { id userId } }`,
+      { worldId },
+    );
+    const memberId = members.worldMembers.find(
+      (member) => member.userId === playerId,
+    )?.id;
+    expect(memberId, "the player is a member").toBeTruthy();
+
+    await player.goto(`/world/${worldId}/play`);
+    await waitForEngineReady(player);
+    const earlier = await drawRect(player, sceneId, {
+      x: 0,
+      y: 0,
+      w: 40,
+      h: 40,
+    });
+    await expect(player.getByTestId("gm-tool-shapes")).toBeVisible();
+
+    await gm.goto(`/world/${worldId}/settings/system`);
+    const toggle = gm.getByTestId(`authoring-tool-toggle-${memberId}-shapes`);
+    await expect(gm.getByTestId("authoring-tool-grants-card")).toContainText(
+      "Players select and draw by default",
+    );
+    await expect(toggle).toBeChecked();
+
+    await test.step("unticking Shapes takes it from the rail and the server", async () => {
+      await toggle.uncheck();
+      await expect(toggle).not.toBeChecked();
+      await expect(toggle).toBeEnabled();
+      await expect(player.getByTestId("gm-tool-shapes")).toHaveCount(0, {
+        timeout: 15_000,
+      });
+      const refused = await graphql<Answer<unknown>>(
+        player,
+        `
+          mutation ($input: GraphQLCreateShapeInput!) {
+            createShape(input: $input) {
+              shapeId
+            }
+          }
+        `,
+        {
+          input: {
+            sceneId,
+            kind: "RECT",
+            geometry: { x: 80, y: 0, w: 40, h: 40 },
+            visibleToPlayers: true,
+          },
+        },
+      );
+      expect(refused.errors?.length ?? 0, "drawing is refused").toBe(1);
+    });
+
+    await test.step("ticking it again gives both back, and the old drawing stands", async () => {
+      await toggle.check();
+      await expect(toggle).toBeChecked();
+      await expect(player.getByTestId("gm-tool-shapes")).toBeVisible({
+        timeout: 15_000,
+      });
+      await drawRect(player, sceneId, { x: 80, y: 0, w: 40, h: 40 });
+      const shapes = await shapesOf(gm, sceneId);
+      const kept = shapes.find((shape) => shape.shapeId === earlier);
+      expect(kept?.geometry).toEqual({ x: 0, y: 0, w: 40, h: 40 });
+      expect(kept?.createdBy).toBe(playerId);
+      expect(shapes).toHaveLength(2);
+    });
+  } finally {
+    await player.context().close();
+  }
+});
