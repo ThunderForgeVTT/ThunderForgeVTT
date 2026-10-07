@@ -7,12 +7,13 @@
  * be one (`AGENTS.md`; spec 074 FR-012): this is one object, written to the
  * browser's own storage as JSON by the few lines at the bottom.
  */
+import type { ArtAsset } from "../seed/art";
 import { buildSeed, type MapListing, type Viewer } from "../seed/world";
 
 export type Row = Record<string, unknown>;
 
 export interface DemoState {
-  version: 3;
+  version: 4;
   world: Row & { id: string; activeSceneId: string | null };
   scenes: Row[];
   levels: Row[];
@@ -32,11 +33,13 @@ export interface DemoState {
   claimedActorId: string | null;
   /** Background asset id → the static file under `maps/` that is its bytes. */
   assets: Record<string, { file: string; byteSize: number }>;
+  /** Actor art asset id → the spec that draws it (`seed/art.ts`). */
+  art: Record<string, ArtAsset>;
   nextEventId: number;
 }
 
 /** Versioned, so a later shape of the world does not read an earlier one. */
-const STORAGE_KEY = "thunderforge-demo:v3";
+const STORAGE_KEY = "thunderforge-demo:v4";
 const SAVE_AFTER_MS = 250;
 
 let state: DemoState | null = null;
@@ -55,7 +58,7 @@ function readSaved(): DemoState | null {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const saved = JSON.parse(raw) as DemoState;
-    return saved.version === 3 ? saved : null;
+    return saved.version === 4 ? saved : null;
   } catch {
     // Storage that cannot be read is the same as storage with nothing in it.
     return null;

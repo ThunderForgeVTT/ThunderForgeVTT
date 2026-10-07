@@ -11,6 +11,7 @@
 import world from "../../world.json";
 import { MAP_CREDIT_LINE } from "../credit";
 import type { DemoState, Row } from "../backend/state";
+import { artUrl, tokenPhotoUrl, type ArtRole } from "./art";
 import { CAST, slotRows } from "./cast";
 
 /** One map as `thunderforge-demo-maps` lists it. */
@@ -128,7 +129,7 @@ export function buildSeed(maps: MapListing[], base: string): DemoState {
   const stamp = { createdAt: SEEDED_AT, updatedAt: SEEDED_AT };
   const by = { createdBy: DEMO_USER.id, updatedBy: DEMO_USER.id };
   const state: DemoState = {
-    version: 3,
+    version: 4,
     world: {
       id: DEMO_WORLD_ID,
       name: "A World To Try",
@@ -163,6 +164,7 @@ export function buildSeed(maps: MapListing[], base: string): DemoState {
     actors: [],
     systemData: [],
     assets: {},
+    art: {},
     viewer: "gm",
     claimedActorId: null,
     nextEventId: 1,
@@ -174,6 +176,22 @@ export function buildSeed(maps: MapListing[], base: string): DemoState {
   CAST.forEach((member, index) => {
     const actorId = seedId(9, index + 1);
     const owner = member.isNpc ? DEMO_USER.id : DEMO_PLAYER.id;
+    // Spec 044: a token and a portrait, as the hero builder would have saved
+    // them. The token's art is what the engine draws on the board.
+    const roles: ArtRole[] = ["token", "portrait"];
+    const images = roles.map((role, r) => {
+      const assetId = seedId(11 + r, index + 1);
+      state.art[assetId] = { role, look: member.look };
+      return {
+        id: seedId(13 + r, index + 1),
+        actorId,
+        role,
+        assetId,
+        url: artUrl(assetId),
+        thumbnailUrl: `${artUrl(assetId)}/thumb`,
+        heroSpec: member.look,
+      };
+    });
     state.actors.push({
       id: actorId,
       worldId: DEMO_WORLD_ID,
@@ -192,7 +210,7 @@ export function buildSeed(maps: MapListing[], base: string): DemoState {
       isUnique: member.isUnique,
       visibleToPlayers: member.visibleToPlayers,
       artLocked: false,
-      images: [],
+      images,
       loreLinkedFrom: [],
       claimedBy: null,
       // The demo's own key, so the encounter and the tests can find it.
@@ -358,7 +376,13 @@ export function buildSeed(maps: MapListing[], base: string): DemoState {
  */
 export function tokenOf(actor: Row, name?: string): Row {
   const linked = !actor.isNpc || actor.isUnique === true;
+  const art = (actor.images as Row[] | undefined)?.find(
+    (image) => image.role === "token",
+  );
   return {
+    // The server resolves a token's art to its actor's token image when the
+    // token is read (`token_art.rs`); the demo writes it in when it is made.
+    photoUrl: art ? tokenPhotoUrl(art.assetId as string) : null,
     actorId: actor.id,
     ownerUserId: actor.isNpc ? null : actor.ownedBy,
     tokenType: actor.isNpc ? "npc" : "character",

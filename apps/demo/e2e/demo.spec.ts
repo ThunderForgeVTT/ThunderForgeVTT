@@ -32,7 +32,7 @@ type Scene = {
     y2: number;
   }[];
   lightSources: { lightId: string }[];
-  tokens: { tokenId: string; x: number; y: number }[];
+  tokens: { tokenId: string; x: number; y: number; photoUrl: string | null }[];
 };
 
 let page: Page;
@@ -82,7 +82,7 @@ async function currentScene(): Promise<Scene> {
     `query ($sceneId: UUID!) {
       walls(sceneId: $sceneId) { wallId doorState x1 y1 x2 y2 }
       lightSources(sceneId: $sceneId) { lightId }
-      tokens(sceneId: $sceneId) { tokenId x y }
+      tokens(sceneId: $sceneId) { tokenId x y photoUrl }
     }`,
     { sceneId: scene.sceneId },
   );
@@ -138,6 +138,28 @@ test.beforeAll(async ({ browser, baseURL }) => {
     viewport: { width: 1440, height: 900 },
   });
   page = await context.newPage();
+  // Which actor pictures were asked of the page's `fetch`, and by whom it was
+  // called: whatever the guard installs as `window.fetch` is wrapped as it is
+  // read, so a call from the engine is seen as well as one from a script.
+  await page.addInitScript(() => {
+    const seen: string[] = [];
+    let current = window.fetch;
+    Object.assign(window, { __actorArtFetched: seen });
+    Object.defineProperty(window, "fetch", {
+      configurable: true,
+      get() {
+        const target = current;
+        return (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = input instanceof Request ? input.url : String(input);
+          if (url.includes("/api/actor-assets/")) seen.push(url);
+          return target.call(window, input, init);
+        };
+      },
+      set(value: typeof fetch) {
+        current = value;
+      },
+    });
+  });
   const origin = new URL(baseURL as string).origin;
   context.on("request", (request) => {
     const url = new URL(request.url());
@@ -250,6 +272,61 @@ test("the ambush is on the board: two heroes a player owns, five monsters only t
   );
   expect(actors.every((a) => a.myPermissionLevel === "OWNER")).toBe(true);
   expect((await currentScene()).tokens).toHaveLength(7);
+});
+
+test("the ambush is drawn with the cast's own faces, not coloured squares", async () => {
+  const tokens = (await currentScene()).tokens;
+  expect(tokens).toHaveLength(7);
+  const urls = tokens.map((token) => token.photoUrl);
+  for (const url of urls) {
+    expect(url).toMatch(/^\/api\/actor-assets\/[0-9a-f-]{36}\.png$/);
+  }
+  // The engine loads each one through the page's `fetch`, which is the
+  // guard's: Bevy's wasm asset reader calls `window.fetch`.
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() =>
+          (
+            window as unknown as { __actorArtFetched: string[] }
+          ).__actorArtFetched.map(
+            (url) => new URL(url, location.href).pathname,
+          ),
+        ),
+      { timeout: 30_000 },
+    )
+    .toEqual(expect.arrayContaining([...new Set(urls)]));
+  const answers = await page.evaluate(
+    (urls) =>
+      Promise.all(
+        urls.map(async (url) => {
+          const response = await fetch(url);
+          const blob = await response.blob();
+          const bytes = new Uint8Array(await blob.arrayBuffer());
+          const bitmap = await createImageBitmap(blob);
+          return {
+            status: response.status,
+            type: response.headers.get("content-type"),
+            head: [...bytes.slice(0, 8)],
+            width: bitmap.width,
+            height: bitmap.height,
+          };
+        }),
+      ),
+    [...new Set(urls)] as string[],
+  );
+  for (const answer of answers) {
+    expect(answer).toEqual({
+      status: 200,
+      type: "image/png",
+      head: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+      width: 512,
+      height: 512,
+    });
+  }
+  // For the record: what the board looks like with them on it.
+  await page.waitForTimeout(1_000);
+  await page.screenshot({ path: test.info().outputPath("ambush.png") });
 });
 
 test("the fighter's sheet opens with his numbers, and a check rolls from them", async () => {

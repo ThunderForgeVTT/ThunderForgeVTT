@@ -10,10 +10,12 @@
     "dev": "pnpm run static && vite",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "format": "prettier --check \"{index.html,vite.config.mts,playwright.config.ts,credit.json,world.json,src/**/*.{ts,tsx,css},e2e/**/*.ts,scripts/**/*.mjs}\"",
-    "e2e": "VITE_ENGINE_PROBE=1 pnpm run build && playwright test"
+    "format": "prettier --check \"{index.html,vite.config.mts,vitest.config.mts,playwright.config.ts,credit.json,world.json,src/**/*.{ts,tsx,css},e2e/**/*.ts,scripts/**/*.mjs}\"",
+    "e2e": "VITE_ENGINE_PROBE=1 pnpm run build && playwright test",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@thunderforge/heroes": "workspace:^",
     "graphql": "^16.14.2",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
@@ -30,6 +32,7 @@
     "prettier": "^3.6.2",
     "tailwindcss": "4.2.4",
     "typescript": "6.0.3",
-    "vite": "^8.0.10"
+    "vite": "^8.0.10",
+    "vitest": "^4.1.11"
   }
 }

@@ -6,6 +6,10 @@
  */
 import { demoState } from "../backend/state";
 import { viewerUser } from "../backend/actors";
+import { drawArt, readArtPath } from "../seed/art";
+
+/** An SVG document drawn as PNG bytes (`rasterize.ts` in the page). */
+export type DrawPng = (svg: string) => Promise<Blob>;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -22,6 +26,7 @@ export function answerRest(
   path: string,
   base: string,
   fetchStatic: typeof fetch,
+  drawPng: DrawPng,
 ): Promise<Response> | Response | null {
   const reads = method === "GET" || method === "HEAD";
 
@@ -93,6 +98,21 @@ export function answerRest(
     const held = demoState().assets[asset[1]];
     if (!held || asset[2]) return json({ error: "asset not found" }, 404);
     return fetchStatic(`${base}maps/${held.file}`, { method });
+  }
+
+  // An actor's picture, drawn from its spec. The engine reads a token's
+  // `photoUrl` through this `fetch` (Bevy's wasm asset reader calls
+  // `window.fetch`), and asks for `.meta` first; there is none.
+  const art = readArtPath(path);
+  if (art) {
+    const held = demoState().art[art.assetId];
+    if (!held || art.meta) return json({ error: "asset not found" }, 404);
+    return drawPng(drawArt(held)).then(
+      (png) =>
+        new Response(method === "HEAD" ? null : png, {
+          headers: { "content-type": "image/png" },
+        }),
+    );
   }
 
   return null;

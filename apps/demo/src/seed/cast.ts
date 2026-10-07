@@ -12,7 +12,9 @@ import {
   STAT_BLOCKS,
   slotsFor,
 } from "../../../../packs/systems/dnd5e/web/src/StatBlocks";
+import type { HeroSpec } from "@thunderforge/heroes";
 import type { Row } from "../backend/state";
+import { creatureLook, heroLook } from "./art";
 
 export type SystemSlots = Record<
   | "ability_data"
@@ -33,6 +35,8 @@ export interface CastMember {
   isUnique: boolean;
   /** Owner decision 2026-09-15: NPCs start hidden from players. */
   visibleToPlayers: boolean;
+  /** What the hero builder draws for them: their token and portrait. */
+  look: HeroSpec;
   slots: SystemSlots;
 }
 
@@ -54,6 +58,7 @@ function fromStatBlock(
     isNpc: true,
     isUnique: false,
     visibleToPlayers: false,
+    look: creatureLook(block.name, `${block.size} ${block.creatureType}`),
     slots: { ...slotsFor(block, null), spell_data: null } as SystemSlots,
   };
 }
@@ -67,6 +72,10 @@ export const CAST: CastMember[] = [
     isNpc: false,
     isUnique: true,
     visibleToPlayers: true,
+    look: heroLook("Brannoc Stoneward", "Human", {
+      headgear: "helm",
+      prop: "sword",
+    }),
     slots: {
       ability_data: {
         strength: 16,
@@ -127,6 +136,7 @@ export const CAST: CastMember[] = [
     isNpc: false,
     isUnique: true,
     visibleToPlayers: true,
+    look: heroLook("Elowen Vire", "Elf", { headgear: "wizard", prop: "staff" }),
     slots: {
       ability_data: {
         strength: 8,

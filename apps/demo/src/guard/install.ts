@@ -16,6 +16,8 @@ import { releaseEvents } from "../backend/events";
 import { runOperation, type OperationRequest } from "../backend/execute";
 import { NOT_IN_DEMO_CODE, reportNotInDemo } from "../backend/notInDemo";
 import { loadState } from "../backend/state";
+import { installImageGuard } from "./images";
+import { svgToPng } from "./rasterize";
 import { answerRest } from "./rest";
 import { installSocketGuard } from "./socket";
 
@@ -89,13 +91,20 @@ async function demoFetch(
   ) {
     return answerGraphQL(request);
   }
-  const answer = answerRest(request.method, url.pathname, BASE, fetchStatic);
+  const answer = answerRest(
+    request.method,
+    url.pathname,
+    BASE,
+    fetchStatic,
+    svgToPng,
+  );
   return answer ?? refuse(`${request.method} ${url.pathname}`);
 }
 
 window.fetch = demoFetch;
 
 installSocketGuard(BASE);
+installImageGuard();
 
 /**
  * The client's one `XMLHttpRequest` is an upload with a progress bar. There
