@@ -55,7 +55,7 @@ they prove inside each phase.
 - [x] T014 [US1] Serve `canvas.rs`, `scene.rs`, `lore.rs`, `actor.rs` in `crates/thunderforge-server/src/assets_serve/` through `ranged::serve`, keeping each route's `Content-Type` and `Cache-Control` and its authorization exactly as is; add a 206 test to `canvas.rs`'s tests
 - [x] T015 [US1] `apps/web/src/services/scenePreload.ts`: warm through `downloadBytes(url, { init: { cache: "force-cache" } })`, keep `{warmed, reason}`; update its Vitest
 - [x] T016 [US1] Engine world cache: install `globalThis.__thunderforgeDownloadBytes` in `apps/web/src/engine/bevy/index.ts` before the engine starts; in `crates/thunderforge-engine/src/plugins/cached_assets/wasm.rs` `fetch()` call it through a `wasm_bindgen` extern when defined, fall back to `gloo_net`; fingerprint check untouched; `cargo check --target wasm32-unknown-unknown -p thunderforge-engine`
-- [ ] T017 [US1] Standalone e2e `packages/downloads/e2e/resume.test.ts`: a real `node:http` server serving a 40 MB generated file with ranges and ETag, which destroys the socket of one part halfway; assert the result's SHA-256 matches and the bytes served after the cut ≤ the parts in flight (SC-001), using real default settings
+- [x] T017 [US1] Standalone e2e `packages/downloads/e2e/resume.test.ts`: a real `node:http` server serving a 40 MB generated file with ranges and ETag, which destroys the socket of one part halfway; assert the result's SHA-256 matches and the bytes served after the cut ≤ the parts in flight (SC-001), using real default settings
 - [ ] T018 [US1] Integration e2e `apps/web/e2e/resumable-downloads-scene.spec.ts`: lower the threshold via the DEV override, open a scene whose background goes into parts, abort one ranged request with `page.route` partway, assert it is re-requested with a later start offset and the board renders the background
 
 ---
@@ -79,7 +79,7 @@ they prove inside each phase.
 - [x] T024 [P] [US3] Server test in `ranged_tests.rs` (needs storage): `If-Range` with a stale ETag answers `200` with the whole current object; matching ETag answers `206`
 - [x] T025 [P] [US3] Downloader tests: a part answered `200`, `416`, or with another ETag before any byte is delivered restarts once and yields the new version; after bytes were delivered the stream errors with `VersionChangedError`; `downloadBytes` restarts and returns the new version
 - [x] T026 [US3] Implement the per-part validator check and the restart rule in `packages/downloads/src/parts.ts`; T025 passes
-- [ ] T027 [US3] Standalone e2e `packages/downloads/e2e/version.test.ts`: the real server swaps the file between parts; the result hashes to one version, run 20 times (SC-005)
+- [x] T027 [US3] Standalone e2e `packages/downloads/e2e/version.test.ts`: the real server swaps the file between parts; the result hashes to one version, run 20 times (SC-005)
 
 ---
 
