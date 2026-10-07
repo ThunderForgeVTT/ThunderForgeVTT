@@ -172,6 +172,36 @@ fn answer(object: OpenObject, extra: &[(HeaderName, &'static str)]) -> Response 
     response
 }
 
+/// A refusal answered to a `Range` request must say nothing about the file:
+/// no part, no version, no size (FR-020, SC-006). Shared by every route's
+/// tests.
+#[cfg(test)]
+pub(crate) fn assert_refused_without_leak(response: &Response, status: StatusCode) {
+    assert_eq!(response.status(), status);
+    let h = response.headers();
+    assert!(
+        h.get(header::CONTENT_RANGE).is_none(),
+        "a refusal named a range"
+    );
+    assert!(h.get(header::ETAG).is_none(), "a refusal named the version");
+    assert!(
+        h.get(header::ACCEPT_RANGES).is_none(),
+        "a refusal offered parts"
+    );
+    if let Some(length) = h.get(header::CONTENT_LENGTH) {
+        let length: usize = length.to_str().unwrap().parse().unwrap();
+        assert!(length < 100, "a refusal carried a file-sized length");
+    }
+}
+
+/// `Range: bytes=0-9`, for tests.
+#[cfg(test)]
+pub(crate) fn first_ten_bytes() -> HeaderMap {
+    let mut h = HeaderMap::new();
+    h.insert(header::RANGE, HeaderValue::from_static("bytes=0-9"));
+    h
+}
+
 #[cfg(test)]
 #[path = "ranged_tests.rs"]
 mod tests;

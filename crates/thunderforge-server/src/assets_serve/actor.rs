@@ -10,7 +10,7 @@
 //! the actor it belongs to (Constitution Principle III).
 
 use axum::extract::{Path, State};
-use axum::http::{StatusCode, header};
+use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Extension, Router};
@@ -24,7 +24,7 @@ use crate::auth_middleware::AuthenticatedUser;
 use crate::graphql::mutations_actor_images::ROLE_TOKEN;
 use crate::graphql::types::ActorPermissionLevel;
 use crate::state::AppState;
-use crate::storage::rustfs::{RustFsConfig, read_object};
+use crate::storage::rustfs::RustFsConfig;
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -138,6 +138,7 @@ async fn authorize_and_read(
     is_admin: bool,
     asset_id: Uuid,
     key: String,
+    headers: &HeaderMap,
 ) -> Response {
     let Some((actor_id, role)) = load_asset_owner(state, asset_id).await else {
         return (StatusCode::NOT_FOUND, "asset not found").into_response();
@@ -171,13 +172,9 @@ async fn authorize_and_read(
     }
 
     let cfg = RustFsConfig::resolve(state).await;
-    match read_object(&cfg, &key).await {
-        Ok(bytes) => (
-            StatusCode::OK,
-            [(header::CONTENT_TYPE, "image/webp")],
-            bytes,
-        )
-            .into_response(),
+    let extra = [(header::CONTENT_TYPE, "image/webp")];
+    match super::ranged::serve(&cfg, &key, headers, &extra).await {
+        Ok(response) => response,
         Err(_) => (StatusCode::NOT_FOUND, "asset object not found in storage").into_response(),
     }
 }
@@ -185,6 +182,7 @@ async fn authorize_and_read(
 async fn serve_actor_asset(
     State(state): State<AppState>,
     Extension(auth_user): Extension<AuthenticatedUser>,
+    headers: HeaderMap,
     Path(asset_segment): Path<String>,
 ) -> Response {
     // `<uuid>`, `<uuid>.webp` or `<uuid>.png`; anything else — Bevy's
@@ -199,6 +197,7 @@ async fn serve_actor_asset(
         auth_user.is_admin,
         asset_id,
         actor_image_full_key(asset_id),
+        &headers,
     )
     .await
 }
@@ -206,6 +205,7 @@ async fn serve_actor_asset(
 async fn serve_actor_asset_thumbnail(
     State(state): State<AppState>,
     Extension(auth_user): Extension<AuthenticatedUser>,
+    headers: HeaderMap,
     Path(asset_id): Path<Uuid>,
 ) -> Response {
     authorize_and_read(
@@ -214,6 +214,7 @@ async fn serve_actor_asset_thumbnail(
         auth_user.is_admin,
         asset_id,
         actor_image_thumb_key(asset_id),
+        &headers,
     )
     .await
 }
@@ -329,5 +330,42 @@ mod tests {
             !token_art_visible_sync(&mut conn, t.player, false, t.npc).expect("answered"),
             "only a token on the map lends its character's art",
         );
+    }
+
+    /// Spec 080 T028 (SC-006): a range from a stranger is refused as
+    /// before, and the refusal says nothing about the picture.
+    #[tokio::test]
+    async fn a_range_from_a_stranger_is_refused_without_a_hint() {
+        use crate::assets_serve::ranged::{assert_refused_without_leak, first_ten_bytes};
+        use crate::graphql::mutations_actor_images::{ROLE_PORTRAIT, upload_actor_image_impl};
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let t = table(&mut conn);
+        let stranger = insert_test_user(&mut conn);
+        drop(conn);
+        let image = upload_actor_image_impl(
+            &state,
+            t.gm,
+            false,
+            t.npc,
+            ROLE_PORTRAIT.to_string(),
+            crate::test_support::tiny_png_bytes(),
+            None,
+        )
+        .await
+        .expect("upload should succeed");
+
+        let response = authorize_and_read(
+            &state,
+            stranger,
+            false,
+            image.asset_id,
+            actor_image_full_key(image.asset_id),
+            &first_ten_bytes(),
+        )
+        .await;
+
+        assert_refused_without_leak(&response, StatusCode::FORBIDDEN);
     }
 }

@@ -27,7 +27,7 @@ const NONE: &[Validator] = &[];
 const MAIL_SECURITY: &[&str] = &["none", "starttls", "implicit"];
 const ACCESS_POLICIES: &[&str] = &["open", "invite_only", "closed"];
 
-pub(super) static DECLARATIONS: [SettingDeclaration; 41] = [
+pub(super) static DECLARATIONS: [SettingDeclaration; 42] = [
     // -- What kind of instance this is --------------------------------------
     //
     // First, and deliberately. Spec 052 US1/US2: what an operator is asked for

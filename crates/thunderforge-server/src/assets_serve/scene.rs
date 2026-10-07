@@ -7,7 +7,7 @@
 //! query already returned this scene per FR-008/FR-009's hidden-filtering).
 
 use axum::extract::{Path, State};
-use axum::http::{StatusCode, header};
+use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Extension, Router};
@@ -17,7 +17,7 @@ use uuid::Uuid;
 use crate::auth::world_membership::require_world_member;
 use crate::auth_middleware::AuthenticatedUser;
 use crate::state::AppState;
-use crate::storage::rustfs::{RustFsConfig, read_object};
+use crate::storage::rustfs::RustFsConfig;
 
 pub fn router() -> Router<AppState> {
     Router::new().route("/scene-assets/{asset_id}/thumb", get(serve_scene_preview))
@@ -60,6 +60,7 @@ async fn load_preview_scene_world_id(state: &AppState, asset_id: Uuid) -> Option
 async fn serve_scene_preview(
     State(state): State<AppState>,
     Extension(auth_user): Extension<AuthenticatedUser>,
+    headers: HeaderMap,
     Path(asset_id): Path<Uuid>,
 ) -> Response {
     let Some(world_id) = load_preview_scene_world_id(&state, asset_id).await else {
@@ -84,13 +85,53 @@ async fn serve_scene_preview(
     }
 
     let cfg = RustFsConfig::resolve(&state).await;
-    match read_object(&cfg, &preview_key(asset_id)).await {
-        Ok(bytes) => (
-            StatusCode::OK,
-            [(header::CONTENT_TYPE, "image/webp")],
-            bytes,
-        )
-            .into_response(),
+    let extra = [(header::CONTENT_TYPE, "image/webp")];
+    match super::ranged::serve(&cfg, &preview_key(asset_id), &headers, &extra).await {
+        Ok(response) => response,
         Err(_) => (StatusCode::NOT_FOUND, "asset object not found in storage").into_response(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::assets_serve::canvas::tests::fake_auth_user;
+    use crate::assets_serve::ranged::{assert_refused_without_leak, first_ten_bytes};
+    use crate::test_support::*;
+
+    /// Spec 080 T028 (SC-006): a non-member's range is refused as before,
+    /// and the refusal says nothing about the preview.
+    #[tokio::test]
+    async fn a_range_from_a_non_member_is_refused_without_a_hint() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        let outsider_id = insert_test_user(&mut conn);
+        let preview_id = Uuid::now_v7();
+        {
+            use crate::schema::scene_preview_images;
+            diesel::insert_into(scene_preview_images::table)
+                .values((
+                    scene_preview_images::id.eq(preview_id),
+                    scene_preview_images::scene_id.eq(scene_id),
+                    scene_preview_images::byte_size.eq(4096_i64),
+                    scene_preview_images::created_at.eq(chrono::Utc::now().naive_utc()),
+                ))
+                .execute(&mut conn)
+                .unwrap();
+        }
+        drop(conn);
+
+        let response = serve_scene_preview(
+            State(state),
+            Extension(fake_auth_user(outsider_id)),
+            first_ten_bytes(),
+            Path(preview_id),
+        )
+        .await;
+
+        assert_refused_without_leak(&response, StatusCode::FORBIDDEN);
     }
 }

@@ -30,7 +30,7 @@
 //! Both now ask `auth::scene_visibility`, which states the rule once.
 
 use axum::extract::{Path, State};
-use axum::http::{StatusCode, header};
+use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Extension, Router};
@@ -41,7 +41,7 @@ use crate::auth::scene_visibility::asset_scene_visible;
 use crate::auth::world_membership::{WorldMembershipError, require_world_member};
 use crate::auth_middleware::AuthenticatedUser;
 use crate::state::AppState;
-use crate::storage::rustfs::{RustFsConfig, read_object};
+use crate::storage::rustfs::RustFsConfig;
 
 pub fn router() -> Router<AppState> {
     Router::new().route("/canvas-assets/{asset_id}", get(serve_canvas_asset))
@@ -76,6 +76,7 @@ pub(crate) fn parse_asset_id(segment: &str) -> Option<Uuid> {
 async fn serve_canvas_asset(
     State(state): State<AppState>,
     Extension(auth_user): Extension<AuthenticatedUser>,
+    headers: HeaderMap,
     Path(asset_segment): Path<String>,
 ) -> Response {
     let user_id = auth_user.user_id;
@@ -165,16 +166,12 @@ async fn serve_canvas_asset(
     }
 
     let cfg = RustFsConfig::resolve(&state).await;
-    match read_object(&cfg, &storage_path).await {
-        Ok(bytes) => (
-            StatusCode::OK,
-            [
-                (header::CONTENT_TYPE, "image/webp"),
-                (header::CACHE_CONTROL, "private, max-age=3600"),
-            ],
-            bytes,
-        )
-            .into_response(),
+    let extra = [
+        (header::CONTENT_TYPE, "image/webp"),
+        (header::CACHE_CONTROL, "private, max-age=3600"),
+    ];
+    match super::ranged::serve(&cfg, &storage_path, &headers, &extra).await {
+        Ok(response) => response,
         Err(e) => {
             eprintln!("[canvas-assets] failed to read {storage_path}: {e}");
             (
@@ -187,7 +184,7 @@ async fn serve_canvas_asset(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     //! Integration tests against a real Postgres (DATABASE_URL) and a real
     //! RustFS (`docker compose up -d rustfs`) — no mocks, mirrors
     //! `graphql::mutations_assets::tests`'s convention.
@@ -198,7 +195,7 @@ mod tests {
     use axum::body::to_bytes;
     use axum::extract::{Extension, Path, State};
 
-    fn fake_auth_user(user_id: Uuid) -> AuthenticatedUser {
+    pub(crate) fn fake_auth_user(user_id: Uuid) -> AuthenticatedUser {
         AuthenticatedUser {
             user_id,
             session_id: Uuid::now_v7(),
@@ -234,6 +231,7 @@ mod tests {
         let response = serve_canvas_asset(
             State(state),
             Extension(fake_auth_user(owner_id)),
+            HeaderMap::new(),
             Path(asset.asset_id.to_string()),
         )
         .await;
@@ -272,6 +270,7 @@ mod tests {
         let response = serve_canvas_asset(
             State(state),
             Extension(fake_auth_user(outsider_id)),
+            HeaderMap::new(),
             Path(asset.asset_id.to_string()),
         )
         .await;
@@ -328,6 +327,7 @@ mod tests {
         let hidden = serve_canvas_asset(
             State(state.clone()),
             Extension(fake_auth_user(player_id)),
+            HeaderMap::new(),
             Path(asset.asset_id.to_string()),
         )
         .await;
@@ -342,6 +342,7 @@ mod tests {
         let as_gm = serve_canvas_asset(
             State(state.clone()),
             Extension(fake_auth_user(owner_id)),
+            HeaderMap::new(),
             Path(asset.asset_id.to_string()),
         )
         .await;
@@ -356,6 +357,7 @@ mod tests {
         let unknown = serve_canvas_asset(
             State(state),
             Extension(fake_auth_user(player_id)),
+            HeaderMap::new(),
             Path(Uuid::now_v7().to_string()),
         )
         .await;
@@ -406,6 +408,7 @@ mod tests {
         let response = serve_canvas_asset(
             State(state),
             Extension(fake_auth_user(player_id)),
+            HeaderMap::new(),
             Path(asset.asset_id.to_string()),
         )
         .await;
@@ -459,6 +462,7 @@ mod tests {
         let response = serve_canvas_asset(
             State(state),
             Extension(fake_auth_user(player_id)),
+            HeaderMap::new(),
             Path(asset.asset_id.to_string()),
         )
         .await;
@@ -482,10 +486,88 @@ mod tests {
         let response = serve_canvas_asset(
             State(state),
             Extension(fake_auth_user(user_id)),
+            HeaderMap::new(),
             Path(Uuid::now_v7().to_string()),
         )
         .await;
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    /// Spec 080 T014: a member asking for a range gets exactly those bytes,
+    /// with the route's own type and caching kept.
+    #[tokio::test]
+    async fn a_member_asking_for_a_range_gets_a_part() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        drop(conn);
+        let asset = upload_canvas_image_impl(
+            &state,
+            owner_id,
+            world_id,
+            scene_id,
+            GraphQLCanvasImageAssetKind::Pasted,
+            tiny_png_bytes(),
+        )
+        .await
+        .expect("upload should succeed");
+
+        let response = serve_canvas_asset(
+            State(state),
+            Extension(fake_auth_user(owner_id)),
+            super::super::ranged::first_ten_bytes(),
+            Path(asset.asset_id.to_string()),
+        )
+        .await;
+
+        assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+        let h = response.headers();
+        assert_eq!(h[header::CONTENT_TYPE], "image/webp");
+        assert_eq!(h[header::CACHE_CONTROL], "private, max-age=3600");
+        assert!(
+            h[header::CONTENT_RANGE]
+                .to_str()
+                .unwrap()
+                .starts_with("bytes 0-9/")
+        );
+        assert!(h.get(header::ETAG).is_some());
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        assert_eq!(body.len(), 10);
+    }
+
+    /// Spec 080 T028 (SC-006): a range changes nothing about who is refused,
+    /// and the refusal says nothing about the file.
+    #[tokio::test]
+    async fn a_range_from_a_non_member_is_refused_without_a_hint() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        let outsider_id = insert_test_user(&mut conn);
+        drop(conn);
+        let asset = upload_canvas_image_impl(
+            &state,
+            owner_id,
+            world_id,
+            scene_id,
+            GraphQLCanvasImageAssetKind::Pasted,
+            tiny_png_bytes(),
+        )
+        .await
+        .expect("upload should succeed");
+
+        let response = serve_canvas_asset(
+            State(state),
+            Extension(fake_auth_user(outsider_id)),
+            super::super::ranged::first_ten_bytes(),
+            Path(asset.asset_id.to_string()),
+        )
+        .await;
+
+        super::super::ranged::assert_refused_without_leak(&response, StatusCode::FORBIDDEN);
     }
 }
