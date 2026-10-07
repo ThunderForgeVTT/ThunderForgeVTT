@@ -168,6 +168,31 @@ export function doorMenuActions(options: {
   return actions;
 }
 
+/**
+ * What pressing a door's icon does (spec 071 FR-009): the menu's matching
+ * item, from the same rule.
+ *
+ * The engine draws the icon — open on a shut door, close on an open one, a
+ * padlock on a locked one, none on a secret one — and reports the press; this
+ * says what it means for this viewer. The Game Master's padlock unlocks. A
+ * player's padlock is the menu's "locked", which changes nothing, and their
+ * open and close go through the door's interactive like the menu's, so the
+ * server still decides.
+ */
+export function doorIconAction(options: {
+  viewer: CanvasMenuViewer;
+  wall: WorldWall;
+}): DoorMenuAction | null {
+  const { viewer, wall } = options;
+  if (wall.doorState === "none" || wall.secret) return null;
+  if (wall.locked) {
+    return viewer.isGameMaster
+      ? { kind: "door-lock", locked: false }
+      : { kind: "door-locked" };
+  }
+  return { kind: "door-state", open: wall.doorState !== "open" };
+}
+
 /** What the menu calls the thing that was right-clicked. */
 export function wallName(wall: WorldWall): string {
   if (wall.doorState === "none") return "Wall";

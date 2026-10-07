@@ -169,6 +169,10 @@ pub fn start(canvas_selector: &str) {
         // what US7 tests.
         .add_plugins(plugins::InteractionPlugin)
         .add_plugins(plugins::interaction_marker::InteractionMarkerPlugin)
+        // Spec 071 US3: an icon on a door that is near the pointer or a
+        // controlled token, which opens, shuts or unlocks it when pressed.
+        // Removing this line removes the icons and changes nothing else.
+        .add_plugins(plugins::door_icons::DoorIconsPlugin)
         // Spec 030 US1: the first contributor. Registered *after* the
         // interaction plugin and depending on nothing in it beyond the
         // message type — deleting this line removes the effect and leaves

@@ -462,7 +462,18 @@ export const mutations: Record<string, Handler> = {
         doorInteractiveId(candidate.wallId as string) === interactiveId,
     );
     if (!wall) notFound("Interactive");
-    // The Game Master's hand: a lock is for players, and there are none.
+    // A lock stops a player and not the Game Master, as the server's
+    // `activation_outcome` decides it (spec 071 FR-010).
+    if (wall.locked && !viewerIsGm(demoState())) {
+      return {
+        outcome: "refused",
+        reason: "locked",
+        requestId: null,
+        effectId: null,
+        effectConfig: null,
+        notices: [],
+      };
+    }
     const next = wall.doorState === "OPEN" ? "CLOSED" : "OPEN";
     changeDoor(wall.wallId as string, { doorState: next });
     return {

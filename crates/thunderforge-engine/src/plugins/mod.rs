@@ -8,6 +8,7 @@ pub mod context_menu;
 pub mod darkness;
 pub mod darkness_probe;
 pub mod dice_roll;
+pub mod door_icons;
 pub mod exploration;
 pub mod frame_trace;
 pub mod grid;

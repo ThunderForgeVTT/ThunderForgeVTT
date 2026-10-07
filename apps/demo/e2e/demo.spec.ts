@@ -588,6 +588,166 @@ test("a door is opened from its own menu, on a scene the Game Master switched to
     .toBe("OPEN");
 });
 
+/** The icon the board draws on a door, from the engine probe; `null` for none. */
+async function doorIconOf(wallId: string): Promise<string | null> {
+  return page.evaluate(
+    (id) =>
+      (
+        window as unknown as {
+          __engineProbe?: {
+            doorIcons?: () => { wallId: string; icon: string }[];
+          };
+        }
+      ).__engineProbe
+        ?.doorIcons?.()
+        .find((row) => row.wallId === id)?.icon ?? null,
+    wallId,
+  );
+}
+
+/**
+ * A board point on the screen wherever the camera is now: a player's board
+ * opens on their own token, not on the origin `toScreen` assumes.
+ */
+async function toScreenNow(point: { x: number; y: number }) {
+  const box = await page.locator("canvas").boundingBox();
+  if (!box) throw new Error("the board's canvas is not on the page");
+  const cam = (await page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          __engineProbe?: {
+            camera?: () => { x: number; y: number; scale: number } | null;
+          };
+        }
+      ).__engineProbe?.camera?.() ?? null,
+  )) ?? { x: 0, y: 0, scale: 1 };
+  const scale = cam.scale > 0 ? cam.scale : 1;
+  return {
+    x: box.x + box.width / 2 + (point.x - cam.x) / scale,
+    y: box.y + box.height / 2 - (point.y - cam.y) / scale,
+  };
+}
+
+async function pressDoorIcon(point: { x: number; y: number }) {
+  const at = await toScreenNow(point);
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.down();
+  await page.waitForTimeout(120);
+  await page.mouse.up();
+}
+
+async function doorLocked(wallId: string) {
+  const { sceneId } = await currentScene();
+  const answer = await ask<{ walls: { wallId: string; locked: boolean }[] }>(
+    "query ($sceneId: UUID!) { walls(sceneId: $sceneId) { wallId locked } }",
+    { sceneId },
+  );
+  return answer.body.data?.walls.find((w) => w.wallId === wallId)?.locked;
+}
+
+test("a door's icon shuts it, and a locked door stays shut for a player whatever they press", async () => {
+  // The door the menu just opened, on The Proving Ground.
+  const door = (await currentScene()).walls.find(
+    (wall) => wall.doorState === "OPEN",
+  );
+  if (!door) throw new Error("the previous step left a door open");
+  const middle = { x: (door.x1 + door.x2) / 2, y: (door.y1 + door.y2) / 2 };
+  const stateOf = async () =>
+    (await currentScene()).walls.find((wall) => wall.wallId === door.wallId)
+      ?.doorState;
+
+  // The Game Master's pointer on it shows close, and pressing that shuts it.
+  const at = await toScreenNow(middle);
+  await page.mouse.move(at.x, at.y);
+  await expect.poll(() => doorIconOf(door.wallId)).toBe("close");
+  await pressDoorIcon(middle);
+  await expect.poll(stateOf).toBe("CLOSED");
+
+  // Locked from its menu, it shows the padlock.
+  await clickBoard(middle, "right");
+  await page.getByRole("menuitem", { name: "Lock", exact: true }).click();
+  await expect.poll(() => doorLocked(door.wallId)).toBe(true);
+  await page.mouse.move(at.x, at.y);
+  await expect.poll(() => doorIconOf(door.wallId)).toBe("padlock");
+
+  // To a player it is the same padlock, and pressing it changes nothing.
+  await page.getByRole("button", { name: "View as player" }).click();
+  await expect(page.getByTestId("demo-viewer")).toContainText(
+    "Viewing as a player",
+  );
+  await expect(page.locator("canvas")).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByTestId("gm-tool-walls")).toHaveCount(0);
+  await expect
+    .poll(
+      async () => {
+        const now = await toScreenNow(middle);
+        await page.mouse.move(now.x, now.y);
+        return doorIconOf(door.wallId);
+      },
+      { timeout: 30_000 },
+    )
+    .toBe("padlock");
+  await pressDoorIcon(middle);
+  await expect(page.getByText("It is locked.")).toBeVisible();
+  // And the demo refuses a player's attempt as the server does (FR-010),
+  // whatever a page might send it.
+  const { sceneId } = await currentScene();
+  const interactives = await ask<{
+    interactives: {
+      interactiveId: string;
+      subjectKind: string;
+      subjectRef: string;
+    }[];
+  }>(
+    "query ($sceneId: UUID!) { interactives(sceneId: $sceneId) { interactiveId subjectKind subjectRef } }",
+    { sceneId },
+  );
+  const interactive = interactives.body.data?.interactives.find(
+    (row) => row.subjectKind === "door" && row.subjectRef === door.wallId,
+  );
+  if (!interactive) throw new Error("a door is an interactive");
+  const tried = await ask<{
+    activateInteractive: { outcome: string; reason: string | null };
+  }>(
+    "mutation ($id: UUID!) { activateInteractive(interactiveId: $id) { outcome reason } }",
+    { id: interactive.interactiveId },
+  );
+  expect(tried.body.data?.activateInteractive).toEqual({
+    outcome: "refused",
+    reason: "locked",
+  });
+  expect(await stateOf()).toBe("CLOSED");
+
+  // The Game Master's padlock unlocks it.
+  await page.getByRole("button", { name: "View as Game Master" }).click();
+  await expect(page.getByTestId("demo-viewer")).toContainText(
+    "Viewing as the Game Master",
+  );
+  await expect(page.getByTestId("gm-tool-walls")).toBeVisible({
+    timeout: 60_000,
+  });
+  await page.getByTestId("gm-tool-select").click();
+  await expect
+    .poll(
+      async () => {
+        const now = await toScreenNow(middle);
+        await page.mouse.move(now.x, now.y);
+        return doorIconOf(door.wallId);
+      },
+      { timeout: 30_000 },
+    )
+    .toBe("padlock");
+  await pressDoorIcon(middle);
+  await expect.poll(() => doorLocked(door.wallId)).toBe(false);
+  expect(await stateOf()).toBe("CLOSED");
+
+  // And its open icon opens it again, as the reload below expects to find it.
+  await expect.poll(() => doorIconOf(door.wallId)).toBe("open");
+  await pressDoorIcon(middle);
+  await expect.poll(stateOf).toBe("OPEN");
+});
+
 test("a light is placed with the light tool", async () => {
   const before = (await currentScene()).lightSources.length;
   await page.getByTestId("gm-tool-lights").click();

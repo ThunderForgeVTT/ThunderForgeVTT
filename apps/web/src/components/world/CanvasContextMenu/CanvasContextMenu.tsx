@@ -54,6 +54,7 @@ import {
 import { ConditionsDialog } from "./ConditionsDialog";
 import { doorInteractive, performDoorAction } from "./doorActions";
 import type { CanvasMenuRequest } from "./useCanvasContextMenu";
+import { useDoorIcons } from "./useDoorIcons";
 
 export interface CanvasContextMenuProps {
   request: CanvasMenuRequest | null;
@@ -198,6 +199,14 @@ export function CanvasContextMenu({
   const [resolved, setResolved] = useState<Resolved | null>(null);
   const [follow, setFollow] = useState<Follow | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // A door's icon is the menu's matching item, pressed on the board.
+  useDoorIcons({
+    worldStore,
+    sceneId,
+    isGameMaster,
+    userId,
+    onNotice: setNotice,
+  });
   const followPending = useRef(false);
   // Held apart from `request`, which the page clears as soon as the menu
   // closes — before a dialog an item opened has finished and needs it.

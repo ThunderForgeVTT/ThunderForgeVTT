@@ -142,6 +142,7 @@ function installEngineProbe(wasm: BevyWasmModule): void {
   const carriedLights = (wasm as { carried_lights?: () => string })
     .carried_lights;
   const placedLights = (wasm as { placed_lights?: () => string }).placed_lights;
+  const doorIcons = (wasm as { door_icons?: () => string }).door_icons;
   const movementState = (wasm as { movement_state?: () => string })
     .movement_state;
   const tokenFootprints = (wasm as { token_footprints?: () => string })
@@ -245,6 +246,24 @@ function installEngineProbe(wasm: BevyWasmModule): void {
             lightId: string;
             bright: number;
             dim: number;
+          }[])
+        : [],
+    // Spec 071 US3: the door icons this board draws now, and where — a
+    // sprite cannot be read back from the canvas.
+    doorIcons: (): {
+      wallId: string;
+      icon: "open" | "close" | "padlock";
+      x: number;
+      y: number;
+      side: number;
+    }[] =>
+      doorIcons
+        ? (JSON.parse(doorIcons()) as {
+            wallId: string;
+            icon: "open" | "close" | "padlock";
+            x: number;
+            y: number;
+            side: number;
           }[])
         : [],
     // Spec 045: what this client believes about moving — which token its
@@ -737,6 +756,37 @@ export function onCanvasContextMenu(
 }
 
 /**
+ * A door's icon was pressed (spec 071 US3). The engine draws the icon and
+ * claims the press; what it means for this viewer is chrome's
+ * (`doorIconAction`), as a right-click's menu is.
+ */
+export interface DoorIconPressedEvent {
+  type: "door_icon_pressed";
+  wallId: string;
+  icon: "open" | "close" | "padlock";
+}
+
+function asDoorIconPressed(event: unknown): DoorIconPressedEvent | null {
+  const candidate = event as { type?: unknown; wallId?: unknown };
+  return candidate.type === "door_icon_pressed" &&
+    typeof candidate.wallId === "string"
+    ? (event as DoorIconPressedEvent)
+    : null;
+}
+
+const doorIconListeners = new Set<(event: DoorIconPressedEvent) => void>();
+
+/** Be told when a door's icon is pressed. */
+export function onDoorIconPressed(
+  listener: (event: DoorIconPressedEvent) => void,
+): () => void {
+  doorIconListeners.add(listener);
+  return () => {
+    doorIconListeners.delete(listener);
+  };
+}
+
+/**
  * Where a board point is on the page, in client pixels — for anchoring a menu
  * opened from the keyboard, where there is no pointer to open it at.
  *
@@ -1122,6 +1172,24 @@ export async function bindWorldStore(worldStore: WorldStore): Promise<void> {
               // One bad listener must not stop the others hearing about this.
             }
           }
+          return;
+        }
+
+        // Nor is a door's icon: it asks chrome to do what the icon offers.
+        // Heard once the engine's frame has returned: what the icon offers
+        // dispatches into the store, which drives the engine, and the engine
+        // is still inside the frame that reported the press.
+        const doorIcon = asDoorIconPressed(parsed);
+        if (doorIcon) {
+          queueMicrotask(() => {
+            for (const listener of doorIconListeners) {
+              try {
+                listener(doorIcon);
+              } catch {
+                // One bad listener must not stop the others hearing about this.
+              }
+            }
+          });
           return;
         }
 

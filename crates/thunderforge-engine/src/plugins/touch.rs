@@ -201,7 +201,7 @@ pub(crate) fn pinch_steps(ratio: f32) -> f32 {
     ratio.ln() / ZOOM_STEP.ln()
 }
 
-fn translate_touches(
+pub(crate) fn translate_touches(
     touches: Res<Touches>,
     time: Res<Time>,
     mut gesture: Local<Gesture>,
