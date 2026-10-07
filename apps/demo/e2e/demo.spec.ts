@@ -439,6 +439,33 @@ test("controls that only a real instance has are not offered, and session notes 
   await expect(page.getByText("Not part of the demo")).toHaveCount(0);
 });
 
+test("every page of the Game Master's sidebar opens without the demo refusing anything", async () => {
+  // T023. A fresh page load, so what was refused is this walk's alone.
+  await page.goto(`/demo/world/${WORLD_ID}/staging`);
+  const nav = page.getByTestId("world-sidebar-nav");
+  await expect(nav).toBeVisible();
+  const links = await nav.getByRole("link").evaluateAll((anchors) =>
+    anchors.map((a) => ({
+      name: (a.textContent ?? "").trim(),
+      href: a.getAttribute("href") ?? "",
+    })),
+  );
+  expect(links.length).toBeGreaterThanOrEqual(8);
+
+  for (const link of links) {
+    await nav.getByRole("link", { name: link.name, exact: true }).click();
+    await expect(page, link.name).toHaveURL(
+      new RegExp(link.href.replace(/[?]/g, "\\?") + "$"),
+    );
+    await page.waitForLoadState("networkidle");
+    expect(await refusedSoFar(), `refused on ${link.name}`).toEqual([]);
+    await expect(
+      page.getByText("Not part of the demo"),
+      `toast on ${link.name}`,
+    ).toHaveCount(0);
+  }
+});
+
 test("the fighter's sheet opens with his numbers, and a check rolls from them", async () => {
   const fighter = (await cast()).find((a) => a.label === "Brannoc Stoneward");
   if (!fighter) throw new Error("the fighter is in the cast");
