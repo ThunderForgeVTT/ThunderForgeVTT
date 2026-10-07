@@ -39,6 +39,7 @@ use thunderforge_server::state::AppState;
 use tokio::sync::broadcast;
 use tower_cookies::{CookieManagerLayer, Key};
 use tower_http::compression::CompressionLayer;
+use tower_http::compression::predicate::{DefaultPredicate, NotForContentType, Predicate};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
@@ -772,7 +773,17 @@ async fn run() {
         // Content negotiation means a client that asks for neither encoding
         // still gets identity, so this cannot break anything that was working;
         // it only takes the win where the browser already advertised support.
-        .layer(CompressionLayer::new().br(true).gzip(true))
+        //
+        // Video and audio are skipped as images already are: they are
+        // compressed in their own format, and a compressed answer cannot
+        // be resumed in parts (spec 080 T021).
+        .layer(
+            CompressionLayer::new().br(true).gzip(true).compress_when(
+                DefaultPredicate::new()
+                    .and(NotForContentType::const_new("video/"))
+                    .and(NotForContentType::const_new("audio/")),
+            ),
+        )
         .layer(CookieManagerLayer::new())
         .layer(Extension(schema));
 

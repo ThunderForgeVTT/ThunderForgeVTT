@@ -61,11 +61,19 @@ where
         ),
     );
     // The folders the bundle builds into; no upload is ever written there.
+    // The build writes a `.br` and a `.gz` beside each compressible file
+    // (spec 080 R4). Sent as they are, they carry `Content-Encoding`, so the
+    // compression layer leaves them alone and they keep `Accept-Ranges`; a
+    // client that takes neither gets the original, in parts if it asks.
     for folder in ["entry", "chunks", "static"] {
         router = router.nest_service(
             &format!("/assets/{folder}"),
-            get_service(ServeDir::new(client.join("assets").join(folder)))
-                .layer(map_response(kept_forever)),
+            get_service(
+                ServeDir::new(client.join("assets").join(folder))
+                    .precompressed_br()
+                    .precompressed_gzip(),
+            )
+            .layer(map_response(kept_forever)),
         );
     }
 

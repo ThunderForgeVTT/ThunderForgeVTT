@@ -1,6 +1,9 @@
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "vite";
+import { promisify } from "node:util";
+import zlib from "node:zlib";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { createHtmlPlugin } from "vite-plugin-html";
 import { viteStaticCopy } from "vite-plugin-static-copy";
@@ -18,6 +21,55 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const devPort = Number(process.env.THUNDERFORGE_WEB_PORT ?? 5173);
 const backendOrigin =
   process.env.THUNDERFORGE_BACKEND_ORIGIN ?? "http://127.0.0.1:30000";
+
+const brotli = promisify(zlib.brotliCompress);
+const gzip = promisify(zlib.gzip);
+
+// Spec 080 R4: a `.br` and a `.gz` beside every compressible built file, so
+// the server sends a precompressed copy (which keeps `Accept-Ranges`) instead
+// of compressing on the fly (which drops it). Only the hashed folders: their
+// files never change at a given name, so the copies cannot go stale.
+function precompress(outDir: string): Plugin {
+  const compressible = /\.(js|css|wasm|json|svg|map)$/;
+  return {
+    name: "thunderforge-precompress",
+    apply: "build",
+    async closeBundle() {
+      const files: string[] = [];
+      for (const folder of ["entry", "chunks", "static"]) {
+        const dir = path.join(outDir, "assets", folder);
+        const names = await readdir(dir).catch(() => [] as string[]);
+        for (const name of names) {
+          if (compressible.test(name)) files.push(path.join(dir, name));
+        }
+      }
+      await Promise.all(
+        files.map(async (file) => {
+          const bytes = await readFile(file);
+          const [br, gz] = await Promise.all([
+            brotli(bytes, {
+              params: {
+                // Quality 11 runs near 1 MB/s. A release engine is ~25 MB;
+                // a dev-profile one is ~270 MB and would hold the build for
+                // minutes, so anything that large settles for quality 9.
+                [zlib.constants.BROTLI_PARAM_QUALITY]:
+                  bytes.length > 64 * 1024 * 1024 ? 9 : 11,
+                [zlib.constants.BROTLI_PARAM_SIZE_HINT]: bytes.length,
+              },
+            }),
+            gzip(bytes, { level: 9 }),
+          ]);
+          await Promise.all([
+            writeFile(`${file}.br`, br),
+            writeFile(`${file}.gz`, gz),
+          ]);
+        }),
+      );
+    },
+  };
+}
+
+const outDir = path.resolve(__dirname, "../../data/client");
 
 export default defineConfig({
   root: __dirname,
@@ -68,9 +120,10 @@ export default defineConfig({
         },
       ],
     }),
+    precompress(outDir),
   ],
   build: {
-    outDir: path.resolve(__dirname, "../../data/client"),
+    outDir,
     emptyOutDir: true,
     sourcemap: true,
     rollupOptions: {

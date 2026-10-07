@@ -220,3 +220,54 @@ async fn the_demo_keeps_its_engine_and_asks_for_its_page() {
         Some(FOREVER.to_owned())
     );
 }
+
+/// Spec 080 T020: a built file is sent as its precompressed copy to a client
+/// that takes it, still offering parts and naming its version, and in parts
+/// of the original to a client that asks for a range without compression.
+#[tokio::test]
+async fn a_built_file_goes_out_precompressed_and_still_in_parts() {
+    let root = tempfile::tempdir().unwrap();
+    build_client(root.path());
+    let entry = root.path().join("client").join("assets").join("entry");
+    fs::write(entry.join("main.js.br"), "brotli bytes").unwrap();
+    fs::write(entry.join("main.js.gz"), "gzip bytes").unwrap();
+    let app: Router = router(&directories(root.path()));
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::get("/assets/entry/main.js")
+                .header("accept-encoding", "br, gzip")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let h = response.headers();
+    assert_eq!(h["content-encoding"], "br");
+    assert_eq!(h["accept-ranges"], "bytes");
+    assert!(h.get("last-modified").is_some(), "no version named");
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(&body[..], b"brotli bytes");
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::get("/assets/entry/main.js")
+                .header("range", "bytes=2-4")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+    assert!(response.headers().get("content-encoding").is_none());
+    assert_eq!(response.headers()["content-range"], "bytes 2-4/8");
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(&body[..], b"scr");
+}
