@@ -463,9 +463,10 @@ async function waitForEngineReady(page: Page): Promise<void> {
     // reached the engine, so the canvas never got focus and every
     // keyboard-driven assertion downstream silently did nothing. Inset
     // far enough to clear the rail (right) and the dice bar (bottom),
-    // while staying clear of where tokens sit.
+    // while staying clear of where tokens sit. A focusing click only: on
+    // the select tool an Escape here would open the Settings pane over the
+    // token panel's toggle (owner request 2026-10-06).
     await page.mouse.click(box.x + box.width - 200, box.y + 120);
-    await page.keyboard.press("Escape");
     await page.waitForTimeout(200);
   }
 }
