@@ -142,6 +142,7 @@ pub(crate) struct SceneParams<'w, 's> {
     units: Option<ResMut<'w, crate::systems::token_move::SceneUnits>>,
     token_culling: Option<ResMut<'w, plugins::TokenCulling>>,
     camera_viewport: Query<'w, 's, &'static Camera, With<Camera2d>>,
+    selected_token: Option<ResMut<'w, resources::SelectedToken>>,
 }
 
 /// The interaction plugin's resources, grouped.
@@ -666,6 +667,14 @@ pub(crate) fn apply_external_commands(
                         immediate,
                     },
                 );
+            }
+            ExternalCommand::SelectTokens { token_ids } => {
+                // Adopted silently: the application already holds this
+                // selection — it is where it came from — so echoing a
+                // `select_token` back would only repeat it.
+                if let Some(selected) = scene.selected_token.as_deref_mut() {
+                    selected.select_stack(token_ids);
+                }
             }
             ExternalCommand::SetControlledToken { token_id } => {
                 // Through the same queue the web uses, so there is one way a

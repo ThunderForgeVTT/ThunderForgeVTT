@@ -13,10 +13,13 @@
  *   member, each keeping its own offset, which is what "move these out of
  *   the doorway" means.
  * - **Double-click** asks *which one*. The click that preceded it already
- *   selected the stack, so this needs no new engine round trip: `disambiguate`
- *   just hands back what is selected for a picker to render, and the picker
- *   calls `selectOne`. Nothing is mutated by asking, so dismissing leaves the
- *   board exactly as it was.
+ *   selected the stack, so asking needs no engine round trip: `disambiguate`
+ *   just hands back what is selected for a picker to render. Nothing is
+ *   mutated by asking, so dismissing leaves the board exactly as it was.
+ *   *Answering* does go to the engine: `selectOne` dispatches `select_token`,
+ *   which the store forwards to the engine, and the engine narrows its own
+ *   selection to that token. A later press on the pile then picks up only
+ *   the chosen token rather than the whole stack again.
  *
  * Double-click is detected in the DOM, not the engine. Two clicks that fast
  * routinely land in the same frame, where Bevy's `just_pressed` sees one

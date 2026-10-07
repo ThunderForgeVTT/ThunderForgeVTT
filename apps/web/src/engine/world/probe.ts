@@ -45,6 +45,9 @@ export interface WorldProbe {
   state: () => {
     worldId: string | null;
     selectedTokenId: string | null;
+    /** The whole selection, topmost first: a picked-up stack, or the one
+     *  token a picker narrowed it to. */
+    selectedTokenIds: string[];
     tokenIds: string[];
     /** Position and size of each token, which is what a missed canvas
      *  hit-test comes down to. */
@@ -110,6 +113,7 @@ export function installWorldProbe(store: WorldStore): () => void {
       return {
         worldId: state.worldId,
         selectedTokenId: state.selectedTokenId,
+        selectedTokenIds: [...state.selectedTokenIds],
         tokenIds,
         tokens: Object.values(state.tokens).map((token) => ({
           id: token.id,

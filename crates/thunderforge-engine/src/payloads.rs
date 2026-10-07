@@ -466,6 +466,16 @@ pub(crate) enum ExternalCommand {
     SetControlledToken {
         token_id: Option<String>,
     },
+    /// The application's selection, topmost first; empty clears it.
+    ///
+    /// Chiefly the stack picker's answer: a click selects a whole pile, the
+    /// picker narrows it to one, and until this existed the engine never
+    /// heard — it reported `select_token` as malformed and the next press
+    /// picked up the whole pile again. Read from either `select_token` (one id
+    /// or null) or `select_tokens` (a list).
+    SelectTokens {
+        token_ids: Vec<String>,
+    },
     /// Configures a token's eyes: darkvision range, facing, cone width and
     /// sight limit. Without this a token has unaided, omnidirectional sight —
     /// which means it cannot see anything standing in darkness.

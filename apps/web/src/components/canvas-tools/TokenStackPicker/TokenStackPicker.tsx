@@ -19,8 +19,8 @@ export interface TokenStackPickerProps {
  * This is the second gesture: choose a member by name and art rather than
  * by dragging the stack apart to reach it.
  *
- * Dismissing must be free. Opening this changes no selection (the engine
- * emits `disambiguate_tokens` without touching state), so Escape or a click
+ * Dismissing must be free. Opening this changes no selection (it only reads
+ * the stack the preceding click already selected), so Escape or a click
  * outside leaves the board exactly as it was — which is what makes
  * double-clicking safe to try when you are not sure what is under there.
  *

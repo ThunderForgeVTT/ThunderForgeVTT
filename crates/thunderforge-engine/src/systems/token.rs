@@ -105,6 +105,20 @@ fn emit_token_selection(token_id: Option<&str>) {
     }));
 }
 
+/// What a left press on `stack` picks up, given what is already selected.
+///
+/// The whole stack, unless exactly one token is selected and it is in the
+/// stack: that is the stack picker's choice, and pressing on the pile again
+/// means "drag the one I chose", not "pick the pile back up". Without this
+/// the picker's answer lasted only until the next press (the owner's report:
+/// "if you select a specific token it doesn't take").
+pub(crate) fn press_pickup(stack: &[String], selected: &[String]) -> Vec<String> {
+    match selected {
+        [only] if stack.contains(only) => vec![only.clone()],
+        _ => stack.to_vec(),
+    }
+}
+
 /// Escape lets go of the selected token (spec 076 FR-008).
 ///
 /// Until spec 076 a token stayed selected until empty board was clicked, and
@@ -236,14 +250,16 @@ pub(crate) fn handle_token_drag(
 
         // Single click takes the whole stack. Dragging one token out of a
         // pile is the rarer intent — that is what the picker is for — while
-        // "move these out of the doorway" is the common one.
-        selected_token.select_stack(stack.clone());
-        emit_token_selection(stack.first().map(String::as_str));
-        emit_stack_selection(&stack);
+        // "move these out of the doorway" is the common one. Once the picker
+        // has chosen, a press on the pile takes the chosen token alone.
+        let picked = press_pickup(&stack, selected_token.selected_ids());
+        selected_token.select_stack(picked.clone());
+        emit_token_selection(picked.first().map(String::as_str));
+        emit_stack_selection(&picked);
 
         dragging.0 = token_query
             .iter()
-            .filter(|(_, identity, _)| stack.contains(&identity.0))
+            .filter(|(_, identity, _)| picked.contains(&identity.0))
             .map(|(transform, identity, _)| {
                 let center = transform.translation.truncate();
                 DraggedToken {
@@ -667,6 +683,49 @@ mod tests {
         let transform = Transform::IDENTITY;
         let dist = resize_handle_world_pos(&transform).length();
         assert!((dist - token_half_diagonal()).abs() < 1e-4);
+    }
+
+    fn ids(list: &[&str]) -> Vec<String> {
+        list.iter().map(|id| (*id).to_string()).collect()
+    }
+
+    /// A press on a pile with nothing chosen picks up the whole pile.
+    #[test]
+    fn a_press_on_a_stack_picks_up_the_whole_stack() {
+        assert_eq!(
+            press_pickup(&ids(&["top", "under"]), &[]),
+            ids(&["top", "under"])
+        );
+    }
+
+    /// The owner's report: pick the lower token from the picker, press on the
+    /// pile, and the whole pile came along again. The token the picker chose
+    /// is the one picked up.
+    #[test]
+    fn a_press_on_a_stack_holding_the_picked_token_takes_only_that_token() {
+        assert_eq!(
+            press_pickup(&ids(&["top", "under"]), &ids(&["under"])),
+            ids(&["under"])
+        );
+    }
+
+    /// A selection elsewhere is not a reason to ignore what was pressed.
+    #[test]
+    fn a_press_on_a_stack_without_the_picked_token_takes_the_stack() {
+        assert_eq!(
+            press_pickup(&ids(&["top", "under"]), &ids(&["elsewhere"])),
+            ids(&["top", "under"])
+        );
+    }
+
+    /// A whole stack selected and pressed again moves as a whole: only a
+    /// single chosen token narrows the press.
+    #[test]
+    fn a_press_on_a_selected_stack_keeps_the_stack() {
+        assert_eq!(
+            press_pickup(&ids(&["top", "under"]), &ids(&["top", "under"])),
+            ids(&["top", "under"])
+        );
     }
 
     /// Spec 076 FR-008: Escape lets go of the selected token.

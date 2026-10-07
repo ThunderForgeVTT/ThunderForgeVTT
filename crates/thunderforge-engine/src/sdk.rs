@@ -241,6 +241,18 @@ pub(crate) fn parse_command(input: &str) -> Option<ExternalCommand> {
                 .and_then(Value::as_str)
                 .map(str::to_owned),
         }),
+        // The world store's selection, forwarded like every other command it
+        // holds. The engine emits the same two shapes when a click selects,
+        // so the vocabulary is shared in both directions.
+        "select_token" => Some(ExternalCommand::SelectTokens {
+            token_ids: match value.get("tokenId") {
+                None | Some(Value::Null) => Vec::new(),
+                Some(id) => vec![id.as_str()?.to_owned()],
+            },
+        }),
+        "select_tokens" => Some(ExternalCommand::SelectTokens {
+            token_ids: serde_json::from_value(value.get("tokenIds")?.clone()).ok()?,
+        }),
         "set_token_vision" => Some(ExternalCommand::SetTokenVision {
             token_id: value.get("tokenId")?.as_str()?.to_owned(),
             darkvision: value
@@ -507,4 +519,58 @@ pub(crate) fn classify_command(input: &str) -> Result<ExternalCommand, SdkError>
 #[wasm_bindgen]
 pub fn debug_panic() {
     panic!("debug_panic: the engine was asked to crash");
+}
+
+#[cfg(test)]
+mod selection_command_tests {
+    use super::*;
+
+    /// The ids a command would leave selected, or `None` when it is not a
+    /// selection command at all (or could not be read).
+    fn selection(input: &str) -> Option<Vec<String>> {
+        match parse_command(input)? {
+            ExternalCommand::SelectTokens { token_ids } => Some(token_ids),
+            _ => None,
+        }
+    }
+
+    /// The stack picker's answer. It used to fall through to `_ => None`, so
+    /// the engine reported it as malformed and kept the whole stack selected.
+    #[test]
+    fn a_picked_token_narrows_the_selection_to_it() {
+        assert_eq!(
+            selection(r#"{"type":"select_token","tokenId":"lower"}"#),
+            Some(vec!["lower".to_string()])
+        );
+    }
+
+    #[test]
+    fn clearing_the_selection_is_a_selection_of_nothing() {
+        assert_eq!(
+            selection(r#"{"type":"select_token","tokenId":null}"#),
+            Some(Vec::new())
+        );
+    }
+
+    #[test]
+    fn a_whole_selection_keeps_its_order() {
+        assert_eq!(
+            selection(r#"{"type":"select_tokens","tokenIds":["top","under"]}"#),
+            Some(vec!["top".to_string(), "under".to_string()])
+        );
+    }
+
+    #[test]
+    fn a_selection_without_its_ids_is_malformed() {
+        assert!(parse_command(r#"{"type":"select_tokens"}"#).is_none());
+        assert!(parse_command(r#"{"type":"select_token","tokenId":3}"#).is_none());
+    }
+
+    /// Through the same gate `apply_world_command` uses, version stamp and all.
+    #[test]
+    fn the_store_s_selection_is_accepted_at_the_boundary() {
+        assert!(
+            classify_command(r#"{"type":"select_token","tokenId":"lower","sdkVersion":1}"#).is_ok()
+        );
+    }
 }

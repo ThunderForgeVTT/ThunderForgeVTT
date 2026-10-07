@@ -818,6 +818,7 @@
         "apps/web/src/components/canvas-tools/{TokenTool,TokenStackPicker}/**",
         "apps/web/src/components/world/GmToolRail/SelectionFilterMenu.tsx",
         "apps/web/src/components/world/PlacedItemPrompt.tsx",
+        "apps/web/src/components/world/SelectionCount/**",
         "apps/web/src/components/world/PlayDock/{LookAtButton.tsx,useSelectedTokenIds.ts}",
         "apps/web/src/components/{TokenPanel,TokenDisclosureControl}.tsx",
         "apps/web/src/db/collections/worldTokensSceneCollection.ts",

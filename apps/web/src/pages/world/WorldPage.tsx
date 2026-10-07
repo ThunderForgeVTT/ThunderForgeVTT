@@ -161,6 +161,7 @@ import {
   type ControllableToken,
 } from "@/engine/world/facets";
 import { TokenStackPicker } from "@/components/canvas-tools/TokenStackPicker";
+import { SelectionCount } from "@/components/world/SelectionCount";
 import { CanvasContextMenu } from "@/components/world/CanvasContextMenu/CanvasContextMenu";
 import { useCanvasContextMenu } from "@/components/world/CanvasContextMenu/useCanvasContextMenu";
 import { ApprovalQueue } from "@/components/ApprovalQueue";
@@ -1005,8 +1006,9 @@ export default function WorldPage() {
   useEffect(() => installWorldProbe(worldStore), [worldStore]);
 
   // Stacked-token gestures. A single click takes the whole stack (handled
-  // in the engine); a double-click asks which one, and that arrives here as
-  // a `disambiguate_tokens` command for this picker to answer.
+  // in the engine); a double-click asks which one, detected below from the
+  // DOM's `dblclick`, and the picker's answer goes back to the engine as a
+  // `select_token` through the world store.
   const [stackPicker, setStackPicker] = useState<{
     members: ControllableToken[];
     at: { x: number; y: number };
@@ -3177,13 +3179,17 @@ export default function WorldPage() {
                * right, and the table feed the bottom. It renders nothing for
                * a player on a scene with one level, so a scene made before
                * levels existed looks exactly as it did. */}
-              <div className="pointer-events-none absolute top-3 left-1/2 z-[1040] flex max-w-[50%] -translate-x-1/2 justify-center">
+              <div className="pointer-events-none absolute top-3 left-1/2 z-[1040] flex max-w-[50%] -translate-x-1/2 items-center justify-center gap-2">
                 <LevelTabs
                   levels={sceneLevelList}
                   level={sceneLevel}
                   isGm={isSceneOwner}
                   selectedTokenIds={worldState.selectedTokenIds}
                   actions={levelActions}
+                />
+                {/* How many tokens a stack click picked up; nothing for one. */}
+                <SelectionCount
+                  selectedTokenIds={worldState.selectedTokenIds}
                 />
               </div>
               {id ? (
