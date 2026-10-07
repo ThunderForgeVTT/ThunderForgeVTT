@@ -60,6 +60,12 @@ export default defineConfig({
         __dirname,
         "../../packs/systems/genie/web/src/index.ts",
       ),
+      // Spec 079: the rules of a fight, the server's own crate compiled to
+      // wasm by `ensureCombatBuild` (scripts/shared.mjs).
+      "@thunderforge/combat": path.resolve(
+        __dirname,
+        "../../dist/combat/combat.js",
+      ),
       // One React, the web app's — see the same aliases in its own config.
       react: path.resolve(web, "node_modules/react"),
       "react-dom": path.resolve(web, "node_modules/react-dom"),

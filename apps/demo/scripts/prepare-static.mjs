@@ -102,3 +102,10 @@ if (!existsSync(path.join(out, "maps/maps.json"))) {
 console.log(
   `[demo] ${systems.length} systems, ${interfaces.length} interface packs, notice written`,
 );
+
+// Spec 079: the fight is the server's rules compiled to wasm, and the page
+// imports them. Built here when missing or stale; a no-op when up to date.
+const { ensureCombatBuild } = await import(
+  path.join(repo, "scripts/shared.mjs")
+);
+await ensureCombatBuild();

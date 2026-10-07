@@ -2,6 +2,7 @@
 
 import {
   ROOT_DIR,
+  ensureCombatBuild,
   ensureDiceBuild,
   ensureEngineBuild,
   ensurePdfBuild,
@@ -28,6 +29,9 @@ async function run() {
   await ensurePdfBuild({ force: args.force });
   // The demo's in-page backend rolls with this (spec 074).
   await ensureDiceBuild({ force: args.force });
+  // The demo's fight rules (spec 079): the demo build imports them, and the
+  // image builds the demo after `--only-wasm`.
+  await ensureCombatBuild({ force: args.force });
 
   if (args.onlyWasm) {
     log("build", "--only-wasm set, skipping frontend/backend builds.");

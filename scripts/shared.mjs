@@ -37,6 +37,18 @@ const PDF_SOURCE_DIRS = [
   join(ROOT_DIR, "crates/thunderforge-canvas-core"),
 ];
 const PDF_PKG_DIR = join(ROOT_DIR, "dist/pdf");
+const COMBAT_DIR = join(ROOT_DIR, "crates/thunderforge-combat");
+/**
+ * The crates the fight rules are built out of (spec 079, ADR-113): the rules
+ * themselves, the dice they roll, and the geometry reach is measured with.
+ * Hashed for the PDF reader's reason: present but stale succeeds wrongly.
+ */
+const COMBAT_SOURCE_DIRS = [
+  COMBAT_DIR,
+  join(ROOT_DIR, "crates/thunderforge-dice"),
+  join(ROOT_DIR, "crates/thunderforge-canvas-core"),
+];
+const COMBAT_PKG_DIR = join(ROOT_DIR, "dist/combat");
 const ENGINE_PKG_SUM = join(ENGINE_PKG_DIR, "pkg.sum");
 const ENGINE_PKG_PACKAGE_JSON = join(ENGINE_PKG_DIR, "package.json");
 const WORKSPACE_CARGO_TOML = join(ROOT_DIR, "Cargo.toml");
@@ -430,6 +442,60 @@ export async function ensureDiceBuild({ force = false } = {}) {
     return;
   }
   log("dice", "Dice are up to date, skipping build...");
+}
+
+/**
+ * Build the rules of a fight for the browser (spec 079 FR-001).
+ *
+ * The crate the server calls, compiled for the demo, which has no server to
+ * call: never a second implementation. Release only, as the PDF reader is.
+ */
+export async function buildCombat() {
+  log("combat", "Building the WebAssembly fight rules...");
+  const child = spawnManaged(
+    "wasm-pack build ./ --release --target web --out-dir ../../dist/combat --scope thunderforge --out-name combat -- --features wasm",
+    { cwd: COMBAT_DIR, prefix: "combat" },
+  );
+  const result = await waitForProcess(child, "combat build");
+  if (result.code !== 0) {
+    throw new Error(`Fight rules build failed with exit code ${result.code}`);
+  }
+  const manifest = join(COMBAT_PKG_DIR, "package.json");
+  const pkg = JSON.parse(readFileSync(manifest, "utf-8"));
+  pkg.name = "@thunderforge/combat";
+  writeFileSync(manifest, JSON.stringify(pkg, null, 2), "utf-8");
+  writeFileSync(
+    join(COMBAT_PKG_DIR, "pkg.sum"),
+    getCombatInputsHash(),
+    "utf-8",
+  );
+  log("combat", "Build complete and pkg.sum updated.");
+}
+
+function getCombatInputsHash() {
+  const hash = createHash("sha256");
+  if (existsSync(WORKSPACE_CARGO_LOCK)) {
+    hashFile(hash, WORKSPACE_CARGO_LOCK);
+  }
+  for (const dir of COMBAT_SOURCE_DIRS) {
+    hashFile(hash, join(dir, "Cargo.toml"));
+    hashDirectoryRecursive(hash, join(dir, "src"));
+  }
+  return hash.digest("hex");
+}
+
+export async function ensureCombatBuild({ force = false } = {}) {
+  const sumPath = join(COMBAT_PKG_DIR, "pkg.sum");
+  if (force || !existsSync(COMBAT_PKG_DIR) || !existsSync(sumPath)) {
+    await buildCombat();
+    return;
+  }
+  if (readFileSync(sumPath, "utf-8").trim() === getCombatInputsHash()) {
+    log("combat", "Fight rules are up to date, skipping build...");
+    return;
+  }
+  log("combat", "Fight rules are out of date, building...");
+  await buildCombat();
 }
 
 export async function ensureEngineBuild({
