@@ -14,12 +14,17 @@
  */
 import { releaseEvents } from "../backend/events";
 import { runOperation, type OperationRequest } from "../backend/execute";
-import { NOT_IN_DEMO_CODE, reportNotInDemo } from "../backend/notInDemo";
+import {
+  NOT_IN_DEMO_CODE,
+  notInDemoMessage,
+  reportNotInDemo,
+} from "../backend/notInDemo";
 import { loadState } from "../backend/state";
 import { installImageGuard } from "./images";
 import { svgToPng } from "./rasterize";
 import { answerRest } from "./rest";
 import { installSocketGuard } from "./socket";
+import { refusingXmlHttpRequest } from "./xhr";
 
 const BASE = import.meta.env.BASE_URL;
 /** Long enough that the mutation's answer is read before its event arrives. */
@@ -37,21 +42,29 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+/** What a refused request is answered with, in the demo's own words. */
+function refusalBody(what: string): string {
+  return JSON.stringify({
+    error: "not part of the demo",
+    errors: [
+      {
+        message: notInDemoMessage(what),
+        extensions: { code: NOT_IN_DEMO_CODE },
+      },
+    ],
+  });
+}
+
 function refuse(what: string): Response {
   reportNotInDemo(what);
-  return json(
-    {
-      error: "not part of the demo",
-      errors: [
-        {
-          message: `${what} is not part of the demo.`,
-          extensions: { code: NOT_IN_DEMO_CODE },
-        },
-      ],
-    },
-    404,
-  );
+  return new Response(refusalBody(what), {
+    status: 404,
+    headers: { "content-type": "application/json" },
+  });
 }
+
+/** The client's one `XMLHttpRequest`: the book importer's upload. */
+const IMPORT = "Importing a book";
 
 async function answerGraphQL(request: Request): Promise<Response> {
   const type = request.headers.get("content-type") ?? "";
@@ -77,7 +90,7 @@ async function demoFetch(
     return fetchStatic(request);
   }
   if (url.origin !== window.location.origin) {
-    return refuse(url.host);
+    return refuse("Reaching another website");
   }
   // The demo's own static files: the bundle, the engine, the maps.
   if (url.pathname.startsWith(BASE)) {
@@ -98,7 +111,7 @@ async function demoFetch(
     fetchStatic,
     svgToPng,
   );
-  return answer ?? refuse(`${request.method} ${url.pathname}`);
+  return answer ?? refuse("That part of the server");
 }
 
 window.fetch = demoFetch;
@@ -106,16 +119,10 @@ window.fetch = demoFetch;
 installSocketGuard(BASE);
 installImageGuard();
 
-/**
- * The client's one `XMLHttpRequest` is an upload with a progress bar. There
- * is nowhere for it to go.
- */
-window.XMLHttpRequest = class {
-  constructor() {
-    reportNotInDemo("Uploading to an instance");
-    throw new DOMException("not part of the demo", "NotSupportedError");
-  }
-} as unknown as typeof XMLHttpRequest;
+window.XMLHttpRequest = refusingXmlHttpRequest(
+  () => refusalBody(IMPORT),
+  () => reportNotInDemo(IMPORT),
+);
 
 if ("sendBeacon" in navigator) {
   navigator.sendBeacon = () => false;

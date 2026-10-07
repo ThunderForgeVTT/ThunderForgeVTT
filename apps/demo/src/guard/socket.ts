@@ -8,7 +8,11 @@
  */
 import { now, subscribeToEvents } from "../backend/events";
 import { openSubscription, type OperationRequest } from "../backend/execute";
-import { NOT_IN_DEMO_CODE, reportNotInDemo } from "../backend/notInDemo";
+import {
+  NOT_IN_DEMO_CODE,
+  notInDemoMessage,
+  reportNotInDemo,
+} from "../backend/notInDemo";
 
 type Listener = ((event: never) => void) | null;
 
@@ -150,7 +154,7 @@ export function installSocketGuard(base: string): void {
         type: "error",
         payload: [
           {
-            message: `${opened.field} is not part of the demo.`,
+            message: notInDemoMessage(opened.field),
             extensions: { code: NOT_IN_DEMO_CODE },
           },
         ],

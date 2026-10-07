@@ -27,7 +27,11 @@ import {
 } from "graphql";
 import sdl from "../../../server/schema.graphql?raw";
 import { mutations, queries } from "./handlers";
-import { NOT_IN_DEMO_CODE, reportNotInDemo } from "./notInDemo";
+import {
+  NOT_IN_DEMO_CODE,
+  notInDemoMessage,
+  reportNotInDemo,
+} from "./notInDemo";
 
 const schema = buildSchema(sdl);
 
@@ -48,7 +52,7 @@ const fieldResolver: GraphQLFieldResolver<unknown, unknown> = (
   const handler = (kind === "mutation" ? mutations : queries)[info.fieldName];
   if (!handler) {
     reportNotInDemo(info.fieldName);
-    throw new GraphQLError(`${info.fieldName} is not part of the demo.`, {
+    throw new GraphQLError(notInDemoMessage(info.fieldName), {
       extensions: { code: NOT_IN_DEMO_CODE },
     });
   }

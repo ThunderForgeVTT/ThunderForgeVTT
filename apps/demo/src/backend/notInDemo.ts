@@ -5,11 +5,21 @@
  * serves, a socket to somewhere — is told so here, and the page's standing
  * notice turns it into something the visitor can read.
  */
+import { refusalArea } from "./refusalNames";
+
 export const NOT_IN_DEMO_EVENT = "thunderforge-demo:not-in-demo";
 export const NOT_IN_DEMO_CODE = "NOT_IN_DEMO";
 
 /** Everything refused so far, for a test to read. */
 export const refused: string[] = [];
+
+/**
+ * The error message a refusal carries, which a page may show in its own
+ * status line: the area by name, never the field that asked for it.
+ */
+export function notInDemoMessage(what: string): string {
+  return `${refusalArea(what)} is not part of the demo.`;
+}
 
 export function reportNotInDemo(what: string): void {
   refused.push(what);

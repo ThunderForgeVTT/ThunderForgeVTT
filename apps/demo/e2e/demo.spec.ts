@@ -56,7 +56,7 @@ async function ask<T>(query: string, variables: object = {}) {
     [query, variables] as const,
   ) as Promise<{
     status: number;
-    body: { data?: T; errors?: { extensions?: { code?: string } }[] };
+    body: { data?: T; errors?: { message?: string; extensions?: { code?: string } }[] };
   }>;
 }
 
@@ -853,7 +853,39 @@ test("something the demo does not do says so, and is not a connection error", as
   );
   expect(answer.status).toBe(200);
   expect(answer.body.errors?.[0]?.extensions?.code).toBe("NOT_IN_DEMO");
+  // Named for the visitor, not for the schema.
+  expect(answer.body.errors?.[0]?.message).toBe(
+    "Invite links is not part of the demo.",
+  );
   await expect(page.getByText("Not part of the demo")).toBeVisible();
+  await expect(
+    page.getByText("Invite links needs a real ThunderForge instance."),
+  ).toBeVisible();
+  await expect(page.getByText("generateInviteCode")).toHaveCount(0);
+
+  // The one XMLHttpRequest the client makes, the book importer's upload, is
+  // answered as a refusal it can read, not thrown at as it is constructed.
+  const upload = await page.evaluate(
+    () =>
+      new Promise<{ status: number; message: string }>((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        request.open("POST", "/api/graphql");
+        request.onerror = () => reject(new Error("the upload errored"));
+        request.onload = () =>
+          resolve({
+            status: request.status,
+            message: JSON.parse(request.responseText).errors[0].message,
+          });
+        request.send("{}");
+      }),
+  );
+  expect(upload).toEqual({
+    status: 404,
+    message: "Importing a book is not part of the demo.",
+  });
+  await expect(
+    page.getByText("Importing a book needs a real ThunderForge instance."),
+  ).toBeVisible();
 });
 
 test("as a player, the heroes are theirs and the ambush is not yet there to see", async () => {

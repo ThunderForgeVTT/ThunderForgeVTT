@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { NOT_IN_DEMO_EVENT } from "./backend/notInDemo";
 import { currentViewer, forgetSavedWorld, setViewer } from "./backend/state";
 import { MAP_CREDIT } from "./credit";
+import { refusalArea } from "./backend/refusalNames";
 
 /**
  * FR-006, FR-018: on every page, what this is, how to undo it, and whose
@@ -15,7 +16,9 @@ export function DemoNotice() {
 
   useEffect(() => {
     const onRefused = (event: Event) => {
-      const what = (event as CustomEvent<string>).detail;
+      // Named by area, not by the field that asked: "Invite links", never
+      // "generateInviteCode".
+      const what = refusalArea((event as CustomEvent<string>).detail);
       // Once each: a page that polls should not fill the screen.
       if (told.current.has(what)) return;
       told.current.add(what);
