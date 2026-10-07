@@ -108,9 +108,9 @@ pub fn entry_for(
         RollView::Whole => {
             let roller = name(row.triggered_by);
             let revealer = row.revealed_by.map(name);
-            Some(WorldRollEntry::WorldRoll(WorldRoll::from_row(
+            Some(WorldRollEntry::WorldRoll(Box::new(WorldRoll::from_row(
                 row, roller, revealer,
-            )))
+            ))))
         }
         RollView::Masked => Some(WorldRollEntry::MaskedRoll(MaskedRoll::new(
             row.id,

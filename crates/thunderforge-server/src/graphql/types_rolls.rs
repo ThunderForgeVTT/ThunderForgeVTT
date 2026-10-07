@@ -115,9 +115,10 @@ impl MaskedRoll {
     }
 }
 
-/// A roll as the caller may see it.
+/// A roll as the caller may see it. The whole roll is boxed: it is several
+/// times the size of a masked one.
 #[derive(Union, Debug, Clone)]
 pub enum WorldRollEntry {
-    WorldRoll(WorldRoll),
+    WorldRoll(Box<WorldRoll>),
     MaskedRoll(MaskedRoll),
 }

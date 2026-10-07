@@ -131,8 +131,8 @@ they prove inside each phase.
 ## Phase 9: Proof and polish
 
 - [x] T043 Register the slice: `scripts/e2e/slices.json` entry `rolls` (`own: ["rolls-"]`, `standalone: "pnpm -F @thunderforge/demo test && pnpm -F @thunderforge/demo e2e rolls-across-tabs"`, neighbours from plan.md confirmed with `pnpm e2e:which --diff`, `paths` for every file touched); root `package.json` scripts `e2e:rolls`, `e2e:rolls:standalone`, `e2e:rolls:integration`; `node scripts/check-e2e-slices.mjs` passes
-- [ ] T044 `cargo fmt`, `cargo clippy -p thunderforge-server`, `pnpm -F web typecheck`, `pnpm -F @thunderforge/demo typecheck`, `node scripts/check-graphql-contract.mjs`
-- [ ] T045 `cargo test -p thunderforge-server` green
+- [x] T044 `cargo fmt`, `cargo clippy -p thunderforge-server`, `pnpm -F web typecheck`, `pnpm -F @thunderforge/demo typecheck`, `node scripts/check-graphql-contract.mjs`
+- [x] T045 `cargo test -p thunderforge-server` green
 - [ ] T046 Run `pnpm e2e:rolls`; record the result here
 - [x] T047 [P] User guide `docs/guides/rolls.md` (who sees what, GM's eyes, GM only, reveal, the sheet in another tab); CONTRIBUTING note on the roll events, the one visibility rule and the demo's tab holder
 

@@ -307,6 +307,12 @@ pub const GATED: &[(&str, &str)] = &[
         r#"mutation { rollDice(input: { worldId: "{world}", formula: "1d20" }) { __typename } }"#,
     ),
     (
+        // The pause is checked before the roll is looked up, so no roll is
+        // needed: the world's own id stands in for one.
+        "revealRoll",
+        r#"mutation { revealRoll(worldId: "{world}", rollId: "{world}") { __typename } }"#,
+    ),
+    (
         "rollCheck",
         r#"mutation { rollCheck(worldId: "{world}", actorId: "{actor}", checkId: "x") { __typename } }"#,
     ),
