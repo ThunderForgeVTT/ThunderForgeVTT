@@ -111,6 +111,8 @@ let loadPromise: Promise<BevyWasmModule> | null = null;
 let worldStoreUnsubscribe: (() => void) | null = null;
 let bevyCallbackRegistered = false;
 let boundWorldStore: WorldStore | null = null;
+/** Read by `__engineProbe.dicePlayed`; never read by the app itself. */
+const dicePlayed: number[][] = [];
 
 const state: EngineState = {
   started: false,
@@ -155,6 +157,10 @@ function installEngineProbe(wasm: BevyWasmModule): void {
     wasm as { sight_probe?: (x: number, y: number) => string }
   ).sight_probe;
   (window as unknown as Record<string, unknown>).__engineProbe = {
+    // Spec 081: every set of dice this board was asked to animate, oldest
+    // first. Recorded once the engine took the command, so a roll that never
+    // reached the board — masked, hidden, or caught up — is not in it.
+    dicePlayed: (): number[][] => dicePlayed.map((dice) => dice.slice()),
     // Spec 076 FR-013: what the darkness sheet shows of the map at a world
     // point. `looking` is whether this canvas sees through a token at all;
     // `seen` is whether that token's line of sight reaches the point. The
@@ -1769,6 +1775,7 @@ export async function triggerDiceRollAnimation(
   module.apply_world_command(
     JSON.stringify({ type: "trigger_dice_roll", dice }),
   );
+  dicePlayed.push(dice.map((die) => die.finalValue));
 }
 
 /**

@@ -1,11 +1,43 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getWorldChatMessages, sendChatMessage } from "@/api/chat";
 import { Button } from "@/components/ui/button/Button";
 import {
   subscribeToWorldEvents,
   startPlayPanelEventSync,
 } from "@/engine/world/sync";
+import { useWorldRolls } from "@/hooks/useWorldRolls";
 import type { ChatMessageRecord } from "@/types/chat";
+import type { WorldRollEntry } from "@/types/roll";
+
+import { feedInstant, feedTime } from "./feedTime";
+import { RollEntry } from "./RollEntry";
+
+type FeedItem =
+  | { kind: "message"; at: number; message: ChatMessageRecord }
+  | { kind: "roll"; at: number; roll: WorldRollEntry };
+
+/** Messages and rolls in one timeline, oldest first. */
+function feedOf(
+  messages: ChatMessageRecord[],
+  rolls: WorldRollEntry[],
+): FeedItem[] {
+  return [
+    ...messages.map(
+      (message): FeedItem => ({
+        kind: "message",
+        at: feedInstant(message.createdAt),
+        message,
+      }),
+    ),
+    ...rolls.map(
+      (roll): FeedItem => ({
+        kind: "roll",
+        at: feedInstant(roll.createdAt),
+        roll,
+      }),
+    ),
+  ].sort((a, b) => a.at - b.at);
+}
 
 export interface ChatPanelProps {
   worldId: string;
@@ -17,6 +49,8 @@ export interface ChatPanelProps {
 /**
  * World chat: persisted backscroll plus a composer, kept live by the same
  * `world_events` subscription every other Play panel uses (event code 17).
+ * Spec 081: the table's rolls read in the same timeline, each as the server
+ * answered it for this viewer — whole, `****`, or not at all.
  *
  * GM-only messages are filtered server-side — this component renders
  * whatever it is given and never decides visibility itself, so there is no
@@ -34,6 +68,17 @@ export function ChatPanel({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const {
+    rolls,
+    hasOlder,
+    loadOlder,
+    upsert,
+    error: rollsError,
+  } = useWorldRolls(worldId);
+  const feed = useMemo(
+    () => (messages === null ? null : feedOf(messages, rolls)),
+    [messages, rolls],
+  );
 
   const refresh = useCallback(() => {
     return getWorldChatMessages(worldId)
@@ -59,13 +104,14 @@ export function ChatPanel({
     return stop;
   }, [worldId, refresh]);
 
-  // Pin to the newest message whenever the log grows.
+  // Pin to the newest entry whenever the log grows.
+  const feedLength = feed?.length ?? 0;
   useEffect(() => {
     const el = scrollRef.current;
     if (el) {
       el.scrollTop = el.scrollHeight;
     }
-  }, [messages]);
+  }, [feedLength]);
 
   const handleSend = async () => {
     const trimmed = body.trim();
@@ -94,43 +140,46 @@ export function ChatPanel({
         ref={scrollRef}
         className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1"
       >
-        {messages === null ? (
+        {hasOlder ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => void loadOlder()}
+            data-testid="chat-older-rolls"
+          >
+            Older rolls
+          </Button>
+        ) : null}
+        {feed === null ? (
           <p className="text-sm text-muted-foreground">Loading chat…</p>
-        ) : messages.length === 0 ? (
+        ) : feed.length === 0 ? (
           <p className="text-sm text-muted-foreground">No messages yet.</p>
         ) : (
-          messages.map((message) => (
-            <div key={message.id} data-testid="chat-message">
-              <div className="flex items-baseline gap-2">
-                <span
-                  className={
-                    message.authorUserId === currentUserId
-                      ? "text-sm font-semibold text-primary"
-                      : "text-sm font-semibold"
-                  }
-                >
-                  {message.authorLabel}
-                </span>
-                {message.gmOnly ? (
-                  <span className="rounded bg-muted px-1.5 py-0.5 text-[0.65rem] font-semibold tracking-widest text-muted-foreground uppercase">
-                    GM only
-                  </span>
-                ) : null}
-                <time className="ml-auto text-xs text-muted-foreground">
-                  {new Date(message.createdAt).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </time>
-              </div>
-              {/* Rendered as text, never as markup — bodies are stored raw. */}
-              <p className="text-sm whitespace-pre-wrap">{message.body}</p>
-            </div>
-          ))
+          feed.map((item) =>
+            item.kind === "roll" ? (
+              <RollEntry
+                key={`roll-${item.roll.id}`}
+                worldId={worldId}
+                entry={item.roll}
+                isGm={isGm}
+                onRevealed={upsert}
+              />
+            ) : (
+              <ChatMessage
+                key={item.message.id}
+                message={item.message}
+                currentUserId={currentUserId}
+              />
+            ),
+          )
         )}
       </div>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {rollsError ? (
+        <p className="text-sm text-destructive">{rollsError.message}</p>
+      ) : null}
 
       <div className="grid gap-2 border-t border-border pt-3">
         <textarea
@@ -174,6 +223,40 @@ export function ChatPanel({
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ChatMessage({
+  message,
+  currentUserId,
+}: {
+  message: ChatMessageRecord;
+  currentUserId: string | null;
+}) {
+  return (
+    <div data-testid="chat-message">
+      <div className="flex items-baseline gap-2">
+        <span
+          className={
+            message.authorUserId === currentUserId
+              ? "text-sm font-semibold text-primary"
+              : "text-sm font-semibold"
+          }
+        >
+          {message.authorLabel}
+        </span>
+        {message.gmOnly ? (
+          <span className="rounded bg-muted px-1.5 py-0.5 text-[0.65rem] font-semibold tracking-widest text-muted-foreground uppercase">
+            GM only
+          </span>
+        ) : null}
+        <time className="ml-auto text-xs text-muted-foreground">
+          {feedTime(message.createdAt)}
+        </time>
+      </div>
+      {/* Rendered as text, never as markup — bodies are stored raw. */}
+      <p className="text-sm whitespace-pre-wrap">{message.body}</p>
     </div>
   );
 }

@@ -761,6 +761,39 @@
       "standalone": "pnpm -F @thunderforge/downloads test:e2e"
     },
     {
+      "name": "rolls",
+      "summary": "Rolls at the table: every board animates a roll, the chat lists it as each viewer may see it, and the GM reveals hidden ones (specs/081-rolls-at-the-table)",
+      "own": ["rolls-"],
+      "neighbours": [
+        {
+          "spec": "dice-roll.spec.ts",
+          "seam": "the dice roller makes the rolls this slice broadcasts"
+        },
+        {
+          "spec": "chat-panel.spec.ts",
+          "seam": "rolls read in the chat panel's timeline"
+        },
+        {
+          "spec": "combat-attack.spec.ts",
+          "seam": "an attack's rolls are announced as rolls"
+        },
+        {
+          "spec": "roll-check.spec.ts",
+          "seam": "a check's roll is a roll like any other"
+        }
+      ],
+      "paths": [
+        "apps/web/src/components/world/PlayDock/{RollEntry.tsx,feedTime.ts}",
+        "apps/web/src/components/world/PlayDock/__tests__/{feedTime,upsertRoll}.test.ts",
+        "apps/web/src/engine/world/sync/rolls.ts",
+        "apps/web/src/engine/world/sync/__tests__/rolls.test.ts",
+        "apps/web/src/hooks/useWorldRolls.ts",
+        "crates/thunderforge-server/src/rolls/**",
+        "crates/thunderforge-server/src/graphql/queries/roll_feed_tests.rs",
+        "crates/thunderforge-server/src/graphql/{roll_stream_tests,types_rolls}.rs"
+      ]
+    },
+    {
       "name": "scenes",
       "summary": "Scenes, staging and the player's active scene (specs/009-gm-staging-page, specs/010-world-staging-actors, specs/022-scene-management-overhaul); scene-lighting and scene-preload are owned elsewhere by exact name",
       "own": [

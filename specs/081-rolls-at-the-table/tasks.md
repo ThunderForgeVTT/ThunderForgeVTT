@@ -62,13 +62,13 @@ they prove inside each phase.
 
 ## Phase 3: US1 — Everyone sees a roll (P1) 🎯 MVP
 
-- [ ] T017 [US1] E2E `apps/web/e2e/rolls-everyone.spec.ts`: GM and two players in three contexts on one world's play view; one player rolls `1d20` from the dice roller; within 1 s every board's dice overlay shows and every chat panel lists the roll with the same total (SC-001); a reload lists it once and does not animate it (catch-up)
+- [x] T017 [US1] E2E `apps/web/e2e/rolls-everyone.spec.ts`: GM and two players in three contexts on one world's play view; one player rolls `1d20` from the dice roller; within 1 s every board's dice overlay shows and every chat panel lists the roll with the same total (SC-001); a reload lists it once and does not animate it (catch-up)
 - [x] T018 [US1] Start the roll sync in the play view where the engine mounts (beside the other `start*Sync` calls); pass `triggerDiceRollAnimation` as `animate`
 - [x] T019 [P] [US1] Remove the local `triggerDiceRollAnimation` calls from `DiceRollerPanel.tsx`, `InPaneCharacterSheet.tsx` and `AttackFlow/AttackFlow.tsx`; each keeps showing its result from the mutation's answer (FR-013)
 - [x] T020 [US1] `crates/thunderforge-server/src/combat/attack.rs::roll_and_record` records code 36 (`everyone`, the attack's name as label) for each roll it inserts; extend `combat/attack_tests.rs` (research R4)
-- [ ] T021 [P] [US1] Create `apps/web/src/hooks/useWorldRolls.ts`: first page from `fetchWorldRolls`, older pages on demand, entries added or replaced by id from the roll sync's `onRoll`, `refetch()`
-- [ ] T022 [US1] `apps/web/src/components/world/PlayDock/ChatPanel.tsx`: interleave roll entries with messages by time; a roll entry shows roller, label, formula, dice and total
-- [ ] T023 [US1] Run `dice-roll.spec.ts`, `combat-attack.spec.ts`, `chat-panel.spec.ts`, `roll-check.spec.ts`; fix what they report
+- [x] T021 [P] [US1] Create `apps/web/src/hooks/useWorldRolls.ts`: first page from `fetchWorldRolls`, older pages on demand, entries added or replaced by id from the roll sync's `onRoll`, `refetch()`
+- [x] T022 [US1] `apps/web/src/components/world/PlayDock/ChatPanel.tsx`: interleave roll entries with messages by time; a roll entry shows roller, label, formula, dice and total
+- [x] T023 [US1] Run `dice-roll.spec.ts`, `combat-attack.spec.ts`, `chat-panel.spec.ts`, `roll-check.spec.ts`; fix what they report
 
 **Checkpoint**: US1 complete; `rolls-everyone.spec.ts` green.
 

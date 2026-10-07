@@ -70,6 +70,8 @@
     "e2e:resumable-downloads": "pnpm run e2e:resumable-downloads:standalone && pnpm run e2e:resumable-downloads:integration",
     "e2e:resumable-downloads:integration": "node ./scripts/e2e-parallel.mjs --shards=1 --slice=resumable-downloads",
     "e2e:resumable-downloads:standalone": "pnpm -F @thunderforge/downloads test:e2e",
+    "e2e:rolls": "pnpm run e2e:rolls:integration",
+    "e2e:rolls:integration": "node ./scripts/e2e-parallel.mjs --shards=1 --slice=rolls",
     "e2e:scenes": "pnpm run e2e:scenes:integration",
     "e2e:scenes:integration": "node ./scripts/e2e-parallel.mjs --shards=1 --slice=scenes",
     "e2e:status": "pnpm run e2e:status:integration",
