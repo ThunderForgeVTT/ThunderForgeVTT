@@ -185,3 +185,39 @@ async fn an_empty_creator_list_clears_nothing() {
     assert_eq!(rows(&t, t.scene), before);
     assert!(deleted_events(&t).is_empty());
 }
+
+/// SC-003: clearing a scene of 200 shapes, timed. The board side is one
+/// ordinary `deleted` event per shape; this is the server's share.
+#[tokio::test]
+async fn clearing_two_hundred_shapes_is_quick() {
+    let t = table();
+    let rows: Vec<_> = (0..200)
+        .map(|_| {
+            (
+                shapes::shape_id.eq(Uuid::now_v7()),
+                shapes::scene_id.eq(t.scene),
+                shapes::kind.eq("rect"),
+                shapes::geometry.eq(json!({ "x": 1, "y": 2, "w": 3, "h": 4 })),
+                shapes::visible_to_players.eq(true),
+                shapes::created_by.eq(t.a),
+                shapes::updated_by.eq(t.a),
+            )
+        })
+        .collect();
+    diesel::insert_into(shapes::table)
+        .values(&rows)
+        .execute(&mut t.state.db_pool.get().unwrap())
+        .unwrap();
+
+    let started = std::time::Instant::now();
+    let cleared = data(clear(&t, t.owner, None).await);
+    let took = started.elapsed();
+    println!("clearShapes of 200 shapes took {took:?}");
+
+    assert_eq!(cleared["clearShapes"], json!(200));
+    assert_eq!(deleted_events(&t).len(), 200);
+    assert!(
+        took < std::time::Duration::from_secs(2),
+        "SC-003 allows 2 s end to end; the server alone took {took:?}"
+    );
+}

@@ -1,7 +1,8 @@
 # Lights and drawings
 
 A light you placed and a drawing you made can each be changed from the board,
-without picking up the tool that made it. These menus are the Game Master's.
+without picking up the tool that made it. The light menu is the Game
+Master's; the drawing menu is anyone's, for the drawings they may change.
 
 ## Lights
 
@@ -33,8 +34,41 @@ letters of a text.
 | **Hide from players**     | Only you see it.                        |
 | **Remove from the board** | Takes it off the board.                 |
 
-A drawing made with the Shape tool starts hidden, so you can sketch a trap or a note to yourself
-before the session and show it when the party finds it.
+A drawing the Game Master makes with the Shape tool starts hidden, so you can
+sketch a trap or a note to yourself before the session and show it when the
+party finds it.
+
+### Players draw too
+
+Every player has a tool rail with **Select** and **Shapes**, so they can mark
+a plan, a route or a guess on the map. What a player draws:
+
+- is theirs. They can move, restyle and remove it; nobody else's drawing
+  answers their clicks. Their right-click menu offers only **Remove from the
+  board**.
+- is always shown to everyone. A player cannot hide a drawing.
+- goes when they delete their account.
+
+The Game Master can change or remove any drawing, a player's included.
+
+### Clearing the board
+
+The **Shapes** tool's panel gives the Game Master two more buttons:
+
+| Button                       | What it does                                                                 |
+| ---------------------------- | ---------------------------------------------------------------------------- |
+| **Clear all shapes**         | Removes every drawing on this scene, on every level, after asking.           |
+| **Clear a player's shapes…** | Lists who drew here and how much; tick the players whose drawings should go. |
+
+Neither touches another scene, and both are gone from every board at once.
+They are not undone.
+
+### Taking the pen away
+
+To stop a player drawing, open the world's dashboard, follow **manage** next
+to the game system, and switch **Shapes** off for them under **Player
+authoring tools**. Their rail drops the tool at once, without a reload, and
+what they already drew stays. Switch it on again to give it back.
 
 ## When things overlap
 

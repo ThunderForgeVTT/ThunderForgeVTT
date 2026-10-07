@@ -125,8 +125,8 @@ as named below.
 
 ## Phase 9: Polish and proof
 
-- [ ] T041 [P] `docs/guides/lights-and-drawings.md`: players draw by default and own their shapes; the GM's two clear actions; taking the tools away. CONTRIBUTING: `shape_authority` is the one rule for shape writes
-- [ ] T042 SC-003: a server test or e2e step clearing 200 shapes, timing it; record the number here
+- [x] T041 [P] `docs/guides/lights-and-drawings.md`: players draw by default and own their shapes; the GM's two clear actions; taking the tools away. CONTRIBUTING: `shape_authority` is the one rule for shape writes
+- [x] T042 SC-003: a server test or e2e step clearing 200 shapes, timing it; record the number here — 2026-10-07: `clearing_two_hundred_shapes_is_quick`, three runs: 131 ms, 122 ms, 118 ms for the server (200 rows, 200 `deleted` events); asserts under 2 s
 - [ ] T043 `make lint`; `make test-rust ARGS="-p thunderforge-server"`; `cargo test -p thunderforge-engine`; `pnpm -F @thunderforge/web test`; `pnpm -F @thunderforge/demo test` and the demo e2e; `pnpm e2e:canvas`
 - [ ] T044 `pnpm e2e:which --diff`, and run each slice it names
 - [ ] T045 The full suite, `node ./scripts/e2e-parallel.mjs`: the schema and migration are cross-cutting, so this is the gate before merge

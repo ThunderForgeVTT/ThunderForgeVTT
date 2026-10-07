@@ -102,6 +102,28 @@ world and takes over.
 `pnpm e2e:rolls` proves all of it: the demo's tests and its two-tab e2e,
 then the app against the stack.
 
+### Drawings
+
+A player draws by default (spec 082): `effective_authoring_tools` gives a
+member Select and Shapes unless a row in `world_authoring_tool_revocations`
+takes one away. A Game Master's grant or revocation is announced as
+`AUTHORING_TOOLS_CHANGED` (38), `{userId}`, and the web rail asks again.
+
+Every shape write asks one function,
+`crates/thunderforge-server/src/auth/shape_authority.rs`: `Dm` may do
+anything, `Creator` may change only the shapes they made and cannot hide them,
+and `None` is told the shape or scene was not found. `createShape`,
+`updateShape`, `deleteShape`, `clearShapes` and `shapeCreators` all go
+through it, and a new path to a shape must too. The engine and the web gate
+on `createdBy` as a courtesy; the server is the rule.
+
+`clearShapes` records one ordinary `deleted` shape event per shape, so no
+client needed a new event. Deleting an account removes the user's drawings in
+other people's worlds (`users/shape_cleanup.rs`), announced by each world's
+owner, because `shapes.created_by` and `updated_by` have no `ON DELETE`.
+
+The demo mirrors all of it in `apps/demo/src/backend/handlers/shapes.ts`.
+
 ### Proving a change
 
 A change is proven by its feature's slice, not by the full e2e suite. A
