@@ -21,6 +21,16 @@ download down. As for the engine, it is the same problem in the same place.
 Each part is checked as one version of the file, so a file changed on the
 server midway is never stitched together from two versions.
 
+Who this is for, in the owner's words: players on a weak computer or a weak
+connection should still get a decent experience. The two are helped
+differently. A weak connection gains the most: a drop costs one part, and
+parallel parts get past a link that throttles each single download. A weak
+computer gains less, and the spec does not pretend otherwise. Parts do not
+make the engine smaller or quicker to run. What they must not do is make
+things worse: the bytes go to the engine in order as they arrive, so it
+compiles while the rest downloads, and no file is held whole in memory
+twice over on a machine that has little to spare.
+
 The owner decided the engine is in scope, not just scene assets. The owner
 also decided the size of the local development build of the engine is not
 a problem to solve here: a development build is large by nature.
@@ -265,7 +275,9 @@ and check that it still arrives whole in one request.
 - **FR-013**: The downloader MUST hand the bytes on in file order as they
   become available, as one continuous stream. A part that arrives early
   waits for the parts before it. Compiling the engine MUST keep
-  overlapping the download, as it does today.
+  overlapping the download, as it does today. What the downloader holds
+  at once MUST be bounded by the parts in flight, not by the file size,
+  so a computer with little memory is not made worse off.
 - **FR-014**: A part that fails MUST be retried on its own, with a growing
   pause between tries, up to a limit. Parts already received MUST be kept.
 - **FR-015**: Every part MUST be fetched against the same version of the
