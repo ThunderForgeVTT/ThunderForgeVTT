@@ -36,11 +36,19 @@ Counted on 2026-10-07:
     GM it is drawn faint (`SECRET_DOOR_COLOR`).
   - The door context menu leaves it out for players (`context_menu.rs:86`).
   - `setDoorSecret` (`mutations_interactives.rs:271`) is GM only and checks
-    the pause. It records `EVENT_CODE_DOOR_CHANGED`.
+    the pause. It records `EVENT_CODE_DOOR_CHANGED` and
+    `EVENT_CODE_WALL_CHANGED` (`announce_door`).
   - Nothing in `setDoorSecret` requires the wall to be a door. Only the UI
     does: the toggle lives in `DoorControls.tsx`, which shows only for doors.
-  - Turning a wall into a door with a click clears `secret`
-    (`systems/wall.rs:280`).
+  - Turning a wall into a door with a click clears `secret` locally and
+    sends `secret: false` in its `update_wall` changes
+    (`systems/wall.rs:280`). The server ignores that field: `updateWall`
+    cannot set `secret` (`mutations_walls.rs:147`), and the web's
+    `WallFieldChanges` has no `secret`.
+  - The web calls `setDoorSecret` straight from components
+    (`DoorControls.tsx:87`, `doorActions.ts:52`). The wall mutation bridge
+    (`sync/walls.ts`) sends only `updateWall`, and has no rollback: a
+    refusal is logged and the board keeps the refused edit.
   - The demo answers `setDoorSecret` (`handlers.ts:507`), and the pause
     table classifies it.
 - **Selection.**
@@ -50,13 +58,30 @@ Counted on 2026-10-07:
     each.
   - `SelectionFilter` (`plugins/selection_filter.rs`, spec 031 FR-008) says
     which kinds the GM's Select acts on. The GM sets it in
-    `SelectionFilterMenu.tsx`, and it is kept per user.
+    `SelectionFilterMenu.tsx`, and it is kept per user. **No engine system
+    reads it** (checked 2026-10-07 while planning): the resource is set and
+    never consulted, so today it changes nothing. The box is the first
+    thing to read it.
+  - **Select picks only tokens.** In `AuthoringMode::Select` only
+    `handle_token_drag` runs; a wall, light or shape is selected only in its
+    own tool's mode (`authoring_tool_allowed`).
+  - **A wall cannot be moved whole.** The wall tool drags an endpoint
+    (`WallDragMode::MovingEndpoint`); a press on a wall's body selects it.
+    Lights and shapes move whole in their own modes
+    (`translate_geometry`, `systems/shape.rs:179`).
+  - The engine holds one level at a time: the web loads only the level in
+    view (`sync/levels.ts`). Nothing in the engine knows about levels.
   - A press on empty board deselects (`systems/token.rs:247`).
   - A stack drag sends one `upsert_token` per token, through the mutation
     bridge (`systems/token.rs:353`). The server checks each token on its
     own: a GM moves anything, a player only a token whose `owner_user_id`
     is theirs (`mutations_tokens.rs:73`).
-  - The engine does not know who owns a token.
+  - The engine does not know who owns a token: `WorldTokenPayload` has no
+    owner, although the web's `WorldToken.ownerUserId` already carries it.
+  - A refused token move is put back from a re-read of the server, with a
+    toast per token (`applyMoveRefusal`, `sync/tokens.ts:229`). The light
+    and wall bridges only log a refusal. Spec 082 T018 adds rollback to the
+    shape bridge.
   - Shift held on the keyboard plans a route (`systems/token_move.rs:166`).
     No mouse gesture uses shift.
 - **Players and the Select tool.** Spec 082 gives every player Select and
@@ -200,11 +225,15 @@ those two, and the GM-owned token stays put.
   `secret` flag. No column, no migration and no new mutation:
   `setDoorSecret` already applies to every wall, and keeps its name.
 - **FR-002**: The wall panel (`WallTool`) MUST offer **Hidden from the
-  table** for every selected wall. With several selected it MUST set every
-  one, with one `setDoorSecret` per wall through the wall mutation bridge.
-  `DoorControls.tsx` keeps its own toggle.
+  table** for the selected wall, and the Select bar (FR-018) for every wall
+  in a group. Either dispatches one world-store command,
+  `set_walls_hidden { wallIds, hidden }`. The wall mutation bridge turns it
+  into one `setDoorSecret` per wall and rolls back each refused wall. No
+  component calls `setDoorSecret` for this. `DoorControls.tsx` keeps its own
+  toggle.
 - **FR-003**: The door click (`systems/wall.rs:280`) MUST stop clearing
-  `secret`.
+  `secret`, both on the engine's wall and in the `update_wall` changes it
+  emits.
 - **FR-004**: A hidden wall MUST keep blocking vision and movement for
   everyone. Nothing reads `secret` in the sight or movement code, and that
   stays true.
@@ -218,11 +247,14 @@ those two, and the GM-owned token stays put.
   today.
 - **FR-006**: Shift held at release MUST toggle the candidates inside the
   box against the current selection. Shift-click MUST toggle one item.
-- **FR-007**: `SelectedWall`, `SelectedLight` and `SelectedShape` MUST
-  become lists with a primary, the way `SelectedToken` already is.
-  `get_selected` keeps answering the primary, so single-selection callers
-  and panels are unchanged. The world store's `select_*` commands carry the
-  full list alongside the primary.
+- **FR-007**: A selection MUST hold several items of every kind.
+  `SelectedToken` is already a list. `SelectedWall`, `SelectedLight` and
+  `SelectedShape` stay as they are and name the primary of their kind, so
+  every single-selection caller and panel is unchanged. A new
+  `GroupSelection` resource holds the full list per kind, and the engine
+  emits it as one `select_group` event. The world store keeps
+  `selectedWallIds`, `selectedLightIds` and `selectedShapeIds` beside the
+  primaries.
 
 **Who the box takes**
 
@@ -240,8 +272,9 @@ those two, and the GM-owned token stays put.
 
 **Acting on a selection**
 
-- **FR-011**: Dragging any selected item MUST move every selected item by
-  the same offset. Each move is the item's existing per-item mutation
+- **FR-011**: In Select, dragging any item of a group of two or more MUST
+  move every selected item by the same offset. A wall moves whole: both
+  endpoints, in one `update_wall` carrying `x1`, `y1`, `x2` and `y2`. Each move is the item's existing per-item mutation
   through its bridge (`upsert_token`, `update_wall`, `update_light`,
   `update_shape`). There is no batch mutation. A group move is N persisted
   changes, as a stack move already is.
@@ -251,8 +284,10 @@ those two, and the GM-owned token stays put.
   against the walls (spec 045 FR-015). A token whose path crosses goes
   back, and the others land.
 - **FR-014**: A refusal from the server MUST roll back only the refused
-  item, from its own pre-move state. The mover sees one notice that counts
-  the refusals.
+  item. A token goes back by its existing re-read; a wall or light by the
+  record the store held before the move; a shape by spec 082's rollback.
+  The mover sees one notice that counts the refusals, in place of a toast
+  per token.
 - **FR-015**: The engine's candidate rules are a courtesy. The server's
   per-item checks are the rule and do not change.
 
@@ -261,8 +296,12 @@ those two, and the GM-owned token stays put.
 - **FR-016**: No new GraphQL mutation is added, so
   `play_pause_surface_tables.rs` is unchanged. If planning finds one is
   needed after all, it MUST be classified there.
-- **FR-017**: The demo needs no backend change for hidden walls. Box
+- **FR-017**: The demo needs no backend change for hidden walls: its
+  `setDoorSecret` (`handlers.ts:507`) does not ask for a door either. Box
   select is engine and web only and runs in the demo unchanged.
+- **FR-018**: In Select, while the group holds more than one item, a
+  Select bar MUST show how many of each kind are selected, **Hidden from
+  the table** when the group holds a wall (GM only), and **Delete**.
 
 ### Key Entities
 
