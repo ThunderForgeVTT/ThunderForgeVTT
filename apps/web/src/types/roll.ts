@@ -41,3 +41,36 @@ export interface PlaceholderBinding {
   name: string;
   value: number;
 }
+
+/** Spec 081: who sees a roll. Players may pick `GM_EYES`, the GM `GM_ONLY`. */
+export type RollVisibility = "EVERYONE" | "GM_EYES" | "GM_ONLY";
+
+/** Spec 081: a roll the viewer may see whole. */
+export interface WorldRollRecord {
+  __typename: "WorldRoll";
+  id: string;
+  rollerId: string;
+  rollerName: string;
+  label: string | null;
+  formula: string;
+  resolution: RollResolutionRecord;
+  visibility: RollVisibility;
+  createdAt: string;
+  revealedAt: string | null;
+  revealedByName: string | null;
+}
+
+/**
+ * Spec 081: a roll made for the GM's eyes, as another player sees it. It has
+ * no field for the dice, the formula or the label — there is nothing in it to
+ * leak.
+ */
+export interface MaskedRollRecord {
+  __typename: "MaskedRoll";
+  id: string;
+  rollerName: string;
+  createdAt: string;
+  visibility: RollVisibility;
+}
+
+export type WorldRollEntry = WorldRollRecord | MaskedRollRecord;

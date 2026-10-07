@@ -43,6 +43,12 @@ export interface WorldEventLike {
   eventCode?: number;
   token_event?: unknown;
   tokenEvent?: unknown;
+  /**
+   * Spec 081: set on an event handed over by the reconnect catch-up rather
+   * than the live stream. Every handler but one ignores it — a roll that
+   * arrives late is listed, not animated (`rolls.ts`).
+   */
+  replayed?: boolean;
 }
 
 /**
@@ -796,10 +802,12 @@ export async function catchUpWorldEvents(
   const consumers = worldConsumers.get(worldId);
   for (const event of payload.events ?? []) {
     // Oldest first, and through the same `deliver` the live path uses — so a
-    // replayed event is indistinguishable downstream, and each consumer's own
-    // id check drops anything it already handled.
+    // replayed event reaches the same handlers, marked only so a roll is not
+    // animated late, and each consumer's own id check drops anything it
+    // already handled.
     if (consumers) {
-      for (const deliver of consumers) deliver(event);
+      const replayed = { ...event, replayed: true };
+      for (const deliver of consumers) deliver(replayed);
     } else {
       // Nobody is subscribed yet; the cursor still has to advance or the same
       // backlog is requested again on the next reconnect.

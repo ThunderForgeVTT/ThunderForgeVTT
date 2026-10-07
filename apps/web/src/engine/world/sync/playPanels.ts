@@ -12,6 +12,8 @@
  * refetch re-applies the server's `gm_only` filter.
  */
 
+import { ROLL_MADE_EVENT_CODE, ROLL_REVEALED_EVENT_CODE } from "./rolls";
+
 export const CHAT_MESSAGE_EVENT_CODE = 17;
 export const COMBAT_CHANGED_EVENT_CODE = 18;
 /**
@@ -38,6 +40,8 @@ export interface PlayPanelEventHandlers {
   onAttackMade?: (attackId: string | undefined) => void;
   /** Spec 046: an offer changed — re-read `pendingOffers(worldId)`. */
   onOfferChanged?: (offerId: string | undefined) => void;
+  /** Spec 081: a roll was made or revealed — read `worldRoll(rollId)`. */
+  onRoll?: (rollId: string | undefined) => void;
 }
 
 /**
@@ -71,6 +75,14 @@ export function applyPlayPanelWorldEvent(
 
   if (eventCode === OFFER_CHANGED_EVENT_CODE) {
     handlers.onOfferChanged?.(payload?.offerId as string | undefined);
+    return;
+  }
+
+  if (
+    eventCode === ROLL_MADE_EVENT_CODE ||
+    eventCode === ROLL_REVEALED_EVENT_CODE
+  ) {
+    handlers.onRoll?.(payload?.rollId as string | undefined);
   }
 }
 

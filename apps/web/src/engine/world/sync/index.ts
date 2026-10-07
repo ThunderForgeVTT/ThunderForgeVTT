@@ -95,6 +95,15 @@ export {
   type LevelViewer,
 } from "./levels";
 export {
+  REPLAY_WINDOW_MS,
+  ROLL_MADE_EVENT_CODE,
+  ROLL_REVEALED_EVENT_CODE,
+  rollIdOf,
+  shouldAnimate,
+  startRollSync,
+  type RollSyncOptions,
+} from "./rolls";
+export {
   applyPlayPanelWorldEvent,
   startPlayPanelEventSync,
   CHAT_MESSAGE_EVENT_CODE,

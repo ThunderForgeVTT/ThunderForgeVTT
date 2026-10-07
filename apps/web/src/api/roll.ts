@@ -8,6 +8,9 @@ import type {
   PlaceholderBinding,
   RollRecordRecord,
   RollResolutionRecord,
+  RollVisibility,
+  WorldRollEntry,
+  WorldRollRecord,
 } from "@/types/roll";
 
 const ROLL_RESOLUTION_FIELDS = `
@@ -27,15 +30,27 @@ type RollDiceMutation = {
   rollDice: RollResolutionRecord;
 };
 
+/** What a roll is for and who sees it (spec 081). */
+export interface RollOptions {
+  bindings?: PlaceholderBinding[];
+  /** `EVERYONE` when left out. */
+  visibility?: RollVisibility;
+  /** What the roll was for — "Stealth", "Longsword". */
+  label?: string;
+}
+
 /**
  * The sole way to produce an authoritative roll. Always re-resolves
  * server-side regardless of anything this client sends — there is no
  * field here that could express a pre-computed result (FR-001/FR-002).
+ *
+ * Spec 081: the server announces the roll to the table; every board,
+ * this one included, animates it from that announcement.
  */
 export function rollDice(
   worldId: string,
   formula: string,
-  bindings?: PlaceholderBinding[],
+  { bindings, visibility, label }: RollOptions = {},
 ): Promise<RollResolutionRecord> {
   return postGraphQL<RollDiceMutation>(
     `
@@ -45,8 +60,91 @@ export function rollDice(
         }
       }
     `,
-    { input: { worldId, formula, bindings } },
+    { input: { worldId, formula, bindings, visibility, label } },
   ).then((data) => data.rollDice);
+}
+
+const WORLD_ROLL_FIELDS = `
+  __typename
+  id
+  rollerId
+  rollerName
+  label
+  formula
+  resolution {
+    ${ROLL_RESOLUTION_FIELDS}
+  }
+  visibility
+  createdAt
+  revealedAt
+  revealedByName
+`;
+
+const WORLD_ROLL_ENTRY_FIELDS = `
+  __typename
+  ... on WorldRoll {
+    ${WORLD_ROLL_FIELDS}
+  }
+  ... on MaskedRoll {
+    id
+    rollerName
+    createdAt
+    visibility
+  }
+`;
+
+/**
+ * One roll as this viewer may see it: whole, masked, or `null` when it is
+ * hidden from them or does not exist — the two answer alike.
+ */
+export function fetchWorldRoll(
+  worldId: string,
+  rollId: string,
+): Promise<WorldRollEntry | null> {
+  return postGraphQL<{ worldRoll: WorldRollEntry | null }>(
+    `
+      query WorldRoll($worldId: UUID!, $rollId: UUID!) {
+        worldRoll(worldId: $worldId, rollId: $rollId) {
+          ${WORLD_ROLL_ENTRY_FIELDS}
+        }
+      }
+    `,
+    { worldId, rollId },
+  ).then((data) => data.worldRoll);
+}
+
+/** The table's rolls, newest first, older than `before` when given. */
+export function fetchWorldRolls(
+  worldId: string,
+  options: { before?: string; limit?: number } = {},
+): Promise<WorldRollEntry[]> {
+  return postGraphQL<{ worldRolls: WorldRollEntry[] }>(
+    `
+      query WorldRolls($worldId: UUID!, $before: String, $limit: Int) {
+        worldRolls(worldId: $worldId, before: $before, limit: $limit) {
+          ${WORLD_ROLL_ENTRY_FIELDS}
+        }
+      }
+    `,
+    { worldId, before: options.before, limit: options.limit },
+  ).then((data) => data.worldRolls);
+}
+
+/** GM only: show a hidden roll to the table. Revealing twice is harmless. */
+export function revealRoll(
+  worldId: string,
+  rollId: string,
+): Promise<WorldRollRecord> {
+  return postGraphQL<{ revealRoll: WorldRollRecord }>(
+    `
+      mutation RevealRoll($worldId: UUID!, $rollId: UUID!) {
+        revealRoll(worldId: $worldId, rollId: $rollId) {
+          ${WORLD_ROLL_FIELDS}
+        }
+      }
+    `,
+    { worldId, rollId },
+  ).then((data) => data.revealRoll);
 }
 
 type WorldRollRecordsQuery = {

@@ -52,9 +52,9 @@ they prove inside each phase.
 
 ### The client's half
 
-- [ ] T014 [P] `apps/web/src/api/roll.ts`: `rollDice(worldId, formula, { bindings, visibility, label })`, `fetchWorldRoll`, `fetchWorldRolls`, `revealRoll`, and the `WorldRollEntry` TypeScript union; `node scripts/check-graphql-contract.mjs` passes
-- [ ] T015 [P] Write `apps/web/src/engine/world/sync/rolls.test.ts`: the animate decision of research R3 (live + whole + within 4 s → animate; masked, null, catch-up or late → not; a reveal animates once)
-- [ ] T016 Create `apps/web/src/engine/world/sync/rolls.ts`: `ROLL_MADE_EVENT_CODE = 36`, `ROLL_REVEALED_EVENT_CODE = 37`, `startRollSync({ worldId, animate, onRoll })` that fetches each roll event, decides per T015, calls `animate` (`triggerDiceRollAnimation`) and hands the entry to `onRoll`; wire codes 36/37 into `playPanels.ts` handlers and export from `sync/index.ts`
+- [x] T014 [P] `apps/web/src/api/roll.ts`: `rollDice(worldId, formula, { bindings, visibility, label })`, `fetchWorldRoll`, `fetchWorldRolls`, `revealRoll`, and the `WorldRollEntry` TypeScript union; `node scripts/check-graphql-contract.mjs` passes
+- [x] T015 [P] Write `apps/web/src/engine/world/sync/rolls.test.ts`: the animate decision of research R3 (live + whole + within 4 s → animate; masked, null, catch-up or late → not; a reveal animates once)
+- [x] T016 Create `apps/web/src/engine/world/sync/rolls.ts`: `ROLL_MADE_EVENT_CODE = 36`, `ROLL_REVEALED_EVENT_CODE = 37`, `startRollSync({ worldId, animate, onRoll })` that fetches each roll event, decides per T015, calls `animate` (`triggerDiceRollAnimation`) and hands the entry to `onRoll`; wire codes 36/37 into `playPanels.ts` handlers and export from `sync/index.ts`
 
 **Checkpoint**: a roll is published, fetched per role and hidden from the stream as the rules say; `cargo test -p thunderforge-server rolls roll_feed world_events_since` green.
 
