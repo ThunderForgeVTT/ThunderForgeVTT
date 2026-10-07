@@ -6,7 +6,12 @@
  * speaks that protocol itself, so the subscription client, the event sync and
  * the engine's own subscriber run exactly as they do against a server.
  */
-import { now, subscribeToEvents } from "../backend/events";
+import {
+  eventReaches,
+  now,
+  subscribeToEvents,
+  viewerIsGm,
+} from "../backend/events";
 import { openSubscription, type OperationRequest } from "../backend/execute";
 import {
   NOT_IN_DEMO_CODE,
@@ -128,6 +133,8 @@ export function installSocketGuard(base: string): void {
         this.subscriptions.set(
           id,
           subscribeToEvents((event) => {
+            // Judged per viewer at delivery, as the server's stream does.
+            if (!eventReaches(event, viewerIsGm())) return;
             last = last.then(() => next(event));
           }),
         );

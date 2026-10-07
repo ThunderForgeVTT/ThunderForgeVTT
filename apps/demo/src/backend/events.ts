@@ -27,6 +27,8 @@ export const EVENT = {
   offer: 30,
   sceneLevel: 33,
   tokenTravelled: 34,
+  rollMade: 36,
+  rollRevealed: 37,
 } as const;
 
 const subscribers = new Set<(event: WorldEvent) => void>();
@@ -75,7 +77,10 @@ export function record(eventCode: number, payload: Row): void {
  */
 export function eventsSince(afterId: number): Row {
   const latestId = demoState().nextEventId - 1;
-  const after = log.filter((event) => event.id > afterId);
+  const isGm = viewerIsGm();
+  const after = log.filter(
+    (event) => event.id > afterId && eventReaches(event, isGm),
+  );
   const oldestKept = log[0]?.id ?? latestId + 1;
   const forgotten = afterId + 1 < oldestKept && afterId < latestId;
   return {
@@ -84,6 +89,21 @@ export function eventsSince(afterId: number): Row {
     latestId: Math.max(latestId, 0),
   };
 }
+
+/**
+ * `roll_event_reaches`: a GM only roll is never delivered to a player at all
+ * (spec 081 FR-005a). Every other event reaches every viewer; a reveal is
+ * for the whole table.
+ */
+export function eventReaches(event: WorldEvent, isGm: boolean): boolean {
+  if (isGm || event.eventCode !== EVENT.rollMade) return true;
+  // No visibility reads as the most hidden, as `Visibility::parse` does.
+  const visibility = (event.tokenEvent as Row | null)?.visibility;
+  return visibility === "everyone" || visibility === "gm_eyes";
+}
+
+/** Whether the page renders for the GM, as `viewerIsGm` judges it. */
+export const viewerIsGm = () => demoState().viewer !== "player";
 
 /** Hands every recorded event to every subscriber, oldest first. */
 export function releaseEvents(): void {

@@ -117,8 +117,8 @@ they prove inside each phase.
 
 ## Phase 8: US6 — The demo across tabs (P2)
 
-- [ ] T037 [US6] Demo tests `apps/demo/src/backend/handlers/dice.test.ts`: the server's visibility cases (T003, T006, T033) against `handlers/dice.ts` as GM and as player
-- [ ] T038 [US6] `apps/demo/src/backend/handlers/dice.ts` and `events.ts`: visibility and label on `rollDice`, `worldRoll`, `worldRolls`, `revealRoll`, codes 36/37 in `EVENT`, a roll without `visibility` read as `everyone` (data-model.md); per-viewer delivery of a `gm_only` roll event
+- [x] T037 [US6] Demo tests `apps/demo/src/backend/handlers/dice.test.ts`: the server's visibility cases (T003, T006, T033) against `handlers/dice.ts` as GM and as player
+- [x] T038 [US6] `apps/demo/src/backend/handlers/dice.ts` and `events.ts`: visibility and label on `rollDice`, `worldRoll`, `worldRolls`, `revealRoll`, codes 36/37 in `EVENT`, a roll without `visibility` read as `everyone` (data-model.md); per-viewer delivery of a `gm_only` roll event
 - [ ] T039 [US6] Viewer per tab: move the GM / player switch from the saved world to `sessionStorage` (`apps/demo/src/backend/state.ts`, `actors.ts`, `DemoNotice.tsx`); a saved world's viewer is read once as the first tab's (research R7)
 - [ ] T040 [US6] Demo tests `apps/demo/src/backend/tabs.test.ts` with a fake lock and channel: a guest's request runs on the holder as the guest's viewer; events reach every tab filtered per viewer; when the holder goes, a guest takes over from the saved world and resends what was open; without locks or channels each tab stands alone
 - [ ] T041 [US6] Create `apps/demo/src/backend/tabs.ts` (contracts/demo-tabs.md) and route the demo's request entry and event subscription through it

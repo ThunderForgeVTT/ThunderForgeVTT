@@ -9,7 +9,8 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { DEMO_USER } from "../../seed/world";
 import { runOperation } from "../execute";
 import { demoState, type Row } from "../state";
-import { freshWorld } from "../testing/world";
+import { eventsSince } from "../events";
+import { freshWorld, heard, refusal, releaseEvents } from "../testing/world";
 import { loadDiceForTest, seedDice } from "./dice";
 
 const ROLL = `mutation ($input: RollDiceInput!) {
@@ -47,6 +48,8 @@ beforeEach(() => {
   state.viewer = "gm";
   state.rolls = [];
   seedDice([1, 2, 3, 4]);
+  // What earlier tests recorded is not this test's to hear.
+  releaseEvents();
 });
 
 describe("rollDice", () => {
@@ -156,5 +159,208 @@ describe("worldRollRecords", () => {
     expect(roll.formula).toMatch(/^1d20 [+-] \d+$/);
     expect(state.rolls?.at(-1)?.triggeredBy).toBeDefined();
     expect(state.rolls).toHaveLength(1);
+  });
+});
+
+/** A roll by a member the demo does not seat, as another player's would be. */
+const OTHER = "00000000-0000-7000-8000-0000000000aa";
+
+const ROLL_AS = `mutation ($input: RollDiceInput!) {
+  rollDice(input: $input) { resultValue }
+}`;
+const ROLL_ONE = `query ($worldId: UUID!, $rollId: UUID!) {
+  worldRoll(worldId: $worldId, rollId: $rollId) {
+    __typename
+    ... on WorldRoll { id rollerName label formula visibility revealedAt revealedByName resolution { resultValue } }
+    ... on MaskedRoll { id rollerName visibility }
+  }
+}`;
+const FEED = `query ($worldId: UUID!, $before: String, $limit: Int) {
+  worldRolls(worldId: $worldId, before: $before, limit: $limit) {
+    __typename
+    ... on WorldRoll { id }
+    ... on MaskedRoll { id }
+  }
+}`;
+const REVEAL = `mutation ($worldId: UUID!, $rollId: UUID!) {
+  revealRoll(worldId: $worldId, rollId: $rollId) { id revealedAt revealedByName visibility }
+}`;
+
+/** Rolls as the current viewer, and the id it was recorded under. */
+async function rollAs(input: Row): Promise<{ id: string; errors?: string }> {
+  const worldId = demoState().world.id;
+  const answer = await ask(ROLL_AS, {
+    input: { worldId, formula: "1d20", ...input },
+  });
+  return {
+    id: String(demoState().rolls?.at(-1)?.id ?? ""),
+    errors: answer.errors?.[0]?.message,
+  };
+}
+
+async function entryOf(rollId: string) {
+  const worldId = demoState().world.id;
+  return (await ask(ROLL_ONE, { worldId, rollId })).data?.worldRoll as
+    | (Row & { resolution?: Row })
+    | null;
+}
+
+async function feed(variables: Row = {}) {
+  const worldId = demoState().world.id;
+  return (await ask(FEED, { worldId, ...variables })).data?.worldRolls as Row[];
+}
+
+/** Spec 081: the server's visibility rule, as the demo answers it. */
+describe("rolls at the table", () => {
+  it("lets a player roll for the GM's eyes and the GM roll GM only, never the other way", async () => {
+    demoState().viewer = "player";
+    expect((await rollAs({ visibility: "GM_ONLY" })).errors).toBe(
+      "Only the GM can roll for their eyes only",
+    );
+    expect((await rollAs({ visibility: "GM_EYES" })).errors).toBeUndefined();
+    demoState().viewer = "gm";
+    expect((await rollAs({ visibility: "GM_EYES" })).errors).toBe(
+      "The GM rolls GM only, not for the GM's eyes",
+    );
+    expect((await rollAs({ visibility: "GM_ONLY" })).errors).toBeUndefined();
+    expect(demoState().rolls).toHaveLength(2);
+  });
+
+  it("keeps a label trimmed and refuses one over 80 characters", async () => {
+    expect((await rollAs({ label: "x".repeat(81) })).errors).toBe(
+      "A roll's label is at most 80 characters",
+    );
+    const { id } = await rollAs({ label: "  Stealth  " });
+    expect((await entryOf(id))?.label).toBe("Stealth");
+    const blank = await rollAs({ label: "   " });
+    expect((await entryOf(blank.id))?.label).toBeNull();
+  });
+
+  it("tells the table of a roll by id and visibility only", async () => {
+    const events = heard();
+    const { id } = await rollAs({ visibility: "GM_ONLY", label: "Ambush" });
+    releaseEvents();
+    expect(events.map((e) => [e.eventCode, e.tokenEvent])).toEqual([
+      [36, { rollId: id, visibility: "gm_only" }],
+    ]);
+  });
+
+  it("shows a GM only roll to the GM and to no player, in the fetch, the feed and the catch-up", async () => {
+    const before = demoState().nextEventId - 1;
+    const { id } = await rollAs({ visibility: "GM_ONLY" });
+    expect((await entryOf(id))?.__typename).toBe("WorldRoll");
+    expect(eventsSince(before).events).toHaveLength(1);
+
+    demoState().viewer = "player";
+    expect(await entryOf(id)).toBeNull();
+    expect(await feed()).toEqual([]);
+    expect(eventsSince(before).events).toEqual([]);
+  });
+
+  it("masks another player's GM's eyes roll and shows the roller and the GM all of it", async () => {
+    demoState().viewer = "player";
+    const own = await rollAs({ visibility: "GM_EYES", label: "Insight" });
+    expect((await entryOf(own.id))?.__typename).toBe("WorldRoll");
+    const other = {
+      ...demoState().rolls!.at(-1)!,
+      id: OTHER,
+      triggeredBy: "someone",
+    };
+    demoState().rolls!.push(other);
+    expect(await entryOf(OTHER)).toEqual({
+      __typename: "MaskedRoll",
+      id: OTHER,
+      rollerName: "",
+      visibility: "GM_EYES",
+    });
+    demoState().viewer = "gm";
+    expect((await entryOf(OTHER))?.__typename).toBe("WorldRoll");
+  });
+
+  it("reads a roll from before spec 081 as one in the open", async () => {
+    await rollOf("1d6");
+    const record = demoState().rolls!.at(-1)!;
+    delete record.visibility;
+    demoState().viewer = "player";
+    expect((await entryOf(String(record.id)))?.visibility).toBe("EVERYONE");
+  });
+
+  it("pages the feed newest first, before a time, at most 100", async () => {
+    const ids: string[] = [];
+    for (let n = 0; n < 3; n += 1) {
+      const { id } = await rollAs({});
+      demoState().rolls!.at(-1)!.createdAt = new Date(
+        Date.UTC(2026, 0, 1, 0, n),
+      ).toISOString();
+      ids.push(id);
+    }
+    expect((await feed()).map((e) => e.id)).toEqual([...ids].reverse());
+    expect(
+      (
+        await feed({
+          before: new Date(Date.UTC(2026, 0, 1, 0, 2)).toISOString(),
+          limit: 1,
+        })
+      ).map((e) => e.id),
+    ).toEqual([ids[1]]);
+    expect(
+      (await ask(FEED, { worldId: demoState().world.id, before: "soon" }))
+        .errors?.[0]?.message,
+    ).toBe("`before` is not a time");
+  });
+
+  it("reveals once, by the GM, to the whole table", async () => {
+    const { id } = await rollAs({ visibility: "GM_ONLY" });
+    const worldId = demoState().world.id;
+    demoState().viewer = "player";
+    expect(await refusal(REVEAL, { worldId, rollId: id })).toBe(
+      "Only the GM can reveal a roll",
+    );
+    demoState().viewer = "gm";
+    expect(
+      await refusal(REVEAL, { worldId, rollId: crypto.randomUUID() }),
+    ).toBe("Roll not found");
+
+    releaseEvents();
+    const events = heard();
+    const revealed = (await ask(REVEAL, { worldId, rollId: id })).data
+      ?.revealRoll as Row;
+    expect(revealed.revealedByName).toBe(DEMO_USER.username);
+    expect(revealed.revealedAt).not.toBeNull();
+    // Again: answered as it is, and nothing recorded.
+    await ask(REVEAL, { worldId, rollId: id });
+    releaseEvents();
+    expect(events.map((e) => [e.eventCode, e.tokenEvent])).toEqual([
+      [37, { rollId: id, visibility: "gm_only" }],
+    ]);
+
+    demoState().viewer = "player";
+    const seen = await entryOf(id);
+    expect(seen?.__typename).toBe("WorldRoll");
+    expect(seen?.revealedByName).toBe(DEMO_USER.username);
+  });
+
+  it("answers a reveal of a roll in the open as it is, and records nothing", async () => {
+    const { id } = await rollAs({});
+    releaseEvents();
+    const events = heard();
+    const answer = await ask(REVEAL, {
+      worldId: demoState().world.id,
+      rollId: id,
+    });
+    releaseEvents();
+    expect((answer.data?.revealRoll as Row).revealedAt).toBeNull();
+    expect(events).toEqual([]);
+  });
+
+  it("names a check's roll for the check", async () => {
+    const actor = demoState().actors.find((a) => !a.isNpc)!;
+    await ask(
+      `mutation ($worldId: UUID!, $actorId: UUID!, $checkId: String!) {
+        rollCheck(worldId: $worldId, actorId: $actorId, checkId: $checkId) { formula }
+      }`,
+      { worldId: demoState().world.id, actorId: actor.id, checkId: "stealth" },
+    );
+    expect(demoState().rolls?.at(-1)?.label).toBe("Stealth");
   });
 });

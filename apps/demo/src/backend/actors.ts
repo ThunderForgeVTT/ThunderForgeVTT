@@ -254,10 +254,13 @@ export function modifierFor(data: Row | null, checkId: string): number {
 export function rollCheck(args: Args): Promise<Row> {
   const state = demoState();
   findActor(state, args.actorId);
-  if (!CHECKS.some((c) => c.id === args.checkId)) {
+  const check = CHECKS.find((c) => c.id === args.checkId);
+  if (!check) {
     throw new GraphQLError(`Unknown check ${args.checkId}`);
   }
   const modifier = modifierFor(systemDataOf(state, args.actorId), args.checkId);
   const sign = modifier < 0 ? "-" : "+";
-  return resolveAndRecord(`1d20 ${sign} ${Math.abs(modifier)}`, {});
+  return resolveAndRecord(`1d20 ${sign} ${Math.abs(modifier)}`, {}, null, {
+    label: check.label,
+  });
 }

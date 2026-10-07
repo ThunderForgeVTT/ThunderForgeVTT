@@ -24,6 +24,7 @@ import {
 import { DEMO_PLAYER } from "../../seed/world";
 import { abilityFor, actorAbilities, worldAbilities } from "./combatAbilities";
 import { applyHitPointChange } from "./combatHp";
+import { recordRoll } from "./dice";
 import {
   MANIFEST,
   actorOf,
@@ -474,6 +475,12 @@ async function makeAttack({ input }: Args): Promise<Row[]> {
     ),
   );
   roller.free();
+  // `roll_and_record`: each roll is in the table's history and on every
+  // board, in the open, named for what it was (spec 081 FR-012).
+  recordRoll(part.toHit, { label: ability.name as string });
+  if (part.damage) {
+    recordRoll(part.damage, { label: `${ability.name as string} damage` });
+  }
   const attack: Row = {
     id: crypto.randomUUID(),
     worldId: state.world.id,
