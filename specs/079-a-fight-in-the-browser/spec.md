@@ -80,8 +80,10 @@ from the page.
 4. **Given** a goblin's hit points reach zero,
    **Then** it is shown as down, exactly as the server shows a creature at
    zero.
-5. **Given** the visitor reloads the page,
-   **Then** the demo starts fresh, as it does today (spec 074).
+5. **Given** a fight is in progress and the visitor reloads the page,
+   **Then** the fight is still there — the round, whose turn it is, every
+   creature's hit points and the attack log — as the rest of the demo
+   survives a reload (spec 074 FR-012); "Start over" is what resets it.
 
 ---
 
@@ -160,9 +162,13 @@ dice, and compares every step.
 - **FR-004** The shared rules MUST be callable from the browser.
 - **FR-005** The demo MUST answer the combat operations the fight UI uses,
   through the shared rules, with no server: the active combat; starting and
-  ending a fight; adding a combatant; advancing the turn; changing hit
-  points; making, previewing and resolving an attack; and the scene's
-  attacks.
+  ending a fight; adding, updating and removing a combatant, and adding a
+  lair; advancing the turn; changing hit points; making, previewing and
+  resolving an attack; one attack (`attack`) and the scene's attacks; the
+  combat's and the world's auto-apply settings (`setCombatAutoApply`,
+  `updateWorldAutoApplyNpcDamage`, which the campaign panel reaches); and
+  the abilities an attack is chosen from (`worldAbilities`,
+  `actorAbilities`), which the demo answers today with nothing.
 - **FR-006** The fight UI (`CombatPanel`, `AttackFlow`, `AttackLog`) MUST be
   used unchanged; the demo reaches it through the same operations as the
   server does.
@@ -214,8 +220,8 @@ dice, and compares every step.
 
 ## Assumptions
 
-- The demo has no attack or fight state that survives a reload; spec 074's
-  reset-on-reload holds.
+- A demo fight is demo state like any other: it survives a reload (spec 074
+  FR-012) and "Start over" resets it.
 - The ambush's monsters keep their SRD stat blocks; the fight uses what
   they already carry (defence, hit points, attacks).
 - An ADR records the shared combat library as a new subsystem, landing with
