@@ -118,8 +118,8 @@ as named below.
 
 ## Phase 8: Account deletion
 
-- [ ] T039 Tests in `crates/thunderforge-server/src/users/shape_cleanup_tests.rs`: a player who drew in another's world deletes their account: it succeeds, their shapes are gone with `deleted` events by the world's owner, a shape they only edited stays with `updated_by = created_by`; `shapes_deleted` counts
-- [ ] T040 `crates/thunderforge-server/src/users/shape_cleanup.rs` called from `delete_user_data_on` before the user row goes (R9); `UserDataDeleteSummary.shapes_deleted`
+- [x] T039 Tests in `crates/thunderforge-server/src/users/shape_cleanup_tests.rs`: a player who drew in another's world deletes their account: it succeeds, their shapes are gone with `deleted` events by the world's owner, a shape they only edited stays with `updated_by = created_by`; `shapes_deleted` counts
+- [x] T040 `crates/thunderforge-server/src/users/shape_cleanup.rs` called from `delete_user_data_on` before the user row goes (R9); `UserDataDeleteSummary.shapes_deleted`
 
 ---
 

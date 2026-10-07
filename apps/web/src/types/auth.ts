@@ -90,6 +90,7 @@ export interface UserDataDeleteSummary {
   login_challenges_deleted: number;
   oauth_link_challenges_deleted: number;
   users_deleted: number;
+  shapes_deleted: number;
 }
 
 export interface UserDataDeleteResponse {

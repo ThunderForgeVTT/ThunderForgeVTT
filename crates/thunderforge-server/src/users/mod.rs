@@ -40,6 +40,7 @@ pub struct ExportQuery {
 }
 
 pub mod export_content;
+mod shape_cleanup;
 
 pub use export_content::{
     ExportedAbility, ExportedActor, ExportedCollection, ExportedItem, ExportedLoreEntry,
@@ -105,6 +106,8 @@ pub struct UserDataDeleteSummary {
     pub login_challenges_deleted: i64,
     pub oauth_link_challenges_deleted: i64,
     pub users_deleted: i64,
+    /// Drawings the account made in worlds it did not create (spec 082 R9).
+    pub shapes_deleted: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -429,6 +432,10 @@ pub(crate) fn delete_user_data_on(
                     .execute(conn)? as i64;
         }
 
+        // Spec 082 R9: their drawings in worlds that remain, before the
+        // user row goes, or its foreign keys refuse the deletion.
+        summary.shapes_deleted += shape_cleanup::forget_shapes_of(conn, user_id)?;
+
         summary.world_events_deleted +=
             diesel::delete(world_events::table.filter(world_events::created_by.eq(user_id)))
                 .execute(conn)? as i64;
@@ -534,6 +541,10 @@ fn build_download_response(body: Vec<u8>, content_type: &str, filename: &str) ->
 #[cfg(test)]
 #[path = "library_deletion_tests.rs"]
 mod library_deletion_tests;
+
+#[cfg(test)]
+#[path = "shape_cleanup_tests.rs"]
+mod shape_cleanup_tests;
 
 #[cfg(test)]
 mod tests {
