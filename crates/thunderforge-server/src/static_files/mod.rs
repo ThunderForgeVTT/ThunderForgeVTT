@@ -24,15 +24,25 @@
 //! A server with no client built — every development and test run, where vite
 //! serves the frontend — has no `index.html` to hand out, and answers an
 //! unknown path with the JSON 404 it always has.
+//!
+//! # Kept until its name changes
+//!
+//! Every file the bundle builds into `assets/` carries a hash of its bytes in
+//! its name (`engine_bg-D9SKK7e3.wasm`), so a file at a given name never
+//! changes: a new engine is a new name. Those are sent as kept forever, and a
+//! visitor downloads the engine once, not once per visit. The page that names
+//! them is sent as `no-cache`, so a deploy is seen on the next load. Uploads
+//! share `/assets` but keep their names across edits, so they are left alone.
 
 use crate::config::Directories;
 use crate::errors::handler_404;
 use crate::settings::features::{DEMO, flag_on};
 use crate::state::AppState;
 use axum::extract::{Request, State};
+use axum::http::{HeaderValue, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use axum::{Router, routing::get_service};
+use axum::{Router, middleware::map_response, routing::get_service};
 use std::path::Path;
 use tower_http::services::{ServeDir, ServeFile};
 
@@ -43,20 +53,31 @@ where
     let client = Path::new(&directories.static_files);
     let index = client.join("index.html");
 
-    let router = Router::new().nest_service(
+    let mut router = Router::new().nest_service(
         "/assets",
         get_service(
             ServeDir::new(client.join("assets"))
                 .fallback(ServeDir::new(&directories.asset_directory)),
         ),
     );
+    // The folders the bundle builds into; no upload is ever written there.
+    for folder in ["entry", "chunks", "static"] {
+        router = router.nest_service(
+            &format!("/assets/{folder}"),
+            get_service(ServeDir::new(client.join("assets").join(folder)))
+                .layer(map_response(kept_forever)),
+        );
+    }
 
     if index.is_file() {
-        router.fallback_service(get_service(
-            ServeDir::new(client)
-                .append_index_html_on_directories(true)
-                .fallback(ServeFile::new(index)),
-        ))
+        router.fallback_service(
+            get_service(
+                ServeDir::new(client)
+                    .append_index_html_on_directories(true)
+                    .fallback(ServeFile::new(index)),
+            )
+            .layer(map_response(asked_every_time)),
+        )
     } else {
         router.fallback(handler_404)
     }
@@ -83,14 +104,43 @@ where
     if !index.is_file() {
         return Router::new();
     }
-    Router::new().nest_service(
-        "/demo",
-        get_service(
-            ServeDir::new(demo)
-                .append_index_html_on_directories(true)
-                .fallback(ServeFile::new(index)),
-        ),
-    )
+    Router::new()
+        .nest_service(
+            "/demo/assets",
+            get_service(ServeDir::new(demo.join("assets"))).layer(map_response(kept_forever)),
+        )
+        .nest_service(
+            "/demo",
+            get_service(
+                ServeDir::new(demo)
+                    .append_index_html_on_directories(true)
+                    .fallback(ServeFile::new(index)),
+            )
+            .layer(map_response(asked_every_time)),
+        )
+}
+
+/// A built file, named by its own hash: kept until a build renames it. A miss
+/// is not kept, because the next build may put a file at that name.
+async fn kept_forever(mut response: Response) -> Response {
+    if response.status().is_success() {
+        response.headers_mut().insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=31536000, immutable"),
+        );
+    }
+    response
+}
+
+/// The page that names the built files, and the files that keep their names
+/// across builds (the maps, `robots.txt`): asked for again on every load, so a
+/// deploy is seen at once. Unchanged, the answer is a cheap 304.
+async fn asked_every_time(mut response: Response) -> Response {
+    response
+        .headers_mut()
+        .entry(header::CACHE_CONTROL)
+        .or_insert(HeaderValue::from_static("no-cache"));
+    response
 }
 
 /// Answers "not found" for the demo while the instance does not offer it

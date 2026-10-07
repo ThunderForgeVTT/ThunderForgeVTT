@@ -140,3 +140,83 @@ async fn a_server_not_told_where_a_demo_is_has_none() {
     let app: Router = demo_router(&empty).merge(router(&empty));
     assert_eq!(get(&app, "/demo/").await.0, StatusCode::NOT_FOUND);
 }
+
+async fn cache_control(app: &Router, path: &str) -> (StatusCode, Option<String>) {
+    let response = app
+        .clone()
+        .oneshot(Request::get(path).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    let header = response
+        .headers()
+        .get(axum::http::header::CACHE_CONTROL)
+        .map(|value| value.to_str().unwrap().to_owned());
+    (response.status(), header)
+}
+
+const FOREVER: &str = "public, max-age=31536000, immutable";
+
+#[tokio::test]
+async fn the_bundle_is_kept_until_its_name_changes() {
+    let root = tempfile::tempdir().unwrap();
+    build_client(root.path());
+    let app: Router = router(&directories(root.path()));
+
+    assert_eq!(
+        cache_control(&app, "/assets/entry/main.js").await,
+        (StatusCode::OK, Some(FOREVER.to_owned()))
+    );
+    // A miss is not kept: the next build may put the file there.
+    assert_eq!(
+        cache_control(&app, "/assets/entry/missing.js").await,
+        (StatusCode::NOT_FOUND, None)
+    );
+    // An upload keeps its own name across edits, so it is never kept forever.
+    assert_ne!(
+        cache_control(&app, "/assets/map.png").await.1,
+        Some(FOREVER.to_owned())
+    );
+}
+
+#[tokio::test]
+async fn the_page_that_names_the_bundle_is_asked_for_every_time() {
+    let root = tempfile::tempdir().unwrap();
+    build_client(root.path());
+    let app: Router = router(&directories(root.path()));
+
+    for path in ["/", "/world/abc/play"] {
+        assert_eq!(
+            cache_control(&app, path).await,
+            (StatusCode::OK, Some("no-cache".to_owned())),
+            "{path}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn the_demo_keeps_its_engine_and_asks_for_its_page() {
+    let root = tempfile::tempdir().unwrap();
+    let directories = build_demo(root.path());
+    let demo = root.path().join("demo");
+    fs::create_dir_all(demo.join("assets")).unwrap();
+    fs::write(
+        demo.join("assets").join("engine_bg-D9SKK7e3.wasm"),
+        "an engine",
+    )
+    .unwrap();
+    let app: Router = demo_router(&directories).merge(router(&directories));
+
+    assert_eq!(
+        cache_control(&app, "/demo/assets/engine_bg-D9SKK7e3.wasm").await,
+        (StatusCode::OK, Some(FOREVER.to_owned()))
+    );
+    assert_eq!(
+        cache_control(&app, "/demo/").await,
+        (StatusCode::OK, Some("no-cache".to_owned()))
+    );
+    // The maps keep their names when they are re-imported.
+    assert_ne!(
+        cache_control(&app, "/demo/maps/NOTICE.txt").await.1,
+        Some(FOREVER.to_owned())
+    );
+}
