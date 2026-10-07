@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { makeAttack, previewAttack } from "@/api/attacks";
 import { Button } from "@/components/ui/button/Button";
-import { triggerDiceRollAnimation } from "@/engine/bevy";
 import { queueEdit, shouldQueue } from "@/engine/world/sync/offlineQueue";
 import type {
   ActionCost,
@@ -182,12 +181,9 @@ export function AttackFlow({
         }
         return;
       }
+      // Spec 081 (FR-013): each to-hit roll is a world event, and the board
+      // animates it from there.
       const made = await makeAttack(input);
-      for (const attack of made) {
-        void triggerDiceRollAnimation(
-          attack.toHit.dice.map((die) => ({ finalValue: die.finalValue })),
-        );
-      }
       setResult(made);
     } catch (err) {
       setError(err instanceof Error ? err.message : "The attack failed");

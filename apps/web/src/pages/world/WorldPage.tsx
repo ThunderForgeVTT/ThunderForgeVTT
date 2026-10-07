@@ -39,6 +39,7 @@ import {
   startTokenMutationBridge,
   startWallMutationBridge,
   catchUpWorldEvents,
+  startRollSync,
   subscribeToLiveSyncState,
   subscribeToWorldEvents,
 } from "@/engine/world/sync";
@@ -96,6 +97,7 @@ import {
   setAuthoringMode,
   onAuthoringToolRevoked,
   stopPeerTransfer,
+  triggerDiceRollAnimation,
 } from "@/engine/bevy";
 import { useAuthoringTools } from "@/hooks/useAuthoringTools";
 import { permittedTools, reconcileOpenTool } from "@/lib/authoringTools";
@@ -1937,6 +1939,31 @@ export default function WorldPage() {
       cancelled = true;
       void iterator.return?.();
     };
+  }, [id]);
+
+  // Spec 081: every roll at the table lands on this board, this client's
+  // own included — the dice animate from the roll's world event, never from
+  // the panel that rolled it, which is what lets a sheet in another tab roll
+  // onto this board. World-level rather than per scene, as rolls are. Read
+  // through a ref so the engine coming up does not reopen the stream, and
+  // checked at each roll so a board without an engine never loads one.
+  const engineReadyRef = useRef(engineReady);
+  useEffect(() => {
+    engineReadyRef.current = engineReady;
+  }, [engineReady]);
+  useEffect(() => {
+    if (!id) {
+      return;
+    }
+    return startRollSync({
+      worldId: id,
+      events: subscribeToWorldEvents(id),
+      animate: (dice) => {
+        if (engineReadyRef.current) {
+          void triggerDiceRollAnimation(dice);
+        }
+      },
+    });
   }, [id]);
 
   // Live cross-client sync: one subscription per mounted scene, feeding

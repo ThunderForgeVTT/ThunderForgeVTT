@@ -6,7 +6,6 @@ import { useAuth } from "@/hooks/useAuth";
 import type { TokenRecord } from "@/types/token";
 import { AttackFlow } from "./AttackFlow/AttackFlow";
 import { rollDice } from "@/api/roll";
-import { triggerDiceRollAnimation } from "@/engine/bevy";
 import { RollResult } from "@/components/world/RollResult";
 import { useActorSystemData } from "@/hooks/useActorSystemData";
 import { mayEditActor } from "@/pages/world/actor/actorEditRight";
@@ -174,14 +173,10 @@ export function InPaneCharacterSheet({
     setResult(null);
     try {
       const resolution = await rollDice(worldId, roll.formula);
-      // Fire-and-forget, exactly as `DiceRollerPanel` does: the engine is
-      // being asked to animate an outcome it played no part in deciding.
-      void triggerDiceRollAnimation(
-        resolution.dice.map((die) => ({ finalValue: die.finalValue })),
-      );
-      // Shown as soon as the server answers, rather than behind the dice
-      // roller's fixed reveal delay. That delay is a copy of a duration in the
-      // engine's Rust, and a second copy of it here would be a number to keep
+      // Spec 081 (FR-013): the board animates this roll from its world
+      // event, as every client's board does. The total is shown as soon as
+      // the server answers, rather than behind the dice roller's fixed reveal
+      // delay. That delay is a copy of a duration in the engine's Rust, and a second copy of it here would be a number to keep
       // in sync in two files; the dock sits beside the canvas rather than over
       // it, so the total appearing while the dice are still settling costs the
       // reveal nothing.

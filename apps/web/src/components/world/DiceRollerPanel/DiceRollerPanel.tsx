@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { rollDice } from "@/api/roll";
-import { triggerDiceRollAnimation } from "@/engine/bevy";
 import { RollResult } from "@/components/world/RollResult";
 import type { RollResolutionRecord } from "@/types/roll";
 
@@ -49,10 +48,10 @@ export function DiceRollerPanel({
     try {
       const resolution = await rollDice(worldId, formula);
 
+      // Spec 081 (FR-013): the board animates this roll from its world
+      // event, like every other client's roll; the panel only waits for the
+      // dice to settle before showing the total.
       if (engineReady) {
-        void triggerDiceRollAnimation(
-          resolution.dice.map((d) => ({ finalValue: d.finalValue })),
-        );
         await new Promise((resolve) =>
           setTimeout(resolve, ANIMATION_REVEAL_MS),
         );

@@ -15,6 +15,7 @@ fn events(conn: &mut PgConnection, world_id: Uuid, code: i32) -> Vec<serde_json:
     world_events::table
         .filter(world_events::world_id.eq(world_id))
         .filter(world_events::event_code.eq(code))
+        .order(world_events::id)
         .select(world_events::token_event)
         .load::<Option<serde_json::Value>>(conn)
         .expect("events")
@@ -166,6 +167,29 @@ fn a_hit_is_recorded_with_attacker_target_total_defence_and_damage() {
         announced,
         vec![serde_json::json!({ "attackId": made.attack_ids[0] })]
     );
+
+    // Spec 081 (research R4): each of the attack's rolls is announced like
+    // any other, in the open, so every board animates it.
+    let rolls = events(
+        &mut conn,
+        t.world_id,
+        crate::world_events::EVENT_CODE_ROLL_MADE,
+    );
+    let to_hit = row.to_hit_roll_id.unwrap();
+    let damage = row.damage_roll_id.unwrap();
+    assert_eq!(
+        rolls,
+        vec![
+            serde_json::json!({ "rollId": to_hit, "visibility": "everyone" }),
+            serde_json::json!({ "rollId": damage, "visibility": "everyone" }),
+        ]
+    );
+    let label: Option<String> = world_roll_records::table
+        .find(to_hit)
+        .select(world_roll_records::label)
+        .first(&mut conn)
+        .expect("the to-hit roll");
+    assert!(label.is_some_and(|l| l.contains("Longsword")));
 }
 
 #[test]
