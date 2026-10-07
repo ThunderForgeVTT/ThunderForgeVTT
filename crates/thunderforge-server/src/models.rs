@@ -11,11 +11,12 @@ use crate::schema::{
     world_ability_effects, world_ability_permissions, world_ability_shares, world_actor_abilities,
     world_actor_claims, world_actor_images, world_actor_inventory, world_actor_permissions,
     world_actor_shares, world_actor_system_data, world_actors, world_authoring_tool_grants,
-    world_chat_messages, world_collection_members, world_collection_shares, world_collections,
-    world_combatants, world_combats, world_events, world_invites, world_item_abilities,
-    world_item_effects, world_item_permissions, world_item_prices, world_item_shares, world_items,
-    world_lore_entries, world_lore_image_assets, world_lore_links, world_lore_permissions,
-    world_lore_revisions, world_lore_tags, world_members, world_roll_records, worlds,
+    world_authoring_tool_revocations, world_chat_messages, world_collection_members,
+    world_collection_shares, world_collections, world_combatants, world_combats, world_events,
+    world_invites, world_item_abilities, world_item_effects, world_item_permissions,
+    world_item_prices, world_item_shares, world_items, world_lore_entries, world_lore_image_assets,
+    world_lore_links, world_lore_permissions, world_lore_revisions, world_lore_tags, world_members,
+    world_roll_records, worlds,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -2233,6 +2234,19 @@ pub struct NewWorldAuthoringToolGrant {
     pub tool: String,
     pub created_by: uuid::Uuid,
     pub updated_by: uuid::Uuid,
+}
+
+/// Spec 082: one default tool (`select` or `shapes`) a Game Master has taken
+/// away from one player. The opposite fact of a grant, in its own table so a
+/// grant row always widens and a revocation row always narrows.
+///
+/// Insert-only, as the grants are: the resolver reads the `tool` column.
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_authoring_tool_revocations)]
+pub struct NewWorldAuthoringToolRevocation {
+    pub world_member_id: uuid::Uuid,
+    pub tool: String,
+    pub revoked_by: Option<uuid::Uuid>,
 }
 
 // ============================================================================

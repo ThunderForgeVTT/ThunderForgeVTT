@@ -1342,6 +1342,23 @@ export async function setActiveShapeTool(kind: string): Promise<boolean> {
 }
 
 /**
+ * Tell the engine who is looking (spec 082), so it lets a player edit only
+ * the shapes they drew. Session state like `setIsGameMaster`, never synced;
+ * re-sent whenever the engine becomes ready. Never throws: a bundle that
+ * predates the command ignores it.
+ */
+export async function setViewerUser(userId: string | null): Promise<void> {
+  try {
+    const module = await getWasmModule();
+    module.apply_world_command?.(
+      JSON.stringify({ type: "set_viewer_user", userId }),
+    );
+  } catch {
+    // An engine that is not there yet is told again when it is ready.
+  }
+}
+
+/**
  * Turn the engine's snapping switch on or off (spec 077 FR-001). Session
  * state like `setIsGameMaster`, never synced; the engine answers with
  * `grid_snap_changed`, which is where the rail reads the result. Never

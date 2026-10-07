@@ -82,6 +82,7 @@ function shapeRecordToWorldShape(record: ShapeRecord): WorldShape {
     text: record.text,
     style: record.style,
     visibleToPlayers: record.visibleToPlayers,
+    createdBy: record.createdBy ?? null,
   };
 }
 

@@ -23,6 +23,6 @@ pub use shape::{ActiveShapeTool, SelectedShape, Shape, ShapeEdit, ShapeKind, Sha
 pub use token_grid::{GridSnapEnabled, TokenGridBehaviour};
 pub use vision::{LightingOverlay, SceneAmbient, TokenVision};
 pub use wall::{
-    ActiveWallPrimitive, DoorState, IsGameMaster, SelectedWall, Wall, WallEdit, WallPrimitive,
-    WallSet, is_visible,
+    ActiveWallPrimitive, DoorState, IsGameMaster, SelectedWall, ViewerUserId, Wall, WallEdit,
+    WallPrimitive, WallSet, is_visible,
 };

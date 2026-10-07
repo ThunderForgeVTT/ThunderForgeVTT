@@ -77,6 +77,9 @@ pub mod permissioned_entities;
 /// sibling of `permissioned_entities` rather than an entry in it — the module
 /// says why.
 pub mod authoring_tools;
+/// Spec 082: the one rule for writing a shape — the DM, or its creator while
+/// they hold the Shapes tool.
+pub mod shape_authority;
 
 pub mod actor_permissions;
 

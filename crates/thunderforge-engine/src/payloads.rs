@@ -232,6 +232,10 @@ pub(crate) struct WorldShapePayload {
     pub(crate) style: Option<Value>,
     #[serde(rename = "visibleToPlayers")]
     pub(crate) visible_to_players: bool,
+    /// Spec 082: who drew it, so the engine lets a player edit only their
+    /// own. Absent from a board that predates it.
+    #[serde(rename = "createdBy", default)]
+    pub(crate) created_by: Option<String>,
 }
 
 /// One interactive, on its way into the engine (spec 030).
@@ -362,6 +366,11 @@ pub(crate) enum ExternalCommand {
     /// and whenever it changes (`WorldPage.tsx`).
     SetIsGameMaster {
         is_game_master: bool,
+    },
+    /// Spec 082: who is looking, by user id. A player may edit only the
+    /// shapes whose `created_by` this is. Never synced to other clients.
+    SetViewerUser {
+        user_id: Option<String>,
     },
     /// Spec 002 (US3): adds or updates one pasted canvas image on the
     /// active scene. `asset_id` is the `CanvasImageAsset.id` from

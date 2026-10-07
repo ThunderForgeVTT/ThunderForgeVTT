@@ -21,8 +21,8 @@ as named below.
 
 ## Phase 1: Setup
 
-- [ ] T001 Migration `crates/thunderforge-server/migrations/2026-10-07-110000-0000_authoring_tool_revocations/{up,down}.sql`: the `world_authoring_tool_revocations` table, its unique and check constraints, deleting default-tool grant rows and adding `tool NOT IN ('select','shapes')` to `world_authoring_tool_grants` (data-model.md); run it; add the table and `joinable!` to `crates/thunderforge-server/src/schema.rs`
-- [ ] T002 `WorldAuthoringToolRevocation` and `NewWorldAuthoringToolRevocation` in `crates/thunderforge-server/src/models.rs`; `cargo check -p thunderforge-server`
+- [x] T001 Migration `crates/thunderforge-server/migrations/2026-10-07-110000-0000_authoring_tool_revocations/{up,down}.sql`: the `world_authoring_tool_revocations` table, its unique and check constraints, deleting default-tool grant rows and adding `tool NOT IN ('select','shapes')` to `world_authoring_tool_grants` (data-model.md); run it; add the table and `joinable!` to `crates/thunderforge-server/src/schema.rs`
+- [x] T002 `NewWorldAuthoringToolRevocation` (no `Queryable`: rows are read as bare `tool` strings, as grants are) in `crates/thunderforge-server/src/models.rs`; `cargo check -p thunderforge-server`
 
 ---
 
@@ -30,19 +30,19 @@ as named below.
 
 ### Tools by default
 
-- [ ] T003 Tests in `crates/thunderforge-server/src/auth/authoring_tools.rs` `mod tests`: rewrite `a_player_in_an_untouched_world_may_use_no_tool` as "… may select and draw"; add a revoked player (`shapes` revoked → `["select"]`), a granted player (`walls` granted → `["select","shapes","walls"]`, in `AUTHORING_TOOLS` order), a non-member (empty), a DM (all six); the revocation cascade when the member is removed (`remove_member_impl`)
-- [ ] T004 `PLAYER_DEFAULT_TOOLS` and a synchronous `effective_tools_on(conn, user_id, is_admin, world_id) -> QueryResult<Vec<String>>` in `crates/thunderforge-server/src/auth/authoring_tools.rs` (R1); `effective_authoring_tools` becomes a `spawn_blocking` wrapper over it; update the module doc (FR-045 superseded)
+- [x] T003 Tests in `crates/thunderforge-server/src/auth/authoring_tools.rs` `mod tests`: rewrite `a_player_in_an_untouched_world_may_use_no_tool` as "… may select and draw"; add a revoked player (`shapes` revoked → `["select"]`), a granted player (`walls` granted → `["select","walls","shapes"]`, in `AUTHORING_TOOLS` order), a non-member (empty), a DM (all six); the revocation cascade when the member is removed (`remove_member_impl`)
+- [x] T004 `PLAYER_DEFAULT_TOOLS` and a synchronous `effective_tools_on(conn, user_id, is_admin, world_id) -> QueryResult<Vec<String>>` in `crates/thunderforge-server/src/auth/authoring_tools.rs` (R1); `effective_authoring_tools` becomes a `spawn_blocking` wrapper over it; update the module doc (FR-045 superseded)
 
 ### One shape authority
 
-- [ ] T005 Tests `crates/thunderforge-server/src/auth/shape_authority_tests.rs`: `shape_authority` for a DM (any shape), the creator holding `shapes`, another player's shape, a revoked creator, a non-member, a site admin, creating (`created_by: None`) as a player
-- [ ] T006 `crates/thunderforge-server/src/auth/shape_authority.rs`: `ShapeAuthority { Dm, Creator, None }` and `shape_authority(conn, user_id, is_admin, scene_id, created_by)` per R3, beside `is_dm_of_scene`; register it and its tests in `src/auth/mod.rs`
+- [x] T005 Tests `crates/thunderforge-server/src/auth/shape_authority_tests.rs`: `shape_authority` for a DM (any shape), the creator holding `shapes`, another player's shape, a revoked creator, a non-member, a site admin, creating (`created_by: None`) as a player
+- [x] T006 `crates/thunderforge-server/src/auth/shape_authority.rs`: `ShapeAuthority { Dm, Creator, None }` and `shape_authority(conn, user_id, is_admin, scene_id, created_by)` per R3, beside `is_dm_of_scene`; register it and its tests in `src/auth/mod.rs`
 
 ### The engine knows shapes' creators and its viewer
 
-- [ ] T007 [P] `created_by: Option<String>` (`#[serde(default)]`) on `Shape` in `crates/thunderforge-canvas-core/src/shape.rs`; fill it at every constructor (`cargo check --workspace` names them)
-- [ ] T008 [P] `WorldShapePayload.created_by` (`createdBy`) in `crates/thunderforge-engine/src/payloads.rs`, copied into `Shape`; `ExternalCommand::SetViewerUser { user_id }`; `set_viewer_user` in `src/sdk.rs`; a `ViewerUserId` resource handled in `src/app.rs` beside `SetIsGameMaster` (contracts/engine-viewer.md)
-- [ ] T009 [P] Web: `createdBy: string | null` on `WorldShape` in `apps/web/src/engine/world/types.ts`; `shapeRecordToWorldShape` in `sync/shapes.ts` fills it, with a case in `sync/__tests__/shapeEventSync.test.ts`; `setViewerUser` in `apps/web/src/engine/bevy/index.ts` beside `setIsGameMaster`
+- [x] T007 [P] `created_by: Option<String>` (`#[serde(default)]`) on `Shape` in `crates/thunderforge-canvas-core/src/shape.rs`; fill it at every constructor (`cargo check --workspace` names them)
+- [x] T008 [P] `WorldShapePayload.created_by` (`createdBy`) in `crates/thunderforge-engine/src/payloads.rs`, copied into `Shape`; `ExternalCommand::SetViewerUser { user_id }`; `set_viewer_user` in `src/sdk.rs`; a `ViewerUserId` resource handled in `src/app.rs` beside `SetIsGameMaster` (contracts/engine-viewer.md)
+- [x] T009 [P] Web: `createdBy: string | null` on `WorldShape` in `apps/web/src/engine/world/types.ts`; `shapeRecordToWorldShape` in `sync/shapes.ts` fills it, with a case in `sync/__tests__/shapeEventSync.test.ts`; `setViewerUser` in `apps/web/src/engine/bevy/index.ts` beside `setIsGameMaster`
 
 **Checkpoint**: a player's effective tools are Select and Shapes; one function decides every shape write; both clients carry `createdBy`.
 
@@ -101,8 +101,8 @@ as named below.
 
 ## Phase 6: US5 — the GM takes the tools away (P2)
 
-- [ ] T032 [US5] Tests in `crates/thunderforge-server/src/graphql/mutations_authoring_tools.rs` `mod tests`: `granted: false` for `shapes` writes a revocation and the answer drops it; `granted: true` removes it; a non-default tool behaves as today; `authoringToolGrants` lists every non-DM member with effective tools (a member with no rows shows Select and Shapes); update the existing asserts around lines 260, 313 and 458
-- [ ] T033 [US5] `set_authoring_tool_grant_impl` writes revocations for a default tool (data-model.md table) and answers effective tools; `authoringToolGrants` in `queries/authoring_tools.rs` answers effective tools per member
+- [x] T032 [US5] (done with Phase 2: the defaults broke these tests, so they moved with it) Tests in `crates/thunderforge-server/src/graphql/mutations_authoring_tools.rs` `mod tests`: `granted: false` for `shapes` writes a revocation and the answer drops it; `granted: true` removes it; a non-default tool behaves as today; `authoringToolGrants` lists every non-DM member with effective tools (a member with no rows shows Select and Shapes); update the existing asserts around lines 260, 313 and 458
+- [x] T033 [US5] `set_authoring_tool_grant_impl` writes revocations for a default tool (data-model.md table) and answers effective tools; `authoringToolGrants` in `queries/authoring_tools.rs` answers effective tools per member
 - [ ] T034 [US5] `AuthoringToolGrantsCard.tsx` reads the effective lists; intro text says players select and draw by default; update the doc comment in `apps/web/src/api/authoringTools.ts`
 - [ ] T035 [US5] E2E: the GM unticks Shapes; the player's rail drops it without a reload and their `createShape` is refused; ticking it again restores both, and the shapes they drew earlier are untouched
 

@@ -64,6 +64,13 @@ describe("applyShapeWorldEvent", () => {
     expect(Object.keys(store.getState().shapes)).toEqual(["b"]);
   });
 
+  it("carries who drew a shape into the store, and so to the engine (spec 082)", async () => {
+    const store = createWorldStore({ worldId: "world-1" });
+    getShapes.mockResolvedValueOnce([record("a")]);
+    await applyShapeWorldEvent(store, SCENE, updated("a"));
+    expect(store.getState().shapes.a?.createdBy).toBe("gm");
+  });
+
   it("keeps a drawing the update does not name", async () => {
     const store = createWorldStore({ worldId: "world-1" });
     getShapes.mockResolvedValueOnce([record("a"), record("b")]);

@@ -831,6 +831,7 @@ mod tests {
             text: None,
             style: None,
             visible_to_players: false,
+            created_by: None,
         }
     }
 
@@ -861,6 +862,7 @@ mod tests {
             text: Some("hi".to_string()),
             style: None,
             visible_to_players: false,
+            created_by: None,
         };
         assert_eq!(shape_anchor(&s), Vec2::new(3.0, 4.0));
     }

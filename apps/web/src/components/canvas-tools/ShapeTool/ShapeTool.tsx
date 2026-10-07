@@ -194,6 +194,7 @@ export function ShapeTool({
               text: created.text,
               style: created.style,
               visibleToPlayers: created.visibleToPlayers,
+              createdBy: created.createdBy ?? null,
             },
           },
           "sync",

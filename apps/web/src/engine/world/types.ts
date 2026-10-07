@@ -100,6 +100,11 @@ export type WorldShape = {
   text: string | null;
   style: Record<string, unknown> | null;
   visibleToPlayers: boolean;
+  /**
+   * Spec 082: who drew it. The engine lets a player edit only the shapes
+   * whose creator they are; the server enforces the same rule.
+   */
+  createdBy: string | null;
 };
 
 export type WorldState = {

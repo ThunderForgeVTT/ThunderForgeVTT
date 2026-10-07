@@ -29,41 +29,35 @@ use async_graphql::{Context, Error, ErrorExtensions, Result as GraphQLResult};
 use diesel::prelude::*;
 use uuid::Uuid;
 
-use crate::auth::authoring_tools::AUTHORING_TOOLS;
+use crate::auth::authoring_tools::{AUTHORING_TOOLS, PLAYER_DEFAULT_TOOLS, resolve_member_tools};
 use crate::auth::world_membership::is_dm_of_world;
 use crate::graphql::{app_state, authenticated_user};
-use crate::models::NewWorldAuthoringToolGrant;
+use crate::models::{NewWorldAuthoringToolGrant, NewWorldAuthoringToolRevocation};
 use crate::play_pause::gate::refuse_if_paused;
-use crate::schema::{world_authoring_tool_grants, world_members};
+use crate::schema::{world_authoring_tool_grants, world_authoring_tool_revocations, world_members};
 use crate::state::AppState;
 
-/// Which tools this membership has been granted, in declaration order.
+/// What this membership may use, in declaration order: spec 082's defaults
+/// less what was revoked, plus what was granted.
 ///
-/// The administrative read — "what has this player been given" — as opposed to
-/// `auth::authoring_tools::effective_authoring_tools`, which answers "what may
-/// this person use" and folds in the DM's implicit everything. A Game Master
-/// looking at the toggles needs the first: their own row would otherwise show
-/// six switches that mean nothing, since a DM holds every tool whatever this
-/// table says.
-pub fn granted_tools_for_member(
-    conn: &mut PgConnection,
-    world_member_id: Uuid,
-) -> QueryResult<Vec<String>> {
-    let held = world_authoring_tool_grants::table
+/// For a player's membership, which is the only kind the settings page
+/// configures. A DM holds every tool whatever these rows say, and
+/// `auth::authoring_tools::effective_authoring_tools` answers that.
+pub fn member_tools(conn: &mut PgConnection, world_member_id: Uuid) -> QueryResult<Vec<String>> {
+    let granted = world_authoring_tool_grants::table
         .filter(world_authoring_tool_grants::world_member_id.eq(world_member_id))
         .select(world_authoring_tool_grants::tool)
         .load::<String>(conn)?;
-
-    Ok(AUTHORING_TOOLS
-        .iter()
-        .filter(|tool| held.iter().any(|row| row == *tool))
-        .map(|tool| (*tool).to_string())
-        .collect())
+    let revoked = world_authoring_tool_revocations::table
+        .filter(world_authoring_tool_revocations::world_member_id.eq(world_member_id))
+        .select(world_authoring_tool_revocations::tool)
+        .load::<String>(conn)?;
+    Ok(resolve_member_tools(&granted, &revoked))
 }
 
 /// Testable core of `AuthoringToolMutation::set_authoring_tool_grant`.
 ///
-/// Returns the member's grants after the write, so the settings page renders
+/// Returns the member's effective tools after the write, so the settings page renders
 /// what the table says rather than what it hoped the click did. Idempotent in
 /// both directions: granting what is already granted refreshes `updated_by`,
 /// revoking what is not granted removes nothing and is not an error.
@@ -109,37 +103,67 @@ pub async fn set_authoring_tool_grant_impl(
                 .select(world_members::id)
                 .first::<Uuid>(conn)?;
 
-            if granted {
-                diesel::insert_into(world_authoring_tool_grants::table)
-                    .values(&NewWorldAuthoringToolGrant {
-                        world_member_id: member_id,
-                        tool: tool.clone(),
-                        created_by: caller_id,
-                        updated_by: caller_id,
-                    })
-                    .on_conflict((
-                        world_authoring_tool_grants::world_member_id,
-                        world_authoring_tool_grants::tool,
-                    ))
-                    // `created_by` is deliberately not touched: it records who
-                    // first handed this tool out, and a second Game Master
-                    // clicking an already-lit toggle has not granted anything.
-                    .do_update()
-                    .set((
-                        world_authoring_tool_grants::updated_by.eq(caller_id),
-                        world_authoring_tool_grants::updated_at.eq(diesel::dsl::now),
-                    ))
+            // Spec 082: a default tool is held until revoked, so taking it
+            // away writes a revocation and handing it back deletes one. The
+            // other tools are granted as before.
+            let is_default = PLAYER_DEFAULT_TOOLS.contains(&tool.as_str());
+            match (is_default, granted) {
+                (true, false) => {
+                    diesel::insert_into(world_authoring_tool_revocations::table)
+                        .values(&NewWorldAuthoringToolRevocation {
+                            world_member_id: member_id,
+                            tool: tool.clone(),
+                            revoked_by: Some(caller_id),
+                        })
+                        .on_conflict((
+                            world_authoring_tool_revocations::world_member_id,
+                            world_authoring_tool_revocations::tool,
+                        ))
+                        .do_nothing()
+                        .execute(conn)?;
+                }
+                (true, true) => {
+                    diesel::delete(
+                        world_authoring_tool_revocations::table
+                            .filter(world_authoring_tool_revocations::world_member_id.eq(member_id))
+                            .filter(world_authoring_tool_revocations::tool.eq(&tool)),
+                    )
                     .execute(conn)?;
-            } else {
-                diesel::delete(
-                    world_authoring_tool_grants::table
-                        .filter(world_authoring_tool_grants::world_member_id.eq(member_id))
-                        .filter(world_authoring_tool_grants::tool.eq(&tool)),
-                )
-                .execute(conn)?;
+                }
+                (false, true) => {
+                    diesel::insert_into(world_authoring_tool_grants::table)
+                        .values(&NewWorldAuthoringToolGrant {
+                            world_member_id: member_id,
+                            tool: tool.clone(),
+                            created_by: caller_id,
+                            updated_by: caller_id,
+                        })
+                        .on_conflict((
+                            world_authoring_tool_grants::world_member_id,
+                            world_authoring_tool_grants::tool,
+                        ))
+                        // `created_by` is deliberately not touched: it records
+                        // who first handed this tool out, and a second Game
+                        // Master clicking an already-lit toggle has not
+                        // granted anything.
+                        .do_update()
+                        .set((
+                            world_authoring_tool_grants::updated_by.eq(caller_id),
+                            world_authoring_tool_grants::updated_at.eq(diesel::dsl::now),
+                        ))
+                        .execute(conn)?;
+                }
+                (false, false) => {
+                    diesel::delete(
+                        world_authoring_tool_grants::table
+                            .filter(world_authoring_tool_grants::world_member_id.eq(member_id))
+                            .filter(world_authoring_tool_grants::tool.eq(&tool)),
+                    )
+                    .execute(conn)?;
+                }
             }
 
-            granted_tools_for_member(conn, member_id)
+            member_tools(conn, member_id)
         })
     })
     .await
@@ -158,8 +182,10 @@ pub struct AuthoringToolMutation;
 #[async_graphql::Object]
 impl AuthoringToolMutation {
     /// Grant (`granted: true`) or revoke a single authoring tool for a single
-    /// member of a world. Owner/GM only. Returns that member's grants after
-    /// the write.
+    /// member of a world. Owner/GM only. For `select` and `shapes`, which a
+    /// player holds by default, `granted: false` takes the tool away and
+    /// `true` hands it back. Returns that member's effective tools after the
+    /// write.
     async fn set_authoring_tool_grant(
         &self,
         ctx: &Context<'_>,
@@ -260,7 +286,8 @@ mod tests {
         let tools = effective_authoring_tools(&state, player_id, false, world_id)
             .await
             .expect("resolution");
-        assert_eq!(tools, vec!["walls".to_string()]);
+        // Spec 082: on top of the Select and Shapes every player holds.
+        assert_eq!(tools, vec!["select", "walls", "shapes"]);
     }
 
     /// FR-046's other half: a revoke removes the row, and the tool goes with
@@ -313,7 +340,7 @@ mod tests {
         let tools = effective_authoring_tools(&state, player_id, false, world_id)
             .await
             .expect("resolution");
-        assert_eq!(tools, vec!["lights".to_string()]);
+        assert_eq!(tools, vec!["select", "lights", "shapes"]);
     }
 
     /// The refusal that matters: a player cannot grant themselves anything.
@@ -458,9 +485,10 @@ mod tests {
         let tools = effective_authoring_tools(&state, player_id, false, world_id)
             .await
             .expect("resolution");
-        assert!(
-            tools.is_empty(),
-            "readmission must not restore what was granted before, got {tools:?}"
+        assert_eq!(
+            tools,
+            vec!["select", "shapes"],
+            "readmission must not restore what was granted before"
         );
     }
 
@@ -497,6 +525,74 @@ mod tests {
         assert!(rows_for(&mut conn, foreign_member_id).is_empty());
     }
 
+    /// Spec 082: Select and Shapes are held by default, so turning one off
+    /// writes a revocation, and turning it back on deletes it. No grant row
+    /// ever names a default tool.
+    #[tokio::test]
+    async fn turning_a_default_tool_off_writes_a_revocation() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let player_id = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, player_id, "Player");
+        let member_id = member_id_of(&mut conn, world_id, player_id);
+        drop(conn);
+
+        let after_off = set_authoring_tool_grant_impl(
+            &state,
+            owner_id,
+            false,
+            world_id,
+            member_id,
+            "shapes".to_string(),
+            false,
+        )
+        .await
+        .expect("revoke");
+        assert_eq!(after_off, vec!["select"]);
+
+        let mut conn = state.db_pool.get().unwrap();
+        let revoked = world_authoring_tool_revocations::table
+            .filter(world_authoring_tool_revocations::world_member_id.eq(member_id))
+            .select((
+                world_authoring_tool_revocations::tool,
+                world_authoring_tool_revocations::revoked_by,
+            ))
+            .load::<(String, Option<Uuid>)>(&mut conn)
+            .expect("revocations");
+        assert_eq!(revoked, vec![("shapes".to_string(), Some(owner_id))]);
+        assert!(rows_for(&mut conn, member_id).is_empty());
+        drop(conn);
+
+        let tools = effective_authoring_tools(&state, player_id, false, world_id)
+            .await
+            .expect("resolution");
+        assert_eq!(tools, vec!["select"]);
+
+        let after_on = set_authoring_tool_grant_impl(
+            &state,
+            owner_id,
+            false,
+            world_id,
+            member_id,
+            "shapes".to_string(),
+            true,
+        )
+        .await
+        .expect("hand back");
+        assert_eq!(after_on, vec!["select", "shapes"]);
+
+        let mut conn = state.db_pool.get().unwrap();
+        let left = world_authoring_tool_revocations::table
+            .filter(world_authoring_tool_revocations::world_member_id.eq(member_id))
+            .count()
+            .get_result::<i64>(&mut conn)
+            .expect("count");
+        assert_eq!(left, 0, "handing a default back deletes its revocation");
+        assert!(rows_for(&mut conn, member_id).is_empty());
+    }
+
     /// Granting twice is one row, not two — the settings page's toggle is a
     /// state, and a double click is still that state.
     #[tokio::test]
@@ -519,7 +615,7 @@ mod tests {
                 false,
                 world_id,
                 member_id,
-                "shapes".to_string(),
+                "tokens".to_string(),
                 true,
             )
             .await
@@ -527,7 +623,7 @@ mod tests {
         }
 
         let mut conn = state.db_pool.get().unwrap();
-        assert_eq!(rows_for(&mut conn, member_id), vec!["shapes".to_string()]);
+        assert_eq!(rows_for(&mut conn, member_id), vec!["tokens".to_string()]);
 
         // The second Game Master touched it last, and the first still holds
         // authorship — which is what an argument about a player's tools asks.

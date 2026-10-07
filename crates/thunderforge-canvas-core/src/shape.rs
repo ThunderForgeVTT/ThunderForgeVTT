@@ -54,6 +54,9 @@ pub struct Shape {
     pub text: Option<String>,
     pub style: Option<Value>,
     pub visible_to_players: bool,
+    /// Spec 082: who drew it. A player may edit only the shapes whose
+    /// creator they are; a GM edits any.
+    pub created_by: Option<String>,
 }
 
 /// One reversible shape edit, pushed onto `ShapeSet`'s undo stack whenever
@@ -173,6 +176,7 @@ mod tests {
             text: None,
             style: None,
             visible_to_players: false,
+            created_by: None,
         }
     }
 
@@ -290,6 +294,7 @@ mod clear_tests {
             text: None,
             style: None,
             visible_to_players: false,
+            created_by: None,
         };
         set.upsert(shape.clone());
         set.push_undo(ShapeEdit::Delete { deleted: shape });

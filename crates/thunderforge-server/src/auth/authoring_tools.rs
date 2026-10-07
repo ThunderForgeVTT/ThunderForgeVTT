@@ -1,5 +1,6 @@
 //! Spec 031 (FR-044, FR-045): which authoring tools a person may use in one
-//! world.
+//! world. Spec 082 changes the default: a player selects and draws unless a
+//! Game Master has taken that away ([`PLAYER_DEFAULT_TOOLS`]).
 //!
 //! # Why this is a permission and not a role check
 //!
@@ -27,7 +28,7 @@
 //! it does not have, which is precisely the confusion ADR-050 refuses.
 //!
 //! So: one declaration, adjacent to the others, sharing their DM rule via
-//! [`is_dm_of_world`] rather than restating it.
+//! [`actor_in_world`] rather than restating it.
 //!
 //! # Where the mutation-side gate is
 //!
@@ -47,8 +48,8 @@ use async_graphql::{Error, Result as GraphQLResult};
 use diesel::prelude::*;
 use uuid::Uuid;
 
-use crate::auth::world_membership::is_dm_of_world;
-use crate::schema::{world_authoring_tool_grants, world_members};
+use crate::auth::world_membership::actor_in_world;
+use crate::schema::{world_authoring_tool_grants, world_authoring_tool_revocations, world_members};
 use crate::state::AppState;
 
 /// Every authoring tool that can be permissioned, by the identifier the rail
@@ -69,48 +70,23 @@ pub const AUTHORING_TOOLS: [&str; 6] = [
     "interactions",
 ];
 
+/// Spec 082: the tools every player holds until a Game Master takes them
+/// away. A player selects and draws on the board; everything else is a
+/// Game Master's to hand out.
+pub const PLAYER_DEFAULT_TOOLS: [&str; 2] = ["select", "shapes"];
+
 /// Which tools `user_id` may use in `world_id`.
 ///
-/// Resolves in the shape the content permissions resolve in: a DM of the world
-/// holds everything, implicitly and un-removably; everyone else holds only
-/// what has been granted to them.
+/// A DM of the world holds everything, implicitly and un-removably. A player
+/// holds [`PLAYER_DEFAULT_TOOLS`] less what has been revoked from them, plus
+/// what has been granted. A non-member holds nothing.
 ///
-/// A world with no `world_authoring_tool_grants` rows resolves a player to the
-/// empty list. That is not a gap waiting to be filled — FR-045 requires
-/// exactly this default, so that a world deployed before this feature existed
-/// behaves after it precisely as it did before: the Game Master authors,
-/// players do not. FR-046's grants add rows; they cannot change what this
-/// returns for a world that has none.
+/// Spec 082 replaces FR-045's "a player holds nothing" default: the defaults
+/// live here, in code, so every world has them on its next request.
 pub async fn effective_authoring_tools(
     state: &AppState,
     user_id: Uuid,
     is_admin: bool,
-    world_id: Uuid,
-) -> GraphQLResult<Vec<String>> {
-    if is_dm_of_world(state, user_id, is_admin, world_id).await? {
-        return Ok(AUTHORING_TOOLS.iter().map(|id| (*id).to_string()).collect());
-    }
-
-    granted_authoring_tools(state, user_id, world_id).await
-}
-
-/// The explicit grants `user_id` holds in `world_id`, DM status aside.
-///
-/// Separated from [`effective_authoring_tools`] so the DM rule and the grant
-/// lookup do not have to be untangled from each other later, and so the one
-/// place that reads grants is greppable.
-///
-/// Rows hang off the *membership*, not off `(world_id, user_id)`, which is why
-/// this joins rather than filtering two columns: a grant is a fact about
-/// somebody's membership, and keying it that way is what makes removal
-/// cascade instead of needing a cleanup block (see the migration).
-///
-/// An empty result is "no tools", never "unrestricted" — every consumer reads
-/// it that way, which is why a player with no rows gets no rail and why the
-/// engine refuses their mode requests.
-async fn granted_authoring_tools(
-    state: &AppState,
-    user_id: Uuid,
     world_id: Uuid,
 ) -> GraphQLResult<Vec<String>> {
     let mut conn = state
@@ -118,29 +94,64 @@ async fn granted_authoring_tools(
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
-    let granted = tokio::task::spawn_blocking(move || {
-        world_authoring_tool_grants::table
-            .inner_join(world_members::table)
-            .filter(world_members::world_id.eq(world_id))
-            .filter(world_members::user_id.eq(user_id))
-            .select(world_authoring_tool_grants::tool)
-            .load::<String>(&mut conn)
-    })
-    .await
-    .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to load authoring tool grants"))?;
+    tokio::task::spawn_blocking(move || effective_tools_on(&mut conn, user_id, is_admin, world_id))
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to load authoring tools"))
+}
 
-    // Returned in [`AUTHORING_TOOLS`] order, and filtered through it rather
-    // than returned raw. Two things fall out of that: the rail is ordered by
-    // the declaration instead of by whatever order a Game Master clicked in,
-    // and a row naming a tool this build does not have resolves to nothing
-    // rather than being handed on to a client that would ask the engine about
-    // it. The declaration is the vocabulary; the table only records answers.
-    Ok(AUTHORING_TOOLS
+/// [`effective_authoring_tools`] on a connection the caller already holds,
+/// for the shape mutations that decide inside their own `spawn_blocking`.
+pub fn effective_tools_on(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    is_admin: bool,
+    world_id: Uuid,
+) -> QueryResult<Vec<String>> {
+    if actor_in_world(conn, user_id, is_admin, world_id).runs_the_world() {
+        return Ok(AUTHORING_TOOLS.iter().map(|id| (*id).to_string()).collect());
+    }
+
+    // Rows hang off the membership, so a removed member's grants and
+    // revocations went with it, and a stranger has neither nor the defaults.
+    let Some(member_id) = world_members::table
+        .filter(world_members::world_id.eq(world_id))
+        .filter(world_members::user_id.eq(user_id))
+        .select(world_members::id)
+        .first::<Uuid>(conn)
+        .optional()?
+    else {
+        return Ok(Vec::new());
+    };
+
+    let granted = world_authoring_tool_grants::table
+        .filter(world_authoring_tool_grants::world_member_id.eq(member_id))
+        .select(world_authoring_tool_grants::tool)
+        .load::<String>(conn)?;
+    let revoked = world_authoring_tool_revocations::table
+        .filter(world_authoring_tool_revocations::world_member_id.eq(member_id))
+        .select(world_authoring_tool_revocations::tool)
+        .load::<String>(conn)?;
+
+    Ok(resolve_member_tools(&granted, &revoked))
+}
+
+/// A player's tools from their rows: the defaults less what was revoked,
+/// plus what was granted, in [`AUTHORING_TOOLS`] order.
+///
+/// Filtered through the declaration rather than returned raw, so the rail is
+/// ordered by it and a row naming a tool this build does not have resolves
+/// to nothing rather than being handed on to a client.
+pub fn resolve_member_tools(granted: &[String], revoked: &[String]) -> Vec<String> {
+    AUTHORING_TOOLS
         .iter()
-        .filter(|tool| granted.iter().any(|held| held == *tool))
+        .filter(|tool| {
+            let by_default =
+                PLAYER_DEFAULT_TOOLS.contains(tool) && !revoked.iter().any(|r| r == *tool);
+            by_default || granted.iter().any(|g| g == *tool)
+        })
         .map(|tool| (*tool).to_string())
-        .collect())
+        .collect()
 }
 
 #[cfg(test)]
@@ -150,11 +161,10 @@ mod tests {
         insert_test_user, insert_test_world, insert_test_world_member, test_app_state,
     };
 
-    /// FR-045, and the assertion the whole default rests on: a world that
-    /// predates this feature has no grant rows, and its players must be able
-    /// to use nothing — not "everything, because the list is empty".
+    /// Spec 082: a world with no rows lets its players select and draw, and
+    /// nothing else.
     #[tokio::test]
-    async fn a_player_in_an_untouched_world_may_use_no_tool() {
+    async fn a_player_in_an_untouched_world_may_select_and_draw() {
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -167,18 +177,116 @@ mod tests {
             .await
             .expect("resolution");
 
-        assert!(
-            tools.is_empty(),
-            "a player with no grants must hold no tools, got {:?}",
-            tools
-        );
+        assert_eq!(tools, vec!["select", "shapes"]);
+    }
 
-        for tool in AUTHORING_TOOLS {
-            assert!(
-                !tools.iter().any(|granted| granted == tool),
-                "{tool} must be refused for a player with no grants"
-            );
-        }
+    /// A revoked default is gone; a granted tool joins the defaults, in the
+    /// declaration's order.
+    #[tokio::test]
+    async fn revocations_narrow_and_grants_widen_a_players_tools() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let revoked = insert_test_user(&mut conn);
+        let granted = insert_test_user(&mut conn);
+        let revoked_member = join(&mut conn, world_id, revoked);
+        let granted_member = join(&mut conn, world_id, granted);
+        revoke(&mut conn, revoked_member, "shapes", owner_id);
+        grant(&mut conn, granted_member, "walls", owner_id);
+        drop(conn);
+
+        let tools = effective_authoring_tools(&state, revoked, false, world_id)
+            .await
+            .expect("resolution");
+        assert_eq!(tools, vec!["select"]);
+
+        let tools = effective_authoring_tools(&state, granted, false, world_id)
+            .await
+            .expect("resolution");
+        assert_eq!(tools, vec!["select", "walls", "shapes"]);
+    }
+
+    /// Removing a member takes their revocations with them, so a player who
+    /// rejoins starts at the defaults.
+    #[tokio::test]
+    async fn a_removed_members_revocations_go_with_them() {
+        use crate::schema::world_authoring_tool_revocations as r;
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        insert_test_world_member(&mut conn, world_id, owner_id, "Owner");
+        let player = insert_test_user(&mut conn);
+        let member = join(&mut conn, world_id, player);
+        revoke(&mut conn, member, "select", owner_id);
+        drop(conn);
+
+        crate::graphql::mutations_invites::remove_member_impl(&state, owner_id, world_id, player)
+            .await
+            .expect("removal");
+
+        let mut conn = state.db_pool.get().unwrap();
+        let left: i64 = r::table
+            .filter(r::world_member_id.eq(member))
+            .count()
+            .get_result(&mut conn)
+            .unwrap();
+        assert_eq!(left, 0, "the revocation must cascade with the membership");
+    }
+
+    /// The database refuses a grant row for a default tool, so "held" has one
+    /// spelling.
+    #[tokio::test]
+    async fn a_grant_never_names_a_default_tool() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let player = insert_test_user(&mut conn);
+        let member = join(&mut conn, world_id, player);
+        let refused = diesel::insert_into(world_authoring_tool_grants::table)
+            .values(crate::models::NewWorldAuthoringToolGrant {
+                world_member_id: member,
+                tool: "shapes".into(),
+                created_by: owner_id,
+                updated_by: owner_id,
+            })
+            .execute(&mut conn);
+        assert!(refused.is_err());
+    }
+
+    fn join(conn: &mut PgConnection, world_id: Uuid, user_id: Uuid) -> Uuid {
+        insert_test_world_member(conn, world_id, user_id, "Player");
+        world_members::table
+            .filter(world_members::world_id.eq(world_id))
+            .filter(world_members::user_id.eq(user_id))
+            .select(world_members::id)
+            .first(conn)
+            .expect("membership")
+    }
+
+    fn revoke(conn: &mut PgConnection, member: Uuid, tool: &str, by: Uuid) {
+        diesel::insert_into(world_authoring_tool_revocations::table)
+            .values(crate::models::NewWorldAuthoringToolRevocation {
+                world_member_id: member,
+                tool: tool.into(),
+                revoked_by: Some(by),
+            })
+            .execute(conn)
+            .expect("revocation");
+    }
+
+    fn grant(conn: &mut PgConnection, member: Uuid, tool: &str, by: Uuid) {
+        diesel::insert_into(world_authoring_tool_grants::table)
+            .values(crate::models::NewWorldAuthoringToolGrant {
+                world_member_id: member,
+                tool: tool.into(),
+                created_by: by,
+                updated_by: by,
+            })
+            .execute(conn)
+            .expect("grant");
     }
 
     /// The other half of "existing worlds are unchanged": the Game Master's

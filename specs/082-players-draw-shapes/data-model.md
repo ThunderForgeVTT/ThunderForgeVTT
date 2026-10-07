@@ -19,13 +19,13 @@ Effective tools, in `AUTHORING_TOOLS` order:
 
 Migration `crates/thunderforge-server/migrations/2026-10-07-110000-0000_authoring_tool_revocations/`.
 
-| Column            | Type          | Rule                                                       |
-| ----------------- | ------------- | ---------------------------------------------------------- |
-| `id`              | `uuid`        | primary key, `gen_random_uuid()`                           |
-| `world_member_id` | `uuid`        | not null, references `world_members(id)` on delete cascade |
-| `tool`            | `varchar(32)` | not null, check `tool IN ('select', 'shapes')`             |
-| `revoked_by`      | `uuid`        | references `users(id)` on delete set null                  |
-| `revoked_at`      | `timestamptz` | not null, default `now()`                                  |
+| Column            | Type          | Rule                                                        |
+| ----------------- | ------------- | ----------------------------------------------------------- |
+| `id`              | `uuid`        | primary key, `gen_random_uuid()`                            |
+| `world_member_id` | `uuid`        | not null, references `world_members(id)` on delete cascade  |
+| `tool`            | `varchar(32)` | not null, check `tool IN ('select', 'shapes')`              |
+| `revoked_by`      | `uuid`        | references `users(id)` on delete set null                   |
+| `revoked_at`      | `timestamp`   | not null, default `CURRENT_TIMESTAMP` (as the grants table) |
 
 - Unique `(world_member_id, tool)`.
 - `revoked_by` is nullable with `set null`, unlike the grants' `created_by`,
@@ -38,8 +38,9 @@ table. Removed default-tool grants are not restored: with the defaults gone,
 those players would hold nothing, as before this spec.
 
 Diesel: `world_authoring_tool_revocations` in `src/schema.rs`, a
-`joinable!` to `world_members`, and `WorldAuthoringToolRevocation` /
-`NewWorldAuthoringToolRevocation` in `src/models.rs`.
+`joinable!` to `world_members`, and `NewWorldAuthoringToolRevocation` in
+`src/models.rs`. No `Queryable` struct: like the grants table, the rows are
+read as bare `tool` strings.
 
 ## `setAuthoringToolGrant` writes
 

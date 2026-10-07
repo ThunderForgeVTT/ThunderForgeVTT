@@ -143,6 +143,8 @@ pub(crate) struct SceneParams<'w, 's> {
     token_culling: Option<ResMut<'w, plugins::TokenCulling>>,
     camera_viewport: Query<'w, 's, &'static Camera, With<Camera2d>>,
     selected_token: Option<ResMut<'w, resources::SelectedToken>>,
+    // Spec 082: exists once `ShapePlugin` is registered.
+    viewer_user: Option<ResMut<'w, resources::ViewerUserId>>,
 }
 
 /// The interaction plugin's resources, grouped.
@@ -576,6 +578,7 @@ pub(crate) fn apply_external_commands(
                         text: shape.text,
                         style: shape.style,
                         visible_to_players: shape.visible_to_players,
+                        created_by: shape.created_by,
                     });
                 }
             }
@@ -622,6 +625,11 @@ pub(crate) fn apply_external_commands(
             } => {
                 if let Some(is_game_master) = is_game_master.as_deref_mut() {
                     is_game_master.0 = value;
+                }
+            }
+            ExternalCommand::SetViewerUser { user_id } => {
+                if let Some(viewer_user) = scene.viewer_user.as_deref_mut() {
+                    viewer_user.0 = user_id;
                 }
             }
             ExternalCommand::SetSceneGrid {

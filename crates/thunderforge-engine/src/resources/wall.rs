@@ -22,6 +22,12 @@ pub use thunderforge_canvas_core::wall::{DoorState, Wall, WallEdit, is_visible};
 #[derive(Resource, Default)]
 pub struct IsGameMaster(pub bool);
 
+/// Spec 082: the signed-in user's id, sent by the host with
+/// `set_viewer_user`. With `IsGameMaster` it decides which shapes this
+/// viewer may edit: a player edits only the shapes they created.
+#[derive(Resource, Default, Debug, Clone, PartialEq, Eq)]
+pub struct ViewerUserId(pub Option<String>);
+
 /// Currently selected wall id (mirrors `resources/selection.rs`'s
 /// `SelectedToken` pattern). Only one wall can be selected at a time.
 #[derive(Resource, Default)]

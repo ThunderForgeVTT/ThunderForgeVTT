@@ -33,7 +33,8 @@ impl Plugin for ShapePlugin {
         app.init_resource::<ShapeSet>()
             .init_resource::<SelectedShape>()
             .init_resource::<ActiveShapeTool>()
-            .init_resource::<IsGameMaster>();
+            .init_resource::<IsGameMaster>()
+            .init_resource::<crate::resources::ViewerUserId>();
 
         init_shape_systems_resources(app);
 

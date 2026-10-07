@@ -11,17 +11,19 @@ use async_graphql::{
 use diesel::prelude::*;
 use uuid::Uuid;
 
-use crate::auth::authoring_tools::{AUTHORING_TOOLS, effective_authoring_tools};
+use crate::auth::authoring_tools::effective_authoring_tools;
 use crate::auth::world_membership::is_dm_of_world;
+use crate::graphql::mutations_authoring_tools::member_tools;
 use crate::graphql::{app_state, authenticated_user};
-use crate::schema::{world_authoring_tool_grants, world_members};
+use crate::schema::world_members;
+use thunderforge_authz::Role;
 
-/// What one member of a world has been *granted*, as the settings page needs
-/// it: keyed by membership, one entry per member holding anything.
+/// What one player of a world may use, as the settings page needs it: keyed
+/// by membership, one entry per member who does not run the world.
 ///
-/// Deliberately not "what this member may use". A Game Master holds every
-/// tool implicitly, and rendering that as six lit toggles would invite
-/// somebody to turn one off and find that nothing happened.
+/// Game Masters are left out. They hold every tool implicitly, and rendering
+/// that as six lit toggles would invite somebody to turn one off and find
+/// that nothing happened.
 #[derive(SimpleObject, Debug, Clone)]
 pub struct GraphQLMemberAuthoringTools {
     pub world_member_id: Uuid,
@@ -41,8 +43,8 @@ impl AuthoringToolsQuery {
     /// and is DM-gated — and answering both from one field would make it easy
     /// to ship the second without the gate.
     ///
-    /// An empty list is the honest answer for a player in a world whose Game
-    /// Master has granted nothing, which today is every world (FR-045).
+    /// A player holds Select and Shapes until a Game Master takes them away
+    /// (spec 082).
     async fn authoring_tools(
         &self,
         ctx: &Context<'_>,
@@ -62,9 +64,9 @@ impl AuthoringToolsQuery {
     /// other not, and the guard is easy to leave off the day the argument is
     /// added.
     ///
-    /// Members with no grants are simply absent. The settings page has the
-    /// roster already and reads an absent member as "nothing", which is the
-    /// same default the resolver applies.
+    /// Spec 082: one entry per member who does not run the world, carrying
+    /// the tools that member may use, so a member with no rows shows the
+    /// defaults rather than reading as "nothing".
     async fn authoring_tool_grants(
         &self,
         ctx: &Context<'_>,
@@ -85,45 +87,67 @@ impl AuthoringToolsQuery {
             .get()
             .map_err(|_| Error::new("Failed to get DB connection"))?;
 
-        let rows = tokio::task::spawn_blocking(move || {
-            world_authoring_tool_grants::table
-                .inner_join(world_members::table)
-                .filter(world_members::world_id.eq(world_id))
-                .select((
-                    world_members::id,
-                    world_members::user_id,
-                    world_authoring_tool_grants::tool,
-                ))
-                .load::<(Uuid, Uuid, String)>(&mut conn)
-        })
-        .await
-        .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to load authoring tool grants"))?;
+        tokio::task::spawn_blocking(move || players_tools_on(&mut conn, world_id))
+            .await
+            .map_err(|_| Error::new("Failed to spawn blocking task"))?
+            .map_err(|_| Error::new("Failed to load authoring tool grants"))
+    }
+}
 
-        // Grouped here rather than by SQL aggregation so the tools come back
-        // in declaration order — the order the rail draws them in, so the
-        // toggles read the same way in both places — and so a row naming a
-        // tool this build does not have is dropped rather than shown as a
-        // switch that controls nothing.
-        let mut grouped: Vec<GraphQLMemberAuthoringTools> = Vec::new();
-        for (world_member_id, user_id, _) in rows.iter().cloned() {
-            if grouped.iter().any(|g| g.world_member_id == world_member_id) {
-                continue;
-            }
-            grouped.push(GraphQLMemberAuthoringTools {
+/// Every member of the world who does not run it, in the order they joined,
+/// with the tools each may use. A member with no rows reads as Select and
+/// Shapes (spec 082).
+pub fn players_tools_on(
+    conn: &mut PgConnection,
+    world_id: Uuid,
+) -> QueryResult<Vec<GraphQLMemberAuthoringTools>> {
+    let members = world_members::table
+        .filter(world_members::world_id.eq(world_id))
+        .order(world_members::joined_at.asc())
+        .select((
+            world_members::id,
+            world_members::user_id,
+            world_members::role,
+        ))
+        .load::<(Uuid, Uuid, String)>(conn)?;
+    members
+        .into_iter()
+        .filter(|(_, _, role)| !Role::from_stored(role).is_some_and(Role::runs_the_world))
+        .map(|(world_member_id, user_id, _)| {
+            Ok(GraphQLMemberAuthoringTools {
                 world_member_id,
                 user_id,
-                tools: AUTHORING_TOOLS
-                    .iter()
-                    .filter(|tool| {
-                        rows.iter()
-                            .any(|(m, _, held)| *m == world_member_id && held == *tool)
-                    })
-                    .map(|tool| (*tool).to_string())
-                    .collect(),
-            });
-        }
+                tools: member_tools(conn, world_member_id)?,
+            })
+        })
+        .collect()
+}
 
-        Ok(grouped)
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{
+        insert_test_user, insert_test_world, insert_test_world_member, test_app_state,
+    };
+
+    /// Spec 082: the settings page lists every player, and one nobody has
+    /// touched shows Select and Shapes rather than nothing. Game Masters are
+    /// left out.
+    #[test]
+    fn every_player_is_listed_with_the_tools_they_hold() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        insert_test_world_member(&mut conn, world_id, owner_id, "Owner");
+        let gm_id = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, gm_id, "GM");
+        let player_id = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, player_id, "Player");
+
+        let listed = players_tools_on(&mut conn, world_id).expect("listing");
+        assert_eq!(listed.len(), 1, "only the player is configurable");
+        assert_eq!(listed[0].user_id, player_id);
+        assert_eq!(listed[0].tools, vec!["select", "shapes"]);
     }
 }

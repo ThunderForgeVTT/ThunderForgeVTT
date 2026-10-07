@@ -300,6 +300,12 @@ pub(crate) fn parse_command(input: &str) -> Option<ExternalCommand> {
         "set_is_game_master" => Some(ExternalCommand::SetIsGameMaster {
             is_game_master: value.get("isGameMaster")?.as_bool()?,
         }),
+        "set_viewer_user" => Some(ExternalCommand::SetViewerUser {
+            user_id: match value.get("userId")? {
+                serde_json::Value::Null => None,
+                id => Some(id.as_str()?.to_owned()),
+            },
+        }),
         "upsert_canvas_image_asset" => Some(ExternalCommand::UpsertCanvasImageAsset {
             asset_id: value.get("assetId")?.as_str()?.to_owned(),
             path: value.get("path")?.as_str()?.to_owned(),
@@ -572,5 +578,40 @@ mod selection_command_tests {
         assert!(
             classify_command(r#"{"type":"select_token","tokenId":"lower","sdkVersion":1}"#).is_ok()
         );
+    }
+}
+
+#[cfg(test)]
+mod viewer_command_tests {
+    use super::*;
+
+    /// Spec 082: the engine is told who is looking, so it can tell a
+    /// player's own shapes from everyone else's.
+    #[test]
+    fn the_viewer_is_a_user_id_or_nobody() {
+        assert!(matches!(
+            parse_command(r#"{"type":"set_viewer_user","userId":"u1"}"#),
+            Some(ExternalCommand::SetViewerUser { user_id: Some(id) }) if id == "u1"
+        ));
+        assert!(matches!(
+            parse_command(r#"{"type":"set_viewer_user","userId":null}"#),
+            Some(ExternalCommand::SetViewerUser { user_id: None })
+        ));
+    }
+
+    #[test]
+    fn a_shape_carries_its_creator() {
+        let with = r#"{"type":"upsert_shape","shape":{"id":"s1","kind":"rect","geometry":{},"text":null,"style":null,"visibleToPlayers":true,"createdBy":"u1"}}"#;
+        let Some(ExternalCommand::UpsertShape { shape }) = parse_command(with) else {
+            panic!("upsert_shape should parse");
+        };
+        assert_eq!(shape.created_by.as_deref(), Some("u1"));
+
+        // A board from before spec 082 sends no creator at all.
+        let without = r#"{"type":"upsert_shape","shape":{"id":"s1","kind":"rect","geometry":{},"text":null,"style":null,"visibleToPlayers":true}}"#;
+        let Some(ExternalCommand::UpsertShape { shape }) = parse_command(without) else {
+            panic!("upsert_shape without a creator should parse");
+        };
+        assert_eq!(shape.created_by, None);
     }
 }

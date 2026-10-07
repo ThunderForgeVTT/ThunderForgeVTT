@@ -99,6 +99,7 @@ fn shape(id: &str, kind: ShapeKind, geometry: serde_json::Value) -> Shape {
         text: None,
         style: None,
         visible_to_players: false,
+        created_by: None,
     }
 }
 

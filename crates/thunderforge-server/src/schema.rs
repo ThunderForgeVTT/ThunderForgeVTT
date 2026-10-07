@@ -1192,6 +1192,17 @@ diesel::table! {
 }
 
 diesel::table! {
+    world_authoring_tool_revocations (id) {
+        id -> Uuid,
+        world_member_id -> Uuid,
+        #[max_length = 32]
+        tool -> Varchar,
+        revoked_by -> Nullable<Uuid>,
+        revoked_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     world_books (id) {
         id -> Uuid,
         world_id -> Uuid,
@@ -1781,6 +1792,8 @@ diesel::joinable!(world_attacks -> world_combats (combat_id));
 diesel::joinable!(world_attacks -> world_items (item_id));
 diesel::joinable!(world_attacks -> worlds (world_id));
 diesel::joinable!(world_authoring_tool_grants -> world_members (world_member_id));
+diesel::joinable!(world_authoring_tool_revocations -> users (revoked_by));
+diesel::joinable!(world_authoring_tool_revocations -> world_members (world_member_id));
 diesel::joinable!(world_books -> compendiums (compendium_id));
 diesel::joinable!(world_books -> users (switched_on_by));
 diesel::joinable!(world_books -> worlds (world_id));
@@ -1917,6 +1930,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     world_actors,
     world_attacks,
     world_authoring_tool_grants,
+    world_authoring_tool_revocations,
     world_books,
     world_chat_messages,
     world_collection_members,
