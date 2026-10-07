@@ -23,6 +23,8 @@ export interface DemoState {
   shapes: Row[];
   lore: Row[];
   chat: Row[];
+  /** `world_roll_records`, oldest first (`handlers/dice.ts`). */
+  rolls?: Row[];
   /** `GraphQLWorldActor` rows, plus `castKey` for the demo's own use. */
   actors: Row[];
   /** One `GraphQLActorSystemData` row per actor that has any. */

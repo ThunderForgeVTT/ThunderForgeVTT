@@ -15,6 +15,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@thunderforge/dice": "workspace:^",
     "@thunderforge/heroes": "workspace:^",
     "graphql": "^16.14.2",
     "marked": "^18.0.10",

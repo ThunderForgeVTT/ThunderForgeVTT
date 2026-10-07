@@ -10,6 +10,7 @@ import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { ensureDiceBuild } from "../../../scripts/shared.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, "../../..");
@@ -87,6 +88,10 @@ await writeFile(
     "",
   ].join("\n"),
 );
+
+// The dice the in-page backend rolls with: `crates/thunderforge-dice`, built
+// for the browser. Skipped when the build is current.
+await ensureDiceBuild();
 
 if (!existsSync(path.join(out, "maps/maps.json"))) {
   console.error(

@@ -17,6 +17,7 @@ import { DND5E_SKILLS } from "../../../../packs/systems/dnd5e/web/src/sheet-regi
 import { DEMO_PLAYER, DEMO_USER } from "../seed/world";
 import { now } from "./events";
 import { loreLinkingToActor } from "./handlers/lore";
+import { resolveAndRecord } from "./handlers/dice";
 import { demoState, markChanged, type DemoState, type Row } from "./state";
 
 type Args = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -228,23 +229,18 @@ export function modifierFor(data: Row | null, checkId: string): number {
   return 0;
 }
 
-/** One d20, from the browser's own randomness. */
-export function rollCheck(args: Args): Row {
+/**
+ * One d20 and the modifier, resolved and recorded by the same dice as
+ * `rollDice` — as the server's `rollCheck` hands its formula to
+ * `roll_dice_impl`.
+ */
+export function rollCheck(args: Args): Promise<Row> {
   const state = demoState();
   findActor(state, args.actorId);
   if (!CHECKS.some((c) => c.id === args.checkId)) {
     throw new GraphQLError(`Unknown check ${args.checkId}`);
   }
   const modifier = modifierFor(systemDataOf(state, args.actorId), args.checkId);
-  const die = 1 + Math.floor(Math.random() * 20);
   const sign = modifier < 0 ? "-" : "+";
-  return {
-    formula: `1d20 ${sign} ${Math.abs(modifier)}`,
-    dice: [
-      { sidesKind: "NUMERIC", numericSides: 20, finalValue: die, kept: true },
-    ],
-    resultKind: "TOTAL",
-    resultValue: die + modifier,
-    outcome: null,
-  };
+  return resolveAndRecord(`1d20 ${sign} ${Math.abs(modifier)}`, {});
 }

@@ -91,8 +91,9 @@ ENV ENGINE_PROFILE=release \
 
 COPY . .
 
-# Order matters. `dist/engine` and `dist/pdf` are pnpm workspace packages that
-# wasm-pack writes, and `apps/web` depends on them, so they have to exist
+# Order matters. `dist/engine`, `dist/pdf` and `dist/dice` are pnpm workspace
+# packages that wasm-pack writes, and `apps/web` and `apps/demo` depend on
+# them, so they have to exist
 # before `pnpm install` can resolve the workspace. The cargo `target/` is a
 # cache mount: it is shared with the server build below and never lands in an
 # image.

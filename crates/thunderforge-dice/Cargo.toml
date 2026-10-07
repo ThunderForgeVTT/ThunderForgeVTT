@@ -9,16 +9,25 @@ repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
 license.workspace = true
 
 [lib]
-crate-type = ["rlib"]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# The browser façade (`src/wasm.rs`) the demo's in-page backend rolls through
+# (spec 074). Off by default, so neither the server nor the engine carries
+# `wasm-bindgen` through this crate.
+wasm = ["dep:wasm-bindgen"]
 
 # Deliberately no `bevy`/`wasm-bindgen`/`rand` dependency (Constitution
 # Principle II: modular, independently testable; spec 014 research.md §3:
 # the evaluator never owns entropy — `rand_core` is the trait-only half
 # of the `rand` ecosystem, so this crate accepts any injected `RngCore`
 # without depending on a concrete RNG or OS/entropy facility itself).
+# `wasm-bindgen` below is only ever pulled in by the `wasm` feature, and the
+# façade it serves takes its entropy from the caller as a seed.
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 rand_core = "0.10"
+wasm-bindgen = { version = "0.2.127", optional = true }
 
 [dev-dependencies]

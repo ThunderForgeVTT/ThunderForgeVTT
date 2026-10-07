@@ -11,6 +11,8 @@ mod ast;
 mod error;
 mod eval;
 mod parser;
+#[cfg(feature = "wasm")]
+mod wasm;
 
 pub use error::FormulaError;
 pub use eval::{MAX_ITERATIONS_PER_DIE, MAX_TOTAL_DICE, PlaceholderBindings, resolve};

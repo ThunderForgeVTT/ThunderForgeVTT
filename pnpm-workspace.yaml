@@ -5,6 +5,8 @@ packages:
   # Spec 047/048: the PDF reader, compiled for the browser. Built like the
   # engine and for the same reason — it is Rust the web loads.
   - dist/pdf
+  # Spec 074: the dice the demo's in-page backend rolls with, built likewise.
+  - dist/dice
   - "crates/*"
   - "packs/*"
   - "packs/systems/*/web"

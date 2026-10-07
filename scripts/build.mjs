@@ -2,6 +2,7 @@
 
 import {
   ROOT_DIR,
+  ensureDiceBuild,
   ensureEngineBuild,
   ensurePdfBuild,
   log,
@@ -25,6 +26,8 @@ async function run() {
   // The web imports this the same way it imports the engine, so it has to
   // exist before the frontend is built. Cheap when it already does.
   await ensurePdfBuild({ force: args.force });
+  // The demo's in-page backend rolls with this (spec 074).
+  await ensureDiceBuild({ force: args.force });
 
   if (args.onlyWasm) {
     log("build", "--only-wasm set, skipping frontend/backend builds.");

@@ -380,6 +380,58 @@ export async function ensurePdfBuild({ force = false } = {}) {
   await buildPdf();
 }
 
+const DICE_DIR = join(ROOT_DIR, "crates/thunderforge-dice");
+const DICE_PKG_DIR = join(ROOT_DIR, "dist/dice");
+
+/**
+ * Build the dice for the browser, for the demo's in-page backend (spec 074).
+ *
+ * The crate `rollDice` resolves with on the server, compiled for the page as
+ * the PDF reader is, so a formula reads the same in both. Release only, for
+ * the PDF reader's reason.
+ */
+export async function buildDice() {
+  log("dice", "Building the WebAssembly dice...");
+  const child = spawnManaged(
+    "wasm-pack build ./ --release --target web --out-dir ../../dist/dice --scope thunderforge --out-name dice -- --features wasm",
+    { cwd: DICE_DIR, prefix: "dice" },
+  );
+  const result = await waitForProcess(child, "dice build");
+  if (result.code !== 0) {
+    throw new Error(`Dice build failed with exit code ${result.code}`);
+  }
+  const manifest = join(DICE_PKG_DIR, "package.json");
+  const pkg = JSON.parse(readFileSync(manifest, "utf-8"));
+  pkg.name = "@thunderforge/dice";
+  writeFileSync(manifest, JSON.stringify(pkg, null, 2), "utf-8");
+  writeFileSync(join(DICE_PKG_DIR, "pkg.sum"), getDiceInputsHash(), "utf-8");
+  log("dice", "Build complete and pkg.sum updated.");
+}
+
+/** What the dice are built from; hashed for the PDF reader's reason. */
+function getDiceInputsHash() {
+  const hash = createHash("sha256");
+  if (existsSync(WORKSPACE_CARGO_LOCK)) {
+    hashFile(hash, WORKSPACE_CARGO_LOCK);
+  }
+  hashFile(hash, join(DICE_DIR, "Cargo.toml"));
+  hashDirectoryRecursive(hash, join(DICE_DIR, "src"));
+  return hash.digest("hex");
+}
+
+export async function ensureDiceBuild({ force = false } = {}) {
+  const sumPath = join(DICE_PKG_DIR, "pkg.sum");
+  if (
+    force ||
+    !existsSync(sumPath) ||
+    readFileSync(sumPath, "utf-8").trim() !== getDiceInputsHash()
+  ) {
+    await buildDice();
+    return;
+  }
+  log("dice", "Dice are up to date, skipping build...");
+}
+
 export async function ensureEngineBuild({
   force = false,
   profile = engineProfile(),

@@ -200,6 +200,9 @@ lint-wasm:
 		--target wasm32-unknown-unknown --all-targets -- -D warnings
 	cargo clippy -p thunderforge_combat --features wasm \
 		--target wasm32-unknown-unknown --all-targets -- -D warnings
+	# The demo's dice (spec 074): the same crate, with its browser façade.
+	cargo clippy -p thunderforge_dice --features thunderforge_dice/wasm \
+		--target wasm32-unknown-unknown --all-targets -- -D warnings
 
 check-file-length:
 	@./scripts/check-file-length.sh
