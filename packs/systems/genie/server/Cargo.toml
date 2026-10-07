@@ -2,7 +2,7 @@
 workspace = true
 
 [package]
-name = "genie-server"
+name = "thunderforge-system-genie"
 version = "0.1.0"
 edition = "2021"
 repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
@@ -14,7 +14,7 @@ serde_json = "1.0.151"
 tokio = { version = "1.53", features = ["full"] }
 async-trait = "0.1"
 inventory = "0.3"
-thunderforge_canvas_core = { path = "../../../../crates/thunderforge-canvas-core" }
+thunderforge-canvas-core = { path = "../../../../crates/thunderforge-canvas-core" }
 
 # This pack owns its tables and contributes its own GraphQL (spec 032,
 # ADR-063), so it needs what any code touching the database needs. The server
@@ -44,5 +44,4 @@ thunderforge-server = { path = "../../../../crates/thunderforge-server", feature
 ] }
 
 [lib]
-name = "genie_server"
 path = "src/lib.rs"

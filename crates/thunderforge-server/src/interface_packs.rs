@@ -24,9 +24,9 @@ use axum::{
     response::Json,
     routing::get,
 };
-use pack_system_spec::interface::{InterfaceManifest, validate};
 use serde::Serialize;
 use serde_json::json;
+use thunderforge_pack_system_spec::interface::{InterfaceManifest, validate};
 
 use crate::state::AppState;
 

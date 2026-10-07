@@ -2,7 +2,7 @@
 //! a feedback submission.
 //!
 //! Declared here without the prefix, like every other asset route, because the
-//! router is merged into `api_router` in `apps/server/src/main.rs`. A client asks
+//! router is merged into `api_router` in `apps/thunderforge/src/main.rs`. A client asks
 //! for `/api/feedback-assets/…`; asking for `/feedback-assets/…` in
 //! development reaches the SPA's `index.html` instead, since only `/api` and
 //! `/assets` are proxied — which looks like a 200 with the wrong body rather

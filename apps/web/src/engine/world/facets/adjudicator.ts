@@ -9,7 +9,7 @@
  *
  * This mirrors the split the Rust side already made: `SessionAdjudicator`
  * with a `LocalAdjudicator` (in-process, what a self-hosted deployment gets
- * by default) and a `RemoteAdjudicator` (HTTP to `crucible-server`). Callers
+ * by default) and a `RemoteAdjudicator` (HTTP to `thunderforge-crucible-server`). Callers
  * there depend only on the trait; callers here depend only on `Adjudicator`.
  */
 

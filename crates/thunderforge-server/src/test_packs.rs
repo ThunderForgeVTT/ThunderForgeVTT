@@ -1,10 +1,10 @@
 //! Links the bundled system packs into this crate's **test** binary only.
 //!
-//! # Why this exists, separately from `apps/server/src/system_packs.rs`
+//! # Why this exists, separately from `apps/thunderforge/src/system_packs.rs`
 //!
 //! Same load-bearing fact, different binary. A statically linked Rust crate
 //! that nothing references is never linked, and its `inventory` submissions
-//! go with it. The application's linkage lives in `apps/server` because that is
+//! go with it. The application's linkage lives in `apps/thunderforge` because that is
 //! the composition root; this crate's *tests* are their own binary and link
 //! nothing, so six tests that assert what a pack contributes — a Genie actor's
 //! derived Wish Points, a 5e actor's modifiers, the Fate and Cypher packs
@@ -18,11 +18,11 @@
 //! A test asserting "a Genie actor derives its Wish Points" has to name Genie;
 //! `scripts/check-system-registry.mjs` exempts tests for exactly that reason.
 
-use blades_server as _;
-use cypher_server as _;
-use dnd5e_server as _;
-use fate_server as _;
-use genie_server as _;
-use pathfinder2e_server as _;
-use roll_for_shoes_server as _;
-use yze_server as _;
+use thunderforge_system_blades_in_the_dark as _;
+use thunderforge_system_cypher_system as _;
+use thunderforge_system_dnd5e as _;
+use thunderforge_system_fate_core as _;
+use thunderforge_system_genie as _;
+use thunderforge_system_pathfinder2e as _;
+use thunderforge_system_roll_for_shoes as _;
+use thunderforge_system_year_zero_engine as _;

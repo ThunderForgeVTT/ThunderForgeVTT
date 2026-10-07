@@ -13,7 +13,7 @@ use async_graphql::{Context, Error, Object, Result as GraphQLResult, SimpleObjec
 use diesel::prelude::*;
 use uuid::Uuid;
 
-use pack_system_spec::conditions::SystemCondition;
+use thunderforge_pack_system_spec::conditions::SystemCondition;
 
 use crate::actor_conditions::{
     announce_changed, apply, clear, declarations_for_system, held_by_actor,

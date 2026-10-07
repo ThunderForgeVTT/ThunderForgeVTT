@@ -111,7 +111,7 @@ async fn a_manifest_route_serves_a_document_the_client_type_can_read() {
     .await;
 
     assert_eq!(status, StatusCode::OK);
-    let manifest: pack_system_spec::interface::InterfaceManifest =
+    let manifest: thunderforge_pack_system_spec::interface::InterfaceManifest =
         serde_json::from_value(body).expect("the served body must be a manifest");
     assert_eq!(manifest.id, crate::interface_packs::BASE_PACK_ID);
 }

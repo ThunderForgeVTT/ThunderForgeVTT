@@ -423,7 +423,7 @@ fn dnd5e_declares() -> Vec<String> {
     }
 
     // The derived half, from 5e's own rules.
-    let rules = dnd5e_server::DnD5eRules::from_manifest(&manifest);
+    let rules = thunderforge_system_dnd5e::DnD5eRules::from_manifest(&manifest);
     ids.extend(
         thunderforge_canvas_core::system_rules::SystemRules::derived_declarations(&rules)
             .into_iter()

@@ -2,7 +2,7 @@
 workspace = true
 
 [package]
-name = "thunderforge_repo_host"
+name = "thunderforge-repo-host"
 version = "0.1.0"
 edition = "2024"
 repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
@@ -22,7 +22,7 @@ crate-type = ["rlib"]
 # call, the installation-token exchange, lives in `crates/thunderforge-server/src/repo_host.rs`.
 #
 # That is not tidiness. It is what makes the refresh-window arithmetic and the
-# scope validation testable at all: `cargo test -p thunderforge_repo_host` must
+# scope validation testable at all: `cargo test -p thunderforge-repo-host` must
 # pass with no network and no application configured. Rules that can only be
 # exercised against a live GitHub App are rules that are hoped for rather than
 # tested. See specs/034-lore-git-sync/research.md R5a.

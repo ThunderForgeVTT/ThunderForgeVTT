@@ -12,7 +12,6 @@ license.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
-name = "thunderforge_server"
 path = "src/lib.rs"
 
 [features]
@@ -106,28 +105,28 @@ inventory = "0.3"
 # Spec 028 / ADR-052: the fingerprint, delta and conflict rules the client
 # also uses. Shared rather than reimplemented so the two sides cannot drift
 # on what "current" means.
-thunderforge_authz = { path = "../../crates/thunderforge-authz" }
-thunderforge_cache_core = { path = "../../crates/thunderforge-cache-core" }
-thunderforge_canvas_core = { path = "../../crates/thunderforge-canvas-core" }
+thunderforge-authz = { path = "../../crates/thunderforge-authz" }
+thunderforge-cache-core = { path = "../../crates/thunderforge-cache-core" }
+thunderforge-canvas-core = { path = "../../crates/thunderforge-canvas-core" }
 # Spec 079 / ADR-113: the rules of a fight, shared with the browser demo.
-thunderforge_combat = { path = "../../crates/thunderforge-combat", features = ["graphql"] }
+thunderforge-combat = { path = "../../crates/thunderforge-combat", features = ["graphql"] }
 thunderforge-content = { path = "../../crates/thunderforge-content" }
 # Reading a source book (spec 049). The same crate the browser runs compiled
 # to wasm — the readers above it must never become two implementations of
 # "what does this book say".
 thunderforge-pdf = { path = "../../crates/thunderforge-pdf" }
-thunderforge_pg = { path = "../../crates/thunderforge-pg" }
-thunderforge_pg_sockets = { path = "../../crates/thunderforge-pg-sockets" }
-thunderforge_presence = { path = "../../crates/thunderforge-presence" }
+thunderforge-pg = { path = "../../crates/thunderforge-pg" }
+thunderforge-pg-sockets = { path = "../../crates/thunderforge-pg-sockets" }
+thunderforge-presence = { path = "../../crates/thunderforge-presence" }
 # The authentication rules, extracted so they can be tested (and proptested)
 # without a database, a request or a provider account behind them. The
 # handlers below stay here — they own `AppState`, Diesel and the cookie jar —
 # and call into these crates for every decision they make. Same reasoning as
 # the cache-core split, docs/CLIENT_WORLD_CACHE.md.
-thunderforge_axum_auth_core = { path = "../../crates/thunderforge-axum-auth-core" }
-thunderforge_axum_oauth = { path = "../../crates/thunderforge-axum-oauth" }
-thunderforge_repo_host = { path = "../../crates/thunderforge-repo-host" }
-thunderforge_axum_oidc = { path = "../../crates/thunderforge-axum-oidc" }
+thunderforge-axum-auth-core = { path = "../../crates/thunderforge-axum-auth-core" }
+thunderforge-axum-oauth = { path = "../../crates/thunderforge-axum-oauth" }
+thunderforge-repo-host = { path = "../../crates/thunderforge-repo-host" }
+thunderforge-axum-oidc = { path = "../../crates/thunderforge-axum-oidc" }
 reqwest = { version = "0.13.4", default-features = false, features = [
   "form",
   "json",
@@ -158,7 +157,7 @@ slug = "0.1.6"
 regex = "1.13.1"
 # Spec 044 B7: a stored hero spec is checked against HERO_SPEC_SCHEMA, the
 # JSON Schema `packages/heroes` emits. Already in the tree through
-# `pack_system_spec`, at the same version.
+# `thunderforge-pack-system-spec`, at the same version.
 jsonschema = "0.52.0"
 # Spec 040 US4: SMTP. `lettre` is the only maintained Rust SMTP client with a
 # native async Tokio transport, and the TLS choice matters more than the crate
@@ -183,16 +182,16 @@ lettre = { version = "0.11", default-features = false, features = [
 # is not object-safe.
 async-trait = "0.1"
 
-[dependencies.thunderforge_core]
+[dependencies.thunderforge-core]
 path = "../thunderforge-core"
 
-[dependencies.thunderforge_dice]
+[dependencies.thunderforge-dice]
 path = "../../crates/thunderforge-dice"
 
-[dependencies.pack_system_spec]
-path = "../../crates/pack_system_spec"
+[dependencies.thunderforge-pack-system-spec]
+path = "../../crates/thunderforge-pack-system-spec"
 
-[dependencies.thunderforge_crucible]
+[dependencies.thunderforge-crucible]
 path = "../../crates/thunderforge-crucible"
 
 
@@ -207,34 +206,26 @@ path = "../../crates/thunderforge-crucible"
 # A dev-dependency cycle, which Cargo permits deliberately: a pack depends on
 # this library, and this library's *tests* depend on the pack. See
 # `src/test_packs.rs` for why linking them at all is necessary.
-[dev-dependencies.dnd5e_server]
+[dev-dependencies.thunderforge-system-dnd5e]
 path = "../../packs/systems/dnd5e/server"
-package = "dnd5e-server"
 
-[dev-dependencies.genie_server]
+[dev-dependencies.thunderforge-system-genie]
 path = "../../packs/systems/genie/server"
-package = "genie-server"
 
-[dev-dependencies.pathfinder2e_server]
+[dev-dependencies.thunderforge-system-pathfinder2e]
 path = "../../packs/systems/pathfinder2e/server"
-package = "pathfinder2e-server"
 
-[dev-dependencies.cypher_server]
+[dev-dependencies.thunderforge-system-cypher-system]
 path = "../../packs/systems/cypher_system/server"
-package = "cypher-server"
 
-[dev-dependencies.fate_server]
+[dev-dependencies.thunderforge-system-fate-core]
 path = "../../packs/systems/fate_core/server"
-package = "fate-server"
 
-[dev-dependencies.blades_server]
+[dev-dependencies.thunderforge-system-blades-in-the-dark]
 path = "../../packs/systems/blades_in_the_dark/server"
-package = "blades-server"
 
-[dev-dependencies.yze_server]
+[dev-dependencies.thunderforge-system-year-zero-engine]
 path = "../../packs/systems/year_zero_engine/server"
-package = "yze-server"
 
-[dev-dependencies.roll_for_shoes_server]
+[dev-dependencies.thunderforge-system-roll-for-shoes]
 path = "../../packs/systems/roll_for_shoes/server"
-package = "roll-for-shoes-server"

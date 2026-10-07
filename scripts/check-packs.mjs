@@ -36,7 +36,7 @@ const SYSTEMS = "packs/systems/";
  * the tests that would have noticed.
  */
 export const LINKAGES = [
-  "apps/server/src/system_packs.rs",
+  "apps/thunderforge/src/system_packs.rs",
   "crates/thunderforge-server/src/test_packs.rs",
 ];
 

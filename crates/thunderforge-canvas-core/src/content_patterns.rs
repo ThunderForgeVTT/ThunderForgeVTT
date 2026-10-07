@@ -121,7 +121,7 @@ pub enum Shape {
 /// Every field is optional and which ones apply depends on the shape, because
 /// a manifest is JSON somebody writes by hand and serde cannot key one
 /// field's validity on another's value. The combination is checked by
-/// `pack_system_spec::validate_system_manifest`, which is where a system
+/// `thunderforge_pack_system_spec::validate_system_manifest`, which is where a system
 /// author gets told they wrote something that cannot work.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]

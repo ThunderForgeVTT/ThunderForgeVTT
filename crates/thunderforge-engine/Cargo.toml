@@ -2,7 +2,7 @@
 workspace = true
 
 [package]
-name = "thunderforge_engine"
+name = "thunderforge-engine"
 version = "0.1.0"
 edition = "2024"
 repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
@@ -37,16 +37,16 @@ crate-type = ["cdylib", "rlib"]
 debug-names = ["bevy/debug"]
 
 [dependencies]
-thunderforge_canvas_core = { path = "../../crates/thunderforge-canvas-core" }
+thunderforge-canvas-core = { path = "../../crates/thunderforge-canvas-core" }
 # Spec 028 (T027): the client world cache. `cache_core` holds the rules the
 # server and this engine must agree on — chiefly `fingerprint::verify`, the
 # only sanctioned way anything here decides bytes are what they claim to be.
 # `cache_browser` is the OPFS/WebCrypto/IndexedDB half; its wasm toolchain is
 # confined to a `cfg(target_arch = "wasm32")` block in its own manifest, so
 # depending on it unconditionally pulls no `web-sys` into a native build.
-thunderforge_cache_browser = { path = "../../crates/thunderforge-cache-browser" }
-thunderforge_cache_core = { path = "../../crates/thunderforge-cache-core" }
-thunderforge_dice = { path = "../../crates/thunderforge-dice" }
+thunderforge-cache-browser = { path = "../../crates/thunderforge-cache-browser" }
+thunderforge-cache-core = { path = "../../crates/thunderforge-cache-core" }
+thunderforge-dice = { path = "../../crates/thunderforge-dice" }
 bevy = { version = "0.19.1", default-features = false, features = [
   "bevy_asset",
   # Without this, `LogPlugin` is absent and every Bevy-side `error!`/`warn!`
@@ -141,7 +141,7 @@ uuid = { version = "1.26.0", features = ["serde"] }
 #
 # `bevy_winit` was an unconditional feature, and winit does not compile for a
 # plain Linux host without a platform backend feature. That made
-# `cargo test -p thunderforge_engine` fail at the *linker for a dependency* —
+# `cargo test -p thunderforge-engine` fail at the *linker for a dependency* —
 # not at any of this crate's code — so roughly forty-five tests in
 # `tests_f1_unit.rs`, `tests_f2_f4_integration.rs`, `sync_test.rs` and
 # `integration_tests.rs` had **never run**. A mutation audit on 2026-09-02
@@ -153,7 +153,7 @@ uuid = { version = "1.26.0", features = ["serde"] }
 # browser, where the engine actually ships. Cargo unions features across target
 # sections, so the wasm build is byte-identical to before.
 #
-# Same shape as `thunderforge_cache_browser` above, and for the same reason:
+# Same shape as `thunderforge-cache-browser` above, and for the same reason:
 # a wasm-only toolchain confined to a wasm-only section costs a native build
 # nothing.
 bevy = { version = "0.19.1", default-features = false, features = [

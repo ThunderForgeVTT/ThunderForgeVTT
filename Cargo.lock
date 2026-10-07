@@ -2455,18 +2455,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "blades-server"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "inventory",
- "serde",
- "serde_json",
- "thunderforge_canvas_core",
- "tokio",
-]
-
-[[package]]
 name = "blake2"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3119,15 +3107,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61803da095bee82a81bb1a452ecc25d3b2f1416d1897eb86430c6159ef717c17"
 
 [[package]]
-name = "crucible-server"
-version = "0.1.0"
-dependencies = [
- "axum",
- "thunderforge_crucible",
- "tokio",
-]
-
-[[package]]
 name = "crunchy"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3221,18 +3200,6 @@ name = "cursor-icon"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
-
-[[package]]
-name = "cypher-server"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "inventory",
- "serde",
- "serde_json",
- "thunderforge_canvas_core",
- "tokio",
-]
 
 [[package]]
 name = "darling"
@@ -3607,16 +3574,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dnd5e-server"
-version = "0.1.0"
-dependencies = [
- "inventory",
- "serde",
- "serde_json",
- "thunderforge_canvas_core",
-]
-
-[[package]]
 name = "document-features"
 version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3898,18 +3855,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
-name = "fate-server"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "inventory",
- "serde",
- "serde_json",
- "thunderforge_canvas_core",
- "tokio",
-]
-
-[[package]]
 name = "fdeflate"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4165,23 +4110,6 @@ dependencies = [
  "typenum",
  "version_check",
  "zeroize",
-]
-
-[[package]]
-name = "genie-server"
-version = "0.1.0"
-dependencies = [
- "async-graphql",
- "async-trait",
- "chrono",
- "diesel",
- "inventory",
- "serde",
- "serde_json",
- "thunderforge-server",
- "thunderforge_canvas_core",
- "tokio",
- "uuid",
 ]
 
 [[package]]
@@ -5476,15 +5404,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 
 [[package]]
-name = "mapforge-server"
-version = "0.1.0"
-dependencies = [
- "axum",
- "thunderforge_mapforge",
- "tokio",
-]
-
-[[package]]
 name = "maplit"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6274,19 +6193,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pack_system_spec"
-version = "0.1.0"
-dependencies = [
- "dnd5e-server",
- "jsonschema",
- "schemars",
- "serde",
- "serde_json",
- "thunderforge_canvas_core",
- "thunderforge_combat",
-]
-
-[[package]]
 name = "parking"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6356,18 +6262,6 @@ checksum = "aab41826031698d6ffcd9cff78ef56ef998e39dc7e5067cdfebe373842d4723b"
 dependencies = [
  "getrandom 0.4.3",
  "phc",
-]
-
-[[package]]
-name = "pathfinder2e-server"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "inventory",
- "serde",
- "serde_json",
- "thunderforge_canvas_core",
- "tokio",
 ]
 
 [[package]]
@@ -7281,23 +7175,6 @@ dependencies = [
  "libc",
  "untrusted 0.9.0",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "roll-for-shoes-server"
-version = "0.1.0"
-dependencies = [
- "async-graphql",
- "chrono",
- "diesel",
- "inventory",
- "rand 0.10.2",
- "serde",
- "serde_json",
- "thunderforge-server",
- "thunderforge_canvas_core",
- "tokio",
- "uuid",
 ]
 
 [[package]]
@@ -8279,28 +8156,29 @@ dependencies = [
  "async-graphql-axum",
  "axum",
  "base64 0.23.1",
- "blades-server",
  "chrono",
  "clap",
- "cypher-server",
  "diesel",
- "dnd5e-server",
  "dotenvy",
- "fate-server",
  "futures-util",
- "genie-server",
- "pathfinder2e-server",
  "reqwest",
- "roll-for-shoes-server",
  "serde",
  "serde_json",
+ "thunderforge-canvas-core",
+ "thunderforge-crucible",
  "thunderforge-pdf",
+ "thunderforge-pg",
+ "thunderforge-pg-sockets",
+ "thunderforge-presence",
  "thunderforge-server",
- "thunderforge_canvas_core",
- "thunderforge_crucible",
- "thunderforge_pg",
- "thunderforge_pg_sockets",
- "thunderforge_presence",
+ "thunderforge-system-blades-in-the-dark",
+ "thunderforge-system-cypher-system",
+ "thunderforge-system-dnd5e",
+ "thunderforge-system-fate-core",
+ "thunderforge-system-genie",
+ "thunderforge-system-pathfinder2e",
+ "thunderforge-system-roll-for-shoes",
+ "thunderforge-system-year-zero-engine",
  "tokio",
  "tower-cookies",
  "tower-http 0.7.0",
@@ -8308,14 +8186,222 @@ dependencies = [
  "tracing-bunyan-formatter",
  "tracing-subscriber",
  "uuid",
- "yze-server",
+]
+
+[[package]]
+name = "thunderforge-authz"
+version = "0.1.0"
+
+[[package]]
+name = "thunderforge-axum-auth-core"
+version = "0.1.0"
+dependencies = [
+ "argon2",
+ "base64 0.23.1",
+ "data-encoding",
+ "proptest",
+ "rand 0.10.2",
+ "totp-rs",
+]
+
+[[package]]
+name = "thunderforge-axum-oauth"
+version = "0.1.0"
+dependencies = [
+ "base64 0.23.1",
+ "proptest",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "thunderforge-axum-auth-core",
+ "url",
+]
+
+[[package]]
+name = "thunderforge-axum-oidc"
+version = "0.1.0"
+dependencies = [
+ "base64 0.23.1",
+ "proptest",
+ "serde",
+ "serde_json",
+ "url",
+]
+
+[[package]]
+name = "thunderforge-cache-browser"
+version = "0.1.0"
+dependencies = [
+ "js-sys",
+ "serde",
+ "serde_json",
+ "thunderforge-cache-core",
+ "thunderforge-opfs",
+ "uuid",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+ "web-sys",
+]
+
+[[package]]
+name = "thunderforge-cache-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "sha2 0.11.0",
+ "uuid",
+]
+
+[[package]]
+name = "thunderforge-canvas-core"
+version = "0.1.0"
+dependencies = [
+ "glam",
+ "inventory",
+ "serde",
+ "serde_json",
+ "ts-rs",
+]
+
+[[package]]
+name = "thunderforge-combat"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "rand_core 0.10.1",
+ "schemars",
+ "serde",
+ "serde_json",
+ "thunderforge-canvas-core",
+ "thunderforge-dice",
+ "wasm-bindgen",
 ]
 
 [[package]]
 name = "thunderforge-content"
 version = "0.1.0"
 dependencies = [
- "thunderforge_canvas_core",
+ "thunderforge-canvas-core",
+]
+
+[[package]]
+name = "thunderforge-core"
+version = "0.1.0"
+dependencies = [
+ "base64 0.23.1",
+ "chrono",
+ "regex",
+ "serde",
+ "serde_json",
+ "thunderforge-authz",
+ "uuid",
+]
+
+[[package]]
+name = "thunderforge-crucible"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+ "tower",
+ "uuid",
+]
+
+[[package]]
+name = "thunderforge-crucible-server"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "thunderforge-crucible",
+ "tokio",
+]
+
+[[package]]
+name = "thunderforge-dice"
+version = "0.1.0"
+dependencies = [
+ "rand_core 0.10.1",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "thunderforge-engine"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "console_error_panic_hook",
+ "futures-util",
+ "gloo-net",
+ "image",
+ "js-sys",
+ "once_cell",
+ "serde",
+ "serde_json",
+ "thunderforge-cache-browser",
+ "thunderforge-cache-core",
+ "thunderforge-canvas-core",
+ "thunderforge-dice",
+ "uuid",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
+name = "thunderforge-mapforge"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "base64 0.23.1",
+ "image",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+ "tower-http 0.7.0",
+ "webp",
+]
+
+[[package]]
+name = "thunderforge-mapforge-server"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "thunderforge-mapforge",
+ "tokio",
+]
+
+[[package]]
+name = "thunderforge-opfs"
+version = "0.1.0"
+dependencies = [
+ "js-sys",
+ "thunderforge-cache-core",
+ "uuid",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
+name = "thunderforge-pack-system-spec"
+version = "0.1.0"
+dependencies = [
+ "jsonschema",
+ "schemars",
+ "serde",
+ "serde_json",
+ "thunderforge-canvas-core",
+ "thunderforge-combat",
+ "thunderforge-system-dnd5e",
 ]
 
 [[package]]
@@ -8325,9 +8411,48 @@ dependencies = [
  "lopdf",
  "serde",
  "serde_json",
+ "thunderforge-canvas-core",
  "thunderforge-content",
- "thunderforge_canvas_core",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "thunderforge-pg"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "thunderforge-pg-sockets",
+ "tokio",
+]
+
+[[package]]
+name = "thunderforge-pg-sockets"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "dashmap",
+ "serde_json",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "thunderforge-presence"
+version = "0.1.0"
+dependencies = [
+ "dashmap",
+ "uuid",
+]
+
+[[package]]
+name = "thunderforge-repo-host"
+version = "0.1.0"
+dependencies = [
+ "jsonwebtoken",
+ "proptest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -8345,34 +8470,26 @@ dependencies = [
  "aws-sdk-sts",
  "axum",
  "base64 0.23.1",
- "blades-server",
  "chrono",
  "clap",
  "comrak",
- "cypher-server",
  "data-encoding",
  "diesel",
  "diesel-derive-enum",
  "diesel_migrations",
- "dnd5e-server",
  "dotenvy",
- "fate-server",
  "futures-util",
- "genie-server",
  "image",
  "include_dir",
  "inventory",
  "jsonschema",
  "lettre",
  "once_cell",
- "pack_system_spec",
- "pathfinder2e-server",
  "qrcode",
  "rand 0.10.2",
  "regex",
  "reqwest",
  "resvg",
- "roll-for-shoes-server",
  "serde",
  "serde_derive",
  "serde_json",
@@ -8380,22 +8497,31 @@ dependencies = [
  "slug",
  "tempfile",
  "thiserror 2.0.20",
+ "thunderforge-authz",
+ "thunderforge-axum-auth-core",
+ "thunderforge-axum-oauth",
+ "thunderforge-axum-oidc",
+ "thunderforge-cache-core",
+ "thunderforge-canvas-core",
+ "thunderforge-combat",
  "thunderforge-content",
+ "thunderforge-core",
+ "thunderforge-crucible",
+ "thunderforge-dice",
+ "thunderforge-pack-system-spec",
  "thunderforge-pdf",
- "thunderforge_authz",
- "thunderforge_axum_auth_core",
- "thunderforge_axum_oauth",
- "thunderforge_axum_oidc",
- "thunderforge_cache_core",
- "thunderforge_canvas_core",
- "thunderforge_combat",
- "thunderforge_core",
- "thunderforge_crucible",
- "thunderforge_dice",
- "thunderforge_pg",
- "thunderforge_pg_sockets",
- "thunderforge_presence",
- "thunderforge_repo_host",
+ "thunderforge-pg",
+ "thunderforge-pg-sockets",
+ "thunderforge-presence",
+ "thunderforge-repo-host",
+ "thunderforge-system-blades-in-the-dark",
+ "thunderforge-system-cypher-system",
+ "thunderforge-system-dnd5e",
+ "thunderforge-system-fate-core",
+ "thunderforge-system-genie",
+ "thunderforge-system-pathfinder2e",
+ "thunderforge-system-roll-for-shoes",
+ "thunderforge-system-year-zero-engine",
  "tokio",
  "tokio-postgres",
  "tokio-stream",
@@ -8409,225 +8535,111 @@ dependencies = [
  "url",
  "uuid",
  "webp",
- "yze-server",
  "zip",
 ]
 
 [[package]]
-name = "thunderforge_authz"
-version = "0.1.0"
-
-[[package]]
-name = "thunderforge_axum_auth_core"
-version = "0.1.0"
-dependencies = [
- "argon2",
- "base64 0.23.1",
- "data-encoding",
- "proptest",
- "rand 0.10.2",
- "totp-rs",
-]
-
-[[package]]
-name = "thunderforge_axum_oauth"
-version = "0.1.0"
-dependencies = [
- "base64 0.23.1",
- "proptest",
- "serde",
- "serde_json",
- "sha2 0.11.0",
- "thunderforge_axum_auth_core",
- "url",
-]
-
-[[package]]
-name = "thunderforge_axum_oidc"
-version = "0.1.0"
-dependencies = [
- "base64 0.23.1",
- "proptest",
- "serde",
- "serde_json",
- "url",
-]
-
-[[package]]
-name = "thunderforge_cache_browser"
-version = "0.1.0"
-dependencies = [
- "js-sys",
- "serde",
- "serde_json",
- "thunderforge_cache_core",
- "thunderforge_opfs",
- "uuid",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "wasm-bindgen-test",
- "web-sys",
-]
-
-[[package]]
-name = "thunderforge_cache_core"
-version = "0.1.0"
-dependencies = [
- "serde",
- "sha2 0.11.0",
- "uuid",
-]
-
-[[package]]
-name = "thunderforge_canvas_core"
-version = "0.1.0"
-dependencies = [
- "glam",
- "inventory",
- "serde",
- "serde_json",
- "ts-rs",
-]
-
-[[package]]
-name = "thunderforge_combat"
-version = "0.1.0"
-dependencies = [
- "async-graphql",
- "rand_core 0.10.1",
- "schemars",
- "serde",
- "serde_json",
- "thunderforge_canvas_core",
- "thunderforge_dice",
- "wasm-bindgen",
-]
-
-[[package]]
-name = "thunderforge_core"
-version = "0.1.0"
-dependencies = [
- "base64 0.23.1",
- "chrono",
- "regex",
- "serde",
- "serde_json",
- "thunderforge_authz",
- "uuid",
-]
-
-[[package]]
-name = "thunderforge_crucible"
+name = "thunderforge-system-blades-in-the-dark"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "axum",
- "reqwest",
+ "inventory",
  "serde",
  "serde_json",
- "thiserror 2.0.20",
+ "thunderforge-canvas-core",
  "tokio",
- "tower",
- "uuid",
 ]
 
 [[package]]
-name = "thunderforge_dice"
+name = "thunderforge-system-cypher-system"
 version = "0.1.0"
 dependencies = [
- "rand_core 0.10.1",
+ "async-trait",
+ "inventory",
  "serde",
  "serde_json",
- "wasm-bindgen",
-]
-
-[[package]]
-name = "thunderforge_engine"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "console_error_panic_hook",
- "futures-util",
- "gloo-net",
- "image",
- "js-sys",
- "once_cell",
- "serde",
- "serde_json",
- "thunderforge_cache_browser",
- "thunderforge_cache_core",
- "thunderforge_canvas_core",
- "thunderforge_dice",
- "uuid",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
-]
-
-[[package]]
-name = "thunderforge_mapforge"
-version = "0.1.0"
-dependencies = [
- "axum",
- "base64 0.23.1",
- "image",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
+ "thunderforge-canvas-core",
  "tokio",
- "tower-http 0.7.0",
- "webp",
 ]
 
 [[package]]
-name = "thunderforge_opfs"
+name = "thunderforge-system-dnd5e"
 version = "0.1.0"
 dependencies = [
- "js-sys",
- "thunderforge_cache_core",
- "uuid",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
+ "inventory",
+ "serde",
+ "serde_json",
+ "thunderforge-canvas-core",
 ]
 
 [[package]]
-name = "thunderforge_pg"
+name = "thunderforge-system-fate-core"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "inventory",
+ "serde",
+ "serde_json",
+ "thunderforge-canvas-core",
+ "tokio",
+]
+
+[[package]]
+name = "thunderforge-system-genie"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "async-trait",
  "chrono",
- "thunderforge_pg_sockets",
- "tokio",
-]
-
-[[package]]
-name = "thunderforge_pg_sockets"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "dashmap",
- "serde_json",
- "tokio",
- "uuid",
-]
-
-[[package]]
-name = "thunderforge_presence"
-version = "0.1.0"
-dependencies = [
- "dashmap",
- "uuid",
-]
-
-[[package]]
-name = "thunderforge_repo_host"
-version = "0.1.0"
-dependencies = [
- "jsonwebtoken",
- "proptest",
+ "diesel",
+ "inventory",
  "serde",
  "serde_json",
- "thiserror 2.0.20",
+ "thunderforge-canvas-core",
+ "thunderforge-server",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "thunderforge-system-pathfinder2e"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "inventory",
+ "serde",
+ "serde_json",
+ "thunderforge-canvas-core",
+ "tokio",
+]
+
+[[package]]
+name = "thunderforge-system-roll-for-shoes"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "chrono",
+ "diesel",
+ "inventory",
+ "rand 0.10.2",
+ "serde",
+ "serde_json",
+ "thunderforge-canvas-core",
+ "thunderforge-server",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "thunderforge-system-year-zero-engine"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "inventory",
+ "serde",
+ "serde_json",
+ "thunderforge-canvas-core",
+ "tokio",
 ]
 
 [[package]]
@@ -10204,18 +10216,6 @@ dependencies = [
  "quote",
  "syn 2.0.119",
  "synstructure",
-]
-
-[[package]]
-name = "yze-server"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "inventory",
- "serde",
- "serde_json",
- "thunderforge_canvas_core",
- "tokio",
 ]
 
 [[package]]

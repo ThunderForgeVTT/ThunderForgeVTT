@@ -21,7 +21,7 @@
  *
  * # What is allowed, and why
  *
- * `apps/server/src/system_packs.rs` is exempt. It holds one `use <pack> as _;`
+ * `apps/thunderforge/src/system_packs.rs` is exempt. It holds one `use <pack> as _;`
  * line per bundled pack, and those lines are load-bearing for a reason that
  * was measured rather than assumed: a statically linked Rust crate nothing
  * references is never linked, and its `inventory` submissions vanish with it.
@@ -80,7 +80,7 @@ function bundledSystemIds(root) {
  */
 function sharedRustSources(root) {
   // Two roots since the crate split: `crates/thunderforge-server` is the server as a library
-  // and `apps/server` is the binary that composes it with the packs. Both are
+  // and `apps/thunderforge` is the binary that composes it with the packs. Both are
   // shared code, and the binary is *especially* worth scanning — it is the one
   // place that legitimately knows packs exist, which makes it the comfortable
   // place for knowledge that should not be there. Missing it would have left

@@ -2,7 +2,7 @@
 workspace = true
 
 [package]
-name = "roll-for-shoes-server"
+name = "thunderforge-system-roll-for-shoes"
 version = "0.1.0"
 edition = "2021"
 repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
@@ -20,7 +20,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 inventory = "0.3"
 tokio = { version = "1.53", features = ["full"] }
-thunderforge_canvas_core = { path = "../../../../crates/thunderforge-canvas-core" }
+thunderforge-canvas-core = { path = "../../../../crates/thunderforge-canvas-core" }
 
 thunderforge-server = { path = "../../../../crates/thunderforge-server" }
 diesel = { version = "2.3.12", features = [
@@ -51,5 +51,4 @@ thunderforge-server = { path = "../../../../crates/thunderforge-server", feature
 ] }
 
 [lib]
-name = "roll_for_shoes_server"
 path = "src/lib.rs"

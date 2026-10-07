@@ -2,7 +2,7 @@
 workspace = true
 
 [package]
-name = "fate-server"
+name = "thunderforge-system-fate-core"
 version = "0.1.0"
 edition = "2021"
 repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
@@ -14,8 +14,7 @@ serde_json = "1.0.151"
 tokio = { version = "1.53", features = ["full"] }
 async-trait = "0.1"
 inventory = "0.3"
-thunderforge_canvas_core = { path = "../../../../crates/thunderforge-canvas-core" }
+thunderforge-canvas-core = { path = "../../../../crates/thunderforge-canvas-core" }
 
 [lib]
-name = "fate_server"
 path = "src/lib.rs"

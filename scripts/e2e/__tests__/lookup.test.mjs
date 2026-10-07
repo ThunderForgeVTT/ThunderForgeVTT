@@ -33,7 +33,7 @@ function slice(name, own, { neighbours = [], paths = [] } = {}) {
 
 const LIST = {
   crossCutting: [
-    { glob: "apps/server/schema.graphql", why: "every client speaks this schema" },
+    { glob: "apps/thunderforge/schema.graphql", why: "every client speaks this schema" },
     // Deliberately overlaps the status slice's glob below: the precedence
     // test needs a path both could claim.
     { glob: "apps/web/src/components/ui/**", why: "shared UI primitives" },
@@ -74,7 +74,7 @@ describe("isSpecPath and normalisePath", () => {
 
 describe("lookupPath", () => {
   test("cross-cutting answers the full suite, with its reason", () => {
-    const answer = lookupPath("apps/server/schema.graphql", LIST);
+    const answer = lookupPath("apps/thunderforge/schema.graphql", LIST);
     assert.equal(answer.kind, "crossCutting");
     assert.equal(answer.why, "every client speaks this schema");
     assert.deepEqual(answer.slices, []);
@@ -159,7 +159,7 @@ describe("lookupPaths", () => {
 
   test("one cross-cutting path asks for the full suite, slices still listed", () => {
     const result = lookupPaths(
-      ["apps/server/schema.graphql", "crates/thunderforge-server/src/combat/turn.rs"],
+      ["apps/thunderforge/schema.graphql", "crates/thunderforge-server/src/combat/turn.rs"],
       LIST,
     );
     assert.equal(result.fullSuite, true);

@@ -8,7 +8,7 @@
 //! block is read once per (directory, system) and kept.
 //!
 //! Absent, unreadable or malformed all read as "no combat block" (M1).
-//! Install-time validation (`pack_system_spec::combat`) is where a malformed
+//! Install-time validation (`thunderforge_pack_system_spec::combat`) is where a malformed
 //! block is reported to the person who wrote it; at the moment somebody is
 //! hit, the honest answer is "this system declares no hit points", said
 //! plainly by the caller.
@@ -16,10 +16,12 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
-pub use pack_system_spec::combat::{SystemCombat, SystemHitPoints, SystemTurnBudget, slot_key};
 /// Reading a manifest that is already in hand is the shared rules' (ADR-113);
 /// this module adds the disk and the cache.
 pub use thunderforge_combat::manifest::{combat_from_manifest, turn_budget_from_manifest};
+pub use thunderforge_pack_system_spec::combat::{
+    SystemCombat, SystemHitPoints, SystemTurnBudget, slot_key,
+};
 
 type Key = (String, String);
 

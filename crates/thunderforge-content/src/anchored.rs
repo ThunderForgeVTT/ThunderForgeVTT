@@ -39,7 +39,7 @@ const LONGEST_NAME: usize = 60;
 pub fn entries(lines: &[SourceLine], pattern: &Pattern) -> Vec<Entry> {
     let Some(anchor) = pattern.anchor.as_deref().filter(|a| !a.trim().is_empty()) else {
         // A pattern with no anchor cannot find anything. Validation refuses
-        // one at install (`pack_system_spec`); this is the belt to that
+        // one at install (`thunderforge_pack_system_spec`); this is the belt to that
         // braces, and returning nothing is the only honest answer.
         return Vec::new();
     };

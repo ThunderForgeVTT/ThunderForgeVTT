@@ -33,8 +33,8 @@ const WEB = 'export const sheet = system === "shoes" ? Shoes : Base;\n';
 // ones the check always had; the rest are spec 066, FR-006.
 for (const [file, source] of [
   ["crates/thunderforge-server/src/graphql.rs", RUST],
-  ["apps/server/src/main.rs", RUST],
-  ["apps/mapforge-server/src/main.rs", RUST],
+  ["apps/thunderforge/src/main.rs", RUST],
+  ["apps/thunderforge-mapforge-server/src/main.rs", RUST],
   ["crates/thunderforge-engine/src/tokens/bars.rs", RUST],
   ["crates/thunderforge-core/src/models/token.rs", RUST],
   ["crates/thunderforge-canvas-core/src/system_rules.rs", RUST],
@@ -84,7 +84,7 @@ test("tests may name a system, in either language", () => {
 test("the linkage modules are exempt, and only by that name", () => {
   assert.deepEqual(
     failuresIn({
-      "apps/server/src/system_packs.rs": 'const ALL: [&str; 1] = ["shoes"];\n',
+      "apps/thunderforge/src/system_packs.rs": 'const ALL: [&str; 1] = ["shoes"];\n',
       "crates/thunderforge-server/src/test_packs.rs":
         'const ALL: [&str; 1] = ["shoes"];\n',
     }),

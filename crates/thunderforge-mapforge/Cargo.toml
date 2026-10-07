@@ -2,7 +2,7 @@
 workspace = true
 
 [package]
-name = "thunderforge_mapforge"
+name = "thunderforge-mapforge"
 version = "0.1.0"
 edition = "2024"
 repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
@@ -10,7 +10,7 @@ license.workspace = true
 
 # A library only, mirroring `thunderforge-crucible`'s split: all routing
 # lives here so tests can drive the router in-process, and the binary that
-# reads a port and serves is `apps/mapforge-server`.
+# reads a port and serves is `apps/thunderforge-mapforge-server`.
 [lib]
 crate-type = ["rlib"]
 

@@ -10,9 +10,9 @@ use axum::{
     routing::{get, post},
 };
 use diesel::prelude::*;
-use pack_system_spec::{SystemManifest, validate_system_manifest};
 use serde_json::json;
 use std::path::PathBuf;
+use thunderforge_pack_system_spec::{SystemManifest, validate_system_manifest};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 
@@ -169,9 +169,9 @@ async fn get_system_manifest(
     // Spec 016 (FR-007, SC-003): fail closed rather than serve a manifest
     // with missing/empty legal metadata to a GM. This is the actual path
     // that delivers a bundled pack's manifest today (unlike
-    // `pack_system_spec::validate_system_manifest`, used only by the
+    // `thunderforge_pack_system_spec::validate_system_manifest`, used only by the
     // admin-upload/install flow), so this is the real enforcement point.
-    pack_system_spec::validate_legal_content(&manifest_json).map_err(|e| {
+    thunderforge_pack_system_spec::validate_legal_content(&manifest_json).map_err(|e| {
         (
             StatusCode::UNPROCESSABLE_ENTITY,
             Json(
@@ -481,7 +481,7 @@ async fn install_game_system(
             )
         })?;
 
-    // Validate the manifest using the pack_system_spec crate
+    // Validate the manifest using the thunderforge_pack_system_spec crate
     validate_system_manifest(&manifest_content).map_err(|e| {
         (
             StatusCode::BAD_REQUEST,
@@ -748,7 +748,7 @@ mod registry_tests;
 
 /// Spec 016 (T005, FR-007): confirms `get_system_manifest` — the actual
 /// path that serves a bundled pack's manifest to a GM, distinct from
-/// `pack_system_spec::validate_system_manifest`'s admin-upload-only usage
+/// `thunderforge_pack_system_spec::validate_system_manifest`'s admin-upload-only usage
 /// — rejects a manifest missing `legal`, and serves one that has it.
 #[cfg(test)]
 #[path = "systems_manifest_legal_enforcement_tests.rs"]

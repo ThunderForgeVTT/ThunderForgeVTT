@@ -2,20 +2,20 @@
 workspace = true
 
 [package]
-name = "mapforge-server"
+name = "thunderforge-mapforge-server"
 version = "0.1.0"
 edition = "2024"
 repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
 license.workspace = true
 
 # An entry point and nothing else: it resolves a corpus directory and a port,
-# then serves the router `thunderforge_mapforge::server` builds. The routing
+# then serves the router `thunderforge-mapforge::server` builds. The routing
 # lives in the library so its tests can drive it in-process.
 [[bin]]
-name = "mapforge-server"
+name = "thunderforge-mapforge-server"
 path = "src/main.rs"
 
 [dependencies]
-thunderforge_mapforge = { path = "../../crates/thunderforge-mapforge" }
+thunderforge-mapforge = { path = "../../crates/thunderforge-mapforge" }
 axum = "0.8.9"
 tokio = { version = "1.53.1", features = ["full"] }

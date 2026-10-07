@@ -43,7 +43,7 @@ fn test_validate_ability_data_valid() {
 /// Literals rather than the range's own bounds: a test written against the
 /// constant asserts the rule accepts whatever the rule is written against,
 /// which is true of every range and catches nothing. That mistake was made
-/// and caught while fixing this same class of bug in `yze-server`.
+/// and caught while fixing this same class of bug in `thunderforge-system-year-zero-engine`.
 #[test]
 fn ability_data_accepts_the_exact_ends_of_the_range() {
     let at = |score: i64| {

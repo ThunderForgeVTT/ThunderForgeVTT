@@ -168,7 +168,7 @@ describe("resolveSlice", () => {
 describe("validateSlices", () => {
   const valid = () => ({
     $comment: "fixture",
-    crossCutting: [{ glob: "apps/server/schema.graphql", why: "every client" }],
+    crossCutting: [{ glob: "apps/thunderforge/schema.graphql", why: "every client" }],
     slices: [slice("alpha", ["alpha-"]), slice("beta", ["beta-"])],
   });
 

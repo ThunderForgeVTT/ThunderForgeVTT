@@ -39,7 +39,7 @@ const CONFIRM_WITHIN: usize = 3;
 /// Every entry of one prose kind, in the order they appear.
 pub fn entries(lines: &[SourceLine], pattern: &Pattern) -> Vec<Entry> {
     if pattern.confirmed_by.is_empty() {
-        // Validation refuses this at install (`pack_system_spec`). Refusing
+        // Validation refuses this at install (`thunderforge_pack_system_spec`). Refusing
         // again here is not belt and braces for its own sake: a prose kind
         // with no discriminator does not return slightly too much, it returns
         // every heading in the book, and doing that silently is how 72,974

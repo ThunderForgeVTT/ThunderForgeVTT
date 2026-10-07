@@ -309,7 +309,7 @@ fn build_adjudicator() -> std::sync::Arc<dyn thunderforge_crucible::SessionAdjud
 /// # Why this is set explicitly, and why it is this large
 ///
 /// async-graphql's `MergedObject` generates field dispatch that nests one
-/// frame deeper per merged root member, and `apps/server/src/schema_roots.rs`
+/// frame deeper per merged root member, and `apps/thunderforge/src/schema_roots.rs`
 /// wraps the server's own roots in another `MergedObject` so that each system
 /// pack can contribute its queries and mutations. That is the design — a pack
 /// owns its own GraphQL (spec 032, ADR-063) — and it costs a level of nesting

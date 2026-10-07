@@ -23,7 +23,7 @@ use crate::combat::manifest::{combat_for_system, slot_key};
 use crate::schema::{scenes, tokens, world_actor_system_data, world_actors, worlds};
 // The tests declare sizes by hand (`use super::*`).
 #[cfg(test)]
-use pack_system_spec::combat::SystemSizes;
+use thunderforge_pack_system_spec::combat::SystemSizes;
 
 /// What a size means — one square by default, and the footprint a declared
 /// size names — is the shared rules' (`thunderforge_combat::size`, ADR-113).
@@ -141,8 +141,8 @@ fn resolve_rows(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pack_system_spec::combat::{SystemFieldRef, SystemSizeCategory};
     use serde_json::json;
+    use thunderforge_pack_system_spec::combat::{SystemFieldRef, SystemSizeCategory};
 
     fn sizes() -> SystemSizes {
         SystemSizes {

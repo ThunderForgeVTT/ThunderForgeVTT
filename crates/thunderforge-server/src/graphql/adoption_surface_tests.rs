@@ -61,7 +61,7 @@ fn only_reach_names_the_adoption_table() {
 
     // The binary crate mounts the REST routes. A route reading the table would
     // live there, so it is walked too.
-    let app = manifest.join("../../apps/server/src");
+    let app = manifest.join("../../apps/thunderforge/src");
     if app.is_dir() {
         files_naming_the_table(&app, &app, "app:", &mut found);
     }

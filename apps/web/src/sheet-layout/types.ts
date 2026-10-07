@@ -1,10 +1,10 @@
 /**
  * The layout half of an interface pack, as the web client sees it.
  *
- * Hand-written rather than generated, because `pack_system_spec::layout` is
+ * Hand-written rather than generated, because `thunderforge_pack_system_spec::layout` is
  * not exported through ts-rs — `apps/web/src/engine/sdk/` carries only what
  * the engine SDK publishes. These types mirror
- * `crates/pack_system_spec/src/layout.rs` exactly, including its serde
+ * `crates/thunderforge-pack-system-spec/src/layout.rs` exactly, including its serde
  * representation (`#[serde(tag = "kind", rename_all = "camelCase")]`), so a
  * node arrives on the wire as `{"kind": "badgeGrid", "of": "attributes",
  * "columns": 3}`. If that enum gains a variant, this union is where it lands.

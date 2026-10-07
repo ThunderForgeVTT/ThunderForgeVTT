@@ -2,7 +2,7 @@
   "$comment": "One owner per spec; see docs/CONTRIBUTING.md 'Proving a change'. Checked by scripts/check-e2e-slices.mjs.",
   "crossCutting": [
     {
-      "glob": "apps/server/schema.graphql",
+      "glob": "apps/thunderforge/schema.graphql",
       "why": "every client speaks this schema"
     },
     {
@@ -50,11 +50,11 @@
       "why": "the server's features and dependencies, which every stack is built with"
     },
     {
-      "glob": "apps/server/Cargo.toml",
+      "glob": "apps/thunderforge/Cargo.toml",
       "why": "the server binary every stack runs"
     },
     {
-      "glob": "apps/server/src/{main,schema_roots}.rs",
+      "glob": "apps/thunderforge/src/{main,schema_roots}.rs",
       "why": "the server binary every stack runs, and the roots of its schema"
     },
     {
@@ -351,7 +351,7 @@
         "apps/web/src/components/world/{DiceRollerPanel/**,RollResult.tsx,rollDiscrepancy.ts,__tests__/rollDiscrepancy.test.ts}",
         "apps/web/src/pages/world/actor/SystemChecksPanel.tsx",
         "apps/web/src/types/{combat,attack,roll}.ts",
-        "crates/pack_system_spec/src/combat*.rs",
+        "crates/thunderforge-pack-system-spec/src/combat*.rs",
         "crates/thunderforge-canvas-core/src/{system_rules,system_rules_tests}.rs",
         "crates/thunderforge-dice/**",
         "packs/systems/dnd5e/**",
@@ -498,11 +498,11 @@
         "apps/web/src/panels/**",
         "apps/web/src/sheet-layout/**",
         "apps/web/src/types/systemManifest.ts",
-        "crates/pack_system_spec/**",
+        "crates/thunderforge-pack-system-spec/**",
         "crates/thunderforge-canvas-core/src/{system_contribution,content_entry,content_patterns}.rs",
         "crates/thunderforge-content/**",
         "packs/systems/{basic-game-system,blades_in_the_dark,cypher_system,dnd5e,fate_core,pathfinder2e,roll_for_shoes,year_zero_engine}/**",
-        "apps/server/src/system_packs.rs",
+        "apps/thunderforge/src/system_packs.rs",
         "crates/thunderforge-server/src/graphql_world_default_system_tests.rs",
         "crates/thunderforge-server/src/{actor_conditions,world_system_settings}.rs",
         "crates/thunderforge-server/src/graphql/{actor_conditions,actor_conditions_tests,world_system_settings,world_system_settings_tests}.rs",
@@ -725,7 +725,7 @@
         "apps/web/src/pages/admin/PlayPausesPage.tsx",
         "apps/web/src/pages/world/settings/PlayPauseHistoryCard.tsx",
         "apps/web/src/pages/world/{PlayPausedPage.tsx,playPauseStatus.ts,__tests__/playPauseStatus.test.ts}",
-        "apps/server/src/play_pause_surface_tests.rs",
+        "apps/thunderforge/src/play_pause_surface_tests.rs",
         "crates/thunderforge-server/src/graphql/queries/play_pause*.rs",
         "crates/thunderforge-server/src/graphql/{mutations_play_pause,play_pause_}*.rs",
         "crates/thunderforge-server/src/moderation/play_pause_hook_tests.rs",

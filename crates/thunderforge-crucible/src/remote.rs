@@ -1,5 +1,5 @@
 //! Spec 024 (User Story 2): `RemoteAdjudicator` — delegates to a standalone
-//! `crucible-server` process over HTTP, per
+//! `thunderforge-crucible-server` process over HTTP, per
 //! `specs/024-thunderforge-crucible-crate/contracts/crucible-server-http.md`.
 //! Selected via `CRUCIBLE_MODE=remote` + `CRUCIBLE_ENDPOINT` (`main.rs`).
 
@@ -73,7 +73,7 @@ mod tests {
     use uuid::Uuid;
 
     /// Spec 024 (SC-002): `RemoteAdjudicator` against a locally-spawned
-    /// `crucible-server` router must produce identical results to
+    /// `thunderforge-crucible-server` router must produce identical results to
     /// `LocalAdjudicator` for the same input — proven here in-process, no
     /// separately-run process needed in CI (plan.md's Testing note).
     #[tokio::test]
@@ -85,7 +85,7 @@ mod tests {
         tokio::spawn(async move {
             axum::serve(listener, crate::server::router())
                 .await
-                .expect("serve crucible-server router");
+                .expect("serve thunderforge-crucible-server router");
         });
 
         let endpoint = Url::parse(&format!("http://{addr}")).unwrap();

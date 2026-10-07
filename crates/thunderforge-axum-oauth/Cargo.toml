@@ -2,7 +2,7 @@
 workspace = true
 
 [package]
-name = "thunderforge_axum_oauth"
+name = "thunderforge-axum-oauth"
 version = "0.1.0"
 edition = "2024"
 repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
@@ -23,7 +23,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 sha2 = "0.11.0"
 url = "2.5.8"
-thunderforge_axum_auth_core = { path = "../thunderforge-axum-auth-core" }
+thunderforge-axum-auth-core = { path = "../thunderforge-axum-auth-core" }
 
 [dev-dependencies]
 proptest = "1.11.0"

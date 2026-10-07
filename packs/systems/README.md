@@ -670,8 +670,8 @@ of them can be discovered, and each entry says why.
 | File                                              | What you add                         | Why it cannot be found for you                                                                                    |
 | ------------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
 | `Cargo.toml` (repository root)                    | the crate, in `members`              | Cargo builds what the workspace lists.                                                                            |
-| `apps/server/Cargo.toml`                          | one dependency                       | A crate the binary does not depend on is not compiled into it.                                                    |
-| `apps/server/src/system_packs.rs`                 | one `use <pack> as _;` line          | A statically linked crate nothing references is never linked, and its `inventory` submissions vanish with it.     |
+| `apps/thunderforge/Cargo.toml`                          | one dependency                       | A crate the binary does not depend on is not compiled into it.                                                    |
+| `apps/thunderforge/src/system_packs.rs`                 | one `use <pack> as _;` line          | A statically linked crate nothing references is never linked, and its `inventory` submissions vanish with it.     |
 | `crates/thunderforge-server/Cargo.toml`           | one dev-dependency                   | The server library's tests are their own binary, and link nothing on their own.                                   |
 | `crates/thunderforge-server/src/test_packs.rs`    | one `use <pack> as _;` line          | The same fact as above, for that test binary.                                                                     |
 
@@ -683,7 +683,7 @@ from it collected an empty set in debug and in release.
 `scripts/check-packs.mjs` refuses a `server/` crate either linkage module
 does not name.
 
-`apps/server/src/system_packs.rs` also holds a test listing every bundled
+`apps/thunderforge/src/system_packs.rs` also holds a test listing every bundled
 system by id. Add yours to it: that list is the assertion that a deleted
 `use` line fails loudly, not the mechanism that finds the pack.
 
@@ -691,7 +691,7 @@ system by id. Add yours to it: that list is the assertion that a deleted
 
 | File                              | What you add                                    | Why                                                                                         |
 | --------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `apps/server/src/schema_roots.rs` | your query, mutation and subscription types     | The schema's roots are one merged Rust type, and a type has to be named to be merged.       |
+| `apps/thunderforge/src/schema_roots.rs` | your query, mutation and subscription types     | The schema's roots are one merged Rust type, and a type has to be named to be merged.       |
 
 **A pack that owns tables (ADR-063), as well:**
 

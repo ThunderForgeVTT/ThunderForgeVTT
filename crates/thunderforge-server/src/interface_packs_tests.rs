@@ -107,7 +107,7 @@ fn the_fate_and_cypher_packs_validate_against_their_own_systems() {
             .unwrap_or_else(|findings| panic!("{pack_id} does not validate: {findings:?}"));
 
         let declared = published_ids(&systems, system_id);
-        pack_system_spec::interface::validate_targeting(&manifest, &|system| {
+        thunderforge_pack_system_spec::interface::validate_targeting(&manifest, &|system| {
             (system == system_id).then(|| declared.clone())
         })
         .unwrap_or_else(|findings| {

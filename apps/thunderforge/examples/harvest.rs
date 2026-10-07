@@ -8,22 +8,22 @@
 //!
 //! # Why it lives here
 //!
-//! It exercises the whole chain, and `apps/server` is the only crate that can see
+//! It exercises the whole chain, and `apps/thunderforge` is the only crate that can see
 //! all of it: the pack declares the pattern, `thunderforge-server` owns the
 //! generic reader, and the pack contributes the refinement for what a
 //! declaration cannot express. This crate is the composition root that links
-//! packs in (`apps/server/src/system_packs.rs`), so it is the only place the chain
+//! packs in (`apps/thunderforge/src/system_packs.rs`), so it is the only place the chain
 //! is whole.
 //!
 //! The system id arrives as an **argument**, never a literal: shared code may
-//! not name a system, and while `apps/server/examples` is outside what
+//! not name a system, and while `apps/thunderforge/examples` is outside what
 //! `check-system-registry` scans, writing one here would be writing it in the
 //! one place nobody is watching.
 //!
 //! # The `use … as _` block is load-bearing
 //!
 //! An example links its package's *library*, and this package is a binary —
-//! so `apps/server/src/system_packs.rs`, which exists precisely to force pack
+//! so `apps/thunderforge/src/system_packs.rs`, which exists precisely to force pack
 //! linkage, is not linked into an example at all. Without the same block
 //! repeated here, `contribution_for` returns `None`, no refinement runs, and
 //! the measurement silently reports zero reaches while looking like it worked.
@@ -38,13 +38,13 @@
 // See "The `use … as _` block is load-bearing" above. Nothing here reads a
 // symbol from these crates; referencing them at all is what links their
 // `inventory` submissions in.
-use blades_server as _;
-use cypher_server as _;
-use dnd5e_server as _;
-use fate_server as _;
-use genie_server as _;
-use pathfinder2e_server as _;
-use yze_server as _;
+use thunderforge_system_blades_in_the_dark as _;
+use thunderforge_system_cypher_system as _;
+use thunderforge_system_dnd5e as _;
+use thunderforge_system_fate_core as _;
+use thunderforge_system_genie as _;
+use thunderforge_system_pathfinder2e as _;
+use thunderforge_system_year_zero_engine as _;
 
 use thunderforge_canvas_core::content_entry::SourceLine;
 use thunderforge_canvas_core::content_patterns::Shape;

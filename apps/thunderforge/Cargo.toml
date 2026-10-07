@@ -91,13 +91,13 @@ reqwest = { version = "0.13.4", default-features = false, features = [
   "json",
   "rustls",
 ] }
-thunderforge_canvas_core = { path = "../../crates/thunderforge-canvas-core" }
+thunderforge-canvas-core = { path = "../../crates/thunderforge-canvas-core" }
 # Spec 049: the `harvest` example reads real books through the generic reader.
 thunderforge-pdf = { path = "../../crates/thunderforge-pdf" }
-thunderforge_pg = { path = "../../crates/thunderforge-pg" }
-thunderforge_pg_sockets = { path = "../../crates/thunderforge-pg-sockets" }
-thunderforge_presence = { path = "../../crates/thunderforge-presence" }
-thunderforge_crucible = { path = "../../crates/thunderforge-crucible" }
+thunderforge-pg = { path = "../../crates/thunderforge-pg" }
+thunderforge-pg-sockets = { path = "../../crates/thunderforge-pg-sockets" }
+thunderforge-presence = { path = "../../crates/thunderforge-presence" }
+thunderforge-crucible = { path = "../../crates/thunderforge-crucible" }
 
 [dev-dependencies]
 # `play_pause_surface_tests` holds the merged schema to the server's own
@@ -110,34 +110,26 @@ chrono = "0.4.45"
 futures-util = "0.3.34"
 
 # Linked for their `inventory::submit!` blocks alone — see `system_packs.rs`.
-[dependencies.dnd5e_server]
+[dependencies.thunderforge-system-dnd5e]
 path = "../../packs/systems/dnd5e/server"
-package = "dnd5e-server"
 
-[dependencies.genie_server]
+[dependencies.thunderforge-system-genie]
 path = "../../packs/systems/genie/server"
-package = "genie-server"
 
-[dependencies.pathfinder2e_server]
+[dependencies.thunderforge-system-pathfinder2e]
 path = "../../packs/systems/pathfinder2e/server"
-package = "pathfinder2e-server"
 
-[dependencies.cypher_server]
+[dependencies.thunderforge-system-cypher-system]
 path = "../../packs/systems/cypher_system/server"
-package = "cypher-server"
 
-[dependencies.fate_server]
+[dependencies.thunderforge-system-fate-core]
 path = "../../packs/systems/fate_core/server"
-package = "fate-server"
 
-[dependencies.blades_server]
+[dependencies.thunderforge-system-blades-in-the-dark]
 path = "../../packs/systems/blades_in_the_dark/server"
-package = "blades-server"
 
-[dependencies.yze_server]
+[dependencies.thunderforge-system-year-zero-engine]
 path = "../../packs/systems/year_zero_engine/server"
-package = "yze-server"
 
-[dependencies.roll_for_shoes_server]
+[dependencies.thunderforge-system-roll-for-shoes]
 path = "../../packs/systems/roll_for_shoes/server"
-package = "roll-for-shoes-server"

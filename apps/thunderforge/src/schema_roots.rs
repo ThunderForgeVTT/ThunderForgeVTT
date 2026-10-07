@@ -24,19 +24,19 @@ use async_graphql::MergedObject;
 #[derive(MergedObject, Default)]
 pub struct AppQueryRoot(
     thunderforge_server::graphql::QueryRoot,
-    genie_server::GenieSessionQuery,
-    roll_for_shoes_server::RollForShoesSettingsQuery,
-    roll_for_shoes_server::RollForShoesTableQuery,
+    thunderforge_system_genie::GenieSessionQuery,
+    thunderforge_system_roll_for_shoes::RollForShoesSettingsQuery,
+    thunderforge_system_roll_for_shoes::RollForShoesTableQuery,
 );
 
 /// Everything mutable, same shape.
 #[derive(MergedObject, Default)]
 pub struct AppMutationRoot(
     thunderforge_server::graphql::MutationRoot,
-    genie_server::GenieSessionMutation,
-    roll_for_shoes_server::RollForShoesRollMutation,
-    roll_for_shoes_server::RollForShoesSettingsMutation,
-    roll_for_shoes_server::RollForShoesTableMutation,
+    thunderforge_system_genie::GenieSessionMutation,
+    thunderforge_system_roll_for_shoes::RollForShoesRollMutation,
+    thunderforge_system_roll_for_shoes::RollForShoesSettingsMutation,
+    thunderforge_system_roll_for_shoes::RollForShoesTableMutation,
 );
 
 pub type AppSchema = async_graphql::Schema<

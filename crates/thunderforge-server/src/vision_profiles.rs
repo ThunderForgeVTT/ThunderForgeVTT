@@ -35,7 +35,7 @@ pub fn vision_declaration_for_system(systems_dir: &str, system_id: &str) -> Visi
 ///
 /// A `vision` block that fails to parse is treated as absent rather than as an
 /// error. Install-time validation is where a malformed block is reported to
-/// the person who wrote it (`pack_system_spec`); by the time a scene is being
+/// the person who wrote it (`thunderforge_pack_system_spec`); by the time a scene is being
 /// drawn, refusing to show anybody anything would be the worse answer.
 pub fn vision_from_manifest(manifest: &serde_json::Value) -> VisionDeclaration {
     manifest

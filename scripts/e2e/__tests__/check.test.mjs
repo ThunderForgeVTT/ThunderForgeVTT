@@ -39,7 +39,7 @@ const SPECS = [
 
 const TRACKED = [
   "apps/web/src/features/combat/CombatPanel.tsx",
-  "apps/server/schema.graphql",
+  "apps/thunderforge/schema.graphql",
   "package.json",
 ];
 
@@ -67,7 +67,7 @@ function run(change = {}) {
   const slices = change.slices ?? SLICES;
   return checkSlices({
     document: {
-      crossCutting: [{ glob: "apps/server/schema.graphql", why: "every client" }],
+      crossCutting: [{ glob: "apps/thunderforge/schema.graphql", why: "every client" }],
       slices,
       ...change.document,
     },

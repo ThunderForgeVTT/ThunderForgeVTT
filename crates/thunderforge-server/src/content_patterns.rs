@@ -43,7 +43,7 @@ pub fn content_patterns_for_system(systems_dir: &str, system_id: &str) -> Conten
 ///
 /// A block that fails to parse is treated as absent rather than as an error,
 /// for the reason `vision_from_manifest` gives: install-time validation
-/// (`pack_system_spec::validate_system_manifest`) is where a malformed block
+/// (`thunderforge_pack_system_spec::validate_system_manifest`) is where a malformed block
 /// is reported to the person who wrote it. What differs is the consequence —
 /// absent here stops an import rather than quietly changing what it produces.
 pub fn content_patterns_from_manifest(manifest: &serde_json::Value) -> ContentPatterns {

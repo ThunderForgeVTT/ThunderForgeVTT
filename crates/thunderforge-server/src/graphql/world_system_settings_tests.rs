@@ -1,7 +1,7 @@
 //! A world's system settings, through the real schema and a real Postgres.
 //!
 //! The declaration's own rules — types, bounds, options — are tested beside
-//! it in `pack_system_spec::settings` with no database. What needs both is
+//! it in `thunderforge_pack_system_spec::settings` with no database. What needs both is
 //! everything a declaration cannot say about itself: who may read, who may
 //! write, that a missing row is a default rather than an error, that a stale
 //! row is ignored and kept, and that a change leaves a record.

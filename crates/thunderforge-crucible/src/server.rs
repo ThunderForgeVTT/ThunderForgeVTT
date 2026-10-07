@@ -1,7 +1,7 @@
-//! Spec 024 (User Story 2): the HTTP surface `crucible-server` exposes —
+//! Spec 024 (User Story 2): the HTTP surface `thunderforge-crucible-server` exposes —
 //! `POST /adjudicate` and `GET /health` — per
 //! `specs/024-thunderforge-crucible-crate/contracts/crucible-server-http.md`.
-//! Reused by both the `crucible-server` binary (`apps/crucible-server`)
+//! Reused by both the `thunderforge-crucible-server` binary (`apps/thunderforge-crucible-server`)
 //! and the in-process integration test that proves `RemoteAdjudicator`
 //! produces identical results to `LocalAdjudicator` (quickstart.md), so
 //! there is exactly one source of truth for this contract regardless of how
@@ -36,7 +36,7 @@ async fn health() -> StatusCode {
     StatusCode::OK
 }
 
-/// Builds the router `crucible-server` serves — per
+/// Builds the router `thunderforge-crucible-server` serves — per
 /// contracts/crucible-server-http.md.
 pub fn router() -> Router {
     Router::new()

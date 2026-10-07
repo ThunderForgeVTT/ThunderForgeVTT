@@ -69,7 +69,7 @@ and what the next pack wanting one should do.
 ## Checking it
 
 ```sh
-cargo test -p roll-for-shoes-server --lib          # validators
+cargo test -p thunderforge-system-roll-for-shoes --lib          # validators
 pnpm --filter @thunderforge/roll-for-shoes test    # the rules
 pnpm --filter @thunderforge/web typecheck          # the sheet and the panel
 THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT=1 pnpm e2e:game-systems

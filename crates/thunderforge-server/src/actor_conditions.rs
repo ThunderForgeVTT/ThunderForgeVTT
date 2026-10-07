@@ -4,7 +4,7 @@
 //!
 //! The *system* says which conditions exist and what the board draws for
 //! each: its manifest's `conditions` block, read by
-//! `pack_system_spec::conditions`. The *actor* holds the ones it is under:
+//! `thunderforge_pack_system_spec::conditions`. The *actor* holds the ones it is under:
 //! rows in `world_actor_conditions`. This module joins the two, and it is the
 //! only code that touches the table.
 //!
@@ -31,7 +31,7 @@ use std::collections::HashMap;
 use diesel::prelude::*;
 use uuid::Uuid;
 
-use pack_system_spec::conditions::{SystemCondition, conditions_from_manifest};
+use thunderforge_pack_system_spec::conditions::{SystemCondition, conditions_from_manifest};
 
 use crate::schema::{tokens, world_actor_conditions, world_actors, worlds};
 use crate::world_events::{

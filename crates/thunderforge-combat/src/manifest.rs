@@ -10,7 +10,7 @@
 //! damage operation; that is a correct answer for a ruleset without hit
 //! points, not a gap to fill with a default.
 //!
-//! The shapes moved here from `pack_system_spec::combat` (ADR-113), which
+//! The shapes moved here from `thunderforge_pack_system_spec::combat` (ADR-113), which
 //! re-exports them and keeps the install-time checks that say a declaration
 //! points at something. Reading a manifest is the same answer on the server
 //! and in the browser, so it is here.
@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 /// The smallest footprint a size may declare, in cells.
 ///
 /// Mirrors `thunderforge_canvas_core`'s `MIN_FOOTPRINT`; a test in
-/// `pack_system_spec`'s `combat_tests.rs` keeps the two equal.
+/// `thunderforge_pack_system_spec`'s `combat_tests.rs` keeps the two equal.
 pub const MIN_SIZE_FOOTPRINT: f32 = 0.5;
 
 /// The `combat` block.

@@ -14,8 +14,7 @@ license.workspace = true
 # the worst of both.
 
 [lib]
-name = "thunderforge_content"
 path = "src/lib.rs"
 
 [dependencies]
-thunderforge_canvas_core = { path = "../thunderforge-canvas-core" }
+thunderforge-canvas-core = { path = "../thunderforge-canvas-core" }

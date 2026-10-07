@@ -4,7 +4,7 @@
 //!
 //! `graphql::play_pause_surface_tests` closes the list of root fields a pause
 //! refuses, but it reads this crate's schema, and a system pack's fields are
-//! merged in only by the app crate (`apps/server/src/schema_roots.rs`). So a pack
+//! merged in only by the app crate (`apps/thunderforge/src/schema_roots.rs`). So a pack
 //! classifies its own fields here, beside the code that defines them, and the
 //! app crate's `play_pause_surface_tests` holds the **merged** schema to the
 //! union: a pack root field in no table fails that build, and every field a

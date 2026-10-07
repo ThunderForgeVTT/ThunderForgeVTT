@@ -222,15 +222,15 @@ format:
 lint: lint-host lint-wasm check-file-length
 
 lint-host:
-	cargo clippy --workspace --exclude thunderforge_engine --all-targets -- -D warnings
+	cargo clippy --workspace --exclude thunderforge-engine --all-targets -- -D warnings
 
 lint-wasm:
-	cargo clippy -p thunderforge_engine -p thunderforge_cache_browser -p thunderforge_opfs \
+	cargo clippy -p thunderforge-engine -p thunderforge-cache-browser -p thunderforge-opfs \
 		--target wasm32-unknown-unknown --all-targets -- -D warnings
-	cargo clippy -p thunderforge_combat --features wasm \
+	cargo clippy -p thunderforge-combat --features wasm \
 		--target wasm32-unknown-unknown --all-targets -- -D warnings
 	# The demo's dice (spec 074): the same crate, with its browser façade.
-	cargo clippy -p thunderforge_dice --features thunderforge_dice/wasm \
+	cargo clippy -p thunderforge-dice --features thunderforge-dice/wasm \
 		--target wasm32-unknown-unknown --all-targets -- -D warnings
 
 check-file-length:

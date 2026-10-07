@@ -126,8 +126,8 @@ COPY --from=planner /build/recipe.json recipe.json
 RUN if [ "$BUILD_PROFILE" = dev ]; then flag=""; engine="--features debug-names"; else flag=--release; engine=""; fi \
   && cargo chef cook $flag --recipe-path recipe.json -p thunderforge \
   && cargo chef cook $flag --recipe-path recipe.json --target wasm32-unknown-unknown \
-  -p thunderforge_engine $engine \
-  && for crate in thunderforge_dice thunderforge-pdf thunderforge_combat; do \
+  -p thunderforge-engine $engine \
+  && for crate in thunderforge-dice thunderforge-pdf thunderforge-combat; do \
   cargo chef cook --release --recipe-path recipe.json --target wasm32-unknown-unknown \
   -p "$crate" --features wasm || exit 1; \
   done

@@ -1,7 +1,7 @@
 //! A character's conditions, through the real schema and a real Postgres.
 //!
 //! The manifest's own rules — glyphs, colours, unique ids — are tested beside
-//! it in `pack_system_spec::conditions` with no database. What needs both is
+//! it in `thunderforge_pack_system_spec::conditions` with no database. What needs both is
 //! everything a declaration cannot say about itself: who may apply, that an
 //! undeclared condition is refused, that a stale row is ignored and kept, and
 //! that a condition travels on the token to whoever is sent the token and to

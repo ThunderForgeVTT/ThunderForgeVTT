@@ -1,4 +1,4 @@
-//! Spec 024 (User Story 2): thin binary entrypoint for `crucible-server` —
+//! Spec 024 (User Story 2): thin binary entrypoint for `thunderforge-crucible-server` —
 //! standalone, out-of-process adjudication, per `plan.md`'s "thin binary
 //! wrapper" convention. All routing logic lives in `thunderforge_crucible::server`
 //! (shared with the in-process integration test) — this binary only reads
@@ -14,11 +14,11 @@ async fn main() {
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await
-        .unwrap_or_else(|err| panic!("crucible-server: failed to bind {addr}: {err}"));
+        .unwrap_or_else(|err| panic!("thunderforge-crucible-server: failed to bind {addr}: {err}"));
 
-    eprintln!("[crucible-server] listening on {addr}");
+    eprintln!("[thunderforge-crucible-server] listening on {addr}");
 
     axum::serve(listener, thunderforge_crucible::server::router())
         .await
-        .expect("crucible-server: failed to serve");
+        .expect("thunderforge-crucible-server: failed to serve");
 }

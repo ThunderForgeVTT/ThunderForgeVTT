@@ -2,7 +2,7 @@
 workspace = true
 
 [package]
-name = "thunderforge_cache_core"
+name = "thunderforge-cache-core"
 version = "0.1.0"
 edition = "2024"
 repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"

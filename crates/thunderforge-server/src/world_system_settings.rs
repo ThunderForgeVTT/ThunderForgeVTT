@@ -3,7 +3,7 @@
 //! # The shape
 //!
 //! The *system* says what may be chosen: its manifest's `settings` block,
-//! read by `pack_system_spec::settings`. The *world* holds what was chosen:
+//! read by `thunderforge_pack_system_spec::settings`. The *world* holds what was chosen:
 //! rows in `world_system_settings`, keyed by world, system and key. This
 //! module joins the two, and it is the only code that touches the table —
 //! server code reads a setting through [`effective_value`], and a pack's web
@@ -26,8 +26,8 @@ use diesel::prelude::*;
 use serde_json::Value;
 use uuid::Uuid;
 
-use pack_system_spec::settings::{SystemSetting, settings_from_manifest};
 use thunderforge_canvas_core::system_contribution::contribution_for;
+use thunderforge_pack_system_spec::settings::{SystemSetting, settings_from_manifest};
 
 use crate::schema::{world_system_setting_changes, world_system_settings, worlds};
 

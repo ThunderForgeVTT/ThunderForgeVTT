@@ -2,7 +2,7 @@
 workspace = true
 
 [package]
-name = "thunderforge_pg"
+name = "thunderforge-pg"
 version = "0.1.0"
 edition = "2024"
 repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
@@ -26,7 +26,7 @@ crate-type = ["rlib"]
 # panics, hangs or errors on demand.
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
-thunderforge_pg_sockets = { path = "../thunderforge-pg-sockets" }
+thunderforge-pg-sockets = { path = "../thunderforge-pg-sockets" }
 tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }
 
 [dev-dependencies]

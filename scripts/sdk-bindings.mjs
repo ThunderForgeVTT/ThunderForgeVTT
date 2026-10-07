@@ -92,7 +92,7 @@ function run() {
   // directory — an environment variable already set wins over `[env]`.
   execFileSync(
     "cargo",
-    ["test", "-p", "thunderforge_canvas_core", "export_bindings"],
+    ["test", "-p", "thunderforge-canvas-core", "export_bindings"],
     {
       cwd: ROOT,
       stdio: "inherit",

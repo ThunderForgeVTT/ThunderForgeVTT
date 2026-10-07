@@ -449,8 +449,8 @@ pub struct TokenCondition {
     pub color: String,
 }
 
-impl From<pack_system_spec::conditions::SystemCondition> for TokenCondition {
-    fn from(condition: pack_system_spec::conditions::SystemCondition) -> Self {
+impl From<thunderforge_pack_system_spec::conditions::SystemCondition> for TokenCondition {
+    fn from(condition: thunderforge_pack_system_spec::conditions::SystemCondition) -> Self {
         Self {
             id: condition.id,
             glyph: condition.marker.glyph.as_str().to_string(),

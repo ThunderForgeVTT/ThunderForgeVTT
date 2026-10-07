@@ -2,7 +2,7 @@
 workspace = true
 
 [package]
-name = "thunderforge_core"
+name = "thunderforge-core"
 version = "0.1.0"
 edition = "2024"
 repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
@@ -22,4 +22,4 @@ uuid = { version = "1.26.0", features = ["serde", "v4", "v7"] }
 chrono = { version = "0.4.45", features = ["serde"] }
 # The one ranking of world roles. `models::invites::WorldMemberRole` converts
 # to it rather than re-deriving who outranks whom.
-thunderforge_authz = { path = "../../crates/thunderforge-authz" }
+thunderforge-authz = { path = "../../crates/thunderforge-authz" }

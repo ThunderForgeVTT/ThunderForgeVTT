@@ -1,13 +1,13 @@
 [workspace]
 resolver = "3"
 members = [
-    "apps/server",
-    "apps/crucible-server",
-    "apps/mapforge-server",
+    "apps/thunderforge",
+    "apps/thunderforge-crucible-server",
+    "apps/thunderforge-mapforge-server",
     "crates/thunderforge-server", 
     "crates/thunderforge-core", 
     "crates/thunderforge-engine", 
-    "crates/pack_system_spec",
+    "crates/thunderforge-pack-system-spec",
     "crates/thunderforge-axum-auth-core",
     "crates/thunderforge-axum-oauth",
     "crates/thunderforge-authz",
@@ -35,7 +35,7 @@ members = [
     "packs/systems/year_zero_engine/server",
     "packs/systems/roll_for_shoes/server"
 ]
-default-members = ["apps/server", "crates/thunderforge-server", "crates/thunderforge-core"]
+default-members = ["apps/thunderforge", "crates/thunderforge-server", "crates/thunderforge-core"]
 
 [workspace.package]
 # Relicensed from BSD 3-Clause to AGPL-3.0-or-later (2026-08-25) — see

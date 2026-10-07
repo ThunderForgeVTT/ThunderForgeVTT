@@ -1,5 +1,5 @@
-//! Thin binary entrypoint for `mapforge-server`, mirroring
-//! `crucible-server`'s convention: all routing lives in
+//! Thin binary entrypoint for `thunderforge-mapforge-server`, mirroring
+//! `thunderforge-crucible-server`'s convention: all routing lives in
 //! `thunderforge_mapforge::server`, and this only resolves a corpus directory
 //! and a port, then serves.
 
@@ -28,10 +28,10 @@ async fn main() {
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
     let listener = tokio::net::TcpListener::bind(addr)
         .await
-        .unwrap_or_else(|err| panic!("mapforge-server: failed to bind {addr}: {err}"));
+        .unwrap_or_else(|err| panic!("thunderforge-mapforge-server: failed to bind {addr}: {err}"));
 
     eprintln!("[mapforge] listening on http://{addr}");
     axum::serve(listener, server::router(source))
         .await
-        .expect("mapforge-server: failed to serve");
+        .expect("thunderforge-mapforge-server: failed to serve");
 }

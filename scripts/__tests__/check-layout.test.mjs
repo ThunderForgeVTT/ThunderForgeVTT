@@ -46,7 +46,7 @@ test("reads the members list, trailing spaces and all", () => {
 
 test("a tree that follows the rule passes and counts its members", () => {
   const result = check({
-    "apps/server": "bin",
+    "apps/thunderforge": "bin",
     "crates/core": "lib",
     "packs/systems/dnd5e/server": "lib",
   });
@@ -54,7 +54,7 @@ test("a tree that follows the rule passes and counts its members", () => {
 });
 
 test("a member outside the homes is refused, by name, with the homes", () => {
-  const { problems } = check({ "apps/server": "bin", "src/extra": "lib" });
+  const { problems } = check({ "apps/thunderforge": "bin", "src/extra": "lib" });
   assert.equal(problems.length, 1);
   assert.match(problems[0], /^src\/extra: /);
   assert.match(problems[0], /apps\/, crates\/, packs\/systems\//);

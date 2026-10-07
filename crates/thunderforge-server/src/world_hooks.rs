@@ -142,7 +142,7 @@ mod tests {
     /// and shared by both. This registry cannot move there: it takes a
     /// `&mut PgConnection` and canvas-core is compiled to wasm.
     ///
-    /// So discovery is asserted in `apps/server`, the binary, where there is one
+    /// So discovery is asserted in `apps/thunderforge`, the binary, where there is one
     /// instance of everything and the linkage is the real one — which is the
     /// same argument `system_packs.rs` already makes for its own test.
     #[test]

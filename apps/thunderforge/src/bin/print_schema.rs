@@ -9,7 +9,7 @@
 //! Rust side compiled, every Rust test passed, and the first thing to notice
 //! was a person clicking a button. `scripts/check-graphql-contract.mjs` closes
 //! that gap by validating every operation the web sends against this output,
-//! which is committed as `apps/server/schema.graphql` so a schema change is also a
+//! which is committed as `apps/thunderforge/schema.graphql` so a schema change is also a
 //! line in the review diff.
 //!
 //! # Why a binary of its own, behind a feature

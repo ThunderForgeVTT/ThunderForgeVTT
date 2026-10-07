@@ -2,7 +2,7 @@
 //! movement/manipulation resolution. Two implementations satisfy this trait:
 //! [`local::LocalAdjudicator`] (in-process, zero-config, what every
 //! self-hosted deployment gets by default) and [`remote::RemoteAdjudicator`]
-//! (delegates over HTTP to a standalone `crucible-server` process). Callers
+//! (delegates over HTTP to a standalone `thunderforge-crucible-server` process). Callers
 //! depend only on this trait, never on which implementation is active
 //! (spec.md FR-006).
 //!

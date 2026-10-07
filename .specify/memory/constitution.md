@@ -207,7 +207,7 @@ and one agent or contributor can own it end to end.
   paired `up.sql`/`down.sql`.
 - Repository layout (spec `065-a-place-for-everything`). Everything has one
   of four homes, and there is no `src/` at the repository root:
-  - `apps/` holds entry points: the server binary (`apps/server`) and the web
+  - `apps/` holds entry points: the server binary (`apps/thunderforge`) and the web
     apps. An app composes libraries and SHOULD hold little else.
   - `crates/` holds Rust libraries, including the server library
     (`crates/thunderforge-server`), the shared models

@@ -17,7 +17,7 @@ use crate::models::{
 };
 use crate::schema::{world_actors, worlds}; // policies disabled
 use crate::state::AppState;
-// Phase 4.8.1: dnd5e_server will be loaded at runtime via game system registry
+// Phase 4.8.1: thunderforge_system_dnd5e will be loaded at runtime via game system registry
 
 // Phase 4.9.Z Step 1: Core entity types extracted to separate module
 pub mod types;

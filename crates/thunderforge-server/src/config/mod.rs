@@ -5,7 +5,7 @@ use std::path::Path;
 pub mod oauth_env;
 
 /// Fields are `pub` rather than `pub(crate)` because the binary that builds
-/// `AppState` now lives in a different crate (`apps/server`) — see `lib.rs` for
+/// `AppState` now lives in a different crate (`apps/thunderforge`) — see `lib.rs` for
 /// why the server became a library. Nothing else about their meaning changed.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Config {

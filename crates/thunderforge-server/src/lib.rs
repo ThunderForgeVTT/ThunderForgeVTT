@@ -1,6 +1,6 @@
 //! The ThunderForge server, as a library.
 //!
-//! # Why this is a library and `apps/server` is the binary
+//! # Why this is a library and `apps/thunderforge` is the binary
 //!
 //! A system pack must be able to own the tables it writes and contribute its
 //! own GraphQL (spec 032 FR-004, ADR-063). That means a pack crate has to
@@ -10,7 +10,7 @@
 //!
 //! Inverting it costs almost nothing. The whole server-to-pack coupling was
 //! seven `use <pack> as _;` lines and seven Cargo entries; those moved to
-//! `apps/server`, the binary, which is the composition root: it links the packs,
+//! `apps/thunderforge`, the binary, which is the composition root: it links the packs,
 //! merges their GraphQL into the roots, and runs `main`. Nothing here knows a
 //! pack exists.
 //!

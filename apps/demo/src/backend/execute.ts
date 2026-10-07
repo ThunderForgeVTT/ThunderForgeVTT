@@ -1,7 +1,7 @@
 /**
  * The server's schema, run in the page.
  *
- * `apps/server/schema.graphql` is the SDL the server itself prints
+ * `apps/thunderforge/schema.graphql` is the SDL the server itself prints
  * (`thunderforge-schema`) and the web app's operations are already checked
  * against (`scripts/check-graphql-contract.mjs`). Building the demo's schema
  * from that same file is what makes FR-010 true without a test having to

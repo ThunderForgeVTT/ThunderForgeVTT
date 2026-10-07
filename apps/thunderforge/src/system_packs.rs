@@ -35,14 +35,14 @@
 // Linked for their `inventory::submit!` blocks alone. Nothing here calls into
 // them, and nothing should: the moment shared code names a pack's function,
 // this file stops being a build-graph fact and starts being a registry again.
-use blades_server as _;
-use cypher_server as _;
-use dnd5e_server as _;
-use fate_server as _;
-use genie_server as _;
-use pathfinder2e_server as _;
-use roll_for_shoes_server as _;
-use yze_server as _;
+use thunderforge_system_blades_in_the_dark as _;
+use thunderforge_system_cypher_system as _;
+use thunderforge_system_dnd5e as _;
+use thunderforge_system_fate_core as _;
+use thunderforge_system_genie as _;
+use thunderforge_system_pathfinder2e as _;
+use thunderforge_system_roll_for_shoes as _;
+use thunderforge_system_year_zero_engine as _;
 
 #[cfg(test)]
 mod tests {
