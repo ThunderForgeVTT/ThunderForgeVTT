@@ -1,0 +1,21 @@
+{
+  "name": "@thunderforge/downloads",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "description": "Large downloads in resumable, version-checked parts, handed on in order as one stream",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --test src/*.test.ts",
+    "test:e2e": "node --test e2e/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "check": "tsc --noEmit && node --test src/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "typescript": "6.0.3"
+  }
+}

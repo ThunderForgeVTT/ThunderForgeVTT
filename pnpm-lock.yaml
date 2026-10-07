@@ -173,6 +173,9 @@ importers:
       '@tailwindcss/postcss':
         specifier: ^4.2.4
         version: 4.2.4
+      '@thunderforge/downloads':
+        specifier: workspace:^
+        version: link:../../packages/downloads
       '@thunderforge/engine':
         specifier: workspace:^
         version: link:../../dist/engine
@@ -330,6 +333,15 @@ importers:
   dist/engine: {}
 
   dist/pdf: {}
+
+  packages/downloads:
+    devDependencies:
+      '@types/node':
+        specifier: ^26.2.0
+        version: 26.2.0
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
 
   packages/hero-builder:
     dependencies:
