@@ -24,6 +24,17 @@ export const EVENT = {
 const subscribers = new Set<(event: WorldEvent) => void>();
 let pending: WorldEvent[] = [];
 
+/**
+ * What `worldEventsSince` answers from: the events this page has recorded,
+ * newest last. A reload starts the client afresh from the saved world, so the
+ * log need only outlive a dropped subscription, not the page.
+ */
+const LOG_LIMIT = 1000;
+const log: WorldEvent[] = [];
+
+/** The server's page size for a catch-up. */
+const CATCH_UP_LIMIT = 200;
+
 export function now(): string {
   // The server's `NaiveDateTime`: no zone, microseconds.
   return `${new Date().toISOString().slice(0, -1)}000`;
@@ -32,7 +43,7 @@ export function now(): string {
 export function record(eventCode: number, payload: Row): void {
   const state = demoState();
   const at = now();
-  pending.push({
+  const event: WorldEvent = {
     id: state.nextEventId++,
     worldId: state.world.id,
     eventCode,
@@ -42,7 +53,28 @@ export function record(eventCode: number, payload: Row): void {
     schemaVersion: 1,
     createdAt: at,
     updatedAt: at,
-  });
+  };
+  pending.push(event);
+  log.push(event);
+  if (log.length > LOG_LIMIT) log.splice(0, log.length - LOG_LIMIT);
+}
+
+/**
+ * `worldEventsSince`, as the server answers it: what came after `afterId`,
+ * oldest first, at most a page of it. `truncated` says the gap was more than
+ * one page — or older than this page remembers — and the client must
+ * resynchronise rather than apply what it was given.
+ */
+export function eventsSince(afterId: number): Row {
+  const latestId = demoState().nextEventId - 1;
+  const after = log.filter((event) => event.id > afterId);
+  const oldestKept = log[0]?.id ?? latestId + 1;
+  const forgotten = afterId + 1 < oldestKept && afterId < latestId;
+  return {
+    events: after.slice(0, CATCH_UP_LIMIT),
+    truncated: forgotten || after.length > CATCH_UP_LIMIT,
+    latestId: Math.max(latestId, 0),
+  };
 }
 
 /** Hands every recorded event to every subscriber, oldest first. */

@@ -31,6 +31,7 @@ import {
   actorAccessQueries,
 } from "./handlers/actorAccess";
 import { loreMutations, loreQueries } from "./handlers/lore";
+import { catchUpQueries } from "./handlers/catchUp";
 import { demoState, markChanged, type DemoState, type Row } from "./state";
 
 type Args = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -359,6 +360,7 @@ export const queries: Record<string, Handler> = {
   // Areas with files of their own, under `handlers/`.
   ...loreQueries,
   ...actorAccessQueries,
+  ...catchUpQueries,
 };
 
 export const mutations: Record<string, Handler> = {

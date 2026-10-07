@@ -376,6 +376,17 @@ test("a lore entry is written, edited and listed, and its link reaches the fight
   await expect(page.getByText("Not part of the demo")).toHaveCount(0);
 });
 
+test("the compendium's Books tab says the world holds no books, rather than refusing", async () => {
+  await page.goto(`/demo/world/${WORLD_ID}/compendium?tab=books`);
+  await expect(page.getByRole("tab", { name: /books/i })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.waitForLoadState("networkidle");
+  expect(await refusedSoFar()).toEqual([]);
+  await expect(page.getByText("Not part of the demo")).toHaveCount(0);
+});
+
 test("the fighter's sheet opens with his numbers, and a check rolls from them", async () => {
   const fighter = (await cast()).find((a) => a.label === "Brannoc Stoneward");
   if (!fighter) throw new Error("the fighter is in the cast");
