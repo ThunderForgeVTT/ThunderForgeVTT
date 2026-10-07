@@ -60,6 +60,14 @@ async function ask<T>(query: string, variables: object = {}) {
   }>;
 }
 
+/** What this page load has refused as "not part of the demo", by name. */
+async function refusedSoFar(): Promise<string[]> {
+  return page.evaluate(() => [
+    ...((window as { __thunderforgeDemoRefused?: string[] })
+      .__thunderforgeDemoRefused ?? []),
+  ]);
+}
+
 async function scenes(): Promise<{ sceneId: string; name: string }[]> {
   const answer = await ask<{ scenes: { sceneId: string; name: string }[] }>(
     "query ($worldId: UUID!) { scenes(worldId: $worldId) { sceneId name } }",
@@ -339,6 +347,13 @@ test("the fighter's sheet opens with his numbers, and a check rolls from them", 
   await expect(page.getByTestId("dnd5e-skill-athletics-bonus")).toHaveText(
     "+5",
   );
+  // Opening a character asks for the world's lore and the actor's ownership
+  // block, and both are answered: nothing on the way in is "not part of the
+  // demo".
+  await expect(page.getByTestId("actor-ownership-block")).toBeVisible();
+  await expect(page.getByTestId("actor-lore-attach-select")).toBeEnabled();
+  expect(await refusedSoFar()).toEqual([]);
+  await expect(page.getByText("Not part of the demo")).toHaveCount(0);
   const rolled = await ask<{
     rollCheck: { resultValue: number; dice: { finalValue: number }[] };
   }>(

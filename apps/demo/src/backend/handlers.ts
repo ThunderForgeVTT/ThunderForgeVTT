@@ -26,6 +26,11 @@ import {
   visibleActors,
 } from "./actors";
 import { EVENT, now, record } from "./events";
+import {
+  actorAccessMutations,
+  actorAccessQueries,
+} from "./handlers/actorAccess";
+import { loreQueries } from "./handlers/lore";
 import { demoState, markChanged, type DemoState, type Row } from "./state";
 
 type Args = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -316,8 +321,6 @@ export const queries: Record<string, Handler> = {
   ],
   pendingOffers: () => [],
   peerSessions: () => [],
-  loreEntry: ({ slug }) =>
-    demoState().lore.find((entry) => entry.slug === slug) ?? null,
   worldSyncPlan: () => ({ fetch: [], evict: [], canonicalVersion: 1 }),
 
   // Scenes and what stands on them.
@@ -352,6 +355,10 @@ export const queries: Record<string, Handler> = {
   tokenAttributes: () => [],
   tokenGrid: () => [],
   tokenVision: () => [],
+
+  // Areas with files of their own, under `handlers/`.
+  ...loreQueries,
+  ...actorAccessQueries,
 };
 
 export const mutations: Record<string, Handler> = {
@@ -596,4 +603,6 @@ export const mutations: Record<string, Handler> = {
     return actorRow(state, actor);
   },
   rollCheck: (args) => rollCheck(args),
+
+  ...actorAccessMutations,
 };

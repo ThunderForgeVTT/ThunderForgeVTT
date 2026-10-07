@@ -17,6 +17,7 @@
   "dependencies": {
     "@thunderforge/heroes": "workspace:^",
     "graphql": "^16.14.2",
+    "marked": "^18.0.10",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-helmet-async": "^2.0.5",

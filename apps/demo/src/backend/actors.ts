@@ -16,6 +16,7 @@ import {
 import { DND5E_SKILLS } from "../../../../packs/systems/dnd5e/web/src/sheet-regions";
 import { DEMO_PLAYER, DEMO_USER } from "../seed/world";
 import { now } from "./events";
+import { loreLinkingToActor } from "./handlers/lore";
 import { demoState, markChanged, type DemoState, type Row } from "./state";
 
 type Args = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -47,8 +48,16 @@ export function tokenVisible(state: DemoState, token: Row): boolean {
   return !actor || actorVisible(state, actor);
 }
 
+/** The actor's explicit ownership-block grants, kept on the actor. */
+export function actorGrants(actor: Row): Row[] {
+  if (!Array.isArray(actor.permissions)) actor.permissions = [];
+  return actor.permissions as Row[];
+}
+
 function permissionOf(state: DemoState, actor: Row): string {
   if (viewerIsGm(state)) return "OWNER";
+  const grant = actorGrants(actor).find((g) => g.userId === DEMO_PLAYER.id);
+  if (grant) return grant.level as string;
   return actor.ownedBy === DEMO_PLAYER.id ? "OWNER" : "VIEWER";
 }
 
@@ -57,6 +66,8 @@ export function actorRow(state: DemoState, actor: Row): Row {
   const mine = permissionOf(state, actor);
   return {
     ...actor,
+    permissions: undefined,
+    loreLinkedFrom: () => loreLinkingToActor(state, actor.id as string),
     myPermissionLevel: mine,
     myMayChangeImagery: mine !== "VIEWER",
     claimedBy:

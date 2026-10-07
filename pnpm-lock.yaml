@@ -20,6 +20,9 @@ importers:
       graphql:
         specifier: ^16.14.2
         version: 16.14.2
+      marked:
+        specifier: ^18.0.10
+        version: 18.0.10
       react:
         specifier: ^19.2.5
         version: 19.2.5
