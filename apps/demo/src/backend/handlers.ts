@@ -23,6 +23,7 @@ import {
   tokenVisible,
   updateSystemData,
   viewerIsGm,
+  viewerUser,
   visibleActors,
 } from "./actors";
 import { EVENT, now, record } from "./events";
@@ -176,8 +177,13 @@ function doorInteractiveId(wallId: string): string {
   return DOOR_PREFIX + wallId.slice(DOOR_PREFIX.length);
 }
 
-function doorInteractive(wall: Row): Row {
-  return {
+/**
+ * A door's interactive as `interactives.rs` answers it: the Game Master gets
+ * the authoring view, a player only that it is there and whether they may
+ * use it, which a lock forbids.
+ */
+function doorInteractive(wall: Row, gm: boolean): Row {
+  const id = {
     interactiveId: doorInteractiveId(wall.wallId as string),
     sceneId: wall.sceneId,
     levelId: wall.levelId,
@@ -185,6 +191,21 @@ function doorInteractive(wall: Row): Row {
     subjectRef: wall.wallId,
     geometry: null,
     trigger: "click",
+  };
+  if (!gm) {
+    return {
+      ...id,
+      effectId: null,
+      effectConfig: null,
+      activation: null,
+      fireMode: null,
+      firedAt: null,
+      available: null,
+      canActivate: !wall.locked,
+    };
+  }
+  return {
+    ...id,
     effectId: "door.set_state",
     effectConfig: { target: wall.wallId, state: "toggle" },
     activation: "anyone",
@@ -204,6 +225,27 @@ function changeDoor(wallId: string, changes: Row): Row {
     scene_id: wall.sceneId,
   });
   return wall;
+}
+
+/** `mutations_chat.rs`: a message's longest body, in characters. */
+const MAX_CHAT_CHARS = 4000;
+
+/** `validate_body`: trimmed, not empty, and not too long. */
+function chatBody(body: string): string {
+  const trimmed = body.trim();
+  if (!trimmed) throw new GraphQLError("Message cannot be empty");
+  if ([...trimmed].length > MAX_CHAT_CHARS) {
+    throw new GraphQLError(
+      `Message cannot exceed ${MAX_CHAT_CHARS} characters`,
+    );
+  }
+  return trimmed;
+}
+
+/** `resolve_history_limit`: 100 unless asked for 1 to 500. */
+function chatHistoryLimit(limit: unknown): number {
+  if (typeof limit !== "number" || limit <= 0) return 100;
+  return Math.min(limit, 500);
 }
 
 export const queries: Record<string, Handler> = {
@@ -274,7 +316,15 @@ export const queries: Record<string, Handler> = {
   worldSystemConditions: () => CONDITIONS,
   systemChecks: () => CHECKS,
   worldCollections: () => [],
-  worldChatMessages: () => demoState().chat,
+  // `world_chat_messages_impl`: the newest `limit`, in reading order, and
+  // never a GM-only message to a player.
+  worldChatMessages: ({ limit }) => {
+    const state = demoState();
+    const seen = state.chat.filter(
+      (message) => viewerIsGm(state) || !message.gmOnly,
+    );
+    return seen.slice(-chatHistoryLimit(limit));
+  },
   worldSystemSettings: () => [
     {
       key: "inspiration",
@@ -350,11 +400,20 @@ export const queries: Record<string, Handler> = {
     return onLevel(state.tokens, args).filter((t) => tokenVisible(state, t));
   },
   lightSources: (args) => onLevel(demoState().lights, args),
-  shapes: (args) => onLevel(demoState().shapes, args),
-  interactives: (args) =>
-    onLevel(demoState().walls, args)
+  // `scene.rs`: a player sees only the shapes shown to players.
+  shapes: (args) => {
+    const state = demoState();
+    return onLevel(state.shapes, args).filter(
+      (shape) => viewerIsGm(state) || shape.visibleToPlayers === true,
+    );
+  },
+  interactives: (args) => {
+    const state = demoState();
+    const gm = viewerIsGm(state);
+    return onLevel(state.walls, args)
       .filter((wall) => wall.doorState !== "NONE")
-      .map(doorInteractive),
+      .map((wall) => doorInteractive(wall, gm));
+  },
   tokenStatus: () => [],
   tokenAttributes: () => [],
   tokenGrid: () => [],
@@ -372,6 +431,9 @@ export const mutations: Record<string, Handler> = {
 
   launchScene: ({ sceneId }) => {
     const state = demoState();
+    if (!viewerIsGm(state)) {
+      throw new GraphQLError("Only the DM (Owner or GM) may launch a scene");
+    }
     scene(state, sceneId);
     state.world.activeSceneId = sceneId;
     record(EVENT.sceneLaunched, { sceneId });
@@ -379,15 +441,24 @@ export const mutations: Record<string, Handler> = {
     return state.world;
   },
 
+  // `send_chat_message_impl`: the body's rules, a GM-only message from the
+  // GM alone, and the sender's own name as its author.
   sendChatMessage: ({ input }) => {
+    const state = demoState();
+    const body = chatBody(input.body);
+    const gmOnly = input.gmOnly ?? false;
+    if (gmOnly && !viewerIsGm(state)) {
+      throw new GraphQLError("Only the GM may send a GM-only message");
+    }
+    const author = viewerUser(state);
     const message: Row = {
       id: crypto.randomUUID(),
       worldId: input.worldId,
       sceneId: input.sceneId ?? null,
-      authorUserId: DEMO_USER.id,
-      authorLabel: "Game Master",
-      body: input.body,
-      gmOnly: input.gmOnly ?? false,
+      authorUserId: author.id,
+      authorLabel: author.username,
+      body,
+      gmOnly,
       createdAt: now(),
     };
     demoState().chat.push(message);
