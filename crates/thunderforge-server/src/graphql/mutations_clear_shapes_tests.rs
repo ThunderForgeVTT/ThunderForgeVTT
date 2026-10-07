@@ -146,3 +146,42 @@ async fn a_player_cannot_clear_and_nothing_is_deleted() {
     assert_eq!(rows(&t, t.scene), before);
     assert!(deleted_events(&t).is_empty());
 }
+
+#[tokio::test]
+async fn the_gm_clears_one_players_shapes_and_leaves_the_rest_byte_for_byte() {
+    let t = table();
+    let gm_shape = draw(&t, t.owner, false).await;
+    let a_shapes = vec![draw(&t, t.a, true).await, draw(&t, t.a, true).await];
+    let b_shape = draw(&t, t.b, true).await;
+    let kept_before: Vec<_> = rows(&t, t.scene)
+        .into_iter()
+        .filter(|row| row.0 == gm_shape || row.0 == b_shape)
+        .collect();
+
+    let cleared = data(clear(&t, t.owner, Some(vec![t.a])).await);
+    assert_eq!(cleared["clearShapes"], json!(2));
+    assert_eq!(
+        rows(&t, t.scene),
+        kept_before,
+        "SC-004: the rest are untouched"
+    );
+
+    let mut told = deleted_events(&t);
+    told.sort();
+    let mut expected = a_shapes;
+    expected.sort();
+    assert_eq!(told, expected, "an event for A's shapes only");
+}
+
+#[tokio::test]
+async fn an_empty_creator_list_clears_nothing() {
+    let t = table();
+    draw(&t, t.owner, false).await;
+    draw(&t, t.a, true).await;
+    let before = rows(&t, t.scene);
+
+    let cleared = data(clear(&t, t.owner, Some(vec![])).await);
+    assert_eq!(cleared["clearShapes"], json!(0));
+    assert_eq!(rows(&t, t.scene), before);
+    assert!(deleted_events(&t).is_empty());
+}

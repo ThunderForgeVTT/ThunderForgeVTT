@@ -2,6 +2,7 @@ import { postGraphQL } from "@/api/graphqlClient";
 import { onViewedLevel, viewedLevelId } from "@/api/viewedLevel";
 import type {
   CreateShapeInput,
+  ShapeCreator,
   ShapeRecord,
   UpdateShapeInput,
 } from "@/types/shape";
@@ -123,4 +124,24 @@ export function clearShapes(
     `,
     { sceneId, createdBy },
   ).then((data) => data.clearShapes);
+}
+
+/**
+ * Who drew on a scene, with how many shapes each, leaving out whoever runs
+ * the world. The Game Master's alone; for "Clear a player's shapes…".
+ */
+export function getShapeCreators(sceneId: string): Promise<ShapeCreator[]> {
+  return postGraphQL<{ shapeCreators: ShapeCreator[] }>(
+    `
+      query ShapeCreators($sceneId: UUID!) {
+        shapeCreators(sceneId: $sceneId) {
+          userId
+          displayName
+          isMember
+          shapeCount
+        }
+      }
+    `,
+    { sceneId },
+  ).then((data) => data.shapeCreators);
 }

@@ -333,3 +333,91 @@ test("the GM clears every drawing, and a player cannot", async ({
     await playerB.context().close();
   }
 });
+
+test("the GM clears one player's drawings, and the rest stay", async ({
+  page: gm,
+  browser,
+}) => {
+  test.setTimeout(6 * 60_000);
+
+  const worldId = await registerAndCreateWorld(
+    gm,
+    `Clear a player ${uniqueSuffix()}`,
+  );
+  const active = await gql<{ world?: { activeSceneId: string | null } }>(
+    gm,
+    `query ($id: UUID!) { world(id: $id) { activeSceneId } }`,
+    { id: worldId },
+  );
+  const [firstScene] = await sceneIds(gm, worldId);
+  const sceneId = active.world?.activeSceneId ?? firstScene;
+
+  const playerA = await inviteAndJoinAsPlayer(browser, gm, worldId, "e2eclpa");
+  const playerB = await inviteAndJoinAsPlayer(browser, gm, worldId, "e2eclpb");
+
+  try {
+    for (const page of [gm, playerA, playerB]) {
+      await page.goto(`/world/${worldId}/play`);
+      await waitForEngineReady(page);
+    }
+    const aId = await userIdOf(playerA);
+    const gmShape = await drawRect(gm, sceneId, { x: 0, y: 0, w: 40, h: 40 });
+    const aShapes = [
+      await drawRect(playerA, sceneId, { x: 80, y: 0, w: 40, h: 40 }),
+      await drawRect(playerA, sceneId, { x: 80, y: 80, w: 40, h: 40 }),
+    ];
+    const bShape = await drawRect(playerB, sceneId, {
+      x: 160,
+      y: 0,
+      w: 40,
+      h: 40,
+    });
+    for (const shapeId of [gmShape, ...aShapes, bShape]) {
+      await expect
+        .poll(() => boardHasDrawing(gm, shapeId), { timeout: 15_000 })
+        .toBe(true);
+    }
+
+    await gm.getByTestId("gm-tool-shapes").click();
+    await gm.getByTestId("shape-clear-player").click();
+    const dialog = gm.getByRole("dialog", {
+      name: /Clear a player's drawings on/,
+    });
+    const options = dialog.getByTestId("shape-clear-player-option");
+
+    await test.step("the picker lists the two players with their counts", async () => {
+      await expect(options).toHaveCount(2);
+      await expect(dialog).toContainText("2 shapes");
+      await expect(dialog).toContainText("1 shape");
+      await expect(
+        dialog.getByTestId("shape-clear-player-confirm"),
+      ).toBeDisabled();
+    });
+
+    await test.step("clearing A leaves the GM's and B's drawings", async () => {
+      await dialog.locator(`[data-user-id="${aId}"]`).click();
+      await dialog.getByTestId("shape-clear-player-confirm").click();
+      await expect(dialog).toBeHidden();
+      await expect
+        .poll(
+          async () =>
+            (await shapesOf(gm, sceneId)).map((shape) => shape.shapeId).sort(),
+          { timeout: 15_000 },
+        )
+        .toEqual([gmShape, bShape].sort());
+      for (const page of [gm, playerA, playerB]) {
+        for (const shapeId of aShapes) {
+          await expect
+            .poll(() => boardHasDrawing(page, shapeId), { timeout: 15_000 })
+            .toBe(false);
+        }
+        for (const shapeId of [gmShape, bShape]) {
+          expect(await boardHasDrawing(page, shapeId)).toBe(true);
+        }
+      }
+    });
+  } finally {
+    await playerA.context().close();
+    await playerB.context().close();
+  }
+});

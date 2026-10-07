@@ -1261,6 +1261,12 @@ type AppQueryRoot {
 	"""
 	authoringToolGrants(worldId: UUID!): [GraphQLMemberAuthoringTools!]!
 	"""
+	Each creator of a shape on the scene who is not an Owner or GM of its
+	world today, by display name. A Game Master of the scene only; anyone
+	else is told the scene was not found.
+	"""
+	shapeCreators(sceneId: UUID!): [ShapeCreator!]!
+	"""
 	Get all invites for a world (Owner/GM only)
 	"""
 	worldInvites(worldId: UUID!): [WorldInvitePayload!]!
@@ -6733,6 +6739,25 @@ enum SettingSource {
 	ENVIRONMENT
 	INSTANCE
 	DEFAULT
+}
+
+"""
+One person who drew on a scene and does not run its world.
+"""
+type ShapeCreator {
+	userId: UUID!
+	"""
+	`users.username`, as the grants card shows it.
+	"""
+	displayName: String!
+	"""
+	False once they left or were removed from the world.
+	"""
+	isMember: Boolean!
+	"""
+	Their shapes on this scene, every level.
+	"""
+	shapeCount: Int!
 }
 
 """

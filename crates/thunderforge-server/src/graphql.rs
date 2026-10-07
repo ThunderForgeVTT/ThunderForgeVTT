@@ -357,6 +357,8 @@ pub struct QueryRoot(
     queries::levels::SceneLevelQuery,
     // Spec 031: `authoringTools(worldId)` — which tools the caller may use.
     queries::AuthoringToolsQuery,
+    // Spec 082: `shapeCreators(sceneId)` — who drew on a scene, for the GM.
+    queries::shape_creators::ShapeCreatorsQuery,
     InviteQuery,
     // Spec 039: the sharing terms and their archive. On the query root because
     // every publishing path's dialog reads it, and because an operator handling

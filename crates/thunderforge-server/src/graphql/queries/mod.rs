@@ -36,6 +36,8 @@ pub mod roll;
 #[cfg(test)]
 mod roll_feed_tests;
 pub mod scene;
+// Spec 082: `shapeCreators(sceneId)` — who drew on a scene, for the GM.
+pub mod shape_creators;
 // Spec 039 US5: `myStanding`, `accountStanding`, `myNotices`.
 pub mod standing;
 pub mod token_attributes;

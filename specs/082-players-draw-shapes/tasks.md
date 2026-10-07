@@ -92,9 +92,9 @@ as named below.
 
 ## Phase 5: US4 — the GM clears one player's shapes (P2)
 
-- [ ] T028 [US4] Tests: `clearShapes` with `createdBy` (only those creators, the GM's and B's untouched, byte-for-byte for SC-004) and with `[]` (nothing, no events); `shapeCreators` lists players with counts, excludes DMs, includes a removed member (`isMember: false`), refuses a player
-- [ ] T029 [US4] `shapeCreators` in `crates/thunderforge-server/src/graphql/queries/shape_creators.rs` (R6), registered in `queries/mod.rs`; regenerate the schema
-- [ ] T030 [US4] `getShapeCreators` in `apps/web/src/api/shapes.ts`; "Clear a player's shapes…" in `ClearShapesDialog.tsx`: a checkbox per creator with count, disabled with a reason when there are none, dispatches `clear_shapes` with `createdBy`
+- [x] T028 [US4] Tests: `clearShapes` with `createdBy` (only those creators, the GM's and B's untouched, byte-for-byte for SC-004) and with `[]` (nothing, no events); `shapeCreators` lists players with counts, excludes DMs, includes a removed member (`isMember: false`), refuses a player
+- [x] T029 [US4] `shapeCreators` in `crates/thunderforge-server/src/graphql/queries/shape_creators.rs` (R6), registered in `queries/mod.rs`; regenerate the schema
+- [x] T030 [US4] `getShapeCreators` in `apps/web/src/api/shapes.ts`; "Clear a player's shapes…" in `ClearShapesDialog.tsx`: a checkbox per creator with count, disabled with a reason when there are none, dispatches `clear_shapes` with `createdBy`
 - [ ] T031 [US4] E2E: the GM clears player A only; the GM's and B's shapes remain
 
 ---

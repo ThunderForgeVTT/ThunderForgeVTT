@@ -8,7 +8,10 @@ import { getCameraState, setActiveShapeTool } from "@/engine/bevy";
 import { screenToWorld } from "@/engine/bevy/screenToWorld";
 import type { WorldStore } from "@/engine/world/store";
 import type { ShapeKind, WorldShape } from "@/engine/world/types";
-import { ClearShapesDialog } from "./ClearShapesDialog";
+import {
+  ClearPlayerShapesDialog,
+  ClearShapesDialog,
+} from "./ClearShapesDialog";
 
 export interface ShapeToolProps {
   worldStore: WorldStore;
@@ -384,11 +387,18 @@ export function ShapeTool({
       ) : null}
 
       {isGm && sceneId ? (
-        <ClearShapesDialog
-          worldStore={worldStore}
-          sceneId={sceneId}
-          sceneName={sceneName ?? "this scene"}
-        />
+        <div className="flex flex-col gap-2">
+          <ClearPlayerShapesDialog
+            worldStore={worldStore}
+            sceneId={sceneId}
+            sceneName={sceneName ?? "this scene"}
+          />
+          <ClearShapesDialog
+            worldStore={worldStore}
+            sceneId={sceneId}
+            sceneName={sceneName ?? "this scene"}
+          />
+        </div>
       ) : null}
     </div>
   );
