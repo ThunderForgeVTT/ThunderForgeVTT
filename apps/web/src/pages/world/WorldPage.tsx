@@ -191,6 +191,7 @@ import { HelpPanel } from "@/components/world/PlayDock/HelpPanel";
 import type { CanvasImageAsset } from "@/api/assets";
 import { runsTheWorld, type WorldRecord } from "@/types/world";
 import type { SceneRecord } from "@/types/scene";
+import { appHref } from "@/lib/appHref";
 
 export const worldPageSeo: SeoConfig = {
   title: "World workspace",
@@ -2262,7 +2263,7 @@ export default function WorldPage() {
     () =>
       onOpenLore((event) => {
         window.open(
-          `/world/${id}/lore/${event.entryId}`,
+          appHref(`/world/${id}/lore/${event.entryId}`),
           "_blank",
           "noopener,noreferrer",
         );

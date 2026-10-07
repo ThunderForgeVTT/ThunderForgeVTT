@@ -3,6 +3,7 @@ import { onPickUpItem, type PickUpItemEvent } from "@/engine/bevy";
 import { isAlreadyTaken, pickUpPlacedItem } from "@/api/inventory";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
+import { appHref } from "@/lib/appHref";
 
 /**
  * What happens when somebody clicks a thing lying on the floor.
@@ -89,7 +90,7 @@ export function PlacedItemPrompt({ worldId, actorId }: PlacedItemPromptProps) {
 
   const handleView = () => {
     window.open(
-      `/world/${worldId}/item/${pending.itemId}/view`,
+      appHref(`/world/${worldId}/item/${pending.itemId}/view`),
       "_blank",
       "noopener,noreferrer",
     );

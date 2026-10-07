@@ -21,6 +21,7 @@ import type { WorldActorRecord } from "@/types/actor";
 import type { TokenRecord } from "@/types/token";
 import { InPaneCharacterSheet } from "./InPaneCharacterSheet";
 import { LookAtButton } from "./LookAtButton";
+import { appHref } from "@/lib/appHref";
 
 export interface ActorsPanelProps {
   worldId: string;
@@ -457,7 +458,7 @@ export function ActorsPanel({
           </button>
         ) : (
           <a
-            href={`/world/${worldId}/actor/${actor.id}/view`}
+            href={appHref(`/world/${worldId}/actor/${actor.id}/view`)}
             target="_blank"
             rel="noreferrer"
             data-testid={`actor-view-${actor.id}`}
@@ -582,7 +583,7 @@ export function ActorsPanel({
                   (portrait and token); the compendium row sets a portrait in
                   place for whoever is already standing in the list. */}
               <a
-                href={`/world/${worldId}/actor/${carrying.id}/edit`}
+                href={appHref(`/world/${worldId}/actor/${carrying.id}/edit`)}
                 target="_blank"
                 rel="noreferrer"
                 className="underline"
