@@ -104,6 +104,7 @@ pub mod qr;
 /// stored flag.
 pub mod readiness;
 pub mod repo_host;
+pub mod rolls;
 pub mod scene_fingerprint;
 pub mod scene_levels;
 pub mod schema;

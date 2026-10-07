@@ -311,6 +311,9 @@ pub async fn roll_check_impl<R: rand::Rng>(
             world_id,
             formula: check.formula.clone(),
             bindings: Some(bindings),
+            // Spec 081: a check is rolled for the table, by its name.
+            visibility: None,
+            label: Some(check.label.clone()),
         },
         rng,
         move |conn, resolution| {

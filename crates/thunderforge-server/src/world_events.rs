@@ -256,6 +256,41 @@ pub const EVENT_CODE_TOKEN_TRAVELLED: i32 = 34;
 ///
 /// Payload: `{"key": <setting id>}`.
 pub const EVENT_CODE_WORLD_SYSTEM_SETTING_CHANGED: i32 = 35;
+/// Spec 081: a roll was made. Payload: [`roll_event_payload`], the roll's id
+/// and its visibility and nothing else (FR-002) — every member's
+/// subscription sees every event, so the dice are fetched per viewer from
+/// `worldRoll`. A `gm_only` one is not delivered to players at all (FR-005a,
+/// `graphql::subscriptions`).
+pub const EVENT_CODE_ROLL_MADE: i32 = 36;
+/// Spec 081: the GM showed a hidden roll to the table. Same payload, with the
+/// roll's original visibility; every member refetches and animates it.
+pub const EVENT_CODE_ROLL_REVEALED: i32 = 37;
+
+/// The whole payload of a roll event (FR-002).
+pub fn roll_event_payload(
+    roll_id: Uuid,
+    visibility: crate::rolls::visibility::Visibility,
+) -> serde_json::Value {
+    serde_json::json!({ "rollId": roll_id, "visibility": visibility.as_str() })
+}
+
+/// Whether a roll event may go to a subscriber who does or does not see behind
+/// the screen. Every other event goes to everyone.
+pub fn roll_event_reaches(
+    event_code: i32,
+    payload: Option<&serde_json::Value>,
+    is_gm_or_admin: bool,
+) -> bool {
+    if event_code != EVENT_CODE_ROLL_MADE {
+        return true;
+    }
+    let visibility = payload
+        .and_then(|p| p.get("visibility"))
+        .and_then(|v| v.as_str())
+        .map(crate::rolls::visibility::Visibility::parse)
+        .unwrap_or(crate::rolls::visibility::Visibility::GmOnly);
+    crate::rolls::visibility::event_reaches(visibility, is_gm_or_admin)
+}
 
 /// Announce [`EVENT_CODE_ACTOR_ACCESS_CHANGED`] for one character.
 ///
@@ -371,4 +406,51 @@ pub fn world_id_for_scene(conn: &mut PgConnection, scene_id: Uuid) -> GraphQLRes
         .select(scenes::world_id)
         .first::<Uuid>(conn)
         .map_err(|e| Error::new(format!("Failed to resolve scene's world: {}", e)))
+}
+
+#[cfg(test)]
+mod roll_event_tests {
+    use super::*;
+    use crate::rolls::visibility::Visibility;
+
+    /// Spec 081 T005: a roll event carries the roll's id and visibility and
+    /// nothing else, so nothing about the dice can ride along to a player.
+    #[test]
+    fn a_roll_event_payload_is_exactly_its_id_and_visibility() {
+        let id = Uuid::now_v7();
+        let payload = roll_event_payload(id, Visibility::GmEyes);
+        let mut keys: Vec<&str> = payload
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        keys.sort();
+        assert_eq!(keys, ["rollId", "visibility"]);
+        assert_eq!(payload["rollId"], id.to_string());
+        assert_eq!(payload["visibility"], "gm_eyes");
+    }
+
+    #[test]
+    fn only_a_gm_only_roll_made_is_withheld() {
+        let hidden = roll_event_payload(Uuid::now_v7(), Visibility::GmOnly);
+        assert!(!roll_event_reaches(
+            EVENT_CODE_ROLL_MADE,
+            Some(&hidden),
+            false
+        ));
+        assert!(roll_event_reaches(
+            EVENT_CODE_ROLL_MADE,
+            Some(&hidden),
+            true
+        ));
+        assert!(roll_event_reaches(
+            EVENT_CODE_ROLL_REVEALED,
+            Some(&hidden),
+            false
+        ));
+        assert!(roll_event_reaches(29, None, false));
+        // A roll event without a readable visibility is treated as hidden.
+        assert!(!roll_event_reaches(EVENT_CODE_ROLL_MADE, None, false));
+    }
 }

@@ -254,6 +254,8 @@ pub async fn roll_skill_impl<R: rand::Rng>(
             world_id,
             formula: format!("{}d6", gathered.level),
             bindings: None,
+            visibility: None,
+            label: None,
         },
         rng,
         move |conn, resolution| {

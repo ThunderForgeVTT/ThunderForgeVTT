@@ -905,6 +905,10 @@ type AppMutationRoot {
 	acknowledgeOperatorStatement(attestation: AttestationInput!): OperatorAcknowledgementState!
 	rollDice(input: RollDiceInput!): GraphQLRollResolution!
 	"""
+	Spec 081: show a hidden roll to the table. GM or admin; idempotent.
+	"""
+	revealRoll(worldId: UUID!, rollId: UUID!): WorldRoll!
+	"""
 	Roll a check the world's system declares, against one actor's values.
 	
 	Resolved server-side and recorded exactly as `rollDice` is. There is
@@ -1672,6 +1676,17 @@ type AppQueryRoot {
 	moderationHistoryForAccount(accountId: UUID!): [GraphQLModerationCase!]!
 	repeatInfringerFlags: [UUID!]!
 	worldRollRecords(worldId: UUID!, limit: Int): [GraphQLRollRecord!]!
+	"""
+	Spec 081: one roll as the caller may see it; null when it does not
+	exist or is hidden from the caller.
+	"""
+	worldRoll(worldId: UUID!, rollId: UUID!): WorldRollEntry
+	"""
+	Spec 081: the table's rolls as the caller may see them, newest first,
+	before `before` (an RFC 3339 time, exclusive). Any member. `limit`
+	1–100, default 50.
+	"""
+	worldRolls(worldId: UUID!, before: String, limit: Int): [WorldRollEntry!]!
 	validateDiceFormula(formula: String!): Boolean!
 	myActorClaim(worldId: UUID!): GraphQLActorClaim
 	availableActors(worldId: UUID!): [GraphQLWorldActor!]!
@@ -5858,6 +5873,17 @@ type MailAvailability {
 	limitedFeatures: [String!]!
 }
 
+"""
+Another player's roll for the GM's eyes: that it happened, by whom and
+when, and nothing of what it was.
+"""
+type MaskedRoll {
+	id: UUID!
+	rollerName: String!
+	createdAt: String!
+	visibility: RollVisibility!
+}
+
 enum ModerationActionType {
 	NOTICE_RECEIVED
 	NOTICE_REJECTED_INCOMPLETE
@@ -6451,6 +6477,15 @@ input RollDiceInput {
 	worldId: UUID!
 	formula: String!
 	bindings: [PlaceholderBindingInput!]
+	"""
+	Spec 081: who sees it. `EVERYONE` when not given; `GM_EYES` is a
+	player's, `GM_ONLY` the GM's (FR-007).
+	"""
+	visibility: RollVisibility
+	"""
+	Spec 081: what it was for, at most 80 characters.
+	"""
+	label: String
 }
 
 input RollForShoesRollSkillInput {
@@ -6562,6 +6597,15 @@ enum RollVerdict {
 	TIE
 	CRITICAL_SUCCESS
 	CRITICAL_FAILURE
+}
+
+"""
+Who a roll is for.
+"""
+enum RollVisibility {
+	EVERYONE
+	GM_EYES
+	GM_ONLY
 }
 
 """
@@ -7719,6 +7763,30 @@ type WorldPreviewPayload {
 	name: String!
 	description: String
 }
+
+"""
+A roll, whole.
+"""
+type WorldRoll {
+	id: UUID!
+	rollerId: UUID!
+	rollerName: String!
+	"""
+	What it was for: "Stealth", "Longsword".
+	"""
+	label: String
+	formula: String!
+	resolution: GraphQLRollResolution!
+	visibility: RollVisibility!
+	createdAt: String!
+	revealedAt: String
+	revealedByName: String
+}
+
+"""
+A roll as the caller may see it.
+"""
+union WorldRollEntry = WorldRoll | MaskedRoll
 
 """
 A world's figures, for the person who asked.

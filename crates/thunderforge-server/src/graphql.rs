@@ -302,6 +302,11 @@ pub use subscriptions::*;
 #[path = "graphql/play_pause_stream_tests.rs"]
 mod play_pause_stream_tests;
 
+/// Spec 081 T011: a GM only roll never reaches a player's live stream.
+#[cfg(test)]
+#[path = "graphql/roll_stream_tests.rs"]
+mod roll_stream_tests;
+
 /// Spec 051 T027: every root mutation and subscription is gated against a
 /// paused world, or says why it is not.
 #[cfg(test)]

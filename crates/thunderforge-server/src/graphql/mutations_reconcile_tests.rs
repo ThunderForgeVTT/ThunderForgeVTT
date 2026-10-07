@@ -121,6 +121,8 @@ fn insert_roll_record(conn: &mut PgConnection, world_id: Uuid, by: Uuid, value: 
             result_kind: "total".to_string(),
             result_value: value,
             outcome: None,
+            visibility: "everyone".to_string(),
+            label: None,
         })
         .returning(world_roll_records::id)
         .get_result::<Uuid>(conn)

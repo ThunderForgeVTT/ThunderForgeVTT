@@ -229,6 +229,11 @@ pub use types_moderation::*;
 pub mod types_dice;
 pub use types_dice::*;
 
+// Spec 081: a roll as one member of the table may see it.
+#[path = "types_rolls.rs"]
+pub mod types_rolls;
+pub use types_rolls::*;
+
 #[path = "types_abilities.rs"]
 pub mod types_abilities;
 pub use types_abilities::*;

@@ -26,8 +26,8 @@ type WorldRoll {
   "The same resolution `rollDice` answers: dice, kept dice, total or successes."
   resolution: GraphQLRollResolution!
   visibility: RollVisibility!
-  createdAt: DateTime!
-  revealedAt: DateTime
+  createdAt: String! # RFC 3339, like RollRecord.createdAt
+  revealedAt: String # RFC 3339
   revealedByName: String
 }
 
@@ -35,7 +35,7 @@ type WorldRoll {
 type MaskedRoll {
   id: UUID!
   rollerName: String!
-  createdAt: DateTime!
+  createdAt: String! # RFC 3339, like RollRecord.createdAt
   visibility: RollVisibility!
 }
 
@@ -45,7 +45,7 @@ type Query {
   "One roll as the caller may see it. Null if it does not exist or is hidden from the caller."
   worldRoll(worldId: UUID!, rollId: UUID!): WorldRollEntry
   "Newest first, before `before` (exclusive). Any member. `limit` 1–100, default 50."
-  worldRolls(worldId: UUID!, before: DateTime, limit: Int): [WorldRollEntry!]!
+  worldRolls(worldId: UUID!, before: String, limit: Int): [WorldRollEntry!]!
 }
 
 type Mutation {

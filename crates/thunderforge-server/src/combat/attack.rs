@@ -52,13 +52,18 @@ use crate::combat::reach::{Measured, Reach, SceneMeasure};
 use crate::combat::records::*;
 use crate::combat::turn::{TurnCheck, running_combat, turn_check};
 use crate::combat::weapon::{Part, find_weapon, parts_of};
+use crate::graphql::mutations_roll::MAX_ROLL_LABEL;
 use crate::models::NewRollRecord;
 use crate::play_pause::gate::{GateError, refuse_if_paused};
+use crate::rolls::visibility::Visibility;
 use crate::schema::{
     scenes, tokens, world_actor_system_data, world_actors, world_attacks, world_offers,
     world_roll_records, worlds,
 };
-use crate::world_events::{EVENT_CODE_ATTACK_MADE, EVENT_CODE_OFFER_CHANGED, record_world_event};
+use crate::world_events::{
+    EVENT_CODE_ATTACK_MADE, EVENT_CODE_OFFER_CHANGED, EVENT_CODE_ROLL_MADE, record_world_event,
+    roll_event_payload,
+};
 
 /// What an attack costs is the shared rules' (`thunderforge_combat::attack`,
 /// ADR-113), as are what a hit is, what a damage roll offers, and when it is
@@ -237,12 +242,14 @@ pub fn defence_of(
 
 /// Roll a formula and keep it as a roll record, inside the caller's
 /// transaction. The same record `rollDice` writes (ADR-044): an attack's rolls
-/// are ordinary rolls, linked from the attack.
+/// are ordinary rolls, linked from the attack. Spec 081: and like every roll,
+/// the table hears of it — in the open, since attacks stay public.
 fn roll_and_record<R: Rng>(
     conn: &mut PgConnection,
     world_id: Uuid,
     user_id: Uuid,
     source: &str,
+    label: &str,
     bindings: &PlaceholderBindings,
     rng: &mut R,
 ) -> Result<(Uuid, RollResolution, f64), FightRefusal> {
@@ -267,9 +274,19 @@ fn roll_and_record<R: Rng>(
             result_kind: kind.to_string(),
             result_value: value,
             outcome: None,
+            visibility: Visibility::Everyone.as_str().to_string(),
+            label: Some(label.chars().take(MAX_ROLL_LABEL).collect()),
         })
         .returning(world_roll_records::id)
         .get_result::<Uuid>(conn)?;
+    record_world_event(
+        conn,
+        world_id,
+        EVENT_CODE_ROLL_MADE,
+        Some(roll_event_payload(id, Visibility::Everyone)),
+        user_id,
+    )
+    .map_err(|_| FightRefusal::Failed("Failed to record the roll".to_string()))?;
     Ok((id, resolution, value))
 }
 
@@ -621,7 +638,7 @@ pub(crate) fn record_attack<R: Rng>(
         for (index, part) in parts.iter().enumerate() {
             let target = target_for(index);
             let (to_hit_roll_id, _, total) =
-                roll_and_record(conn, world_id, user_id, &part.to_hit, &bindings, rng)?;
+                roll_and_record(conn, world_id, user_id, &part.to_hit, &part.name, &bindings, rng)?;
 
             let defence = match target {
                 Some(target) => defence_of(conn, systems_dir, world_system.as_deref(), target)?,
@@ -633,7 +650,13 @@ pub(crate) fn record_attack<R: Rng>(
 
             let damage = match damage_source(&part.damage) {
                 Some(source) if outcome == OUTCOME_HIT => Some(roll_and_record(
-                    conn, world_id, user_id, &source, &bindings, rng,
+                    conn,
+                    world_id,
+                    user_id,
+                    &source,
+                    &format!("{} damage", part.name),
+                    &bindings,
+                    rng,
                 )?),
                 _ => None,
             };

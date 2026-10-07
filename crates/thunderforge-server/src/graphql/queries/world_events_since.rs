@@ -97,11 +97,10 @@ impl WorldEventsSinceQuery {
         world_id: Uuid,
         after_id: i64,
     ) -> async_graphql::Result<GraphQLWorldEventCatchUp> {
-        use crate::schema::world_events;
-
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         let user_id = auth_user.user_id;
+        let is_admin = auth_user.is_admin;
 
         let mut conn = state
             .db_pool
@@ -117,25 +116,9 @@ impl WorldEventsSinceQuery {
                 return Ok(Err(refusal));
             }
 
-            // One more than the limit, so "there is more" is answered by the
-            // same query rather than by a second count.
-            let mut rows = world_events::table
-                .filter(world_events::world_id.eq(world_id))
-                .filter(world_events::id.gt(after_id))
-                .order(world_events::id.asc())
-                .limit(CATCH_UP_LIMIT + 1)
-                .load::<WorldEvent>(&mut conn)
-                .map_err(|e| WorldMembershipError::Database(e.to_string()))?;
-
-            let truncated = rows.len() as i64 > CATCH_UP_LIMIT;
-            rows.truncate(CATCH_UP_LIMIT as usize);
-
-            let latest_id = world_events::table
-                .filter(world_events::world_id.eq(world_id))
-                .select(diesel::dsl::max(world_events::id))
-                .first::<Option<i64>>(&mut conn)
-                .map_err(|e| WorldMembershipError::Database(e.to_string()))?
-                .unwrap_or(0);
+            let (rows, truncated, latest_id) =
+                catch_up(&mut conn, user_id, is_admin, world_id, after_id)
+                    .map_err(|e| WorldMembershipError::Database(e.to_string()))?;
 
             Ok::<_, WorldMembershipError>(Ok((rows, truncated, latest_id)))
         })
@@ -158,6 +141,57 @@ impl WorldEventsSinceQuery {
             latest_id,
         })
     }
+}
+
+/// What a caller already found to be a member is owed after `after_id`: the
+/// events, whether there were more than one catch-up returns, and the newest
+/// id it may see.
+///
+/// Spec 081 FR-005a: a player catches up on everything but a GM only roll,
+/// and the cursor it is handed is the newest event it may see, so a hidden
+/// one cannot show up as a gap at the end.
+pub(crate) fn catch_up(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    is_admin: bool,
+    world_id: Uuid,
+    after_id: i64,
+) -> QueryResult<(Vec<WorldEvent>, bool, i64)> {
+    use crate::schema::world_events;
+
+    let withheld =
+        !crate::auth::world_membership::actor_in_world(conn, user_id, is_admin, world_id)
+            .runs_the_world();
+    let visible = move || {
+        let query = world_events::table
+            .filter(world_events::world_id.eq(world_id))
+            .into_boxed();
+        if withheld {
+            query.filter(diesel::dsl::sql::<diesel::sql_types::Bool>(&format!(
+                "NOT (event_code = {} AND token_event->>'visibility' = 'gm_only')",
+                crate::world_events::EVENT_CODE_ROLL_MADE
+            )))
+        } else {
+            query
+        }
+    };
+
+    // One more than the limit, so "there is more" is answered by the same
+    // query rather than by a second count.
+    let mut rows = visible()
+        .filter(world_events::id.gt(after_id))
+        .order(world_events::id.asc())
+        .limit(CATCH_UP_LIMIT + 1)
+        .load::<WorldEvent>(conn)?;
+
+    let truncated = rows.len() as i64 > CATCH_UP_LIMIT;
+    rows.truncate(CATCH_UP_LIMIT as usize);
+
+    let latest_id = visible()
+        .select(diesel::dsl::max(world_events::id))
+        .first::<Option<i64>>(conn)?
+        .unwrap_or(0);
+    Ok((rows, truncated, latest_id))
 }
 
 #[cfg(test)]
@@ -347,5 +381,54 @@ mod tests {
             .first::<Option<i64>>(conn)
             .unwrap()
             .unwrap_or(0)
+    }
+
+    /// Spec 081 T013: a GM only roll is caught up by the GM and not by a
+    /// player, and the player's cursor stops at the newest event it may see.
+    #[tokio::test]
+    async fn a_gm_only_roll_is_caught_up_by_the_gm_alone() {
+        use crate::rolls::visibility::Visibility;
+        use crate::world_events::{EVENT_CODE_ROLL_MADE, roll_event_payload};
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner = insert_test_user(&mut conn);
+        let player = insert_test_user(&mut conn);
+        let world = insert_test_world(&mut conn, owner);
+        insert_test_world_member(&mut conn, world, player, "Player");
+
+        let start = world_high_water(&mut conn, world);
+        let roll = |conn: &mut diesel::PgConnection, v: Visibility| {
+            record_world_event(
+                conn,
+                world,
+                EVENT_CODE_ROLL_MADE,
+                Some(roll_event_payload(Uuid::now_v7(), v)),
+                owner,
+            )
+            .unwrap()
+        };
+        let open = roll(&mut conn, Visibility::Everyone);
+        let eyes = roll(&mut conn, Visibility::GmEyes);
+        let hidden = roll(&mut conn, Visibility::GmOnly);
+
+        let ids = |rows: Vec<WorldEvent>| rows.into_iter().map(|e| e.id).collect::<Vec<_>>();
+
+        let (rows, _, latest) = catch_up(&mut conn, player, false, world, start).unwrap();
+        assert_eq!(
+            ids(rows),
+            vec![open, eyes],
+            "a player misses the GM only roll"
+        );
+        assert_eq!(latest, eyes, "and its cursor never points past what it saw");
+
+        let (rows, _, latest) = catch_up(&mut conn, owner, false, world, start).unwrap();
+        assert_eq!(ids(rows), vec![open, eyes, hidden]);
+        assert_eq!(latest, hidden);
+
+        // An operator who is not at the table still sees everything.
+        let admin = insert_test_user(&mut conn);
+        let (rows, _, _) = catch_up(&mut conn, admin, true, world, start).unwrap();
+        assert_eq!(ids(rows), vec![open, eyes, hidden]);
     }
 }

@@ -1793,6 +1793,13 @@ pub struct RollRecord {
     pub created_at: chrono::DateTime<chrono::Utc>,
     /// How the system's adjudicator judged it; `None` when nothing did.
     pub outcome: Option<serde_json::Value>,
+    /// Spec 081: `everyone`, `gm_eyes` or `gm_only` (`rolls::visibility`).
+    pub visibility: String,
+    /// Spec 081: what the roll was for ("Stealth", "Longsword").
+    pub label: Option<String>,
+    /// Spec 081: when the GM showed a hidden roll to the table.
+    pub revealed_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub revealed_by: Option<uuid::Uuid>,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
@@ -1806,6 +1813,8 @@ pub struct NewRollRecord {
     pub result_kind: String,
     pub result_value: f64,
     pub outcome: Option<serde_json::Value>,
+    pub visibility: String,
+    pub label: Option<String>,
 }
 
 // ============================================================================

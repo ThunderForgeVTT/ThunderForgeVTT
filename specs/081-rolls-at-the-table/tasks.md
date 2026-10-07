@@ -17,8 +17,8 @@ they prove inside each phase.
 
 ## Phase 1: Setup
 
-- [ ] T001 Migration `crates/thunderforge-server/migrations/2026-10-07-100000-0000_roll_visibility/{up,down}.sql`: `visibility` text not null default `'everyone'` with a check on the three values, `label` text with a length check of 80, `revealed_at` timestamptz, `revealed_by` uuid references `users(id)` on delete set null, the reveal check and the `(world_id, created_at DESC)` index if absent (data-model.md); run it; update `src/schema.rs`
-- [ ] T002 Add the four fields to `RollRecord` and `NewRollRecord` in `crates/thunderforge-server/src/models.rs`; fill `visibility: "everyone"`, `label: None` at every existing insert (`mutations_roll.rs`, `combat/attack.rs`, `mutations_reconcile_tests.rs`); `cargo check -p thunderforge-server`
+- [x] T001 Migration `crates/thunderforge-server/migrations/2026-10-07-100000-0000_roll_visibility/{up,down}.sql`: `visibility` text not null default `'everyone'` with a check on the three values, `label` text with a length check of 80, `revealed_at` timestamptz, `revealed_by` uuid references `users(id)` on delete set null, the reveal check and the `(world_id, created_at DESC)` index if absent (data-model.md); run it; update `src/schema.rs`
+- [x] T002 Add the four fields to `RollRecord` and `NewRollRecord` in `crates/thunderforge-server/src/models.rs`; fill `visibility: "everyone"`, `label: None` at every existing insert (`mutations_roll.rs`, `combat/attack.rs`, `mutations_reconcile_tests.rs`); `cargo check -p thunderforge-server`
 
 ---
 
@@ -26,29 +26,29 @@ they prove inside each phase.
 
 ### One visibility rule
 
-- [ ] T003 Write `crates/thunderforge-server/src/rolls/visibility_tests.rs`: `may_roll` for each visibility × player / GM / admin (FR-007 table); `view_of` for each visibility × roller / GM / admin / other player, before and after a reveal (data-model.md table)
-- [ ] T004 Create `crates/thunderforge-server/src/rolls/{mod.rs,visibility.rs}`: `RollVisibility` (`everyone`, `gm_eyes`, `gm_only`, parse/as_str), `Viewer { user_id, is_gm, is_admin }`, `may_roll`, `view_of -> RollView { Whole, Masked, Hidden }` (research R2); register the module in `src/lib.rs`
+- [x] T003 Write `crates/thunderforge-server/src/rolls/visibility_tests.rs`: `may_roll` for each visibility × player / GM / admin (FR-007 table); `view_of` for each visibility × roller / GM / admin / other player, before and after a reveal (data-model.md table)
+- [x] T004 Create `crates/thunderforge-server/src/rolls/{mod.rs,visibility.rs}`: `RollVisibility` (`everyone`, `gm_eyes`, `gm_only`, parse/as_str), `Viewer { user_id, is_gm, is_admin }`, `may_roll`, `view_of -> RollView { Whole, Masked, Hidden }` (research R2); register the module in `src/lib.rs`
 
 ### Events
 
-- [ ] T005 Add `EVENT_CODE_ROLL_MADE = 36` and `EVENT_CODE_ROLL_REVEALED = 37` to `crates/thunderforge-server/src/world_events.rs`, with a `roll_event_payload(roll_id, visibility) -> serde_json::Value` that builds exactly `{rollId, visibility}`; a test asserts the key set (contracts/graphql-rolls.md)
+- [x] T005 Add `EVENT_CODE_ROLL_MADE = 36` and `EVENT_CODE_ROLL_REVEALED = 37` to `crates/thunderforge-server/src/world_events.rs`, with a `roll_event_payload(roll_id, visibility) -> serde_json::Value` that builds exactly `{rollId, visibility}`; a test asserts the key set (contracts/graphql-rolls.md)
 
 ### Fetching a roll
 
-- [ ] T006 Write `crates/thunderforge-server/src/graphql/queries/roll_feed_tests.rs`: `worldRoll` for each visibility fetched as the roller, the GM, an admin and another player (whole / masked / null); a non-member gets nothing; `worldRolls` pages newest first with `before` and `limit`, applies the same rule and omits hidden rolls without leaving a hole in the page size
-- [ ] T007 Create `crates/thunderforge-server/src/graphql/types_rolls.rs`: `RollVisibility` GraphQL enum, `WorldRoll`, `MaskedRoll` (built by a constructor taking only id, roller name, created_at and visibility — research R5), union `WorldRollEntry`
-- [ ] T008 Add `world_roll` and `world_rolls` to `crates/thunderforge-server/src/graphql/queries/roll.rs` (member check, `view_of`, roller and revealer names joined from `users`); register them; regenerate `apps/thunderforge/schema.graphql` with `thunderforge-schema`
+- [x] T006 Write `crates/thunderforge-server/src/graphql/queries/roll_feed_tests.rs`: `worldRoll` for each visibility fetched as the roller, the GM, an admin and another player (whole / masked / null); a non-member gets nothing; `worldRolls` pages newest first with `before` and `limit`, applies the same rule and omits hidden rolls without leaving a hole in the page size
+- [x] T007 Create `crates/thunderforge-server/src/graphql/types_rolls.rs`: `RollVisibility` GraphQL enum, `WorldRoll`, `MaskedRoll` (built by a constructor taking only id, roller name, created_at and visibility — research R5), union `WorldRollEntry`
+- [x] T008 Add `world_roll` and `world_rolls` to `crates/thunderforge-server/src/graphql/queries/roll.rs` (member check, `view_of`, roller and revealer names joined from `users`); register them; regenerate `apps/thunderforge/schema.graphql` with `thunderforge-schema`
 
 ### Publishing a roll
 
-- [ ] T009 Extend `crates/thunderforge-server/src/graphql/mutations_roll_tests.rs` (or create it): `rollDice` records one code-36 event in the same transaction with the payload of T005; a refused roll (bad formula, refused visibility, long label) records no row and no event; `visibility` defaults to `everyone`
-- [ ] T010 `crates/thunderforge-server/src/graphql/mutations_roll.rs`: `RollDiceInput` gains `visibility` and `label`; `roll_dice_impl` checks `may_roll` against the caller's role, stores both, and calls `record_world_event` with code 36 inside the insert's transaction; `rollCheck` passes `everyone` and the check's name as label (`mutations_roll_check.rs`)
+- [x] T009 Extend `crates/thunderforge-server/src/graphql/mutations_roll_tests.rs` (or create it): `rollDice` records one code-36 event in the same transaction with the payload of T005; a refused roll (bad formula, refused visibility, long label) records no row and no event; `visibility` defaults to `everyone`
+- [x] T010 `crates/thunderforge-server/src/graphql/mutations_roll.rs`: `RollDiceInput` gains `visibility` and `label`; `roll_dice_impl` checks `may_roll` against the caller's role, stores both, and calls `record_world_event` with code 36 inside the insert's transaction; `rollCheck` passes `everyone` and the check's name as label (`mutations_roll_check.rs`)
 
 ### The stream does not carry a GM only roll to a player
 
-- [ ] T011 Write tests in `crates/thunderforge-server/src/graphql/subscriptions_tests.rs` (or beside the existing subscription tests): a player's `worldEventsCreated` receives code 36 for `everyone` and `gm_eyes` and nothing for `gm_only`; the GM's receives all three; every other event code passes untouched
-- [ ] T012 Filter in `world_events_created` (`crates/thunderforge-server/src/graphql/subscriptions.rs`): for code 36 with payload visibility `gm_only`, ask `is_dm_of_world` (or admin) when the event arrives and skip it for anyone else (research R1)
-- [ ] T013 Same rule in `crates/thunderforge-server/src/graphql/queries/world_events_since.rs` as a SQL condition; extend its tests with a `gm_only` roll event caught up by a player (absent) and by the GM (present)
+- [x] T011 Write tests in `crates/thunderforge-server/src/graphql/subscriptions_tests.rs` (or beside the existing subscription tests): a player's `worldEventsCreated` receives code 36 for `everyone` and `gm_eyes` and nothing for `gm_only`; the GM's receives all three; every other event code passes untouched
+- [x] T012 Filter in `world_events_created` (`crates/thunderforge-server/src/graphql/subscriptions.rs`): for code 36 with payload visibility `gm_only`, ask `is_dm_of_world` (or admin) when the event arrives and skip it for anyone else (research R1)
+- [x] T013 Same rule in `crates/thunderforge-server/src/graphql/queries/world_events_since.rs` as a SQL condition; extend its tests with a `gm_only` roll event caught up by a player (absent) and by the GM (present)
 
 ### The client's half
 
@@ -106,8 +106,8 @@ they prove inside each phase.
 
 ## Phase 7: US5 — The GM reveals (P2)
 
-- [ ] T033 [US5] Server tests in `mutations_roll_tests.rs`: `revealRoll` by the GM and by an admin sets `revealed_at`/`revealed_by` and records one code-37 event; a second reveal and a reveal of an `everyone` roll record nothing (FR-010); a player's reveal is refused; dice, total and `created_at` unchanged (FR-011)
-- [ ] T034 [US5] `revealRoll` in `crates/thunderforge-server/src/graphql/mutations_roll.rs`; regenerate the schema
+- [x] T033 [US5] Server tests in `mutations_roll_tests.rs`: `revealRoll` by the GM and by an admin sets `revealed_at`/`revealed_by` and records one code-37 event; a second reveal and a reveal of an `everyone` roll record nothing (FR-010); a player's reveal is refused; dice, total and `created_at` unchanged (FR-011)
+- [x] T034 [US5] `revealRoll` in `crates/thunderforge-server/src/graphql/mutations_roll.rs`; regenerate the schema
 - [ ] T035 [US5] A "Reveal" button on the GM's `gm_eyes` and `gm_only` entries in `ChatPanel.tsx`; a revealed entry stays at its time and reads "revealed by <GM>"
 - [ ] T036 [US5] E2E `apps/web/e2e/rolls-reveal.spec.ts`: a `gm_eyes` and a `gm_only` roll revealed; every member's feed shows the whole roll and every board animates within 1 s (SC-004); a second reveal sends no frame to the other contexts
 

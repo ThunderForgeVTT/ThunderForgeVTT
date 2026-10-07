@@ -160,6 +160,11 @@ impl SubscriptionRoot {
         // with that session rather than outliving it. Read here, before the
         // stream is built, because `ctx` does not survive into it.
         let session_id = authenticated_user(ctx).ok().map(|user| user.session_id);
+        // Spec 081 FR-005a: who is watching, for the one event a player may
+        // not receive. Read here for the same reason as the session.
+        let watcher = authenticated_user(ctx)
+            .ok()
+            .map(|user| (user.user_id, user.is_admin));
 
         if let Some(rx) = rx_opt {
             // Success case: stream this world's channel. The id is no longer
@@ -227,6 +232,39 @@ impl SubscriptionRoot {
                         }
                     }
                 });
+            // Spec 081 FR-005a: a GM only roll does not reach a player, not
+            // even as an id. Whether this watcher runs the world is asked when
+            // such an event arrives rather than once at subscribe time, so a GM
+            // demoted mid-session stops receiving them; every other event
+            // passes without a query (research R1).
+            let rolls_state = app_state.clone();
+            let stream = Box::pin(futures_util::StreamExt::filter_map(stream, move |item| {
+                let state = rolls_state.clone();
+                async move {
+                    let withheld = match &item {
+                        Ok(event) => !crate::world_events::roll_event_reaches(
+                            event.event_code,
+                            event.token_event.as_ref().map(|json| &json.0),
+                            false,
+                        ),
+                        Err(_) => false,
+                    };
+                    if !withheld {
+                        return Some(item);
+                    }
+                    let sees = match (state, watcher) {
+                        (Some(state), Some((user_id, is_admin))) => {
+                            crate::auth::world_membership::is_dm_of_world(
+                                &state, user_id, is_admin, world_uuid,
+                            )
+                            .await
+                            .unwrap_or(false)
+                        }
+                        _ => false,
+                    };
+                    sees.then_some(item)
+                }
+            }));
             // A stream whose session ends, ends — and so does one whose world
             // an operator pauses. See `session_lifetime`: the membership check
             // above runs once, which is right for membership and was wrong for

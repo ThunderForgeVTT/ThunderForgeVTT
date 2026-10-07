@@ -212,6 +212,8 @@ pub async fn set_difficulty_impl<R: rand::Rng>(
                     world_id,
                     formula: format!("{}d6", band.dice()),
                     bindings: None,
+                    visibility: None,
+                    label: None,
                 },
                 rng,
             )

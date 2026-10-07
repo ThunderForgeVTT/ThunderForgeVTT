@@ -14,13 +14,18 @@ use diesel::prelude::*;
 use rand::SeedableRng;
 use uuid::Uuid;
 
-use crate::auth::world_membership::require_world_member;
-use crate::graphql::types::GraphQLRollResolution;
+use crate::auth::world_membership::{actor_in_world, is_dm_of_world, require_world_member};
+use crate::graphql::queries::roll::{usernames, viewer_in_world};
+use crate::graphql::types::{GraphQLRollResolution, RollVisibility, WorldRoll};
 use crate::graphql::{app_state, authenticated_user};
-use crate::models::NewRollRecord;
+use crate::models::{NewRollRecord, RollRecord};
 use crate::play_pause::gate::refuse_if_paused;
+use crate::rolls::visibility::{Visibility, may_roll};
 use crate::schema::world_roll_records;
 use crate::state::AppState;
+use crate::world_events::{
+    EVENT_CODE_ROLL_MADE, EVENT_CODE_ROLL_REVEALED, record_world_event, roll_event_payload,
+};
 use thunderforge_canvas_core::system_contribution::RollOutcome;
 use thunderforge_dice::{DiceFormula, FormulaError, ResolutionKind, RollResolution};
 
@@ -35,6 +40,28 @@ pub struct RollDiceInput {
     pub world_id: Uuid,
     pub formula: String,
     pub bindings: Option<Vec<PlaceholderBindingInput>>,
+    /// Spec 081: who sees it. `EVERYONE` when not given; `GM_EYES` is a
+    /// player's, `GM_ONLY` the GM's (FR-007).
+    pub visibility: Option<RollVisibility>,
+    /// Spec 081: what it was for, at most 80 characters.
+    pub label: Option<String>,
+}
+
+/// Spec 081: the longest label a roll keeps.
+pub const MAX_ROLL_LABEL: usize = 80;
+
+/// A label as stored: trimmed, empty as none, refused when too long.
+fn roll_label(label: Option<String>) -> GraphQLResult<Option<String>> {
+    let Some(label) = label
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+    else {
+        return Ok(None);
+    };
+    if label.chars().count() > MAX_ROLL_LABEL {
+        return Err(Error::new("A roll's label is at most 80 characters"));
+    }
+    Ok(Some(label))
 }
 
 fn formula_error_message(err: &FormulaError) -> String {
@@ -102,10 +129,15 @@ where
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
     let world_id = input.world_id;
+    let visibility: Visibility = input.visibility.unwrap_or(RollVisibility::Everyone).into();
+    let label = roll_label(input.label)?;
     tokio::task::spawn_blocking(move || -> GraphQLResult<()> {
         require_world_member(&mut conn, user_id, world_id)
             .map_err(|_| Error::new("You must be a member of this world to roll dice"))?;
         refuse_if_paused(&mut conn, world_id)?;
+        // FR-007: an admin who does not run the world rolls as a player.
+        let is_gm = actor_in_world(&mut conn, user_id, false, world_id).runs_the_world();
+        may_roll(visibility, is_gm).map_err(Error::new)?;
         Ok(())
     })
     .await
@@ -144,6 +176,8 @@ where
         result_kind: result_kind.to_string(),
         result_value,
         outcome: None,
+        visibility: visibility.as_str().to_string(),
+        label,
     };
 
     let mut conn = state
@@ -156,9 +190,20 @@ where
             new_record.outcome = outcome
                 .as_ref()
                 .and_then(|outcome| serde_json::to_value(outcome).ok());
-            diesel::insert_into(world_roll_records::table)
+            let roll_id = diesel::insert_into(world_roll_records::table)
                 .values(&new_record)
-                .execute(conn)?;
+                .returning(world_roll_records::id)
+                .get_result::<Uuid>(conn)?;
+            // Spec 081 FR-001: the table hears of it in the same transaction,
+            // by id and visibility only (FR-002).
+            record_world_event(
+                conn,
+                world_id,
+                EVENT_CODE_ROLL_MADE,
+                Some(roll_event_payload(roll_id, visibility)),
+                user_id,
+            )
+            .map_err(|_| Unsettled::Database)?;
             Ok((resolution, outcome, settled))
         })
     })
@@ -197,6 +242,71 @@ pub fn roll_value(resolution: &RollResolution) -> f64 {
     }
 }
 
+/// Spec 081: `revealRoll`. The GM (or an admin) shows a hidden roll to the
+/// table: who and when are recorded, the dice are not touched (FR-011), and
+/// every member is told to fetch it again. A roll already public answers as
+/// it is and records nothing (FR-010).
+pub async fn reveal_roll_impl(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    world_id: Uuid,
+    roll_id: Uuid,
+) -> GraphQLResult<WorldRoll> {
+    if !is_dm_of_world(state, user_id, is_admin, world_id).await? {
+        return Err(Error::new("Only the GM can reveal a roll"));
+    }
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    tokio::task::spawn_blocking(move || -> GraphQLResult<WorldRoll> {
+        refuse_if_paused(&mut conn, world_id)?;
+        let row = conn.transaction::<_, Error, _>(|conn| {
+            let row = world_roll_records::table
+                .filter(world_roll_records::id.eq(roll_id))
+                .filter(world_roll_records::world_id.eq(world_id))
+                .select(RollRecord::as_select())
+                .for_update()
+                .first::<RollRecord>(conn)
+                .optional()
+                .map_err(|_| Error::new("Failed to load the roll"))?
+                .ok_or_else(|| Error::new("Roll not found"))?;
+            let visibility = Visibility::parse(&row.visibility);
+            if visibility == Visibility::Everyone || row.revealed_at.is_some() {
+                return Ok(row);
+            }
+            let row = diesel::update(world_roll_records::table.find(roll_id))
+                .set((
+                    world_roll_records::revealed_at.eq(chrono::Utc::now()),
+                    world_roll_records::revealed_by.eq(user_id),
+                ))
+                .returning(RollRecord::as_returning())
+                .get_result::<RollRecord>(conn)
+                .map_err(|_| Error::new("Failed to reveal the roll"))?;
+            record_world_event(
+                conn,
+                world_id,
+                EVENT_CODE_ROLL_REVEALED,
+                Some(roll_event_payload(roll_id, visibility)),
+                user_id,
+            )?;
+            Ok(row)
+        })?;
+        // The revealer may see it whole; asked anyway, so a reveal answers
+        // through the same rule as every other read.
+        viewer_in_world(&mut conn, user_id, is_admin, world_id)?;
+        let mut ids = vec![row.triggered_by];
+        ids.extend(row.revealed_by);
+        let names = usernames(&mut conn, &ids).map_err(|_| Error::new("Failed to load names"))?;
+        let roller = names.get(&row.triggered_by).cloned().unwrap_or_default();
+        let revealer = row.revealed_by.and_then(|id| names.get(&id).cloned());
+        Ok(WorldRoll::from_row(row, roller, revealer))
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+}
+
 #[derive(Default)]
 pub struct RollMutation;
 
@@ -218,433 +328,27 @@ impl RollMutation {
         let mut rng = rand::rngs::StdRng::from_rng(&mut rand::rng());
         roll_dice_impl(state, auth_user.user_id, input, &mut rng).await
     }
+
+    /// Spec 081: show a hidden roll to the table. GM or admin; idempotent.
+    async fn reveal_roll(
+        &self,
+        ctx: &Context<'_>,
+        world_id: Uuid,
+        roll_id: Uuid,
+    ) -> GraphQLResult<WorldRoll> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        reveal_roll_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            world_id,
+            roll_id,
+        )
+        .await
+    }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::test_support::{insert_test_user, insert_test_world, test_app_state};
-
-    /// Deterministic RNG for tests — `rand_core` 0.10 dropped its old
-    /// `mock::StepRng`, so this is a minimal always-increasing generator
-    /// (never actually treated as authoritative; only `rollDice`'s real
-    /// resolver method uses `rand::rng()`, research.md §3).
-    struct StepRng(u64);
-
-    impl StepRng {
-        fn new(start: u64, _step: u64) -> Self {
-            StepRng(start)
-        }
-    }
-
-    impl rand::TryRng for StepRng {
-        type Error = std::convert::Infallible;
-
-        fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
-            self.0 = self.0.wrapping_add(1);
-            Ok(self.0 as u32)
-        }
-        fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
-            Ok(self.try_next_u32()? as u64)
-        }
-        fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Self::Error> {
-            for b in dest.iter_mut() {
-                *b = self.try_next_u32()? as u8;
-            }
-            Ok(())
-        }
-    }
-
-    #[tokio::test]
-    async fn non_member_is_rejected_before_any_roll_happens() {
-        let state = test_app_state();
-        let mut conn = state.db_pool.get().unwrap();
-        let owner_id = insert_test_user(&mut conn);
-        let world_id = insert_test_world(&mut conn, owner_id);
-        let outsider_id = insert_test_user(&mut conn);
-        drop(conn);
-
-        let mut rng = StepRng::new(0, 1);
-        let result = roll_dice_impl(
-            &state,
-            outsider_id,
-            RollDiceInput {
-                world_id,
-                formula: "1d20".to_string(),
-                bindings: None,
-            },
-            &mut rng,
-        )
-        .await;
-
-        assert!(result.is_err());
-
-        let mut conn = state.db_pool.get().unwrap();
-        let count: i64 = world_roll_records::table
-            .filter(world_roll_records::world_id.eq(world_id))
-            .count()
-            .get_result(&mut conn)
-            .unwrap();
-        assert_eq!(
-            count, 0,
-            "no roll should have been recorded for a rejected caller"
-        );
-    }
-
-    #[tokio::test]
-    async fn member_can_roll_and_a_record_is_persisted() {
-        let state = test_app_state();
-        let mut conn = state.db_pool.get().unwrap();
-        let owner_id = insert_test_user(&mut conn);
-        let world_id = insert_test_world(&mut conn, owner_id);
-        drop(conn);
-
-        let mut rng = StepRng::new(0, 1);
-        let resolution = roll_dice_impl(
-            &state,
-            owner_id,
-            RollDiceInput {
-                world_id,
-                formula: "1d20".to_string(),
-                bindings: None,
-            },
-            &mut rng,
-        )
-        .await
-        .expect("a world member should be able to roll");
-
-        assert_eq!(resolution.dice.len(), 1);
-
-        let mut conn = state.db_pool.get().unwrap();
-        let count: i64 = world_roll_records::table
-            .filter(world_roll_records::world_id.eq(world_id))
-            .count()
-            .get_result(&mut conn)
-            .unwrap();
-        assert_eq!(count, 1);
-    }
-
-    fn one_d20(world_id: Uuid) -> RollDiceInput {
-        RollDiceInput {
-            world_id,
-            formula: "1d20".to_string(),
-            bindings: None,
-        }
-    }
-
-    /// Spec 067 FR-032: what the settle step says is stored with the roll and
-    /// answered with it, and what else it returns comes back to the caller.
-    #[tokio::test]
-    async fn a_settled_roll_stores_its_outcome_with_the_record() {
-        use thunderforge_canvas_core::system_contribution::Verdict;
-
-        let state = test_app_state();
-        let mut conn = state.db_pool.get().unwrap();
-        let owner_id = insert_test_user(&mut conn);
-        let world_id = insert_test_world(&mut conn, owner_id);
-        drop(conn);
-
-        let (resolution, seen) = roll_and_settle(
-            &state,
-            owner_id,
-            one_d20(world_id),
-            &mut StepRng::new(0, 1),
-            |_, resolution| {
-                Ok((
-                    Some(RollOutcome {
-                        verdict: Verdict::CriticalSuccess,
-                        label: "Nailed it".to_string(),
-                    }),
-                    roll_value(resolution),
-                ))
-            },
-        )
-        .await
-        .expect("the roll settles");
-
-        let outcome = resolution.outcome.expect("the outcome is answered");
-        assert_eq!(
-            outcome.verdict,
-            crate::graphql::types::RollVerdict::CriticalSuccess
-        );
-        assert_eq!(outcome.label, "Nailed it");
-        assert_eq!(seen, resolution.result_value, "settle saw the real roll");
-
-        let mut conn = state.db_pool.get().unwrap();
-        let stored: Option<serde_json::Value> = world_roll_records::table
-            .filter(world_roll_records::world_id.eq(world_id))
-            .select(world_roll_records::outcome)
-            .first(&mut conn)
-            .unwrap();
-        assert_eq!(
-            stored,
-            Some(serde_json::json!({ "verdict": "critical_success", "label": "Nailed it" }))
-        );
-    }
-
-    /// A plain `rollDice` is judged by nobody, and says so with a null rather
-    /// than a made-up verdict.
-    #[tokio::test]
-    async fn a_plain_roll_stores_no_outcome() {
-        let state = test_app_state();
-        let mut conn = state.db_pool.get().unwrap();
-        let owner_id = insert_test_user(&mut conn);
-        let world_id = insert_test_world(&mut conn, owner_id);
-        drop(conn);
-
-        let resolution =
-            roll_dice_impl(&state, owner_id, one_d20(world_id), &mut StepRng::new(0, 1))
-                .await
-                .expect("a member rolls");
-        assert!(resolution.outcome.is_none());
-
-        let mut conn = state.db_pool.get().unwrap();
-        let stored: Option<serde_json::Value> = world_roll_records::table
-            .filter(world_roll_records::world_id.eq(world_id))
-            .select(world_roll_records::outcome)
-            .first(&mut conn)
-            .unwrap();
-        assert_eq!(stored, None);
-    }
-
-    /// The record and what follows from it land together: a settle step that
-    /// refuses leaves no roll behind, and takes its own writes with it.
-    #[tokio::test]
-    async fn a_refused_settle_leaves_no_record_and_undoes_its_own_writes() {
-        let state = test_app_state();
-        let mut conn = state.db_pool.get().unwrap();
-        let owner_id = insert_test_user(&mut conn);
-        let world_id = insert_test_world(&mut conn, owner_id);
-        drop(conn);
-
-        let refused = roll_and_settle(
-            &state,
-            owner_id,
-            one_d20(world_id),
-            &mut StepRng::new(0, 1),
-            move |conn, _| -> Result<(Option<RollOutcome>, ()), String> {
-                diesel::update(crate::schema::worlds::table.find(world_id))
-                    .set(crate::schema::worlds::name.eq("Written and then refused"))
-                    .execute(conn)
-                    .map_err(|e| e.to_string())?;
-                Err("Not today".to_string())
-            },
-        )
-        .await
-        .expect_err("the settle step refused");
-        assert_eq!(refused.message, "Not today");
-
-        let mut conn = state.db_pool.get().unwrap();
-        let count: i64 = world_roll_records::table
-            .filter(world_roll_records::world_id.eq(world_id))
-            .count()
-            .get_result(&mut conn)
-            .unwrap();
-        assert_eq!(count, 0);
-        let name: String = crate::schema::worlds::table
-            .find(world_id)
-            .select(crate::schema::worlds::name)
-            .first(&mut conn)
-            .unwrap();
-        assert_ne!(name, "Written and then refused");
-    }
-
-    #[tokio::test]
-    async fn malformed_formula_produces_zero_rows() {
-        let state = test_app_state();
-        let mut conn = state.db_pool.get().unwrap();
-        let owner_id = insert_test_user(&mut conn);
-        let world_id = insert_test_world(&mut conn, owner_id);
-        drop(conn);
-
-        let mut rng = StepRng::new(0, 1);
-        let result = roll_dice_impl(
-            &state,
-            owner_id,
-            RollDiceInput {
-                world_id,
-                formula: "1d20 +".to_string(),
-                bindings: None,
-            },
-            &mut rng,
-        )
-        .await;
-        assert!(result.is_err());
-
-        let mut conn = state.db_pool.get().unwrap();
-        let count: i64 = world_roll_records::table
-            .filter(world_roll_records::world_id.eq(world_id))
-            .count()
-            .get_result(&mut conn)
-            .unwrap();
-        assert_eq!(count, 0);
-    }
-
-    #[tokio::test]
-    async fn two_rolls_from_different_users_are_independent_records() {
-        let state = test_app_state();
-        let mut conn = state.db_pool.get().unwrap();
-        let owner_id = insert_test_user(&mut conn);
-        let world_id = insert_test_world(&mut conn, owner_id);
-        let other_id = insert_test_user(&mut conn);
-        crate::test_support::insert_test_world_member(&mut conn, world_id, other_id, "Player");
-        drop(conn);
-
-        let mut rng_a = StepRng::new(0, 1);
-        roll_dice_impl(
-            &state,
-            owner_id,
-            RollDiceInput {
-                world_id,
-                formula: "1d20".to_string(),
-                bindings: None,
-            },
-            &mut rng_a,
-        )
-        .await
-        .unwrap();
-
-        let mut rng_b = StepRng::new(0, 1);
-        roll_dice_impl(
-            &state,
-            other_id,
-            RollDiceInput {
-                world_id,
-                formula: "1d20".to_string(),
-                bindings: None,
-            },
-            &mut rng_b,
-        )
-        .await
-        .unwrap();
-
-        let mut conn = state.db_pool.get().unwrap();
-        let records: Vec<crate::models::RollRecord> = world_roll_records::table
-            .filter(world_roll_records::world_id.eq(world_id))
-            .load(&mut conn)
-            .unwrap();
-        assert_eq!(records.len(), 2);
-        assert_ne!(records[0].triggered_by, records[1].triggered_by);
-    }
-
-    /// US3 (T021): `RollDiceInput.bindings` correctly maps into
-    /// `resolve()`'s `PlaceholderBindings`, and a missing placeholder
-    /// surfaces as a specific, distinguishable error message rather than
-    /// a generic failure.
-    #[tokio::test]
-    async fn placeholder_bindings_flow_through_and_missing_ones_are_specific_errors() {
-        let state = test_app_state();
-        let mut conn = state.db_pool.get().unwrap();
-        let owner_id = insert_test_user(&mut conn);
-        let world_id = insert_test_world(&mut conn, owner_id);
-        drop(conn);
-
-        let mut rng = StepRng::new(0, 1);
-        let low = roll_dice_impl(
-            &state,
-            owner_id,
-            RollDiceInput {
-                world_id,
-                formula: "1d20 + STAT".to_string(),
-                bindings: Some(vec![PlaceholderBindingInput {
-                    name: "STAT".to_string(),
-                    value: 3.0,
-                }]),
-            },
-            &mut rng,
-        )
-        .await
-        .unwrap();
-
-        let mut rng = StepRng::new(0, 1);
-        let high = roll_dice_impl(
-            &state,
-            owner_id,
-            RollDiceInput {
-                world_id,
-                formula: "1d20 + STAT".to_string(),
-                bindings: Some(vec![PlaceholderBindingInput {
-                    name: "STAT".to_string(),
-                    value: 8.0,
-                }]),
-            },
-            &mut rng,
-        )
-        .await
-        .unwrap();
-
-        assert_eq!(high.result_value - low.result_value, 5.0);
-
-        let mut rng = StepRng::new(0, 1);
-        let err = roll_dice_impl(
-            &state,
-            owner_id,
-            RollDiceInput {
-                world_id,
-                formula: "1d20 + STAT".to_string(),
-                bindings: None,
-            },
-            &mut rng,
-        )
-        .await
-        .unwrap_err();
-        assert!(
-            err.message.contains("STAT"),
-            "error should name the missing placeholder: {}",
-            err.message
-        );
-    }
-
-    /// US3 (T022, SC-005): a spec 013 Item Effect-style formula (attack
-    /// roll with a stat + flat modifiers placeholder) resolves through
-    /// `rollDice` with no schema changes needed on either side.
-    #[tokio::test]
-    async fn spec_013_item_effect_formula_resolves_unchanged() {
-        let state = test_app_state();
-        let mut conn = state.db_pool.get().unwrap();
-        let owner_id = insert_test_user(&mut conn);
-        let world_id = insert_test_world(&mut conn, owner_id);
-        drop(conn);
-
-        // A "Longsword" damage effect's stored formula (spec 013).
-        let mut rng = StepRng::new(0, 1);
-        let damage = roll_dice_impl(
-            &state,
-            owner_id,
-            RollDiceInput {
-                world_id,
-                formula: "2d8".to_string(),
-                bindings: None,
-            },
-            &mut rng,
-        )
-        .await
-        .unwrap();
-        assert_eq!(damage.dice.len(), 2);
-
-        // An attack-roll effect's stored formula.
-        let mut rng = StepRng::new(0, 1);
-        let attack = roll_dice_impl(
-            &state,
-            owner_id,
-            RollDiceInput {
-                world_id,
-                formula: "1d20 + STAT + MODIFIERS".to_string(),
-                bindings: Some(vec![
-                    PlaceholderBindingInput {
-                        name: "STAT".to_string(),
-                        value: 3.0,
-                    },
-                    PlaceholderBindingInput {
-                        name: "MODIFIERS".to_string(),
-                        value: 2.0,
-                    },
-                ]),
-            },
-            &mut rng,
-        )
-        .await
-        .unwrap();
-        assert_eq!(attack.dice.len(), 1);
-    }
-}
+#[path = "mutations_roll_tests.rs"]
+mod tests;

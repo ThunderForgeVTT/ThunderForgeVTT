@@ -33,6 +33,8 @@ pub mod moderation;
 // `worldPlayState` (members), kept apart by what each selects.
 pub mod play_pause;
 pub mod roll;
+#[cfg(test)]
+mod roll_feed_tests;
 pub mod scene;
 // Spec 039 US5: `myStanding`, `accountStanding`, `myNotices`.
 pub mod standing;
