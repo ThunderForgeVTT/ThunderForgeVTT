@@ -76,9 +76,9 @@ they prove inside each phase.
 
 ## Phase 4: US2 — The sheet in another tab rolls onto the board (P1)
 
-- [ ] T024 [US2] E2E `apps/web/e2e/rolls-sheet-tab.spec.ts`: one player, two tabs of one context — the play view and `/world/:id/actor/:actorId/view`; roll Stealth on the sheet page; the play tab's board animates it and its chat lists "Stealth" (SC-002); an attack button on the sheet page says to pick the target on the board
-- [ ] T025 [US2] `apps/web/src/pages/world/actor/ActorDetailPage.tsx`: a roll section built from `statRolls` / `abilityRolls` in `PlayDock/characterRolls.ts`, shown to anyone who may roll for the actor, calling `rollDice` with the roll's label; attack entries show "Pick the target on the board" instead of rolling (FR-014)
-- [ ] T026 [P] [US2] Lift the roll buttons from `InPaneCharacterSheet.tsx` into a shared `PlayDock/CharacterRollButtons.tsx` used by both sheets, if the two would otherwise duplicate more than the list
+- [x] T024 [US2] E2E `apps/web/e2e/rolls-sheet-tab.spec.ts`: one player, two tabs of one context — the play view and `/world/:id/actor/:actorId/view`; roll Stealth on the sheet page; the play tab's board animates it and its chat lists "Stealth" (SC-002); an attack button on the sheet page says to pick the target on the board
+- [x] T025 [US2] `apps/web/src/pages/world/actor/ActorDetailPage.tsx`: a roll section built from `statRolls` / `abilityRolls` in `PlayDock/characterRolls.ts`, shown to anyone who may roll for the actor, calling `rollDice` with the roll's label; attack entries show "Pick the target on the board" instead of rolling (FR-014)
+- [x] T026 [P] [US2] Lift the roll buttons from `InPaneCharacterSheet.tsx` into a shared `PlayDock/CharacterRollButtons.tsx` used by both sheets, if the two would otherwise duplicate more than the list
 
 **Checkpoint**: US2 complete; `rolls-sheet-tab.spec.ts` green.
 
@@ -86,10 +86,10 @@ they prove inside each phase.
 
 ## Phase 5: US3 — A player rolls for the GM's eyes (P1)
 
-- [ ] T027 [US3] E2E `apps/web/e2e/rolls-gm-eyes.spec.ts`: GM, player A, player B. A rolls "GM's eyes": A and the GM see the number and the GM's board animates; B's panel shows `****` and B's board does not animate. A network capture on B (every WebSocket frame and every response body) contains none of the roll's formula, label or total (SC-003)
-- [ ] T028 [P] [US3] Create `apps/web/src/components/world/RollVisibility/{RollVisibilityPicker.tsx,storedChoice.ts}`: options by role (player: Everyone, GM's eyes; GM: Everyone, GM only), the choice in `localStorage` wrapped in try/catch (research R8); a Vitest for the stored choice
-- [ ] T029 [US3] Put the picker on `DiceRollerPanel.tsx`, `InPaneCharacterSheet.tsx` (or `CharacterRollButtons.tsx`) and the sheet page; pass the choice to `rollDice`
-- [ ] T030 [US3] Render `MaskedRoll` in `ChatPanel.tsx` as "<name> rolled for the GM: \*\*\*\*"; mark the roller's and GM's view of a `gm_eyes` roll "GM's eyes"
+- [x] T027 [US3] E2E `apps/web/e2e/rolls-gm-eyes.spec.ts`: GM, player A, player B. A rolls "GM's eyes": A and the GM see the number and the GM's board animates; B's panel shows `****` and B's board does not animate. A network capture on B (every WebSocket frame and every response body) contains none of the roll's formula, label or total (SC-003)
+- [x] T028 [P] [US3] Create `apps/web/src/components/world/RollVisibility/{RollVisibilityPicker.tsx,storedChoice.ts}`: options by role (player: Everyone, GM's eyes; GM: Everyone, GM only), the choice in `localStorage` wrapped in try/catch (research R8); a Vitest for the stored choice
+- [x] T029 [US3] Put the picker on `DiceRollerPanel.tsx`, `InPaneCharacterSheet.tsx` (or `CharacterRollButtons.tsx`) and the sheet page; pass the choice to `rollDice`
+- [x] T030 [US3] Render `MaskedRoll` in `ChatPanel.tsx` as "<name> rolled for the GM: \*\*\*\*"; mark the roller's and GM's view of a `gm_eyes` roll "GM's eyes"
 
 **Checkpoint**: US3 complete; `rolls-gm-eyes.spec.ts` green with the capture clean.
 
@@ -97,8 +97,8 @@ they prove inside each phase.
 
 ## Phase 6: US4 — The GM rolls behind the screen (P2)
 
-- [ ] T031 [US4] E2E `apps/web/e2e/rolls-gm-only.spec.ts`: GM rolls "GM only"; the GM's board animates and the feed shows it marked "GM only"; the player's feed, board and network capture show nothing — no `MaskedRoll`, no code-36 frame (SC-003, FR-005a); the player reloads and catch-up still shows nothing
-- [ ] T032 [US4] Mark `gm_only` entries in the GM's `ChatPanel.tsx`; confirm the picker's GM options from T028 reach `rollDice`
+- [x] T031 [US4] E2E `apps/web/e2e/rolls-gm-only.spec.ts`: GM rolls "GM only"; the GM's board animates and the feed shows it marked "GM only"; the player's feed, board and network capture show nothing — no `MaskedRoll`, no code-36 frame (SC-003, FR-005a); the player reloads and catch-up still shows nothing
+- [x] T032 [US4] Mark `gm_only` entries in the GM's `ChatPanel.tsx`; confirm the picker's GM options from T028 reach `rollDice`
 
 **Checkpoint**: US4 complete; `rolls-gm-only.spec.ts` green.
 
@@ -108,8 +108,8 @@ they prove inside each phase.
 
 - [x] T033 [US5] Server tests in `mutations_roll_tests.rs`: `revealRoll` by the GM and by an admin sets `revealed_at`/`revealed_by` and records one code-37 event; a second reveal and a reveal of an `everyone` roll record nothing (FR-010); a player's reveal is refused; dice, total and `created_at` unchanged (FR-011)
 - [x] T034 [US5] `revealRoll` in `crates/thunderforge-server/src/graphql/mutations_roll.rs`; regenerate the schema
-- [ ] T035 [US5] A "Reveal" button on the GM's `gm_eyes` and `gm_only` entries in `ChatPanel.tsx`; a revealed entry stays at its time and reads "revealed by <GM>"
-- [ ] T036 [US5] E2E `apps/web/e2e/rolls-reveal.spec.ts`: a `gm_eyes` and a `gm_only` roll revealed; every member's feed shows the whole roll and every board animates within 1 s (SC-004); a second reveal sends no frame to the other contexts
+- [x] T035 [US5] A "Reveal" button on the GM's `gm_eyes` and `gm_only` entries in `ChatPanel.tsx`; a revealed entry stays at its time and reads "revealed by <GM>"
+- [x] T036 [US5] E2E `apps/web/e2e/rolls-reveal.spec.ts`: a `gm_eyes` and a `gm_only` roll revealed; every member's feed shows the whole roll and every board animates within 1 s (SC-004); a second reveal sends no frame to the other contexts
 
 **Checkpoint**: US5 complete; `rolls-reveal.spec.ts` green.
 

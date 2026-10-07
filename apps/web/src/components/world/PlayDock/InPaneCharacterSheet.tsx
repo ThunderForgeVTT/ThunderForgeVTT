@@ -1,20 +1,14 @@
 import { createElement, useEffect, useMemo, useRef, useState } from "react";
-import { getWorldAbilities } from "@/api/abilities";
-import { getActorAbilities } from "@/api/actorAbilities";
 import { getTokens } from "@/api/tokens";
 import { useAuth } from "@/hooks/useAuth";
 import type { TokenRecord } from "@/types/token";
 import { AttackFlow } from "./AttackFlow/AttackFlow";
-import { rollDice } from "@/api/roll";
-import { RollResult } from "@/components/world/RollResult";
-import { useActorSystemData } from "@/hooks/useActorSystemData";
 import { mayEditActor } from "@/pages/world/actor/actorEditRight";
 import { resolveActorSheet } from "@/pages/world/actor/systemActorSheets";
-import type { WorldAbilityRecord } from "@/types/ability";
-import type { ActorAbilityEntryRecord } from "@/types/actorAbility";
 import type { WorldActorRecord } from "@/types/actor";
-import type { RollResolutionRecord } from "@/types/roll";
-import { abilityRolls, statRolls, type CharacterRoll } from "./characterRolls";
+import { CharacterRollButtons } from "./CharacterRollButtons";
+import type { CharacterRoll } from "./characterRolls";
+import { useCharacterRolls } from "./useCharacterRolls";
 
 /**
  * A player's own character, inside the dock, while the table stays live.
@@ -65,9 +59,10 @@ import { abilityRolls, statRolls, type CharacterRoll } from "./characterRolls";
  * not this one's — the rolls are derived alongside it in `characterRolls.ts`
  * from the same data the sheet is drawing, and go out through `rollDice`.
  *
- * Constitution Principle I: nothing here is canvas state. The dice animation
- * is a one-shot presentation trigger the engine already accepts from the dice
- * roller, and the roll itself is decided entirely by the server.
+ * Constitution Principle I: nothing here is canvas state. The roll is decided
+ * entirely by the server, and the board animates it from its world event
+ * (spec 081 FR-013), so the buttons are `CharacterRollButtons`, shared with
+ * the sheet page.
  */
 
 export interface InPaneCharacterSheetProps {
@@ -75,6 +70,8 @@ export interface InPaneCharacterSheetProps {
   /** The scene in play, where this character's token is and its targets are. */
   sceneId?: string | null;
   actor: WorldActorRecord;
+  /** Whether the viewer runs the world; it decides the roll picker's choices. */
+  isGm?: boolean;
   /** Returns the pane to whatever it was showing before (FR-002/US2 #3). */
   onDismiss: () => void;
 }
@@ -83,6 +80,7 @@ export function InPaneCharacterSheet({
   worldId,
   sceneId = null,
   actor,
+  isGm = false,
   onDismiss,
 }: InPaneCharacterSheetProps) {
   const { user } = useAuth();
@@ -90,41 +88,6 @@ export function InPaneCharacterSheet({
   const [attacking, setAttacking] = useState<CharacterRoll | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const sheet = resolveActorSheet(actor.gameSystemId);
-  const { data } = useActorSystemData(
-    actor.id,
-    actor.gameSystemId ?? undefined,
-  );
-  const [entries, setEntries] = useState<ActorAbilityEntryRecord[] | null>(
-    null,
-  );
-  const [catalog, setCatalog] = useState<WorldAbilityRecord[] | null>(null);
-  const [rolling, setRolling] = useState<string | null>(null);
-  const [result, setResult] = useState<RollResolutionRecord | null>(null);
-  const [rollError, setRollError] = useState<string | null>(null);
-
-  // Two reads because a formula lives on the ability, not on the actor's entry
-  // for it. A failure on either leaves the ability rolls absent rather than
-  // taking the whole view down: the stats still roll, and the sheet still
-  // renders, which is most of why the player opened this.
-  useEffect(() => {
-    let active = true;
-    Promise.all([getActorAbilities(actor.id), getWorldAbilities(worldId)])
-      .then(([actorAbilities, worldAbilities]) => {
-        if (active) {
-          setEntries(actorAbilities);
-          setCatalog(worldAbilities);
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setEntries([]);
-          setCatalog([]);
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [actor.id, worldId]);
 
   // Spec 046: an attack is made from this character's token on the scene, at
   // another token there.
@@ -153,42 +116,7 @@ export function InPaneCharacterSheet({
     );
   }, [sceneTokens, sceneId, actor.id, user?.id]);
 
-  const rolls = useMemo<CharacterRoll[]>(
-    () => [...statRolls(data?.ability_data), ...abilityRolls(entries, catalog)],
-    [data?.ability_data, entries, catalog],
-  );
-
-  const handleRoll = async (roll: CharacterRoll) => {
-    // Spec 046: an attack roll is an attack, aimed at something, rolled and
-    // judged by the server — not a free number (it replaces the bare
-    // `rollDice` this used to send for it).
-    if (roll.attackAbilityId) {
-      setResult(null);
-      setRollError(null);
-      setAttacking(roll);
-      return;
-    }
-    setRolling(roll.key);
-    setRollError(null);
-    setResult(null);
-    try {
-      const resolution = await rollDice(worldId, roll.formula);
-      // Spec 081 (FR-013): the board animates this roll from its world
-      // event, as every client's board does. The total is shown as soon as
-      // the server answers, rather than behind the dice roller's fixed reveal
-      // delay. That delay is a copy of a duration in the engine's Rust, and a second copy of it here would be a number to keep
-      // in sync in two files; the dock sits beside the canvas rather than over
-      // it, so the total appearing while the dice are still settling costs the
-      // reveal nothing.
-      setResult(resolution);
-    } catch (error) {
-      setRollError(
-        error instanceof Error ? error.message : "Failed to roll dice",
-      );
-    } finally {
-      setRolling(null);
-    }
-  };
+  const rolls = useCharacterRolls(worldId, actor);
 
   return (
     <div
@@ -270,35 +198,18 @@ export function InPaneCharacterSheet({
               Nothing on this character carries a formula to roll yet.
             </p>
           ) : (
-            <ul className="grid gap-1">
-              {rolls.map((roll) => (
-                <li key={roll.key}>
-                  <button
-                    type="button"
-                    disabled={
-                      rolling !== null ||
-                      (roll.attackAbilityId !== undefined && !attackerToken)
-                    }
-                    title={
-                      roll.attackAbilityId !== undefined && !attackerToken
-                        ? `${actor.label} has no token on this scene to attack from`
-                        : undefined
-                    }
-                    onClick={() => void handleRoll(roll)}
-                    data-testid={`in-pane-roll-${roll.key}`}
-                    data-attack={roll.attackAbilityId ? "true" : undefined}
-                    className="flex w-full items-center gap-2 rounded border border-border px-2 py-1 text-left text-xs transition-colors hover:bg-muted disabled:opacity-60"
-                  >
-                    <span className="min-w-0 flex-1 truncate">
-                      {roll.label}
-                    </span>
-                    <span className="text-muted-foreground tabular-nums">
-                      {rolling === roll.key ? "Rolling…" : roll.formula}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <CharacterRollButtons
+              worldId={worldId}
+              rolls={rolls}
+              isGm={isGm}
+              testIdPrefix="in-pane"
+              onAttack={setAttacking}
+              attackUnavailable={
+                attackerToken
+                  ? null
+                  : `${actor.label} has no token on this scene to attack from`
+              }
+            />
           )}
         </section>
       )}
@@ -324,25 +235,6 @@ export function InPaneCharacterSheet({
               ?.focus();
           }}
         />
-      ) : null}
-
-      {rollError ? (
-        <p
-          className="text-xs text-destructive"
-          data-testid="in-pane-roll-error"
-        >
-          {rollError}
-        </p>
-      ) : null}
-
-      {result ? (
-        // `RollResult` is the same renderer the dice roller uses, so a roll
-        // made from a character reads exactly like one made from the roller —
-        // including the Game Master's discrepancy note, which is deliberately
-        // never shown to the player rolling (spec 028 FR-067).
-        <div data-testid="in-pane-roll-result">
-          <RollResult resolution={result} />
-        </div>
       ) : null}
     </div>
   );

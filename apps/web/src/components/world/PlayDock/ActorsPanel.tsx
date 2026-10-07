@@ -349,6 +349,7 @@ export function ActorsPanel({
         worldId={worldId}
         sceneId={sceneId}
         actor={viewing}
+        isGm={isGm}
         onDismiss={() => setViewing(null)}
       />
     );

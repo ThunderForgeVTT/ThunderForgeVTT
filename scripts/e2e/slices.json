@@ -780,10 +780,26 @@
         {
           "spec": "roll-check.spec.ts",
           "seam": "a check's roll is a roll like any other"
+        },
+        {
+          "spec": "combat-accessibility.spec.ts",
+          "seam": "the dock sheet's attack buttons are the shared roll buttons"
+        },
+        {
+          "spec": "system-roll-for-shoes.spec.ts",
+          "seam": "the dock sheet's rolls section, beside a sheet that rolls itself"
+        },
+        {
+          "spec": "actor-detail-routes.spec.ts",
+          "seam": "the sheet page gains a rolls section"
         }
       ],
       "paths": [
-        "apps/web/src/components/world/PlayDock/{RollEntry.tsx,feedTime.ts}",
+        "apps/web/src/components/world/PlayDock/{RollEntry,CharacterRollButtons}.tsx",
+        "apps/web/src/components/world/PlayDock/{feedTime,useCharacterRolls}.ts",
+        "apps/web/src/components/world/RollVisibility/**",
+        "apps/web/src/pages/world/actor/ActorRollsPanel.tsx",
+        "apps/web/e2e/fixtures/rolls.ts",
         "apps/web/src/components/world/PlayDock/__tests__/{feedTime,upsertRoll}.test.ts",
         "apps/web/src/engine/world/sync/rolls.ts",
         "apps/web/src/engine/world/sync/__tests__/rolls.test.ts",

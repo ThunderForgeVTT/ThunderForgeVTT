@@ -30,6 +30,7 @@ import { ActorImageryPanel } from "@/pages/world/actor/ActorImageryPanel";
 import { ActorInventoryPanel } from "@/pages/world/actor/ActorInventoryPanel";
 import { ActorLorePanel } from "@/pages/world/actor/ActorLorePanel";
 import { ActorOwnershipBlock } from "@/pages/world/actor/ActorOwnershipBlock";
+import { ActorRollsPanel } from "@/pages/world/actor/ActorRollsPanel";
 import { ActorStatBlockPanel } from "@/pages/world/actor/ActorStatBlockPanel";
 import { WorldAppearance } from "@/appearance/WorldAppearance";
 import { startActorAccessEventSync } from "@/engine/world/sync/actorAccess";
@@ -635,6 +636,12 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
             actor={actor}
             onApplied={() => setSheetVersion((version) => version + 1)}
           />
+        ) : null}
+
+        {/* Spec 081 US2: the character's rolls, for whoever may play them.
+            Rolled here, they animate on the play view's board. */}
+        {canEdit ? (
+          <ActorRollsPanel worldId={worldId} actor={actor} isGm={isDm} />
         ) : null}
 
         {/* Spec 036 US3b (FR-036): rolling a check from the sheet. Renders

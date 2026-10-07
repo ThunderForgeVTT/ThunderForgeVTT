@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { rollDice } from "@/api/roll";
 import { RollResult } from "@/components/world/RollResult";
+import { RollVisibilityPicker } from "@/components/world/RollVisibility/RollVisibilityPicker";
+import { useRollVisibility } from "@/components/world/RollVisibility/useRollVisibility";
 import type { RollResolutionRecord } from "@/types/roll";
 
 export interface DiceRollerPanelProps {
@@ -40,13 +42,15 @@ export function DiceRollerPanel({
   const [isRolling, setIsRolling] = useState(false);
   const [result, setResult] = useState<RollResolutionRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Spec 081: who sees the roll, remembered per browser.
+  const [visibility, setVisibility] = useRollVisibility(isGameMaster);
 
   const handleRoll = async () => {
     setIsRolling(true);
     setError(null);
     setResult(null);
     try {
-      const resolution = await rollDice(worldId, formula);
+      const resolution = await rollDice(worldId, formula, { visibility });
 
       // Spec 081 (FR-013): the board animates this roll from its world
       // event, like every other client's roll; the panel only waits for the
@@ -96,6 +100,11 @@ export function DiceRollerPanel({
           {isRolling ? "Rolling…" : "Roll"}
         </button>
       </div>
+      <RollVisibilityPicker
+        isGm={isGameMaster}
+        value={visibility}
+        onChange={setVisibility}
+      />
       {error ? <p data-testid="dice-roll-error">{error}</p> : null}
       {result ? (
         <div data-testid="dice-roll-result">
