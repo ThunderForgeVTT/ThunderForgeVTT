@@ -41,8 +41,9 @@ Counted on 2026-10-07:
   - wobbles them for `SETTLE_DURATION_SECS = 1.2`, then leaves them in
     place. They are despawned only when the next roll arrives.
 - **The engine is 2D.** It has one `Camera2d` (`plugins/camera.rs:35`). Bevy
-  runs without `bevy_pbr` or a 3D camera. `Mesh2d` is already used for shapes
-  (`systems/shape.rs`) and darkness (`plugins/darkness.rs`). Several systems
+  runs without `bevy_pbr` or a 3D camera. `Mesh2d` is used only by darkness
+  (`plugins/darkness.rs`); shapes are sprite chains on purpose, because
+  per-frame mesh inserts leaked (`systems/shape.rs`). Several systems
   look up the camera as the single `Camera2d`. The release build is about
   4.15 MB brotli.
 - **The engine already links the dice crate**
@@ -87,7 +88,7 @@ A roll plays in three beats, the same on every board.
    exploded lands, and a new die of the same kind tumbles in beside it. A die
    that keep/drop dropped turns dim.
 3. **Readout.** Above the dice, a line appears:
-   `Ayla · Stealth   17 + 5 = 22`. That is the roller, the label if there
+   `Ayla: Stealth   17 + 5 = 22`. That is the roller, the label if there
    is one, the kept dice and bonuses as arithmetic, and the total. The
    readout and the dice hold, fade together, and are removed.
 
@@ -111,7 +112,7 @@ can predict where each die rests.
 | d100                            | A percentile pair of d10s: tens (`00`–`90`) and units (`0`–`9`) |
 | d3                              | A cube whose faces read 1–3 twice                               |
 | d2, coin                        | A disc that flips                                               |
-| Fate (`dF`)                     | A cube whose faces read `+`, `+`, blank, blank, `−`, `−`        |
+| Fate (`dF`)                     | A cube whose faces read `+`, `+`, blank, blank, `-`, `-`        |
 | Any other size (d5, d7, d30, …) | A disc with the number, which flips like a coin                 |
 
 A d4 shows its number on the face toward the viewer, like every other die.
@@ -176,7 +177,7 @@ and landed face, in the resolution's order, and matches the server.
    sides 100.
 3. **Given** `4dF`,
    **When** it plays,
-   **Then** four Fate cubes land on `+`, blank or `−` as the server rolled,
+   **Then** four Fate cubes land on `+`, blank or `-` as the server rolled,
    and the readout reads the total.
 4. **Given** `1d7`,
    **When** it plays,
@@ -248,7 +249,7 @@ equals the binding the server recorded.
    substituted, rather than wrong arithmetic.
 3. **Given** a negative bonus,
    **When** it plays,
-   **Then** the readout reads `12 − 1 = 11`, not `12 + -1`.
+   **Then** the readout reads `12 - 1 = 11`, not `12 + -1`.
 
 ---
 
@@ -310,8 +311,12 @@ reduce`, and check that the dice land with no tumble.
   scene's.
 - **Clicks pass through.** The dice and readout are never the target of a
   click, drag or hover on the board.
-- **Coin and Fate readouts** use the dice crate's values. A coin reads as
-  its face label, and Fate sums `+1`, `0` and `−1`.
+- **Coin and Fate readouts** use the dice crate's values. A coin's faces
+  read `H` and `T` and its addend is the crate's `1` or `0`; Fate sums
+  `+1`, `0` and `-1`.
+- **The readout is ASCII.** The engine's default font
+  (`FiraMono-subset.ttf`) covers U+0020 to U+007E only, so the readout uses
+  `:` and `-` rather than `·` and `−` (research R6).
 
 ## Requirements
 
@@ -326,9 +331,10 @@ reduce`, and check that the dice land with no tumble.
   build this from the `WorldRoll` it already fetched. It does not fetch
   anything more.
 - **FR-002**: The dice crate MUST record, for each value in a die's chain
-  after the first, whether it was a reroll or an explosion, and whether
-  the final value was clamped. The field is additive and defaults when
-  absent, so stored resolutions still read.
+  after the first, whether it was a reroll or an explosion. The field is
+  additive and defaults when absent, so stored resolutions still read. A
+  clamp is not stored: a die was clamped exactly when its final value
+  differs from its chain's last value (research R5).
 - **FR-003**: `WorldRoll` MUST expose the bindings the server recorded, as
   placeholder and value pairs. `MaskedRoll` MUST NOT gain them; it stays
   unable to carry a roll's content (spec 081 FR-004).
@@ -399,9 +405,10 @@ reduce`, and check that the dice land with no tumble.
   throw the engine finished or skipped:
   - `{ rollId, skipped, readout, chip }`;
   - and, per die drawn, `{ sides, face, kept, rerolled, exploded,
-  restingPlace }`.
-    The engine reports these when they happen, through the event callback,
-    so the probe reads what the engine drew rather than what the web sent.
+restingPlace }`.
+    The engine records these when they happen, in a log it exports as the
+    wasm getter `dice_landed()` (like `camera_state()`), so the probe reads
+    what the engine drew rather than what the web sent (research R10).
 
 **The demo**
 
@@ -438,7 +445,8 @@ reduce`, and check that the dice land with no tumble.
 - **SC-005**: Two boards playing the same roll report identical faces and
   resting places.
 - **SC-006**: The release engine bundle grows by less than 150 KB brotli. It
-  is measured by the existing bundle report, in brotli and not raw (the
+  is measured as the brotli size of `dist/engine/engine_bg.wasm` before
+  and after, not raw (`pnpm bundle:check` covers web routes only; the
   concern threshold is 100 MB compressed; this is far below it, and is
   stated so that growth is visible).
 - **SC-007**: A 20-die throw keeps the board at or above 55 fps on the
@@ -451,8 +459,10 @@ reduce`, and check that the dice land with no tumble.
   - reading a resolution stored without them;
   - the breakdown for sums, differences, negatives and substituted
     bindings, and nothing for products, pools and success counts.
-- **Engine tests**, run for wasm32 as the engine lints (`make lint` is
-  `lint-host` plus `lint-wasm`):
+- **Throw logic tests**, in `thunderforge-canvas-core` on the host,
+  because the engine crate cannot compile for the host
+  (`plugins/frame_trace.rs`); the engine itself is linted for wasm32
+  (`make lint` is `lint-host` plus `lint-wasm`) and proven by the e2e:
   - each shape's face count and face values;
   - that the landing orientation turns each value's face toward the viewer
     for every value of every die;
