@@ -104,9 +104,10 @@ they prove inside each phase.
 ## Phase 8: Proof and polish
 
 - [x] T032 Register the slice: `scripts/e2e/slices.json` entry `resumable-downloads` (`standalone: "pnpm -F @thunderforge/downloads test:e2e"`, `own: ["resumable-downloads-"]`, neighbours `engine-loading.spec.ts` and `scene-preload.spec.ts` with seams, `paths` for every file touched); root `package.json` scripts; `node scripts/check-e2e-slices.mjs` passes
-- [ ] T033 `cargo fmt`, `cargo clippy -p thunderforge-server`, `cargo check --target wasm32-unknown-unknown -p thunderforge-engine`, `pnpm -F @thunderforge/downloads typecheck`, `pnpm -F web typecheck`
+- [x] T033 `cargo fmt`, `cargo clippy -p thunderforge-server`, `cargo check --target wasm32-unknown-unknown -p thunderforge-engine`, `pnpm -F @thunderforge/downloads typecheck`, `pnpm -F web typecheck`
 - [x] T034 `cargo test -p thunderforge-server assets_serve static_files` green
-- [ ] T035 Run `pnpm e2e:resumable-downloads`; record the result here
+- [x] T035 Run `pnpm e2e:resumable-downloads`; record the result here
+  - 2026-10-07: green. Standalone 21/21 (`node --test`, real socket); integration 8/8 in 1.1 min — both `resumable-downloads-*` specs, `scene-preload.spec.ts`, and all five of `engine-loading.spec.ts`. In dev the engine fetches in parts only because `vite.config.mts` advertises `Accept-Ranges` on `.wasm` (Vite's file server answers ranges but says so only on the 206).
 - [x] T036 [P] User guide note in `docs/guides/` on the `feature.download_in_parts` switch; CONTRIBUTING note on the package and the DEV override
 
 ---
