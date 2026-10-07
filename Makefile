@@ -1,4 +1,4 @@
-.PHONY: image push clean-builds test-db-reset dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-rust test-mail bench-blob-store test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean container container-up container-down container-down-clean
+.PHONY: gc image push clean-builds test-db-reset dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-rust test-mail bench-blob-store test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean container container-up container-down container-down-clean
 
 # Loads DATABASE_URL (and anything else) from the repo-root .env for targets
 # that shell out to tools which don't read it themselves (diesel-cli).
@@ -22,7 +22,8 @@ help:
 	@echo "  make services-down-clean  Stop postgres+rustfs and DELETE their data volumes"
 	@echo "  make migrate          Run pending Diesel migrations against DATABASE_URL"
 	@echo "  make seed             Seed local demo logins (admin/admin, user1/user1, user2/user2) + a ready-to-play world"
-	@echo "  make build            Production build (engine WASM + backend + frontend)"
+	@echo "  make build            Production build (engine WASM + backend + frontend); runs make gc first"
+	@echo "  make gc               Delete build output unused for GC_DAYS (cargo-sweep) and trim Docker's build cache to GC_DOCKER_KEEP"
 	@echo "  make clean            Remove build output (dist/)"
 	@echo "  make container        Build the app image from source (docker compose build; no host toolchain needed)"
 	@echo "  make container-up     Start the whole app (app+postgres+rustfs+mailpit) detached on http://localhost:42080"
@@ -124,8 +125,29 @@ seed:
 	@url="$(DATABASE_URL)"; 	case "$$url" in 		*@*:[0-9]*/*) ;; 		*) url=$$(printf '%s' "$$url" | sed -E 's#@([^:/@]+)/#@\1:5432/#') ;; 	esac; 	psql "$$url" -q -v ON_ERROR_STOP=1 -f crates/thunderforge-server/seeds/demo_accounts.sql
 	@echo "Seeded: admin/admin (site admin), user1/user1 (GM), user2/user2 (player), with a world ready to play."
 
-build:
+build: gc
 	pnpm build
+
+# Keep Rust's build output from eating the disk. cargo-sweep deletes whatever in
+# target/ no build has used for GC_DAYS: incremental caches for feature and
+# profile combinations nothing builds any more, and dependencies an older
+# Cargo.lock compiled. Docker's build cache is capped at GC_DOCKER_KEEP, least
+# recently used first; each Cargo.lock change leaves a cargo-chef dependency
+# layer of several GB behind. Neither tool is required: a missing one is
+# skipped with a note, never a failed build.
+GC_DAYS ?= 14
+GC_DOCKER_KEEP ?= 40GB
+gc:
+	@if command -v cargo-sweep >/dev/null 2>&1; then \
+		cargo sweep --time $(GC_DAYS); \
+	else \
+		echo "gc: cargo-sweep not installed, target/ left as is (cargo install cargo-sweep --locked)"; \
+	fi
+	@if docker info >/dev/null 2>&1; then \
+		docker builder prune -f --max-used-space $(GC_DOCKER_KEEP) | tail -1; \
+	else \
+		echo "gc: docker not running, its build cache left as is"; \
+	fi
 
 clean:
 	pnpm clean
