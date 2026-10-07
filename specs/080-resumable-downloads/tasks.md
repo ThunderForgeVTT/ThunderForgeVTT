@@ -56,7 +56,7 @@ they prove inside each phase.
 - [x] T015 [US1] `apps/web/src/services/scenePreload.ts`: warm through `downloadBytes(url, { init: { cache: "force-cache" } })`, keep `{warmed, reason}`; update its Vitest
 - [x] T016 [US1] Engine world cache: install `globalThis.__thunderforgeDownloadBytes` in `apps/web/src/engine/bevy/index.ts` before the engine starts; in `crates/thunderforge-engine/src/plugins/cached_assets/wasm.rs` `fetch()` call it through a `wasm_bindgen` extern when defined, fall back to `gloo_net`; fingerprint check untouched; `cargo check --target wasm32-unknown-unknown -p thunderforge-engine`
 - [x] T017 [US1] Standalone e2e `packages/downloads/e2e/resume.test.ts`: a real `node:http` server serving a 40 MB generated file with ranges and ETag, which destroys the socket of one part halfway; assert the result's SHA-256 matches and the bytes served after the cut ≤ the parts in flight (SC-001), using real default settings
-- [ ] T018 [US1] Integration e2e `apps/web/e2e/resumable-downloads-scene.spec.ts`: lower the threshold via the DEV override, open a scene whose background goes into parts, abort one ranged request with `page.route` partway, assert it is re-requested with a later start offset and the board renders the background
+- [x] T018 [US1] Integration e2e `apps/web/e2e/resumable-downloads-scene.spec.ts`: lower the threshold via the DEV override, open a scene whose background goes into parts, abort one ranged request with `page.route` partway, assert it is re-requested with a later start offset and the board renders the background
 
 ---
 
@@ -103,11 +103,11 @@ they prove inside each phase.
 
 ## Phase 8: Proof and polish
 
-- [ ] T032 Register the slice: `scripts/e2e/slices.json` entry `resumable-downloads` (`standalone: "pnpm -F @thunderforge/downloads test:e2e"`, `own: ["resumable-downloads-"]`, neighbours `engine-loading.spec.ts` and `scene-preload.spec.ts` with seams, `paths` for every file touched); root `package.json` scripts; `node scripts/check-e2e-slices.mjs` passes
+- [x] T032 Register the slice: `scripts/e2e/slices.json` entry `resumable-downloads` (`standalone: "pnpm -F @thunderforge/downloads test:e2e"`, `own: ["resumable-downloads-"]`, neighbours `engine-loading.spec.ts` and `scene-preload.spec.ts` with seams, `paths` for every file touched); root `package.json` scripts; `node scripts/check-e2e-slices.mjs` passes
 - [ ] T033 `cargo fmt`, `cargo clippy -p thunderforge-server`, `cargo check --target wasm32-unknown-unknown -p thunderforge-engine`, `pnpm -F @thunderforge/downloads typecheck`, `pnpm -F web typecheck`
-- [ ] T034 `cargo test -p thunderforge-server assets_serve static_files` green
+- [x] T034 `cargo test -p thunderforge-server assets_serve static_files` green
 - [ ] T035 Run `pnpm e2e:resumable-downloads`; record the result here
-- [ ] T036 [P] User guide note in `docs/guides/` on the `feature.download_in_parts` switch; CONTRIBUTING note on the package and the DEV override
+- [x] T036 [P] User guide note in `docs/guides/` on the `feature.download_in_parts` switch; CONTRIBUTING note on the package and the DEV override
 
 ---
 

@@ -45,6 +45,34 @@ login. Reach for them before the full app when the work is in their part.
   page of its own, for tuning looks and race-aware dice in `packages/heroes`
   (`pnpm -F @thunderforge/hero-builder-app dev`). It needs no stack at all.
 
+### Large downloads
+
+Anything large the web app fetches — the engine, a scene's images, the
+world cache's assets — goes through `packages/downloads`
+(`@thunderforge/downloads`), reached from the app as
+`apps/web/src/services/downloads.ts`. A file at or above the threshold
+(16 MiB), uncompressed, offering byte ranges and a strong `ETag` or a
+`Last-Modified`, is fetched in parts (8 MiB, four at a time) that resume
+after a cut; anything else is one plain request. The server's ranged
+answers come from `crates/thunderforge-server/src/assets_serve/ranged.rs`,
+and built files from `ServeDir`, which offers ranges on the precompressed
+copies too.
+
+Fixtures are rarely 16 MiB. In a dev build a test can shrink the numbers
+before the page loads; a production build never reads this:
+
+```ts
+await page.addInitScript(() => {
+  globalThis.__thunderforgeDownloadSettings = {
+    threshold: 4096,
+    partSize: 16384,
+  };
+});
+```
+
+`pnpm e2e:resumable-downloads` proves it: the package against a real socket,
+then the app against the stack.
+
 ### Proving a change
 
 A change is proven by its feature's slice, not by the full e2e suite. A

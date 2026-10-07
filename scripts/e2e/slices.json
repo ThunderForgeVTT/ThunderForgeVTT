@@ -733,6 +733,34 @@
       ]
     },
     {
+      "name": "resumable-downloads",
+      "summary": "Resumable downloads (specs/080-resumable-downloads)",
+      "own": ["resumable-downloads-"],
+      "neighbours": [
+        {
+          "spec": "engine-loading.spec.ts",
+          "seam": "the engine loader's progress bar is fed by the downloader's parts"
+        },
+        {
+          "spec": "scene-preload.spec.ts",
+          "seam": "a scene's images are warmed through the downloader"
+        }
+      ],
+      "paths": [
+        "packages/downloads/**",
+        "apps/web/src/services/{downloads,scenePreload}.ts",
+        "apps/web/src/services/__tests__/{downloads,scenePreload}.test.ts",
+        "apps/web/src/api/featureFlags.ts",
+        "apps/web/src/engine/bevy/index.ts",
+        "crates/thunderforge-engine/src/plugins/cached_assets/wasm.rs",
+        "crates/thunderforge-server/src/assets_serve/**",
+        "crates/thunderforge-server/src/storage/rustfs.rs",
+        "crates/thunderforge-server/src/static_files/**",
+        "crates/thunderforge-server/src/settings/features.rs"
+      ],
+      "standalone": "pnpm -F @thunderforge/downloads test:e2e"
+    },
+    {
       "name": "scenes",
       "summary": "Scenes, staging and the player's active scene (specs/009-gm-staging-page, specs/010-world-staging-actors, specs/022-scene-management-overhaul); scene-lighting and scene-preload are owned elsewhere by exact name",
       "own": [
