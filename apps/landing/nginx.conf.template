@@ -1,0 +1,125 @@
+# thunderforge.dev: the homepage at /, the browser demo at /demo/, and a
+# cached read-only window onto the repository's GitHub stars.
+#
+# A template: the nginx image substitutes ${GITHUB_TOKEN} at start. GitHub only
+# lists stargazers to an authenticated caller, so the token stays here and no
+# browser ever sees it. Without one the star chart shows contributors only.
+
+upstream github_api {
+  server api.github.com:443;
+  keepalive 4;
+}
+
+# Every visitor is served from this cache. GitHub is asked again at most once
+# every ten minutes per path and pod, and an error or rate limit from GitHub
+# serves the last good answer instead (kept for a week).
+proxy_cache_path /var/cache/nginx/github levels=1:2 keys_zone=github:1m max_size=20m inactive=7d use_temp_path=off;
+
+map "${GITHUB_TOKEN}" $github_auth {
+  ""      "";
+  default "Bearer ${GITHUB_TOKEN}";
+}
+
+server {
+  listen 8080;
+  server_name _;
+  root /usr/share/nginx/html;
+
+  server_tokens off;
+  # Behind the gateway, a redirect must not name this pod's port or scheme.
+  absolute_redirect off;
+  gzip on;
+  gzip_types text/css application/javascript application/json image/svg+xml application/wasm;
+
+  add_header X-Content-Type-Options nosniff always;
+  add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+  # Hashed build output never changes under the same name.
+  location ~ ^/(demo/)?assets/ {
+    add_header Cache-Control "public, max-age=31536000, immutable";
+    add_header X-Content-Type-Options nosniff always;
+    try_files $uri =404;
+  }
+
+  # The demo is a single-page app under its own base path.
+  location /demo/ {
+    try_files $uri $uri/ /demo/index.html;
+  }
+  location = /demo {
+    return 301 /demo/;
+  }
+
+  location / {
+    # The dice are WebAssembly, the hero portraits are data: URIs, and the
+    # only outside images are stargazers' GitHub avatars.
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://avatars.githubusercontent.com; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'" always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+    add_header Cache-Control "no-cache";
+    try_files $uri $uri/ =404;
+  }
+
+  # GitHub, read-only and cached. Each path maps to exactly one GitHub URL
+  # (the query string a visitor sends is never forwarded), so nobody can spend
+  # the token on anything else or fill the cache with variants.
+  location /gh/ {
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_set_header Host api.github.com;
+    proxy_ssl_server_name on;
+    proxy_ssl_name api.github.com;
+    proxy_set_header Authorization $github_auth;
+    proxy_set_header Accept "application/vnd.github+json";
+    proxy_set_header User-Agent "thunderforge.dev";
+    proxy_set_header Cookie "";
+
+    proxy_cache github;
+    proxy_cache_valid 200 10m;
+    proxy_cache_valid any 1m;
+    proxy_cache_use_stale error timeout updating http_403 http_429 http_500 http_502 http_503 http_504;
+    proxy_cache_background_update on;
+    proxy_cache_lock on;
+    proxy_ignore_headers Cache-Control Expires Set-Cookie Vary X-Accel-Expires;
+    proxy_hide_header Set-Cookie;
+    proxy_hide_header X-RateLimit-Limit;
+    proxy_hide_header X-RateLimit-Remaining;
+    proxy_hide_header X-RateLimit-Reset;
+    proxy_hide_header X-RateLimit-Used;
+    proxy_hide_header X-RateLimit-Resource;
+    proxy_hide_header X-OAuth-Scopes;
+    proxy_hide_header X-Accepted-OAuth-Scopes;
+    proxy_hide_header Access-Control-Allow-Origin;
+    proxy_hide_header Access-Control-Expose-Headers;
+    proxy_hide_header Content-Security-Policy;
+    proxy_hide_header Link;
+
+    add_header Cache-Control "public, max-age=300" always;
+    add_header X-Cache $upstream_cache_status always;
+    add_header X-Content-Type-Options nosniff always;
+
+    location = /gh/repo {
+      set $gh "/repos/ThunderForgeVTT/ThunderForgeVTT";
+      proxy_cache_key "repo";
+      proxy_pass https://github_api$gh;
+    }
+    location = /gh/contributors {
+      set $gh "/repos/ThunderForgeVTT/ThunderForgeVTT/contributors?per_page=100";
+      proxy_cache_key "contributors";
+      proxy_pass https://github_api$gh;
+    }
+    location = /gh/stargazers {
+      if ($arg_page !~ "^[1-9][0-9]?$") {
+        return 400;
+      }
+      set $gh "/repos/ThunderForgeVTT/ThunderForgeVTT/stargazers?per_page=100&page=$arg_page";
+      proxy_cache_key "stargazers:$arg_page";
+      proxy_pass https://github_api$gh;
+    }
+    return 404;
+  }
+
+  location = /healthz {
+    access_log off;
+    return 200 "ok\n";
+  }
+}

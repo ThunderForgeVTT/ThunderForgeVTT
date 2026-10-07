@@ -171,6 +171,22 @@ RUN if [ "$BUILD_PROFILE" = dev ]; then flag=""; dir=debug; else flag=--release;
 # it is built after the server and not beside the client.
 RUN pnpm -F @thunderforge/demo run build
 
+# --- the homepage ------------------------------------------------------------
+#
+# thunderforge.dev: apps/landing at / and the demo at /demo/, served by nginx.
+# Build it with `--target landing`; the server stays the default (last) stage.
+FROM build AS landing-build
+RUN pnpm -F @thunderforge/landing run build
+
+FROM nginx:stable-alpine AS landing
+# The image fills in the template at start; an empty token is allowed and
+# leaves the star chart to contributors only.
+ENV GITHUB_TOKEN=""
+COPY apps/landing/nginx.conf.template /etc/nginx/templates/default.conf.template
+COPY --from=landing-build /build/apps/landing/dist /usr/share/nginx/html
+COPY --from=build /build/data/demo /usr/share/nginx/html/demo
+EXPOSE 8080
+
 # --- the server ---------------------------------------------------------------
 #
 # The same Debian release the binary was linked on, so glibc and libpq match.
