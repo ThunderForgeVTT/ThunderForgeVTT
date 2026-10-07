@@ -121,6 +121,15 @@ pub enum StorageError {
     DeleteRefused(String),
     #[error("STS AssumeRole response was missing credentials")]
     MissingCredentials,
+    /// Spec 080 FR-004: the range asked for starts at or past the end.
+    #[error("requested range is outside the object")]
+    RangeNotSatisfiable,
+    /// Spec 080 FR-003: the object is no longer the version the reader
+    /// named, so a part of it would splice two versions.
+    #[error("object changed since the version asked for")]
+    PreconditionFailed,
+    #[error("S3 HeadObject failed: {0}")]
+    HeadObject(String),
 }
 
 /// Derives the storage object key for one asset. Never client-supplied —
@@ -273,6 +282,105 @@ pub fn scoped_read_policy(bucket: &str, key: &str) -> String {
 /// from RustFS itself, so this credential stays exactly as
 /// server-side-only as the write one does).
 pub async fn read_object(cfg: &RustFsConfig, key: &str) -> Result<Vec<u8>, StorageError> {
+    let s3 = scoped_reader(cfg, key).await?;
+
+    let output = s3
+        .get_object()
+        .bucket(&cfg.bucket)
+        .key(key)
+        .send()
+        .await
+        .map_err(|e| StorageError::GetObject(e.to_string()))?;
+
+    let bytes = output
+        .body
+        .collect()
+        .await
+        .map_err(|e| StorageError::GetObject(e.to_string()))?
+        .into_bytes()
+        .to_vec();
+
+    Ok(bytes)
+}
+
+/// One object opened for reading, its body not yet read.
+///
+/// Spec 080: the body is a stream, so a route hands it to the client as
+/// storage sends it and never holds the object (FR-006).
+pub struct OpenObject {
+    pub body: ByteStream,
+    pub content_length: Option<i64>,
+    /// `bytes a-b/size` when a range was asked for and served.
+    pub content_range: Option<String>,
+    pub e_tag: Option<String>,
+    /// An HTTP date.
+    pub last_modified: Option<String>,
+}
+
+/// Opens `key` for reading, or one byte range of it.
+///
+/// `range` is an HTTP range spec the caller has already checked is one
+/// `bytes=` range. `if_match` is the entity tag the reader expects: storage
+/// refuses with [`StorageError::PreconditionFailed`] when the object is no
+/// longer that version. A range past the end is
+/// [`StorageError::RangeNotSatisfiable`].
+///
+/// The credential is minted per call, scoped to this one key, exactly as
+/// [`read_object`] mints it: a part is a request like any other (FR-005).
+pub async fn open_object(
+    cfg: &RustFsConfig,
+    key: &str,
+    range: Option<&str>,
+    if_match: Option<&str>,
+) -> Result<OpenObject, StorageError> {
+    let s3 = scoped_reader(cfg, key).await?;
+
+    let output = s3
+        .get_object()
+        .bucket(&cfg.bucket)
+        .key(key)
+        .set_range(range.map(str::to_string))
+        .set_if_match(if_match.map(str::to_string))
+        .send()
+        .await
+        .map_err(|e| match e.raw_response().map(|r| r.status().as_u16()) {
+            Some(416) => StorageError::RangeNotSatisfiable,
+            Some(412) => StorageError::PreconditionFailed,
+            _ => StorageError::GetObject(e.to_string()),
+        })?;
+
+    Ok(OpenObject {
+        content_length: output.content_length(),
+        content_range: output.content_range().map(str::to_string),
+        e_tag: output.e_tag().map(str::to_string),
+        last_modified: output
+            .last_modified()
+            .and_then(|t| t.fmt(aws_sdk_s3::primitives::DateTimeFormat::HttpDate).ok()),
+        body: output.body,
+    })
+}
+
+/// The size of `key` in bytes, for a `416` answer's `bytes */size`.
+///
+/// `HeadObject` is authorised by the same `s3:GetObject` the scoped read
+/// policy grants.
+pub async fn object_size(cfg: &RustFsConfig, key: &str) -> Result<i64, StorageError> {
+    let s3 = scoped_reader(cfg, key).await?;
+    let output = s3
+        .head_object()
+        .bucket(&cfg.bucket)
+        .key(key)
+        .send()
+        .await
+        .map_err(|e| StorageError::HeadObject(e.to_string()))?;
+    output
+        .content_length()
+        .ok_or_else(|| StorageError::HeadObject("no content length".to_string()))
+}
+
+/// An S3 client holding a fresh credential that may read `key` and nothing
+/// else. It stays inside this module.
+async fn scoped_reader(cfg: &RustFsConfig, key: &str) -> Result<aws_sdk_s3::Client, StorageError> {
     let sts = sts_client(cfg);
     let policy = scoped_read_policy(&cfg.bucket, key);
 
@@ -295,24 +403,7 @@ pub async fn read_object(cfg: &RustFsConfig, key: &str) -> Result<Vec<u8>, Stora
         creds.secret_access_key().to_string(),
         creds.session_token().to_string(),
     );
-
-    let output = s3
-        .get_object()
-        .bucket(&cfg.bucket)
-        .key(key)
-        .send()
-        .await
-        .map_err(|e| StorageError::GetObject(e.to_string()))?;
-
-    let bytes = output
-        .body
-        .collect()
-        .await
-        .map_err(|e| StorageError::GetObject(e.to_string()))?
-        .into_bytes()
-        .to_vec();
-
-    Ok(bytes)
+    Ok(s3)
 }
 
 /// Mints an STS credential scoped to exactly one `PutObject` on `key`,
