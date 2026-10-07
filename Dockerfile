@@ -28,15 +28,17 @@
 #
 # A cold build is long — tens of minutes on a laptop — because the workspace's
 # release profile is `lto = true, codegen-units = 1` and `wasm-opt` is
-# single-threaded over a ~25MB module. Neither scales with cores. BuildKit
-# cache mounts keep the cargo registry and the compiled `target/` between
-# builds, so a rebuild after a small change is minutes, not tens of minutes.
+# single-threaded over a ~25MB module. Neither scales with cores. cargo-chef
+# keeps every compiled dependency in a layer of its own (the `cook` stage), so
+# a rebuild after a source change compiles only this workspace's crates, and
+# BUILD_PROFILE=dev (what `make push` uses) skips LTO and wasm-opt altogether.
 
 ARG RUST_VERSION=1.98
 ARG NODE_VERSION=24
 ARG PNPM_VERSION=10.33.2
 ARG WASM_PACK_VERSION=0.15.0
 ARG DIESEL_CLI_VERSION=2.3.13
+ARG CARGO_CHEF_VERSION=0.1.78
 # `release` for anything a visitor downloads; `dev` for the dev cluster, where
 # the wait matters more than the size: an unoptimised engine (no wasm-opt) and
 # a debug server, minutes instead of tens of minutes. `make push` passes `dev`
@@ -55,6 +57,7 @@ FROM rust:${RUST_VERSION}-bookworm AS toolchain
 ARG PNPM_VERSION
 ARG WASM_PACK_VERSION
 ARG DIESEL_CLI_VERSION
+ARG CARGO_CHEF_VERSION
 
 RUN apt-get update \
   && apt-get install --no-install-recommends --yes \
@@ -79,33 +82,68 @@ RUN rustup target add wasm32-unknown-unknown
 # wasm-pack drives the engine build and fetches a matching wasm-bindgen and
 # binaryen on first use. diesel-cli applies the migrations at container start:
 # they are not embedded in the binary, and `make migrate` uses the same tool.
+# cargo-chef splits the Rust build so dependencies are a layer of their own;
+# see the `cook` stage.
 RUN --mount=type=cache,target=/usr/local/cargo/registry,id=thunderforge-cargo-registry \
   cargo install wasm-pack --version "${WASM_PACK_VERSION}" --locked \
   && cargo install diesel_cli --version "${DIESEL_CLI_VERSION}" --locked \
-  --no-default-features --features postgres
+  --no-default-features --features postgres \
+  && cargo install cargo-chef --version "${CARGO_CHEF_VERSION}" --locked
 
-# --- the build ----------------------------------------------------------------
-FROM toolchain AS build
+# --- the dependencies (cargo-chef) -------------------------------------------
+#
+# `planner` reduces the workspace to its manifests and lockfile (recipe.json);
+# `cook` compiles every dependency from that recipe alone. The cooked `target/`
+# and the registry it was fetched from are ordinary layers, so they stay valid
+# until a dependency changes, a source edit never invalidates them, and unlike
+# a cache mount they can be exported (`--cache-to`) and pushed: a CI job run in
+# the `cook` image starts with every dependency compiled, at these paths, with
+# this rustc and this glibc.
+#
+# Each cook below has to build its crate exactly as the build stage will —
+# same target, profile and features — or cargo sees different dependencies and
+# compiles them again. The engine follows BUILD_PROFILE (with `debug-names` on
+# dev, as `scripts/shared.mjs` builds it); dice, pdf and combat are always
+# release with `wasm`; the server follows BUILD_PROFILE with its defaults,
+# which is also what its demo-maps binary needs (that feature enables nothing
+# in a dependency).
+FROM toolchain AS planner
+WORKDIR /build
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM toolchain AS cook
 ARG BUILD_PROFILE
 WORKDIR /build
-
 # The engine follows BUILD_PROFILE: `release` is what a release is; `dev` is
 # a fast, unoptimised bundle for the dev cluster.
 ENV ENGINE_PROFILE=${BUILD_PROFILE} \
   CARGO_TERM_COLOR=never \
   CI=true
+# `[env]` in the cargo config is part of what a build sees.
+COPY .cargo .cargo
+COPY --from=planner /build/recipe.json recipe.json
+RUN if [ "$BUILD_PROFILE" = dev ]; then flag=""; engine="--features debug-names"; else flag=--release; engine=""; fi \
+  && cargo chef cook $flag --recipe-path recipe.json -p thunderforge \
+  && cargo chef cook $flag --recipe-path recipe.json --target wasm32-unknown-unknown \
+  -p thunderforge_engine $engine \
+  && for crate in thunderforge_dice thunderforge-pdf thunderforge_combat; do \
+  cargo chef cook --release --recipe-path recipe.json --target wasm32-unknown-unknown \
+  -p "$crate" --features wasm || exit 1; \
+  done
+
+# --- the build ----------------------------------------------------------------
+FROM cook AS build
+ARG BUILD_PROFILE
 
 COPY . .
 
 # Order matters. `dist/engine`, `dist/pdf` and `dist/dice` are pnpm workspace
 # packages that wasm-pack writes, and `apps/web` and `apps/demo` depend on
-# them, so they have to exist
-# before `pnpm install` can resolve the workspace. The cargo `target/` is a
-# cache mount: it is shared with the server build below and never lands in an
-# image.
-RUN --mount=type=cache,target=/usr/local/cargo/registry,id=thunderforge-cargo-registry \
-  --mount=type=cache,target=/build/target,id=thunderforge-cargo-target \
-  --mount=type=cache,target=/root/.cache,id=thunderforge-wasm-pack-cache \
+# them, so they have to exist before `pnpm install` can resolve the
+# workspace. `target/` is the cooked one from the stage above: only this
+# workspace's own crates compile here.
+RUN --mount=type=cache,target=/root/.cache,id=thunderforge-wasm-pack-cache \
   node scripts/build.mjs --only-wasm
 
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=thunderforge-pnpm-store \
@@ -115,13 +153,10 @@ RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=thunderforge-pnpm
 RUN pnpm -F @thunderforge/web run build
 
 # The server in BUILD_PROFILE, stripped: a debug binary carries about 1.4GB
-# of symbols and nothing in a container needs them. Copied out of the cache
-# mount in the same step, because the mount is gone once the step ends. The
-# same step runs the demo's map importer, a second binary of the same crate,
-# in the same profile so it reuses what the server build compiled.
-RUN --mount=type=cache,target=/usr/local/cargo/registry,id=thunderforge-cargo-registry \
-  --mount=type=cache,target=/build/target,id=thunderforge-cargo-target \
-  if [ "$BUILD_PROFILE" = dev ]; then flag=""; dir=debug; else flag=--release; dir=release; fi \
+# of symbols and nothing in a container needs them. The same step runs the
+# demo's map importer, a second binary of the same crate, in the same profile
+# so it reuses what the server build compiled.
+RUN if [ "$BUILD_PROFILE" = dev ]; then flag=""; dir=debug; else flag=--release; dir=release; fi \
   && cargo build $flag -p thunderforge \
   && mkdir -p /out \
   && install -m 755 target/$dir/thunderforge /out/thunderforge \
