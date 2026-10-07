@@ -20,7 +20,7 @@ import {
   findActor,
   rollCheck,
   systemDataOf,
-  tokenVisible,
+  tokenForViewer,
   updateSystemData,
   viewerIsGm,
   viewerUser,
@@ -397,7 +397,7 @@ export const queries: Record<string, Handler> = {
   walls: (args) => onLevel(demoState().walls, args),
   tokens: (args) => {
     const state = demoState();
-    return onLevel(state.tokens, args).filter((t) => tokenVisible(state, t));
+    return onLevel(state.tokens, args).map((t) => tokenForViewer(state, t));
   },
   lightSources: (args) => onLevel(demoState().lights, args),
   // `scene.rs`: a player sees only the shapes shown to players.

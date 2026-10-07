@@ -43,10 +43,27 @@ export function visibleActors(state: DemoState): Row[] {
   return state.actors.filter((actor) => actorVisible(state, actor));
 }
 
-export function tokenVisible(state: DemoState, token: Row): boolean {
-  if (!token.actorId) return true;
-  const actor = state.actors.find((a) => a.id === token.actorId);
-  return !actor || actorVisible(state, actor);
+/**
+ * A token as this viewer is sent it (`GraphQLToken::for_viewer`). The board
+ * sends every token, a hidden NPC's included: hiding the creature hides its
+ * name, not the figure standing in the room. A player may read the name only
+ * when the token's own switch allows it **and** players may see the creature
+ * (`player_may_read_token_name`); otherwise it goes out with no name, neither
+ * as `name` nor as the `metadata.label` it was written in.
+ */
+export function tokenForViewer(state: DemoState, token: Row): Row {
+  if (viewerIsGm(state)) return token;
+  const actor = token.actorId
+    ? state.actors.find((a) => a.id === token.actorId)
+    : undefined;
+  const seen = !actor || !actor.isNpc || actor.visibleToPlayers === true;
+  if (token.nameVisibleToPlayers === true && seen) return token;
+  const metadata =
+    token.metadata && typeof token.metadata === "object"
+      ? { ...(token.metadata as Row) }
+      : token.metadata;
+  if (metadata && typeof metadata === "object") delete (metadata as Row).label;
+  return { ...token, name: null, nameVisibleToPlayers: false, metadata };
 }
 
 /** The actor's explicit ownership-block grants, kept on the actor. */

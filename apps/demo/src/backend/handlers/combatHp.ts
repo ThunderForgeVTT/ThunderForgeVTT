@@ -10,7 +10,7 @@
  */
 import { GraphQLError } from "graphql";
 import system from "../../../../../packs/systems/dnd5e/system.json";
-import { tokenVisible, viewerIsGm } from "../actors";
+import { viewerIsGm } from "../actors";
 import { EVENT, now, record } from "../events";
 import { markChanged, type DemoState, type Fight, type Row } from "../state";
 import { MANIFEST, actorOf, call, slotsOf, type Rules } from "./combatRules";
@@ -212,7 +212,7 @@ export function tokenStatus(state: DemoState, sceneId: string): Row[] {
   const gm = viewerIsGm(state);
   const out: Row[] = [];
   for (const token of state.tokens) {
-    if (token.sceneId !== sceneId || !tokenVisible(state, token)) continue;
+    if (token.sceneId !== sceneId) continue;
     const actor = actorOf(state, token);
     if (!actor) continue;
     const resources: Row[] = [];

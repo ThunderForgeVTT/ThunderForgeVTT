@@ -238,8 +238,13 @@ describe("a fight in the demo", () => {
     try {
       const goblin = tokenNamed("Goblin 1");
       const brannoc = tokenNamed("Brannoc Stoneward");
-      // Hidden ambushers are not on the player's board at all.
-      expect(await hitPoints(goblin.tokenId as string)).toBeUndefined();
+      // A hidden ambusher stands on the player's board like any other
+      // figure (the server sends every token); its health is a quarter.
+      const hidden = (
+        (await hitPoints(goblin.tokenId as string))?.resources as Row[]
+      )[0];
+      expect(hidden.disclosure).toBe("chunked");
+      expect(hidden.entries).toBeNull();
       const hero = await hitPoints(brannoc.tokenId as string);
       expect((hero?.resources as Row[])[0].disclosure).toBe("visible");
 

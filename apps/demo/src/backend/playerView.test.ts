@@ -83,3 +83,32 @@ describe("shapes", () => {
     expect(player.shapes).toEqual([{ shapeId: "shown" }]);
   });
 });
+
+describe("tokens", () => {
+  const TOKENS = `query ($s: UUID!) {
+    tokens(sceneId: $s) { tokenId actorId name nameVisibleToPlayers metadata }
+  }`;
+
+  it("sends a player every token, and no hidden creature's name", async () => {
+    const hidden = state.tokens.find((token) => {
+      const actor = state.actors.find((a) => a.id === token.actorId);
+      return (
+        token.sceneId === sceneId && actor?.isNpc && !actor.visibleToPlayers
+      );
+    });
+    expect(
+      hidden,
+      "the seed's first scene holds a hidden creature",
+    ).toBeDefined();
+    const gm = await must(TOKENS, { s: sceneId });
+
+    viewAs("player");
+    const player = await must(TOKENS, { s: sceneId });
+    expect(player.tokens.map((t: Row) => t.tokenId)).toEqual(
+      gm.tokens.map((t: Row) => t.tokenId),
+    );
+    const seen = player.tokens.find((t: Row) => t.tokenId === hidden!.tokenId);
+    expect(seen).toMatchObject({ name: null, nameVisibleToPlayers: false });
+    expect(seen.metadata?.label).toBeUndefined();
+  });
+});

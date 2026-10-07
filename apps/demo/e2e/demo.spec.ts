@@ -978,7 +978,7 @@ test("something the demo does not do says so, and is not a connection error", as
   ).toBeVisible();
 });
 
-test("as a player, the heroes are theirs and the ambush is not yet there to see", async () => {
+test("as a player, the heroes are theirs and the ambushers stand on the board unnamed", async () => {
   await page.goto(`/demo/world/${WORLD_ID}`);
   await page.getByRole("button", { name: "View as player" }).click();
   await expect(page.getByTestId("demo-viewer")).toContainText(
@@ -1004,11 +1004,16 @@ test("as a player, the heroes are theirs and the ambush is not yet there to see"
   expect(claim.body.data?.myActorClaim.actor.label).toBe("Brannoc Stoneward");
   const ambush = (await scenes()).find((s) => s.name === "Grassy Path Ambush");
   if (!ambush) throw new Error("Grassy Path Ambush is a scene of the demo");
-  const tokens = await ask<{ tokens: { tokenId: string }[] }>(
-    "query ($sceneId: UUID!) { tokens(sceneId: $sceneId) { tokenId } }",
-    { sceneId: ambush.sceneId },
-  );
-  expect(tokens.body.data?.tokens).toHaveLength(2);
+  // Every figure is on a player's board, as the server sends it: the
+  // monsters are there to be seen, only their names are the GM's.
+  const tokens = await ask<{
+    tokens: { tokenId: string; name: string | null }[];
+  }>("query ($sceneId: UUID!) { tokens(sceneId: $sceneId) { tokenId name } }", {
+    sceneId: ambush.sceneId,
+  });
+  const board = tokens.body.data?.tokens ?? [];
+  expect(board).toHaveLength(7);
+  expect(board.filter((t) => t.name === null)).toHaveLength(5);
   // And the play field is a player's: a board with no Game Master's tools.
   await page.goto(`/demo/world/${WORLD_ID}/play`);
   await expect(page.locator("canvas")).toBeVisible({ timeout: 60_000 });
