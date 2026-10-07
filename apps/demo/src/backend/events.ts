@@ -102,16 +102,22 @@ export function eventReaches(event: WorldEvent, isGm: boolean): boolean {
   return visibility === "everyone" || visibility === "gm_eyes";
 }
 
-/** Whether the page renders for the GM, as `viewerIsGm` judges it. */
-export const viewerIsGm = () => demoState().viewer !== "player";
+/** Whether the operation in flight is the GM's, as `viewerIsGm` judges it. */
+const viewerIsGm = () => demoState().viewer !== "player";
 
 /** Hands every recorded event to every subscriber, oldest first. */
 export function releaseEvents(): void {
   const events = pending;
   pending = [];
-  for (const event of events) {
-    for (const deliver of [...subscribers]) deliver(event);
-  }
+  for (const event of events) deliverEvent(event);
+}
+
+/**
+ * Hands one event to every subscriber: one this tab released, or one the
+ * tab holding the world released and posted (spec 081 R6).
+ */
+export function deliverEvent(event: WorldEvent): void {
+  for (const deliver of [...subscribers]) deliver(event);
 }
 
 export function subscribeToEvents(

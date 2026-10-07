@@ -806,8 +806,11 @@
         "apps/web/src/hooks/useWorldRolls.ts",
         "crates/thunderforge-server/src/rolls/**",
         "crates/thunderforge-server/src/graphql/queries/roll_feed_tests.rs",
-        "crates/thunderforge-server/src/graphql/{roll_stream_tests,types_rolls}.rs"
-      ]
+        "crates/thunderforge-server/src/graphql/{roll_stream_tests,types_rolls}.rs",
+        "apps/demo/src/backend/tabs{,.test}.ts",
+        "apps/demo/e2e/rolls-across-tabs.spec.ts"
+      ],
+      "standalone": "pnpm -F @thunderforge/demo test && pnpm -F @thunderforge/demo e2e rolls-across-tabs"
     },
     {
       "name": "scenes",

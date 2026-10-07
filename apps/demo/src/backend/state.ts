@@ -53,7 +53,11 @@ export interface DemoState {
   actors: Row[];
   /** One `GraphQLActorSystemData` row per actor that has any. */
   systemData: Row[];
-  /** Whose view the page renders; the session answers with this member. */
+  /**
+   * Who asked the operation in flight: the handlers answer as this member.
+   * The tab holding the world sets it per request (spec 081 R7); which tab
+   * renders for whom is `currentViewer`.
+   */
   viewer: Viewer;
   /** The hero the seeded player is playing (spec 023); they own both. */
   claimedActorId: string | null;
@@ -119,6 +123,7 @@ export async function loadState(
   base: string,
 ): Promise<DemoState> {
   const saved = readSaved();
+  savedViewer ??= saved?.viewer ?? "gm";
   if (saved) {
     state = saved;
     return saved;
@@ -138,11 +143,25 @@ function saveNow(): void {
   }
   if (!state) return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    // `viewer` is whoever asked last; the world keeps the one it was saved
+    // with, which is all a tab without a choice of its own reads (R7).
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ ...state, viewer: savedViewer ?? state.viewer }),
+    );
   } catch {
     // A full or forbidden store costs the visitor their changes on reload and
     // nothing else; the world in the tab is still whole.
   }
+}
+
+/**
+ * Spec 081: a tab taking over the world from one that closed reads it as
+ * that tab last saved it, which is everything that tab answered.
+ */
+export function reloadSaved(): void {
+  const saved = readSaved();
+  if (saved) state = saved;
 }
 
 /** Called after anything changes. Coalesces a drag's worth of writes. */
@@ -151,24 +170,41 @@ export function markChanged(): void {
   saveTimer = setTimeout(saveNow, SAVE_AFTER_MS);
 }
 
+/** Spec 081 R7: the GM / player switch belongs to the tab, not the world. */
+const VIEWER_KEY = "thunderforge-demo:viewer";
+
 /**
- * Who the page is rendering for, before the world is necessarily loaded: the
- * notice bar draws on the first paint, and the saved answer is what the
- * session will report once it is.
+ * The viewer a world saved before spec 081 was switched to, kept as it was
+ * so that a tab opened without a choice of its own starts where the visitor
+ * left off, whatever the tabs have asked since.
+ */
+let savedViewer: Viewer | null = null;
+
+/**
+ * Who this tab renders for. A tab that has not chosen starts as the saved
+ * world's viewer, read once, or as the GM.
  */
 export function currentViewer(): Viewer {
-  return state?.viewer ?? readSaved()?.viewer ?? "gm";
+  try {
+    const chosen = window.sessionStorage.getItem(VIEWER_KEY);
+    if (chosen === "gm" || chosen === "player") return chosen;
+  } catch {
+    // A tab that cannot remember its choice renders for the default.
+  }
+  savedViewer ??= readSaved()?.viewer ?? "gm";
+  return savedViewer;
 }
 
 /**
- * Who the page is rendering for. Saved at once: the caller reloads the page
- * so the real client asks who it is afresh, and the answer must be waiting.
+ * Who this tab renders for. Kept at once: the caller reloads the page so the
+ * real client asks who it is afresh, and the answer must be waiting.
  */
 export function setViewer(viewer: Viewer): void {
-  if (!state) state = readSaved();
-  if (!state) return;
-  state.viewer = viewer;
-  saveNow();
+  try {
+    window.sessionStorage.setItem(VIEWER_KEY, viewer);
+  } catch {
+    // Nowhere to keep it: the tab stays as it was.
+  }
 }
 
 /** FR-007: forget what this browser changed. The next load is the seed. */
@@ -186,6 +222,9 @@ export function forgetSavedWorld(): void {
   }
 }
 
-window.addEventListener("pagehide", () => {
+/** Writes the world now if anything is waiting to be written. */
+export function flushSave(): void {
   if (saveTimer) saveNow();
-});
+}
+
+window.addEventListener("pagehide", flushSave);

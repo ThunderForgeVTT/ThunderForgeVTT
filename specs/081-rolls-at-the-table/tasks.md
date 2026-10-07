@@ -119,10 +119,10 @@ they prove inside each phase.
 
 - [x] T037 [US6] Demo tests `apps/demo/src/backend/handlers/dice.test.ts`: the server's visibility cases (T003, T006, T033) against `handlers/dice.ts` as GM and as player
 - [x] T038 [US6] `apps/demo/src/backend/handlers/dice.ts` and `events.ts`: visibility and label on `rollDice`, `worldRoll`, `worldRolls`, `revealRoll`, codes 36/37 in `EVENT`, a roll without `visibility` read as `everyone` (data-model.md); per-viewer delivery of a `gm_only` roll event
-- [ ] T039 [US6] Viewer per tab: move the GM / player switch from the saved world to `sessionStorage` (`apps/demo/src/backend/state.ts`, `actors.ts`, `DemoNotice.tsx`); a saved world's viewer is read once as the first tab's (research R7)
-- [ ] T040 [US6] Demo tests `apps/demo/src/backend/tabs.test.ts` with a fake lock and channel: a guest's request runs on the holder as the guest's viewer; events reach every tab filtered per viewer; when the holder goes, a guest takes over from the saved world and resends what was open; without locks or channels each tab stands alone
-- [ ] T041 [US6] Create `apps/demo/src/backend/tabs.ts` (contracts/demo-tabs.md) and route the demo's request entry and event subscription through it
-- [ ] T042 [US6] Demo E2E `apps/demo/e2e/rolls-across-tabs.spec.ts`: two tabs of one context; one switched to player; a roll in either animates on both boards; a `gm_only` roll from the GM tab does not reach the player tab; closing the first tab leaves the second working; after edits in both and a reload of both, one identical world (SC-005)
+- [x] T039 [US6] Viewer per tab: move the GM / player switch from the saved world to `sessionStorage` (`apps/demo/src/backend/state.ts`, `actors.ts`, `DemoNotice.tsx`); a saved world's viewer is read once as the first tab's (research R7)
+- [x] T040 [US6] Demo tests `apps/demo/src/backend/tabs.test.ts` with a fake lock and channel: a guest's request runs on the holder as the guest's viewer; events reach every tab filtered per viewer; when the holder goes, a guest takes over from the saved world and resends what was open; without locks or channels each tab stands alone
+- [x] T041 [US6] Create `apps/demo/src/backend/tabs.ts` (contracts/demo-tabs.md) and route the demo's request entry and event subscription through it
+- [x] T042 [US6] Demo E2E `apps/demo/e2e/rolls-across-tabs.spec.ts`: two tabs of one context; one switched to player; a roll in either animates on both boards; a `gm_only` roll from the GM tab does not reach the player tab; closing the first tab leaves the second working; after edits in both and a reload of both, one identical world (SC-005)
 
 **Checkpoint**: US6 complete; `pnpm -F @thunderforge/demo test` and the demo's `rolls-across-tabs.spec.ts` green.
 
@@ -130,7 +130,7 @@ they prove inside each phase.
 
 ## Phase 9: Proof and polish
 
-- [ ] T043 Register the slice: `scripts/e2e/slices.json` entry `rolls` (`own: ["rolls-"]`, `standalone: "pnpm -F @thunderforge/demo test && pnpm -F @thunderforge/demo e2e rolls-across-tabs"`, neighbours from plan.md confirmed with `pnpm e2e:which --diff`, `paths` for every file touched); root `package.json` scripts `e2e:rolls`, `e2e:rolls:standalone`, `e2e:rolls:integration`; `node scripts/check-e2e-slices.mjs` passes
+- [x] T043 Register the slice: `scripts/e2e/slices.json` entry `rolls` (`own: ["rolls-"]`, `standalone: "pnpm -F @thunderforge/demo test && pnpm -F @thunderforge/demo e2e rolls-across-tabs"`, neighbours from plan.md confirmed with `pnpm e2e:which --diff`, `paths` for every file touched); root `package.json` scripts `e2e:rolls`, `e2e:rolls:standalone`, `e2e:rolls:integration`; `node scripts/check-e2e-slices.mjs` passes
 - [ ] T044 `cargo fmt`, `cargo clippy -p thunderforge-server`, `pnpm -F web typecheck`, `pnpm -F @thunderforge/demo typecheck`, `node scripts/check-graphql-contract.mjs`
 - [ ] T045 `cargo test -p thunderforge-server` green
 - [ ] T046 Run `pnpm e2e:rolls`; record the result here

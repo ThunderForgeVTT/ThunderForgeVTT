@@ -12,7 +12,11 @@
  * guard at the door covers code that is written next year, and a list of
  * replaced modules would not.
  */
-import { releaseEvents } from "../backend/events";
+import {
+  deliverEvent,
+  releaseEvents,
+  subscribeToEvents,
+} from "../backend/events";
 import { runOperation, type OperationRequest } from "../backend/execute";
 import {
   NOT_IN_DEMO_CODE,
@@ -20,7 +24,20 @@ import {
   reportNotInDemo,
 } from "../backend/notInDemo";
 import { importUvtt } from "../backend/mapImport";
-import { loadState } from "../backend/state";
+import {
+  currentViewer,
+  demoState,
+  flushSave,
+  loadState,
+  reloadSaved,
+} from "../backend/state";
+import {
+  CHANNEL_NAME,
+  connectTabs,
+  oneAtATime,
+  type Channel,
+  type Locks,
+} from "../backend/tabs";
 import { installImageGuard } from "./images";
 import { multipartOperation } from "./multipart";
 import { svgToPng } from "./rasterize";
@@ -34,8 +51,37 @@ const EVENT_DELAY_MS = 10;
 
 const fetchStatic = window.fetch.bind(window);
 
+/**
+ * Spec 081: an operation on the world, as the member who asked. Saved before
+ * it is answered, so a tab taking over the world has every answered change;
+ * its events follow the answer.
+ */
+const runOnWorld = oneAtATime(async (viewer, operation: OperationRequest) => {
+  demoState().viewer = viewer;
+  const result = await runOperation(operation);
+  flushSave();
+  setTimeout(releaseEvents, EVENT_DELAY_MS);
+  return result;
+});
+
+/** The visitor's other tabs, sharing the one world (spec 081 R6). */
+const tabs = connectTabs({
+  locks: (navigator as Navigator & { locks?: Locks }).locks,
+  channel:
+    typeof BroadcastChannel === "function"
+      ? (new BroadcastChannel(CHANNEL_NAME) as unknown as Channel)
+      : undefined,
+  viewer: currentViewer,
+  run: runOnWorld,
+  takeOver: reloadSaved,
+  deliver: deliverEvent,
+  onReleased: (post) => {
+    subscribeToEvents(post);
+  },
+});
+
 /** The world, loaded once. Every answer waits for it. */
-export const worldReady = loadState(fetchStatic, BASE);
+export const worldReady = loadState(fetchStatic, BASE).then(() => tabs.ready);
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -79,9 +125,7 @@ async function answerGraphQL(request: Request): Promise<Response> {
   } else {
     return refuse(`A ${type || "bodiless"} GraphQL request`);
   }
-  const result = await runOperation(operation);
-  setTimeout(releaseEvents, EVENT_DELAY_MS);
-  return json(result);
+  return json(await tabs.ask(operation));
 }
 
 async function demoFetch(
@@ -114,6 +158,8 @@ async function demoFetch(
     url.pathname,
   );
   if (request.method === "POST" && mapImport) {
+    // The import writes the world, which only the tab holding it may do.
+    if (!tabs.holds()) return refuse("Importing a map in a second tab");
     const form = await request.formData().catch(() => null);
     const answer = await importUvtt(mapImport[1], form);
     setTimeout(releaseEvents, EVENT_DELAY_MS);
