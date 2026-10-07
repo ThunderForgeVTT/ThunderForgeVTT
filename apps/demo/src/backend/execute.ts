@@ -25,7 +25,7 @@ import {
   type ExecutionResult,
   type GraphQLFieldResolver,
 } from "graphql";
-import sdl from "../../../server/schema.graphql?raw";
+import sdl from "../../../thunderforge/schema.graphql?raw";
 import { mutations, queries } from "./handlers";
 import {
   NOT_IN_DEMO_CODE,
