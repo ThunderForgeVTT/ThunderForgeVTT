@@ -212,7 +212,7 @@ async fn clearing_two_hundred_shapes_is_quick() {
     let started = std::time::Instant::now();
     let cleared = data(clear(&t, t.owner, None).await);
     let took = started.elapsed();
-    println!("clearShapes of 200 shapes took {took:?}");
+    eprintln!("clearShapes of 200 shapes took {took:?}");
 
     assert_eq!(cleared["clearShapes"], json!(200));
     assert_eq!(deleted_events(&t).len(), 200);
