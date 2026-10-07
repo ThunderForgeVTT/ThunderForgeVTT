@@ -30,7 +30,7 @@ import {
   actorAccessMutations,
   actorAccessQueries,
 } from "./handlers/actorAccess";
-import { loreQueries } from "./handlers/lore";
+import { loreMutations, loreQueries } from "./handlers/lore";
 import { demoState, markChanged, type DemoState, type Row } from "./state";
 
 type Args = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -364,37 +364,6 @@ export const queries: Record<string, Handler> = {
 export const mutations: Record<string, Handler> = {
   heartbeat: () => true,
 
-  createLoreEntry: ({ input }) => {
-    const at = now();
-    const content = (input.content as string | undefined) ?? "";
-    const entry: Row = {
-      id: crypto.randomUUID(),
-      worldId: input.worldId,
-      title: input.title,
-      slug: String(input.title)
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, ""),
-      content,
-      // Text, escaped. The server renders markdown; the demo does not need to
-      // for what it stores, and must never hand back markup it did not write.
-      renderedHtml: `<p>${content.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`)}</p>\n`,
-      currentRevisionId: crypto.randomUUID(),
-      myPermissionLevel: "OWNER",
-      moderated: false,
-      moderationCaseId: null,
-      createdBy: DEMO_USER.id,
-      createdAt: at,
-      updatedAt: at,
-      parentId: null,
-      tags: [],
-      linkedFrom: [],
-    };
-    demoState().lore.push(entry);
-    markChanged();
-    return entry;
-  },
-
   launchScene: ({ sceneId }) => {
     const state = demoState();
     scene(state, sceneId);
@@ -604,5 +573,6 @@ export const mutations: Record<string, Handler> = {
   },
   rollCheck: (args) => rollCheck(args),
 
+  ...loreMutations,
   ...actorAccessMutations,
 };

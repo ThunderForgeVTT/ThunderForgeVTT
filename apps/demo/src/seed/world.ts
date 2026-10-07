@@ -13,6 +13,7 @@ import { MAP_CREDIT_LINE } from "../credit";
 import type { DemoState, Row } from "../backend/state";
 import { artUrl, tokenPhotoUrl, type ArtRole } from "./art";
 import { CAST, slotRows } from "./cast";
+import { seedLore } from "./lore";
 
 /** One map as `thunderforge-demo-maps` lists it. */
 export interface MapListing {
@@ -159,7 +160,7 @@ export function buildSeed(maps: MapListing[], base: string): DemoState {
     tokens: [],
     lights: [],
     shapes: [],
-    lore: [],
+    lore: seedLore(DEMO_WORLD_ID, DEMO_USER.id, SEEDED_AT, seedId),
     chat: [],
     actors: [],
     systemData: [],

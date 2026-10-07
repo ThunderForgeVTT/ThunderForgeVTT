@@ -16,6 +16,13 @@ import type { DemoState, Row } from "./state";
 
 const SAFE_HREF = /^(https?:|mailto:|\/|#|\.)/i;
 
+/**
+ * Where the app is served. The server's links start at `/world/...`; the demo
+ * lives under its own base, and a link that dropped it would leave the demo
+ * for a page this browser has no server for.
+ */
+const APP_BASE = (import.meta.env?.BASE_URL ?? "/").replace(/\/$/, "");
+
 const escapeHtml = (text: string) =>
   text.replace(
     /[&<>"]/g,
@@ -141,7 +148,7 @@ export function renderLore(
             const shown = escapeHtml(unescapeHtml(label ?? target).trim());
             const found = resolveLink(state, name, gm);
             return found
-              ? `<a class="lore-link" href="${found.href}">${shown}</a>`
+              ? `<a class="lore-link" href="${APP_BASE}${found.href}">${shown}</a>`
               : `<span class="lore-link-broken" title="Unresolved link">${shown}</span>`;
           }),
     )

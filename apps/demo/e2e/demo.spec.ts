@@ -337,6 +337,45 @@ test("the ambush is drawn with the cast's own faces, not coloured squares", asyn
   await page.screenshot({ path: test.info().outputPath("ambush.png") });
 });
 
+test("a lore entry is written, edited and listed, and its link reaches the fighter's sheet", async () => {
+  await page.goto(`/demo/world/${WORLD_ID}/compendium?tab=lore`);
+  const table = page.getByTestId("lore-catalog-table");
+  // The ambush's own entries are there to read before anything is written.
+  await expect(table.getByText("The Stoneward Oath")).toBeVisible({
+    timeout: 30_000,
+  });
+
+  await page.getByTestId("new-lore-entry-title-input").fill("Camp Notes");
+  await page.getByTestId("add-lore-entry-button").click();
+  await expect(table.getByText("Camp Notes")).toBeVisible();
+
+  await page.goto(`/demo/world/${WORLD_ID}/lore/camp-notes/edit`);
+  const editor = page
+    .getByTestId("lore-markdown-editor-textarea")
+    .locator(".cm-content");
+  await editor.click();
+  await page.keyboard.type("Watch kept by [[Brannoc Stoneward]] until dawn.");
+  await page.locator("#lore-entry-title").fill("Camp Notes, Night One");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("Saved.")).toBeVisible();
+  await expect(page).toHaveURL(/\/lore\/camp-notes-night-one\/edit$/);
+
+  await page.goto(`/demo/world/${WORLD_ID}/lore/camp-notes-night-one/view`);
+  const link = page.locator("a.lore-link", { hasText: "Brannoc Stoneward" });
+  await expect(link).toBeVisible();
+  await expect(link).toHaveAttribute(
+    "href",
+    new RegExp(`^/demo/world/${WORLD_ID}/actor/[^/]+/view$`),
+  );
+  await link.click();
+  await expect(page.getByTestId("dnd5e-actor-sheet")).toBeVisible();
+
+  await page.goto(`/demo/world/${WORLD_ID}/compendium?tab=lore`);
+  await expect(table.getByText("Camp Notes, Night One")).toBeVisible();
+  expect(await refusedSoFar()).toEqual([]);
+  await expect(page.getByText("Not part of the demo")).toHaveCount(0);
+});
+
 test("the fighter's sheet opens with his numbers, and a check rolls from them", async () => {
   const fighter = (await cast()).find((a) => a.label === "Brannoc Stoneward");
   if (!fighter) throw new Error("the fighter is in the cast");
