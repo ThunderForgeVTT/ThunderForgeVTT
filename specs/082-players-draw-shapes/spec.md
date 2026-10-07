@@ -50,7 +50,9 @@ Counted on 2026-10-07:
     has no creator.
 - **The server.**
   - `createShape`, `updateShape` and `deleteShape` (`mutations_shapes.rs`)
-    each require `is_dm_of_scene`. A refused caller gets `NotFound`.
+    each require `is_dm_of_scene`. A refused `createShape` or
+    `updateShape` gets a "not found or not owned by you" error; a refused
+    `deleteShape` answers `false`.
   - `shapes.created_by` (not null, references `users`) and `updated_by`
     are already written, and GraphQL exposes them. The web carries
     `createdBy` in `types/shape.ts` and `api/shapes.ts`.
@@ -133,8 +135,8 @@ server, whatever the engine allowed.
 3. **Given** player A calling `updateShape` or `deleteShape` on a shape
    they did not draw, straight at the API,
    **When** the server answers,
-   **Then** it refuses with the same `NotFound` refusal a non-member gets,
-   and nothing changes.
+   **Then** it refuses exactly as it refuses a non-member today (an error
+   for `updateShape`, `false` for `deleteShape`), and nothing changes.
 4. **Given** the GM,
    **When** they select, move or delete any shape on the scene,
    **Then** it works as it does today.
@@ -291,9 +293,13 @@ GM, "Clear a player's shapes…" removes the player's shape.
   NOT be written.
 - **FR-003**: `setAuthoringToolGrant` keeps its signature. For a default
   tool, `granted: false` writes a revocation and `granted: true` deletes
-  it. For any other tool it behaves as it does today. The card shows the
-  effective answer for each player. Its intro text says that players can
-  select and draw by default.
+  it. For any other tool it behaves as it does today. It answers the
+  member's effective tools. `authoringToolGrants` answers every non-DM
+  member with their effective tools, so a member with no rows shows Select
+  and Shapes (today it lists only members with grant rows, and the card
+  reads an absent member as holding nothing). The card shows the effective
+  answer for each player. Its intro text says that players can select and
+  draw by default.
 
 **Ownership on the server**
 
@@ -303,8 +309,9 @@ GM, "Clear a player's shapes…" removes the player's shape.
   whatever the input asked for.
 - **FR-005**: `updateShape` and `deleteShape` MUST accept a DM of the
   scene, or a non-DM member who holds `shapes` and whose id is the shape's
-  `created_by`. Anyone else gets the existing `NotFound` refusal. A non-DM
-  update cannot set `visible_to_players` to false.
+  `created_by`. Anyone else gets the refusal each gives today for a
+  missing shape: an error from `updateShape`, `false` from `deleteShape`.
+  A non-DM update cannot set `visible_to_players` to false.
 - **FR-006**: The ownership check MUST live in one function beside
   `is_dm_of_scene`, used by all three mutations and the bulk clear. No
   mutation may restate it.
@@ -350,7 +357,10 @@ GM, "Clear a player's shapes…" removes the player's shape.
 - **FR-014**: The web dispatches into the world store and lets the
   mutation bridge send the mutations, per AGENTS.md. No component calls
   `clearShapes` directly. Shapes leave the boards when the server's events
-  arrive, not before.
+  arrive, not before. The text tool in `ShapeTool.tsx`, which calls
+  `createShape` itself today, dispatches `create_shape` instead. The shape
+  mutation bridge, which only logs a refused update or delete today,
+  restores the shape the store held before the command.
 - **FR-015**: A player's shape panel MUST NOT offer the GM-only/visible
   toggle.
 
@@ -445,10 +455,15 @@ GM, "Clear a player's shapes…" removes the player's shape.
   player no new reach over walls, lights or tokens. Token dragging keeps
   its own rules (spec 045). Selecting walls or lights still needs the DM
   role or the matching grant.
-- **Account deletion.** `shapes.created_by` references `users`. Account
-  deletion (`auth/account_ownership.rs`) MUST delete or reassign a
-  deleted player's shapes in worlds it does not delete. Planning checks
-  what it does today and closes the gap if there is one.
+- **Account deletion.** Decided in planning ([R9](./research.md#r9-account-deletion-and-a-players-shapes)).
+  `shapes.created_by` and `updated_by` reference `users` with no
+  `ON DELETE`, and account deletion (`delete_user_data_on` in
+  `crates/thunderforge-server/src/users/mod.rs`) does not touch shapes, so
+  today it fails for anyone who drew in a world they did not create. It
+  MUST delete the shapes the user created in the worlds that remain,
+  recording a `deleted` event for each attributed to the world's owner, and
+  set `updated_by = created_by` on shapes they only edited. The same gap in
+  `walls` and `light_sources` is out of scope.
 - **Batch event later, if needed.** One event per shape is the choice
   (FR-009). If a clear of many shapes is measurably slow, a batched
   `deleted_many` action is a later change.
