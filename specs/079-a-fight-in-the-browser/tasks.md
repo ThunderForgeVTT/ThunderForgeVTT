@@ -77,10 +77,10 @@ with a small rule inside; Phase 4 takes from them only what the demo needs.
 
 - [X] T040 `crates/thunderforge-combat/src/wasm.rs`: the JSON façade — `Dice` (seeded or scripted), `roll`, `attackPart`, `attackFormulas`, `autoApplyHolds`, `measure`, `readHitPoints`, `writeHitPoints`, `applyHitPoints`, `standingAfter`, `footprintFrom`, `combatFromManifest`, `roundLabel`, `sortSeats`, `nextTurn`, `heldBy`, `turnRefusal`, `resolveBudget`, `spendForAttack`, `takeSpend`, `startTurn`, `spendFlags`, `moveCost`
 - [X] T041 Measure the release wasm (FR-009): 412,578 B raw, 118,073 B brotli; recorded in plan.md
-- [ ] T042 Build the module for the demo: a `scripts/shared.mjs` step beside the pdf crate's (`wasm-pack build ./ --release --target web --out-dir ../../dist/combat --scope thunderforge --out-name combat -- --features wasm`), and the demo's Vite config resolving `@thunderforge/combat`
-- [ ] T043 `apps/demo/src/backend/handlers/combat.ts` (new): the demo's combat operations, registered in `apps/demo/src/backend/handlers.ts` with one import and one spread, nothing else in that file changed. Load the wasm module lazily, on the first combat operation
-- [ ] T044 `apps/demo/src/backend/state.ts`: the fight in the demo's persisted state — combat, combatants, budgets, attacks, offers, the auto-apply settings, the dice seed's position — so a reload keeps it and "Start over" clears it (US1 scenario 5, spec 074 FR-012)
-- [ ] T045 [US1] Answer, through the crate, every operation of FR-005:
+- [x] T042 Build the module for the demo: a `scripts/shared.mjs` step beside the pdf crate's (`wasm-pack build ./ --release --target web --out-dir ../../dist/combat --scope thunderforge --out-name combat -- --features wasm`), and the demo's Vite config resolving `@thunderforge/combat`
+- [x] T043 `apps/demo/src/backend/handlers/combat.ts` (new): the demo's combat operations, registered in `apps/demo/src/backend/handlers.ts` with one import and one spread, nothing else in that file changed. Load the wasm module lazily, on the first combat operation
+- [x] T044 `apps/demo/src/backend/state.ts`: the fight in the demo's persisted state — combat, combatants, budgets, attacks, offers, the auto-apply settings, the dice seed's position — so a reload keeps it and "Start over" clears it (US1 scenario 5, spec 074 FR-012)
+- [x] T045 [US1] Answer, through the crate, every operation of FR-005:
   - `activeCombat`; `startCombat`, `endCombat`
   - `addCombatant`, `updateCombatant`, `removeCombatant`, `addLairCombatant`
   - `advanceTurn` (`nextTurn`, `startTurn` on the new combatant's budget)
@@ -89,10 +89,10 @@ with a small rule inside; Phase 4 takes from them only what the demo needs.
   - `attack` (one attack) and `sceneAttacks`, replacing today's empty stub
   - `setCombatAutoApply`, `updateWorldAutoApplyNpcDamage`
   - `worldAbilities` and `actorAbilities`, from the ambush's stat blocks, replacing today's empty lists: the tracker's attack list reads `worldAbilities`
-- [ ] T046 [US1] Dice: `Dice.seeded` from `crypto.getRandomValues` in play; a fixed seed or `Dice.scripted` when the demo's e2e asks for one (FR-007)
-- [ ] T047 [US1] Viewing as a player: hide what the server hides (FR-008) — a monster's exact hit points, a hidden combatant's name; port the server's `combat/redaction.rs` rule into the crate if the demo needs more than the viewer's role
-- [ ] T048 [US1] Anything the fight UI asks for that the demo does not support (`setAbilityAttack`, `setItemAttack` — editing an attack's cost and reach — unless T045 finds them cheap) is refused with the "not part of the demo" answer (`notInDemo.ts`), never silently empty
-- [ ] T049 [US1] `apps/demo` e2e: start a fight on the Grassy Path Ambush, attack a goblin on Brannoc's turn, advance a full round, reload, and read back the turn order, the attack log and the hit points (`cd apps/demo && pnpm run e2e`)
-- [ ] T050 [US1] SC-004: each of start, attack and advance shows its result in under half a second in that e2e
+- [x] T046 [US1] Dice: `Dice.seeded` from `crypto.getRandomValues` in play; a fixed seed or `Dice.scripted` when the demo's e2e asks for one (FR-007)
+- [x] T047 [US1] Viewing as a player: hide what the server hides (FR-008) — a monster's exact hit points, a hidden combatant's name; port the server's `combat/redaction.rs` rule into the crate if the demo needs more than the viewer's role
+- [x] T048 [US1] Anything the fight UI asks for that the demo does not support (`setAbilityAttack`, `setItemAttack` — editing an attack's cost and reach — unless T045 finds them cheap) is refused with the "not part of the demo" answer (`notInDemo.ts`), never silently empty
+- [x] T049 [US1] `apps/demo` e2e: start a fight on the Grassy Path Ambush, attack a goblin on Brannoc's turn, advance a full round, reload, and read back the turn order, the attack log and the hit points (`cd apps/demo && pnpm run e2e`)
+- [x] T050 [US1] SC-004: each of start, attack and advance shows its result in under half a second in that e2e
 
 **Checkpoint**: SC-001 — a round of the ambush, with no server.
