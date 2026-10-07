@@ -13,8 +13,11 @@
  *   member, each keeping its own offset, which is what "move these out of
  *   the doorway" means.
  * - **Double-click** asks *which one*. The click that preceded it already
- *   selected the stack, so asking needs no engine round trip: `disambiguate`
- *   just hands back what is selected for a picker to render. Nothing is
+ *   reported the pile under it, so asking needs no engine round trip:
+ *   `disambiguate` hands back that pile for a picker to render. It reads the
+ *   pile, not the selection: once the picker has chosen, a press on the pile
+ *   selects the chosen token alone, and a double-click there must still ask
+ *   again rather than see one token and pin its status panel. Nothing is
  *   mutated by asking, so dismissing leaves the board exactly as it was.
  *   *Answering* does go to the engine: `selectOne` dispatches `select_token`,
  *   which the store forwards to the engine, and the engine narrows its own
@@ -64,8 +67,9 @@ export interface SelectionFacet {
   selection(): ControllableToken[];
   /**
    * The stack to offer a picker over, or `null` when there is nothing to
-   * choose between — one token, or none. Reads the current selection, which
-   * the click preceding the double-click already established.
+   * choose between — one token, or none. Reads the pile the click preceding
+   * the double-click pressed on, which is more than the selection once the
+   * picker has chosen.
    */
   disambiguate(): TokenStack | null;
   /** Narrow the selection to one member, e.g. from the picker. */
@@ -91,10 +95,10 @@ export function createSelectionFacet(
   const decorate = (token: WorldToken): ControllableToken =>
     resolveTokenPermissions(token, context.principal);
 
-  const selection = (): ControllableToken[] => {
-    const { tokens, selectedTokenIds } = store.getState();
+  const known = (ids: string[]): ControllableToken[] => {
+    const { tokens } = store.getState();
     return (
-      selectedTokenIds
+      ids
         .map((id) => tokens[id])
         // An id the store has never seen is dropped rather than rendered as
         // a blank row: the engine spawns demo tokens that were never synced,
@@ -105,12 +109,15 @@ export function createSelectionFacet(
     );
   };
 
+  const selection = (): ControllableToken[] =>
+    known(store.getState().selectedTokenIds);
+
   return {
     selectedIds: () => [...store.getState().selectedTokenIds],
     selection,
 
     disambiguate() {
-      const members = selection();
+      const members = known(store.getState().stackTokenIds);
       // One token is not a choice, and a one-row picker over it is noise.
       if (members.length < 2) return null;
       return { at: { x: members[0].token.x, y: members[0].token.y }, members };

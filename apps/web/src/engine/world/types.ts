@@ -112,6 +112,14 @@ export type WorldState = {
    * consumers can keep reading that and ignore this entirely.
    */
   selectedTokenIds: string[];
+  /**
+   * The whole pile under the press that made the selection, topmost first.
+   *
+   * The same as `selectedTokenIds` until the stack picker chooses: a press
+   * on the pile then selects the chosen token alone, but the pile is still
+   * there, and a double-click on it must still ask which one.
+   */
+  stackTokenIds: string[];
   walls: Record<string, WorldWall>;
   selectedWallId: string | null;
   lights: Record<string, WorldLight>;
@@ -168,6 +176,11 @@ export type SelectTokensCommand = {
   type: "select_tokens";
   /** Topmost first. Empty means the click landed on empty canvas. */
   tokenIds: string[];
+  /**
+   * The whole pile under the press, topmost first, when it is more than
+   * what was selected. Absent means the pile is `tokenIds`.
+   */
+  stackIds?: string[];
 };
 
 export type UpsertTokenCommand = {

@@ -88,9 +88,21 @@ fn cursor_world_position(
 /// replacing it: every existing consumer reads the primary, and breaking
 /// them to add stacks would be a much larger change than this needs to be.
 fn emit_stack_selection(token_ids: &[String]) {
+    emit_pile_selection(token_ids, token_ids);
+}
+
+/// Notifies the frontend of the selection and of the whole pile under the
+/// press that made it, both topmost first.
+///
+/// They differ once the stack picker has chosen: a press on the pile then
+/// selects the chosen token alone, but the pile is still two tokens, and a
+/// double-click on it must still ask which one. The frontend reads the pile,
+/// not the selection, to decide whether there is a choice to offer.
+fn emit_pile_selection(token_ids: &[String], stack_ids: &[String]) {
     emit_event(json!({
         "type": "select_tokens",
         "tokenIds": token_ids,
+        "stackIds": stack_ids,
     }));
 }
 
@@ -255,7 +267,7 @@ pub(crate) fn handle_token_drag(
         let picked = press_pickup(&stack, selected_token.selected_ids());
         selected_token.select_stack(picked.clone());
         emit_token_selection(picked.first().map(String::as_str));
-        emit_stack_selection(&picked);
+        emit_pile_selection(&picked, &stack);
 
         dragging.0 = token_query
             .iter()

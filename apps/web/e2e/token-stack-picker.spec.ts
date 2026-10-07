@@ -134,7 +134,7 @@ async function boardWithAStack(
   return { sceneId, tokenIds };
 }
 
-test("a token picked from a stack is the one the next drag moves, and the count says how many are selected", async ({
+test("a token picked from a stack is the one the next drag moves, the pile can be asked again, and the count says how many are selected", async ({
   page,
 }) => {
   test.setTimeout(4 * 60_000);
@@ -182,6 +182,21 @@ test("a token picked from a stack is the one the next drag moves, and the count 
   await expect.poll(() => selectedIds(page)).toEqual([lower]);
   await expect(count, "one token selected needs no count").toHaveCount(0);
 
+  // A second double-click on the same pile asks again, rather than pinning
+  // the status panel of the one token the picker chose. The owner's report:
+  // after a pick, the pile could only be asked about again once empty board
+  // had been clicked. Change the answer to the other token.
+  await page.mouse.dblclick(centre.x, centre.y);
+  await expect(
+    page.getByTestId("token-stack-picker"),
+    "a double-click on a pile of two should open the picker again",
+  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId(`token-stack-option-${top}`)).toBeVisible();
+  await expect(page.getByTestId(`token-stack-option-${lower}`)).toBeVisible();
+  await page.getByTestId(`token-stack-option-${top}`).click();
+  await expect(page.getByTestId("token-stack-picker")).toHaveCount(0);
+  await expect.poll(() => selectedIds(page)).toEqual([top]);
+
   // Where the server has both before the drag. Read rather than assumed:
   // the clicks that picked the pile up may have snapped it into its cell.
   const position = (tokens: ServerToken[], id: string) => {
@@ -189,10 +204,10 @@ test("a token picked from a stack is the one the next drag moves, and the count 
     return token ? { x: Math.round(token.x), y: Math.round(token.y) } : null;
   };
   const before = await serverTokens(page, sceneId);
-  const topBefore = position(before, top);
-  const lowerBefore = position(before, lower);
-  expect(topBefore, "the top token is on the server").not.toBeNull();
-  expect(lowerBefore, "the picked token is on the server").not.toBeNull();
+  const pickedBefore = position(before, top);
+  const leftBefore = position(before, lower);
+  expect(leftBefore, "the token left on the pile is on the server").not.toBeNull();
+  expect(pickedBefore, "the picked token is on the server").not.toBeNull();
 
   // Drag the pile. Only the picked token should come away.
   await page.mouse.move(centre.x, centre.y);
@@ -205,8 +220,8 @@ test("a token picked from a stack is the one the next drag moves, and the count 
   await expect
     .poll(
       async () =>
-        (position(await serverTokens(page, sceneId), lower)?.x ?? 0) -
-        (lowerBefore?.x ?? 0),
+        (position(await serverTokens(page, sceneId), top)?.x ?? 0) -
+        (pickedBefore?.x ?? 0),
       {
         message: "the picked token should have moved, on the server",
         timeout: 30_000,
@@ -218,7 +233,7 @@ test("a token picked from a stack is the one the next drag moves, and the count 
   // later, as a second move of a stack arriving late would.
   await page.waitForTimeout(1_500);
   expect(
-    position(await serverTokens(page, sceneId), top),
+    position(await serverTokens(page, sceneId), lower),
     "the token left on the pile should not have moved",
-  ).toEqual(topBefore);
+  ).toEqual(leftBefore);
 });
