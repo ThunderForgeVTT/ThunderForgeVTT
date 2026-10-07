@@ -73,6 +73,35 @@ await page.addInitScript(() => {
 `pnpm e2e:resumable-downloads` proves it: the package against a real socket,
 then the app against the stack.
 
+### Rolls
+
+Every roll is a row in `world_rolls` and a world event: `ROLL_MADE` (36)
+when it is made, `ROLL_REVEALED` (37) when the GM reveals it. The payload is
+`{rollId, visibility}` and nothing more; a client fetches the roll itself
+with `worldRoll`. A board animates a roll from its event, never from the
+panel that asked for it, so a roll from the sheet in another tab plays on the
+same board.
+
+Who may see what is decided in one place, `crates/thunderforge-server/src/rolls/visibility.rs`:
+`may_roll` (who may pick a visibility), `view_of` (a whole roll, a
+`MaskedRoll` or nothing) and `event_reaches` (whether a `ROLL_MADE` event is
+delivered at all). The fetch, the feed, the live subscription and the
+catch-up all go through it. A new path to a roll must use it too, rather
+than check visibility itself. A `MaskedRoll` cannot be built from a roll's
+row, so a masked roll cannot carry its numbers by mistake.
+
+The demo answers GraphQL in the browser, so it mirrors the rule in
+`apps/demo/src/backend/handlers/dice.ts` and `events.ts`. Its tabs share one
+world through `apps/demo/src/backend/tabs.ts`. The tab holding the
+`thunderforge-demo-world` Web Lock runs every tab's operations, one at a time
+and each as the asking tab's viewer. The other tabs ask over the
+`thunderforge-demo` BroadcastChannel. Every tab filters the events it hears
+for its own viewer. When the holder closes, a waiting tab reads the saved
+world and takes over.
+
+`pnpm e2e:rolls` proves all of it: the demo's tests and its two-tab e2e,
+then the app against the stack.
+
 ### Proving a change
 
 A change is proven by its feature's slice, not by the full e2e suite. A

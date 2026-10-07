@@ -134,7 +134,7 @@ they prove inside each phase.
 - [ ] T044 `cargo fmt`, `cargo clippy -p thunderforge-server`, `pnpm -F web typecheck`, `pnpm -F @thunderforge/demo typecheck`, `node scripts/check-graphql-contract.mjs`
 - [ ] T045 `cargo test -p thunderforge-server` green
 - [ ] T046 Run `pnpm e2e:rolls`; record the result here
-- [ ] T047 [P] User guide `docs/guides/rolls.md` (who sees what, GM's eyes, GM only, reveal, the sheet in another tab); CONTRIBUTING note on the roll events, the one visibility rule and the demo's tab holder
+- [x] T047 [P] User guide `docs/guides/rolls.md` (who sees what, GM's eyes, GM only, reveal, the sheet in another tab); CONTRIBUTING note on the roll events, the one visibility rule and the demo's tab holder
 
 ---
 
