@@ -31,6 +31,9 @@ export const FEATURE_BOOK_IMPORT = "feature.book_import";
 /** Whether this instance offers the demo at `/demo/` (spec 074). Public. */
 export const FEATURE_DEMO = "feature.demo";
 
+/** Whether large files download in resumable parts (spec 080). Public. */
+export const FEATURE_DOWNLOAD_IN_PARTS = "feature.download_in_parts";
+
 /** The settings group a flag is declared in, as the server names it. */
 export const FEATURES_GROUP = "Features";
 

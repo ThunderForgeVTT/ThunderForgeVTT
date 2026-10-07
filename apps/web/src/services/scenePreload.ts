@@ -1,3 +1,4 @@
+import { downloadBytes } from "@/services/downloads";
 import type { SceneRecord } from "@/types/scene";
 
 /**
@@ -52,17 +53,13 @@ export async function preloadScene(
 
   try {
     // `cache: "force-cache"` because the point is to *populate* the browser
-    // cache, and a revalidating fetch would defeat it. The response body is
-    // read to completion — a fetch whose body is never consumed may not be
-    // stored, which would make this look like it worked and warm nothing.
-    const response = await fetch(scene.backgroundUrl, {
-      cache: "force-cache",
-      credentials: "same-origin",
+    // cache, and a revalidating fetch would defeat it. The body is read to
+    // completion — a fetch whose body is never consumed may not be stored.
+    // A large background arrives in resumable parts (spec 080 FR-021); a
+    // small one is still the one plain request it always was.
+    await downloadBytes(scene.backgroundUrl, {
+      init: { cache: "force-cache", credentials: "same-origin" },
     });
-    if (!response.ok) {
-      return { warmed: false, reason: "failed" };
-    }
-    await response.blob();
     return { warmed: true };
   } catch {
     return { warmed: false, reason: "failed" };

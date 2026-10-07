@@ -480,12 +480,45 @@ async fn fetch_and_deliver(request: &ResolveRequest, handles: Option<Rc<Handles>
 /// `fetch` defaults to `credentials: "same-origin"`, which is what
 /// carries the session cookie the route authenticates on — the same
 /// reason Bevy's own wasm asset reader works against it today.
+///
+/// The web app installs `globalThis.__thunderforgeDownloadBytes`, its one
+/// downloader (spec 080 FR-022): a large asset then arrives in resumable,
+/// version-checked parts. A page without it (the demo) fetches plainly.
+/// Either way the bytes are checked against their fingerprint afterwards.
 async fn fetch(url: &str) -> Option<Vec<u8>> {
+    if let Some(bytes) = fetch_through_page(url).await {
+        return bytes;
+    }
     let response = gloo_net::http::Request::get(url).send().await.ok()?;
     if !response.ok() {
         return None;
     }
     response.binary().await.ok()
+}
+
+/// `None` when the page installed no downloader; `Some(None)` when it
+/// did and the download failed.
+async fn fetch_through_page(url: &str) -> Option<Option<Vec<u8>>> {
+    use wasm_bindgen::{JsCast, JsValue};
+
+    let downloader = js_sys::Reflect::get(
+        &js_sys::global(),
+        &JsValue::from_str("__thunderforgeDownloadBytes"),
+    )
+    .ok()?
+    .dyn_into::<js_sys::Function>()
+    .ok()?;
+    let promise = match downloader.call1(&JsValue::NULL, &JsValue::from_str(url)) {
+        Ok(value) => js_sys::Promise::resolve(&value),
+        Err(_) => return Some(None),
+    };
+    Some(
+        wasm_bindgen_futures::JsFuture::from(promise)
+            .await
+            .ok()
+            .and_then(|value| value.dyn_into::<js_sys::Uint8Array>().ok())
+            .map(|bytes| bytes.to_vec()),
+    )
 }
 
 /// Hand bytes back to the main thread for decoding.

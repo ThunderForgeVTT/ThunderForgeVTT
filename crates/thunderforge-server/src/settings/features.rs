@@ -40,6 +40,9 @@ pub const BOOK_IMPORT: &str = "feature.book_import";
 /// Offering the demo at `/demo` to anyone who asks (spec 074).
 pub const DEMO: &str = "feature.demo";
 
+/// Fetching a large file in resumable parts (spec 080).
+pub const DOWNLOAD_IN_PARTS: &str = "feature.download_in_parts";
+
 /// One flag, and who may be told how it is set.
 #[derive(Debug, Clone, Copy)]
 pub struct Feature {
@@ -58,6 +61,11 @@ pub const FEATURES: &[Feature] = &[
     // Public: the sign-in page draws the link, and a stranger is who it is for.
     Feature {
         key: DEMO,
+        public: true,
+    },
+    // Public: a visitor to the demo downloads the engine too.
+    Feature {
+        key: DOWNLOAD_IN_PARTS,
         public: true,
     },
 ];

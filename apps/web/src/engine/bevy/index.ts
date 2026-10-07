@@ -6,6 +6,7 @@ import {
 import { createClient, type Client } from "graphql-ws";
 
 import { postGraphQL } from "../../api/graphqlClient";
+import { download, downloadBytes } from "../../services/downloads";
 import { reportPlayPausedIn } from "../../api/playPauseSignal";
 import {
   isPeerTransferEnabled,
@@ -314,6 +315,7 @@ async function getWasmModule(onProgress?: EngineLoadListener) {
       // hub — which measurably slowed unrelated pages. Deferring it here
       // pays that cost only when the engine is actually being mounted.
       const url = await resolveWasmUrl();
+      installPageDownloader();
 
       if (onProgress && url) {
         const response = await fetchWasmWithProgress(url, onProgress);
@@ -384,6 +386,19 @@ async function resolveWasmUrl(): Promise<string | null> {
 }
 
 /**
+ * The engine's world cache fetches canvas assets through this when it is
+ * present (spec 080 FR-022), so they get the same parts, retries and
+ * version checks as everything else. Installed before the engine starts.
+ */
+function installPageDownloader(): void {
+  (
+    globalThis as {
+      __thunderforgeDownloadBytes?: (url: string) => Promise<Uint8Array>;
+    }
+  ).__thunderforgeDownloadBytes = (url) => downloadBytes(url);
+}
+
+/**
  * Fetch the engine's wasm, reporting bytes as they arrive.
  *
  * Returns a `Response` rather than an `ArrayBuffer` deliberately: passing a
@@ -391,62 +406,42 @@ async function resolveWasmUrl(): Promise<string | null> {
  * compilation overlaps the download instead of waiting for it. Buffering the
  * whole thing to measure it would trade real load time for a progress bar,
  * which is the wrong way round.
+ *
+ * A large uncompressed engine (the development build) arrives in resumable
+ * parts, still in order, so streaming compilation is unaffected (spec 080
+ * FR-020). A compressed one is one plain request, as before.
  */
 async function fetchWasmWithProgress(
   url: string,
   onProgress: EngineLoadListener,
 ): Promise<Response> {
   // FR-033: no artificial delay for a return visitor. The browser's HTTP
-  // cache serves a repeat load from disk, `Content-Length` is still present,
-  // and the whole body arrives in one or two chunks — so the loader resolves
-  // in a frame or two rather than lingering to be seen. Nothing here waits
-  // on a minimum display time, which is the usual way loaders end up
-  // *causing* the delay they exist to explain.
-  const response = await fetch(url);
-  if (!response.ok) {
+  // cache serves a repeat load from disk and the whole body arrives in one
+  // or two chunks — so the loader resolves in a frame or two rather than
+  // lingering to be seen. Nothing here waits on a minimum display time,
+  // which is the usual way loaders end up *causing* the delay they exist to
+  // explain.
+  //
+  // `total` is `null` when the answer is compressed: its length counts
+  // compressed bytes and the body yields decoded ones, so no honest
+  // percentage exists (FR-030) and the bar is indeterminate.
+  let got;
+  try {
+    got = await download(url, {
+      onProgress: ({ loaded, total }) =>
+        onProgress({ stage: "downloading", loaded, total }),
+    });
+  } catch (error) {
     throw new Error(
-      `Engine download failed: ${response.status} ${response.statusText}`,
+      `Engine download failed: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
     );
   }
-
-  const header = response.headers.get("Content-Length");
-  // `Content-Length` describes the encoded body, and progress is counted in
-  // the same encoded bytes, so the ratio stays honest under gzip/br. Absent
-  // header (chunked) means no total is knowable at all.
-  const total = header ? Number(header) : null;
-  const knownTotal =
-    total !== null && Number.isFinite(total) && total > 0 ? total : null;
-
-  if (!response.body) {
-    // No streaming available. Report the one honest data point and move on
-    // rather than faking intermediate progress.
-    onProgress({ stage: "downloading", loaded: 0, total: knownTotal });
-    return response;
-  }
-
-  let loaded = 0;
-  const counted = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      const reader = response.body!.getReader();
-      try {
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          loaded += value.byteLength;
-          onProgress({ stage: "downloading", loaded, total: knownTotal });
-          controller.enqueue(value);
-        }
-        controller.close();
-      } catch (error) {
-        controller.error(error);
-      } finally {
-        reader.releaseLock();
-      }
-    },
-  });
+  onProgress({ stage: "downloading", loaded: 0, total: got.total });
 
   // Content-Type must survive, or `instantiateStreaming` refuses the stream.
-  return new Response(counted, {
+  const response = got.toResponse();
+  return new Response(response.body, {
     headers: { "Content-Type": "application/wasm" },
   });
 }
