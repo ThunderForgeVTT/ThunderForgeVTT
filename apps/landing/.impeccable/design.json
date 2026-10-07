@@ -1,0 +1,431 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-07T22:40:37.052Z",
+  "title": "Design System: ThunderForge",
+  "extensions": {
+    "colorMeta": {
+      "mat": {
+        "role": "neutral",
+        "displayName": "Vinyl Mat",
+        "canonical": "oklch(94.6% 0.007 124)",
+        "tonalRamp": [
+          "oklch(15% 0.007 124)",
+          "oklch(25% 0.007 124)",
+          "oklch(35% 0.007 124)",
+          "oklch(45% 0.007 124)",
+          "oklch(55% 0.007 124)",
+          "oklch(70% 0.007 124)",
+          "oklch(85% 0.007 124)",
+          "oklch(95% 0.003 124)"
+        ]
+      },
+      "mat-deep": {
+        "role": "neutral",
+        "displayName": "Shaded Vinyl",
+        "canonical": "oklch(91.8% 0.009 129)",
+        "tonalRamp": [
+          "oklch(15% 0.009 129)",
+          "oklch(25% 0.009 129)",
+          "oklch(35% 0.009 129)",
+          "oklch(45% 0.009 129)",
+          "oklch(55% 0.009 129)",
+          "oklch(70% 0.009 129)",
+          "oklch(85% 0.009 129)",
+          "oklch(95% 0.004 129)"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Card Paper",
+        "canonical": "oklch(98.7% 0.004 106)",
+        "tonalRamp": [
+          "oklch(15% 0.004 106)",
+          "oklch(25% 0.004 106)",
+          "oklch(35% 0.004 106)",
+          "oklch(45% 0.004 106)",
+          "oklch(55% 0.004 106)",
+          "oklch(70% 0.004 106)",
+          "oklch(85% 0.004 106)",
+          "oklch(95% 0.002 106)"
+        ]
+      },
+      "grid-line": {
+        "role": "neutral",
+        "displayName": "Grid Print",
+        "canonical": "rgb(120 142 168 / 0.26)"
+      },
+      "grid-major": {
+        "role": "neutral",
+        "displayName": "Grid Print, Major",
+        "canonical": "rgb(96 118 146 / 0.42)"
+      },
+      "ink-black": {
+        "role": "neutral",
+        "displayName": "Black Marker",
+        "canonical": "oklch(27.6% 0.017 222)",
+        "tonalRamp": [
+          "oklch(15% 0.017 222)",
+          "oklch(25% 0.017 222)",
+          "oklch(35% 0.017 222)",
+          "oklch(45% 0.017 222)",
+          "oklch(55% 0.017 222)",
+          "oklch(70% 0.017 222)",
+          "oklch(85% 0.017 222)",
+          "oklch(95% 0.007 222)"
+        ]
+      },
+      "ink-blue": {
+        "role": "primary",
+        "displayName": "Wet-Erase Blue",
+        "canonical": "oklch(51.9% 0.171 261)",
+        "tonalRamp": [
+          "oklch(15% 0.171 261)",
+          "oklch(25% 0.171 261)",
+          "oklch(35% 0.171 261)",
+          "oklch(45% 0.171 261)",
+          "oklch(55% 0.171 261)",
+          "oklch(70% 0.171 261)",
+          "oklch(85% 0.171 261)",
+          "oklch(95% 0.068 261)"
+        ]
+      },
+      "ink-red": {
+        "role": "secondary",
+        "displayName": "Wet-Erase Red",
+        "canonical": "oklch(54.6% 0.182 29)",
+        "tonalRamp": [
+          "oklch(15% 0.182 29)",
+          "oklch(25% 0.182 29)",
+          "oklch(35% 0.182 29)",
+          "oklch(45% 0.182 29)",
+          "oklch(55% 0.182 29)",
+          "oklch(70% 0.182 29)",
+          "oklch(85% 0.182 29)",
+          "oklch(95% 0.073 29)"
+        ]
+      },
+      "ink-green": {
+        "role": "tertiary",
+        "displayName": "Wet-Erase Green",
+        "canonical": "oklch(60.9% 0.142 151)",
+        "tonalRamp": [
+          "oklch(15% 0.142 151)",
+          "oklch(25% 0.142 151)",
+          "oklch(35% 0.142 151)",
+          "oklch(45% 0.142 151)",
+          "oklch(55% 0.142 151)",
+          "oklch(70% 0.142 151)",
+          "oklch(85% 0.142 151)",
+          "oklch(95% 0.057 151)"
+        ]
+      },
+      "text-soft": {
+        "role": "neutral",
+        "displayName": "Faded Marker",
+        "canonical": "oklch(44.6% 0.017 208)",
+        "tonalRamp": [
+          "oklch(15% 0.017 208)",
+          "oklch(25% 0.017 208)",
+          "oklch(35% 0.017 208)",
+          "oklch(45% 0.017 208)",
+          "oklch(55% 0.017 208)",
+          "oklch(70% 0.017 208)",
+          "oklch(85% 0.017 208)",
+          "oklch(95% 0.007 208)"
+        ]
+      },
+      "text-blue": {
+        "role": "primary",
+        "displayName": "Deep Pen Blue",
+        "canonical": "oklch(47.8% 0.159 261)",
+        "tonalRamp": [
+          "oklch(15% 0.159 261)",
+          "oklch(25% 0.159 261)",
+          "oklch(35% 0.159 261)",
+          "oklch(45% 0.159 261)",
+          "oklch(55% 0.159 261)",
+          "oklch(70% 0.159 261)",
+          "oklch(85% 0.159 261)",
+          "oklch(95% 0.064 261)"
+        ]
+      },
+      "text-red": {
+        "role": "secondary",
+        "displayName": "Deep Pen Red",
+        "canonical": "oklch(51.7% 0.174 29)",
+        "tonalRamp": [
+          "oklch(15% 0.174 29)",
+          "oklch(25% 0.174 29)",
+          "oklch(35% 0.174 29)",
+          "oklch(45% 0.174 29)",
+          "oklch(55% 0.174 29)",
+          "oklch(70% 0.174 29)",
+          "oklch(85% 0.174 29)",
+          "oklch(95% 0.070 29)"
+        ]
+      },
+      "text-green": {
+        "role": "tertiary",
+        "displayName": "Deep Pen Green",
+        "canonical": "oklch(47.7% 0.112 152)",
+        "tonalRamp": [
+          "oklch(15% 0.112 152)",
+          "oklch(25% 0.112 152)",
+          "oklch(35% 0.112 152)",
+          "oklch(45% 0.112 152)",
+          "oklch(55% 0.112 152)",
+          "oklch(70% 0.112 152)",
+          "oklch(85% 0.112 152)",
+          "oklch(95% 0.045 152)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The one hero headline inside the drawn room."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Every section heading (.marker-head); a big variant closes the page."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Sub-heads within a section: legend title, support ways."
+      },
+      "lede": {
+        "displayName": "Lede",
+        "purpose": "Opening paragraph under each headline, max 38em."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "All running text, max 68ch."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Button, chip and nav text, form labels."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Formulas, roll history, sources, commands, counts."
+      },
+      "figure": {
+        "displayName": "Figure",
+        "purpose": "Measured numbers and the dice total."
+      }
+    },
+    "shadows": [
+      {
+        "name": "token-rest",
+        "value": "drop-shadow(0 2px 1.5px rgb(31 42 46 / 0.35))",
+        "purpose": "A token lying on the mat (CSS filter)."
+      },
+      {
+        "name": "token-lifted",
+        "value": "drop-shadow(0 8px 6px rgb(31 42 46 / 0.35))",
+        "purpose": "A token while dragged, with scale(1.08) (CSS filter)."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "The single easing for every transition and draw-on."
+      },
+      {
+        "name": "wall-draw",
+        "value": "520ms ease-out, stagger 150ms, delay 180ms",
+        "purpose": "Hero walls draw on once at load via stroke-dashoffset."
+      },
+      {
+        "name": "control-lift",
+        "value": "160ms ease-out",
+        "purpose": "Ink button and chip hover lift of 2px."
+      },
+      {
+        "name": "nav-underline",
+        "value": "200ms ease-out",
+        "purpose": "Blue marker line grows under nav links on hover."
+      },
+      {
+        "name": "token-snap",
+        "value": "140ms ease-out",
+        "purpose": "Token settles onto its square after a drag."
+      },
+      {
+        "name": "die-settle",
+        "value": "380ms ease-out, stagger 40ms",
+        "purpose": "Dice drop in and settle after a roll."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone",
+        "value": "max-width: 559px",
+        "note": "--cell 32px, --marker-w 5.5px"
+      },
+      {
+        "name": "tablet",
+        "value": "max-width: 899px",
+        "note": "--cell 40px, single column"
+      },
+      {
+        "name": "map-stack",
+        "value": "max-width: 1023px",
+        "note": "map legend stacks"
+      },
+      {
+        "name": "desktop",
+        "value": "min-width: 900px",
+        "note": "--cell 48px"
+      }
+    ],
+    "strokes": [
+      {
+        "name": "marker-w",
+        "value": "7px",
+        "purpose": "Walls, frames, tray felt (5.5px on phones)."
+      },
+      {
+        "name": "marker-thin",
+        "value": "3.5px",
+        "purpose": "Doors, rulers, checks, rings."
+      },
+      {
+        "name": "marker-hair",
+        "value": "1.5px",
+        "purpose": "Fine marks; door swings at 2px dotted."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Ink Button",
+      "kind": "button",
+      "refersTo": "ink-btn-blue",
+      "description": "The single primary action per view: a filled square of Deep Pen Blue.",
+      "html": "<a class=\"ds-ink-btn ds-ink-btn--blue\" href=\"#\">Play the demo world <svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 12h15M13 6l6 6-6 6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg></a>",
+      "css": ".ds-ink-btn { --ink: #1f2a2e; display: inline-flex; align-items: center; gap: 0.55em; min-height: 48px; padding: 0.6em 1.15em; font: 700 1.05rem/1.2 'Atkinson Hyperlegible Next', system-ui, sans-serif; text-decoration: none; color: #fbfbf8; background: var(--ink); border: 3px solid var(--ink); border-radius: 5px 7px 6px 4px / 6px 4px 7px 5px; cursor: pointer; transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1); } .ds-ink-btn:hover { transform: translateY(-2px); box-shadow: 0 0 0 2px currentColor; } .ds-ink-btn:active { transform: none; } .ds-ink-btn:focus-visible { outline: 3px solid #2a62c9; outline-offset: 3px; } .ds-ink-btn--blue { --ink: #2457b5; }"
+    },
+    {
+      "name": "Donate Ink Button",
+      "kind": "button",
+      "refersTo": "ink-btn-red",
+      "description": "Filled Deep Pen Red, for giving only.",
+      "html": "<a class=\"ds-ink-btn-red\" href=\"#\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 20.5s-7.5-4.6-7.5-10.3C4.5 7.3 6.6 5 9.2 5c1.3 0 2.2.6 2.8 1.6C12.6 5.6 13.5 5 14.8 5c2.6 0 4.7 2.3 4.7 5.2 0 5.7-7.5 10.3-7.5 10.3z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linejoin=\"round\"/></svg>Sponsor on GitHub</a>",
+      "css": ".ds-ink-btn-red { display: inline-flex; align-items: center; gap: 0.55em; min-height: 48px; padding: 0.6em 1.15em; font: 700 1.05rem/1.2 'Atkinson Hyperlegible Next', system-ui, sans-serif; text-decoration: none; color: #fbfbf8; background: #b72f25; border: 3px solid #b72f25; border-radius: 5px 7px 6px 4px / 6px 4px 7px 5px; transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1); } .ds-ink-btn-red:hover { transform: translateY(-2px); box-shadow: 0 0 0 2px currentColor; } .ds-ink-btn-red:active { transform: none; } .ds-ink-btn-red:focus-visible { outline: 3px solid #2a62c9; outline-offset: 3px; }"
+    },
+    {
+      "name": "Line Ink Button",
+      "kind": "button",
+      "refersTo": "ink-btn-line",
+      "description": "An outline in one ink; paper ground on hover.",
+      "html": "<a class=\"ds-ink-btn-line\" href=\"#\">Watch the roadmap</a>",
+      "css": ".ds-ink-btn-line { display: inline-flex; align-items: center; gap: 0.55em; min-height: 48px; padding: 0.6em 1.15em; font: 700 1.05rem/1.2 'Atkinson Hyperlegible Next', system-ui, sans-serif; text-decoration: none; color: #1f2a2e; background: transparent; border: 3px solid #1f2a2e; border-radius: 5px 7px 6px 4px / 6px 4px 7px 5px; transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1); } .ds-ink-btn-line:hover { background: #fbfbf8; transform: translateY(-2px); box-shadow: 0 0 0 2px currentColor; } .ds-ink-btn-line:active { transform: none; } .ds-ink-btn-line:focus-visible { outline: 3px solid #2a62c9; outline-offset: 3px; }"
+    },
+    {
+      "name": "Dice Preset Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "A paper chip with a label over its mono formula.",
+      "html": "<button class=\"ds-chip\" type=\"button\">Advantage<code>2d20kh1+5</code></button>",
+      "css": ".ds-chip { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 0.1rem; min-height: 48px; padding: 0.45rem 0.8rem; font: 700 0.95rem/1.25 'Atkinson Hyperlegible Next', system-ui, sans-serif; color: #1f2a2e; background: #fbfbf8; border: 2.5px solid #1f2a2e; border-radius: 4px 6px 5px 3px / 5px 3px 6px 4px; cursor: pointer; transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1); } .ds-chip code { font: 400 0.85rem 'Atkinson Hyperlegible Mono', ui-monospace, monospace; color: #2457b5; } .ds-chip:hover { transform: translateY(-2px); box-shadow: 0 0 0 2px currentColor; } .ds-chip:focus-visible { outline: 3px solid #2a62c9; outline-offset: 3px; }"
+    },
+    {
+      "name": "Formula Input",
+      "kind": "input",
+      "refersTo": "input-formula",
+      "description": "Paper field with a black marker border, set in mono.",
+      "html": "<label class=\"ds-field\"><span>Or write your own</span><input value=\"4d6dl1\" /></label>",
+      "css": ".ds-field span { display: block; margin-bottom: 0.3rem; font: 700 1rem 'Atkinson Hyperlegible Next', system-ui, sans-serif; color: #1f2a2e; } .ds-field input { min-height: 48px; padding: 0 0.9rem; font: 400 1.1rem 'Atkinson Hyperlegible Mono', ui-monospace, monospace; color: #1f2a2e; background: #fbfbf8; border: 2.5px solid #1f2a2e; border-radius: 4px; } .ds-field input:focus-visible { outline: 3px solid #2a62c9; outline-offset: 1px; }"
+    },
+    {
+      "name": "Mat Navigation",
+      "kind": "nav",
+      "refersTo": "nav",
+      "description": "Bold black links on the mat; a blue marker line grows under on hover.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-brand\" href=\"#\">ThunderForge</a><a class=\"ds-nav-link\" href=\"#\">The dream</a><a class=\"ds-nav-link\" href=\"#\">Dice</a><a class=\"ds-nav-link\" href=\"#\">Self-host</a></nav>",
+      "css": ".ds-nav { display: flex; align-items: center; gap: 1.4rem; height: 96px; padding: 0 48px; background-color: #eceee9; } .ds-brand { margin-right: auto; font: 700 1.2rem 'Atkinson Hyperlegible Next', system-ui, sans-serif; color: #1f2a2e; text-decoration: none; } .ds-nav-link { padding: 0.5rem 0; font: 700 1rem 'Atkinson Hyperlegible Next', system-ui, sans-serif; color: #1f2a2e; text-decoration: none; background: linear-gradient(#2a62c9, #2a62c9) 0 100% / 0 3px no-repeat; transition: background-size 200ms cubic-bezier(0.22, 1, 0.36, 1); } .ds-nav-link:hover { background-size: 100% 3px; } .ds-nav-link:focus-visible { outline: 3px solid #2a62c9; outline-offset: 3px; }"
+    },
+    {
+      "name": "Legend Card",
+      "kind": "card",
+      "refersTo": "legend-card",
+      "description": "Paper card laid on the mat; toggle rows with dashed dividers.",
+      "html": "<div class=\"ds-legend\"><h3>Legend</h3><button class=\"ds-legend-row\" aria-pressed=\"true\"><strong>Walls</strong> block movement and sight</button><button class=\"ds-legend-row\" aria-pressed=\"false\"><strong>Lights</strong> decide what each token can see</button></div>",
+      "css": ".ds-legend { padding: 1.25rem 1.4rem 1.5rem; background: #fbfbf8; border: 2.5px solid #1f2a2e; border-radius: 4px; color: #1f2a2e; font-family: 'Atkinson Hyperlegible Next', system-ui, sans-serif; } .ds-legend h3 { margin: 0 0 0.6rem; font: 400 1.6rem 'Permanent Marker', cursive; } .ds-legend-row { display: block; width: 100%; min-height: 48px; padding: 0.5rem 0.25rem; font: inherit; text-align: left; color: #1f2a2e; background: none; border: 0; border-bottom: 1px dashed rgb(31 42 46 / 0.25); cursor: pointer; } .ds-legend-row:hover { background: rgb(42 98 201 / 0.06); } .ds-legend-row[aria-pressed='false'] { color: #4a5759; } .ds-legend-row[aria-pressed='false'] strong { text-decoration: line-through 2px #c4352a; } .ds-legend-row:focus-visible { outline: 3px solid #2a62c9; outline-offset: 3px; }"
+    },
+    {
+      "name": "Marker Heading with Strike",
+      "kind": "custom",
+      "refersTo": "headline",
+      "description": "A section headline in marker over a struck-out line drawn with the red Rule stroke.",
+      "html": "<div class=\"ds-mat\"><h2 class=\"ds-marker-head\">Burned one too many times.</h2><p class=\"ds-struck\">A new edition pushed over the source material we loved.<svg viewBox=\"0 0 100 10\" preserveAspectRatio=\"none\" aria-hidden=\"true\"><path d=\"M0.8 5.2 Q50 6.4 99.2 4.6\" stroke=\"#c4352a\" stroke-width=\"4.5\" fill=\"none\" stroke-linecap=\"round\" opacity=\"0.9\" vector-effect=\"non-scaling-stroke\" style=\"mix-blend-mode:multiply\"/></svg></p></div>",
+      "css": ".ds-mat { padding: 48px; background-color: #eceee9; background-image: linear-gradient(to right, rgb(120 142 168 / 0.26) 1px, transparent 1px), linear-gradient(to bottom, rgb(120 142 168 / 0.26) 1px, transparent 1px); background-size: 48px 48px; } .ds-marker-head { margin: 0 0 1.1rem; font: 400 clamp(2.25rem, 1.6rem + 2.6vw, 3.75rem)/1.05 'Permanent Marker', 'Comic Sans MS', cursive; color: #1f2a2e; } .ds-struck { position: relative; margin: 0; font: 400 1.15rem/1.6 'Atkinson Hyperlegible Next', system-ui, sans-serif; color: #4a5759; } .ds-struck svg { position: absolute; left: -0.4rem; top: calc(50% - 6px); width: calc(100% + 0.8rem); height: 12px; }"
+    },
+    {
+      "name": "Measure",
+      "kind": "custom",
+      "refersTo": "figure",
+      "description": "A measured figure under a green ruler counted in cells.",
+      "html": "<div class=\"ds-measure\"><div class=\"ds-ruler\"><span></span><i></i><span></span></div><p><b class=\"ds-fig\">10,000</b> <strong>live subscribers</strong><br><span class=\"ds-then\">0 starved, 0 leaked</span></p></div>",
+      "css": ".ds-measure { color: #1f2a2e; font-family: 'Atkinson Hyperlegible Next', system-ui, sans-serif; } .ds-ruler { display: flex; align-items: center; width: 480px; max-width: 100%; height: 18px; color: #2f9a54; } .ds-ruler span { width: 12px; height: 12px; border-radius: 50%; background: currentColor; } .ds-ruler i { flex: 1; height: 4px; background: repeating-linear-gradient(to right, currentColor 0 42px, transparent 42px 48px); } .ds-fig { font: 400 clamp(2.75rem, 2rem + 3vw, 4.5rem)/1 'Atkinson Hyperlegible Mono', ui-monospace, monospace; letter-spacing: -0.02em; } .ds-then { font: 400 1rem 'Atkinson Hyperlegible Mono', ui-monospace, monospace; color: #1d6e3b; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Battle Mat",
+    "overview": "The page is the table. Every surface sits on a cool vinyl wet-erase mat printed with a pale blue-grey grid, one square per foot-scale cell and every fifth line darker. Everything that is not reading text is drawn on that mat in four translucent marker inks, the way a game master sketches a room before the players arrive: walls in black, the call to play in blue, the call to give in red, the things you can measure and the notes in the margin in green. Real objects (hero tokens, dice) sit on the mat and cast small physical shadows; drawn things never do.\n\nDensity is generous and gridded. Measures, gaps and section rhythm are counted in cells, so a heading, a room wall and a draggable token all land on the same printed lines. The voice of the type is split cleanly: a felt-tip marker for anything a hand would write on the mat, a hyperlegible sans for anything a person must read, and a hyperlegible mono only where the page reports a formula, a measurement or a command.\n\nThe world refuses the category default of dark map art, glowing calls to action and feature-card grids. Controls are inked squares and outlines with slightly uneven corners, never stock pills. Motion is one gesture: the room's walls draw on once at load, and tokens snap to squares as they are dragged.",
+    "keyCharacteristics": [
+      "Light, cool vinyl ground (#eceee9) with a printed 1px grid at `--cell` and a darker line every five cells.",
+      "Four marker inks, translucent and multiplied onto the mat, with round caps and overshot, slightly bowed strokes.",
+      "Permanent Marker for the drawn voice; Atkinson Hyperlegible Next for reading; Atkinson Hyperlegible Mono for numbers and commands.",
+      "Layout counted in cells (48 / 40 / 32px by breakpoint).",
+      "Hand-drawn asymmetric corner radii on every ink control and frame.",
+      "Real objects are draggable and snap to the grid; marker drawings stay flat."
+    ],
+    "rules": [
+      {
+        "name": "The Pressed Harder Rule",
+        "body": "Every ink has two strengths. The `--ink-*` value draws strokes, fills and outlines; the `--text-*` value is the same pen pressed harder and is the only one used for words or as a filled button ground. Wet-Erase Green never carries text.",
+        "section": "colors"
+      },
+      {
+        "name": "The Four Pens Rule",
+        "body": "The palette is the four inks plus the vinyl and the paper. A new color needs a new pen on the table, not a tint for a section.",
+        "section": "colors"
+      },
+      {
+        "name": "The Hand and the Page Rule",
+        "body": "Permanent Marker is for what a hand writes on the mat: headings, notes, signatures. It never sets a paragraph, a button label or a form field.",
+        "section": "typography"
+      },
+      {
+        "name": "The Instrument Rule",
+        "body": "Mono appears only where the page reports something exact: a formula, a measurement, a count, a command. Never as decoration.",
+        "section": "typography"
+      },
+      {
+        "name": "The Objects Cast, Ink Doesn't Rule",
+        "body": "Only real tabletop objects (tokens, dice) get a shadow, and it is soft and short. Marker drawings, frames, cards and controls stay flat on the vinyl.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** count space in cells (`--cell`: 48 / 40 / 32px) and lay positioned art from the page origin so it lands on the printed grid.",
+      "**Do** draw with the four inks only, at `--marker-w` (7px) or `--marker-thin` (3.5px), round caps, 0.9 opacity, multiplied onto the mat.",
+      "**Do** use the `--text-*` strength of an ink for any words or filled button grounds; keep Wet-Erase Green (#2f9a54) for strokes.",
+      "**Do** generate hand strokes through `stroke()` in `src/ink/marker.ts` with a fixed seed, and reuse `Check` and `Ring` for ticks and circles; strike text with `.strike`.",
+      "**Do** give every ink control and frame a hand-drawn asymmetric radius and a 48px minimum target.",
+      "**Do** keep one blue filled button per view as the primary; red is for giving, black and outlines for the rest.",
+      "**Do** set every reported number, formula and command in Atkinson Hyperlegible Mono, and only those.",
+      "**Do** honor `prefers-reduced-motion` by showing drawn-on strokes and settled dice in their final state."
+    ],
+    "donts": [
+      "**Don't** use stock pill buttons or fully rounded controls; controls are inked squares and outlines.",
+      "**Don't** set paragraphs, button labels or form text in Permanent Marker.",
+      "**Don't** put a shadow on a drawing, card or frame; only tokens and other tabletop objects cast one.",
+      "**Don't** introduce dark map-art backgrounds, glowing calls to action or a feature-card grid.",
+      "**Don't** add a color outside the four inks, the vinyl and the paper (the brand teal stays inside the terminal and the brand mark)."
+    ]
+  }
+}
