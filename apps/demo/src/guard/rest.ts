@@ -6,6 +6,7 @@
  */
 import { demoState } from "../backend/state";
 import { viewerUser } from "../backend/actors";
+import { bytesOf } from "../backend/uploads";
 import { drawArt, readArtPath } from "../seed/art";
 
 /** An SVG document drawn as PNG bytes (`rasterize.ts` in the page). */
@@ -90,14 +91,25 @@ export function answerRest(
     return fetchStatic(`${base}packs/${folder}/${manifest[2]}/manifest.json`);
   }
 
-  // A scene's background: one of the maps shipped beside the page.
+  // A scene's background: one of the maps shipped beside the page, or a
+  // picture the visitor gave it, kept in this browser.
   const asset = /^\/api\/canvas-assets\/([0-9a-f-]{36})\.webp(\.meta)?$/.exec(
     path,
   );
   if (asset) {
     const held = demoState().assets[asset[1]];
     if (!held || asset[2]) return json({ error: "asset not found" }, 404);
-    return fetchStatic(`${base}maps/${held.file}`, { method });
+    if (held.file) return fetchStatic(`${base}maps/${held.file}`, { method });
+    return bytesOf(asset[1]).then((bytes) =>
+      bytes
+        ? new Response(method === "HEAD" ? null : bytes, {
+            headers: {
+              "content-type": "image/webp",
+              "content-length": String(bytes.size),
+            },
+          })
+        : json({ error: "asset not found" }, 404),
+    );
   }
 
   // An actor's picture, drawn from its spec. The engine reads a token's

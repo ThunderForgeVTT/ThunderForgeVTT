@@ -9,8 +9,20 @@
  */
 import type { ArtAsset } from "../seed/art";
 import { buildSeed, type MapListing, type Viewer } from "../seed/world";
+import { forgetUploads } from "./uploads";
 
 export type Row = Record<string, unknown>;
+
+/**
+ * Where an asset's bytes are: a static file under `maps/` for a seeded map,
+ * else the browser's upload store (`uploads.ts`), with the
+ * `canvas_image_assets` row the upload made.
+ */
+export interface HeldAsset {
+  file?: string;
+  byteSize: number;
+  row?: Row;
+}
 
 export interface SceneExploration {
   enabled: boolean;
@@ -45,8 +57,8 @@ export interface DemoState {
   viewer: Viewer;
   /** The hero the seeded player is playing (spec 023); they own both. */
   claimedActorId: string | null;
-  /** Background asset id → the static file under `maps/` that is its bytes. */
-  assets: Record<string, { file: string; byteSize: number }>;
+  /** Asset id → where its bytes are: a static file under `maps/`, or an upload. */
+  assets: Record<string, HeldAsset>;
   /** Actor art asset id → the spec that draws it (`seed/art.ts`). */
   art: Record<string, ArtAsset>;
   nextEventId: number;
@@ -147,6 +159,7 @@ export function forgetSavedWorld(): void {
     saveTimer = null;
   }
   state = null;
+  forgetUploads();
   try {
     window.localStorage.removeItem(STORAGE_KEY);
   } catch {

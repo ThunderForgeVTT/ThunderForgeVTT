@@ -39,7 +39,7 @@ function sees(state: DemoState, scene: Row): boolean {
 }
 
 /** The trigger's mirror: the scene's board is its entry level's. */
-function mirrorToEntry(state: DemoState, scene: Row): void {
+export function mirrorToEntry(state: DemoState, scene: Row): void {
   const entry = levelsOf(state, scene.sceneId as string).find((l) => l.isEntry);
   if (!entry) return;
   entry.backgroundAssetId = scene.backgroundAssetId;

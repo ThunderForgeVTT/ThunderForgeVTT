@@ -19,8 +19,10 @@ import {
   notInDemoMessage,
   reportNotInDemo,
 } from "../backend/notInDemo";
+import { importUvtt } from "../backend/mapImport";
 import { loadState } from "../backend/state";
 import { installImageGuard } from "./images";
+import { multipartOperation } from "./multipart";
 import { svgToPng } from "./rasterize";
 import { answerRest } from "./rest";
 import { installSocketGuard } from "./socket";
@@ -68,11 +70,15 @@ const IMPORT = "Importing a book";
 
 async function answerGraphQL(request: Request): Promise<Response> {
   const type = request.headers.get("content-type") ?? "";
-  if (!type.includes("application/json")) {
-    // The multipart form: an upload to instance storage (FR-013).
-    return refuse("Uploading to an instance");
+  let operation: OperationRequest;
+  if (type.includes("multipart/form-data")) {
+    // An upload: the GraphQL multipart request, its file kept in the page.
+    operation = await multipartOperation(await request.formData());
+  } else if (type.includes("application/json")) {
+    operation = (await request.json()) as OperationRequest;
+  } else {
+    return refuse(`A ${type || "bodiless"} GraphQL request`);
   }
-  const operation = (await request.json()) as OperationRequest;
   const result = await runOperation(operation);
   setTimeout(releaseEvents, EVENT_DELAY_MS);
   return json(result);
@@ -103,6 +109,15 @@ async function demoFetch(
     (url.pathname === "/api/graphql" || url.pathname === "/api/graphql/public")
   ) {
     return answerGraphQL(request);
+  }
+  const mapImport = /^\/api\/scenes\/([0-9a-f-]{36})\/import\/uvtt$/.exec(
+    url.pathname,
+  );
+  if (request.method === "POST" && mapImport) {
+    const form = await request.formData().catch(() => null);
+    const answer = await importUvtt(mapImport[1], form);
+    setTimeout(releaseEvents, EVENT_DELAY_MS);
+    return json(answer.body, answer.status);
   }
   const answer = answerRest(
     request.method,
