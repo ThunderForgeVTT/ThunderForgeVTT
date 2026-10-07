@@ -212,7 +212,8 @@ the first, and a second reroll with Inspiration is refused.
 5. **Given** a table that turned the `inspiration` setting off,
    **When** a roll is made,
    **Then** no Inspiration reroll is offered, and the server refuses one.
-6. **Given** a check the 5e adjudicator judged,
+6. **Given** a check its system's adjudicator judged (5e registers none
+   today, so this holds for any system that does; research R14),
    **When** it is rerolled,
    **Then** the new roll is judged again, and the chat shows the new
    verdict.
@@ -324,8 +325,8 @@ one-handed weapon, records `[1, 5]`.
    **Then** the damage is rolled as declared.
 3. **Given** a weapon item,
    **When** the GM edits it,
-   **Then** they can mark it Two-Handed. SRD weapons imported from the
-   compendium arrive with it marked.
+   **Then** they can mark it Two-Handed. There is no SRD weapon compendium
+   in the repository, so the GM marks it by hand (research R6).
 
 ---
 
@@ -352,9 +353,8 @@ one-handed weapon, records `[1, 5]`.
 - **The GM's NPCs.** An NPC's sheet can carry facets too. The GM rolling
   for it may spend its Inspiration or Luck Points.
 - **A roll older than the session.** A reroll is offered only on the
-  latest roll in its chain, and only for a short time after it. Planning
-  sets the time, on the order of a minute or until the next roll in the
-  world, so last week's failed check cannot be rerolled tonight.
+  latest roll in its chain, and only for two minutes after it (research
+  R5), so last week's failed check cannot be rerolled tonight.
 - **A pause** (spec 071). A reroll is a roll. While play is paused it is
   refused, exactly like `rollCheck`.
 - **Other systems.** None of this runs for a world on another system. Roll
@@ -408,9 +408,13 @@ one-handed weapon, records `[1, 5]`.
 **Spendable facets**
 
 - **FR-009**: The roll record MUST gain `actor_id` (nullable), set for
-  checks and attacks. A roll with no actor cannot be rerolled.
-- **FR-010**: A new mutation, `rerollRoll(worldId, rollId, spend)`, with
-  `spend` one of `INSPIRATION` or `LUCK_POINT`, MUST in one transaction:
+  checks and attacks, plus `roll_kind` (`check`, `to_hit`, `damage`, or
+  null for a free roll) and `check_id`, so a reroll knows how to judge
+  again. A roll with no actor cannot be rerolled.
+- **FR-010**: A new mutation, `rerollRoll(worldId, rollId, spend: String!)`,
+  MUST in one transaction do the steps below. `spend` is the pack's id
+  (`inspiration` or `luck_point` for 5e), not a GraphQL enum, so shared
+  code never names 5e (research R15).
   1. refuse unless the caller made the roll and still has Editor on its
      actor;
   2. refuse unless the roll is a d20 test, is the latest in its chain and
@@ -431,13 +435,19 @@ one-handed weapon, records `[1, 5]`.
      attack's hit or miss per US4);
   8. record a `ROLL_MADE` event for it and the actor's update event, as
      any sheet change does.
-- **FR-011**: The database MUST enforce one reroll per roll per resource,
-  with a unique index on `(reroll_of, reroll_spent)`. A losing concurrent
-  spend then fails without spending.
+- **FR-011**: The database MUST enforce one reroll per roll, with a
+  partial unique index on `reroll_of` alone, and the server MUST refuse a
+  spend already used in the roll's chain. A `(reroll_of, reroll_spent)`
+  index would let Inspiration and a Luck Point both replace one roll and
+  fork the chain (research R8). A losing concurrent spend then fails
+  without spending.
 - **FR-012**: Rebuilding a resolution MUST be a dice-crate function, with
-  its own tests. It takes a resolution, the die to reroll or the die to
-  add, and an rng. It replays the term's keep, drop and floor modifiers,
-  and never re-parses the formula.
+  its own tests. It takes the stored formula, bindings and resolution, the
+  die to reroll or a reshaped formula, and an rng. It re-parses the
+  server's stored formula to align dice with terms, and replays each
+  term's keep, drop and floor modifiers through the crate's own code
+  (research R3). Re-parsing is safe: the formula is the server's record,
+  never the client's.
 - **FR-013**: `rerollRoll` MUST be classified GATED in
   `play_pause_surface_tables.rs`.
 - **FR-014**: An attack reroll MUST be refused unless every part being
@@ -448,7 +458,9 @@ one-handed weapon, records `[1, 5]`.
 **Showing it**
 
 - **FR-015**: `WorldRoll` MUST expose `rerollOf`, `rerolledBy` (the later
-  roll, if any), `spent` and `facets`. `MaskedRoll` gains nothing.
+  roll, if any), `spent` and `facets`, plus, for the viewer,
+  `rerollOffers` (the spends the server would accept now) and
+  `rerollUntil` (when the window closes). `MaskedRoll` gains nothing.
 - **FR-016**: The chat MUST show a rerolled roll struck through, joined to
   its replacement, with the resource that was spent. It MUST show each die
   that a passive facet changed with both values, the rolled and the used.
@@ -476,12 +488,16 @@ one-handed weapon, records `[1, 5]`.
   - `actor_id` (nullable);
   - `facets` (text array, the ids applied, empty by default);
   - `reroll_of` (nullable, the roll replaced);
+  - `roll_kind` and `check_id` (nullable);
   - `reroll_spent` (nullable, the resource spent);
-  - a unique index on `(reroll_of, reroll_spent)`.
-- **Item property**: a weapon item gains a list of the pack's properties.
-  Only `two_handed` is read in this spec. It lives where planning decides
-  (a column on `world_items`, or a pack-validated data field), but it is
-  declared by the pack, not by shared code.
+  - a partial unique index on `reroll_of`.
+- **Attack record** (`world_attacks`), existing, gains `reroll_of`
+  (nullable, unique): an attack reroll is a new row judged against the
+  stored defence (research R7).
+- **Item property**: a weapon item gains `world_items.properties`, a text
+  array checked against the pack's `itemProperties` in `system.json`.
+  Only `two_handed` is read in this spec. Shared code stores the ids; the
+  pack declares them.
 
 ## Success Criteria
 
@@ -524,8 +540,10 @@ one-handed weapon, records `[1, 5]`.
   - Inspiration spent from the chat, with the sheet's toggle off
     afterwards, the struck-through roll in the GM's chat, and a second
     reroll refused;
-  - Halfling Luck shown on a seeded 1;
-  - a missed attack rerolled.
+  - Halfling Luck shown by its formula (`r1`) and tag. The server cannot
+    be seeded from e2e, so the seeded 1 is proven in the server and demo
+    tests (research R13);
+  - a missed attack rerolled, forced to miss with AC 99.
 
 ## Assumptions
 
@@ -550,6 +568,6 @@ one-handed weapon, records `[1, 5]`.
   That needs "held in two hands" at attack time, which nothing records yet.
 - **No rest mechanism.** Luck Points are reset by hand on the sheet. A
   long rest button belongs to a spec about rests.
-- **The reroll window** is decided in planning, measured against how long
-  a table takes to decide. A roll's maker sees the button only while the
+- **The reroll window** is two minutes, and only on the latest roll in its
+  chain (research R5). A roll's maker sees the button only while the
   server would accept it.
