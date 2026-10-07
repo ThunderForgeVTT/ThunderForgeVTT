@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "types": ["vite/client", "node"]
+  },
+  "include": ["src", "vite.config.mts", "e2e", "playwright.config.ts"]
+}

@@ -1,0 +1,9 @@
+export const REPO = "https://github.com/ThunderForgeVTT/ThunderForgeVTT";
+export const DISCUSSIONS = `${REPO}/discussions`;
+export const PROJECTS = `${REPO}/projects`;
+export const SPONSORS = "https://github.com/sponsors/mbround18";
+export const KOFI = "https://ko-fi.com/mbround18";
+export const DEMO = "/demo/";
+export const MAPS_SOURCE = "https://github.com/mbround18/vtt-maps";
+export const MAPS_CATALOG = "https://vtt-maps.dnd-apps.dev/catalog";
+export const CC_BY_SA = "https://creativecommons.org/licenses/by-sa/4.0/";

@@ -1,0 +1,100 @@
+{
+  "title": "Choose the visual world for thunderforge.dev",
+  "question": "The roll assigned The Character Sheet. Keep it, take an alternate, or re-roll.",
+  "options": [
+    {
+      "id": "assigned",
+      "label": "The Character Sheet",
+      "kicker": "THE ROLL",
+      "lineage": "the pencil-worn character sheet every player knows by heart (our own grammar, never a publisher's trade dress)",
+      "thesis": "ThunderForge introduces itself the way every adventurer does: on a filled-in sheet.",
+      "palette": ["#e9e4d6", "#1d2430", "#2f6f8f", "#c8402e", "#56e0c7"],
+      "materials": ["ruled boxes and ovals", "graphite pencil and eraser smudge", "a live d20 in the margin"],
+      "viewport": "Name box reads THUNDERFORGE, class Virtual Tabletop, level 0 (unreleased); six ability boxes hold real measured numbers; a Roll button rolls the real Rust dice in the margin; Donate and Follow sit in the 'Allies & Organizations' box.",
+      "risk": "Cream paper is the category's softest default; it must be worked in pencil, ink and slate so it reads as a played sheet, not parchment.",
+      "raised": [
+        { "from": "challenger-forge", "raise": "Every number on the sheet is ruled with its measurement and source, like a smith's chalk marks: no unmeasured stat." },
+        { "from": "challenger-pattern", "raise": "The visitor's chosen table (in person / online / both) traces solid; the others stay dashed." },
+        { "from": "challenger-bass", "raise": "Each sheet section commits fully to one ink; no section is half-decorated." }
+      ]
+    },
+    {
+      "id": "model-pick",
+      "label": "The Battle Mat",
+      "kicker": "IMPECCABLE’S PICK",
+      "lineage": "wet-erase one-inch grid vinyl, four-color markers, painted minis",
+      "thesis": "The homepage is the table: a vinyl grid where the story is drawn in marker as you scroll.",
+      "palette": ["#f2efe6", "#1f2a2e", "#2a62c9", "#d23a2a", "#2f9a54"],
+      "materials": ["printed square grid", "wet-erase marker strokes", "hero tokens from the heroes package"],
+      "viewport": "Full-bleed grid mat; marker-drawn walls form the headline room; procedural hero tokens stand on squares; the real dice roll on the mat.",
+      "risk": "The most obvious VTT metaphor; it is where most runs for this category would land."
+    },
+    {
+      "id": "challenger-forge",
+      "label": "Power-Hammer Forge",
+      "verdict": "declined",
+      "lineage": "a blacksmith's forge under the power hammer",
+      "thesis": "The project forged blow by blow, heat by heat.",
+      "palette": ["#121212", "#5a5f66", "#ff6a1a", "#fff1c2"],
+      "materials": ["scale-shower particles", "stenciled industrial caps"],
+      "viewport": "A white-hot billet stretched by each scroll blow.",
+      "case": "Fuses on the name only: players identify with the table, not the smithy.",
+      "kept": "Every number ruled with its measurement.",
+      "risk": "Literal reading of the name; says nothing about play.",
+      "hero": "https://impeccable.style/worlds/cards/metal-forging-patina-blacksmith-scale-shower-hero.webp"
+    },
+    {
+      "id": "challenger-pattern",
+      "label": "Sewing Pattern Envelope",
+      "verdict": "declined",
+      "lineage": "home sewing pattern envelopes and tissue",
+      "thesis": "Views A, B, C of one tabletop.",
+      "palette": ["#e8d9b5", "#111111", "#c0392b"],
+      "materials": ["tissue", "dashed cutting lines"],
+      "viewport": "Envelope front with three views of a table.",
+      "case": "Fuses poorly: tabletop players do not read the sewing room.",
+      "kept": "The chosen variant traces solid, the rest dashed.",
+      "risk": "Charming and off-subject.",
+      "hero": "https://impeccable.style/worlds/cards/fashion-folded-worlds-sewing-pattern-envelope-hero.webp"
+    },
+    {
+      "id": "challenger-bass",
+      "label": "Saul Bass Title Sequence",
+      "verdict": "declined",
+      "lineage": "1950s cut-paper film titles",
+      "thesis": "The creator's story told as a ninety-second title sequence.",
+      "palette": ["#d9571e", "#111111", "#f1ead9"],
+      "materials": ["cut paper", "jittering line"],
+      "viewport": "Burnt-orange field, a cut-paper hand rolling a die.",
+      "case": "Strong story, weak proof: hides the product behind cinema.",
+      "kept": "One committed field color per act.",
+      "risk": "Style outruns substance.",
+      "hero": "https://impeccable.style/worlds/cards/posters-covers-sleeves-saul-bass-title-hero.webp"
+    },
+    {
+      "id": "challenger-scope",
+      "label": "Oscilloscope Bench",
+      "verdict": "declined",
+      "lineage": "CRT oscilloscopes",
+      "thesis": "The server's event stream as a phosphor trace.",
+      "palette": ["#050805", "#39ff6a", "#ffb000"],
+      "materials": ["graticule", "phosphor"],
+      "viewport": "A trace of live world events.",
+      "case": "Speaks to engineers, not players.",
+      "kept": "Everything measured against one grid.",
+      "risk": "Neon-on-black default.",
+      "hero": "https://impeccable.style/worlds/cards/scientific-notation-oscilloscope-signal-bench-hero.webp"
+    }
+  ],
+  "reroll": { "registers": ["safer", "bolder"] },
+  "canon": true,
+  "canonCard": {
+    "label": "The category standard",
+    "thesis": "A dark fantasy game-site hero: map art, glowing CTA, feature grid, done impeccably.",
+    "palette": ["#0a1018", "#f5f8ff", "#56e0c7"],
+    "materials": ["full-bleed map art", "clean grid"],
+    "viewport": "Brand mark and headline over a dark map, Try the demo + Donate buttons.",
+    "risk": "Indistinguishable from every other VTT site by design."
+  },
+  "steer": true
+}

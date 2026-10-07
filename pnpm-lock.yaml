@@ -123,6 +123,52 @@ importers:
         specifier: ^8.0.10
         version: 8.0.10(@types/node@26.2.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.46.2)
 
+  apps/landing:
+    dependencies:
+      '@fontsource/atkinson-hyperlegible-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/atkinson-hyperlegible-next':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/permanent-marker':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@thunderforge/dice':
+        specifier: workspace:^
+        version: link:../../dist/dice
+      '@thunderforge/heroes':
+        specifier: workspace:^
+        version: link:../../packages/heroes
+      react:
+        specifier: ^19.2.5
+        version: 19.2.5
+      react-dom:
+        specifier: ^19.2.5
+        version: 19.2.5(react@19.2.5)
+    devDependencies:
+      '@playwright/test':
+        specifier: ^1.62.1
+        version: 1.62.1
+      '@types/node':
+        specifier: ^26.2.0
+        version: 26.2.0
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.14)
+      '@vitejs/plugin-react':
+        specifier: ^6.0.1
+        version: 6.0.1(vite@8.0.10(@types/node@26.2.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.46.2))
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.10
+        version: 8.0.10(@types/node@26.2.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.46.2)
+
   apps/web:
     dependencies:
       '@codemirror/autocomplete':
@@ -1012,6 +1058,15 @@ packages:
 
   '@fontsource-variable/geist@5.3.0':
     resolution: {integrity: sha512-j0m+vLQuG5XAYoHtGCVu0spvlGreR3EzpECUVzkFmI1mTVnAO38l/NEPDCFgZ177JxzYJCLSmTQibIiYPilGrA==}
+
+  '@fontsource/atkinson-hyperlegible-mono@5.3.0':
+    resolution: {integrity: sha512-7Iha5azCRXJVk4NdxbVdKAE+4p/rMJoW6dslvhktugDFPSp7kxFRGAavBtwtSTrnyNhKXW8w1NHgMnrh/6OshA==}
+
+  '@fontsource/atkinson-hyperlegible-next@5.3.0':
+    resolution: {integrity: sha512-8p1tHVoPDo6oYwSO3sMw5snGwFwSf3TmeSF9Gcj792GXdsg6oqvhoItbj6Hj/XZIk0Xs+Cwu6pkLBAl3Q5HrwA==}
+
+  '@fontsource/permanent-marker@5.3.0':
+    resolution: {integrity: sha512-ZO/NtYW4SCc/iY8N3dmjWyDITcXJ/vhWZFgnwRcvzwCKKnScMrM/a2/6VHlsjCVuIgmPzNrCFbedEYhv+/jJBg==}
 
   '@hono/node-server@2.1.1':
     resolution: {integrity: sha512-ELuehkj5VCBdgEw9zs+ivkKwyzzUCSQuE96YmiPvn1ECBoZCczbFXJLeEGMTYjphP6gydh4pHMqEYPVMYUVgQg==}
@@ -5725,6 +5780,12 @@ snapshots:
   '@floating-ui/utils@0.2.11': {}
 
   '@fontsource-variable/geist@5.3.0': {}
+
+  '@fontsource/atkinson-hyperlegible-mono@5.3.0': {}
+
+  '@fontsource/atkinson-hyperlegible-next@5.3.0': {}
+
+  '@fontsource/permanent-marker@5.3.0': {}
 
   '@hono/node-server@2.1.1(hono@4.13.3)':
     dependencies:

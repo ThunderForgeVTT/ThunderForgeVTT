@@ -1,0 +1,5 @@
+dist/
+public/maps/
+.impeccable/review/
+test-results/
+playwright-report/
