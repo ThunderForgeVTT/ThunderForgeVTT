@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { REPO } from "../links.ts";
+import { DISCUSSIONS, REPO } from "../links.ts";
 
 const COMMANDS = `git clone \\
   https://github.com/ThunderForgeVTT/ThunderForgeVTT.git
@@ -38,6 +38,7 @@ export function SelfHost() {
           <a href={`${REPO}#quick-start`}>The full quick start</a> covers ports, mail and the rest.
         </p>
       </div>
+      <div className="host-run">
       <figure className="terminal">
         <div className="terminal-bar">
           <figcaption>Four lines to your own table</figcaption>
@@ -49,6 +50,21 @@ export function SelfHost() {
           <code>{COMMANDS}</code>
         </pre>
       </figure>
+      <aside className="early-note" aria-labelledby="early-title">
+        <h3 id="early-title" className="early-title">
+          Early days, and we're glad you're here.
+        </h3>
+        <p>
+          ThunderForge is in active development, and the container changes fast. Expect new releases
+          often, and changes that break things between them. Back up your database before you pull
+          a new one, and read what changed first.
+        </p>
+        <p>
+          If that sounds like fun, you're exactly who we want. Early adopters shape what this
+          becomes: <a href={DISCUSSIONS}>tell us what breaks</a> and what your table needs.
+        </p>
+      </aside>
+      </div>
     </section>
   );
 }

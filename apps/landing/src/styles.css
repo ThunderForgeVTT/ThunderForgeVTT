@@ -1234,6 +1234,25 @@ main {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+.early-note {
+  margin-top: 1.25rem;
+  padding: 0.9rem 1.1rem 1rem;
+  background: var(--paper);
+  border: 2px dashed var(--ink-green);
+  border-radius: 4px 6px 3px 5px;
+  font-size: 0.98rem;
+}
+.early-note p {
+  margin: 0.45rem 0 0;
+}
+.early-title {
+  margin: 0;
+  font-family: var(--font-marker);
+  font-weight: 400;
+  font-size: 1.2rem;
+  line-height: 1.25;
+  color: var(--text-green);
+}
 .host-copy code {
   font-size: 0.95em;
   padding: 0 0.25em;
