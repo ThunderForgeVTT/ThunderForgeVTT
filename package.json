@@ -18,6 +18,7 @@
     "verify:fix": "./scripts/verify.mjs --fix",
     "test:scripts": "node --test \"scripts/e2e/__tests__/*.test.mjs\" \"scripts/__tests__/*.test.mjs\"",
     "bundle:check": "node ./scripts/check-bundle-budget.mjs",
+    "browsers:update": "./scripts/update-browsers-data.mjs",
     "torture": "./scripts/torture.mjs",
     "torture:5": "./scripts/torture.mjs 5",
     "torture:10": "./scripts/torture.mjs 10",
