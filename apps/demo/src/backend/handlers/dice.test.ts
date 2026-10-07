@@ -4,28 +4,13 @@
  * the roll is recorded for the DM's history as `roll_dice_impl` records it.
  */
 import { readFileSync } from "node:fs";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-
-vi.hoisted(() =>
-  Object.assign(globalThis, {
-    window: {
-      addEventListener() {},
-      localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-      location: { href: "http://demo.test/demo/", origin: "http://demo.test" },
-    },
-  }),
-);
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { DEMO_USER } from "../../seed/world";
 import { runOperation } from "../execute";
-import { demoState, loadState, type Row } from "../state";
+import { demoState, type Row } from "../state";
+import { freshWorld } from "../testing/world";
 import { loadDiceForTest, seedDice } from "./dice";
-
-const BASE = "/demo/";
-const fetchStatic = (async () =>
-  new Response(
-    readFileSync(new URL("../../../public/maps/maps.json", import.meta.url)),
-  )) as unknown as typeof fetch;
 
 const ROLL = `mutation ($input: RollDiceInput!) {
   rollDice(input: $input) {
@@ -54,7 +39,7 @@ beforeAll(async () => {
       new URL("../../../../../dist/dice/dice_bg.wasm", import.meta.url),
     ),
   );
-  await loadState(fetchStatic, BASE);
+  await freshWorld();
 });
 
 beforeEach(() => {

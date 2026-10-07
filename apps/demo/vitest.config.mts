@@ -11,6 +11,8 @@ export default mergeConfig(
     test: {
       include: ["src/**/*.test.ts"],
       environment: "node",
+      // The backend reads `window` as it loads; this gives it one.
+      setupFiles: ["src/backend/testing/setup.ts"],
     },
   }),
 );

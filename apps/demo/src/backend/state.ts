@@ -12,6 +12,13 @@ import { buildSeed, type MapListing, type Viewer } from "../seed/world";
 
 export type Row = Record<string, unknown>;
 
+export interface SceneExploration {
+  enabled: boolean;
+  epoch: number;
+  /** User id → the epoch that member's own reset left them at. */
+  resets: Record<string, number>;
+}
+
 export interface DemoState {
   version: 4;
   world: Row & { id: string; activeSceneId: string | null };
@@ -25,6 +32,11 @@ export interface DemoState {
   chat: Row[];
   /** `world_roll_records`, oldest first (`handlers/dice.ts`). */
   rolls?: Row[];
+  /**
+   * `scenes.exploration_enabled` and `exploration_epoch`, and each member's
+   * `scene_exploration_resets` row, by scene (`handlers/lighting.ts`).
+   */
+  exploration?: Record<string, SceneExploration>;
   /** `GraphQLWorldActor` rows, plus `castKey` for the demo's own use. */
   actors: Row[];
   /** One `GraphQLActorSystemData` row per actor that has any. */

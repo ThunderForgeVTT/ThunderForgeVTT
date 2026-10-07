@@ -8,6 +8,7 @@
 import "./window";
 import { refused } from "../notInDemo";
 import { runOperation } from "../execute";
+import { subscribeToEvents, releaseEvents, type WorldEvent } from "../events";
 import { demoState, forgetSavedWorld, loadState } from "../state";
 import { DEMO_SCENES, type MapListing, type Viewer } from "../../seed/world";
 
@@ -64,4 +65,22 @@ export async function must<T = Record<string, any>>( // eslint-disable-line @typ
   return answer.data as T;
 }
 
-export { refused };
+/** The answer's data, or the test fails with the errors. */
+export const data = must;
+
+/** The first refusal's words. */
+export async function refusal(
+  query: string,
+  variables: Record<string, unknown> = {},
+): Promise<string | undefined> {
+  return (await ask(query, variables)).errors?.[0]?.message;
+}
+
+/** Every event released from now on, as a subscriber receives it. */
+export function heard(): WorldEvent[] {
+  const events: WorldEvent[] = [];
+  subscribeToEvents((event) => events.push(event));
+  return events;
+}
+
+export { refused, releaseEvents };

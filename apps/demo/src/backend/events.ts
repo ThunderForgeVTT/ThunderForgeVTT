@@ -19,6 +19,10 @@ export const EVENT = {
   sceneLaunched: 16,
   chat: 17,
   door: 21,
+  sceneLighting: 25,
+  explorationReset: 27,
+  sceneLevel: 33,
+  tokenTravelled: 34,
 } as const;
 
 const subscribers = new Set<(event: WorldEvent) => void>();
