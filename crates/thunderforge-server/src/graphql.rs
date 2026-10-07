@@ -107,7 +107,8 @@ pub mod mutations_lighting;
 pub use mutations_lighting::LightSourceMutation;
 
 // Native canvas authoring: shape (stroke/rect/ellipse/line/text) mutations
-pub mod mutations_shapes;
+pub mod mutations_clear_shapes;
+pub mod mutations_shapes; // Spec 082: the GM clears a scene's drawings
 pub use mutations_shapes::ShapeMutation;
 
 // Native canvas authoring: scene-scoped token mutations
@@ -485,6 +486,7 @@ pub struct MutationRoot(
     WallMutation,
     LightSourceMutation,
     ShapeMutation,
+    mutations_clear_shapes::ClearShapesMutation,
     // Spec 030: authoring, activation and approval for interactive elements.
     mutations_interactives::InteractiveMutation,
     mutations_levels::SceneLevelMutation,

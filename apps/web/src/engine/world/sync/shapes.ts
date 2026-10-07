@@ -46,7 +46,13 @@
  * meantime.
  */
 
-import { createShape, deleteShape, getShapes, updateShape } from "@/api/shapes";
+import {
+  clearShapes,
+  createShape,
+  deleteShape,
+  getShapes,
+  updateShape,
+} from "@/api/shapes";
 import type { ShapeRecord, ShapeKind as ApiShapeKind } from "@/types/shape";
 import type { WorldStore } from "../store";
 import type { ShapeKind, WorldShape } from "../types";
@@ -297,6 +303,15 @@ export function startShapeMutationBridge(
           console.error("Failed to delete shape:", error);
           restore(before);
         });
+      return;
+    }
+
+    if (command.type === "clear_shapes") {
+      // Nothing is removed here: the server's `deleted` events do it, on
+      // every board at once, so a refusal leaves nothing to put back.
+      void clearShapes(command.sceneId, command.createdBy).catch((error) => {
+        console.error("Failed to clear shapes:", error);
+      });
     }
   });
 

@@ -167,6 +167,10 @@ pub const GATED: &[(&str, &str)] = &[
         "deleteShape",
         r#"mutation { deleteShape(shapeId: "{shape}") }"#,
     ),
+    (
+        "clearShapes",
+        r#"mutation { clearShapes(sceneId: "{scene}") }"#,
+    ),
     // --- interactives (T032) ---------------------------------------------
     (
         "createInteractive",

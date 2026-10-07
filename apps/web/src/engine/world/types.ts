@@ -422,6 +422,17 @@ export type DeleteShapeCommand = {
   worldId?: string;
 };
 
+// Spec 082: the Game Master clears a scene's drawings — every one, or only
+// the named creators'. An intent like the three above, but with no
+// optimistic half: the drawings leave when the server's `deleted` events
+// arrive, so there is nothing to roll back.
+export type ClearShapesCommand = {
+  type: "clear_shapes";
+  sceneId: string;
+  createdBy?: string[];
+  worldId?: string;
+};
+
 // Spec 002 (US3): a pasted (or, latently, migrated-background) canvas
 // image asset. Not tracked in WorldState (no reducer case — see
 // store.ts's default case) since nothing currently reads a
@@ -623,6 +634,7 @@ export type WorldCommand =
   | CreateShapeCommand
   | UpdateShapeCommand
   | DeleteShapeCommand
+  | ClearShapesCommand
   | UpsertCanvasImageAssetCommand
   | RemoveCanvasImageAssetCommand
   | UpsertInteractiveCommand

@@ -8,6 +8,7 @@ import { getCameraState, setActiveShapeTool } from "@/engine/bevy";
 import { screenToWorld } from "@/engine/bevy/screenToWorld";
 import type { WorldStore } from "@/engine/world/store";
 import type { ShapeKind, WorldShape } from "@/engine/world/types";
+import { ClearShapesDialog } from "./ClearShapesDialog";
 
 export interface ShapeToolProps {
   worldStore: WorldStore;
@@ -30,6 +31,8 @@ export interface ShapeToolProps {
    * (spec 082 FR-015), so a player is not offered the toggle.
    */
   isGm?: boolean;
+  /** The scene's name, for the Game Master's "Clear all shapes" confirmation. */
+  sceneName?: string;
 }
 
 type DrawTool = "none" | "freehand" | "rect" | "ellipse" | "line" | "text";
@@ -90,6 +93,7 @@ export function ShapeTool({
   sceneId,
   canvasContainerRef,
   isGm = false,
+  sceneName,
 }: ShapeToolProps) {
   const [activeTool, setActiveTool] = useState<DrawTool>("none");
   const [textPlacement, setTextPlacement] = useState<TextPlacement | null>(
@@ -377,6 +381,14 @@ export function ShapeTool({
             Delete shape
           </Button>
         </Panel>
+      ) : null}
+
+      {isGm && sceneId ? (
+        <ClearShapesDialog
+          worldStore={worldStore}
+          sceneId={sceneId}
+          sceneName={sceneName ?? "this scene"}
+        />
       ) : null}
     </div>
   );

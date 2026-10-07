@@ -242,3 +242,94 @@ test("a player draws, everybody sees it, and they touch only their own", async (
     await playerB.context().close();
   }
 });
+
+test("the GM clears every drawing, and a player cannot", async ({
+  page: gm,
+  browser,
+}) => {
+  test.setTimeout(6 * 60_000);
+
+  const worldId = await registerAndCreateWorld(
+    gm,
+    `Clear drawings ${uniqueSuffix()}`,
+  );
+  const active = await gql<{ world?: { activeSceneId: string | null } }>(
+    gm,
+    `query ($id: UUID!) { world(id: $id) { activeSceneId } }`,
+    { id: worldId },
+  );
+  const [firstScene] = await sceneIds(gm, worldId);
+  const sceneId = active.world?.activeSceneId ?? firstScene;
+
+  const playerA = await inviteAndJoinAsPlayer(browser, gm, worldId, "e2eclra");
+  const playerB = await inviteAndJoinAsPlayer(browser, gm, worldId, "e2eclrb");
+
+  try {
+    for (const page of [gm, playerA, playerB]) {
+      await page.goto(`/world/${worldId}/play`);
+      await waitForEngineReady(page);
+    }
+    const drawn = [
+      await drawRect(gm, sceneId, { x: 0, y: 0, w: 40, h: 40 }),
+      await drawRect(playerA, sceneId, { x: 80, y: 0, w: 40, h: 40 }),
+      await drawRect(playerB, sceneId, { x: 160, y: 0, w: 40, h: 40 }),
+    ];
+    for (const page of [gm, playerA, playerB]) {
+      for (const shapeId of drawn) {
+        await expect
+          .poll(() => boardHasDrawing(page, shapeId), { timeout: 15_000 })
+          .toBe(true);
+      }
+    }
+
+    await test.step("a player is offered no clear, and the server refuses theirs", async () => {
+      await playerA.getByTestId("gm-tool-shapes").click();
+      await expect(playerA.getByTestId("shape-tool")).toBeVisible();
+      await expect(playerA.getByTestId("shape-clear-all")).toHaveCount(0);
+      const refused = await graphql<Answer<unknown>>(
+        playerA,
+        `
+          mutation ($sceneId: UUID!) {
+            clearShapes(sceneId: $sceneId)
+          }
+        `,
+        { sceneId },
+      );
+      expect(refused.errors?.length ?? 0, "a player's clear is refused").toBe(
+        1,
+      );
+      expect(await shapesOf(gm, sceneId)).toHaveLength(3);
+    });
+
+    await gm.getByTestId("gm-tool-shapes").click();
+    const dialog = gm.getByRole("dialog", { name: /Clear every drawing on/ });
+
+    await test.step("cancelling leaves every drawing", async () => {
+      await gm.getByTestId("shape-clear-all").click();
+      await expect(dialog).toBeVisible();
+      await dialog.getByTestId("shape-clear-cancel").click();
+      await expect(dialog).toBeHidden();
+      expect(await shapesOf(gm, sceneId)).toHaveLength(3);
+    });
+
+    await test.step("confirming empties the server and every board", async () => {
+      await gm.getByTestId("shape-clear-all").click();
+      await dialog.getByTestId("shape-clear-confirm").click();
+      await expect
+        .poll(async () => (await shapesOf(gm, sceneId)).length, {
+          timeout: 15_000,
+        })
+        .toBe(0);
+      for (const page of [gm, playerA, playerB]) {
+        for (const shapeId of drawn) {
+          await expect
+            .poll(() => boardHasDrawing(page, shapeId), { timeout: 15_000 })
+            .toBe(false);
+        }
+      }
+    });
+  } finally {
+    await playerA.context().close();
+    await playerB.context().close();
+  }
+});

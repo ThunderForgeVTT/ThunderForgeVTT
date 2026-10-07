@@ -325,17 +325,25 @@ type AppMutationRoot {
 	"""
 	deleteLightSource(lightId: UUID!): Boolean!
 	"""
-	Create a new shape on a scene (scene owner only)
+	Create a new shape on a scene: a Game Master, or a player holding the
+	Shapes tool, whose shape is always visible to players (spec 082)
 	"""
 	createShape(input: GraphQLCreateShapeInput!): GraphQLShape!
 	"""
-	Update an existing shape (scene owner only)
+	Update a shape: a Game Master any, a player only their own (spec 082)
 	"""
 	updateShape(shapeId: UUID!, input: GraphQLUpdateShapeInput!): GraphQLShape!
 	"""
-	Delete a shape (scene owner only)
+	Delete a shape: a Game Master any, a player only their own (spec 082)
 	"""
 	deleteShape(shapeId: UUID!): Boolean!
+	"""
+	Delete a scene's shapes, on every level: every one when `createdBy`
+	is left out, only those creators' when it is given (`[]` deletes
+	nothing). A Game Master of the scene only; anyone else is told the
+	scene was not found. Answers how many were deleted.
+	"""
+	clearShapes(sceneId: UUID!, createdBy: [UUID!]): Int!
 	"""
 	Author an interactive. Game Master only (FR-005).
 	"""
@@ -933,8 +941,10 @@ type AppMutationRoot {
 	setPlayerCharacterBinding(worldId: UUID!, worldMemberId: UUID!, actorId: UUID): GraphQLWorldActor
 	"""
 	Grant (`granted: true`) or revoke a single authoring tool for a single
-	member of a world. Owner/GM only. Returns that member's grants after
-	the write.
+	member of a world. Owner/GM only. For `select` and `shapes`, which a
+	player holds by default, `granted: false` takes the tool away and
+	`true` hands it back. Returns that member's effective tools after the
+	write.
 	"""
 	setAuthoringToolGrant(worldId: UUID!, worldMemberId: UUID!, tool: String!, granted: Boolean!): [String!]!
 	sendChatMessage(input: SendChatMessageInput!): GraphQLChatMessage!
@@ -1231,8 +1241,8 @@ type AppQueryRoot {
 	and is DM-gated — and answering both from one field would make it easy
 	to ship the second without the gate.
 	
-	An empty list is the honest answer for a player in a world whose Game
-	Master has granted nothing, which today is every world (FR-045).
+	A player holds Select and Shapes until a Game Master takes them away
+	(spec 082).
 	"""
 	authoringTools(worldId: UUID!): [String!]!
 	"""
@@ -1245,9 +1255,9 @@ type AppQueryRoot {
 	other not, and the guard is easy to leave off the day the argument is
 	added.
 	
-	Members with no grants are simply absent. The settings page has the
-	roster already and reads an absent member as "nothing", which is the
-	same default the resolver applies.
+	Spec 082: one entry per member who does not run the world, carrying
+	the tools that member may use, so a member with no rows shows the
+	defaults rather than reading as "nothing".
 	"""
 	authoringToolGrants(worldId: UUID!): [GraphQLMemberAuthoringTools!]!
 	"""
@@ -4250,12 +4260,12 @@ type GraphQLManifestEntry {
 }
 
 """
-What one member of a world has been *granted*, as the settings page needs
-it: keyed by membership, one entry per member holding anything.
+What one player of a world may use, as the settings page needs it: keyed
+by membership, one entry per member who does not run the world.
 
-Deliberately not "what this member may use". A Game Master holds every
-tool implicitly, and rendering that as six lit toggles would invite
-somebody to turn one off and find that nothing happened.
+Game Masters are left out. They hold every tool implicitly, and rendering
+that as six lit toggles would invite somebody to turn one off and find
+that nothing happened.
 """
 type GraphQLMemberAuthoringTools {
 	worldMemberId: UUID!
@@ -7784,7 +7794,8 @@ type WorldRoll {
 }
 
 """
-A roll as the caller may see it.
+A roll as the caller may see it. The whole roll is boxed: it is several
+times the size of a masked one.
 """
 union WorldRollEntry = WorldRoll | MaskedRoll
 

@@ -105,3 +105,22 @@ export function deleteShape(shapeId: string): Promise<boolean> {
     { shapeId },
   ).then((data) => data.deleteShape);
 }
+
+/**
+ * Delete a scene's drawings, on every level (spec 082): every one, or only
+ * those `createdBy` names. The Game Master's alone. Answers how many went;
+ * each also arrives as a `deleted` event, which is what clears the boards.
+ */
+export function clearShapes(
+  sceneId: string,
+  createdBy?: string[],
+): Promise<number> {
+  return postGraphQL<{ clearShapes: number }>(
+    `
+      mutation ClearShapes($sceneId: UUID!, $createdBy: [UUID!]) {
+        clearShapes(sceneId: $sceneId, createdBy: $createdBy)
+      }
+    `,
+    { sceneId, createdBy },
+  ).then((data) => data.clearShapes);
+}

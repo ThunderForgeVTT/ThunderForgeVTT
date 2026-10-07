@@ -80,12 +80,12 @@ as named below.
 
 ## Phase 4: US3 — the GM clears the board (P1)
 
-- [ ] T021 [US3] Tests in `crates/thunderforge-server/src/graphql/mutations_clear_shapes_tests.rs` (its own file, beside the mutation): `clearShapes` with no filter (every level), another scene untouched, one `deleted` event per shape in the same transaction, the count; as a player → `NotFound`, nothing deleted
-- [ ] T022 [US3] `clearShapes` in `crates/thunderforge-server/src/graphql/mutations_clear_shapes.rs` (R5), DM only via `shape_authority`, `refuse_scene_if_paused`; register it in the mutation root
-- [ ] T023 [US3] Add `clearShapes` to GATED in `crates/thunderforge-server/src/graphql/play_pause_surface_tables.rs`; regenerate `apps/thunderforge/schema.graphql` (`node scripts/check-graphql-contract.mjs --schema --fix`)
-- [ ] T024 [P] [US3] Tests in `shapeEventSync.test.ts`: `clear_shapes` sends `clearShapes(sceneId, createdBy)` and removes nothing locally; the `deleted` events remove the shapes
-- [ ] T025 [US3] `ClearShapesCommand` in `apps/web/src/engine/world/types.ts`; `clearShapes` in `apps/web/src/api/shapes.ts`; the bridge case in `sync/shapes.ts`
-- [ ] T026 [US3] "Clear all shapes" in `ShapeTool.tsx` for a DM, with a confirmation naming the scene (`apps/web/src/components/canvas-tools/ShapeTool/ClearShapesDialog.tsx`, the `ui/dialog` wrapper); dispatches `clear_shapes`
+- [x] T021 [US3] Tests in `crates/thunderforge-server/src/graphql/mutations_clear_shapes_tests.rs` (its own file, beside the mutation): `clearShapes` with no filter (every level), another scene untouched, one `deleted` event per shape in the same transaction, the count; as a player → `NotFound`, nothing deleted
+- [x] T022 [US3] `clearShapes` in `crates/thunderforge-server/src/graphql/mutations_clear_shapes.rs` (R5), DM only via `shape_authority`, `refuse_scene_if_paused`; register it in the mutation root
+- [x] T023 [US3] Add `clearShapes` to GATED in `crates/thunderforge-server/src/graphql/play_pause_surface_tables.rs`; regenerate `apps/thunderforge/schema.graphql` (`node scripts/check-graphql-contract.mjs --schema --fix`)
+- [x] T024 [P] [US3] Tests in `shapeEventSync.test.ts`: `clear_shapes` sends `clearShapes(sceneId, createdBy)` and removes nothing locally; the `deleted` events remove the shapes
+- [x] T025 [US3] `ClearShapesCommand` in `apps/web/src/engine/world/types.ts`; `clearShapes` in `apps/web/src/api/shapes.ts`; the bridge case in `sync/shapes.ts`
+- [x] T026 [US3] "Clear all shapes" in `ShapeTool.tsx` for a DM, with a confirmation naming the scene (`apps/web/src/components/canvas-tools/ShapeTool/ClearShapesDialog.tsx`, the `ui/dialog` wrapper); dispatches `clear_shapes`
 - [ ] T027 [US3] E2E in `canvas-shapes-by-players.spec.ts`: GM and players draw; cancel leaves them; confirm empties all three boards and the server's answer; the player's panel has no clear action and their direct `clearShapes` is refused
 
 ---

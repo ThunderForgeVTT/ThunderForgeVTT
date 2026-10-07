@@ -3147,6 +3147,7 @@ export default function WorldPage() {
                           sceneId={sceneId}
                           canvasContainerRef={containerRef}
                           isGm={isSceneOwner}
+                          sceneName={selectedScene?.name}
                         />
                       ),
                     },

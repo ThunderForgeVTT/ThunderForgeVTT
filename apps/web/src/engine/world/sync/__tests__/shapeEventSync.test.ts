@@ -14,11 +14,13 @@ import type { ShapeRecord } from "@/types/shape";
 const getShapes = vi.fn();
 const updateShape = vi.fn();
 const deleteShape = vi.fn();
+const clearShapes = vi.fn();
 
 vi.mock("@/api/shapes", () => ({
   createShape: vi.fn(),
   updateShape: (...args: unknown[]) => updateShape(...args),
   deleteShape: (...args: unknown[]) => deleteShape(...args),
+  clearShapes: (...args: unknown[]) => clearShapes(...args),
   getShapes: (...args: unknown[]) => getShapes(...args),
 }));
 
@@ -157,5 +159,74 @@ describe("startShapeMutationBridge rolls back a refusal", () => {
     startShapeMutationBridge(store, SCENE);
     store.dispatch({ type: "delete_shape", shapeId: "a" }, "ui");
     await vi.waitFor(() => expect(restored).toEqual([before]));
+  });
+});
+
+/**
+ * The Game Master clears a scene (spec 082 FR-014). Nothing leaves the board
+ * on the asking: the drawings go when the server's `deleted` events arrive,
+ * so every board, the asker's included, empties from the same answer.
+ */
+describe("clearing a scene's drawings", () => {
+  beforeEach(() => {
+    clearShapes.mockReset();
+  });
+
+  function storeWith(...ids: string[]) {
+    const store = createWorldStore({ worldId: "world-1" });
+    for (const id of ids) {
+      store.dispatch(
+        {
+          type: "upsert_shape",
+          shape: {
+            id,
+            sceneId: SCENE,
+            kind: "rect",
+            geometry: { x: 0, y: 0, w: 10, h: 10 },
+            text: null,
+            style: null,
+            visibleToPlayers: true,
+            createdBy: "gm",
+          },
+        },
+        "sync",
+      );
+    }
+    return store;
+  }
+
+  it("sends clearShapes with the creators named and removes nothing itself", async () => {
+    const store = storeWith("a", "b");
+    clearShapes.mockResolvedValueOnce(2);
+    startShapeMutationBridge(store, SCENE);
+    store.dispatch(
+      { type: "clear_shapes", sceneId: SCENE, createdBy: ["player-a"] },
+      "ui",
+    );
+    await vi.waitFor(() =>
+      expect(clearShapes).toHaveBeenCalledWith(SCENE, ["player-a"]),
+    );
+    expect(Object.keys(store.getState().shapes).sort()).toEqual(["a", "b"]);
+  });
+
+  it("sends no creators when every drawing goes", async () => {
+    const store = storeWith("a");
+    clearShapes.mockResolvedValueOnce(1);
+    startShapeMutationBridge(store, SCENE);
+    store.dispatch({ type: "clear_shapes", sceneId: SCENE }, "ui");
+    await vi.waitFor(() =>
+      expect(clearShapes).toHaveBeenCalledWith(SCENE, undefined),
+    );
+  });
+
+  it("lets the deleted events take the drawings away", async () => {
+    const store = storeWith("a", "b");
+    for (const id of ["a", "b"]) {
+      await applyShapeWorldEvent(store, SCENE, {
+        event_code: 12,
+        token_event: { action: "deleted", shape_id: id, scene_id: SCENE },
+      });
+    }
+    expect(store.getState().shapes).toEqual({});
   });
 });
