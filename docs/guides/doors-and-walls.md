@@ -35,6 +35,18 @@ your Game Master.
 On a touchscreen, hold a finger still on the door for the same menu. See
 [Playing on a touchscreen](./playing-on-a-touchscreen.md).
 
+## The door icon
+
+Bring the pointer to a door, or move a token you control to within one
+square of it, and an icon appears at the door's middle: an open door, a
+closed door, or a padlock when it is locked. Click or tap it to open or
+close the door. The Game Master's padlock unlocks the door; a player's
+padlock does nothing. The icon goes away when the pointer and your tokens
+move off.
+
+A door locked as a wall never shows an icon, to anybody. To the players there
+is no door there at all.
+
 ## From the keyboard
 
 The door menu opens from the pointer only. A Game Master can do everything
