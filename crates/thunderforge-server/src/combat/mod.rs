@@ -31,3 +31,8 @@ pub mod weapon;
 #[cfg(test)]
 #[path = "fixtures_tests.rs"]
 pub(crate) mod fixtures;
+
+/// Spec 079 US3: a scripted fight through the server and through the crate.
+#[cfg(test)]
+#[path = "parity_tests.rs"]
+mod parity_tests;
