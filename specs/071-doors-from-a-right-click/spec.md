@@ -74,6 +74,29 @@ If it is hidden, their right-click is a right-click on a wall.
 3. **Given** a hidden door or a plain wall, **when** a player right-clicks
    it, **then** nothing about a door is shown.
 
+### User Story 3 — A door shows what it can do (Priority: P2)
+
+Amended 2026-10-06. The owner, of the demo: "doors don't get little icon to
+open or close them. We should have an open icon and a close icon. So players
+and the GM can open and close it. And then … when the GM locks a specific
+door, it has a lock icon." Asked who sees what, the owner decided: players
+see the padlock; icons show on hover or when a token is near; a secret door
+shows no icon.
+
+**Acceptance scenarios**:
+
+1. **Given** a shut, unlocked door, **when** the pointer is over it or a
+   token the viewer controls is near it, **then** an open icon shows at the
+   door; pressing it opens the door for the table.
+2. **Given** an open door, under the same conditions, **then** a close icon
+   shows; pressing it shuts the door.
+3. **Given** a locked door, **then** a padlock shows, to the Game Master and
+   to players alike. For a player it does nothing when pressed; the Game
+   Master's padlock unlocks the door.
+4. **Given** a secret door, **then** no icon shows, to anyone.
+5. **Given** the pointer leaves and no controlled token is near, **then** the
+   icon goes away.
+
 ### Edge cases
 
 - A token standing in a doorway: the right-click is about the token.
@@ -101,6 +124,17 @@ If it is hidden, their right-click is a right-click on a wall.
   interactive lets them; a disabled Locked when it is locked; otherwise none.
 - **FR-006** Every change goes through the mutations spec 030 already has.
   No new mutation, column or event.
+- **FR-007** The engine draws a door's icon at the door's midpoint, on the
+  board (constitution I): open when shut, close when open, a padlock when
+  locked. A secret door draws none.
+- **FR-008** The icon shows while the pointer is within ten screen pixels of
+  the door, or while a token the viewer controls is within one grid square
+  of it, and at no other time.
+- **FR-009** Pressing the icon does what the menu's matching item does
+  (FR-003, FR-005), through the same rule and the same mutations; a player
+  pressing a padlock changes nothing.
+- **FR-010** The demo (spec 074) enforces the lock as the server does: a
+  player's attempt on a locked door is refused, not obeyed.
 
 ## Success Criteria
 
@@ -108,6 +142,11 @@ If it is hidden, their right-click is a right-click on a wall.
   designate, lock, refused player, unlock, player opens, double right-click,
   player sees wall, reveal.
 - **SC-002** The interactive and canvas slices still pass.
+- **SC-003** An e2e check, in the interactive slice, hovers a shut door
+  (open icon), presses it (door opens, close icon), locks it (padlock for the
+  Game Master and the player), and makes it secret (no icon for either).
+- **SC-004** The demo's own e2e: a player view of a locked door shows the
+  padlock and the door stays shut when pressed.
 
 ## What this spec does not do
 
