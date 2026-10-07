@@ -35,6 +35,7 @@ import { loreMutations, loreQueries } from "./handlers/lore";
 import { catchUpQueries } from "./handlers/catchUp";
 import { worldMutations } from "./handlers/world";
 import { areaMutations, areaQueries } from "./handlers/index";
+import { levelFor, onLevel, refuse } from "./handlers/common";
 import { combatMutations, combatQueries } from "./handlers/combat";
 import { demoState, markChanged, type DemoState, type Row } from "./state";
 
@@ -43,29 +44,22 @@ type Handler = (args: Args) => unknown;
 
 const by = { createdBy: DEMO_USER.id, updatedBy: DEMO_USER.id };
 
+const ALL_TOOLS = [
+  "select",
+  "walls",
+  "lights",
+  "shapes",
+  "tokens",
+  "interactions",
+];
+const PLAYER_TOOLS = ["select", "shapes"];
+
 function notFound(what: string): never {
   throw new GraphQLError(`${what} not found`);
 }
 
 function scene(state: DemoState, sceneId: string): Row {
   return state.scenes.find((s) => s.sceneId === sceneId) ?? notFound("Scene");
-}
-
-/** The level a thing lands on when the request names none: the entry level. */
-function levelFor(state: DemoState, sceneId: string, levelId?: string): string {
-  if (levelId) return levelId;
-  const entry =
-    state.levels.find((l) => l.sceneId === sceneId && l.isEntry) ??
-    state.levels.find((l) => l.sceneId === sceneId);
-  return (entry?.levelId as string | undefined) ?? notFound("Scene");
-}
-
-function onLevel(rows: Row[], args: Args): Row[] {
-  return rows.filter(
-    (row) =>
-      row.sceneId === args.sceneId &&
-      (args.levelId == null || row.levelId === args.levelId),
-  );
 }
 
 /** The fields of `input` that were actually sent. */
@@ -162,7 +156,6 @@ function kind(
 
 const walls = kind((s) => s.walls, "wallId", "wall_id", EVENT.wall);
 const lights = kind((s) => s.lights, "lightId", "light_id", EVENT.light);
-const shapes = kind((s) => s.shapes, "shapeId", "shape_id", EVENT.shape);
 const tokens = kind((s) => s.tokens, "tokenId", "token_id", EVENT.token);
 
 /**
@@ -364,15 +357,22 @@ export const queries: Record<string, Handler> = {
       },
     ],
   }),
-  authoringToolGrants: () => [],
-  authoringTools: () => [
-    "select",
-    "walls",
-    "lights",
-    "shapes",
-    "tokens",
-    "interactions",
-  ],
+  // Spec 082 R10: the GM holds every tool, the player what players hold by
+  // default. The demo takes nothing away, so the grants are those defaults.
+  authoringToolGrants: () => {
+    const state = demoState();
+    if (!viewerIsGm(state)) {
+      refuse("Only Owners and GMs can see this world's authoring tool grants");
+    }
+    return members(state)
+      .filter((member) => member.role === "Player")
+      .map((member) => ({
+        worldMemberId: member.id,
+        userId: member.userId,
+        tools: PLAYER_TOOLS,
+      }));
+  },
+  authoringTools: () => (viewerIsGm(demoState()) ? ALL_TOOLS : PLAYER_TOOLS),
   pendingOffers: () => [],
   peerSessions: () => [],
   worldSyncPlan: () => ({ fetch: [], evict: [], canonicalVersion: 1 }),
@@ -400,13 +400,6 @@ export const queries: Record<string, Handler> = {
     return onLevel(state.tokens, args).map((t) => tokenForViewer(state, t));
   },
   lightSources: (args) => onLevel(demoState().lights, args),
-  // `scene.rs`: a player sees only the shapes shown to players.
-  shapes: (args) => {
-    const state = demoState();
-    return onLevel(state.shapes, args).filter(
-      (shape) => viewerIsGm(state) || shape.visibleToPlayers === true,
-    );
-  },
   interactives: (args) => {
     const state = demoState();
     const gm = viewerIsGm(state);
@@ -562,26 +555,6 @@ export const mutations: Record<string, Handler> = {
   updateLightSource: ({ lightId, input }) =>
     lights.update(lightId, given(input)),
   deleteLightSource: ({ lightId }) => lights.remove(lightId),
-
-  createShape: ({ input }) => {
-    const at = now();
-    return shapes.create({
-      shapeId: crypto.randomUUID(),
-      sceneId: input.sceneId,
-      levelId: levelFor(demoState(), input.sceneId, input.levelId),
-      kind: input.kind,
-      geometry: input.geometry,
-      text: input.text ?? null,
-      style: input.style ?? null,
-      visibleToPlayers: input.visibleToPlayers ?? true,
-      metadata: input.metadata ?? null,
-      ...by,
-      createdAt: at,
-      updatedAt: at,
-    });
-  },
-  updateShape: ({ shapeId, input }) => shapes.update(shapeId, given(input)),
-  deleteShape: ({ shapeId }) => shapes.remove(shapeId),
 
   createToken: ({ input }) => {
     const state = demoState();

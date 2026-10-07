@@ -8,6 +8,7 @@ import { diceMutations, diceQueries } from "./dice";
 import { levelMutations, levelQueries } from "./levels";
 import { lightingMutations, lightingQueries } from "./lighting";
 import { sceneMutations, sceneQueries } from "./scenes";
+import { shapeMutations, shapeQueries } from "./shapes";
 import { tokenSheetQueries } from "./tokenSheets";
 
 export const areaQueries: Record<string, Handler> = {
@@ -17,6 +18,7 @@ export const areaQueries: Record<string, Handler> = {
   ...tokenSheetQueries,
   ...sceneQueries,
   ...assetQueries,
+  ...shapeQueries,
 };
 
 export const areaMutations: Record<string, Handler> = {
@@ -25,4 +27,5 @@ export const areaMutations: Record<string, Handler> = {
   ...levelMutations,
   ...sceneMutations,
   ...assetMutations,
+  ...shapeMutations,
 };

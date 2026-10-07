@@ -111,7 +111,14 @@ export function connectTabs(options: TabsOptions): Tabs {
           query: data.query,
           variables: data.variables,
         }).then((result) =>
-          channel.postMessage({ kind: "answer", id: data.id, result }),
+          channel.postMessage({
+            kind: "answer",
+            id: data.id,
+            // As the response carries it: a structured clone of a
+            // `GraphQLError` keeps no `toJSON`, and its message would read
+            // as `{}` on the guest.
+            result: JSON.parse(JSON.stringify(result)) as ExecutionResult,
+          }),
         );
         return;
       case "answer": {

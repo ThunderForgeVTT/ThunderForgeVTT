@@ -110,9 +110,9 @@ as named below.
 
 ## Phase 7: US6 — the demo (P3)
 
-- [ ] T036 [P] [US6] Tests `apps/demo/src/backend/handlers/shapes.test.ts`: the cases of T010, T021 and T028 for the tab's viewer; `authoringTools` per viewer
-- [ ] T037 [US6] `apps/demo/src/backend/handlers/shapes.ts`: move the shape handlers out of `handlers.ts`; stamp `createdBy`/`updatedBy` with `viewerUser(state).id`; ownership and forced visibility; `clearShapes`, `shapeCreators`; a stored shape with no `createdBy` reads as `DEMO_USER.id`; `authoringTools` and `authoringToolGrants` per R10
-- [ ] T038 [US6] `apps/demo/e2e/shapes-by-players.spec.ts`: as a player, draw and fail to select the GM's shape; as the GM, clear the player's shape
+- [x] T036 [P] [US6] Tests `apps/demo/src/backend/handlers/shapes.test.ts`: the cases of T010, T021 and T028 for the tab's viewer; `authoringTools` per viewer
+- [x] T037 [US6] `apps/demo/src/backend/handlers/shapes.ts`: move the shape handlers out of `handlers.ts`; stamp `createdBy`/`updatedBy` with `viewerUser(state).id`; ownership and forced visibility; `clearShapes`, `shapeCreators`; a stored shape with no `createdBy` reads as `DEMO_USER.id`; `authoringTools` and `authoringToolGrants` per R10
+- [x] T038 [US6] `apps/demo/e2e/shapes-by-players.spec.ts`: as a player, draw and fail to select the GM's shape; as the GM, clear the player's shape — 2026-10-07: green. The player's write to the GM's shape is proved refused through the demo's backend rather than by a click. It found that a guest tab got every refusal as `{}` (a structured clone of a `GraphQLError` loses `toJSON`); `tabs.ts` now posts the answer as JSON
 
 ---
 

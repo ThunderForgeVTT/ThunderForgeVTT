@@ -3,7 +3,7 @@
  * way a browser behaves — the lock goes to one tab at a time and passes to
  * the longest waiting on release, and a message reaches every other tab.
  */
-import type { ExecutionResult } from "graphql";
+import { GraphQLError, type ExecutionResult } from "graphql";
 import { describe, expect, it } from "vitest";
 
 import type { Viewer } from "../seed/world";
@@ -109,6 +109,9 @@ function table() {
       viewer: () => viewer,
       run: async (as: Viewer, operation: OperationRequest) => {
         ran.push({ tab, viewer: as, query: operation.query });
+        if (operation.query === "refuse") {
+          return { data: null, errors: [new GraphQLError("Scene not found")] };
+        }
         return { data: { ranOn: tab, as } } as ExecutionResult;
       },
       takeOver: () => tookOver.push(tab),
@@ -142,6 +145,20 @@ describe("tabs", () => {
     expect((await gm.tabs.ask({ query: "{ me }" })).data).toEqual({
       ranOn: 1,
       as: "gm",
+    });
+  });
+
+  it("hands a guest the holder's refusal in the server's words", async () => {
+    const t = table();
+    const gm = t.open(1, "gm");
+    const player = t.open(2, "player");
+    await Promise.all([gm.tabs.ready, player.tabs.ready]);
+
+    const answer = await player.tabs.ask({ query: "refuse" });
+    // What the page reads is the JSON the response carries.
+    expect(JSON.parse(JSON.stringify(answer))).toEqual({
+      data: null,
+      errors: [{ message: "Scene not found" }],
     });
   });
 
