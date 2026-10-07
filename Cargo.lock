@@ -6285,6 +6285,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thunderforge_canvas_core",
+ "thunderforge_combat",
 ]
 
 [[package]]
@@ -8389,6 +8390,7 @@ dependencies = [
  "thunderforge_axum_oidc",
  "thunderforge_cache_core",
  "thunderforge_canvas_core",
+ "thunderforge_combat",
  "thunderforge_core",
  "thunderforge_crucible",
  "thunderforge_dice",
@@ -8487,6 +8489,20 @@ dependencies = [
  "serde",
  "serde_json",
  "ts-rs",
+]
+
+[[package]]
+name = "thunderforge_combat"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "rand_core 0.10.1",
+ "schemars",
+ "serde",
+ "serde_json",
+ "thunderforge_canvas_core",
+ "thunderforge_dice",
+ "wasm-bindgen",
 ]
 
 [[package]]

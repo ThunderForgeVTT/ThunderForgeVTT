@@ -74,20 +74,24 @@ use std::collections::HashMap;
 use diesel::PgConnection;
 use diesel::prelude::*;
 use thunderforge_canvas_core::Vec2;
-use thunderforge_canvas_core::grid::{Footprint, GridKind, GridSpec};
-use thunderforge_canvas_core::measure::GridUnits;
-use thunderforge_canvas_core::movement_budget::{
-    MovementBudget, TerrainCost, cost_path, speeds_from,
-};
+use thunderforge_canvas_core::grid::Footprint;
+use thunderforge_canvas_core::movement_budget::speeds_from;
+use thunderforge_combat::budget::{Spent, flags_after_spend, flags_before_spend};
 use uuid::Uuid;
 
 use crate::combat::attack::ActionCost;
 use crate::combat::manifest::{SystemTurnBudget, turn_budget_for_system};
-use crate::combat::records::{FLAG_LEGENDARY_ON_OWN_TURN, FLAG_OVERSPENT, KIND_LAIR};
+use crate::combat::records::KIND_LAIR;
+// The tests build grids and units by hand (`use super::*`).
 use crate::models::{ActorSystemData, Combatant};
 use crate::schema::{
     scenes, tokens, world_actor_system_data, world_combatant_budgets, world_combatants,
     world_combats, worlds,
+};
+#[cfg(test)]
+use thunderforge_canvas_core::{
+    grid::{GridKind, GridSpec},
+    measure::GridUnits,
 };
 
 /// One combatant's row: what it has spent this turn.
@@ -119,67 +123,28 @@ impl BudgetRow {
     }
 }
 
-/// One line of a turn's budget. `remaining` may be negative: that is a debt,
-/// and it is shown (C9).
-#[derive(async_graphql::SimpleObject, Clone, Copy, Debug, PartialEq)]
-pub struct BudgetLine {
-    pub allowed: f64,
-    pub spent: f64,
-    pub remaining: f64,
-}
-
-impl BudgetLine {
-    pub fn new(allowed: f64, spent: f64) -> Self {
-        // Two decimals: 29.999999 ft from float arithmetic is 30 ft.
-        let tidy = |v: f64| (v * 100.0).round() / 100.0;
-        BudgetLine {
-            allowed: tidy(allowed),
-            spent: tidy(spent),
-            remaining: tidy(allowed - spent),
-        }
-    }
-
-    pub fn is_overspent(&self) -> bool {
-        self.spent > self.allowed
-    }
-}
-
-/// What a combatant's turn affords and what it has spent (contract §1).
-#[derive(async_graphql::SimpleObject, Clone, Debug, PartialEq)]
-pub struct TurnBudget {
-    pub action: BudgetLine,
-    pub bonus_action: BudgetLine,
-    pub reaction: BudgetLine,
-    /// In the system's units.
-    pub movement: BudgetLine,
-    /// Null when the creature has no legendary actions (Phase 9).
-    pub legendary: Option<BudgetLine>,
-    /// What the system calls its distances ("ft"), so movement can be said.
-    pub unit: String,
-}
+/// What a turn affords and has spent, and what a spend does to it, are the
+/// shared rules' (`thunderforge_combat::budget`, ADR-113): the browser demo
+/// keeps the same lines. This module keeps the row.
+pub use thunderforge_combat::budget::{BudgetLine, Spend, TurnBudget, move_cost, step_cells};
 
 /// A row resolved against the pack's allowances and the creature's speed
 /// (pure).
 pub fn resolve(declared: &SystemTurnBudget, speed: f64, row: &BudgetRow, unit: &str) -> TurnBudget {
-    let whole = |n: Option<u32>| n.unwrap_or(0) as f64;
-    let movement_allowed = if declared.movement.is_some() {
-        speed
-    } else {
-        0.0
-    };
-    TurnBudget {
-        action: BudgetLine::new(whole(declared.action), row.action_spent as f64),
-        bonus_action: BudgetLine::new(whole(declared.bonus_action), row.bonus_action_spent as f64),
-        reaction: BudgetLine::new(whole(declared.reaction), row.reaction_spent as f64),
-        movement: BudgetLine::new(movement_allowed, row.movement_spent),
-        legendary: match (row.legendary_per_round, row.legendary_remaining) {
-            (Some(per_round), Some(remaining)) => Some(BudgetLine::new(
-                per_round as f64,
-                (per_round - remaining) as f64,
-            )),
-            _ => None,
-        },
-        unit: unit.to_string(),
+    thunderforge_combat::budget::resolve(declared, speed, &row.spent(), unit)
+}
+
+impl BudgetRow {
+    /// What the row says was spent, without its key.
+    pub fn spent(&self) -> Spent {
+        Spent {
+            action_spent: self.action_spent,
+            bonus_action_spent: self.bonus_action_spent,
+            reaction_spent: self.reaction_spent,
+            movement_spent: self.movement_spent,
+            legendary_per_round: self.legendary_per_round,
+            legendary_remaining: self.legendary_remaining,
+        }
     }
 }
 
@@ -195,32 +160,6 @@ pub fn create_for(conn: &mut PgConnection, combatant_id: Uuid, user_id: Uuid) ->
         .do_nothing()
         .execute(conn)?;
     Ok(())
-}
-
-/// What one spend takes.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Spend {
-    Action,
-    BonusAction,
-    Reaction,
-    /// In the system's units.
-    Movement(f64),
-    /// From the legendary pool: the ability's `legendary_cost`.
-    Legendary(i32),
-}
-
-impl Spend {
-    /// The line an attack of this cost spends; `None` for free. A legendary
-    /// action spends `legendary_cost` from the pool.
-    pub fn for_attack(cost: ActionCost, legendary_cost: i32) -> Option<Spend> {
-        match cost {
-            ActionCost::Action => Some(Spend::Action),
-            ActionCost::BonusAction => Some(Spend::BonusAction),
-            ActionCost::Reaction => Some(Spend::Reaction),
-            ActionCost::Legendary => Some(Spend::Legendary(legendary_cost.max(0))),
-            ActionCost::Free => None,
-        }
-    }
 }
 
 /// Record a spend. Never refused and never capped (C9): the row is created if
@@ -522,14 +461,8 @@ pub fn spend_for_attack(
     let Some(budget) = budget_of(conn, systems_dir, world_id, &combatant)? else {
         return Ok(Vec::new());
     };
-    let mut flags = Vec::new();
-    if line_of(&budget, what).is_none_or(|line| line.is_overspent()) {
-        flags.push(FLAG_OVERSPENT);
-    }
-    if what_is_legendary(what) && is_own_turn(conn, &combatant)? {
-        flags.push(FLAG_LEGENDARY_ON_OWN_TURN);
-    }
-    Ok(flags)
+    let own_turn = what.is_legendary() && is_own_turn(conn, &combatant)?;
+    Ok(flags_after_spend(&budget, what, own_turn))
 }
 
 /// The flags an attack of this cost would be given, for the warning before it
@@ -552,35 +485,8 @@ pub fn attack_would_flag(
     let Some(budget) = budget_of(conn, systems_dir, world_id, &combatant)? else {
         return Ok(Vec::new());
     };
-    let needed = match what {
-        Spend::Legendary(cost) => cost as f64,
-        _ => 1.0,
-    };
-    let mut flags = Vec::new();
-    if line_of(&budget, what).is_none_or(|line| line.remaining < needed) {
-        flags.push(FLAG_OVERSPENT);
-    }
-    if what_is_legendary(what) && is_own_turn(conn, &combatant)? {
-        flags.push(FLAG_LEGENDARY_ON_OWN_TURN);
-    }
-    Ok(flags)
-}
-
-/// The line a spend is counted against. `None` only for a legendary action
-/// by a creature with no legendary actions: past an allowance of nothing, so
-/// flagged overspent, and there is no pool to take it from.
-fn line_of(budget: &TurnBudget, what: Spend) -> Option<BudgetLine> {
-    match what {
-        Spend::Action => Some(budget.action),
-        Spend::BonusAction => Some(budget.bonus_action),
-        Spend::Reaction => Some(budget.reaction),
-        Spend::Movement(_) => Some(budget.movement),
-        Spend::Legendary(_) => budget.legendary,
-    }
-}
-
-fn what_is_legendary(what: Spend) -> bool {
-    matches!(what, Spend::Legendary(_))
+    let own_turn = what.is_legendary() && is_own_turn(conn, &combatant)?;
+    Ok(flags_before_spend(&budget, what, own_turn))
 }
 
 /// Whether it is this combatant's own turn in its combat.
@@ -601,71 +507,6 @@ fn touch(
 ) -> QueryResult<()> {
     crate::graphql::mutations_combat::touch_and_broadcast(conn, combat_id, world_id, user_id)
         .map_err(|message| diesel::result::Error::QueryBuilderError(message.into()))
-}
-
-/// How many cells a token of `footprint` moves by going from `from` to `to`
-/// in one step (pure). See the module documentation.
-pub fn step_cells(grid: &GridSpec, footprint: Footprint, from: Vec2, to: Vec2) -> f32 {
-    match grid.kind {
-        GridKind::Square => {
-            let (a, b) = (
-                grid.covered_cells(from, footprint).min,
-                grid.covered_cells(to, footprint).min,
-            );
-            (a.q - b.q).abs().max((a.r - b.r).abs()) as f32
-        }
-        GridKind::HexPointyTop | GridKind::HexFlatTop => {
-            grid.cell_distance(grid.world_to_cell(from), grid.world_to_cell(to)) as f32
-        }
-        GridKind::Gridless => {
-            let size = if grid.size.is_finite() && grid.size > f32::EPSILON {
-                grid.size
-            } else {
-                GridSpec::default().size
-            };
-            from.distance(to) / size
-        }
-    }
-}
-
-/// What a move costs, in the system's units (pure): the token's position, the
-/// route's points, then the destination, one step between each pair.
-pub fn move_cost(
-    grid: &GridSpec,
-    units: &GridUnits,
-    footprint: Footprint,
-    speed_kind: &str,
-    from: Vec2,
-    route: &[Vec2],
-    to: Vec2,
-) -> f64 {
-    let mut points = Vec::with_capacity(route.len() + 2);
-    points.push(from);
-    points.extend_from_slice(route);
-    points.push(to);
-    points.dedup();
-
-    let mut steps: Vec<TerrainCost> = Vec::new();
-    for pair in points.windows(2) {
-        let cells = step_cells(grid, footprint, pair[0], pair[1]);
-        if cells <= 0.0 {
-            continue;
-        }
-        if grid.kind == GridKind::Gridless {
-            // No cells to enter: a step is its own length.
-            steps.push(TerrainCost {
-                multiplier: cells,
-                ignored_by: Vec::new(),
-            });
-        } else {
-            steps.extend(std::iter::repeat_n(
-                TerrainCost::default(),
-                cells.round() as usize,
-            ));
-        }
-    }
-    let cost = cost_path(&steps, speed_kind, units, &MovementBudget::new(0.0));
-    (cost.distance as f64 * 100.0).round() / 100.0
 }
 
 /// A committed move spends its cost against the token's combatant, when the

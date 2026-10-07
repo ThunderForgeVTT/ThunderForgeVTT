@@ -17,6 +17,9 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
 pub use pack_system_spec::combat::{SystemCombat, SystemHitPoints, SystemTurnBudget, slot_key};
+/// Reading a manifest that is already in hand is the shared rules' (ADR-113);
+/// this module adds the disk and the cache.
+pub use thunderforge_combat::manifest::{combat_from_manifest, turn_budget_from_manifest};
 
 type Key = (String, String);
 
@@ -48,14 +51,6 @@ pub fn combat_for_system(systems_dir: &str, system_id: &str) -> Arc<SystemCombat
     block
 }
 
-/// The same, from a manifest already in hand.
-pub fn combat_from_manifest(manifest: &serde_json::Value) -> SystemCombat {
-    manifest
-        .get("combat")
-        .and_then(|block| serde_json::from_value::<SystemCombat>(block.clone()).ok())
-        .unwrap_or_default()
-}
-
 type BudgetCache = Mutex<HashMap<Key, Option<SystemTurnBudget>>>;
 
 /// A system's turn budget, if it declares one, read once and kept like the
@@ -79,14 +74,6 @@ pub fn turn_budget_for_system(systems_dir: &str, system_id: &str) -> Option<Syst
         map.insert(key, budget.clone());
     }
     budget
-}
-
-/// A system's turn budget, if it declares one, from a manifest in hand.
-pub fn turn_budget_from_manifest(manifest: &serde_json::Value) -> Option<SystemTurnBudget> {
-    manifest
-        .get("turnStructure")
-        .and_then(|t| t.get("budget"))
-        .and_then(|b| serde_json::from_value::<SystemTurnBudget>(b.clone()).ok())
 }
 
 #[cfg(test)]

@@ -21,20 +21,14 @@ use uuid::Uuid;
 
 use crate::combat::manifest::{combat_for_system, slot_key};
 use crate::schema::{scenes, tokens, world_actor_system_data, world_actors, worlds};
+// The tests declare sizes by hand (`use super::*`).
+#[cfg(test)]
 use pack_system_spec::combat::SystemSizes;
 
-/// A creature of no known size fills one square.
-pub const DEFAULT_FOOTPRINT: f32 = 1.0;
-
-/// The footprint a slot's value names, by a system's declared sizes.
-pub fn footprint_from(sizes: &SystemSizes, slot: Option<&serde_json::Value>) -> f32 {
-    slot.and_then(|slot| slot.get(&sizes.source.field))
-        .and_then(|value| value.as_str())
-        .and_then(|id| sizes.categories.iter().find(|c| c.id == id))
-        .map(|category| category.footprint)
-        .filter(|footprint| footprint.is_finite() && *footprint > 0.0)
-        .unwrap_or(DEFAULT_FOOTPRINT)
-}
+/// What a size means — one square by default, and the footprint a declared
+/// size names — is the shared rules' (`thunderforge_combat::size`, ADR-113).
+/// This module finds which record a token's size is read from.
+pub use thunderforge_combat::size::{DEFAULT_FOOTPRINT, footprint_from};
 
 type TokenRow = (Uuid, Option<Uuid>, bool, Option<serde_json::Value>);
 

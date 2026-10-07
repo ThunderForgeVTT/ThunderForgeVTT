@@ -1,0 +1,39 @@
+[lints]
+workspace = true
+
+[package]
+name = "thunderforge_combat"
+version = "0.1.0"
+edition = "2024"
+repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+# Spec 079 / ADR-113: the rules of a fight, once. The server calls these
+# between its loads and its writes; the demo calls the same functions compiled
+# to wasm. Deliberately no diesel, network, bevy or tokio: nothing here reads a
+# database or owns entropy. Dice come from `thunderforge_dice`, which takes an
+# injected RNG, so a fight is deterministic under a fixed one (FR-007).
+[features]
+# The server's GraphQL derives on the types its schema exposes (`ActionCost`,
+# `HitPointChange`, `BudgetLine`, `TurnBudget`), so the type and the schema
+# stay one. Off for wasm.
+graphql = ["dep:async-graphql"]
+# `JsonSchema` on the manifest's `combat` and `turnStructure` shapes, for
+# `pack_system_spec`'s install-time schema. Off for wasm.
+schema = ["dep:schemars"]
+# The browser façade, as `thunderforge-pdf` has it. Off by default so the
+# server does not carry `wasm-bindgen` for a target it never builds.
+wasm = ["dep:wasm-bindgen"]
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+rand_core = "0.10"
+thunderforge_canvas_core = { path = "../thunderforge-canvas-core", default-features = false }
+thunderforge_dice = { path = "../thunderforge-dice" }
+async-graphql = { version = "7.2.1", optional = true, default-features = false }
+schemars = { version = "1.2.2", features = ["derive"], optional = true }
+wasm-bindgen = { version = "0.2.127", optional = true }

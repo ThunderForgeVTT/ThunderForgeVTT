@@ -16,135 +16,17 @@
 //! absent from the pack's own `data_types` (M2), a size smaller than the
 //! canvas can draw or a duplicated size id (M3), and a budget whose movement
 //! names no declared speed (M4).
+//!
+//! The shapes themselves live in `thunderforge_combat::manifest` (spec 079,
+//! ADR-113), because reading a manifest is the same answer on the server and
+//! in the browser demo; they are re-exported here, with their `JsonSchema`,
+//! so this crate's schema and everything that names them is unchanged.
 
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-
-/// The smallest footprint a size may declare, in cells.
-///
-/// Mirrors `thunderforge_canvas_core`'s `MIN_FOOTPRINT`; a test in
-/// `combat_tests.rs` keeps the two equal.
-pub const MIN_SIZE_FOOTPRINT: f32 = 0.5;
-
-/// The `combat` block.
-#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct SystemCombat {
-    /// Which fields are a creature's hit points. Phase 1 of spec 046.
-    #[serde(default)]
-    pub hit_points: Option<SystemHitPoints>,
-    /// What an attack is rolled against — 5e's armour class.
-    #[serde(default)]
-    pub defence: Option<SystemDefence>,
-    /// How big a creature is, and how many cells that fills.
-    #[serde(default)]
-    pub sizes: Option<SystemSizes>,
-    /// Where a creature's legendary actions per round are stored.
-    #[serde(default)]
-    pub legendary: Option<SystemFieldRef>,
-}
-
-/// Where a creature's hit points live.
-#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct SystemHitPoints {
-    /// `resourceData`, and so on — the manifest's slot vocabulary.
-    pub slot: String,
-    pub current: String,
-    pub max: String,
-    /// Spent before `current` when damage lands. Absent for a system with no
-    /// temporary hit points.
-    #[serde(default)]
-    pub temporary: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct SystemDefence {
-    pub slot: String,
-    pub field: String,
-    #[serde(default)]
-    pub label: Option<String>,
-    #[serde(default)]
-    pub abbrev: Option<String>,
-}
-
-/// One field in one slot.
-#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct SystemFieldRef {
-    pub slot: String,
-    pub field: String,
-}
-
-#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct SystemSizes {
-    pub source: SystemFieldRef,
-    pub categories: Vec<SystemSizeCategory>,
-}
-
-#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct SystemSizeCategory {
-    pub id: String,
-    pub label: String,
-    /// Cells per side. At least [`MIN_SIZE_FOOTPRINT`].
-    pub footprint: f32,
-}
-
-/// The `turnStructure` block, typed.
-///
-/// `rounds` and `roundLabel` predate spec 046 (spec 031, read by the server's
-/// `turn_structure.rs`); `budget` is new.
-#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct SystemTurnStructure {
-    #[serde(default)]
-    pub rounds: Option<bool>,
-    #[serde(default)]
-    pub round_label: Option<String>,
-    #[serde(default)]
-    pub budget: Option<SystemTurnBudget>,
-}
-
-/// What one turn affords. Shown and spent, never refused (spec 046 decision 2).
-#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, Default, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct SystemTurnBudget {
-    #[serde(default)]
-    pub action: Option<u32>,
-    #[serde(default)]
-    pub bonus_action: Option<u32>,
-    #[serde(default)]
-    pub reaction: Option<u32>,
-    #[serde(default)]
-    pub movement: Option<SystemBudgetMovement>,
-}
-
-#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct SystemBudgetMovement {
-    /// A key of the pack's `movement` block — 5e's `walk`.
-    pub speed: String,
-}
-
-/// `resourceData` → `resource_data`; a snake-case name is returned unchanged.
-///
-/// Declarations use the manifest's camel-case slot vocabulary (as `vision`
-/// and `resources` do); `data_types` is keyed in snake case.
-pub fn slot_key(slot: &str) -> String {
-    let mut out = String::with_capacity(slot.len() + 4);
-    for ch in slot.chars() {
-        if ch.is_ascii_uppercase() {
-            out.push('_');
-            out.push(ch.to_ascii_lowercase());
-        } else {
-            out.push(ch);
-        }
-    }
-    out
-}
+pub use thunderforge_combat::manifest::{
+    MIN_SIZE_FOOTPRINT, SystemBudgetMovement, SystemCombat, SystemDefence, SystemFieldRef,
+    SystemHitPoints, SystemSizeCategory, SystemSizes, SystemTurnBudget, SystemTurnStructure,
+    slot_key,
+};
 
 /// M2: `slot` is a data type the pack declares, and `field` one of its
 /// properties.

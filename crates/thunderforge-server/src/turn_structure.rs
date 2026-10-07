@@ -33,15 +33,11 @@
 //! - **blades_in_the_dark** — "no strict turn order or initiative; the fiction
 //!   determines who acts". No rounds, and the case SC-011 is written for.
 
-/// What a system says about counting rounds.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TurnStructure {
-    /// What this ruleset calls a round — "Round", Fate's "Exchange".
-    ///
-    /// Only present when the system counts them at all. A caller with no label
-    /// has nothing to show, which is the whole of SC-011.
-    pub round_label: Option<String>,
-}
+/// What a system says about counting rounds, and reading it from a manifest
+/// in hand, are the shared rules' (`thunderforge_combat::turn_structure`,
+/// ADR-113), so the browser demo counts rounds as the server does. This
+/// module reads the manifest from disk.
+pub use thunderforge_combat::turn_structure::{TurnStructure, from_manifest};
 
 /// Read a system's turn structure from its manifest.
 pub fn for_system(systems_dir: &str, system_id: &str) -> TurnStructure {
@@ -55,32 +51,6 @@ pub fn for_system(systems_dir: &str, system_id: &str) -> TurnStructure {
         return TurnStructure { round_label: None };
     };
     from_manifest(&manifest)
-}
-
-/// Split out so it can be tested without a filesystem.
-pub fn from_manifest(manifest: &serde_json::Value) -> TurnStructure {
-    let Some(block) = manifest.get("turnStructure") else {
-        return TurnStructure { round_label: None };
-    };
-
-    // `rounds: false` and an absent block are the same answer, deliberately:
-    // a system declining rounds and a system that never mentioned them both
-    // want no counter, and giving them two representations would invite a
-    // caller to treat them differently.
-    if block.get("rounds").and_then(|r| r.as_bool()) != Some(true) {
-        return TurnStructure { round_label: None };
-    }
-
-    TurnStructure {
-        round_label: Some(
-            block
-                .get("roundLabel")
-                .and_then(|l| l.as_str())
-                .filter(|label| !label.trim().is_empty())
-                .unwrap_or("Round")
-                .to_string(),
-        ),
-    }
 }
 
 #[cfg(test)]

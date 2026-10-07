@@ -198,6 +198,8 @@ lint-host:
 lint-wasm:
 	cargo clippy -p thunderforge_engine -p thunderforge_cache_browser -p thunderforge_opfs \
 		--target wasm32-unknown-unknown --all-targets -- -D warnings
+	cargo clippy -p thunderforge_combat --features wasm \
+		--target wasm32-unknown-unknown --all-targets -- -D warnings
 
 check-file-length:
 	@./scripts/check-file-length.sh

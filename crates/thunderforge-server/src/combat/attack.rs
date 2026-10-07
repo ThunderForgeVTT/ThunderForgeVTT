@@ -41,7 +41,8 @@
 use diesel::PgConnection;
 use diesel::prelude::*;
 use rand::Rng;
-use thunderforge_dice::{DiceFormula, PlaceholderBindings, ResolutionKind, RollResolution};
+use thunderforge_combat::attack::{damage_source, judge, offered_amount, roll};
+use thunderforge_dice::{PlaceholderBindings, ResolutionKind, RollResolution};
 use uuid::Uuid;
 
 use crate::combat::controllers::{may_act_for, player_controllers, token_control};
@@ -59,40 +60,10 @@ use crate::schema::{
 };
 use crate::world_events::{EVENT_CODE_ATTACK_MADE, EVENT_CODE_OFFER_CHANGED, record_world_event};
 
-/// What an attack costs (`world_attacks.action_cost`, research R13).
-#[derive(async_graphql::Enum, Copy, Clone, Debug, PartialEq, Eq)]
-#[graphql(name = "ActionCost")]
-pub enum ActionCost {
-    Action,
-    BonusAction,
-    Reaction,
-    Legendary,
-    Free,
-}
-
-impl ActionCost {
-    pub fn as_db_str(self) -> &'static str {
-        match self {
-            ActionCost::Action => "action",
-            ActionCost::BonusAction => "bonus_action",
-            ActionCost::Reaction => "reaction",
-            ActionCost::Legendary => "legendary",
-            ActionCost::Free => "free",
-        }
-    }
-
-    /// An unrecognised stored value reads as an action, the default a row
-    /// written before the column existed has.
-    pub fn from_db_str(value: &str) -> Self {
-        match value {
-            "bonus_action" => ActionCost::BonusAction,
-            "reaction" => ActionCost::Reaction,
-            "legendary" => ActionCost::Legendary,
-            "free" => ActionCost::Free,
-            _ => ActionCost::Action,
-        }
-    }
-}
+/// What an attack costs is the shared rules' (`thunderforge_combat::attack`,
+/// ADR-113), as are what a hit is, what a damage roll offers, and when it is
+/// applied without asking: the browser demo's attack decides as this one does.
+pub use thunderforge_combat::attack::ActionCost;
 
 /// Why a fight's rule refused. A sentence for a person, and a kind for the
 /// callers that report a refusal as something other than an error (offline
@@ -275,10 +246,7 @@ fn roll_and_record<R: Rng>(
     bindings: &PlaceholderBindings,
     rng: &mut R,
 ) -> Result<(Uuid, RollResolution, f64), FightRefusal> {
-    let formula = DiceFormula::parse(source)
-        .map_err(|e| FightRefusal::Invalid(format!("Roll rejected: {e}")))?;
-    let resolution = thunderforge_dice::resolve(&formula, bindings, rng)
-        .map_err(|e| FightRefusal::Invalid(format!("Roll rejected: {e}")))?;
+    let (resolution, _) = roll(source, bindings, rng).map_err(FightRefusal::Invalid)?;
     let (kind, value) = match resolution.kind {
         ResolutionKind::Total(v) => ("total", v),
         ResolutionKind::SuccessCount(n) => ("success_count", n as f64),
@@ -314,9 +282,12 @@ pub fn auto_apply_holds(
     flags: &[String],
     needs_line_of_sight: bool,
 ) -> bool {
-    effective_setting
-        && target_player_controllers.is_empty()
-        && (!needs_line_of_sight || !flags.iter().any(|f| f == "no_line_of_sight"))
+    thunderforge_combat::attack::auto_apply_holds(
+        effective_setting,
+        !target_player_controllers.is_empty(),
+        flags,
+        needs_line_of_sight,
+    )
 }
 
 /// What `previewAttack` answers: what `make_attack` would record, and whether
@@ -656,28 +627,15 @@ pub(crate) fn record_attack<R: Rng>(
                 Some(target) => defence_of(conn, systems_dir, world_system.as_deref(), target)?,
                 None => None,
             };
-            let outcome = match (target, defence) {
-                (None, _) => OUTCOME_NO_TARGET,
-                (Some(_), None) => OUTCOME_NO_DEFENCE,
-                (Some(_), Some(defence)) if total >= defence as f64 => OUTCOME_HIT,
-                (Some(_), Some(_)) => OUTCOME_MISS,
-            };
+            let outcome = judge(target.is_some(), defence, total);
             let Measured { distance, mut flags } = measured[index].clone();
             flags.extend(spend_flags.iter().map(|flag| flag.to_string()));
 
-            let damage = if outcome == OUTCOME_HIT && !part.damage.is_empty() {
-                let source = if part.damage.len() == 1 {
-                    part.damage[0].clone()
-                } else {
-                    part.damage
-                        .iter()
-                        .map(|f| format!("({f})"))
-                        .collect::<Vec<_>>()
-                        .join("+")
-                };
-                Some(roll_and_record(conn, world_id, user_id, &source, &bindings, rng)?)
-            } else {
-                None
+            let damage = match damage_source(&part.damage) {
+                Some(source) if outcome == OUTCOME_HIT => Some(roll_and_record(
+                    conn, world_id, user_id, &source, &bindings, rng,
+                )?),
+                _ => None,
             };
 
             let attack_id = Uuid::now_v7();
@@ -742,7 +700,7 @@ pub(crate) fn record_attack<R: Rng>(
                 .filter(tokens::token_id.eq(target))
                 .select(tokens::linked)
                 .first::<bool>(conn)?;
-            let amount = amount.round().max(0.0).min(i32::MAX as f64) as i32;
+            let amount = offered_amount(amount);
             let offer_id = Uuid::now_v7();
             diesel::insert_into(world_offers::table)
                 .values(&OfferRecord {

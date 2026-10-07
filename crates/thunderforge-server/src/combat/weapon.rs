@@ -117,16 +117,10 @@ fn part_from(
     reach: Reach,
     effects: Vec<(String, String)>,
 ) -> Result<Part, FightRefusal> {
-    let to_hit = effects
-        .iter()
-        .find(|(kind, formula)| kind == "attack_roll" && !formula.trim().is_empty())
-        .map(|(_, formula)| formula.trim().to_string())
-        .ok_or_else(|| FightRefusal::Invalid(format!("{name} has no attack roll to make")))?;
-    let damage = effects
-        .iter()
-        .filter(|(kind, formula)| kind == "damage" && !formula.trim().is_empty())
-        .map(|(_, formula)| formula.trim().to_string())
-        .collect();
+    // Which effects are the to-hit and the damage is the shared rules'
+    // (`thunderforge_combat::attack`, ADR-113).
+    let (to_hit, damage) = thunderforge_combat::attack::attack_formulas(&name, &effects)
+        .map_err(FightRefusal::Invalid)?;
     Ok(Part {
         ability_id,
         item_id,

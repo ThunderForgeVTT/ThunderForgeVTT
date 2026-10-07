@@ -63,9 +63,23 @@ impl TurnCheck {
     }
 }
 
-/// "It is <label>'s turn".
-pub fn turn_refusal(label: &str) -> String {
-    format!("It is {label}'s turn")
+/// "It is <label>'s turn", and who holds a token back, are the shared rules'
+/// (`thunderforge_combat::turn`, ADR-113): the browser demo refuses in the
+/// same words. This module finds the combat and redacts the label.
+pub use thunderforge_combat::turn::turn_refusal;
+
+/// A combatant row, as the turn check reads it.
+impl thunderforge_combat::turn::Party for Combatant {
+    type Id = Uuid;
+    fn party_id(&self) -> Uuid {
+        self.id
+    }
+    fn token(&self) -> Option<Uuid> {
+        self.token_id
+    }
+    fn actor(&self) -> Option<Uuid> {
+        self.actor_id
+    }
 }
 
 /// The world's running combat in this scene (a combat with no scene is the
@@ -143,20 +157,12 @@ pub fn turn_check(
         .select(Combatant::as_select())
         .load::<Combatant>(conn)?;
 
-    // The acting token's own combatant rows: by token, or by actor for a
-    // combatant added from the actor list with no token of its own.
-    let is_acting = |c: &Combatant| match c.token_id {
-        Some(token) => token == acting_token_id,
-        None => actor_id.is_some() && c.actor_id == actor_id,
-    };
-    let mine: Vec<&Combatant> = combatants.iter().filter(|c| is_acting(c)).collect();
-    if mine.is_empty() || mine.iter().any(|c| c.id == active_id) {
-        return Ok(TurnCheck::permitted());
-    }
-
-    let Some(active) = combatants.iter().find(|c| c.id == active_id) else {
-        // The pointer names a combatant that is gone. Nobody holds the turn,
-        // so nobody is held to it.
+    // The acting token's own combatant rows are found by token, or by actor
+    // for a combatant added from the actor list with no token of its own; a
+    // pointer naming a combatant that is gone holds nobody to it.
+    let Some(active) =
+        thunderforge_combat::turn::held_by(&combatants, active_id, acting_token_id, actor_id)
+    else {
         return Ok(TurnCheck::permitted());
     };
 

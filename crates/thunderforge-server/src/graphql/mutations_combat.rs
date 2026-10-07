@@ -186,12 +186,26 @@ impl GraphQLCombat {
 /// The single definition of turn order. See this module's doc comment for
 /// why the trailing id comparison is load-bearing.
 pub(crate) fn sort_combatants(combatants: &mut [Combatant]) {
-    combatants.sort_by(|a, b| {
-        b.initiative
-            .cmp(&a.initiative)
-            .then(b.tiebreak.cmp(&a.tiebreak))
-            .then(a.id.cmp(&b.id))
-    });
+    thunderforge_combat::order::sort_seats(combatants);
+}
+
+/// A combatant row, as turn order reads it. The order itself is the shared
+/// rules' (`thunderforge_combat::order`, ADR-113), so the browser demo's
+/// fight goes round in the same order as the server's.
+impl thunderforge_combat::order::Seat for Combatant {
+    type Id = Uuid;
+    fn seat_id(&self) -> Uuid {
+        self.id
+    }
+    fn initiative(&self) -> i32 {
+        self.initiative
+    }
+    fn tiebreak(&self) -> i32 {
+        self.tiebreak
+    }
+    fn is_active(&self) -> bool {
+        self.active
+    }
 }
 
 /// Index of the combatant that takes the turn after `active_id`.
@@ -201,42 +215,10 @@ pub(crate) fn sort_combatants(combatants: &mut [Combatant]) {
 /// (downed/removed) combatants. Returns `None` when nobody is eligible, so
 /// a combat whose combatants are all inactive stops rather than spinning.
 fn next_turn_index(ordered: &[Combatant], active_id: Option<Uuid>) -> Option<(usize, bool)> {
-    if ordered.is_empty() {
-        return None;
-    }
-
-    let current = active_id.and_then(|id| ordered.iter().position(|c| c.id == id));
-
-    // Walk the whole ring exactly once, and where it starts depends on
-    // whether anybody is holding the turn.
-    //
-    // Moving on from a combatant starts *just past* them — offset 1 — which
-    // is what makes "next" skip the current one rather than landing back on
-    // it when it is the only active combatant.
-    //
-    // Entering the order starts *at* the top — offset 0. Starting past it
-    // meant the combatant who rolled highest never acted in the first round:
-    // `start_combat` leaves `active_combatant_id` NULL, so the first advance
-    // arrived here with `current` as `None` and opened the encounter on
-    // second place.
-    let len = ordered.len();
-    let (start, first_offset) = match current {
-        Some(index) => (index, 1),
-        None => (0, 0),
-    };
-
-    for offset in first_offset..(first_offset + len) {
-        let idx = (start + offset) % len;
-        if ordered[idx].active {
-            // A wrap happened if we passed index 0 on the way. With no
-            // current combatant we are entering the order for the first
-            // time, which is not a new round.
-            let wrapped = current.is_some() && start + offset >= len;
-            return Some((idx, wrapped));
-        }
-    }
-
-    None
+    // Where the walk round the ring starts, and why the top of the order acts
+    // first in the first round (`start_combat` leaves `active_combatant_id`
+    // NULL), is recorded on `thunderforge_combat::order::next_turn`.
+    thunderforge_combat::order::next_turn(ordered, active_id)
 }
 
 /// What a combatant is called in the tracker for someone not permitted to read
