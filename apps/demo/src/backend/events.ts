@@ -18,9 +18,13 @@ export const EVENT = {
   token: 14,
   sceneLaunched: 16,
   chat: 17,
+  combat: 18,
   door: 21,
   sceneLighting: 25,
+  actorSheet: 26,
   explorationReset: 27,
+  attack: 29,
+  offer: 30,
   sceneLevel: 33,
   tokenTravelled: 34,
 } as const;

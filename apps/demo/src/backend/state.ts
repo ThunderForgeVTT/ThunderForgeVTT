@@ -62,6 +62,25 @@ export interface DemoState {
   /** Actor art asset id → the spec that draws it (`seed/art.ts`). */
   art: Record<string, ArtAsset>;
   nextEventId: number;
+  /**
+   * Spec 079: the fight, made the first time one is started. Optional, so a
+   * world saved before there were fights still loads; "Start over" forgets
+   * it with everything else.
+   */
+  fight?: Fight;
+}
+
+/** Spec 079 FR-006: everything a fight is, kept so a reload keeps it. */
+export interface Fight {
+  combats: Row[];
+  combatants: Row[];
+  attacks: Row[];
+  offers: Row[];
+  /** A copy's own hit points (`tokens.system_data` on the server). */
+  copies: Record<string, Row>;
+  /** Where the dice start, and how many throws have been made since. */
+  seed: number;
+  draws: number;
 }
 
 /** Versioned, so a later shape of the world does not read an earlier one. */

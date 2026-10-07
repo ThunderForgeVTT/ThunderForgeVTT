@@ -34,6 +34,7 @@ import { loreMutations, loreQueries } from "./handlers/lore";
 import { catchUpQueries } from "./handlers/catchUp";
 import { worldMutations } from "./handlers/world";
 import { areaMutations, areaQueries } from "./handlers/index";
+import { combatMutations, combatQueries } from "./handlers/combat";
 import { demoState, markChanged, type DemoState, type Row } from "./state";
 
 type Args = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -363,6 +364,7 @@ export const queries: Record<string, Handler> = {
   ...loreQueries,
   ...actorAccessQueries,
   ...catchUpQueries,
+  ...combatQueries,
 };
 
 export const mutations: Record<string, Handler> = {
@@ -580,6 +582,7 @@ export const mutations: Record<string, Handler> = {
   ...loreMutations,
   ...worldMutations,
   ...actorAccessMutations,
+  ...combatMutations,
 };
 
 // The areas kept in `handlers/`, one file each.
