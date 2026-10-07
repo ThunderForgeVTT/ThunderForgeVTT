@@ -4,6 +4,7 @@ import {
   ROOT_DIR,
   ensureCombatBuild,
   ensureDiceBuild,
+  engineProfile,
   ensureEngineBuild,
   ensurePdfBuild,
   log,
@@ -23,7 +24,13 @@ async function run() {
     void terminateChildren("SIGTERM").then(() => process.exit(0));
   });
 
-  await ensureEngineBuild({ force: args.force });
+  // Release only where CI=true (CI, and the Dockerfile, which sets it): a
+  // local build is a check that things compile, and a release engine is
+  // minutes of wasm-opt for it. ENGINE_PROFILE still overrides either way.
+  await ensureEngineBuild({
+    force: args.force,
+    profile: engineProfile(process.env.CI === "true" ? "release" : "dev"),
+  });
   // The web imports this the same way it imports the engine, so it has to
   // exist before the frontend is built. Cheap when it already does.
   await ensurePdfBuild({ force: args.force });

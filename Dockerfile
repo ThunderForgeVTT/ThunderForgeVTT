@@ -37,6 +37,11 @@ ARG NODE_VERSION=24
 ARG PNPM_VERSION=10.33.2
 ARG WASM_PACK_VERSION=0.15.0
 ARG DIESEL_CLI_VERSION=2.3.13
+# `release` for anything a visitor downloads; `dev` for the dev cluster, where
+# the wait matters more than the size: an unoptimised engine (no wasm-opt) and
+# a debug server, minutes instead of tens of minutes. `make push` passes `dev`
+# unless CI=true.
+ARG BUILD_PROFILE=release
 
 # --- the toolchain -----------------------------------------------------------
 #
@@ -81,11 +86,12 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,id=thunderforge-cargo-re
 
 # --- the build ----------------------------------------------------------------
 FROM toolchain AS build
+ARG BUILD_PROFILE
 WORKDIR /build
 
-# The engine's release profile; `ENGINE_PROFILE=dev` is for a developer who
-# wants a fast, unoptimised bundle and is not what a release is.
-ENV ENGINE_PROFILE=release \
+# The engine follows BUILD_PROFILE: `release` is what a release is; `dev` is
+# a fast, unoptimised bundle for the dev cluster.
+ENV ENGINE_PROFILE=${BUILD_PROFILE} \
   CARGO_TERM_COLOR=never \
   CI=true
 
@@ -108,19 +114,21 @@ RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=thunderforge-pnpm
 # The client bundle, written to data/client.
 RUN pnpm -F @thunderforge/web run build
 
-# The server, release profile, stripped: a debug binary carries about 1.4GB of
-# symbols and nothing in a container needs them. Copied out of the cache mount
-# in the same step, because the mount is gone once the step ends. The same
-# step runs the demo's map importer, a second binary of the same crate.
+# The server in BUILD_PROFILE, stripped: a debug binary carries about 1.4GB
+# of symbols and nothing in a container needs them. Copied out of the cache
+# mount in the same step, because the mount is gone once the step ends. The
+# same step runs the demo's map importer, a second binary of the same crate,
+# in the same profile so it reuses what the server build compiled.
 RUN --mount=type=cache,target=/usr/local/cargo/registry,id=thunderforge-cargo-registry \
   --mount=type=cache,target=/build/target,id=thunderforge-cargo-target \
-  cargo build --release -p thunderforge \
+  if [ "$BUILD_PROFILE" = dev ]; then flag=""; dir=debug; else flag=--release; dir=release; fi \
+  && cargo build $flag -p thunderforge \
   && mkdir -p /out \
-  && install -m 755 target/release/thunderforge /out/thunderforge \
+  && install -m 755 target/$dir/thunderforge /out/thunderforge \
   && strip /out/thunderforge \
   && install -m 755 /usr/local/cargo/bin/diesel /out/diesel \
   && strip /out/diesel \
-  && cargo run --release -q -p thunderforge --bin thunderforge-demo-maps \
+  && cargo run $flag -q -p thunderforge --bin thunderforge-demo-maps \
   --features demo-maps -- examples/maps apps/demo/public/maps
 
 # The demo (spec 074), written to data/demo: static files and nothing else.

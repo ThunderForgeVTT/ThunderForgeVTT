@@ -1,4 +1,4 @@
-.PHONY: push clean-builds test-db-reset dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-rust test-mail bench-blob-store test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean container container-up container-down container-down-clean
+.PHONY: image push clean-builds test-db-reset dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-rust test-mail bench-blob-store test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean container container-up container-down container-down-clean
 
 # Loads DATABASE_URL (and anything else) from the repo-root .env for targets
 # that shell out to tools which don't read it themselves (diesel-cli).
@@ -28,7 +28,8 @@ help:
 	@echo "  make container-up     Start the whole app (app+postgres+rustfs+mailpit) detached on http://localhost:42080"
 	@echo "  make container-down   Stop it, keep the instance's data"
 	@echo "  make container-down-clean  Stop it and DELETE the instance (database, uploads, worlds)"
-	@echo "  make push             Push the dev image (IMAGE) and restart its deployment (KUBE_CONTEXT/KUBE_NAMESPACE/DEPLOY)"
+	@echo "  make image            Build the dev image (IMAGE) from the tree"
+	@echo "  make push             Build, push the dev image (IMAGE) and restart its deployment (KUBE_CONTEXT/KUBE_NAMESPACE/DEPLOY)"
 	@echo "  make clean-builds     Show what old cargo output and finished worktrees can go (ARGS=--apply deletes it)"
 	@echo "  make format           Run prettier + cargo fmt"
 	@echo "  make lint             Run cargo clippy (-D warnings) plus the file-length check"
@@ -153,14 +154,20 @@ container-down:
 container-down-clean:
 	docker compose down -v
 
-# Ship the image that `docker build --target server -t $(IMAGE) .` left behind
-# and roll the dev deployment onto it. Prints the pushed digest first so it can
-# be checked against `docker image inspect` before the pods move.
+# Build the image from the tree as it is, ship it, and roll the dev deployment
+# onto it. `push` builds first because `make build` is the host build and never
+# touched the image: pushing alone shipped whatever image was last built. The
+# image is a dev build (unoptimised engine, debug server) unless CI=true;
+# BUILD_PROFILE=release forces the other.
 IMAGE ?= mbround18/thunderforgevtt:develop
 KUBE_CONTEXT ?= default
 KUBE_NAMESPACE ?= thunderforge-dev
 DEPLOY ?= thunderforge
-push:
+BUILD_PROFILE ?= $(if $(filter true,$(CI)),release,dev)
+image:
+	docker build --target server --build-arg BUILD_PROFILE=$(BUILD_PROFILE) -t $(IMAGE) .
+
+push: image
 	docker push $(IMAGE)
 	kubectl --context $(KUBE_CONTEXT) -n $(KUBE_NAMESPACE) rollout restart deploy/$(DEPLOY)
 	kubectl --context $(KUBE_CONTEXT) -n $(KUBE_NAMESPACE) rollout status deploy/$(DEPLOY) --timeout=5m
