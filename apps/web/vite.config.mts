@@ -69,6 +69,26 @@ function precompress(outDir: string): Plugin {
   };
 }
 
+// Spec 080: the dev file server answers a byte range but only says so on the
+// 206 itself, so the downloader, which needs to be told before it asks, sees
+// a plain file. The built server says it on every answer; this makes the
+// engine's wasm say it in dev too, so dev and e2e fetch the engine in parts
+// exactly as production does.
+function advertiseRanges(): Plugin {
+  return {
+    name: "thunderforge-advertise-ranges",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (/\.wasm(\?|$)/.test(req.url ?? "")) {
+          res.setHeader("Accept-Ranges", "bytes");
+        }
+        next();
+      });
+    },
+  };
+}
+
 const outDir = path.resolve(__dirname, "../../data/client");
 
 export default defineConfig({
@@ -121,6 +141,7 @@ export default defineConfig({
       ],
     }),
     precompress(outDir),
+    advertiseRanges(),
   ],
   build: {
     outDir,

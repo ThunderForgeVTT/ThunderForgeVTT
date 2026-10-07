@@ -68,7 +68,7 @@ they prove inside each phase.
 - [x] T020 [P] [US2] `crates/thunderforge-server/src/static_files/mod.rs`: `.precompressed_br().precompressed_gzip()` on the three built mounts; test that a `br` request gets `Content-Encoding: br` + `Accept-Ranges` + `ETag` and an identity `Range` request gets `206` of the original — `ServeDir` names its version by `Last-Modified`, not `ETag`; the downloader accepts either
 - [x] T021 [P] [US2] `apps/thunderforge/src/main.rs`: compression predicate also skips `video/*` and `audio/*`
 - [x] T022 [US2] `apps/web/src/engine/bevy/index.ts`: `fetchWasmWithProgress` uses `download()` and hands `toResponse()` to `wasm.default({ module_or_path })`, mapping `onProgress` to the existing `{stage: "downloading", loaded, total}`; return visits keep the no-delay rule
-- [ ] T023 [US2] Integration e2e `apps/web/e2e/resumable-downloads-engine.spec.ts`: on a cold context, record the engine requests; assert several `206` answers with distinct ranges, progress reports non-decreasing, and the engine reaches ready
+- [x] T023 [US2] Integration e2e `apps/web/e2e/resumable-downloads-engine.spec.ts`: on a cold context, record the engine requests; assert several `206` answers with distinct ranges, progress reports non-decreasing, and the engine reaches ready
 
 ---
 
@@ -97,7 +97,7 @@ they prove inside each phase.
 **Independent test**: below the threshold, without ranges, without a validator, with `Content-Encoding`, or with the flag off, a download is exactly one plain request.
 
 - [x] T030 [US5] Downloader tests for each fallback case (one request, no `Range` header sent, body passed through)
-- [ ] T031 [US5] Integration e2e step in `resumable-downloads-engine.spec.ts`: with default settings a small asset makes one request with no `Range`
+- [x] T031 [US5] Integration e2e step in `resumable-downloads-engine.spec.ts`: with default settings a small asset makes one request with no `Range`
 
 ---
 
