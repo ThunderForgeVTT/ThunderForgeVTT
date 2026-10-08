@@ -153,7 +153,7 @@ nothing visible changed.
   - The choice is passed to every check and attack, and goes back to Normal after each one is sent (FR-018).
   - `apps/web/src/pages/world/actor/ActorRollsPanel.tsx` gets the same, through `CharacterRollButtons`.
   - *As built*: `CharacterRollButtons` sends free `rollDice` formulas and hands attacks to the attack flow, so it rolls no server check. The picker is in the two places a d20 test reaches the server, which are the ones FR-018 names: `SystemChecksPanel` (the sheet page's checks, via `rollCheck`) and `AttackFlow` (via `makeAttack`). `rollsWithAdvantage(worldId)` is a root query beside `systemChecks`. A lair or a queued attack is not offered the choice.
-- [ ] T022 [US1] `apps/web/src/components/world/PlayDock/RollEntry.tsx`: tags from `facets` (`data-testid="roll-facet"`). `apps/web/src/hooks/useWorldRolls.ts` and `apps/web/src/api/roll.ts` fetch `facets { id label }`. Test the tags in `RollEntry`'s vitest file.
+- [x] T022 [US1] `apps/web/src/components/world/PlayDock/RollEntry.tsx`: tags from `facets` (`data-testid="roll-facet"`). `apps/web/src/hooks/useWorldRolls.ts` and `apps/web/src/api/roll.ts` fetch `facets { id label }`. Test the tags in `RollEntry`'s vitest file.
 
 ### Demo
 

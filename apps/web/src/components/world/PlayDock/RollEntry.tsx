@@ -98,6 +98,16 @@ export function RollEntry({
             {badge}
           </span>
         ) : null}
+        {entry.facets.map((facet) => (
+          <span
+            key={facet.id}
+            className={BADGE}
+            data-testid="roll-facet"
+            data-facet-id={facet.id}
+          >
+            {facet.label}
+          </span>
+        ))}
         {time}
       </div>
       <p className="text-sm">

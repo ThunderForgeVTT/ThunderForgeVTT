@@ -73,6 +73,14 @@ export interface WorldRollRecord {
   createdAt: string;
   revealedAt: string | null;
   revealedByName: string | null;
+  /** Spec 084: the facets that shaped this roll, such as Advantage. */
+  facets: RollFacetRecord[];
+}
+
+/** Spec 084: a facet a roll carries, named as its system names it. */
+export interface RollFacetRecord {
+  id: string;
+  label: string;
 }
 
 /**

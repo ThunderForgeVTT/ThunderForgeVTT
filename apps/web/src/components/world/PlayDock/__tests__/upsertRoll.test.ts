@@ -39,6 +39,7 @@ describe("upsertRoll", () => {
       createdAt: first.createdAt,
       revealedAt: "2026-10-07T12:05:00Z",
       revealedByName: "GM",
+      facets: [],
     };
     const feed = upsertRoll([first, second], revealed);
     expect(feed).toHaveLength(2);

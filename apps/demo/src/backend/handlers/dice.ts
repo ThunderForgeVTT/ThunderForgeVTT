@@ -258,6 +258,8 @@ function entryFor(record: Row, state: DemoState): Row | null {
       revealedAt: record.revealedAt ?? null,
       revealedByName:
         record.revealedBy == null ? null : usernameOf(record.revealedBy),
+      // Spec 084: filled from the roll's meta once the demo shapes rolls.
+      facets: [],
     };
   }
   if (visibility === "gm_eyes") {

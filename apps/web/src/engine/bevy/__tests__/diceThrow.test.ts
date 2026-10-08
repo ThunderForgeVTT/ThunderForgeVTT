@@ -36,6 +36,7 @@ const roll: WorldRollRecord = {
   createdAt: "2026-10-07T12:00:00Z",
   revealedAt: null,
   revealedByName: null,
+  facets: [],
 };
 
 describe("buildDiceThrow (contracts/engine-dice.md)", () => {

@@ -83,6 +83,10 @@ const WORLD_ROLL_FIELDS = `
   createdAt
   revealedAt
   revealedByName
+  facets {
+    id
+    label
+  }
 `;
 
 const WORLD_ROLL_ENTRY_FIELDS = `

@@ -38,6 +38,7 @@ const whole: WorldRollRecord = {
   createdAt: "2026-10-07T12:00:00Z",
   revealedAt: null,
   revealedByName: null,
+  facets: [],
 };
 
 const masked: MaskedRollRecord = {
