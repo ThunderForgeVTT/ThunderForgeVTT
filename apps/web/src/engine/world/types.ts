@@ -131,7 +131,40 @@ export type WorldState = {
   selectedLightId: string | null;
   shapes: Record<string, WorldShape>;
   selectedShapeId: string | null;
+  /**
+   * Spec 085: every wall, light and shape selected together, in the order
+   * they were taken. Each kind's `selected…Id` is its first element, so a
+   * tool that knows one at a time keeps working.
+   */
+  selectedWallIds: string[];
+  selectedLightIds: string[];
+  selectedShapeIds: string[];
 };
+
+/**
+ * Spec 085: the engine stamps every change it sends for a group with one id
+ * and the count it sent, so the answers can be tallied into one message.
+ */
+export type GroupStamp = { id: string; size: number };
+
+/** Spec 085: hide walls from the table, or show them again. */
+export type SetWallsHiddenCommand = {
+  type: "set_walls_hidden";
+  wallIds: string[];
+  hidden: boolean;
+};
+
+/** Spec 085: what the engine's box or shift-click left selected. */
+export type SelectGroupCommand = {
+  type: "select_group";
+  tokenIds: string[];
+  wallIds: string[];
+  lightIds: string[];
+  shapeIds: string[];
+};
+
+/** The Select bar's Delete: forwarded to the engine, which emits the deletes. */
+export type DeleteGroupCommand = { type: "delete_group" };
 
 export type SetWorldCommand = {
   type: "set_world";
@@ -201,6 +234,7 @@ export type UpsertTokenCommand = {
    * they are.
    */
   path?: { x: number; y: number }[];
+  group?: GroupStamp;
 };
 
 export type RemoveTokenCommand = {
@@ -290,12 +324,14 @@ export type UpdateWallCommand = {
   wallId: string;
   changes: WallFieldChanges;
   worldId?: string;
+  group?: GroupStamp;
 };
 
 export type DeleteWallCommand = {
   type: "delete_wall";
   wallId: string;
   worldId?: string;
+  group?: GroupStamp;
 };
 
 // Confirmed light upsert/remove: dispatched once a light's state is known
@@ -356,12 +392,14 @@ export type UpdateLightCommand = {
   lightId: string;
   changes: LightFieldChanges;
   worldId?: string;
+  group?: GroupStamp;
 };
 
 export type DeleteLightCommand = {
   type: "delete_light";
   lightId: string;
   worldId?: string;
+  group?: GroupStamp;
 };
 
 // Confirmed shape upsert/remove: dispatched once a shape's state is known
@@ -414,12 +452,14 @@ export type UpdateShapeCommand = {
   shapeId: string;
   changes: ShapeFieldChanges;
   worldId?: string;
+  group?: GroupStamp;
 };
 
 export type DeleteShapeCommand = {
   type: "delete_shape";
   shapeId: string;
   worldId?: string;
+  group?: GroupStamp;
 };
 
 // Spec 082: the Game Master clears a scene's drawings — every one, or only
@@ -640,7 +680,10 @@ export type WorldCommand =
   | UpsertInteractiveCommand
   | RemoveInteractiveCommand
   | DispatchInteractionCommand
-  | SetScenePlayingCommand;
+  | SetScenePlayingCommand
+  | SetWallsHiddenCommand
+  | SelectGroupCommand
+  | DeleteGroupCommand;
 
 export type WorldStoreEvent = {
   command: WorldCommand;

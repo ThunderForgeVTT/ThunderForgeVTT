@@ -157,6 +157,9 @@ function reduceState(state: WorldState, command: WorldCommand): WorldState {
         walls: nextWalls,
         selectedWallId:
           state.selectedWallId === command.wallId ? null : state.selectedWallId,
+        selectedWallIds: state.selectedWallIds.filter(
+          (id) => id !== command.wallId,
+        ),
       };
     }
 
@@ -164,6 +167,33 @@ function reduceState(state: WorldState, command: WorldCommand): WorldState {
       return {
         ...state,
         selectedWallId: command.wallId,
+        selectedWallIds: command.wallId === null ? [] : [command.wallId],
+      };
+
+    case "set_walls_hidden": {
+      // Optimistic: the walls bridge puts back any wall the server refuses.
+      const nextWalls = { ...state.walls };
+      for (const wallId of command.wallIds) {
+        const wall = nextWalls[wallId];
+        if (wall) {
+          nextWalls[wallId] = { ...wall, secret: command.hidden };
+        }
+      }
+      return { ...state, walls: nextWalls };
+    }
+
+    case "select_group":
+      return {
+        ...state,
+        selectedTokenId: command.tokenIds[0] ?? null,
+        selectedTokenIds: command.tokenIds,
+        stackTokenIds: command.tokenIds,
+        selectedWallId: command.wallIds[0] ?? null,
+        selectedWallIds: command.wallIds,
+        selectedLightId: command.lightIds[0] ?? null,
+        selectedLightIds: command.lightIds,
+        selectedShapeId: command.shapeIds[0] ?? null,
+        selectedShapeIds: command.shapeIds,
       };
 
     case "upsert_light":
@@ -186,6 +216,9 @@ function reduceState(state: WorldState, command: WorldCommand): WorldState {
           state.selectedLightId === command.lightId
             ? null
             : state.selectedLightId,
+        selectedLightIds: state.selectedLightIds.filter(
+          (id) => id !== command.lightId,
+        ),
       };
     }
 
@@ -193,6 +226,7 @@ function reduceState(state: WorldState, command: WorldCommand): WorldState {
       return {
         ...state,
         selectedLightId: command.lightId,
+        selectedLightIds: command.lightId === null ? [] : [command.lightId],
       };
 
     case "upsert_shape":
@@ -215,6 +249,9 @@ function reduceState(state: WorldState, command: WorldCommand): WorldState {
           state.selectedShapeId === command.shapeId
             ? null
             : state.selectedShapeId,
+        selectedShapeIds: state.selectedShapeIds.filter(
+          (id) => id !== command.shapeId,
+        ),
       };
     }
 
@@ -222,6 +259,7 @@ function reduceState(state: WorldState, command: WorldCommand): WorldState {
       return {
         ...state,
         selectedShapeId: command.shapeId,
+        selectedShapeIds: command.shapeId === null ? [] : [command.shapeId],
       };
 
     // create_wall/update_wall/delete_wall and the equivalent light/shape
@@ -229,7 +267,8 @@ function reduceState(state: WorldState, command: WorldCommand): WorldState {
     // (engine/world/sync/{walls,lights,shapes}.ts) turns them into
     // GraphQL mutations and dispatches upsert_*/remove_* once the server
     // confirms. They pass through the store unchanged so both the sync
-    // subscriber and the Bevy bridge can observe them.
+    // subscriber and the Bevy bridge can observe them. `delete_group` is
+    // one too: the engine hears it and emits the group's deletes.
     default:
       return state;
   }
@@ -244,10 +283,13 @@ export function createWorldStore(options: CreateWorldStoreOptions): WorldStore {
     stackTokenIds: [],
     walls: normalizeWalls(options.initialWalls ?? []),
     selectedWallId: null,
+    selectedWallIds: [],
     lights: normalizeLights(options.initialLights ?? []),
     selectedLightId: null,
+    selectedLightIds: [],
     shapes: normalizeShapes(options.initialShapes ?? []),
     selectedShapeId: null,
+    selectedShapeIds: [],
   };
 
   const subscribers = new Set<WorldStoreSubscriber>();
