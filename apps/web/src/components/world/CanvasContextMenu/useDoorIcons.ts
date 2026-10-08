@@ -23,7 +23,9 @@ export function useDoorIcons(options: {
   const { worldStore, sceneId, isGameMaster, userId } = options;
   // Held apart so a new callback each render does not resubscribe.
   const onNotice = useRef(options.onNotice);
-  onNotice.current = options.onNotice;
+  useEffect(() => {
+    onNotice.current = options.onNotice;
+  });
 
   useEffect(() => {
     if (!sceneId) return;
