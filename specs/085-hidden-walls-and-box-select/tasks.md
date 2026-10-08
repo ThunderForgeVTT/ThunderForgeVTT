@@ -178,7 +178,7 @@ that passes them.
   Then `SelectionBar.tsx`. Render it from `apps/web/src/pages/world/WorldPage.tsx` in Select mode. Forward `delete_group` to `deleteSelection()` in `apps/web/src/engine/bevy/index.ts`.
 
 - [x] T026 [US2] Probe `selection()`: `selection_state()` in `crates/thunderforge-engine/src/sdk.rs`, and the reader in `apps/web/src/engine/bevy/index.ts`.
-- [ ] T027 [US2] E2E in `canvas-box-select.spec.ts`, as the GM:
+- [x] T027 [US2] E2E in `canvas-box-select.spec.ts`, as the GM:
   - box three tokens and a wall (mouse down, move, up on the canvas); `selection()` holds all four;
   - drag one token by two cells; a reload shows all four moved by the same offset (SC-002);
   - shift-box one token out and shift-click it back;

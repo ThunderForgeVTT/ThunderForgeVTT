@@ -280,3 +280,303 @@ test("the GM hides a plain wall: the table does not see it, and it still blocks"
     await player.context().close();
   }
 });
+
+type Selection = {
+  tokens: string[];
+  walls: string[];
+  lights: string[];
+  shapes: string[];
+};
+
+/** What this board's engine holds selected (`__engineProbe.selection`). */
+async function selection(page: Page): Promise<Selection> {
+  return page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          __engineProbe?: { selection?: () => Selection };
+        }
+      ).__engineProbe?.selection?.() ?? {
+        tokens: [],
+        walls: [],
+        lights: [],
+        shapes: [],
+      },
+  );
+}
+
+/** A box: a press on empty board, a move, a release. */
+async function boxBoard(
+  page: Page,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  shift = false,
+): Promise<void> {
+  if (shift) await page.keyboard.down("Shift");
+  try {
+    await dragBoard(page, from, to);
+  } finally {
+    if (shift) await page.keyboard.up("Shift");
+  }
+}
+
+type ServerWallAt = {
+  wallId: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  secret: boolean;
+};
+
+async function serverWalls(
+  page: Page,
+  sceneId: string,
+): Promise<ServerWallAt[]> {
+  return (
+    await gql<{ walls: ServerWallAt[] }>(
+      page,
+      `query ($sceneId: UUID!) { walls(sceneId: $sceneId) { wallId x1 y1 x2 y2 secret } }`,
+      { sceneId },
+    )
+  ).walls;
+}
+
+async function serverTokens(
+  page: Page,
+  sceneId: string,
+): Promise<{ tokenId: string; x: number; y: number }[]> {
+  return (
+    await gql<{ tokens: { tokenId: string; x: number; y: number }[] }>(
+      page,
+      `query ($sceneId: UUID!) { tokens(sceneId: $sceneId) { tokenId x y } }`,
+      { sceneId },
+    )
+  ).tokens;
+}
+
+const sorted = (ids: string[]) => [...ids].sort();
+
+test("the GM boxes a group, moves it as one, trims it, hides its walls and deletes it", async ({
+  page: gm,
+}) => {
+  test.setTimeout(6 * 60_000);
+
+  // A 50-unit grid keeps the whole layout in the middle of the board, clear
+  // of the tool rail on the left and the dock on the right.
+  const GRID = 50;
+  const worldId = await registerAndCreateWorld(
+    gm,
+    `Box select ${uniqueSuffix()}`,
+  );
+  const active = await gql<{ world?: { activeSceneId: string | null } }>(
+    gm,
+    `query ($id: UUID!) { world(id: $id) { activeSceneId } }`,
+    { id: worldId },
+  );
+  const [firstScene] = await sceneIds(gm, worldId);
+  const sceneId = active.world?.activeSceneId ?? firstScene;
+  await gql(
+    gm,
+    `mutation ($sceneId: UUID!, $input: GraphQLUpdateSceneInput!) {
+      updateScene(sceneId: $sceneId, input: $input) { sceneId }
+    }`,
+    { sceneId, input: { gridSize: GRID } },
+  );
+
+  // Three one-cell tokens on cell centres, and a wall below them.
+  const at = [
+    { x: -125, y: 75 },
+    { x: -25, y: 75 },
+    { x: -125, y: -25 },
+  ];
+  const tokenIds: string[] = [];
+  for (const point of at) {
+    tokenIds.push(
+      (
+        await gql<{ createToken: { tokenId: string } }>(
+          gm,
+          `mutation ($input: GraphQLCreateTokenInput!) {
+            createToken(input: $input) { tokenId }
+          }`,
+          {
+            input: { sceneId, x: point.x, y: point.y, tokenType: "character" },
+          },
+        )
+      ).createToken.tokenId,
+    );
+  }
+  const [, t2] = tokenIds;
+  const wallId = (
+    await gql<{ createWall: { wallId: string } }>(
+      gm,
+      `mutation ($input: GraphQLCreateWallInput!) {
+        createWall(input: $input) { wallId }
+      }`,
+      {
+        input: {
+          sceneId,
+          x1: -150,
+          y1: -100,
+          x2: -50,
+          y2: -100,
+          blocksVision: true,
+          blocksMovement: true,
+        },
+      },
+    )
+  ).createWall.wallId;
+
+  await gm.goto(`/world/${worldId}/play`);
+  await waitForEngineReady(gm);
+  await waitForWallsLoaded(gm);
+  for (const id of tokenIds) {
+    await expect
+      .poll(() => boardToken(gm, id), { timeout: 15_000 })
+      .toBeDefined();
+  }
+
+  await test.step("a box over the three tokens and the wall takes all four", async () => {
+    await expect(async () => {
+      await boxBoard(gm, { x: -170, y: 120 }, { x: 10, y: -120 });
+      const held = await selection(gm);
+      expect(sorted(held.tokens)).toEqual(sorted(tokenIds));
+      expect(held.walls).toEqual([wallId]);
+    }).toPass({ timeout: 30_000 });
+    await expect(gm.getByTestId("selection-bar-counts")).toHaveText(
+      "3 tokens, 1 wall",
+    );
+  });
+
+  await test.step("dragging one token two cells moves all four by the same offset (SC-002)", async () => {
+    const tokensBefore = await serverTokens(gm, sceneId);
+    const [wallBefore] = (await serverWalls(gm, sceneId)).filter(
+      (w) => w.wallId === wallId,
+    );
+    await dragBoard(gm, at[0], { x: at[0].x + 2 * GRID, y: at[0].y });
+    await expect
+      .poll(
+        async () =>
+          (await serverWalls(gm, sceneId)).find((w) => w.wallId === wallId)?.x1,
+        { timeout: 15_000, message: "the wall's move reaches the server" },
+      )
+      .toBe(wallBefore.x1 + 2 * GRID);
+
+    await gm.reload();
+    await waitForEngineReady(gm);
+    await waitForWallsLoaded(gm);
+    const tokensAfter = await serverTokens(gm, sceneId);
+    for (const before of tokensBefore) {
+      const after = tokensAfter.find((t) => t.tokenId === before.tokenId)!;
+      expect(after.x - before.x, `${before.tokenId} x`).toBe(2 * GRID);
+      expect(after.y - before.y, `${before.tokenId} y`).toBe(0);
+    }
+    const wallAfter = (await serverWalls(gm, sceneId)).find(
+      (w) => w.wallId === wallId,
+    )!;
+    expect([
+      wallAfter.x1 - wallBefore.x1,
+      wallAfter.y1 - wallBefore.y1,
+      wallAfter.x2 - wallBefore.x2,
+      wallAfter.y2 - wallBefore.y2,
+    ]).toEqual([2 * GRID, 0, 2 * GRID, 0]);
+    for (const id of tokenIds) {
+      await expect
+        .poll(() => boardToken(gm, id), { timeout: 15_000 })
+        .toBeDefined();
+    }
+  });
+
+  // Where everything is now: two cells to the right.
+  const moved = at.map((p) => ({ x: p.x + 2 * GRID, y: p.y }));
+
+  await test.step("shift-box takes one token out; shift-click puts it back", async () => {
+    await expect(async () => {
+      await boxBoard(gm, { x: -70, y: 120 }, { x: 120, y: -120 });
+      const held = await selection(gm);
+      expect(sorted(held.tokens)).toEqual(sorted(tokenIds));
+      expect(held.walls).toEqual([wallId]);
+    }).toPass({ timeout: 30_000 });
+
+    await boxBoard(gm, { x: 120, y: 120 }, { x: 45, y: 30 }, true);
+    await expect
+      .poll(async () => sorted((await selection(gm)).tokens), {
+        timeout: 10_000,
+      })
+      .toEqual(sorted(tokenIds.filter((id) => id !== t2)));
+
+    await gm.keyboard.down("Shift");
+    try {
+      await clickBoard(gm, moved[1]);
+    } finally {
+      await gm.keyboard.up("Shift");
+    }
+    await expect
+      .poll(async () => sorted((await selection(gm)).tokens), {
+        timeout: 10_000,
+      })
+      .toEqual(sorted(tokenIds));
+    expect((await selection(gm)).walls).toEqual([wallId]);
+  });
+
+  await test.step("with walls unticked, a box does not take the wall", async () => {
+    await openGmTool(gm, "select");
+    const expand = gm.getByTestId("selection-filter-expand");
+    if (await expand.isVisible().catch(() => false)) await expand.click();
+    await gm.getByTestId("selection-filter-walls").uncheck();
+    await expect(async () => {
+      await boxBoard(gm, { x: -70, y: 120 }, { x: 120, y: -120 });
+      const held = await selection(gm);
+      expect(sorted(held.tokens)).toEqual(sorted(tokenIds));
+      expect(held.walls).toEqual([]);
+    }).toPass({ timeout: 30_000 });
+
+    await gm.getByTestId("selection-filter-walls").check();
+    await expect(async () => {
+      await boxBoard(gm, { x: -70, y: 120 }, { x: 120, y: -120 });
+      expect((await selection(gm)).walls).toEqual([wallId]);
+    }).toPass({ timeout: 30_000 });
+  });
+
+  await test.step("the Select bar hides the group's walls", async () => {
+    const hidden = gm.getByTestId("selection-bar-hidden");
+    await expect(hidden).not.toBeChecked();
+    await hidden.click();
+    await expect
+      .poll(
+        async () =>
+          (await serverWalls(gm, sceneId)).find((w) => w.wallId === wallId)
+            ?.secret,
+        { timeout: 15_000, message: "the server holds the wall hidden" },
+      )
+      .toBe(true);
+    await expect(hidden).toBeChecked();
+  });
+
+  await test.step("Delete removes the group from the board and the server", async () => {
+    await gm.getByTestId("selection-bar-delete").click();
+    await expect
+      .poll(
+        async () => {
+          const tokens = (await serverTokens(gm, sceneId)).map(
+            (t) => t.tokenId,
+          );
+          const walls = (await serverWalls(gm, sceneId)).map((w) => w.wallId);
+          return [...tokens, ...walls].filter(
+            (id) => tokenIds.includes(id) || id === wallId,
+          );
+        },
+        { timeout: 15_000, message: "the server holds none of the group" },
+      )
+      .toEqual([]);
+    for (const id of tokenIds) {
+      await expect
+        .poll(() => boardToken(gm, id), { timeout: 15_000 })
+        .toBeUndefined();
+    }
+    await expect
+      .poll(() => drawnWalls(gm), { timeout: 15_000 })
+      .not.toContain(wallId);
+    await expect(gm.getByTestId("selection-bar")).toHaveCount(0);
+  });
+});
