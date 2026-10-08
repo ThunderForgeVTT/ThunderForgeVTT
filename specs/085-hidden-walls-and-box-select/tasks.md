@@ -103,7 +103,7 @@ that passes them.
   - it dispatches `set_walls_hidden` for `[id]`;
   - its test id is `wall-hidden-toggle`.
 - [x] T015 [US1] Probe `drawnWalls()`: `wall_visuals()` in `crates/thunderforge-engine/src/sdk.rs` (wall ids with a visual entity, from `sync_wall_visuals`'s marker), and the reader in `apps/web/src/engine/bevy/index.ts` `__engineProbe`. *Landed:* `drawn_wall_ids()` (spec 030) already publishes exactly that list from `sync_wall_visuals`, for any wall, so no new engine export was added; `__engineProbe.drawnWalls()` reads it.
-- [ ] T016 [US1] E2E `apps/web/e2e/canvas-box-select.spec.ts`, first test, with a GM and a player in two contexts:
+- [x] T016 [US1] E2E `apps/web/e2e/canvas-box-select.spec.ts`, first test, with a GM and a player in two contexts:
   - the GM hides a plain wall through `wall-hidden-toggle`;
   - the player's `drawnWalls()` lacks it and the GM's still has it;
   - the player's drag across it ends where it began;
