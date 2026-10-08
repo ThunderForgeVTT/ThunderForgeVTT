@@ -153,3 +153,60 @@ test("two tabs share one world: rolls reach both boards, a GM only roll does not
     await context.close();
   }
 });
+
+interface Landed {
+  rollId: string;
+  skipped: boolean;
+  dice: { face: number; restingPlace: [number, number] }[];
+}
+
+/** Spec 083: every throw this board's engine landed, oldest first. */
+function diceLanded(page: Page): Promise<Landed[]> {
+  return page.evaluate(() =>
+    (
+      window as unknown as { __engineProbe: { diceLanded: () => Landed[] } }
+    ).__engineProbe.diceLanded(),
+  );
+}
+
+test("two tabs throw the same dice: the same faces in the same places", async ({
+  browser,
+  baseURL,
+}) => {
+  test.setTimeout(240_000);
+  const { page: first, outside } = await openDemo(browser, baseURL);
+  const context = first.context();
+  try {
+    await enterPlay(first);
+    await boardReady(first);
+    const second = await context.newPage();
+    await second.goto(`/demo/world/${WORLD_ID}/play`);
+    await boardReady(second);
+
+    const open = await roll(second, "1d20", "EVERYONE");
+    for (const board of [first, second]) {
+      await expect
+        .poll(() => dicePlayed(board), { timeout: 15_000 })
+        .toEqual([[open]]);
+    }
+    const [rollId] = await rollIds(second);
+    const throws: Landed[] = [];
+    for (const board of [first, second]) {
+      await expect
+        .poll(async () => (await diceLanded(board)).length, {
+          timeout: 15_000,
+        })
+        .toBe(1);
+      const [landed] = await diceLanded(board);
+      expect(landed.rollId).toBe(rollId);
+      expect(landed.skipped).toBe(false);
+      expect(landed.dice.map((d) => d.face)).toEqual([open]);
+      throws.push(landed);
+    }
+    expect(throws[1].dice).toEqual(throws[0].dice);
+
+    expect(outside, "nothing leaves the demo's own static files").toEqual([]);
+  } finally {
+    await context.close();
+  }
+});

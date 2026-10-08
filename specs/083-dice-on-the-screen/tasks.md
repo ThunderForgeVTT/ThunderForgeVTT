@@ -292,7 +292,7 @@ die (research R4).
 
   Rebuild `dist/dice` with `node scripts/build.mjs --only-wasm`. T048 and T049 go green.
 
-- [ ] T051 Add a test to `apps/demo/e2e/rolls-across-tabs.spec.ts` that keeps its `dicePlayed` assertions unchanged, and asserts on both tabs that `diceLanded()` has an entry for the open roll, with the same `face` and `restingPlace`
+- [x] T051 Add a test to `apps/demo/e2e/rolls-across-tabs.spec.ts` that keeps its `dicePlayed` assertions unchanged, and asserts on both tabs that `diceLanded()` has an entry for the open roll, with the same `face` and `restingPlace`
 
 ---
 
