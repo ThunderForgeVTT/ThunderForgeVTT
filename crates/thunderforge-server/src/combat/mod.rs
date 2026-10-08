@@ -17,6 +17,7 @@ pub(crate) mod attack_reroll;
 pub mod budget;
 pub mod controllers;
 pub mod hit_points;
+pub mod item_properties;
 pub mod lair;
 pub mod legendary;
 pub mod manifest;

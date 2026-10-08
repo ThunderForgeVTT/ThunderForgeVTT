@@ -152,7 +152,8 @@ impl GraphQLItem {
                 &row.action_cost,
                 row.legendary_cost,
                 &row.multiattack,
-            ),
+            )
+            .with_properties(&row.properties),
             effects: effects.into_iter().map(GraphQLItemEffect::from).collect(),
             my_permission_level,
             created_at: row.created_at,

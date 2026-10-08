@@ -399,12 +399,12 @@ world's System settings page for the Game Master, shows it read-only to
 players, and tells every open client when it changes. You write no migration,
 no GraphQL and no panel.
 
-| `type`    | A world's answer is     | Extra keys                               |
-| --------- | ----------------------- | ---------------------------------------- |
-| `boolean` | on or off               |                                          |
-| `integer` | a whole number          | `min`, `max`                             |
-| `choice`  | one of `options`        | `options`: a list of `{ value, label }`  |
-| `text`    | a line of text          | `maxLength` (500 when absent)            |
+| `type`    | A world's answer is | Extra keys                              |
+| --------- | ------------------- | --------------------------------------- |
+| `boolean` | on or off           |                                         |
+| `integer` | a whole number      | `min`, `max`                            |
+| `choice`  | one of `options`    | `options`: a list of `{ value, label }` |
+| `text`    | a line of text      | `maxLength` (500 when absent)           |
 
 ```json
 "settings": [
@@ -485,26 +485,27 @@ promise nobody keeps, and the place to find that out is before it ships.
 
 <!-- manifest-keys -->
 
-| Key                                    | Read by                                                                      |
-| -------------------------------------- | ---------------------------------------------------------------------------- |
-| `id`, `title`, `version`               | The host, wherever a system is listed or chosen.                             |
-| `description`, `template`              | The host's system picker.                                                    |
-| `compatibility`, `legal`               | The host, when the manifest is installed and when it is served.              |
-| `author`, `url`, `license`             | Nothing. Provenance, kept for a person reading the file.                     |
-| `data_types`                           | The host, to check `combat` and `appearance` name fields that exist.         |
-| `abilities`, `resources`, `movement`   | The host: the values a sheet, a token and a check may read.                  |
-| `sheet`, `groups`                      | The host: what the declared sheet draws, and how it is arranged.             |
-| `vision`                               | The host: the senses a token may be given.                                   |
-| `turnStructure`, `combat`              | The host's combat tracker.                                                   |
-| `appearance`                           | The host's hero builder.                                                     |
-| `checks`                               | The host's `rollCheck`.                                                      |
-| `settings`                             | The host's world settings.                                                   |
-| `contentPatterns`                      | The host's book import.                                                      |
-| `abilityVocabulary`, `abilityFacets`   | The host's ability editor. `abilityFacets` is the older spelling.            |
-| `skills`                               | Your own rules, if they publish a value per skill (5e's do). Not the host.   |
-| `conditions`                           | The host: the states a character may be in, and the marker the board draws.  |
-| `wishPoints`                           | Genie's rules.                                                               |
-| `startingSkills`                       | Roll for Shoes' crate.                                                       |
+| Key                                  | Read by                                                                            |
+| ------------------------------------ | ---------------------------------------------------------------------------------- |
+| `id`, `title`, `version`             | The host, wherever a system is listed or chosen.                                   |
+| `description`, `template`            | The host's system picker.                                                          |
+| `compatibility`, `legal`             | The host, when the manifest is installed and when it is served.                    |
+| `author`, `url`, `license`           | Nothing. Provenance, kept for a person reading the file.                           |
+| `data_types`                         | The host, to check `combat` and `appearance` name fields that exist.               |
+| `abilities`, `resources`, `movement` | The host: the values a sheet, a token and a check may read.                        |
+| `sheet`, `groups`                    | The host: what the declared sheet draws, and how it is arranged.                   |
+| `vision`                             | The host: the senses a token may be given.                                         |
+| `turnStructure`, `combat`            | The host's combat tracker.                                                         |
+| `appearance`                         | The host's hero builder.                                                           |
+| `checks`                             | The host's `rollCheck`.                                                            |
+| `itemProperties`                     | The host's item editor and `setItemAttack`; your `roll_facets` gives them meaning. |
+| `settings`                           | The host's world settings.                                                         |
+| `contentPatterns`                    | The host's book import.                                                            |
+| `abilityVocabulary`, `abilityFacets` | The host's ability editor. `abilityFacets` is the older spelling.                  |
+| `skills`                             | Your own rules, if they publish a value per skill (5e's do). Not the host.         |
+| `conditions`                         | The host: the states a character may be in, and the marker the board draws.        |
+| `wishPoints`                         | Genie's rules.                                                                     |
+| `startingSkills`                     | Roll for Shoes' crate.                                                             |
 
 <!-- /manifest-keys -->
 
@@ -625,9 +626,9 @@ world's system.
 | Slot             | Where it appears                                          | Props                     |
 | ---------------- | --------------------------------------------------------- | ------------------------- |
 | `npc-detail`     | The actor page, below inventory and abilities, for an NPC | `NpcDetailPanelProps`     |
-| `world-staging`  | The pre-session staging page, below session notes          | `WorldStagingPanelProps`  |
-| `world-settings` | The world's system-settings page                           | `WorldSettingsPanelProps` |
-| `dock`           | The play dock, as a tab of its own                         | `DockPanelProps`          |
+| `world-staging`  | The pre-session staging page, below session notes         | `WorldStagingPanelProps`  |
+| `world-settings` | The world's system-settings page                          | `WorldSettingsPanelProps` |
+| `dock`           | The play dock, as a tab of its own                        | `DockPanelProps`          |
 
 The slot names and their props are declared in `apps/web/src/host/index.ts`
 (`PanelSlot`, `PanelSlotProps`), and the registry is typed against them — a
@@ -667,13 +668,13 @@ of them can be discovered, and each entry says why.
 
 **Any pack with a `server/` crate:**
 
-| File                                              | What you add                         | Why it cannot be found for you                                                                                    |
-| ------------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `Cargo.toml` (repository root)                    | the crate, in `members`              | Cargo builds what the workspace lists.                                                                            |
-| `apps/thunderforge/Cargo.toml`                          | one dependency                       | A crate the binary does not depend on is not compiled into it.                                                    |
-| `apps/thunderforge/src/system_packs.rs`                 | one `use <pack> as _;` line          | A statically linked crate nothing references is never linked, and its `inventory` submissions vanish with it.     |
-| `crates/thunderforge-server/Cargo.toml`           | one dev-dependency                   | The server library's tests are their own binary, and link nothing on their own.                                   |
-| `crates/thunderforge-server/src/test_packs.rs`    | one `use <pack> as _;` line          | The same fact as above, for that test binary.                                                                     |
+| File                                           | What you add                | Why it cannot be found for you                                                                                |
+| ---------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `Cargo.toml` (repository root)                 | the crate, in `members`     | Cargo builds what the workspace lists.                                                                        |
+| `apps/thunderforge/Cargo.toml`                 | one dependency              | A crate the binary does not depend on is not compiled into it.                                                |
+| `apps/thunderforge/src/system_packs.rs`        | one `use <pack> as _;` line | A statically linked crate nothing references is never linked, and its `inventory` submissions vanish with it. |
+| `crates/thunderforge-server/Cargo.toml`        | one dev-dependency          | The server library's tests are their own binary, and link nothing on their own.                               |
+| `crates/thunderforge-server/src/test_packs.rs` | one `use <pack> as _;` line | The same fact as above, for that test binary.                                                                 |
 
 These are build-graph facts: they say a crate exists and should be linked,
 and say nothing about what it contains, so they cannot drift out of step with
@@ -689,17 +690,17 @@ system by id. Add yours to it: that list is the assertion that a deleted
 
 **A pack that adds GraphQL root fields, as well:**
 
-| File                              | What you add                                    | Why                                                                                         |
-| --------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `apps/thunderforge/src/schema_roots.rs` | your query, mutation and subscription types     | The schema's roots are one merged Rust type, and a type has to be named to be merged.       |
+| File                                    | What you add                                | Why                                                                                   |
+| --------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `apps/thunderforge/src/schema_roots.rs` | your query, mutation and subscription types | The schema's roots are one merged Rust type, and a type has to be named to be merged. |
 
 **A pack that owns tables (ADR-063), as well:**
 
-| File                                               | What you add                              | Why                                                                                               |
-| -------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `crates/thunderforge-server/migrations/<stamp>_…/` | the migration that creates them           | One database has one ordered migration history, and the server runs it at start.                  |
-| `diesel.toml` (repository root)                    | a pattern in `except_tables`              | Shared schema generation would otherwise write your tables into the server's `schema.rs`.         |
-| `crates/thunderforge-server/diesel.toml`           | each table in `except_tables`             | The same, for the copy of the configuration the crate's own tooling reads.                        |
+| File                                               | What you add                    | Why                                                                                       |
+| -------------------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------- |
+| `crates/thunderforge-server/migrations/<stamp>_…/` | the migration that creates them | One database has one ordered migration history, and the server runs it at start.          |
+| `diesel.toml` (repository root)                    | a pattern in `except_tables`    | Shared schema generation would otherwise write your tables into the server's `schema.rs`. |
+| `crates/thunderforge-server/diesel.toml`           | each table in `except_tables`   | The same, for the copy of the configuration the crate's own tooling reads.                |
 
 Genie and Roll for Shoes each touch every file in all three tables, and are
 the worked examples. Moving a pack's migrations into the pack is the

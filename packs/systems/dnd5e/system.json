@@ -132,6 +132,17 @@
       "order": 5
     }
   },
+  "itemProperties": [
+    { "id": "ammunition", "label": "Ammunition" },
+    { "id": "finesse", "label": "Finesse" },
+    { "id": "heavy", "label": "Heavy" },
+    { "id": "light", "label": "Light" },
+    { "id": "loading", "label": "Loading" },
+    { "id": "reach", "label": "Reach" },
+    { "id": "thrown", "label": "Thrown" },
+    { "id": "two_handed", "label": "Two-Handed" },
+    { "id": "versatile", "label": "Versatile" }
+  ],
   "checks": [
     {
       "id": "strength",

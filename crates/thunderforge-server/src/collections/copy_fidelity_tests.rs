@@ -714,6 +714,7 @@ async fn attack_fields_travel_with_a_copy_and_an_export() {
             world_items::needs_line_of_sight.eq(false),
             world_items::action_cost.eq("reaction"),
             world_items::multiattack.eq(vec![Some(s.ability_id)]),
+            world_items::properties.eq(vec![Some("two_handed".to_string())]),
         ))
         .execute(&mut conn)
         .expect("the item as an attack");
@@ -778,6 +779,7 @@ async fn attack_fields_travel_with_a_copy_and_an_export() {
     assert!(!item.needs_line_of_sight);
     assert_eq!(item.action_cost, "reaction");
     assert_eq!(item.multiattack, vec![Some(ability_copy)]);
+    assert_eq!(item.properties, vec![Some("two_handed".to_string())]);
 
     // A personal export says the same of the originals.
     let exported =
@@ -798,6 +800,7 @@ async fn attack_fields_travel_with_a_copy_and_an_export() {
         .find(|i| i.id == s.item_id)
         .expect("exported item");
     assert_eq!(item.attack.reach, Some(5.0));
+    assert_eq!(item.attack.properties, ["two_handed"]);
     assert_eq!(item.attack.action_cost, "reaction");
 }
 

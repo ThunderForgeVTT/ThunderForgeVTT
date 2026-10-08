@@ -34,6 +34,8 @@ pub struct AttackFields {
     pub action_cost: String,
     pub legendary_cost: i32,
     pub multiattack: Vec<Uuid>,
+    /// Spec 084: an item's pack properties (`two_handed`); none on an ability.
+    pub properties: Vec<String>,
 }
 
 impl From<&WorldAbility> for AttackFields {
@@ -46,6 +48,7 @@ impl From<&WorldAbility> for AttackFields {
             action_cost: a.action_cost.clone(),
             legendary_cost: a.legendary_cost,
             multiattack: a.multiattack.iter().flatten().copied().collect(),
+            properties: Vec::new(),
         }
     }
 }
@@ -60,6 +63,7 @@ impl From<&WorldItem> for AttackFields {
             action_cost: i.action_cost.clone(),
             legendary_cost: i.legendary_cost,
             multiattack: i.multiattack.iter().flatten().copied().collect(),
+            properties: i.properties.iter().flatten().cloned().collect(),
         }
     }
 }
@@ -105,6 +109,12 @@ impl AttackFields {
                 world_items::action_cost.eq(&self.action_cost),
                 world_items::legendary_cost.eq(self.legendary_cost),
                 world_items::multiattack.eq(self.multiattack_column()),
+                world_items::properties.eq(self
+                    .properties
+                    .iter()
+                    .cloned()
+                    .map(Some)
+                    .collect::<Vec<_>>()),
             ))
             .execute(conn)
             .map(|_| ())

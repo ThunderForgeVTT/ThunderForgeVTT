@@ -1523,6 +1523,11 @@ type AppQueryRoot {
 	"""
 	systemChecks(worldId: UUID!): [GraphQLSystemCheck!]!
 	"""
+	Spec 084 research R6: the item properties this world's system
+	declares, for the item editor. Empty for a pack that declares none.
+	"""
+	systemItemProperties(worldId: UUID!): [RollFacet!]!
+	"""
 	Spec 084 FR-018: whether this world's system rolls a check or an
 	attack with advantage, so a sheet offers the choice only where the
 	server would take it.
@@ -2010,6 +2015,11 @@ input AttackFieldsInput {
 	actionCost: ActionCost!
 	legendaryCost: Int!
 	multiattack: [UUID!]!
+	"""
+	Spec 084: the pack's item properties, for an item only. Absent leaves
+	them as they are; an id the world's system does not declare is refused.
+	"""
+	properties: [String!]
 }
 
 """
@@ -2934,6 +2944,11 @@ type GraphQLAbility {
 	actionCost: ActionCost!
 	legendaryCost: Int!
 	multiattack: [UUID!]!
+	"""
+	Spec 084 research R6: the pack's item properties this is marked
+	with (`two_handed`). Always empty for an ability.
+	"""
+	properties: [String!]!
 	"""
 	Spec 025 (FR-029): every lore entry whose body currently contains a
 	resolved in-text link to this ability. Named `linkedFromLore` to match
@@ -4023,6 +4038,11 @@ type GraphQLItem {
 	actionCost: ActionCost!
 	legendaryCost: Int!
 	multiattack: [UUID!]!
+	"""
+	Spec 084 research R6: the pack's item properties this is marked
+	with (`two_handed`). Always empty for an ability.
+	"""
+	properties: [String!]!
 	"""
 	Spec 013 (US3, FR-016): every lore entry whose body currently
 	contains a resolved in-text link to this item — mirrors

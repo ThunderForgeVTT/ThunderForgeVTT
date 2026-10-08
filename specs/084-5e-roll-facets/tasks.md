@@ -408,11 +408,12 @@ nothing visible changed.
 
 ## Phase 8: US6: Great Weapon Fighting (P3)
 
-- [ ] T061 [P] [US6] Declare `itemProperties` in `packs/systems/dnd5e/system.json` (data-model.md). Tests `crates/thunderforge-server/src/combat/item_properties_tests.rs`:
+- [x] T061 [P] [US6] Declare `itemProperties` in `packs/systems/dnd5e/system.json` (data-model.md). Tests `crates/thunderforge-server/src/combat/item_properties_tests.rs`:
   - `item_properties_for_system` reads 5e's nine;
   - a pack without the key gives none;
   - `setItemAttack` with `properties: ["two_handed"]` stores it, and an undeclared id is refused with the contract sentence.
-- [ ] T062 [US6] `crates/thunderforge-server/src/combat/item_properties.rs`. In `types_attacks.rs`, `AttackFieldsInput` gains `properties: Option<Vec<String>>`. `set_attack_fields_impl` (`mutations_attacks.rs:197`) validates and writes it, for items only; an ability with properties is refused. Add the `systemItemProperties` query, and expose `properties` on the item's attack fields.
+- [x] T062 [US6] `crates/thunderforge-server/src/combat/item_properties.rs`. In `types_attacks.rs`, `AttackFieldsInput` gains `properties: Option<Vec<String>>`. `set_attack_fields_impl` (`mutations_attacks.rs:197`) validates and writes it, for items only; an ability with properties is refused. Add the `systemItemProperties` query, and expose `properties` on the item's attack fields.
+  - As built: an ability given properties is refused with `Only an item has properties.` (an empty list is accepted and ignored). Repeats are stored once. Collection copies and the personal export carry an item's properties with its other attack fields (`combat/attack_fields.rs`, `users/export_content.rs`), proven in `copy_fidelity_tests.rs`.
 - [ ] T063 [P] [US6] Tests in `roll_facets_tests.rs`:
   - `great_weapon_fighting` with `melee` and `two_handed` gives `2d6min3 + STR` with `["great_weapon_fighting"]`;
   - not melee, or no `two_handed`, leaves it untouched;

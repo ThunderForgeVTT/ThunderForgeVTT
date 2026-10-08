@@ -395,6 +395,29 @@ impl RollCheckQuery {
         )
     }
 
+    /// Spec 084 research R6: the item properties this world's system
+    /// declares, for the item editor. Empty for a pack that declares none.
+    async fn system_item_properties(
+        &self,
+        ctx: &Context<'_>,
+        world_id: Uuid,
+    ) -> GraphQLResult<Vec<crate::graphql::types::types_rolls::RollFacet>> {
+        let state = app_state(ctx)?;
+        let Some(system_id) = member_world_system(ctx, world_id).await? else {
+            return Ok(Vec::new());
+        };
+        Ok(crate::combat::item_properties::item_properties_for_system(
+            &state.directories.systems_dir,
+            &system_id,
+        )
+        .into_iter()
+        .map(|property| crate::graphql::types::types_rolls::RollFacet {
+            id: property.id,
+            label: property.label,
+        })
+        .collect())
+    }
+
     /// Spec 084 FR-018: whether this world's system rolls a check or an
     /// attack with advantage, so a sheet offers the choice only where the
     /// server would take it.

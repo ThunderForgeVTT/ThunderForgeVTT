@@ -239,6 +239,9 @@ pub struct GraphQLAttackFields {
     pub action_cost: ActionCost,
     pub legendary_cost: i32,
     pub multiattack: Vec<Uuid>,
+    /// Spec 084 research R6: the pack's item properties this is marked
+    /// with (`two_handed`). Always empty for an ability.
+    pub properties: Vec<String>,
 }
 
 impl Default for GraphQLAttackFields {
@@ -252,6 +255,7 @@ impl Default for GraphQLAttackFields {
             action_cost: ActionCost::Action,
             legendary_cost: 1,
             multiattack: Vec::new(),
+            properties: Vec::new(),
         }
     }
 }
@@ -275,7 +279,14 @@ impl GraphQLAttackFields {
             action_cost: ActionCost::from_db_str(action_cost),
             legendary_cost,
             multiattack: multiattack.iter().flatten().copied().collect(),
+            properties: Vec::new(),
         }
+    }
+
+    /// An item's properties, which an ability has none of.
+    pub fn with_properties(mut self, properties: &[Option<String>]) -> Self {
+        self.properties = properties.iter().flatten().cloned().collect();
+        self
     }
 }
 
@@ -290,6 +301,9 @@ pub struct AttackFieldsInput {
     pub action_cost: ActionCost,
     pub legendary_cost: i32,
     pub multiattack: Vec<Uuid>,
+    /// Spec 084: the pack's item properties, for an item only. Absent leaves
+    /// them as they are; an id the world's system does not declare is refused.
+    pub properties: Option<Vec<String>>,
 }
 
 impl AttackFieldsInput {

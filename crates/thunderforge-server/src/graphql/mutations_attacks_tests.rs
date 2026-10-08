@@ -15,6 +15,7 @@ fn fields(reach: Option<f64>, normal: Option<f64>, long: Option<f64>) -> AttackF
         action_cost: ActionCost::BonusAction,
         legendary_cost: 2,
         multiattack: Vec::new(),
+        properties: None,
     }
 }
 

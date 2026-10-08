@@ -248,6 +248,7 @@ pub async fn set_attack_fields_impl(
         .db_pool
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let systems_dir = state.directories.systems_dir.clone();
     tokio::task::spawn_blocking(move || -> GraphQLResult<bool> {
         refuse_if_paused(&mut conn, world_id)?;
         // A multiattack names abilities of the same world, and never itself.
@@ -272,6 +273,32 @@ pub async fn set_attack_fields_impl(
             }
         }
         let multiattack: Vec<Option<Uuid>> = named.into_iter().map(Some).collect();
+        // Spec 084 research R6: an item's properties are the pack's ids.
+        let properties: Option<Vec<Option<String>>> = match (&input.properties, owner) {
+            (None, _) => None,
+            (Some(given), AttackFieldsOwner::Ability(_)) if given.is_empty() => None,
+            (Some(_), AttackFieldsOwner::Ability(_)) => {
+                return Err(Error::new(crate::combat::item_properties::ONLY_AN_ITEM));
+            }
+            (Some(given), AttackFieldsOwner::Item(_)) => {
+                let system = worlds::table
+                    .filter(worlds::id.eq(world_id))
+                    .select(worlds::game_system_id)
+                    .first::<Option<String>>(&mut conn)
+                    .map_err(|_| Error::new("World not found"))?;
+                let declared = system
+                    .map(|id| {
+                        crate::combat::item_properties::item_properties_for_system(
+                            &systems_dir,
+                            &id,
+                        )
+                    })
+                    .unwrap_or_default();
+                let kept = crate::combat::item_properties::checked_properties(&declared, given)
+                    .map_err(Error::new)?;
+                Some(kept.into_iter().map(Some).collect())
+            }
+        };
         let cost = input.action_cost.as_db_str();
         let now = chrono::Utc::now().naive_utc();
         let written = match owner {
@@ -303,6 +330,14 @@ pub async fn set_attack_fields_impl(
                         world_items::updated_at.eq(now),
                     ))
                     .execute(&mut conn)
+                    .and_then(|written| match &properties {
+                        Some(properties) => {
+                            diesel::update(world_items::table.filter(world_items::id.eq(id)))
+                                .set(world_items::properties.eq(properties))
+                                .execute(&mut conn)
+                        }
+                        None => Ok(written),
+                    })
             }
         }
         .map_err(|e| Error::new(format!("Failed to save the attack: {e}")))?;

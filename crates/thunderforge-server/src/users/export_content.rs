@@ -116,6 +116,8 @@ pub struct ExportedAttack {
     pub legendary_cost: i32,
     /// Ability ids, in the world the ability or item is in.
     pub multiattack: Vec<Uuid>,
+    /// Spec 084: an item's pack properties (`two_handed`); none on an ability.
+    pub properties: Vec<String>,
 }
 
 impl From<crate::combat::attack_fields::AttackFields> for ExportedAttack {
@@ -128,6 +130,7 @@ impl From<crate::combat::attack_fields::AttackFields> for ExportedAttack {
             action_cost: f.action_cost,
             legendary_cost: f.legendary_cost,
             multiattack: f.multiattack,
+            properties: f.properties,
         }
     }
 }
