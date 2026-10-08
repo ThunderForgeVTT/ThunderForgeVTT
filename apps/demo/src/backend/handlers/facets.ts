@@ -85,10 +85,41 @@ export function shapeD20(
   return { formula: shaped, facets };
 }
 
-/** A damage roll is rolled as declared, and never with advantage. */
-export function shapeDamage(formula: string, advantage: Advantage): Shaped {
+/** What a hit's damage is shaped by: the sheet, the swing and the weapon. */
+export interface DamageWeapon {
+  traitData: unknown;
+  /** The part has a reach and the target was within it. */
+  melee: boolean;
+  /** The weapon's properties (`two_handed`); none for an ability. */
+  properties: readonly string[];
+}
+
+/**
+ * `shape_damage`: damage is never rolled with advantage. With Great Weapon
+ * Fighting, a two-handed weapon's damage in melee treats a 1 or 2 on each
+ * die as a 3 (`min3`), unless the term already clamps (research R6).
+ */
+export function shapeDamage(
+  formula: string,
+  advantage: Advantage,
+  weapon?: DamageWeapon,
+): Shaped {
   if (advantage !== "NORMAL") throw new GraphQLError(NO_DAMAGE_ADVANTAGE);
-  return { formula, facets: [] };
+  const fighting =
+    weapon !== undefined &&
+    weapon.melee &&
+    weapon.properties.includes("two_handed") &&
+    hasFacet(weapon.traitData, "great_weapon_fighting");
+  if (!fighting) return { formula, facets: [] };
+  let raised = false;
+  const shaped = formula.replace(TERM, (term, _c, _s, modifiers: string) => {
+    if (/min|max/i.test(modifiers)) return term;
+    raised = true;
+    return `${term}min3`;
+  });
+  return raised
+    ? { formula: shaped, facets: ["great_weapon_fighting"] }
+    : { formula, facets: [] };
 }
 
 /** `RollFacet` rows, for a roll's `facets` field. */

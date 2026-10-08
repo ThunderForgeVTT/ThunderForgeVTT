@@ -25,7 +25,7 @@ import { DEMO_PLAYER } from "../../seed/world";
 import { abilityFor, actorAbilities, worldAbilities } from "./combatAbilities";
 import { applyHitPointChange } from "./combatHp";
 import { recordRoll } from "./dice";
-import { shapeD20, type Advantage } from "./facets";
+import { shapeD20, shapeDamage, type Advantage } from "./facets";
 import {
   MANIFEST,
   actorOf,
@@ -150,6 +150,32 @@ interface Reach {
   rangeNormal: number | null;
   rangeLong: number | null;
   needsLineOfSight: boolean;
+}
+
+/** `reach::is_melee`: a reach, and a target measured within it. */
+export function isMelee(distance: number | null, reach: Reach): boolean {
+  return (
+    distance !== null && reach.reach !== null && distance <= reach.reach + 1e-6
+  );
+}
+
+/**
+ * The damage formulas shaped as `roll_hit_damage` shapes them (spec 084
+ * R6). The demo has no items, so a weapon's `properties` are the row's own.
+ */
+export function shapedDamage(
+  formulas: string[],
+  traitData: unknown,
+  melee: boolean,
+  properties: readonly string[],
+): { formulas: string[]; facets: string[] } {
+  const shaped = formulas.map((f) =>
+    shapeDamage(f, "NORMAL", { traitData, melee, properties }),
+  );
+  return {
+    formulas: shaped.map((x) => x.formula),
+    facets: [...new Set(shaped.flatMap((x) => x.facets))],
+  };
 }
 
 function reachOf(ability: Row): Reach {
@@ -442,14 +468,10 @@ async function makeAttack({ input }: Args): Promise<Row[]> {
   if (attacker.lair && advantage !== "NORMAL") {
     throw new GraphQLError(LAIR_NO_ADVANTAGE);
   }
-  const toHit = shapeD20(
-    declared.toHit,
-    advantage,
-    attacker.token
-      ? slotsOf(state, attacker.token.actorId).traitData
-      : undefined,
-  );
-  const formulas = { ...declared, toHit: toHit.formula };
+  const traitData = attacker.token
+    ? slotsOf(state, attacker.token.actorId).traitData
+    : undefined;
+  const toHit = shapeD20(declared.toHit, advantage, traitData);
   const target = targetOf(input, 0);
   const targetToken = target ? tokenById(state, target) : undefined;
   if (target && targetToken?.sceneId !== attacker.sceneId) {
@@ -459,6 +481,10 @@ async function makeAttack({ input }: Args): Promise<Row[]> {
   const measured = attacker.token
     ? measure(r, state, attacker.token, targetToken, reach)
     : { distance: null, flags: [] };
+  const melee = isMelee(measured.distance, reach);
+  const properties = (ability.properties as string[] | undefined) ?? [];
+  const damage = shapedDamage(declared.damage, traitData, melee, properties);
+  const formulas = { toHit: toHit.formula, damage: damage.formulas };
 
   const combat = combatOn(fight, attacker.sceneId);
   const effectiveAutoApply =
@@ -505,7 +531,7 @@ async function makeAttack({ input }: Args): Promise<Row[]> {
   if (part.damage) {
     recordRoll(part.damage, {
       label: `${ability.name as string} damage`,
-      meta: { actorId, rollKind: "damage", facets: [] },
+      meta: { actorId, rollKind: "damage", facets: damage.facets },
     });
   }
   const attack: Row = {
@@ -523,7 +549,9 @@ async function makeAttack({ input }: Args): Promise<Row[]> {
     // What `reroll_attack` needs to judge and settle this attack again.
     actorId,
     toHitRollId,
-    damageFormulas: formulas.damage,
+    damageFormulas: declared.damage,
+    melee,
+    properties,
     needsLineOfSight: reach.needsLineOfSight,
     toHit: resolutionRow(part.toHit, part.toHitTotal),
     damage: part.damage
@@ -641,21 +669,25 @@ export async function rerollAttack(
   const at = now();
   let damage: { resolution: WasmResolution; value: number } | null = null;
   const formulas = (first.damageFormulas as string[] | undefined) ?? [];
+  const actorId = (first.actorId as string | null) ?? null;
+  // Shaped as the first hit's damage would have been (spec 084 R6).
+  const shaped = shapedDamage(
+    formulas,
+    actorId ? slotsOf(state, actorId).traitData : undefined,
+    first.melee === true,
+    (first.properties as string[] | undefined) ?? [],
+  );
   if (outcome === "HIT" && formulas.length > 0) {
     const source =
-      formulas.length === 1
-        ? formulas[0]
-        : formulas.map((f) => `(${f})`).join("+");
+      shaped.formulas.length === 1
+        ? shaped.formulas[0]
+        : shaped.formulas.map((f) => `(${f})`).join("+");
     const roller = dice(r, fight);
     damage = call(() => r.roll(roller, source, "{}"));
     roller.free();
     recordRoll(damage!.resolution, {
       label: `${first.abilityName as string} damage`,
-      meta: {
-        actorId: (first.actorId as string | null) ?? null,
-        rollKind: "damage",
-        facets: [],
-      },
+      meta: { actorId, rollKind: "damage", facets: shaped.facets },
     });
   }
   const amount = damage === null ? null : Math.max(0, Math.round(damage.value));

@@ -36,6 +36,8 @@ import { initSync } from "@thunderforge/combat";
 import { runOperation } from "../execute";
 import { demoState, loadState, type Row } from "../state";
 import { loadDiceForTest, seedDice } from "./dice";
+import { isMelee, shapedDamage } from "./combatAttacks";
+import { rules } from "./combatRules";
 import type { MapListing } from "../../seed/world";
 
 const ROOT = new URL("../../../../../", import.meta.url);
@@ -480,5 +482,49 @@ describe("a fight in the demo", () => {
     });
     expect(again?.message).toBe("This roll has already been rerolled.");
     armourClass(15);
+  });
+
+  it("rolls a seeded [1, 5] greatsword hit as [3, 5] with Great Weapon Fighting", async () => {
+    // Spec 084 T067: as `roll_hit_damage`. A seed whose `2d6` rolls [1, 5]
+    // is found, then the shaped damage is rolled from the same seed.
+    const r = await rules();
+    const roll = (seed: number, formula: string) => {
+      const roller = r.Dice.seeded(seed);
+      const { resolution } = JSON.parse(r.roll(roller, formula, "{}")) as {
+        resolution: { dice: { rolls: number[]; final_value: number }[] };
+      };
+      roller.free();
+      return resolution.dice;
+    };
+    const seed = Array.from({ length: 10_000 }, (_, i) => i).find(
+      (s) => JSON.stringify(roll(s, "2d6").map((d) => d.rolls)) === "[[1],[5]]",
+    )!;
+    expect(seed).toBeDefined();
+    const traitData = { facets: ["great_weapon_fighting"] };
+    const finals = (melee: boolean, properties: string[]) => {
+      const shaped = shapedDamage(["2d6"], traitData, melee, properties);
+      return {
+        values: roll(seed, shaped.formulas[0]).map((d) => d.final_value),
+        facets: shaped.facets,
+      };
+    };
+    const reach = {
+      reach: 5,
+      rangeNormal: null,
+      rangeLong: null,
+      needsLineOfSight: false,
+    };
+    expect(isMelee(5, reach)).toBe(true);
+    expect(finals(isMelee(5, reach), ["two_handed"])).toEqual({
+      values: [3, 5],
+      facets: ["great_weapon_fighting"],
+    });
+    // At range, or one-handed, the one stands.
+    expect(isMelee(30, reach)).toBe(false);
+    expect(finals(isMelee(30, reach), ["two_handed"])).toEqual({
+      values: [1, 5],
+      facets: [],
+    });
+    expect(finals(true, ["versatile"])).toEqual({ values: [1, 5], facets: [] });
   });
 });

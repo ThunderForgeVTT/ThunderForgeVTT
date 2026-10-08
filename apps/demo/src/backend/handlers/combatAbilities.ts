@@ -30,6 +30,11 @@ interface Weapon {
   reach: number | null;
   rangeNormal: number | null;
   rangeLong: number | null;
+  /**
+   * Spec 084 R6: what an item's properties would say (`two_handed`). The
+   * demo has no items, so its weapons carry them; a stat block's carry none.
+   */
+  properties?: string[];
 }
 
 /** The heroes' sheets carry no ability rows; these are what they fight with. */
@@ -44,6 +49,7 @@ const HERO_WEAPONS: Record<string, Weapon[]> = {
       reach: 5,
       rangeNormal: null,
       rangeLong: null,
+      properties: ["versatile"],
     },
   ],
   wizard: [
@@ -119,6 +125,7 @@ function catalogue(state: DemoState): Array<{ ability: Row; actorId: string }> {
           reach: weapon.reach,
           rangeNormal: weapon.rangeNormal,
           rangeLong: weapon.rangeLong,
+          properties: weapon.properties ?? [],
           // Melee goes through a gap a bolt cannot: only a ranged attack
           // asks for a clear line (research R2 of spec 046).
           needsLineOfSight: weapon.rangeNormal !== null,

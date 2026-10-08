@@ -145,6 +145,32 @@ describe("shapeDamage", () => {
       NO_DAMAGE_ADVANTAGE,
     );
   });
+
+  it("raises a two-handed melee weapon's low dice with Great Weapon Fighting", () => {
+    const traitData = { facets: ["great_weapon_fighting"] };
+    const greatsword = { traitData, melee: true, properties: ["two_handed"] };
+    expect(shapeDamage("2d6 + 1d8 + 3", "NORMAL", greatsword)).toEqual({
+      formula: "2d6min3 + 1d8min3 + 3",
+      facets: ["great_weapon_fighting"],
+    });
+    // A term that already clamps is left alone.
+    expect(shapeDamage("2d6min2", "NORMAL", greatsword)).toEqual({
+      formula: "2d6min2",
+      facets: [],
+    });
+  });
+
+  it("needs melee, a two-handed weapon and the fighting style", () => {
+    const traitData = { facets: ["great_weapon_fighting"] };
+    const untouched = { formula: "2d6 + 3", facets: [] };
+    for (const weapon of [
+      { traitData, melee: false, properties: ["two_handed"] },
+      { traitData, melee: true, properties: ["versatile"] },
+      { traitData: { facets: [] }, melee: true, properties: ["two_handed"] },
+    ]) {
+      expect(shapeDamage("2d6 + 3", "NORMAL", weapon)).toEqual(untouched);
+    }
+  });
 });
 
 describe("facetRows", () => {
