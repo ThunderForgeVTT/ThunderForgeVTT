@@ -61,6 +61,8 @@ interface Resolution {
   dice: Array<{
     sides: { Numeric: number } | "Fate" | "Coin";
     rolls: number[];
+    /** Why each value after the first was rolled; absent before spec 083. */
+    steps?: Array<"Reroll" | "Explode">;
     kept: boolean;
     final_value: number;
   }>;
@@ -77,6 +79,9 @@ export function resolutionRow(detail: Resolution, outcome: Row | null): Row {
         typeof die.sides === "object" ? "NUMERIC" : die.sides.toUpperCase(),
       numericSides: typeof die.sides === "object" ? die.sides.Numeric : null,
       rolls: die.rolls,
+      steps: (die.steps ?? []).map((step) =>
+        step === "Explode" ? "EXPLODE" : "REROLL",
+      ),
       kept: die.kept,
       finalValue: die.final_value,
     })),
@@ -140,6 +145,8 @@ function labelFrom(value: unknown): string | null {
 }
 
 interface RecordOptions {
+  /** The numbers put in for the formula's placeholders (spec 083). */
+  bindings?: Record<string, number>;
   visibility?: Visibility;
   label?: string | null;
   outcome?: Row | null;
@@ -153,7 +160,12 @@ interface RecordOptions {
  */
 export function recordRoll(
   detail: unknown,
-  { visibility = "everyone", label = null, outcome = null }: RecordOptions = {},
+  {
+    bindings = {},
+    visibility = "everyone",
+    label = null,
+    outcome = null,
+  }: RecordOptions = {},
 ): string {
   const state = demoState();
   const rolls = (state.rolls ??= []);
@@ -163,6 +175,7 @@ export function recordRoll(
     worldId: state.world.id,
     triggeredBy: viewerUser(state).id,
     detail,
+    bindings,
     outcome,
     visibility,
     label: label === null ? null : [...label].slice(0, MAX_LABEL).join(""),
@@ -185,7 +198,7 @@ export async function resolveAndRecord(
   formula: string,
   bindings: Record<string, number>,
   outcome: Row | null = null,
-  options: Omit<RecordOptions, "outcome"> = {},
+  options: Omit<RecordOptions, "outcome" | "bindings"> = {},
 ): Promise<Row> {
   await diceReady();
   let detail: Resolution;
@@ -196,7 +209,7 @@ export async function resolveAndRecord(
   } catch (error) {
     throw new GraphQLError(`Roll rejected: ${(error as Error).message}`);
   }
-  recordRoll(detail, { ...options, outcome });
+  recordRoll(detail, { ...options, bindings, outcome });
   return resolutionRow(detail, outcome);
 }
 
@@ -206,6 +219,14 @@ const usernameOf = (id: unknown): string =>
     : id === DEMO_USER.id
       ? DEMO_USER.username
       : "";
+
+/** `row_bindings`: a record's bindings, sorted; none before spec 083. */
+function bindingsOf(record: Row): Row[] {
+  const stored = (record.bindings ?? {}) as Record<string, number>;
+  return Object.entries(stored)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([placeholder, value]) => ({ placeholder, value }));
+}
 
 /**
  * `entry_for`: one roll as the viewer may see it, or nothing. The roller,
@@ -227,6 +248,7 @@ function entryFor(record: Row, state: DemoState): Row | null {
       rollerName: usernameOf(record.triggeredBy),
       label: record.label ?? null,
       formula: (record.detail as Resolution).formula,
+      bindings: bindingsOf(record),
       resolution: resolutionRow(
         record.detail as Resolution,
         (record.outcome as Row | null) ?? null,

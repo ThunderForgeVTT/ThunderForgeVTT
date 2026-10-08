@@ -259,8 +259,9 @@ export function rollCheck(args: Args): Promise<Row> {
     throw new GraphQLError(`Unknown check ${args.checkId}`);
   }
   const modifier = modifierFor(systemDataOf(state, args.actorId), args.checkId);
-  const sign = modifier < 0 ? "-" : "+";
-  return resolveAndRecord(`1d20 ${sign} ${Math.abs(modifier)}`, {}, null, {
+  // The pack's formula, its placeholder filled in by the dice: the record
+  // keeps the binding, as the server's does (spec 083).
+  return resolveAndRecord("1d20 + MODIFIER", { MODIFIER: modifier }, null, {
     label: check.label,
   });
 }

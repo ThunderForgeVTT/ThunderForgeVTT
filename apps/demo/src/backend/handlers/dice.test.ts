@@ -11,7 +11,7 @@ import { runOperation } from "../execute";
 import { demoState, type Row } from "../state";
 import { eventsSince } from "../events";
 import { freshWorld, heard, refusal, releaseEvents } from "../testing/world";
-import { loadDiceForTest, seedDice } from "./dice";
+import { loadDiceForTest, resolutionRow, seedDice } from "./dice";
 
 const ROLL = `mutation ($input: RollDiceInput!) {
   rollDice(input: $input) {
@@ -156,7 +156,7 @@ describe("worldRollRecords", () => {
     );
     expect(answer.errors).toBeUndefined();
     const roll = answer.data?.rollCheck as Row;
-    expect(roll.formula).toMatch(/^1d20 [+-] \d+$/);
+    expect(roll.formula).toBe("1d20 + MODIFIER");
     expect(state.rolls?.at(-1)?.triggeredBy).toBeDefined();
     expect(state.rolls).toHaveLength(1);
   });
@@ -362,5 +362,89 @@ describe("rolls at the table", () => {
       { worldId: demoState().world.id, actorId: actor.id, checkId: "stealth" },
     );
     expect(demoState().rolls?.at(-1)?.label).toBe("Stealth");
+  });
+});
+
+const ROLL_WHOLE = `query ($worldId: UUID!, $rollId: UUID!) {
+  worldRoll(worldId: $worldId, rollId: $rollId) {
+    __typename
+    ... on WorldRoll {
+      id bindings { placeholder value }
+      resolution { dice { rolls steps finalValue } }
+    }
+    ... on MaskedRoll { id }
+  }
+}`;
+
+async function wholeOf(rollId: string) {
+  const worldId = demoState().world.id;
+  return (await ask(ROLL_WHOLE, { worldId, rollId })).data?.worldRoll as Row;
+}
+
+/** Spec 083: what a board needs to throw a roll as the server rolled it. */
+describe("dice on the screen", () => {
+  it("answers a check's bindings, sorted, and a plain roll's as none", async () => {
+    const actor = demoState().actors.find((a) => !a.isNpc)!;
+    await ask(
+      `mutation ($worldId: UUID!, $actorId: UUID!, $checkId: String!) {
+        rollCheck(worldId: $worldId, actorId: $actorId, checkId: $checkId) { formula }
+      }`,
+      { worldId: demoState().world.id, actorId: actor.id, checkId: "stealth" },
+    );
+    const check = await wholeOf(String(demoState().rolls!.at(-1)!.id));
+    expect(check.bindings).toEqual([
+      { placeholder: "MODIFIER", value: expect.any(Number) },
+    ]);
+
+    await rollOf("1d20 + B + A", [
+      { name: "B", value: 2 },
+      { name: "A", value: 1 },
+    ]);
+    const bound = await wholeOf(String(demoState().rolls!.at(-1)!.id));
+    expect(bound.bindings).toEqual([
+      { placeholder: "A", value: 1 },
+      { placeholder: "B", value: 2 },
+    ]);
+
+    const { id } = await rollAs({});
+    expect((await wholeOf(id)).bindings).toEqual([]);
+  });
+
+  it("never answers a masked roll's bindings", async () => {
+    demoState().viewer = "player";
+    await rollAs({ visibility: "GM_EYES" });
+    demoState().rolls!.push({
+      ...demoState().rolls!.at(-1)!,
+      id: OTHER,
+      triggeredBy: "someone",
+      bindings: { MODIFIER: 3 },
+    });
+    const masked = await wholeOf(OTHER);
+    expect(masked.__typename).toBe("MaskedRoll");
+    expect(masked).not.toHaveProperty("bindings");
+  });
+
+  it("says why each die's chain grew, and reads a roll from before as none", async () => {
+    const { id } = await rollAs({ formula: "1d6xo>0" });
+    const [die] = ((await wholeOf(id)).resolution as Row).dice as Row[];
+    expect(die.rolls).toHaveLength(2);
+    expect(die.steps).toEqual(["EXPLODE"]);
+
+    const rerolled = await rollAs({ formula: "1d6r<7" });
+    const [again] = ((await wholeOf(rerolled.id)).resolution as Row)
+      .dice as Row[];
+    expect(again.steps).toEqual(["REROLL"]);
+
+    const before = resolutionRow(
+      {
+        formula: "1d6",
+        dice: [
+          { sides: { Numeric: 6 }, rolls: [2, 5], kept: true, final_value: 5 },
+        ],
+        kind: { Total: 5 },
+      },
+      null,
+    );
+    expect((before.dice as Row[])[0].steps).toEqual([]);
   });
 });

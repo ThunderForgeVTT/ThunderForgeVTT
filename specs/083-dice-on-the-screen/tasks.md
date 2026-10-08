@@ -279,12 +279,12 @@ die (research R4).
 
 ## Phase 9: The demo (FR-020)
 
-- [ ] T048 [P] [US4] Tests in `apps/demo/src/backend/handlers/dice.test.ts`, beside the `rollCheck` tests (:151, :360):
+- [x] T048 [P] [US4] Tests in `apps/demo/src/backend/handlers/dice.test.ts`, beside the `rollCheck` tests (:151, :360):
   - `worldRoll` of a check returns `bindings` sorted;
   - a plain roll returns `[]`;
   - a masked entry has no `bindings` key.
-- [ ] T049 [P] [US3] Tests in the same file: `resolutionRow` maps the crate's `steps` to `REROLL`/`EXPLODE`, and a stored detail without `steps` maps to `[]`
-- [ ] T050 In `apps/demo/src/backend/handlers/dice.ts`:
+- [x] T049 [P] [US3] Tests in the same file: `resolutionRow` maps the crate's `steps` to `REROLL`/`EXPLODE`, and a stored detail without `steps` maps to `[]`
+- [x] T050 In `apps/demo/src/backend/handlers/dice.ts`:
   - `recordRoll` stores `bindings` (it gains a `bindings` option, passed by `resolveAndRecord`);
   - `entryFor` emits `bindings`;
   - `Resolution` gains `steps?`;
