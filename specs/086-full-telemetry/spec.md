@@ -151,16 +151,26 @@ Counted on 2026-10-07:
   - Metric aggregation from thousands of short-lived tabs needs delta
     temporality, and the collector would then have to convert it. Counts
     and percentiles of browser events are read from Loki instead.
-- **Browser telemetry is off unless the page is told otherwise, at
-  runtime.**
+- **Browser telemetry is on by default for thunderforge.dev's landing and
+  demo, and off by default everywhere else, decided at runtime.** The owner
+  decided on 2026-10-07: "i want telemetry on landing and demo absolutely
+  on by default the reason for this is i wanna see if people are hitting
+  issues".
+  - The landing image's nginx serves `/telemetry.json` and
+    `/demo/telemetry.json` with `enabled: true`, the endpoint
+    `https://telemetry.thunderforge.dev` and a sample rate of 1.0 unless its
+    environment says otherwise. `THUNDERFORGE_BROWSER_TELEMETRY_ENABLED=false`
+    turns it off.
+  - The server image (the web app, and the demo a self-hosted server serves
+    at `/demo`) stays off unless its operator sets the variables.
   - Each app reads a small config file at start. The landing reads
     `/telemetry.json`, the demo `${BASE_URL}telemetry.json`. The web app
     reads `/telemetry.json` from the server.
   - The file names the endpoint, the sample rate and an `enabled` flag.
   - A missing file, an unreadable file or `enabled: false` means nothing is
     sent, and the telemetry chunk is never loaded. That is the kill switch.
-  - A self-hosted instance, or a self-hosted copy of the demo, sends nothing
-    unless its operator sets it up.
+  - A self-hosted instance, or the demo its server serves, sends nothing
+    unless its operator sets it up. Only the landing image ships on.
 - **Privacy rules.**
   - The only identifier is a random, session-scoped id: 128 bits, kept in
     `sessionStorage` so the demo's viewer switch (which reloads) stays one
@@ -170,8 +180,9 @@ Counted on 2026-10-07:
     Paths are sent as route templates (`/world/:worldId/play`).
   - The user agent is reduced to browser family and major version, OS
     family and a mobile flag.
-  - A browser with Global Privacy Control or Do Not Track set sends
-    nothing. This undercounts, and that is accepted.
+  - A browser with Global Privacy Control or Do Not Track set still sends
+    error and failure events, because finding people's problems is the
+    point. It sends no page views, funnel steps, vitals or traces.
 - **nginx on the landing** writes JSON access logs and gets a
   `nginx-prometheus-exporter` sidecar, scraped through a PodMonitor
   labelled `release: kube-prometheus-stack`.
@@ -377,7 +388,8 @@ and rolls. The canary appears in no telemetry request body.
    **Then** it lists what is sent and what is not, as FR-024 states.
 3. **Given** Global Privacy Control or Do Not Track,
    **When** any of the three apps loads,
-   **Then** no telemetry request is made.
+   **Then** only `error` events are sent: no page view, funnel step,
+   vital or trace.
 
 ---
 
@@ -606,7 +618,8 @@ conversion (see **Open items**).
     - a viewport width bucket;
     - device memory and core-count buckets.
   - No IP, cookie, user or world id, or full user agent.
-  - GPC or DNT MUST turn telemetry off before the chunk loads.
+  - GPC or DNT MUST limit the session to `error` events, decided before
+    the chunk loads.
 - **FR-020**: The caps are 50 error events and 2,000 events in all per
   session. Batches are flushed every 5 s, on `visibilitychange` to
   hidden, and on `pagehide`. Each batch body is at most 60 KB.
@@ -676,7 +689,10 @@ conversion (see **Open items**).
     `THUNDERFORGE_BROWSER_TELEMETRY_ENVIRONMENT`. With no endpoint it
     answers `enabled: false`.
   - The landing's nginx MUST answer both from a template fed by the same
-    variables.
+    variables. Unlike the server, its defaults are on: the endpoint
+    `https://telemetry.thunderforge.dev`, sample rate 1.0, environment
+    `production`, and `THUNDERFORGE_BROWSER_TELEMETRY_ENABLED=false` to turn
+    it off.
   - The built bundles MUST NOT carry a default that is on.
 
 **nginx (landing)**
@@ -774,8 +790,9 @@ conversion (see **Open items**).
 
   No telemetry request leaves the test machine.
 - **FR-034**: `docs/guides/telemetry.md` MUST explain, for operators, the
-  `OTEL_*` and `THUNDERFORGE_BROWSER_TELEMETRY_*` variables, that
-  everything is off by default, and exactly what the browser sends.
+  `OTEL_*` and `THUNDERFORGE_BROWSER_TELEMETRY_*` variables, that a
+  self-hosted server is off by default (only thunderforge.dev's landing image
+  is on), and exactly what the browser sends.
   `CONTRIBUTING.md` MUST state the naming and cardinality rules: bounded
   labels, no ids as labels, and the allow-list.
 
@@ -810,8 +827,9 @@ conversion (see **Open items**).
   token name and in an uploaded file's name appears in no telemetry body.
   Every request outside the demo's files goes to the telemetry origin's
   `/v1/logs` or `/v1/traces`.
-- **SC-005**: With the config off, or with GPC set, the same run makes no
-  telemetry request and loads no telemetry chunk. Spec 074's original
+- **SC-005**: With the config off, the same run makes no telemetry request
+  and loads no telemetry chunk. With GPC set, it sends only `error`
+  events. Spec 074's original
   assertion holds unchanged.
 - **SC-006**: A render throw shows the error boundary and posts one
   redacted `error` event.
