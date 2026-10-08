@@ -15,6 +15,7 @@
 //! shell, this crate is the tested core underneath it.
 
 pub mod attributes;
+pub mod box_select;
 pub mod camera;
 pub mod content_entry;
 pub mod content_patterns;

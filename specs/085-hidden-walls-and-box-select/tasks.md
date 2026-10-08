@@ -32,8 +32,8 @@ that passes them.
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirm spec 082 tasks T008, T012, T015 and T018 are `[x]` in `specs/082-players-draw-shapes/tasks.md`, and that `ViewerUserId`, `may_edit_shape` and `Shape.created_by` exist (`grep` in `crates/thunderforge-engine/src` and `crates/thunderforge-canvas-core/src/shape.rs`). Until they are, only Phase 2 (T003–T009) and US1 (T010–T016) may start.
-- [ ] T002 [P] Confirm `apps/web/e2e/canvas-box-select.spec.ts` resolves to the `canvas` slice through the `canvas-` prefix in `scripts/e2e/slices.json` (`pnpm e2e:which apps/web/e2e/canvas-box-select.spec.ts`). Expect no change to `slices.json`.
+- [x] T001 Confirm spec 082 tasks T008, T012, T015 and T018 are `[x]` in `specs/082-players-draw-shapes/tasks.md`, and that `ViewerUserId`, `may_edit_shape` and `Shape.created_by` exist (`grep` in `crates/thunderforge-engine/src` and `crates/thunderforge-canvas-core/src/shape.rs`). Until they are, only Phase 2 (T003–T009) and US1 (T010–T016) may start.
+- [x] T002 [P] Confirm `apps/web/e2e/canvas-box-select.spec.ts` resolves to the `canvas` slice through the `canvas-` prefix in `scripts/e2e/slices.json` (`pnpm e2e:which apps/web/e2e/canvas-box-select.spec.ts`). Expect no change to `slices.json`.
 
 ---
 
@@ -41,7 +41,7 @@ that passes them.
 
 **Purpose**: the pure box rule, the group resource, the token's owner in the engine, and the store's group and tally.
 
-- [ ] T003 [P] Tests `crates/thunderforge-canvas-core/src/box_select_tests.rs`:
+- [x] T003 [P] Tests `crates/thunderforge-canvas-core/src/box_select_tests.rs`:
   - `ScreenBox::from_corners` orders the corners in all four drag directions;
   - `wholly_inside`:
     - a point inside, on the edge and outside;
@@ -52,7 +52,7 @@ that passes them.
     - with toggle, it removes the held hits and appends the others in order;
     - an empty toggle changes nothing;
     - there are no duplicates.
-- [ ] T004 `crates/thunderforge-canvas-core/src/box_select.rs` per contracts/engine-selection.md, with `#[cfg(test)] #[path = "box_select_tests.rs"] mod tests;`. Add `pub mod box_select;` to `crates/thunderforge-canvas-core/src/lib.rs`. `cargo test -p thunderforge-canvas-core box_select` is green.
+- [x] T004 `crates/thunderforge-canvas-core/src/box_select.rs` per contracts/engine-selection.md, with `#[cfg(test)] #[path = "box_select_tests.rs"] mod tests;`. Add `pub mod box_select;` to `crates/thunderforge-canvas-core/src/lib.rs`. `cargo test -p thunderforge-canvas-core box_select` is green.
 - [ ] T005 [P] Tests in a new `crates/thunderforge-engine/src/resources/group_selection.rs` `mod tests`:
   - `set_group` writes `SelectedToken` and each kind's primary;
   - `select_one` resets the group to one item, and `clear` resets it to none;
