@@ -1991,6 +1991,10 @@ type Attack {
 	"""
 	offer: Offer
 	multiattackOf: UUID
+	"""
+	Spec 084: the missed attack this one rerolled, when it is a reroll.
+	"""
+	rerollOf: UUID
 	createdAt: NaiveDateTime!
 }
 

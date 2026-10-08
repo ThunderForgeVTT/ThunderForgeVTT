@@ -360,6 +360,7 @@ function attackRow(state: DemoState, attack: Row): Row {
     actionCost: attack.actionCost,
     offer: offer ? offerRow(state, offer) : null,
     multiattackOf: attack.multiattackOf,
+    rerollOf: attack.rerollOf ?? null,
     createdAt: attack.createdAt,
   };
 }
@@ -515,6 +516,7 @@ async function makeAttack({ input }: Args): Promise<Row[]> {
     targetLabel: targetToken ? tokenLabel(state, targetToken) : null,
     abilityName: ability.name,
     multiattackOf: null,
+    rerollOf: null,
     toHit: resolutionRow(part.toHit, part.toHitTotal),
     damage: part.damage
       ? resolutionRow(part.damage, totalOf(part.damage, part.amount ?? 0))

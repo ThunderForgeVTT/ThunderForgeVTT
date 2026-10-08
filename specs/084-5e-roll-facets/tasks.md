@@ -396,7 +396,7 @@ nothing visible changed.
   - never calls `spend_for_attack` (research R7).
 
   As built: `mutations_reroll.rs`'s `reroll_check` became `reroll_d20`, which records the new roll with its own kind and then hands a `to_hit` to `reroll_attack`; the stub that refused an attack, and the one that offered it nothing, are gone. Only a hit is refused (`A hit cannot be rerolled.`, the same refusal `may_reroll` makes first), so an attack with no target or no defence may be rerolled too and is judged the same way. The part is rebuilt as whoever runs the world sees the weapon, so a multiattack's part need not be on the attacker's own sheet. The tests find their seeds by replaying the to-hit exactly as `rerollRoll` does.
-- [ ] T058 [P] [US4] The attack feed and the type: `graphql/types_attacks.rs` gains `rerollOf` on the attack, and `queries/attacks.rs` returns it. Regenerate the GraphQL contract.
+- [x] T058 [P] [US4] The attack feed and the type: `graphql/types_attacks.rs` gains `rerollOf` on the attack, and `queries/attacks.rs` returns it. Regenerate the GraphQL contract.
 - [ ] T059 [P] [US4] Demo: `combatAttacks.ts` handles a `to_hit` reroll the same way (a new attack row, the stored defence, damage, an offer). Test it in `combat.test.ts` with a seeded miss and then a hit.
 - [ ] T060 [US4] `apps/web/e2e/rolls-facets-attack.spec.ts`:
   1. The GM sets a goblin's AC to 99.

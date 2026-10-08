@@ -67,6 +67,8 @@ export interface AttackRecord {
   actionCost: ActionCost;
   offer: OfferRecord | null;
   multiattackOf: string | null;
+  /** Spec 084: the missed attack this one rerolled. */
+  rerollOf: string | null;
   createdAt: string;
 }
 

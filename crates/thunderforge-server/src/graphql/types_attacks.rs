@@ -145,6 +145,8 @@ pub struct GraphQLAttack {
     /// Null on a miss, with no target, or when the system has no hit points.
     pub offer: Option<GraphQLOffer>,
     pub multiattack_of: Option<Uuid>,
+    /// Spec 084: the missed attack this one rerolled, when it is a reroll.
+    pub reroll_of: Option<Uuid>,
     pub created_at: chrono::NaiveDateTime,
 }
 
@@ -504,6 +506,7 @@ pub fn build_attacks(
             action_cost: ActionCost::from_db_str(&record.action_cost),
             offer: offers.remove(&record.id),
             multiattack_of: record.multiattack_of,
+            reroll_of: record.reroll_of,
             created_at: record.created_at,
         });
     }

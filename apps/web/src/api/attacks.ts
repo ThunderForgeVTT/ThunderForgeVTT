@@ -51,6 +51,7 @@ const ATTACK_FIELDS = `
   actionCost
   offer { ${OFFER_FIELDS} }
   multiattackOf
+  rerollOf
   createdAt
 `;
 
