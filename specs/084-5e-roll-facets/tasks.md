@@ -157,13 +157,14 @@ nothing visible changed.
 
 ### Demo
 
-- [ ] T023 [P] [US1] Tests `apps/demo/src/backend/handlers/facets.test.ts` and `dice.test.ts`:
+- [x] T023 [P] [US1] Tests `apps/demo/src/backend/handlers/facets.test.ts` and `dice.test.ts`:
   - `rollCheck` with `ADVANTAGE` and `DISADVANTAGE` records `2d20kh1 ± n` and `2d20kl1 ± n`, with facets, under `seedDice`;
   - `makeAttack` with advantage judges on the kept die.
-- [ ] T024 [US1] Mirror the transform:
+- [x] T024 [US1] Mirror the transform:
   - `apps/demo/src/backend/handlers/facets.ts` holds `shapeD20` and `shapeDamage`;
   - `apps/demo/src/backend/actors.ts` `rollCheck` (`:254`) and `handlers/combatAttacks.ts` `makeAttack` (`:412`) apply it;
   - `recordRoll` in `handlers/dice.ts` stores `actorId`, `rollKind`, `checkId` and `facets`, and returns them on the `WorldRoll` row.
+  - *As built*: the attack-with-disadvantage test is in `handlers/combat.test.ts`, beside the fight it needs; `WorldRoll` answers `facets` as labelled rows. A lair refuses advantage, as on the server.
 
 ### Proof
 

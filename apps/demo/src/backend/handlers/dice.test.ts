@@ -162,6 +162,74 @@ describe("worldRollRecords", () => {
   });
 });
 
+const CHECK_WITH = `mutation ($w: UUID!, $a: UUID!, $adv: Advantage) {
+  rollCheck(worldId: $w, actorId: $a, checkId: "stealth", advantage: $adv) {
+    formula resultValue dice { numericSides kept finalValue }
+  }
+}`;
+const FACETS_OF = `query ($worldId: UUID!, $rollId: UUID!) {
+  worldRoll(worldId: $worldId, rollId: $rollId) {
+    ... on WorldRoll { formula facets { id label } }
+  }
+}`;
+
+/** Spec 084 (FR-019): a check rolled with advantage, as the server rolls it. */
+describe("rollCheck with advantage", () => {
+  async function checkWith(advantage?: string) {
+    const state = demoState();
+    const actor = state.actors.find((a) => !a.isNpc)!;
+    const answer = await ask(CHECK_WITH, {
+      w: state.world.id,
+      a: actor.id,
+      adv: advantage,
+    });
+    expect(answer.errors).toBeUndefined();
+    const record = state.rolls!.at(-1)!;
+    const seen = (
+      await ask(FACETS_OF, { worldId: state.world.id, rollId: record.id })
+    ).data?.worldRoll as Row;
+    return { roll: answer.data?.rollCheck as Row, record, seen };
+  }
+
+  it("rolls two d20s and keeps the higher, and says so", async () => {
+    const { roll, record, seen } = await checkWith("ADVANTAGE");
+    expect(roll.formula).toBe("2d20kh1 + MODIFIER");
+    const d20s = (roll.dice as Row[]).filter((d) => d.numericSides === 20);
+    expect(d20s).toHaveLength(2);
+    const kept = d20s.filter((d) => d.kept);
+    expect(kept).toHaveLength(1);
+    expect(kept[0].finalValue).toBe(
+      Math.max(...d20s.map((d) => d.finalValue as number)),
+    );
+    expect(record).toMatchObject({
+      rollKind: "check",
+      checkId: "stealth",
+      facets: ["advantage"],
+    });
+    expect(record.actorId).toBeDefined();
+    expect(seen.facets).toEqual([{ id: "advantage", label: "Advantage" }]);
+  });
+
+  it("keeps the lower for disadvantage", async () => {
+    const { roll, seen } = await checkWith("DISADVANTAGE");
+    expect(roll.formula).toBe("2d20kl1 + MODIFIER");
+    const d20s = (roll.dice as Row[]).filter((d) => d.numericSides === 20);
+    expect(d20s.find((d) => d.kept)?.finalValue).toBe(
+      Math.min(...d20s.map((d) => d.finalValue as number)),
+    );
+    expect(seen.facets).toEqual([
+      { id: "disadvantage", label: "Disadvantage" },
+    ]);
+  });
+
+  it("rolls the declared formula when nothing is chosen", async () => {
+    const { roll, record, seen } = await checkWith();
+    expect(roll.formula).toBe("1d20 + MODIFIER");
+    expect(record.facets).toEqual([]);
+    expect(seen.facets).toEqual([]);
+  });
+});
+
 /** A roll by a member the demo does not seat, as another player's would be. */
 const OTHER = "00000000-0000-7000-8000-0000000000aa";
 

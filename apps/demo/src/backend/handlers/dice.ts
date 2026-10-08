@@ -15,6 +15,8 @@
  */
 import init, { initSync, roll, validateFormula } from "@thunderforge/dice";
 import { GraphQLError } from "graphql";
+
+import { facetRows, type RollKind } from "./facets";
 import { DEMO_PLAYER, DEMO_USER } from "../../seed/world";
 import { viewerIsGm, viewerUser } from "../actors";
 import { EVENT, record } from "../events";
@@ -150,6 +152,16 @@ interface RecordOptions {
   visibility?: Visibility;
   label?: string | null;
   outcome?: Row | null;
+  /** Spec 084: whose roll it was, what for, and what shaped it. */
+  meta?: RollMeta;
+}
+
+/** Spec 084: `RollMeta`, as `RollMeta::write_to` writes it on the record. */
+export interface RollMeta {
+  actorId?: string | null;
+  rollKind?: RollKind | null;
+  checkId?: string | null;
+  facets?: string[];
 }
 
 /**
@@ -165,6 +177,7 @@ export function recordRoll(
     visibility = "everyone",
     label = null,
     outcome = null,
+    meta = {},
   }: RecordOptions = {},
 ): string {
   const state = demoState();
@@ -182,6 +195,10 @@ export function recordRoll(
     createdAt: new Date().toISOString(),
     revealedAt: null,
     revealedBy: null,
+    actorId: meta.actorId ?? null,
+    rollKind: meta.rollKind ?? null,
+    checkId: meta.checkId ?? null,
+    facets: meta.facets ?? [],
   });
   rolls.splice(0, Math.max(0, rolls.length - KEPT));
   record(EVENT.rollMade, { rollId: id, visibility });
@@ -258,8 +275,7 @@ function entryFor(record: Row, state: DemoState): Row | null {
       revealedAt: record.revealedAt ?? null,
       revealedByName:
         record.revealedBy == null ? null : usernameOf(record.revealedBy),
-      // Spec 084: filled from the roll's meta once the demo shapes rolls.
-      facets: [],
+      facets: facetRows((record.facets as string[] | undefined) ?? []),
     };
   }
   if (visibility === "gm_eyes") {

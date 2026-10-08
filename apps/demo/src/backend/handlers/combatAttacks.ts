@@ -25,6 +25,7 @@ import { DEMO_PLAYER } from "../../seed/world";
 import { abilityFor, actorAbilities, worldAbilities } from "./combatAbilities";
 import { applyHitPointChange } from "./combatHp";
 import { recordRoll } from "./dice";
+import { shapeD20, type Advantage } from "./facets";
 import {
   MANIFEST,
   actorOf,
@@ -56,6 +57,7 @@ const ALREADY_RESOLVED = "That offer has already been resolved";
 const RELINKED_SINCE =
   "That creature was relinked after this offer was made, so its hit points are a different record now. Decline the offer, and change its hit points by hand if the hit should stand.";
 const LAIR_NOT_THERE = "That lair is not in a running encounter";
+const LAIR_NO_ADVANTAGE = "A lair does not roll with advantage.";
 
 /** `queries/attacks.rs`: a page of a scene's attacks. */
 const SCENE_ATTACKS_PAGE = 50;
@@ -429,7 +431,15 @@ async function makeAttack({ input }: Args): Promise<Row[]> {
     const refusal = refusalOf(r, turnCheck(r, state, attacker.token));
     if (refusal) throw new GraphQLError(refusal);
   }
-  const formulas = formulasOf(r, ability);
+  const declared = formulasOf(r, ability);
+  // Spec 084: `record_attack` shapes the to-hit for advantage; a lair never
+  // rolls with it.
+  const advantage = (input.advantage as Advantage | undefined) ?? "NORMAL";
+  if (attacker.lair && advantage !== "NORMAL") {
+    throw new GraphQLError(LAIR_NO_ADVANTAGE);
+  }
+  const toHit = shapeD20(declared.toHit, advantage);
+  const formulas = { ...declared, toHit: toHit.formula };
   const target = targetOf(input, 0);
   const targetToken = target ? tokenById(state, target) : undefined;
   if (target && targetToken?.sceneId !== attacker.sceneId) {
@@ -477,9 +487,16 @@ async function makeAttack({ input }: Args): Promise<Row[]> {
   roller.free();
   // `roll_and_record`: each roll is in the table's history and on every
   // board, in the open, named for what it was (spec 081 FR-012).
-  recordRoll(part.toHit, { label: ability.name as string });
+  const actorId = (attacker.token?.actorId as string | undefined) ?? null;
+  recordRoll(part.toHit, {
+    label: ability.name as string,
+    meta: { actorId, rollKind: "to_hit", facets: toHit.facets },
+  });
   if (part.damage) {
-    recordRoll(part.damage, { label: `${ability.name as string} damage` });
+    recordRoll(part.damage, {
+      label: `${ability.name as string} damage`,
+      meta: { actorId, rollKind: "damage", facets: [] },
+    });
   }
   const attack: Row = {
     id: crypto.randomUUID(),

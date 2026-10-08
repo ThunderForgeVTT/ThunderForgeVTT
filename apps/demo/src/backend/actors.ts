@@ -18,6 +18,7 @@ import { DEMO_PLAYER, DEMO_USER } from "../seed/world";
 import { now } from "./events";
 import { loreLinkingToActor } from "./handlers/lore";
 import { resolveAndRecord } from "./handlers/dice";
+import { shapeD20, type Advantage } from "./handlers/facets";
 import { demoState, markChanged, type DemoState, type Row } from "./state";
 
 type Args = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -259,9 +260,21 @@ export function rollCheck(args: Args): Promise<Row> {
     throw new GraphQLError(`Unknown check ${args.checkId}`);
   }
   const modifier = modifierFor(systemDataOf(state, args.actorId), args.checkId);
+  // Spec 084: shaped for advantage after the bindings, as `roll_check_impl`
+  // calls `shape_roll`.
+  const shaped = shapeD20(
+    "1d20 + MODIFIER",
+    (args.advantage as Advantage | undefined) ?? "NORMAL",
+  );
   // The pack's formula, its placeholder filled in by the dice: the record
   // keeps the binding, as the server's does (spec 083).
-  return resolveAndRecord("1d20 + MODIFIER", { MODIFIER: modifier }, null, {
+  return resolveAndRecord(shaped.formula, { MODIFIER: modifier }, null, {
     label: check.label,
+    meta: {
+      actorId: args.actorId as string,
+      rollKind: "check",
+      checkId: check.id,
+      facets: shaped.facets,
+    },
   });
 }

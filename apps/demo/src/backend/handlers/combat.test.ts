@@ -210,6 +210,56 @@ describe("a fight in the demo", () => {
     expect((sceneAttacks as Row[])[0].id).toBe(attack.id);
   });
 
+  it("rolls a to-hit with disadvantage and judges it on the die kept", async () => {
+    // Spec 084 (FR-019): as `record_attack` shapes the to-hit. A reaction,
+    // so the turn the previous test spent is not in the way.
+    const brannoc = tokenNamed("Brannoc Stoneward");
+    const goblin = tokenNamed("Goblin 1");
+    const { actorAbilities } = await ask(
+      `query($a: UUID!) { actorAbilities(actorId: $a) { abilityId } }`,
+      { a: actorId("fighter") },
+    );
+    const sword = (actorAbilities as Row[])[0];
+    const before = demoState().rolls?.length ?? 0;
+    const { makeAttack } = await ask(
+      `mutation($i: AttackInput!) { makeAttack(input: $i) {
+         outcome defence toHit { formula resultValue dice { numericSides kept finalValue } } } }`,
+      {
+        i: {
+          attackerTokenId: brannoc.tokenId,
+          abilityId: sword.abilityId,
+          targetTokenId: goblin.tokenId,
+          actionCost: "REACTION",
+          advantage: "DISADVANTAGE",
+        },
+      },
+    );
+    const [attack] = makeAttack as Row[];
+    const toHit = attack.toHit as Row;
+    expect(toHit.formula).toContain("2d20kl1");
+    const d20s = (toHit.dice as Row[]).filter((d) => d.numericSides === 20);
+    expect(d20s).toHaveLength(2);
+    const kept = d20s.find((d) => d.kept)!;
+    expect(kept.finalValue).toBe(
+      Math.min(...d20s.map((d) => d.finalValue as number)),
+    );
+    const total = toHit.resultValue as number;
+    const natural = kept.finalValue as number;
+    if (natural !== 1 && natural !== 20) {
+      expect(attack.outcome).toBe(
+        total >= (attack.defence as number) ? "HIT" : "MISS",
+      );
+    }
+    const records = demoState().rolls!.slice(before);
+    expect(records[0]).toMatchObject({
+      rollKind: "to_hit",
+      facets: ["disadvantage"],
+    });
+    for (const damage of records.slice(1)) {
+      expect(damage).toMatchObject({ rollKind: "damage", facets: [] });
+    }
+  });
+
   it("puts a creature at 0 hit points out of the order", async () => {
     const goblin = tokenNamed("Goblin 2");
     const { changeHitPoints } = await ask(
