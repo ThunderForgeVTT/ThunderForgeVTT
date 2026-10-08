@@ -299,3 +299,85 @@ fn a_creatures_luck_points_come_from_its_challenge() {
         Err("Pip has no Luck Points left.".to_string())
     );
 }
+
+// ---------------------------------------------------------------------------
+// Spec 084 US6: Great Weapon Fighting treats a 1 or 2 on a damage die as a 3.
+// ---------------------------------------------------------------------------
+
+fn damage<'a>(
+    formula: &'a str,
+    sheet: &'a Value,
+    melee: bool,
+    properties: &'a [String],
+) -> ShapeInput<'a> {
+    ShapeInput {
+        kind: RollKind::Damage,
+        formula,
+        trait_data: sheet,
+        advantage: Advantage::Normal,
+        melee,
+        item_properties: properties,
+    }
+}
+
+fn two_handed() -> Vec<String> {
+    vec!["heavy".to_string(), "two_handed".to_string()]
+}
+
+#[test]
+fn great_weapon_fighting_raises_a_two_handed_melee_weapons_low_dice() {
+    let sheet = json!({ "facets": ["great_weapon_fighting"] });
+    let properties = two_handed();
+    assert_eq!(
+        shape(&damage("2d6 + STR", &sheet, true, &properties)),
+        Ok(shaped("2d6min3 + STR", &["great_weapon_fighting"]))
+    );
+}
+
+#[test]
+fn great_weapon_fighting_needs_melee_a_two_handed_weapon_and_the_style() {
+    let sheet = json!({ "facets": ["great_weapon_fighting"] });
+    let properties = two_handed();
+    let one_handed = vec!["versatile".to_string()];
+    // Thrown or shot at range.
+    assert_eq!(
+        shape(&damage("2d6 + STR", &sheet, false, &properties)),
+        Ok(None)
+    );
+    // Not two-handed.
+    assert_eq!(
+        shape(&damage("1d8 + STR", &sheet, true, &one_handed)),
+        Ok(None)
+    );
+    // Without the fighting style.
+    let plain = json!({ "facets": [] });
+    assert_eq!(
+        shape(&damage("2d6 + STR", &plain, true, &properties)),
+        Ok(None)
+    );
+}
+
+#[test]
+fn great_weapon_fighting_raises_every_damage_die() {
+    let sheet = json!({ "facets": ["great_weapon_fighting"] });
+    let properties = two_handed();
+    assert_eq!(
+        shape(&damage("2d6 + 1d8", &sheet, true, &properties)),
+        Ok(shaped("2d6min3 + 1d8min3", &["great_weapon_fighting"]))
+    );
+}
+
+#[test]
+fn great_weapon_fighting_leaves_a_d20_test_alone() {
+    let sheet = json!({ "facets": ["great_weapon_fighting"] });
+    let properties = two_handed();
+    let roll = ShapeInput {
+        kind: RollKind::ToHit,
+        formula: "1d20 + STR",
+        trait_data: &sheet,
+        advantage: Advantage::Normal,
+        melee: true,
+        item_properties: &properties,
+    };
+    assert_eq!(shape(&roll), Ok(None));
+}

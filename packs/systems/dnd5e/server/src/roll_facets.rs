@@ -86,8 +86,36 @@ pub fn shape(input: &ShapeInput<'_>) -> Result<Option<Shaped>, String> {
         RollKind::Damage if input.advantage != Advantage::Normal => {
             Err(NO_DAMAGE_ADVANTAGE.to_string())
         }
-        RollKind::Damage => Ok(None),
+        RollKind::Damage => shape_damage(input),
     }
+}
+
+/// Great Weapon Fighting: a two-handed weapon's damage, in melee, treats a
+/// 1 or 2 on each die as a 3 (research R6). Thrown or at range, it does not.
+fn shape_damage(input: &ShapeInput<'_>) -> Result<Option<Shaped>, String> {
+    let two_handed = input.item_properties.iter().any(|p| p == "two_handed");
+    if !input.melee || !two_handed || !has_facet(input.trait_data, "great_weapon_fighting") {
+        return Ok(None);
+    }
+    let mut raised = false;
+    let formula = rewrite_dice_terms(input.formula, |term| {
+        if term.sides.is_none() || term.clamps {
+            return None;
+        }
+        raised = true;
+        Some(TermEdit {
+            count: None,
+            add: vec![AddModifier::Min(3)],
+        })
+    })
+    .map_err(|error| error.to_string())?;
+    if !raised {
+        return Ok(None);
+    }
+    Ok(Some(Shaped {
+        formula,
+        facets: vec!["great_weapon_fighting".to_string()],
+    }))
 }
 
 /// The first d20 term that keeps nothing takes the choice, and Halfling Luck
