@@ -17,6 +17,7 @@
     "demo-tokens": "pnpm run maps && node scripts/demo-tokens-check.mjs"
   },
   "dependencies": {
+    "@thunderforge/dice": "workspace:^",
     "@thunderforge/engine": "workspace:^"
   },
   "devDependencies": {

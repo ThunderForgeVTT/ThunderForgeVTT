@@ -21,6 +21,7 @@
  */
 
 import { FrameSampler, type FrameStats } from "./frameStats";
+import { wireDice } from "./dice";
 import { RAMP_AXES, reset as resetStress, SCENARIOS } from "./stress";
 import init, {
   apply_world_command,
@@ -198,6 +199,9 @@ async function boot(): Promise<void> {
       sizeInput.value = String(gridSize);
       sizeValue.textContent = String(gridSize);
       pushGrid();
+
+  // --- Dice ---------------------------------------------------------------
+  void wireDice(send, log).catch((error) => log(`dice: ${error}`));
       log(`set_scene_background → ${map.image} (${map.widthPx}×${map.heightPx}) @ ${map.pixelsPerGrid}px/cell`);
     });
     container.append(button);

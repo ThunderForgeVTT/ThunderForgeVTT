@@ -75,6 +75,9 @@ importers:
 
   apps/engine-sandbox:
     dependencies:
+      '@thunderforge/dice':
+        specifier: workspace:^
+        version: link:../../dist/dice
       '@thunderforge/engine':
         specifier: workspace:^
         version: link:../../dist/engine

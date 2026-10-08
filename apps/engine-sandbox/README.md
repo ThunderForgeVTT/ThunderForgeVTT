@@ -68,6 +68,20 @@ Rust:
 node -e "import('./scripts/shared.mjs').then(m => m.buildEngine())"
 ```
 
+## Dice
+
+The **Dice** panel throws a roll on the board (spec 083). Type a formula and
+press **Roll**: the sandbox rolls it with the dice crate itself
+(`@thunderforge/dice`), and sends the result through `apply_world_command`
+as `trigger_dice_roll`, in the same shape the app sends (`src/dice.ts`). The
+faces and the total are the crate's, so this is the place to tune how a
+throw looks: the solids, the tumble, the readout, rerolls (`1d6r<7`),
+explosions (`1d6xo>0`), clamps (`1d20min21`), dropped dice (`2d20kh1`) and
+the `+N more` chip (`40d6`).
+
+**reduced motion** sends `set_reduced_motion`, as the app does from the OS
+setting: the dice appear landed after a short fade.
+
 ## Attach modes
 
 The app passes `#game-canvas-container` — the id of a **`<div>`**. winit's
