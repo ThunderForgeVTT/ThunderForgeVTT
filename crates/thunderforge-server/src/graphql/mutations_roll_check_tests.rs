@@ -808,3 +808,97 @@ fn only_a_system_with_facets_rolls_with_advantage() {
     .sdl();
     assert!(sdl.contains("rollsWithAdvantage(worldId: UUID!): Boolean!"));
 }
+
+// ---------------------------------------------------------------------------
+// Spec 084 US2: Halfling Luck rerolls a natural 1 on the server.
+// ---------------------------------------------------------------------------
+
+/// The first `StepRng` seed whose first d20 lands on a 1, found by rolling,
+/// so the test never guesses at how the dice crate draws.
+fn seed_rolling_a_one() -> u64 {
+    let d20 = thunderforge_dice::DiceFormula::parse("1d20").unwrap();
+    (0..10_000)
+        .find(|seed| {
+            let rolled =
+                thunderforge_dice::resolve(&d20, &Default::default(), &mut StepRng(*seed)).unwrap();
+            rolled.dice[0].rolls[0] == 1
+        })
+        .expect("some seed rolls a 1")
+}
+
+fn set_traits(state: &AppState, actor_id: Uuid, traits: serde_json::Value) {
+    let mut conn = state.db_pool.get().unwrap();
+    diesel::update(
+        world_actor_system_data::table.filter(world_actor_system_data::actor_id.eq(actor_id)),
+    )
+    .set(world_actor_system_data::trait_data.eq(Some(traits)))
+    .execute(&mut conn)
+    .unwrap();
+}
+
+async fn roll_seeded(
+    state: &AppState,
+    owner_id: Uuid,
+    world_id: Uuid,
+    actor_id: Uuid,
+) -> GraphQLRollResolution {
+    roll_check_impl(
+        state,
+        owner_id,
+        false,
+        world_id,
+        actor_id,
+        "stealth".to_string(),
+        Advantage::Normal,
+        &mut StepRng(seed_rolling_a_one()),
+    )
+    .await
+    .expect("the check rolls")
+}
+
+#[tokio::test]
+async fn a_halflings_natural_one_is_rerolled_and_the_new_roll_counts() {
+    let state = state_with_real_packs();
+    let (owner_id, world_id, actor_id) = world_with_actor(&state, "dnd5e");
+    set_traits(
+        &state,
+        actor_id,
+        serde_json::json!({ "level": 5, "facets": ["halfling_luck"] }),
+    );
+
+    let resolution = roll_seeded(&state, owner_id, world_id, actor_id).await;
+    assert_eq!(resolution.dice.len(), 1);
+    let die = &resolution.dice[0];
+    assert_eq!(
+        die.rolls.len(),
+        2,
+        "the 1 was rolled again: {:?}",
+        die.rolls
+    );
+    assert_eq!(die.rolls[0], 1);
+    assert_eq!(
+        die.final_value, die.rolls[1],
+        "the new roll is the one used"
+    );
+    // Dexterity 16 is +3, and proficiency at level 5 is +3.
+    assert_eq!(resolution.result_value, f64::from(die.rolls[1] + 6));
+
+    let row = only_roll(&state, world_id);
+    assert_eq!(row.formula, "1d20r1 + MODIFIER");
+    assert_eq!(row.facet_ids(), vec!["halfling_luck".to_string()]);
+}
+
+#[tokio::test]
+async fn a_character_without_halfling_luck_keeps_its_one() {
+    let state = state_with_real_packs();
+    let (owner_id, world_id, actor_id) = world_with_actor(&state, "dnd5e");
+
+    let resolution = roll_seeded(&state, owner_id, world_id, actor_id).await;
+    assert_eq!(resolution.dice[0].rolls, vec![1]);
+    assert_eq!(resolution.dice[0].final_value, 1);
+    assert_eq!(resolution.result_value, 7.0);
+
+    let row = only_roll(&state, world_id);
+    assert_eq!(row.formula, "1d20 + MODIFIER");
+    assert!(row.facet_ids().is_empty());
+}

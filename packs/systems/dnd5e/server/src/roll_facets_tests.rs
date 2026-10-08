@@ -97,3 +97,47 @@ fn damage_never_takes_advantage() {
     let roll = input(RollKind::Damage, "1d20", &sheet, Advantage::Advantage);
     assert!(shape(&roll).is_err());
 }
+
+#[test]
+fn halfling_luck_rerolls_a_natural_one_on_a_d20_test() {
+    let halfling = json!({ "facets": ["halfling_luck"] });
+    for kind in [RollKind::Check, RollKind::ToHit] {
+        let roll = input(kind, "1d20 + MODIFIER", &halfling, Advantage::Normal);
+        assert_eq!(
+            shape(&roll),
+            Ok(shaped("1d20r1 + MODIFIER", &["halfling_luck"]))
+        );
+    }
+    let roll = input(
+        RollKind::Check,
+        "1d20 + MODIFIER",
+        &halfling,
+        Advantage::Advantage,
+    );
+    assert_eq!(
+        shape(&roll),
+        Ok(shaped(
+            "2d20r1kh1 + MODIFIER",
+            &["advantage", "halfling_luck"]
+        ))
+    );
+}
+
+#[test]
+fn halfling_luck_never_touches_damage() {
+    let halfling = json!({ "facets": ["halfling_luck"] });
+    let roll = input(RollKind::Damage, "1d20 + 2", &halfling, Advantage::Normal);
+    assert_eq!(shape(&roll), Ok(None));
+}
+
+#[test]
+fn a_sheet_without_halfling_luck_keeps_its_ones() {
+    let other = json!({ "facets": ["lucky"] });
+    let roll = input(
+        RollKind::Check,
+        "1d20 + MODIFIER",
+        &other,
+        Advantage::Normal,
+    );
+    assert_eq!(shape(&roll), Ok(None));
+}

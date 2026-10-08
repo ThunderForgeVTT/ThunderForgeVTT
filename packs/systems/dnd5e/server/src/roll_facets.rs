@@ -87,14 +87,16 @@ pub fn shape(input: &ShapeInput<'_>) -> Result<Option<Shaped>, String> {
     }
 }
 
-/// The first d20 term that keeps nothing takes the choice.
+/// The first d20 term that keeps nothing takes the choice, and Halfling Luck
+/// rerolls its natural ones once.
 fn shape_d20(input: &ShapeInput<'_>) -> Result<Option<Shaped>, String> {
     let keep = match input.advantage {
         Advantage::Normal => None,
         Advantage::Advantage => Some(("advantage", AddModifier::KeepHighest(1))),
         Advantage::Disadvantage => Some(("disadvantage", AddModifier::KeepLowest(1))),
     };
-    if keep.is_none() {
+    let lucky = has_facet(input.trait_data, "halfling_luck");
+    if keep.is_none() && !lucky {
         return Ok(None);
     }
     let mut facets = Vec::new();
@@ -110,11 +112,22 @@ fn shape_d20(input: &ShapeInput<'_>) -> Result<Option<Shaped>, String> {
             edit.add.push(modifier);
             facets.push(id.to_string());
         }
+        if lucky && !term.rerolls {
+            edit.add.push(AddModifier::RerollOnceEq(1));
+            facets.push("halfling_luck".to_string());
+        }
         Some(edit)
     })
     .map_err(|error| error.to_string())?;
     if !found {
-        return Err(NO_D20.to_string());
+        // A halfling's roll with no plain d20 is simply rolled as written.
+        return match keep {
+            Some(_) => Err(NO_D20.to_string()),
+            None => Ok(None),
+        };
+    }
+    if facets.is_empty() {
+        return Ok(None);
     }
     Ok(Some(Shaped { formula, facets }))
 }

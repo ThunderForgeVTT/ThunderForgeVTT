@@ -188,12 +188,12 @@ nothing visible changed.
   - it refuses an unknown id and a duplicate;
   - `luck_points_used` accepts 0 and above, and refuses a negative or a fraction.
 - [x] T027 [US2] `packs/systems/dnd5e/server/src/validators.rs` `validate_trait_data` (`:502`) checks both fields. Declare them in `packs/systems/dnd5e/system.json` `data_types.trait_data` (data-model.md).
-- [ ] T028 [P] [US2] Tests in `roll_facets_tests.rs`:
+- [x] T028 [P] [US2] Tests in `roll_facets_tests.rs`:
   - `halfling_luck` gives `1d20r1 + MODIFIER`, and `2d20r1kh1 + MODIFIER` with Advantage;
   - damage gets no `r1`;
   - a sheet without the facet is untouched.
-- [ ] T029 [US2] `roll_facets.rs` `shape`: add `r1` for `halfling_luck` on d20 tests.
-- [ ] T030 [US2] Server tests in `mutations_roll_check_tests.rs`: a halfling's check under a seeded rng whose first d20 is a 1 records `rolls [1, n]`, a total using `n` and `facets {halfling_luck}`. A plain character keeps the 1.
+- [x] T029 [US2] `roll_facets.rs` `shape`: add `r1` for `halfling_luck` on d20 tests.
+- [x] T030 [US2] Server tests in `mutations_roll_check_tests.rs`: a halfling's check under a seeded rng whose first d20 is a 1 records `rolls [1, n]`, a total using `n` and `facets {halfling_luck}`. A plain character keeps the 1.
 - [ ] T031 [US2] The sheet: `packs/systems/dnd5e/web/src/components/RollFacetsSection.tsx`, mounted from `ActorSheet.tsx` beside Heroic Inspiration (`:212`):
   - three checkboxes (`data-testid="roll-facet-<id>"`) written through `writeTraits`, for whoever may edit;
   - when Lucky is ticked, the Luck Points left (proficiency bonus minus `luck_points_used`, computed in `derived-data.ts`) and a **Reset** button that writes `luck_points_used: 0`.
