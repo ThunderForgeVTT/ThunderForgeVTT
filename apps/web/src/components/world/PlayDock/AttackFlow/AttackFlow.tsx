@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { makeAttack, previewAttack } from "@/api/attacks";
+import { getRollsWithAdvantage } from "@/api/systemChecks";
 import { Button } from "@/components/ui/button/Button";
 import { queueEdit, shouldQueue } from "@/engine/world/sync/offlineQueue";
 import type {
@@ -11,6 +12,8 @@ import type {
 import type { TokenRecord } from "@/types/token";
 import { attackSummary, warningTexts } from "../AttackLog/attackText";
 import { useSelectedTokenIds } from "../useSelectedTokenIds";
+import { AdvantagePicker } from "@/components/world/RollAdvantage/AdvantagePicker";
+import type { Advantage } from "@/types/roll";
 
 /** The value of the "no target" choice. */
 const NO_TARGET = "";
@@ -113,6 +116,25 @@ export function AttackFlow({
   const [result, setResult] = useState<AttackRecord[] | null>(null);
   const [queued, setQueued] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Spec 084 FR-018: a creature's to-hit may be rolled with advantage where
+  // the system says so. A lair never does, and a queued attack is rolled
+  // plainly when it lands, so neither is offered the choice.
+  const [advantage, setAdvantage] = useState<Advantage>("NORMAL");
+  const [rollsWithAdvantage, setRollsWithAdvantage] = useState(false);
+  useEffect(() => {
+    let active = true;
+    if (lairCombatantId || shouldQueue()) return;
+    getRollsWithAdvantage(worldId)
+      .then((answer) => {
+        if (active) setRollsWithAdvantage(answer);
+      })
+      .catch(() => {
+        if (active) setRollsWithAdvantage(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [worldId, lairCombatantId]);
 
   const input: AttackInput = useMemo(
     () => ({
@@ -183,7 +205,9 @@ export function AttackFlow({
       }
       // Spec 081 (FR-013): each to-hit roll is a world event, and the board
       // animates it from there.
-      const made = await makeAttack(input);
+      const chosen = advantage;
+      setAdvantage("NORMAL");
+      const made = await makeAttack({ ...input, advantage: chosen });
       setResult(made);
     } catch (err) {
       setError(err instanceof Error ? err.message : "The attack failed");
@@ -277,6 +301,9 @@ export function AttackFlow({
         </div>
       ) : null}
 
+      {rollsWithAdvantage ? (
+        <AdvantagePicker value={advantage} onChange={setAdvantage} />
+      ) : null}
       <div className="flex gap-2">
         <Button
           type="button"

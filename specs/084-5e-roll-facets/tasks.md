@@ -147,11 +147,12 @@ nothing visible changed.
 ### Web
 
 - [x] T020 [P] [US1] `apps/web/src/components/world/RollAdvantage/AdvantagePicker.tsx`, with a vitest test: a three-way segmented control with `data-testid="roll-advantage-picker"`. It offers Normal, Advantage and Disadvantage, and has an accessible name.
-- [ ] T021 [US1] Wire the picker up:
+- [x] T021 [US1] Wire the picker up:
   - `apps/web/src/api/systemChecks.ts` `rollCheck` and `apps/web/src/api/attacks.ts` `makeAttack` take `advantage`;
   - `apps/web/src/components/world/PlayDock/CharacterRollButtons.tsx` renders the picker, but only when the world's system declares facets. Expose `rollsWithAdvantage: Boolean!` on the system checks query, true when a `roll_facets` slot is registered, and read it there.
   - The choice is passed to every check and attack, and goes back to Normal after each one is sent (FR-018).
   - `apps/web/src/pages/world/actor/ActorRollsPanel.tsx` gets the same, through `CharacterRollButtons`.
+  - *As built*: `CharacterRollButtons` sends free `rollDice` formulas and hands attacks to the attack flow, so it rolls no server check. The picker is in the two places a d20 test reaches the server, which are the ones FR-018 names: `SystemChecksPanel` (the sheet page's checks, via `rollCheck`) and `AttackFlow` (via `makeAttack`). `rollsWithAdvantage(worldId)` is a root query beside `systemChecks`. A lair or a queued attack is not offered the choice.
 - [ ] T022 [US1] `apps/web/src/components/world/PlayDock/RollEntry.tsx`: tags from `facets` (`data-testid="roll-facet"`). `apps/web/src/hooks/useWorldRolls.ts` and `apps/web/src/api/roll.ts` fetch `facets { id label }`. Test the tags in `RollEntry`'s vitest file.
 
 ### Demo

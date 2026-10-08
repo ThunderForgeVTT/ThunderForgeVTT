@@ -8,6 +8,8 @@ import {
 import { GraphQLRequestError } from "@/api/graphqlClient";
 import { Button } from "@/components/ui/button/Button";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
+import { AdvantagePicker } from "@/components/world/RollAdvantage/AdvantagePicker";
+import type { Advantage } from "@/types/roll";
 
 /**
  * Spec 036 US3b (FR-036, FR-037): rolling a check from a character sheet.
@@ -58,6 +60,10 @@ export function SystemChecksPanel({
   actorId: string;
 }) {
   const [checks, setChecks] = useState<SystemCheck[] | null>(null);
+  // Spec 084 FR-018: offered only where the system takes the choice, and
+  // back to Normal once a check is sent.
+  const [rollsWithAdvantage, setRollsWithAdvantage] = useState(false);
+  const [advantage, setAdvantage] = useState<Advantage>("NORMAL");
   const [rolling, setRolling] = useState<string | null>(null);
   const [last, setLast] = useState<{
     label: string;
@@ -67,7 +73,10 @@ export function SystemChecksPanel({
 
   const load = useCallback(() => {
     getSystemChecks(worldId)
-      .then(setChecks)
+      .then((answer) => {
+        setChecks(answer.checks);
+        setRollsWithAdvantage(answer.rollsWithAdvantage);
+      })
       // A world whose checks could not be read shows no buttons rather than
       // broken ones. The sheet's subject is the character, and failing to
       // offer a roll must not take the numbers down with it.
@@ -79,11 +88,14 @@ export function SystemChecksPanel({
   const roll = async (check: SystemCheck) => {
     setRolling(check.id);
     setError(null);
+    const chosen = advantage;
+    setAdvantage("NORMAL");
     try {
       const resolution = await rollCheck({
         worldId,
         actorId,
         checkId: check.id,
+        advantage: chosen,
       });
       setLast({ label: check.label, resolution });
     } catch (caught) {
@@ -124,6 +136,14 @@ export function SystemChecksPanel({
   return (
     <section className="grid gap-3" data-testid="system-checks">
       <h3 className="font-semibold">Checks</h3>
+
+      {rollsWithAdvantage ? (
+        <AdvantagePicker
+          value={advantage}
+          onChange={setAdvantage}
+          disabled={rolling !== null}
+        />
+      ) : null}
 
       {[...groups.entries()].map(([group, entries]) => (
         <div key={group || "ungrouped"} className="grid gap-1.5">

@@ -1,5 +1,6 @@
-/** Spec 084: how a d20 test is rolled. Matches the GraphQL `Advantage` enum. */
-export type Advantage = "NORMAL" | "ADVANTAGE" | "DISADVANTAGE";
+import type { Advantage } from "@/types/roll";
+
+export type { Advantage };
 
 export const ADVANTAGE_CHOICES: readonly Advantage[] = [
   "NORMAL",

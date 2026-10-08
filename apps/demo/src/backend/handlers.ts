@@ -308,6 +308,8 @@ export const queries: Record<string, Handler> = {
   worldAbilities: () => [],
   worldSystemConditions: () => CONDITIONS,
   systemChecks: () => CHECKS,
+  // Spec 084: the demo is a 5e world, and 5e registers roll facets.
+  rollsWithAdvantage: () => true,
   worldCollections: () => [],
   // `world_chat_messages_impl`: the newest `limit`, in reading order, and
   // never a GM-only message to a player.

@@ -89,3 +89,6 @@ export interface MaskedRollRecord {
 }
 
 export type WorldRollEntry = WorldRollRecord | MaskedRollRecord;
+
+/** Spec 084: how a d20 test is rolled. Matches the GraphQL `Advantage` enum. */
+export type Advantage = "NORMAL" | "ADVANTAGE" | "DISADVANTAGE";

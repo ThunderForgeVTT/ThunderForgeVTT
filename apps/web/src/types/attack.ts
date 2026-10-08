@@ -6,7 +6,7 @@
 // has nothing to recover it from.
 
 import type { HitPointChange } from "@/types/combat";
-import type { RollResolutionRecord } from "@/types/roll";
+import type { Advantage, RollResolutionRecord } from "@/types/roll";
 
 export type ActionCost =
   | "ACTION"
@@ -97,6 +97,8 @@ export interface AttackInput {
   targetTokenId?: string | null;
   targets?: string[] | null;
   actionCost?: ActionCost | null;
+  /** Spec 084: how the to-hit d20 is rolled; Normal when left out. */
+  advantage?: Advantage | null;
 }
 
 /** What an ability or item is as an attack (research R2). */

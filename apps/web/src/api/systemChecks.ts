@@ -1,4 +1,5 @@
 import { postGraphQL } from "@/api/graphqlClient";
+import type { Advantage } from "@/types/roll";
 
 /**
  * Spec 036 US3b: what this world's system says a character can be asked to
@@ -40,23 +41,62 @@ export interface CheckResolution {
   dice: { finalValue: number; kept: boolean }[];
 }
 
+/**
+ * The checks, and whether this system takes Normal, Advantage or
+ * Disadvantage on them (spec 084 FR-018) — asked together because the sheet
+ * draws both at once.
+ */
+export interface SystemChecks {
+  checks: SystemCheck[];
+  rollsWithAdvantage: boolean;
+}
+
 const CHECKS_QUERY = `
   query SystemChecks($worldId: UUID!) {
     systemChecks(worldId: $worldId) { id label group }
+    rollsWithAdvantage(worldId: $worldId)
   }
 `;
 
-export async function getSystemChecks(worldId: string): Promise<SystemCheck[]> {
-  const data = await postGraphQL<{ systemChecks: SystemCheck[] }>(
-    CHECKS_QUERY,
+export async function getSystemChecks(worldId: string): Promise<SystemChecks> {
+  const data = await postGraphQL<{
+    systemChecks: SystemCheck[];
+    rollsWithAdvantage: boolean;
+  }>(CHECKS_QUERY, { worldId });
+  return {
+    checks: data.systemChecks,
+    rollsWithAdvantage: data.rollsWithAdvantage,
+  };
+}
+
+const ROLLS_WITH_ADVANTAGE = `
+  query RollsWithAdvantage($worldId: UUID!) {
+    rollsWithAdvantage(worldId: $worldId)
+  }
+`;
+
+/** Spec 084: whether the attack flow offers the advantage picker. */
+export async function getRollsWithAdvantage(worldId: string): Promise<boolean> {
+  const data = await postGraphQL<{ rollsWithAdvantage: boolean }>(
+    ROLLS_WITH_ADVANTAGE,
     { worldId },
   );
-  return data.systemChecks;
+  return data.rollsWithAdvantage;
 }
 
 const ROLL_CHECK = `
-  mutation RollCheck($worldId: UUID!, $actorId: UUID!, $checkId: String!) {
-    rollCheck(worldId: $worldId, actorId: $actorId, checkId: $checkId) {
+  mutation RollCheck(
+    $worldId: UUID!
+    $actorId: UUID!
+    $checkId: String!
+    $advantage: Advantage
+  ) {
+    rollCheck(
+      worldId: $worldId
+      actorId: $actorId
+      checkId: $checkId
+      advantage: $advantage
+    ) {
       formula
       resultKind
       resultValue
@@ -69,11 +109,14 @@ export async function rollCheck(input: {
   worldId: string;
   actorId: string;
   checkId: string;
+  /** Spec 084: how the check's d20 is rolled; Normal when left out. */
+  advantage?: Advantage;
 }): Promise<CheckResolution> {
   const data = await postGraphQL<{ rollCheck: CheckResolution }>(ROLL_CHECK, {
     worldId: input.worldId,
     actorId: input.actorId,
     checkId: input.checkId,
+    advantage: input.advantage ?? "NORMAL",
   });
   return data.rollCheck;
 }
