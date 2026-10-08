@@ -204,7 +204,8 @@ nothing visible changed.
 
 - [x] T032 [US2] `RollEntry.tsx`: a die whose `rolls` has more than one value, or whose `finalValue` differs from its last roll, shows the rolled values struck beside the used one (FR-016). Test it in vitest.
 - [x] T033 [P] [US2] Demo: `facets.ts` adds `r1`, and `facets.test.ts` seeds a 1 and asserts the chain.
-- [ ] T034 [US2] In `rolls-facets-advantage.spec.ts`, add a second test: tick Halfling Luck on the player's sheet, roll a check, and assert the formula contains `r1` and the Halfling Luck tag shows in both chats (research R13).
+- [x] T034 [US2] In `rolls-facets-advantage.spec.ts`, add a second test: tick Halfling Luck on the player's sheet, roll a check, and assert the formula contains `r1` and the Halfling Luck tag shows in both chats (research R13).
+  - As built: the GM ticks Halfling Luck on the sheet's `/edit` route, because claiming a character does not grant the player Editor yet. The player rolls from `/view`.
 
 ---
 

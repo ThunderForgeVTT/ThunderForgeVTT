@@ -45,6 +45,28 @@ async function expectShaped(page: Page, label: string, facet: string) {
   return entry;
 }
 
+type Table = Awaited<ReturnType<typeof openTable>>;
+
+/** Pip's hero on the board, claimed, with both chats open. */
+async function seatHero(table: Table) {
+  const [pip] = table.players;
+  const hero = await placeCast(table, {
+    label: "Pip",
+    at: { x: -192, y: 0 },
+    seat: pip,
+  });
+  await setAbilityScores(table, hero.actorId, SCORES);
+  await claimFor(table, pip, hero.actorId);
+  return hero;
+}
+
+async function openChats(table: Table) {
+  for (const client of [table.gm, table.players[0].page]) {
+    await sitDown(table, client);
+    await openChat(client);
+  }
+}
+
 test("a check with Advantage and an attack with Disadvantage reach every chat, tagged", async ({
   page,
   browser,
@@ -61,11 +83,7 @@ test("a check with Advantage and an attack with Disadvantage reach every chat, t
   const [pip] = table.players;
 
   try {
-    const hero = await placeCast(table, {
-      label: "Pip",
-      at: { x: -192, y: 0 },
-      seat: pip,
-    });
+    const hero = await seatHero(table);
     await placeCast(table, {
       label: "Goblin",
       at: { x: 0, y: 0 },
@@ -75,8 +93,6 @@ test("a check with Advantage and an attack with Disadvantage reach every chat, t
         hitPoints: { current: 7, max: 7 },
       },
     });
-    await setAbilityScores(table, hero.actorId, SCORES);
-    await claimFor(table, pip, hero.actorId);
     await grantAbility(table, hero.actorId, {
       name: "Dagger",
       classification: "feat",
@@ -86,10 +102,7 @@ test("a check with Advantage and an attack with Disadvantage reach every chat, t
       ],
     });
 
-    for (const client of [table.gm, pip.page]) {
-      await sitDown(table, client);
-      await openChat(client);
-    }
+    await openChats(table);
 
     // The check, from the sheet page in a second tab.
     const sheetTab = await pip.page.context().newPage();
@@ -150,6 +163,74 @@ test("a check with Advantage and an attack with Disadvantage reach every chat, t
       const entry = await expectShaped(client, "Dagger", "Disadvantage");
       await expect(entry).toContainText("kl1");
     }
+  } finally {
+    await closeTable(table);
+  }
+});
+
+/**
+ * Spec 084 US2 (FR-005): a halfling's sheet has Halfling Luck ticked, and the
+ * server rolls its d20 tests with `r1`. The server's dice take no seed
+ * (research R13), so what is asserted is the formula it rolled and the tag
+ * on the roll in both chats; whether a 1 came up is the unit tests' to prove.
+ */
+test("a halfling's check is rolled with Halfling Luck, and every chat says so", async ({
+  page,
+  browser,
+}, testInfo) => {
+  test.setTimeout(5 * 60_000);
+
+  const table = await openTable({
+    browser,
+    gm: page,
+    testInfo,
+    system: "dnd5e",
+    players: ["Pip"],
+  });
+  const [pip] = table.players;
+
+  try {
+    const hero = await seatHero(table);
+    await openChats(table);
+
+    // The GM ticks it, on the edit route: claiming a character does not yet
+    // make its player an Editor of it, and only an Editor's sheet there has
+    // the checkbox.
+    const sheetUrl = `/world/${table.worldId}/actor/${hero.actorId}`;
+    const gmSheet = await table.gm.context().newPage();
+    await gmSheet.goto(`${sheetUrl}/edit`);
+    const halflingLuck = gmSheet
+      .getByTestId("dnd5e-roll-facets")
+      .getByTestId("roll-facet-halfling_luck");
+    await expect(halflingLuck).not.toBeChecked({ timeout: 30_000 });
+    // The box is controlled: it ticks once the sheet write is confirmed.
+    await halflingLuck.click();
+    await expect(halflingLuck).toBeChecked({ timeout: 15_000 });
+    await expect(halflingLuck).toBeEnabled({ timeout: 15_000 });
+    await gmSheet.close();
+
+    const sheetTab = await pip.page.context().newPage();
+    await sheetTab.goto(`${sheetUrl}/view`);
+    await expect(
+      sheetTab
+        .getByTestId("dnd5e-roll-facets")
+        .getByTestId("roll-facet-halfling_luck"),
+    ).toHaveText("Halfling Luck: yes", { timeout: 30_000 });
+
+    const checks = sheetTab.getByTestId("system-checks");
+    await checks.getByTestId("system-check-dexterity").click();
+    await expect(checks.getByTestId("system-check-result")).toBeVisible({
+      timeout: 15_000,
+    });
+    for (const client of [table.gm, pip.page]) {
+      const entry = rollNamed(client, "Dexterity");
+      await expect(entry).toBeVisible({ timeout: 15_000 });
+      await expect(entry.getByTestId("roll-facet")).toHaveText([
+        "Halfling Luck",
+      ]);
+      await expect(entry).toContainText("1d20r1");
+    }
+    await sheetTab.close();
   } finally {
     await closeTable(table);
   }
