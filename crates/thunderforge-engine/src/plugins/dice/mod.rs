@@ -48,6 +48,11 @@ impl Plugin for DicePlugin {
                     probe::count_entities,
                 )
                     .chain()
+                    // Not at all while no throw is waiting, playing or
+                    // fading. Even idle, these systems cost a 3200-token
+                    // world its first load in the engine-limits sweep
+                    // (2 to 9 fps there against 60 without them).
+                    .run_if(dice_active)
                     // After every camera system in `Update`, and before
                     // transforms and visibility propagate, so the stage
                     // reaches the screen in the same frame as the camera.
@@ -94,6 +99,16 @@ pub struct DiceStage;
 /// On every entity a throw spawns, so `dice_entity_count()` can count them.
 #[derive(Component)]
 pub struct DiceThrowEntity;
+
+/// Whether the dice systems have anything to do this frame: a command in
+/// the inbox, a throw in the queue, or throw entities the probe has not yet
+/// counted down to none.
+fn dice_active(inbox: Res<DiceInbox>, queue: Res<DiceQueue>) -> bool {
+    !inbox.throws.is_empty()
+        || inbox.reduced.is_some()
+        || !queue.0.is_empty()
+        || probe::entity_count() > 0
+}
 
 fn spawn_stage(mut commands: Commands) {
     commands.spawn((
