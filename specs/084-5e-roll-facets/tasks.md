@@ -269,7 +269,7 @@ nothing visible changed.
 
 - [x] T041 [US3] Make `rerollRoll` gated in `crates/thunderforge-server/src/graphql/play_pause_surface_tables.rs`, beside `rollCheck` (`:316`). Run the pause surface tests.
 - [x] T042 [US3] `revealRoll` (`graphql/mutations_roll.rs:249`) reveals the whole chain and emits `ROLL_REVEALED` per roll. Test it in `mutations_roll_tests.rs`: revealing the reroll reveals the original, and the reverse.
-- [ ] T043 [US3] Run `node scripts/check-graphql-contract.mjs --schema --fix` and commit the regenerated schema with this phase.
+- [x] T043 [US3] Run `node scripts/check-graphql-contract.mjs --schema --fix` and commit the regenerated schema with this phase.
 
 ### Web
 

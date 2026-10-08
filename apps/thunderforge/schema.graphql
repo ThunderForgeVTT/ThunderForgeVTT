@@ -934,6 +934,11 @@ type AppMutationRoot {
 	server's, never the sheet's (FR-035).
 	"""
 	rollCheck(worldId: UUID!, actorId: UUID!, checkId: String!, advantage: Advantage = NORMAL): GraphQLRollResolution!
+	"""
+	Spec 084: spend a resource to reroll one of your own d20 tests.
+	Gated by a pause.
+	"""
+	rerollRoll(worldId: UUID!, rollId: UUID!, spend: String!): WorldRoll!
 	claimActor(worldId: UUID!, actorId: UUID!): GraphQLActorClaim!
 	createAndClaimActor(worldId: UUID!, name: String!, description: String): GraphQLActorClaim!
 	setActorAvailability(actorId: UUID!, available: Boolean!): GraphQLWorldActor!
