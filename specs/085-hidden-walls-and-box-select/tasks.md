@@ -185,7 +185,7 @@ that passes them.
   - untick walls in `SelectionFilterMenu`, box again, and the wall is not taken;
   - hide the group's walls from the Select bar;
   - Delete removes the group, on both the GM's board and the server's answer.
-- [ ] T028 [US2] `make lint` passes for host and wasm32, with the two new systems.
+- [x] T028 [US2] `make lint` passes for host and wasm32, with the two new systems.
 
 **Checkpoint**: US1 and US2 green in `pnpm e2e:canvas`.
 
@@ -224,7 +224,7 @@ that passes them.
 
 ## Phase 6: Polish & Proof
 
-- [ ] T034 [P] `docs/guides/doors-and-walls.md`: hiding any wall from the table, and that a hidden wall still blocks and casts a shadow. `docs/guides/lights-and-drawings.md`: selecting several things with a box, shift, the Select bar, and what a player's box takes.
+- [x] T034 [P] `docs/guides/doors-and-walls.md`: hiding any wall from the table, and that a hidden wall still blocks and casts a shadow. `docs/guides/lights-and-drawings.md`: selecting several things with a box, shift, the Select bar, and what a player's box takes.
 - [ ] T035 [P] Demo check: in `pnpm -F @thunderforge/demo dev`, hide a wall and box a group as the GM and as a player (quickstart.md). It should need no `apps/demo` change. If one is needed, add it with a test in `apps/demo/src/backend/` and record why here.
 - [ ] T036 Run the following, each green:
   - `make lint`;

@@ -70,6 +70,36 @@ to the game system, and switch **Shapes** off for them under **Player
 authoring tools**. Their rail drops the tool at once, without a reload, and
 what they already drew stays. Switch it on again to give it back.
 
+## Selecting several things at once
+
+With **Select** armed, press on empty board and drag: a box follows the
+pointer, and what lies wholly inside it when you let go is selected. A press
+on a token, a wall or a drawing drags that thing instead, and a click on
+empty board clears the selection.
+
+- **Shift** while you let go of a box adds what is inside it to the
+  selection, or takes it out if it was already selected. **Shift-click**
+  does the same for one thing.
+- **Drag** any selected item and the whole group moves by the same amount,
+  snapped as the item you hold would be. A wall moves whole, both ends.
+- **Delete** removes everything selected that you are allowed to remove.
+
+While more than one thing is selected, the **Select bar** at the top of the
+board says how many of each kind you hold, and offers **Delete**. For the
+Game Master it also offers **Hidden from the table** when the group holds a
+wall; see [Doors and walls](./doors-and-walls.md#hiding-a-wall-from-the-table).
+
+The Game Master's box takes tokens, walls, lights and drawings, as the
+filter in the **Select** panel allows: untick a kind and the box leaves it
+alone.
+
+A player's box takes only their own tokens that they can currently see, and
+their own drawings. It never takes walls, lights, other people's tokens or
+the Game Master's drawings. When a player drags a group, each token's own
+path is checked against the walls: a token whose path crosses one stays
+where it was, the rest move, and one notice says how many could not be
+moved.
+
 ## When things overlap
 
 One right-click is about one thing. A token comes first, then a light, then a

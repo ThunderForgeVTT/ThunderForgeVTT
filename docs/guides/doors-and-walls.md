@@ -27,6 +27,21 @@ menu.
 
 Locking as a wall shuts an open door first.
 
+## Hiding a wall from the table
+
+Any wall can be hidden, not only a door. Select it with the **Walls** tool
+and tick **Hidden from the table** in its panel. To hide several at once,
+box them in **Select** and tick the same box on the Select bar (see
+[Selecting several things at once](./lights-and-drawings.md#selecting-several-things-at-once)).
+
+A hidden wall is drawn only for you. For the players it is not drawn, but it
+still blocks their sight and their tokens exactly as before. It also still
+casts its shadow: a player whose view it cuts sees where the darkness starts,
+just as with a door locked as a wall.
+
+Making a hidden wall into a door keeps it hidden, so it becomes a secret
+door. Untick **Hidden from the table** to show it again.
+
 ## As a player
 
 Right-click a door to open or close it. A locked door says **Locked**; ask
