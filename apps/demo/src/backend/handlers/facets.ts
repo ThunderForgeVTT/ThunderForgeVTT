@@ -126,8 +126,8 @@ export interface RerollPlan {
 /** The spends the pack knows, in the order it offers them. */
 const REROLLS = ["inspiration", "luck_point"] as const;
 
-/** The kinds a spend may be offered on until the attack reroll (T057). */
-const OFFERED_ON: readonly RollKind[] = ["check"];
+/** The kinds a spend may be offered on: the d20 tests. */
+const OFFERED_ON: readonly RollKind[] = ["check", "to_hit"];
 
 /** `proficiency_of`: from the level, or else the challenge rating. */
 function proficiencyOf(traits: Record<string, unknown>): number {

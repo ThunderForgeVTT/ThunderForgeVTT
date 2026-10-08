@@ -35,6 +35,7 @@ vi.hoisted(() => {
 import { initSync } from "@thunderforge/combat";
 import { runOperation } from "../execute";
 import { demoState, loadState, type Row } from "../state";
+import { loadDiceForTest, seedDice } from "./dice";
 import type { MapListing } from "../../seed/world";
 
 const ROOT = new URL("../../../../../", import.meta.url);
@@ -88,6 +89,7 @@ beforeAll(async () => {
   initSync({
     module: readFileSync(new URL("dist/combat/combat_bg.wasm", ROOT)),
   });
+  loadDiceForTest(readFileSync(new URL("dist/dice/dice_bg.wasm", ROOT)));
   await loadState(fetchStatic, "/demo/");
 });
 
@@ -369,5 +371,114 @@ describe("a fight in the demo", () => {
       { w: demoState().world.id },
     );
     expect(activeCombat).toBeNull();
+  });
+
+  /** The goblins' Armor Class, as the sheet holds it. */
+  function armourClass(ac: number) {
+    const sheet = demoState().systemData.find(
+      (row) => row.actorId === actorId("goblin"),
+    )!;
+    sheet.abilityData = { ...(sheet.abilityData as Row), armor_class: ac };
+  }
+
+  function inspire(key: string): Row {
+    const sheet = demoState().systemData.find(
+      (row) => row.actorId === actorId(key),
+    )!;
+    sheet.traitData = { ...(sheet.traitData as Row), inspiration: true };
+    return sheet;
+  }
+
+  /** Brannoc's longsword at Goblin 2, which cannot land against AC 99. */
+  async function aMiss(): Promise<Row> {
+    armourClass(99);
+    inspire("fighter");
+    const { actorAbilities } = await ask(
+      `query($a: UUID!) { actorAbilities(actorId: $a) { abilityId } }`,
+      { a: actorId("fighter") },
+    );
+    const { makeAttack } = await ask(
+      `mutation($i: AttackInput!) { makeAttack(input: $i) { id outcome defence } }`,
+      {
+        i: {
+          attackerTokenId: tokenNamed("Brannoc Stoneward").tokenId,
+          abilityId: (actorAbilities as Row[])[0].abilityId,
+          targetTokenId: tokenNamed("Goblin 2").tokenId,
+        },
+      },
+    );
+    const [attack] = makeAttack as Row[];
+    expect(attack).toMatchObject({ outcome: "MISS", defence: 99 });
+    return demoState().fight!.attacks.find((a) => a.id === attack.id)!;
+  }
+
+  const REROLL = `mutation($w: UUID!, $r: UUID!) {
+    rerollRoll(worldId: $w, rollId: $r, spend: "inspiration") { id rerollOf } }`;
+  const ATTACKS = `query($s: UUID!) { sceneAttacks(sceneId: $s) {
+    id outcome defence rerollOf damage { resultValue } offer { amount } } }`;
+
+  it("rerolls a missed attack with Inspiration into a hit, judged on the defence it was made against", async () => {
+    // Spec 084 T059: as `reroll_attack`. The miss was made against AC 99;
+    // the row is given the defence 1 that a d20 cannot miss, and the
+    // goblin keeps its 99, so only the row's defence can make it a hit.
+    demoState().viewer = "gm";
+    seedDice([5, 6, 7, 8]);
+    const first = await aMiss();
+    first.defence = 1;
+    const offers = demoState().fight!.offers.length;
+
+    const { rerollRoll } = await ask(REROLL, {
+      w: demoState().world.id,
+      r: first.toHitRollId,
+    });
+    expect((rerollRoll as Row).rerollOf).toBe(first.toHitRollId);
+    const { sceneAttacks } = await ask(ATTACKS, { s: AMBUSH });
+    const shown = (sceneAttacks as Row[]).find((a) => a.rerollOf === first.id)!;
+    expect(shown).toMatchObject({ outcome: "HIT", defence: 1 });
+    expect(shown.damage).not.toBeNull();
+    expect(shown.offer).not.toBeNull();
+    expect(demoState().fight!.offers.length).toBe(offers + 1);
+    const sheet = demoState().systemData.find(
+      (row) => row.actorId === actorId("fighter"),
+    )!;
+    expect((sheet.traitData as Row).inspiration).toBe(false);
+    // The hit's to-hit is never rerolled, whatever is left to spend.
+    const second = demoState().fight!.attacks.find(
+      (a) => a.rerollOf === first.id,
+    )!;
+    inspire("fighter");
+    const hit = await refusal(REROLL, {
+      w: demoState().world.id,
+      r: second.toHitRollId,
+    });
+    expect(hit?.message).toBe("A hit cannot be rerolled.");
+  });
+
+  it("rerolls a miss that misses again: no damage, no offer, Inspiration spent", async () => {
+    demoState().viewer = "gm";
+    seedDice([9, 10, 11, 12]);
+    const first = await aMiss();
+    const offers = demoState().fight!.offers.length;
+    const rolls = demoState().rolls!.length;
+
+    await ask(REROLL, { w: demoState().world.id, r: first.toHitRollId });
+    const second = demoState().fight!.attacks.find(
+      (a) => a.rerollOf === first.id,
+    )!;
+    expect(second.outcome).toBe("MISS");
+    expect(second.damage).toBeNull();
+    expect(demoState().fight!.offers.length).toBe(offers);
+    expect(demoState().rolls!.length).toBe(rolls + 1);
+    const sheet = demoState().systemData.find(
+      (row) => row.actorId === actorId("fighter"),
+    )!;
+    expect((sheet.traitData as Row).inspiration).toBe(false);
+    // A rerolled miss is not rerolled again, and a hit is never offered.
+    const again = await refusal(REROLL, {
+      w: demoState().world.id,
+      r: first.toHitRollId,
+    });
+    expect(again?.message).toBe("This roll has already been rerolled.");
+    armourClass(15);
   });
 });

@@ -58,6 +58,9 @@ const RELINKED_SINCE =
   "That creature was relinked after this offer was made, so its hit points are a different record now. Decline the offer, and change its hit points by hand if the hit should stand.";
 const LAIR_NOT_THERE = "That lair is not in a running encounter";
 const LAIR_NO_ADVANTAGE = "A lair does not roll with advantage.";
+/** `rolls::reroll`'s refusals that an attack's reroll can meet. */
+const NOT_A_D20_TEST = "Only a d20 test can be rerolled.";
+const A_HIT = "A hit cannot be rerolled.";
 
 /** `queries/attacks.rs`: a page of a scene's attacks. */
 const SCENE_ATTACKS_PAGE = 50;
@@ -495,7 +498,7 @@ async function makeAttack({ input }: Args): Promise<Row[]> {
   // `roll_and_record`: each roll is in the table's history and on every
   // board, in the open, named for what it was (spec 081 FR-012).
   const actorId = (attacker.token?.actorId as string | undefined) ?? null;
-  recordRoll(part.toHit, {
+  const toHitRollId = recordRoll(part.toHit, {
     label: ability.name as string,
     meta: { actorId, rollKind: "to_hit", facets: toHit.facets },
   });
@@ -517,6 +520,11 @@ async function makeAttack({ input }: Args): Promise<Row[]> {
     abilityName: ability.name,
     multiattackOf: null,
     rerollOf: null,
+    // What `reroll_attack` needs to judge and settle this attack again.
+    actorId,
+    toHitRollId,
+    damageFormulas: formulas.damage,
+    needsLineOfSight: reach.needsLineOfSight,
     toHit: resolutionRow(part.toHit, part.toHitTotal),
     damage: part.damage
       ? resolutionRow(part.damage, totalOf(part.damage, part.amount ?? 0))
@@ -533,49 +541,151 @@ async function makeAttack({ input }: Args): Promise<Row[]> {
   record(EVENT.attack, { attackId: attack.id });
 
   // A hit on a creature with hit points is an offer of that damage.
-  if (targetToken && part.amount !== null && actorOf(state, targetToken)) {
-    const offer: Row = {
-      id: crypto.randomUUID(),
-      worldId: state.world.id,
-      sceneId: attacker.sceneId,
-      attackId: attack.id,
-      targetTokenId: targetToken.tokenId,
-      targetLinked: targetToken.linked === true,
-      kind: "DAMAGE",
-      amount: part.amount,
-      status: "PENDING",
-      resolvedBy: null,
-      resolvedOnBehalf: false,
-      resolvedAt: null,
-      createdAt: at,
-    };
-    fight.offers.push(offer);
-    const holds = r.autoApplyHolds(
-      effectiveAutoApply,
-      playerControls(state, targetToken),
-      JSON.stringify(flags),
-      reach.needsLineOfSight,
-    );
-    if (holds) {
-      try {
-        applyHitPointChange(
-          r,
-          state,
-          fight,
-          targetToken,
-          "DAMAGE",
-          part.amount,
-        );
-        offer.status = "APPLIED";
-        offer.resolvedAt = at;
-      } catch {
-        // `auto-apply left an offer pending`: the GM decides it by hand.
-      }
-    }
-    record(EVENT.offer, { offerId: offer.id });
+  if (targetToken && part.amount !== null) {
+    settleHit(r, state, fight, attack, targetToken, part.amount, {
+      autoApply: effectiveAutoApply,
+      needsLineOfSight: reach.needsLineOfSight,
+      at,
+    });
   }
   markChanged();
   return [attackRow(state, attack)];
+}
+
+/**
+ * `combat/attack_hit.rs` `settle_hit`: a hit's damage offered to whoever
+ * controls the target, or applied when auto-apply holds, and event 30.
+ */
+function settleHit(
+  r: Rules,
+  state: DemoState,
+  fight: Fight,
+  attack: Row,
+  targetToken: Row,
+  amount: number,
+  hit: { autoApply: boolean; needsLineOfSight: boolean; at: string },
+): void {
+  if (!actorOf(state, targetToken)) return;
+  const offer: Row = {
+    id: crypto.randomUUID(),
+    worldId: state.world.id,
+    sceneId: attack.sceneId,
+    attackId: attack.id,
+    targetTokenId: targetToken.tokenId,
+    targetLinked: targetToken.linked === true,
+    kind: "DAMAGE",
+    amount,
+    status: "PENDING",
+    resolvedBy: null,
+    resolvedOnBehalf: false,
+    resolvedAt: null,
+    createdAt: hit.at,
+  };
+  fight.offers.push(offer);
+  const holds = r.autoApplyHolds(
+    hit.autoApply,
+    playerControls(state, targetToken),
+    JSON.stringify(attack.flags),
+    hit.needsLineOfSight,
+  );
+  if (holds) {
+    try {
+      applyHitPointChange(r, state, fight, targetToken, "DAMAGE", amount);
+      offer.status = "APPLIED";
+      offer.resolvedAt = hit.at;
+    } catch {
+      // `auto-apply left an offer pending`: the GM decides it by hand.
+    }
+  }
+  record(EVENT.offer, { offerId: offer.id });
+}
+
+/** `rolls::reroll::attack_hit`: whether this to-hit's attack landed. */
+export function attackHit(rollId: unknown): boolean {
+  return (demoState().fight?.attacks ?? []).some(
+    (a) => a.toHitRollId === rollId && a.outcome === "HIT",
+  );
+}
+
+/** `thunderforge_combat::attack::judge`. */
+function judge(hasTarget: boolean, defence: number | null, total: number) {
+  if (!hasTarget) return "NO_TARGET";
+  if (defence === null) return "NO_DEFENCE";
+  return total >= defence ? "HIT" : "MISS";
+}
+
+/**
+ * `combat/attack_reroll.rs` `reroll_attack` (spec 084 research R7): the
+ * attack `oldRollId` was the to-hit of, judged again with `newRollId` as its
+ * to-hit, against the defence stored with it. A new row points back at the
+ * miss; a hit rolls its damage and settles it as a first-time hit; nothing
+ * is spent from the budget.
+ */
+export async function rerollAttack(
+  oldRollId: string,
+  newRollId: string,
+  resolution: WasmResolution,
+): Promise<void> {
+  const r = await rules();
+  const state = demoState();
+  const fight = fightOf(state);
+  const first = fight.attacks.find((a) => a.toHitRollId === oldRollId);
+  if (!first) throw new GraphQLError(NOT_A_D20_TEST);
+  if (first.outcome === "HIT") throw new GraphQLError(A_HIT);
+  const total = totalOf(resolution, 0);
+  const outcome = judge(
+    first.targetTokenId != null,
+    (first.defence as number | null) ?? null,
+    total,
+  );
+  const at = now();
+  let damage: { resolution: WasmResolution; value: number } | null = null;
+  const formulas = (first.damageFormulas as string[] | undefined) ?? [];
+  if (outcome === "HIT" && formulas.length > 0) {
+    const source =
+      formulas.length === 1
+        ? formulas[0]
+        : formulas.map((f) => `(${f})`).join("+");
+    const roller = dice(r, fight);
+    damage = call(() => r.roll(roller, source, "{}"));
+    roller.free();
+    recordRoll(damage!.resolution, {
+      label: `${first.abilityName as string} damage`,
+      meta: {
+        actorId: (first.actorId as string | null) ?? null,
+        rollKind: "damage",
+        facets: [],
+      },
+    });
+  }
+  const amount = damage === null ? null : Math.max(0, Math.round(damage.value));
+  const attack: Row = {
+    ...first,
+    id: crypto.randomUUID(),
+    toHitRollId: newRollId,
+    toHit: resolutionRow(resolution, total),
+    damage: damage ? resolutionRow(damage.resolution, damage.value) : null,
+    outcome,
+    rerollOf: first.id,
+    createdAt: at,
+  };
+  fight.attacks.push(attack);
+  record(EVENT.attack, { attackId: attack.id });
+  const targetToken =
+    first.targetTokenId != null
+      ? tokenById(state, first.targetTokenId as string)
+      : undefined;
+  if (targetToken && amount !== null) {
+    const combat = combatOn(fight, first.sceneId);
+    settleHit(r, state, fight, attack, targetToken, amount, {
+      autoApply:
+        (combat?.autoApply as boolean | null | undefined) ??
+        state.world.autoApplyNpcDamage === true,
+      needsLineOfSight: first.needsLineOfSight !== false,
+      at,
+    });
+  }
+  markChanged();
 }
 
 async function previewAttack({ input }: Args): Promise<Row> {

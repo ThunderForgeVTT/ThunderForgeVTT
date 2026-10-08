@@ -22,6 +22,8 @@ import init, {
 } from "@thunderforge/dice";
 import { GraphQLError } from "graphql";
 
+import { attackHit, rerollAttack } from "./combatAttacks";
+import type { WasmResolution } from "./combatRules";
 import { facetRows, rerollOffers, rerollPlan, type RollKind } from "./facets";
 import { DEMO_PLAYER, DEMO_USER } from "../../seed/world";
 import { mayActFor, systemDataOf, viewerIsGm, viewerUser } from "../actors";
@@ -269,6 +271,7 @@ const NO_LONGER_ACTS = "You can no longer act for this character.";
 const NOT_A_D20_TEST = "Only a d20 test can be rerolled.";
 const ALREADY_REROLLED = "This roll has already been rerolled.";
 const TOO_LATE = "It is too late to reroll this roll.";
+const A_HIT = "A hit cannot be rerolled.";
 
 const isD20Test = (record: Row) =>
   record.rollKind === "check" || record.rollKind === "to_hit";
@@ -329,11 +332,13 @@ function mayReroll(record: Row | undefined, state: DemoState): Row {
   if (!actor || !mayActFor(state, actor)) {
     throw new GraphQLError(NO_LONGER_ACTS);
   }
-  // A to_hit roll waits for the attack reroll (spec 084 T057).
-  if (record.rollKind !== "check") throw new GraphQLError(NOT_A_D20_TEST);
+  if (!isD20Test(record)) throw new GraphQLError(NOT_A_D20_TEST);
   if (rerolledBy(record, state)) throw new GraphQLError(ALREADY_REROLLED);
   if (Date.now() >= (rerollUntil(record, state) ?? 0)) {
     throw new GraphQLError(TOO_LATE);
+  }
+  if (record.rollKind === "to_hit" && attackHit(record.id)) {
+    throw new GraphQLError(A_HIT);
   }
   return actor;
 }
@@ -559,6 +564,14 @@ export const diceMutations = {
         rerollSpent: String(spend),
       },
     });
+    // `reroll_attack`: a to-hit's attack is judged again (research R7).
+    if (original.rollKind === "to_hit") {
+      await rerollAttack(
+        original.id as string,
+        id,
+        replayed as unknown as WasmResolution,
+      );
+    }
     return entryFor(state.rolls!.find((r) => r.id === id)!, state);
   },
 };
