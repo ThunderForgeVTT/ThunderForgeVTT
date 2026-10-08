@@ -8261,6 +8261,7 @@ dependencies = [
  "inventory",
  "serde",
  "serde_json",
+ "thunderforge-dice",
  "ts-rs",
 ]
 

@@ -18,6 +18,7 @@ pub mod attributes;
 pub mod camera;
 pub mod content_entry;
 pub mod content_patterns;
+pub mod dice_throw;
 pub mod door_icon;
 pub mod frame_trace;
 pub mod grid;

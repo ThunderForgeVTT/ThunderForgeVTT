@@ -38,7 +38,7 @@ die (research R4).
 ## Phase 1: Setup
 
 - [x] T001 Record the engine's brotli size before any change, from a release build (`node scripts/build.mjs --only-wasm`, then the research R13 one-liner on `dist/engine/engine_bg.wasm`), into `specs/083-dice-on-the-screen/tasks.md` under T068
-- [ ] T002 [P] Add `thunderforge-dice = { path = "../thunderforge-dice" }` to `crates/thunderforge-canvas-core/Cargo.toml`, and `pub mod dice_throw;` with an empty `crates/thunderforge-canvas-core/src/dice_throw/mod.rs` to `crates/thunderforge-canvas-core/src/lib.rs`. Then run `cargo check -p thunderforge-canvas-core` and `cargo check -p thunderforge-engine --target wasm32-unknown-unknown`
+- [x] T002 [P] Add `thunderforge-dice = { path = "../thunderforge-dice" }` to `crates/thunderforge-canvas-core/Cargo.toml`, and `pub mod dice_throw;` with an empty `crates/thunderforge-canvas-core/src/dice_throw/mod.rs` to `crates/thunderforge-canvas-core/src/lib.rs`. Then run `cargo check -p thunderforge-canvas-core` and `cargo check -p thunderforge-engine --target wasm32-unknown-unknown`
 
 ---
 
@@ -95,7 +95,7 @@ die (research R4).
 
 ### Canvas core: the throw's model
 
-- [ ] T012 In `crates/thunderforge-canvas-core/src/dice_throw/mod.rs`:
+- [x] T012 In `crates/thunderforge-canvas-core/src/dice_throw/mod.rs`:
   - `ThrowSpec`, the parsed payload in core types: roll id, roller, label, formula, bindings, result kind and value, and dice with sides, rolls, steps, kept and final value;
   - `ThrowDie`, `ShapeKind`, `Segment`;
   - `TIMINGS` (research R9), with `tumble_ms: 1200`, `step_ms: 500`, `hold_ms: 2500`, `fade_ms: 400` and `reduced_ms: 150`;
@@ -121,18 +121,18 @@ die (research R4).
 
 ### Tests first
 
-- [ ] T014 [P] [US1] Tests in `crates/thunderforge-canvas-core/src/dice_throw/shapes_tests.rs`:
+- [x] T014 [P] [US1] Tests in `crates/thunderforge-canvas-core/src/dice_throw/shapes_tests.rs`:
   - the icosahedron has 20 faces labelled 1 to 20, each once;
   - every face is a planar convex polygon whose outward normal points away from the centroid;
   - vertices are unit-scale.
-- [ ] T015 [P] [US1] Tests in `dice_throw/landing_tests.rs`: for every value 1 to 20, the face's normal rotated by `landing(shape, value, spin)` is `+z` within 1e-5, for several spins.
-- [ ] T016 [P] [US1] Tests in `dice_throw/tumble_tests.rs`:
+- [x] T015 [P] [US1] Tests in `dice_throw/landing_tests.rs`: for every value 1 to 20, the face's normal rotated by `landing(shape, value, spin)` is `+z` within 1e-5, for several spins.
+- [x] T016 [P] [US1] Tests in `dice_throw/tumble_tests.rs`:
   - `seed("0d9b…")` is stable (a literal);
   - `path(seed, index, t)` is identical on two calls;
   - at `t = 1`, the orientation equals the landing orientation and the position equals the resting place;
   - two dice of one throw get different resting places that do not overlap at the die size;
   - every resting place is inside the lower third of a 1280×720 viewport.
-- [ ] T017 [P] [US1] Tests in `dice_throw/readout_tests.rs`:
+- [x] T017 [P] [US1] Tests in `dice_throw/readout_tests.rs`:
   - `Ayla: Stealth   17 + 5 = 22`;
   - with no label, `Ayla   17 + 5 = 22`;
   - a negative constant reads `12 - 1 = 11`;
@@ -143,7 +143,7 @@ die (research R4).
 
 ### Implementation
 
-- [ ] T019 [US1] Implement `dice_throw/shapes.rs` (the icosahedron first, with the table and face labels), `landing.rs`, `tumble.rs` (FNV-1a and splitmix64, research R3) and `readout.rs`, until T014 to T017 are green
+- [x] T019 [US1] Implement `dice_throw/shapes.rs` (the icosahedron first, with the table and face labels), `landing.rs`, `tumble.rs` (FNV-1a and splitmix64, research R3) and `readout.rs`, until T014 to T017 are green
 - [ ] T020 [US1] Replace `crates/thunderforge-engine/src/plugins/dice_roll.rs` with `crates/thunderforge-engine/src/plugins/dice/`:
   - **`mod.rs`**: `DicePlugin`, plus the `DiceQueue`, `DiceMotion` and `DiceStage` resources and markers, with the system order after the camera systems.
   - **`mesh.rs`**: one `Mesh2d` per die, built at spawn and mutated in place with `Assets<Mesh>::get_mut`. It rotates, projects, culls by normal z and shades by `n · L` with `ATTRIBUTE_COLOR` (research R1).
@@ -183,7 +183,7 @@ die (research R4).
 
 ## Phase 4: User Story 2, several dice of several kinds (P1)
 
-- [ ] T028 [P] [US2] Extend `dice_throw/shapes_tests.rs` and `landing_tests.rs` to every `ShapeKind` in data-model.md:
+- [x] T028 [P] [US2] Extend `dice_throw/shapes_tests.rs` and `landing_tests.rs` to every `ShapeKind` in data-model.md:
   - d4, d6, d8, d12 and d10 face counts and labels;
   - the d10 labels `0` for 10;
   - the d100 pair labels `00` to `90` and `0` to `9`, with 100 reading `00` and `0`;
@@ -191,11 +191,11 @@ die (research R4).
   - the coin labels `H` and `T`;
   - a disc for d2 and for any other size;
   - every value of every shape lands with its face toward `+z`.
-- [ ] T029 [P] [US2] In `dice_throw/expand_tests.rs`:
+- [x] T029 [P] [US2] In `dice_throw/expand_tests.rs`:
   - `2d6 + 1d8 + 3` expands to `[6, 6, 8]` in resolution order;
   - `1d100` is one throw die with two meshes, and reports `sides: 100` once;
   - `1d7` is a disc showing 7's value.
-- [ ] T030 [US2] Implement the remaining vertex and face tables in `dice_throw/shapes.rs`: tetra, cube, octa, dodeca, the pentagonal trapezohedron and the disc prism. Implement the d100 pair in `expand`. T028 and T029 go green.
+- [x] T030 [US2] Implement the remaining vertex and face tables in `dice_throw/shapes.rs`: tetra, cube, octa, dodeca, the pentagonal trapezohedron and the disc prism. Implement the d100 pair in `expand`. T028 and T029 go green.
 - [ ] T031 [US2] Draw a d100 as two meshes in `plugins/dice/mesh.rs` and `throw.rs`, and add the disc flip (a rotation about x) in `throw.rs`
 - [ ] T032 [US2] In `rolls-dice-on-screen.spec.ts`, US2:
   - `2d6 + 1d8 + 3` reports sides `[6, 6, 8]` and the faces match the server, with readout `a + b + c + 3 = total`;
@@ -207,11 +207,11 @@ die (research R4).
 
 ## Phase 5: User Story 3, advantage, rerolls and explosions (P1)
 
-- [ ] T033 [P] [US3] In `dice_throw/readout_tests.rs`:
+- [x] T033 [P] [US3] In `dice_throw/readout_tests.rs`:
   - `2d20kh1 + 4` sums only the kept die;
   - `6d10cs>=8` reads `3 successes` with marks, and `1 success` for one;
   - an exploded chain's readout uses the crate's `final_value`, and its total is the server's (research R4).
-- [ ] T034 [P] [US3] In `dice_throw/tumble_tests.rs`:
+- [x] T034 [P] [US3] In `dice_throw/tumble_tests.rs`:
   - a die with two segments takes `tumble_ms + step_ms` to land;
   - an explosion die enters at `tumble_ms + k·step_ms`;
   - a clamp segment adds no tumble time.
@@ -236,18 +236,18 @@ die (research R4).
 
 ## Phase 6: User Story 4, bonuses are named numbers (P2)
 
-- [ ] T037 [P] [US4] In `dice_throw/readout_tests.rs`:
+- [x] T037 [P] [US4] In `dice_throw/readout_tests.rs`:
   - `1d20 + MODIFIER` with `MODIFIER=3` reads `13 + 3 = 16`;
   - `(1d6 + MOD) * 2` with `MOD=2` reads `(1d6 + 2) * 2 = 14`, the placeholder replaced as a whole identifier, so `MODX` is untouched;
   - a roll stored before this spec, with no bindings and a placeholder formula, reads `formula = total`.
-- [ ] T038 [US4] Substitute the placeholders in the fallback in `dice_throw/readout.rs`. T037 goes green.
+- [x] T038 [US4] Substitute the placeholders in the fallback in `dice_throw/readout.rs`. T037 goes green.
 - [ ] T039 [US4] In `rolls-dice-on-screen.spec.ts`, US4: a Stealth check rolled from the sheet in the dock (the `rolls-sheet-tab` setup) has a readout bonus equal to `worldRoll.bindings[0].value`, and the readout does not contain `MODIFIER`
 
 ---
 
 ## Phase 7: User Story 5, a busy table and a calm screen (P2)
 
-- [ ] T040 [P] [US5] Tests in `dice_throw/queue_tests.rs`:
+- [x] T040 [P] [US5] Tests in `dice_throw/queue_tests.rs`:
   - push A, B, C, D and E while A plays, and B is skipped, never A;
   - `landed()` starts the next throw in arrival order;
   - fading throws are independent of the playing one;
