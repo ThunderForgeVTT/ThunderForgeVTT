@@ -306,17 +306,35 @@ async function selection(page: Page): Promise<Selection> {
 }
 
 /** A box: a press on empty board, a move, a release. */
+/**
+ * Press Shift where the engine hears it, and hold it across a frame. The
+ * engine reads keys from the canvas, and reads Shift on the frame of the
+ * press and again on the frame of the release: a key that changes in the
+ * same frame as the mouse is a plain gesture to it.
+ */
+async function holdShiftOnBoard(page: Page): Promise<void> {
+  await page.locator("canvas").focus();
+  await page.keyboard.down("Shift");
+  await page.waitForTimeout(120);
+}
+
+/** Let go of Shift a frame after the mouse, so the release still sees it. */
+async function releaseShift(page: Page): Promise<void> {
+  await page.waitForTimeout(120);
+  await page.keyboard.up("Shift");
+}
+
 async function boxBoard(
   page: Page,
   from: { x: number; y: number },
   to: { x: number; y: number },
   shift = false,
 ): Promise<void> {
-  if (shift) await page.keyboard.down("Shift");
+  if (shift) await holdShiftOnBoard(page);
   try {
     await dragBoard(page, from, to);
   } finally {
-    if (shift) await page.keyboard.up("Shift");
+    if (shift) await releaseShift(page);
   }
 }
 
@@ -356,6 +374,27 @@ async function serverTokens(
 }
 
 const sorted = (ids: string[]) => [...ids].sort();
+
+/**
+ * Wait for the board to hold `expected` (only the kinds named, compared
+ * unordered). Polled rather than read once: a box's release lands on the
+ * engine's next frame, and until then the board still shows the press,
+ * which drops the tokens (a press on empty board deselects them).
+ */
+async function expectHeld(
+  page: Page,
+  expected: Partial<Selection>,
+  timeout = 5_000,
+): Promise<void> {
+  const kinds = Object.keys(expected) as (keyof Selection)[];
+  const pick = (held: Selection) =>
+    Object.fromEntries(kinds.map((kind) => [kind, sorted(held[kind])]));
+  await expect
+    .poll(async () => pick(await selection(page)), { timeout })
+    .toEqual(
+      pick({ tokens: [], walls: [], lights: [], shapes: [], ...expected }),
+    );
+}
 
 test("the GM boxes a group, moves it as one, trims it, hides its walls and deletes it", async ({
   page: gm,
@@ -437,11 +476,10 @@ test("the GM boxes a group, moves it as one, trims it, hides its walls and delet
   }
 
   await test.step("a box over the three tokens and the wall takes all four", async () => {
+    await openGmTool(gm, "select");
     await expect(async () => {
       await boxBoard(gm, { x: -170, y: 120 }, { x: 10, y: -120 });
-      const held = await selection(gm);
-      expect(sorted(held.tokens)).toEqual(sorted(tokenIds));
-      expect(held.walls).toEqual([wallId]);
+      await expectHeld(gm, { tokens: tokenIds, walls: [wallId] });
     }).toPass({ timeout: 30_000 });
     await expect(gm.getByTestId("selection-bar-counts")).toHaveText(
       "3 tokens, 1 wall",
@@ -493,29 +531,49 @@ test("the GM boxes a group, moves it as one, trims it, hides its walls and delet
   await test.step("shift-box takes one token out; shift-click puts it back", async () => {
     await expect(async () => {
       await boxBoard(gm, { x: -70, y: 120 }, { x: 120, y: -120 });
-      const held = await selection(gm);
-      expect(sorted(held.tokens)).toEqual(sorted(tokenIds));
-      expect(held.walls).toEqual([wallId]);
+      await expectHeld(gm, { tokens: tokenIds, walls: [wallId] });
     }).toPass({ timeout: 30_000 });
 
-    await boxBoard(gm, { x: 120, y: 120 }, { x: 45, y: 30 }, true);
-    await expect
-      .poll(async () => sorted((await selection(gm)).tokens), {
-        timeout: 10_000,
-      })
-      .toEqual(sorted(tokenIds.filter((id) => id !== t2)));
+    // Retried from the whole group: the engine reads shift from the
+    // keyboard, and a key press it missed leaves a plain box, which takes
+    // only the one token.
+    await expect(async () => {
+      if (sorted((await selection(gm)).tokens).length !== tokenIds.length) {
+        await boxBoard(gm, { x: -70, y: 120 }, { x: 120, y: -120 });
+      }
+      await boxBoard(gm, { x: 120, y: 120 }, { x: 45, y: 30 }, true);
+      await expect
+        .poll(async () => sorted((await selection(gm)).tokens), {
+          timeout: 5_000,
+        })
+        .toEqual(sorted(tokenIds.filter((id) => id !== t2)));
+    }).toPass({ timeout: 30_000 });
+    expect((await selection(gm)).walls).toEqual([wallId]);
 
-    await gm.keyboard.down("Shift");
-    try {
-      await clickBoard(gm, moved[1]);
-    } finally {
-      await gm.keyboard.up("Shift");
-    }
-    await expect
-      .poll(async () => sorted((await selection(gm)).tokens), {
-        timeout: 10_000,
-      })
-      .toEqual(sorted(tokenIds));
+    const withoutT2 = sorted(tokenIds.filter((id) => id !== t2));
+    await expect(async () => {
+      // A missed shift makes the click a plain one, which leaves only t2:
+      // put the group back as the step above left it, then click again.
+      if (
+        JSON.stringify(sorted((await selection(gm)).tokens)) !==
+        JSON.stringify(withoutT2)
+      ) {
+        await boxBoard(gm, { x: -70, y: 120 }, { x: 120, y: -120 });
+        await boxBoard(gm, { x: 120, y: 120 }, { x: 45, y: 30 }, true);
+        await expectHeld(gm, { tokens: withoutT2 });
+      }
+      await holdShiftOnBoard(gm);
+      try {
+        await clickBoard(gm, moved[1]);
+      } finally {
+        await releaseShift(gm);
+      }
+      await expect
+        .poll(async () => sorted((await selection(gm)).tokens), {
+          timeout: 5_000,
+        })
+        .toEqual(sorted(tokenIds));
+    }).toPass({ timeout: 30_000 });
     expect((await selection(gm)).walls).toEqual([wallId]);
   });
 
@@ -526,15 +584,13 @@ test("the GM boxes a group, moves it as one, trims it, hides its walls and delet
     await gm.getByTestId("selection-filter-walls").uncheck();
     await expect(async () => {
       await boxBoard(gm, { x: -70, y: 120 }, { x: 120, y: -120 });
-      const held = await selection(gm);
-      expect(sorted(held.tokens)).toEqual(sorted(tokenIds));
-      expect(held.walls).toEqual([]);
+      await expectHeld(gm, { tokens: tokenIds, walls: [] });
     }).toPass({ timeout: 30_000 });
 
     await gm.getByTestId("selection-filter-walls").check();
     await expect(async () => {
       await boxBoard(gm, { x: -70, y: 120 }, { x: 120, y: -120 });
-      expect((await selection(gm)).walls).toEqual([wallId]);
+      await expectHeld(gm, { walls: [wallId] });
     }).toPass({ timeout: 30_000 });
   });
 
@@ -579,4 +635,189 @@ test("the GM boxes a group, moves it as one, trims it, hides its walls and delet
       .not.toContain(wallId);
     await expect(gm.getByTestId("selection-bar")).toHaveCount(0);
   });
+});
+
+test("a player's box takes only what is theirs, and a group drag leaves a token at the wall", async ({
+  page: gm,
+  browser,
+}) => {
+  test.setTimeout(6 * 60_000);
+
+  const GRID = 50;
+  const worldId = await registerAndCreateWorld(
+    gm,
+    `Player box ${uniqueSuffix()}`,
+  );
+  const active = await gql<{ world?: { activeSceneId: string | null } }>(
+    gm,
+    `query ($id: UUID!) { world(id: $id) { activeSceneId } }`,
+    { id: worldId },
+  );
+  const [firstScene] = await sceneIds(gm, worldId);
+  const sceneId = active.world?.activeSceneId ?? firstScene;
+  await gql(
+    gm,
+    `mutation ($sceneId: UUID!, $input: GraphQLUpdateSceneInput!) {
+      updateScene(sceneId: $sceneId, input: $input) { sceneId }
+    }`,
+    { sceneId, input: { gridSize: GRID } },
+  );
+
+  const player = await inviteAndJoinAsPlayer(browser, gm, worldId);
+  const playerUserId = (
+    await gql<{ me: { id: string } }>(player, `query { me { id } }`, {})
+  ).me.id;
+
+  const token = async (x: number, y: number): Promise<string> =>
+    (
+      await gql<{ createToken: { tokenId: string } }>(
+        gm,
+        `mutation ($input: GraphQLCreateTokenInput!) {
+          createToken(input: $input) { tokenId }
+        }`,
+        { input: { sceneId, x, y, tokenType: "character" } },
+      )
+    ).createToken.tokenId;
+  const give = async (tokenId: string, isPrimary: boolean) =>
+    gql(
+      gm,
+      `mutation ($tokenId: UUID!, $input: GraphQLUpdateTokenInput!) {
+        updateToken(tokenId: $tokenId, input: $input) { tokenId }
+      }`,
+      { tokenId, input: { ownerUserId: playerUserId, isPrimary } },
+    );
+  const wall = async (x1: number, y1: number, x2: number, y2: number) =>
+    (
+      await gql<{ createWall: { wallId: string } }>(
+        gm,
+        `mutation ($input: GraphQLCreateWallInput!) {
+          createWall(input: $input) { wallId }
+        }`,
+        {
+          input: {
+            sceneId,
+            x1,
+            y1,
+            x2,
+            y2,
+            blocksVision: true,
+            blocksMovement: true,
+          },
+        },
+      )
+    ).createWall.wallId;
+  const shape = async (page: Page, x: number): Promise<string> =>
+    (
+      await gql<{ createShape: { shapeId: string } }>(
+        page,
+        `mutation ($input: GraphQLCreateShapeInput!) {
+          createShape(input: $input) { shapeId }
+        }`,
+        {
+          input: {
+            sceneId,
+            kind: "RECT",
+            geometry: { x, y: -150, w: 30, h: 30 },
+            visibleToPlayers: true,
+          },
+        },
+      )
+    ).createShape.shapeId;
+
+  // A (their primary) and B side by side; C is theirs too, but behind W1
+  // where A cannot see it. An NPC, a GM's light, and W2 just below B.
+  const a = { x: -125, y: 75 };
+  const b = { x: -25, y: 75 };
+  const tokenA = await token(a.x, a.y);
+  const tokenB = await token(b.x, b.y);
+  const tokenC = await token(175, 75);
+  const npc = await token(-75, -75);
+  await give(tokenA, true);
+  await give(tokenB, false);
+  await give(tokenC, false);
+  await wall(100, -150, 100, 150);
+  await wall(-60, 25, 10, 25);
+  await gql(
+    gm,
+    `mutation ($input: GraphQLCreateLightSourceInput!) {
+      createLightSource(input: $input) { lightId }
+    }`,
+    {
+      input: {
+        sceneId,
+        x: -125,
+        y: -75,
+        radius: 60,
+        intensity: 0.8,
+        castsShadows: false,
+      },
+    },
+  );
+  const theirShape = await shape(player, -40);
+  await shape(gm, 20);
+
+  try {
+    for (const page of [gm, player]) {
+      await page.goto(`/world/${worldId}/play`);
+      await waitForEngineReady(page);
+      await waitForWallsLoaded(page);
+    }
+    for (const id of [tokenA, tokenB, npc]) {
+      await expect
+        .poll(() => boardToken(player, id), { timeout: 15_000 })
+        .toBeDefined();
+    }
+
+    await test.step("a box over everything takes their two seen tokens and their shape (SC-003)", async () => {
+      await expect(async () => {
+        await boxBoard(player, { x: -170, y: 160 }, { x: 220, y: -160 });
+        await expectHeld(player, {
+          tokens: [tokenA, tokenB],
+          shapes: [theirShape],
+          walls: [],
+          lights: [],
+        });
+      }).toPass({ timeout: 30_000 });
+    });
+
+    await test.step("a drag where B's path crosses a wall moves A and leaves B (SC-004)", async () => {
+      await expect(async () => {
+        await boxBoard(player, { x: -170, y: 120 }, { x: 10, y: 40 });
+        await expectHeld(player, { tokens: [tokenA, tokenB], shapes: [] });
+      }).toPass({ timeout: 30_000 });
+
+      const before = await serverTokens(gm, sceneId);
+      const bBefore = before.find((t) => t.tokenId === tokenB)!;
+      await dragBoard(player, a, { x: a.x, y: a.y - 2 * GRID });
+
+      await expect(player.getByText("1 of 2 could not be moved.")).toBeVisible({
+        timeout: 15_000,
+      });
+      await expect
+        .poll(async () => await serverToken(gm, sceneId, tokenA), {
+          timeout: 15_000,
+          message: "A's move reaches the server",
+        })
+        .toEqual({ x: a.x, y: a.y - 2 * GRID });
+      expect(
+        await serverToken(gm, sceneId, tokenB),
+        "B's move is never sent",
+      ).toEqual({ x: bBefore.x, y: bBefore.y });
+
+      for (const page of [player, gm]) {
+        await expect
+          .poll(async () => await boardToken(page, tokenA), {
+            timeout: 15_000,
+          })
+          .toEqual({ x: a.x, y: a.y - 2 * GRID });
+        await expect
+          .poll(async () => await boardToken(page, tokenB), {
+            timeout: 15_000,
+          })
+          .toEqual(b);
+      }
+    });
+  } finally {
+    await player.context().close();
+  }
 });

@@ -211,7 +211,7 @@ that passes them.
   - for a non-GM, a token whose own path crosses a blocking wall (`token_move::refuse_at_wall`) is not sent and goes back;
   - `size` counts only what was sent;
   - Delete sends only shapes the viewer may edit.
-- [ ] T032 [US3] E2E in `canvas-box-select.spec.ts`, with a GM and a player who owns two tokens:
+- [x] T032 [US3] E2E in `canvas-box-select.spec.ts`, with a GM and a player who owns two tokens:
   - the player's box over their two tokens, an NPC, a wall, a light, their shape and the GM's shape selects exactly their two tokens and their shape (SC-003);
   - a token of theirs hidden by sight inside the box is not taken;
   - a group drag where one path crosses a wall leaves that token back and the other moved, on both boards;
