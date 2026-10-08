@@ -12,7 +12,8 @@ import {
 
 /**
  * Spec 084 US3 (FR-009 to FR-012, FR-017): a player spends their character's
- * Heroic Inspiration to reroll their own check from the chat.
+ * Heroic Inspiration to reroll their own check from the chat. US5 (FR-013):
+ * a Lucky character spends a Luck Point the same way.
  *
  * The server rolls the lowest d20 again and keeps the rest, so what is
  * asserted is what every chat shows: the first roll struck through, the new
@@ -160,6 +161,130 @@ test("a player spends Heroic Inspiration to reroll their check, once, and every 
       { worldId: table.worldId, rollId: firstId, spend: "inspiration" },
     );
     expect(again.errors?.[0]?.message).toContain("already been rerolled");
+  } finally {
+    await closeTable(table);
+  }
+});
+
+/** The player's newest Dexterity check, rolled from the sheet in a new tab. */
+async function rollDexterity(
+  page: Page,
+  sheetUrl: string,
+  advantage?: "DISADVANTAGE",
+) {
+  const sheetTab = await page.context().newPage();
+  await sheetTab.goto(`${sheetUrl}/view`);
+  const checks = sheetTab.getByTestId("system-checks");
+  await expect(checks).toBeVisible({ timeout: 30_000 });
+  if (advantage) {
+    await checks
+      .getByTestId("roll-advantage-picker")
+      .getByTestId(`roll-advantage-${advantage}`)
+      .click();
+  }
+  await checks.getByTestId("system-check-dexterity").click();
+  await expect(checks.getByTestId("system-check-result")).toBeVisible({
+    timeout: 15_000,
+  });
+  await sheetTab.close();
+}
+
+/** "Luck Points left: N", read off the sheet. */
+async function luckPointsLeft(sheet: Page): Promise<number> {
+  const shown = sheet.getByTestId("dnd5e-luck-points");
+  await expect(shown).toHaveText(/Luck Points left: \d+/, { timeout: 30_000 });
+  return Number((await shown.textContent())!.replace(/\D+/g, ""));
+}
+
+test("a Lucky player spends a Luck Point for one more d20, and none at Disadvantage", async ({
+  page,
+  browser,
+}, testInfo) => {
+  test.setTimeout(5 * 60_000);
+
+  const table = await openTable({
+    browser,
+    gm: page,
+    testInfo,
+    system: "dnd5e",
+    players: ["Pip"],
+  });
+  const [pip] = table.players;
+
+  try {
+    const hero = await placeCast(table, {
+      label: "Pip",
+      at: { x: -192, y: 0 },
+      seat: pip,
+    });
+    await setAbilityScores(table, hero.actorId, SCORES);
+    await claimFor(table, pip, hero.actorId);
+    await must(
+      table.gm,
+      `mutation ($input: SetActorPermissionInput!) {
+        setActorPermission(input: $input) { actorId }
+      }`,
+      {
+        input: { actorId: hero.actorId, userId: pip.userId, level: "EDITOR" },
+      },
+    );
+    for (const client of [table.gm, pip.page]) {
+      await sitDown(table, client);
+    }
+
+    // 1. The GM ticks the Lucky feat on the sheet.
+    const sheetUrl = `/world/${table.worldId}/actor/${hero.actorId}`;
+    const gmSheet = await table.gm.context().newPage();
+    await gmSheet.goto(`${sheetUrl}/edit`);
+    const lucky = gmSheet
+      .getByTestId("dnd5e-roll-facets")
+      .getByTestId("roll-facet-lucky");
+    await expect(lucky).not.toBeChecked({ timeout: 30_000 });
+    await lucky.click();
+    await expect(lucky).toBeChecked({ timeout: 15_000 });
+    const before = await luckPointsLeft(gmSheet);
+    expect(before).toBeGreaterThan(0);
+
+    // 2. The player rolls a check, and only a Luck Point is offered.
+    await rollDexterity(pip.page, sheetUrl);
+    for (const client of [table.gm, pip.page]) {
+      await openChat(client);
+    }
+    const mine = dexterityRolls(pip.page).last();
+    await expect(mine).toBeVisible({ timeout: 15_000 });
+    const firstId = await mine.getAttribute("data-roll-id");
+    const luck = mine.getByTestId("roll-reroll-luck_point");
+    await expect(luck).toHaveText("Reroll (Luck Point)", { timeout: 15_000 });
+    await expect(mine.getByTestId("roll-reroll-inspiration")).toHaveCount(0);
+
+    // 3. The player spends it: one more d20, the highest kept.
+    await luck.click();
+    for (const client of [table.gm, pip.page]) {
+      const first = client.locator(`[data-roll-id="${firstId}"]`);
+      await expect(first).toHaveAttribute("data-rerolled", "true", {
+        timeout: 15_000,
+      });
+      await expect(dexterityRolls(client)).toHaveCount(2, { timeout: 15_000 });
+      const second = dexterityRolls(client).last();
+      await expect(second).toContainText("2d20kh1");
+      await expect(second.getByTestId("roll-facet")).toHaveText(["Luck Point"]);
+      await expect(second.getByTestId("roll-spent")).toHaveText(
+        "Rerolled with Luck Point",
+      );
+    }
+
+    // 4. The sheet has one point fewer.
+    await gmSheet.reload();
+    expect(await luckPointsLeft(gmSheet)).toBe(before - 1);
+    await gmSheet.close();
+
+    // 5. A check at Disadvantage is offered no Luck Point.
+    await rollDexterity(pip.page, sheetUrl, "DISADVANTAGE");
+    await openChat(pip.page);
+    await expect(dexterityRolls(pip.page)).toHaveCount(3, { timeout: 15_000 });
+    const worse = dexterityRolls(pip.page).last();
+    await expect(worse.getByTestId("roll-facet")).toHaveText(["Disadvantage"]);
+    await expect(worse.getByTestId("roll-reroll-luck_point")).toHaveCount(0);
   } finally {
     await closeTable(table);
   }

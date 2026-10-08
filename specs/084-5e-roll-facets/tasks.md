@@ -355,12 +355,15 @@ nothing visible changed.
   accepted, as `offers_for` does. An unknown spend now gets the pack's own
   sentence.
 
-- [ ] T054 [US5] In `rolls-facets-inspiration.spec.ts`, add a second test:
+- [x] T054 [US5] In `rolls-facets-inspiration.spec.ts`, add a second test:
   1. Tick Lucky.
   2. Roll.
   3. Reroll (Luck Point).
   4. The new formula shows `2d20kh1`, and the sheet's points left drop by one.
   5. A roll at Disadvantage offers no Luck button.
+
+  As built: the points left are read off the sheet before and after, since
+  they hang on the proficiency bonus of whatever level the placed actor has.
 
 ---
 
