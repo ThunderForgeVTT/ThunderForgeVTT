@@ -133,7 +133,7 @@ that passes them.
 
   *Landed:* registered in `plugins/group_select.rs` (`GroupSelectPlugin`) rather than `app.rs`, which is near the 1000-line limit. The rule already carries the player rows; T029 adds their tests.
 
-- [ ] T019 [US2] Two guard clauses at the top of `handle_token_drag`'s press branch in `crates/thunderforge-engine/src/systems/token.rs`:
+- [x] T019 [US2] Two guard clauses at the top of `handle_token_drag`'s press branch in `crates/thunderforge-engine/src/systems/token.rs`:
   - with shift held, an empty-board press does not deselect;
   - a press on a token in a group of two or more is left to `group_move`.
 

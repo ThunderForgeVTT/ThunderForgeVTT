@@ -193,6 +193,21 @@ fn token_half_diagonal() -> f32 {
     TOKEN_SIZE.length() / 2.0
 }
 
+/// Whether a left press in Select belongs to the group rather than to this
+/// drag (spec 085).
+///
+/// With shift held the press is the box's — a shift-box or a shift-click
+/// toggling one item — so the drag neither deselects on empty board nor picks
+/// anything up. A press on a token that is a member of a group of two or more
+/// is the group move's.
+pub(crate) fn token_press_yields(
+    shift: bool,
+    stack: &[String],
+    group: &crate::resources::GroupSelection,
+) -> bool {
+    shift || (group.len() >= 2 && stack.iter().any(|id| group.tokens.contains(id)))
+}
+
 /// Click-to-select and click-drag-to-move for tokens on the live
 /// `TokenIdentity` pipeline (the one that's actually wired to the server via
 /// `emit_event`/`apply_external_commands` — see lib.rs).
@@ -227,6 +242,8 @@ pub(crate) fn handle_token_drag(
     // command loop is: without `GridPlugin` there is no scene grid, and the
     // hit area falls back to the default token size rather than panicking.
     grid: Option<Res<SceneGrid>>,
+    keys: Option<Res<ButtonInput<KeyCode>>>,
+    group: Option<Res<crate::resources::GroupSelection>>,
 ) {
     if drag_state.mode != TokenDragMode::Idle {
         return;
@@ -261,6 +278,16 @@ pub(crate) fn handle_token_drag(
             .collect();
 
         let stack = tokens_at(&candidates, cursor_world);
+
+        let shift = crate::systems::box_select::shift_held(keys.as_deref());
+        if group
+            .as_deref()
+            .is_some_and(|group| token_press_yields(shift, &stack, group))
+            || (shift && group.is_none())
+        {
+            dragging.0.clear();
+            return;
+        }
 
         if stack.is_empty() {
             selected_token.deselect();
@@ -689,6 +716,10 @@ pub(crate) fn init_token_systems_resources(app: &mut App) {
 #[cfg(test)]
 #[path = "token_owner_tests.rs"]
 mod token_owner_tests;
+
+#[cfg(test)]
+#[path = "token_press_tests.rs"]
+mod token_press_tests;
 
 #[cfg(test)]
 mod tests {
