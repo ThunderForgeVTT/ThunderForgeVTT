@@ -46,10 +46,12 @@
  * getWalls). This mirrors the exact same limitation tokens already have.
  */
 
+import { setDoorSecret } from "@/api/interactives";
 import { createWall, deleteWall, getWalls, updateWall } from "@/api/walls";
 import type { WallRecord, DoorState as ApiDoorState } from "@/types/wall";
 import type { WorldStore } from "../store";
 import type { DoorState, WorldWall } from "../types";
+import { localGroupStamp, settleGroup } from "./groupMoves";
 
 type WorldEventLike = {
   event_code?: number;
@@ -203,7 +205,39 @@ export function startWallMutationBridge(
   worldStore: WorldStore,
   sceneId: string,
 ): () => void {
+  // One wall's mutations, one at a time, in the order they were asked for —
+  // the light bridge's rule (spec 045 FR-061). A hide sent while the wall's
+  // move is in flight must not land first and be overwritten by the move's
+  // answer.
+  const inFlight = new Map<string, Promise<void>>();
+  const inTurn = (wallId: string, send: () => Promise<void>) => {
+    const next = (inFlight.get(wallId) ?? Promise.resolve()).then(send);
+    inFlight.set(wallId, next);
+    void next.finally(() => {
+      if (inFlight.get(wallId) === next) inFlight.delete(wallId);
+    });
+  };
+
+  /**
+   * Put a wall back as the store held it before a refused change (spec 085
+   * FR-014). Dispatched with source "sync", it reaches the engine too, which
+   * moved or removed the wall before asking.
+   */
+  const restore = (before: WorldWall | undefined) => {
+    if (before) {
+      worldStore.dispatch({ type: "upsert_wall", wall: before }, "sync");
+    }
+  };
+
+  // The walls as they stood before the event being handled. A hide is
+  // applied by the store on dispatch, so by the time this subscriber hears
+  // it, the store already holds the hidden version.
+  let lastWalls = worldStore.getState().walls;
+
   const unsubscribe = worldStore.subscribe((event) => {
+    const prior = lastWalls;
+    lastWalls = event.state.walls;
+
     // Avoid reacting to our own confirmed dispatches.
     if (event.source === "sync") {
       return;
@@ -236,42 +270,83 @@ export function startWallMutationBridge(
     }
 
     if (command.type === "update_wall") {
-      const { wallId, changes } = command;
-      void updateWall(wallId, {
-        x1: changes.x1,
-        y1: changes.y1,
-        x2: changes.x2,
-        y2: changes.y2,
-        blocksVision: changes.blocksVision,
-        blocksMovement: changes.blocksMovement,
-        doorState:
-          changes.doorState !== undefined
-            ? toApiDoorState(changes.doorState)
-            : undefined,
-      })
-        .then((updated) => {
-          worldStore.dispatch(
-            { type: "upsert_wall", wall: wallRecordToWorldWall(updated) },
-            "sync",
-          );
+      const { wallId, changes, group } = command;
+      const before = prior[wallId];
+      inTurn(wallId, () =>
+        updateWall(wallId, {
+          x1: changes.x1,
+          y1: changes.y1,
+          x2: changes.x2,
+          y2: changes.y2,
+          blocksVision: changes.blocksVision,
+          blocksMovement: changes.blocksMovement,
+          doorState:
+            changes.doorState !== undefined
+              ? toApiDoorState(changes.doorState)
+              : undefined,
         })
-        .catch((error) => {
-          console.error("Failed to update wall:", error);
-        });
+          .then((updated) => {
+            worldStore.dispatch(
+              { type: "upsert_wall", wall: wallRecordToWorldWall(updated) },
+              "sync",
+            );
+            settleGroup(group, true, "moved");
+          })
+          .catch((error) => {
+            console.error("Failed to update wall:", error);
+            restore(before);
+            settleGroup(group, false, "moved");
+          }),
+      );
       return;
     }
 
     if (command.type === "delete_wall") {
-      const { wallId } = command;
-      void deleteWall(wallId)
-        .then((ok) => {
-          if (ok) {
-            worldStore.dispatch({ type: "remove_wall", wallId }, "sync");
-          }
-        })
-        .catch((error) => {
-          console.error("Failed to delete wall:", error);
-        });
+      const { wallId, group } = command;
+      const before = prior[wallId];
+      // After the wall's edits, so a late answer to one cannot bring it back.
+      inTurn(wallId, () =>
+        deleteWall(wallId)
+          .then((ok) => {
+            if (ok) {
+              worldStore.dispatch({ type: "remove_wall", wallId }, "sync");
+            } else {
+              // The server's "no" to a delete is `false`, not an error.
+              restore(before);
+            }
+            settleGroup(group, ok, "deleted");
+          })
+          .catch((error) => {
+            console.error("Failed to delete wall:", error);
+            restore(before);
+            settleGroup(group, false, "deleted");
+          }),
+      );
+      return;
+    }
+
+    if (command.type === "set_walls_hidden") {
+      // Spec 085: any wall, door or not, hidden from the table. One mutation
+      // per wall, each judged by the server on its own; the store already
+      // shows the result, and a refused wall is put back alone.
+      const { wallIds, hidden } = command;
+      const stamp = localGroupStamp(wallIds.length);
+      for (const wallId of wallIds) {
+        const before = prior[wallId];
+        inTurn(wallId, () =>
+          setDoorSecret(wallId, hidden)
+            .catch((error) => {
+              console.error("Failed to hide wall:", error);
+              return false;
+            })
+            .then((ok) => {
+              if (!ok) {
+                restore(before);
+              }
+              settleGroup(stamp, ok, "hidden");
+            }),
+        );
+      }
     }
   });
 
