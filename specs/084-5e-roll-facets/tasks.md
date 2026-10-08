@@ -329,20 +329,25 @@ nothing visible changed.
 
 ## Phase 6: US5: The Lucky feat (P2)
 
-- [ ] T049 [P] [US5] Tests in `roll_facets_tests.rs`:
+- [x] T049 [P] [US5] Tests in `roll_facets_tests.rs`:
   - `reroll("luck_point")` with `lucky` at level 5 and 2 points used gives `Reshape { "2d20kh1 + MODIFIER" }` and `luck_points_used: 3`;
   - it refuses at 3 used, without `lucky`, and on a roll whose facets include `disadvantage`;
   - from `2d20r1kh1 + MODIFIER` it gives `3d20r1kh1 + MODIFIER`;
   - an NPC's proficiency bonus comes from its challenge.
-- [ ] T050 [US5] `roll_facets.rs` `reroll` for `luck_point`, using `rules::proficiency_bonus` and `proficiency_bonus_for_challenge`.
-- [ ] T051 [US5] Server tests in `mutations_reroll_tests.rs`:
+- [x] T050 [US5] `roll_facets.rs` `reroll` for `luck_point`, using `rules::proficiency_bonus` and `proficiency_bonus_for_challenge`.
+- [x] T051 [US5] Server tests in `mutations_reroll_tests.rs`:
   - a Luck reroll adds one d20 and keeps the highest, keeping the original dice' chains (seeded);
   - `luck_points_used` goes up by one;
   - three rerolls on three rolls succeed and the fourth is refused;
   - Inspiration and then Luck on the new roll is allowed (US5.4);
   - Luck twice in a chain is refused;
   - Disadvantage is refused, and `rerollOffers` omits Luck there.
-- [ ] T052 [US5] Nothing new in `mutations_reroll.rs`. If T051 needs a code change, it goes in the `Reshape` branch only: replay with `reshaped`, and store the new formula.
+- [x] T052 [US5] Nothing new in `mutations_reroll.rs`. If T051 needs a code change, it goes in the `Reshape` branch only: replay with `reshaped`, and store the new formula.
+
+  As built: no change was needed; the `Reshape` branch already replays with
+  the new formula and stores it. The pack refuses in this order: not a d20
+  test, no Lucky feat, disadvantage, no points left.
+
 - [ ] T053 [P] [US5] Demo: `facets.ts` `rerollPlan` for `luck_point`, with the matching cases in `dice.test.ts`.
 - [ ] T054 [US5] In `rolls-facets-inspiration.spec.ts`, add a second test:
   1. Tick Lucky.

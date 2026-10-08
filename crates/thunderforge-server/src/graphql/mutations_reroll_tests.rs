@@ -435,3 +435,154 @@ async fn a_hundred_rerolls_at_once_make_one() {
     assert_eq!(table.events(26), sheet_events + 1);
     assert_eq!(table.inspired(), json!(false));
 }
+
+// Spec 084 T051: the Lucky feat's Luck Points, through the same mutation.
+
+impl Table {
+    /// The actor has the Lucky feat, `used` of its three points spent, and
+    /// Heroic Inspiration too.
+    fn lucky(&self, used: i64) {
+        let mut conn = self.state.db_pool.get().unwrap();
+        diesel::update(
+            world_actor_system_data::table.filter(world_actor_system_data::actor_id.eq(self.actor)),
+        )
+        .set(world_actor_system_data::trait_data.eq(Some(json!({
+            "level": 5,
+            "facets": ["lucky"],
+            "luck_points_used": used,
+            "inspiration": true,
+        }))))
+        .execute(&mut conn)
+        .unwrap();
+    }
+
+    fn luck_used(&self) -> Value {
+        let mut conn = self.state.db_pool.get().unwrap();
+        let traits = world_actor_system_data::table
+            .filter(world_actor_system_data::actor_id.eq(self.actor))
+            .select(world_actor_system_data::trait_data)
+            .first::<Option<Value>>(&mut conn)
+            .unwrap()
+            .unwrap_or(Value::Null);
+        traits["luck_points_used"].clone()
+    }
+
+    async fn spend(&self, roll: &RollRecord, spend: &str) -> GraphQLResult<WorldRoll> {
+        reroll_roll_impl(
+            &self.state,
+            self.player,
+            false,
+            RerollRequest {
+                world_id: self.world,
+                roll_id: roll.id,
+                spend: spend.to_string(),
+            },
+            &mut StepRng(977),
+            Utc::now(),
+        )
+        .await
+    }
+
+    fn offers(&self, roll: &RollRecord) -> Vec<String> {
+        let mut conn = self.state.db_pool.get().unwrap();
+        let viewer = Viewer {
+            user_id: self.player,
+            is_gm: false,
+            is_admin: false,
+        };
+        crate::rolls::reroll::offers_from_db(
+            &mut conn,
+            &self.state.directories.systems_dir,
+            "dnd5e",
+            viewer,
+            roll,
+            None,
+            Utc::now(),
+        )
+        .unwrap()
+        .into_iter()
+        .map(|(id, _)| id)
+        .collect()
+    }
+}
+
+#[tokio::test]
+async fn a_luck_point_adds_a_d20_keeps_the_highest_and_keeps_the_dice() {
+    let table = a_table();
+    table.lucky(0);
+    let first = table.check(table.player, Advantage::Normal).await;
+    assert_eq!(table.offers(&first), ["inspiration", "luck_point"]);
+
+    table.spend(&first, "luck_point").await.unwrap();
+
+    let second = table.rolls().pop().unwrap();
+    assert!(
+        second.formula.contains("2d20kh1"),
+        "the new formula is {}",
+        second.formula
+    );
+    assert_eq!(second.reroll_spent.as_deref(), Some("luck_point"));
+    let before = &first.detail["dice"][0];
+    let after = &second.detail["dice"][0];
+    assert_eq!(after["final_value"], before["final_value"]);
+    assert_eq!(
+        after["rolls"], before["rolls"],
+        "the first die's chain is kept"
+    );
+    assert_eq!(faces(&second).len(), 2);
+    assert_eq!(table.luck_used(), json!(1));
+}
+
+#[tokio::test]
+async fn three_luck_points_buy_three_rerolls_and_no_fourth() {
+    let table = a_table();
+    table.lucky(0);
+    for _ in 0..3 {
+        let roll = table.check(table.player, Advantage::Normal).await;
+        table.spend(&roll, "luck_point").await.unwrap();
+    }
+    assert_eq!(table.luck_used(), json!(3));
+    let fourth = table.check(table.player, Advantage::Normal).await;
+    assert!(!table.offers(&fourth).contains(&"luck_point".to_string()));
+    let error = table.spend(&fourth, "luck_point").await.unwrap_err();
+    assert!(
+        error.message.ends_with(" has no Luck Points left."),
+        "{}",
+        error.message
+    );
+}
+
+#[tokio::test]
+async fn inspiration_then_luck_is_allowed_and_luck_twice_is_not() {
+    let table = a_table();
+    table.lucky(0);
+    let first = table.check(table.player, Advantage::Normal).await;
+    table.spend(&first, "inspiration").await.unwrap();
+    let second = table.rolls().pop().unwrap();
+    assert_eq!(table.offers(&second), ["luck_point"]);
+    table.spend(&second, "luck_point").await.unwrap();
+    let third = table.rolls().pop().unwrap();
+    assert_eq!(third.reroll_of, Some(second.id));
+    assert!(table.offers(&third).is_empty());
+
+    let error = table.spend(&third, "luck_point").await.unwrap_err();
+    assert_eq!(
+        error.message,
+        "Luck Point has already been spent on this roll."
+    );
+    assert_eq!(table.luck_used(), json!(1));
+}
+
+#[tokio::test]
+async fn a_luck_point_is_not_offered_or_spent_at_disadvantage() {
+    let table = a_table();
+    table.lucky(0);
+    let first = table.check(table.player, Advantage::Disadvantage).await;
+    assert_eq!(table.offers(&first), ["inspiration"]);
+    let error = table.spend(&first, "luck_point").await.unwrap_err();
+    assert_eq!(
+        error.message,
+        "A Luck Point does nothing on a roll made with disadvantage."
+    );
+    assert_eq!(table.luck_used(), json!(0));
+}

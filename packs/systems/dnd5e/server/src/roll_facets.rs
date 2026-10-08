@@ -10,6 +10,8 @@ use thunderforge_canvas_core::roll_facets::{
 };
 use thunderforge_dice::{rewrite_dice_terms, AddModifier, TermEdit};
 
+use crate::rules::{proficiency_bonus, proficiency_bonus_for_challenge};
+
 /// The refusal for advantage on a roll with no plain d20 in it.
 pub const NO_D20: &str = "This roll has no d20 to roll twice.";
 
@@ -143,6 +145,7 @@ pub const NOT_A_D20_TEST: &str = "Only a d20 test can be rerolled.";
 pub fn reroll(input: &RerollInput<'_>) -> Result<RerollPlan, String> {
     match input.spend {
         "inspiration" => spend_inspiration(input),
+        "luck_point" => spend_luck_point(input),
         other => Err(format!("This system has no reroll called \"{other}\".")),
     }
 }
@@ -167,6 +170,79 @@ fn spend_inspiration(input: &RerollInput<'_>) -> Result<RerollPlan, String> {
     trait_data.insert("inspiration".into(), serde_json::Value::Bool(false));
     Ok(RerollPlan {
         edit: RerollEdit::RerollLowest { sides: 20 },
+        trait_data: serde_json::Value::Object(trait_data),
+    })
+}
+
+/// The sheet's `trait_data`, as an object to write back.
+fn trait_data_of(input: &RerollInput<'_>) -> serde_json::Map<String, serde_json::Value> {
+    match input.sheet.get("trait_data") {
+        Some(serde_json::Value::Object(map)) => map.clone(),
+        _ => serde_json::Map::new(),
+    }
+}
+
+/// The proficiency bonus, from a level or else a challenge rating, as the
+/// derived data reads it.
+fn proficiency_of(trait_data: &serde_json::Map<String, serde_json::Value>) -> Option<i32> {
+    match trait_data.get("level").and_then(serde_json::Value::as_i64) {
+        Some(level) => i32::try_from(level).ok().and_then(proficiency_bonus),
+        None => trait_data
+            .get("challenge")
+            .and_then(serde_json::Value::as_str)
+            .and_then(proficiency_bonus_for_challenge),
+    }
+}
+
+/// The Lucky feat: one more d20 in the first d20 term, the highest kept, and
+/// one more of the proficiency bonus's points used.
+fn spend_luck_point(input: &RerollInput<'_>) -> Result<RerollPlan, String> {
+    if input.kind == RollKind::Damage {
+        return Err(NOT_A_D20_TEST.to_string());
+    }
+    let mut trait_data = trait_data_of(input);
+    let traits = serde_json::Value::Object(trait_data.clone());
+    if !has_facet(&traits, "lucky") {
+        return Err(format!(
+            "{} does not have the Lucky feat.",
+            input.actor_name
+        ));
+    }
+    // In the 2024 rules a Luck Point at disadvantage makes a plain d20 roll,
+    // which buys nothing the player could see.
+    if input.facets.iter().any(|facet| facet == "disadvantage") {
+        return Err("A Luck Point does nothing on a roll made with disadvantage.".to_string());
+    }
+    let used = trait_data
+        .get("luck_points_used")
+        .and_then(serde_json::Value::as_i64)
+        .unwrap_or(0);
+    let points = i64::from(proficiency_of(&trait_data).unwrap_or(0));
+    if used >= points {
+        return Err(format!("{} has no Luck Points left.", input.actor_name));
+    }
+    let mut found = false;
+    let formula = rewrite_dice_terms(input.formula, |term| {
+        if found || term.sides != Some(20) {
+            return None;
+        }
+        found = true;
+        let mut edit = TermEdit {
+            count: Some(term.count.unwrap_or(1) + 1),
+            ..TermEdit::default()
+        };
+        if !term.keeps {
+            edit.add.push(AddModifier::KeepHighest(1));
+        }
+        Some(edit)
+    })
+    .map_err(|error| error.to_string())?;
+    if !found {
+        return Err(NOT_A_D20_TEST.to_string());
+    }
+    trait_data.insert("luck_points_used".into(), serde_json::Value::from(used + 1));
+    Ok(RerollPlan {
+        edit: RerollEdit::Reshape { formula },
         trait_data: serde_json::Value::Object(trait_data),
     })
 }

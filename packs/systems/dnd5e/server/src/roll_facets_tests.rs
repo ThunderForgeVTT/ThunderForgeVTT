@@ -5,7 +5,7 @@ use thunderforge_canvas_core::roll_facets::{
     Advantage, RerollEdit, RerollInput, RollKind, ShapeInput, Shaped,
 };
 
-use super::{reroll, shape, NO_D20};
+use super::{reroll, shape, NOT_A_D20_TEST, NO_D20};
 
 fn input<'a>(
     kind: RollKind,
@@ -215,5 +215,87 @@ fn a_spend_this_system_does_not_have_is_refused() {
     assert_eq!(
         reroll(&spend("bardic", RollKind::Check, &sheet, &settings, &[])),
         Err("This system has no reroll called \"bardic\".".to_string())
+    );
+}
+
+fn lucky_spend<'a>(sheet: &'a Value, formula: &'a str, facets: &'a [String]) -> RerollInput<'a> {
+    RerollInput {
+        spend: "luck_point",
+        kind: RollKind::Check,
+        formula,
+        facets,
+        actor_name: "Pip",
+        sheet,
+        settings: &Value::Null,
+    }
+}
+
+fn lucky_sheet(level: Value, used: i64) -> Value {
+    json!({ "trait_data": { "level": level, "facets": ["lucky"], "luck_points_used": used } })
+}
+
+#[test]
+fn a_luck_point_adds_a_d20_keeps_the_highest_and_is_counted() {
+    let sheet = lucky_sheet(json!(5), 2);
+    let plan = reroll(&lucky_spend(&sheet, "1d20 + MODIFIER", &[])).unwrap();
+    assert_eq!(
+        plan.edit,
+        RerollEdit::Reshape {
+            formula: "2d20kh1 + MODIFIER".to_string()
+        }
+    );
+    assert_eq!(
+        plan.trait_data,
+        json!({ "level": 5, "facets": ["lucky"], "luck_points_used": 3 })
+    );
+
+    // A roll already keeping the highest only gains a die.
+    let plan = reroll(&lucky_spend(&sheet, "2d20r1kh1 + MODIFIER", &[])).unwrap();
+    assert_eq!(
+        plan.edit,
+        RerollEdit::Reshape {
+            formula: "3d20r1kh1 + MODIFIER".to_string()
+        }
+    );
+
+    // Never used is none used.
+    let fresh = json!({ "trait_data": { "level": 1, "facets": ["lucky"] } });
+    let plan = reroll(&lucky_spend(&fresh, "1d20 + MODIFIER", &[])).unwrap();
+    assert_eq!(plan.trait_data["luck_points_used"], json!(1));
+}
+
+#[test]
+fn a_luck_point_is_refused_when_there_is_none_or_it_would_buy_nothing() {
+    let spent = lucky_sheet(json!(5), 3);
+    assert_eq!(
+        reroll(&lucky_spend(&spent, "1d20 + MODIFIER", &[])),
+        Err("Pip has no Luck Points left.".to_string())
+    );
+    let unlucky = json!({ "trait_data": { "level": 5, "luck_points_used": 0 } });
+    assert_eq!(
+        reroll(&lucky_spend(&unlucky, "1d20 + MODIFIER", &[])),
+        Err("Pip does not have the Lucky feat.".to_string())
+    );
+    let sheet = lucky_sheet(json!(5), 0);
+    let disadvantage = ["disadvantage".to_string()];
+    assert_eq!(
+        reroll(&lucky_spend(&sheet, "2d20kl1 + MODIFIER", &disadvantage)),
+        Err("A Luck Point does nothing on a roll made with disadvantage.".to_string())
+    );
+    let mut damage = lucky_spend(&sheet, "1d8 + 2", &[]);
+    damage.kind = RollKind::Damage;
+    assert_eq!(reroll(&damage), Err(NOT_A_D20_TEST.to_string()));
+}
+
+#[test]
+fn a_creatures_luck_points_come_from_its_challenge() {
+    let creature =
+        json!({ "trait_data": { "challenge": "5", "facets": ["lucky"], "luck_points_used": 2 } });
+    assert!(reroll(&lucky_spend(&creature, "1d20 + MODIFIER", &[])).is_ok());
+    let used_up =
+        json!({ "trait_data": { "challenge": "5", "facets": ["lucky"], "luck_points_used": 3 } });
+    assert_eq!(
+        reroll(&lucky_spend(&used_up, "1d20 + MODIFIER", &[])),
+        Err("Pip has no Luck Points left.".to_string())
     );
 }
