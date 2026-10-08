@@ -213,11 +213,11 @@ nothing visible changed.
 
 ### 5e pack
 
-- [ ] T035 [P] [US3] Tests in `roll_facets_tests.rs`:
+- [x] T035 [P] [US3] Tests in `roll_facets_tests.rs`:
   - `reroll("inspiration")` with `inspiration: true` gives `RerollLowest { sides: 20 }` and a sheet with it false;
   - it refuses when the flag is false, when the setting `inspiration` is false, and on a damage roll;
   - an unknown spend is refused.
-- [ ] T036 [US3] `roll_facets.rs` `reroll` for `inspiration`, plus `spends`.
+- [x] T036 [US3] `roll_facets.rs` `reroll` for `inspiration`, plus `spends`.
 
 ### Server
 

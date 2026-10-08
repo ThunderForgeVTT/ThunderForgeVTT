@@ -5,7 +5,8 @@
 //! crate's AST, never by string edits (research R2).
 
 use thunderforge_canvas_core::roll_facets::{
-    Advantage, FacetLabel, RerollInput, RerollPlan, RollFacets, RollKind, ShapeInput, Shaped,
+    Advantage, FacetLabel, RerollEdit, RerollInput, RerollPlan, RollFacets, RollKind, ShapeInput,
+    Shaped,
 };
 use thunderforge_dice::{rewrite_dice_terms, AddModifier, TermEdit};
 
@@ -132,12 +133,42 @@ fn shape_d20(input: &ShapeInput<'_>) -> Result<Option<Shaped>, String> {
     Ok(Some(Shaped { formula, facets }))
 }
 
-/// The rerolls arrive with US3; until then every spend is refused.
+/// The refusal for a reroll of anything but a check or an attack's to-hit.
+pub const NOT_A_D20_TEST: &str = "Only a d20 test can be rerolled.";
+
+/// Plans a reroll by `input.spend`, or refuses it (research R9).
+///
+/// `offers_for` calls this too, and discards the plan, so the button the
+/// table is offered and the refusal it would get cannot disagree.
 pub fn reroll(input: &RerollInput<'_>) -> Result<RerollPlan, String> {
-    Err(format!(
-        "This system has no reroll called \"{}\".",
-        input.spend
-    ))
+    match input.spend {
+        "inspiration" => spend_inspiration(input),
+        other => Err(format!("This system has no reroll called \"{other}\".")),
+    }
+}
+
+/// Heroic Inspiration: the lowest d20 is rolled again, and the sheet's
+/// `inspiration` goes back to false.
+fn spend_inspiration(input: &RerollInput<'_>) -> Result<RerollPlan, String> {
+    if input.kind == RollKind::Damage {
+        return Err(NOT_A_D20_TEST.to_string());
+    }
+    // The setting defaults on (`system.json`); only an explicit false is off.
+    if input.settings.get("inspiration") == Some(&serde_json::Value::Bool(false)) {
+        return Err("This table does not use Heroic Inspiration.".to_string());
+    }
+    let mut trait_data = match input.sheet.get("trait_data") {
+        Some(serde_json::Value::Object(map)) => map.clone(),
+        _ => serde_json::Map::new(),
+    };
+    if trait_data.get("inspiration") != Some(&serde_json::Value::Bool(true)) {
+        return Err(format!("{} has no Heroic Inspiration.", input.actor_name));
+    }
+    trait_data.insert("inspiration".into(), serde_json::Value::Bool(false));
+    Ok(RerollPlan {
+        edit: RerollEdit::RerollLowest { sides: 20 },
+        trait_data: serde_json::Value::Object(trait_data),
+    })
 }
 
 #[cfg(test)]

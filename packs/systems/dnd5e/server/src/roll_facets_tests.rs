@@ -1,9 +1,11 @@
 //! Spec 084: how 5e shapes a roll before it is thrown.
 
 use serde_json::{json, Value};
-use thunderforge_canvas_core::roll_facets::{Advantage, RollKind, ShapeInput, Shaped};
+use thunderforge_canvas_core::roll_facets::{
+    Advantage, RerollEdit, RerollInput, RollKind, ShapeInput, Shaped,
+};
 
-use super::{shape, NO_D20};
+use super::{reroll, shape, NO_D20};
 
 fn input<'a>(
     kind: RollKind,
@@ -140,4 +142,78 @@ fn a_sheet_without_halfling_luck_keeps_its_ones() {
         Advantage::Normal,
     );
     assert_eq!(shape(&roll), Ok(None));
+}
+
+fn spend<'a>(
+    spend: &'a str,
+    kind: RollKind,
+    sheet: &'a Value,
+    settings: &'a Value,
+    facets: &'a [String],
+) -> RerollInput<'a> {
+    RerollInput {
+        spend,
+        kind,
+        formula: "1d20 + MODIFIER",
+        facets,
+        actor_name: "Pip",
+        sheet,
+        settings,
+    }
+}
+
+#[test]
+fn heroic_inspiration_rerolls_the_lowest_d20_and_is_spent() {
+    let sheet = json!({ "trait_data": { "level": 3, "inspiration": true } });
+    let settings = json!({ "inspiration": true });
+    for kind in [RollKind::Check, RollKind::ToHit] {
+        let plan = reroll(&spend("inspiration", kind, &sheet, &settings, &[])).unwrap();
+        assert_eq!(plan.edit, RerollEdit::RerollLowest { sides: 20 });
+        assert_eq!(plan.trait_data, json!({ "level": 3, "inspiration": false }));
+    }
+    // A world that never set the setting uses its default, which is on.
+    let plan = reroll(&spend(
+        "inspiration",
+        RollKind::Check,
+        &sheet,
+        &json!({}),
+        &[],
+    ));
+    assert!(plan.is_ok());
+}
+
+#[test]
+fn heroic_inspiration_is_refused_when_it_is_not_there_to_spend() {
+    let on = json!({ "inspiration": true });
+    let without = json!({ "trait_data": { "inspiration": false } });
+    assert_eq!(
+        reroll(&spend("inspiration", RollKind::Check, &without, &on, &[])),
+        Err("Pip has no Heroic Inspiration.".to_string())
+    );
+    let blank = json!({});
+    assert_eq!(
+        reroll(&spend("inspiration", RollKind::Check, &blank, &on, &[])),
+        Err("Pip has no Heroic Inspiration.".to_string())
+    );
+
+    let inspired = json!({ "trait_data": { "inspiration": true } });
+    let off = json!({ "inspiration": false });
+    assert_eq!(
+        reroll(&spend("inspiration", RollKind::Check, &inspired, &off, &[])),
+        Err("This table does not use Heroic Inspiration.".to_string())
+    );
+    assert_eq!(
+        reroll(&spend("inspiration", RollKind::Damage, &inspired, &on, &[])),
+        Err("Only a d20 test can be rerolled.".to_string())
+    );
+}
+
+#[test]
+fn a_spend_this_system_does_not_have_is_refused() {
+    let sheet = json!({ "trait_data": { "inspiration": true } });
+    let settings = json!({});
+    assert_eq!(
+        reroll(&spend("bardic", RollKind::Check, &sheet, &settings, &[])),
+        Err("This system has no reroll called \"bardic\".".to_string())
+    );
 }
