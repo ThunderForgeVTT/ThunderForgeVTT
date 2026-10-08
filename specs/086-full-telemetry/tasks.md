@@ -1,10 +1,11 @@
 # Tasks: Full Telemetry
 
 **Input**: Design documents from `specs/086-full-telemetry/`
-**Prerequisites**: plan.md, spec.md, research.md (R1–R24), data-model.md,
+**Prerequisites**: plan.md, spec.md, research.md (R1–R31), data-model.md,
 contracts/served-config-and-csp.md, contracts/server-instruments.md,
 contracts/browser-events.md, contracts/collector-count-connector.md,
-contracts/observability-apply.md, quickstart.md
+contracts/observability-apply.md, contracts/telemetry-gateway.md,
+quickstart.md
 
 **Spec 083 is being implemented in this tree.** 086 edits none of 083's
 files. The demo's funnel hooks go in `record()` in
@@ -36,7 +37,8 @@ cross-cutting (R21). The named slices answer it. No task runs the full suite.
   - US5: visitors told, nothing typed leaves;
   - US6: anonymous by default, redirect, off;
   - US7: engine load and slow actions traced;
-  - US8: the operator is told.
+  - US8: the operator is told;
+  - US9: the owner's endpoint labels the source and drops spam.
 
 ---
 
@@ -47,8 +49,9 @@ cross-cutting (R21). The named slices answer it. No task runs the full suite.
   - `package.json`: name `@thunderforge/telemetry`, `"type": "module"`, exports `.`, `./otlp`, `./browser` and `./vite`, `"test": "node --test src/*.test.ts src/**/*.test.ts"`, dependency `web-vitals` `6.2.3` (R10, R11).
   - Run `pnpm install`, and confirm that `pnpm-workspace.yaml` already covers `packages/*`.
 - [ ] T003 [P] Add the Rust dependencies (R1, R2), each crate declaring its own, as the workspace does today:
-  - `crates/thunderforge-server/Cargo.toml`: `opentelemetry = "0.33.0"`, and add `v4` to `uuid`'s features;
-  - `apps/thunderforge/Cargo.toml`: `opentelemetry = "0.33.0"`, `opentelemetry_sdk = "0.33.0"` (no `rt-tokio`, R1), `opentelemetry-otlp = { version = "0.33.0", default-features = false, features = ["http-proto", "reqwest-client", "reqwest-rustls", "trace", "metrics", "logs"] }`, `tracing-opentelemetry = "0.34.0"`, `opentelemetry-appender-tracing = "0.33.0"`, and `opentelemetry_sdk` with `testing` under `[dev-dependencies]`.
+  - create `crates/thunderforge-telemetry-policy` (an empty `lib.rs`, no dependencies, `regex` under `[dev-dependencies]`) and add it to the root `Cargo.toml`'s `members` (R25);
+  - `crates/thunderforge-server/Cargo.toml`: `opentelemetry = "0.33.0"`, `thunderforge-telemetry-policy` by path, and add `v4` to `uuid`'s features;
+  - `apps/thunderforge/Cargo.toml`: `opentelemetry = "0.33.0"`, `opentelemetry_sdk = "0.33.0"` (no `rt-tokio`, R1), `opentelemetry-otlp = { version = "0.33.0", default-features = false, features = ["http-proto", "reqwest-client", "reqwest-rustls", "trace", "metrics", "logs"] }`, `tracing-opentelemetry = "0.34.0"`, `opentelemetry-appender-tracing = "0.33.0"`, `thunderforge-telemetry-policy` by path, and `opentelemetry_sdk` with `testing` under `[dev-dependencies]`.
   - Check with `cargo tree -d -p thunderforge`: there must be no second `reqwest` or `tracing-subscriber`.
 - [ ] T004 Add the `telemetry` slice.
   - `scripts/e2e/slices.json`: `own: ["telemetry"]`. The paths are `packages/telemetry/**`, `apps/thunderforge/src/telemetry/**`, `crates/thunderforge-server/src/telemetry/**`, `apps/web/src/telemetry/**`, `apps/web/src/components/AppErrorBoundary.tsx`, `apps/web/src/engine/bevy/{loadTelemetry,framesSummary}.ts`, `apps/demo/src/telemetry.ts`, `apps/demo/src/backend/telemetryTap.ts`, `apps/landing/src/telemetry.ts`, `apps/landing/e2e/**`, `apps/landing/nginx.conf.template`, `deploy/k8s/observability/**`, and `scripts/check-{observability.mjs,landing-nginx.sh}`. The standalone command is `pnpm -F @thunderforge/telemetry test && pnpm -F @thunderforge/demo e2e && pnpm -F @thunderforge/landing e2e`.
@@ -108,20 +111,20 @@ the server crate's API-only module, the tier, the settings and the instance id.
 - [ ] T014 Implement `crates/thunderforge-server/src/telemetry/instance_id.rs` (`ensure_instance_id`): `INSERT ... ON CONFLICT (key) DO NOTHING`, then `SELECT`, with key `system.telemetry_instance_id` (R23). Add `pub mod telemetry` with `telemetry/mod.rs` to `crates/thunderforge-server/src/lib.rs`. Call it in `apps/thunderforge/src/main.rs` after migrations, whatever `TELEMETRY` is.
 - [ ] T015 [P] Write failing table tests in `crates/thunderforge-server/src/telemetry/served_config.rs` for `BrowserTelemetry::served_json()` and `connect_src()`. They cover every row of `contracts/served-config-and-csp.md`'s field and connect-src tables, including off with no other keys and a sample rate clamped to 0..1.
 - [ ] T016 Implement the following:
-  - the `Tier` enum (no decision logic) in `crates/thunderforge-server/src/telemetry/mod.rs`;
+  - a re-export of the policy crate's `Tier` (no decision logic) in `crates/thunderforge-server/src/telemetry/mod.rs`;
   - `BrowserTelemetry` in `served_config.rs`;
   - `TelemetryStatus` in `status.rs`;
   - `AppState.telemetry: Arc<TelemetryStatus>` in `crates/thunderforge-server/src/state.rs`.
 
   Update every `AppState` constructor in tests with a `TelemetryStatus::off_for_tests()`.
 
-### The app: tier and settings (FR-002, FR-006, FR-009)
+### The policy crate and the app: tier and settings (FR-002, FR-006, FR-009, FR-038)
 
-- [ ] T017 [P] Write failing tests in `apps/thunderforge/src/telemetry/tier.rs`.
+- [ ] T017 [P] Write failing tests in `crates/thunderforge-telemetry-policy/src/{tier,lists}.rs`.
   - `tier_for` runs over the normalisation table in `contracts/served-config-and-csp.md`.
-  - `ANONYMOUS_SPAN_ATTRIBUTES`, `ANONYMOUS_RESOURCE_ATTRIBUTES` and `INSTRUMENTS` are each enumerated exactly.
+  - `ANONYMOUS_SPAN_ATTRIBUTES`, `ANONYMOUS_RESOURCE_ATTRIBUTES`, `SERVER_ERROR_ATTRIBUTES` and `INSTRUMENTS` are each enumerated exactly.
   - Every `INSTRUMENTS` name matches `PUBLIC_METRIC_NAME_FILTER` (`^(thunderforge\.|http\.server\.|db\.client\.)`).
-- [ ] T018 Implement `apps/thunderforge/src/telemetry/{mod,tier}.rs` as `contracts/server-instruments.md` gives them, with `print_instruments`, the `#[test]` that prints each instrument's Prometheus name for `scripts/check-observability.mjs`. Add `mod telemetry;` to `apps/thunderforge/src/main.rs`.
+- [ ] T018 Implement `crates/thunderforge-telemetry-policy/src/{lib,tier,lists}.rs` as `contracts/server-instruments.md` and `contracts/telemetry-gateway.md` give them, with `print_instruments`, the `#[test]` that prints each instrument's Prometheus name for `scripts/check-observability.mjs`. Then add `apps/thunderforge/src/telemetry/{mod,tier}.rs`, where `tier.rs` only re-exports the crate's tier and lists and adapts them to the SDK's types. Add `mod telemetry;` to `apps/thunderforge/src/main.rs`. No list is written twice.
 - [ ] T019 [P] Implement `apps/thunderforge/src/telemetry/settings.rs` (`TelemetrySettings::from_env`) with table tests:
   - `TELEMETRY` false, 0, no or off in any case;
   - `OTEL_SDK_DISABLED`;
@@ -130,7 +133,7 @@ the server crate's API-only module, the tier, the settings and the instance id.
 
   Tests pass an environment map, never `std::env::set_var`.
 
-**Checkpoint**: `pnpm -F @thunderforge/telemetry test`, `cargo test -p thunderforge-server telemetry` and `cargo test -p thunderforge telemetry` pass. `TELEMETRY=false` is in every stack.
+**Checkpoint**: `pnpm -F @thunderforge/telemetry test`, `cargo test -p thunderforge-telemetry-policy`, `cargo test -p thunderforge-server telemetry` and `cargo test -p thunderforge telemetry` pass. `TELEMETRY=false` is in every stack.
 
 ---
 
@@ -157,7 +160,7 @@ any of these.
 - [ ] T021 [P] [US6] Write the SC-011 leak test in `apps/thunderforge/src/telemetry/tests.rs`.
   - Seed admin `canary-7f3a@example.org`, and a world, actor, scene and token named `zq-canary-7f3a`.
   - Send a chat line and a mutation carrying the canary, and log an `ERROR` whose message holds the email.
-  - On the anonymous tier, assert that no exported record holds the email, the canary, the hostname or any seeded id, and that every span and resource attribute is on the `tier.rs` lists.
+  - On the anonymous tier, assert that no exported record holds the email, the canary, the hostname or any seeded id, and that every span and resource attribute is on the policy crate's lists.
   - On the operator tier, assert that `world.id` (or the existing `world_id` field) is present.
 - [ ] T022 [US6] Implement `apps/thunderforge/src/telemetry/anonymous.rs`.
   - `AllowListSpanProcessor` keeps the span name, status, duration and `ANONYMOUS_SPAN_ATTRIBUTES`. It drops other attributes, links, and every event except the redacted `exception`.
@@ -206,7 +209,7 @@ README and the guide, with Appendix A's words.
 - [ ] T030 [US8] Add `telemetry_status` to `AdminQuery` in `crates/thunderforge-server/src/graphql/queries/admin.rs`, returning `TelemetryStatus` as the contract gives it (wire tier `full`, not `operator`).
   - Test that a non-admin is refused.
   - Regenerate `apps/thunderforge/schema.graphql` and the web's generated types with the repository's existing schema export.
-  - `schema.graphql` is cross-cutting. The slices named in Phase 11 answer it.
+  - `schema.graphql` is cross-cutting. The slices named in Phase 12 answer it.
 - [ ] T031 [US8] Add `apps/web/src/pages/admin/TelemetryPanel.tsx`, filled by a plain GraphQL fetch hook that exposes `refetch()` (AGENTS.md §2), and render it from `apps/web/src/pages/admin/SettingsPage.tsx`.
   - It is read-only, with Appendix A.4's text, both rows and the install id.
   - It names the variables to set and offers no toggle.
@@ -265,8 +268,8 @@ read them.
 - [ ] T044 [US3] Create `deploy/k8s/observability/` as `contracts/observability-apply.md` gives it:
   - `kustomization.yaml`, and `dashboards/kustomization.yaml` with a `configMapGenerator` labelled `grafana_dashboard: "1"`, annotated `grafana_folder: ThunderForge`, in `monitoring`;
   - `dashboards/{server,graphql,backplane,database,world-events}.json`, each using `${prometheus}`, `${loki}` and `${tempo}`, with no fixed UID;
-  - `prometheus-rules.yaml`, labelled `release: kube-prometheus-stack`, with FR-030's nine server alerts (the two landing alerts are added in US4).
-- [ ] T045 [US3] Add `scripts/check-observability.mjs` (SC-008, as the contract gives it), and the `observability` and `observability-check` targets in `Makefile`, using the existing `KUBE_CONTEXT`, `KUBE_NAMESPACE`, `DEPLOY` and `LANDING_DEPLOY`, and the new `OBS_DIR` and `OTEL_IN_CLUSTER`.
+  - `prometheus-rules.yaml`, labelled `release: kube-prometheus-stack`, with FR-030's nine server alerts (the two landing alerts are added in US4, and the two gateway alerts in US9, T101).
+- [ ] T045 [US3] Add `scripts/check-observability.mjs` (SC-008, as the contract gives it, reading `print_instruments` from `cargo test -p thunderforge-telemetry-policy`), and the `observability` and `observability-check` targets in `Makefile`, using the existing `KUBE_CONTEXT`, `KUBE_NAMESPACE`, `DEPLOY` and `LANDING_DEPLOY`, and the new `OBS_DIR` and `OTEL_IN_CLUSTER`.
   - `promtool` is skipped with a note when it is absent.
   - Run `make observability-check`.
 
@@ -434,22 +437,68 @@ green.
 
 ---
 
-## Phase 11: Polish & Proof
+## Phase 11: User Story 9 — The owner's endpoint labels the source and drops spam (P2)
+
+**Goal**: `apps/telemetry-gateway` answers CORS for any origin, adds the
+source labels, drops spam by reason, sheds load, and forwards the rest to
+the collector's `otlp/public` receiver. It shares one policy crate with the
+server (FR-037 to FR-046).
+
+**Independent Test**: `cargo test -p thunderforge-telemetry-policy` and
+`cargo test -p thunderforge-telemetry-gateway`. The gateway's tests run the
+router in process against a fake upstream; no cluster and no e2e slice is
+needed (SC-014).
+
+- [ ] T091 [P] [US9] Write failing tests in `crates/thunderforge-telemetry-policy/src/{lists,caps,labels,rate}.rs`, deterministic, as `contracts/telemetry-gateway.md`'s Tests section lists them:
+  - `SERVICE_NAMES`, the browser resource, record and span lists, `GATEWAY_LABELS` and `GATEWAY_INSTRUMENTS` are each enumerated exactly;
+  - `BROWSER_RECORD_ATTRIBUTES` equals `ALLOWED_ATTRIBUTES` in `packages/telemetry/src/allowList.ts`, read with `include_str!` (SC-015);
+  - `attribute_allowed` and `metric_allowed` for each place and service;
+  - `cap_for`, `is_instance_id`, `instance_id_required`, `source_for`, `client_version`, `reduce_user_agent` (one fixture string per family) and `country`;
+  - `TokenBucket` under a fixed `Instant` advanced by hand, including the `Retry-After` value;
+  - `DropReason::as_str()` gives the ten names.
+- [ ] T092 [US9] Implement `crates/thunderforge-telemetry-policy/src/{caps,labels,rate}.rs` and the rest of `lists.rs` until T091 passes. The crate stays `std` only.
+- [ ] T093 [P] [US9] Create `apps/telemetry-gateway` (package `thunderforge-telemetry-gateway`) and add it to the root `Cargo.toml`'s `members`.
+  - `Cargo.toml`: `opentelemetry-proto = { version = "0.33.0", default-features = false, features = ["gen-tonic-messages", "trace", "logs", "metrics", "with-serde"] }`, `prost = "0.14"`, `serde_json`, `axum`, `tower` (`limit`, `load-shed`, `timeout`), `tower-http` (`cors`, `limit`, `trace`), `tokio`, `reqwest`, `clap` (`derive`, `env`), `tracing`, the otel 0.33 SDK and OTLP exporter as `apps/thunderforge` has them, and `thunderforge-telemetry-policy` by path (R26).
+  - `src/main.rs`: the flags and environment of the contract's Configuration table, the gateway's own telemetry to `OTEL_EXPORTER_OTLP_ENDPOINT` (default `http://otel-collector.monitoring:4318`), and `axum::serve`.
+  - Check `cargo tree -d -p thunderforge-telemetry-gateway`: no second `prost`, `reqwest` or `tower`.
+- [ ] T094 [US9] Capture fixtures in `apps/telemetry-gateway/tests/fixtures/`: one JSON body per signal from `packages/telemetry`'s OTLP/JSON encoder, one protobuf body per signal from the server's exporter (an in-memory export re-encoded with `opentelemetry-proto`), and one hostile body per drop reason. Write a fixture test that each honest body decodes and re-encodes to the same content (R26).
+- [ ] T095 [US9] Write failing integration tests in `apps/telemetry-gateway/src/tests.rs` (`#[cfg(test)]`): the router through `tower::ServiceExt::oneshot`, a fake upstream axum router on `127.0.0.1:0` that records every request, an in-memory meter and a captured `tracing` subscriber. They cover every item of SC-014:
+  - the preflight for `https://game.example.org` and for `Origin: null`;
+  - each label for `owner_site`, `self_hosted_browser` and `server`, with and without `CF-IPCountry`;
+  - `X-Forwarded-For: 203.0.113.77` and the full `User-Agent` appear in no byte the fake received, in no captured log line and in no metric attribute;
+  - one test per drop reason, asserting the status, what the fake received and `dropped{reason}` at one;
+  - `429` with `Retry-After` under a fake clock, and the fast `503` when the fake holds every upstream slot;
+  - the upstream's `partial_success` is passed back.
+- [ ] T096 [US9] Implement `apps/telemetry-gateway/src/router.rs`: the three paths and `/healthz`, `CorsLayer` for any origin without credentials, and the `ServiceBuilder` of R31 (`load_shed`, `concurrency_limit`, `timeout`, `RequestBodyLimitLayer` at 4 MiB), with a `TraceLayer` that records method, matched path, status and latency only.
+- [ ] T097 [US9] Implement `apps/telemetry-gateway/src/intake.rs`: decode by content type, apply the policy per resource and record, strip and count unlisted attributes, set the labels of FR-041, and build the `partial_success` answer.
+- [ ] T098 [US9] Implement `apps/telemetry-gateway/src/limits.rs`: the client IP from `X-Forwarded-For` at the trusted hop count, hashed with a per-process `RandomState`, and the bounded IP and instance bucket maps with idle eviction (FR-042, FR-043, R28).
+- [ ] T099 [US9] Implement `apps/telemetry-gateway/src/{upstream,metrics}.rs`: one `reqwest::Client` with the connect and total timeouts, a semaphore taken with `try_acquire`, a fresh protobuf request with only `Content-Type`, and the four gateway instruments (FR-044, FR-045). T095 passes.
+- [ ] T100 [US9] Add the `telemetry-gateway` stage to `Dockerfile` (its own cargo-chef cook and build, release only, `debian:bookworm-slim`, non-root), placed before `server` so `server` stays the default stage, and add `TELEMETRY_GATEWAY_IMAGE`, `telemetry-gateway-image` and `push-telemetry-gateway` to `Makefile`, with help lines beside `push-landing`. Check `docker build --target telemetry-gateway .` and that the image's `--help` lists every flag.
+- [ ] T101 [US9] Add the **Public telemetry intake** row to `deploy/k8s/observability/dashboards/server.json`, and `ThunderForgeTelemetryIntakeFailing` and `ThunderForgeTelemetrySpam` to `prometheus-rules.yaml`, as the contract gives them. `scripts/check-observability.mjs` reads the gateway's series from `print_instruments`. Run `make observability-check`.
+- [ ] T102 [P] [US9] In `docs/CONTRIBUTING.md`, describe the gateway and the policy crate: the one list, the labels, the drop reasons, and that a release adding an instrument ships its gateway with or before it (R27).
+
+**Checkpoint**: `cargo test -p thunderforge-telemetry-policy`,
+`cargo test -p thunderforge-telemetry-gateway`, `cargo test -p thunderforge
+telemetry`, `make observability-check` and the image build pass.
+
+---
+
+## Phase 12: Polish & Proof
 
 - [ ] T079 Run `make lint` (host and wasm32), and fix what it reports. Every Rust file stays at 1000 lines or fewer (`check-file-length`).
-- [ ] T080 Run `cargo test -p thunderforge`, `cargo test -p thunderforge-server`, `pnpm -F @thunderforge/telemetry test`, `pnpm -F @thunderforge/web test` and `pnpm -F @thunderforge/demo test`.
+- [ ] T080 Run `cargo test -p thunderforge`, `cargo test -p thunderforge-server`, `cargo test -p thunderforge-telemetry-policy`, `cargo test -p thunderforge-telemetry-gateway`, `pnpm -F @thunderforge/telemetry test`, `pnpm -F @thunderforge/web test` and `pnpm -F @thunderforge/demo test`.
 - [ ] T081 Run `pnpm e2e:telemetry`.
 - [ ] T082 Run `pnpm e2e:feedback`, `pnpm e2e:resumable-downloads`, `pnpm e2e:rolls` and `pnpm e2e:worlds`. Then run every slice that `pnpm e2e:which --diff` names, except its FULL SUITE line (R21), which those slices answer. Record the slices run and their results in this file.
 - [ ] T083 Run `make observability-check` and `scripts/check-landing-nginx.sh`.
-- [ ] T084 Walk `quickstart.md`'s Real game, Demo and Landing sections by hand against a local collector, and fix any step that does not hold.
+- [ ] T084 Walk `quickstart.md`'s Real game, Demo, Landing and Telemetry gateway sections by hand against a local collector, and fix any step that does not hold.
 - [ ] T085 Mark every task `[x]`, and set spec.md's status.
 
 ---
 
-## Phase 12: Cluster apply (last; the owner runs these)
+## Phase 13: Cluster apply (last; the owner runs these)
 
 **Purpose**: Ship the images, then the dashboards, rules, exporter and
-in-cluster endpoint, then the two Flux changes.
+in-cluster endpoint, then the gateway, then the Flux changes.
 
 - [ ] T086 Ship both images with the existing targets, so the server exports and the landing serves `telemetry.json`:
 
@@ -471,7 +520,19 @@ in-cluster endpoint, then the two Flux changes.
 
   Grafana's **ThunderForge** folder holds the seven dashboards. **Backplane** shows poll rates from vtt-dev within 2 minutes, and **Landing** shows `nginx_up 1`.
 - [ ] T088 In the Flux repository, add the `count` connector from `contracts/collector-count-connector.md` to the public and in-cluster logs pipelines (R8). Confirm that `thunderforge_browser_events_total` appears in Prometheus.
-- [ ] T089 In the Flux repository, set `allowed_origins: ["*"]` with no credentials on the public receiver (R7, open item 9). This waits on the owner's yes. Until then, self-hosted browsers' reports are refused at preflight.
+- [ ] T103 Push the gateway image and deploy it, as `contracts/telemetry-gateway.md`'s Shipping section gives it:
+
+  ```sh
+  make push-telemetry-gateway
+  ```
+
+  - In the Flux repository, add `overlays/services/otel-collector/telemetry-gateway.yaml` (the Deployment and the `telemetry-gateway` Service on 4318, in `monitoring`) and list it in that `kustomization.yaml`. The route is not changed yet.
+  - From a test pod, post through the shared gateway and read what reaches the gateway: set `TELEMETRY_GATEWAY_TRUSTED_HOPS` to the hop that holds the client address (R28), and record whether `CF-IPCountry` arrives (R29). Record both answers in research.md.
+- [ ] T089 In the Flux repository, switch the public route to the gateway (R7, R25, open item 9). This replaces widening the receiver's CORS.
+  - `overlays/services/otel-collector/route.yaml`: the backendRef becomes `telemetry-gateway:4318`, and the header comment says the gateway answers CORS, labels and rate-limits.
+  - `helmrelease.yaml`: remove the `otlp/public` receiver's `cors` block. `filter/public`, `transform/public` and `public-service.yaml` stay.
+  - Check: a preflight from `https://game.example.org` gets `Access-Control-Allow-Origin: *`, and a post from vtt-dev still arrives, now labelled `owner_site`.
+- [ ] T104 Confirm SC-015 in the cluster: a post from an origin other than the project's reaches Loki with `thunderforge.source="self_hosted_browser"`, and the **Public telemetry intake** row shows accepted and dropped batches. Run `make observability KUBE_CONTEXT=<your context>` if T101's rules are not yet applied.
 - [ ] T090 Once the connector's series exist, add `ThunderForgeBrowserErrorSpike` and `ThunderForgeDemoFunnelStepSilent` from `contracts/collector-count-connector.md` to `deploy/k8s/observability/prometheus-rules.yaml`. Then run `make observability-check` and `make observability KUBE_CONTEXT=<your context>`.
 
 ---
@@ -492,10 +553,15 @@ in-cluster endpoint, then the two Flux changes.
 - **US4 (Phase 8)** needs T053 and T052.
 - **US5 (Phase 9)** needs T054 and T055. Its canary test needs T050.
 - **US7 (Phase 10)** needs T025 and T042 (`traceparent` is joined on the server).
-- **Polish (Phase 11)** comes after every story it covers.
-- **Cluster (Phase 12)** comes after Phase 11.
+- **US9 (Phase 11)** needs T017 and T018 (the policy crate), T011 (the browser's `allowList.ts` and OTLP encoder, for T091 and T094), and T044 and T045 (for T101). It does not need any other story, so it can run beside US1 to US7 once those are done.
+  - T092 needs T091. T095 needs T093 and T094. T096 to T099 need T095, and T099 finishes it.
+  - T100 needs T093. T101 needs T099.
+- **Polish (Phase 12)** comes after every story it covers.
+- **Cluster (Phase 13)** comes after Phase 12.
   - T090 needs T088.
-  - T089 waits on the owner.
+  - T103 needs T100.
+  - T089 needs T103 and the hop count it records. It replaces the old CORS widening.
+  - T104 needs T089 and T101.
 
 ## Parallel Opportunities
 
@@ -505,6 +571,7 @@ in-cluster endpoint, then the two Flux changes.
 - US8: T028 ∥ T032.
 - US3: T035 ∥ T037 ∥ T039 ∥ T041.
 - US1 and US4 touch the same landing files, so they run in sequence. US2 and US7 touch the web app's separate files, so they run in parallel after US6.
+- US9: T091 ∥ T093 ∥ T102. The gateway touches no file another story touches, apart from `server.json`, `prometheus-rules.yaml` and `Makefile` (T101, T100), so it runs beside US1 to US7 once its dependencies are in.
 - Two agents in this tree serialise their commits and stage explicit paths. Never `git add -A`.
 
 ## Implementation Strategy
@@ -518,5 +585,6 @@ in-cluster endpoint, then the two Flux changes.
 2. **Then US8**, so the default is disclosed before any visible data flows. **Then US3**, the server's numbers and alerts.
 3. **Then US1 and US2**, the demo funnel and the errors: the owner's two questions.
 4. **Then US4, US5 and US7.**
-5. **Then Polish**, which proves the whole by slices.
-6. **Then Phase 12**, which the owner runs.
+5. **Then US9**, the gateway, so the public route can be switched before self-hosted browsers report.
+6. **Then Polish**, which proves the whole by slices.
+7. **Then Phase 13**, which the owner runs.

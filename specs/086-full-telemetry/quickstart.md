@@ -57,19 +57,48 @@ How to see each part work, and the commands that prove it. The shapes are in
 - Run `pnpm -F @thunderforge/landing build`. It fails if the telemetry chunk
   is over 25 KB brotli (SC-007).
 
+## Telemetry gateway
+
+1. Start a collector with the `debug` exporter on `127.0.0.1:4319`, then
+   run `cargo run -p thunderforge-telemetry-gateway -- --listen 127.0.0.1:4320 --upstream http://127.0.0.1:4319`.
+2. **Preflight, any origin.**
+   `curl -si -X OPTIONS -H 'Origin: https://game.example.org' -H 'Access-Control-Request-Method: POST' localhost:4320/v1/logs`
+   answers `204` with `Access-Control-Allow-Origin: *` and no credentials
+   header.
+3. **Labels.** Point a local server at it
+   (`OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4320 make dev`). The
+   collector shows `thunderforge.ingress=public` and
+   `thunderforge.source=server` on the resource, and no address anywhere.
+   Add `-H 'CF-IPCountry: DE'` to a hand-sent post and
+   `thunderforge.country=DE` appears; leave it off and no country does.
+4. **Spam.** Post a fixture with `service.name=evil` and the collector
+   receives nothing, the answer is `200` with `partial_success`, and the
+   gateway's debug meter shows `dropped{reason="unknown_service"} 1`. Post
+   in a tight loop and the 61st request gets `429` with `Retry-After`.
+5. **Image.** `make telemetry-gateway-image` builds
+   `mbround18/thunderforgevtt:telemetry-gateway`; `make push-telemetry-gateway`
+   pushes it.
+
 ## Cluster
 
 Run `make observability-check` offline, then `make observability` (see
-tasks.md, Phase 12). Then in Grafana, under ThunderForge:
+tasks.md, Phase 13). Then in Grafana, under ThunderForge:
 
 - **Backplane** shows non-zero poll rates from `vtt-dev`.
 - **Landing** shows `nginx_up 1`.
+- **Server**, row **Public telemetry intake**, shows accepted batches by
+  source once the route points at the gateway (T089), and drops by reason.
+- A post from a non-project origin reaches Loki with
+  `thunderforge.source="self_hosted_browser"` in its structured metadata
+  (SC-015).
 
 ## Proof commands
 
 | What | Command |
 | --- | --- |
 | Rust, the app | `cargo test -p thunderforge telemetry` |
+| Rust, the policy crate | `cargo test -p thunderforge-telemetry-policy` |
+| Rust, the gateway | `cargo test -p thunderforge-telemetry-gateway` (SC-014) |
 | Rust, the server crate | `cargo test -p thunderforge-server telemetry` and `cargo test -p thunderforge-server static_files` |
 | The browser package | `pnpm -F @thunderforge/telemetry test` |
 | Web units | `pnpm -F @thunderforge/web test` |

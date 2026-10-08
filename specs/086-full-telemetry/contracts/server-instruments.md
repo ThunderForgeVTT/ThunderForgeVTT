@@ -2,10 +2,14 @@
 
 This contract is the source of truth for two things:
 
-- the constants in `apps/thunderforge/src/telemetry/tier.rs`, which FR-009
-  requires;
-- the list that `cargo test -p thunderforge -- telemetry::tier::print_instruments --nocapture`
+- the constants in `crates/thunderforge-telemetry-policy`, which FR-009
+  requires, and which `apps/thunderforge/src/telemetry/tier.rs` re-exports;
+- the list that `cargo test -p thunderforge-telemetry-policy -- print_instruments --nocapture`
   prints for SC-008's checker.
+
+The telemetry gateway reads the same constants
+([telemetry-gateway.md](telemetry-gateway.md)), so a name added here is
+also a name the public route accepts.
 
 A name changes here first.
 
@@ -95,7 +99,10 @@ A test reads `world_events.rs` with `include_str!`, collects every
 
 A subscription gets one span, for its setup only.
 
-## `tier.rs` constants (FR-009)
+## Policy constants (FR-009)
+
+In `crates/thunderforge-telemetry-policy/src/lib.rs` (and its modules).
+`tier.rs` re-exports them and adds only the SDK glue.
 
 ```rust
 pub const PROJECT_TELEMETRY_ENDPOINT: &str = "https://telemetry.thunderforge.dev";
@@ -116,6 +123,9 @@ pub const INSTRUMENTS: &[(&str, InstrumentKind, &str)] = &[ /* the table above *
 
 pub const PUBLIC_METRIC_NAME_FILTER: &str = r"^(thunderforge\.|http\.server\.|db\.client\.)";
 ```
+
+`PUBLIC_METRIC_NAME_FILTER` mirrors the collector's `filter/public`. The
+gateway is stricter: it accepts exactly the `INSTRUMENTS` names (R27).
 
 On the anonymous tier, the processor that enforces these
 (`anonymous::AllowListSpanProcessor`) wraps the batch processor. On `on_end`

@@ -3,6 +3,7 @@
 **Feature Branch**: `086-full-telemetry`
 **Created**: 2026-10-07
 **Status**: Planned (plan.md, tasks.md)
+**Amended**: 2026-10-07, to the owner's decision to put a proxy in front of the public route: "could our telemetry proxy to our in cluster otel ? and add necessary labels and optics about where the event came from and drop anything when its considered spam". User Story 9, FR-037 to FR-046, SC-014 and SC-015, and R25 to R31 record it.
 **Input**: The owner, 2026-10-07: "full telemetry for the landing and the demo, like a crazy amount of telemetry, so i can act on it", plus server telemetry and Grafana dashboards on the k8s cluster.
 **Revised**: 2026-10-07, to the owner's decision: "for the base image i want TELEMETRY=true default and i want to change our constitution to allow telemetry of people's thunderforge instances to tell me what's going on not just my own but they can override the otel endpoint if they want their own telemetry else i see it and they can do false and this all goes into a disclaimer and spec". Constitution v1.5.0, Principle VII, and [ADR-114](../../docs/adrs/20261007-114-telemetry_is_on_and_the_operators_to_redirect.md) record it.
 
@@ -134,8 +135,10 @@ Counted on 2026-10-07:
     `http://otel-collector.monitoring:4318`. That is an operator endpoint
     (the project operating its own instance), so it gets the full tier.
   - Every other server, and every browser, sends OTLP/HTTP to
-    `https://telemetry.thunderforge.dev` by default. Browsers on other
-    origins can post to it once its CORS allows any origin (open item 9).
+    `https://telemetry.thunderforge.dev` by default. That route reaches
+    `apps/telemetry-gateway`, a small proxy that answers CORS for any
+    origin, labels where each batch came from, drops spam, and forwards
+    the rest to the collector's public receiver (User Story 9).
 - **The demo sends anonymous usage telemetry, and says so.** This amends
   spec 074. The events cover the funnel, timings and errors. They never
   carry what a visitor types, rolls, names or uploads.
@@ -205,8 +208,9 @@ Counted on 2026-10-07:
     The operator's collector may receive full logs (through the
     `tracing` log bridge) and unredacted spans, including `world.id`,
     because that data stays on infrastructure the operator controls.
-  - **Where it is decided.** One function, `telemetry::tier_for(endpoint)`
-    in `apps/thunderforge/src/telemetry/tier.rs`, compares the resolved
+  - **Where it is decided.** One function, `tier_for(endpoint)` in
+    `crates/thunderforge-telemetry-policy`, called only through
+    `apps/thunderforge/src/telemetry/tier.rs`, compares the resolved
     endpoint with the compiled-in project default
     (`PROJECT_TELEMETRY_ENDPOINT`), after normalising scheme, host case, a
     default port and a trailing slash. Equal means anonymous; anything else
@@ -284,8 +288,9 @@ Counted on 2026-10-07:
 This repository owns what ThunderForge emits, and what reads it: the
 instrumentation, the config files, the dashboards and the alert rules. The
 owner's Flux repository owns the collector, Tempo, Loki, Prometheus,
-Grafana, the `telemetry.thunderforge.dev` route and its CORS, retention,
-and the landing Deployment itself. Where this spec depends on how that side
+Grafana, the `telemetry.thunderforge.dev` route, the telemetry gateway's
+Deployment and Service, retention, and the landing Deployment itself. This
+repository owns the gateway's code, its image and its policy crate. Where this spec depends on how that side
 is configured, it says so under **Open items**.
 
 ## User Scenarios & Testing
@@ -601,6 +606,65 @@ matches Appendix A.
 
 ---
 
+### User Story 9 - The owner's endpoint labels where each batch came from, and drops spam (Priority: P2)
+
+`telemetry.thunderforge.dev` takes posts from anyone. The owner wants to
+know where each batch came from (his own sites, a self-hosted instance's
+browsers, or a self-hosted server), and wants junk dropped before it
+reaches the collector, counted by why it was dropped. A small proxy,
+`apps/telemetry-gateway`, sits between the public route and the
+collector's public receiver to do both. It also answers CORS for any
+origin, which is what open item 9 asked of the collector.
+
+**Why this priority**: Without it, self-hosted browsers are refused at
+preflight and a single sender can fill the counts. The P1 stories still
+work without it, because the project's own sites are already allowed and
+the server tier is enforced at the sender.
+
+**Independent Test**: The gateway's integration tests post OTLP/HTTP
+batches to the router in process, against a fake upstream, and read what
+the fake received and what the gateway's in-memory meter counted. No
+cluster is needed.
+
+**Acceptance Scenarios**:
+
+1. **Given** a browser on `https://game.example.org` posting
+   `/v1/logs` as JSON,
+   **When** its preflight and its post reach the gateway,
+   **Then** the preflight is answered with
+   `Access-Control-Allow-Origin: *` and no credentials, and the upstream
+   receives the batch as protobuf with
+   `thunderforge.ingress=public`, `thunderforge.source=self_hosted_browser`
+   and `thunderforge.origin.host=game.example.org` on its resource.
+2. **Given** a self-hosted server posting `/v1/metrics` as protobuf with
+   no `Origin` header,
+   **When** the gateway accepts it,
+   **Then** the resource carries `thunderforge.source=server`, no
+   `thunderforge.origin.host`, and the sender's `thunderforge.instance.id`
+   unchanged.
+3. **Given** any accepted batch,
+   **When** the upstream receives it,
+   **Then** no header, attribute or body field holds the sender's IP
+   address, and the gateway's own logs and telemetry hold none either.
+4. **Given** a sender over its per-IP rate,
+   **When** it posts again,
+   **Then** it gets `429` with `Retry-After`, nothing reaches the upstream,
+   and `dropped{reason="rate_limited_ip"}` goes up by one.
+5. **Given** a batch with an unknown `service.name`, a metric name off the
+   instrument list, an attribute value over its cap, or a missing or
+   non-UUID instance id,
+   **When** it arrives,
+   **Then** the offending resource or metric is dropped, the rest is
+   forwarded, the sender gets `200` with an OTLP `partial_success`, and
+   `dropped` goes up under that reason.
+6. **Given** the upstream is slow or the gateway is at its concurrency
+   limit,
+   **When** another post arrives,
+   **Then** it gets `503` at once, not after a queue, and
+   `dropped{reason="overloaded"}` goes up.
+
+---
+
 ### Edge Cases
 
 - **The telemetry endpoint is down or blocked** (an ad blocker, a corporate
@@ -664,6 +728,22 @@ matches Appendix A.
 - **No database yet.** The instance id is read after migrations. Until it
   exists (the first start), nothing is exported; export begins once the id
   is stored, so no record ever leaves without one.
+- **A forged `Origin`.** A server or a script can send any `Origin` it
+  likes, so `thunderforge.source` and `thunderforge.origin.host` are
+  indicative, not authenticated. They are for slicing dashboards, never
+  for trust. A sender that claims to be `thunderforge.dev` is still held
+  to the same allow-lists and rates.
+- **The landing and the demo have no instance id.** Their nginx and the
+  demo's served config carry none. The gateway lets `thunderforge-landing`
+  and `thunderforge-demo` through without one only when the source is
+  `owner_site`. Every other batch without a valid id is dropped.
+- **No `CF-IPCountry` header.** Whether Cloudflare fronts the domain is
+  unverified (R29). Without the header the gateway adds no country; it
+  never guesses one from the IP.
+- **A release adds an instrument before the gateway knows it.** The new
+  metric is dropped as `metric_name` until a gateway built from that
+  release is deployed. The gateway ships with, or before, the server
+  release that adds it (R27).
 
 ## Requirements
 
@@ -698,9 +778,10 @@ matches Appendix A.
 
 **Server: tiers, identity and disclosure**
 
-- **FR-006 The tier.** `apps/thunderforge/src/telemetry/tier.rs` MUST hold
-  `PROJECT_TELEMETRY_ENDPOINT` and `tier_for(endpoint) -> Tier`, as decided
-  above, and it MUST be the only place the tier is decided. On
+- **FR-006 The tier.** `crates/thunderforge-telemetry-policy` MUST hold
+  `PROJECT_TELEMETRY_ENDPOINT`, `Tier` and `tier_for(endpoint) -> Tier`, as
+  decided above. `apps/thunderforge/src/telemetry/tier.rs` re-exports them,
+  and it MUST be the only place in the server that decides the tier. On
   `Tier::Anonymous` the server MUST:
   - export metrics (`/v1/metrics`) and spans (`/v1/traces`), and
     `server.error` event records (`/v1/logs`), and install no `tracing`
@@ -736,9 +817,10 @@ matches Appendix A.
   state, with the destination filled in for the server and for browsers.
 - **FR-009 The anonymous allow-list is code, and tested.** The span
   attribute allow-list, the resource attribute list and the metric
-  instrument list MUST be constants in `tier.rs`, a unit test MUST
-  enumerate each, and adding an entry MUST be a reviewed change to that
-  file.
+  instrument list MUST be constants in `crates/thunderforge-telemetry-policy`,
+  a unit test MUST enumerate each, and adding an entry MUST be a reviewed
+  change to that crate. The server and the gateway (FR-040) read the same
+  constants, so the two cannot drift.
 
 **Server: what it reports**
 
@@ -905,7 +987,11 @@ conversion (see **Open items**).
   block at `/#telemetry`. It lists what is sent: pages viewed, steps
   reached in the demo, timings, errors, coarse browser and device class,
   and a random id that dies with the tab. It also lists what is not: what
-  you type, roll, name or upload, your address, cookies, any account. It
+  you type, roll, name or upload, your IP address, cookies, any account.
+  It says what the project's endpoint adds on arrival (the site the report
+  came from, and the country when the edge supplies it), and that it uses
+  the IP address only in memory, to rate-limit, and never stores or
+  forwards it (FR-041, FR-042). It
   also says that self-hosted instances report the same anonymous set by
   default, and how their operators redirect it or turn it off. Its text is
   Appendix A.5. The demo's notice MUST say "Anonymous usage counts go to
@@ -1084,6 +1170,135 @@ conversion (see **Open items**).
     turn it on and intercept the endpoint with `page.route`, answering
     `204`, so nothing leaves the machine.
 
+**The telemetry gateway (User Story 9)**
+
+- **FR-037 The service.** `apps/telemetry-gateway` (package
+  `thunderforge-telemetry-gateway`) MUST be a thin Axum and Tower binary
+  that the `telemetry.thunderforge.dev` route points at. Its configuration
+  is `clap` flags with environment fallbacks: the listen address, the
+  upstream URL (default `http://otel-collector-public.monitoring:4319`),
+  the rate settings and the trusted proxy hop count
+  (`contracts/telemetry-gateway.md`). It keeps no state on disk.
+- **FR-038 One policy, two users.** `crates/thunderforge-telemetry-policy`
+  MUST hold, as pure functions and constants with no network, OTel SDK or
+  Axum dependency:
+  - the tier (`PROJECT_TELEMETRY_ENDPOINT`, `Tier`, `tier_for`);
+  - the resource attribute allow-lists, for the server and for each
+    browser `service.name`;
+  - the span and log record attribute allow-lists;
+  - the metric name allow-list, which is `INSTRUMENTS`' names exactly;
+  - the attribute value caps;
+  - the instance id shape check (a hyphenated UUID);
+  - the known `service.name` values (`thunderforge`,
+    `thunderforge-landing`, `thunderforge-demo`, `thunderforge-web`);
+  - the source rule, the user agent reduction and the country check of
+    FR-041;
+  - the token bucket of FR-043, with the clock passed in.
+
+  The server's anonymous tier and the gateway MUST both use it. Neither
+  keeps a copy of any list.
+- **FR-039 What it accepts.** The gateway MUST accept `POST` on
+  `/v1/traces`, `/v1/logs` and `/v1/metrics`, with
+  `Content-Type: application/x-protobuf` or `application/json`, decoded
+  with `opentelemetry-proto` 0.33 (R26). It MUST:
+  - answer `OPTIONS` preflights on those paths for any origin with
+    `Access-Control-Allow-Origin: *`, the `POST` method, the
+    `Content-Type` header and no credentials;
+  - refuse a body over 4 MiB with `413` and a body it cannot decode, or a
+    content type it does not know, with `400`;
+  - answer `404` to every other path and method;
+  - forward what it accepts to the upstream as OTLP/HTTP protobuf, with
+    only a `Content-Type` header. No incoming header is copied.
+
+  The collector's public filters stay on behind it as defence in depth.
+- **FR-040 What it drops, and at what grain.** For each accepted request,
+  the gateway MUST apply FR-038's policy:
+  - a resource whose `service.name` is not known is dropped
+    (`unknown_service`);
+  - a resource whose `thunderforge.instance.id` is present and not a
+    UUID, or absent, is dropped (`instance_id`). The one exception is
+    `thunderforge-landing` and `thunderforge-demo` with source
+    `owner_site`, which may have none;
+  - a metric whose name is not on the list is dropped (`metric_name`);
+  - a span, log record or data point holding an attribute value over its
+    cap is dropped (`attribute_too_large`);
+  - an attribute not on its allow-list is removed, and the record kept,
+    counted in `thunderforge.telemetry_gateway.attributes_stripped`.
+
+  When anything is dropped and something is left, the gateway MUST
+  forward the rest and answer `200` with an OTLP `partial_success` naming
+  the rejected count. When nothing is left it forwards nothing and answers
+  the same way, so a sender does not retry.
+- **FR-041 What it adds.** On every resource it forwards, the gateway MUST
+  set these attributes, overwriting any the sender sent under the same
+  name:
+  - `thunderforge.ingress` = `public`;
+  - `thunderforge.source` = `owner_site` when the `Origin` host is
+    `thunderforge.dev` or `vtt-dev.thunderforge.dev`,
+    `self_hosted_browser` for any other `Origin`, and `server` when there
+    is no `Origin`;
+  - `thunderforge.origin.host`, the `Origin` header's host, lower-cased,
+    without scheme or port, for browsers only (`opaque` for `Origin: null`);
+  - `thunderforge.instance.id`, passed through after FR-040's check;
+  - `thunderforge.client.version`, the resource's `service.version` when
+    it looks like a version, else `unknown`;
+  - `thunderforge.user_agent.family` and `thunderforge.user_agent.major`,
+    the `User-Agent` header reduced to one of `chrome`, `edge`, `firefox`,
+    `safari`, `opera`, `samsung`, `otel-rust` or `other`, and a major
+    version number or `unknown`;
+  - `thunderforge.country`, the `CF-IPCountry` header when it is two
+    capital letters other than `XX` and `T1`. When the header is absent,
+    no country is added.
+
+  The full `User-Agent` is never forwarded.
+- **FR-042 The IP address.** The gateway MUST use the client IP only in
+  memory, as the key of the per-IP rate limit, and only as a keyed hash
+  whose key is random per process. It MUST NOT log it, store it, put it
+  in its own telemetry, or forward it in any header, attribute or body.
+  The client IP is the address `TELEMETRY_GATEWAY_TRUSTED_HOPS` from the
+  right of `X-Forwarded-For`, or the peer address when there is none.
+- **FR-043 Rates.** The gateway MUST hold two token buckets in memory, in
+  maps bounded in size and evicted when idle:
+  - per client IP: over the rate, `429` with `Retry-After` in whole
+    seconds, and nothing forwarded (`rate_limited_ip`);
+  - per instance id, checked after decoding: a resource over its
+    instance's rate is dropped (`rate_limited_instance`), and when every
+    resource in the request is, the answer is `429` with `Retry-After`.
+
+  The rates and burst sizes are configuration, with defaults in
+  `contracts/telemetry-gateway.md`.
+- **FR-044 Load shedding.** Per AGENTS.md, the gateway MUST drop, not
+  queue: a Tower concurrency limit with load shedding in front of the
+  handlers answers `503` at once when full (`overloaded`). The upstream
+  client is bounded: a fixed number of requests in flight, a connect and
+  a total timeout. A request that cannot get an upstream slot at once, or
+  whose upstream call fails or times out, gets `503` (`overloaded` or
+  `upstream_error`).
+- **FR-045 Its own telemetry.** The gateway MUST report, through the
+  OTel SDK, to the in-cluster collector
+  (`http://otel-collector.monitoring:4318`), never the public route:
+  - `thunderforge.telemetry_gateway.dropped{reason}`, where `reason` is
+    one of `rate_limited_ip`, `rate_limited_instance`, `body_too_large`,
+    `undecodable`, `unknown_service`, `metric_name`,
+    `attribute_too_large`, `instance_id`, `overloaded` or
+    `upstream_error`;
+  - `thunderforge.telemetry_gateway.accepted{signal, source}`;
+  - `thunderforge.telemetry_gateway.attributes_stripped`;
+  - `thunderforge.telemetry_gateway.upstream.duration`.
+
+  `server.json` gains a **Public telemetry intake** row, and the rules gain
+  `ThunderForgeTelemetryIntakeFailing` and `ThunderForgeTelemetrySpam`.
+  No label holds an IP, an origin host or an instance id.
+- **FR-046 Shipping it.** The `Dockerfile` MUST gain a
+  `telemetry-gateway` stage built the way the server is (cargo-chef
+  planner, cook and build), producing
+  `mbround18/thunderforgevtt:telemetry-gateway`, and the `server` stage
+  stays the default last one. `make push-telemetry-gateway` builds and
+  pushes it. In the Flux repository, a Deployment and Service for the
+  gateway go in `monitoring`, the `telemetry-thunderforge-dev` route's
+  backend moves from `otel-collector-public:4319` to the gateway, and the
+  `otlp/public` receiver's `cors` block is removed.
+
 ### Key Entities
 
 - **Telemetry config**: `{ enabled, endpoint, sampleRate, environment,
@@ -1100,6 +1315,14 @@ conversion (see **Open items**).
 - **Funnel step**: one of seven names, sent once per session.
 - **Server instrument**: a counter, gauge or histogram with a bounded label
   set, named `thunderforge_*`.
+- **Telemetry policy**: the allow-lists, caps and checks in
+  `crates/thunderforge-telemetry-policy`, read by the server's anonymous
+  tier and by the gateway.
+- **Source labels**: the `thunderforge.*` resource attributes the gateway
+  adds (FR-041), which say where a batch came from. They are indicative,
+  because `Origin` can be forged.
+- **Rate bucket**: a token bucket held in the gateway's memory, keyed by a
+  hashed client IP or by an instance id, gone when the process stops.
 
 ## Success Criteria
 
@@ -1157,6 +1380,20 @@ conversion (see **Open items**).
 - **SC-013**: A full `cargo test` run and each named e2e slice export
   nothing to any network destination (their stacks run with
   `TELEMETRY=false`, FR-036).
+- **SC-014**: The gateway's integration tests, against a fake upstream,
+  show each of User Story 9's scenarios: the preflight for an arbitrary
+  origin, every label of FR-041 for each source, one test per drop reason
+  of FR-045 with the counter at one, the `429` with `Retry-After`, the
+  fast `503`, and, for a request sent with a known
+  `X-Forwarded-For` address, that the address appears nowhere in what
+  the fake upstream received or in the gateway's captured logs and
+  metrics.
+- **SC-015**: The server's anonymous tier and the gateway read the same
+  lists: `crates/thunderforge-telemetry-policy` is the only Rust source
+  that names an allow-listed attribute or instrument, a test there fails when
+  `packages/telemetry/src/allowList.ts` differs from it, and after the
+  cluster apply a batch posted from an origin other than the project's
+  reaches Loki with `thunderforge.source=self_hosted_browser`.
 
 ### Proof
 
@@ -1205,6 +1442,15 @@ conversion (see **Open items**).
 
   `App.tsx` and `graphqlClient.ts` are cross-cutting, and the named slices
   are the proof for them. The full suite is not run.
+- `cargo test -p thunderforge-telemetry-policy`: the lists, the caps, the
+  instance id check, the source rule, the user agent reduction, the
+  country check and the token bucket under a fixed clock. These are
+  written first (TDD) and are deterministic.
+- `cargo test -p thunderforge-telemetry-gateway`: the router in process
+  with `tower::ServiceExt::oneshot`, against a fake upstream on
+  `127.0.0.1`, for SC-014. No slice covers the gateway, and none is added:
+  it has no browser surface of its own, and the browsers' half is the
+  `telemetry` slice's `page.route` interception, which never reaches it.
 - `deploy/k8s/observability`: `kustomize build` succeeds, every dashboard
   parses, the SC-008 script passes, and `promtool check rules` passes.
 
@@ -1213,10 +1459,21 @@ conversion (see **Open items**).
 - The Flux side runs an OpenTelemetry Collector at
   `otel-collector.monitoring:4318`. It exports metrics to Prometheus, logs
   to Loki over Loki's native OTLP endpoint, and traces to Tempo. It also
-  exposes `https://telemetry.thunderforge.dev`. Its CORS today allows only
-  `https://thunderforge.dev` and `https://vtt-dev.thunderforge.dev` (R7), so
-  self-hosted instances' browsers are refused at preflight until it allows
-  any origin without credentials (open item 9). Servers are unaffected.
+  exposes `https://telemetry.thunderforge.dev`. That route will point at
+  the telemetry gateway, which answers CORS for any origin and forwards to
+  the collector's `otlp/public` receiver on `:4319` (User Story 9). Until
+  the gateway is deployed, the receiver's CORS allows only
+  `https://thunderforge.dev` and `https://vtt-dev.thunderforge.dev` (R7),
+  so self-hosted browsers are refused at preflight. Servers are
+  unaffected.
+- Whether Cloudflare proxies `telemetry.thunderforge.dev`, and so whether
+  `CF-IPCountry` arrives, is unverified (R29). The gateway adds a country
+  only when the header is there.
+- The shared gateway in front of the route is assumed to append the
+  client address to `X-Forwarded-For`, so one trusted hop is the default
+  (unverified, R28). If it does not,
+  every sender shares one per-IP bucket, which `TELEMETRY_GATEWAY_TRUSTED_HOPS`
+  corrects (R28).
 - Grafana runs kube-prometheus-stack's dashboard sidecar, which picks up
   ConfigMaps labelled `grafana_dashboard: "1"`.
 - `thunderforge-dev` is not Flux-managed, and neither Deployment's manifest
@@ -1235,7 +1492,8 @@ conversion (see **Open items**).
 ## Open items
 
 Planning (research.md) resolved items 1 to 5 and 7 against the live
-cluster. Items 6, 7a, 8 and 9 remain open:
+cluster. The telemetry gateway (User Story 9) resolved 7a and 9. Items 6
+and 8 remain open:
 
 1. **Resolved (R4).** **Metric names after the collector.** The names above assume the
    Prometheus exporter adds `_total` and unit suffixes, and turns
@@ -1285,17 +1543,17 @@ cluster. Items 6, 7a, 8 and 9 remain open:
    - the same span-attribute allow-list as FR-006, applied again at the
      collector for traces from the public route.
 
-   There is no per-IP rate limit on that route. A sender can inflate the
-   counts or the series within the allowed names; the dashboards say their
-   self-hosted panels are indicative, and a limit (at the gateway, or the
-   collector's `memory_limiter` plus a per-`thunderforge.instance.id`
-   cap) is future work.
-7a. **Collector-side allow-list (residual hardening, Flux side).** The
+   The rate limit this item called future work is now the gateway's
+   (FR-043): per IP and per instance id. A sender inside both limits can
+   still skew the self-hosted counts within the allowed names, so those
+   panels stay indicative.
+7a. **Resolved by the gateway (FR-040).** **Collector-side allow-list (residual hardening, Flux side).** The
    public route's `transform/public` does not strip `process.*`,
    `container.*` or `k8s.*`, and the collector has no span-attribute
    allow-list (R6). `tier.rs`'s span processor and hand-built resource are
-   the guarantee, and SC-011 proves them. A collector-side copy is defence
-   in depth and does not block this spec.
+   the guarantee, and SC-011 proves them. The gateway now applies the same
+   lists from the same crate to everything that arrives publicly, so a
+   hostile sender meets them too; the collector's filters stay behind it.
 8. **GDPR wording for the server-image default.** The anonymous tier and
    the two switches are why on-by-default is defensible: nothing sent
    identifies a person, and the operator controls it with one variable.
@@ -1304,11 +1562,13 @@ cluster. Items 6, 7a, 8 and 9 remain open:
    legitimate-interest wording (GDPR Art. 6(1)(f)) and whether an
    operator-facing data-processing note is wanted. This is an open item,
    not a blocker; ADR-114 records it.
-9. **CORS on the public route (owner's yes, Flux side).** The public
+9. **Resolved by a proxy (R7, R25).** **CORS on the public route.** The public
    receiver allows only `https://thunderforge.dev` and
    `https://vtt-dev.thunderforge.dev`, so self-hosted browsers' JSON posts
-   fail preflight (R7). The fix is `allowed_origins: ["*"]` with no
-   credentials, which is task T089. Until then the self-hosted browser
+   fail preflight (R7). The owner chose a proxy over widening the
+   receiver: the gateway answers preflights for any origin without
+   credentials (FR-039), the route moves to it, and the receiver's `cors`
+   block goes (T089). Until that is applied, the self-hosted browser
    panels are empty.
 
 ## Appendix A: The disclosure
@@ -1332,7 +1592,12 @@ build, including the server image you run yourself.
   install.
 - **What is never sent:** anything anyone types, rolls, names or uploads;
   emails, accounts, or world, character or scene ids; IP addresses;
-  hostnames; cookies.
+  machine hostnames; cookies.
+- **What we add when it arrives:** where it came from (our own sites,
+  your players' browsers and your site's domain, or your server), the
+  browser family and major version, and the country when our network edge
+  supplies it. Our endpoint uses your IP address only in memory, to limit
+  how fast one sender can post, and never stores or forwards it.
 - **Where it goes:** `https://telemetry.thunderforge.dev`, kept for 14 days.
 - **Send it to your own collector instead:** set
   `OTEL_EXPORTER_OTLP_ENDPOINT` for the server and
@@ -1376,8 +1641,9 @@ settings show both destinations.
 
 ## What we receive, when it comes to us
 
-Only this, and the list is enforced in code
-(`apps/thunderforge/src/telemetry/tier.rs` and `packages/telemetry`):
+Only this, and the list is enforced in code, by the sender
+(`crates/thunderforge-telemetry-policy` and `packages/telemetry`) and again
+by our endpoint, from the same crate:
 
 - **Errors**: the error's type and its message and stack, with emails,
   tokens and other personal details removed by the same rules as feedback
@@ -1400,20 +1666,44 @@ Only this, and the list is enforced in code
   fifty instances with one each. Delete the row for a new one.
 - **A random browser session id** that is forgotten when the tab closes.
 
+## What our endpoint adds
+
+Our endpoint at `telemetry.thunderforge.dev` labels each report before it
+is stored, so we can tell where it came from:
+
+- whether it came from our own sites, from a browser on a ThunderForge we
+  don't run, or from a server;
+- for a browser, the domain of the site it was on (your site's domain,
+  for your players), never the page's path;
+- your install's random id, after checking it is one;
+- the ThunderForge version;
+- the browser family and major version, from the `User-Agent` header,
+  which is then discarded;
+- the country, when our network edge supplies it. If it does not, no
+  country is recorded; we never work one out from your address.
+
+Your IP address is used only in the endpoint's memory, to limit how fast
+one sender can post. It is never logged, stored, or passed on. Reports
+that break the rules above, or come too fast, are dropped and only
+counted.
+
 ## What we never receive
 
 - Anything anyone types, rolls, names or uploads: chat, names of worlds,
   characters or tokens, notes, dice results, file names, GraphQL variables.
 - Emails, usernames, or user, world, character, scene or token ids.
-- IP addresses, hostnames, container or Kubernetes names, full user
-  agents, cookies.
+- IP addresses (used in memory to rate-limit, as above, and never kept),
+  machine hostnames, container or Kubernetes names, full user agents,
+  cookies.
 - Your server's logs. Only error records built from the list above leave
   for us.
 
 ## Where it goes and how long it is kept
 
-To `https://telemetry.thunderforge.dev`, the project's OpenTelemetry
-collector, run by the ThunderForge maintainer. It is stored in Loki,
+To `https://telemetry.thunderforge.dev`, the project's endpoint, which
+labels and checks it as above and passes it to the project's
+OpenTelemetry collector, both run by the ThunderForge maintainer. It is
+stored in Loki,
 Tempo and Prometheus and kept for 14 days. It is not sold or shared, and
 it is used only to find and fix problems in ThunderForge.
 
@@ -1466,7 +1756,8 @@ Heading **Telemetry**, then:
   diagnostics to the ThunderForge project at
   `https://telemetry.thunderforge.dev`: errors with personal details
   removed, timings, counts and versions. Nothing anyone types, rolls, names
-  or uploads, and no emails, ids, addresses or hostnames. Kept 14 days."
+  or uploads, and no emails, ids, IP addresses or machine hostnames;
+  browsers' reports name your site's domain. Kept 14 days."
 - **Redirected:** "This instance sends its telemetry to `<destination>`,
   your own collector, and nothing to the ThunderForge project."
 - **Off:** "Telemetry is off. Nothing is sent anywhere."
@@ -1484,9 +1775,12 @@ sent](docs/guides/telemetry.md)". There is no toggle.
 > and the demo send us anonymous usage: which pages you view, how far you
 > get in the demo, how long things take, errors, your browser family and a
 > rough device class, and a random id that is forgotten when you close the
-> tab. We never receive what you type, roll, name or upload, your address,
-> cookies, or any account. It goes to `telemetry.thunderforge.dev` and is
-> kept for 14 days. If your browser sends Global Privacy Control or Do Not
+> tab. We never receive what you type, roll, name or upload, cookies, or
+> any account. Our endpoint uses your IP address only in memory, to stop
+> one sender flooding it, and never stores or passes it on. It notes which
+> site the report came from, and your country when our network edge
+> supplies it. It goes to `telemetry.thunderforge.dev` and is kept for 14
+> days. If your browser sends Global Privacy Control or Do Not
 > Track, we receive errors only.
 >
 > ThunderForge you run yourself sends us the same kind of anonymous

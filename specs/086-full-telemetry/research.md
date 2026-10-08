@@ -14,6 +14,8 @@ rejected. Checked against the tree and the live cluster on 2026-10-07.
 | `opentelemetry-otlp` | 0.33.0 | `thunderforge` | The OTLP/HTTP exporter. `default-features = false`, with features `http-proto`, `reqwest-client`, `reqwest-rustls`, `trace`, `metrics` and `logs`. |
 | `tracing-opentelemetry` | 0.34.0 | `thunderforge` | The layer beside Bunyan (FR-001). 0.34 is the release that pairs with otel 0.33. |
 | `opentelemetry-appender-tracing` | 0.33.0 | `thunderforge` | The log bridge. Installed on the operator tier only (FR-006). |
+| `opentelemetry-proto` | 0.33.0 | `thunderforge-telemetry-gateway` | The OTLP message types the gateway decodes and re-encodes (R26). |
+| `prost` | 0.14 | `thunderforge-telemetry-gateway` | Decodes and encodes those types as protobuf. The version `opentelemetry-proto` 0.33 itself depends on. |
 
 **Verified**:
 
@@ -31,8 +33,8 @@ rejected. Checked against the tree and the live cluster on 2026-10-07.
 **Not added**:
 
 - `opentelemetry-semantic-conventions`. About ten attribute names are needed,
-  and they are written as constants in `tier.rs`, which is where FR-009 wants
-  them listed anyway.
+  and they are written as constants in `crates/thunderforge-telemetry-policy`,
+  which is where FR-009 wants them listed anyway.
 - `grpc-tonic`. gRPC would pull in tonic and a second HTTP stack, and the
   public route is HTTP only.
 - `gzip-http`. Batches are small, the collector's body cap is 4 MiB, and
@@ -59,8 +61,9 @@ the OS random source through `getrandom`, which is already in the tree.
   (`served_config.rs`), and the `TelemetryStatus` that the admin query and
   the startup line read (`status.rs`).
 - `apps/thunderforge/src/telemetry/` holds the SDK:
-  - `tier.rs`: `PROJECT_TELEMETRY_ENDPOINT`, `tier_for`, and the three
-    allow-list constants;
+  - `tier.rs`: re-exports `PROJECT_TELEMETRY_ENDPOINT`, `Tier`, `tier_for`
+    and the allow-lists from `crates/thunderforge-telemetry-policy` (R25),
+    and adapts them to the SDK's types;
   - `settings.rs`: reads the environment into one `TelemetrySettings`;
   - `install.rs`: the providers and the layers;
   - `anonymous.rs`: the allow-list span processor and the `server.error`
@@ -83,6 +86,11 @@ the OS random source through `getrandom`, which is already in the tree.
 **Rejected**: A new `thunderforge-telemetry` crate. It would hold one file of
 SDK wiring that has one caller. If a second binary ever needs it, it can be
 moved then.
+
+**Amended (R25)**: A second binary did arrive, the telemetry gateway, and
+it needs the policy, not the SDK wiring. So the policy alone moved into
+`crates/thunderforge-telemetry-policy`. The SDK wiring stays in
+`apps/thunderforge/src/telemetry/`.
 
 ## R4. Instrument names and the collector's conversion (open item 1)
 
@@ -167,6 +175,11 @@ structured metadata, with dots turned into underscores (`event.name` becomes
   the Flux side. It is in the spec's open items as item 7a, and it does not
   block this spec.
 
+**Amended (R25)**: The telemetry gateway now applies the allow-lists to
+everything that arrives publicly, from the same crate the server uses, and
+adds a per-IP and per-instance rate limit. Item 7a is resolved by it. The
+collector's `filter/public` and `transform/public` stay on behind it.
+
 ## R7. CORS on the public route (new open item)
 
 **Verified**: The public receiver's CORS allows only
@@ -198,6 +211,11 @@ structured metadata, with dots turned into underscores (`event.name` becomes
 **Rejected**: Proxying browser telemetry through each instance's own server.
 That would make every instance forward strangers' posts, which is a bigger
 surface than one CORS line.
+
+**Superseded (R25)**: The owner chose a proxy in front of the project's
+collector, not in each instance. The gateway answers preflights for any
+origin with no credentials, the route moves to it, and the receiver's
+`cors` block is removed. T089 is now that change.
 
 ## R8. Browser alerts: a collector `count` connector (open item 3)
 
@@ -565,3 +583,178 @@ govern `fetch`, and a header cannot loosen a `<meta>`.
 and the served header narrows it to the one origin. The browser enforces both,
 so the stricter wins. FR-021 is corrected to this wording. On a host that
 sends no header, the guard is the limit, as open item 6 already says.
+
+## R25. A proxy in front of the public receiver
+
+**Decision**: The owner chose a proxy, `apps/telemetry-gateway`, between the
+`telemetry.thunderforge.dev` route and the collector's `otlp/public`
+receiver. It answers CORS for any origin, labels where each batch came
+from, drops spam by reason, and forwards the rest. The allow-lists move
+into `crates/thunderforge-telemetry-policy`, which the server and the
+gateway both use.
+
+**Why**:
+
+- The collector can widen CORS, but it cannot say where a batch came from,
+  and it has no per-IP or per-sender limit. The gateway can do all three.
+- The policy crate is pure (no SDK, no Axum, no IO) and works on string
+  keys and values, so the server's SDK types and the gateway's protobuf
+  types both call it. The two can never hold different lists.
+- The collector's `filter/public` and `transform/public` stay on. A bug in
+  the gateway then still meets the old filters.
+
+**Rejected**:
+
+- `allowed_origins: ["*"]` on the receiver alone (the old T089). It fixes
+  CORS and nothing else.
+- Rate limiting in the collector. Contrib has no per-client limiter on the
+  OTLP receiver, and `memory_limiter` refuses everyone at once.
+- Labelling in the collector from headers (`include_metadata` plus a
+  `transform`). It can copy `Origin`, but not reduce a user agent or keep
+  the IP out of every record, and the allow-lists would live in YAML apart
+  from the server's.
+- An Envoy or nginx rate limit on the shared gateway. It would limit by IP
+  but could not decode OTLP to check content or count reasons.
+
+## R26. `opentelemetry-proto` 0.33.0 for the OTLP messages
+
+**Verified** on crates.io and in the crate's source (2026-10-07):
+
+- 0.33.0 depends on `opentelemetry` and `opentelemetry_sdk` `^0.33`, and on
+  `prost` `^0.14` (optional), so it matches R1's 0.33 line.
+  `opentelemetry-otlp` 0.33 already pulls it in for the server.
+- `gen-tonic-messages` gives the prost message types without the tonic
+  client or server. The default `full` feature would add tonic, which is
+  not wanted.
+- `with-serde` derives serde with `rename_all = "camelCase"`, hex trace and
+  span ids, and int64 and uint64 fields accepted as a number or a string.
+  Unknown fields are ignored. Enums are integers, which is what OTLP/JSON
+  sends.
+- The collector request types (`ExportTraceServiceRequest` and the others)
+  and their `partial_success` responses are in the messages.
+
+**Decision**:
+
+```toml
+opentelemetry-proto = { version = "0.33.0", default-features = false, features = ["gen-tonic-messages", "trace", "logs", "metrics", "with-serde"] }
+prost = "0.14"
+```
+
+The gateway decodes JSON with `serde_json` into those types and
+re-encodes protobuf with `prost`, so the upstream sees one format.
+
+**To check in the tests**: fixtures captured from `packages/telemetry`'s
+JSON encoder and from the server's `http-proto` exporter must decode, and
+must forward byte-for-byte the same content they carried. If the JSON path
+disagrees with what the browser sends (for example in how an `AnyValue`
+holding bytes is spelled), the fixture test fails first.
+
+## R27. The metric allow-list is the instrument names, exactly
+
+**Decision**: The gateway accepts a metric only when its name is one of
+`INSTRUMENTS`' names. The collector's looser regex stays behind it.
+
+**Why**: The regex lets any sender invent `thunderforge.anything` series,
+each a new Prometheus series. The exact list bounds the series to what the
+server can emit.
+
+**Cost**: A release that adds an instrument must ship its gateway with or
+before it. Until then the new metric is dropped as `metric_name` and the
+drop shows on the dashboard, so the skew is visible. Older servers send a
+subset, which passes.
+
+## R28. The client IP, and keeping it out of everything
+
+**Decision**:
+
+- The client IP is the address `TELEMETRY_GATEWAY_TRUSTED_HOPS` (default
+  `1`) from the right of `X-Forwarded-For`, or the peer address when the
+  header is absent.
+- It is hashed at once with a keyed hash whose key is random per process,
+  and only the hash keys the bucket. The address itself is dropped at the
+  end of the request.
+- The bucket map is bounded (100 000 entries by default) and evicts
+  entries idle longer than their refill time. A full map refuses new keys
+  as `rate_limited_ip`, so it cannot grow without bound.
+- The gateway's `TraceLayer` records no client address, no
+  `X-Forwarded-For`, and no `User-Agent`. The upstream request is built
+  fresh, with only `Content-Type`.
+
+**Unverified**: How many hops the cilium shared gateway appends to
+`X-Forwarded-For`, and whether Cloudflare sits in front of it (R29). With
+the wrong count, every sender shares one bucket (too few hops) or a sender
+can choose its own key (too many). The cluster task checks the header
+once, with a test pod, and sets the count.
+
+## R29. The country, from `CF-IPCountry` only
+
+**Unverified**: Whether Cloudflare proxies `telemetry.thunderforge.dev`.
+The gateway's certificate is `cloudflare-thunderforge-dev-tls`
+(issued through Cloudflare's DNS), and the shared gateway terminates TLS
+itself, but nothing in the Flux repository says whether the DNS record is
+proxied (orange cloud) or DNS only.
+
+**Decision**: The gateway adds `thunderforge.country` only when
+`CF-IPCountry` is present and is two capital letters other than `XX`
+(unknown) and `T1` (Tor). When the header is absent, no country is added.
+The gateway never looks an address up in a GeoIP database.
+
+**Why**: A country from the edge costs nothing and needs no database. A
+lookup from the IP would mean shipping and updating a GeoIP file and
+reading the address for more than the rate limit, which the disclosure
+says it is not used for.
+
+**Note**: The header can be forged when Cloudflare is not in front. That
+makes the country indicative, like the other labels.
+
+## R30. The source, the origin host and the user agent
+
+**Decision**:
+
+- `thunderforge.source` is `owner_site` when `Origin`'s host is
+  `thunderforge.dev` or `vtt-dev.thunderforge.dev`, `self_hosted_browser`
+  for any other `Origin`, and `server` when there is none. The server's
+  `reqwest` exporter sends no `Origin`; browsers always do on a
+  cross-origin `fetch`.
+- `thunderforge.origin.host` is the host alone: no scheme, no port, no
+  path, lower-cased, at most 253 characters. `Origin: null` (a sandboxed
+  frame or a `file:` page) becomes `opaque`.
+- The user agent is reduced by ordered substring rules
+  (`Edg/`, `OPR/`, `SamsungBrowser/`, `Firefox/`, `Chrome/`, then
+  `Safari/` with `Version/`, then `opentelemetry` or `reqwest` for
+  `otel-rust`) to a family and a major version. Anything else is `other`
+  and `unknown`.
+- Every label overwrites a sender's attribute of the same name.
+
+**Why**: The browsers already send `browser.family` and `browser.major`
+from their own parse, but that is the sender's word. The header reduction
+is the gateway's, and it covers servers too. The origin host is the one
+label that tells two self-hosted communities apart without an id.
+
+**Rejected**: A user-agent parsing crate. The regex-database crates weigh
+several hundred kilobytes for eight families, and their output would need
+reducing anyway.
+
+## R31. Answers, load shedding and the upstream client
+
+**Decision**:
+
+- Request-level failures answer with a status and forward nothing: `400`
+  undecodable, `413` over 4 MiB, `429` rate-limited with `Retry-After`,
+  `503` overloaded or upstream failure.
+- Content-level drops answer `200` with OTLP `partial_success`
+  (`rejected_spans`, `rejected_log_records` or `rejected_data_points`, and
+  a short `error_message` naming the reasons). OTLP senders treat that as
+  final, so they do not retry the junk.
+- `tower::ServiceBuilder` puts `load_shed` over a `concurrency_limit`
+  (default 256) over a 10 s `timeout`, so a full gateway answers `503` at
+  once. `RequestBodyLimitLayer` enforces the 4 MiB cap before decoding.
+- The upstream client is one `reqwest::Client` with a 2 s connect and a
+  5 s total timeout, behind a semaphore (default 64). `try_acquire` fails
+  fast with `503` (`overloaded`), so nothing queues for the upstream.
+- The upstream's own `partial_success` is passed back to the sender added
+  to the gateway's.
+
+**Why**: AGENTS.md: drop, don't queue. A 503 is retried by the OTLP
+exporters with backoff, and a browser's queue already drops the oldest
+batch.

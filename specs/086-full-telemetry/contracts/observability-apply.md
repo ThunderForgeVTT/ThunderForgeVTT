@@ -85,14 +85,16 @@ The target uses the Makefile's existing `KUBE_CONTEXT`, `KUBE_NAMESPACE`,
 is how a change is shipped.
 
 `THUNDERFORGE_BROWSER_TELEMETRY_ENDPOINT` is left at the default on
-`thunderforge`. vtt-dev's browsers report to the public route, whose CORS
-already allows `https://vtt-dev.thunderforge.dev`. The server's export goes to
+`thunderforge`. vtt-dev's browsers report to the public route, which the
+telemetry gateway answers for any origin and labels `owner_site`
+([telemetry-gateway.md](telemetry-gateway.md)). The server's export goes to
 the in-cluster collector on the operator tier.
 
 ## `scripts/check-observability.mjs` (SC-008)
 
-1. Runs `cargo test -p thunderforge --quiet -- telemetry::tier::print_instruments --nocapture --exact`
-   and reads the Prometheus names it prints.
+1. Runs `cargo test -p thunderforge-telemetry-policy --quiet -- print_instruments --nocapture --exact`
+   and reads the Prometheus names it prints: the server's `INSTRUMENTS` and
+   the gateway's `GATEWAY_INSTRUMENTS`.
 2. Reads `ALLOWED_ATTRIBUTES` and the event names from
    `packages/telemetry/src/allowList.ts`.
 3. Adds the connector's series from
