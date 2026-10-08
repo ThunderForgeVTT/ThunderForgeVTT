@@ -288,6 +288,9 @@ pub(crate) enum ExternalCommand {
     SetWorld {
         world_id: String,
     },
+    /// Spec 085: delete every member of the group the viewer may delete.
+    /// The Select bar's Delete, as the `delete_group` store command.
+    DeleteSelection,
     /// The engine sandbox's red and blue demo tokens. Sent by
     /// `apps/engine-sandbox` and nothing else; a world session has none.
     SpawnDemoTokens,

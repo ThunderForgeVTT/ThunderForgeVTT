@@ -140,14 +140,14 @@ that passes them.
   Test both in a new `crates/thunderforge-engine/src/systems/token_press_tests.rs` (`#[path]` from `token.rs`). Shift-click on a token toggles it in the group (`apply_box` with one hit).
 
 - [x] T020 [US2] [082 merged] Move `translate_geometry` and its two tests from `crates/thunderforge-engine/src/systems/shape.rs` to a new `crates/thunderforge-canvas-core/src/shape_geometry.rs` as `translate`. Add `shape_bounds(kind, &geometry)` with tests for rect, ellipse, line, stroke and text. `systems/shape.rs` calls `shape_geometry::translate`.
-- [ ] T021 [P] [US2] Tests in `crates/thunderforge-engine/src/systems/group_move.rs` `mod tests` for a pure `release_events(members, offset, stamp) -> Vec<Value>`:
+- [x] T021 [P] [US2] Tests in `crates/thunderforge-engine/src/systems/group_move.rs` `mod tests` for a pure `release_events(members, offset, stamp) -> Vec<Value>`:
   - a token gets `upsert_token` with its fields;
   - a wall gets `update_wall` with all four ends moved by the offset;
   - a light gets `update_light` with `x` and `y`;
   - a shape gets `update_shape` with translated geometry;
   - every event carries the same `group`, whose `size` equals the count;
   - the offset is snapped by the pressed item's snapping.
-- [ ] T022 [US2] [082 merged] `crates/thunderforge-engine/src/systems/group_move.rs`:
+- [x] T022 [US2] [082 merged] `crates/thunderforge-engine/src/systems/group_move.rs`:
   - the `GroupDrag` resource, started by a press on a member of a group of two or more;
   - live preview of every member;
   - `release_events` on release;
@@ -155,6 +155,8 @@ that passes them.
   - `ExternalCommand::DeleteSelection` (`payloads.rs`) and `delete_selection()` (`sdk.rs`) do the same.
 
   Register it in `app.rs` under Select.
+
+  *Landed:* registered in `GroupSelectPlugin` (`plugins/group_select.rs`), as T018 was. `delete_selection()` and the `delete_group` command both raise one request the system consumes, the pattern `set_selection_filter` uses. A GM's group Delete also removes tokens, as `remove_token` (FR-012: every item the viewer may delete).
 
 - [ ] T023 [P] [US2] Light bridge, tests first, in `apps/web/src/engine/world/sync/__tests__/lightBridge.test.ts`:
   - a refused `update_light` or `delete_light` restores the cached record with source `"sync"`;

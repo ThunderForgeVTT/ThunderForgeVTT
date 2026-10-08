@@ -34,6 +34,7 @@ pub mod conflict_visualization;
 pub mod event_dispatcher;
 /// The snapping switch's key and its report to the page (spec 077).
 pub mod grid_snap;
+pub mod group_move;
 pub mod lighting;
 /// Resizing, toggling, deleting and undoing a placed light — split from
 /// `lighting` to keep that file within the length limit.

@@ -250,6 +250,9 @@ pub(crate) fn apply_external_commands(
             ExternalCommand::SetWorld { world_id } => {
                 active_world.0 = world_id;
             }
+            ExternalCommand::DeleteSelection => {
+                crate::systems::group_move::request_delete();
+            }
             ExternalCommand::SpawnDemoTokens => {
                 spawn_demo_tokens(&mut commands, &mut token_entities);
             }

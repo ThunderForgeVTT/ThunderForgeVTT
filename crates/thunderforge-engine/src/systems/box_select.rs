@@ -126,7 +126,7 @@ impl SelectionParams<'_> {
 
     /// The group the singles describe, when a tool selected one thing on
     /// its own.
-    pub(crate) fn from_singles(&mut self) -> GroupSelection {
+    pub(crate) fn singles_group(&mut self) -> GroupSelection {
         let singles = Singles {
             token: &mut self.token,
             wall: &mut self.wall,
@@ -140,7 +140,7 @@ impl SelectionParams<'_> {
 /// Everything on the board the box measures, read-only.
 #[derive(SystemParam)]
 pub(crate) struct BoardItems<'w, 's> {
-    tokens: Query<
+    pub(crate) tokens: Query<
         'w,
         's,
         (
@@ -151,14 +151,14 @@ pub(crate) struct BoardItems<'w, 's> {
             Option<&'static Visibility>,
         ),
     >,
-    walls: Option<Res<'w, WallSet>>,
-    lights: Option<Res<'w, LightSet>>,
-    shapes: Option<Res<'w, ShapeSet>>,
-    grid: Option<Res<'w, SceneGrid>>,
+    pub(crate) walls: Option<Res<'w, WallSet>>,
+    pub(crate) lights: Option<Res<'w, LightSet>>,
+    pub(crate) shapes: Option<Res<'w, ShapeSet>>,
+    pub(crate) grid: Option<Res<'w, SceneGrid>>,
 }
 
 impl BoardItems<'_, '_> {
-    fn token_side(&self, behaviour: Option<&TokenGridBehaviour>) -> f32 {
+    pub(crate) fn token_side(&self, behaviour: Option<&TokenGridBehaviour>) -> f32 {
         let footprint = behaviour.map_or_else(Default::default, |b| b.footprint);
         self.grid
             .as_ref()
@@ -448,7 +448,7 @@ pub(crate) fn handle_box_select(
 /// picked in Walls — the group follows the singles.
 pub(crate) fn follow_single_selection(mut selection: SelectionParams) {
     if !selection.agrees() {
-        let group = selection.from_singles();
+        let group = selection.singles_group();
         *selection.group = group;
     }
 }

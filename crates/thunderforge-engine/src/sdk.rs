@@ -104,6 +104,7 @@ pub(crate) fn parse_command(input: &str) -> Option<ExternalCommand> {
 
     match command_type {
         "spawn_demo_tokens" => Some(ExternalCommand::SpawnDemoTokens),
+        "delete_group" => Some(ExternalCommand::DeleteSelection),
         "set_world" => Some(ExternalCommand::SetWorld {
             world_id: value.get("worldId")?.as_str()?.to_owned(),
         }),
@@ -532,6 +533,14 @@ pub(crate) fn classify_command(input: &str) -> Result<ExternalCommand, SdkError>
         },
         command: command_type,
     })
+}
+
+/// Spec 085: delete every member of the group the viewer may delete, as the
+/// Select bar's Delete does. The same request the `delete_group` command
+/// makes.
+#[wasm_bindgen]
+pub fn delete_selection() {
+    crate::systems::group_move::request_delete();
 }
 
 /// Panic, on purpose (spec 070).
