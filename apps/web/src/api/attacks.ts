@@ -6,6 +6,7 @@
 
 import { postGraphQL } from "@/api/graphqlClient";
 import type { CombatRecord } from "@/types/combat";
+import type { RollFacetRecord } from "@/types/roll";
 import type {
   ActionCost,
   AttackFields,
@@ -278,4 +279,24 @@ export function setItemAttack(
     `,
     { itemId, attack },
   ).then((data) => data.setItemAttack);
+}
+
+/**
+ * Spec 084 research R6: the item properties the world's system declares,
+ * such as 5e's Two-Handed. Empty for a system that declares none.
+ */
+export function getSystemItemProperties(
+  worldId: string,
+): Promise<RollFacetRecord[]> {
+  return postGraphQL<{ systemItemProperties: RollFacetRecord[] }>(
+    `
+      query SystemItemProperties($worldId: UUID!) {
+        systemItemProperties(worldId: $worldId) {
+          id
+          label
+        }
+      }
+    `,
+    { worldId },
+  ).then((data) => data.systemItemProperties);
 }

@@ -1,10 +1,16 @@
 import { useEffect, useState } from "react";
-import { setAbilityAttack, setItemAttack } from "@/api/attacks";
+import {
+  getSystemItemProperties,
+  setAbilityAttack,
+  setItemAttack,
+} from "@/api/attacks";
 import { postGraphQL } from "@/api/graphqlClient";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
+import { ItemPropertyChecklist } from "@/pages/world/ability/ItemPropertyChecklist";
 import { MultiattackPicker } from "@/pages/world/ability/MultiattackPicker";
 import type { ActionCost, AttackFields } from "@/types/attack";
+import type { RollFacetRecord } from "@/types/roll";
 
 const ATTACK_FIELD_SELECTION = `
   reach
@@ -46,6 +52,7 @@ function loadFields(owner: AttackFieldsOwner): Promise<AttackFields> {
       query ItemAttackFields($itemId: UUID!) {
         item(itemId: $itemId) {
           ${ATTACK_FIELD_SELECTION}
+          properties
         }
       }
     `,
@@ -92,6 +99,23 @@ export function AttackFieldsEditor({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [declared, setDeclared] = useState<RollFacetRecord[]>([]);
+
+  // Spec 084 R6: only an item is marked with its system's properties.
+  useEffect(() => {
+    if (owner.kind !== "item") return;
+    let active = true;
+    getSystemItemProperties(worldId)
+      .then((properties) => {
+        if (active) setDeclared(properties);
+      })
+      .catch(() => {
+        if (active) setDeclared([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [owner.kind, worldId]);
 
   useEffect(() => {
     let active = true;
@@ -244,6 +268,14 @@ export function AttackFieldsEditor({
         />
         Needs to see its target
       </label>
+      {owner.kind === "item" ? (
+        <ItemPropertyChecklist
+          declared={declared}
+          selected={fields.properties ?? []}
+          disabled={!canEdit}
+          onChange={(properties) => setFields({ ...fields, properties })}
+        />
+      ) : null}
       <MultiattackPicker
         worldId={worldId}
         value={fields.multiattack}

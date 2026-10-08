@@ -112,4 +112,9 @@ export interface AttackFields {
   actionCost: ActionCost;
   legendaryCost: number;
   multiattack: string[];
+  /**
+   * Spec 084 research R6: an item's properties (`two_handed`), from the ids
+   * its system declares. Only an item has them; absent for an ability.
+   */
+  properties?: string[];
 }
