@@ -56,15 +56,15 @@ two specs meet.
 
 ### Dice crate: rewrite and replay
 
-- [ ] T004 [P] Tests `crates/thunderforge-dice/src/rewrite_tests.rs`:
+- [x] T004 [P] Tests `crates/thunderforge-dice/src/rewrite_tests.rs`:
   - an edit returning `None` everywhere gives the formula back byte for byte;
   - `1d20 + MODIFIER` becomes `2d20kh1 + MODIFIER` and `2d20kl1 + MODIFIER`;
   - `1d20r1` is accepted, and so is `2d20r1kh1` in canonical order;
   - every term of `2d6 + 1d8 + 3` gets `min3`;
   - only the first d20 term is touched in `1d20 + 1d20`;
   - `parse(print(ast)) == ast` for every modifier kind in `ast.rs`.
-- [ ] T005 `crates/thunderforge-dice/src/rewrite.rs`: `TermView`, `AddModifier`, `TermEdit` and `rewrite_dice_terms`, with a canonical printer for `Expr` (contracts/pack-roll-facets.md). Export it from `src/lib.rs`, and register the tests with `#[cfg(test)] #[path]`.
-- [ ] T006 [P] Tests `crates/thunderforge-dice/src/replay_tests.rs`, covering guarantees 1–5 of contracts/pack-roll-facets.md:
+- [x] T005 `crates/thunderforge-dice/src/rewrite.rs`: `TermView`, `AddModifier`, `TermEdit` and `rewrite_dice_terms`, with a canonical printer for `Expr` (contracts/pack-roll-facets.md). Export it from `src/lib.rs`, and register the tests with `#[cfg(test)] #[path]`.
+- [x] T006 [P] Tests `crates/thunderforge-dice/src/replay_tests.rs`, covering guarantees 1–5 of contracts/pack-roll-facets.md:
   - an identity replay with a panicking rng, over formulas covering keep, drop, `r`, `rr`, `x`, `xo`, `min` and `max`, and counting successes;
   - `RerollDie` under `2d20kh1`, where the keep moves;
   - `RerollDie` under `min3`;
@@ -73,14 +73,14 @@ two specs meet.
   - a reshape from `2d20r1kh1` to `3d20r1kh1`, with a fresh 1 rerolled;
   - a misaligned reshape is an error;
   - `lowest_die` picks the first of tied lowest d20s and ignores d6s.
-- [ ] T007 `crates/thunderforge-dice/src/replay.rs`:
+- [x] T007 `crates/thunderforge-dice/src/replay.rs`:
   - `Recorded`, `ReplayEdit`, `lowest_die` and `replay` (research R3);
   - an `EvalCtx` draw source that pops recorded chains term by term;
   - keep and clamp reapplied through the existing `apply_keep_drop` and `apply_clamp`. Make them `pub(crate)` in `eval.rs`, with no new logic there.
 
   Export from `src/lib.rs`.
 
-- [ ] T008 [P] `crates/thunderforge-dice/src/wasm.rs`: `replayRoll` and `lowestDie` (contracts/pack-roll-facets.md), with a host test calling the inner functions.
+- [x] T008 [P] `crates/thunderforge-dice/src/wasm.rs`: `replayRoll` and `lowestDie` (contracts/pack-roll-facets.md), with a host test calling the inner functions.
 
 ### Canvas core: the slot
 

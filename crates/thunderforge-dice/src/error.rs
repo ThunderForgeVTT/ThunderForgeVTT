@@ -22,6 +22,9 @@ pub enum FormulaError {
     /// The FR-012 bound on reroll/explosion iterations for a single die
     /// would be exceeded.
     IterationCapExceeded,
+    /// Spec 084: a replay's recorded dice do not line up with the formula
+    /// it was asked to replay them through.
+    ReplayMismatch(String),
 }
 
 impl fmt::Display for FormulaError {
@@ -43,6 +46,9 @@ impl fmt::Display for FormulaError {
                     f,
                     "a die's reroll/explosion chain exceeded the allowed bound"
                 )
+            }
+            FormulaError::ReplayMismatch(why) => {
+                write!(f, "the recorded dice do not fit the formula: {why}")
             }
         }
     }

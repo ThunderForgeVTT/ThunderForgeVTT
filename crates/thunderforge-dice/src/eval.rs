@@ -10,6 +10,7 @@ use rand_core::Rng;
 
 use crate::ast::{BinOp, Condition, DiceTerm, Expr, MathFn, Modifier, Sides};
 use crate::error::FormulaError;
+use crate::replay::DrawSource;
 use crate::{ChainStep, DiceFormula, DieOutcome, DieSides, ResolutionKind, RollResolution};
 
 /// FR-012: hard cap on total dice rolled (base + every reroll/explosion)
@@ -29,6 +30,8 @@ struct EvalCtx<'a, R: Rng> {
     bindings: &'a PlaceholderBindings,
     dice: Vec<DieOutcome>,
     total_dice_rolled: u32,
+    /// Spec 084: recorded dice to use before drawing fresh ones (a replay).
+    source: Option<&'a mut dyn DrawSource>,
 }
 
 impl<R: Rng> EvalCtx<'_, R> {
@@ -101,11 +104,22 @@ pub fn resolve<R: Rng>(
     bindings: &PlaceholderBindings,
     rng: &mut R,
 ) -> Result<RollResolution, FormulaError> {
+    resolve_with(formula, bindings, rng, None)
+}
+
+/// `resolve`, taking each term's dice from `source` while it has them.
+pub(crate) fn resolve_with<'a, R: Rng>(
+    formula: &DiceFormula,
+    bindings: &'a PlaceholderBindings,
+    rng: &'a mut R,
+    source: Option<&'a mut dyn DrawSource>,
+) -> Result<RollResolution, FormulaError> {
     let mut ctx = EvalCtx {
         rng,
         bindings,
         dice: Vec::new(),
         total_dice_rolled: 0,
+        source,
     };
     let result = eval_expr(&mut ctx, &formula.ast)?;
 
@@ -235,6 +249,9 @@ fn eval_dice_term<R: Rng>(
     };
 
     ctx.take_dice_budget(count)?;
+    if let Some(source) = ctx.source.as_deref_mut() {
+        source.begin_term(count, sides)?;
+    }
 
     let max_face = ctx.max_face(&sides);
 
@@ -261,6 +278,10 @@ fn eval_dice_term<R: Rng>(
     let mut outcomes: Vec<DieOutcome> = Vec::with_capacity(count as usize);
 
     for _ in 0..count {
+        if let Some(recorded) = ctx.source.as_deref_mut().and_then(|s| s.next_die()) {
+            outcomes.push(recorded);
+            continue;
+        }
         let mut rolls = vec![ctx.roll_face(&sides)];
         let mut steps = Vec::new();
         let mut iterations = 0u32;

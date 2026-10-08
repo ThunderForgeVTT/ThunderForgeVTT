@@ -12,12 +12,16 @@ pub mod breakdown;
 mod error;
 mod eval;
 mod parser;
+mod replay;
+mod rewrite;
 #[cfg(feature = "wasm")]
 mod wasm;
 
 pub use breakdown::{Addend, AddendKind, Breakdown, breakdown};
 pub use error::FormulaError;
 pub use eval::{MAX_ITERATIONS_PER_DIE, MAX_TOTAL_DICE, PlaceholderBindings, resolve};
+pub use replay::{Recorded, ReplayEdit, lowest_die, replay};
+pub use rewrite::{AddModifier, TermEdit, TermView, rewrite_dice_terms};
 
 /// A parsed, validated formula. The only way to obtain one is
 /// `DiceFormula::parse` — an unparseable string never produces a value

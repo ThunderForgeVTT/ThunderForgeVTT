@@ -15,7 +15,7 @@ use std::collections::HashMap;
 
 use wasm_bindgen::prelude::*;
 
-use crate::{DiceFormula, resolve};
+use crate::{DiceFormula, Recorded, ReplayEdit, RollResolution, lowest_die, replay, resolve};
 
 /// xoshiro128** (Blackman and Vigna): small, fast, and good enough for dice
 /// whose seed is the browser's own cryptographic randomness.
@@ -81,15 +81,75 @@ pub fn validate_formula(formula: &str) -> bool {
 #[wasm_bindgen]
 pub fn roll(formula: &str, bindings: &str, seed: &[u32]) -> Result<String, JsError> {
     let parsed = DiceFormula::parse(formula).map_err(|e| JsError::new(&e.to_string()))?;
-    let bindings: HashMap<String, f64> = if bindings.trim().is_empty() {
-        HashMap::new()
-    } else {
-        serde_json::from_str(bindings).map_err(|e| JsError::new(&e.to_string()))?
-    };
+    let bindings = parse_bindings(bindings).map_err(|e| JsError::new(&e))?;
     let mut rng = Xoshiro128::new(seed);
     let resolution =
         resolve(&parsed, &bindings, &mut rng).map_err(|e| JsError::new(&e.to_string()))?;
     serde_json::to_string(&resolution).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// `replayRoll` (spec 084): roll a recorded roll again, keeping its dice.
+///
+/// `detail` is the stored `RollResolution` JSON. `reshaped` is the formula to
+/// replay it through (a Luck Point), and `reroll_die` the die to roll once
+/// more (Heroic Inspiration). Answers the new resolution as JSON.
+#[wasm_bindgen(js_name = replayRoll)]
+pub fn replay_roll(
+    formula: &str,
+    bindings: &str,
+    detail: &str,
+    reshaped: Option<String>,
+    reroll_die: Option<u32>,
+    seed: &[u32],
+) -> Result<String, JsError> {
+    replay_inner(
+        formula,
+        bindings,
+        detail,
+        reshaped.as_deref(),
+        reroll_die,
+        seed,
+    )
+    .map_err(|e| JsError::new(&e))
+}
+
+/// `lowestDie` (spec 084): the index of the lowest `d{sides}` in `detail`.
+#[wasm_bindgen(js_name = lowestDie)]
+pub fn lowest_die_js(detail: &str, sides: u32) -> Option<u32> {
+    let resolution: RollResolution = serde_json::from_str(detail).ok()?;
+    lowest_die(&resolution, sides).map(|i| i as u32)
+}
+
+fn parse_bindings(bindings: &str) -> Result<HashMap<String, f64>, String> {
+    if bindings.trim().is_empty() {
+        Ok(HashMap::new())
+    } else {
+        serde_json::from_str(bindings).map_err(|e| e.to_string())
+    }
+}
+
+fn replay_inner(
+    formula: &str,
+    bindings: &str,
+    detail: &str,
+    reshaped: Option<&str>,
+    reroll_die: Option<u32>,
+    seed: &[u32],
+) -> Result<String, String> {
+    let bindings = parse_bindings(bindings)?;
+    let resolution: RollResolution = serde_json::from_str(detail).map_err(|e| e.to_string())?;
+    let edit = match reroll_die {
+        Some(i) => ReplayEdit::RerollDie(i as usize),
+        None => ReplayEdit::None,
+    };
+    let recorded = Recorded {
+        formula,
+        bindings: &bindings,
+        resolution: &resolution,
+    };
+    let out =
+        replay(recorded, reshaped, edit, &mut Xoshiro128::new(seed)).map_err(|e| e.to_string())?;
+    serde_json::to_string(&out).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -115,6 +175,42 @@ mod tests {
         let mut rng = Xoshiro128::new(&[0x9e37_79b9, 0x243f_6a88, 0xb7e1_5162, 0x1234_5678]);
         // A stuck generator answers 0 for ever; this one moves off it.
         assert!((0..8).map(|_| rng.next()).any(|word| word != 0));
+    }
+
+    #[test]
+    fn a_replay_through_the_facade_keeps_the_other_dice() {
+        let f = DiceFormula::parse("2d20kh1 + MODIFIER").unwrap();
+        let bindings = HashMap::from([("MODIFIER".to_string(), 3.0)]);
+        let first = resolve(&f, &bindings, &mut Xoshiro128::new(&[1, 2, 3, 4])).unwrap();
+        let detail = serde_json::to_string(&first).unwrap();
+        let lowest = lowest_die_js(&detail, 20).unwrap();
+        let out = replay_inner(
+            "2d20kh1 + MODIFIER",
+            r#"{"MODIFIER": 3}"#,
+            &detail,
+            None,
+            Some(lowest),
+            &[5, 6, 7, 8],
+        )
+        .unwrap();
+        let out: RollResolution = serde_json::from_str(&out).unwrap();
+        let other = 1 - lowest as usize;
+        assert_eq!(out.dice[other].rolls, first.dice[other].rolls);
+        assert_eq!(out.dice[lowest as usize].rolls.len(), 2);
+
+        let luck = replay_inner(
+            "2d20kh1 + MODIFIER",
+            r#"{"MODIFIER": 3}"#,
+            &detail,
+            Some("3d20kh1 + MODIFIER"),
+            None,
+            &[5, 6, 7, 8],
+        )
+        .unwrap();
+        let luck: RollResolution = serde_json::from_str(&luck).unwrap();
+        assert_eq!(luck.dice.len(), 3);
+        assert!(replay_inner("1d20", "", &detail, None, None, &[1]).is_err());
+        assert_eq!(lowest_die_js("not json", 20), None);
     }
 
     #[test]
