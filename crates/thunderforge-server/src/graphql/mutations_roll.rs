@@ -266,6 +266,7 @@ pub async fn reveal_roll_impl(
         .db_pool
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let systems_dir = state.directories.systems_dir.clone();
     tokio::task::spawn_blocking(move || -> GraphQLResult<WorldRoll> {
         refuse_if_paused(&mut conn, world_id)?;
         let row = conn.transaction::<_, Error, _>(|conn| {
@@ -301,13 +302,16 @@ pub async fn reveal_roll_impl(
         })?;
         // The revealer may see it whole; asked anyway, so a reveal answers
         // through the same rule as every other read.
-        viewer_in_world(&mut conn, user_id, is_admin, world_id)?;
+        let viewer = viewer_in_world(&mut conn, user_id, is_admin, world_id)?;
         let mut ids = vec![row.triggered_by];
         ids.extend(row.revealed_by);
         let names = usernames(&mut conn, &ids).map_err(|_| Error::new("Failed to load names"))?;
         let roller = names.get(&row.triggered_by).cloned().unwrap_or_default();
         let revealer = row.revealed_by.and_then(|id| names.get(&id).cloned());
-        let context = RollContext::load(&mut conn, world_id, &[row.id])
+        let mut context = RollContext::load(&mut conn, world_id, &[row.id])
+            .map_err(|_| Error::new("Failed to load the roll"))?;
+        context
+            .offer(&mut conn, &systems_dir, viewer, std::slice::from_ref(&row))
             .map_err(|_| Error::new("Failed to load the roll"))?;
         let links = context.links(row.id);
         Ok(WorldRoll::from_row(row, roller, revealer, links))

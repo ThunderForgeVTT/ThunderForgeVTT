@@ -13,6 +13,7 @@ use crate::auth::world_membership::{actor_in_world, is_dm_of_world, require_worl
 use crate::graphql::types::{GraphQLRollRecord, MaskedRoll, RollLinks, WorldRoll, WorldRollEntry};
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::RollRecord;
+use crate::rolls::reroll::offers_from_db;
 use crate::rolls::visibility::{RollFacts, RollView, Viewer, Visibility, view_of};
 use crate::schema::{users, world_roll_records};
 use crate::state::AppState;
@@ -100,6 +101,8 @@ pub fn usernames(conn: &mut PgConnection, ids: &[Uuid]) -> QueryResult<HashMap<U
 pub struct RollContext {
     pub system_id: String,
     pub rerolled_by: HashMap<Uuid, Uuid>,
+    /// Spec 084: the spends the viewer could reroll each of their rolls by.
+    pub offers: HashMap<Uuid, Vec<(String, String)>>,
 }
 
 impl RollContext {
@@ -116,13 +119,42 @@ impl RollContext {
         Ok(RollContext {
             system_id,
             rerolled_by,
+            offers: HashMap::new(),
         })
+    }
+
+    /// Spec 084: what `viewer` could reroll each of their own `rows` by now.
+    pub fn offer(
+        &mut self,
+        conn: &mut PgConnection,
+        systems_dir: &str,
+        viewer: Viewer,
+        rows: &[RollRecord],
+    ) -> QueryResult<()> {
+        let now = chrono::Utc::now();
+        for row in rows {
+            let rerolled_by = self.rerolled_by.get(&row.id).copied();
+            let offers = offers_from_db(
+                conn,
+                systems_dir,
+                &self.system_id,
+                viewer,
+                row,
+                rerolled_by,
+                now,
+            )?;
+            if !offers.is_empty() {
+                self.offers.insert(row.id, offers);
+            }
+        }
+        Ok(())
     }
 
     pub fn links(&self, roll_id: Uuid) -> RollLinks<'_> {
         RollLinks {
             system_id: &self.system_id,
             rerolled_by: self.rerolled_by.get(&roll_id).copied(),
+            offers: self.offers.get(&roll_id).map_or(&[], Vec::as_slice),
         }
     }
 }
@@ -162,12 +194,14 @@ pub fn entry_for(
 /// Rows and the names they mention, turned into what this viewer may see.
 fn entries(
     conn: &mut PgConnection,
+    systems_dir: &str,
     world_id: Uuid,
     rows: Vec<RollRecord>,
     viewer: Viewer,
 ) -> QueryResult<Vec<WorldRollEntry>> {
     let roll_ids: Vec<Uuid> = rows.iter().map(|row| row.id).collect();
-    let context = RollContext::load(conn, world_id, &roll_ids)?;
+    let mut context = RollContext::load(conn, world_id, &roll_ids)?;
+    context.offer(conn, systems_dir, viewer, &rows)?;
     let ids: Vec<Uuid> = rows
         .iter()
         .flat_map(|row| std::iter::once(row.triggered_by).chain(row.revealed_by))
@@ -192,6 +226,7 @@ pub async fn world_roll_impl(
         .db_pool
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let systems_dir = state.directories.systems_dir.clone();
     tokio::task::spawn_blocking(move || {
         let viewer = viewer_in_world(&mut conn, user_id, is_admin, world_id)?;
         let row = world_roll_records::table
@@ -204,9 +239,11 @@ pub async fn world_roll_impl(
         let Some(row) = row else {
             return Ok(None);
         };
-        Ok(entries(&mut conn, world_id, vec![row], viewer)
-            .map_err(|_| Error::new("Failed to load the roll"))?
-            .pop())
+        Ok(
+            entries(&mut conn, &systems_dir, world_id, vec![row], viewer)
+                .map_err(|_| Error::new("Failed to load the roll"))?
+                .pop(),
+        )
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -239,6 +276,7 @@ pub async fn world_rolls_impl(
         .db_pool
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let systems_dir = state.directories.systems_dir.clone();
     tokio::task::spawn_blocking(move || {
         let viewer = viewer_in_world(&mut conn, user_id, is_admin, world_id)?;
         let mut query = world_roll_records::table
@@ -261,7 +299,8 @@ pub async fn world_rolls_impl(
         let rows = query
             .load::<RollRecord>(&mut conn)
             .map_err(|_| Error::new("Failed to load rolls"))?;
-        entries(&mut conn, world_id, rows, viewer).map_err(|_| Error::new("Failed to load rolls"))
+        entries(&mut conn, &systems_dir, world_id, rows, viewer)
+            .map_err(|_| Error::new("Failed to load rolls"))
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?

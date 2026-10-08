@@ -96,12 +96,14 @@ impl From<GraphQLAdvantage> for Advantage {
     }
 }
 
-/// What a row alone cannot say: the system that names its facets, and the
-/// roll that replaced it, if one has.
+/// What a row alone cannot say: the system that names its facets, the
+/// roll that replaced it, if one has, and what its viewer could reroll it
+/// with now, as `(id, label)`.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RollLinks<'a> {
     pub system_id: &'a str,
     pub rerolled_by: Option<uuid::Uuid>,
+    pub offers: &'a [(String, String)],
 }
 
 fn named(system_id: &str, ids: &[String]) -> Vec<RollFacet> {
@@ -149,6 +151,8 @@ impl WorldRoll {
         revealed_by_name: Option<String>,
         links: RollLinks<'_>,
     ) -> Self {
+        let reroll_until = crate::rolls::reroll::reroll_until(&row, links.rerolled_by)
+            .map(|until| until.to_rfc3339());
         // Written only after a successful resolve; a row that no longer reads
         // is shown with its total and no dice rather than refused.
         let resolution: RollResolution =
@@ -179,8 +183,15 @@ impl WorldRoll {
                 .reroll_spent
                 .as_ref()
                 .and_then(|id| named(links.system_id, std::slice::from_ref(id)).pop()),
-            reroll_offers: Vec::new(),
-            reroll_until: None,
+            reroll_offers: links
+                .offers
+                .iter()
+                .map(|(id, label)| RollFacet {
+                    id: id.clone(),
+                    label: label.clone(),
+                })
+                .collect(),
+            reroll_until,
         }
     }
 }

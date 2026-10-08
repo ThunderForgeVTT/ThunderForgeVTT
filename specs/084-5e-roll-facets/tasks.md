@@ -227,7 +227,8 @@ nothing visible changed.
   - the spend already used in the chain;
   - "already rerolled";
   - `offers_for(viewer, roll)`, which is empty for a non-maker, for a reroll's original and after the window.
-- [ ] T038 [US3] `crates/thunderforge-server/src/rolls/reroll.rs`: `REROLL_WINDOW = 2 min`, `chain_of`, `may_reroll`, and `offers_for`, which calls the pack's `reroll` and discards the result. Fill `WorldRoll.reroll_offers` and `reroll_until` in `graphql/queries/roll.rs` `entry_for` (`:96`) for the viewer.
+- [x] T038 [US3] `crates/thunderforge-server/src/rolls/reroll.rs`: `REROLL_WINDOW = 2 min`, `chain_of`, `may_reroll`, and `offers_for`, which calls the pack's `reroll` and discards the result. Fill `WorldRoll.reroll_offers` and `reroll_until` in `graphql/queries/roll.rs` `entry_for` (`:96`) for the viewer.
+  - As built: offers are filled in `RollContext::offer`, which `entries` (so `worldRoll` and `worldRolls`) and `revealRoll` call. `rerollUntil` is shown to every viewer; only the maker is offered spends. Tested in `graphql/queries/roll_offers_tests.rs`.
 - [ ] T039 [US3] Tests `crates/thunderforge-server/src/graphql/mutations_reroll_tests.rs`:
   - an Inspiration reroll of a check, in one transaction:
     - `trait_data.inspiration` is false;

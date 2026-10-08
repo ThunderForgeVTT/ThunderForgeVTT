@@ -35,6 +35,8 @@ pub mod play_pause;
 pub mod roll;
 #[cfg(test)]
 mod roll_feed_tests;
+#[cfg(test)]
+mod roll_offers_tests;
 pub mod scene;
 // Spec 082: `shapeCreators(sceneId)` — who drew on a scene, for the GM.
 pub mod shape_creators;
