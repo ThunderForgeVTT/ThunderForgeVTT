@@ -187,6 +187,28 @@ pub fn chain_of(conn: &mut PgConnection, row: &RollRecord) -> QueryResult<Vec<Ro
     Ok(chain)
 }
 
+/// Every roll in `row`'s chain, older and newer, oldest first: a roll and
+/// what replaced it are one roll to the table.
+pub fn whole_chain(conn: &mut PgConnection, row: &RollRecord) -> QueryResult<Vec<RollRecord>> {
+    let mut chain = chain_of(conn, row)?;
+    chain.reverse();
+    while let Some(newer) = rerolled_by(conn, chain[chain.len() - 1].id)? {
+        if chain.len() >= 32 || chain.iter().any(|roll| roll.id == newer) {
+            break;
+        }
+        let Some(newer) = world_roll_records::table
+            .find(newer)
+            .select(RollRecord::as_select())
+            .first::<RollRecord>(conn)
+            .optional()?
+        else {
+            break;
+        };
+        chain.push(newer);
+    }
+    Ok(chain)
+}
+
 /// Every spend used in a chain.
 pub fn spent_in(chain: &[RollRecord]) -> Vec<String> {
     chain

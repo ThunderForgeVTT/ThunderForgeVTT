@@ -676,3 +676,63 @@ async fn an_admin_reveals_and_an_open_roll_has_nothing_to_reveal() {
         .count();
     assert_eq!(revealed, 1, "only the hidden roll was revealed");
 }
+
+/// Spec 084 T042: a roll and its reroll are one roll to the table, so
+/// revealing either reveals both, each with its own event.
+#[tokio::test]
+async fn revealing_a_roll_reveals_its_reroll_and_the_reverse() {
+    let state = test_app_state();
+    let (world, gm, player) = gm_and_player(&state);
+
+    let chain = |conn: &mut PgConnection, original: Uuid, reroll: Uuid| {
+        diesel::update(world_roll_records::table.find(reroll))
+            .set((
+                world_roll_records::reroll_of.eq(original),
+                world_roll_records::reroll_spent.eq("inspiration"),
+            ))
+            .execute(conn)
+            .unwrap();
+    };
+    let mut pair = Vec::new();
+    for _ in 0..2 {
+        let mut ids = Vec::new();
+        for _ in 0..2 {
+            roll_as(&state, player, world, Some(RollVisibility::GmEyes), None)
+                .await
+                .unwrap();
+            ids.push(newest_roll(&state, world).id);
+        }
+        let mut conn = state.db_pool.get().unwrap();
+        chain(&mut conn, ids[0], ids[1]);
+        pair.push(ids);
+    }
+
+    // Revealing the reroll reveals the original; then the reverse.
+    reveal_roll_impl(&state, gm, false, world, pair[0][1])
+        .await
+        .unwrap();
+    let shown = reveal_roll_impl(&state, gm, false, world, pair[1][0])
+        .await
+        .unwrap();
+    assert_eq!(shown.id, pair[1][0]);
+    assert!(shown.revealed_at.is_some());
+
+    let mut conn = state.db_pool.get().unwrap();
+    for id in pair.iter().flatten() {
+        let revealed_by = world_roll_records::table
+            .find(*id)
+            .select(world_roll_records::revealed_by)
+            .first::<Option<Uuid>>(&mut conn)
+            .unwrap();
+        assert_eq!(revealed_by, Some(gm), "roll {id} was revealed");
+    }
+    let revealed: Vec<_> = roll_events(&state, world)
+        .into_iter()
+        .filter(|(code, _)| *code == EVENT_CODE_ROLL_REVEALED)
+        .map(|(_, payload)| payload["rollId"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(revealed.len(), 4, "one event per roll");
+    for id in pair.iter().flatten() {
+        assert!(revealed.contains(&id.to_string()));
+    }
+}

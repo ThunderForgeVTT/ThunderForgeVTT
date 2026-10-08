@@ -279,26 +279,36 @@ pub async fn reveal_roll_impl(
                 .optional()
                 .map_err(|_| Error::new("Failed to load the roll"))?
                 .ok_or_else(|| Error::new("Roll not found"))?;
-            let visibility = Visibility::parse(&row.visibility);
-            if visibility == Visibility::Everyone || row.revealed_at.is_some() {
-                return Ok(row);
+            // Spec 084: a roll and its rerolls are revealed together, each
+            // with its own event, so no one sees half of what happened.
+            let chain = crate::rolls::reroll::whole_chain(conn, &row)
+                .map_err(|_| Error::new("Failed to load the roll"))?;
+            let mut asked = row;
+            for roll in chain {
+                let visibility = Visibility::parse(&roll.visibility);
+                if visibility == Visibility::Everyone || roll.revealed_at.is_some() {
+                    continue;
+                }
+                let revealed = diesel::update(world_roll_records::table.find(roll.id))
+                    .set((
+                        world_roll_records::revealed_at.eq(chrono::Utc::now()),
+                        world_roll_records::revealed_by.eq(user_id),
+                    ))
+                    .returning(RollRecord::as_returning())
+                    .get_result::<RollRecord>(conn)
+                    .map_err(|_| Error::new("Failed to reveal the roll"))?;
+                record_world_event(
+                    conn,
+                    world_id,
+                    EVENT_CODE_ROLL_REVEALED,
+                    Some(roll_event_payload(roll.id, visibility)),
+                    user_id,
+                )?;
+                if revealed.id == roll_id {
+                    asked = revealed;
+                }
             }
-            let row = diesel::update(world_roll_records::table.find(roll_id))
-                .set((
-                    world_roll_records::revealed_at.eq(chrono::Utc::now()),
-                    world_roll_records::revealed_by.eq(user_id),
-                ))
-                .returning(RollRecord::as_returning())
-                .get_result::<RollRecord>(conn)
-                .map_err(|_| Error::new("Failed to reveal the roll"))?;
-            record_world_event(
-                conn,
-                world_id,
-                EVENT_CODE_ROLL_REVEALED,
-                Some(roll_event_payload(roll_id, visibility)),
-                user_id,
-            )?;
-            Ok(row)
+            Ok(asked)
         })?;
         // The revealer may see it whole; asked anyway, so a reveal answers
         // through the same rule as every other read.
