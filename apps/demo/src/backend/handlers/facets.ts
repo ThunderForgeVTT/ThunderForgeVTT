@@ -40,21 +40,44 @@ const FACET = { ADVANTAGE: "advantage", DISADVANTAGE: "disadvantage" } as const;
 /** A dice term: count, `d`, sides, then its modifiers (`kh1`, `r1`, …). */
 const TERM = /(\d*)d(\d+)((?:[a-z]+\d*)*)/gi;
 
-/** `shape_d20`: the first d20 that keeps nothing takes the choice. */
-export function shapeD20(formula: string, advantage: Advantage): Shaped {
-  if (advantage === "NORMAL") return { formula, facets: [] };
+/** Whether a sheet's `trait_data.facets` lists `id` (5e's `has_facet`). */
+export function hasFacet(traitData: unknown, id: string): boolean {
+  const facets = (traitData as { facets?: unknown } | null | undefined)?.facets;
+  return Array.isArray(facets) && facets.includes(id);
+}
+
+/**
+ * `shape_d20`: the first d20 that keeps nothing takes the choice, and a
+ * halfling's sheet rerolls its natural 1s once (`r1`), unless the term
+ * already rerolls.
+ */
+export function shapeD20(
+  formula: string,
+  advantage: Advantage,
+  traitData?: unknown,
+): Shaped {
+  const lucky = hasFacet(traitData, "halfling_luck");
+  if (advantage === "NORMAL" && !lucky) return { formula, facets: [] };
   let found = false;
   const shaped = formula.replace(
     TERM,
     (term, count: string, sides: string, modifiers: string) => {
       if (found || sides !== "20" || /[kd]/i.test(modifiers)) return term;
       found = true;
-      const dice = Math.max(count === "" ? 1 : Number(count), 2);
-      return `${dice}d20${modifiers}${KEEP[advantage]}`;
+      const written = count === "" ? 1 : Number(count);
+      const dice = advantage === "NORMAL" ? written : Math.max(written, 2);
+      const reroll = lucky && !/r/i.test(modifiers) ? "r1" : "";
+      const keep = advantage === "NORMAL" ? "" : KEEP[advantage];
+      return `${dice}d20${modifiers}${reroll}${keep}`;
     },
   );
-  if (!found) throw new GraphQLError(NO_D20);
-  return { formula: shaped, facets: [FACET[advantage]] };
+  if (!found) {
+    if (advantage !== "NORMAL") throw new GraphQLError(NO_D20);
+    return { formula, facets: [] };
+  }
+  const facets: string[] = advantage === "NORMAL" ? [] : [FACET[advantage]];
+  if (lucky) facets.push("halfling_luck");
+  return { formula: shaped, facets };
 }
 
 /** A damage roll is rolled as declared, and never with advantage. */

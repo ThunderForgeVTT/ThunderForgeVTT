@@ -438,7 +438,13 @@ async function makeAttack({ input }: Args): Promise<Row[]> {
   if (attacker.lair && advantage !== "NORMAL") {
     throw new GraphQLError(LAIR_NO_ADVANTAGE);
   }
-  const toHit = shapeD20(declared.toHit, advantage);
+  const toHit = shapeD20(
+    declared.toHit,
+    advantage,
+    attacker.token
+      ? slotsOf(state, attacker.token.actorId).traitData
+      : undefined,
+  );
   const formulas = { ...declared, toHit: toHit.formula };
   const target = targetOf(input, 0);
   const targetToken = target ? tokenById(state, target) : undefined;

@@ -3,8 +3,13 @@
  * cases `packs/systems/dnd5e/server/src/roll_facets_tests.rs` holds the
  * server to.
  */
-import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { beforeAll, describe, expect, it } from "vitest";
 
+import { runOperation } from "../execute";
+import { demoState, type Row } from "../state";
+import { freshWorld } from "../testing/world";
+import { loadDiceForTest, seedDice } from "./dice";
 import {
   NO_D20,
   NO_DAMAGE_ADVANTAGE,
@@ -45,6 +50,88 @@ describe("shapeD20", () => {
   it("refuses a formula with no d20 to roll twice", () => {
     expect(() => shapeD20("1d6 + 2", "ADVANTAGE")).toThrow(NO_D20);
     expect(() => shapeD20("1d200", "ADVANTAGE")).toThrow(NO_D20);
+  });
+});
+
+describe("shapeD20 with Halfling Luck", () => {
+  const halfling = { facets: ["halfling_luck"] };
+
+  it("rerolls a natural 1 once on a halfling's d20 test", () => {
+    expect(shapeD20("1d20 + MODIFIER", "NORMAL", halfling)).toEqual({
+      formula: "1d20r1 + MODIFIER",
+      facets: ["halfling_luck"],
+    });
+  });
+
+  it("rerolls before it keeps, with advantage", () => {
+    expect(shapeD20("1d20 + MODIFIER", "ADVANTAGE", halfling)).toEqual({
+      formula: "2d20r1kh1 + MODIFIER",
+      facets: ["advantage", "halfling_luck"],
+    });
+  });
+
+  it("leaves a term that already rerolls, and a sheet without the facet", () => {
+    expect(shapeD20("1d20r2 + 1", "NORMAL", halfling).formula).toBe(
+      "1d20r2 + 1",
+    );
+    expect(shapeD20("1d20 + 1", "NORMAL", { facets: ["lucky"] })).toEqual({
+      formula: "1d20 + 1",
+      facets: [],
+    });
+  });
+
+  it("asks nothing of a halfling's roll with no d20", () => {
+    expect(shapeD20("1d6 + 2", "NORMAL", halfling)).toEqual({
+      formula: "1d6 + 2",
+      facets: [],
+    });
+  });
+});
+
+const ROLL = `mutation ($input: RollDiceInput!) {
+  rollDice(input: $input) { dice { rolls steps finalValue } }
+}`;
+
+async function firstDie(formula: string): Promise<Row> {
+  const worldId = demoState().world.id;
+  const answer = await runOperation({
+    query: ROLL,
+    variables: { input: { worldId, formula } },
+  });
+  expect(answer.errors).toBeUndefined();
+  return (answer.data?.rollDice as { dice: Row[] }).dice[0];
+}
+
+/** A seed whose every word differs, so the first draw moves with it. */
+function spread(seed: number): number[] {
+  return [1, 2, 3, 4].map((k) => Math.imul(seed + k, 0x9e3779b1) >>> 0);
+}
+
+describe("a halfling's natural 1, rolled by the page's dice", () => {
+  beforeAll(async () => {
+    loadDiceForTest(
+      readFileSync(
+        new URL("../../../../../dist/dice/dice_bg.wasm", import.meta.url),
+      ),
+    );
+    await freshWorld();
+    demoState().viewer = "gm";
+  });
+
+  it("is rolled again, and the new roll counts", async () => {
+    let seed = 0;
+    for (; seed < 500; seed += 1) {
+      seedDice(spread(seed));
+      if (((await firstDie("1d20")).rolls as number[])[0] === 1) break;
+    }
+    expect(seed).toBeLessThan(500);
+    seedDice(spread(seed));
+    const die = await firstDie("1d20r1");
+    const rolls = die.rolls as number[];
+    expect(rolls).toHaveLength(2);
+    expect(rolls[0]).toBe(1);
+    expect(die.steps).toEqual(["REROLL"]);
+    expect(die.finalValue).toBe(rolls[1]);
   });
 });
 

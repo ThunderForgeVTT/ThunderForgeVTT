@@ -265,6 +265,7 @@ export function rollCheck(args: Args): Promise<Row> {
   const shaped = shapeD20(
     "1d20 + MODIFIER",
     (args.advantage as Advantage | undefined) ?? "NORMAL",
+    systemDataOf(state, args.actorId)?.traitData,
   );
   // The pack's formula, its placeholder filled in by the dice: the record
   // keeps the binding, as the server's does (spec 083).

@@ -203,7 +203,7 @@ nothing visible changed.
   As built: the pack has no vitest of its own, so the test is `apps/web/src/pages/world/actor/__tests__/dnd5eRollFacets.test.tsx`, beside `applyStatBlock.test.ts`, which tests this pack the same way. The facet list, `toggleFacet`, `sheetFacets` and `calculateLuckPointsLeft` live in `derived-data.ts`.
 
 - [x] T032 [US2] `RollEntry.tsx`: a die whose `rolls` has more than one value, or whose `finalValue` differs from its last roll, shows the rolled values struck beside the used one (FR-016). Test it in vitest.
-- [ ] T033 [P] [US2] Demo: `facets.ts` adds `r1`, and `facets.test.ts` seeds a 1 and asserts the chain.
+- [x] T033 [P] [US2] Demo: `facets.ts` adds `r1`, and `facets.test.ts` seeds a 1 and asserts the chain.
 - [ ] T034 [US2] In `rolls-facets-advantage.spec.ts`, add a second test: tick Halfling Luck on the player's sheet, roll a check, and assert the formula contains `r1` and the Halfling Luck tag shows in both chats (research R13).
 
 ---
