@@ -436,8 +436,9 @@ nothing visible changed.
   - that a reroll keeps its visibility and a reveal shows the chain;
   - the GM marking a weapon Two-Handed.
 - [x] T069 [P] `docs/CONTRIBUTING.md`, in the Rolls section: the `roll_facets` slot, `rewrite_dice_terms` and `replay`, and the rule that shared code carries facet ids as opaque strings.
-- [ ] T070 Run `make lint` (host and wasm32, plus the file-length check) and `pnpm verify`. Confirm `attack.rs` is smaller than 830 lines after T055.
-- [ ] T071 Run `cargo test -p thunderforge-dice`, `cargo test -p thunderforge-system-dnd5e`, `make test-rust ARGS="-p thunderforge-server"`, `pnpm -F @thunderforge/demo test` and `pnpm -F @thunderforge/web test`. All must be green.
+- [x] T070 Run `make lint` (host and wasm32, plus the file-length check) and `pnpm verify`. Confirm `attack.rs` is smaller than 830 lines after T055.
+- [x] T071 Run `cargo test -p thunderforge-dice`, `cargo test -p thunderforge-system-dnd5e`, `make test-rust ARGS="-p thunderforge-server"`, `pnpm -F @thunderforge/demo test` and `pnpm -F @thunderforge/web test`. All must be green.
+  - As built: dice 60 passed; dnd5e 92; server 1992 (one run failed `only_the_first_administrator_satisfies_the_second_factor_gate`, which passed alone and on a full rerun); demo 149; web 876 in 108 files.
 - [ ] T072 **Proof**: `pnpm e2e:rolls` is green, including `rolls-facets-advantage.spec.ts`, `rolls-facets-inspiration.spec.ts` and `rolls-facets-attack.spec.ts`, which the `rolls` slice owns by its `rolls-` prefix in `scripts/e2e/slices.json`. Then run every slice that `pnpm e2e:which --diff` names. The schema and a migration changed, so it prints FULL SUITE: run the slices it names instead. The owner has ruled out the full suite as a gate; never run `node ./scripts/e2e-parallel.mjs` on its own. Record each slice's result here.
 
 ---
