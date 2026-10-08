@@ -10,12 +10,13 @@ use uuid::Uuid;
 use std::collections::HashMap;
 
 use crate::auth::world_membership::{actor_in_world, is_dm_of_world, require_world_member};
-use crate::graphql::types::{GraphQLRollRecord, MaskedRoll, WorldRoll, WorldRollEntry};
+use crate::graphql::types::{GraphQLRollRecord, MaskedRoll, RollLinks, WorldRoll, WorldRollEntry};
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::RollRecord;
 use crate::rolls::visibility::{RollFacts, RollView, Viewer, Visibility, view_of};
 use crate::schema::{users, world_roll_records};
 use crate::state::AppState;
+use crate::world_system_settings::system_of_world;
 use thunderforge_dice::DiceFormula;
 
 const DEFAULT_ROLL_RECORD_LIMIT: i64 = 50;
@@ -93,11 +94,45 @@ pub fn usernames(conn: &mut PgConnection, ids: &[Uuid]) -> QueryResult<HashMap<U
         .collect())
 }
 
+/// Spec 084: what the rows of one world need beyond themselves to be shown
+/// whole: the world's system, and which roll replaced which.
+#[derive(Debug, Default)]
+pub struct RollContext {
+    pub system_id: String,
+    pub rerolled_by: HashMap<Uuid, Uuid>,
+}
+
+impl RollContext {
+    /// One query for the system and one for every replacement of `ids`.
+    pub fn load(conn: &mut PgConnection, world_id: Uuid, ids: &[Uuid]) -> QueryResult<Self> {
+        let system_id = system_of_world(conn, world_id)?.unwrap_or_default();
+        let rerolled_by = world_roll_records::table
+            .filter(world_roll_records::reroll_of.eq_any(ids))
+            .select((world_roll_records::reroll_of, world_roll_records::id))
+            .load::<(Option<Uuid>, Uuid)>(conn)?
+            .into_iter()
+            .filter_map(|(of, by)| of.map(|of| (of, by)))
+            .collect();
+        Ok(RollContext {
+            system_id,
+            rerolled_by,
+        })
+    }
+
+    pub fn links(&self, roll_id: Uuid) -> RollLinks<'_> {
+        RollLinks {
+            system_id: &self.system_id,
+            rerolled_by: self.rerolled_by.get(&roll_id).copied(),
+        }
+    }
+}
+
 /// One row as this viewer may see it, or nothing (FR-003).
 pub fn entry_for(
     row: RollRecord,
     viewer: Viewer,
     names: &HashMap<Uuid, String>,
+    context: &RollContext,
 ) -> Option<WorldRollEntry> {
     let facts = RollFacts {
         roller: row.triggered_by,
@@ -109,8 +144,9 @@ pub fn entry_for(
         RollView::Whole => {
             let roller = name(row.triggered_by);
             let revealer = row.revealed_by.map(name);
+            let links = context.links(row.id);
             Some(WorldRollEntry::WorldRoll(Box::new(WorldRoll::from_row(
-                row, roller, revealer,
+                row, roller, revealer, links,
             ))))
         }
         RollView::Masked => Some(WorldRollEntry::MaskedRoll(MaskedRoll::new(
@@ -126,9 +162,12 @@ pub fn entry_for(
 /// Rows and the names they mention, turned into what this viewer may see.
 fn entries(
     conn: &mut PgConnection,
+    world_id: Uuid,
     rows: Vec<RollRecord>,
     viewer: Viewer,
 ) -> QueryResult<Vec<WorldRollEntry>> {
+    let roll_ids: Vec<Uuid> = rows.iter().map(|row| row.id).collect();
+    let context = RollContext::load(conn, world_id, &roll_ids)?;
     let ids: Vec<Uuid> = rows
         .iter()
         .flat_map(|row| std::iter::once(row.triggered_by).chain(row.revealed_by))
@@ -136,7 +175,7 @@ fn entries(
     let names = usernames(conn, &ids)?;
     Ok(rows
         .into_iter()
-        .filter_map(|row| entry_for(row, viewer, &names))
+        .filter_map(|row| entry_for(row, viewer, &names, &context))
         .collect())
 }
 
@@ -165,7 +204,7 @@ pub async fn world_roll_impl(
         let Some(row) = row else {
             return Ok(None);
         };
-        Ok(entries(&mut conn, vec![row], viewer)
+        Ok(entries(&mut conn, world_id, vec![row], viewer)
             .map_err(|_| Error::new("Failed to load the roll"))?
             .pop())
     })
@@ -222,7 +261,7 @@ pub async fn world_rolls_impl(
         let rows = query
             .load::<RollRecord>(&mut conn)
             .map_err(|_| Error::new("Failed to load rolls"))?;
-        entries(&mut conn, rows, viewer).map_err(|_| Error::new("Failed to load rolls"))
+        entries(&mut conn, world_id, rows, viewer).map_err(|_| Error::new("Failed to load rolls"))
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?

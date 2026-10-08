@@ -9,7 +9,9 @@ use async_graphql::{Enum, SimpleObject, Union};
 
 use crate::graphql::types::{GraphQLRollResolution, stored_outcome};
 use crate::models::RollRecord;
+use crate::rolls::facets::facet_labels;
 use crate::rolls::visibility::Visibility;
+use thunderforge_canvas_core::roll_facets::Advantage;
 use thunderforge_dice::{ResolutionKind, RollResolution};
 
 /// Who a roll is for.
@@ -67,6 +69,48 @@ fn row_bindings(stored: Option<&serde_json::Value>) -> Vec<RollBinding> {
     bindings
 }
 
+/// Spec 084: a facet or a spend, by its id and the name the table sees.
+#[derive(SimpleObject, Debug, Clone, PartialEq, Eq)]
+pub struct RollFacet {
+    pub id: String,
+    pub label: String,
+}
+
+/// Spec 084: roll a d20 test twice and keep the higher or the lower.
+#[derive(Enum, Copy, Clone, Debug, Default, PartialEq, Eq)]
+#[graphql(name = "Advantage")]
+pub enum GraphQLAdvantage {
+    #[default]
+    Normal,
+    Advantage,
+    Disadvantage,
+}
+
+impl From<GraphQLAdvantage> for Advantage {
+    fn from(value: GraphQLAdvantage) -> Self {
+        match value {
+            GraphQLAdvantage::Normal => Advantage::Normal,
+            GraphQLAdvantage::Advantage => Advantage::Advantage,
+            GraphQLAdvantage::Disadvantage => Advantage::Disadvantage,
+        }
+    }
+}
+
+/// What a row alone cannot say: the system that names its facets, and the
+/// roll that replaced it, if one has.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RollLinks<'a> {
+    pub system_id: &'a str,
+    pub rerolled_by: Option<uuid::Uuid>,
+}
+
+fn named(system_id: &str, ids: &[String]) -> Vec<RollFacet> {
+    facet_labels(system_id, ids)
+        .into_iter()
+        .map(|(id, label)| RollFacet { id, label })
+        .collect()
+}
+
 /// A roll, whole.
 #[derive(SimpleObject, Debug, Clone)]
 pub struct WorldRoll {
@@ -84,6 +128,18 @@ pub struct WorldRoll {
     pub created_at: String,
     pub revealed_at: Option<String>,
     pub revealed_by_name: Option<String>,
+    /// Spec 084: the facets applied, plus the spend on a reroll.
+    pub facets: Vec<RollFacet>,
+    /// The roll this one replaces.
+    pub reroll_of: Option<uuid::Uuid>,
+    /// The roll that replaced this one.
+    pub rerolled_by: Option<uuid::Uuid>,
+    /// What this reroll spent.
+    pub spent: Option<RollFacet>,
+    /// Only for the roll's maker: the spends the server would accept now.
+    pub reroll_offers: Vec<RollFacet>,
+    /// RFC 3339; null when the roll cannot be rerolled at all.
+    pub reroll_until: Option<String>,
 }
 
 impl WorldRoll {
@@ -91,6 +147,7 @@ impl WorldRoll {
         row: RollRecord,
         roller_name: String,
         revealed_by_name: Option<String>,
+        links: RollLinks<'_>,
     ) -> Self {
         // Written only after a successful resolve; a row that no longer reads
         // is shown with its total and no dice rather than refused.
@@ -115,6 +172,15 @@ impl WorldRoll {
             created_at: row.created_at.to_rfc3339(),
             revealed_at: row.revealed_at.map(|at| at.to_rfc3339()),
             revealed_by_name,
+            facets: named(links.system_id, &row.facet_ids()),
+            reroll_of: row.reroll_of,
+            rerolled_by: links.rerolled_by,
+            spent: row
+                .reroll_spent
+                .as_ref()
+                .and_then(|id| named(links.system_id, std::slice::from_ref(id)).pop()),
+            reroll_offers: Vec::new(),
+            reroll_until: None,
         }
     }
 }

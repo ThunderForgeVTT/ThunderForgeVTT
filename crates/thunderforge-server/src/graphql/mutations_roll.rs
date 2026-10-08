@@ -15,7 +15,7 @@ use rand::SeedableRng;
 use uuid::Uuid;
 
 use crate::auth::world_membership::{actor_in_world, is_dm_of_world, require_world_member};
-use crate::graphql::queries::roll::{usernames, viewer_in_world};
+use crate::graphql::queries::roll::{RollContext, usernames, viewer_in_world};
 use crate::graphql::types::{GraphQLRollResolution, RollVisibility, WorldRoll};
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{NewRollRecord, RollRecord};
@@ -307,7 +307,10 @@ pub async fn reveal_roll_impl(
         let names = usernames(&mut conn, &ids).map_err(|_| Error::new("Failed to load names"))?;
         let roller = names.get(&row.triggered_by).cloned().unwrap_or_default();
         let revealer = row.revealed_by.and_then(|id| names.get(&id).cloned());
-        Ok(WorldRoll::from_row(row, roller, revealer))
+        let context = RollContext::load(&mut conn, world_id, &[row.id])
+            .map_err(|_| Error::new("Failed to load the roll"))?;
+        let links = context.links(row.id);
+        Ok(WorldRoll::from_row(row, roller, revealer, links))
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?

@@ -6526,6 +6526,14 @@ input RollDiceInput {
 	label: String
 }
 
+"""
+Spec 084: a facet or a spend, by its id and the name the table sees.
+"""
+type RollFacet {
+	id: String!
+	label: String!
+}
+
 input RollForShoesRollSkillInput {
 	worldId: UUID!
 	actorId: UUID!
@@ -7843,6 +7851,30 @@ type WorldRoll {
 	createdAt: String!
 	revealedAt: String
 	revealedByName: String
+	"""
+	Spec 084: the facets applied, plus the spend on a reroll.
+	"""
+	facets: [RollFacet!]!
+	"""
+	The roll this one replaces.
+	"""
+	rerollOf: UUID
+	"""
+	The roll that replaced this one.
+	"""
+	rerolledBy: UUID
+	"""
+	What this reroll spent.
+	"""
+	spent: RollFacet
+	"""
+	Only for the roll's maker: the spends the server would accept now.
+	"""
+	rerollOffers: [RollFacet!]!
+	"""
+	RFC 3339; null when the roll cannot be rerolled at all.
+	"""
+	rerollUntil: String
 }
 
 """

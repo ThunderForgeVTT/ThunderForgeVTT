@@ -196,3 +196,41 @@ async fn the_feed_pages_newest_first_and_a_hidden_roll_leaves_no_hole() {
         .unwrap();
     assert_eq!(ids(&next), vec![first]);
 }
+
+/// Spec 084 T013: a reroll and the roll it replaced point at each other in
+/// the feed, the one by `rerollOf` and the other by `rerolledBy`.
+#[tokio::test]
+async fn a_feed_of_two_chained_rolls_shows_both_links() {
+    let t = a_table();
+    let first = roll(&t, t.roller, RollVisibility::Everyone).await;
+    let second = roll(&t, t.roller, RollVisibility::Everyone).await;
+    {
+        let mut conn = t.state.db_pool.get().unwrap();
+        diesel::update(world_roll_records::table.find(second))
+            .set((
+                world_roll_records::reroll_of.eq(first),
+                world_roll_records::reroll_spent.eq("inspiration"),
+            ))
+            .execute(&mut conn)
+            .unwrap();
+    }
+    let feed = world_rolls_impl(&t.state, t.other, false, t.world, None, None)
+        .await
+        .unwrap();
+    let whole = |id: Uuid| {
+        feed.iter()
+            .find_map(|e| match e {
+                WorldRollEntry::WorldRoll(r) if r.id == id => Some(r.clone()),
+                _ => None,
+            })
+            .expect("both rolls are open to the table")
+    };
+    let (old, new) = (whole(first), whole(second));
+    assert_eq!(old.rerolled_by, Some(second));
+    assert_eq!(old.reroll_of, None);
+    assert_eq!(new.reroll_of, Some(first));
+    assert_eq!(new.rerolled_by, None);
+    // A world with no system names nothing: the spend shows by its id.
+    assert_eq!(new.spent.map(|s| s.id), Some("inspiration".to_string()));
+    assert!(old.reroll_offers.is_empty() && old.reroll_until.is_none());
+}

@@ -44,7 +44,7 @@ fn row(bindings: Option<serde_json::Value>) -> RollRecord {
 }
 
 fn bindings_of(value: Option<serde_json::Value>) -> Vec<(String, f64)> {
-    WorldRoll::from_row(row(value), "Ayla".to_string(), None)
+    WorldRoll::from_row(row(value), "Ayla".to_string(), None, RollLinks::default())
         .bindings
         .into_iter()
         .map(|b| (b.placeholder, b.value))

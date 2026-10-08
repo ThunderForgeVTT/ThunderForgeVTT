@@ -102,7 +102,7 @@ two specs meet.
   - `roll_and_settle` (`graphql/mutations_roll.rs:112`) gains a `meta: RollMeta` parameter and writes it to the record. `rollDice` passes `RollMeta::default()`, and its tests prove nothing about a free roll changes.
   - `roll_and_record` (`combat/attack.rs:247`) gains the same parameter.
   - **Spec 083 meet point**: if `DieOutcome.steps` exists by now, `replay` copies it and pushes `ChainStep::Reroll` for the new face, and T006 gains that case.
-- [ ] T013 [P] `crates/thunderforge-server/src/graphql/types_rolls.rs`:
+- [x] T013 [P] `crates/thunderforge-server/src/graphql/types_rolls.rs`:
   - `RollFacet { id, label }` and the `Advantage` enum;
   - `WorldRoll` gains `facets`, `reroll_of`, `rerolled_by`, `spent`, `reroll_offers` and `reroll_until`, filled in `from_row`. Offers and until are empty or null for now; US3 fills them.
   - `graphql/queries/roll.rs` `entries` batch-loads `rerolled_by` with one `reroll_of = ANY(ids)` query.
