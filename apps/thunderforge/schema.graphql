@@ -1518,6 +1518,12 @@ type AppQueryRoot {
 	"""
 	systemChecks(worldId: UUID!): [GraphQLSystemCheck!]!
 	"""
+	Spec 084 FR-018: whether this world's system rolls a check or an
+	attack with advantage, so a sheet offers the choice only where the
+	server would take it.
+	"""
+	rollsWithAdvantage(worldId: UUID!): Boolean!
+	"""
 	Who currently holds the calling account's play field, if anybody.
 	
 	A companion surface asks this to know whether offering "take the table

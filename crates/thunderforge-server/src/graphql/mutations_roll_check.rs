@@ -383,26 +383,7 @@ impl RollCheckQuery {
         world_id: Uuid,
     ) -> GraphQLResult<Vec<GraphQLSystemCheck>> {
         let state = app_state(ctx)?;
-        let auth_user = authenticated_user(ctx)?;
-
-        let mut conn = state
-            .db_pool
-            .get()
-            .map_err(|_| Error::new("Failed to get DB connection"))?;
-        let user_id = auth_user.user_id;
-        let system_id = tokio::task::spawn_blocking(move || -> Result<Option<String>, Error> {
-            require_world_member(&mut conn, user_id, world_id)
-                .map_err(|_| Error::new("You must be a member of this world"))?;
-            worlds::table
-                .filter(worlds::id.eq(world_id))
-                .select(worlds::game_system_id)
-                .first::<Option<String>>(&mut conn)
-                .map_err(|_| Error::new("World not found"))
-        })
-        .await
-        .map_err(|_| Error::new("Failed to spawn blocking task"))??;
-
-        let Some(system_id) = system_id else {
+        let Some(system_id) = member_world_system(ctx, world_id).await? else {
             return Ok(Vec::new());
         };
 
@@ -413,6 +394,42 @@ impl RollCheckQuery {
                 .collect(),
         )
     }
+
+    /// Spec 084 FR-018: whether this world's system rolls a check or an
+    /// attack with advantage, so a sheet offers the choice only where the
+    /// server would take it.
+    async fn rolls_with_advantage(&self, ctx: &Context<'_>, world_id: Uuid) -> GraphQLResult<bool> {
+        let system_id = member_world_system(ctx, world_id).await?;
+        Ok(rolls_with_advantage(system_id.as_deref()))
+    }
+}
+
+/// True when the system registers a roll-facets slot (spec 084).
+pub(crate) fn rolls_with_advantage(system_id: Option<&str>) -> bool {
+    system_id.is_some_and(|id| facets_for(id).is_some())
+}
+
+/// The world's game system, for a member of that world.
+async fn member_world_system(ctx: &Context<'_>, world_id: Uuid) -> GraphQLResult<Option<String>> {
+    let state = app_state(ctx)?;
+    let auth_user = authenticated_user(ctx)?;
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let user_id = auth_user.user_id;
+    tokio::task::spawn_blocking(move || -> Result<Option<String>, Error> {
+        require_world_member(&mut conn, user_id, world_id)
+            .map_err(|_| Error::new("You must be a member of this world"))?;
+        worlds::table
+            .filter(worlds::id.eq(world_id))
+            .select(worlds::game_system_id)
+            .first::<Option<String>>(&mut conn)
+            .map_err(|_| Error::new("World not found"))
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
 }
 
 #[derive(Default)]

@@ -787,3 +787,24 @@ async fn a_system_without_facets_refuses_advantage_and_rolls_its_formula_untouch
     assert_eq!(row.formula, "1d20");
     assert!(row.facet_ids().is_empty());
 }
+
+/// FR-018: a sheet draws the advantage picker only where the system has
+/// somewhere for the choice to go, and the query that says so sits beside
+/// the checks it would apply to.
+#[test]
+fn only_a_system_with_facets_rolls_with_advantage() {
+    use super::rolls_with_advantage;
+    assert!(rolls_with_advantage(Some("dnd5e")));
+    assert!(!rolls_with_advantage(Some("roll_for_shoes")));
+    assert!(!rolls_with_advantage(Some("cypher_system")));
+    assert!(!rolls_with_advantage(None));
+
+    let sdl = async_graphql::Schema::build(
+        crate::graphql::QueryRoot::default(),
+        crate::graphql::MutationRoot::default(),
+        crate::graphql::SubscriptionRoot,
+    )
+    .finish()
+    .sdl();
+    assert!(sdl.contains("rollsWithAdvantage(worldId: UUID!): Boolean!"));
+}
