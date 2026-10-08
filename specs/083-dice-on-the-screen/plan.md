@@ -61,7 +61,8 @@ JSON, defaulted when absent. `world_roll_records.bindings` already exists.
 - `make test-rust ARGS="-p thunderforge-server --lib roll"`;
 - `make lint` (host, plus wasm32 for the engine);
 - web and demo vitest;
-- `pnpm e2e:rolls`, then the full suite, because the GraphQL schema changes.
+- `pnpm e2e:rolls`, then every slice `pnpm e2e:which --diff` names. Slices
+  are the gate (owner decision 2026-10-07); the full suite is not run.
 
 **Target Platform**: browsers running the wasm engine, and the self-hosted
 server.
@@ -91,7 +92,7 @@ waiting.
 | III. Agnostic core             | The shapes, orientation, tumble, queue and readout are pure, in `thunderforge-canvas-core`. The breakdown is pure, in `thunderforge-dice`. The engine plugin only maps them onto entities.                                                          |
 | IV. Tests first                | Every phase opens with its failing tests: crate, canvas core, server, web and demo vitest, then e2e.                                                                                                                                                |
 | V. Docs by audience            | `docs/guides/rolls.md` says what players see. CONTRIBUTING's Rolls section says where the throw is built and how to tune it in the sandbox.                                                                                                         |
-| VI. Proven by its own slice    | `apps/web/e2e/rolls-dice-on-screen.spec.ts` sits in the `rolls` slice. The demo's `rolls-across-tabs.spec.ts` asserts `diceLanded()`. `pnpm e2e:rolls` is green, then `node ./scripts/e2e-parallel.mjs`, because `schema.graphql` is cross-cutting. |
+| VI. Proven by its own slice    | `apps/web/e2e/rolls-dice-on-screen.spec.ts` sits in the `rolls` slice. The demo's `rolls-across-tabs.spec.ts` asserts `diceLanded()`. `pnpm e2e:rolls` is green, then every slice `pnpm e2e:which --diff` names; slices are the gate (owner decision 2026-10-07). |
 
 No violations.
 

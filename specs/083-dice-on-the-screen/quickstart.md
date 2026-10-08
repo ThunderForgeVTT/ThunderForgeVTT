@@ -69,8 +69,8 @@ pnpm -F @thunderforge/web exec vitest run src/engine/bevy src/engine/world/sync 
 pnpm -F @thunderforge/demo exec vitest run src/backend/handlers/dice.test.ts
 node scripts/build.mjs --only-wasm          # release engine and dice wasm
 pnpm e2e:rolls                              # demo two-tab e2e, then the rolls slice
-pnpm e2e:which --diff
-node ./scripts/e2e-parallel.mjs             # the schema changed: full suite
+pnpm e2e:which --diff                       # then run every slice it names
+# Slices are the gate (owner decision 2026-10-07): no full-suite run.
 ```
 
 The bundle is measured in brotli, before and after (research R13):

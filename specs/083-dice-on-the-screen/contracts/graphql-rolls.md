@@ -1,7 +1,7 @@
 # Contract: GraphQL, rolls
 
-This changes `apps/thunderforge/schema.graphql`. The schema is
-cross-cutting, so the full e2e suite gates the merge. Regenerate it with
+This changes `apps/thunderforge/schema.graphql`. The slices
+`pnpm e2e:which --diff` names gate the merge (owner decision 2026-10-07). Regenerate it with
 `node scripts/check-graphql-contract.mjs --schema --fix`.
 
 ## Additions

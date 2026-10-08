@@ -334,7 +334,7 @@ die (research R4).
 - [ ] T063 The existing `rolls-everyone`, `rolls-gm-only`, `rolls-sheet-tab`, `rolls-reveal` and `rolls-gm-eyes` specs pass unchanged on `dicePlayed` (FR-018)
 - [ ] T064 **Proof**: `pnpm e2e:rolls`, green. It runs the demo's unit tests and `rolls-across-tabs`, then the `rolls` slice with `rolls-dice-on-screen.spec.ts`.
 - [ ] T065 `pnpm e2e:which --diff`, and run every slice it names
-- [ ] T066 Full suite `node ./scripts/e2e-parallel.mjs`, green. It is the gate, because `apps/thunderforge/schema.graphql` and `apps/web/e2e/fixtures/rolls.ts` are cross-cutting.
+- [x] T066 ~~Full suite `node ./scripts/e2e-parallel.mjs`, green~~ — skipped by owner decision 2026-10-07: slices are the gate (T064 and T065 are the proof)
 - [ ] T067 SC-004: in `rolls-dice-on-screen.spec.ts`, 50 consecutive `1d6` rolls end with `diceEntities() == 0`. SC-007: a `20d6` throw keeps the frame times from `frame_trace()` at or under 18.2 ms (55 fps) at the median, as `engine-limits.spec.ts` reads them.
 - [ ] T068 SC-006: the release `engine_bg.wasm` brotli size after the change, minus T001's, is under 150 KB. Record both numbers here.
 
@@ -371,6 +371,7 @@ After US1: T028/T029 (US2), T033/T034 (US3), T037 (US4), T040/T041 (US5), T048/T
 2. Then US2 and US3, which complete the ask: "of that variety", and what
    happened to each die.
 3. Then US4 and US5, the timings, the demo, the sandbox and the docs.
-4. The proof is `pnpm e2e:rolls`, then the full suite.
+4. The proof is `pnpm e2e:rolls`, then every slice `pnpm e2e:which --diff`
+   names. Slices are the gate (owner decision 2026-10-07).
 
 Commit at each checkpoint, signed, with explicit paths.
