@@ -482,6 +482,21 @@ pub(crate) fn draw_box(
     }
 }
 
+/// Publish the group for `selection_state()` whenever it changes (spec 085).
+pub fn publish_selection(group: Res<GroupSelection>) {
+    if !group.is_changed() {
+        return;
+    }
+    if let Ok(mut slot) = crate::selection_slot().lock() {
+        *slot = json!({
+            "tokens": group.tokens,
+            "walls": group.walls,
+            "lights": group.lights,
+            "shapes": group.shapes,
+        });
+    }
+}
+
 #[cfg(test)]
 #[path = "box_select_tests.rs"]
 mod tests;

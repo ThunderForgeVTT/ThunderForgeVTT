@@ -177,7 +177,7 @@ that passes them.
 
   Then `SelectionBar.tsx`. Render it from `apps/web/src/pages/world/WorldPage.tsx` in Select mode. Forward `delete_group` to `deleteSelection()` in `apps/web/src/engine/bevy/index.ts`.
 
-- [ ] T026 [US2] Probe `selection()`: `selection_state()` in `crates/thunderforge-engine/src/sdk.rs`, and the reader in `apps/web/src/engine/bevy/index.ts`.
+- [x] T026 [US2] Probe `selection()`: `selection_state()` in `crates/thunderforge-engine/src/sdk.rs`, and the reader in `apps/web/src/engine/bevy/index.ts`.
 - [ ] T027 [US2] E2E in `canvas-box-select.spec.ts`, as the GM:
   - box three tokens and a wall (mouse down, move, up on the canvas); `selection()` holds all four;
   - drag one token by two cells; a reload shows all four moved by the same offset (SC-002);
@@ -197,14 +197,14 @@ that passes them.
 
 **Independent Test**: A player with two tokens boxes them plus an NPC. Only their two are selected and moved.
 
-- [ ] T029 [P] [US3] [082] Tests in `systems/box_select.rs` `mod tests` for a player's `box_candidate`:
+- [x] T029 [P] [US3] [082] Tests in `systems/box_select.rs` `mod tests` for a player's `box_candidate`:
   - their visible token is taken;
   - their token hidden by sight (`seen: false`) is not;
   - another's token is not;
   - walls and lights are never taken, with any filter;
   - their own shape is taken and the GM's is not;
   - with no viewer id, nothing is taken.
-- [ ] T030 [US3] [082] Player rows of `box_candidate`:
+- [x] T030 [US3] [082] Player rows of `box_candidate`:
   - `ViewerUserId`, `TokenOwner`, `Visibility` and `may_edit_shape`, in `crates/thunderforge-engine/src/systems/box_select.rs`;
   - in `systems/token.rs`'s upsert, a token whose new owner is not the viewer leaves `GroupSelection` and `SelectedToken` for a non-GM, with a test in `token_owner_tests.rs`.
 - [ ] T031 [US3] Tests in `group_move.rs` `mod tests`, then the code:

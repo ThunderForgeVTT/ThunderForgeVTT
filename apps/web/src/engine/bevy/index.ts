@@ -163,6 +163,8 @@ function installEngineProbe(wasm: BevyWasmModule): void {
   const diceLanded = (wasm as { dice_landed?: () => string }).dice_landed;
   const drawnWallIds = (wasm as { drawn_wall_ids?: () => string })
     .drawn_wall_ids;
+  const selectionState = (wasm as { selection_state?: () => string })
+    .selection_state;
   const diceEntityCount = (wasm as { dice_entity_count?: () => number })
     .dice_entity_count;
   (window as unknown as Record<string, unknown>).__engineProbe = {
@@ -171,6 +173,22 @@ function installEngineProbe(wasm: BevyWasmModule): void {
     // Game Master's; it blocks on both.
     drawnWalls: (): string[] =>
       drawnWallIds ? (JSON.parse(drawnWallIds()) as string[]) : [],
+    // Spec 085: what this board holds selected, per kind, read from the
+    // engine's own group.
+    selection: (): {
+      tokens: string[];
+      walls: string[];
+      lights: string[];
+      shapes: string[];
+    } =>
+      selectionState
+        ? (JSON.parse(selectionState()) as {
+            tokens: string[];
+            walls: string[];
+            lights: string[];
+            shapes: string[];
+          })
+        : { tokens: [], walls: [], lights: [], shapes: [] },
     // Spec 083: the throws this board finished or skipped, oldest first
     // (contracts/engine-dice.md), and how many throw entities are alive.
     diceLanded: (): unknown[] =>

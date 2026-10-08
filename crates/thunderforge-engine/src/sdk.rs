@@ -461,6 +461,27 @@ pub fn drawn_wall_ids() -> String {
         .unwrap_or_else(|| "[]".to_string())
 }
 
+/// What this board holds selected, per kind, as JSON (spec 085 R12).
+///
+/// Read from the engine's own `GroupSelection`, published once a frame after
+/// every tool has had its say. Read-only, like `drawn_wall_ids`.
+#[wasm_bindgen]
+pub fn selection_state() -> String {
+    selection_slot()
+        .lock()
+        .ok()
+        .map(|group| group.to_string())
+        .unwrap_or_else(|| r#"{"tokens":[],"walls":[],"lights":[],"shapes":[]}"#.to_string())
+}
+
+pub(crate) static SELECTION: OnceLock<Mutex<Value>> = OnceLock::new();
+
+pub(crate) fn selection_slot() -> &'static Mutex<Value> {
+    SELECTION.get_or_init(|| {
+        Mutex::new(serde_json::json!({ "tokens": [], "walls": [], "lights": [], "shapes": [] }))
+    })
+}
+
 pub(crate) static DRAWN_WALLS: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
 
 pub(crate) fn drawn_walls_slot() -> &'static Mutex<Vec<String>> {

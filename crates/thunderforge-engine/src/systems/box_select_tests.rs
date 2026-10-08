@@ -130,3 +130,69 @@ fn a_box_without_shift_replaces_and_with_shift_toggles_per_kind() {
     assert_eq!(toggled.tokens, vec!["b".to_string()]);
     assert_eq!(toggled.walls, vec!["w1".to_string()]);
 }
+
+fn player_takes(item: BoxItem<'_>) -> bool {
+    box_candidate(false, Some("me"), &SelectionFilter::default(), item)
+}
+
+#[test]
+fn a_player_box_takes_their_own_token_only_while_they_can_see_it() {
+    assert!(player_takes(BoxItem::Token {
+        owner: Some("me"),
+        seen: true
+    }));
+    assert!(!player_takes(BoxItem::Token {
+        owner: Some("me"),
+        seen: false
+    }));
+    assert!(!player_takes(BoxItem::Token {
+        owner: Some("someone"),
+        seen: true
+    }));
+    assert!(!player_takes(BoxItem::Token {
+        owner: None,
+        seen: true
+    }));
+}
+
+#[test]
+fn a_player_box_never_takes_a_wall_or_a_light_whatever_the_filter() {
+    for kind in [
+        GroupKind::Token,
+        GroupKind::Wall,
+        GroupKind::Light,
+        GroupKind::Shape,
+    ] {
+        for on in [true, false] {
+            let filter = only(kind, on);
+            assert!(!box_candidate(false, Some("me"), &filter, BoxItem::Wall));
+            assert!(!box_candidate(false, Some("me"), &filter, BoxItem::Light));
+        }
+    }
+}
+
+#[test]
+fn a_player_box_takes_their_own_shape_and_not_the_gms() {
+    let mine = shape(Some("me"));
+    let gms = shape(Some("gm"));
+    let nobodys = shape(None);
+    assert!(player_takes(BoxItem::Shape(&mine)));
+    assert!(!player_takes(BoxItem::Shape(&gms)));
+    assert!(!player_takes(BoxItem::Shape(&nobodys)));
+}
+
+#[test]
+fn a_player_the_board_was_never_told_the_name_of_takes_nothing() {
+    let filter = SelectionFilter::default();
+    let mine = shape(Some("me"));
+    assert!(!box_candidate(
+        false,
+        None,
+        &filter,
+        BoxItem::Token {
+            owner: Some("me"),
+            seen: true
+        }
+    ));
+    assert!(!box_candidate(false, None, &filter, BoxItem::Shape(&mine)));
+}

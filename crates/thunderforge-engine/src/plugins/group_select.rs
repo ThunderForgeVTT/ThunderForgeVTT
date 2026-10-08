@@ -7,7 +7,9 @@ use crate::plugins::authoring_mode::AuthoringMode;
 use crate::resources::{
     GroupSelection, IsGameMaster, SelectedLight, SelectedShape, SelectedToken, SelectedWall,
 };
-use crate::systems::box_select::{BoxDrag, draw_box, follow_single_selection, handle_box_select};
+use crate::systems::box_select::{
+    BoxDrag, draw_box, follow_single_selection, handle_box_select, publish_selection,
+};
 use crate::systems::group_move::{
     GroupDrag, GroupStamps, delete_group_selection, drive_group_drag, start_group_drag,
 };
@@ -47,7 +49,15 @@ impl Plugin for GroupSelectPlugin {
                     .before(handle_token_drag),
             )
             // After every tool has had its say this frame.
-            .add_systems(PostUpdate, follow_single_selection);
+            .add_systems(
+                PostUpdate,
+                (
+                    crate::systems::token::release_disowned_tokens,
+                    follow_single_selection,
+                    publish_selection,
+                )
+                    .chain(),
+            );
 
         if app.is_plugin_added::<bevy::gizmos::GizmoPlugin>() {
             app.add_systems(Update, draw_box.run_if(in_state(AuthoringMode::Select)));

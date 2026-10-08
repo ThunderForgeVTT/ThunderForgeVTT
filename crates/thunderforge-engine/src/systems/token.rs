@@ -40,6 +40,62 @@ pub(crate) fn next_owner(
     }
 }
 
+/// Spec 085 T030: a token given to someone else leaves a player's group.
+///
+/// A player's group holds only their own tokens, so a token whose owner is
+/// now someone else comes out of `GroupSelection`, and out of `SelectedToken`
+/// with it. Only a token that was in the group: a player's single selection
+/// of another's token (a target, say) is not the group's to take away. A Game
+/// Master's group is never trimmed. Returns whether the group changed.
+pub(crate) fn release_disowned(
+    is_gm: bool,
+    viewer: Option<&str>,
+    token_id: &str,
+    owner: &TokenOwner,
+    group: &mut crate::resources::GroupSelection,
+    selected: &mut SelectedToken,
+) -> bool {
+    if is_gm || (viewer.is_some() && owner.0.as_deref() == viewer) {
+        return false;
+    }
+    let Some(at) = group.tokens.iter().position(|id| id == token_id) else {
+        return false;
+    };
+    group.tokens.remove(at);
+    selected.0.retain(|id| id != token_id);
+    true
+}
+
+/// [`release_disowned`] for every token whose owner was written this frame.
+pub(crate) fn release_disowned_tokens(
+    changed: Query<(&TokenIdentity, &TokenOwner), Changed<TokenOwner>>,
+    is_gm: Option<Res<IsGameMaster>>,
+    viewer: Option<Res<crate::resources::ViewerUserId>>,
+    mut group: ResMut<crate::resources::GroupSelection>,
+    mut selected: ResMut<SelectedToken>,
+) {
+    let is_gm = is_gm.is_some_and(|gm| gm.0);
+    let viewer = viewer.as_ref().and_then(|v| v.0.as_deref());
+    let mut released = false;
+    for (identity, owner) in changed.iter() {
+        // Through `bypass_change_detection` so an owner that leaves the group
+        // alone does not mark it changed.
+        released |= release_disowned(
+            is_gm,
+            viewer,
+            &identity.0,
+            owner,
+            group.bypass_change_detection(),
+            selected.bypass_change_detection(),
+        );
+    }
+    if released {
+        group.set_changed();
+        selected.set_changed();
+        crate::systems::box_select::emit_group(&group);
+    }
+}
+
 /// Whole grid-cell increments a token's `scale` may take (spec 004 US2's
 /// resize clarification: 1x1, 2x2, 3x3... never a fractional cell).
 const MIN_TOKEN_SCALE: f32 = 1.0;
