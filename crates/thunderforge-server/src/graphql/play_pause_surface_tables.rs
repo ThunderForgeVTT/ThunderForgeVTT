@@ -321,6 +321,11 @@ pub const GATED: &[(&str, &str)] = &[
         r#"mutation { rollCheck(worldId: "{world}", actorId: "{actor}", checkId: "x") { __typename } }"#,
     ),
     (
+        // Spec 084: as `revealRoll`, the pause comes before the roll.
+        "rerollRoll",
+        r#"mutation { rerollRoll(worldId: "{world}", rollId: "{world}", spend: "inspiration") { __typename } }"#,
+    ),
+    (
         "setAuthoringToolGrant",
         r#"mutation { setAuthoringToolGrant(worldId: "{world}", worldMemberId: "{playerMember}", tool: "walls", granted: true) }"#,
     ),
