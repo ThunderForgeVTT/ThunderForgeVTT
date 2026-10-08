@@ -170,7 +170,7 @@ that passes them.
 
   Then the code in `apps/web/src/engine/world/sync/tokens.ts` (`applyMoveRefusal` takes the stamp) and `sync/shapes.ts`.
 
-- [ ] T025 [US2] Select bar, test first in `apps/web/src/components/canvas-tools/SelectionBar/__tests__/SelectionBar.test.tsx`:
+- [x] T025 [US2] Select bar, test first in `apps/web/src/components/canvas-tools/SelectionBar/__tests__/SelectionBar.test.tsx`:
   - it renders only with two or more selected, and shows counts by kind;
   - **Hidden from the table** appears only for a GM with walls, and dispatches `set_walls_hidden` with the group's wall ids;
   - **Delete** dispatches `delete_group`.

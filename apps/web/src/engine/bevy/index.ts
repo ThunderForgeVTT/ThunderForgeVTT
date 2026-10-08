@@ -22,6 +22,8 @@ type BevyWasmModule = {
   default: (moduleOrPath?: unknown) => Promise<unknown>;
   start: (canvasSelector: string) => void;
   apply_world_command?: (json: string) => void;
+  /** Spec 085: the Select bar's Delete, the same request as the Delete key. */
+  delete_selection?: () => void;
   set_authoring_mode?: (toolId: string) => boolean;
   set_allowed_authoring_tools?: (toolIds: string) => void;
   clear_allowed_authoring_tools?: () => void;
@@ -1279,6 +1281,17 @@ export async function bindWorldStore(worldStore: WorldStore): Promise<void> {
 
   worldStoreUnsubscribe = worldStore.subscribe((event) => {
     if (event.source === "bevy") {
+      return;
+    }
+
+    // Spec 085: `set_walls_hidden` is the walls bridge's alone; the engine
+    // hears the answer as `update_wall`. `delete_group` is the engine's own
+    // Delete, so the bar and the key take one path.
+    if (event.command.type === "set_walls_hidden") {
+      return;
+    }
+    if (event.command.type === "delete_group") {
+      module.delete_selection?.();
       return;
     }
 

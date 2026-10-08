@@ -166,6 +166,7 @@ import {
 } from "@/engine/world/facets";
 import { TokenStackPicker } from "@/components/canvas-tools/TokenStackPicker";
 import { SelectionCount } from "@/components/world/SelectionCount";
+import { SelectionBar } from "@/components/canvas-tools/SelectionBar";
 import { CanvasContextMenu } from "@/components/world/CanvasContextMenu/CanvasContextMenu";
 import { useCanvasContextMenu } from "@/components/world/CanvasContextMenu/useCanvasContextMenu";
 import { ApprovalQueue } from "@/components/ApprovalQueue";
@@ -3250,6 +3251,20 @@ export default function WorldPage() {
                 <SelectionCount
                   selectedTokenIds={worldState.selectedTokenIds}
                 />
+                {/* Spec 085 FR-018: a group in Select. Someone without a rail
+                 * is always in Select. */}
+                {!hasToolRail ||
+                (effectiveGmToolId ?? "select") === "select" ? (
+                  <SelectionBar
+                    worldStore={worldStore}
+                    isGm={isSceneOwner}
+                    walls={worldState.walls}
+                    selectedTokenIds={worldState.selectedTokenIds}
+                    selectedWallIds={worldState.selectedWallIds}
+                    selectedLightIds={worldState.selectedLightIds}
+                    selectedShapeIds={worldState.selectedShapeIds}
+                  />
+                ) : null}
               </div>
               {id ? (
                 <div
