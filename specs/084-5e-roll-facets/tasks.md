@@ -168,12 +168,14 @@ nothing visible changed.
 
 ### Proof
 
-- [ ] T025 [US1] `apps/web/e2e/rolls-facets-advantage.spec.ts`, with a GM and a player (the `apps/web/e2e/fixtures/rolls.ts` helpers):
+- [x] T025 [US1] `apps/web/e2e/rolls-facets-advantage.spec.ts`, with a GM and a player (the `apps/web/e2e/fixtures/rolls.ts` helpers):
   - the player rolls Stealth with Advantage, and both chats show two d20s, one struck, and the Advantage tag;
   - the picker reads Normal again;
   - a Disadvantage attack's formula shows `kl1`.
 
   Run `pnpm e2e:rolls`.
+
+  As built: the player rolls the Dexterity check, not Stealth. A skill needs the character's level for its proficiency bonus, and the server refuses a check whose value the sheet lacks; a Dexterity check needs only the score.
 
 **Checkpoint**: US1 works end to end on the server and in the demo.
 
