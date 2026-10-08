@@ -10,6 +10,8 @@ use thunderforge_canvas_core::system_contribution::contribution_for;
 use uuid::Uuid;
 
 use crate::models::NewRollRecord;
+use crate::schema::world_actor_system_data;
+use diesel::prelude::*;
 
 /// What a roll was for, written to its record (data-model.md). The default
 /// is a free roll: no sheet, no kind, no facets, not a reroll.
@@ -77,6 +79,18 @@ pub fn shape_roll(system_id: &str, input: ShapeInput<'_>) -> Result<Shaped, Stri
         return Ok(untouched(&input));
     };
     Ok((facets.shape)(&input)?.unwrap_or_else(|| untouched(&input)))
+}
+
+/// The actor's `trait_data`, the sheet a roll is shaped by; `Null` for an
+/// actor with none.
+pub fn sheet_of(conn: &mut PgConnection, actor_id: Uuid) -> QueryResult<serde_json::Value> {
+    Ok(world_actor_system_data::table
+        .filter(world_actor_system_data::actor_id.eq(actor_id))
+        .select(world_actor_system_data::trait_data)
+        .first::<Option<serde_json::Value>>(conn)
+        .optional()?
+        .flatten()
+        .unwrap_or(serde_json::Value::Null))
 }
 
 /// Each id with the name the table sees: a facet's label, a spend's label,

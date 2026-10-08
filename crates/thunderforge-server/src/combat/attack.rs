@@ -55,7 +55,7 @@ use crate::combat::weapon::{Part, find_weapon, parts_of};
 use crate::graphql::mutations_roll::MAX_ROLL_LABEL;
 use crate::models::NewRollRecord;
 use crate::play_pause::gate::{GateError, refuse_if_paused};
-use crate::rolls::facets::RollMeta;
+use crate::rolls::facets::{RollMeta, shape_roll, sheet_of};
 use crate::rolls::visibility::Visibility;
 use crate::schema::{
     scenes, tokens, world_actor_system_data, world_actors, world_attacks, world_offers,
@@ -65,6 +65,7 @@ use crate::world_events::{
     EVENT_CODE_ATTACK_MADE, EVENT_CODE_OFFER_CHANGED, EVENT_CODE_ROLL_MADE, record_world_event,
     roll_event_payload,
 };
+use thunderforge_canvas_core::roll_facets::{Advantage, RollKind, ShapeInput};
 
 /// What an attack costs is the shared rules' (`thunderforge_combat::attack`,
 /// ADR-113), as are what a hit is, what a damage roll offers, and when it is
@@ -149,6 +150,8 @@ pub struct AttackRequest {
     pub targets: Option<Vec<Uuid>>,
     pub action_cost: Option<ActionCost>,
     pub bindings: Vec<(String, f64)>,
+    /// Spec 084: the attacker's choice for every part's to-hit.
+    pub advantage: Advantage,
 }
 
 /// What `make_attack` wrote.
@@ -532,6 +535,7 @@ pub fn make_attack<R: Rng>(
             scene_id,
             attacker_token_id: Some(attacker_token_id),
             attacker_kind: KIND_CREATURE,
+            attacker_actor_id: control.actor_id,
             attacker_label,
             measured,
             action_cost,
@@ -575,6 +579,9 @@ pub(crate) struct Settled {
     pub attacker_token_id: Option<Uuid>,
     /// `creature` or `lair` (`world_attacks.attacker_kind`).
     pub attacker_kind: &'static str,
+    /// Spec 084: the sheet a to-hit is shaped by; `None` for a lair or a
+    /// marker.
+    pub attacker_actor_id: Option<Uuid>,
     pub attacker_label: String,
     pub parts: Vec<Part>,
     /// One per part.
@@ -598,6 +605,7 @@ pub(crate) fn record_attack<R: Rng>(
         scene_id,
         attacker_token_id,
         attacker_kind,
+        attacker_actor_id,
         attacker_label,
         parts,
         measured,
@@ -639,20 +647,43 @@ pub(crate) fn record_attack<R: Rng>(
             offer_ids: Vec::new(),
         };
         let now = chrono::Utc::now().naive_utc();
+        // Spec 084: each to-hit is shaped by the attacker's sheet.
+        let system_id = world_system.clone().unwrap_or_default();
+        let trait_data = match attacker_actor_id {
+            Some(actor_id) => sheet_of(conn, actor_id)?,
+            None => serde_json::Value::Null,
+        };
+        let meta = |roll_kind, facets| RollMeta {
+            actor_id: attacker_actor_id,
+            roll_kind: Some(roll_kind),
+            facets,
+            ..RollMeta::default()
+        };
 
         for (index, part) in parts.iter().enumerate() {
             let target = target_for(index);
-            let (to_hit_roll_id, _, total) =
-                roll_and_record(
-                    conn,
-                    world_id,
-                    user_id,
-                    &part.to_hit,
-                    &part.name,
-                    &bindings,
-                    RollMeta::default(),
-                    rng,
-                )?;
+            let shaped = shape_roll(
+                &system_id,
+                ShapeInput {
+                    kind: RollKind::ToHit,
+                    formula: &part.to_hit,
+                    trait_data: &trait_data,
+                    advantage: request.advantage,
+                    melee: false,
+                    item_properties: &[],
+                },
+            )
+            .map_err(FightRefusal::Invalid)?;
+            let (to_hit_roll_id, _, total) = roll_and_record(
+                conn,
+                world_id,
+                user_id,
+                &shaped.formula,
+                &part.name,
+                &bindings,
+                meta(RollKind::ToHit, shaped.facets),
+                rng,
+            )?;
 
             let defence = match target {
                 Some(target) => defence_of(conn, systems_dir, world_system.as_deref(), target)?,
@@ -670,7 +701,7 @@ pub(crate) fn record_attack<R: Rng>(
                     &source,
                     &format!("{} damage", part.name),
                     &bindings,
-                    RollMeta::default(),
+                    meta(RollKind::Damage, Vec::new()),
                     rng,
                 )?),
                 _ => None,

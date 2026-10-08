@@ -158,6 +158,7 @@ async fn make_attack_answers_the_caller_as_they_may_see_it() {
             targets: None,
             action_cost: None,
             bindings: None,
+            advantage: None,
         },
         rng(),
     )
@@ -197,6 +198,7 @@ async fn make_attack_answers_the_caller_as_they_may_see_it() {
             targets: None,
             action_cost: None,
             bindings: None,
+            advantage: None,
         },
         rng(),
     )

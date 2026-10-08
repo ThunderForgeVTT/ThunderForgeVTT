@@ -434,6 +434,8 @@ fn parse_attack_intent(
         targets: parsed.attack.targets,
         action_cost,
         bindings: Vec::new(),
+        // A queued attack carries no choice (spec 084): it is rolled plainly.
+        advantage: Default::default(),
     })
 }
 

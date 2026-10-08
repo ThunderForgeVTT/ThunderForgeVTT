@@ -32,6 +32,10 @@ pub mod weapon;
 #[path = "fixtures_tests.rs"]
 pub(crate) mod fixtures;
 
+/// Spec 084 US1: advantage on an attack's to-hit.
+#[cfg(test)]
+mod attack_facets_tests;
+
 /// Spec 079 US3: a scripted fight through the server and through the crate.
 #[cfg(test)]
 #[path = "parity_tests.rs"]

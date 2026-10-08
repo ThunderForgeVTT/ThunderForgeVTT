@@ -137,12 +137,12 @@ nothing visible changed.
   - `roll_check_impl` and the resolver (`:398`) take `advantage: Option<Advantage>`;
   - read the actor's sheet (the existing `actor_slots`, `:163`);
   - call `shape_roll` between `bindings_for_check` and `roll_and_settle`, and pass `RollMeta`.
-- [ ] T018 [US1] Tests in a new `crates/thunderforge-server/src/combat/attack_facets_tests.rs`, registered from `combat/mod.rs`:
+- [x] T018 [US1] Tests in a new `crates/thunderforge-server/src/combat/attack_facets_tests.rs`, registered from `combat/mod.rs`:
   - `make_attack` with `advantage: Advantage` records a `2d20kh1 + …` to-hit with `roll_kind = 'to_hit'`, the attacker's `actor_id` and `["advantage"]`;
   - the hit or miss is judged on the kept die (seeded rng);
   - damage is untouched;
   - a lair's attack takes no actor and refuses advantage.
-- [ ] T019 [US1] `AttackRequest` (`combat/attack.rs:142`) gains `advantage`, and `AttackInput` (`graphql/types_attacks.rs`) gains `advantage: Option<Advantage>` mapped in `into_request`. `record_attack` (`:583`) shapes each part's to-hit with the attacker's sheet before `roll_and_record`, and passes `RollMeta`. Keep `attack.rs` under 900 lines: the sheet read goes in `rolls/facets.rs` as `sheet_of(conn, actor_id)`.
+- [x] T019 [US1] `AttackRequest` (`combat/attack.rs:142`) gains `advantage`, and `AttackInput` (`graphql/types_attacks.rs`) gains `advantage: Option<Advantage>` mapped in `into_request`. `record_attack` (`:583`) shapes each part's to-hit with the attacker's sheet before `roll_and_record`, and passes `RollMeta`. Keep `attack.rs` under 900 lines: the sheet read goes in `rolls/facets.rs` as `sheet_of(conn, actor_id)`.
 
 ### Web
 

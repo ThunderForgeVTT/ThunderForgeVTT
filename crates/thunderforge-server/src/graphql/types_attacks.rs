@@ -188,6 +188,9 @@ pub struct AttackInput {
     /// Defaults to the ability's. `REACTION` is not held to the turn.
     pub action_cost: Option<ActionCost>,
     pub bindings: Option<Vec<PlaceholderBindingInput>>,
+    /// Spec 084: every part's to-hit rolled with advantage or disadvantage.
+    #[graphql(default_with = "Some(crate::graphql::types::GraphQLAdvantage::Normal)")]
+    pub advantage: Option<crate::graphql::types::GraphQLAdvantage>,
 }
 
 impl AttackInput {
@@ -218,6 +221,7 @@ impl AttackInput {
                 .into_iter()
                 .map(|b| (b.name, b.value))
                 .collect(),
+            advantage: self.advantage.unwrap_or_default().into(),
         })
     }
 }

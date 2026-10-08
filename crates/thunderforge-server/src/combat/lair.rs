@@ -103,6 +103,9 @@ pub fn preview_lair_action(
     })
 }
 
+/// The refusal for a lair's action rolled with advantage or disadvantage.
+pub const LAIR_NO_ADVANTAGE: &str = "A lair does not roll with advantage.";
+
 /// Make a lair's action. See the module documentation.
 pub fn make_lair_action<R: Rng>(
     conn: &mut PgConnection,
@@ -121,6 +124,10 @@ pub fn make_lair_action<R: Rng>(
     // C2: nobody controls a lair; the Game Master acts for it.
     if !runs_the_world(conn, user_id, is_admin, world_id) {
         return Err(FightRefusal::NotControlled);
+    }
+    // Spec 084: a lair has no sheet and rolls no d20 twice.
+    if request.advantage != thunderforge_canvas_core::roll_facets::Advantage::Normal {
+        return Err(FightRefusal::Invalid(LAIR_NO_ADVANTAGE.to_string()));
     }
 
     let scene_id = match combat.scene_id {
@@ -166,6 +173,7 @@ pub fn make_lair_action<R: Rng>(
             scene_id,
             attacker_token_id: None,
             attacker_kind: KIND_LAIR,
+            attacker_actor_id: None,
             attacker_label: lair.label,
             measured,
             action_cost,

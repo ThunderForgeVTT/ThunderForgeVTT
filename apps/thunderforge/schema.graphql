@@ -2041,6 +2041,10 @@ input AttackInput {
 	"""
 	actionCost: ActionCost
 	bindings: [PlaceholderBindingInput!]
+	"""
+	Spec 084: every part's to-hit rolled with advantage or disadvantage.
+	"""
+	advantage: Advantage = NORMAL
 }
 
 enum AttackOutcome {
