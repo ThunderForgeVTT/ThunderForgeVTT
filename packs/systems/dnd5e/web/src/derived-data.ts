@@ -241,3 +241,39 @@ export function calculateArmorClass(
 export function calculateInitiative(dexterityModifier: number): number {
   return dexterityModifier;
 }
+
+/**
+ * Spec 084: the roll facets a sheet can list in `trait_data.facets`, in the
+ * order the sheet offers them. The server's `validate_trait_data` holds the
+ * same three ids.
+ */
+export const DND5E_SHEET_FACETS = [
+  { id: "halfling_luck", label: "Halfling Luck" },
+  { id: "great_weapon_fighting", label: "Great Weapon Fighting" },
+  { id: "lucky", label: "Lucky" },
+] as const;
+
+/** The facet ids a sheet lists, unknown and repeated ids left out. */
+export function sheetFacets(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const known: readonly string[] = DND5E_SHEET_FACETS.map((facet) => facet.id);
+  return known.filter((id) => value.includes(id));
+}
+
+/** `facets` with `id` ticked when it was not, and unticked when it was. */
+export function toggleFacet(facets: string[], id: string): string[] {
+  return facets.includes(id)
+    ? facets.filter((facet) => facet !== id)
+    : [...facets, id];
+}
+
+/**
+ * Luck Points left: the Lucky feat gives as many as the proficiency bonus,
+ * and a long rest gives them back. Never below 0, whatever was recorded.
+ */
+export function calculateLuckPointsLeft(
+  proficiencyBonus: number,
+  used: number,
+): number {
+  return Math.max(0, proficiencyBonus - Math.max(0, used));
+}

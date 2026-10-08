@@ -8,10 +8,14 @@ import {
 } from "@thunderforge/host";
 import {
   calculateAbilityModifier,
+  calculateLuckPointsLeft,
   calculateMaxSpellSlots,
   calculateProficiencyBonus,
   calculateProficiencyBonusForChallenge,
+  sheetFacets,
+  toggleFacet,
 } from "./derived-data.ts";
+import RollFacetsSection from "./components/RollFacetsSection";
 import {
   DND5E_ABILITIES,
   DND5E_ALIGNMENTS,
@@ -210,6 +214,13 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
   const darkvision = num(traitData.darkvision, 0);
   const experience = Math.max(0, num(traitData.experience, 0));
   const inspiration = traitData.inspiration === true;
+  // Spec 084: what shapes this character's rolls, and the Luck Points the
+  // Lucky feat has left until a long rest.
+  const facets = sheetFacets(traitData.facets);
+  const luckPointsLeft = calculateLuckPointsLeft(
+    proficiencyBonus,
+    num(traitData.luck_points_used, 0),
+  );
   // A table that does not award Inspiration turns it off in the world's
   // settings. Shown until the read lands and when it fails: the declared
   // default is on, and a control that flickers in is worse than one that
@@ -563,6 +574,16 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
                 </label>
               </div>
             ) : null}
+            <RollFacetsSection
+              facets={facets}
+              luckPointsLeft={luckPointsLeft}
+              canEdit={canEdit}
+              disabled={isPending}
+              onToggle={(id) =>
+                void writeTraits({ facets: toggleFacet(facets, id) })
+              }
+              onResetLuck={() => void writeTraits({ luck_points_used: 0 })}
+            />
           </div>
         );
 

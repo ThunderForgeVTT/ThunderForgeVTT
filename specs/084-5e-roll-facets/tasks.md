@@ -194,11 +194,13 @@ nothing visible changed.
   - a sheet without the facet is untouched.
 - [x] T029 [US2] `roll_facets.rs` `shape`: add `r1` for `halfling_luck` on d20 tests.
 - [x] T030 [US2] Server tests in `mutations_roll_check_tests.rs`: a halfling's check under a seeded rng whose first d20 is a 1 records `rolls [1, n]`, a total using `n` and `facets {halfling_luck}`. A plain character keeps the 1.
-- [ ] T031 [US2] The sheet: `packs/systems/dnd5e/web/src/components/RollFacetsSection.tsx`, mounted from `ActorSheet.tsx` beside Heroic Inspiration (`:212`):
+- [x] T031 [US2] The sheet: `packs/systems/dnd5e/web/src/components/RollFacetsSection.tsx`, mounted from `ActorSheet.tsx` beside Heroic Inspiration (`:212`):
   - three checkboxes (`data-testid="roll-facet-<id>"`) written through `writeTraits`, for whoever may edit;
   - when Lucky is ticked, the Luck Points left (proficiency bonus minus `luck_points_used`, computed in `derived-data.ts`) and a **Reset** button that writes `luck_points_used: 0`.
 
   Test it with vitest beside the sheet's existing tests.
+
+  As built: the pack has no vitest of its own, so the test is `apps/web/src/pages/world/actor/__tests__/dnd5eRollFacets.test.tsx`, beside `applyStatBlock.test.ts`, which tests this pack the same way. The facet list, `toggleFacet`, `sheetFacets` and `calculateLuckPointsLeft` live in `derived-data.ts`.
 
 - [ ] T032 [US2] `RollEntry.tsx`: a die whose `rolls` has more than one value, or whose `finalValue` differs from its last roll, shows the rolled values struck beside the used one (FR-016). Test it in vitest.
 - [ ] T033 [P] [US2] Demo: `facets.ts` adds `r1`, and `facets.test.ts` seeds a 1 and asserts the chain.
