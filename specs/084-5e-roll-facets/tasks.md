@@ -146,7 +146,7 @@ nothing visible changed.
 
 ### Web
 
-- [ ] T020 [P] [US1] `apps/web/src/components/world/RollAdvantage/AdvantagePicker.tsx`, with a vitest test: a three-way segmented control with `data-testid="roll-advantage-picker"`. It offers Normal, Advantage and Disadvantage, and has an accessible name.
+- [x] T020 [P] [US1] `apps/web/src/components/world/RollAdvantage/AdvantagePicker.tsx`, with a vitest test: a three-way segmented control with `data-testid="roll-advantage-picker"`. It offers Normal, Advantage and Disadvantage, and has an accessible name.
 - [ ] T021 [US1] Wire the picker up:
   - `apps/web/src/api/systemChecks.ts` `rollCheck` and `apps/web/src/api/attacks.ts` `makeAttack` take `advantage`;
   - `apps/web/src/components/world/PlayDock/CharacterRollButtons.tsx` renders the picker, but only when the world's system declares facets. Expose `rollsWithAdvantage: Boolean!` on the system checks query, true when a `roll_facets` slot is registered, and read it there.
