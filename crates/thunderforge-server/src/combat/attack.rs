@@ -41,12 +41,13 @@
 use diesel::PgConnection;
 use diesel::prelude::*;
 use rand::Rng;
-use thunderforge_combat::attack::{damage_source, judge, offered_amount, roll};
+use thunderforge_combat::attack::{judge, roll};
 use thunderforge_dice::{PlaceholderBindings, ResolutionKind, RollResolution};
 use uuid::Uuid;
 
-use crate::combat::controllers::{may_act_for, player_controllers, token_control};
-use crate::combat::hit_points::{HitPointChangeKind, apply_hit_point_change, slot_column};
+use crate::combat::attack_hit::{HitContext, roll_hit_damage, settle_hit};
+use crate::combat::controllers::{may_act_for, token_control};
+use crate::combat::hit_points::slot_column;
 use crate::combat::manifest::{combat_for_system, slot_key};
 use crate::combat::reach::{Measured, Reach, SceneMeasure};
 use crate::combat::records::*;
@@ -58,12 +59,11 @@ use crate::play_pause::gate::{GateError, refuse_if_paused};
 use crate::rolls::facets::{RollMeta, shape_roll, sheet_of};
 use crate::rolls::visibility::Visibility;
 use crate::schema::{
-    scenes, tokens, world_actor_system_data, world_actors, world_attacks, world_offers,
-    world_roll_records, worlds,
+    scenes, tokens, world_actor_system_data, world_actors, world_attacks, world_roll_records,
+    worlds,
 };
 use crate::world_events::{
-    EVENT_CODE_ATTACK_MADE, EVENT_CODE_OFFER_CHANGED, EVENT_CODE_ROLL_MADE, record_world_event,
-    roll_event_payload,
+    EVENT_CODE_ATTACK_MADE, EVENT_CODE_ROLL_MADE, record_world_event, roll_event_payload,
 };
 use thunderforge_canvas_core::roll_facets::{Advantage, RollKind, ShapeInput};
 
@@ -248,7 +248,7 @@ pub fn defence_of(
 /// transaction. The same record `rollDice` writes (ADR-044): an attack's rolls
 /// are ordinary rolls, linked from the attack. Spec 081: and like every roll,
 /// the table hears of it — in the open, since attacks stay public.
-fn roll_and_record<R: Rng>(
+pub(crate) fn roll_and_record<R: Rng>(
     conn: &mut PgConnection,
     world_id: Uuid,
     user_id: Uuid,
@@ -690,21 +690,24 @@ pub(crate) fn record_attack<R: Rng>(
                 None => None,
             };
             let outcome = judge(target.is_some(), defence, total);
-            let Measured { distance, mut flags } = measured[index].clone();
+            let Measured {
+                distance,
+                mut flags,
+            } = measured[index].clone();
             flags.extend(spend_flags.iter().map(|flag| flag.to_string()));
 
-            let damage = match damage_source(&part.damage) {
-                Some(source) if outcome == OUTCOME_HIT => Some(roll_and_record(
+            let damage = if outcome == OUTCOME_HIT {
+                roll_hit_damage(
                     conn,
                     world_id,
                     user_id,
-                    &source,
-                    &format!("{} damage", part.name),
+                    part,
                     &bindings,
                     meta(RollKind::Damage, Vec::new()),
                     rng,
-                )?),
-                _ => None,
+                )?
+            } else {
+                None
             };
 
             let attack_id = Uuid::now_v7();
@@ -754,109 +757,30 @@ pub(crate) fn record_attack<R: Rng>(
             let (Some(target), Some((_, _, amount))) = (target, damage) else {
                 continue;
             };
-            let target_system = target_system(conn, world_system.as_deref(), target)?;
-            // M1: a pack with no hit points shows the number and offers nothing.
-            let declares_hit_points = target_system
-                .as_deref()
-                .is_some_and(|id| combat_for_system(systems_dir, id).hit_points.is_some());
-            if !declares_hit_points {
-                continue;
-            }
-
-            let target_control = token_control(conn, target)?.ok_or_else(|| {
-                FightRefusal::NotFound("That target is not on this scene".to_string())
-            })?;
-            let target_linked = tokens::table
-                .filter(tokens::token_id.eq(target))
-                .select(tokens::linked)
-                .first::<bool>(conn)?;
-            let amount = offered_amount(amount);
-            let offer_id = Uuid::now_v7();
-            diesel::insert_into(world_offers::table)
-                .values(&OfferRecord {
-                    id: offer_id,
-                    world_id,
-                    scene_id,
-                    attack_id: Some(attack_id),
-                    target_token_id: target,
-                    target_linked,
-                    kind: OFFER_DAMAGE.to_string(),
-                    amount,
-                    status: OFFER_PENDING.to_string(),
-                    resolved_by: None,
-                    resolved_on_behalf: false,
-                    resolved_at: None,
-                    created_by: user_id,
-                    updated_by: user_id,
-                    created_at: now,
-                    updated_at: now,
-                })
-                .execute(conn)?;
-            made.offer_ids.push(offer_id);
-
-            // C5: auto-apply, or the offer waits for whoever controls the target.
-            let players = player_controllers(conn, &target_control)?;
-            if auto_apply_holds(
-                effective_auto_apply,
-                &players,
-                &flags,
-                part.reach.needs_line_of_sight,
-            ) {
-                // A savepoint: a creature with no hit points recorded leaves
-                // the offer pending for a person to deal with, rather than
-                // losing the attack.
-                let applied = conn.transaction::<_, FightRefusal, _>(|conn| {
-                    apply_hit_point_change(
-                        conn,
-                        systems_dir,
-                        target,
-                        HitPointChangeKind::Damage,
-                        amount,
-                        user_id,
-                    )
-                    .map_err(FightRefusal::Invalid)?;
-                    diesel::update(world_offers::table.filter(world_offers::id.eq(offer_id)))
-                        .set((
-                            world_offers::status.eq(OFFER_APPLIED),
-                            world_offers::resolved_at.eq(Some(now)),
-                        ))
-                        .execute(conn)?;
-                    Ok(())
-                });
-                if let Err(FightRefusal::Invalid(reason)) = &applied {
-                    tracing::info!(offer_id = %offer_id, %reason, "auto-apply left an offer pending");
-                } else {
-                    applied?;
-                }
-            }
-            let _ = record_world_event(
-                conn,
+            let hit = HitContext {
                 world_id,
-                EVENT_CODE_OFFER_CHANGED,
-                Some(serde_json::json!({ "offerId": offer_id })),
+                scene_id,
+                world_system: world_system.as_deref(),
+                auto_apply: effective_auto_apply,
+                now,
+            };
+            if let Some(offer_id) = settle_hit(
+                conn,
+                systems_dir,
                 user_id,
-            );
+                &hit,
+                part,
+                target,
+                attack_id,
+                amount,
+                &flags,
+            )? {
+                made.offer_ids.push(offer_id);
+            }
         }
 
         Ok(made)
     })
-}
-
-/// The system a target's hit points are declared by: its actor's, else the
-/// world's — the same resolution `apply_hit_point_change` makes.
-fn target_system(
-    conn: &mut PgConnection,
-    world_system: Option<&str>,
-    target: Uuid,
-) -> QueryResult<Option<String>> {
-    let actor_system = tokens::table
-        .inner_join(world_actors::table.on(world_actors::id.nullable().eq(tokens::actor_id)))
-        .filter(tokens::token_id.eq(target))
-        .select(world_actors::game_system_id)
-        .first::<Option<String>>(conn)
-        .optional()?
-        .flatten();
-    Ok(actor_system.or_else(|| world_system.map(str::to_string)))
 }
 
 /// The scene an attack belongs to, for a caller holding only its id.

@@ -369,7 +369,14 @@ nothing visible changed.
 
 ## Phase 7: US4: A missed attack can be rerolled (P2)
 
-- [ ] T055 [US4] Move out of `record_attack` (`combat/attack.rs:648–790`), with no change in behaviour: the per-part block "roll damage on a hit → insert the offer → auto-apply → `OFFER_CHANGED`" becomes `settle_hit(conn, systems_dir, user_id, ctx, part, target, attack_id, flags, rng)` in a new `crates/thunderforge-server/src/combat/attack_hit.rs`. Existing `attack_tests.rs` and `parity_tests.rs` must stay green unchanged.
+- [x] T055 [US4] Move out of `record_attack` (`combat/attack.rs:648–790`), with no change in behaviour: the per-part block "roll damage on a hit → insert the offer → auto-apply → `OFFER_CHANGED`" becomes `settle_hit(conn, systems_dir, user_id, ctx, part, target, attack_id, flags, rng)` in a new `crates/thunderforge-server/src/combat/attack_hit.rs`. Existing `attack_tests.rs` and `parity_tests.rs` must stay green unchanged.
+
+  As built: two calls, not one. The attack row names its damage roll and
+  the offer names the row, so `roll_hit_damage` comes before the row is
+  inserted and `settle_hit` (offer, auto-apply, event 30) after it, keeping
+  the events in the order they were. `target_system` moved with it, and
+  `roll_and_record` is now `pub(crate)`.
+
 - [ ] T056 [P] [US4] Tests `crates/thunderforge-server/src/combat/attack_reroll_tests.rs`:
   - a seeded miss rerolled with Inspiration into a hit:
     - one new `world_attacks` row with `reroll_of`, the old `defence` (even after the target's AC is changed in between), and the same target, labels and distance;
