@@ -40,6 +40,33 @@ impl From<Visibility> for RollVisibility {
     }
 }
 
+/// One placeholder of a roll's formula and the number the server put in
+/// for it (spec 083 FR-003).
+#[derive(SimpleObject, Debug, Clone, PartialEq)]
+pub struct RollBinding {
+    pub placeholder: String,
+    pub value: f64,
+}
+
+/// A row's recorded bindings, sorted. A null or unreadable column reads as
+/// none: the roll is still shown, with its formula as written.
+fn row_bindings(stored: Option<&serde_json::Value>) -> Vec<RollBinding> {
+    let Some(serde_json::Value::Object(map)) = stored else {
+        return Vec::new();
+    };
+    let mut bindings: Vec<RollBinding> = map
+        .iter()
+        .filter_map(|(name, value)| {
+            value.as_f64().map(|value| RollBinding {
+                placeholder: name.clone(),
+                value,
+            })
+        })
+        .collect();
+    bindings.sort_by(|a, b| a.placeholder.cmp(&b.placeholder));
+    bindings
+}
+
 /// A roll, whole.
 #[derive(SimpleObject, Debug, Clone)]
 pub struct WorldRoll {
@@ -49,6 +76,9 @@ pub struct WorldRoll {
     /// What it was for: "Stealth", "Longsword".
     pub label: Option<String>,
     pub formula: String,
+    /// The values the server substituted for the formula's placeholders,
+    /// sorted by placeholder.
+    pub bindings: Vec<RollBinding>,
     pub resolution: GraphQLRollResolution,
     pub visibility: RollVisibility,
     pub created_at: String,
@@ -76,6 +106,7 @@ impl WorldRoll {
             roller_name,
             label: row.label.clone(),
             formula: row.formula.clone(),
+            bindings: row_bindings(row.bindings.as_ref()),
             resolution: GraphQLRollResolution {
                 outcome: stored_outcome(&row),
                 ..GraphQLRollResolution::from(&resolution)
@@ -122,3 +153,7 @@ pub enum WorldRollEntry {
     WorldRoll(Box<WorldRoll>),
     MaskedRoll(MaskedRoll),
 }
+
+#[cfg(test)]
+#[path = "roll_bindings_tests.rs"]
+mod roll_bindings_tests;

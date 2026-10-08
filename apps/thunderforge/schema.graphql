@@ -2506,6 +2506,14 @@ enum DieSidesKind {
 }
 
 """
+Why a value in a die's chain after the first was rolled (spec 083).
+"""
+enum DieStep {
+	REROLL
+	EXPLODE
+}
+
+"""
 Testable core of `removeLoreRepositoryConnection`.
 
 Deletes the connection row and nothing else. FR-005: the world's lore is
@@ -3631,6 +3639,11 @@ type GraphQLDieOutcome {
 	Full chain: original roll + every reroll/explosion of this die.
 	"""
 	rolls: [Int!]!
+	"""
+	Why each value after the first was rolled: steps[i] explains
+	rolls[i + 1]. Empty for rolls stored before spec 083.
+	"""
+	steps: [DieStep!]!
 	kept: Boolean!
 	finalValue: Int!
 }
@@ -6489,6 +6502,15 @@ type ResolvedSetting {
 	undecryptable: Boolean!
 }
 
+"""
+One placeholder of a roll's formula and the number the server put in
+for it (spec 083 FR-003).
+"""
+type RollBinding {
+	placeholder: String!
+	value: Float!
+}
+
 input RollDiceInput {
 	worldId: UUID!
 	formula: String!
@@ -7811,6 +7833,11 @@ type WorldRoll {
 	"""
 	label: String
 	formula: String!
+	"""
+	The values the server substituted for the formula's placeholders,
+	sorted by placeholder.
+	"""
+	bindings: [RollBinding!]!
 	resolution: GraphQLRollResolution!
 	visibility: RollVisibility!
 	createdAt: String!

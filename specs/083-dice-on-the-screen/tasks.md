@@ -37,7 +37,7 @@ die (research R4).
 
 ## Phase 1: Setup
 
-- [ ] T001 Record the engine's brotli size before any change, from a release build (`node scripts/build.mjs --only-wasm`, then the research R13 one-liner on `dist/engine/engine_bg.wasm`), into `specs/083-dice-on-the-screen/tasks.md` under T068
+- [x] T001 Record the engine's brotli size before any change, from a release build (`node scripts/build.mjs --only-wasm`, then the research R13 one-liner on `dist/engine/engine_bg.wasm`), into `specs/083-dice-on-the-screen/tasks.md` under T068
 - [ ] T002 [P] Add `thunderforge-dice = { path = "../thunderforge-dice" }` to `crates/thunderforge-canvas-core/Cargo.toml`, and `pub mod dice_throw;` with an empty `crates/thunderforge-canvas-core/src/dice_throw/mod.rs` to `crates/thunderforge-canvas-core/src/lib.rs`. Then run `cargo check -p thunderforge-canvas-core` and `cargo check -p thunderforge-engine --target wasm32-unknown-unknown`
 
 ---
@@ -46,7 +46,7 @@ die (research R4).
 
 ### Dice crate: chain steps (FR-002)
 
-- [ ] T003 [P] Tests in the new `crates/thunderforge-dice/src/eval_steps_tests.rs`, wired from `eval.rs` with `#[cfg(test)] #[path = "eval_steps_tests.rs"] mod steps_tests;`, using a fixed seeded RNG:
+- [x] T003 [P] Tests in the new `crates/thunderforge-dice/src/eval_steps_tests.rs`, wired from `eval.rs` with `#[cfg(test)] #[path = "eval_steps_tests.rs"] mod steps_tests;`, using a fixed seeded RNG:
   - `1d6r<7` gives `steps == [Reroll]`;
   - `rr` gives only `Reroll` steps;
   - `1d6xo>0` gives `[Explode]`;
@@ -56,12 +56,12 @@ die (research R4).
   - `1d20min21` gives `final_value != *rolls.last()` and no extra step;
   - a `DieOutcome` deserialized from JSON without `steps` reads `steps == []`;
   - a resolution serialized then deserialized round-trips.
-- [ ] T004 Add `ChainStep { Reroll, Explode }` and `#[serde(default)] pub steps: Vec<ChainStep>` to `DieOutcome` in `crates/thunderforge-dice/src/lib.rs`, and export `ChainStep`. Push a step beside each `rolls.push` in `eval_dice_term` (`crates/thunderforge-dice/src/eval.rs:266-301`), and set `steps: Vec::new()` in the other `DieOutcome` constructors in `eval.rs`. T003 goes green.
-- [ ] T005 Add `steps: vec![]` to the `DieOutcome` literal in `crates/thunderforge-server/src/graphql/mutations_roll_check_tests.rs:592`, and to any other constructor `cargo check --workspace --all-targets` reports
+- [x] T004 Add `ChainStep { Reroll, Explode }` and `#[serde(default)] pub steps: Vec<ChainStep>` to `DieOutcome` in `crates/thunderforge-dice/src/lib.rs`, and export `ChainStep`. Push a step beside each `rolls.push` in `eval_dice_term` (`crates/thunderforge-dice/src/eval.rs:266-301`), and set `steps: Vec::new()` in the other `DieOutcome` constructors in `eval.rs`. T003 goes green.
+- [x] T005 Add `steps: vec![]` to the `DieOutcome` literal in `crates/thunderforge-server/src/graphql/mutations_roll_check_tests.rs:592`, and to any other constructor `cargo check --workspace --all-targets` reports
 
 ### Dice crate: breakdown (FR-004, FR-005)
 
-- [ ] T006 [P] Tests in the new `crates/thunderforge-dice/src/breakdown_tests.rs`, written against hand-built `RollResolution`s, so they need no RNG:
+- [x] T006 [P] Tests in the new `crates/thunderforge-dice/src/breakdown_tests.rs`, written against hand-built `RollResolution`s, so they need no RNG:
   - `1d20 + 5` gives `Sum[Die 0, +5]`;
   - `2d6 + 1d8 + 3` gives three dice in order, then `+3`;
   - `1d20 - 2` and `1d20 + -1` both give a negative constant;
@@ -75,19 +75,19 @@ die (research R4).
   - `floor(1d6 / 2)` gives `None`;
   - `6d10cs>=8` gives `Successes` with a mark per die;
   - a resolution with fewer dice than the formula's count gives `None`.
-- [ ] T007 Implement `crates/thunderforge-dice/src/breakdown.rs` (data-model.md: `Breakdown`, `Addend`, `AddendKind`, `breakdown()`). It walks `ast::Expr` left to right as `eval_expr` does (`eval.rs:139-150`), and reuses `condition_matches` for success marks, made `pub(crate)` if needed. Add `pub mod breakdown;` and the re-exports to `lib.rs`. T006 goes green. Then run `cargo clippy -p thunderforge-dice --features thunderforge-dice/wasm --target wasm32-unknown-unknown -- -D warnings`.
+- [x] T007 Implement `crates/thunderforge-dice/src/breakdown.rs` (data-model.md: `Breakdown`, `Addend`, `AddendKind`, `breakdown()`). It walks `ast::Expr` left to right as `eval_expr` does (`eval.rs:139-150`), and reuses `condition_matches` for success marks, made `pub(crate)` if needed. Add `pub mod breakdown;` and the re-exports to `lib.rs`. T006 goes green. Then run `cargo clippy -p thunderforge-dice --features thunderforge-dice/wasm --target wasm32-unknown-unknown -- -D warnings`.
 
 ### Server: steps and bindings (FR-002, FR-003)
 
-- [ ] T008 [P] Tests in the new `crates/thunderforge-server/src/graphql/roll_bindings_tests.rs`, wired from `types_rolls.rs`:
+- [x] T008 [P] Tests in the new `crates/thunderforge-server/src/graphql/roll_bindings_tests.rs`, wired from `types_rolls.rs`:
   - `WorldRoll::from_row` with `bindings = {"MODIFIER": 3}` gives `[RollBinding{placeholder: "MODIFIER", value: 3.0}]`;
   - `null` and a non-object both give `[]`;
   - two bindings come back sorted;
   - `GraphQLDieOutcome::from` maps `[Reroll, Explode]` to `[REROLL, EXPLODE]`;
   - a check rolled through `roll_check` (the `mutations_roll_check_tests.rs` harness) and fetched with `worldRoll` returns its bindings;
   - the same roll for GM's eyes, fetched by another player, is a `MaskedRoll`, and the query `... on MaskedRoll { bindings }` fails validation.
-- [ ] T009 Add `DieStep` and `GraphQLDieOutcome.steps` in `crates/thunderforge-server/src/graphql/types_dice.rs`, and `RollBinding` and `WorldRoll.bindings` (built from `row.bindings` in `from_row`) in `crates/thunderforge-server/src/graphql/types_rolls.rs`. T008 goes green under `make test-rust ARGS="-p thunderforge-server --lib roll"`.
-- [ ] T010 Regenerate `apps/thunderforge/schema.graphql` with `node scripts/check-graphql-contract.mjs --schema --fix`, and check that the diff is exactly contracts/graphql-rolls.md
+- [x] T009 Add `DieStep` and `GraphQLDieOutcome.steps` in `crates/thunderforge-server/src/graphql/types_dice.rs`, and `RollBinding` and `WorldRoll.bindings` (built from `row.bindings` in `from_row`) in `crates/thunderforge-server/src/graphql/types_rolls.rs`. T008 goes green under `make test-rust ARGS="-p thunderforge-server --lib roll"`.
+- [x] T010 Regenerate `apps/thunderforge/schema.graphql` with `node scripts/check-graphql-contract.mjs --schema --fix`, and check that the diff is exactly contracts/graphql-rolls.md
 
 ### Web: types and queries
 
@@ -336,7 +336,7 @@ die (research R4).
 - [ ] T065 `pnpm e2e:which --diff`, and run every slice it names
 - [x] T066 ~~Full suite `node ./scripts/e2e-parallel.mjs`, green~~ — skipped by owner decision 2026-10-07: slices are the gate (T064 and T065 are the proof)
 - [ ] T067 SC-004: in `rolls-dice-on-screen.spec.ts`, 50 consecutive `1d6` rolls end with `diceEntities() == 0`. SC-007: a `20d6` throw keeps the frame times from `frame_trace()` at or under 18.2 ms (55 fps) at the median, as `engine-limits.spec.ts` reads them.
-- [ ] T068 SC-006: the release `engine_bg.wasm` brotli size after the change, minus T001's, is under 150 KB. Record both numbers here.
+- [ ] T068 SC-006: the release `engine_bg.wasm` brotli size after the change, minus T001's, is under 150 KB. Record both numbers here. Before (T001, release, pre-change): 5,010,820 B brotli (raw 30,140,764 B).
 
 ---
 

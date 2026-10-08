@@ -4,13 +4,29 @@ use async_graphql::SimpleObject;
 
 use crate::models::RollRecord;
 use thunderforge_canvas_core::system_contribution::{RollOutcome, Verdict};
-use thunderforge_dice::{DieSides, ResolutionKind, RollResolution};
+use thunderforge_dice::{ChainStep, DieSides, ResolutionKind, RollResolution};
 
 #[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq, Debug)]
 pub enum DieSidesKind {
     Numeric,
     Fate,
     Coin,
+}
+
+/// Why a value in a die's chain after the first was rolled (spec 083).
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq, Debug)]
+pub enum DieStep {
+    Reroll,
+    Explode,
+}
+
+impl From<ChainStep> for DieStep {
+    fn from(step: ChainStep) -> Self {
+        match step {
+            ChainStep::Reroll => DieStep::Reroll,
+            ChainStep::Explode => DieStep::Explode,
+        }
+    }
 }
 
 #[derive(SimpleObject, Debug, Clone)]
@@ -20,6 +36,9 @@ pub struct GraphQLDieOutcome {
     pub numeric_sides: Option<i32>,
     /// Full chain: original roll + every reroll/explosion of this die.
     pub rolls: Vec<i32>,
+    /// Why each value after the first was rolled: steps[i] explains
+    /// rolls[i + 1]. Empty for rolls stored before spec 083.
+    pub steps: Vec<DieStep>,
     pub kept: bool,
     pub final_value: i32,
 }
@@ -35,6 +54,7 @@ impl From<&thunderforge_dice::DieOutcome> for GraphQLDieOutcome {
             sides_kind,
             numeric_sides,
             rolls: outcome.rolls.iter().map(|v| *v as i32).collect(),
+            steps: outcome.steps.iter().map(|s| DieStep::from(*s)).collect(),
             kept: outcome.kept,
             final_value: outcome.final_value as i32,
         }
