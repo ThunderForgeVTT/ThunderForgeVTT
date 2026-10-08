@@ -262,20 +262,21 @@ fn roll_and_record<R: Rng>(
         .map_err(|_| FightRefusal::Failed("Failed to record the roll".to_string()))?;
     let id = diesel::insert_into(world_roll_records::table)
         .values(&NewRollRecord {
-            world_id,
-            triggered_by: user_id,
-            formula: resolution.formula.clone(),
             bindings: if bindings.is_empty() {
                 None
             } else {
                 serde_json::to_value(bindings).ok()
             },
-            detail,
-            result_kind: kind.to_string(),
-            result_value: value,
-            outcome: None,
             visibility: Visibility::Everyone.as_str().to_string(),
             label: Some(label.chars().take(MAX_ROLL_LABEL).collect()),
+            ..NewRollRecord::plain(
+                world_id,
+                user_id,
+                resolution.formula.clone(),
+                detail,
+                kind,
+                value,
+            )
         })
         .returning(world_roll_records::id)
         .get_result::<Uuid>(conn)?;
@@ -692,6 +693,7 @@ pub(crate) fn record_attack<R: Rng>(
                     created_at: now,
                     updated_at: now,
                     attacker_kind: attacker_kind.to_string(),
+                    reroll_of: None,
                 })
                 .execute(conn)?;
             made.attack_ids.push(attack_id);

@@ -8571,6 +8571,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thunderforge-canvas-core",
+ "thunderforge-dice",
 ]
 
 [[package]]

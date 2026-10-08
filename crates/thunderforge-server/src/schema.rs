@@ -1176,6 +1176,7 @@ diesel::table! {
         created_at -> Timestamp,
         updated_at -> Timestamp,
         attacker_kind -> Text,
+        reroll_of -> Nullable<Uuid>,
     }
 }
 
@@ -1460,6 +1461,7 @@ diesel::table! {
         action_cost -> Text,
         legendary_cost -> Int4,
         multiattack -> Array<Nullable<Uuid>>,
+        properties -> Array<Nullable<Text>>,
     }
 }
 
@@ -1653,6 +1655,12 @@ diesel::table! {
         label -> Nullable<Text>,
         revealed_at -> Nullable<Timestamptz>,
         revealed_by -> Nullable<Uuid>,
+        actor_id -> Nullable<Uuid>,
+        roll_kind -> Nullable<Text>,
+        check_id -> Nullable<Text>,
+        facets -> Array<Nullable<Text>>,
+        reroll_of -> Nullable<Uuid>,
+        reroll_spent -> Nullable<Text>,
     }
 }
 
@@ -1848,6 +1856,7 @@ diesel::joinable!(world_offers -> worlds (world_id));
 diesel::joinable!(world_play_pause_triggers -> world_play_pause_requests (request_id));
 diesel::joinable!(world_play_pause_triggers -> world_play_pauses (pause_id));
 diesel::joinable!(world_play_pauses -> world_play_pause_requests (request_id));
+diesel::joinable!(world_roll_records -> world_actors (actor_id));
 diesel::joinable!(world_roll_records -> worlds (world_id));
 diesel::joinable!(world_system_setting_changes -> users (changed_by));
 diesel::joinable!(world_system_setting_changes -> worlds (world_id));

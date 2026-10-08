@@ -36,19 +36,19 @@ two specs meet.
 
 ## Phase 1: Setup
 
-- [ ] T001 Migration `crates/thunderforge-server/migrations/2026-10-07-120000-0000_roll_facets/{up,down}.sql` as in data-model.md:
+- [x] T001 Migration `crates/thunderforge-server/migrations/2026-10-07-120000-0000_roll_facets/{up,down}.sql` as in data-model.md:
   - on `world_roll_records`: `actor_id`, `roll_kind`, `check_id`, `facets`, `reroll_of` (partial unique index), `reroll_spent`, and the two checks;
   - `world_attacks.reroll_of` (partial unique index) and `world_attacks_to_hit_roll_id_idx`;
   - `world_items.properties`.
 
   Run it, and update `crates/thunderforge-server/src/schema.rs`. It must sort after spec 082's `…110000…`.
 
-- [ ] T002 In `crates/thunderforge-server/src/models.rs`:
+- [x] T002 In `crates/thunderforge-server/src/models.rs`:
   - add the new fields to `RollRecord`, `NewRollRecord` (`:1808`), `AttackRecord` and the item model;
   - add a `NewRollRecord::plain(world_id, triggered_by, …)` constructor with the new fields defaulted;
   - move every `NewRollRecord { … }` literal to it: `graphql/mutations_roll.rs`, `combat/attack.rs` `roll_and_record` `:263`, and the tests that `cargo check --workspace --tests` names.
   - Run `cargo check --workspace`.
-- [ ] T003 [P] `packs/systems/dnd5e/server/Cargo.toml`: add a path dependency on `thunderforge-dice`, then `cargo check -p thunderforge-system-dnd5e`.
+- [x] T003 [P] `packs/systems/dnd5e/server/Cargo.toml`: add a path dependency on `thunderforge-dice`, then `cargo check -p thunderforge-system-dnd5e`.
 
 ---
 

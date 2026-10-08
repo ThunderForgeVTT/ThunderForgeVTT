@@ -168,16 +168,17 @@ where
     };
 
     let mut new_record = NewRollRecord {
-        world_id: input.world_id,
-        triggered_by: user_id,
-        formula: resolution.formula.clone(),
         bindings: bindings_json,
-        detail,
-        result_kind: result_kind.to_string(),
-        result_value,
-        outcome: None,
         visibility: visibility.as_str().to_string(),
         label,
+        ..NewRollRecord::plain(
+            input.world_id,
+            user_id,
+            resolution.formula.clone(),
+            detail,
+            result_kind,
+            result_value,
+        )
     };
 
     let mut conn = state

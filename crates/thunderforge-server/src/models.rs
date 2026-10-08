@@ -1587,6 +1587,8 @@ pub struct WorldItem {
     pub legendary_cost: i32,
     /// Abilities one use makes, in order (FR-044). Empty for a single attack.
     pub multiattack: Vec<Option<uuid::Uuid>>,
+    /// Spec 084: the item properties the system declares (`two_handed`).
+    pub properties: Vec<Option<String>>,
 }
 
 /// New item for insertion.
@@ -1801,6 +1803,23 @@ pub struct RollRecord {
     /// Spec 081: when the GM showed a hidden roll to the table.
     pub revealed_at: Option<chrono::DateTime<chrono::Utc>>,
     pub revealed_by: Option<uuid::Uuid>,
+    /// Spec 084: the sheet the roll was made from, where there was one.
+    pub actor_id: Option<uuid::Uuid>,
+    /// Spec 084: `check`, `attack` or `damage`; `None` for a typed formula.
+    pub roll_kind: Option<String>,
+    pub check_id: Option<String>,
+    /// Spec 084: the facet ids that shaped this roll.
+    pub facets: Vec<Option<String>>,
+    /// Spec 084: the roll this one rerolled, and what the reroll spent.
+    pub reroll_of: Option<uuid::Uuid>,
+    pub reroll_spent: Option<String>,
+}
+
+impl RollRecord {
+    /// The facet ids, without the nulls Postgres arrays allow.
+    pub fn facet_ids(&self) -> Vec<String> {
+        self.facets.iter().flatten().cloned().collect()
+    }
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
@@ -1816,6 +1835,43 @@ pub struct NewRollRecord {
     pub outcome: Option<serde_json::Value>,
     pub visibility: String,
     pub label: Option<String>,
+    pub actor_id: Option<uuid::Uuid>,
+    pub roll_kind: Option<String>,
+    pub check_id: Option<String>,
+    pub facets: Vec<Option<String>>,
+    pub reroll_of: Option<uuid::Uuid>,
+    pub reroll_spent: Option<String>,
+}
+
+impl NewRollRecord {
+    /// A roll seen by everyone, with no label, sheet, facets or reroll link.
+    pub fn plain(
+        world_id: uuid::Uuid,
+        triggered_by: uuid::Uuid,
+        formula: String,
+        detail: serde_json::Value,
+        result_kind: &str,
+        result_value: f64,
+    ) -> Self {
+        Self {
+            world_id,
+            triggered_by,
+            formula,
+            bindings: None,
+            detail,
+            result_kind: result_kind.to_string(),
+            result_value,
+            outcome: None,
+            visibility: "everyone".to_string(),
+            label: None,
+            actor_id: None,
+            roll_kind: None,
+            check_id: None,
+            facets: Vec::new(),
+            reroll_of: None,
+            reroll_spent: None,
+        }
+    }
 }
 
 // ============================================================================

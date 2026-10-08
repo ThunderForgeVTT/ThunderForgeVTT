@@ -43,6 +43,8 @@ pub struct AttackRecord {
     pub updated_at: chrono::NaiveDateTime,
     /// `creature`, or `lair` for a lair's action (no attacker token).
     pub attacker_kind: String,
+    /// Spec 084: the missed attack this row replaces, when it is a reroll.
+    pub reroll_of: Option<Uuid>,
 }
 
 #[derive(Queryable, Selectable, Insertable, Debug, Clone)]

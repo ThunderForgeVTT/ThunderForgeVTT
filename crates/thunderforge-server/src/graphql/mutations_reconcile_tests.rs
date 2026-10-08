@@ -112,18 +112,14 @@ fn move_command(token_id: Uuid, x: f64) -> QueuedChangeInput {
 fn insert_roll_record(conn: &mut PgConnection, world_id: Uuid, by: Uuid, value: f64) -> Uuid {
     use crate::schema::world_roll_records;
     diesel::insert_into(world_roll_records::table)
-        .values(&crate::models::NewRollRecord {
+        .values(&crate::models::NewRollRecord::plain(
             world_id,
-            triggered_by: by,
-            formula: "1d20".to_string(),
-            bindings: None,
-            detail: serde_json::json!({}),
-            result_kind: "total".to_string(),
-            result_value: value,
-            outcome: None,
-            visibility: "everyone".to_string(),
-            label: None,
-        })
+            by,
+            "1d20".to_string(),
+            serde_json::json!({}),
+            "total",
+            value,
+        ))
         .returning(world_roll_records::id)
         .get_result::<Uuid>(conn)
         .expect("failed to insert test roll record")

@@ -49,6 +49,7 @@ pub async fn world_roll_records_impl(
             .filter(world_roll_records::world_id.eq(world_id))
             .order(world_roll_records::created_at.desc())
             .limit(take)
+            .select(RollRecord::as_select())
             .load::<RollRecord>(&mut conn)
     })
     .await

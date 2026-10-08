@@ -34,6 +34,12 @@ fn row(bindings: Option<serde_json::Value>) -> RollRecord {
         label: None,
         revealed_at: None,
         revealed_by: None,
+        actor_id: None,
+        roll_kind: None,
+        check_id: None,
+        facets: Vec::new(),
+        reroll_of: None,
+        reroll_spent: None,
     }
 }
 
