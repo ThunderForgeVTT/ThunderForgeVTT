@@ -229,7 +229,7 @@ nothing visible changed.
   - `offers_for(viewer, roll)`, which is empty for a non-maker, for a reroll's original and after the window.
 - [x] T038 [US3] `crates/thunderforge-server/src/rolls/reroll.rs`: `REROLL_WINDOW = 2 min`, `chain_of`, `may_reroll`, and `offers_for`, which calls the pack's `reroll` and discards the result. Fill `WorldRoll.reroll_offers` and `reroll_until` in `graphql/queries/roll.rs` `entry_for` (`:96`) for the viewer.
   - As built: offers are filled in `RollContext::offer`, which `entries` (so `worldRoll` and `worldRolls`) and `revealRoll` call. `rerollUntil` is shown to every viewer; only the maker is offered spends. Tested in `graphql/queries/roll_offers_tests.rs`.
-- [ ] T039 [US3] Tests `crates/thunderforge-server/src/graphql/mutations_reroll_tests.rs`:
+- [x] T039 [US3] Tests `crates/thunderforge-server/src/graphql/mutations_reroll_tests.rs`:
   - an Inspiration reroll of a check, in one transaction:
     - `trait_data.inspiration` is false;
     - a new record has `reroll_of`, `reroll_spent = 'inspiration'`, facets plus `inspiration`, the same visibility, label, actor and check id;
@@ -250,7 +250,9 @@ nothing visible changed.
   - A GM's eyes roll rerolled stays GM's eyes, and `view_of` masks the reroll for another player.
   - **SC-003**: 100 concurrent `reroll_roll_impl` calls on one roll leave exactly one new record and one sheet write. Use `tokio::spawn` over the test pool.
   - A check on a test system with an adjudicator is judged again (research R14).
-- [ ] T040 [US3] `crates/thunderforge-server/src/graphql/mutations_reroll.rs`: `reroll_roll_impl` and `RerollMutation::reroll_roll` (contracts/graphql-rolls-facets.md):
+
+  As built: the adjudicator case is not tested. No system with roll facets has an adjudicator, and registering a fake one is a broad change. `judge` still runs the adjudicator when a system has one. The advantage test checks that the higher die stays, whichever die is lower. The free-roll and no-actor cases are the same roll. An attack (`to_hit`) is refused with `Only a d20 test can be rerolled.` and offered nothing until T057.
+- [x] T040 [US3] `crates/thunderforge-server/src/graphql/mutations_reroll.rs`: `reroll_roll_impl` and `RerollMutation::reroll_roll` (contracts/graphql-rolls-facets.md):
   - the refusals in order;
   - then, in one transaction:
     1. lock the roll row, then the sheet row;

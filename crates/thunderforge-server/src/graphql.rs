@@ -218,6 +218,8 @@ pub use mutations_roll::RollMutation;
 // comes from (ADR-044).
 pub mod mutations_roll_check;
 pub use mutations_roll_check::{RollCheckMutation, RollCheckQuery};
+pub mod mutations_reroll;
+pub use mutations_reroll::RerollMutation;
 
 // Spec 018's Genie session loop used to be declared here — thirteen
 // mutations and the queries beside them, 2,763 lines of one ruleset's rules
@@ -547,6 +549,7 @@ pub struct MutationRoot(
     RollMutation,
     // Spec 036 US3b: `rollCheck(worldId, actorId, checkId)`.
     RollCheckMutation,
+    RerollMutation,
     ActorClaimMutation,
     // Spec 031 (FR-046): per-player authoring tool grants.
     AuthoringToolMutation,
