@@ -13,6 +13,7 @@
 use diesel::PgConnection;
 use diesel::prelude::*;
 use rand::Rng;
+use thunderforge_canvas_core::roll_facets::{Advantage, RollKind, ShapeInput};
 use thunderforge_combat::attack::{damage_source, offered_amount};
 use thunderforge_dice::{PlaceholderBindings, RollResolution};
 use uuid::Uuid;
@@ -23,7 +24,7 @@ use crate::combat::hit_points::{HitPointChangeKind, apply_hit_point_change};
 use crate::combat::manifest::combat_for_system;
 use crate::combat::records::*;
 use crate::combat::weapon::Part;
-use crate::rolls::facets::RollMeta;
+use crate::rolls::facets::{RollMeta, shape_roll};
 use crate::schema::{tokens, world_actors, world_offers};
 use crate::world_events::{EVENT_CODE_OFFER_CHANGED, record_world_event};
 
@@ -37,25 +38,49 @@ pub(crate) struct HitContext<'a> {
     pub now: chrono::NaiveDateTime,
 }
 
-/// A hit's damage roll, recorded like any roll, or `None` when the part has
-/// nothing to roll.
+/// What shapes a hit's damage (spec 084 research R6): the world's system,
+/// the attacker's sheet, and whether the attack was made in melee.
+pub(crate) struct DamageShape<'a> {
+    pub system_id: &'a str,
+    pub trait_data: &'a serde_json::Value,
+    pub melee: bool,
+}
+
+/// A hit's damage roll, shaped by the attacker's pack and recorded like any
+/// roll as `damage`, or `None` when the part has nothing to roll.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn roll_hit_damage<R: Rng>(
     conn: &mut PgConnection,
     world_id: Uuid,
     user_id: Uuid,
     part: &Part,
     bindings: &PlaceholderBindings,
-    meta: RollMeta,
+    shape: DamageShape<'_>,
+    mut meta: RollMeta,
     rng: &mut R,
 ) -> Result<Option<(Uuid, RollResolution, f64)>, FightRefusal> {
     let Some(source) = damage_source(&part.damage) else {
         return Ok(None);
     };
+    let shaped = shape_roll(
+        shape.system_id,
+        ShapeInput {
+            kind: RollKind::Damage,
+            formula: &source,
+            trait_data: shape.trait_data,
+            advantage: Advantage::Normal,
+            melee: shape.melee,
+            item_properties: &part.properties,
+        },
+    )
+    .map_err(FightRefusal::Invalid)?;
+    meta.roll_kind = Some(RollKind::Damage);
+    meta.facets = shaped.facets;
     roll_and_record(
         conn,
         world_id,
         user_id,
-        &source,
+        &shaped.formula,
         &format!("{} damage", part.name),
         bindings,
         meta,

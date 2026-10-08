@@ -12,20 +12,20 @@ use diesel::PgConnection;
 use diesel::prelude::*;
 use rand::Rng;
 use thunderforge_combat::attack::judge;
+use thunderforge_combat::reach::is_melee;
 use thunderforge_dice::PlaceholderBindings;
 use uuid::Uuid;
 
 use crate::combat::attack::FightRefusal;
-use crate::combat::attack_hit::{HitContext, roll_hit_damage, settle_hit};
+use crate::combat::attack_hit::{DamageShape, HitContext, roll_hit_damage, settle_hit};
 use crate::combat::records::*;
 use crate::combat::turn::running_combat;
 use crate::combat::weapon::{Part, find_weapon, parts_of};
 use crate::models::RollRecord;
-use crate::rolls::facets::RollMeta;
+use crate::rolls::facets::{RollMeta, sheet_of};
 use crate::rolls::reroll::{A_HIT, NOT_A_D20_TEST};
 use crate::schema::{world_attacks, worlds};
 use crate::world_events::{EVENT_CODE_ATTACK_MADE, record_world_event};
-use thunderforge_canvas_core::roll_facets::RollKind;
 
 /// What a rerolled attack wrote.
 #[derive(Clone, Debug)]
@@ -69,20 +69,29 @@ pub(crate) fn reroll_attack<R: Rng>(
     } else {
         None
     };
+    let (world_system, world_auto_apply) = worlds::table
+        .filter(worlds::id.eq(world_id))
+        .select((worlds::game_system_id, worlds::auto_apply_npc_damage))
+        .first::<(Option<String>, bool)>(conn)?;
+    // Spec 084 R6: the reroll's damage is shaped as the first hit's would
+    // have been, in melee when the stored distance is within the reach.
     let damage = match &part {
-        Some(part) => roll_hit_damage(
-            conn,
-            world_id,
-            user_id,
-            part,
-            &bindings,
-            RollMeta {
+        Some(part) => {
+            let trait_data = match new_roll.actor_id {
+                Some(actor_id) => sheet_of(conn, actor_id)?,
+                None => serde_json::Value::Null,
+            };
+            let shape = DamageShape {
+                system_id: world_system.as_deref().unwrap_or_default(),
+                trait_data: &trait_data,
+                melee: is_melee(first.distance, &part.reach),
+            };
+            let meta = RollMeta {
                 actor_id: new_roll.actor_id,
-                roll_kind: Some(RollKind::Damage),
                 ..RollMeta::default()
-            },
-            rng,
-        )?,
+            };
+            roll_hit_damage(conn, world_id, user_id, part, &bindings, shape, meta, rng)?
+        }
         None => None,
     };
 
@@ -118,10 +127,6 @@ pub(crate) fn reroll_attack<R: Rng>(
     let (Some(target), Some(part), Some((_, _, amount))) = (target, part, damage) else {
         return Ok(rerolled);
     };
-    let (world_system, world_auto_apply) = worlds::table
-        .filter(worlds::id.eq(world_id))
-        .select((worlds::game_system_id, worlds::auto_apply_npc_damage))
-        .first::<(Option<String>, bool)>(conn)?;
     let auto_apply = running_combat(conn, world_id, first.scene_id)?
         .and_then(|(_, override_)| override_)
         .unwrap_or(world_auto_apply);

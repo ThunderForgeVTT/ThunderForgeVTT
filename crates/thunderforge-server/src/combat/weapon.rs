@@ -27,6 +27,8 @@ pub(crate) struct Part {
     pub(crate) to_hit: String,
     pub(crate) damage: Vec<String>,
     pub(crate) reach: Reach,
+    /// Spec 084 R6: the item's properties (`two_handed`); none for an ability.
+    pub(crate) properties: Vec<String>,
 }
 
 /// What the attack is made with, once found.
@@ -115,6 +117,7 @@ fn part_from(
     item_id: Option<Uuid>,
     name: String,
     reach: Reach,
+    properties: Vec<String>,
     effects: Vec<(String, String)>,
 ) -> Result<Part, FightRefusal> {
     // Which effects are the to-hit and the damage is the shared rules'
@@ -128,6 +131,7 @@ fn part_from(
         to_hit,
         damage,
         reach,
+        properties,
     })
 }
 
@@ -229,6 +233,7 @@ pub(crate) fn parts_of(
                 None,
                 a.name.clone(),
                 reach_of_ability(a),
+                Vec::new(),
                 effects_of_ability(conn, a.id)?,
             )?,
             Weapon::Item(i) => part_from(
@@ -236,6 +241,7 @@ pub(crate) fn parts_of(
                 Some(i.id),
                 i.name.clone(),
                 reach_of_item(i),
+                i.properties.iter().flatten().cloned().collect(),
                 effects_of_item(conn, i.id)?,
             )?,
         }]);
@@ -259,6 +265,7 @@ pub(crate) fn parts_of(
                 None,
                 ability.name.clone(),
                 reach_of_ability(ability),
+                Vec::new(),
                 effects_of_ability(conn, ability.id)?,
             )
         })

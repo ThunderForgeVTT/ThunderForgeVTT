@@ -55,8 +55,6 @@ pub struct Measured {
 ///   the swing was too far when nobody said how far it goes.
 /// - No line of sight when it needs one: `no_line_of_sight`, whatever else.
 pub fn flags_for(distance: f64, reach: &Reach, line_of_sight: bool) -> Vec<String> {
-    // A hair of tolerance: 5.000001 ft from float arithmetic is five feet.
-    const SLACK: f64 = 1e-6;
     let mut flags = Vec::new();
     let within = |limit: f64| distance <= limit + SLACK;
 
@@ -97,6 +95,16 @@ pub fn scene_grid(grid_type: &str, grid_size: i32, width: i32, height: i32) -> G
     }
 }
 
+/// A hair of tolerance: 5.000001 ft from float arithmetic is five feet.
+const SLACK: f64 = 1e-6;
+
+/// Spec 084 research R6: the attack is a melee one when the part has a
+/// reach and the target was measured within it. A target with no distance
+/// (none chosen, or not on the board) is not in melee.
+pub fn is_melee(distance: Option<f64>, reach: &Reach) -> bool {
+    matches!((distance, reach.reach), (Some(d), Some(r)) if d <= r + SLACK)
+}
+
 /// Distance and flags for one attack between two placed creatures.
 pub fn measure(
     grid: &GridSpec,
@@ -114,5 +122,34 @@ pub fn measure(
     Measured {
         distance: Some(distance),
         flags: flags_for(distance, reach, line_of_sight),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn reach(reach: Option<f64>, range_normal: Option<f64>) -> Reach {
+        Reach {
+            reach,
+            range_normal,
+            range_long: None,
+            needs_line_of_sight: true,
+        }
+    }
+
+    #[test]
+    fn melee_is_a_reach_and_a_target_within_it() {
+        assert!(is_melee(Some(5.0), &reach(Some(5.0), None)));
+        assert!(is_melee(Some(5.000_000_1), &reach(Some(5.0), None)));
+        assert!(
+            !is_melee(Some(10.0), &reach(Some(5.0), None)),
+            "out of reach"
+        );
+        assert!(
+            !is_melee(Some(5.0), &reach(None, Some(80.0))),
+            "a ranged part"
+        );
+        assert!(!is_melee(None, &reach(Some(5.0), None)), "no distance");
     }
 }

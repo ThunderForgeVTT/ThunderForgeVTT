@@ -45,7 +45,7 @@ use thunderforge_combat::attack::{judge, roll};
 use thunderforge_dice::{PlaceholderBindings, ResolutionKind, RollResolution};
 use uuid::Uuid;
 
-use crate::combat::attack_hit::{HitContext, roll_hit_damage, settle_hit};
+use crate::combat::attack_hit::{DamageShape, HitContext, roll_hit_damage, settle_hit};
 use crate::combat::controllers::{may_act_for, token_control};
 use crate::combat::hit_points::slot_column;
 use crate::combat::manifest::{combat_for_system, slot_key};
@@ -697,15 +697,14 @@ pub(crate) fn record_attack<R: Rng>(
             flags.extend(spend_flags.iter().map(|flag| flag.to_string()));
 
             let damage = if outcome == OUTCOME_HIT {
-                roll_hit_damage(
-                    conn,
-                    world_id,
-                    user_id,
-                    part,
-                    &bindings,
-                    meta(RollKind::Damage, Vec::new()),
-                    rng,
-                )?
+                let melee = thunderforge_combat::reach::is_melee(distance, &part.reach);
+                let shape = DamageShape {
+                    system_id: &system_id,
+                    trait_data: &trait_data,
+                    melee,
+                };
+                let meta = meta(RollKind::Damage, Vec::new());
+                roll_hit_damage(conn, world_id, user_id, part, &bindings, shape, meta, rng)?
             } else {
                 None
             };

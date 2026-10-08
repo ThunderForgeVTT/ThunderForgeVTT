@@ -419,8 +419,8 @@ nothing visible changed.
   - not melee, or no `two_handed`, leaves it untouched;
   - `2d6 + 1d8` gets `min3` on both terms;
   - a d20 test is unaffected.
-- [ ] T064 [US6] `roll_facets.rs` `shape` for damage. `Part` (`combat/weapon.rs:113` `part_from`) carries `properties` from the item. `record_attack` shapes the damage source with `melee`, which holds when the part has a reach and `Measured.distance` is within it (research R6), and passes `roll_kind = 'damage'`. `settle_hit` does the same for a reroll's damage.
-- [ ] T065 [US6] Server test in `attack_facets_tests.rs`: a seeded `[1, 5]` greatsword hit records final values `[3, 5]` with the GWF tag. The same weapon at range, or a one-handed weapon, records `[1, 5]`.
+- [x] T064 [US6] `roll_facets.rs` `shape` for damage. `Part` (`combat/weapon.rs:113` `part_from`) carries `properties` from the item. `record_attack` shapes the damage source with `melee`, which holds when the part has a reach and `Measured.distance` is within it (research R6), and passes `roll_kind = 'damage'`. `settle_hit` does the same for a reroll's damage.
+- [x] T065 [US6] Server test in `attack_facets_tests.rs`: a seeded `[1, 5]` greatsword hit records final values `[3, 5]` with the GWF tag. The same weapon at range, or a one-handed weapon, records `[1, 5]`.
 - [ ] T066 [P] [US6] Web: `apps/web/src/pages/world/ability/AttackFieldsEditor.tsx` shows a checkbox per `systemItemProperties` entry (`data-testid="item-property-<id>"`) for an item, saved through `setItemAttack` (`apps/web/src/api/attacks.ts`). Test it with vitest.
 - [ ] T067 [P] [US6] Demo: `facets.ts` `shapeDamage`, and the demo's items carry `properties`. Add a seeded `[1, 5]` → `[3, 5]` case in `combat.test.ts`.
 
