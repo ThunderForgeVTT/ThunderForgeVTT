@@ -175,56 +175,6 @@ fn shape_anchor(shape: &Shape) -> Vec2 {
     }
 }
 
-/// Translates every point-like field in a shape's geometry blob by
-/// `delta`, used by move-drag. Kind-aware since each kind stores position
-/// under different field names (contracts/graphql.md).
-fn translate_geometry(kind: ShapeKind, geometry: &Value, delta: Vec2) -> Value {
-    match kind {
-        ShapeKind::Rect | ShapeKind::Ellipse => {
-            let x = geometry["x"].as_f64().unwrap_or(0.0) as f32;
-            let y = geometry["y"].as_f64().unwrap_or(0.0) as f32;
-            let w = geometry["w"].as_f64().unwrap_or(0.0);
-            let h = geometry["h"].as_f64().unwrap_or(0.0);
-            json!({ "x": x + delta.x, "y": y + delta.y, "w": w, "h": h })
-        }
-        ShapeKind::Line => {
-            let x1 = geometry["x1"].as_f64().unwrap_or(0.0) as f32;
-            let y1 = geometry["y1"].as_f64().unwrap_or(0.0) as f32;
-            let x2 = geometry["x2"].as_f64().unwrap_or(0.0) as f32;
-            let y2 = geometry["y2"].as_f64().unwrap_or(0.0) as f32;
-            json!({
-                "x1": x1 + delta.x, "y1": y1 + delta.y,
-                "x2": x2 + delta.x, "y2": y2 + delta.y,
-            })
-        }
-        ShapeKind::Text => {
-            let x = geometry["x"].as_f64().unwrap_or(0.0) as f32;
-            let y = geometry["y"].as_f64().unwrap_or(0.0) as f32;
-            json!({ "x": x + delta.x, "y": y + delta.y })
-        }
-        ShapeKind::Stroke => {
-            let points: Vec<Value> = geometry["points"]
-                .as_array()
-                .cloned()
-                .unwrap_or_default()
-                .iter()
-                .map(|p| {
-                    let pair = p.as_array().cloned().unwrap_or_default();
-                    let x = pair.first().and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                    let y = pair.get(1).and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                    json!([x + delta.x, y + delta.y])
-                })
-                .collect();
-            json!({ "points": points })
-        }
-    }
-}
-
-/// Notifies the frontend of a selection change — same gap and same fix as
-/// `systems/wall.rs`'s `emit_wall_selection` (T014/T015/T020,
-/// specs/002-canvas-authoring-asset-storage): `SelectedShape` previously
-/// only ever changed locally, so `ShapeTool.tsx`'s "Selected shape" panel
-/// could never appear for a shape selected by clicking the canvas.
 fn emit_shape_selection(shape_id: Option<&str>) {
     emit_event(json!({
         "type": "select_shape",
@@ -364,7 +314,11 @@ pub(crate) fn handle_shape_input(
                 if let Some(shape) = shape_set.get(shape_id).cloned() {
                     let delta = cursor - *origin;
                     let mut moved = shape;
-                    moved.geometry = translate_geometry(moved.kind, prior_geometry, delta);
+                    moved.geometry = thunderforge_canvas_core::shape_geometry::translate(
+                        moved.kind,
+                        prior_geometry,
+                        delta,
+                    );
                     // Optimistic local move so the sprite tracks the
                     // cursor; reconciled by the next `upsert_shape`
                     // confirmation from the server (mirrors wall's
@@ -878,25 +832,6 @@ mod tests {
             created_by: None,
         };
         assert_eq!(shape_anchor(&s), Vec2::new(3.0, 4.0));
-    }
-
-    #[test]
-    fn translate_geometry_rect_shifts_position_keeps_size() {
-        let g = json!({ "x": 0.0, "y": 0.0, "w": 10.0, "h": 10.0 });
-        let moved = translate_geometry(ShapeKind::Rect, &g, Vec2::new(5.0, -5.0));
-        assert_eq!(moved["x"], 5.0);
-        assert_eq!(moved["y"], -5.0);
-        assert_eq!(moved["w"], 10.0);
-        assert_eq!(moved["h"], 10.0);
-    }
-
-    #[test]
-    fn translate_geometry_stroke_shifts_every_point() {
-        let g = json!({ "points": [[0.0, 0.0], [1.0, 1.0]] });
-        let moved = translate_geometry(ShapeKind::Stroke, &g, Vec2::new(2.0, 3.0));
-        let points = moved["points"].as_array().unwrap();
-        assert_eq!(points[0], json!([2.0, 3.0]));
-        assert_eq!(points[1], json!([3.0, 4.0]));
     }
 
     #[test]

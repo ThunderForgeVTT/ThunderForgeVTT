@@ -137,7 +137,7 @@ that passes them.
 
   Test both in a new `crates/thunderforge-engine/src/systems/token_press_tests.rs` (`#[path]` from `token.rs`). Shift-click on a token toggles it in the group (`apply_box` with one hit).
 
-- [ ] T020 [US2] [082 merged] Move `translate_geometry` and its two tests from `crates/thunderforge-engine/src/systems/shape.rs` to a new `crates/thunderforge-canvas-core/src/shape_geometry.rs` as `translate`. Add `shape_bounds(kind, &geometry)` with tests for rect, ellipse, line, stroke and text. `systems/shape.rs` calls `shape_geometry::translate`.
+- [x] T020 [US2] [082 merged] Move `translate_geometry` and its two tests from `crates/thunderforge-engine/src/systems/shape.rs` to a new `crates/thunderforge-canvas-core/src/shape_geometry.rs` as `translate`. Add `shape_bounds(kind, &geometry)` with tests for rect, ellipse, line, stroke and text. `systems/shape.rs` calls `shape_geometry::translate`.
 - [ ] T021 [P] [US2] Tests in `crates/thunderforge-engine/src/systems/group_move.rs` `mod tests` for a pure `release_events(members, offset, stamp) -> Vec<Value>`:
   - a token gets `upsert_token` with its fields;
   - a wall gets `update_wall` with all four ends moved by the offset;
