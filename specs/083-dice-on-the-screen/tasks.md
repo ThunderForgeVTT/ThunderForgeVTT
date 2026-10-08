@@ -170,8 +170,8 @@ die (research R4).
 
 ### E2E
 
-- [ ] T026 [US1] `diceLanded(page)` and `diceEntities(page)` in `apps/web/e2e/fixtures/rolls.ts`, beside `dicePlayed` (:36)
-- [ ] T027 [US1] The new `apps/web/e2e/rolls-dice-on-screen.spec.ts`, owned by the `rolls-` prefix of the `rolls` slice (`scripts/e2e/slices.json:765`), with the US1 tests:
+- [x] T026 [US1] `diceLanded(page)` and `diceEntities(page)` in `apps/web/e2e/fixtures/rolls.ts`, beside `dicePlayed` (:36)
+- [x] T027 [US1] The new `apps/web/e2e/rolls-dice-on-screen.spec.ts`, owned by the `rolls-` prefix of the `rolls` slice (`scripts/e2e/slices.json:765`), with the US1 tests:
   - `1d20 + 5` lands one die of sides 20 on the server's `finalValue`, read with `worldRoll`, and the readout ends `<v> + 5 = <total>`;
   - the same roll on a second member's board has identical faces and resting places;
   - after a pan far from the origin and a zoom, the readout still appears (`diceLanded` grows) and `restingPlace` is unchanged;
@@ -197,7 +197,7 @@ die (research R4).
   - `1d7` is a disc showing 7's value.
 - [x] T030 [US2] Implement the remaining vertex and face tables in `dice_throw/shapes.rs`: tetra, cube, octa, dodeca, the pentagonal trapezohedron and the disc prism. Implement the d100 pair in `expand`. T028 and T029 go green.
 - [x] T031 [US2] Draw a d100 as two meshes in `plugins/dice/mesh.rs` and `throw.rs`, and add the disc flip (a rotation about x) in `throw.rs`
-- [ ] T032 [US2] In `rolls-dice-on-screen.spec.ts`, US2:
+- [x] T032 [US2] In `rolls-dice-on-screen.spec.ts`, US2:
   - `2d6 + 1d8 + 3` reports sides `[6, 6, 8]` and the faces match the server, with readout `a + b + c + 3 = total`;
   - `1d100` reports one die of sides 100 whose face is the server's;
   - `4dF` reports four `"F"` dice;
@@ -225,7 +225,7 @@ die (research R4).
 
   The probe gains `rerolled`, `clamped`, `explosionOf` and `succeeded`. T033 and T034 go green.
 
-- [ ] T036 [US3] In `rolls-dice-on-screen.spec.ts`, US3. These rolls are deterministic whatever the server's RNG (research R5):
+- [x] T036 [US3] In `rolls-dice-on-screen.spec.ts`, US3. These rolls are deterministic whatever the server's RNG (research R5):
   - `2d20kh1 + 4`: one die reports `kept: false`, and the readout uses the other;
   - `1d6r<7`: `rerolled` has one value, and `face` is the server's `finalValue`;
   - `1d6xo>0`: two dice, the second with `explosionOf: 0`;
@@ -241,7 +241,7 @@ die (research R4).
   - `(1d6 + MOD) * 2` with `MOD=2` reads `(1d6 + 2) * 2 = 14`, the placeholder replaced as a whole identifier, so `MODX` is untouched;
   - a roll stored before this spec, with no bindings and a placeholder formula, reads `formula = total`.
 - [x] T038 [US4] Substitute the placeholders in the fallback in `dice_throw/readout.rs`. T037 goes green.
-- [ ] T039 [US4] In `rolls-dice-on-screen.spec.ts`, US4: a Stealth check rolled from the sheet in the dock (the `rolls-sheet-tab` setup) has a readout bonus equal to `worldRoll.bindings[0].value`, and the readout does not contain `MODIFIER`
+- [x] T039 [US4] In `rolls-dice-on-screen.spec.ts`, US4: a Stealth check rolled from the sheet in the dock (the `rolls-sheet-tab` setup) has a readout bonus equal to `worldRoll.bindings[0].value`, and the readout does not contain `MODIFIER`. Done with the Dexterity check on the sheet page (`system-check-dexterity`): the dock's roll buttons send no bindings, and Stealth refuses until the sheet has a `skillStealth` value
 
 ---
 
@@ -262,7 +262,7 @@ die (research R4).
   T041 goes green.
 
 - [x] T044 [US5] The `+N more` chip in `plugins/dice/readout.rs`, using `readout::chip`
-- [ ] T045 [US5] In `rolls-dice-on-screen.spec.ts`, US5:
+- [x] T045 [US5] In `rolls-dice-on-screen.spec.ts`, US5:
   - five rolls within a second give five `diceLanded` entries in arrival order, of which at most one is skipped, and the playing throw never is;
   - every skipped roll is in the chat;
   - a context with `reducedMotion: "reduce"` lands within 150 ms plus the event's delivery, and the entry reports `reducedMotion: true`;
@@ -335,7 +335,7 @@ die (research R4).
 - [ ] T064 **Proof**: `pnpm e2e:rolls`, green. It runs the demo's unit tests and `rolls-across-tabs`, then the `rolls` slice with `rolls-dice-on-screen.spec.ts`.
 - [ ] T065 `pnpm e2e:which --diff`, and run every slice it names
 - [x] T066 ~~Full suite `node ./scripts/e2e-parallel.mjs`, green~~ — skipped by owner decision 2026-10-07: slices are the gate (T064 and T065 are the proof)
-- [ ] T067 SC-004: in `rolls-dice-on-screen.spec.ts`, 50 consecutive `1d6` rolls end with `diceEntities() == 0`. SC-007: a `20d6` throw keeps the frame times from `frame_trace()` at or under 18.2 ms (55 fps) at the median, as `engine-limits.spec.ts` reads them.
+- [x] T067 SC-004: in `rolls-dice-on-screen.spec.ts`, 50 consecutive `1d6` rolls end with `diceEntities() == 0`. SC-007: a `20d6` throw keeps the frame times from `frame_trace()` at or under 18.2 ms (55 fps) at the median, as `engine-limits.spec.ts` reads them.
 - [ ] T068 SC-006: the release `engine_bg.wasm` brotli size after the change, minus T001's, is under 150 KB. Record both numbers here. Before (T001, release, pre-change): 5,010,820 B brotli (raw 30,140,764 B).
 
 ---
