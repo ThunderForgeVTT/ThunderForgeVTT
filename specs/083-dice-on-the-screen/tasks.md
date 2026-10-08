@@ -166,7 +166,7 @@ die (research R4).
   T018 goes green.
 
 - [x] T024 [US1] Widen `animate` in `apps/web/src/engine/world/sync/rolls.ts` to `(roll: WorldRollRecord) => void`, and update both callers: `apps/web/src/pages/world/WorldPage.tsx:1958-1966` and `apps/web/src/hooks/useWorldRolls.ts:103`
-- [ ] T025 [US1] Run `make lint` (lint-host, lint-wasm, file length). Then rebuild with `ENGINE_PROFILE=dev node scripts/build.mjs --only-wasm`, and check a `1d20 + 5` by hand in `make dev`.
+- [x] T025 [US1] Run `make lint` (lint-host, lint-wasm, file length). Then rebuild with `ENGINE_PROFILE=dev node scripts/build.mjs --only-wasm`, and check a `1d20 + 5` by hand in `make dev`. `make lint` green. The by-hand check was not done (an agent has no eyes on `make dev`); `rolls-dice-on-screen` US1 rolls `1d20 + 5` in a real browser in its place.
 
 ### E2E
 
@@ -298,20 +298,20 @@ die (research R4).
 
 ## Phase 10: The sandbox
 
-- [ ] T052 Add `"@thunderforge/dice": "workspace:^"` to `apps/engine-sandbox/package.json`, and a formula field with a **Roll** button in `apps/engine-sandbox/src/main.ts`, beside the buttons at ~:181 and :236. It rolls with the dice wasm `roll(formula, "{}", seed)`, builds a `WorldRoll`-shaped payload, and sends it through `apply_world_command` (:60). Add a reduced-motion checkbox that sends `set_reduced_motion`. Document both in `apps/engine-sandbox/README.md`.
+- [x] T052 Add `"@thunderforge/dice": "workspace:^"` to `apps/engine-sandbox/package.json`, and a formula field with a **Roll** button in `apps/engine-sandbox/src/main.ts`, beside the buttons at ~:181 and :236. It rolls with the dice wasm `roll(formula, "{}", seed)`, builds a `WorldRoll`-shaped payload, and sends it through `apply_world_command` (:60). Add a reduced-motion checkbox that sends `set_reduced_motion`. Document both in `apps/engine-sandbox/README.md`.
 
 ---
 
 ## Phase 11: Docs
 
-- [ ] T053 [P] `docs/guides/rolls.md`: a new section, "Dice on the board". It says:
+- [x] T053 [P] `docs/guides/rolls.md`: a new section, "Dice on the board". It says:
   - what plays;
   - what the readout means;
   - how dropped, rerolled, exploded and clamped dice look;
   - that bursts queue and skip;
   - that reduced motion is the OS setting;
   - that a GM's eyes or GM only roll never plays where it is hidden.
-- [ ] T054 [P] `docs/CONTRIBUTING.md` Rolls section (:76). It covers:
+- [x] T054 [P] `docs/CONTRIBUTING.md` Rolls section (:76). It covers:
   - where the throw is built: `dice_throw` in canvas core and `plugins/dice/` in the engine;
   - why the logic lives in canvas core;
   - the payload contract;
@@ -323,20 +323,20 @@ die (research R4).
 
 ## Phase 12: Polish and proof
 
-- [ ] T055 `cargo test -p thunderforge-dice` and `cargo test -p thunderforge-canvas-core dice_throw`, green
-- [ ] T056 `make test-rust ARGS="-p thunderforge-server --lib roll"`, green
-- [ ] T057 `make lint`, green (host, wasm32 and file length)
-- [ ] T058 `node scripts/check-graphql-contract.mjs --schema`, clean
-- [ ] T059 Web vitest `pnpm -F @thunderforge/web exec vitest run src/engine src/components/world/DiceRollerPanel`, and `pnpm -F @thunderforge/web exec tsc --noEmit`, green
-- [ ] T060 Demo vitest `pnpm -F @thunderforge/demo exec vitest run`, green
-- [ ] T061 `pnpm verify` green, including `e2e-slices`, which checks that the new spec is owned by `rolls`
-- [ ] T062 Release rebuild with `node scripts/build.mjs --only-wasm`, outside any e2e run
-- [ ] T063 The existing `rolls-everyone`, `rolls-gm-only`, `rolls-sheet-tab`, `rolls-reveal` and `rolls-gm-eyes` specs pass unchanged on `dicePlayed` (FR-018)
-- [ ] T064 **Proof**: `pnpm e2e:rolls`, green. It runs the demo's unit tests and `rolls-across-tabs`, then the `rolls` slice with `rolls-dice-on-screen.spec.ts`.
+- [x] T055 `cargo test -p thunderforge-dice` and `cargo test -p thunderforge-canvas-core dice_throw`, green
+- [x] T056 `make test-rust ARGS="-p thunderforge-server --lib roll"`, green
+- [x] T057 `make lint`, green (host, wasm32 and file length)
+- [x] T058 `node scripts/check-graphql-contract.mjs --schema`, clean
+- [x] T059 Web vitest `pnpm -F @thunderforge/web exec vitest run src/engine src/components/world/DiceRollerPanel`, and `pnpm -F @thunderforge/web exec tsc --noEmit`, green
+- [x] T060 Demo vitest `pnpm -F @thunderforge/demo exec vitest run`, green
+- [x] T061 `pnpm verify` green, including `e2e-slices`, which checks that the new spec is owned by `rolls`
+- [x] T062 Release rebuild with `node scripts/build.mjs --only-wasm`, outside any e2e run
+- [x] T063 The existing `rolls-everyone`, `rolls-gm-only`, `rolls-sheet-tab`, `rolls-reveal` and `rolls-gm-eyes` specs pass unchanged on `dicePlayed` (FR-018)
+- [x] T064 **Proof**: `pnpm e2e:rolls`, green. It runs the demo's unit tests and `rolls-across-tabs`, then the `rolls` slice with `rolls-dice-on-screen.spec.ts`.
 - [ ] T065 `pnpm e2e:which --diff`, and run every slice it names
 - [x] T066 ~~Full suite `node ./scripts/e2e-parallel.mjs`, green~~ — skipped by owner decision 2026-10-07: slices are the gate (T064 and T065 are the proof)
 - [x] T067 SC-004: in `rolls-dice-on-screen.spec.ts`, 50 consecutive `1d6` rolls end with `diceEntities() == 0`. SC-007: a `20d6` throw keeps the frame times from `frame_trace()` at or under 18.2 ms (55 fps) at the median, as `engine-limits.spec.ts` reads them.
-- [ ] T068 SC-006: the release `engine_bg.wasm` brotli size after the change, minus T001's, is under 150 KB. Record both numbers here. Before (T001, release, pre-change): 5,010,820 B brotli (raw 30,140,764 B).
+- [x] T068 SC-006: the release `engine_bg.wasm` brotli size after the change, minus T001's, is under 150 KB. Record both numbers here. Before (T001, release, pre-change): 5,010,820 B brotli (raw 30,140,764 B). After (release, 2026-10-07): 5,046,804 B brotli (raw 30,303,528 B). Growth 35,984 B, under 150 KB.
 
 ---
 
