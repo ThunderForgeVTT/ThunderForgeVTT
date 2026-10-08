@@ -62,3 +62,35 @@ async fn a_player_is_refused() {
     let refused = run(&t.state, t.a, false, CREATORS, json!({ "scene": t.scene })).await;
     assert!(!refused.errors.is_empty(), "a player read the creators");
 }
+
+/// A world's creator has no `world_members` row (`create_world` does not
+/// write one; `require_world_member` falls back to `worlds.created_by`), and
+/// is still the one who runs it, not a player who left.
+#[tokio::test]
+async fn leaves_out_the_worlds_creator_with_no_member_row() {
+    let t = table();
+    draw(&t, t.owner, false).await;
+    draw(&t, t.a, true).await;
+    diesel::delete(
+        world_members::table
+            .filter(world_members::world_id.eq(t.world))
+            .filter(world_members::user_id.eq(t.owner)),
+    )
+    .execute(&mut t.state.db_pool.get().unwrap())
+    .unwrap();
+
+    let answer = data(
+        run(
+            &t.state,
+            t.owner,
+            false,
+            CREATORS,
+            json!({ "scene": t.scene }),
+        )
+        .await,
+    );
+    assert_eq!(
+        answer["shapeCreators"],
+        json!([{ "userId": t.a, "displayName": username(&t, t.a), "isMember": true, "shapeCount": 1 }])
+    );
+}

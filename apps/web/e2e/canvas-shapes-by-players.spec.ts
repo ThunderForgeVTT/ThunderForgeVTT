@@ -474,7 +474,9 @@ test("the GM takes Shapes away and gives it back, without a reload", async ({
     await expect(toggle).toBeChecked();
 
     await test.step("unticking Shapes takes it from the rail and the server", async () => {
-      await toggle.uncheck();
+      // The card shows the server's answer, not the click (a grant is never
+      // guessed), so `uncheck()`'s own "did it change" check is too early.
+      await toggle.click();
       await expect(toggle).not.toBeChecked();
       await expect(toggle).toBeEnabled();
       await expect(player.getByTestId("gm-tool-shapes")).toHaveCount(0, {
@@ -502,7 +504,7 @@ test("the GM takes Shapes away and gives it back, without a reload", async ({
     });
 
     await test.step("ticking it again gives both back, and the old drawing stands", async () => {
-      await toggle.check();
+      await toggle.click();
       await expect(toggle).toBeChecked();
       await expect(player.getByTestId("gm-tool-shapes")).toBeVisible({
         timeout: 15_000,

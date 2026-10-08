@@ -900,6 +900,10 @@ test.describe("Hand-drawn shape authoring (US2)", () => {
     // Escape first to leave the ellipse/line drag-tool mode and drop back
     // to plain select-by-click (systems/shape.rs's handle_shape_tool_selection).
     await page.keyboard.press("Escape");
+    // Escape also puts the Shapes tool down (back to Select, owner
+    // request 2026-10-06), and "Selected shape" is the Shapes panel's.
+    await page.getByTestId("gm-tool-shapes").click();
+    await expect(page.getByTestId("shape-tool")).toBeVisible();
     await clickCanvasAt(page, -20, -125); // rectangle center
     await expect(page.getByText("Selected shape")).toBeVisible({
       timeout: 10_000,
@@ -943,6 +947,10 @@ test.describe("Hand-drawn shape authoring (US2)", () => {
     await page.keyboard.press("2");
     await dragCanvas(page, { dx: -60, dy: -60 }, { dx: 60, dy: 60 });
     await page.keyboard.press("Escape");
+    // Escape also puts the Shapes tool down (back to Select, owner
+    // request 2026-10-06), and "Selected shape" is the Shapes panel's.
+    await page.getByTestId("gm-tool-shapes").click();
+    await expect(page.getByTestId("shape-tool")).toBeVisible();
     await clickCanvasAt(page, 0, 0);
     await expect(page.getByText("Selected shape")).toBeVisible({
       timeout: 10_000,

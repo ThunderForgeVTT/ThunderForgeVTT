@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::auth::shape_authority::{ShapeAuthority, shape_authority};
 use crate::graphql::{app_state, authenticated_user};
-use crate::schema::{scenes, shapes, users, world_members};
+use crate::schema::{scenes, shapes, users, world_members, worlds};
 
 /// One person who drew on a scene and does not run its world.
 #[derive(SimpleObject, Debug, Clone, PartialEq)]
@@ -65,6 +65,12 @@ fn creators_on(conn: &mut PgConnection, scene_id: Uuid) -> QueryResult<Vec<Shape
         .find(scene_id)
         .select(scenes::world_id)
         .first(conn)?;
+    // `create_world` writes no member row for its creator, who is the
+    // world's Owner all the same (`auth::world_membership`).
+    let creator: Uuid = worlds::table
+        .find(world_id)
+        .select(worlds::created_by)
+        .first(conn)?;
     let per_creator: Vec<(Uuid, i64)> = shapes::table
         .filter(shapes::scene_id.eq(scene_id))
         .group_by(shapes::created_by)
@@ -89,7 +95,7 @@ fn creators_on(conn: &mut PgConnection, scene_id: Uuid) -> QueryResult<Vec<Shape
         .filter_map(|(user_id, display_name, count)| {
             let role = roles.iter().find(|r| r.0 == user_id).map(|r| r.1.as_str());
             // Whoever runs the world today is not a "player's shapes" entry.
-            if matches!(role, Some("Owner" | "GM")) {
+            if user_id == creator || matches!(role, Some("Owner" | "GM")) {
                 return None;
             }
             Some(ShapeCreator {
