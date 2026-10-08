@@ -1,0 +1,166 @@
+# Contract: Server instruments, spans and the anonymous allow-lists
+
+This contract is the source of truth for two things:
+
+- the constants in `apps/thunderforge/src/telemetry/tier.rs`, which FR-009
+  requires;
+- the list that `cargo test -p thunderforge -- telemetry::tier::print_instruments --nocapture`
+  prints for SC-008's checker.
+
+A name changes here first.
+
+## Conversion rule (R4)
+
+- The OTel name's dots become underscores.
+- A monotonic counter gains `_total`.
+- Unit `s` becomes `_seconds`.
+- A `{...}` unit adds nothing.
+- Resource attributes go to `target_info{job="thunderforge"}`, and never to a
+  series.
+
+## Instruments
+
+All instruments come from `opentelemetry::global::meter("thunderforge")`.
+
+| OTel name | Kind | Unit | Attributes | Prometheus series | Reads |
+| --- | --- | --- | --- | --- | --- |
+| `thunderforge.backplane.sent` | observable counter | `{event}` | none | `thunderforge_backplane_sent_total` | `DeliveryMetrics.sent` |
+| `thunderforge.backplane.dropped` | observable counter | `{event}` | none | `thunderforge_backplane_dropped_total` | `.dropped` |
+| `thunderforge.backplane.polls` | observable counter | `{poll}` | none | `thunderforge_backplane_polls_total` | `.polls` |
+| `thunderforge.backplane.errors` | observable counter | `{error}` | none | `thunderforge_backplane_errors_total` | `.errors` |
+| `thunderforge.backplane.panics` | observable counter | `{panic}` | none | `thunderforge_backplane_panics_total` | `.panics` |
+| `thunderforge.backplane.timeouts` | observable counter | `{timeout}` | none | `thunderforge_backplane_timeouts_total` | `.timeouts` |
+| `thunderforge.backplane.cursor` | observable gauge | `{event}` | none | `thunderforge_backplane_cursor` | `.cursor` |
+| `thunderforge.subscriptions.opened` | observable counter | `{subscription}` | none | `thunderforge_subscriptions_opened_total` | `subscription_metrics::OPENED` |
+| `thunderforge.subscriptions.refused` | observable counter | `{subscription}` | none | `thunderforge_subscriptions_refused_total` | `REFUSED` |
+| `thunderforge.subscriptions.delivered` | observable counter | `{event}` | none | `thunderforge_subscriptions_delivered_total` | `DELIVERED` |
+| `thunderforge.subscriptions.lagged` | observable counter | `{event}` | none | `thunderforge_subscriptions_lagged_total` | `LAGGED_EVENTS` |
+| `thunderforge.websocket.sockets_open` | observable gauge | `{socket}` | none | `thunderforge_websocket_sockets_open` | `SOCKETS_OPEN` |
+| `thunderforge.world_channels.reaped` | observable counter | `{channel}` | none | `thunderforge_world_channels_reaped_total` | new `WORLD_CHANNELS_REAPED` |
+| `thunderforge.graphql.operation.duration` | histogram | `s` | `operation_type`, `root_field`, `outcome` | `thunderforge_graphql_operation_duration_seconds_{bucket,sum,count}` | extension |
+| `thunderforge.graphql.errors` | counter | `{error}` | `root_field`, `code` | `thunderforge_graphql_errors_total` | extension |
+| `thunderforge.http.server.duration` | histogram | `s` | `route`, `method`, `status_class` | `thunderforge_http_server_duration_seconds_{bucket,sum,count}` | `TraceLayer` `on_response` |
+| `thunderforge.db.pool.connections` | observable gauge | `{connection}` | `state` = `idle` or `in_use` | `thunderforge_db_pool_connections` | `pool.state()` |
+| `thunderforge.db.pool.max_connections` | observable gauge | `{connection}` | none | `thunderforge_db_pool_max_connections` | `pool.max_size()` |
+| `thunderforge.db.pool.checkout_wait` | histogram | `s` | none | `thunderforge_db_pool_checkout_wait_seconds_{bucket,sum,count}` | `HandleEvent::handle_checkout` |
+| `thunderforge.db.pool.checkout_timeouts` | counter | `{timeout}` | none | `thunderforge_db_pool_checkout_timeouts_total` | `HandleEvent::handle_timeout` |
+| `thunderforge.world_events` | counter | `{event}` | `event` | `thunderforge_world_events_total` | `record_world_event` (ok) |
+| `thunderforge.world_event.record_failures` | counter | `{event}` | `event` | `thunderforge_world_event_record_failures_total` | `record_world_event` (err) |
+| `thunderforge.rolls` | counter | `{roll}` | `event`, `visibility` | `thunderforge_rolls_total` | `record_world_event` for codes 36 and 37 |
+
+Histogram buckets:
+
+- seconds instruments use `0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10`;
+- the pool wait uses `0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5, 30`.
+
+These are set with SDK views in `install.rs`.
+
+### Bounded label values
+
+| Label | Values |
+| --- | --- |
+| `operation_type` | `query`, `mutation`, `subscription` |
+| `root_field` | a field name of the schema's Query, Mutation or Subscription root, or `unknown` |
+| `outcome` | `ok`, `error`, `refused` |
+| `code` | an `extensions.code` the server emits, or `internal` when there is none |
+| `route` | an axum `MatchedPath` template, or `unmatched` |
+| `method` | `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`, `HEAD`, `other` |
+| `status_class` | `1xx` .. `5xx` |
+| `state` | `idle`, `in_use` |
+| `event` | a name from `telemetry/event_names.rs`, covering 29 codes |
+| `visibility` | `everyone`, `gm_eyes`, `gm_only`: `rolls::visibility::Visibility::as_str()`, a closed enum |
+
+`code` is bounded by the server's own error codes. Nothing outside the server
+can set it, because errors are produced by our resolvers. An `internal`
+fallback catches the rest.
+
+### The event-code name table
+
+`telemetry/event_names.rs` has `pub fn event_name(code: i32) -> &'static str`.
+It covers all 29 `EVENT_CODE_*` constants in `world_events.rs`, by the
+constant's own name lower-cased with the prefix removed. For example,
+`EVENT_CODE_ROLL_MADE` (36) is `roll_made`. An unknown code is `unknown`.
+
+A test reads `world_events.rs` with `include_str!`, collects every
+`pub const EVENT_CODE_` line, and fails when one has no name (FR-014).
+
+## Spans
+
+| Span | Name | Attributes, operator tier | Kept on the anonymous tier |
+| --- | --- | --- | --- |
+| HTTP request (`TraceLayer`) | `HTTP {method} {route}` | `http.route`, `http.request.method`, `http.response.status_code`, `url.path`, `user_agent.original`, `trace_id` and `span_id` fields | `http.route`, `http.request.method`, `http.response.status_code` |
+| GraphQL operation | `graphql.{type} {root_field}` | `graphql.operation.type`, `graphql.root_field`, `graphql.operation.name`, `graphql.error.codes`, `root_fields`, `outcome`, `world.id` (when a resolver records it) | everything but `graphql.operation.name` and `world.id` |
+| `record_world_event` | `world_event.record` | `event`, `visibility`, `world.id` | `event`, `visibility` |
+| Pool checkout (operator only) | none: a span event on the current span | `state` | dropped |
+
+A subscription gets one span, for its setup only.
+
+## `tier.rs` constants (FR-009)
+
+```rust
+pub const PROJECT_TELEMETRY_ENDPOINT: &str = "https://telemetry.thunderforge.dev";
+
+pub const ANONYMOUS_SPAN_ATTRIBUTES: &[&str] = &[
+    "graphql.operation.type", "graphql.root_field", "graphql.error.codes",
+    "root_fields", "outcome",
+    "http.route", "http.request.method", "http.response.status_code",
+    "event", "visibility", "state",
+];
+
+pub const ANONYMOUS_RESOURCE_ATTRIBUTES: &[&str] = &[
+    "service.name", "service.version", "thunderforge.instance.id",
+    "thunderforge.tier", "os.type", "host.arch", "deployment.environment",
+];
+
+pub const INSTRUMENTS: &[(&str, InstrumentKind, &str)] = &[ /* the table above */ ];
+
+pub const PUBLIC_METRIC_NAME_FILTER: &str = r"^(thunderforge\.|http\.server\.|db\.client\.)";
+```
+
+On the anonymous tier, the processor that enforces these
+(`anonymous::AllowListSpanProcessor`) wraps the batch processor. On `on_end`
+it:
+
+- drops every attribute not in the list;
+- drops every link;
+- keeps only span events named `exception`, with their `exception.message`
+  and `exception.stacktrace` redacted and truncated (512 and 4096
+  characters);
+- forwards the result.
+
+Tests:
+
+- `INSTRUMENTS` matches `PUBLIC_METRIC_NAME_FILTER`;
+- `ANONYMOUS_RESOURCE_ATTRIBUTES` excludes `service.instance.id`, `host.name`,
+  `process.*`, `container.*` and `k8s.*`;
+- each list is enumerated, so an addition is visible in review.
+
+## The `server.error` record (anonymous tier)
+
+The `anonymous::ServerErrorLayer`, a `tracing` layer, emits one OTLP log
+record per `ERROR` event. No other log record leaves on that tier.
+
+| Field | Value |
+| --- | --- |
+| body | the redacted message, cut to 512 characters |
+| `event.name` | `server.error` |
+| `error.type` | the event's `error.type` field if it has one, else its target (a module path) |
+| `error.message` | the same as the body |
+| `error.stack` | `std::backtrace::Backtrace::capture()` reduced to `crate::path:line` frames, cut to 4096 characters (empty unless `RUST_BACKTRACE` is set) |
+| severity | `ERROR` |
+
+Redaction uses `crates/thunderforge-server/src/feedback/redaction.rs`, which
+reads `config/feedback-redaction.json`. No other field of the event is read.
+
+## Resource
+
+| Attribute | Anonymous | Operator |
+| --- | --- | --- |
+| `service.name` | `thunderforge` | `OTEL_SERVICE_NAME`, or `thunderforge` |
+| `service.version` | `CARGO_PKG_VERSION` | the same |
+| `thunderforge.instance.id` | the instance id | the same |
+| `thunderforge.tier` | `anonymous` | `operator` |
+| `os.type`, `host.arch` | from `std::env::consts` | the detectors' values |
+| `deployment.environment` | `self-hosted` | `OTEL_RESOURCE_ATTRIBUTES`, or unset |
+| everything else | none | the SDK's default detectors plus `OTEL_RESOURCE_ATTRIBUTES` |
+| `service.instance.id` | never set | never set by us (R4) |

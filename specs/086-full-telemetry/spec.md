@@ -2,7 +2,7 @@
 
 **Feature Branch**: `086-full-telemetry`
 **Created**: 2026-10-07
-**Status**: Draft
+**Status**: Planned (plan.md, tasks.md)
 **Input**: The owner, 2026-10-07: "full telemetry for the landing and the demo, like a crazy amount of telemetry, so i can act on it", plus server telemetry and Grafana dashboards on the k8s cluster.
 **Revised**: 2026-10-07, to the owner's decision: "for the base image i want TELEMETRY=true default and i want to change our constitution to allow telemetry of people's thunderforge instances to tell me what's going on not just my own but they can override the otel endpoint if they want their own telemetry else i see it and they can do false and this all goes into a disclaimer and spec". Constitution v1.5.0, Principle VII, and [ADR-114](../../docs/adrs/20261007-114-telemetry_is_on_and_the_operators_to_redirect.md) record it.
 
@@ -95,8 +95,8 @@ Counted on 2026-10-07:
     to any path outside the demo's own static files, and opens no
     socket").
   - The demo's e2e records every such request in `outside`
-    (`apps/demo/e2e/support.ts:25-33`). Nine files use it, with fourteen
-    `toEqual([])` assertions. `demo.spec.ts` keeps its own copy (line 40).
+    (`apps/demo/e2e/support.ts:25-33`). Nine files use it, with fifteen
+    `toEqual([])` assertions (R14). `demo.spec.ts` keeps its own copy (line 40).
   - The copy repeats it. `DemoNotice.tsx:51` says "Nothing is saved
     anywhere but this browser". The meta description in
     `apps/demo/index.html:10` says "Nothing you do here leaves this
@@ -134,8 +134,8 @@ Counted on 2026-10-07:
     `http://otel-collector.monitoring:4318`. That is an operator endpoint
     (the project operating its own instance), so it gets the full tier.
   - Every other server, and every browser, sends OTLP/HTTP to
-    `https://telemetry.thunderforge.dev` by default. Browsers on any origin
-    may post to it (see **Open items** for CORS).
+    `https://telemetry.thunderforge.dev` by default. Browsers on other
+    origins can post to it once its CORS allows any origin (open item 9).
 - **The demo sends anonymous usage telemetry, and says so.** This amends
   spec 074. The events cover the funnel, timings and errors. They never
   carry what a visitor types, rolls, names or uploads.
@@ -220,7 +220,8 @@ Counted on 2026-10-07:
 - **A random instance id.** So the owner can tell one instance with 50
   errors from 50 instances with one each, the server generates a random
   128-bit UUIDv4 the first time it starts, stores it in `instance_settings`
-  under `telemetry_instance_id`, and never regenerates it. It is derived
+  under `system.telemetry_instance_id` (the prefix the instance keeps for
+  its own bookkeeping, R23), and never regenerates it. It is derived
   from nothing: not the hostname, the database URL, a MAC address, an admin
   or a time. It travels as the resource attribute `thunderforge.instance.id`
   on the server's export, and in the served browser config as `instanceId`,
@@ -243,8 +244,9 @@ Counted on 2026-10-07:
   can only name the endpoint known at build, so an operator who redirected
   browser telemetry would have to rebuild the demo, which Principle VII
   forbids. A header cannot loosen a `<meta>` (the browser enforces both, so
-  the stricter wins), so `connect-src` leaves the `<meta>` altogether, and
-  the server's demo router and the landing's nginx send it as a
+  the stricter wins), so the `<meta>`'s `connect-src` is widened to
+  `'self' data: blob: https: http:` (it cannot simply go, because
+  `default-src` would then govern `fetch`, R24), and the server's demo router and the landing's nginx send it as a
   `Content-Security-Policy` header built from the same config they serve:
   `'self' data: blob:` plus the configured telemetry origin when it is on,
   and nothing more when it is off. Every other directive stays in the
@@ -724,7 +726,7 @@ matches Appendix A.
   bridge is installed, spans keep every attribute, and the standard
   resource detectors run.
 - **FR-007 The instance id.** On start, after migrations, the server MUST
-  read `instance_settings.telemetry_instance_id`, and if it is absent insert
+  read the `instance_settings` row `system.telemetry_instance_id` (R23), and if it is absent insert
   a fresh UUIDv4 from the OS random source with an insert that does nothing
   on conflict, then read it back. It MUST NOT overwrite an existing value,
   and nothing else writes that key. With `TELEMETRY=false` it is still
@@ -859,8 +861,11 @@ conversion (see **Open items**).
     `<telemetry origin>/v1/logs` or `/v1/traces` through to the real
     `fetch`, and only when the config is enabled and names that origin.
     Every other cross-origin request is still refused.
-  - `sealedPage()` MUST drop `connect-src` from the `<meta>` policy and
-    keep every other directive. The server's `demo_router` and the landing's
+  - `sealedPage()` MUST widen the `<meta>` policy's `connect-src` to
+    `'self' data: blob: https: http:` and keep every other directive. It
+    cannot drop it, because `default-src` would then govern `fetch` and
+    block the telemetry origin whatever the header said (R24). The header
+    narrows it, because the browser enforces both and the stricter wins. The server's `demo_router` and the landing's
     nginx `location /demo/` MUST send `Content-Security-Policy:
     connect-src 'self' data: blob: <origin>`, where `<origin>` is the
     served config's endpoint origin when it is enabled and absent when it is
@@ -919,7 +924,7 @@ conversion (see **Open items**).
   - post `engine.load_failed` with `webgl2Unavailable`'s reason;
   - post the `engine.frames` summary from `stats.ts`;
   - in sampled sessions, add `traceparent` to GraphQL requests in
-    `graphqlClient.ts`.
+    `apps/web/src/api/graphqlClient.ts`.
 
   `startLogCapture` and its buffer are unchanged.
 - **FR-026 Serving the config.**
@@ -1013,9 +1018,14 @@ conversion (see **Open items**).
   - `ThunderForgeLandingDown`: `nginx_up == 0` for 2 m.
   - `ThunderForgeLanding5xx`: 5xx above 1 % for 10 m.
 - **FR-031**: Browser-side alerts (a spike in demo errors, a funnel step
-  dropping to zero) MUST be written as Loki ruler rules in
-  `deploy/k8s/observability/loki-rules.yaml`. They are applied once the
-  Flux side confirms a Loki ruler (see **Open items**).
+  dropping to zero) MUST be Prometheus alerts in the same
+  `prometheus-rules.yaml`, over the series that a collector `count`
+  connector makes from browser log records:
+  `thunderforge_browser_events_total` and
+  `thunderforge_browser_errors_total`, by `service_name` and `event_name`
+  (R8, `contracts/collector-count-connector.md`). The connector is a Flux
+  change, and the two alerts are added after its series exist. There is no
+  `loki-rules.yaml`.
 
 **The amendment to spec 074, and its tests**
 
@@ -1029,7 +1039,7 @@ conversion (see **Open items**).
   - route requests to the telemetry origin with `page.route`, answer them
     `204`, and keep their bodies in a new `telemetry` list;
   - leave every other request to `outside`, which stays asserted equal to
-    `[]` in all fourteen places.
+    `[]` in all fifteen places.
 
   No telemetry request leaves the test machine.
 - **FR-034**: `docs/guides/telemetry.md` MUST be Appendix A.2, in full: that
@@ -1164,7 +1174,7 @@ conversion (see **Open items**).
     `multiple`;
   - pool gauges;
   - the event-code name table.
-- `packages/telemetry` unit tests (vitest):
+- `packages/telemetry` unit tests (`node --test`, as `packages/downloads` runs them, R11):
   - the allow-list;
   - redaction through the port;
   - caps and folding;
@@ -1180,8 +1190,9 @@ conversion (see **Open items**).
   - **integration**: `apps/web/e2e/telemetry-*.spec.ts` for the error
     boundary, the engine load trace, `traceparent`, an instance with
     telemetry off, one redirected (US6), and the admin **Telemetry** panel
-    (US8). These start their stack with `TELEMETRY=true` and a browser
-    endpoint that `page.route` intercepts.
+    (US8). These run on the ordinary `TELEMETRY=false` stack and route
+    `**/telemetry.json` to an enabled config whose endpoint `page.route`
+    intercepts; the server's half of each state is proven in Rust (R15).
 - Neighbouring slices:
   - `pnpm e2e:feedback`: the shared error listeners and redaction;
   - `pnpm e2e:resumable-downloads`: it owns
@@ -1202,15 +1213,18 @@ conversion (see **Open items**).
 - The Flux side runs an OpenTelemetry Collector at
   `otel-collector.monitoring:4318`. It exports metrics to Prometheus, logs
   to Loki over Loki's native OTLP endpoint, and traces to Tempo. It also
-  exposes `https://telemetry.thunderforge.dev`. Because self-hosted
-  instances' browsers post to it from their own origins, its CORS allows
-  any origin for `POST` with `Content-Type: application/json`, and no
-  credentials.
+  exposes `https://telemetry.thunderforge.dev`. Its CORS today allows only
+  `https://thunderforge.dev` and `https://vtt-dev.thunderforge.dev` (R7), so
+  self-hosted instances' browsers are refused at preflight until it allows
+  any origin without credentials (open item 9). Servers are unaffected.
 - Grafana runs kube-prometheus-stack's dashboard sidecar, which picks up
   ConfigMaps labelled `grafana_dashboard: "1"`.
-- The vtt-dev deployment sets the `OTEL_*` and
-  `THUNDERFORGE_BROWSER_TELEMETRY_*` variables, and the landing deployment
-  sets the nginx template's. Those settings live in the Flux repository.
+- `thunderforge-dev` is not Flux-managed, and neither Deployment's manifest
+  is in a repository (R9). `make observability` applies the dashboards, the
+  rules and the PodMonitor with `kubectl apply -k`, patches the landing's
+  exporter sidecar in with `kubectl patch`, and sets vtt-dev's
+  `OTEL_EXPORTER_OTLP_ENDPOINT` to the in-cluster collector with
+  `kubectl set env`. The landing image's defaults are its `ENV` lines.
 - `web-vitals` (Apache 2.0) is an acceptable dependency. Whether the OTLP
   adapter uses the OpenTelemetry JS SDK or a small hand-written JSON
   encoder is a planning decision, bound by SC-007's 25 KB.
@@ -1220,30 +1234,29 @@ conversion (see **Open items**).
 
 ## Open items
 
-Items 1 to 7 depend on the Flux repository, which is still being built;
-item 8 is the owner's. Each is stated so that planning can proceed and the
-answer only adjusts names or wording:
+Planning (research.md) resolved items 1 to 5 and 7 against the live
+cluster. Items 6, 7a, 8 and 9 remain open:
 
-1. **Metric names after the collector.** The names above assume the
+1. **Resolved (R4).** **Metric names after the collector.** The names above assume the
    Prometheus exporter adds `_total` and unit suffixes, and turns
    `service.name` into a `job` or `service_name` label. If the collector is
    set up differently, the dashboards and rules change. Instrumentation
    does not.
-2. **Loki over OTLP.** The LogQL assumes Loki 3's native OTLP ingestion:
+2. **Resolved (R5): native OTLP, structured metadata.** **Loki over OTLP.** The LogQL assumes Loki 3's native OTLP ingestion:
    `service_name` as an index label, and record attributes as structured
    metadata, so queries filter with `| event_name="funnel"` and not
    `| json`. If logs arrive through a Loki exporter instead, the queries
    change.
-3. **Browser alerts.** A `PrometheusRule` cannot read Loki. FR-031's rules
+3. **Resolved (R8): a collector `count` connector; FR-031 rewritten.** **Browser alerts.** A `PrometheusRule` cannot read Loki. FR-031's rules
    need the Loki ruler enabled, or the collector needs a `count`
    connector over browser log records that turns them into Prometheus
    series. Until one exists, browser errors are dashboards only.
-4. **Where `deploy/k8s/observability` is applied from.** This assumes the
+4. **Resolved (R9): `make observability`, because `thunderforge-dev` is not Flux-managed.** **Where `deploy/k8s/observability` is applied from.** This assumes the
    Flux repository adds a `GitRepository` source on this repository and a
    `Kustomization` for that path. It also assumes the dashboard
    ConfigMaps go to the namespace Grafana's sidecar watches (`monitoring`
    assumed), and that the PodMonitor goes to `thunderforge-dev`.
-5. **The landing Deployment is not in this repository.** FR-028 ships the
+5. **Resolved (R9): `kubectl patch` from `make observability`.** **The landing Deployment is not in this repository.** FR-028 ships the
    sidecar as a patch against `deploy/thunderforge-landing`. If the Flux
    repository owns that Deployment, the patch moves there, and only the
    PodMonitor and the `stub_status` port stay here.
@@ -1256,7 +1269,7 @@ answer only adjusts names or wording:
    sends no `connect-src` header, so only the guard limits where the page
    posts. The guide says so, and that such a host should send the header
    itself.
-7. **The project collector must accept server metrics publicly.** The
+7. **Resolved (R6): done in the Flux repository (fluxified 4890522); the remainder is 7a.** **The project collector must accept server metrics publicly.** The
    fluxified `telemetry.thunderforge.dev` route allows only `/v1/traces`
    and `/v1/logs` today. Server-side anonymous telemetry needs
    `/v1/metrics` back on that route. It MUST return only behind:
@@ -1277,6 +1290,12 @@ answer only adjusts names or wording:
    self-hosted panels are indicative, and a limit (at the gateway, or the
    collector's `memory_limiter` plus a per-`thunderforge.instance.id`
    cap) is future work.
+7a. **Collector-side allow-list (residual hardening, Flux side).** The
+   public route's `transform/public` does not strip `process.*`,
+   `container.*` or `k8s.*`, and the collector has no span-attribute
+   allow-list (R6). `tier.rs`'s span processor and hand-built resource are
+   the guarantee, and SC-011 proves them. A collector-side copy is defence
+   in depth and does not block this spec.
 8. **GDPR wording for the server-image default.** The anonymous tier and
    the two switches are why on-by-default is defensible: nothing sent
    identifies a person, and the operator controls it with one variable.
@@ -1285,6 +1304,12 @@ answer only adjusts names or wording:
    legitimate-interest wording (GDPR Art. 6(1)(f)) and whether an
    operator-facing data-processing note is wanted. This is an open item,
    not a blocker; ADR-114 records it.
+9. **CORS on the public route (owner's yes, Flux side).** The public
+   receiver allows only `https://thunderforge.dev` and
+   `https://vtt-dev.thunderforge.dev`, so self-hosted browsers' JSON posts
+   fail preflight (R7). The fix is `allowed_origins: ["*"]` with no
+   credentials, which is task T089. Until then the self-hosted browser
+   panels are empty.
 
 ## Appendix A: The disclosure
 
@@ -1370,7 +1395,7 @@ Only this, and the list is enforced in code
   pattern (`/world/:worldId/play`, never the id itself).
 - **A random install id**: a random UUID made the first time your server
   starts, stored in your database (`instance_settings`,
-  `telemetry_instance_id`), and never changed. It is made from nothing
+  `system.telemetry_instance_id`), and never changed. It is made from nothing
   about your machine. It lets us tell one instance with fifty errors from
   fifty instances with one each. Delete the row for a new one.
 - **A random browser session id** that is forgotten when the tab closes.
