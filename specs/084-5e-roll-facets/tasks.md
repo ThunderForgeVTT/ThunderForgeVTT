@@ -306,7 +306,7 @@ nothing visible changed.
 
 ### Proof
 
-- [ ] T048 [US3] `apps/web/e2e/rolls-facets-inspiration.spec.ts`:
+- [x] T048 [US3] `apps/web/e2e/rolls-facets-inspiration.spec.ts`:
   1. The GM grants the player's character Inspiration on its sheet.
   2. The player rolls a check, and the GM's chat shows no Reroll button.
   3. The player clicks Reroll (Heroic Inspiration).
@@ -316,6 +316,11 @@ nothing visible changed.
   7. A direct `rerollRoll` on the same roll through the page's GraphQL helper is refused with "already been rerolled".
 
   Run `pnpm e2e:rolls`.
+
+  As built: the GM grants the player Editor with `setActorPermission`, as
+  claiming does not (yet) make the player one, and the chats are opened again
+  after the sheet tabs: the play view came back up behind them ("Bringing
+  the table up…") with its dock closed.
 
 **Checkpoint**: a spendable facet works end to end. US4 and US5 reuse
 `rerollRoll` unchanged.
