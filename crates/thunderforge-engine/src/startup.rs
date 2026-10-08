@@ -198,6 +198,10 @@ pub fn start(canvas_selector: &str) {
         // resource; order relative to WallPlugin/LightingPlugin doesn't
         // matter (Constitution Principle II: independently addable).
         .add_plugins(ShapePlugin)
+        // Spec 085: several things selected at once, by a box or shift, and
+        // moved or deleted together. After every kind's own plugin, whose
+        // sets and selections it reads.
+        .add_plugins(plugins::group_select::GroupSelectPlugin)
         // Scene background (map import art): renders into
         // `CanvasLayer::Background`, the lowest/furthest-back layer.
         // Depends on CanvasLayerPlugin (above); order relative to

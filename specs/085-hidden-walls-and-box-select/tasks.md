@@ -53,12 +53,12 @@ that passes them.
     - an empty toggle changes nothing;
     - there are no duplicates.
 - [x] T004 `crates/thunderforge-canvas-core/src/box_select.rs` per contracts/engine-selection.md, with `#[cfg(test)] #[path = "box_select_tests.rs"] mod tests;`. Add `pub mod box_select;` to `crates/thunderforge-canvas-core/src/lib.rs`. `cargo test -p thunderforge-canvas-core box_select` is green.
-- [ ] T005 [P] Tests in a new `crates/thunderforge-engine/src/resources/group_selection.rs` `mod tests`:
+- [x] T005 [P] Tests in a new `crates/thunderforge-engine/src/resources/group_selection.rs` `mod tests`:
   - `set_group` writes `SelectedToken` and each kind's primary;
   - `select_one` resets the group to one item, and `clear` resets it to none;
   - `remove(id)` drops an id from whichever kind holds it;
   - `len()` counts across kinds.
-- [ ] T006 `GroupSelection` and the helpers T005 names, in `crates/thunderforge-engine/src/resources/group_selection.rs`. Register it in `resources/mod.rs` and `app.rs` (`init_resource`).
+- [x] T006 `GroupSelection` and the helpers T005 names, in `crates/thunderforge-engine/src/resources/group_selection.rs`. Register it in `resources/mod.rs` and `app.rs` (`init_resource`).
 - [ ] T007 [P] Engine owner:
   - Tests first, in `crates/thunderforge-engine/src/systems/token_owner_tests.rs` (`#[path]` from `systems/token.rs`): a payload without `ownerUserId` keeps the current `TokenOwner`, `null` clears it, and a string sets it.
   - Then `owner_user_id: Option<Option<String>>` on `WorldTokenPayload` (`payloads.rs`, `absent_or_null` deserializer), and a `TokenOwner` component set by the token upsert in `systems/token.rs`.

@@ -12,6 +12,7 @@ pub mod door_icons;
 pub mod exploration;
 pub mod frame_trace;
 pub mod grid;
+pub mod group_select;
 pub mod interaction;
 pub mod interaction_marker;
 pub mod item;
