@@ -22,8 +22,7 @@
  * crate into one that builds for wasm. The image work would stay the
  * browser's: the server's `image` crate is the larger half of the server.
  */
-import { DEMO_USER } from "../seed/world";
-import { viewerIsGm } from "./actors";
+import { DEMO_USER, type Viewer } from "../seed/world";
 import { now, record } from "./events";
 import { storeImage } from "./handlers/assets";
 import { levelsOf } from "./handlers/common";
@@ -216,12 +215,16 @@ function imageBytes(base64: string): Uint8Array {
   return bytes;
 }
 
-async function importUvttFile(sceneId: string, raw: string): Promise<Row> {
+async function importUvttFile(
+  sceneId: string,
+  raw: string,
+  viewer: Viewer,
+): Promise<Row> {
   const { file, skipped } = parseUvtt(raw);
   const warnings = warningsFor(file);
   const state = demoState();
   const scene = state.scenes.find((s) => s.sceneId === sceneId);
-  if (!scene || !viewerIsGm(state)) {
+  if (!scene || viewer === "player") {
     throw new ImportError(403, "scene not found or not owned by caller");
   }
 
@@ -378,6 +381,8 @@ async function importUvttFile(sceneId: string, raw: string): Promise<Row> {
 export async function importUvtt(
   sceneId: string,
   form: FormData | null,
+  /** The asking tab's (spec 081 R7): the world's is whoever asked last. */
+  viewer: Viewer,
 ): Promise<ImportAnswer> {
   try {
     const field = form?.get("file");
@@ -389,7 +394,7 @@ export async function importUvtt(
     }
     return {
       status: 200,
-      body: await importUvttFile(sceneId, await field.text()),
+      body: await importUvttFile(sceneId, await field.text(), viewer),
     };
   } catch (error) {
     if (error instanceof ImportError) {

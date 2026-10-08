@@ -89,7 +89,7 @@ describe("importUvtt", () => {
   it("lays the map's walls, door and light on its art, centred and y up", async () => {
     const events = heard();
     const before = { walls: state.walls.length, lights: state.lights.length };
-    const answer = await importUvtt(sceneId, form(uvtt()));
+    const answer = await importUvtt(sceneId, form(uvtt()), "gm");
     expect(answer.status).toBe(200);
     expect(answer.body).toMatchObject({
       wallsCreated: 2,
@@ -144,6 +144,7 @@ describe("importUvtt", () => {
           resolution: { map_size: { x: 48, y: 27 }, pixels_per_grid: 128 },
         }),
       ),
+      "gm",
     );
     expect(answer.status).toBe(200);
     const scene = state.scenes.find((s) => s.sceneId === sceneId) as Row;
@@ -154,24 +155,38 @@ describe("importUvtt", () => {
   });
 
   it("refuses as the server does", async () => {
-    expect(await importUvtt(sceneId, new FormData())).toEqual({
+    expect(await importUvtt(sceneId, new FormData(), "gm")).toEqual({
       status: 400,
       body: { error: "no file field found in multipart upload" },
     });
     expect(
-      (await importUvtt(sceneId, form(uvtt({ format: 0.2 })))).body,
+      (await importUvtt(sceneId, form(uvtt({ format: 0.2 })), "gm")).body,
     ).toEqual({
       error: "unsupported UVTT format version 0.2; only 0.3 is supported",
     });
-    expect((await importUvtt(sceneId, form("{"))).status).toBe(400);
+    expect((await importUvtt(sceneId, form("{"), "gm")).status).toBe(400);
     expect(
-      (await importUvtt(sceneId, form(uvtt({ image: btoa("GIF89a") })))).body,
+      (await importUvtt(sceneId, form(uvtt({ image: btoa("GIF89a") })), "gm"))
+        .body,
     ).toEqual({ error: "decoded image does not look like a PNG file" });
-    state.viewer = "player";
-    expect(await importUvtt(sceneId, form(uvtt()))).toEqual({
+    expect(await importUvtt(sceneId, form(uvtt()), "player")).toEqual({
       status: 403,
       body: { error: "scene not found or not owned by caller" },
     });
+  });
+});
+
+describe("importUvtt, as the tab that asked (spec 081 R7)", () => {
+  it("lets the Game Master's tab import after a player's tab asked last", async () => {
+    state.viewer = "player";
+    expect((await importUvtt(sceneId, form(uvtt()), "gm")).status).toBe(200);
+  });
+
+  it("refuses a player's tab after the Game Master's asked last", async () => {
+    state.viewer = "gm";
+    expect((await importUvtt(sceneId, form(uvtt()), "player")).status).toBe(
+      403,
+    );
   });
 });
 

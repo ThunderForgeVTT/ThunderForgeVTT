@@ -161,7 +161,7 @@ async function demoFetch(
     // The import writes the world, which only the tab holding it may do.
     if (!tabs.holds()) return refuse("Importing a map in a second tab");
     const form = await request.formData().catch(() => null);
-    const answer = await importUvtt(mapImport[1], form);
+    const answer = await importUvtt(mapImport[1], form, currentViewer());
     setTimeout(releaseEvents, EVENT_DELAY_MS);
     return json(answer.body, answer.status);
   }
