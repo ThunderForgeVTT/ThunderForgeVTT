@@ -28,6 +28,7 @@ describe("upsertRoll", () => {
       rollerName: "Ana",
       label: null,
       formula: "1d20",
+      bindings: [],
       resolution: {
         formula: "1d20",
         dice: [],

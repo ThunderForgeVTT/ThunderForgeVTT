@@ -10,9 +10,16 @@ export interface DieOutcomeRecord {
   numericSides: number | null;
   /** Full chain: original roll + every reroll/explosion of this die. */
   rolls: number[];
+  /**
+   * Spec 083: why each value after the first was rolled; `steps[i]` explains
+   * `rolls[i + 1]`. Empty on a roll stored before spec 083.
+   */
+  steps: DieStep[];
   kept: boolean;
   finalValue: number;
 }
+
+export type DieStep = "REROLL" | "EXPLODE";
 
 export type RollResultKind = "TOTAL" | "SUCCESS_COUNT";
 
@@ -42,6 +49,12 @@ export interface PlaceholderBinding {
   value: number;
 }
 
+/** Spec 083: a value the server put in for one of the formula's placeholders. */
+export interface RollBindingRecord {
+  placeholder: string;
+  value: number;
+}
+
 /** Spec 081: who sees a roll. Players may pick `GM_EYES`, the GM `GM_ONLY`. */
 export type RollVisibility = "EVERYONE" | "GM_EYES" | "GM_ONLY";
 
@@ -53,6 +66,8 @@ export interface WorldRollRecord {
   rollerName: string;
   label: string | null;
   formula: string;
+  /** Spec 083: sorted by placeholder; empty when the formula has none. */
+  bindings: RollBindingRecord[];
   resolution: RollResolutionRecord;
   visibility: RollVisibility;
   createdAt: string;

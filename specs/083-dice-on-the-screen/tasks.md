@@ -91,7 +91,7 @@ die (research R4).
 
 ### Web: types and queries
 
-- [ ] T011 [P] Add `steps: ("REROLL" | "EXPLODE")[]` to `DieOutcomeRecord`, and `bindings: PlaceholderBinding[]` to `WorldRollRecord`, in `apps/web/src/types/roll.ts`. Reuse `PlaceholderBinding` (:40) if its fields match `{placeholder, value}`, and add `RollBindingRecord` if not. Select `steps` in the `dice {` fragment and `bindings { placeholder value }` in `... on WorldRoll` in `apps/web/src/api/roll.ts`. Fix the fixtures `pnpm -F @thunderforge/web exec tsc --noEmit` reports.
+- [x] T011 [P] Add `steps: ("REROLL" | "EXPLODE")[]` to `DieOutcomeRecord`, and `bindings: PlaceholderBinding[]` to `WorldRollRecord`, in `apps/web/src/types/roll.ts`. Reuse `PlaceholderBinding` (:40) if its fields match `{placeholder, value}`, and add `RollBindingRecord` if not. Select `steps` in the `dice {` fragment and `bindings { placeholder value }` in `... on WorldRoll` in `apps/web/src/api/roll.ts`. Fix the fixtures `pnpm -F @thunderforge/web exec tsc --noEmit` reports.
 
 ### Canvas core: the throw's model
 
@@ -139,7 +139,7 @@ die (research R4).
   - addends that do not sum to the total fall back to `formula = total`;
   - a non-integer total prints two decimals;
   - every output byte is ASCII.
-- [ ] T018 [P] [US1] Web tests in the new `apps/web/src/engine/bevy/__tests__/diceThrow.test.ts`: `buildDiceThrow(roll)` keeps every field of contracts/engine-dice.md from a `WorldRollRecord` fixture, with `steps` and `bindings` defaulting to `[]` when the record has none. In `apps/web/src/engine/world/sync/__tests__/rolls.test.ts`, change the `animate` assertions to receive the whole `WorldRoll`, and to never receive a `MaskedRoll`.
+- [x] T018 [P] [US1] Web tests in the new `apps/web/src/engine/bevy/__tests__/diceThrow.test.ts`: `buildDiceThrow(roll)` keeps every field of contracts/engine-dice.md from a `WorldRollRecord` fixture, with `steps` and `bindings` defaulting to `[]` when the record has none. In `apps/web/src/engine/world/sync/__tests__/rolls.test.ts`, change the `animate` assertions to receive the whole `WorldRoll`, and to never receive a `MaskedRoll`.
 
 ### Implementation
 
@@ -159,13 +159,13 @@ die (research R4).
 
   Export them from `sdk.rs` as `frame_trace` is exported (`sdk.rs:52`).
 
-- [ ] T023 [US1] Web side, in the new `apps/web/src/engine/bevy/diceThrow.ts`: `buildDiceThrow(roll)` and `engineDiceTimings()`. In `apps/web/src/engine/bevy/index.ts`:
+- [x] T023 [US1] Web side, in the new `apps/web/src/engine/bevy/diceThrow.ts`: `buildDiceThrow(roll)` and `engineDiceTimings()`. In `apps/web/src/engine/bevy/index.ts`:
   - `triggerDiceRollAnimation(roll: WorldRollRecord)` (:1768) sends `{type: "trigger_dice_roll", roll: buildDiceThrow(roll)}`, and still pushes the final values to `dicePlayed` (:115);
   - `installEngineProbe` (~:132-200) gains `diceLanded()` and `diceEntities()`.
 
   T018 goes green.
 
-- [ ] T024 [US1] Widen `animate` in `apps/web/src/engine/world/sync/rolls.ts` to `(roll: WorldRollRecord) => void`, and update both callers: `apps/web/src/pages/world/WorldPage.tsx:1958-1966` and `apps/web/src/hooks/useWorldRolls.ts:103`
+- [x] T024 [US1] Widen `animate` in `apps/web/src/engine/world/sync/rolls.ts` to `(roll: WorldRollRecord) => void`, and update both callers: `apps/web/src/pages/world/WorldPage.tsx:1958-1966` and `apps/web/src/hooks/useWorldRolls.ts:103`
 - [ ] T025 [US1] Run `make lint` (lint-host, lint-wasm, file length). Then rebuild with `ENGINE_PROFILE=dev node scripts/build.mjs --only-wasm`, and check a `1d20 + 5` by hand in `make dev`.
 
 ### E2E
@@ -252,9 +252,9 @@ die (research R4).
   - `landed()` starts the next throw in arrival order;
   - fading throws are independent of the playing one;
   - a sixth push while four wait skips the oldest again.
-- [ ] T041 [P] [US5] Web test in `apps/web/src/engine/bevy/__tests__/diceThrow.test.ts`: `watchReducedMotion` sends the initial value, sends on `change`, and stops after its disposer runs (a `matchMedia` stub)
+- [x] T041 [P] [US5] Web test in `apps/web/src/engine/bevy/__tests__/diceThrow.test.ts`: `watchReducedMotion` sends the initial value, sends on `change`, and stops after its disposer runs (a `matchMedia` stub)
 - [x] T042 [US5] Implement `dice_throw/queue.rs` and use it from `plugins/dice/throw.rs`. Write skipped throws to the landed log. T040 goes green.
-- [ ] T043 [US5] Reduced motion:
+- [x] T043 [US5] Reduced motion:
   - in `plugins/dice/throw.rs`, `DiceMotion.reduced` spawns dice landed, fades them in over `reduced_ms`, and shows the readout at once;
   - in `diceThrow.ts`, `watchReducedMotion`;
   - in `WorldPage.tsx`, start it when the engine is ready, send `set_reduced_motion`, and stop it on teardown.
@@ -272,8 +272,8 @@ die (research R4).
 
 ## Phase 8: Timings owned by the engine (FR-017)
 
-- [ ] T046 [P] Web test in the new `apps/web/src/components/world/DiceRollerPanel/__tests__/DiceRollerPanel.test.tsx`: the result appears after `engineDiceTimings().tumbleMs` (stubbed to 300), after `reducedMs` under reduced motion, and after 1200 ms when no engine is loaded
-- [ ] T047 Read the delay from `engineDiceTimings()` in `apps/web/src/components/world/DiceRollerPanel/DiceRollerPanel.tsx` (:37, :63), and delete `ANIMATION_REVEAL_MS`. T046 goes green.
+- [x] T046 [P] Web test in the new `apps/web/src/components/world/DiceRollerPanel/__tests__/DiceRollerPanel.test.tsx`: the result appears after `engineDiceTimings().tumbleMs` (stubbed to 300), after `reducedMs` under reduced motion, and after 1200 ms when no engine is loaded
+- [x] T047 Read the delay from `engineDiceTimings()` in `apps/web/src/components/world/DiceRollerPanel/DiceRollerPanel.tsx` (:37, :63), and delete `ANIMATION_REVEAL_MS`. T046 goes green.
 
 ---
 

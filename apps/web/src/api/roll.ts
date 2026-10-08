@@ -19,6 +19,7 @@ const ROLL_RESOLUTION_FIELDS = `
     sidesKind
     numericSides
     rolls
+    steps
     kept
     finalValue
   }
@@ -71,6 +72,10 @@ const WORLD_ROLL_FIELDS = `
   rollerName
   label
   formula
+  bindings {
+    placeholder
+    value
+  }
   resolution {
     ${ROLL_RESOLUTION_FIELDS}
   }

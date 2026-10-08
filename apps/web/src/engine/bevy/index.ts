@@ -15,6 +15,8 @@ import {
 import type { EngineMountOptions, EngineState } from "./types";
 import type { WorldStore } from "../world/store";
 import type { WorldCommand } from "../world/types";
+import type { WorldRollRecord } from "../../types/roll";
+import { buildDiceThrow, setDiceTimingsSource } from "./diceThrow";
 
 type BevyWasmModule = {
   default: (moduleOrPath?: unknown) => Promise<unknown>;
@@ -156,7 +158,15 @@ function installEngineProbe(wasm: BevyWasmModule): void {
   const sightProbe = (
     wasm as { sight_probe?: (x: number, y: number) => string }
   ).sight_probe;
+  const diceLanded = (wasm as { dice_landed?: () => string }).dice_landed;
+  const diceEntityCount = (wasm as { dice_entity_count?: () => number })
+    .dice_entity_count;
   (window as unknown as Record<string, unknown>).__engineProbe = {
+    // Spec 083: the throws this board finished or skipped, oldest first
+    // (contracts/engine-dice.md), and how many throw entities are alive.
+    diceLanded: (): unknown[] =>
+      diceLanded ? (JSON.parse(diceLanded()) as unknown[]) : [],
+    diceEntities: (): number => (diceEntityCount ? diceEntityCount() : 0),
     // Spec 081: every set of dice this board was asked to animate, oldest
     // first. Recorded once the engine took the command, so a roll that never
     // reached the board — masked, hidden, or caught up — is not in it.
@@ -333,6 +343,9 @@ async function getWasmModule(onProgress?: EngineLoadListener) {
         // load (FR-004's spirit applied to the loader itself).
         await wasm.default();
       }
+      setDiceTimingsSource(
+        (wasm as { dice_timings?: () => string }).dice_timings ?? null,
+      );
       installEngineProbe(wasm);
       return wasm;
     })();
@@ -1775,24 +1788,30 @@ export async function setDisplayAppearance(
 }
 
 /**
- * Spec 014 (US4): forwards the per-die detail from an already-resolved
- * `rollDice` response into the engine's `DiceRollPlugin`, purely to
- * animate a reveal — this never asks the engine to decide an outcome
- * (FR-015). Not a `WorldCommand`/`worldStore` event: like
- * `setIsGameMaster`, this is a one-shot local trigger, not persisted
- * world state to sync or broadcast.
+ * Spec 083: throws a roll the server already resolved onto the board. This
+ * never asks the engine to decide an outcome (FR-015). Not a
+ * `WorldCommand`/`worldStore` event: like `setIsGameMaster`, it is a
+ * one-shot local trigger, not world state to sync or broadcast.
  */
 export async function triggerDiceRollAnimation(
-  dice: { finalValue: number }[],
+  roll: WorldRollRecord,
 ): Promise<void> {
   const module = await getWasmModule();
   if (!module.apply_world_command) {
     return;
   }
   module.apply_world_command(
-    JSON.stringify({ type: "trigger_dice_roll", dice }),
+    JSON.stringify({ type: "trigger_dice_roll", roll: buildDiceThrow(roll) }),
   );
-  dicePlayed.push(dice.map((die) => die.finalValue));
+  dicePlayed.push(roll.resolution.dice.map((die) => die.finalValue));
+}
+
+/** Spec 083: whether the viewer prefers reduced motion, for the next throw. */
+export async function setReducedMotion(reduced: boolean): Promise<void> {
+  const module = await getWasmModule();
+  module.apply_world_command?.(
+    JSON.stringify({ type: "set_reduced_motion", reduced }),
+  );
 }
 
 /**

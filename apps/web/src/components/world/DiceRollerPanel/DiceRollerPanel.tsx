@@ -3,10 +3,15 @@ import { rollDice } from "@/api/roll";
 import { RollResult } from "@/components/world/RollResult";
 import { RollVisibilityPicker } from "@/components/world/RollVisibility/RollVisibilityPicker";
 import { useRollVisibility } from "@/components/world/RollVisibility/useRollVisibility";
+import {
+  engineDiceTimings,
+  prefersReducedMotion,
+} from "@/engine/bevy/diceThrow";
 import type { RollResolutionRecord } from "@/types/roll";
 
 import { D20Icon } from "./D20Icon";
 import { DiceFormulaHelp } from "./DiceFormulaHelp";
+import { revealDelayMs } from "./revealDelay";
 
 export interface DiceRollerPanelProps {
   worldId: string;
@@ -25,16 +30,12 @@ export interface DiceRollerPanelProps {
 /**
  * Spec 014 (US4): triggers `rollDice` (the sole source of an
  * authoritative result), forwards the response's per-die detail into the
- * engine for the bouncing-dice reveal, and only then shows the total —
- * gated on a fixed reveal delay matching the engine's own settle
- * animation duration when the canvas is mounted, or shown immediately
+ * engine for the reveal, and only then shows the total — gated on the
+ * engine's own tumble time (spec 083, `revealDelayMs`) when the canvas is
+ * mounted, or shown immediately
  * when it isn't (quickstart.md US4 step 3: a missing animation surface
  * never blocks or hides a resolved roll).
  */
-// Mirrors `SETTLE_DURATION_SECS` in
-// `crates/thunderforge-engine/src/plugins/dice_roll.rs` — kept in sync manually since
-// the two live in separate build targets with no shared config.
-const ANIMATION_REVEAL_MS = 1200;
 
 export function DiceRollerPanel({
   worldId,
@@ -58,10 +59,13 @@ export function DiceRollerPanel({
       // Spec 081 (FR-013): the board animates this roll from its world
       // event, like every other client's roll; the panel only waits for the
       // dice to settle before showing the total.
-      if (engineReady) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, ANIMATION_REVEAL_MS),
-        );
+      const delay = revealDelayMs({
+        engineReady,
+        timings: engineDiceTimings(),
+        reducedMotion: prefersReducedMotion(),
+      });
+      if (delay > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
       }
 
       setResult(resolution);

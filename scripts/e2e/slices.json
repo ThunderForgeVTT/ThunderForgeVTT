@@ -811,7 +811,8 @@
         "apps/demo/src/backend/tabs{,.test}.ts",
         "apps/demo/e2e/rolls-across-tabs.spec.ts",
         "crates/thunderforge-engine/src/plugins/dice/**",
-        "crates/thunderforge-canvas-core/src/dice_throw/**"
+        "crates/thunderforge-canvas-core/src/dice_throw/**",
+        "apps/web/src/engine/bevy/{diceThrow.ts,__tests__/diceThrow.test.ts}"
       ],
       "standalone": "pnpm -F @thunderforge/demo test && pnpm -F @thunderforge/demo e2e rolls-across-tabs"
     },

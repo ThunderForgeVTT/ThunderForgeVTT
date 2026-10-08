@@ -98,7 +98,9 @@ import {
   onAuthoringToolRevoked,
   stopPeerTransfer,
   triggerDiceRollAnimation,
+  setReducedMotion,
 } from "@/engine/bevy";
+import { watchReducedMotion } from "@/engine/bevy/diceThrow";
 import { useAuthoringTools } from "@/hooks/useAuthoringTools";
 import { railTools, reconcileOpenTool } from "@/lib/authoringTools";
 import { usePlaceActorTokens } from "./usePlaceActorTokens";
@@ -1972,13 +1974,25 @@ export default function WorldPage() {
     return startRollSync({
       worldId: id,
       events: subscribeToWorldEvents(id),
-      animate: (dice) => {
+      animate: (roll) => {
         if (engineReadyRef.current) {
-          void triggerDiceRollAnimation(dice);
+          void triggerDiceRollAnimation(roll);
         }
       },
     });
   }, [id]);
+
+  // Spec 083 (research R11): the engine throws dice landed and faded in for
+  // a viewer who prefers reduced motion. Sent once the engine is up, and
+  // again whenever the preference changes.
+  useEffect(() => {
+    if (!engineReady) {
+      return;
+    }
+    return watchReducedMotion((reduced) => {
+      void setReducedMotion(reduced);
+    });
+  }, [engineReady]);
 
   // Live cross-client sync: one subscription per mounted scene, feeding
   // every apply*WorldEvent for this scene's canvas primitives — each of

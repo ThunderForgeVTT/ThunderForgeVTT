@@ -15,7 +15,7 @@
  */
 
 import { fetchWorldRoll } from "@/api/roll";
-import type { WorldRollEntry } from "@/types/roll";
+import type { WorldRollEntry, WorldRollRecord } from "@/types/roll";
 
 import type { WorldEventLike } from "./subscriptionClient";
 
@@ -59,8 +59,11 @@ export function shouldAnimate(input: {
 export interface RollSyncOptions {
   worldId: string;
   events: AsyncIterable<WorldEventLike>;
-  /** Shows the dice on the board. Left out where there is no board. */
-  animate?: (dice: { finalValue: number }[]) => void;
+  /**
+   * Throws the roll on the board. Left out where there is no board. Only
+   * ever handed a whole `WorldRoll`, never a masked one (research R2).
+   */
+  animate?: (roll: WorldRollRecord) => void;
   /** Each roll as this viewer may see it, as it arrives or is revealed. */
   onRoll?: (entry: WorldRollEntry) => void;
   /** Overridable for tests. */
@@ -107,9 +110,7 @@ export function startRollSync({
         answeredAt: now(),
       })
     ) {
-      animate(
-        entry.resolution.dice.map((die) => ({ finalValue: die.finalValue })),
-      );
+      animate(entry);
     }
     onRoll?.(entry);
   };

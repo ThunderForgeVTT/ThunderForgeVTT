@@ -18,6 +18,7 @@ const whole: WorldRollRecord = {
   rollerName: "Ana",
   label: "Stealth",
   formula: "1d20",
+  bindings: [],
   resolution: {
     formula: "1d20",
     dice: [
@@ -25,6 +26,7 @@ const whole: WorldRollRecord = {
         sidesKind: "NUMERIC",
         numericSides: 20,
         rolls: [14],
+        steps: [],
         kept: true,
         finalValue: 14,
       },
@@ -128,7 +130,7 @@ describe("startRollSync", () => {
     await settle();
 
     expect(fetchRoll).toHaveBeenCalledExactlyOnceWith("w", "roll-1");
-    expect(animate).toHaveBeenCalledExactlyOnceWith([{ finalValue: 14 }]);
+    expect(animate).toHaveBeenCalledExactlyOnceWith(whole);
     expect(onRoll).toHaveBeenCalledExactlyOnceWith(whole);
     stop();
   });
@@ -197,7 +199,7 @@ describe("startRollSync", () => {
     });
     await settle();
     await settle();
-    expect(animate).toHaveBeenCalledOnce();
+    expect(animate).toHaveBeenCalledExactlyOnceWith(revealed);
     stop();
   });
 
