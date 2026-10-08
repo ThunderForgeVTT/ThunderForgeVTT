@@ -1,5 +1,19 @@
 <!--
 Sync Impact Report
+- Version change: 1.4.0 → 1.5.0
+- Modified principles: n/a
+- Added sections: Principle VII "Telemetry Is On, Anonymous, and the
+  Operator's to Redirect" (spec 086-full-telemetry, ADR-114). Every build,
+  the self-hostable server image included, ships with `TELEMETRY=true` and
+  reports to the project's collector. An operator can point it at their own
+  collector, which stops it reaching the project, or set `TELEMETRY=false`.
+  What reaches the project's collector is an allow-listed, anonymous set,
+  and the default is disclosed wherever an operator or visitor meets it.
+  Decided by the project owner on 2026-10-07.
+- Removed sections: none
+- Deferred TODOs: spec 086 builds it; until then nothing is sent.
+
+Prior report (v1.4.0):
 - Version change: 1.3.0 → 1.4.0
 - Modified principles: n/a
 - Added sections: Technology & Architecture Constraints gained the
@@ -178,6 +192,42 @@ guess. A slice that crosses exactly the feature's seams gives the same
 confidence about that feature in minutes. It can run beside other work,
 and one agent or contributor can own it end to end.
 
+### VII. Telemetry Is On, Anonymous, and the Operator's to Redirect
+Every ThunderForge build MUST ship with telemetry on (`TELEMETRY=true`):
+the landing, the demo, the web app and the self-hostable server image
+alike. Its default destination is the project's collector
+(`telemetry.thunderforge.dev`), so the project sees what goes wrong on
+instances it does not run. An operator MUST be able to do either of two
+things, each with a single environment variable and no rebuild:
+
+- **Redirect it.** Setting the OTLP endpoint (`OTEL_EXPORTER_OTLP_ENDPOINT`,
+  and its browser counterpart) sends everything to the operator's own
+  collector and nothing to the project's.
+- **Turn it off.** `TELEMETRY=false` sends nothing anywhere and loads no
+  telemetry code in the browser.
+
+What reaches the project's collector MUST be anonymous, and MUST be
+limited to an allow-list kept in code: errors and their redacted stacks,
+performance timings, counts, versions, and bounded-cardinality labels. It
+MUST NOT carry anything a person typed, rolled, named or uploaded, nor any
+email, account, world, actor or scene id, IP address, hostname, secret or
+full user agent. An operator's own collector MAY receive more, such as full
+logs and unredacted spans, because that data stays on infrastructure they
+control.
+
+The default MUST be disclosed wherever someone meets it: the README and
+`docs/guides/telemetry.md` for operators, one line in the server's startup
+log naming the destination and how to change it, the instance's admin
+settings, and the landing's and demo's **What we measure**. A disclosure
+MUST say what is sent, where, and the two switches above. Tests and the e2e
+stacks MUST run with `TELEMETRY=false`, so no test run reports anywhere.
+
+**Rationale**: The owner decided on 2026-10-07 to see problems on
+everyone's instances, not only their own. A self-hosted project otherwise
+learns of a bug only when someone files it, and most people who hit one
+just leave. On-by-default is only defensible if the data is anonymous, the
+switches are one variable each, and nobody can miss being told.
+
 ## Technology & Architecture Constraints
 
 - Canvas rendering and interaction: Bevy (Rust, compiled to WASM). No
@@ -289,4 +339,4 @@ Compliance is reviewed at PR/change-review time. Any deviation from
 Principle I (ECS owns simulation) or Principle III (ownership enforcement)
 requires explicit justification recorded in the associated ADR or spec.
 
-**Version**: 1.4.0 | **Ratified**: 2026-08-20 | **Last Amended**: 2026-10-04
+**Version**: 1.5.0 | **Ratified**: 2026-08-20 | **Last Amended**: 2026-10-07

@@ -4,6 +4,7 @@
 **Created**: 2026-10-07
 **Status**: Draft
 **Input**: The owner, 2026-10-07: "full telemetry for the landing and the demo, like a crazy amount of telemetry, so i can act on it", plus server telemetry and Grafana dashboards on the k8s cluster.
+**Revised**: 2026-10-07, to the owner's decision: "for the base image i want TELEMETRY=true default and i want to change our constitution to allow telemetry of people's thunderforge instances to tell me what's going on not just my own but they can override the otel endpoint if they want their own telemetry else i see it and they can do false and this all goes into a disclaimer and spec". Constitution v1.5.0, Principle VII, and [ADR-114](../../docs/adrs/20261007-114-telemetry_is_on_and_the_operators_to_redirect.md) record it.
 
 ## Why
 
@@ -29,6 +30,14 @@ that turn the data into something the owner can act on.
 visitors *do*: every funnel step, every timing, every error. It is not
 taken for what visitors *say*. Nothing anyone types, rolls, names or
 uploads is sent, and the pages say so openly.
+
+The same blindness covers every instance somebody else runs. A self-hosted
+ThunderForge that breaks tells nobody; most people who hit a bug leave
+rather than file it. So every build, the self-hostable server image
+included, reports to the project by default. What it reports to the project
+is anonymous and allow-listed. The operator can send it to their own
+collector instead, or turn it off, with one environment variable each, and
+they are told so in every place they would look.
 
 ## What exists
 
@@ -121,10 +130,12 @@ Counted on 2026-10-07:
 - **OpenTelemetry everywhere.** The server and all three browser apps speak
   OTLP. The cluster collector lives in the owner's separate Flux repository
   and fans out to Tempo (traces), Loki (logs) and Prometheus (metrics).
-  - In-cluster, the server sends to `http://otel-collector.monitoring:4318`.
-  - Browsers send OTLP/HTTP to `https://telemetry.thunderforge.dev`. It
-    allows CORS from `https://thunderforge.dev` and
-    `https://vtt-dev.thunderforge.dev`.
+  - In-cluster, the project's own server sends to
+    `http://otel-collector.monitoring:4318`. That is an operator endpoint
+    (the project operating its own instance), so it gets the full tier.
+  - Every other server, and every browser, sends OTLP/HTTP to
+    `https://telemetry.thunderforge.dev` by default. Browsers on any origin
+    may post to it (see **Open items** for CORS).
 - **The demo sends anonymous usage telemetry, and says so.** This amends
   spec 074. The events cover the funnel, timings and errors. They never
   carry what a visitor types, rolls, names or uploads.
@@ -134,9 +145,8 @@ Counted on 2026-10-07:
   - The landing and the demo say what is collected.
 - **On the server, the OpenTelemetry layer sits beside Bunyan.** The
   `opentelemetry`, `opentelemetry-otlp` and `tracing-opentelemetry` layer
-  is added beside the existing Bunyan layer, not in place of it. The
-  standard `OTEL_*` variables turn it on. With none set it is off, and the
-  server behaves exactly as today. The stderr report at `listener.rs:208`
+  is added beside the existing Bunyan layer, not in place of it. Bunyan's
+  stdout is unchanged in every mode. The stderr report at `listener.rs:208`
   stays.
 - **Ports and adapters.**
   - On the server, `thunderforge-server` depends only on the `opentelemetry`
@@ -151,26 +161,95 @@ Counted on 2026-10-07:
   - Metric aggregation from thousands of short-lived tabs needs delta
     temporality, and the collector would then have to convert it. Counts
     and percentiles of browser events are read from Loki instead.
-- **Browser telemetry is on by default for thunderforge.dev's landing and
-  demo, and off by default everywhere else, decided at runtime.** The owner
-  decided on 2026-10-07: "i want telemetry on landing and demo absolutely
-  on by default the reason for this is i wanna see if people are hitting
-  issues".
-  - The landing image's nginx serves `/telemetry.json` and
-    `/demo/telemetry.json` with `enabled: true`, the endpoint
-    `https://telemetry.thunderforge.dev` and a sample rate of 1.0 unless its
-    environment says otherwise. `THUNDERFORGE_BROWSER_TELEMETRY_ENABLED=false`
-    turns it off.
-  - The server image (the web app, and the demo a self-hosted server serves
-    at `/demo`) stays off unless its operator sets the variables.
+- **Every build is on by default, decided at runtime (Principle VII).** The
+  owner decided on 2026-10-07, first for the landing and demo ("i want
+  telemetry on landing and demo absolutely on by default the reason for
+  this is i wanna see if people are hitting issues") and then for every
+  instance ("for the base image i want TELEMETRY=true default").
+  - **One switch, `TELEMETRY`, default `true`.** It is read by the server
+    image (the server, the web app it serves, and the demo it serves at
+    `/demo`) and by the landing image's nginx. `TELEMETRY=false` sends
+    nothing anywhere: the server installs no exporter, and both config files
+    answer `{"enabled":false}`, so no browser loads the telemetry chunk.
+    `OTEL_SDK_DISABLED=true` is honoured as well and means the same for the
+    server's export.
+  - **The default destination is `https://telemetry.thunderforge.dev`**,
+    for the server's OTLP export and for the browser config the server
+    serves at `/telemetry.json` and `/demo/telemetry.json`. The landing's
+    nginx serves the same default.
+  - **Redirect.** `OTEL_EXPORTER_OTLP_ENDPOINT` (or a signal-specific
+    `OTEL_EXPORTER_OTLP_*_ENDPOINT`) sends the server's export to the
+    operator's collector, and nothing of it to the project's.
+    `THUNDERFORGE_BROWSER_TELEMETRY_ENDPOINT` does the same for browsers.
+    The two are independent: an operator may redirect one and leave the
+    other on the default, and the disclosures say which is which.
   - Each app reads a small config file at start. The landing reads
     `/telemetry.json`, the demo `${BASE_URL}telemetry.json`. The web app
     reads `/telemetry.json` from the server.
-  - The file names the endpoint, the sample rate and an `enabled` flag.
+  - The file names the endpoint, the sample rate, the tier, the instance id
+    and an `enabled` flag (FR-018).
   - A missing file, an unreadable file or `enabled: false` means nothing is
-    sent, and the telemetry chunk is never loaded. That is the kill switch.
-  - A self-hosted instance, or the demo its server serves, sends nothing
-    unless its operator sets it up. Only the landing image ships on.
+    sent, and the telemetry chunk is never loaded.
+  - No built bundle carries an endpoint. The endpoint is always the served
+    config's, so redirecting or turning off never needs a rebuild.
+- **Two tiers, decided by the destination.** What is sent depends on where
+  it goes, not on who runs the instance.
+  - **The anonymous tier** applies whenever the destination is the project's
+    collector. Only the allow-list leaves: errors with redacted stacks,
+    timings, counts, versions and bounded labels. For the server that means
+    metrics, `server.error` event records, and redacted spans whose
+    attributes are filtered to the allow-list: no GraphQL variables, no
+    client operation names, no ids, no hostnames. The server's logs are not
+    sent; there is no log bridge on this tier.
+  - **The operator tier** applies when the destination is anything else.
+    The operator's collector may receive full logs (through the
+    `tracing` log bridge) and unredacted spans, including `world.id`,
+    because that data stays on infrastructure the operator controls.
+  - **Where it is decided.** One function, `telemetry::tier_for(endpoint)`
+    in `apps/thunderforge/src/telemetry/tier.rs`, compares the resolved
+    endpoint with the compiled-in project default
+    (`PROJECT_TELEMETRY_ENDPOINT`), after normalising scheme, host case, a
+    default port and a trailing slash. Equal means anonymous; anything else
+    means operator. The browser's tier comes from the served config, which
+    the server fills from the same function. The landing's nginx serves
+    `anonymous` unless its endpoint was changed. A destination that cannot
+    be parsed is treated as anonymous, never as operator, so a typo can
+    only ever send less.
+  - Browser telemetry is already anonymous in full (FR-019) and is the same
+    on both tiers, except for the extra resource attributes of FR-019a.
+- **A random instance id.** So the owner can tell one instance with 50
+  errors from 50 instances with one each, the server generates a random
+  128-bit UUIDv4 the first time it starts, stores it in `instance_settings`
+  under `telemetry_instance_id`, and never regenerates it. It is derived
+  from nothing: not the hostname, the database URL, a MAC address, an admin
+  or a time. It travels as the resource attribute `thunderforge.instance.id`
+  on the server's export, and in the served browser config as `instanceId`,
+  which the browser adds as the same resource attribute. It is never a
+  Prometheus label (the collector moves it to `target_info`), and never a
+  Loki index label. An operator who wants a new one deletes the row.
+- **The disclosure is required everywhere Principle VII lists**, and the
+  exact words are in **Appendix A**: the README, `docs/guides/telemetry.md`,
+  the server's startup log line, the admin settings page, and the landing's
+  and demo's **What we measure**.
+- **GPC and DNT are a browser rule.** The server never sees a visitor's
+  privacy signal for its own export, so the server ignores them. In the
+  browser, the rule stands as written below.
+- **Tests never report.** Every test run and every e2e stack runs with
+  `TELEMETRY=false` (FR-036). The tests that prove telemetry intercept it
+  with an in-memory exporter or Playwright routing, so nothing leaves the
+  machine.
+- **The demo's `connect-src` moves to a header set at serve time.** The
+  demo's CSP was a `<meta>` baked at build by `sealedPage()`. A baked policy
+  can only name the endpoint known at build, so an operator who redirected
+  browser telemetry would have to rebuild the demo, which Principle VII
+  forbids. A header cannot loosen a `<meta>` (the browser enforces both, so
+  the stricter wins), so `connect-src` leaves the `<meta>` altogether, and
+  the server's demo router and the landing's nginx send it as a
+  `Content-Security-Policy` header built from the same config they serve:
+  `'self' data: blob:` plus the configured telemetry origin when it is on,
+  and nothing more when it is off. Every other directive stays in the
+  `<meta>`, where it holds whichever host serves the demo. The guard
+  (`install.ts`) stays the in-page enforcement either way.
 - **Privacy rules.**
   - The only identifier is a random, session-scoped id: 128 bits, kept in
     `sessionStorage` so the demo's viewer switch (which reloads) stays one
@@ -182,7 +261,8 @@ Counted on 2026-10-07:
     family and a mobile flag.
   - A browser with Global Privacy Control or Do Not Track set still sends
     error and failure events, because finding people's problems is the
-    point. It sends no page views, funnel steps, vitals or traces.
+    point. It sends no page views, funnel steps, vitals or traces. This
+    rule is the browser's only; the server's export does not consult it.
 - **nginx on the landing** writes JSON access logs and gets a
   `nginx-prometheus-exporter` sidecar, scraped through a PodMonitor
   labelled `release: kube-prometheus-stack`.
@@ -312,18 +392,25 @@ root field.
 
 **Acceptance Scenarios**:
 
-1. **Given** the server with no `OTEL_*` variable set,
+1. **Given** the server with `TELEMETRY=false`,
    **When** it runs,
    **Then** it opens no connection to a collector, installs no
-   OpenTelemetry layer, and logs exactly as today.
-2. **Given** `OTEL_EXPORTER_OTLP_ENDPOINT` set,
+   OpenTelemetry layer, and its stdout is the same as before this spec,
+   apart from the one startup line of FR-008.
+2. **Given** `OTEL_EXPORTER_OTLP_ENDPOINT` set to the owner's in-cluster
+   collector,
    **When** world events flow,
    **Then** the backplane, GraphQL, pool and world-event series of FR-010
-   to FR-014 reach the collector.
-3. **Given** the delivery loop stops polling,
+   to FR-014 reach it, with the operator tier's full logs and spans.
+3. **Given** the server with no telemetry variable at all,
+   **When** world events flow,
+   **Then** the same series reach `https://telemetry.thunderforge.dev` on
+   the anonymous tier (FR-006): metrics, `server.error` records and
+   allow-listed spans, and no log records from `tracing`.
+4. **Given** the delivery loop stops polling,
    **When** two minutes pass,
    **Then** `ThunderForgeBackplaneStalled` fires.
-4. **Given** a collector that is down,
+5. **Given** a collector that is down,
    **When** the server starts and runs,
    **Then** start-up does not wait on it, requests are not slowed, and the
    exporter drops what it cannot send.
@@ -393,29 +480,53 @@ and rolls. The canary appears in no telemetry request body.
 
 ---
 
-### User Story 6 - A self-hosted instance sends nothing unless its operator says so (Priority: P2)
+### User Story 6 - A self-hosted instance reports anonymously, and its operator redirects it or turns it off (Priority: P1)
 
-Somebody runs ThunderForge on their own machine. Their web app, and the demo
-their server serves at `/demo`, send nothing anywhere. If they want
-telemetry, they set environment variables, and it goes to *their*
-collector.
+Somebody runs the ThunderForge server image on their own machine and sets
+nothing. Their server, their web app and the demo it serves at `/demo`
+report the anonymous tier to `https://telemetry.thunderforge.dev`, so the
+owner sees the errors their players hit. If the operator wants the data
+themselves, they set the endpoint and it goes to *their* collector, in full,
+and nothing reaches the project. If they want none of it, `TELEMETRY=false`
+and nothing is sent anywhere.
 
-**Why this priority**: The web app and the demo ship in the same image as
-thunderforge.dev's. A default that phones home would be a breach of trust
-in every install.
+**Why this priority**: This is the owner's decision of 2026-10-07, and the
+image ships with it. A default that reports is only acceptable if both
+switches work exactly as written, so they are proven first.
 
 **Independent Test**: The server started with no telemetry variables
-answers `/telemetry.json` with `{"enabled":false}`. A web e2e run then
-makes no request outside the instance.
+answers `/telemetry.json` with `enabled: true`, the project endpoint and
+`tier: "anonymous"`. With `TELEMETRY=false` it answers `{"enabled":false}`,
+and a web e2e run makes no request outside the instance. With
+`THUNDERFORGE_BROWSER_TELEMETRY_ENDPOINT=https://otel.example.org` it names
+that endpoint and `tier: "operator"`.
 
 **Acceptance Scenarios**:
 
-1. **Given** no `THUNDERFORGE_BROWSER_TELEMETRY_ENDPOINT`,
+1. **Given** no telemetry variable,
    **When** the web app or the demo loads from that server,
-   **Then** no telemetry chunk is loaded and no telemetry request is made.
-2. **Given** it set to `https://otel.example.org`,
+   **Then** the telemetry chunk loads after `load`, and events go to
+   `https://telemetry.thunderforge.dev` and nowhere else, carrying the
+   instance's `thunderforge.instance.id`.
+2. **Given** `THUNDERFORGE_BROWSER_TELEMETRY_ENDPOINT=https://otel.example.org`,
    **When** the web app loads,
-   **Then** events go there and nowhere else.
+   **Then** events go there and nowhere else; none reaches the project's
+   origin.
+3. **Given** `OTEL_EXPORTER_OTLP_ENDPOINT=http://collector.local:4318`,
+   **When** the server runs,
+   **Then** its export goes there on the operator tier, logs included, and
+   nothing of the server's reaches the project.
+4. **Given** `TELEMETRY=false`,
+   **When** the server, the web app or the demo runs,
+   **Then** no telemetry chunk is loaded, no telemetry request is made, and
+   the server installs no exporter.
+5. **Given** the anonymous tier and a world where an admin with the email
+   `canary@example.org` names a token, types in chat and runs a mutation,
+   all with a canary string,
+   **When** the export is captured,
+   **Then** neither the email, nor the canary, nor any user, world, actor or
+   scene id, nor the machine's hostname appears in any metric, span or log
+   record (SC-011).
 
 ---
 
@@ -446,6 +557,45 @@ carries a `traceparent` header whose trace id matches the browser span.
 3. **Given** a sampled browser trace,
    **When** the web app sends a GraphQL request,
    **Then** it carries `traceparent`, and the server's span joins that trace.
+
+---
+
+### User Story 8 - An operator is told, wherever they look (Priority: P1)
+
+An operator who never reads documentation still learns, the first time they
+start the server, that it reports, where to, and how to change that. One who
+reads the README, the guide or their admin settings learns the same, in the
+same words.
+
+**Why this priority**: Principle VII makes the disclosure the condition of
+the default. On-by-default that nobody is told about is not what the owner
+decided.
+
+**Independent Test**: The server's startup output contains the FR-008 line
+for each of the three states. The admin settings page shows the
+**Telemetry** panel with the state, destination and switches, and its text
+matches Appendix A.
+
+**Acceptance Scenarios**:
+
+1. **Given** the server starts with no telemetry variable,
+   **When** its startup log is read,
+   **Then** one line says it is on, anonymous, sending to
+   `https://telemetry.thunderforge.dev`, and names
+   `OTEL_EXPORTER_OTLP_ENDPOINT`, `THUNDERFORGE_BROWSER_TELEMETRY_ENDPOINT`
+   and `TELEMETRY=false`.
+2. **Given** an admin opens the admin settings,
+   **When** the page renders,
+   **Then** a read-only **Telemetry** panel shows the server's and the
+   browser's state, tier and destination, the instance id, and the
+   variables that change them, linking to `docs/guides/telemetry.md`.
+3. **Given** a reader of `README.md`,
+   **When** they reach **Telemetry**,
+   **Then** they read Appendix A's short text and a link to the guide.
+4. **Given** a visitor on the landing or in the demo,
+   **When** they open **What we measure**,
+   **Then** it says self-hosted instances report the same anonymous set by
+   default, and how an operator changes that.
 
 ---
 
@@ -487,12 +637,31 @@ carries a `traceparent` header whose trace id matches the browser span.
   - An unknown root field is labelled `unknown`.
 - **A query with several root fields** is labelled by its first, with
   `root_fields=multiple` on the span.
-- **Tests.** Rust tests and the e2e stack run with no `OTEL_*` variable, so
-  they export nothing, unless a test asks for it with an in-memory
-  exporter.
-- **The demo served by a self-hosted server** carries the telemetry origin in
-  its built CSP (FR-021), but its `/demo/telemetry.json` says
-  `enabled: false`, so the origin is allowed and never used.
+- **Tests.** Because the default is now on, a test that forgot to say so
+  would report. Rust tests and every e2e stack run with `TELEMETRY=false`
+  (FR-036), so they export nothing, unless a test asks for it with an
+  in-memory exporter or Playwright routing.
+- **The demo served by a self-hosted server** gets its `connect-src` from
+  the header its server builds from the served config. By default that
+  names the project's origin, which is what the default sends to. An
+  operator who redirects gets their own origin in the header with no
+  rebuild; one who turns telemetry off gets no extra origin at all.
+- **An operator's reverse proxy sets its own CSP** on `/demo/`. Two
+  policies intersect, so theirs must allow the telemetry origin too, or the
+  browser blocks the post and the batch is dropped as in the first edge
+  case. The guide says so.
+- **Half redirected.** An operator sets `OTEL_EXPORTER_OTLP_ENDPOINT` but
+  not the browser endpoint. The server goes to their collector on the
+  operator tier, and browsers still report the anonymous set to the
+  project. That is allowed. The startup line and the admin panel show the
+  two destinations separately, so it is never a surprise.
+- **The project default written out by hand.** An operator who sets
+  `OTEL_EXPORTER_OTLP_ENDPOINT=https://telemetry.thunderforge.dev/` gets
+  the anonymous tier, because the tier follows the normalised destination,
+  not whether a variable was set.
+- **No database yet.** The instance id is read after migrations. Until it
+  exists (the first start), nothing is exported; export begins once the id
+  is stored, so no record ever leaves without one.
 
 ## Requirements
 
@@ -504,12 +673,18 @@ carries a `traceparent` header whose trace id matches the browser span.
   and meter provider with the OTLP/HTTP exporter. It MUST add a
   `tracing-opentelemetry` layer to the registry built at `main.rs:350`,
   beside `JsonStorageLayer` and `BunyanFormattingLayer`, which stay.
-- **FR-002**: The layer MUST be installed only when
-  `OTEL_EXPORTER_OTLP_ENDPOINT`, or a signal-specific endpoint variable, is
-  set, and `OTEL_SDK_DISABLED` is not `true`. All other configuration
-  (`OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`, `OTEL_TRACES_SAMPLER`,
-  `OTEL_TRACES_SAMPLER_ARG`, `OTEL_METRIC_EXPORT_INTERVAL`) is read from
-  the standard variables. The service name defaults to `thunderforge`.
+- **FR-002**: The layer MUST be installed unless `TELEMETRY` is `false`
+  (case-insensitive; also `0`, `no`, `off`) or `OTEL_SDK_DISABLED` is
+  `true`. The endpoint is `OTEL_EXPORTER_OTLP_ENDPOINT` or a
+  signal-specific endpoint variable when set, and
+  `https://telemetry.thunderforge.dev` otherwise. On the operator tier, all
+  other configuration (`OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`,
+  `OTEL_TRACES_SAMPLER`, `OTEL_TRACES_SAMPLER_ARG`,
+  `OTEL_METRIC_EXPORT_INTERVAL`) is read from the standard variables. On the
+  anonymous tier, `OTEL_RESOURCE_ATTRIBUTES` and `OTEL_SERVICE_NAME` are
+  ignored, because they are free text the project did not choose; the
+  sampler defaults to `parentbased_traceidratio` at 0.1. The service name
+  defaults to `thunderforge`.
 - **FR-003**: Export MUST be batched and non-blocking, with bounded queues.
   An unreachable collector MUST NOT delay start-up or requests. The
   providers MUST be flushed on graceful shutdown.
@@ -518,6 +693,50 @@ carries a `traceparent` header whose trace id matches the browser span.
 - **FR-005**: `crates/thunderforge-server` MUST depend only on the
   `opentelemetry` API crate. Instruments are created from the global meter,
   which is a no-op until FR-001 installs a provider.
+
+**Server: tiers, identity and disclosure**
+
+- **FR-006 The tier.** `apps/thunderforge/src/telemetry/tier.rs` MUST hold
+  `PROJECT_TELEMETRY_ENDPOINT` and `tier_for(endpoint) -> Tier`, as decided
+  above, and it MUST be the only place the tier is decided. On
+  `Tier::Anonymous` the server MUST:
+  - export metrics (`/v1/metrics`) and spans (`/v1/traces`), and
+    `server.error` event records (`/v1/logs`), and install no `tracing`
+    log bridge;
+  - pass every span through an allow-list span processor that keeps only
+    the span name, status, duration, and the attributes
+    `graphql.operation.type`, `graphql.root_field`, `graphql.error.codes`,
+    `root_fields`, `outcome`, `http.route`, `http.request.method`,
+    `http.response.status_code`, `event`, `visibility` and
+    `state`; it drops every other attribute, every span
+    event other than the redacted `exception`, and every link;
+  - emit a `server.error` record for each `tracing` event at `ERROR`, with
+    `error.type`, the redacted `error.message` (512 chars) and a backtrace
+    reduced to crate paths and lines (4096 chars), through the same
+    `config/feedback-redaction.json` rule set, and nothing from the event's
+    other fields;
+  - set only these resource attributes: `service.name`, `service.version`,
+    `thunderforge.instance.id`, `thunderforge.tier=anonymous`, `os.type`,
+    `host.arch`, and `deployment.environment=self-hosted`; no
+    `host.name`, `process.*`, `container.*` or `k8s.*` detector runs.
+
+  On `Tier::Operator` none of these limits apply beyond FR-014's: the log
+  bridge is installed, spans keep every attribute, and the standard
+  resource detectors run.
+- **FR-007 The instance id.** On start, after migrations, the server MUST
+  read `instance_settings.telemetry_instance_id`, and if it is absent insert
+  a fresh UUIDv4 from the OS random source with an insert that does nothing
+  on conflict, then read it back. It MUST NOT overwrite an existing value,
+  and nothing else writes that key. With `TELEMETRY=false` it is still
+  created, so turning telemetry back on does not mint a new identity.
+- **FR-008 The startup line.** After the exporter decision, the server MUST
+  log exactly one `INFO` line whose message is Appendix A.3's text for its
+  state, with the destination filled in for the server and for browsers.
+- **FR-009 The anonymous allow-list is code, and tested.** The span
+  attribute allow-list, the resource attribute list and the metric
+  instrument list MUST be constants in `tier.rs`, a unit test MUST
+  enumerate each, and adding an entry MUST be a reviewed change to that
+  file.
 
 **Server: what it reports**
 
@@ -570,8 +789,9 @@ conversion (see **Open items**).
   - A single table MUST map every `EVENT_CODE_*` to its name, and a unit
     test MUST fail when a code is added without a name.
   - Rolls MUST also count `thunderforge_rolls_total{event, visibility}`.
-  - Span attributes MAY carry `world.id`. Neither spans nor metrics carry
-    a user id, a name or any payload content.
+  - On the operator tier, span attributes MAY carry `world.id`. On the
+    anonymous tier they never do (FR-006). On either tier, neither spans
+    nor metrics carry a user id, a name or any payload content.
 
 **Browser: `packages/telemetry`**
 
@@ -596,7 +816,9 @@ conversion (see **Open items**).
   the config file says it is on, and after the page's `load` event. The
   first paint waits for none of it.
 - **FR-018**: The config file is
-  `{ "enabled": bool, "endpoint": url, "sampleRate": 0..1, "environment": string }`.
+  `{ "enabled": bool, "endpoint": url, "sampleRate": 0..1, "environment": string, "tier": "anonymous"|"operator", "instanceId"?: uuid }`.
+  `instanceId` is present only when a server serves the file; the landing's
+  nginx omits it.
   - **Unsampled:** funnel, `demo.action`, `demo.not_in_demo`, `error`,
     `engine.load_failed` and page views are always sent.
   - **Sampled per session at `sampleRate`:** web vitals, long tasks,
@@ -620,6 +842,12 @@ conversion (see **Open items**).
   - No IP, cookie, user or world id, or full user agent.
   - GPC or DNT MUST limit the session to `error` events, decided before
     the chunk loads.
+- **FR-019a Browser tiers.** The browser's events are the same on both
+  tiers. The only difference is resource attributes: on both tiers it adds
+  `thunderforge.instance.id` when the config carries one, and
+  `thunderforge.tier`; on the operator tier it also adds the config's
+  `environment` as `deployment.environment`, which on the anonymous tier is
+  fixed to `production` for the landing image and `self-hosted` otherwise.
 - **FR-020**: The caps are 50 error events and 2,000 events in all per
   session. Batches are flushed every 5 s, on `visibilitychange` to
   hidden, and on `pagehide`. Each batch body is at most 60 KB.
@@ -631,8 +859,15 @@ conversion (see **Open items**).
     `<telemetry origin>/v1/logs` or `/v1/traces` through to the real
     `fetch`, and only when the config is enabled and names that origin.
     Every other cross-origin request is still refused.
-  - `sealedPage()` MUST add the telemetry origin, from
-    `VITE_TELEMETRY_ORIGIN` at build, to `connect-src`, and nothing else.
+  - `sealedPage()` MUST drop `connect-src` from the `<meta>` policy and
+    keep every other directive. The server's `demo_router` and the landing's
+    nginx `location /demo/` MUST send `Content-Security-Policy:
+    connect-src 'self' data: blob: <origin>`, where `<origin>` is the
+    served config's endpoint origin when it is enabled and absent when it is
+    not. One function builds both the served config and that header on the
+    server, so they cannot disagree. The demo's `vite preview` (its e2e
+    server) MUST send the same header through `preview.headers`. No build
+    variable names a telemetry origin.
   - Funnel steps:
     - `demo_opened`, with `entry=landing|direct`;
     - `map_loaded`: the engine's first frame with the scene's map drawn;
@@ -665,10 +900,15 @@ conversion (see **Open items**).
   block at `/#telemetry`. It lists what is sent: pages viewed, steps
   reached in the demo, timings, errors, coarse browser and device class,
   and a random id that dies with the tab. It also lists what is not: what
-  you type, roll, name or upload, your address, cookies, any account. The
-  demo's notice MUST say "Anonymous usage counts go to ThunderForge; what
-  you type does not," linking to it. `apps/demo/index.html:10` MUST no
-  longer say that nothing leaves the browser.
+  you type, roll, name or upload, your address, cookies, any account. It
+  also says that self-hosted instances report the same anonymous set by
+  default, and how their operators redirect it or turn it off. Its text is
+  Appendix A.5. The demo's notice MUST say "Anonymous usage counts go to
+  ThunderForge; what you type does not," linking to it. When the served
+  config is the operator tier, the notice says "go to this server's
+  operator" instead, and when telemetry is off it says nothing about it.
+  `apps/demo/index.html:10` MUST no longer say that nothing leaves the
+  browser.
 - **FR-025 The web app** MUST:
   - add an app-level error boundary in `App.tsx` that reports to the
     package;
@@ -684,16 +924,19 @@ conversion (see **Open items**).
   `startLogCapture` and its buffer are unchanged.
 - **FR-026 Serving the config.**
   - The server MUST answer `GET /telemetry.json` and
-    `GET /demo/telemetry.json` from `THUNDERFORGE_BROWSER_TELEMETRY_ENDPOINT`,
+    `GET /demo/telemetry.json` from `TELEMETRY`,
+    `THUNDERFORGE_BROWSER_TELEMETRY_ENDPOINT`,
     `THUNDERFORGE_BROWSER_TELEMETRY_SAMPLE_RATE` and
-    `THUNDERFORGE_BROWSER_TELEMETRY_ENVIRONMENT`. With no endpoint it
-    answers `enabled: false`.
+    `THUNDERFORGE_BROWSER_TELEMETRY_ENVIRONMENT`. Its defaults are on: the
+    endpoint `https://telemetry.thunderforge.dev`, sample rate 1.0, and the
+    tier from `tier_for`. It adds `instanceId` (FR-007). With
+    `TELEMETRY=false` it answers `{"enabled":false}` and nothing else.
   - The landing's nginx MUST answer both from a template fed by the same
-    variables. Unlike the server, its defaults are on: the endpoint
-    `https://telemetry.thunderforge.dev`, sample rate 1.0, environment
-    `production`, and `THUNDERFORGE_BROWSER_TELEMETRY_ENABLED=false` to turn
-    it off.
-  - The built bundles MUST NOT carry a default that is on.
+    variables, with the same defaults and environment `production`.
+    `TELEMETRY=false` turns it off there too.
+  - The built bundles MUST NOT carry an endpoint or an `enabled` default of
+    their own. Whether anything is sent, and where, is always the served
+    config's, so neither switch needs a rebuild.
 
 **nginx (landing)**
 
@@ -789,17 +1032,56 @@ conversion (see **Open items**).
     `[]` in all fourteen places.
 
   No telemetry request leaves the test machine.
-- **FR-034**: `docs/guides/telemetry.md` MUST explain, for operators, the
-  `OTEL_*` and `THUNDERFORGE_BROWSER_TELEMETRY_*` variables, that a
-  self-hosted server is off by default (only thunderforge.dev's landing image
-  is on), and exactly what the browser sends.
-  `CONTRIBUTING.md` MUST state the naming and cardinality rules: bounded
-  labels, no ids as labels, and the allow-list.
+- **FR-034**: `docs/guides/telemetry.md` MUST be Appendix A.2, in full: that
+  every build, the server image included, reports the anonymous tier to
+  `https://telemetry.thunderforge.dev` by default; the `TELEMETRY`,
+  `OTEL_*` and `THUNDERFORGE_BROWSER_TELEMETRY_*` variables; the two tiers;
+  the instance id; retention; and exactly what the server and the browser
+  send on each tier. `CONTRIBUTING.md` MUST state the naming and
+  cardinality rules: bounded labels, no ids as labels, the allow-list, and
+  that adding to the anonymous allow-list is a constitution-level change
+  (Principle VII) reviewed as such.
+
+**The disclosure**
+
+- **FR-035 Where it is said.** The disclosure MUST appear, with Appendix A's
+  text, in each of:
+  1. `README.md`: a **Telemetry** section, Appendix A.1;
+  2. `docs/guides/telemetry.md`: Appendix A.2 (FR-034);
+  3. the server's startup log: Appendix A.3 (FR-008);
+  4. the admin settings page (`apps/web/src/pages/admin/SettingsPage.tsx`):
+     a read-only **Telemetry** panel, Appendix A.4, filled from a new admin
+     GraphQL query `telemetryStatus { enabled tier serverEndpoint
+     browserEndpoint instanceId }`. The environment variables are the
+     control; the panel says which to set and does not offer a toggle;
+  5. the landing's and the demo's **What we measure**: Appendix A.5
+     (FR-024).
+
+  A change to what is sent MUST change Appendix A and each of these in the
+  same commit.
+- **FR-036 Tests run with telemetry off.** `TELEMETRY=false` MUST be set:
+  - in the e2e harness's stack environment: the `webServer.env` of
+    `apps/web/playwright.config.ts` and the stack env in
+    `scripts/e2e-parallel.mjs` (beside `THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT`),
+    and in `scripts/journeys.mjs` and `scripts/torture.mjs` where they start a
+    server;
+  - for `cargo test`, in `.cargo/config.toml`'s `[env]` (which never
+    overrides a variable already set), so a test that wants telemetry sets
+    it itself, with an in-memory exporter;
+  - for the demo's and the landing's e2e preview servers, which serve a
+    `telemetry.json` with `enabled: false` unless a telemetry spec serves
+    its own. Those specs (FR-033, `apps/landing/e2e/telemetry.spec.ts`)
+    turn it on and intercept the endpoint with `page.route`, answering
+    `204`, so nothing leaves the machine.
 
 ### Key Entities
 
-- **Telemetry config**: `{ enabled, endpoint, sampleRate, environment }`,
-  served per origin. It is the runtime switch.
+- **Telemetry config**: `{ enabled, endpoint, sampleRate, environment,
+  tier, instanceId? }`, served per origin. It is the runtime switch.
+- **Tier**: `anonymous` (the destination is the project's collector) or
+  `operator` (anything else), decided only by `tier_for`.
+- **Instance id**: a random UUIDv4 in `instance_settings`, created once,
+  never regenerated, derived from nothing.
 - **Session**: a random 128-bit id, its start time, and the funnel steps
   reached. All three are in `sessionStorage` and die with the tab.
 - **Event**: an OTLP log record with `event.name` and allow-listed
@@ -813,9 +1095,12 @@ conversion (see **Open items**).
 
 ### Measurable Outcomes
 
-- **SC-001**: With no `OTEL_*` variable, the server opens no outbound
-  connection to a collector, and its stdout is byte-for-byte the same
-  shape as before.
+- **SC-001**: With `TELEMETRY=false`, the server opens no outbound
+  connection to a collector, and its stdout is the same shape as before
+  apart from the one FR-008 line. With no telemetry variable, it exports
+  to `https://telemetry.thunderforge.dev` on the anonymous tier and to
+  nowhere else; with `OTEL_EXPORTER_OTLP_ENDPOINT` set, to that endpoint
+  only.
 - **SC-002**: With an in-memory exporter, every series of FR-010 is
   reported, and its value equals the atomic it reads. A mutation produces
   exactly one operation span and one histogram observation whose
@@ -827,10 +1112,11 @@ conversion (see **Open items**).
   token name and in an uploaded file's name appears in no telemetry body.
   Every request outside the demo's files goes to the telemetry origin's
   `/v1/logs` or `/v1/traces`.
-- **SC-005**: With the config off, the same run makes no telemetry request
-  and loads no telemetry chunk. With GPC set, it sends only `error`
-  events. Spec 074's original
-  assertion holds unchanged.
+- **SC-005**: With `TELEMETRY=false` (the served config off), the same run
+  makes no telemetry request and loads no telemetry chunk, and spec 074's
+  original assertion holds unchanged. With a redirected endpoint, every
+  telemetry request goes to that origin and none to the project's. With
+  GPC set, it sends only `error` events.
 - **SC-006**: A render throw shows the error boundary and posts one
   redacted `error` event.
 - **SC-007**: The landing's initial document and script requests are
@@ -843,12 +1129,36 @@ conversion (see **Open items**).
 - **SC-009**: The landing's access-log line parses as JSON and holds no
   query string, address or user agent.
 - **SC-010**: `make lint` (host and wasm32) passes.
+- **SC-011**: On the anonymous tier, with in-memory exporters, a server
+  test seeds an admin `canary-7f3a@example.org`, a world, actor, scene and
+  token named with the canary `zq-canary-7f3a`, sends a chat line and a
+  mutation whose variables carry it, raises an error whose message holds
+  the email, and reads the machine's hostname. No exported metric, span,
+  span event or log record contains the email, the canary, the hostname,
+  or any seeded user, world, actor, scene or token id; and every span
+  attribute and resource attribute is on FR-009's lists. The same test on
+  the operator tier finds `world.id`, which proves the filter is what
+  removed it. The browser half is SC-004.
+- **SC-012**: The FR-008 line appears exactly once in startup output, with
+  the right text for each of on, redirected and off. The admin
+  **Telemetry** panel and the README and guide sections match Appendix A
+  (a test compares the strings), and the instance id survives a restart
+  unchanged.
+- **SC-013**: A full `cargo test` run and each named e2e slice export
+  nothing to any network destination (their stacks run with
+  `TELEMETRY=false`, FR-036).
 
 ### Proof
 
 - Rust, `cargo test -p thunderforge-server` and `-p thunderforge`, with
   in-memory exporters:
-  - the off-by-default path (SC-001);
+  - the three states: off, default and redirected (SC-001);
+  - `tier_for`'s normalisation table, including a trailing slash, an
+    uppercase host, `:443`, and an unparseable value (anonymous);
+  - the anonymous tier's leak test (SC-011);
+  - the instance id: created once, unchanged across a restart, untouched
+    when present (SC-012);
+  - the startup line for each state (SC-012);
   - backplane instruments equal to the atomics;
   - the GraphQL extension's span and labels, including `unknown` and
     `multiple`;
@@ -868,8 +1178,10 @@ conversion (see **Open items**).
     `apps/demo/e2e/telemetry.spec.ts` for SC-003 to SC-005; and a new
     `apps/landing/e2e/telemetry.spec.ts` for page views, CTAs and vitals;
   - **integration**: `apps/web/e2e/telemetry-*.spec.ts` for the error
-    boundary, the engine load trace, `traceparent`, and an instance with
-    telemetry off (US6).
+    boundary, the engine load trace, `traceparent`, an instance with
+    telemetry off, one redirected (US6), and the admin **Telemetry** panel
+    (US8). These start their stack with `TELEMETRY=true` and a browser
+    endpoint that `page.route` intercepts.
 - Neighbouring slices:
   - `pnpm e2e:feedback`: the shared error listeners and redaction;
   - `pnpm e2e:resumable-downloads`: it owns
@@ -890,7 +1202,10 @@ conversion (see **Open items**).
 - The Flux side runs an OpenTelemetry Collector at
   `otel-collector.monitoring:4318`. It exports metrics to Prometheus, logs
   to Loki over Loki's native OTLP endpoint, and traces to Tempo. It also
-  exposes `https://telemetry.thunderforge.dev` with the CORS above.
+  exposes `https://telemetry.thunderforge.dev`. Because self-hosted
+  instances' browsers post to it from their own origins, its CORS allows
+  any origin for `POST` with `Content-Type: application/json`, and no
+  credentials.
 - Grafana runs kube-prometheus-stack's dashboard sidecar, which picks up
   ConfigMaps labelled `grafana_dashboard: "1"`.
 - The vtt-dev deployment sets the `OTEL_*` and
@@ -900,12 +1215,14 @@ conversion (see **Open items**).
   adapter uses the OpenTelemetry JS SDK or a small hand-written JSON
   encoder is a planning decision, bound by SC-007's 25 KB.
 - Retention, sampling at the collector, and access to Grafana are the
-  Flux side's.
+  Flux side's. The disclosure states 14 days, which is the cluster's Loki
+  and Tempo retention today; if that changes, Appendix A changes with it.
 
 ## Open items
 
-These depend on the Flux repository, which is still being built. Each is
-stated so that planning can proceed and the answer only adjusts names:
+Items 1 to 7 depend on the Flux repository, which is still being built;
+item 8 is the owner's. Each is stated so that planning can proceed and the
+answer only adjusts names or wording:
 
 1. **Metric names after the collector.** The names above assume the
    Prometheus exporter adds `_total` and unit suffixes, and turns
@@ -930,9 +1247,225 @@ stated so that planning can proceed and the answer only adjusts names:
    sidecar as a patch against `deploy/thunderforge-landing`. If the Flux
    repository owns that Deployment, the patch moves there, and only the
    PodMonitor and the `stub_status` port stay here.
-6. **The demo's built CSP** names thunderforge.dev's telemetry origin in
-   every image, including self-hosted ones. It is never used unless
-   enabled (US6), but a self-hoster who points browser telemetry at their
-   own collector also needs the demo rebuilt with their origin. The
-   alternative is to drop the `<meta>` policy in favour of a header set at
-   serve time.
+6. **The demo's CSP.** Decided above: `connect-src` is a header built at
+   serve time from the served config, and the rest of the policy stays in
+   the `<meta>`. The project's origin is allowed by default because that is
+   where the default sends; a redirected origin is allowed without a
+   rebuild. What remains open is outside this repository: a host that
+   serves the built demo without our server or nginx (a plain static host)
+   sends no `connect-src` header, so only the guard limits where the page
+   posts. The guide says so, and that such a host should send the header
+   itself.
+7. **The project collector must accept server metrics publicly.** The
+   fluxified `telemetry.thunderforge.dev` route allows only `/v1/traces`
+   and `/v1/logs` today. Server-side anonymous telemetry needs
+   `/v1/metrics` back on that route. It MUST return only behind:
+   - a collector `filter` processor on the public metrics pipeline that
+     drops every metric whose name is not `thunderforge.*`,
+     `http.server.*` or `db.client.*` (the instrument list of FR-010 to
+     FR-014, as SC-008's script prints it);
+   - a `resource` / `transform` processor on every public pipeline that
+     deletes every resource attribute not on FR-006's list
+     (`host.name`, `process.*`, `container.*`, `k8s.*`, `telemetry.sdk.*`
+     beyond the name and version), so a misconfigured or hostile sender
+     cannot store more than the allow-list;
+   - the same span-attribute allow-list as FR-006, applied again at the
+     collector for traces from the public route.
+
+   There is no per-IP rate limit on that route. A sender can inflate the
+   counts or the series within the allowed names; the dashboards say their
+   self-hosted panels are indicative, and a limit (at the gateway, or the
+   collector's `memory_limiter` plus a per-`thunderforge.instance.id`
+   cap) is future work.
+8. **GDPR wording for the server-image default.** The anonymous tier and
+   the two switches are why on-by-default is defensible: nothing sent
+   identifies a person, and the operator controls it with one variable.
+   That is not legal advice. Before the server-image default ships to EU
+   operators, the owner checks whether the disclosure needs
+   legitimate-interest wording (GDPR Art. 6(1)(f)) and whether an
+   operator-facing data-processing note is wanted. This is an open item,
+   not a blocker; ADR-114 records it.
+
+## Appendix A: The disclosure
+
+These are the words. Each place in FR-035 uses its part verbatim, apart
+from Markdown or JSX markup and the values in angle brackets, which are
+filled from the running configuration. A change to what is sent changes
+this appendix first.
+
+### A.1 README.md
+
+```markdown
+## Telemetry
+
+ThunderForge reports anonymous diagnostics to its developers by default,
+so we hear about the bugs on instances we don't run. That covers every
+build, including the server image you run yourself.
+
+- **What is sent:** errors with personal details stripped from them,
+  timings, counts, the ThunderForge version, and a random id for this
+  install.
+- **What is never sent:** anything anyone types, rolls, names or uploads;
+  emails, accounts, or world, character or scene ids; IP addresses;
+  hostnames; cookies.
+- **Where it goes:** `https://telemetry.thunderforge.dev`, kept for 14 days.
+- **Send it to your own collector instead:** set
+  `OTEL_EXPORTER_OTLP_ENDPOINT` for the server and
+  `THUNDERFORGE_BROWSER_TELEMETRY_ENDPOINT` for browsers. Nothing then
+  reaches us.
+- **Turn it off:** `TELEMETRY=false`. Nothing is sent anywhere.
+
+Details: [docs/guides/telemetry.md](docs/guides/telemetry.md).
+```
+
+### A.2 docs/guides/telemetry.md
+
+```markdown
+# Telemetry
+
+ThunderForge reports anonymous diagnostics by default. This page says
+exactly what, where it goes, and how to send it somewhere else or turn it
+off. Both take one environment variable and a restart; nothing needs
+rebuilding.
+
+## Why it is on
+
+ThunderForge is self-hosted. When it breaks on your instance, we only find
+out if somebody tells us, and most people who hit a bug just leave. The
+default lets us see what goes wrong everywhere, not only on the instances
+we run. It is anonymous so that this costs you and your players nothing,
+and it is yours to change.
+
+## The three settings
+
+| You set | What happens |
+| --- | --- |
+| nothing | Anonymous diagnostics go to `https://telemetry.thunderforge.dev`. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT=<your collector>` | The server's telemetry goes to your collector, in full, and none of it to us. |
+| `THUNDERFORGE_BROWSER_TELEMETRY_ENDPOINT=<your collector>` | Your players' browsers report to your collector, and none of it to us. |
+| `TELEMETRY=false` | Nothing is sent anywhere. Browsers do not even load the telemetry code. |
+
+The server and browser endpoints are separate. If you set only one, the
+other still reports to us anonymously; the startup log and the admin
+settings show both destinations.
+
+## What we receive, when it comes to us
+
+Only this, and the list is enforced in code
+(`apps/thunderforge/src/telemetry/tier.rs` and `packages/telemetry`):
+
+- **Errors**: the error's type and its message and stack, with emails,
+  tokens and other personal details removed by the same rules as feedback
+  reports (`config/feedback-redaction.json`), and cut to a fixed length.
+- **Timings**: how long requests, GraphQL operations, database waits,
+  page loads and the board's engine take; frame rates.
+- **Counts**: requests, GraphQL operations by their field name, world
+  events by kind, rolls by visibility, open connections, backplane
+  deliveries.
+- **Versions and coarse environment**: the ThunderForge version, the
+  operating system family and CPU architecture, the browser family and
+  major version, a mobile flag, and bucketed screen width, memory and core
+  count.
+- **Steps reached** in the demo and on the landing, and page views by route
+  pattern (`/world/:worldId/play`, never the id itself).
+- **A random install id**: a random UUID made the first time your server
+  starts, stored in your database (`instance_settings`,
+  `telemetry_instance_id`), and never changed. It is made from nothing
+  about your machine. It lets us tell one instance with fifty errors from
+  fifty instances with one each. Delete the row for a new one.
+- **A random browser session id** that is forgotten when the tab closes.
+
+## What we never receive
+
+- Anything anyone types, rolls, names or uploads: chat, names of worlds,
+  characters or tokens, notes, dice results, file names, GraphQL variables.
+- Emails, usernames, or user, world, character, scene or token ids.
+- IP addresses, hostnames, container or Kubernetes names, full user
+  agents, cookies.
+- Your server's logs. Only error records built from the list above leave
+  for us.
+
+## Where it goes and how long it is kept
+
+To `https://telemetry.thunderforge.dev`, the project's OpenTelemetry
+collector, run by the ThunderForge maintainer. It is stored in Loki,
+Tempo and Prometheus and kept for 14 days. It is not sold or shared, and
+it is used only to find and fix problems in ThunderForge.
+
+## Sending it to your own collector
+
+Set `OTEL_EXPORTER_OTLP_ENDPOINT` (and the other standard `OTEL_*`
+variables you need) for the server, and
+`THUNDERFORGE_BROWSER_TELEMETRY_ENDPOINT` for browsers. Your collector
+then receives everything, not just the anonymous list: the server's full
+logs and its spans with every attribute. That data stays on your
+infrastructure. Your collector must accept OTLP/HTTP JSON from browsers
+on your origin (CORS). If a reverse proxy in front of ThunderForge sets its
+own `Content-Security-Policy` on `/demo/`, it must allow your collector's
+origin in `connect-src` too.
+
+## Turning it off
+
+`TELEMETRY=false`. The server installs no exporter, `/telemetry.json`
+answers `{"enabled":false}`, and no browser loads telemetry code.
+`OTEL_SDK_DISABLED=true` also stops the server's export.
+
+## Browser privacy signals
+
+A browser with Global Privacy Control or Do Not Track set reports errors
+only: no page views, steps, timings or traces.
+
+## Checking it
+
+The server's startup log names where telemetry is going. Your admin
+settings show the same under **Telemetry**. The browser's requests are
+visible in its developer tools, to `/v1/logs` and `/v1/traces` on the
+endpoint shown.
+```
+
+### A.3 The startup log line (FR-008)
+
+One `INFO` line, the first that matches:
+
+- **Off:** `telemetry: off (TELEMETRY=false). Nothing is sent anywhere. See docs/guides/telemetry.md`
+- **Otherwise:** `telemetry: server → <server destination> (<tier>), browsers → <browser destination> (<tier>). Anonymous goes to the ThunderForge project; set OTEL_EXPORTER_OTLP_ENDPOINT and THUNDERFORGE_BROWSER_TELEMETRY_ENDPOINT to use your own collector, or TELEMETRY=false to send nothing. See docs/guides/telemetry.md`
+
+`<tier>` is `anonymous` or `full`. With nothing set it reads:
+`telemetry: server → https://telemetry.thunderforge.dev (anonymous), browsers → https://telemetry.thunderforge.dev (anonymous). Anonymous goes to the ThunderForge project; …`
+
+### A.4 The admin settings panel (FR-035.4)
+
+Heading **Telemetry**, then:
+
+- **On, anonymous (the default):** "This instance sends anonymous
+  diagnostics to the ThunderForge project at
+  `https://telemetry.thunderforge.dev`: errors with personal details
+  removed, timings, counts and versions. Nothing anyone types, rolls, names
+  or uploads, and no emails, ids, addresses or hostnames. Kept 14 days."
+- **Redirected:** "This instance sends its telemetry to `<destination>`,
+  your own collector, and nothing to the ThunderForge project."
+- **Off:** "Telemetry is off. Nothing is sent anywhere."
+
+Then a two-row table, **Server** and **Browsers**, each with its state,
+tier and destination; the line "Install id: `<instanceId>`"; and:
+"To change this, set `OTEL_EXPORTER_OTLP_ENDPOINT` (server) or
+`THUNDERFORGE_BROWSER_TELEMETRY_ENDPOINT` (browsers) to your own
+collector, or `TELEMETRY=false` to turn it off, and restart. [What is
+sent](docs/guides/telemetry.md)". There is no toggle.
+
+### A.5 What we measure (landing `/#telemetry`, and the demo)
+
+> **What we measure.** We count what happens, not what you say. This page
+> and the demo send us anonymous usage: which pages you view, how far you
+> get in the demo, how long things take, errors, your browser family and a
+> rough device class, and a random id that is forgotten when you close the
+> tab. We never receive what you type, roll, name or upload, your address,
+> cookies, or any account. It goes to `telemetry.thunderforge.dev` and is
+> kept for 14 days. If your browser sends Global Privacy Control or Do Not
+> Track, we receive errors only.
+>
+> ThunderForge you run yourself sends us the same kind of anonymous
+> diagnostics by default, so we hear about the bugs we would otherwise
+> never see. Its operator can send them to their own collector instead, or
+> turn them off with `TELEMETRY=false`.
+> [How](https://github.com/ThunderForgeVTT/ThunderForgeVTT/blob/main/docs/guides/telemetry.md)
