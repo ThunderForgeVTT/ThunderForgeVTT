@@ -55,6 +55,7 @@ use crate::combat::weapon::{Part, find_weapon, parts_of};
 use crate::graphql::mutations_roll::MAX_ROLL_LABEL;
 use crate::models::NewRollRecord;
 use crate::play_pause::gate::{GateError, refuse_if_paused};
+use crate::rolls::facets::RollMeta;
 use crate::rolls::visibility::Visibility;
 use crate::schema::{
     scenes, tokens, world_actor_system_data, world_actors, world_attacks, world_offers,
@@ -251,6 +252,7 @@ fn roll_and_record<R: Rng>(
     source: &str,
     label: &str,
     bindings: &PlaceholderBindings,
+    meta: RollMeta,
     rng: &mut R,
 ) -> Result<(Uuid, RollResolution, f64), FightRefusal> {
     let (resolution, _) = roll(source, bindings, rng).map_err(FightRefusal::Invalid)?;
@@ -260,24 +262,26 @@ fn roll_and_record<R: Rng>(
     };
     let detail = serde_json::to_value(&resolution)
         .map_err(|_| FightRefusal::Failed("Failed to record the roll".to_string()))?;
+    let mut record = NewRollRecord {
+        bindings: if bindings.is_empty() {
+            None
+        } else {
+            serde_json::to_value(bindings).ok()
+        },
+        visibility: Visibility::Everyone.as_str().to_string(),
+        label: Some(label.chars().take(MAX_ROLL_LABEL).collect()),
+        ..NewRollRecord::plain(
+            world_id,
+            user_id,
+            resolution.formula.clone(),
+            detail,
+            kind,
+            value,
+        )
+    };
+    meta.write_to(&mut record);
     let id = diesel::insert_into(world_roll_records::table)
-        .values(&NewRollRecord {
-            bindings: if bindings.is_empty() {
-                None
-            } else {
-                serde_json::to_value(bindings).ok()
-            },
-            visibility: Visibility::Everyone.as_str().to_string(),
-            label: Some(label.chars().take(MAX_ROLL_LABEL).collect()),
-            ..NewRollRecord::plain(
-                world_id,
-                user_id,
-                resolution.formula.clone(),
-                detail,
-                kind,
-                value,
-            )
-        })
+        .values(&record)
         .returning(world_roll_records::id)
         .get_result::<Uuid>(conn)?;
     record_world_event(
@@ -639,7 +643,16 @@ pub(crate) fn record_attack<R: Rng>(
         for (index, part) in parts.iter().enumerate() {
             let target = target_for(index);
             let (to_hit_roll_id, _, total) =
-                roll_and_record(conn, world_id, user_id, &part.to_hit, &part.name, &bindings, rng)?;
+                roll_and_record(
+                    conn,
+                    world_id,
+                    user_id,
+                    &part.to_hit,
+                    &part.name,
+                    &bindings,
+                    RollMeta::default(),
+                    rng,
+                )?;
 
             let defence = match target {
                 Some(target) => defence_of(conn, systems_dir, world_system.as_deref(), target)?,
@@ -657,6 +670,7 @@ pub(crate) fn record_attack<R: Rng>(
                     &source,
                     &format!("{} damage", part.name),
                     &bindings,
+                    RollMeta::default(),
                     rng,
                 )?),
                 _ => None,

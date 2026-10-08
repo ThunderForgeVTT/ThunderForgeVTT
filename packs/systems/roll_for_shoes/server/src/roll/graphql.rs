@@ -19,6 +19,7 @@ use thunderforge_server::graphql::mutations_roll::{
 use thunderforge_server::graphql::types::{ActorPermissionLevel, GraphQLRollResolution};
 use thunderforge_server::graphql::{app_state, authenticated_user};
 use thunderforge_server::play_pause::gate::refuse_world_if_paused;
+use thunderforge_server::rolls::facets::RollMeta;
 use thunderforge_server::schema::{world_actor_system_data, world_actors};
 use thunderforge_server::state::AppState;
 use thunderforge_server::world_events::{record_world_event, EVENT_CODE_ACTOR_SHEET_CHANGED};
@@ -257,6 +258,7 @@ pub async fn roll_skill_impl<R: rand::Rng>(
             visibility: None,
             label: None,
         },
+        RollMeta::default(),
         rng,
         move |conn, resolution| {
             let dice = kept_dice(resolution);

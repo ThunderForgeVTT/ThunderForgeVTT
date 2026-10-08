@@ -35,6 +35,7 @@
 //! the build if a system identifier reappears in shared server code.
 
 use crate::content_entry::{Entry as ContentEntry, SourceLine as ContentSourceLine};
+use crate::roll_facets::RollFacets;
 use crate::system_rules::SystemRules;
 
 /// Validates one of an actor's stored data slots for one system.
@@ -146,6 +147,9 @@ pub struct SystemContribution {
     /// rolled and recorded and never judged, which is every system before
     /// spec 067.
     pub adjudicate: Option<AdjudicatorFn>,
+    /// Shapes this system's rolls and spends its rerolls (spec 084). A system
+    /// without one rolls every formula as written and offers no reroll.
+    pub roll_facets: Option<&'static RollFacets>,
 }
 
 impl SystemContribution {
@@ -165,6 +169,7 @@ impl SystemContribution {
             refine_content: None,
             world_setting: None,
             adjudicate: None,
+            roll_facets: None,
         }
     }
 }
@@ -196,5 +201,6 @@ mod tests {
         assert_eq!(bare.id, "bare");
         assert!(bare.ability_data.is_none());
         assert!(bare.rules.is_none());
+        assert!(bare.roll_facets.is_none());
     }
 }

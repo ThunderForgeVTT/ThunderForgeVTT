@@ -20,6 +20,7 @@ use crate::graphql::types::{GraphQLRollResolution, RollVisibility, WorldRoll};
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{NewRollRecord, RollRecord};
 use crate::play_pause::gate::refuse_if_paused;
+use crate::rolls::facets::RollMeta;
 use crate::rolls::visibility::{Visibility, may_roll};
 use crate::schema::world_roll_records;
 use crate::state::AppState;
@@ -79,9 +80,11 @@ pub async fn roll_dice_impl<R: rand::Rng>(
     input: RollDiceInput,
     rng: &mut R,
 ) -> GraphQLResult<GraphQLRollResolution> {
-    roll_and_settle(state, user_id, input, rng, |_, _| Ok((None, ())))
-        .await
-        .map(|(resolution, ())| resolution)
+    roll_and_settle(state, user_id, input, RollMeta::default(), rng, |_, _| {
+        Ok((None, ()))
+    })
+    .await
+    .map(|(resolution, ())| resolution)
 }
 
 /// Why a settled roll left nothing behind.
@@ -113,6 +116,7 @@ pub async fn roll_and_settle<R, T, F>(
     state: &AppState,
     user_id: Uuid,
     input: RollDiceInput,
+    meta: RollMeta,
     rng: &mut R,
     settle: F,
 ) -> GraphQLResult<(GraphQLRollResolution, T)>
@@ -180,6 +184,7 @@ where
             result_value,
         )
     };
+    meta.write_to(&mut new_record);
 
     let mut conn = state
         .db_pool

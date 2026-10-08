@@ -84,7 +84,7 @@ two specs meet.
 
 ### Canvas core: the slot
 
-- [ ] T009 `crates/thunderforge-canvas-core/src/roll_facets.rs`:
+- [x] T009 `crates/thunderforge-canvas-core/src/roll_facets.rs`:
   - the types in contracts/pack-roll-facets.md;
   - `pub roll_facets: Option<&'static RollFacets>` on `SystemContribution` (`system_contribution.rs`), set to `None` in `new`;
   - a test that `new` leaves it `None`.
@@ -93,12 +93,12 @@ two specs meet.
 
 ### Server: the record and the shaping hook
 
-- [ ] T010 Tests `crates/thunderforge-server/src/rolls/facets_tests.rs`:
+- [x] T010 Tests `crates/thunderforge-server/src/rolls/facets_tests.rs`:
   - `shape_roll` for a system with no slot gives the formula untouched with no facets, and refuses `Advantage` with `This system does not roll with advantage.`;
   - a test-registered slot (`inventory::submit!` under `#[cfg(test)]`, id `test-facets`) is called with the input it should get;
   - `facet_labels` maps ids to labels and passes an unknown id through as its own label.
-- [ ] T011 `crates/thunderforge-server/src/rolls/facets.rs`: `shape_roll` and `facet_labels` (contracts/pack-roll-facets.md). Register it in `rolls/mod.rs`.
-- [ ] T012 `RollMeta { actor_id, roll_kind, check_id, facets, reroll_of, reroll_spent }`, threaded through internally:
+- [x] T011 `crates/thunderforge-server/src/rolls/facets.rs`: `shape_roll` and `facet_labels` (contracts/pack-roll-facets.md). Register it in `rolls/mod.rs`.
+- [x] T012 `RollMeta { actor_id, roll_kind, check_id, facets, reroll_of, reroll_spent }`, threaded through internally:
   - `roll_and_settle` (`graphql/mutations_roll.rs:112`) gains a `meta: RollMeta` parameter and writes it to the record. `rollDice` passes `RollMeta::default()`, and its tests prove nothing about a free roll changes.
   - `roll_and_record` (`combat/attack.rs:247`) gains the same parameter.
   - **Spec 083 meet point**: if `DieOutcome.steps` exists by now, `replay` copies it and pushes `ChainStep::Reroll` for the new face, and T006 gains that case.

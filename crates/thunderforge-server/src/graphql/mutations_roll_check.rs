@@ -47,6 +47,7 @@ use crate::graphql::mutations_roll::{
 use crate::graphql::types::{ActorPermissionLevel, GraphQLRollResolution};
 use crate::graphql::{app_state, authenticated_user};
 use crate::play_pause::gate::refuse_world_if_paused;
+use crate::rolls::facets::RollMeta;
 use crate::schema::{world_actor_system_data, world_actors, worlds};
 use crate::state::AppState;
 use crate::world_system_settings;
@@ -315,6 +316,7 @@ pub async fn roll_check_impl<R: rand::Rng>(
             visibility: None,
             label: Some(check.label.clone()),
         },
+        RollMeta::default(),
         rng,
         move |conn, resolution| {
             let Some(adjudicate) = adjudicate else {

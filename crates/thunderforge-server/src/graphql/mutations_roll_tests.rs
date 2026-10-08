@@ -132,6 +132,7 @@ async fn a_settled_roll_stores_its_outcome_with_the_record() {
         &state,
         owner_id,
         one_d20(world_id),
+        RollMeta::default(),
         &mut StepRng::new(0, 1),
         |_, resolution| {
             Ok((
@@ -204,6 +205,7 @@ async fn a_refused_settle_leaves_no_record_and_undoes_its_own_writes() {
         &state,
         owner_id,
         one_d20(world_id),
+        RollMeta::default(),
         &mut StepRng::new(0, 1),
         move |conn, _| -> Result<(Option<RollOutcome>, ()), String> {
             diesel::update(crate::schema::worlds::table.find(world_id))
