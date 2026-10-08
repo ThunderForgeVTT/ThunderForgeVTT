@@ -119,13 +119,13 @@ nothing visible changed.
 
 ### 5e pack
 
-- [ ] T014 [P] [US1] Tests `packs/systems/dnd5e/server/src/roll_facets_tests.rs`:
+- [x] T014 [P] [US1] Tests `packs/systems/dnd5e/server/src/roll_facets_tests.rs`:
   - `shape` on a check and a to-hit with Normal gives `Ok(None)`;
   - Advantage gives `2d20kh1 + MODIFIER` with `["advantage"]`;
   - Disadvantage gives `2d20kl1 + MODIFIER`;
   - a formula with no d20 refuses with `This roll has no d20 to roll twice.`;
   - Damage with Normal is untouched.
-- [ ] T015 [US1] `packs/systems/dnd5e/server/src/roll_facets.rs`: `shape` for the choice, using `rewrite_dice_terms`, plus `RollFacets` with `labels` and a `reroll` that refuses everything for now. Register it in `packs/systems/dnd5e/server/src/lib.rs`, and in `registration_tests.rs` assert that 5e registers it.
+- [x] T015 [US1] `packs/systems/dnd5e/server/src/roll_facets.rs`: `shape` for the choice, using `rewrite_dice_terms`, plus `RollFacets` with `labels` and a `reroll` that refuses everything for now. Register it in `packs/systems/dnd5e/server/src/lib.rs`, and in `registration_tests.rs` assert that 5e registers it.
 
 ### Server
 

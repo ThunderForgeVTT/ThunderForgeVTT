@@ -25,6 +25,7 @@ pub mod content_refine;
 pub mod models;
 #[cfg(test)]
 mod registration_tests;
+pub mod roll_facets;
 pub mod rules;
 pub mod srd;
 pub mod stat_blocks;
@@ -59,6 +60,7 @@ inventory::submit! {
         spell_data: Some(validators::validate_spell_data_for_registry),
         rules: Some(|manifest| Box::new(crate::rules::DnD5eRules::from_manifest(manifest))),
         refine_content: Some(content_refine::refine),
+        roll_facets: Some(&roll_facets::ROLL_FACETS),
         ..thunderforge_canvas_core::system_contribution::SystemContribution::new(SYSTEM_ID)
     }
 }

@@ -27,6 +27,13 @@ fn the_pack_contributes_itself_under_its_own_id() {
     // passive Perception rather than storing them.
     assert!(contributed.spell_data.is_some());
     assert!(contributed.rules.is_some());
+
+    // Spec 084: advantage, Halfling Luck and the rerolls are 5e's.
+    let facets = contributed
+        .roll_facets
+        .expect("5e registers its roll facets");
+    let spends: Vec<&str> = facets.spends.iter().map(|s| s.id).collect();
+    assert_eq!(spends, ["inspiration", "luck_point"]);
 }
 
 /// The Rust constant and the pack's manifest name the same system (T014b).
