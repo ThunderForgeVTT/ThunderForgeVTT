@@ -172,6 +172,27 @@ export function WallTool({ worldStore, walls, selectedWallId }: WallToolProps) {
             <Label htmlFor="wall-blocks-movement">Blocks movement</Label>
           </div>
 
+          {/* Spec 085: any wall, door or not. A hidden wall still blocks
+              sight and movement; it is only not drawn for the players. */}
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="wall-hidden"
+              data-testid="wall-hidden-toggle"
+              checked={selectedWall.secret === true}
+              onCheckedChange={(checked) =>
+                worldStore.dispatch(
+                  {
+                    type: "set_walls_hidden",
+                    wallIds: [selectedWall.id],
+                    hidden: checked === true,
+                  },
+                  "ui",
+                )
+              }
+            />
+            <Label htmlFor="wall-hidden">Hidden from the table</Label>
+          </div>
+
           <div className="grid gap-1.5">
             <Label htmlFor="wall-door-state">Door</Label>
             <Select

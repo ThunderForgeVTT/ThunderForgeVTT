@@ -159,9 +159,16 @@ function installEngineProbe(wasm: BevyWasmModule): void {
     wasm as { sight_probe?: (x: number, y: number) => string }
   ).sight_probe;
   const diceLanded = (wasm as { dice_landed?: () => string }).dice_landed;
+  const drawnWallIds = (wasm as { drawn_wall_ids?: () => string })
+    .drawn_wall_ids;
   const diceEntityCount = (wasm as { dice_entity_count?: () => number })
     .dice_entity_count;
   (window as unknown as Record<string, unknown>).__engineProbe = {
+    // Spec 085: the walls this canvas draws a sprite for, sorted. A wall
+    // hidden from the table is absent on a player's board and present on the
+    // Game Master's; it blocks on both.
+    drawnWalls: (): string[] =>
+      drawnWallIds ? (JSON.parse(drawnWallIds()) as string[]) : [],
     // Spec 083: the throws this board finished or skipped, oldest first
     // (contracts/engine-dice.md), and how many throw entities are alive.
     diceLanded: (): unknown[] =>
