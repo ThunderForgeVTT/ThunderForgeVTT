@@ -59,16 +59,16 @@ that passes them.
   - `remove(id)` drops an id from whichever kind holds it;
   - `len()` counts across kinds.
 - [x] T006 `GroupSelection` and the helpers T005 names, in `crates/thunderforge-engine/src/resources/group_selection.rs`. Register it in `resources/mod.rs` and `app.rs` (`init_resource`).
-- [ ] T007 [P] Engine owner:
+- [x] T007 [P] Engine owner:
   - Tests first, in `crates/thunderforge-engine/src/systems/token_owner_tests.rs` (`#[path]` from `systems/token.rs`): a payload without `ownerUserId` keeps the current `TokenOwner`, `null` clears it, and a string sets it.
   - Then `owner_user_id: Option<Option<String>>` on `WorldTokenPayload` (`payloads.rs`, `absent_or_null` deserializer), and a `TokenOwner` component set by the token upsert in `systems/token.rs`.
-- [ ] T008 [P] Store:
+- [x] T008 [P] Store:
   - Tests first, in `apps/web/src/engine/world/__tests__/store.test.ts`:
     - `select_group` sets the four lists and the three primaries;
     - `select_wall`, `select_light` and `select_shape` set their list to `[id]` or `[]`;
     - `remove_wall`, `remove_light` and `remove_shape` drop the id from the list.
   - Then `SelectGroupCommand`, `DeleteGroupCommand`, `GroupStamp` and an optional `group` on the per-item commands in `apps/web/src/engine/world/types.ts`, and the state fields and cases in `apps/web/src/engine/world/store.ts`.
-- [ ] T009 [P] Tally:
+- [x] T009 [P] Tally:
   - Tests first, in `apps/web/src/engine/world/sync/__tests__/groupMoves.test.ts`:
     - all answers OK gives no toast;
     - 2 refused of 5 gives one toast, "2 of 5 could not be moved.";
