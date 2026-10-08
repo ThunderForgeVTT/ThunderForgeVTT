@@ -301,6 +301,14 @@ pub(crate) fn apply_external_commands(
                             text: token.label.clone(),
                             hidden_from_players: token.name_hidden,
                         });
+                    if token.owner_user_id.is_some() {
+                        commands
+                            .entity(existing_entity)
+                            .insert(crate::systems::token::next_owner(
+                                None,
+                                &token.owner_user_id,
+                            ));
+                    }
                     if let Some(conditions) = &token.conditions {
                         commands.entity(existing_entity).insert(
                             crate::plugins::condition_markers::TokenConditions::from_payload(
@@ -398,7 +406,11 @@ pub(crate) fn apply_external_commands(
                     .insert(crate::plugins::nameplate::TokenName {
                         text: token.label.clone(),
                         hidden_from_players: token.name_hidden,
-                    });
+                    })
+                    .insert(crate::systems::token::next_owner(
+                        None,
+                        &token.owner_user_id,
+                    ));
                 if let Some(conditions) = &token.conditions {
                     commands.entity(entity).insert(
                         crate::plugins::condition_markers::TokenConditions::from_payload(

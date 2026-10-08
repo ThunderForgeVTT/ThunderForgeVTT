@@ -23,6 +23,23 @@ use crate::{ActiveWorld, TOKEN_SIZE, TokenIdentity, emit_event};
 use thunderforge_canvas_core::grid::Footprint;
 use thunderforge_canvas_core::token_stack::{StackCandidate, tokens_at};
 
+/// The user who owns a token, or nobody (spec 085). A player's box takes
+/// only the tokens they own.
+#[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
+pub struct TokenOwner(pub Option<String>);
+
+/// The owner a token has after an `upsert_token`: the one sent, or — when the
+/// payload said nothing about it — the one it had.
+pub(crate) fn next_owner(
+    current: Option<&TokenOwner>,
+    sent: &Option<Option<String>>,
+) -> TokenOwner {
+    match sent {
+        Some(owner) => TokenOwner(owner.clone()),
+        None => current.cloned().unwrap_or_default(),
+    }
+}
+
 /// Whole grid-cell increments a token's `scale` may take (spec 004 US2's
 /// resize clarification: 1x1, 2x2, 3x3... never a fractional cell).
 const MIN_TOKEN_SCALE: f32 = 1.0;
@@ -668,6 +685,10 @@ pub(crate) fn sync_token_visuals(
 pub(crate) fn init_token_systems_resources(app: &mut App) {
     app.init_resource::<TokenDragState>();
 }
+
+#[cfg(test)]
+#[path = "token_owner_tests.rs"]
+mod token_owner_tests;
 
 #[cfg(test)]
 mod tests {

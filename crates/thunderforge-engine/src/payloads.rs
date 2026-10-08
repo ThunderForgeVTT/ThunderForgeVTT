@@ -131,6 +131,22 @@ pub(crate) struct WorldTokenPayload {
     /// list is the one that clears them.
     #[serde(default)]
     pub(crate) conditions: Option<Vec<ConditionPayload>>,
+    /// Who owns the token (spec 085): a player's box takes only their own.
+    ///
+    /// Three states, because a positional update says nothing about the
+    /// owner: absent keeps the owner the engine has, `null` clears it, and a
+    /// user id sets it.
+    #[serde(default, rename = "ownerUserId", deserialize_with = "absent_or_null")]
+    pub(crate) owner_user_id: Option<Option<String>>,
+}
+
+/// A field that was sent, as `Some` — its value `null` or not. With
+/// `#[serde(default)]`, a field that was not sent stays `None`.
+fn absent_or_null<'de, D>(deserializer: D) -> Result<Option<Option<String>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(Some(Option::<String>::deserialize(deserializer)?))
 }
 
 /// One condition as the board draws it: an identifier and its marker. The
