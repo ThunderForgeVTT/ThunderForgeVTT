@@ -422,4 +422,4 @@ impl RollCheckMutation {
 
 #[cfg(test)]
 #[path = "mutations_roll_check_tests.rs"]
-mod tests;
+pub(crate) mod tests;

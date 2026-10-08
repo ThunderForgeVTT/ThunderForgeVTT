@@ -8,12 +8,14 @@
 //! the sole source of an authoritative roll (FR-001).
 
 mod ast;
+pub mod breakdown;
 mod error;
 mod eval;
 mod parser;
 #[cfg(feature = "wasm")]
 mod wasm;
 
+pub use breakdown::{Addend, AddendKind, Breakdown, breakdown};
 pub use error::FormulaError;
 pub use eval::{MAX_ITERATIONS_PER_DIE, MAX_TOTAL_DICE, PlaceholderBindings, resolve};
 
@@ -48,6 +50,15 @@ pub enum DieSides {
     Coin,
 }
 
+/// Why a value in a die's chain after the first was rolled (spec 083
+/// FR-002). A min/max clamp is not a step: a die was clamped exactly when
+/// its `final_value` differs from the last value in its `rolls`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ChainStep {
+    Reroll,
+    Explode,
+}
+
 /// One individual die's full history within a resolution (FR-013) — the
 /// unit the presentation/animation layer renders.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -57,6 +68,11 @@ pub struct DieOutcome {
     /// original roll, subsequent entries are rerolls/explosions of
     /// *this* die.
     pub rolls: Vec<i64>,
+    /// Why each value after the first was rolled: `steps[i]` explains
+    /// `rolls[i + 1]`. Empty on a resolution stored before spec 083, which
+    /// reads every extra value as a reroll.
+    #[serde(default)]
+    pub steps: Vec<ChainStep>,
     /// Whether this die's final value contributed to the aggregated
     /// result (`false` for a die dropped by a keep/drop modifier —
     /// dropped dice are represented, never hidden).

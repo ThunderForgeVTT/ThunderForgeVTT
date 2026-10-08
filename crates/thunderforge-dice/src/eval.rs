@@ -10,7 +10,7 @@ use rand_core::Rng;
 
 use crate::ast::{BinOp, Condition, DiceTerm, Expr, MathFn, Modifier, Sides};
 use crate::error::FormulaError;
-use crate::{DiceFormula, DieOutcome, DieSides, ResolutionKind, RollResolution};
+use crate::{ChainStep, DiceFormula, DieOutcome, DieSides, ResolutionKind, RollResolution};
 
 /// FR-012: hard cap on total dice rolled (base + every reroll/explosion)
 /// across one resolution. Generous enough for any real tabletop formula
@@ -82,7 +82,7 @@ impl ExprValue {
     }
 }
 
-fn condition_matches(condition: Condition, value: i64, max_face: i64) -> bool {
+pub(crate) fn condition_matches(condition: Condition, value: i64, max_face: i64) -> bool {
     match condition {
         Condition::Eq(n) => value == n,
         Condition::Gt(n) => value > n,
@@ -262,6 +262,7 @@ fn eval_dice_term<R: Rng>(
 
     for _ in 0..count {
         let mut rolls = vec![ctx.roll_face(&sides)];
+        let mut steps = Vec::new();
         let mut iterations = 0u32;
 
         if let Some(cond) = reroll_once
@@ -269,6 +270,7 @@ fn eval_dice_term<R: Rng>(
         {
             ctx.take_dice_budget(1)?;
             rolls.push(ctx.roll_face(&sides));
+            steps.push(ChainStep::Reroll);
         }
 
         if let Some(cond) = reroll_recursive {
@@ -279,6 +281,7 @@ fn eval_dice_term<R: Rng>(
                 }
                 ctx.take_dice_budget(1)?;
                 rolls.push(ctx.roll_face(&sides));
+                steps.push(ChainStep::Reroll);
             }
         }
 
@@ -287,6 +290,7 @@ fn eval_dice_term<R: Rng>(
         {
             ctx.take_dice_budget(1)?;
             rolls.push(ctx.roll_face(&sides));
+            steps.push(ChainStep::Explode);
         }
 
         if let Some(cond) = explode {
@@ -297,6 +301,7 @@ fn eval_dice_term<R: Rng>(
                 }
                 ctx.take_dice_budget(1)?;
                 rolls.push(ctx.roll_face(&sides));
+                steps.push(ChainStep::Explode);
             }
         }
 
@@ -304,6 +309,7 @@ fn eval_dice_term<R: Rng>(
         outcomes.push(DieOutcome {
             sides,
             rolls,
+            steps,
             kept: true,
             final_value,
         });
@@ -942,3 +948,7 @@ mod tests {
         assert_eq!(result.kind, ResolutionKind::SuccessCount(1));
     }
 }
+
+#[cfg(test)]
+#[path = "eval_steps_tests.rs"]
+mod steps_tests;

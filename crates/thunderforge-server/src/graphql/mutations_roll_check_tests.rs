@@ -38,7 +38,7 @@ fn packs() -> String {
 
 /// `test_app_state` points its directories at a temp dir, which has no packs
 /// in it. A check is content, so a test about checks needs the real ones.
-fn state_with_real_packs() -> AppState {
+pub(crate) fn state_with_real_packs() -> AppState {
     let mut state = test_app_state();
     state.directories = crate::config::Directories::from(repo_root());
     state
@@ -46,7 +46,7 @@ fn state_with_real_packs() -> AppState {
 
 /// Deterministic RNG, same shape as `mutations_roll.rs`'s — a real roll comes
 /// only from the resolver method, never from a test.
-struct StepRng(u64);
+pub(crate) struct StepRng(pub(crate) u64);
 
 impl rand::TryRng for StepRng {
     type Error = std::convert::Infallible;
@@ -301,7 +301,7 @@ async fn the_5e_checks_bind_only_to_values_that_system_actually_publishes() {
 
 /// Sets up a world playing `system_id`, with one actor whose sheet is filled
 /// in. Returns the owner, the world and the actor.
-fn world_with_actor(state: &AppState, system_id: &str) -> (Uuid, Uuid, Uuid) {
+pub(crate) fn world_with_actor(state: &AppState, system_id: &str) -> (Uuid, Uuid, Uuid) {
     let mut conn = state.db_pool.get().unwrap();
     let owner_id = insert_test_user(&mut conn);
     let world_id = insert_test_world(&mut conn, owner_id);
@@ -592,6 +592,7 @@ async fn a_checks_adjudicator_is_shown_the_roll_and_the_worlds_settings() {
     let die = |final_value: i64, kept: bool| DieOutcome {
         sides: DieSides::Numeric(20),
         rolls: vec![final_value],
+        steps: vec![],
         kept,
         final_value,
     };
