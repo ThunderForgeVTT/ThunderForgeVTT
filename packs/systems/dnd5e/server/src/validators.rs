@@ -498,6 +498,9 @@ fn validate_proficiency_set(
 // trait_data Validators
 // ============================================================================
 
+/// Spec 084: the facets a sheet may list in `trait_data.facets`.
+pub const SHEET_FACETS: &[&str] = &["halfling_luck", "great_weapon_fighting", "lucky"];
+
 /// Validates D&D 5e character class, level, race, and feats
 pub fn validate_trait_data(data: &serde_json::Value) -> Result<(), ValidationError> {
     let obj = data.as_object().ok_or(ValidationError {
@@ -650,6 +653,30 @@ pub fn validate_trait_data(data: &serde_json::Value) -> Result<(), ValidationErr
             });
         }
     }
+
+    // Spec 084: the facets a character has, each known and listed once, and
+    // how many Luck Points it has spent since its last long rest.
+    if let Some(facets) = obj.get("facets").filter(|v| !v.is_null()) {
+        let refuse = |message: String| ValidationError {
+            field: "trait_data.facets".to_string(),
+            message,
+        };
+        let ids = facets
+            .as_array()
+            .ok_or_else(|| refuse("must be an array of facet ids".to_string()))?;
+        let mut seen = Vec::new();
+        for id in ids {
+            let id = id
+                .as_str()
+                .filter(|id| SHEET_FACETS.contains(id))
+                .ok_or_else(|| refuse(format!("must each be one of {SHEET_FACETS:?}")))?;
+            if seen.contains(&id) {
+                return Err(refuse(format!("lists '{id}' twice")));
+            }
+            seen.push(id);
+        }
+    }
+    optional_whole(obj, "trait_data", "luck_points_used", 0, i64::MAX)?;
 
     // Validate traits array (if present)
     if let Some(traits_val) = obj.get("traits") {

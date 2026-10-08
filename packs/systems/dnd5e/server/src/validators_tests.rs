@@ -408,3 +408,33 @@ fn spell_data_holds_spent_slots_to_the_same_rule_as_the_slots() {
     assert!(validate_spell_data(&json!({"spell_slots_used": {"level_10": 1}})).is_err());
     assert!(validate_spell_data(&json!({"spell_slots_used": [1]})).is_err());
 }
+
+// Spec 084: the roll facets a character has, and the Luck Points it spent.
+#[test]
+fn trait_data_facets_are_known_ids_listed_once() {
+    let all = json!({ "facets": ["halfling_luck", "great_weapon_fighting", "lucky"] });
+    assert!(validate_trait_data(&all).is_ok());
+    assert!(validate_trait_data(&json!({ "facets": [] })).is_ok());
+    assert!(validate_trait_data(&json!({ "facets": null })).is_ok());
+
+    for bad in [
+        json!({ "facets": ["advantage"] }),
+        json!({ "facets": ["lucky", "lucky"] }),
+        json!({ "facets": [3] }),
+        json!({ "facets": "lucky" }),
+    ] {
+        let error = validate_trait_data(&bad).unwrap_err();
+        assert_eq!(error.field, "trait_data.facets", "{bad}");
+    }
+}
+
+#[test]
+fn luck_points_used_is_a_whole_number_of_zero_or_more() {
+    for used in [0, 1, 6] {
+        assert!(validate_trait_data(&json!({ "luck_points_used": used })).is_ok());
+    }
+    for bad in [json!(-1), json!(1.5), json!("2")] {
+        let error = validate_trait_data(&json!({ "luck_points_used": bad })).unwrap_err();
+        assert_eq!(error.field, "trait_data.luck_points_used", "{bad}");
+    }
+}

@@ -183,11 +183,11 @@ nothing visible changed.
 
 ## Phase 4: US2: Halfling Luck (P1)
 
-- [ ] T026 [P] [US2] Tests in `packs/systems/dnd5e/server/src/validators_tests.rs`:
+- [x] T026 [P] [US2] Tests in `packs/systems/dnd5e/server/src/validators_tests.rs`:
   - `trait_data.facets` accepts the three ids;
   - it refuses an unknown id and a duplicate;
   - `luck_points_used` accepts 0 and above, and refuses a negative or a fraction.
-- [ ] T027 [US2] `packs/systems/dnd5e/server/src/validators.rs` `validate_trait_data` (`:502`) checks both fields. Declare them in `packs/systems/dnd5e/system.json` `data_types.trait_data` (data-model.md).
+- [x] T027 [US2] `packs/systems/dnd5e/server/src/validators.rs` `validate_trait_data` (`:502`) checks both fields. Declare them in `packs/systems/dnd5e/system.json` `data_types.trait_data` (data-model.md).
 - [ ] T028 [P] [US2] Tests in `roll_facets_tests.rs`:
   - `halfling_luck` gives `1d20r1 + MODIFIER`, and `2d20r1kh1 + MODIFIER` with Advantage;
   - damage gets no `r1`;

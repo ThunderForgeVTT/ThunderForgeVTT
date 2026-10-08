@@ -840,6 +840,19 @@
             "type": "boolean",
             "label": "Heroic Inspiration"
           },
+          "facets": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["halfling_luck", "great_weapon_fighting", "lucky"]
+            },
+            "label": "Roll facets"
+          },
+          "luck_points_used": {
+            "type": "integer",
+            "min": 0,
+            "label": "Luck Points used"
+          },
           "notes": {
             "type": "string",
             "label": "Notes"
