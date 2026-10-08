@@ -221,7 +221,7 @@ nothing visible changed.
 
 ### Server
 
-- [ ] T037 [US3] Tests `crates/thunderforge-server/src/rolls/reroll_tests.rs`:
+- [x] T037 [US3] Tests `crates/thunderforge-server/src/rolls/reroll_tests.rs`:
   - the chain walk;
   - the window: accepted at 1:59 and refused at 2:01, with an injected clock;
   - the spend already used in the chain;
