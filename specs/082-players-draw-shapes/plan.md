@@ -90,7 +90,7 @@ mutations, one changed query, six engine gates, one new store command.
 | III. Agnostic core          | `created_by` is added to canvas-core's `Shape` with no server or network type.                                                                                                                                                                                                           |
 | IV. Tests first             | Each phase opens with its failing tests.                                                                                                                                                                                                                                                 |
 | V. Docs by audience         | `docs/guides/lights-and-drawings.md` for players and GMs; CONTRIBUTING for the shape authority rule.                                                                                                                                                                                     |
-| VI. Proven by its own slice | Slice `canvas`; own spec `canvas-shapes-by-players.spec.ts` (the `canvas-` prefix); neighbour `scene-management.spec.ts`. The migration and schema change are cross-cutting, so `node ./scripts/e2e-parallel.mjs` is the gate before merge, plus whatever `pnpm e2e:which --diff` names. |
+| VI. Proven by its own slice | Slice `canvas`; own spec `canvas-shapes-by-players.spec.ts` (the `canvas-` prefix); neighbour `scene-management.spec.ts`. The gate before merge is that slice plus every slice `pnpm e2e:which --diff` names (the owner's decision, 2026-10-07). |
 
 No violations.
 

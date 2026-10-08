@@ -34,6 +34,5 @@ pnpm -F @thunderforge/web test -- authoringTools shapes
 pnpm -F @thunderforge/demo test -- shapes
 pnpm e2e:canvas
 pnpm e2e:which --diff           # run every slice it names
-node ./scripts/e2e-parallel.mjs # schema and migration are cross-cutting
 make lint
 ```

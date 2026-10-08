@@ -86,7 +86,7 @@ as named below.
 - [x] T024 [P] [US3] Tests in `shapeEventSync.test.ts`: `clear_shapes` sends `clearShapes(sceneId, createdBy)` and removes nothing locally; the `deleted` events remove the shapes
 - [x] T025 [US3] `ClearShapesCommand` in `apps/web/src/engine/world/types.ts`; `clearShapes` in `apps/web/src/api/shapes.ts`; the bridge case in `sync/shapes.ts`
 - [x] T026 [US3] "Clear all shapes" in `ShapeTool.tsx` for a DM, with a confirmation naming the scene (`apps/web/src/components/canvas-tools/ShapeTool/ClearShapesDialog.tsx`, the `ui/dialog` wrapper); dispatches `clear_shapes`
-- [ ] T027 [US3] E2E in `canvas-shapes-by-players.spec.ts`: GM and players draw; cancel leaves them; confirm empties all three boards and the server's answer; the player's panel has no clear action and their direct `clearShapes` is refused
+- [x] T027 [US3] E2E in `canvas-shapes-by-players.spec.ts`: GM and players draw; cancel leaves them; confirm empties all three boards and the server's answer; the player's panel has no clear action and their direct `clearShapes` is refused — 2026-10-07: green in the canvas slice
 
 ---
 
@@ -95,7 +95,7 @@ as named below.
 - [x] T028 [US4] Tests: `clearShapes` with `createdBy` (only those creators, the GM's and B's untouched, byte-for-byte for SC-004) and with `[]` (nothing, no events); `shapeCreators` lists players with counts, excludes DMs, includes a removed member (`isMember: false`), refuses a player
 - [x] T029 [US4] `shapeCreators` in `crates/thunderforge-server/src/graphql/queries/shape_creators.rs` (R6), registered in `queries/mod.rs`; regenerate the schema
 - [x] T030 [US4] `getShapeCreators` in `apps/web/src/api/shapes.ts`; "Clear a player's shapes…" in `ClearShapesDialog.tsx`: a checkbox per creator with count, disabled with a reason when there are none, dispatches `clear_shapes` with `createdBy`
-- [ ] T031 [US4] E2E: the GM clears player A only; the GM's and B's shapes remain
+- [x] T031 [US4] E2E: the GM clears player A only; the GM's and B's shapes remain — 2026-10-07: green in the canvas slice, after a server fix: the world's creator has no `world_members` row, so `shapeCreators` listed the GM as "(no longer in this world)"; it now leaves out `worlds.created_by` (95da29c0)
 
 ---
 
@@ -104,7 +104,7 @@ as named below.
 - [x] T032 [US5] (done with Phase 2: the defaults broke these tests, so they moved with it) Tests in `crates/thunderforge-server/src/graphql/mutations_authoring_tools.rs` `mod tests`: `granted: false` for `shapes` writes a revocation and the answer drops it; `granted: true` removes it; a non-default tool behaves as today; `authoringToolGrants` lists every non-DM member with effective tools (a member with no rows shows Select and Shapes); update the existing asserts around lines 260, 313 and 458
 - [x] T033 [US5] `set_authoring_tool_grant_impl` writes revocations for a default tool (data-model.md table) and answers effective tools; `authoringToolGrants` in `queries/authoring_tools.rs` answers effective tools per member
 - [x] T034 [US5] `AuthoringToolGrantsCard.tsx` reads the effective lists; intro text says players select and draw by default; update the doc comment in `apps/web/src/api/authoringTools.ts`. Also (R12, found while implementing): `setAuthoringToolGrant` records event 38 and `useAuthoringTools` re-asks on it, which SC-005 needs and no task carried
-- [ ] T035 [US5] E2E: the GM unticks Shapes; the player's rail drops it without a reload and their `createShape` is refused; ticking it again restores both, and the shapes they drew earlier are untouched
+- [x] T035 [US5] E2E: the GM unticks Shapes; the player's rail drops it without a reload and their `createShape` is refused; ticking it again restores both, and the shapes they drew earlier are untouched — 2026-10-07: green in the canvas slice; the test clicks the grants checkbox and waits for the server's answer, because `AuthoringToolGrantsCard` is not optimistic and Playwright's `check()` gave up first (95da29c0)
 
 ---
 
@@ -127,9 +127,11 @@ as named below.
 
 - [x] T041 [P] `docs/guides/lights-and-drawings.md`: players draw by default and own their shapes; the GM's two clear actions; taking the tools away. CONTRIBUTING: `shape_authority` is the one rule for shape writes
 - [x] T042 SC-003: a server test or e2e step clearing 200 shapes, timing it; record the number here — 2026-10-07: `clearing_two_hundred_shapes_is_quick`, three runs: 131 ms, 122 ms, 118 ms for the server (200 rows, 200 `deleted` events); asserts under 2 s
-- [ ] T043 `make lint`; `make test-rust ARGS="-p thunderforge-server"`; `cargo test -p thunderforge-engine`; `pnpm -F @thunderforge/web test`; `pnpm -F @thunderforge/demo test` and the demo e2e; `pnpm e2e:canvas`
-- [ ] T044 `pnpm e2e:which --diff`, and run each slice it names
-- [ ] T045 The full suite, `node ./scripts/e2e-parallel.mjs`: the schema and migration are cross-cutting, so this is the gate before merge
+- [x] T043 `make lint`; `make test-rust ARGS="-p thunderforge-server"`; `cargo test -p thunderforge-engine`; `pnpm -F @thunderforge/web test`; `pnpm -F @thunderforge/demo test` and the demo e2e; `pnpm e2e:canvas` — 2026-10-07: lint clean; server 1933 passed, 6 ignored; engine 324 passed; the wasm in `dist/engine` was stale since 6595369f and was rebuilt with `build.mjs --only-wasm` before the e2e; web 841; demo unit 113; demo e2e 32 of 34; canvas 40 passed, 1 skipped. Canvas also needed `canvas-authoring.spec.ts` to pick the Shapes tool up again after Escape, which since 2026-10-06 returns to Select (95da29c0)
+  - The two demo e2e failures, `demo.spec.ts:540` and `fight.spec.ts:310`, failed at HEAD without 082's demo files too, so they are not 082's; left for a separate fix. fd11e947 (UVTT import: a map import is judged by the tab that asked for it) landed alongside.
+    both fixed by e433d31f
+- [x] T044 `pnpm e2e:which --diff`, and run each slice it names — 2026-10-07, all exit 0, no flakes: canvas 40 passed, 1 skipped; accounts 67; engine-limits 4; engine-other 9; play-pause 13; resumable-downloads 8; rolls 18; worlds 20 — 179 passed, 1 skipped in all
+- [x] T045 ~~The full suite, `node ./scripts/e2e-parallel.mjs`~~ — skipped by owner decision 2026-10-07: slices are the gate
 
 ---
 
