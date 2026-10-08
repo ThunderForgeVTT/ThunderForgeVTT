@@ -206,7 +206,7 @@ pub fn start(canvas_selector: &str) {
         // Spec 014 (US4): dice-bouncing reveal for a `rollDice` response
         // already handed to us — independent of every canvas plugin
         // above (Constitution Principle II).
-        .add_plugins(DiceRollPlugin)
+        .add_plugins(DicePlugin)
         // Raw per-frame timing ring, always on (one push per frame).
         .add_plugins(plugins::FrameTracePlugin)
         // Renderer self-test, off unless `set_render_probe` turns it on.

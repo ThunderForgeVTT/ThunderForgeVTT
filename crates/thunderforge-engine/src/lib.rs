@@ -43,7 +43,7 @@ use derived_data::*;
 #[cfg(target_arch = "wasm32")]
 use plugins::{
     BackgroundPlugin, CachedAssetsPlugin, CameraPlugin, CanvasLayerPlugin, DarknessPlugin,
-    DiceRollPlugin, ExplorationPlugin, GridPlugin, LightingOverlayPlugin, LightingPlugin,
+    DicePlugin, ExplorationPlugin, GridPlugin, LightingOverlayPlugin, LightingPlugin,
     RenderProbePlugin, ScenePlugin, SelectionPlugin, ShapePlugin, StatusDisplayPlugin, TokenPlugin,
     WallPlugin,
 };

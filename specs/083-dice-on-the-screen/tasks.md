@@ -111,7 +111,7 @@ die (research R4).
 
 ### Engine: the payload
 
-- [ ] T013 Replace `ExternalCommand::TriggerDiceRoll { dice }` and `DiceRollDiePayload` in `crates/thunderforge-engine/src/payloads.rs` (:529) with `TriggerDiceRoll { roll: DiceRollPayload }` (contracts/engine-dice.md, camelCase, `steps` and `bindings` defaulted), and add `SetReducedMotion { reduced: bool }`. Parse both in `crates/thunderforge-engine/src/sdk.rs` (:314). In `crates/thunderforge-engine/src/app.rs` (:211-213, :872), push into the new `DiceQueue` resource and set the `DiceMotion` resource; both are declared in T019. Convert the payload to `ThrowSpec` in a `From` impl in `payloads.rs`.
+- [x] T013 Replace `ExternalCommand::TriggerDiceRoll { dice }` and `DiceRollDiePayload` in `crates/thunderforge-engine/src/payloads.rs` (:529) with `TriggerDiceRoll { roll: DiceRollPayload }` (contracts/engine-dice.md, camelCase, `steps` and `bindings` defaulted), and add `SetReducedMotion { reduced: bool }`. Parse both in `crates/thunderforge-engine/src/sdk.rs` (:314). In `crates/thunderforge-engine/src/app.rs` (:211-213, :872), push into the new `DiceQueue` resource and set the `DiceMotion` resource; both are declared in T019. Convert the payload to `ThrowSpec` in a `From` impl in `payloads.rs`.
 
 **Checkpoint**: crate, server and canvas core tests are green; the schema is regenerated; the engine compiles for wasm32.
 
@@ -144,7 +144,7 @@ die (research R4).
 ### Implementation
 
 - [x] T019 [US1] Implement `dice_throw/shapes.rs` (the icosahedron first, with the table and face labels), `landing.rs`, `tumble.rs` (FNV-1a and splitmix64, research R3) and `readout.rs`, until T014 to T017 are green
-- [ ] T020 [US1] Replace `crates/thunderforge-engine/src/plugins/dice_roll.rs` with `crates/thunderforge-engine/src/plugins/dice/`:
+- [x] T020 [US1] Replace `crates/thunderforge-engine/src/plugins/dice_roll.rs` with `crates/thunderforge-engine/src/plugins/dice/`:
   - **`mod.rs`**: `DicePlugin`, plus the `DiceQueue`, `DiceMotion` and `DiceStage` resources and markers, with the system order after the camera systems.
   - **`mesh.rs`**: one `Mesh2d` per die, built at spawn and mutated in place with `Assets<Mesh>::get_mut`. It rotates, projects, culls by normal z and shades by `n · L` with `ATTRIBUTE_COLOR` (research R1).
   - **`throw.rs`**: spawn under the stage, animate from `tumble::path`, land, hold, fade, then despawn and drop the mesh handles.
@@ -152,8 +152,8 @@ die (research R4).
 
   Update `plugins/mod.rs` (:10, :43) and the `lib.rs` (:46) registration. `SETTLE_DURATION_SECS` goes.
 
-- [ ] T021 [US1] Screen anchoring in `plugins/dice/mod.rs` (research R8). It copies the `Camera2d` translation into `DiceStage` at z 950 and its projection scale into the stage's scale, and reads the viewport for the lower third.
-- [ ] T022 [US1] `plugins/dice/probe.rs`:
+- [x] T021 [US1] Screen anchoring in `plugins/dice/mod.rs` (research R8). It copies the `Camera2d` translation into `DiceStage` at z 950 and its projection scale into the stage's scale, and reads the viewport for the lower third.
+- [x] T022 [US1] `plugins/dice/probe.rs`:
   - the landed log (50 entries);
   - `#[wasm_bindgen] dice_landed() -> String`, `dice_timings() -> String` and `dice_entity_count() -> u32`.
 
@@ -196,7 +196,7 @@ die (research R4).
   - `1d100` is one throw die with two meshes, and reports `sides: 100` once;
   - `1d7` is a disc showing 7's value.
 - [x] T030 [US2] Implement the remaining vertex and face tables in `dice_throw/shapes.rs`: tetra, cube, octa, dodeca, the pentagonal trapezohedron and the disc prism. Implement the d100 pair in `expand`. T028 and T029 go green.
-- [ ] T031 [US2] Draw a d100 as two meshes in `plugins/dice/mesh.rs` and `throw.rs`, and add the disc flip (a rotation about x) in `throw.rs`
+- [x] T031 [US2] Draw a d100 as two meshes in `plugins/dice/mesh.rs` and `throw.rs`, and add the disc flip (a rotation about x) in `throw.rs`
 - [ ] T032 [US2] In `rolls-dice-on-screen.spec.ts`, US2:
   - `2d6 + 1d8 + 3` reports sides `[6, 6, 8]` and the faces match the server, with readout `a + b + c + 3 = total`;
   - `1d100` reports one die of sides 100 whose face is the server's;
@@ -215,7 +215,7 @@ die (research R4).
   - a die with two segments takes `tumble_ms + step_ms` to land;
   - an explosion die enters at `tumble_ms + k·step_ms`;
   - a clamp segment adds no tumble time.
-- [ ] T035 [US3] In `plugins/dice/throw.rs` and `readout.rs`:
+- [x] T035 [US3] In `plugins/dice/throw.rs` and `readout.rs`:
   - a dropped die dims to grey at half alpha;
   - a failed success-count die is dimmed;
   - a struck value is a `Text2d` plus a thin sprite bar, shown above the die;
@@ -253,7 +253,7 @@ die (research R4).
   - fading throws are independent of the playing one;
   - a sixth push while four wait skips the oldest again.
 - [ ] T041 [P] [US5] Web test in `apps/web/src/engine/bevy/__tests__/diceThrow.test.ts`: `watchReducedMotion` sends the initial value, sends on `change`, and stops after its disposer runs (a `matchMedia` stub)
-- [ ] T042 [US5] Implement `dice_throw/queue.rs` and use it from `plugins/dice/throw.rs`. Write skipped throws to the landed log. T040 goes green.
+- [x] T042 [US5] Implement `dice_throw/queue.rs` and use it from `plugins/dice/throw.rs`. Write skipped throws to the landed log. T040 goes green.
 - [ ] T043 [US5] Reduced motion:
   - in `plugins/dice/throw.rs`, `DiceMotion.reduced` spawns dice landed, fades them in over `reduced_ms`, and shows the readout at once;
   - in `diceThrow.ts`, `watchReducedMotion`;
@@ -261,7 +261,7 @@ die (research R4).
 
   T041 goes green.
 
-- [ ] T044 [US5] The `+N more` chip in `plugins/dice/readout.rs`, using `readout::chip`
+- [x] T044 [US5] The `+N more` chip in `plugins/dice/readout.rs`, using `readout::chip`
 - [ ] T045 [US5] In `rolls-dice-on-screen.spec.ts`, US5:
   - five rolls within a second give five `diceLanded` entries in arrival order, of which at most one is skipped, and the playing throw never is;
   - every skipped roll is in the chat;

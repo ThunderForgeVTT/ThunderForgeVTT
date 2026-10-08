@@ -53,6 +53,26 @@ pub fn frame_trace() -> String {
     plugins::frame_trace_json()
 }
 
+/// The throws the engine has finished or skipped, oldest first, as JSON
+/// (spec 083, contracts/engine-dice.md).
+#[wasm_bindgen]
+pub fn dice_landed() -> String {
+    plugins::dice::probe::landed_json()
+}
+
+/// How long each part of a throw takes, as JSON, from
+/// `dice_throw::TIMINGS`.
+#[wasm_bindgen]
+pub fn dice_timings() -> String {
+    plugins::dice::probe::timings_json()
+}
+
+/// How many throw entities are alive. It is 0 once every throw has faded.
+#[wasm_bindgen]
+pub fn dice_entity_count() -> u32 {
+    plugins::dice::probe::entity_count()
+}
+
 /// Empties the frame trace. Call right before the thing being measured, so
 /// the retained window contains it and nothing else.
 #[wasm_bindgen]
@@ -318,10 +338,12 @@ pub(crate) fn parse_command(input: &str) -> Option<ExternalCommand> {
             asset_id: value.get("assetId")?.as_str()?.to_owned(),
         }),
         "trigger_dice_roll" => {
-            let dice_value = value.get("dice")?.clone();
-            let dice: Vec<DiceRollDiePayload> = serde_json::from_value(dice_value).ok()?;
-            Some(ExternalCommand::TriggerDiceRoll { dice })
+            let roll: DiceRollPayload = serde_json::from_value(value.get("roll")?.clone()).ok()?;
+            Some(ExternalCommand::TriggerDiceRoll { roll })
         }
+        "set_reduced_motion" => Some(ExternalCommand::SetReducedMotion {
+            reduced: value.get("reduced")?.as_bool()?,
+        }),
         _ => None,
     }
 }

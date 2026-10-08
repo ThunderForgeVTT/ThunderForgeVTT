@@ -356,7 +356,7 @@
         "crates/thunderforge-canvas-core/src/{system_rules,system_rules_tests}.rs",
         "crates/thunderforge-dice/**",
         "packs/systems/dnd5e/**",
-        "crates/thunderforge-engine/src/plugins/dice_roll.rs",
+        "crates/thunderforge-engine/src/plugins/dice/**",
         "crates/thunderforge-server/src/combat/**",
         "crates/thunderforge-server/src/graphql/mutations_{combat,attacks,roll}*.rs",
         "crates/thunderforge-server/src/graphql/queries/{attacks,roll}.rs",
@@ -809,7 +809,9 @@
         "crates/thunderforge-server/src/graphql/queries/roll_feed_tests.rs",
         "crates/thunderforge-server/src/graphql/{roll_stream_tests,types_rolls}.rs",
         "apps/demo/src/backend/tabs{,.test}.ts",
-        "apps/demo/e2e/rolls-across-tabs.spec.ts"
+        "apps/demo/e2e/rolls-across-tabs.spec.ts",
+        "crates/thunderforge-engine/src/plugins/dice/**",
+        "crates/thunderforge-canvas-core/src/dice_throw/**"
       ],
       "standalone": "pnpm -F @thunderforge/demo test && pnpm -F @thunderforge/demo e2e rolls-across-tabs"
     },

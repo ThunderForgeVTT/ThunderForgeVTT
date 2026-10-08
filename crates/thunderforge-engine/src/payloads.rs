@@ -531,19 +531,115 @@ pub(crate) enum ExternalCommand {
     SetTokenCulling {
         enabled: bool,
     },
-    /// Spec 014 (US4): the per-die final values from a `rollDice`
-    /// response, already authoritative — this command only ever tells
-    /// `DiceRollPlugin` what to animate toward, never asks it to decide
-    /// an outcome (FR-015).
+    /// A roll the server has already resolved, to throw on the board (spec
+    /// 083, contracts/engine-dice.md). This command only ever tells the dice
+    /// plugin what to show, never asks it to decide an outcome (FR-015).
     TriggerDiceRoll {
-        dice: Vec<DiceRollDiePayload>,
+        roll: DiceRollPayload,
+    },
+    /// Whether the viewer prefers reduced motion. It applies to the next
+    /// throw that starts.
+    SetReducedMotion {
+        reduced: bool,
     },
 }
 
+/// A `WorldRoll` as the web fetched it, in its GraphQL field names.
 #[derive(Debug, Clone, Deserialize)]
-pub(crate) struct DiceRollDiePayload {
-    #[serde(rename = "finalValue")]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DiceRollPayload {
+    pub(crate) id: String,
+    #[serde(default)]
+    pub(crate) roller_name: String,
+    #[serde(default)]
+    pub(crate) label: Option<String>,
+    pub(crate) formula: String,
+    #[serde(default)]
+    pub(crate) bindings: Vec<DiceBindingPayload>,
+    pub(crate) result_kind: String,
+    pub(crate) result_value: f64,
+    #[serde(default)]
+    pub(crate) dice: Vec<DiceDiePayload>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct DiceBindingPayload {
+    pub(crate) placeholder: String,
+    pub(crate) value: f64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DiceDiePayload {
+    #[serde(default)]
+    pub(crate) sides_kind: String,
+    #[serde(default)]
+    pub(crate) numeric_sides: Option<u32>,
+    #[serde(default)]
+    pub(crate) rolls: Vec<i64>,
+    #[serde(default)]
+    pub(crate) steps: Vec<String>,
+    #[serde(default = "kept_by_default")]
+    pub(crate) kept: bool,
     pub(crate) final_value: i64,
+}
+
+fn kept_by_default() -> bool {
+    true
+}
+
+impl From<DiceRollPayload> for thunderforge_canvas_core::dice_throw::ThrowSpec {
+    /// An unknown `sidesKind`, or a `NUMERIC` die with no `numericSides`,
+    /// becomes `Numeric(0)`, which plays as a disc showing `finalValue`.
+    fn from(roll: DiceRollPayload) -> Self {
+        use thunderforge_dice::{ChainStep, DieOutcome, DieSides, ResolutionKind, RollResolution};
+        let dice = roll
+            .dice
+            .into_iter()
+            .map(|die| DieOutcome {
+                sides: match (die.sides_kind.as_str(), die.numeric_sides) {
+                    ("FATE", _) => DieSides::Fate,
+                    ("COIN", _) => DieSides::Coin,
+                    ("NUMERIC", Some(n)) => DieSides::Numeric(n),
+                    _ => DieSides::Numeric(0),
+                },
+                rolls: if die.rolls.is_empty() {
+                    vec![die.final_value]
+                } else {
+                    die.rolls
+                },
+                steps: die
+                    .steps
+                    .iter()
+                    .map(|step| match step.as_str() {
+                        "EXPLODE" => ChainStep::Explode,
+                        _ => ChainStep::Reroll,
+                    })
+                    .collect(),
+                kept: die.kept,
+                final_value: die.final_value,
+            })
+            .collect();
+        let kind = match roll.result_kind.as_str() {
+            "SUCCESS_COUNT" => ResolutionKind::SuccessCount(roll.result_value.round() as i64),
+            _ => ResolutionKind::Total(roll.result_value),
+        };
+        Self {
+            roll_id: roll.id,
+            roller: roll.roller_name,
+            label: roll.label,
+            bindings: roll
+                .bindings
+                .into_iter()
+                .map(|b| (b.placeholder, b.value))
+                .collect(),
+            resolution: RollResolution {
+                formula: roll.formula,
+                dice,
+                kind,
+            },
+        }
+    }
 }
 
 /// Plain-data mirror of `plugins::render_probe::EngineStats`.

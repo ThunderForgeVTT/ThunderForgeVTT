@@ -210,9 +210,10 @@ pub(crate) fn apply_external_commands(
     // registered, same graceful-degradation rationale as `wall_set` above.
     mut render_probe: Option<ResMut<RenderProbeEnabled>>,
     mut scene: SceneParams,
-    // `PendingDiceRoll` only exists once `DiceRollPlugin` is registered,
-    // same graceful-degradation rationale as `wall_set` above.
-    pending_dice_roll: Option<ResMut<plugins::dice_roll::PendingDiceRoll>>,
+    // `DiceInbox` only exists once `DicePlugin` is registered, same
+    // graceful-degradation rationale as `wall_set` above. One inbox for both
+    // dice commands, so this system takes one parameter for them.
+    dice_inbox: Option<ResMut<plugins::dice::DiceInbox>>,
     // For token art (`upsert_token`'s optional `image`). Not `Option`: the
     // asset server is part of `DefaultPlugins`, not a plugin this crate can
     // choose to leave out.
@@ -237,7 +238,7 @@ pub(crate) fn apply_external_commands(
     let mut background = background;
     let mut placed_canvas_images = placed_canvas_images;
     let mut is_game_master = is_game_master;
-    let mut pending_dice_roll = pending_dice_roll;
+    let mut dice_inbox = dice_inbox;
     let InteractionParams {
         interactives,
         pending_activations,
@@ -877,15 +878,14 @@ pub(crate) fn apply_external_commands(
                     placed_canvas_images.0.remove(&asset_id);
                 }
             }
-            ExternalCommand::TriggerDiceRoll { dice } => {
-                if let Some(pending_dice_roll) = pending_dice_roll.as_deref_mut() {
-                    pending_dice_roll.0 = Some(
-                        dice.into_iter()
-                            .map(|d| plugins::dice_roll::DiceRollDie {
-                                final_value: d.final_value,
-                            })
-                            .collect(),
-                    );
+            ExternalCommand::TriggerDiceRoll { roll } => {
+                if let Some(inbox) = dice_inbox.as_deref_mut() {
+                    inbox.throws.push(roll.into());
+                }
+            }
+            ExternalCommand::SetReducedMotion { reduced } => {
+                if let Some(inbox) = dice_inbox.as_deref_mut() {
+                    inbox.reduced = Some(reduced);
                 }
             }
         }
