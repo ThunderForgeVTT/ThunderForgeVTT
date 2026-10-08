@@ -145,7 +145,13 @@ export type WorldState = {
  * Spec 085: the engine stamps every change it sends for a group with one id
  * and the count it sent, so the answers can be tallied into one message.
  */
-export type GroupStamp = { id: string; size: number };
+export type GroupStamp = {
+  id: string;
+  /** How many changes were sent, each of which will be answered. */
+  size: number;
+  /** Members the board held back itself, never sent (spec 085 FR-013). */
+  refused?: number;
+};
 
 /** Spec 085: hide walls from the table, or show them again. */
 export type SetWallsHiddenCommand = {

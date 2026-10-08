@@ -56,8 +56,14 @@ export function settleGroup(
 
   clearTimeout(tally.timer);
   tallies.delete(stamp.id);
-  if (tally.refused > 0) {
-    toast.warning(`${tally.refused} of ${stamp.size} could not be ${verb}.`);
+  // The board's own refusals were never sent, so they have no answer to
+  // wait for; they count toward the one notice all the same.
+  const heldBack = stamp.refused ?? 0;
+  const refused = tally.refused + heldBack;
+  if (refused > 0) {
+    toast.warning(
+      `${refused} of ${stamp.size + heldBack} could not be ${verb}.`,
+    );
   }
 }
 

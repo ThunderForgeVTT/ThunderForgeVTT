@@ -43,6 +43,15 @@ describe("settleGroup", () => {
     expect(warning).toHaveBeenCalledWith("2 of 5 could not be moved.");
   });
 
+  it("counts the members the board held back with the server's refusals", () => {
+    // Two tokens moved; one crossed a wall on a player's board and was never
+    // sent, so one answer comes back.
+    const stamp = { id: "g-4", size: 1, refused: 1 };
+    settleGroup(stamp, true, "moved");
+    expect(warning).toHaveBeenCalledTimes(1);
+    expect(warning).toHaveBeenCalledWith("1 of 2 could not be moved.");
+  });
+
   it("ignores an answer that carries no stamp", () => {
     settleGroup(undefined, false, "deleted");
     expect(warning).not.toHaveBeenCalled();

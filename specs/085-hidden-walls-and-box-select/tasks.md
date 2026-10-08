@@ -207,7 +207,7 @@ that passes them.
 - [x] T030 [US3] [082] Player rows of `box_candidate`:
   - `ViewerUserId`, `TokenOwner`, `Visibility` and `may_edit_shape`, in `crates/thunderforge-engine/src/systems/box_select.rs`;
   - in `systems/token.rs`'s upsert, a token whose new owner is not the viewer leaves `GroupSelection` and `SelectedToken` for a non-GM, with a test in `token_owner_tests.rs`.
-- [ ] T031 [US3] Tests in `group_move.rs` `mod tests`, then the code:
+- [x] T031 [US3] Tests in `group_move.rs` `mod tests`, then the code:
   - for a non-GM, a token whose own path crosses a blocking wall (`token_move::refuse_at_wall`) is not sent and goes back;
   - `size` counts only what was sent;
   - Delete sends only shapes the viewer may edit.

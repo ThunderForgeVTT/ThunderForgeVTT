@@ -34,12 +34,20 @@ use crate::{TokenIdentity, emit_event};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GroupStamp {
     pub id: String,
+    /// How many changes were sent: the answers the web waits for.
     pub size: usize,
+    /// How many members the board held back itself (a player's token whose
+    /// path crosses a wall, FR-013), so the one notice can count them too.
+    pub refused: usize,
 }
 
 impl GroupStamp {
-    fn to_json(&self) -> Value {
-        json!({ "id": self.id, "size": self.size })
+    pub(crate) fn to_json(&self) -> Value {
+        if self.refused == 0 {
+            json!({ "id": self.id, "size": self.size })
+        } else {
+            json!({ "id": self.id, "size": self.size, "refused": self.refused })
+        }
     }
 }
 
@@ -49,10 +57,16 @@ pub struct GroupStamps(u64);
 
 impl GroupStamps {
     pub fn next(&mut self, size: usize) -> GroupStamp {
+        self.next_judged(size, 0)
+    }
+
+    /// A stamp for `size` sent changes and `refused` members held back.
+    pub fn next_judged(&mut self, size: usize, refused: usize) -> GroupStamp {
         self.0 += 1;
         GroupStamp {
             id: format!("g-{}", self.0),
             size,
+            refused,
         }
     }
 }
@@ -134,6 +148,30 @@ pub fn release_events(
             event
         })
         .collect()
+}
+
+/// Split a released group into what is sent and what goes back (FR-013).
+///
+/// For a player each token is judged on its own path, from where it began to
+/// where the offset puts it; one whose path `blocked` says crosses a wall is
+/// held back. Everything else is sent. A Game Master's moves are not judged
+/// on the board, as a single drag's are not.
+pub fn judge_paths(
+    members: Vec<Member>,
+    offset: Vec2,
+    is_gm: bool,
+    blocked: impl Fn(Vec2, Vec2) -> bool,
+) -> (Vec<Member>, Vec<Member>) {
+    if is_gm {
+        return (members, Vec::new());
+    }
+    members.into_iter().partition(|member| match member {
+        Member::Token { at, .. } => {
+            let from = at.truncate();
+            !blocked(from, from + offset)
+        }
+        _ => true,
+    })
 }
 
 /// How the pressed item snaps, which decides how the whole group snaps.
@@ -307,6 +345,7 @@ pub(crate) fn drive_group_drag(
     snap_enabled: Option<Res<GridSnapEnabled>>,
     mut stamps: ResMut<GroupStamps>,
     active_world: Res<ActiveWorld>,
+    is_gm: Option<Res<IsGameMaster>>,
 ) {
     let Some((press, press_px)) = drag.press else {
         return;
@@ -391,8 +430,33 @@ pub(crate) fn drive_group_drag(
         if offset == Vec2::ZERO || members.is_empty() {
             return;
         }
-        let stamp = stamps.next(members.len());
-        for event in release_events(&members, offset, &stamp, &active_world.0) {
+        let is_gm = is_gm.is_some_and(|gm| gm.0);
+        let (sent, refused) = judge_paths(members, offset, is_gm, |from, to| {
+            walls.as_ref().is_some_and(|walls| {
+                thunderforge_canvas_core::wall::movement_blocked_by(from, to, walls).is_some()
+            })
+        });
+        // A held-back token goes back at once, before any answer.
+        for member in &refused {
+            if let Member::Token { id, at, .. } = member
+                && let Some((mut transform, _)) =
+                    tokens.iter_mut().find(|(_, identity)| &identity.0 == id)
+            {
+                transform.translation.x = at.x;
+                transform.translation.y = at.y;
+            }
+        }
+        if sent.is_empty() {
+            // Nothing to count: the one notice is the wall's own.
+            if let (Some(Member::Token { at, .. }), Some(walls)) = (refused.first(), walls.as_ref())
+            {
+                let from = at.truncate();
+                crate::systems::token_move::refuse_at_wall(from, from + offset, walls);
+            }
+            return;
+        }
+        let stamp = stamps.next_judged(sent.len(), refused.len());
+        for event in release_events(&sent, offset, &stamp, &active_world.0) {
             emit_event(event);
         }
     }

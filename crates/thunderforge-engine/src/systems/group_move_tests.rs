@@ -61,6 +61,7 @@ fn stamp() -> GroupStamp {
     GroupStamp {
         id: "g-1".into(),
         size: 4,
+        refused: 0,
     }
 }
 
@@ -222,6 +223,7 @@ fn a_gm_deletes_every_member_but_a_carried_light() {
         &GroupStamp {
             id: "g-3".into(),
             size: 4,
+            refused: 0,
         },
         "world",
     );
@@ -238,4 +240,92 @@ fn a_gm_deletes_every_member_but_a_carried_light() {
     for event in &events {
         assert_eq!(event["group"], json!({ "id": "g-3", "size": 4 }));
     }
+}
+
+fn two_tokens() -> Vec<Member> {
+    vec![
+        Member::Token {
+            id: "near".into(),
+            at: Vec3::new(-25.0, 0.0, 1.0),
+            scale: 1.0,
+            rotation: 0.0,
+        },
+        Member::Token {
+            id: "far".into(),
+            at: Vec3::new(-25.0, 500.0, 1.0),
+            scale: 1.0,
+            rotation: 0.0,
+        },
+        Member::Shape(shape(Some("me"))),
+    ]
+}
+
+/// A wall along x = 0 from y = -100 to y = 100.
+fn crosses_the_wall(from: Vec2, to: Vec2) -> bool {
+    (from.x < 0.0) != (to.x < 0.0) && from.y.abs() <= 100.0 && to.y.abs() <= 100.0
+}
+
+#[test]
+fn a_players_token_whose_path_crosses_a_wall_is_not_sent_and_the_rest_are() {
+    let (sent, refused) = judge_paths(two_tokens(), Vec2::new(50.0, 0.0), false, crosses_the_wall);
+    let ids = |members: &[Member]| -> Vec<String> {
+        members
+            .iter()
+            .map(|m| match m {
+                Member::Token { id, .. } => id.clone(),
+                Member::Shape(s) => s.id.clone(),
+                _ => String::new(),
+            })
+            .collect()
+    };
+    assert_eq!(ids(&refused), vec!["near".to_string()]);
+    assert_eq!(ids(&sent), vec!["far".to_string(), "s1".to_string()]);
+}
+
+#[test]
+fn a_gms_group_is_not_judged_on_the_board() {
+    let (sent, refused) = judge_paths(two_tokens(), Vec2::new(50.0, 0.0), true, crosses_the_wall);
+    assert_eq!(sent.len(), 3);
+    assert!(refused.is_empty());
+}
+
+#[test]
+fn size_counts_only_what_was_sent_and_the_stamp_says_how_many_stayed() {
+    let (sent, refused) = judge_paths(two_tokens(), Vec2::new(50.0, 0.0), false, crosses_the_wall);
+    let mut stamps = GroupStamps::default();
+    let stamp = stamps.next_judged(sent.len(), refused.len());
+    let events = release_events(&sent, Vec2::new(50.0, 0.0), &stamp, "world");
+    assert_eq!(events.len(), 2);
+    for event in &events {
+        assert_eq!(
+            event["group"],
+            json!({ "id": "g-1", "size": 2, "refused": 1 })
+        );
+    }
+    // Nothing held back: the stamp is the plain one.
+    assert_eq!(
+        stamps.next_judged(2, 0).to_json(),
+        json!({ "id": "g-2", "size": 2 })
+    );
+}
+
+#[test]
+fn a_players_delete_sends_only_the_shapes_they_may_edit() {
+    let group = GroupSelection {
+        tokens: vec!["t1".into()],
+        walls: vec!["w1".into()],
+        lights: vec!["l1".into()],
+        shapes: vec!["mine".into(), "gms".into()],
+    };
+    let doomed = deletable(
+        &group,
+        false,
+        Some("me"),
+        |id| Some(shape(Some(if id == "mine" { "me" } else { "gm" }))),
+        |_| false,
+    );
+    assert!(doomed.tokens.is_empty());
+    assert!(doomed.walls.is_empty());
+    assert!(doomed.lights.is_empty());
+    assert_eq!(doomed.shapes, vec!["mine".to_string()]);
 }
