@@ -24,6 +24,11 @@ vi.mock("@/api/lights", () => ({
   getLights: vi.fn(),
 }));
 
+const settleGroup = vi.fn();
+vi.mock("../groupMoves", () => ({
+  settleGroup: (...args: unknown[]) => settleGroup(...args),
+}));
+
 const { createWorldStore } = await import("../../store");
 const { startLightMutationBridge } = await import("../lights");
 
@@ -63,6 +68,7 @@ describe("the light mutation bridge", () => {
   beforeEach(() => {
     updateLight.mockReset();
     deleteLight.mockReset();
+    settleGroup.mockReset();
   });
 
   it("sends a light's next edit only once the last one is answered, and keeps the newest answer", async () => {
@@ -153,6 +159,90 @@ describe("the light mutation bridge", () => {
     await settle();
     expect(deleteLight).toHaveBeenCalledTimes(1);
     expect(store.getState().lights[LIGHT]).toBeUndefined();
+  });
+
+  describe("spec 085: a refusal puts the light back, and every answer settles its group", () => {
+    const group = { id: "g-1", size: 2 };
+
+    it("restores the held light when a grouped move is refused", async () => {
+      const store = createWorldStore({ worldId: "world-1" });
+      store.dispatch({ type: "upsert_light", light: toLight(100, 50) });
+      startLightMutationBridge(store, "scene-1");
+      const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+      updateLight.mockRejectedValueOnce(new Error("refused"));
+      const seen: string[] = [];
+      store.subscribe((event) => {
+        if (event.command.type === "upsert_light") seen.push(event.source);
+      });
+
+      store.dispatch(
+        {
+          type: "update_light",
+          lightId: LIGHT,
+          changes: { x: 125, y: 25 },
+          group,
+        },
+        "bevy",
+      );
+      await settle();
+      await settle();
+
+      expect(store.getState().lights[LIGHT]).toMatchObject({ x: 25, y: 25 });
+      expect(seen, "the restore reaches the engine").toEqual(["sync"]);
+      expect(settleGroup).toHaveBeenCalledWith(group, false, "moved");
+      errors.mockRestore();
+    });
+
+    it("restores the held light when a delete is refused or fails", async () => {
+      const store = createWorldStore({ worldId: "world-1" });
+      store.dispatch({ type: "upsert_light", light: toLight(100, 50) });
+      startLightMutationBridge(store, "scene-1");
+      const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+      deleteLight
+        .mockResolvedValueOnce(false)
+        .mockRejectedValueOnce(new Error("gone"));
+
+      // The engine took the light off its own board before it asked; the
+      // store still holds it, and the restore puts it back there.
+      const restored: string[] = [];
+      store.subscribe((event) => {
+        if (event.command.type === "upsert_light") restored.push(event.source);
+      });
+      store.dispatch({ type: "delete_light", lightId: LIGHT, group }, "bevy");
+      await settle();
+      await settle();
+      expect(store.getState().lights[LIGHT]).toMatchObject({ x: 25 });
+      expect(settleGroup).toHaveBeenLastCalledWith(group, false, "deleted");
+
+      store.dispatch({ type: "delete_light", lightId: LIGHT, group }, "bevy");
+      await settle();
+      await settle();
+      expect(store.getState().lights[LIGHT]).toMatchObject({ x: 25 });
+      expect(settleGroup).toHaveBeenCalledTimes(2);
+      expect(restored).toEqual(["sync", "sync"]);
+      errors.mockRestore();
+    });
+
+    it("settles a grouped answer that was accepted", async () => {
+      const store = createWorldStore({ worldId: "world-1" });
+      startLightMutationBridge(store, "scene-1");
+      updateLight.mockResolvedValueOnce(record(100, 50));
+      deleteLight.mockResolvedValueOnce(true);
+
+      store.dispatch(
+        { type: "update_light", lightId: LIGHT, changes: { x: 25 }, group },
+        "bevy",
+      );
+      store.dispatch({ type: "delete_light", lightId: LIGHT, group }, "bevy");
+      await settle();
+      await settle();
+      await settle();
+
+      expect(settleGroup.mock.calls).toEqual([
+        [group, true, "moved"],
+        [group, true, "deleted"],
+      ]);
+    });
   });
 });
 

@@ -158,13 +158,13 @@ that passes them.
 
   *Landed:* registered in `GroupSelectPlugin` (`plugins/group_select.rs`), as T018 was. `delete_selection()` and the `delete_group` command both raise one request the system consumes, the pattern `set_selection_filter` uses. A GM's group Delete also removes tokens, as `remove_token` (FR-012: every item the viewer may delete).
 
-- [ ] T023 [P] [US2] Light bridge, tests first, in `apps/web/src/engine/world/sync/__tests__/lightBridge.test.ts`:
+- [x] T023 [P] [US2] Light bridge, tests first, in `apps/web/src/engine/world/sync/__tests__/lightBridge.test.ts`:
   - a refused `update_light` or `delete_light` restores the cached record with source `"sync"`;
   - every answer settles its `group`.
 
   Then the code in `apps/web/src/engine/world/sync/lights.ts`.
 
-- [ ] T024 [P] [US2] [082] Token and shape bridges, tests first, in `tokenBridge.test.ts` and `shapeEventSync.test.ts`:
+- [x] T024 [P] [US2] [082] Token and shape bridges, tests first, in `tokenBridge.test.ts` and `shapeEventSync.test.ts`:
   - each answer settles its `group`;
   - a refused grouped `upsert_token` still re-reads and puts the token back, but shows no toast of its own.
 

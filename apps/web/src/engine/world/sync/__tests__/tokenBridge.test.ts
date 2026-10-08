@@ -35,6 +35,16 @@ vi.mock("../offlineQueue", () => ({
   shouldQueue: () => shouldQueue(),
 }));
 
+const settleGroup = vi.fn();
+vi.mock("../groupMoves", () => ({
+  settleGroup: (...args: unknown[]) => settleGroup(...args),
+}));
+
+const toastWarning = vi.fn();
+vi.mock("sonner", () => ({
+  toast: { warning: (...args: unknown[]) => toastWarning(...args) },
+}));
+
 const { createWorldStore } = await import("../../store");
 const { startTokenMutationBridge } = await import("../tokens");
 
@@ -133,6 +143,71 @@ describe("startTokenMutationBridge", () => {
     await settle();
 
     expect(deleteToken).not.toHaveBeenCalled();
+    stop();
+  });
+});
+
+describe("a group move's tokens (spec 085)", () => {
+  const group = { id: "g-2", size: 2 };
+
+  it("settles each answer to a grouped move", async () => {
+    const { store, stop } = bridgeOnStore();
+    await settle();
+    store.dispatch({ type: "upsert_token", token: tokenAt(0, 0) }, "sync");
+    store.dispatch(
+      { type: "upsert_token", token: tokenAt(50, 0), group },
+      "bevy",
+    );
+    await settle();
+    expect(settleGroup).toHaveBeenCalledWith(group, true, "moved");
+    stop();
+  });
+
+  it("puts a refused grouped token back from the server, with no toast of its own", async () => {
+    getTokens.mockResolvedValue([{ tokenId: TOKEN_ID, x: 0, y: 0, z: 0 }]);
+    moveOwnToken.mockRejectedValueOnce(new Error("A wall is in the way"));
+    const { store, stop } = bridgeOnStore(false);
+    await settle();
+    store.dispatch(
+      { type: "upsert_token", token: tokenAt(200, 0), group },
+      "bevy",
+    );
+    await vi.waitFor(() =>
+      expect(settleGroup).toHaveBeenCalledWith(group, false, "moved"),
+    );
+    await vi.waitFor(() =>
+      expect(store.getState().tokens[TOKEN_ID]).toMatchObject({ x: 0, y: 0 }),
+    );
+    expect(toastWarning).not.toHaveBeenCalled();
+    stop();
+  });
+
+  it("still shows the toast for a refused move that is not a group's", async () => {
+    getTokens.mockResolvedValue([{ tokenId: TOKEN_ID, x: 0, y: 0, z: 0 }]);
+    moveOwnToken.mockRejectedValueOnce(new Error("A wall is in the way"));
+    const { store, stop } = bridgeOnStore(false);
+    await settle();
+    store.dispatch({ type: "upsert_token", token: tokenAt(200, 0) }, "bevy");
+    await vi.waitFor(() =>
+      expect(toastWarning).toHaveBeenCalledWith("A wall is in the way"),
+    );
+    expect(settleGroup).not.toHaveBeenCalledWith(
+      expect.anything(),
+      false,
+      "moved",
+    );
+    stop();
+  });
+
+  it("settles a grouped token delete", async () => {
+    deleteToken.mockResolvedValueOnce(true);
+    const { store, stop } = bridgeOnStore();
+    await settle();
+    store.dispatch({ type: "upsert_token", token: tokenAt(0, 0) }, "sync");
+    store.dispatch({ type: "remove_token", tokenId: TOKEN_ID, group }, "bevy");
+    await vi.waitFor(() =>
+      expect(settleGroup).toHaveBeenCalledWith(group, true, "deleted"),
+    );
     stop();
   });
 });

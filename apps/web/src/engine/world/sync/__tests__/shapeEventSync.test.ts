@@ -24,6 +24,11 @@ vi.mock("@/api/shapes", () => ({
   getShapes: (...args: unknown[]) => getShapes(...args),
 }));
 
+const settleGroup = vi.fn();
+vi.mock("../groupMoves", () => ({
+  settleGroup: (...args: unknown[]) => settleGroup(...args),
+}));
+
 const { createWorldStore } = await import("../../store");
 const { applyShapeWorldEvent, startShapeMutationBridge } =
   await import("../shapes");
@@ -159,6 +164,37 @@ describe("startShapeMutationBridge rolls back a refusal", () => {
     startShapeMutationBridge(store, SCENE);
     store.dispatch({ type: "delete_shape", shapeId: "a" }, "ui");
     await vi.waitFor(() => expect(restored).toEqual([before]));
+  });
+
+  it("settles each grouped answer, accepted or refused (spec 085)", async () => {
+    const { store } = storeHolding();
+    const group = { id: "g-4", size: 3 };
+    settleGroup.mockReset();
+    updateShape
+      .mockResolvedValueOnce(record("a"))
+      .mockRejectedValueOnce(new Error("refused"));
+    deleteShape.mockResolvedValueOnce(false);
+    startShapeMutationBridge(store, SCENE);
+    const moved = { geometry: { x: 50, y: 50, w: 10, h: 10 } };
+    store.dispatch(
+      { type: "update_shape", shapeId: "a", changes: moved, group },
+      "bevy",
+    );
+    await vi.waitFor(() =>
+      expect(settleGroup).toHaveBeenCalledWith(group, true, "moved"),
+    );
+    store.dispatch(
+      { type: "update_shape", shapeId: "a", changes: moved, group },
+      "bevy",
+    );
+    await vi.waitFor(() =>
+      expect(settleGroup).toHaveBeenCalledWith(group, false, "moved"),
+    );
+    store.dispatch({ type: "delete_shape", shapeId: "a", group }, "bevy");
+    await vi.waitFor(() =>
+      expect(settleGroup).toHaveBeenCalledWith(group, false, "deleted"),
+    );
+    expect(settleGroup).toHaveBeenCalledTimes(3);
   });
 });
 

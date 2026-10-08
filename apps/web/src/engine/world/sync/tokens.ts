@@ -57,7 +57,8 @@ import { loadTokenGridIntoEngine } from "./tokenGrid";
 import { toast } from "sonner";
 import type { TokenRecord, UpdateTokenInput } from "@/types/token";
 import type { WorldStore } from "../store";
-import type { WorldCommand, WorldToken } from "../types";
+import type { GroupStamp, WorldCommand, WorldToken } from "../types";
+import { settleGroup } from "./groupMoves";
 import { queueEdit, shouldQueue } from "./offlineQueue";
 import { beginLocalMove, isPositionStale, markRead } from "./localMoves";
 
@@ -233,15 +234,20 @@ async function applyMoveRefusal(
   sceneId: string,
   tokenId: string,
   error: unknown,
+  group?: GroupStamp,
 ): Promise<void> {
-  const lostTheServer = error instanceof GraphQLRequestError && error.transport;
-  toast.warning(
-    lostTheServer
-      ? "Could not reach the table. Your token has not moved."
-      : error instanceof Error
-        ? error.message
-        : String(error),
-  );
+  // Spec 085: a group's refusals are told once, together, by the tally.
+  if (!group) {
+    const lostTheServer =
+      error instanceof GraphQLRequestError && error.transport;
+    toast.warning(
+      lostTheServer
+        ? "Could not reach the table. Your token has not moved."
+        : error instanceof Error
+          ? error.message
+          : String(error),
+    );
+  }
 
   try {
     const mark = markRead();
@@ -530,9 +536,23 @@ export function startTokenMutationBridge(
             }
             const settle = beginLocalMove(knownTokenId);
             void updateToken(knownTokenId, input)
-              .catch((error) => {
-                console.error("Failed to update token:", error);
-              })
+              .then(
+                () => settleGroup(command.group, true, "moved"),
+                (error: unknown) => {
+                  console.error("Failed to update token:", error);
+                  if (command.group) {
+                    // A group member is put back alone (FR-014).
+                    void applyMoveRefusal(
+                      worldStore,
+                      sceneId,
+                      knownTokenId,
+                      error,
+                      command.group,
+                    );
+                    settleGroup(command.group, false, "moved");
+                  }
+                },
+              )
               .finally(settle);
           } else {
             // Spec 004 FR-009: non-GM callers only ever move a token they
@@ -551,10 +571,23 @@ export function startTokenMutationBridge(
               token.x,
               token.y,
               command.path,
-            ).then(settle, (error: unknown) => {
-              settle();
-              void applyMoveRefusal(worldStore, sceneId, knownTokenId, error);
-            });
+            ).then(
+              () => {
+                settle();
+                settleGroup(command.group, true, "moved");
+              },
+              (error: unknown) => {
+                settle();
+                void applyMoveRefusal(
+                  worldStore,
+                  sceneId,
+                  knownTokenId,
+                  error,
+                  command.group,
+                );
+                settleGroup(command.group, false, "moved");
+              },
+            );
           }
           return;
         }
@@ -594,11 +627,12 @@ export function startTokenMutationBridge(
     }
 
     if (command.type === "remove_token") {
-      const { tokenId: engineId } = command;
+      const { tokenId: engineId, group } = command;
 
       void ready.then(() => {
         const knownTokenId = engineIdToTokenId.get(engineId);
         if (!knownTokenId) {
+          settleGroup(group, false, "deleted");
           return;
         }
 
@@ -607,9 +641,11 @@ export function startTokenMutationBridge(
             if (ok) {
               engineIdToTokenId.delete(engineId);
             }
+            settleGroup(group, ok, "deleted");
           })
           .catch((error) => {
             console.error("Failed to delete token:", error);
+            settleGroup(group, false, "deleted");
           });
       });
     }

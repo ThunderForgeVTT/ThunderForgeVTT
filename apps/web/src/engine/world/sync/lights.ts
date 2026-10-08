@@ -44,6 +44,7 @@ import { createLight, deleteLight, getLights, updateLight } from "@/api/lights";
 import type { LightRecord } from "@/types/light";
 import type { WorldStore } from "../store";
 import type { WorldLight } from "../types";
+import { settleGroup } from "./groupMoves";
 
 type WorldEventLike = {
   event_code?: number;
@@ -205,6 +206,17 @@ export function startLightMutationBridge(
     });
   };
 
+  /**
+   * Put a light back as the store held it before a refused change (spec 085
+   * FR-014). Dispatched with source "sync", it reaches the engine too, which
+   * moved or removed the light before asking.
+   */
+  const restore = (before: WorldLight | undefined) => {
+    if (before) {
+      worldStore.dispatch({ type: "upsert_light", light: before }, "sync");
+    }
+  };
+
   const unsubscribe = worldStore.subscribe((event) => {
     // Avoid reacting to our own confirmed dispatches.
     if (event.source === "sync") {
@@ -239,7 +251,8 @@ export function startLightMutationBridge(
     }
 
     if (command.type === "update_light") {
-      const { lightId, changes } = command;
+      const { lightId, changes, group } = command;
+      const before = event.state.lights[lightId];
       inTurn(lightId, () =>
         updateLight(lightId, {
           x: changes.x,
@@ -256,26 +269,36 @@ export function startLightMutationBridge(
               { type: "upsert_light", light: lightRecordToWorldLight(updated) },
               "sync",
             );
+            settleGroup(group, true, "moved");
           })
           .catch((error) => {
             console.error("Failed to update light source:", error);
+            restore(before);
+            settleGroup(group, false, "moved");
           }),
       );
       return;
     }
 
     if (command.type === "delete_light") {
-      const { lightId } = command;
+      const { lightId, group } = command;
+      const before = event.state.lights[lightId];
       // After the light's edits, so a late answer to one cannot bring it back.
       inTurn(lightId, () =>
         deleteLight(lightId)
           .then((ok) => {
             if (ok) {
               worldStore.dispatch({ type: "remove_light", lightId }, "sync");
+            } else {
+              // The server's "no" to a delete is `false`, not an error.
+              restore(before);
             }
+            settleGroup(group, ok, "deleted");
           })
           .catch((error) => {
             console.error("Failed to delete light source:", error);
+            restore(before);
+            settleGroup(group, false, "deleted");
           }),
       );
     }

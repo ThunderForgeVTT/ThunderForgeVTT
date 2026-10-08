@@ -56,6 +56,7 @@ import {
 import type { ShapeRecord, ShapeKind as ApiShapeKind } from "@/types/shape";
 import type { WorldStore } from "../store";
 import type { ShapeKind, WorldShape } from "../types";
+import { settleGroup } from "./groupMoves";
 
 type WorldEventLike = {
   event_code?: number;
@@ -266,7 +267,7 @@ export function startShapeMutationBridge(
     }
 
     if (command.type === "update_shape") {
-      const { shapeId, changes } = command;
+      const { shapeId, changes, group } = command;
       const before = worldStore.getState().shapes[shapeId];
       void updateShape(shapeId, {
         geometry: changes.geometry,
@@ -279,16 +280,18 @@ export function startShapeMutationBridge(
             { type: "upsert_shape", shape: shapeRecordToWorldShape(updated) },
             "sync",
           );
+          settleGroup(group, true, "moved");
         })
         .catch((error) => {
           console.error("Failed to update shape:", error);
           restore(before);
+          settleGroup(group, false, "moved");
         });
       return;
     }
 
     if (command.type === "delete_shape") {
-      const { shapeId } = command;
+      const { shapeId, group } = command;
       const before = worldStore.getState().shapes[shapeId];
       void deleteShape(shapeId)
         .then((ok) => {
@@ -298,10 +301,12 @@ export function startShapeMutationBridge(
             // The server's "no" to a delete is `false`, not an error.
             restore(before);
           }
+          settleGroup(group, ok, "deleted");
         })
         .catch((error) => {
           console.error("Failed to delete shape:", error);
           restore(before);
+          settleGroup(group, false, "deleted");
         });
       return;
     }

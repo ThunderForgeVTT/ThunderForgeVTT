@@ -240,6 +240,8 @@ export type UpsertTokenCommand = {
 export type RemoveTokenCommand = {
   type: "remove_token";
   tokenId: string;
+  /** Spec 085: one of a group's deletes, as the engine sends a GM's Delete. */
+  group?: GroupStamp;
 };
 
 // Spec 029: a token's resources, already reduced by the server to what this
