@@ -44,13 +44,14 @@ use crate::declared_values::{ActorSlots, declared_values_for_actor};
 use crate::graphql::mutations_roll::{
     PlaceholderBindingInput, RollDiceInput, kept_dice, roll_and_settle, roll_value,
 };
-use crate::graphql::types::{ActorPermissionLevel, GraphQLRollResolution};
+use crate::graphql::types::{ActorPermissionLevel, GraphQLAdvantage, GraphQLRollResolution};
 use crate::graphql::{app_state, authenticated_user};
 use crate::play_pause::gate::refuse_world_if_paused;
-use crate::rolls::facets::RollMeta;
+use crate::rolls::facets::{NO_ADVANTAGE, RollMeta, facets_for, shape_roll};
 use crate::schema::{world_actor_system_data, world_actors, worlds};
 use crate::state::AppState;
 use crate::world_system_settings;
+use thunderforge_canvas_core::roll_facets::{Advantage, RollKind, ShapeInput};
 use thunderforge_canvas_core::system_contribution::{
     AdjudicatorFn, RollFacts, RollOutcome, contribution_for,
 };
@@ -245,6 +246,7 @@ pub async fn roll_check_impl<R: rand::Rng>(
     world_id: Uuid,
     actor_id: Uuid,
     check_id: String,
+    advantage: Advantage,
     rng: &mut R,
 ) -> GraphQLResult<GraphQLRollResolution> {
     // The actor must be in the world the caller named. Without this an actor
@@ -280,6 +282,11 @@ pub async fn roll_check_impl<R: rand::Rng>(
     .await?;
     // Also gated inside `roll_dice_impl`; refused here before any check is resolved.
     refuse_world_if_paused(state, world_id).await?;
+    // Spec 084: a system that does not roll with advantage says so before
+    // anything else is looked up.
+    if advantage != Advantage::Normal && facets_for(&system_id).is_none() {
+        return Err(Error::new(NO_ADVANTAGE));
+    }
 
     // The id is matched against what the system declared. It is never parsed,
     // never interpolated and never reaches the dice crate — a caller who
@@ -296,6 +303,28 @@ pub async fn roll_check_impl<R: rand::Rng>(
         &slots,
     ));
     let bindings = bindings_for_check(check, &values).map_err(Error::new)?;
+    // Spec 084: the system shapes the formula (advantage, Halfling Luck)
+    // against the sheet, and the record says what the roll was for.
+    let trait_data = slots.trait_data.clone().unwrap_or(serde_json::Value::Null);
+    let shaped = shape_roll(
+        &system_id,
+        ShapeInput {
+            kind: RollKind::Check,
+            formula: &check.formula,
+            trait_data: &trait_data,
+            advantage,
+            melee: false,
+            item_properties: &[],
+        },
+    )
+    .map_err(Error::new)?;
+    let meta = RollMeta {
+        actor_id: Some(actor_id),
+        roll_kind: Some(RollKind::Check),
+        check_id: Some(check.id.clone()),
+        facets: shaped.facets,
+        ..RollMeta::default()
+    };
 
     // And now the ordinary path, with a formula the client never saw. If the
     // system judges its rolls (spec 067 FR-032), its adjudicator is shown the
@@ -310,13 +339,13 @@ pub async fn roll_check_impl<R: rand::Rng>(
         user_id,
         RollDiceInput {
             world_id,
-            formula: check.formula.clone(),
+            formula: shaped.formula,
             bindings: Some(bindings),
             // Spec 081: a check is rolled for the table, by its name.
             visibility: None,
             label: Some(check.label.clone()),
         },
-        RollMeta::default(),
+        meta,
         rng,
         move |conn, resolution| {
             let Some(adjudicate) = adjudicate else {
@@ -403,6 +432,9 @@ impl RollCheckMutation {
         world_id: Uuid,
         actor_id: Uuid,
         check_id: String,
+        #[graphql(default_with = "Some(GraphQLAdvantage::Normal)")] advantage: Option<
+            GraphQLAdvantage,
+        >,
     ) -> GraphQLResult<GraphQLRollResolution> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
@@ -416,6 +448,7 @@ impl RollCheckMutation {
             world_id,
             actor_id,
             check_id,
+            advantage.unwrap_or_default().into(),
             &mut rng,
         )
         .await

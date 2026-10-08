@@ -129,11 +129,11 @@ nothing visible changed.
 
 ### Server
 
-- [ ] T016 [US1] In `crates/thunderforge-server/src/graphql/mutations_roll_check_tests.rs`, `rollCheck` on a 5e world:
+- [x] T016 [US1] In `crates/thunderforge-server/src/graphql/mutations_roll_check_tests.rs`, `rollCheck` on a 5e world:
   - `advantage: ADVANTAGE` records `2d20kh1 + MODIFIER`, two d20 dice, `facets = {advantage}`, `actor_id`, `roll_kind = 'check'` and `check_id`;
   - the GraphQL default is `NORMAL`, and the formula is byte-identical to before;
   - a Roll for Shoes world refuses `ADVANTAGE`, and its `NORMAL` formula is unchanged (SC-005).
-- [ ] T017 [US1] `crates/thunderforge-server/src/graphql/mutations_roll_check.rs`:
+- [x] T017 [US1] `crates/thunderforge-server/src/graphql/mutations_roll_check.rs`:
   - `roll_check_impl` and the resolver (`:398`) take `advantage: Option<Advantage>`;
   - read the actor's sheet (the existing `actor_slots`, `:163`);
   - call `shape_roll` between `bindings_for_check` and `roll_and_settle`, and pass `RollMeta`.

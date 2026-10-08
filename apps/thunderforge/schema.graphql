@@ -168,6 +168,15 @@ type AdminAccount {
 }
 
 """
+Spec 084: roll a d20 test twice and keep the higher or the lower.
+"""
+enum Advantage {
+	NORMAL
+	ADVANTAGE
+	DISADVANTAGE
+}
+
+"""
 Everything mutable, same shape.
 """
 type AppMutationRoot {
@@ -924,7 +933,7 @@ type AppMutationRoot {
 	argument: the dice, the numbers and the result are the system's and the
 	server's, never the sheet's (FR-035).
 	"""
-	rollCheck(worldId: UUID!, actorId: UUID!, checkId: String!): GraphQLRollResolution!
+	rollCheck(worldId: UUID!, actorId: UUID!, checkId: String!, advantage: Advantage = NORMAL): GraphQLRollResolution!
 	claimActor(worldId: UUID!, actorId: UUID!): GraphQLActorClaim!
 	createAndClaimActor(worldId: UUID!, name: String!, description: String): GraphQLActorClaim!
 	setActorAvailability(actorId: UUID!, available: Boolean!): GraphQLWorldActor!

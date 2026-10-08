@@ -101,6 +101,7 @@ async fn a_check_rolled_from_the_sheet_reads_back_with_its_bindings() {
         world_id,
         actor_id,
         "dexterity".to_string(),
+        thunderforge_canvas_core::roll_facets::Advantage::Normal,
         &mut StepRng(11),
     )
     .await

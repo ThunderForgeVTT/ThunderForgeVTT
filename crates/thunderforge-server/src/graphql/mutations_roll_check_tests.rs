@@ -362,6 +362,7 @@ async fn a_check_rolled_from_a_sheet_is_recorded_exactly_as_a_roll_is() {
         world_id,
         actor_id,
         "dexterity".to_string(),
+        Advantage::Normal,
         &mut rng,
     )
     .await
@@ -403,6 +404,7 @@ async fn an_unknown_check_id_is_never_treated_as_a_formula() {
             world_id,
             actor_id,
             candidate.to_string(),
+            Advantage::Normal,
             &mut rng,
         )
         .await
@@ -442,6 +444,7 @@ async fn a_member_without_permission_on_the_actor_is_refused() {
         world_id,
         actor_id,
         "dexterity".to_string(),
+        Advantage::Normal,
         &mut rng,
     )
     .await;
@@ -466,6 +469,7 @@ async fn an_actor_from_another_world_is_refused() {
         world_id,
         other_actor,
         "dexterity".to_string(),
+        Advantage::Normal,
         &mut rng,
     )
     .await
@@ -494,6 +498,7 @@ async fn a_system_declaring_no_checks_offers_none_through_the_mutation() {
         world_id,
         actor_id,
         "ladder".to_string(),
+        Advantage::Normal,
         &mut rng,
     )
     .await
@@ -524,7 +529,7 @@ fn the_schema_offers_a_check_by_name_and_no_way_to_name_a_roll() {
     let sdl = schema.sdl();
 
     for field in [
-        "rollCheck(worldId: UUID!, actorId: UUID!, checkId: String!)",
+        "rollCheck(worldId: UUID!, actorId: UUID!, checkId: String!, advantage: Advantage = NORMAL)",
         "systemChecks(worldId: UUID!)",
     ] {
         assert!(
@@ -636,4 +641,149 @@ async fn a_checks_adjudicator_is_shown_the_roll_and_the_worlds_settings() {
     .expect("judged")
     .expect("the adjudicator answered");
     assert_eq!(once_set.label, "strength [17] 17 false");
+}
+
+// ---------------------------------------------------------------------------
+// Spec 084 US1: advantage reaches the server as an argument.
+// ---------------------------------------------------------------------------
+
+fn only_roll(state: &AppState, world_id: Uuid) -> crate::models::RollRecord {
+    let mut conn = state.db_pool.get().unwrap();
+    let mut rows: Vec<crate::models::RollRecord> = world_roll_records::table
+        .filter(world_roll_records::world_id.eq(world_id))
+        .load(&mut conn)
+        .unwrap();
+    assert_eq!(rows.len(), 1, "one roll was made");
+    rows.pop().unwrap()
+}
+
+async fn roll_with(
+    state: &AppState,
+    who: Uuid,
+    world_id: Uuid,
+    actor_id: Uuid,
+    check_id: &str,
+    advantage: Advantage,
+) -> GraphQLResult<GraphQLRollResolution> {
+    roll_check_impl(
+        state,
+        who,
+        false,
+        world_id,
+        actor_id,
+        check_id.to_string(),
+        advantage,
+        &mut StepRng(11),
+    )
+    .await
+}
+
+#[tokio::test]
+async fn a_5e_check_with_advantage_rolls_two_d20s_and_says_what_it_was_for() {
+    let state = state_with_real_packs();
+    let (owner_id, world_id, actor_id) = world_with_actor(&state, "dnd5e");
+    let resolution = roll_with(
+        &state,
+        owner_id,
+        world_id,
+        actor_id,
+        "stealth",
+        Advantage::Advantage,
+    )
+    .await
+    .expect("5e rolls with advantage");
+    assert_eq!(resolution.dice.len(), 2, "advantage rolls two d20s");
+
+    let row = only_roll(&state, world_id);
+    assert_eq!(row.formula, "2d20kh1 + MODIFIER");
+    assert_eq!(row.facet_ids(), vec!["advantage".to_string()]);
+    assert_eq!(row.actor_id, Some(actor_id));
+    assert_eq!(row.roll_kind.as_deref(), Some("check"));
+    assert_eq!(row.check_id.as_deref(), Some("stealth"));
+    assert_eq!(row.reroll_of, None);
+}
+
+#[tokio::test]
+async fn a_5e_check_rolled_normally_is_the_declared_formula() {
+    let state = state_with_real_packs();
+    let (owner_id, world_id, actor_id) = world_with_actor(&state, "dnd5e");
+    roll_with(
+        &state,
+        owner_id,
+        world_id,
+        actor_id,
+        "stealth",
+        Advantage::Normal,
+    )
+    .await
+    .expect("a plain check rolls");
+    let row = only_roll(&state, world_id);
+    assert_eq!(row.formula, "1d20 + MODIFIER");
+    assert!(row.facet_ids().is_empty());
+    assert_eq!(row.roll_kind.as_deref(), Some("check"));
+}
+
+#[test]
+fn the_schema_defaults_a_check_to_a_normal_roll() {
+    let schema = async_graphql::Schema::build(
+        crate::graphql::QueryRoot::default(),
+        crate::graphql::MutationRoot::default(),
+        crate::graphql::SubscriptionRoot,
+    )
+    .finish();
+    let sdl = schema.sdl();
+    let declaration = sdl
+        .lines()
+        .find(|line| line.trim_start().starts_with("rollCheck("))
+        .expect("rollCheck must be declared");
+    assert!(
+        declaration.contains("advantage: Advantage = NORMAL"),
+        "{declaration}"
+    );
+}
+
+/// SC-005: a system without facets refuses the choice and rolls its own
+/// formula untouched. Roll for Shoes declares no checks, so the untouched
+/// half is shown on Cypher, which declares one and registers no facets.
+#[tokio::test]
+async fn a_system_without_facets_refuses_advantage_and_rolls_its_formula_untouched() {
+    let state = state_with_real_packs();
+    let (owner_id, world_id, actor_id) = world_with_actor(&state, "roll_for_shoes");
+    let err = roll_with(
+        &state,
+        owner_id,
+        world_id,
+        actor_id,
+        "anything",
+        Advantage::Advantage,
+    )
+    .await
+    .expect_err("Roll for Shoes has no advantage");
+    assert_eq!(err.message, "This system does not roll with advantage.");
+    assert_eq!(roll_count(&state, world_id), 0);
+
+    let (owner_id, world_id, actor_id) = world_with_actor(&state, "cypher_system");
+    roll_with(
+        &state,
+        owner_id,
+        world_id,
+        actor_id,
+        "task",
+        Advantage::Disadvantage,
+    )
+    .await
+    .expect_err("Cypher has no disadvantage either");
+    roll_with(
+        &state,
+        owner_id,
+        world_id,
+        actor_id,
+        "task",
+        Advantage::Normal,
+    )
+    .await
+    .expect("a plain Cypher task rolls");
+    let row = only_roll(&state, world_id);
+    assert_eq!(row.formula, "1d20");
+    assert!(row.facet_ids().is_empty());
 }
