@@ -53,6 +53,8 @@ pub mod token_loader;
 pub mod token_move;
 pub mod token_sync_d2;
 pub mod wall;
+/// The Door primitive's click on an existing wall (spec 085 keeps it hidden).
+pub mod wall_door;
 /// What a wall gesture lays down and its preview — split from `wall` to
 /// keep that file within the length limit (spec 077).
 pub mod wall_draw;

@@ -274,10 +274,7 @@ pub(crate) fn handle_wall_input(
                     })
                     .cloned()
             {
-                let mut updated = wall.clone();
-                updated.door_state = DoorState::Closed;
-                updated.locked = false;
-                updated.secret = false;
+                let (updated, changes) = crate::systems::wall_door::door_click_update(&wall);
                 wall_set.push_undo(WallEdit::DoorToggle {
                     wall_id: wall.id.clone(),
                     prior_door_state: wall.door_state,
@@ -288,7 +285,7 @@ pub(crate) fn handle_wall_input(
                 emit_event(json!({
                     "type": "update_wall",
                     "wallId": wall.id,
-                    "changes": { "doorState": "closed", "locked": false, "secret": false },
+                    "changes": changes,
                     "worldId": active_world.0,
                 }));
                 drag.mode = WallDragMode::Idle;

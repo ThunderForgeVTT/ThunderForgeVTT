@@ -86,8 +86,8 @@ that passes them.
 
 **Independent Test**: The GM hides a plain wall. The player's board does not draw it, and the player's token cannot cross it.
 
-- [ ] T010 [P] [US1] Door click, tests first, in `crates/thunderforge-engine/src/systems/wall_door_tests.rs`: a click that makes a hidden plain wall a door keeps `secret: true`, and its changes are exactly `{doorState:"closed", locked:false}`.
-- [ ] T011 [US1] Extract the door click's wall update into `door_click_update(&Wall) -> (Wall, serde_json::Value)` in a new `crates/thunderforge-engine/src/systems/wall_door.rs`. Call it from `systems/wall.rs` (≈278–292), dropping `updated.secret = false` and `secret: false`, so `wall.rs` shrinks.
+- [x] T010 [P] [US1] Door click, tests first, in `crates/thunderforge-engine/src/systems/wall_door_tests.rs`: a click that makes a hidden plain wall a door keeps `secret: true`, and its changes are exactly `{doorState:"closed", locked:false}`.
+- [x] T011 [US1] Extract the door click's wall update into `door_click_update(&Wall) -> (Wall, serde_json::Value)` in a new `crates/thunderforge-engine/src/systems/wall_door.rs`. Call it from `systems/wall.rs` (≈278–292), dropping `updated.secret = false` and `secret: false`, so `wall.rs` shrinks.
 - [ ] T012 [P] [US1] Wall bridge, tests first, in a new `apps/web/src/engine/world/sync/__tests__/wallBridge.test.ts`, with `setDoorSecret` and `updateWall` mocked:
   - `set_walls_hidden` for 3 walls sends 3 `setDoorSecret` calls, each in its wall's turn;
   - one refusal restores that wall's prior record with source `"sync"` and leaves the other two;
