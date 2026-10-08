@@ -80,6 +80,14 @@ function permissionOf(state: DemoState, actor: Row): string {
   return actor.ownedBy === DEMO_PLAYER.id ? "OWNER" : "VIEWER";
 }
 
+/**
+ * Spec 084 `may_act`: the GM, or an Editor or Owner of the actor, may still
+ * act for it.
+ */
+export function mayActFor(state: DemoState, actor: Row): boolean {
+  return permissionOf(state, actor) !== "VIEWER";
+}
+
 /** An actor row with the viewer-dependent fields filled in. */
 export function actorRow(state: DemoState, actor: Row): Row {
   const mine = permissionOf(state, actor);

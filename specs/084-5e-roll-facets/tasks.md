@@ -291,13 +291,18 @@ nothing visible changed.
 
 ### Demo
 
-- [ ] T046 [P] [US3] Tests in `apps/demo/src/backend/handlers/dice.test.ts`: `rerollRoll` with Inspiration through `replayRoll` (seeded), the sheet flag off, and each refusal from T039 that the demo can reach (another viewer, spent, setting off, window, a damage roll). Revealing a chain reveals both.
-- [ ] T047 [US3] `apps/demo/src/backend/handlers/dice.ts`:
+- [x] T046 [P] [US3] Tests in `apps/demo/src/backend/handlers/dice.test.ts`: `rerollRoll` with Inspiration through `replayRoll` (seeded), the sheet flag off, and each refusal from T039 that the demo can reach (another viewer, spent, setting off, window, a damage roll). Revealing a chain reveals both.
+- [x] T047 [US3] `apps/demo/src/backend/handlers/dice.ts`:
   - a `rerollRoll` mutation, with `facets.ts` `rerollPlan` for the rules;
   - `rerollOffers`, `rerollUntil`, `rerollOf` and `rerolledBy` on the row;
   - a chain reveal.
 
   `events.ts` needs no change.
+
+  As built: the demo's Inspiration setting is always on, so "setting off" is
+  not reachable there; the server test covers it. `actors.ts` exports
+  `mayActFor` for the server's `may_act`. A to_hit roll is refused, as the
+  server refuses it, until T057.
 
 ### Proof
 

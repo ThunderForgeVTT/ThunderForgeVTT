@@ -6,12 +6,12 @@
 import { readFileSync } from "node:fs";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { DEMO_USER } from "../../seed/world";
+import { DEMO_PLAYER, DEMO_USER } from "../../seed/world";
 import { runOperation } from "../execute";
 import { demoState, type Row } from "../state";
 import { eventsSince } from "../events";
 import { freshWorld, heard, refusal, releaseEvents } from "../testing/world";
-import { loadDiceForTest, resolutionRow, seedDice } from "./dice";
+import { loadDiceForTest, recordRoll, resolutionRow, seedDice } from "./dice";
 
 const ROLL = `mutation ($input: RollDiceInput!) {
   rollDice(input: $input) {
@@ -514,5 +514,186 @@ describe("dice on the screen", () => {
       null,
     );
     expect((before.dice as Row[])[0].steps).toEqual([]);
+  });
+});
+
+const REROLL = `mutation ($worldId: UUID!, $rollId: UUID!, $spend: String!) {
+  rerollRoll(worldId: $worldId, rollId: $rollId, spend: $spend) {
+    id rerollOf spent { id label } facets { id }
+    resolution { dice { numericSides kept finalValue } }
+  }
+}`;
+const REROLL_LINKS = `query ($worldId: UUID!, $rollId: UUID!) {
+  worldRoll(worldId: $worldId, rollId: $rollId) {
+    ... on WorldRoll {
+      rerollOf rerolledBy rerollUntil
+      spent { id label }
+      rerollOffers { id label }
+    }
+  }
+}`;
+
+/** The player's own character, holding Heroic Inspiration or not. */
+function playersCharacter(inspired: boolean): Row {
+  const state = demoState();
+  const actor = state.actors.find((a) => a.ownedBy === DEMO_PLAYER.id)!;
+  const sheet = state.systemData.find((row) => row.actorId === actor.id)!;
+  sheet.traitData = { ...(sheet.traitData as Row), inspiration: inspired };
+  return actor;
+}
+
+function inspired(actor: Row): unknown {
+  const state = demoState();
+  return (
+    state.systemData.find((row) => row.actorId === actor.id)!.traitData as Row
+  ).inspiration;
+}
+
+async function playerChecks(actor: Row, advantage?: string): Promise<Row> {
+  demoState().viewer = "player";
+  const answer = await ask(CHECK_WITH, {
+    w: demoState().world.id,
+    a: actor.id,
+    adv: advantage,
+  });
+  expect(answer.errors).toBeUndefined();
+  return demoState().rolls!.at(-1)!;
+}
+
+async function reroll(rollId: unknown, spend = "inspiration") {
+  return ask(REROLL, { worldId: demoState().world.id, rollId, spend });
+}
+
+async function linksOf(rollId: unknown): Promise<Row> {
+  const worldId = demoState().world.id;
+  return (await ask(REROLL_LINKS, { worldId, rollId })).data?.worldRoll as Row;
+}
+
+/** Spec 084 US3: `rerollRoll`, as the server spends Heroic Inspiration. */
+describe("rerollRoll", () => {
+  it("spends the maker's Heroic Inspiration on their check, once", async () => {
+    const actor = playersCharacter(true);
+    const first = await playerChecks(actor);
+    const offered = await linksOf(first.id);
+    expect(offered.rerollOffers).toEqual([
+      { id: "inspiration", label: "Heroic Inspiration" },
+    ]);
+    expect(offered.rerollUntil).not.toBeNull();
+    const events = heard();
+
+    const answer = await reroll(first.id);
+    expect(answer.errors).toBeUndefined();
+    const second = answer.data?.rerollRoll as Row;
+    expect(second.rerollOf).toBe(first.id);
+    expect(second.spent).toEqual({
+      id: "inspiration",
+      label: "Heroic Inspiration",
+    });
+    expect(second.facets).toEqual([{ id: "inspiration" }]);
+    expect(inspired(actor)).toBe(false);
+    const record = demoState().rolls!.at(-1)!;
+    expect(record).toMatchObject({
+      rerollOf: first.id,
+      rerollSpent: "inspiration",
+      actorId: actor.id,
+      checkId: "stealth",
+      rollKind: "check",
+      visibility: first.visibility,
+      label: first.label,
+    });
+    releaseEvents();
+    expect(events.map((event) => event.eventCode)).toEqual(
+      expect.arrayContaining([26, 36]),
+    );
+
+    const replaced = await linksOf(first.id);
+    expect(replaced.rerolledBy).toBe(second.id);
+    expect(replaced.rerollOffers).toEqual([]);
+    expect(replaced.rerollUntil).toBeNull();
+
+    playersCharacter(true);
+    expect((await reroll(first.id)).errors?.[0]?.message).toBe(
+      "This roll has already been rerolled.",
+    );
+    expect((await reroll(second.id)).errors?.[0]?.message).toBe(
+      "Heroic Inspiration has already been spent on this roll.",
+    );
+    expect(inspired(actor)).toBe(true);
+  });
+
+  it("rolls only the lower d20 again when there are two", async () => {
+    const actor = playersCharacter(true);
+    const first = await playerChecks(actor, "ADVANTAGE");
+    const before = (resolutionRow(first.detail as never, null).dice as Row[])
+      .filter((die) => die.numericSides === 20)
+      .map((die) => die.finalValue as number);
+    const answer = await reroll(first.id);
+    const after = (
+      (answer.data?.rerollRoll as Row).resolution as { dice: Row[] }
+    ).dice
+      .filter((die) => die.numericSides === 20)
+      .map((die) => die.finalValue as number);
+    const lower = before[1] < before[0] ? 1 : 0;
+    expect(after[1 - lower]).toBe(before[1 - lower]);
+  });
+
+  it("refuses what the server refuses, and spends nothing", async () => {
+    const actor = playersCharacter(true);
+    const first = await playerChecks(actor);
+
+    demoState().viewer = "gm";
+    expect((await linksOf(first.id)).rerollOffers).toEqual([]);
+    expect((await reroll(first.id)).errors?.[0]?.message).toBe(
+      "Only the person who made a roll may reroll it.",
+    );
+
+    demoState().viewer = "player";
+    first.createdAt = new Date(Date.now() - 121_000).toISOString();
+    expect((await linksOf(first.id)).rerollOffers).toEqual([]);
+    expect((await reroll(first.id)).errors?.[0]?.message).toBe(
+      "It is too late to reroll this roll.",
+    );
+
+    recordRoll(first.detail, {
+      meta: { actorId: actor.id as string, rollKind: "damage" },
+    });
+    const damage = demoState().rolls!.at(-1)!;
+    expect((await reroll(damage.id)).errors?.[0]?.message).toBe(
+      "Only a d20 test can be rerolled.",
+    );
+
+    const free = await rollAs({});
+    expect((await reroll(free.id)).errors?.[0]?.message).toBe(
+      "Only the person who made a roll may reroll it.",
+    );
+    expect(inspired(actor)).toBe(true);
+
+    playersCharacter(false);
+    const second = await playerChecks(actor);
+    expect((await linksOf(second.id)).rerollOffers).toEqual([]);
+    expect((await reroll(second.id)).errors?.[0]?.message).toBe(
+      `${String(actor.label)} has no Heroic Inspiration.`,
+    );
+  });
+
+  it("reveals a roll and its reroll together", async () => {
+    demoState().viewer = "player";
+    const first = await rollAs({ visibility: "GM_EYES" });
+    const second = await rollAs({ visibility: "GM_EYES" });
+    Object.assign(demoState().rolls!.at(-1)!, {
+      rerollOf: first.id,
+      rerollSpent: "inspiration",
+    });
+    demoState().viewer = "gm";
+    const answer = await ask(REVEAL, {
+      worldId: demoState().world.id,
+      rollId: second.id,
+    });
+    expect(answer.errors).toBeUndefined();
+    for (const id of [first.id, second.id]) {
+      expect(
+        demoState().rolls!.find((roll) => roll.id === id)!.revealedAt,
+      ).not.toBeNull();
+    }
   });
 });

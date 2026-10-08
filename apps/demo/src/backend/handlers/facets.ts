@@ -92,3 +92,43 @@ export function facetRows(
 ): { id: string; label: string }[] {
   return ids.map((id) => ({ id, label: FACET_LABELS[id] ?? id }));
 }
+
+/** What a facet may be spent on: the d20 tests (spec 084 FR-018). */
+const REROLLS: Record<string, { trait: string; kinds: readonly RollKind[] }> = {
+  inspiration: { trait: "inspiration", kinds: ["check"] },
+};
+
+/** The facets a sheet holds that a roll of `kind` may be rerolled with. */
+export function rerollOffers(traitData: unknown, kind: unknown): string[] {
+  const traits = (traitData ?? {}) as Record<string, unknown>;
+  return Object.entries(REROLLS)
+    .filter(
+      ([, plan]) =>
+        traits[plan.trait] === true && plan.kinds.includes(kind as RollKind),
+    )
+    .map(([id]) => id);
+}
+
+/**
+ * The 5e pack's `reroll`: the trait data with `spend` spent, or the pack's
+ * refusal. `spentAlready` is every facet spent along the roll's chain.
+ */
+export function rerollPlan(
+  traitData: unknown,
+  spend: string,
+  actorName: string,
+  spentAlready: readonly string[],
+): Record<string, unknown> {
+  const plan = REROLLS[spend];
+  const label = FACET_LABELS[spend] ?? spend;
+  if (!plan)
+    throw new GraphQLError("This table does not use Heroic Inspiration.");
+  if (spentAlready.includes(spend)) {
+    throw new GraphQLError(`${label} has already been spent on this roll.`);
+  }
+  const traits = (traitData ?? {}) as Record<string, unknown>;
+  if (traits[plan.trait] !== true) {
+    throw new GraphQLError(`${actorName} has no ${label}.`);
+  }
+  return { ...traits, [plan.trait]: false };
+}

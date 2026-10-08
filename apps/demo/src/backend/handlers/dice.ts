@@ -13,12 +13,18 @@
  * per roll, where the server seeds a `StdRng` from the OS. A test fixes the
  * seed with `seedDice`.
  */
-import init, { initSync, roll, validateFormula } from "@thunderforge/dice";
+import init, {
+  initSync,
+  lowestDie,
+  replayRoll,
+  roll,
+  validateFormula,
+} from "@thunderforge/dice";
 import { GraphQLError } from "graphql";
 
-import { facetRows, type RollKind } from "./facets";
+import { facetRows, rerollOffers, rerollPlan, type RollKind } from "./facets";
 import { DEMO_PLAYER, DEMO_USER } from "../../seed/world";
-import { viewerIsGm, viewerUser } from "../actors";
+import { mayActFor, systemDataOf, viewerIsGm, viewerUser } from "../actors";
 import { EVENT, record } from "../events";
 import { demoState, markChanged, type DemoState, type Row } from "../state";
 
@@ -162,6 +168,9 @@ export interface RollMeta {
   rollKind?: RollKind | null;
   checkId?: string | null;
   facets?: string[];
+  /** The roll this one rerolled, and what was spent to do it. */
+  rerollOf?: string | null;
+  rerollSpent?: string | null;
 }
 
 /**
@@ -199,6 +208,8 @@ export function recordRoll(
     rollKind: meta.rollKind ?? null,
     checkId: meta.checkId ?? null,
     facets: meta.facets ?? [],
+    rerollOf: meta.rerollOf ?? null,
+    rerollSpent: meta.rerollSpent ?? null,
   });
   rolls.splice(0, Math.max(0, rolls.length - KEPT));
   record(EVENT.rollMade, { rollId: id, visibility });
@@ -250,6 +261,98 @@ function bindingsOf(record: Row): Row[] {
  * the GM and a revealed roll see it whole; another player sees a GM's eyes
  * roll masked and a GM only roll not at all (FR-003).
  */
+/** `reroll::REROLL_WINDOW`: how long a roll's maker may reroll it. */
+const REROLL_WINDOW_MS = 120_000;
+
+const ONLY_MAKER = "Only the person who made a roll may reroll it.";
+const NO_LONGER_ACTS = "You can no longer act for this character.";
+const NOT_A_D20_TEST = "Only a d20 test can be rerolled.";
+const ALREADY_REROLLED = "This roll has already been rerolled.";
+const TOO_LATE = "It is too late to reroll this roll.";
+
+const isD20Test = (record: Row) =>
+  record.rollKind === "check" || record.rollKind === "to_hit";
+
+/** `rerolled_by`: the roll that replaced this one, if any. */
+function rerolledBy(record: Row, state: DemoState): Row | null {
+  return (state.rolls ?? []).find((r) => r.rerollOf === record.id) ?? null;
+}
+
+/** `chain_of`: the roll and every roll it rerolled, newest first. */
+function chainOf(record: Row, state: DemoState): Row[] {
+  const chain = [record];
+  let at = record;
+  while (at.rerollOf != null) {
+    const before = (state.rolls ?? []).find((r) => r.id === at.rerollOf);
+    if (!before) break;
+    chain.push(before);
+    at = before;
+  }
+  return chain;
+}
+
+/** `whole_chain`: oldest first, the rolls rerolled and the rerolls after. */
+function wholeChain(record: Row, state: DemoState): Row[] {
+  const chain = chainOf(record, state).reverse();
+  let next = rerolledBy(record, state);
+  while (next) {
+    chain.push(next);
+    next = rerolledBy(next, state);
+  }
+  return chain;
+}
+
+/** `spent_in`: every facet spent along the chain. */
+function spentIn(record: Row, state: DemoState): string[] {
+  return chainOf(record, state)
+    .map((r) => r.rerollSpent as string | null)
+    .filter((id): id is string => id != null);
+}
+
+/** `reroll_until`: when the window shuts, for a d20 test not yet rerolled. */
+function rerollUntil(record: Row, state: DemoState): number | null {
+  if (record.actorId == null || !isD20Test(record)) return null;
+  if (rerolledBy(record, state)) return null;
+  return Date.parse(String(record.createdAt)) + REROLL_WINDOW_MS;
+}
+
+/** `may_reroll`, refused in the server's order; the facets come after. */
+function mayReroll(record: Row | undefined, state: DemoState): Row {
+  if (
+    !record ||
+    record.actorId == null ||
+    record.triggeredBy !== viewerUser(state).id
+  ) {
+    throw new GraphQLError(ONLY_MAKER);
+  }
+  const actor = state.actors.find((a) => a.id === record.actorId);
+  if (!actor || !mayActFor(state, actor)) {
+    throw new GraphQLError(NO_LONGER_ACTS);
+  }
+  // A to_hit roll waits for the attack reroll (spec 084 T057).
+  if (record.rollKind !== "check") throw new GraphQLError(NOT_A_D20_TEST);
+  if (rerolledBy(record, state)) throw new GraphQLError(ALREADY_REROLLED);
+  if (Date.now() >= (rerollUntil(record, state) ?? 0)) {
+    throw new GraphQLError(TOO_LATE);
+  }
+  return actor;
+}
+
+/** `offers_from_db`: what the viewer may spend on this roll now. */
+function offersFor(record: Row, state: DemoState): string[] {
+  let actor: Row;
+  try {
+    actor = mayReroll(record, state);
+  } catch {
+    return [];
+  }
+  const spent = spentIn(record, state);
+  return rerollOffers(
+    systemDataOf(state, actor.id as string)?.traitData,
+    record.rollKind,
+  ).filter((id) => !spent.includes(id));
+}
+
 function entryFor(record: Row, state: DemoState): Row | null {
   const visibility = visibilityOf(record);
   const whole =
@@ -258,6 +361,7 @@ function entryFor(record: Row, state: DemoState): Row | null {
     record.triggeredBy === viewerUser(state).id ||
     viewerIsGm(state);
   if (whole) {
+    const until = rerollUntil(record, state);
     return {
       __typename: "WorldRoll",
       id: record.id,
@@ -276,6 +380,14 @@ function entryFor(record: Row, state: DemoState): Row | null {
       revealedByName:
         record.revealedBy == null ? null : usernameOf(record.revealedBy),
       facets: facetRows((record.facets as string[] | undefined) ?? []),
+      rerollOf: record.rerollOf ?? null,
+      rerolledBy: rerolledBy(record, state)?.id ?? null,
+      spent:
+        record.rerollSpent == null
+          ? null
+          : facetRows([record.rerollSpent as string])[0],
+      rerollOffers: facetRows(offersFor(record, state)),
+      rerollUntil: until === null ? null : new Date(until).toISOString(),
     };
   }
   if (visibility === "gm_eyes") {
@@ -368,13 +480,72 @@ export const diceMutations = {
     }
     const found = (state.rolls ?? []).find((record) => record.id === rollId);
     if (!found) throw new GraphQLError("Roll not found");
-    const visibility = visibilityOf(found);
-    if (visibility !== "everyone" && found.revealedAt == null) {
-      found.revealedAt = new Date().toISOString();
-      found.revealedBy = viewerUser(state).id;
-      record(EVENT.rollRevealed, { rollId: found.id, visibility });
-      markChanged();
+    // Spec 084: a reroll and the roll it replaced are revealed together.
+    for (const link of wholeChain(found, state)) {
+      const visibility = visibilityOf(link);
+      if (visibility !== "everyone" && link.revealedAt == null) {
+        link.revealedAt = new Date().toISOString();
+        link.revealedBy = viewerUser(state).id;
+        record(EVENT.rollRevealed, { rollId: link.id, visibility });
+        markChanged();
+      }
     }
     return entryFor(found, state);
+  },
+  /**
+   * Spec 084 `reroll_roll_impl`: the maker spends a facet to roll their own
+   * d20 test again. The lowest d20 is rolled again and every other die kept;
+   * the new roll keeps the old one's visibility, label and actor.
+   */
+  rerollRoll: async ({ rollId, spend }: Args) => {
+    await diceReady();
+    const state = demoState();
+    const found = (state.rolls ?? []).find((r) => r.id === rollId);
+    const actor = mayReroll(found, state);
+    const original = found!;
+    const sheet = systemDataOf(state, actor.id as string);
+    const traits = rerollPlan(
+      sheet?.traitData,
+      String(spend),
+      String(actor.label),
+      spentIn(original, state),
+    );
+    if (sheet) sheet.traitData = traits;
+    record(EVENT.actorSheet, {
+      action: "changed",
+      actorId: actor.id,
+      dataType: "trait_data",
+    });
+    const detail = original.detail as Resolution;
+    const bindings = (original.bindings ?? {}) as Record<string, number>;
+    const die = lowestDie(JSON.stringify(detail), 20);
+    const replayed = JSON.parse(
+      replayRoll(
+        detail.formula,
+        JSON.stringify(bindings),
+        JSON.stringify(detail),
+        undefined,
+        die,
+        nextSeed(),
+      ),
+    ) as Resolution;
+    const id = recordRoll(replayed, {
+      bindings,
+      visibility: visibilityOf(original),
+      label: (original.label as string | null) ?? null,
+      outcome: (original.outcome as Row | null) ?? null,
+      meta: {
+        actorId: actor.id as string,
+        rollKind: original.rollKind as RollKind,
+        checkId: (original.checkId as string | null) ?? null,
+        facets: [
+          ...((original.facets as string[] | undefined) ?? []),
+          String(spend),
+        ],
+        rerollOf: original.id as string,
+        rerollSpent: String(spend),
+      },
+    });
+    return entryFor(state.rolls!.find((r) => r.id === id)!, state);
   },
 };
