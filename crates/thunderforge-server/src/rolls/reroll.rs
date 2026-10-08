@@ -332,9 +332,7 @@ pub fn offers_from_db(
     let (Some(actor_id), true, Some(_)) = (row.actor_id, open, system) else {
         return Ok(Vec::new());
     };
-    // An attack is offered nothing until `rerollRoll` re-judges attacks
-    // (tasks.md T057); until then the mutation refuses one.
-    if row.triggered_by != viewer.user_id || row.roll_kind.as_deref() == Some("to_hit") {
+    if row.triggered_by != viewer.user_id {
         return Ok(Vec::new());
     }
     let chain = chain_of(conn, row)?;

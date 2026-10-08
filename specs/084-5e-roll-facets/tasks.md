@@ -377,7 +377,7 @@ nothing visible changed.
   the events in the order they were. `target_system` moved with it, and
   `roll_and_record` is now `pub(crate)`.
 
-- [ ] T056 [P] [US4] Tests `crates/thunderforge-server/src/combat/attack_reroll_tests.rs`:
+- [x] T056 [P] [US4] Tests `crates/thunderforge-server/src/combat/attack_reroll_tests.rs`:
   - a seeded miss rerolled with Inspiration into a hit:
     - one new `world_attacks` row with `reroll_of`, the old `defence` (even after the target's AC is changed in between), and the same target, labels and distance;
     - one damage roll and one offer, or an auto-applied change;
@@ -387,13 +387,15 @@ nothing visible changed.
   - A hit is refused with `A hit cannot be rerolled.`
   - One part of a multiattack: only that part gets a new row, and the others stand.
   - A lair's to-hit has no actor and cannot be rerolled.
-- [ ] T057 [US4] `crates/thunderforge-server/src/combat/attack_reroll.rs`: `reroll_attack(conn, …, roll, new_resolution)`, called from `mutations_reroll.rs` when `roll_kind = 'to_hit'`. It:
+- [x] T057 [US4] `crates/thunderforge-server/src/combat/attack_reroll.rs`: `reroll_attack(conn, …, roll, new_resolution)`, called from `mutations_reroll.rs` when `roll_kind = 'to_hit'`. It:
   - finds the attack by `to_hit_roll_id`;
   - refuses unless it missed;
   - judges with `judge(target.is_some(), attack.defence, total)`;
   - inserts the new row;
   - on a hit, rebuilds the part with `find_weapon` and `parts_of` (`combat/weapon.rs:140`, `:219`) from the row's `item_id` or `ability_id`, and calls `settle_hit`;
   - never calls `spend_for_attack` (research R7).
+
+  As built: `mutations_reroll.rs`'s `reroll_check` became `reroll_d20`, which records the new roll with its own kind and then hands a `to_hit` to `reroll_attack`; the stub that refused an attack, and the one that offered it nothing, are gone. Only a hit is refused (`A hit cannot be rerolled.`, the same refusal `may_reroll` makes first), so an attack with no target or no defence may be rerolled too and is judged the same way. The part is rebuilt as whoever runs the world sees the weapon, so a multiattack's part need not be on the attacker's own sheet. The tests find their seeds by replaying the to-hit exactly as `rerollRoll` does.
 - [ ] T058 [P] [US4] The attack feed and the type: `graphql/types_attacks.rs` gains `rerollOf` on the attack, and `queries/attacks.rs` returns it. Regenerate the GraphQL contract.
 - [ ] T059 [P] [US4] Demo: `combatAttacks.ts` handles a `to_hit` reroll the same way (a new attack row, the stored defence, damage, an offer). Test it in `combat.test.ts` with a seeded miss and then a hit.
 - [ ] T060 [US4] `apps/web/e2e/rolls-facets-attack.spec.ts`:

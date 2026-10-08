@@ -16,6 +16,8 @@ use diesel::result::{DatabaseErrorKind, Error as DieselError};
 use rand::SeedableRng;
 use uuid::Uuid;
 
+use crate::combat::attack::FightRefusal;
+use crate::combat::attack_reroll::reroll_attack;
 use crate::graphql::queries::roll::{RollContext, usernames, viewer_in_world};
 use crate::graphql::types::WorldRoll;
 use crate::graphql::{app_state, authenticated_user};
@@ -130,13 +132,8 @@ pub async fn reroll_roll_impl<R: rand::Rng>(
             };
             let label = spend_label(&system_id, &spend);
             let kind = may_reroll(user_id, &standing, &spend, &label, now).map_err(said)?;
-            // An attack's reroll re-judges the attack too (research R7);
-            // until that lands, only a check is rerolled.
-            if kind != RollKind::Check {
-                return Err(said(NOT_A_D20_TEST));
-            }
             let actor_id = row.actor_id.ok_or_else(|| said(ONLY_MAKER))?;
-            reroll_check(
+            reroll_d20(
                 conn,
                 &systems_dir,
                 &system_id,
@@ -144,6 +141,7 @@ pub async fn reroll_roll_impl<R: rand::Rng>(
                 &row,
                 actor_id,
                 &spend,
+                kind,
                 &mut rng,
             )
         })?;
@@ -165,9 +163,9 @@ pub async fn reroll_roll_impl<R: rand::Rng>(
 
 /// Everything after the host's refusals, on the transaction's connection:
 /// the pack's plan, the sheet it pays from, the replayed dice, the record
-/// and the events.
+/// and the events. A to-hit then re-judges its attack (research R7).
 #[allow(clippy::too_many_arguments)]
-fn reroll_check(
+fn reroll_d20(
     conn: &mut PgConnection,
     systems_dir: &str,
     system_id: &str,
@@ -175,6 +173,7 @@ fn reroll_check(
     row: &RollRecord,
     actor_id: Uuid,
     spend: &str,
+    kind: RollKind,
     rng: &mut rand::rngs::StdRng,
 ) -> Result<RollRecord, Refused> {
     let world_id = row.world_id;
@@ -189,8 +188,7 @@ fn reroll_check(
     let system = facets_for(system_id)
         .ok_or_else(|| said(format!("This system has no reroll called \"{spend}\".")))?;
     let facets = row.facet_ids();
-    let plan = (system.reroll)(&reroll_input(spend, RollKind::Check, row, &facets, &sheet))
-        .map_err(said)?;
+    let plan = (system.reroll)(&reroll_input(spend, kind, row, &facets, &sheet)).map_err(said)?;
 
     crate::systems::validate_actor_system_data(system_id, "trait_data", &plan.trait_data)
         .map_err(said)?;
@@ -242,7 +240,7 @@ fn reroll_check(
     with_spend.push(spend.to_string());
     RollMeta {
         actor_id: Some(actor_id),
-        roll_kind: Some(RollKind::Check),
+        roll_kind: Some(kind),
         check_id: row.check_id.clone(),
         facets: with_spend,
         reroll_of: Some(row.id),
@@ -264,6 +262,20 @@ fn reroll_check(
         user_id,
     )
     .map_err(|_| Refused::Database)?;
+    if kind == RollKind::ToHit {
+        let attack = reroll_attack(conn, systems_dir, user_id, row.id, &new_row, rng).map_err(
+            |refusal| match refusal {
+                FightRefusal::Failed(_) => Refused::Database,
+                other => said(other.message()),
+            },
+        )?;
+        tracing::info!(
+            attack_id = %attack.attack_id,
+            outcome = %attack.outcome,
+            offer_id = ?attack.offer_id,
+            "an attack was rerolled"
+        );
+    }
     Ok(new_row)
 }
 

@@ -13,6 +13,7 @@
 pub mod attack;
 pub mod attack_fields;
 pub(crate) mod attack_hit;
+pub(crate) mod attack_reroll;
 pub mod budget;
 pub mod controllers;
 pub mod hit_points;
