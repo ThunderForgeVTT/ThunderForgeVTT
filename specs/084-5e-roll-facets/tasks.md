@@ -348,7 +348,13 @@ nothing visible changed.
   the new formula and stores it. The pack refuses in this order: not a d20
   test, no Lucky feat, disadvantage, no points left.
 
-- [ ] T053 [P] [US5] Demo: `facets.ts` `rerollPlan` for `luck_point`, with the matching cases in `dice.test.ts`.
+- [x] T053 [P] [US5] Demo: `facets.ts` `rerollPlan` for `luck_point`, with the matching cases in `dice.test.ts`.
+
+  As built: `rerollPlan` now answers the pack's `RerollEdit` too (`lowest`
+  or `reshape`), and `rerollOffers` keeps every spend whose plan would be
+  accepted, as `offers_for` does. An unknown spend now gets the pack's own
+  sentence.
+
 - [ ] T054 [US5] In `rolls-facets-inspiration.spec.ts`, add a second test:
   1. Tick Lucky.
   2. Roll.

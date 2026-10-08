@@ -7,6 +7,11 @@
  */
 import { GraphQLError } from "graphql";
 
+import {
+  calculateProficiencyBonus,
+  calculateProficiencyBonusForChallenge,
+} from "../../../../../packs/systems/dnd5e/web/src/derived-data";
+
 /** How a d20 test is rolled. The GraphQL `Advantage` enum. */
 export type Advantage = "NORMAL" | "ADVANTAGE" | "DISADVANTAGE";
 
@@ -93,42 +98,147 @@ export function facetRows(
   return ids.map((id) => ({ id, label: FACET_LABELS[id] ?? id }));
 }
 
-/** What a facet may be spent on: the d20 tests (spec 084 FR-018). */
-const REROLLS: Record<string, { trait: string; kinds: readonly RollKind[] }> = {
-  inspiration: { trait: "inspiration", kinds: ["check"] },
-};
+/** What the pack's `NOT_A_D20_TEST` says. */
+export const NOT_A_D20_TEST = "Only a d20 test can be rerolled.";
 
-/** The facets a sheet holds that a roll of `kind` may be rerolled with. */
-export function rerollOffers(traitData: unknown, kind: unknown): string[] {
-  const traits = (traitData ?? {}) as Record<string, unknown>;
-  return Object.entries(REROLLS)
-    .filter(
-      ([, plan]) =>
-        traits[plan.trait] === true && plan.kinds.includes(kind as RollKind),
-    )
-    .map(([id]) => id);
+/** The roll a reroll is planned against. */
+export interface RerollTarget {
+  kind: unknown;
+  formula: string;
+  facets: readonly string[];
 }
 
 /**
- * The 5e pack's `reroll`: the trait data with `spend` spent, or the pack's
- * refusal. `spentAlready` is every facet spent along the roll's chain.
+ * How the pack's `RerollEdit` says to roll again: the lowest d20 once more
+ * (Heroic Inspiration), or the whole roll through a new formula (a Luck
+ * Point).
+ */
+export type RerollEdit =
+  | { kind: "lowest"; sides: 20 }
+  | { kind: "reshape"; formula: string };
+
+/** A planned reroll: the sheet's trait data once spent, and the edit. */
+export interface RerollPlan {
+  traitData: Record<string, unknown>;
+  edit: RerollEdit;
+}
+
+/** The spends the pack knows, in the order it offers them. */
+const REROLLS = ["inspiration", "luck_point"] as const;
+
+/** The kinds a spend may be offered on until the attack reroll (T057). */
+const OFFERED_ON: readonly RollKind[] = ["check"];
+
+/** `proficiency_of`: from the level, or else the challenge rating. */
+function proficiencyOf(traits: Record<string, unknown>): number {
+  const level = traits.level;
+  if (typeof level === "number" && Number.isInteger(level)) {
+    return level >= 1 && level <= 20 ? calculateProficiencyBonus(level) : 0;
+  }
+  const challenge = traits.challenge;
+  return typeof challenge === "string"
+    ? (calculateProficiencyBonusForChallenge(challenge) ?? 0)
+    : 0;
+}
+
+/** `spend_inspiration`. */
+function spendInspiration(
+  traits: Record<string, unknown>,
+  target: RerollTarget,
+  actorName: string,
+): RerollPlan {
+  if (target.kind === "damage") throw new GraphQLError(NOT_A_D20_TEST);
+  if (traits.inspiration !== true) {
+    throw new GraphQLError(`${actorName} has no Heroic Inspiration.`);
+  }
+  return {
+    traitData: { ...traits, inspiration: false },
+    edit: { kind: "lowest", sides: 20 },
+  };
+}
+
+/**
+ * `spend_luck_point`: one more d20 in the first d20 term, the highest kept,
+ * and one more of the proficiency bonus's points used.
+ */
+function spendLuckPoint(
+  traits: Record<string, unknown>,
+  target: RerollTarget,
+  actorName: string,
+): RerollPlan {
+  if (target.kind === "damage") throw new GraphQLError(NOT_A_D20_TEST);
+  if (!hasFacet(traits, "lucky")) {
+    throw new GraphQLError(`${actorName} does not have the Lucky feat.`);
+  }
+  if (target.facets.includes("disadvantage")) {
+    throw new GraphQLError(
+      "A Luck Point does nothing on a roll made with disadvantage.",
+    );
+  }
+  const used =
+    typeof traits.luck_points_used === "number" ? traits.luck_points_used : 0;
+  if (used >= proficiencyOf(traits)) {
+    throw new GraphQLError(`${actorName} has no Luck Points left.`);
+  }
+  let found = false;
+  const formula = target.formula.replace(
+    TERM,
+    (term, count: string, sides: string, modifiers: string) => {
+      if (found || sides !== "20") return term;
+      found = true;
+      const dice = (count === "" ? 1 : Number(count)) + 1;
+      const keep = /[kd]/i.test(modifiers) ? "" : "kh1";
+      return `${dice}d20${modifiers}${keep}`;
+    },
+  );
+  if (!found) throw new GraphQLError(NOT_A_D20_TEST);
+  return {
+    traitData: { ...traits, luck_points_used: used + 1 },
+    edit: { kind: "reshape", formula },
+  };
+}
+
+/**
+ * The 5e pack's `reroll`: the plan for spending `spend` on `target`, or the
+ * pack's refusal. `spentAlready` is every facet spent along the roll's chain
+ * (the server's own check, made before the pack is asked).
  */
 export function rerollPlan(
   traitData: unknown,
   spend: string,
   actorName: string,
   spentAlready: readonly string[],
-): Record<string, unknown> {
-  const plan = REROLLS[spend];
-  const label = FACET_LABELS[spend] ?? spend;
-  if (!plan)
-    throw new GraphQLError("This table does not use Heroic Inspiration.");
+  target: RerollTarget,
+): RerollPlan {
+  const traits = { ...((traitData ?? {}) as Record<string, unknown>) };
+  if (!(REROLLS as readonly string[]).includes(spend)) {
+    throw new GraphQLError(`This system has no reroll called "${spend}".`);
+  }
   if (spentAlready.includes(spend)) {
+    const label = FACET_LABELS[spend] ?? spend;
     throw new GraphQLError(`${label} has already been spent on this roll.`);
   }
-  const traits = (traitData ?? {}) as Record<string, unknown>;
-  if (traits[plan.trait] !== true) {
-    throw new GraphQLError(`${actorName} has no ${label}.`);
-  }
-  return { ...traits, [plan.trait]: false };
+  return spend === "inspiration"
+    ? spendInspiration(traits, target, actorName)
+    : spendLuckPoint(traits, target, actorName);
+}
+
+/**
+ * `offers_for`: every spend whose plan the pack would accept, so the button
+ * the table is offered and the refusal it would get cannot disagree.
+ */
+export function rerollOffers(
+  traitData: unknown,
+  target: RerollTarget,
+  spentAlready: readonly string[],
+): string[] {
+  if (!OFFERED_ON.includes(target.kind as RollKind)) return [];
+  return REROLLS.filter((spend) => {
+    try {
+      rerollPlan(traitData, spend, "", spentAlready, target);
+      return true;
+    } catch {
+      return false;
+    }
+  });
 }

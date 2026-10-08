@@ -697,3 +697,109 @@ describe("rerollRoll", () => {
     }
   });
 });
+
+/** The player's own character with the Lucky feat, `used` points spent. */
+function luckyCharacter(used: number, level = 5): Row {
+  const actor = playersCharacter(false);
+  const sheet = demoState().systemData.find((row) => row.actorId === actor.id)!;
+  sheet.traitData = {
+    ...(sheet.traitData as Row),
+    level,
+    facets: ["lucky"],
+    luck_points_used: used,
+  };
+  return actor;
+}
+
+function luckUsed(actor: Row): unknown {
+  return (
+    demoState().systemData.find((row) => row.actorId === actor.id)!
+      .traitData as Row
+  ).luck_points_used;
+}
+
+const LUCK = `mutation ($worldId: UUID!, $rollId: UUID!, $spend: String!) {
+  rerollRoll(worldId: $worldId, rollId: $rollId, spend: $spend) {
+    id formula facets { id }
+    resolution { dice { numericSides kept finalValue } }
+  }
+}`;
+
+/** Spec 084 US4: a Luck Point, as the 5e pack's `spend_luck_point` plans it. */
+describe("rerollRoll with a Luck Point", () => {
+  it("rolls one more d20, keeps the highest, and keeps the first die", async () => {
+    const actor = luckyCharacter(0);
+    const first = await playerChecks(actor);
+    expect((await linksOf(first.id)).rerollOffers).toEqual([
+      { id: "luck_point", label: "Luck Point" },
+    ]);
+    const before = (resolutionRow(first.detail as never, null).dice as Row[])
+      .filter((die) => die.numericSides === 20)
+      .map((die) => die.finalValue);
+
+    const answer = await ask(LUCK, {
+      worldId: demoState().world.id,
+      rollId: first.id,
+      spend: "luck_point",
+    });
+    expect(answer.errors).toBeUndefined();
+    const second = answer.data?.rerollRoll as Row;
+    expect(second.formula).toMatch(/^2d20kh1/);
+    expect(second.facets).toEqual([{ id: "luck_point" }]);
+    const d20s = (second.resolution as { dice: Row[] }).dice.filter(
+      (die) => die.numericSides === 20,
+    );
+    expect(d20s).toHaveLength(2);
+    expect(d20s[0].finalValue).toBe(before[0]);
+    expect(d20s.filter((die) => die.kept)).toHaveLength(1);
+    expect(luckUsed(actor)).toBe(1);
+
+    expect((await reroll(second.id, "luck_point")).errors?.[0]?.message).toBe(
+      "Luck Point has already been spent on this roll.",
+    );
+    expect(luckUsed(actor)).toBe(1);
+  });
+
+  it("spends no more points than the proficiency bonus", async () => {
+    const actor = luckyCharacter(3);
+    const first = await playerChecks(actor);
+    expect((await linksOf(first.id)).rerollOffers).toEqual([]);
+    expect((await reroll(first.id, "luck_point")).errors?.[0]?.message).toBe(
+      `${String(actor.label)} has no Luck Points left.`,
+    );
+    expect(luckUsed(actor)).toBe(3);
+  });
+
+  it("offers nothing at disadvantage, and refuses a sheet without the feat", async () => {
+    const actor = luckyCharacter(0);
+    const worse = await playerChecks(actor, "DISADVANTAGE");
+    expect((await linksOf(worse.id)).rerollOffers).toEqual([]);
+    expect((await reroll(worse.id, "luck_point")).errors?.[0]?.message).toBe(
+      "A Luck Point does nothing on a roll made with disadvantage.",
+    );
+
+    const plain = playersCharacter(false);
+    const sheet = demoState().systemData.find(
+      (row) => row.actorId === plain.id,
+    )!;
+    sheet.traitData = { ...(sheet.traitData as Row), facets: [] };
+    const first = await playerChecks(plain);
+    expect((await reroll(first.id, "luck_point")).errors?.[0]?.message).toBe(
+      `${String(plain.label)} does not have the Lucky feat.`,
+    );
+    expect(luckUsed(actor)).toBe(0);
+  });
+
+  it("allows a Luck Point after Heroic Inspiration on the same roll", async () => {
+    const actor = luckyCharacter(0);
+    playersCharacter(true);
+    const first = await playerChecks(actor);
+    expect(
+      ((await linksOf(first.id)).rerollOffers as Row[]).map((o) => o.id),
+    ).toEqual(["inspiration", "luck_point"]);
+    const second = (await reroll(first.id)).data?.rerollRoll as Row;
+    const third = await reroll(second.id, "luck_point");
+    expect(third.errors).toBeUndefined();
+    expect(luckUsed(actor)).toBe(1);
+  });
+});

@@ -346,11 +346,20 @@ function offersFor(record: Row, state: DemoState): string[] {
   } catch {
     return [];
   }
-  const spent = spentIn(record, state);
   return rerollOffers(
     systemDataOf(state, actor.id as string)?.traitData,
-    record.rollKind,
-  ).filter((id) => !spent.includes(id));
+    rerollTarget(record),
+    spentIn(record, state),
+  );
+}
+
+/** What the pack is asked to plan a reroll against. */
+function rerollTarget(record: Row) {
+  return {
+    kind: record.rollKind,
+    formula: (record.detail as Resolution).formula,
+    facets: (record.facets as string[] | undefined) ?? [],
+  };
 }
 
 function entryFor(record: Row, state: DemoState): Row | null {
@@ -494,7 +503,8 @@ export const diceMutations = {
   },
   /**
    * Spec 084 `reroll_roll_impl`: the maker spends a facet to roll their own
-   * d20 test again. The lowest d20 is rolled again and every other die kept;
+   * d20 test again: the lowest d20 once more (Heroic Inspiration), or the
+   * whole roll through a reshaped formula that keeps its dice (a Luck Point);
    * the new roll keeps the old one's visibility, label and actor.
    */
   rerollRoll: async ({ rollId, spend }: Args) => {
@@ -504,13 +514,14 @@ export const diceMutations = {
     const actor = mayReroll(found, state);
     const original = found!;
     const sheet = systemDataOf(state, actor.id as string);
-    const traits = rerollPlan(
+    const plan = rerollPlan(
       sheet?.traitData,
       String(spend),
       String(actor.label),
       spentIn(original, state),
+      rerollTarget(original),
     );
-    if (sheet) sheet.traitData = traits;
+    if (sheet) sheet.traitData = plan.traitData;
     record(EVENT.actorSheet, {
       action: "changed",
       actorId: actor.id,
@@ -518,14 +529,16 @@ export const diceMutations = {
     });
     const detail = original.detail as Resolution;
     const bindings = (original.bindings ?? {}) as Record<string, number>;
-    const die = lowestDie(JSON.stringify(detail), 20);
+    const { edit } = plan;
     const replayed = JSON.parse(
       replayRoll(
         detail.formula,
         JSON.stringify(bindings),
         JSON.stringify(detail),
-        undefined,
-        die,
+        edit.kind === "reshape" ? edit.formula : undefined,
+        edit.kind === "lowest"
+          ? lowestDie(JSON.stringify(detail), edit.sides)
+          : undefined,
         nextSeed(),
       ),
     ) as Resolution;
