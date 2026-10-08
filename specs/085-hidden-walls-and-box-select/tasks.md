@@ -121,8 +121,8 @@ that passes them.
 
 **Independent Test**: Box three tokens and a wall, drag, reload. All four moved.
 
-- [ ] T017 [P] [US2] Tests in `crates/thunderforge-engine/src/systems/box_select.rs` `mod tests`: `box_candidate` for a GM with each `SelectionFilter` field on and off, one row per kind.
-- [ ] T018 [US2] [082] `crates/thunderforge-engine/src/systems/box_select.rs`:
+- [x] T017 [P] [US2] Tests in `crates/thunderforge-engine/src/systems/box_select.rs` `mod tests`: `box_candidate` for a GM with each `SelectionFilter` field on and off, one row per kind.
+- [x] T018 [US2] [082] `crates/thunderforge-engine/src/systems/box_select.rs`:
   - the `BoxDrag` resource;
   - press on empty board, a drag past the click threshold, a gizmo rectangle, and the release;
   - footprints built from the ECS (the token footprint as `tokens_at` measures it, the wall segment, the light centre, the shape's bounds);
@@ -130,6 +130,8 @@ that passes them.
   - write `GroupSelection` and emit `select_group`.
 
   Register it in `app.rs` under `AuthoringMode::Select`, `.before(handle_token_drag)`.
+
+  *Landed:* registered in `plugins/group_select.rs` (`GroupSelectPlugin`) rather than `app.rs`, which is near the 1000-line limit. The rule already carries the player rows; T029 adds their tests.
 
 - [ ] T019 [US2] Two guard clauses at the top of `handle_token_drag`'s press branch in `crates/thunderforge-engine/src/systems/token.rs`:
   - with shift held, an empty-board press does not deselect;

@@ -27,6 +27,7 @@
 // exercise them were unreachable text. Declared here so they are part of the
 // crate, and so their tests can run (spec 032 T083).
 pub mod background;
+pub mod box_select;
 /// "Look at this creature": the camera, moved to a token the viewer may see.
 pub mod camera_focus;
 pub mod conflict_visualization;
