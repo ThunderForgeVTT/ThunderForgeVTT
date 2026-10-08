@@ -65,3 +65,61 @@ describe("RollEntry facets", () => {
     expect(markup(roll([]))).not.toContain('data-testid="roll-facet"');
   });
 });
+
+function oneDie(die: {
+  rolls: number[];
+  steps?: ("REROLL" | "EXPLODE")[];
+  finalValue: number;
+}): WorldRollRecord {
+  const entry = roll([]);
+  entry.resolution = {
+    ...entry.resolution,
+    dice: [
+      {
+        sidesKind: "NUMERIC",
+        numericSides: 20,
+        kept: true,
+        steps: [],
+        ...die,
+      },
+    ],
+  };
+  return entry;
+}
+
+function struck(html: string): string[] {
+  return [...html.matchAll(/data-testid="roll-die-struck"[^>]*>([^<]*)</g)].map(
+    (match) => match[1],
+  );
+}
+
+describe("RollEntry rerolled dice", () => {
+  it("strikes a rerolled 1 beside the value used", () => {
+    const html = markup(
+      oneDie({ rolls: [1, 14], steps: ["REROLL"], finalValue: 14 }),
+    );
+    expect(struck(html)).toEqual(["1"]);
+    expect(html).toMatch(/roll-die-struck[^>]*>1<\/span><span>14</);
+  });
+
+  it("reads a chain stored before spec 083 as rerolls", () => {
+    expect(struck(markup(oneDie({ rolls: [1, 2, 9], finalValue: 9 })))).toEqual(
+      ["1", "2"],
+    );
+  });
+
+  it("strikes a value the die did not end on", () => {
+    expect(struck(markup(oneDie({ rolls: [1], finalValue: 3 })))).toEqual([
+      "1",
+    ]);
+  });
+
+  it("strikes nothing on a plain die or an explosion", () => {
+    expect(struck(markup(oneDie({ rolls: [12], finalValue: 12 })))).toEqual([]);
+    expect(
+      struck(
+        markup(oneDie({ rolls: [6, 4], steps: ["EXPLODE"], finalValue: 10 })),
+      ),
+    ).toEqual([]);
+  });
+});

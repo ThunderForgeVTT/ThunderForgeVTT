@@ -2,7 +2,11 @@ import { useState } from "react";
 
 import { revealRoll } from "@/api/roll";
 import { Button } from "@/components/ui/button/Button";
-import type { WorldRollEntry, WorldRollRecord } from "@/types/roll";
+import type {
+  DieOutcomeRecord,
+  WorldRollEntry,
+  WorldRollRecord,
+} from "@/types/roll";
 
 import { feedTime } from "./feedTime";
 
@@ -28,6 +32,29 @@ function total(roll: WorldRollRecord): string {
   return resultKind === "SUCCESS_COUNT"
     ? `${resultValue} ${resultValue === 1 ? "success" : "successes"}`
     : String(resultValue);
+}
+
+/**
+ * Spec 084 FR-016: the values a die rolled and did not use, in order. A
+ * reroll replaces the value before it (a chain stored before spec 083 has no
+ * steps, and every extra value in it was a reroll); an explosion adds to it,
+ * so it strikes nothing. A last value the die did not end on, such as a 1
+ * that Great Weapon Fighting reads as a 3, is struck too.
+ */
+function struckRolls(die: DieOutcomeRecord): number[] {
+  const steps = die.steps ?? [];
+  const struck = die.rolls
+    .slice(0, -1)
+    .filter((_, at) => (steps[at] ?? "REROLL") === "REROLL");
+  const last = die.rolls[die.rolls.length - 1];
+  if (
+    !steps.includes("EXPLODE") &&
+    last !== undefined &&
+    last !== die.finalValue
+  ) {
+    struck.push(last);
+  }
+  return struck;
 }
 
 /**
@@ -122,6 +149,15 @@ export function RollEntry({
           {entry.resolution.dice.map((die, at) => (
             <span key={at}>
               {at > 0 ? ", " : null}
+              {struckRolls(die).map((value, step) => (
+                <span
+                  key={step}
+                  className="mr-1 line-through opacity-60"
+                  data-testid="roll-die-struck"
+                >
+                  {value}
+                </span>
+              ))}
               {/* A die the formula dropped, such as the low one of 2d20kh1. */}
               <span className={die.kept ? undefined : "line-through"}>
                 {die.finalValue}
