@@ -1,4 +1,4 @@
-.PHONY: gc image push clean-builds test-db-reset dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-rust test-mail bench-blob-store test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean container container-up container-down container-down-clean
+.PHONY: gc image push landing-image push-landing clean-builds test-db-reset dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-rust test-mail bench-blob-store test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean container container-up container-down container-down-clean
 
 # Loads DATABASE_URL (and anything else) from the repo-root .env for targets
 # that shell out to tools which don't read it themselves (diesel-cli).
@@ -31,6 +31,7 @@ help:
 	@echo "  make container-down-clean  Stop it and DELETE the instance (database, uploads, worlds)"
 	@echo "  make image            Build the dev image (IMAGE) from the tree"
 	@echo "  make push             Build, push the dev image (IMAGE) and restart its deployment (KUBE_CONTEXT/KUBE_NAMESPACE/DEPLOY)"
+	@echo "  make push-landing     Build and push the thunderforge.dev image (LANDING_IMAGE, a release build) and restart deploy/$(LANDING_DEPLOY)"
 	@echo "  make clean-builds     Show what old cargo output and finished worktrees can go (ARGS=--apply deletes it)"
 	@echo "  make format           Run prettier + cargo fmt"
 	@echo "  make lint             Run cargo clippy (-D warnings) plus the file-length check"
@@ -193,6 +194,18 @@ push: image
 	docker push $(IMAGE)
 	kubectl --context $(KUBE_CONTEXT) -n $(KUBE_NAMESPACE) rollout restart deploy/$(DEPLOY)
 	kubectl --context $(KUBE_CONTEXT) -n $(KUBE_NAMESPACE) rollout status deploy/$(DEPLOY) --timeout=5m
+
+# thunderforge.dev: the homepage and the demo, served by nginx (the Dockerfile's
+# `landing` stage). Always a release build: it is the public site.
+LANDING_IMAGE ?= mbround18/thunderforgevtt:landing
+LANDING_DEPLOY ?= thunderforge-landing
+landing-image:
+	docker build --target landing --build-arg BUILD_PROFILE=release -t $(LANDING_IMAGE) .
+
+push-landing: landing-image
+	docker push $(LANDING_IMAGE)
+	kubectl --context $(KUBE_CONTEXT) -n $(KUBE_NAMESPACE) rollout restart deploy/$(LANDING_DEPLOY)
+	kubectl --context $(KUBE_CONTEXT) -n $(KUBE_NAMESPACE) rollout status deploy/$(LANDING_DEPLOY) --timeout=5m
 
 # Trim cargo's build output without throwing away the warm cache: incremental
 # sessions no crate reads, cargo units unused for a week, and agent worktrees
