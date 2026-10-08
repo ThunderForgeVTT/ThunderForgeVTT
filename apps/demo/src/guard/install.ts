@@ -171,6 +171,7 @@ async function demoFetch(
     BASE,
     fetchStatic,
     svgToPng,
+    currentViewer(),
   );
   return answer ?? refuse("That part of the server");
 }

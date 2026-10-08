@@ -57,7 +57,7 @@ const drawPng = async (svg: string): Promise<Blob> => {
 };
 
 function ask(path: string, method = "GET"): Promise<Response> {
-  const answer = answerRest(method, path, BASE, fetchStatic, drawPng);
+  const answer = answerRest(method, path, BASE, fetchStatic, drawPng, "gm");
   if (!answer) throw new Error(`the guard does not answer ${path}`);
   return Promise.resolve(answer);
 }

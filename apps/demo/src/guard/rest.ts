@@ -8,6 +8,7 @@ import { demoState } from "../backend/state";
 import { viewerUser } from "../backend/actors";
 import { bytesOf } from "../backend/uploads";
 import { drawArt, readArtPath } from "../seed/art";
+import type { Viewer } from "../seed/world";
 
 /** An SVG document drawn as PNG bytes (`rasterize.ts` in the page). */
 export type DrawPng = (svg: string) => Promise<Blob>;
@@ -21,20 +22,24 @@ function json(body: unknown, status = 200): Response {
 
 const SESSION_LENGTH_MS = 24 * 60 * 60 * 1000;
 
-/** `null` when the demo has no answer for this address. */
+/**
+ * `null` when the demo has no answer for this address. `viewer` is the asking
+ * tab's (spec 081 R7): the world's own is whoever asked it last.
+ */
 export function answerRest(
   method: string,
   path: string,
   base: string,
   fetchStatic: typeof fetch,
   drawPng: DrawPng,
+  viewer: Viewer,
 ): Promise<Response> | Response | null {
   const reads = method === "GET" || method === "HEAD";
 
   if (reads && path === "/api/authentication/session") {
     const state = demoState();
     const at = state.world.createdAt as string;
-    const user = viewerUser(state);
+    const user = viewerUser({ ...state, viewer });
     return json({
       status: "authenticated",
       message: "This is the demo. Nobody is signed in to anything.",
