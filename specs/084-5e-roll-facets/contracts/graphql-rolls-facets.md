@@ -2,8 +2,8 @@
 
 This changes the shared schema, so it is a cross-cutting path. Regenerate
 the contract with `node scripts/check-graphql-contract.mjs --schema --fix`.
-The full e2e suite (`node ./scripts/e2e-parallel.mjs`) is the gate before
-merge.
+The gate before merge is `pnpm e2e:rolls` plus every slice
+`pnpm e2e:which --diff` names, never the full suite.
 
 ## New enum
 

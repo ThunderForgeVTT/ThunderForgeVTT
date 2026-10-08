@@ -55,5 +55,5 @@ pnpm -F @thunderforge/web test
 make lint
 node scripts/check-graphql-contract.mjs --schema --fix
 pnpm e2e:rolls
-node ./scripts/e2e-parallel.mjs   # the gate before merge: schema and migration are cross-cutting
+pnpm e2e:which --diff   # then run every slice it names; never the full suite
 ```

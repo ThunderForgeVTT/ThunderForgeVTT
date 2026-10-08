@@ -391,7 +391,7 @@ nothing visible changed.
 - [ ] T069 [P] `docs/CONTRIBUTING.md`, in the Rolls section: the `roll_facets` slot, `rewrite_dice_terms` and `replay`, and the rule that shared code carries facet ids as opaque strings.
 - [ ] T070 Run `make lint` (host and wasm32, plus the file-length check) and `pnpm verify`. Confirm `attack.rs` is smaller than 830 lines after T055.
 - [ ] T071 Run `cargo test -p thunderforge-dice`, `cargo test -p thunderforge-system-dnd5e`, `make test-rust ARGS="-p thunderforge-server"`, `pnpm -F @thunderforge/demo test` and `pnpm -F @thunderforge/web test`. All must be green.
-- [ ] T072 **Proof**: `pnpm e2e:rolls` is green, including `rolls-facets-advantage.spec.ts`, `rolls-facets-inspiration.spec.ts` and `rolls-facets-attack.spec.ts`, which the `rolls` slice owns by its `rolls-` prefix in `scripts/e2e/slices.json`. Then run the full suite, `node ./scripts/e2e-parallel.mjs`, as the gate before merge: the GraphQL schema and a migration changed. Record both results here.
+- [ ] T072 **Proof**: `pnpm e2e:rolls` is green, including `rolls-facets-advantage.spec.ts`, `rolls-facets-inspiration.spec.ts` and `rolls-facets-attack.spec.ts`, which the `rolls` slice owns by its `rolls-` prefix in `scripts/e2e/slices.json`. Then run every slice that `pnpm e2e:which --diff` names. The schema and a migration changed, so it prints FULL SUITE: run the slices it names instead. The owner has ruled out the full suite as a gate; never run `node ./scripts/e2e-parallel.mjs` on its own. Record each slice's result here.
 
 ---
 
@@ -422,4 +422,5 @@ nothing visible changed.
 3. Add Inspiration (Phase 5), the reroll path everything else reuses.
 4. Then Lucky, attack rerolls and Great Weapon Fighting, each with its own
    proof.
-5. Finish with Phase 9. The full suite is the merge gate.
+5. Finish with Phase 9. The merge gate is `pnpm e2e:rolls` plus every slice
+   `pnpm e2e:which --diff` names, never the full suite.

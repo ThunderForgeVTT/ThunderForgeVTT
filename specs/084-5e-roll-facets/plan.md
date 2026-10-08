@@ -78,8 +78,9 @@ which is uncommitted in this tree.
 - `pnpm -F @thunderforge/demo test`;
 - `pnpm -F @thunderforge/web test` for `RollEntry`;
 - `pnpm e2e:rolls`;
-- then `node ./scripts/e2e-parallel.mjs`, because the GraphQL schema and a
-  migration change.
+- then every slice that `pnpm e2e:which --diff` names. The GraphQL schema
+  and a migration change, so it prints FULL SUITE; the named slices run
+  instead. The full suite is never the gate.
 
 **Target Platform**: the server on Linux; the web and demo in Chromium, as
 the e2e suite runs.
@@ -107,7 +108,7 @@ re-evaluation of the formula with no extra draws for the recorded dice.
 | III. Optimistic updates with rollback            | A roll is not optimistic, and it never was. The chat shows what the server recorded. The Reroll button disables while in flight and shows the refusal sentence.                                                                       |
 | IV. Base data vs derived data                    | The Luck Point maximum is derived from the level and never stored. The labels are joined at read. `rerollOffers` is derived per viewer at read and never stored.                                                                      |
 | V. One pub/sub backplane                         | The new events are the existing codes 26, 29, 30, 36 and 37, through `record_world_event`. There is no new channel.                                                                                                                   |
-| VI. Every feature is proven by its own slice     | The new specs are `rolls-facets-*.spec.ts`, which the `rolls` slice already owns by prefix. `pnpm e2e:rolls` proves the feature. The schema and migration are cross-cutting, so the full suite is the gate before merge.              |
+| VI. Every feature is proven by its own slice     | The new specs are `rolls-facets-*.spec.ts`, which the `rolls` slice already owns by prefix. `pnpm e2e:rolls` proves the feature. The schema and migration are cross-cutting, so every slice `pnpm e2e:which --diff` names runs too; the full suite is never the gate.              |
 
 ## Project Structure
 
