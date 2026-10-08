@@ -10,12 +10,15 @@
  * whatever the server answered for this viewer — whole, masked, or absent —
  * so nothing here decides visibility.
  *
+ * Spec 084: a reroll arriving asks again for the roll it replaced, so the
+ * old one is struck through and loses its Reroll buttons on every screen.
+ *
  * `rolls` is oldest first, the order a feed reads in.
  */
 
 import { useCallback, useEffect, useState } from "react";
 
-import { fetchWorldRolls } from "@/api/roll";
+import { fetchWorldRoll, fetchWorldRolls } from "@/api/roll";
 import { startRollSync, subscribeToWorldEvents } from "@/engine/world/sync";
 import { useResetOnChange } from "@/hooks/useResetOnChange";
 import type { WorldRollEntry } from "@/types/roll";
@@ -80,9 +83,21 @@ export function useWorldRolls(worldId: string): UseWorldRollsResult {
     setHasOlder(false);
   });
 
-  const upsert = useCallback((entry: WorldRollEntry) => {
-    setRolls((held) => upsertRoll(held, entry));
-  }, []);
+  const upsert = useCallback(
+    (entry: WorldRollEntry) => {
+      setRolls((held) => upsertRoll(held, entry));
+      if (entry.__typename === "WorldRoll" && entry.rerollOf !== null) {
+        fetchWorldRoll(worldId, entry.rerollOf)
+          .then((original) => {
+            if (original) setRolls((held) => upsertRoll(held, original));
+          })
+          .catch(() => {
+            // The original stays as it was; the next page fetch mends it.
+          });
+      }
+    },
+    [worldId],
+  );
 
   useEffect(() => {
     let active = true;

@@ -87,6 +87,17 @@ const WORLD_ROLL_FIELDS = `
     id
     label
   }
+  rerollOf
+  rerolledBy
+  spent {
+    id
+    label
+  }
+  rerollOffers {
+    id
+    label
+  }
+  rerollUntil
 `;
 
 const WORLD_ROLL_ENTRY_FIELDS = `
@@ -154,6 +165,28 @@ export function revealRoll(
     `,
     { worldId, rollId },
   ).then((data) => data.revealRoll);
+}
+
+/**
+ * Spec 084: spend `spend` (an id from the roll's `rerollOffers`) to roll
+ * one of your own d20 tests again. The server answers with the new roll, or
+ * refuses in a sentence meant for the person who asked.
+ */
+export function rerollRoll(
+  worldId: string,
+  rollId: string,
+  spend: string,
+): Promise<WorldRollRecord> {
+  return postGraphQL<{ rerollRoll: WorldRollRecord }>(
+    `
+      mutation RerollRoll($worldId: UUID!, $rollId: UUID!, $spend: String!) {
+        rerollRoll(worldId: $worldId, rollId: $rollId, spend: $spend) {
+          ${WORLD_ROLL_FIELDS}
+        }
+      }
+    `,
+    { worldId, rollId, spend },
+  ).then((data) => data.rerollRoll);
 }
 
 type WorldRollRecordsQuery = {

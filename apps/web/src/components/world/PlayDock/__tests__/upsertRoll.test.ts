@@ -40,6 +40,11 @@ describe("upsertRoll", () => {
       revealedAt: "2026-10-07T12:05:00Z",
       revealedByName: "GM",
       facets: [],
+      rerollOf: null,
+      rerolledBy: null,
+      spent: null,
+      rerollOffers: [],
+      rerollUntil: null,
     };
     const feed = upsertRoll([first, second], revealed);
     expect(feed).toHaveLength(2);

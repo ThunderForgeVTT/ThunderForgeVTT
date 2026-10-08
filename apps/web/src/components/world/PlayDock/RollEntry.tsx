@@ -9,6 +9,7 @@ import type {
 } from "@/types/roll";
 
 import { feedTime } from "./feedTime";
+import { RerollButtons } from "./RerollButtons";
 
 export interface RollEntryProps {
   worldId: string;
@@ -16,6 +17,8 @@ export interface RollEntryProps {
   isGm: boolean;
   /** Takes the revealed roll in at once, ahead of its event. */
   onRevealed: (roll: WorldRollRecord) => void;
+  /** Takes a reroll in at once, ahead of its event. */
+  onRerolled?: (roll: WorldRollRecord) => void;
 }
 
 const BADGE =
@@ -67,6 +70,7 @@ export function RollEntry({
   entry,
   isGm,
   onRevealed,
+  onRerolled = onRevealed,
 }: RollEntryProps) {
   const [revealing, setRevealing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -117,6 +121,7 @@ export function RollEntry({
       data-testid="roll-entry"
       data-roll-id={entry.id}
       data-visibility={entry.visibility}
+      data-rerolled={entry.rerolledBy !== null ? "true" : undefined}
     >
       <div className="flex items-baseline gap-2">
         <span className="text-sm font-semibold">{entry.rollerName}</span>
@@ -137,7 +142,14 @@ export function RollEntry({
         ))}
         {time}
       </div>
-      <p className="text-sm">
+      <p
+        className={
+          entry.rerolledBy !== null
+            ? "text-sm line-through opacity-60"
+            : "text-sm"
+        }
+        data-testid={entry.rerolledBy !== null ? "roll-rerolled" : undefined}
+      >
         {entry.label ? (
           <span data-testid="roll-label" className="font-medium">
             {entry.label}:{" "}
@@ -168,6 +180,11 @@ export function RollEntry({
         </span>{" "}
         = <strong data-testid="roll-total">{total(entry)}</strong>
       </p>
+      {entry.spent !== null ? (
+        <p className="text-xs text-muted-foreground" data-testid="roll-spent">
+          Rerolled with {entry.spent.label}
+        </p>
+      ) : null}
       {entry.revealedAt !== null ? (
         <p
           className="text-xs text-muted-foreground"
@@ -176,6 +193,7 @@ export function RollEntry({
           revealed by {entry.revealedByName ?? "the GM"}
         </p>
       ) : null}
+      <RerollButtons worldId={worldId} roll={entry} onRerolled={onRerolled} />
       {mayReveal ? (
         <Button
           type="button"

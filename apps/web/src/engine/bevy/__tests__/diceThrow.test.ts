@@ -37,6 +37,11 @@ const roll: WorldRollRecord = {
   revealedAt: null,
   revealedByName: null,
   facets: [],
+  rerollOf: null,
+  rerolledBy: null,
+  spent: null,
+  rerollOffers: [],
+  rerollUntil: null,
 };
 
 describe("buildDiceThrow (contracts/engine-dice.md)", () => {

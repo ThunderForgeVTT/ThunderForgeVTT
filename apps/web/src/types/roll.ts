@@ -75,6 +75,16 @@ export interface WorldRollRecord {
   revealedByName: string | null;
   /** Spec 084: the facets that shaped this roll, such as Advantage. */
   facets: RollFacetRecord[];
+  /** The roll this one replaces. */
+  rerollOf: string | null;
+  /** The roll that replaced this one; it is struck through when set. */
+  rerolledBy: string | null;
+  /** What this reroll spent. */
+  spent: RollFacetRecord | null;
+  /** Only for the roll's maker: the spends the server would accept now. */
+  rerollOffers: RollFacetRecord[];
+  /** RFC 3339; until when this roll may be rerolled, or null. */
+  rerollUntil: string | null;
 }
 
 /** Spec 084: a facet a roll carries, named as its system names it. */

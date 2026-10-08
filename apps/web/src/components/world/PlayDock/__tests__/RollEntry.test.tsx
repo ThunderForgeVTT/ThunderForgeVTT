@@ -44,6 +44,11 @@ function roll(facets: WorldRollRecord["facets"]): WorldRollRecord {
     revealedAt: null,
     revealedByName: null,
     facets,
+    rerollOf: null,
+    rerolledBy: null,
+    spent: null,
+    rerollOffers: [],
+    rerollUntil: null,
   };
 }
 
@@ -121,5 +126,41 @@ describe("RollEntry rerolled dice", () => {
         markup(oneDie({ rolls: [6, 4], steps: ["EXPLODE"], finalValue: 10 })),
       ),
     ).toEqual([]);
+  });
+});
+
+describe("RollEntry rerolls", () => {
+  const INSPIRATION = { id: "inspiration", label: "Heroic Inspiration" };
+
+  it("strikes through a roll that was rerolled, and offers it nothing", () => {
+    const html = markup({
+      ...roll([]),
+      rerolledBy: "roll-2",
+      rerollOffers: [INSPIRATION],
+      rerollUntil: "2999-01-01T00:00:00Z",
+    });
+    expect(html).toContain('data-testid="roll-rerolled"');
+    expect(html).not.toContain("roll-reroll-inspiration");
+  });
+
+  it("marks a reroll with what it spent", () => {
+    const html = markup({
+      ...roll([INSPIRATION]),
+      rerollOf: "roll-0",
+      spent: INSPIRATION,
+    });
+    expect(html).toContain('data-testid="roll-spent"');
+    expect(html).toContain("Rerolled with Heroic Inspiration");
+    expect(html).not.toContain('data-testid="roll-rerolled"');
+  });
+
+  it("offers the maker a reroll while the window is open", () => {
+    const html = markup({
+      ...roll([]),
+      rerollOffers: [INSPIRATION],
+      rerollUntil: "2999-01-01T00:00:00Z",
+    });
+    expect(html).toContain('data-testid="roll-reroll-inspiration"');
+    expect(html).toContain("Reroll (Heroic Inspiration)");
   });
 });

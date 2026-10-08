@@ -39,6 +39,11 @@ const whole: WorldRollRecord = {
   revealedAt: null,
   revealedByName: null,
   facets: [],
+  rerollOf: null,
+  rerolledBy: null,
+  spent: null,
+  rerollOffers: [],
+  rerollUntil: null,
 };
 
 const masked: MaskedRollRecord = {

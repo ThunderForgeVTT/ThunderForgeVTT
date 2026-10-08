@@ -273,7 +273,7 @@ nothing visible changed.
 
 ### Web
 
-- [ ] T044 [P] [US3] `apps/web/src/components/world/PlayDock/RerollButtons.tsx`, with a vitest test:
+- [x] T044 [P] [US3] `apps/web/src/components/world/PlayDock/RerollButtons.tsx`, with a vitest test:
   - one button per `rerollOffers` entry (`data-testid="roll-reroll-<id>"`, "Reroll (<label>)");
   - it is hidden once `rerollUntil` has passed (a timer);
   - it is disabled while in flight;
@@ -281,11 +281,13 @@ nothing visible changed.
 
   `apps/web/src/api/roll.ts` gains `rerollRoll`.
 
-- [ ] T045 [US3] `RollEntry.tsx`:
+- [x] T045 [US3] `RollEntry.tsx`:
   - a roll with `rerolledBy` is struck through (`data-testid="roll-rerolled"`);
   - its replacement shows "Rerolled with <spent.label>" (`data-testid="roll-spent"`);
   - `RerollButtons` sits on the roller's own entry, in the chat and in the in-pane result.
   - `useWorldRolls.ts` refetches the original when a `ROLL_MADE` arrives for a roll with `rerollOf`, so its `rerolledBy` and offers update.
+
+  As built: the buttons are on the chat entry only. The in-pane result is a `rollCheck` resolution, which carries no roll id to reroll. The original is refetched from the hook's `upsert`, so the mutation's own answer strikes it too. `apps/web` has no DOM in its unit tests, so `RerollButtonsView` is tested as markup and the window as `msUntilClosed`.
 
 ### Demo
 
