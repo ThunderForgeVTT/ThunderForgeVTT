@@ -102,6 +102,51 @@ world and takes over.
 `pnpm e2e:rolls` proves all of it: the demo's tests and its two-tab e2e,
 then the app against the stack.
 
+#### Dice on the board
+
+A board throws a roll as dice (spec 083). The throw is built in two places:
+
+- `crates/thunderforge-canvas-core/src/dice_throw/` decides everything a
+  throw shows: which solid each die is (`shapes`), the orientation that puts
+  the server's face toward the viewer (`landing`), the seeded path from the
+  roll's id (`tumble`), how a `DieOutcome`'s chain expands into drawn dice
+  (`expand`), the line of arithmetic (`readout`), the timings (`TIMINGS`)
+  and the burst queue (`queue`).
+- `crates/thunderforge-engine/src/plugins/dice/` only draws it: one
+  `Mesh2d` per die, rewritten each frame, on a stage that follows the
+  camera so the throw sits in screen space.
+
+The logic lives in canvas core because the engine compiles for wasm32 only,
+so a `#[test]` there never runs. Canvas core builds for the host, and
+`cargo test -p thunderforge-canvas-core dice_throw` covers it.
+
+The web hands the engine the whole roll: `buildDiceThrow` in
+`apps/web/src/engine/bevy/diceThrow.ts` sends
+`{type: "trigger_dice_roll", roll}`, where `roll` is the `WorldRoll`'s id,
+roller, label, formula, `bindings` and resolution, with each die's `rolls`,
+`steps` (`REROLL` or `EXPLODE`), `kept` and `finalValue`. The engine never
+rolls, totals or guesses: the faces and the total are the server's. Reduced
+motion is `{type: "set_reduced_motion", reduced}`, sent from the OS setting
+by `watchReducedMotion`. The roll panel waits on the engine's own timings
+(`dice_timings()`), so the two never drift.
+
+A test reads what the engine drew from `__engineProbe.diceLanded()`: one
+entry per throw, with each die's `sides`, `face`, `kept`, `rerolled`,
+`clamped`, `explosionOf` and `restingPlace`, plus the `readout`, the `chip`
+and whether it was `skipped`. `diceEntities()` is how many dice entities are
+alive, 0 once every throw has faded. `apps/web/e2e/fixtures/rolls.ts` wraps
+both. `dicePlayed()` is unchanged: what the board was handed.
+
+To tune a throw, use the engine sandbox (`apps/engine-sandbox`). Its formula
+field and **Roll** button roll with the dice crate and throw the result, and
+its reduced-motion checkbox sends `set_reduced_motion`.
+
+One follow-up is open (research R4): the dice crate sets an exploded die's
+`final_value` to the last value of its chain, rather than the chain's sum
+(`crates/thunderforge-dice/src/eval.rs:303`). The readout uses the crate's
+addends, and when they do not reach the server's total it falls back to
+`formula = total`, so the board never shows a sum the server did not make.
+
 ### Drawings
 
 A player draws by default (spec 082): `effective_authoring_tools` gives a
