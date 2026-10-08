@@ -87,6 +87,65 @@ to be connected between the tabs.
 An attack needs a target, and you can only pick one on the board. So an
 attack on the sheet page tells you to make it from the play view.
 
+## Facets and rerolls
+
+In a D&D 5e world, the rules that change how a die is rolled are applied by
+the server when it rolls. You never edit a formula to roll with advantage.
+
+### Advantage
+
+Ability checks, saving throws and attacks have an **advantage** choice next
+to the roll button: Normal, Advantage or Disadvantage. With advantage, two
+d20s are rolled and the higher is kept. With disadvantage, the lower is
+kept. The other die is shown dimmed. The choice goes back to Normal after
+each roll. Damage is never rolled with advantage.
+
+### What the sheet's facets do
+
+The character sheet has a **Roll facets** section. Tick the ones the
+character has, and every roll made for that character uses them:
+
+- **Halfling Luck**: a natural 1 on a check, save or attack is rerolled
+  once, and the new roll stands.
+- **Great Weapon Fighting**: the damage of a two-handed weapon, in melee,
+  treats a 1 or 2 on each die as a 3. It does not apply at range or with a
+  thrown weapon.
+- **Lucky**: the character has Luck Points to spend on rerolls. The sheet
+  shows how many are left, and **Reset** gives them back after a long rest.
+
+A roll that a facet changed says so in the chat, for example "Advantage" or
+"Great Weapon Fighting".
+
+### Rerolls
+
+When a character has **Heroic Inspiration** ticked on their sheet, or Luck
+Points left, their check, save or attack in the chat shows a **Reroll**
+button, such as **Reroll (Heroic Inspiration)**. Only the person who made
+the roll sees it, and only while they can still act for that character.
+
+- The button is there for **two minutes** after the roll. After that, the
+  roll stands.
+- Rerolling spends the Inspiration or the Luck Point. The first roll is
+  struck through, and the new one says what was spent.
+- A roll is replaced once. Each spend is used once per roll: a roll
+  rerolled with Heroic Inspiration can be rerolled again with a Luck Point,
+  but not with Inspiration a second time.
+- A missed attack can be rerolled. It is judged against the same Armor
+  Class it missed, and a hit then rolls its damage as usual. A hit cannot be
+  rerolled.
+
+A reroll keeps the first roll's **Roll for**. A roll kept behind the screen
+is rerolled behind the screen. When the Game Master reveals it, the table
+sees the whole chain: the first roll, struck through, and the reroll.
+
+### Two-handed weapons
+
+Great Weapon Fighting needs to know which weapons are two-handed. On an
+item's page, **As an attack** has a **Properties** list with the properties
+the world's game system knows about, such as Two-Handed, Heavy and
+Versatile. The Game Master, or whoever can edit the item, ticks the ones
+the weapon has and saves. Only items have properties, not abilities.
+
 ## In the demo
 
 The demo runs in your browser, so its tabs share one world. Roll in one tab

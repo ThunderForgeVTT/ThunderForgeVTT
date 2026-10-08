@@ -102,6 +102,46 @@ world and takes over.
 `pnpm e2e:rolls` proves all of it: the demo's tests and its two-tab e2e,
 then the app against the stack.
 
+#### Roll facets and rerolls
+
+Spec 084. A game system shapes its rolls through the `roll_facets` slot of
+its server contribution (`RollFacets` in
+`crates/thunderforge-canvas-core/src/roll_facets.rs`). The slot has:
+
+- `shape`: given a `ShapeInput` (the roll's kind, its formula, the actor's
+  `trait_data`, the advantage chosen, and for damage whether the attack was
+  melee and the item's properties), it returns the formula to roll and the
+  facet ids it applied, or `None` to roll the formula as written. 5e's
+  is `packs/systems/dnd5e/server/src/roll_facets.rs`: advantage, Halfling
+  Luck and Great Weapon Fighting.
+- `reroll`: whether the sheet can pay a spend (`inspiration`,
+  `luck_point`) and the `trait_data` after paying.
+- `labels` and `spends`: the names the table sees for each id.
+
+The host calls `shape_roll` in `crates/thunderforge-server/src/rolls/facets.rs`
+for every check, to-hit and damage roll, and records the result's facets on
+the roll row. A system without the slot rolls everything as written and
+refuses advantage.
+
+A shape never edits formula text. It goes through
+`thunderforge_dice::rewrite_dice_terms`, which hands it each dice term
+(`TermView`) and applies the `TermEdit` it returns: a new count, or added
+modifiers such as `kh1`, `r1` or `min3`. A reroll goes through
+`thunderforge_dice::replay`, which replays a recorded resolution with one
+die rerolled (`ReplayEdit::RerollDie`), so the other dice keep their values.
+The rules for who may reroll, until when and with what are in
+`crates/thunderforge-server/src/rolls/reroll.rs`. A rerolled to-hit
+re-judges its attack in `combat/attack_reroll.rs`, against the defence
+stored with the first attack.
+
+Shared code carries facet, spend and item-property ids as opaque strings.
+It stores them, checks them against what the pack declares, and passes them
+to the pack, but it never branches on one. Only the pack knows what
+`great_weapon_fighting` or `two_handed` does. Item properties are declared
+in the pack's `system.json` under `itemProperties`.
+
+The demo mirrors 5e's shaping in `apps/demo/src/backend/handlers/facets.ts`.
+
 #### Dice on the board
 
 A board throws a roll as dice (spec 083). The throw is built in two places:
