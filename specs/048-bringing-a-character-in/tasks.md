@@ -149,7 +149,8 @@ Content the world lacks is staged under their name and kept out of play.
   - a `damageTypes` list;
   - the vocabulary types `feature` and `species_trait`.
   Then implement the validators. T026 goes green. Delete the unused `server/src/models.rs:13-48`.
-- [ ] T028 [P] [US1] Add the pack's web sheet sections in `packs/systems/dnd5e/web/src/sheet/`: `ClassesSection.tsx`, `DefencesSection.tsx`, `PersonaSection.tsx` and `CoinsSection.tsx`. Add `LinkedContent.tsx`, which lists linked spells, features and items and marks staged ones "awaiting the GM" or "declined by the GM". Mount them in `ActorSheet.tsx`, with mount points only. Add vitest tests for each section.
+- [X] T028 [P] [US1] Add the pack's web sheet sections in `packs/systems/dnd5e/web/src/sheet/`: `ClassesSection.tsx`, `DefencesSection.tsx`, `PersonaSection.tsx` and `CoinsSection.tsx`. Add `LinkedContent.tsx`, which lists linked spells, features and items and marks staged ones "awaiting the GM" or "declined by the GM". Mount them in `ActorSheet.tsx`, with mount points only. Add vitest tests for each section.
+  - Done: the four sections mount as regions in `sheet-regions.ts`. `LinkedContent.tsx` and its test are in place; it mounts in T039, because no read gives the sheet a link's staged state until T036.
 
 ### The reader (TDD)
 

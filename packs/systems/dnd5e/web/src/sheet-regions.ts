@@ -134,7 +134,11 @@ export type SheetRegionKind =
   | "spellcasting"
   | "proficiencies"
   | "features"
-  | "notes";
+  | "notes"
+  | "classes"
+  | "defences"
+  | "coins"
+  | "persona";
 
 export interface SheetRegion {
   id: string;
@@ -172,6 +176,21 @@ export const DND5E_SHEET_REGIONS: readonly SheetRegion[] = [
     span: 1,
   },
   {
+    id: "classes",
+    kind: "classes",
+    title: "Classes",
+    blurb: "Each class and its levels. The character's level is their sum.",
+    span: 2,
+  },
+  {
+    id: "defences",
+    kind: "defences",
+    title: "Defences",
+    blurb:
+      "Damage it resists, ignores or takes double, and conditions it is immune to.",
+    span: 1,
+  },
+  {
     id: "skills",
     kind: "skills",
     title: "Skills",
@@ -195,10 +214,24 @@ export const DND5E_SHEET_REGIONS: readonly SheetRegion[] = [
     span: 1,
   },
   {
+    id: "coins",
+    kind: "coins",
+    title: "Coins",
+    blurb: "The purse, coin by coin.",
+    span: 1,
+  },
+  {
     id: "features",
     kind: "features",
     title: "Features & traits",
     blurb: "Class features, racial traits and feats, one per line.",
+    span: 2,
+  },
+  {
+    id: "persona",
+    kind: "persona",
+    title: "Persona",
+    blurb: "Looks, beliefs and the story so far.",
     span: 2,
   },
   {

@@ -16,6 +16,17 @@ import {
   toggleFacet,
 } from "./derived-data.ts";
 import RollFacetsSection from "./components/RollFacetsSection";
+import ClassesSection from "./sheet/ClassesSection";
+import CoinsSection from "./sheet/CoinsSection";
+import DefencesSection from "./sheet/DefencesSection";
+import PersonaSection from "./sheet/PersonaSection";
+import {
+  classesPatch,
+  readClasses,
+  readCoins,
+  readDefences,
+  readPersona,
+} from "./sheet/data";
 import {
   DND5E_ABILITIES,
   DND5E_ALIGNMENTS,
@@ -1295,6 +1306,48 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
               onSave={(items) => writeTraits({ feats: items })}
             />
           </div>
+        );
+
+      // Spec 048: sections in their own files under `sheet/`; this only
+      // mounts them and says where their writes go.
+      case "classes":
+        return (
+          <ClassesSection
+            classes={readClasses(traitData)}
+            canEdit={canEdit}
+            disabled={isPending}
+            onSave={(classes) => void writeTraits(classesPatch(classes))}
+          />
+        );
+
+      case "defences":
+        return (
+          <DefencesSection
+            defences={readDefences(traitData)}
+            canEdit={canEdit}
+            disabled={isPending}
+            onSave={(key, ids) => void writeTraits({ [key]: ids })}
+          />
+        );
+
+      case "coins":
+        return (
+          <CoinsSection
+            coins={readCoins(resourceData)}
+            canEdit={canEdit}
+            disabled={isPending}
+            onSave={(coins) => void writeResources({ coins })}
+          />
+        );
+
+      case "persona":
+        return (
+          <PersonaSection
+            persona={readPersona(traitData)}
+            canEdit={canEdit}
+            disabled={isPending}
+            onSave={(key, value) => void writeTraits({ [key]: value })}
+          />
         );
 
       case "notes":
