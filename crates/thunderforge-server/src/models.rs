@@ -507,6 +507,10 @@ pub struct World {
     /// Spec 044 FR-030a: whether the player who holds a character may change
     /// its portrait and token. On by default; a Game Master turns it off.
     pub allow_player_actor_art: bool,
+    /// Spec 088 (FR-040): when the GM last cleared the roll feed. A roll
+    /// created at or before it is withheld from every path to a roll
+    /// (`rolls::visibility::cleared`). `None` = never cleared.
+    pub rolls_cleared_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 // Policy struct disabled - table not implemented
@@ -658,6 +662,9 @@ pub struct CanvasImageAsset {
     /// Callers must read that as "the client must fetch this", never as
     /// "unchanged" — see `thunderforge_cache_core::delta::compute_plan`.
     pub content_hash: Option<String>,
+    /// Spec 088 (FR-029): the base map this background was made from, by its
+    /// `maps.json` id. `None` for every other image.
+    pub base_map_id: Option<String>,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
@@ -680,6 +687,9 @@ pub struct NewCanvasImageAsset {
     /// Always `Some` on insert — the bytes are in hand at that moment, so
     /// there is no reason to write a row that immediately needs backfilling.
     pub content_hash: Option<String>,
+    /// Spec 088 (FR-029): the base map this background was made from, by its
+    /// `maps.json` id. `None` for every other image.
+    pub base_map_id: Option<String>,
 }
 
 // ========== Scene State Fingerprints (Spec 028) ==========
@@ -1311,7 +1321,8 @@ pub struct WorldInvite {
     pub id: uuid::Uuid,
     pub world_id: uuid::Uuid,
     pub invite_code: String,
-    pub max_uses: i32,
+    /// Spec 088 (FR-012): `None` is no limit.
+    pub max_uses: Option<i32>,
     pub used_count: i32,
     pub expires_at: Option<chrono::NaiveDateTime>,
     pub created_by: uuid::Uuid,
@@ -1332,7 +1343,8 @@ pub struct NewWorldInvite {
     pub id: uuid::Uuid,
     pub world_id: uuid::Uuid,
     pub invite_code: String,
-    pub max_uses: i32,
+    /// Spec 088 (FR-012): `None` is no limit.
+    pub max_uses: Option<i32>,
     pub used_count: i32,
     pub expires_at: Option<chrono::NaiveDateTime>,
     pub created_by: uuid::Uuid,

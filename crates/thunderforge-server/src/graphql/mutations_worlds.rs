@@ -145,6 +145,7 @@ pub async fn create_world_impl(
         auto_apply_npc_damage: false,
         // Spec 044 FR-030a: on, as the migration backfilled every old world.
         allow_player_actor_art: true,
+        rolls_cleared_at: None,
     };
 
     let inserted_world = new_world.clone();

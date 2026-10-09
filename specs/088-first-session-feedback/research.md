@@ -4,6 +4,23 @@ Counted against `main` at `caafdd6d`. Line numbers are from that commit
 and drift as the hotfixes land. Each entry gives what is there, what was
 decided, and what else was weighed.
 
+## Base
+
+- Worktree `../ThunderForgeVTT-088`, branch `088-first-session-feedback`,
+  cut from `main` at `f4263b49` ("E2E: one run per machine, and a second
+  run waits for the first").
+- Every hotfix branch is on main, cherry-picked, so the branches still read
+  as unmerged by ancestry. Matched by subject:
+  - `hotfix-invite-transactional`: `af29a822`, `b8dc67fc`, `250dc165`, `ae8e8bfe`
+  - `hotfix-invite-uses`: `a7565cb9`, `fa852b5e`
+  - `hotfix-world-permissions`: `2258d605`, `c2d0b008`, `68137893`, `07793da2`
+  - `hotfix-player-hero-edit`: `65675cf9`, `7d1a7d75`, `a655dd21`
+  - `hotfix-player-settings-gif`: `b037d54f`, `90b70526`
+  - `hotfix-map-load-sync`: `d4b54507`, `87d5d8d7`
+  - `hotfix-ws-keepalive`: `88a43c07`, `487ffdf9`, `5d9a4018`
+  - `fix-scene-live-launch`: `0add03cc`
+- Line numbers below are from `caafdd6d` and have drifted since.
+
 ## US1 World links
 
 ### R1 What a world link is today

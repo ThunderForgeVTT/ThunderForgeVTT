@@ -233,10 +233,11 @@ pub async fn world_by_invite_code_impl(
         }
     }
 
-    // `max_uses == 0` means unlimited, matching the join predicate and
-    // `WorldInvite::is_valid`. Without that guard an uncapped link read as
-    // exhausted immediately, since `0 >= 0`.
-    if invite.max_uses > 0 && invite.used_count >= invite.max_uses {
+    // Spec 088 (FR-012): `None` is no limit, matching the join predicate.
+    if invite
+        .max_uses
+        .is_some_and(|max_uses| invite.used_count >= max_uses)
+    {
         return Ok(None); // Invite exhausted
     }
 
@@ -410,7 +411,8 @@ mod tests {
             id: uuid::Uuid::now_v7(),
             world_id,
             invite_code: code.clone(),
-            max_uses,
+            // Test callers pass `0` for no limit.
+            max_uses: (max_uses > 0).then_some(max_uses),
             used_count,
             expires_at,
             created_by,

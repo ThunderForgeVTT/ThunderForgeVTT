@@ -73,7 +73,7 @@ pub enum WorldAccessLinkState {
 pub fn derive_link_state(
     revoked: bool,
     expires_at: Option<chrono::NaiveDateTime>,
-    max_uses: i32,
+    max_uses: Option<i32>,
     used_count: i32,
 ) -> WorldAccessLinkState {
     if revoked {
@@ -84,23 +84,26 @@ pub fn derive_link_state(
     {
         return WorldAccessLinkState::Expired;
     }
-    // `max_uses == 0` is unlimited, so it can never be exhausted. See
-    // `WorldInvite::is_valid` in crates/thunderforge-core for why that branch still exists.
-    if max_uses > 0 && used_count >= max_uses {
+    // Spec 088 (FR-012): `None` is no limit, so it can never be used up.
+    if max_uses.is_some_and(|max_uses| used_count >= max_uses) {
         return WorldAccessLinkState::Exhausted;
     }
     WorldAccessLinkState::Active
 }
 
-/// Uses left on a link, or `None` when it is uncapped (`max_uses == 0`).
+/// Uses left on a link, or `None` when it has no limit.
 ///
 /// Saturates at zero rather than reporting a negative remainder, so a row that
 /// somehow over-consumed reads as spent instead of nonsensical.
-pub fn remaining_uses(max_uses: i32, used_count: i32) -> Option<i32> {
-    if max_uses <= 0 {
-        None
-    } else {
-        Some((max_uses - used_count).max(0))
+pub fn remaining_uses(max_uses: Option<i32>, used_count: i32) -> Option<i32> {
+    max_uses.map(|max_uses| (max_uses - used_count).max(0))
+}
+
+/// The deprecated `status` string: `"3/10 uses"`, or `"3 uses"` with no limit.
+pub fn status_text(max_uses: Option<i32>, used_count: i32) -> String {
+    match max_uses {
+        Some(max_uses) => format!("{used_count}/{max_uses} uses"),
+        None => format!("{used_count} uses"),
     }
 }
 
@@ -109,7 +112,8 @@ pub struct WorldInvitePayload {
     pub id: Uuid,
     pub world_id: Uuid,
     pub invite_code: String,
-    pub max_uses: i32,
+    /// Spec 088 (FR-012): `null` is no limit.
+    pub max_uses: Option<i32>,
     pub used_count: i32,
     pub expires_at: Option<String>,
     pub created_by: Uuid,
@@ -152,7 +156,7 @@ impl WorldInvitePayload {
             ),
             remaining_uses: remaining_uses(invite.max_uses, invite.used_count),
             rotated_from: invite.rotated_from,
-            status: format!("{}/{} uses", invite.used_count, invite.max_uses),
+            status: status_text(invite.max_uses, invite.used_count),
         }
     }
 }

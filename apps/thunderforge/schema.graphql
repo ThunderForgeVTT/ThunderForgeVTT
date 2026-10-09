@@ -7822,7 +7822,10 @@ type WorldInvitePayload {
 	id: UUID!
 	worldId: UUID!
 	inviteCode: String!
-	maxUses: Int!
+	"""
+	Spec 088 (FR-012): `null` is no limit.
+	"""
+	maxUses: Int
 	usedCount: Int!
 	expiresAt: String
 	createdBy: UUID!

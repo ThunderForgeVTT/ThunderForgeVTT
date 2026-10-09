@@ -21,6 +21,8 @@ import type { WorldEventLike } from "./subscriptionClient";
 
 export const ROLL_MADE_EVENT_CODE = 36;
 export const ROLL_REVEALED_EVENT_CODE = 37;
+/** Spec 088: the GM cleared the feed. Payload `{clearedAt}`. */
+export const ROLLS_CLEARED_EVENT_CODE = 39;
 
 /**
  * The dice's settle time (1.2 s) plus the slowest fetch worth animating. A

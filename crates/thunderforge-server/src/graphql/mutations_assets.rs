@@ -203,6 +203,7 @@ pub async fn upload_canvas_image_impl(
         created_at: now,
         updated_at: now,
         content_hash: Some(content_hash),
+        base_map_id: None,
     };
 
     let mut conn = state

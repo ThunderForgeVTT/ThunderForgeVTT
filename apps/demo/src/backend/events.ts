@@ -30,6 +30,7 @@ export const EVENT = {
   tokenTravelled: 34,
   rollMade: 36,
   rollRevealed: 37,
+  rollsCleared: 39,
 } as const;
 
 const subscribers = new Set<(event: WorldEvent) => void>();

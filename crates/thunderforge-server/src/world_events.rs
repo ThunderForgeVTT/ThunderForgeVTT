@@ -269,6 +269,12 @@ pub const EVENT_CODE_ROLL_REVEALED: i32 = 37;
 /// away. The player's rail re-reads `authoringTools` on it, so a revoked
 /// tool goes without a reload (SC-005). Payload: `{"userId": <the player>}`.
 pub const EVENT_CODE_AUTHORING_TOOLS_CHANGED: i32 = 38;
+/// Spec 088 (FR-040): the GM cleared the roll feed. Every roll created at or
+/// before `clearedAt` is withheld from then on, on every path to a roll
+/// (`rolls::visibility::cleared`); nothing is deleted. It reaches every
+/// member, with no visibility filter, and each client drops the feed's
+/// entries at or before the time. Payload: `{"clearedAt": <RFC 3339>}`.
+pub const EVENT_CODE_ROLLS_CLEARED: i32 = 39;
 
 /// The whole payload of a roll event (FR-002).
 pub fn roll_event_payload(

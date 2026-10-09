@@ -150,7 +150,7 @@ pub async fn generate_invite_code_impl(
         id: invite_id,
         world_id,
         invite_code: invite_code.clone(),
-        max_uses,
+        max_uses: Some(max_uses),
         used_count: 0,
         expires_at,
         created_by: user_id,
@@ -189,10 +189,10 @@ pub async fn generate_invite_code_impl(
         created_by: new_invite.created_by,
         created_at: new_invite.created_at.to_string(),
         updated_at: new_invite.updated_at.to_string(),
-        state: derive_link_state(false, new_invite.expires_at, max_uses, 0),
-        remaining_uses: remaining_uses(max_uses, 0),
+        state: derive_link_state(false, new_invite.expires_at, new_invite.max_uses, 0),
+        remaining_uses: remaining_uses(new_invite.max_uses, 0),
         rotated_from: None,
-        status: format!("0/{} uses", max_uses),
+        status: status_text(new_invite.max_uses, 0),
     })
 }
 
@@ -294,10 +294,13 @@ pub async fn join_world_impl(
                             .is_null()
                             .or(world_invites::expires_at.gt(now)),
                     )
+                    // Spec 088 (FR-012): NULL is no limit.
                     .filter(
                         world_invites::max_uses
-                            .eq(0)
-                            .or(world_invites::used_count.lt(world_invites::max_uses)),
+                            .is_null()
+                            .or(world_invites::used_count
+                                .nullable()
+                                .lt(world_invites::max_uses)),
                     ),
             )
             .set((

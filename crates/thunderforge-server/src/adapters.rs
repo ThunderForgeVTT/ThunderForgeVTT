@@ -169,6 +169,7 @@ impl From<CoreWorld> for DbWorld {
             auto_apply_npc_damage: false,
             // Spec 044 FR-030a: on, as the migration backfilled every old world.
             allow_player_actor_art: true,
+            rolls_cleared_at: None,
         }
     }
 }
@@ -216,7 +217,8 @@ impl From<crate::models::WorldInvite> for thunderforge_core::models::invites::Wo
             id: db.id,
             world_id: db.world_id,
             invite_code: db.invite_code,
-            max_uses: db.max_uses,
+            // The core model keeps `0` for no limit.
+            max_uses: db.max_uses.unwrap_or(0),
             used_count: db.used_count,
             expires_at: db.expires_at,
             created_by: db.created_by,
@@ -234,7 +236,7 @@ impl From<thunderforge_core::models::invites::WorldInvite> for crate::models::Wo
             id: core.id,
             world_id: core.world_id,
             invite_code: core.invite_code,
-            max_uses: core.max_uses,
+            max_uses: (core.max_uses > 0).then_some(core.max_uses),
             used_count: core.used_count,
             expires_at: core.expires_at,
             created_by: core.created_by,

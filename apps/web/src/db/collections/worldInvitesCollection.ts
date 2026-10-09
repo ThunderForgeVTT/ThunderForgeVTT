@@ -20,7 +20,8 @@ export interface WorldInviteDoc {
   id: string;
   world_id: string;
   invite_code: string;
-  max_uses: number;
+  /** Spec 088 (FR-012): `null` is no limit. */
+  max_uses: number | null;
   used_count: number;
   expires_at?: string | null;
   created_by: string;
@@ -84,7 +85,9 @@ export function computeInviteDerivedData(invite: WorldInviteDoc): {
 } {
   const remaining =
     invite.remaining_uses ??
-    (invite.max_uses > 0 ? invite.max_uses - invite.used_count : null);
+    (invite.max_uses != null && invite.max_uses > 0
+      ? invite.max_uses - invite.used_count
+      : null);
 
   const status =
     invite.state === "ACTIVE"

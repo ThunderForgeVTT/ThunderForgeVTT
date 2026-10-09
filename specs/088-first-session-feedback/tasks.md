@@ -42,8 +42,8 @@ on.
 
 **Purpose**: a worktree on the right base.
 
-- [ ] T001 Check which hotfix branches are on main (`git log --oneline main` and `mcp__gitops__workspace_scan`). Record the result at the top of research.md under `## Base`.
-- [ ] T002 Create the worktree: `git worktree add ../ThunderForgeVTT-088 -b 088-first-session-feedback main`. Record the base commit under `## Base`.
+- [X] T001 Check which hotfix branches are on main (`git log --oneline main` and `mcp__gitops__workspace_scan`). Record the result at the top of research.md under `## Base`.
+- [X] T002 Create the worktree: `git worktree add ../ThunderForgeVTT-088 -b 088-first-session-feedback main`. Record the base commit under `## Base`.
 - [ ] T003 [P] `pnpm install`, `cargo check -p thunderforge-server`, and confirm the RustFS bucket `thunderforge-canvas-assets` exists (quickstart.md, step 0).
 
 **Checkpoint**: the worktree builds on main with the landed hotfixes.
@@ -55,11 +55,11 @@ on.
 **Purpose**: the migrations and the event code that several stories read.
 No behaviour changes.
 
-- [ ] T005 [P] Migration M1 `world_invites_default_one` (data-model.md), with `down.sql`.
-- [ ] T006 [P] Migration M2 `base_map_assets` (`canvas_image_assets.base_map_id`), with `down.sql`.
-- [ ] T007 [P] Migration M3 `rolls_cleared_at` (`worlds.rolls_cleared_at`), with `down.sql`.
-- [ ] T008 Run the migrations, regenerate `crates/thunderforge-server/src/schema.rs`, and update the Diesel models that select `*` from the two tables. `cargo test -p thunderforge-server` passes unchanged.
-- [ ] T009 Add `EVENT_CODE_ROLLS_CLEARED: i32 = 39` to `world_events.rs`, with its doc comment, and to the web's and demo's event-code lists.
+- [X] T005 [P] Migration M1 `world_invites_default_one` (data-model.md), with `down.sql`. Landed as `world_invites_optional_limit`, the data-model name, since the owner settled on no limit by default.
+- [X] T006 [P] Migration M2 `base_map_assets` (`canvas_image_assets.base_map_id`), with `down.sql`.
+- [X] T007 [P] Migration M3 `rolls_cleared_at` (`worlds.rolls_cleared_at`), with `down.sql`.
+- [X] T008 Run the migrations, regenerate `crates/thunderforge-server/src/schema.rs`, and update the Diesel models that select `*` from the two tables. `cargo test -p thunderforge-server` passes unchanged. schema.rs is edited by hand (the shared dev database is left alone); the test database migrates on demand. The core crate's `WorldInvite` keeps `0` for no limit and the adapter converts.
+- [X] T009 Add `EVENT_CODE_ROLLS_CLEARED: i32 = 39` to `world_events.rs`, with its doc comment, and to the web's and demo's event-code lists.
 
 **Checkpoint**: the schema holds the three columns. Every existing test
 still passes. Commit: "Spec 088: the migrations and event 39".

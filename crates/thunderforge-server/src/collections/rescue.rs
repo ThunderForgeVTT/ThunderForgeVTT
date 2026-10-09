@@ -165,6 +165,7 @@ fn personal_world_sync(
         auto_apply_npc_damage: false,
         // Spec 044 FR-030a: on, as the migration backfilled every old world.
         allow_player_actor_art: true,
+        rolls_cleared_at: None,
     };
     crate::graphql::mutations_worlds::insert_world_sync(conn, &world, Uuid::now_v7(), now)?;
     Ok(world.id)

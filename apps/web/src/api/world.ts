@@ -240,7 +240,8 @@ export interface WorldInviteRecord {
   id: string;
   worldId: string;
   inviteCode: string;
-  maxUses: number;
+  /** Spec 088 (FR-012): `null` is no limit. */
+  maxUses: number | null;
   usedCount: number;
   expiresAt?: string | null;
   createdBy: string;

@@ -110,7 +110,8 @@ fn insert_test_invite_with_revocation(
             id,
             world_id,
             invite_code: code.clone(),
-            max_uses,
+            // Test callers pass `0` for no limit.
+            max_uses: (max_uses > 0).then_some(max_uses),
             used_count,
             expires_at,
             created_by,
@@ -278,7 +279,7 @@ async fn generate_invite_code_success_path() {
     .await
     .expect("the world's own owner must be able to generate an invite");
     assert_eq!(payload.world_id, world_id);
-    assert_eq!(payload.max_uses, 7);
+    assert_eq!(payload.max_uses, Some(7));
     assert_eq!(payload.used_count, 0);
 
     // Spec 027 (FR-006): this assertion previously expected 8 characters.
@@ -394,7 +395,7 @@ async fn rotation_inherits_cap_and_expiry_but_resets_the_count() {
         .await
         .expect("rotation should succeed");
 
-    assert_eq!(replacement.max_uses, 10, "cap must be inherited");
+    assert_eq!(replacement.max_uses, Some(10), "cap must be inherited");
     assert_eq!(replacement.used_count, 0, "count must reset (FR-014)");
     assert_eq!(replacement.remaining_uses, Some(10));
 
@@ -730,11 +731,11 @@ fn in_the_future() -> Option<chrono::NaiveDateTime> {
 #[test]
 fn a_fresh_capped_link_is_active() {
     assert_eq!(
-        derive_link_state(false, None, 10, 0),
+        derive_link_state(false, None, Some(10), 0),
         WorldAccessLinkState::Active
     );
     assert_eq!(
-        derive_link_state(false, in_the_future(), 10, 3),
+        derive_link_state(false, in_the_future(), Some(10), 3),
         WorldAccessLinkState::Active
     );
 }
@@ -742,7 +743,7 @@ fn a_fresh_capped_link_is_active() {
 #[test]
 fn a_past_expiry_reads_expired() {
     assert_eq!(
-        derive_link_state(false, in_the_past(), 10, 0),
+        derive_link_state(false, in_the_past(), Some(10), 0),
         WorldAccessLinkState::Expired
     );
 }
@@ -750,12 +751,12 @@ fn a_past_expiry_reads_expired() {
 #[test]
 fn a_spent_cap_reads_exhausted() {
     assert_eq!(
-        derive_link_state(false, None, 5, 5),
+        derive_link_state(false, None, Some(5), 5),
         WorldAccessLinkState::Exhausted
     );
     // Over-consumption still reads exhausted rather than active.
     assert_eq!(
-        derive_link_state(false, None, 5, 7),
+        derive_link_state(false, None, Some(5), 7),
         WorldAccessLinkState::Exhausted
     );
 }
@@ -763,7 +764,7 @@ fn a_spent_cap_reads_exhausted() {
 #[test]
 fn revocation_reads_revoked() {
     assert_eq!(
-        derive_link_state(true, None, 10, 0),
+        derive_link_state(true, None, Some(10), 0),
         WorldAccessLinkState::Revoked
     );
 }
@@ -774,34 +775,33 @@ fn revocation_reads_revoked() {
 #[test]
 fn revoked_outranks_expired_and_exhausted() {
     assert_eq!(
-        derive_link_state(true, in_the_past(), 5, 5),
+        derive_link_state(true, in_the_past(), Some(5), 5),
         WorldAccessLinkState::Revoked,
         "revocation must outrank every other reason"
     );
     assert_eq!(
-        derive_link_state(false, in_the_past(), 5, 5),
+        derive_link_state(false, in_the_past(), Some(5), 5),
         WorldAccessLinkState::Expired,
         "expiry must outrank exhaustion"
     );
 }
 
-/// `max_uses == 0` means unlimited, so it can never be exhausted and has
-/// no remaining count to report. Unreachable via the API today, but the
-/// model still branches on it — see `WorldInvite::is_valid`.
+/// Spec 088 (FR-012): a link with no limit can never be used up and has
+/// no remaining count to report.
 #[test]
 fn an_uncapped_link_never_exhausts_and_reports_no_remainder() {
     assert_eq!(
-        derive_link_state(false, None, 0, 9_999),
+        derive_link_state(false, None, None, 9_999),
         WorldAccessLinkState::Active
     );
-    assert_eq!(remaining_uses(0, 9_999), None);
+    assert_eq!(remaining_uses(None, 9_999), None);
 }
 
 #[test]
 fn remaining_uses_counts_down_and_saturates_at_zero() {
-    assert_eq!(remaining_uses(10, 0), Some(10));
-    assert_eq!(remaining_uses(10, 4), Some(6));
-    assert_eq!(remaining_uses(10, 10), Some(0));
+    assert_eq!(remaining_uses(Some(10), 0), Some(10));
+    assert_eq!(remaining_uses(Some(10), 4), Some(6));
+    assert_eq!(remaining_uses(Some(10), 10), Some(0));
     // Never negative, even if a row somehow over-consumed.
-    assert_eq!(remaining_uses(10, 12), Some(0));
+    assert_eq!(remaining_uses(Some(10), 12), Some(0));
 }

@@ -130,6 +130,7 @@ diesel::table! {
         created_at -> Timestamp,
         updated_at -> Timestamp,
         content_hash -> Nullable<Text>,
+        base_map_id -> Nullable<Text>,
     }
 }
 
@@ -1365,7 +1366,7 @@ diesel::table! {
         world_id -> Uuid,
         #[max_length = 32]
         invite_code -> Varchar,
-        max_uses -> Int4,
+        max_uses -> Nullable<Int4>,
         used_count -> Int4,
         expires_at -> Nullable<Timestamp>,
         created_by -> Uuid,
@@ -1707,6 +1708,7 @@ diesel::table! {
         active_scene_id -> Nullable<Uuid>,
         auto_apply_npc_damage -> Bool,
         allow_player_actor_art -> Bool,
+        rolls_cleared_at -> Nullable<Timestamptz>,
     }
 }
 
