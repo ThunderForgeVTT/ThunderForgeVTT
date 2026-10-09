@@ -31,14 +31,14 @@ today (T034, T040).
 **Purpose**: the numbers everything after is measured against. No version
 changes in this phase.
 
-- [ ] T001 Create the worktree: `git worktree add ../ThunderForgeVTT-087 -b 087-bevy-0-20 main`. Record the base commit in research.md as `## Baseline` → "Taken at `<hash>`".
-- [ ] T002 [P] Check the toolchain: `rustc --version` is at least 1.97.1, and `cargo search bevy --limit 1` shows 0.20.x. If 0.20.1 or later exists and is bug-fix only, use it, and record that in research.md R1.
-- [ ] T003 [US3] Build a release engine (`ENGINE_PROFILE=release node scripts/build.mjs --only-wasm`) and copy `dist/engine` over main's (quickstart.md). Wait for the e2e lock if a run holds it.
-- [ ] T004 [US3] Run `THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT=1 pnpm e2e:engine-limits` three times. Record the median fps and frame time for each level (3200, 4000, 4800, 5600, 6400) in research.md under `## Baseline`.
-- [ ] T005 [P] [US4] Record the release `.wasm` size, raw and brotli at quality 11, in research.md under `## Baseline` (quickstart.md step 2).
-- [ ] T006 [P] [US3] Record three render-probe lines on the 3200-token scene in research.md under `## Baseline` (contracts/render-probe.md).
-- [ ] T007 [P] [US1] Take the four baseline captures (quickstart.md step 4). Keep them in `specs/087-bevy-0-20/baseline/` (`darkness.png`, `stack.png`, `text.png`, `sprite.png`), and record the known sprite's pixel value.
-- [ ] T008 Commit the baseline (research.md and `baseline/`) on `087-bevy-0-20` as "Spec 087: the 0.19.1 baseline".
+- [x] T001 Create the worktree: `git worktree add ../ThunderForgeVTT-087 -b 087-bevy-0-20 main`. Record the base commit in research.md as `## Baseline` → "Taken at `<hash>`".
+- [x] T002 [P] Check the toolchain: `rustc --version` is at least 1.97.1, and `cargo search bevy --limit 1` shows 0.20.x. If 0.20.1 or later exists and is bug-fix only, use it, and record that in research.md R1.
+- [x] T003 [US3] Build a release engine (`ENGINE_PROFILE=release node scripts/build.mjs --only-wasm`) and copy `dist/engine` over main's (quickstart.md). Wait for the e2e lock if a run holds it.
+- [x] T004 [US3] Run `THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT=1 pnpm e2e:engine-limits` three times. Record the median fps and frame time for each level (3200, 4000, 4800, 5600, 6400) in research.md under `## Baseline`.
+- [x] T005 [P] [US4] Record the release `.wasm` size, raw and brotli at quality 11, in research.md under `## Baseline` (quickstart.md step 2).
+- [x] T006 [P] [US3] Record three render-probe lines on the 3200-token scene in research.md under `## Baseline` (contracts/render-probe.md).
+- [x] T007 [P] [US1] Take the four baseline captures (quickstart.md step 4). Keep them in `specs/087-bevy-0-20/baseline/` (`darkness.png`, `stack.png`, `text.png`, `sprite.png`), and record the known sprite's pixel value.
+- [x] T008 Commit the baseline (research.md and `baseline/`) on `087-bevy-0-20` as "Spec 087: the 0.19.1 baseline".
 
 **Checkpoint**: the baseline is recorded and committed. Nothing else has
 changed.

@@ -351,3 +351,78 @@ before any version change (T003–T007).
   `render_probe.rs`, but not `stats.ts` or `EngineStats`' fields.
 - The textual overlap is Cargo.lock only. The semantic one is that
   `engine.frames` measured before and after 087 would show a step.
+
+## Baseline
+
+Taken at `caafdd6d` (T001), on bevy 0.19.1, glam 0.32.1 and wgpu 29.0.4,
+in the worktree `../ThunderForgeVTT-087`.
+
+**Toolchain (T002).** `rustc` 1.99.0. `cargo search bevy` shows 0.20.0 as
+the latest; there is no 0.20.1, so R1 stands.
+
+**Engine (T003).** A release build (`ENGINE_PROFILE=release node
+scripts/build.mjs --only-wasm`). The worktree resolves
+`@thunderforge/engine` through its own `dist/engine`, so nothing was
+copied over main's: that would have put this engine under spec 086's runs.
+
+**Frame rate (T004).** `pnpm e2e:engine-limits`, three runs, each started
+only when no e2e run, no build from another tree, and a 1-minute load
+under 4. All 4 tests passed in each run.
+
+| Run | Load at start (1/5/15 min) | 3200 | 4000 | 4800 | 5600 | 6400 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 2.18 / 3.08 / 4.99 | 61 fps, 16.5 ms | 60, 16.7 | 58, 17.2 | 61, 16.5 | 60, 16.6 |
+| 2 | 2.41 / 4.54 / 5.32 | 61, 16.3 | 60, 16.7 | 60, 16.7 | 60, 16.7 | 60, 16.6 |
+| 3 | 3.82 / 4.16 / 4.73 | 60, 16.7 | 60, 16.7 | 60, 16.8 | 60, 16.8 | 60, 16.6 |
+| **Median** | | **61, 16.5** | **60, 16.7** | **60, 16.8** | **60, 16.7** | **60, 16.6** |
+
+Every level sits at the display's 60 Hz, so the slice measures whether a
+frame is dropped, not how much headroom there is. Run 1's report says
+another tree's `cargo`/`rustc` was active for 7 samples; its numbers match
+runs 2 and 3, so it is kept.
+
+**Size (T005).** Release `engine_bg.wasm`: 30,424,557 bytes raw,
+5,069,241 bytes brotli at quality 11.
+
+**Render probe (T006).** The 3200-token level at the default camera, in
+the engine sandbox, release engine (load about 12.6 / 9.3 / 6.8, so these
+are counts, not timings):
+
+```
+main: sprites total=3202 view_visible=274
+render: Transparent2d view items=750
+render: views matching (RenderVisibleEntities, ExtractedView, Msaa)=1 · views missing Msaa=1
+render: ExtractedSprites=748
+render: view RenderVisibleEntities<Sprite>=748
+```
+
+`engineStats` read fps 65.4, frame 15.3 ms and `tokens_culled` 2020 there.
+
+**Captures (T007).** In the engine sandbox, Chromium with a GPU, 1280×900
+canvas. The four pictures are in `baseline/` (`sprite.png`, `stack.png`,
+`text.png`, `darkness.png`).
+
+- Known sprite: the red token at world (-170, 10) reads RGBA
+  `[203, 67, 75, 255]`; clear floor reads `[34, 40, 49, 255]`.
+- Darkness: torch `[255, 200, 128]`, lit floor at (-60, 0)
+  `[99, 103, 111]`, wall shadow at (60, 0) `[100, 105, 123]`, far dark
+  `[39, 47, 78]`.
+- Stack: a click on three tokens on one square picks `stack-a`, the
+  lowest id, and the box-select returns all three.
+- `stack.png` is not stable from run to run, even on 0.19.1: two captures
+  of the same build differ inside the stack's box (1,924 pixels, up to 222
+  per channel). The three photo tokens share one z, and which is drawn on
+  top most likely follows when each one's art arrives. So the stack is compared by a
+  second, deterministic check instead: three plain tokens of the three
+  kind colours (character blue, npc red, vehicle amber, ids `kind-a`,
+  `kind-b`, `kind-c`) on one square, added in two orders, reading the top
+  pixel before a click.
+
+  | Added | Drawn on top | Click picks |
+  | --- | --- | --- |
+  | a, b, c | `kind-c` (amber `[229, 163, 64]`) | `kind-a` |
+  | c, b, a | `kind-a` (blue `[106, 137, 237]`) | `kind-a` |
+
+  The last token added is drawn on top, and a click picks the lowest id
+  (`token_stack.rs`), whatever is drawn. When those disagree, the click
+  takes a token the player cannot see. That is true on 0.19.1 already.
