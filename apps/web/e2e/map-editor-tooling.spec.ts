@@ -557,10 +557,11 @@ test.describe("Non-GM player sees no authoring controls (US1, T006)", () => {
 
     // A real invite, so the second account is a real member rather than a
     // second window onto the owner's own session.
-    await gm.goto(`/world/${worldId}`);
-    await expect(
-      gm.getByRole("heading", { name: /campaign settings/i }),
-    ).toBeVisible({ timeout: 15_000 });
+    // Spec 088: links are made on the players page.
+    await gm.goto(`/world/${worldId}/players`);
+    await expect(gm.getByTestId("world-links-panel")).toBeVisible({
+      timeout: 15_000,
+    });
     await gm.getByRole("button", { name: /generate join link/i }).click();
     await expect(gm.getByTestId("invite-link-row").first()).toBeVisible({
       timeout: 15_000,

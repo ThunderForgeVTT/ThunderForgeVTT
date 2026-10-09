@@ -108,6 +108,8 @@ test.describe("Spec 019: Session Resource trading between two real players", () 
       { actorId: playerActorId, available: true },
     );
 
+    // Spec 088: links are made on the players page.
+    await gmPage.goto(`/world/${worldId}/players`);
     await gmPage.getByRole("button", { name: "Generate Join Link" }).click();
     const inviteCode = await extractInviteCode(gmPage);
 
@@ -286,6 +288,8 @@ test.describe("Spec 019 T012: two clients connected at once, each seeing the oth
       { actorId: playerActorId, available: true },
     );
 
+    // Spec 088: links are made on the players page.
+    await gmPage.goto(`/world/${worldId}/players`);
     await gmPage.getByRole("button", { name: "Generate Join Link" }).click();
     const inviteCode = await extractInviteCode(gmPage);
 

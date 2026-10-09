@@ -187,7 +187,7 @@ async function generateJoinLink(
   await gmPage
     .context()
     .grantPermissions(["clipboard-read", "clipboard-write"]);
-  await gmPage.goto(`/world/${worldId}`);
+  await gmPage.goto(`/world/${worldId}/players`);
   await gmPage.getByRole("button", { name: "Generate Join Link" }).click();
 
   // The link is put in a read-only field for the GM to copy, so this reads it

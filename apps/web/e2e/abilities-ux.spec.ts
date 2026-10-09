@@ -174,10 +174,11 @@ test.describe("A Game Master finds their rulebook's sections", () => {
     await addAbility(gm, shared);
 
     // A real invite, so the player is a real member.
-    await gm.goto(`/world/${worldId}`);
-    await expect(
-      gm.getByRole("heading", { name: /campaign settings/i }),
-    ).toBeVisible({ timeout: 15_000 });
+    // Spec 088: links are made on the players page.
+    await gm.goto(`/world/${worldId}/players`);
+    await expect(gm.getByTestId("world-links-panel")).toBeVisible({
+      timeout: 15_000,
+    });
     await gm.getByRole("button", { name: /generate join link/i }).click();
     await expect(gm.getByTestId("invite-link-row").first()).toBeVisible({
       timeout: 15_000,

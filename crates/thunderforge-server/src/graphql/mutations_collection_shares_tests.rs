@@ -241,7 +241,7 @@ fn a_caller() -> String {
 async fn a_share_link_carries_an_unguessable_code() {
     let f = fixture();
     let (_, share) = shared_fixture(&f).await;
-    assert_eq!(share.share_code.len(), 20);
+    assert_eq!(share.share_code.len(), 26);
     assert_eq!(share.share_code, share.share_code.to_uppercase());
     assert!(!share.revoked);
 }

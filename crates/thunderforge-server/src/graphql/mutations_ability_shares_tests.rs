@@ -123,7 +123,7 @@ async fn create_ability_share_link_requires_owner_level() {
     .await
     .expect("the DM has implicit Owner and may share");
     assert!(!link.revoked);
-    assert_eq!(link.share_code.len(), 20, "20-char code");
+    assert_eq!(link.share_code.len(), 26, "26-char code");
     assert_eq!(link.share_code, link.share_code.to_uppercase());
 }
 

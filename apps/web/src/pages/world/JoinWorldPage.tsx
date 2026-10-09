@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { postGraphQL } from "@/api/graphqlClient";
+import { GraphQLRequestError, postGraphQL } from "@/api/graphqlClient";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
@@ -10,6 +10,13 @@ import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { useAuth } from "@/hooks/useAuth";
 import type { SeoConfig } from "@/types/seo";
 import { AppFooter } from "@/components/navigation/AppFooter";
+import { joinRefusalOf, type JoinRefusal } from "@/pages/world/joinRefusal";
+
+/** Spec 088 (FR-008): a refusal the server named, or `null`. */
+function refusalOf(error: unknown): JoinRefusal | null {
+  if (!(error instanceof GraphQLRequestError)) return null;
+  return joinRefusalOf(error.codes, error.errors[0] ?? error.message);
+}
 
 interface WorldInfo {
   id: string;
@@ -40,6 +47,11 @@ export const joinWorldPageSeo: SeoConfig = {
  * 4. On join click: call joinWorld(code) mutation
  * 5. On success: redirect to world dashboard
  * 6. On error: show error message
+ *
+ * Spec 088 (FR-008, FR-009): a signed-out visitor is sent to sign in and
+ * shown nothing of the world. A signed-in one reads why a dead link admits
+ * no one before any Join button, and a member reads that they are already
+ * in the world.
  */
 export default function JoinWorldPage() {
   const navigate = useNavigate();
@@ -49,12 +61,14 @@ export default function JoinWorldPage() {
     Omit<JoinResponse, "world"> & {
       world: WorldInfo | null;
       status: string | null;
+      refusal: JoinRefusal | null;
       isLoading: boolean;
     }
   >({
     world: null,
     alreadyMember: false,
     status: null,
+    refusal: null,
     isLoading: true,
   });
   const [isJoining, setIsJoining] = useState(false);
@@ -95,18 +109,22 @@ export default function JoinWorldPage() {
             world: data.worldByInviteCode,
             alreadyMember: data.alreadyMember,
             status: null,
+            refusal: null,
             isLoading: false,
           });
         }
       } catch (error) {
         if (active) {
+          const refusal = refusalOf(error);
           setWorldState({
             world: null,
             alreadyMember: false,
-            status:
-              error instanceof Error
+            status: refusal
+              ? null
+              : error instanceof Error
                 ? error.message
                 : "Failed to load campaign.",
+            refusal,
             isLoading: false,
           });
         }
@@ -141,11 +159,20 @@ export default function JoinWorldPage() {
         navigate(`/world/${worldState.world.id}`);
       }
     } catch (error) {
-      setWorldState((current) => ({
-        ...current,
-        status:
-          error instanceof Error ? error.message : "Failed to join campaign.",
-      }));
+      const refusal = refusalOf(error);
+      setWorldState((current) =>
+        refusal?.kind === "ALREADY_MEMBER"
+          ? { ...current, alreadyMember: true }
+          : {
+              ...current,
+              refusal,
+              status: refusal
+                ? null
+                : error instanceof Error
+                  ? error.message
+                  : "Failed to join campaign.",
+            },
+      );
       setIsJoining(false);
     }
   };
@@ -176,36 +203,37 @@ export default function JoinWorldPage() {
       />
       <Container>
         <main className="grid min-h-[60vh] place-items-center py-16">
-          {worldState.status ? (
+          {worldState.refusal &&
+          worldState.refusal.kind !== "ALREADY_MEMBER" ? (
             <Card
               surface="stone"
               className="grid w-full max-w-lg gap-4 p-6 text-center"
+              data-testid="join-refusal"
+              data-refusal={worldState.refusal.kind}
             >
-              <StatusBadge variant="danger">{worldState.status}</StatusBadge>
               <h1 className="text-2xl font-semibold">
-                This link is no longer available
+                {worldState.refusal.heading}
               </h1>
-              {/* Spec 027 (FR-011 / SC-005): one message for every dead link.
-                  Listing possible causes — invalid, expired, used up, revoked —
-                  tells the holder of a killed link which one applied, which is
-                  exactly what the server refuses to disclose. */}
               <p className="text-muted-foreground">
-                Ask your GM for a new invite link.
+                {worldState.refusal.message}
               </p>
               <Button onClick={() => navigate("/worlds")}>
                 Return to my campaigns
               </Button>
             </Card>
-          ) : !world ? (
+          ) : worldState.status || !world ? (
             <Card
               surface="stone"
               className="grid w-full max-w-lg gap-4 p-6 text-center"
             >
+              {worldState.status ? (
+                <StatusBadge variant="danger">{worldState.status}</StatusBadge>
+              ) : null}
               <h1 className="text-2xl font-semibold">
-                This link is no longer available
+                This link could not be opened
               </h1>
               <p className="text-muted-foreground">
-                Ask your GM for a new invite link.
+                Try again in a moment, or ask your GM for a new link.
               </p>
               <Button onClick={() => navigate("/worlds")}>
                 Return to my campaigns
@@ -216,7 +244,7 @@ export default function JoinWorldPage() {
               <div>
                 <h1 className="text-2xl font-semibold">{world.name}</h1>
                 <p className="text-muted-foreground">
-                  You are already a member
+                  You&apos;re already in this world.
                 </p>
               </div>
               <p className="text-muted-foreground">

@@ -1294,7 +1294,8 @@ type AppQueryRoot {
 	"""
 	worldMember(worldId: UUID!, userId: UUID!): WorldMembershipPayload
 	"""
-	Get world info by invite code (for /join/:code landing page)
+	Get world info by invite code (for /join/:code landing page).
+	Spec 088 (FR-007): nothing for a signed-out caller.
 	"""
 	worldByInviteCode(code: String!): WorldPreviewPayload
 	"""
@@ -2732,11 +2733,13 @@ input GenerateInviteCodeInput {
 	"""
 	worldId: UUID!
 	"""
-	Maximum number of times this invite can be used (0 = unlimited)
+	Spec 088 (FR-002): how many joins the link admits, 1 to 50. Left out,
+	the link has no limit.
 	"""
-	maxUses: Int!
+	maxUses: Int
 	"""
-	Optional expiry time (ISO 8601 format)
+	Spec 088 (FR-002): when the link stops working, as RFC 3339. Left out,
+	seven days from now; `null`, never.
 	"""
 	expiresAt: String
 }

@@ -105,6 +105,12 @@ export {
   type RollSyncOptions,
 } from "./rolls";
 export {
+  isWorldLinkEvent,
+  MEMBER_JOINED_EVENT_CODE,
+  startWorldLinkSync,
+  WORLD_LINK_CHANGED_EVENT_CODE,
+} from "./worldLinks";
+export {
   applyPlayPanelWorldEvent,
   startPlayPanelEventSync,
   CHAT_MESSAGE_EVENT_CODE,

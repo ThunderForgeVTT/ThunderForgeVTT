@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { generateInviteCode } from "@/api/world";
 import { Button } from "@/components/ui/button/Button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,10 @@ interface SessionSetupInviteLinkProps {
  * (`CampaignSettingsPanel.tsx`), directly on Session Setup, so the GM
  * doesn't need to leave this page to copy/distribute it. Reuses the same
  * `generateInviteCode` mutation — no new server surface for this.
+ *
+ * Spec 088 (FR-003): a link made here takes the same defaults as one made
+ * on the Players page (no use limit, 7 days), and the Players page is where
+ * it is listed and revoked.
  */
 export function SessionSetupInviteLink({
   worldId,
@@ -28,7 +33,7 @@ export function SessionSetupInviteLink({
       // Spec 027: was a private `postGraphQL` copy — one the transport
       // consolidation missed because it lived in a component rather than
       // `src/api/`. Now shares the hardened client like everything else.
-      const created = await generateInviteCode(worldId, 5);
+      const created = await generateInviteCode(worldId);
       const url = `${window.location.origin}/join/${created.inviteCode}`;
       setInviteUrl(url);
       await navigator.clipboard.writeText(url).catch(() => {});
@@ -64,6 +69,17 @@ export function SessionSetupInviteLink({
       {status ? (
         <p className="text-xs text-muted-foreground">{status}</p>
       ) : null}
+      <p className="text-xs text-muted-foreground">
+        A link has no use limit and lasts 7 days.{" "}
+        <Link
+          to={`/world/${worldId}/players`}
+          className="underline underline-offset-2"
+          data-testid="session-setup-manage-links"
+        >
+          See and revoke links on the Players page
+        </Link>
+        .
+      </p>
     </div>
   );
 }

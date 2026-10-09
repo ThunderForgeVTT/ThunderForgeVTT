@@ -250,7 +250,7 @@ test.describe("US2: invite-code path works for existing and brand-new accounts (
     await page
       .context()
       .grantPermissions(["clipboard-read", "clipboard-write"]);
-    await page.goto(`/world/${worldId}`);
+    await page.goto(`/world/${worldId}/players`);
     await page.getByRole("button", { name: "Generate Join Link" }).click();
     const inviteCode = await extractInviteCode(page);
     // A second, distinct account (with an existing world of its own, so it
@@ -284,7 +284,7 @@ test.describe("US2: invite-code path works for existing and brand-new accounts (
     }
   });
 
-  test("an unauthenticated invite link survives login-vs-register and redemption completes after registering", async ({
+  test("a signed-out invite link asks for an existing account, and a new account joins once it has one", async ({
     page,
   }) => {
     // GM: create a world, generate an invite code.
@@ -303,7 +303,7 @@ test.describe("US2: invite-code path works for existing and brand-new accounts (
     await page
       .context()
       .grantPermissions(["clipboard-read", "clipboard-write"]);
-    await page.goto(`/world/${worldId}`);
+    await page.goto(`/world/${worldId}/players`);
     await page.getByRole("button", { name: "Generate Join Link" }).click();
     const inviteCode = await extractInviteCode(page);
     await page.context().clearCookies();
@@ -313,23 +313,19 @@ test.describe("US2: invite-code path works for existing and brand-new accounts (
     await page.goto(`/join/${inviteCode}`);
     await page.waitForURL(/\/login\?returnTo=/, { timeout: 10_000 });
 
-    // T017: the "Register" link must preserve that returnTo across the
-    // Login -> Register hop.
-    await page.getByRole("link", { name: "Create a local account" }).click();
-    await expect(page).toHaveURL(/\/register\?returnTo=/);
-
-    const creds = freshCredentials("e2eonbinvitee");
-    await page.locator("#register-username").fill(creds.username);
-    await page.locator("#register-email").fill(creds.email);
-    await page.locator("#register-password").fill(creds.password);
-    await page.locator("#register-password-confirmation").fill(creds.password);
-    await page.getByRole("button", { name: "Create account" }).click();
-
-    // FR-012: registration returns straight to redeeming the code, not the
-    // zero-worlds create-world path.
-    await page.waitForURL(new RegExp(`/join/${inviteCode}`), {
-      timeout: 15_000,
+    // Spec 088 (FR-009): world links are for existing accounts, so the
+    // sign-in page reached from one says so and offers no registration.
+    await expect(page.getByTestId("world-link-sign-in-notice")).toBeVisible({
+      timeout: 10_000,
     });
+    await expect(
+      page.getByRole("link", { name: "Create a local account" }),
+    ).toHaveCount(0);
+
+    // Someone new makes an account the ordinary way, then opens the link.
+    await register(page, freshCredentials("e2eonbinvitee"));
+    await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
+    await page.goto(`/join/${inviteCode}`);
     await expect(
       page.getByRole("button", { name: "Join Campaign" }),
     ).toBeVisible({ timeout: 10_000 });

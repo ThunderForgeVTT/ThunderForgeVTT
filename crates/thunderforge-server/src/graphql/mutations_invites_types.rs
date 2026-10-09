@@ -4,7 +4,10 @@
 //! two pure functions that read a link's state off its own columns. Nothing
 //! here touches the database, which is why it reads as one piece.
 
-use async_graphql::{Context, Error, InputObject, Result as GraphQLResult, SimpleObject};
+use async_graphql::{
+    Context, Error, ErrorExtensions, InputObject, MaybeUndefined, Result as GraphQLResult,
+    SimpleObject,
+};
 use chrono::Utc;
 use diesel::prelude::*;
 use uuid::Uuid;
@@ -18,10 +21,72 @@ use crate::models::WorldInvite;
 pub struct GenerateInviteCodeInput {
     /// World ID for the campaign
     pub world_id: Uuid,
-    /// Maximum number of times this invite can be used (0 = unlimited)
-    pub max_uses: i32,
-    /// Optional expiry time (ISO 8601 format)
-    pub expires_at: Option<String>,
+    /// Spec 088 (FR-002): how many joins the link admits, 1 to 50. Left out,
+    /// the link has no limit.
+    pub max_uses: Option<i32>,
+    /// Spec 088 (FR-002): when the link stops working, as RFC 3339. Left out,
+    /// seven days from now; `null`, never.
+    pub expires_at: MaybeUndefined<String>,
+}
+
+/// Spec 088 (FR-002): the most joins a limited link may admit.
+pub const MAX_LINK_USES: i32 = 50;
+
+/// Spec 088 (FR-002): how long a link lives when its expiry is left out.
+pub const DEFAULT_LINK_LIFETIME_DAYS: i64 = 7;
+
+pub const LINK_LIMIT_MESSAGE: &str = "A link can be used 1 to 50 times.";
+pub const EXPIRY_NOT_A_DATE_MESSAGE: &str = "That expiry is not a date.";
+pub const EXPIRY_PASSED_MESSAGE: &str = "That expiry has already passed.";
+
+/// Spec 088 (FR-002): a new link's use limit and expiry, from what the GM
+/// asked for, or the message refusing it.
+pub fn link_options(
+    max_uses: Option<i32>,
+    expires_at: &MaybeUndefined<String>,
+    now: chrono::DateTime<Utc>,
+) -> Result<(Option<i32>, Option<chrono::NaiveDateTime>), &'static str> {
+    if max_uses.is_some_and(|n| !(1..=MAX_LINK_USES).contains(&n)) {
+        return Err(LINK_LIMIT_MESSAGE);
+    }
+    let expires_at = match expires_at {
+        MaybeUndefined::Undefined => Some(now + chrono::Duration::days(DEFAULT_LINK_LIFETIME_DAYS)),
+        MaybeUndefined::Null => None,
+        MaybeUndefined::Value(text) => {
+            let at = chrono::DateTime::parse_from_rfc3339(text)
+                .map_err(|_| EXPIRY_NOT_A_DATE_MESSAGE)?
+                .with_timezone(&Utc);
+            if at <= now {
+                return Err(EXPIRY_PASSED_MESSAGE);
+            }
+            Some(at)
+        }
+    };
+    Ok((max_uses, expires_at.map(|at| at.naive_utc())))
+}
+
+// ========== Join refusals (spec 088, FR-008) ==========
+
+pub const LINK_REVOKED_MESSAGE: &str = "The GM has withdrawn this link. Ask them for a new one.";
+pub const LINK_EXPIRED_MESSAGE: &str = "This link has expired. Ask your GM for a new one.";
+pub const LINK_USED_UP_MESSAGE: &str =
+    "This link has already been used. Ask your GM for a new one.";
+pub const LINK_UNKNOWN_MESSAGE: &str =
+    "There is no world behind this link. Check it was copied whole.";
+
+/// Spec 088 (FR-008): why a link admitted no one, as `extensions.code` and
+/// its message. `None` is a code with no link behind it. A link that reads
+/// active here lost its last use to a concurrent join, so it is used up.
+pub fn link_refusal(state: Option<WorldAccessLinkState>) -> Error {
+    let (code, message) = match state {
+        None => ("LINK_UNKNOWN", LINK_UNKNOWN_MESSAGE),
+        Some(WorldAccessLinkState::Revoked) => ("LINK_REVOKED", LINK_REVOKED_MESSAGE),
+        Some(WorldAccessLinkState::Expired) => ("LINK_EXPIRED", LINK_EXPIRED_MESSAGE),
+        Some(WorldAccessLinkState::Exhausted | WorldAccessLinkState::Active) => {
+            ("LINK_USED_UP", LINK_USED_UP_MESSAGE)
+        }
+    };
+    Error::new(message).extend_with(|_, ext| ext.set("code", code))
 }
 
 #[derive(InputObject, Debug, Clone)]

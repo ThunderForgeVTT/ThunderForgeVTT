@@ -257,7 +257,7 @@ test.describe("Spec 034: an instance with no repository integration", () => {
       `E2E Lore Member ${uniqueSuffix()}`,
     );
 
-    await ownerPage.goto(`/world/${worldId}`);
+    await ownerPage.goto(`/world/${worldId}/players`);
     await ownerPage.getByRole("button", { name: "Generate Join Link" }).click();
     const inviteInput = ownerPage.locator("input[readonly]").first();
     await expect(inviteInput).toBeVisible({ timeout: 10_000 });

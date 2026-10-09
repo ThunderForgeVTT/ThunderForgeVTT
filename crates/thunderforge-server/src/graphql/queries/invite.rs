@@ -200,9 +200,10 @@ pub async fn world_by_invite_code_impl(
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
-    // Find the invite by code
+    // Find the invite by code, read the way it was meant (spec 088, FR-006).
+    let code = crate::graphql::share_codes::normalize_link_code(code);
     let invite: Option<WorldInvite> = world_invites::table
-        .filter(world_invites::invite_code.eq(code))
+        .filter(world_invites::invite_code.eq(&code))
         .select(WorldInvite::as_select())
         .first::<WorldInvite>(&mut conn)
         .optional()
@@ -256,6 +257,70 @@ pub async fn world_by_invite_code_impl(
     }))
 }
 
+/// Spec 088 (FR-007): a link's world is shown only to a signed-in caller, so
+/// a link pasted somewhere public names no world to a passer-by.
+pub async fn world_by_invite_code_for(
+    state: &AppState,
+    caller: Option<Uuid>,
+    code: &str,
+) -> GraphQLResult<Option<WorldPreviewPayload>> {
+    let Some(caller) = caller else {
+        return Ok(None);
+    };
+    if let Some(preview) = world_by_invite_code_impl(state, code).await? {
+        return Ok(Some(preview));
+    }
+    // Spec 088 (FR-008): a signed-in caller is told why the link admits no
+    // one, before they press Join, with `joinWorld`'s own code and message.
+    // A member of the link's world is not refused: their world is shown and
+    // the page says they are already in it.
+    let code = crate::graphql::share_codes::normalize_link_code(code);
+    if let Some(preview) = member_preview(state, caller, code.clone()).await? {
+        return Ok(Some(preview));
+    }
+    let link = crate::graphql::mutations_invites::link_state_of(state, code).await?;
+    Err(crate::graphql::mutations_invites::link_refusal(link))
+}
+
+/// The world behind `code` when `caller` already belongs to it, whatever
+/// the link's state.
+async fn member_preview(
+    state: &AppState,
+    caller: Uuid,
+    code: String,
+) -> GraphQLResult<Option<WorldPreviewPayload>> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let world_id: Option<Uuid> = world_invites::table
+        .filter(world_invites::invite_code.eq(&code))
+        .select(world_invites::world_id)
+        .first(&mut conn)
+        .optional()
+        .map_err(|e| Error::new(format!("Database error: {}", e)))?;
+    let Some(world_id) = world_id else {
+        return Ok(None);
+    };
+    let is_member =
+        crate::graphql::mutations_invites::is_member_or_owner(&mut conn, caller, world_id)
+            .map_err(|e| Error::new(format!("Database error: {}", e)))?;
+    if !is_member {
+        return Ok(None);
+    }
+    let world = worlds::table
+        .find(world_id)
+        .select((worlds::id, worlds::name, worlds::description))
+        .first::<(Uuid, String, Option<String>)>(&mut conn)
+        .optional()
+        .map_err(|e| Error::new(format!("Failed to load world: {}", e)))?;
+    Ok(world.map(|(id, name, description)| WorldPreviewPayload {
+        id: id.to_string(),
+        name,
+        description,
+    }))
+}
+
 /// Testable core of `InviteQuery::already_member`.
 pub async fn already_member_impl(
     state: &AppState,
@@ -267,9 +332,10 @@ pub async fn already_member_impl(
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
-    // Find the invite by code
+    // Find the invite by code, read the way it was meant (spec 088, FR-006).
+    let code = crate::graphql::share_codes::normalize_link_code(code);
     let invite: Option<WorldInvite> = world_invites::table
-        .filter(world_invites::invite_code.eq(code))
+        .filter(world_invites::invite_code.eq(&code))
         .select(WorldInvite::as_select())
         .first::<WorldInvite>(&mut conn)
         .optional()
@@ -340,14 +406,18 @@ impl InviteQuery {
         world_member_impl(state, auth_user.user_id, world_id, user_id).await
     }
 
-    /// Get world info by invite code (for /join/:code landing page)
+    /// Get world info by invite code (for /join/:code landing page).
+    /// Spec 088 (FR-007): nothing for a signed-out caller.
     async fn world_by_invite_code(
         &self,
         ctx: &Context<'_>,
         code: String,
     ) -> GraphQLResult<Option<WorldPreviewPayload>> {
         let state = app_state(ctx)?;
-        world_by_invite_code_impl(state, &code).await
+        let caller = ctx
+            .data_opt::<crate::auth_middleware::AuthenticatedUser>()
+            .map(|user| user.user_id);
+        world_by_invite_code_for(state, caller, &code).await
     }
 
     /// Check if current user is already a member of world via invite code
@@ -595,6 +665,77 @@ mod tests {
             .expect("a valid, non-exhausted invite must resolve its world");
 
         assert_eq!(result.id, world_id.to_string());
+    }
+
+    /// Spec 088 (T016, FR-007): a signed-out caller learns nothing from a
+    /// live link, while a signed-in one sees its world.
+    #[tokio::test]
+    async fn world_by_invite_code_names_no_world_to_a_signed_out_caller() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let visitor = insert_test_user(&mut conn);
+        let code = insert_test_invite(&mut conn, world_id, owner_id, 5, 0, None);
+        drop(conn);
+
+        let signed_out = super::world_by_invite_code_for(&state, None, &code)
+            .await
+            .expect("the query itself does not error");
+        assert!(signed_out.is_none(), "no world for a signed-out caller");
+
+        let signed_in = super::world_by_invite_code_for(&state, Some(visitor), &code)
+            .await
+            .expect("the query itself does not error")
+            .expect("a signed-in caller sees the link's world");
+        assert_eq!(signed_in.id, world_id.to_string());
+    }
+
+    /// Spec 088 (FR-008): before Join, a signed-in visitor reads why a dead
+    /// link admits no one; a member of its world is shown the world instead.
+    #[tokio::test]
+    async fn a_signed_in_visitor_reads_why_a_dead_link_admits_no_one() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let visitor = insert_test_user(&mut conn);
+        let revoked =
+            insert_test_invite_with_revocation(&mut conn, world_id, owner_id, 5, 0, None, true);
+        drop(conn);
+
+        let err = super::world_by_invite_code_for(&state, Some(visitor), &revoked)
+            .await
+            .err()
+            .expect("a revoked link is refused with its reason");
+        let code = err
+            .extensions
+            .as_ref()
+            .and_then(|ext| ext.get("code"))
+            .map(|value| value.to_string());
+        assert_eq!(code.as_deref(), Some("\"LINK_REVOKED\""));
+
+        let unknown = super::world_by_invite_code_for(&state, Some(visitor), "NOSUCHCODE")
+            .await
+            .err()
+            .expect("an unknown code is refused");
+        assert_eq!(
+            unknown.message,
+            crate::graphql::mutations_invites::LINK_UNKNOWN_MESSAGE
+        );
+
+        let owner_view = super::world_by_invite_code_for(&state, Some(owner_id), &revoked)
+            .await
+            .expect("the owner is not refused")
+            .expect("the owner sees their world");
+        assert_eq!(owner_view.id, world_id.to_string());
+
+        assert!(
+            super::world_by_invite_code_for(&state, None, &revoked)
+                .await
+                .expect("signed out is never an error")
+                .is_none()
+        );
     }
 
     #[tokio::test]

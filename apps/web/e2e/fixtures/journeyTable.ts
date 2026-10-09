@@ -102,6 +102,8 @@ export async function seatATable(
     const toggle = gmPage.getByTestId("allow-player-created-actors-toggle");
     await toggle.click();
     await expect(toggle.locator("input")).toBeChecked({ timeout: 10_000 });
+    // Spec 088: links are made on the players page.
+    await gmPage.goto(`/world/${worldId}/players`);
     await gmPage.getByRole("button", { name: "Generate Join Link" }).click();
     const link = gmPage.getByRole("textbox", { name: "Invite link" }).first();
     await expect(link).toBeVisible({ timeout: 10_000 });

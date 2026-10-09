@@ -327,7 +327,7 @@ async function generateInviteCodeFromDashboard(
   worldId: string,
 ): Promise<string> {
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
-  await page.goto(`/world/${worldId}`);
+  await page.goto(`/world/${worldId}/players`);
   await page.getByRole("button", { name: "Generate Join Link" }).click();
   const inviteCode = await extractInviteCode(page);
   await page.goto(`/world/${worldId}/play`);

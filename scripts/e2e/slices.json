@@ -139,7 +139,8 @@
         "concurrent-sessions.spec.ts",
         "user-data-export.spec.ts",
         "account-standing.spec.ts",
-        "invite-membership.spec.ts"
+        "invite-membership.spec.ts",
+        "world-links.spec.ts"
       ],
       "neighbours": [],
       "paths": [
@@ -149,10 +150,14 @@
         "apps/web/src/components/security/**",
         "apps/web/src/db/collections/__tests__/{worldInvitesCollection,worldMembersCollection}.test.ts",
         "apps/web/src/db/collections/{worldInvitesCollection,worldMembersCollection}.ts",
+        "apps/web/src/engine/world/sync/__tests__/worldLinks.test.ts",
+        "apps/web/src/engine/world/sync/worldLinks.ts",
         "apps/web/src/hooks/{useAuth,useWorldInvites}.ts",
         "apps/web/src/layouts/auth-layout/**",
         "apps/web/src/pages/admin/components/{OAuthProviderForm,OAuthProvidersTable,UserTwoFactorControl,SecurityPanel}.tsx",
         "apps/web/src/pages/auth/**",
+        "apps/web/src/pages/world/__tests__/joinRefusal.test.ts",
+        "apps/web/src/pages/world/{JoinWorldPage.tsx,joinRefusal.ts}",
         "apps/web/src/pages/user/components/**",
         "apps/web/src/pages/user/noticeText*.ts",
         "apps/web/src/pages/user/{SecuritySettingsPage,StandingPage,WelcomePage}.tsx",
@@ -318,7 +323,7 @@
         "crates/thunderforge-server/src/collections/**",
         "crates/thunderforge-server/src/compendium/{collections,collections_tests,origin,origin_tests}.rs",
         "crates/thunderforge-server/src/graphql/mutations_{collections,collection_shares,shelf_collections,library,ability_shares,item_shares,sync_back}*.rs",
-        "crates/thunderforge-server/src/graphql/{share_codes,share_rate_limit,publishing_gate}.rs",
+        "crates/thunderforge-server/src/graphql/{share_codes,share_codes_tests,share_rate_limit,publishing_gate}.rs",
         "crates/thunderforge-server/src/library/**",
         "crates/thunderforge-server/src/users/library_deletion_tests.rs",
         "crates/thunderforge-server/src/{publishing,publishing_tests,attestation,attestation_tests,content}.rs"

@@ -58,17 +58,12 @@ async function registerAndCreateWorld(
 }
 
 /**
- * Opens the campaign settings panel where invite links live. It renders on
- * the world dashboard itself (`/world/:id`), not a dedicated settings route.
+ * Opens the world's links. Spec 088 (FR-001) moved them from the world
+ * dashboard to the players page, shown only to those who run the world.
  */
-async function openCampaignSettings(
-  page: Page,
-  worldId: string,
-): Promise<void> {
-  await page.goto(`/world/${worldId}`);
-  await expect(
-    page.getByRole("heading", { name: /campaign settings/i }),
-  ).toBeVisible({
+async function openWorldLinks(page: Page, worldId: string): Promise<void> {
+  await page.goto(`/world/${worldId}/players`);
+  await expect(page.getByTestId("world-links-panel")).toBeVisible({
     timeout: 15_000,
   });
 }
@@ -110,7 +105,7 @@ test.describe("world access links", () => {
       gmPage,
       `Leak Test ${uniqueSuffix()}`,
     );
-    await openCampaignSettings(gmPage, worldId);
+    await openWorldLinks(gmPage, worldId);
     const originalCode = await generateLink(gmPage);
 
     // Control: the code works before rotation. Without this the refusal
@@ -127,7 +122,7 @@ test.describe("world access links", () => {
     await firstJoiner.close();
 
     // The GM notices the leak and refreshes the link.
-    await openCampaignSettings(gmPage, worldId);
+    await openWorldLinks(gmPage, worldId);
     await gmPage.getByTestId("invite-link-refresh").first().click();
     await expect
       .poll(async () => firstLinkCode(gmPage), { timeout: 15_000 })
@@ -140,8 +135,9 @@ test.describe("world access links", () => {
     await register(secondPage, freshCredentials("e2ejoin2"));
     await secondPage.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
     await secondPage.goto(`/join/${originalCode}`);
+    // Spec 088 (FR-008): a refreshed link reads as withdrawn.
     await expect(
-      secondPage.getByRole("heading", { name: /no longer available/i }),
+      secondPage.getByRole("heading", { name: /this link was withdrawn/i }),
     ).toBeVisible({ timeout: 15_000 });
     await expect(
       secondPage.getByRole("button", { name: /join campaign/i }),
@@ -167,7 +163,7 @@ test.describe("world access links", () => {
       gmPage,
       `Revoke Test ${uniqueSuffix()}`,
     );
-    await openCampaignSettings(gmPage, worldId);
+    await openWorldLinks(gmPage, worldId);
     const code = await generateLink(gmPage);
 
     const row = gmPage.getByTestId("invite-link-row").first();
@@ -177,12 +173,17 @@ test.describe("world access links", () => {
     await row.getByTestId("invite-link-revoke").click();
     await row.getByTestId("invite-link-revoke-confirm").click();
 
-    await expect(row.getByTestId("invite-link-state")).toHaveText(/revoked/i, {
-      timeout: 15_000,
-    });
-
-    // FR-010: a revoked link stays listed, so a GM can see what they retired.
-    await expect(gmPage.getByTestId("invite-link-row")).toHaveCount(1);
+    // FR-010 (027), FR-003 (088): a revoked link stays listed, under past
+    // links, so a GM can see what they retired.
+    const past = gmPage.getByTestId("world-links-past");
+    await expect(past).toBeVisible({ timeout: 15_000 });
+    await past.locator("summary").click();
+    const retired = past.getByTestId("invite-link-row");
+    await expect(retired).toHaveCount(1);
+    await expect(retired.getByTestId("invite-link-state")).toHaveText(
+      /revoked/i,
+    );
+    await expect(gmPage.getByTestId("invite-link-list")).toHaveCount(0);
 
     // And the code is dead.
     const joiner = await browser.newContext();
@@ -191,31 +192,34 @@ test.describe("world access links", () => {
     await joinerPage.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
     await joinerPage.goto(`/join/${code}`);
     await expect(
-      joinerPage.getByRole("heading", { name: /no longer available/i }),
+      joinerPage.getByRole("heading", { name: /this link was withdrawn/i }),
     ).toBeVisible({ timeout: 15_000 });
+    await expect(
+      joinerPage.getByRole("button", { name: /join campaign/i }),
+    ).toHaveCount(0);
     await joiner.close();
 
     await gmContext.close();
   });
 
-  test("a never-issued code fails exactly like a revoked one", async ({
+  test("a revoked code and a never-issued one each say why, and neither names the world", async ({
     browser,
   }) => {
-    // FR-011 / SC-005: the holder of a dead code must not be able to tell
-    // whether it was ever real. Both paths must render the same page.
+    // Spec 088 (FR-008) replaces 027's FR-011: a signed-in visitor reads why
+    // a link admits no one. The world behind a dead link stays unnamed.
     const gmContext = await browser.newContext();
     const gmPage = await gmContext.newPage();
     const worldId = await registerAndCreateWorld(
       gmPage,
       `Uniform Test ${uniqueSuffix()}`,
     );
-    await openCampaignSettings(gmPage, worldId);
+    await openWorldLinks(gmPage, worldId);
     const code = await generateLink(gmPage);
 
     const row = gmPage.getByTestId("invite-link-row").first();
     await row.getByTestId("invite-link-revoke").click();
     await row.getByTestId("invite-link-revoke-confirm").click();
-    await expect(row.getByTestId("invite-link-state")).toHaveText(/revoked/i, {
+    await expect(gmPage.getByTestId("world-links-past")).toBeVisible({
       timeout: 15_000,
     });
 
@@ -224,25 +228,28 @@ test.describe("world access links", () => {
     await register(visitorPage, freshCredentials("e2ejoin4"));
     await visitorPage.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
 
-    const messageFor = async (candidate: string): Promise<string> => {
+    const messageFor = async (
+      candidate: string,
+      heading: RegExp,
+    ): Promise<string> => {
       await visitorPage.goto(`/join/${candidate}`);
-      const heading = visitorPage.getByRole("heading", {
-        name: /no longer available/i,
-      });
-      await expect(heading).toBeVisible({ timeout: 15_000 });
+      await expect(
+        visitorPage.getByRole("heading", { name: heading }),
+      ).toBeVisible({ timeout: 15_000 });
+      await expect(
+        visitorPage.getByRole("button", { name: /join campaign/i }),
+      ).toHaveCount(0);
       return (await visitorPage.locator("main").innerText()).trim();
     };
 
-    const revokedMessage = await messageFor(code);
-    const unknownMessage = await messageFor("ZZZZZZZZZZZZZZZZZZZZ");
+    const revokedMessage = await messageFor(code, /this link was withdrawn/i);
+    const unknownMessage = await messageFor(
+      "ZZZZZZZZZZZZZZZZZZZZZZZZZZ",
+      /no world behind this link/i,
+    );
 
-    expect(
-      unknownMessage,
-      "a never-issued code must be indistinguishable from a revoked one",
-    ).toBe(revokedMessage);
-
-    // And neither may name the world it pointed at.
     expect(revokedMessage).not.toContain("Uniform Test");
+    expect(unknownMessage).not.toContain("Uniform Test");
 
     await visitor.close();
     await gmContext.close();

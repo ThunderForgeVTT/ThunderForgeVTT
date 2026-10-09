@@ -9,103 +9,74 @@
 //! Consolidating here raises invites to share-code strength and leaves one
 //! place to change if that bar ever moves.
 //!
-//! # The v4 requirement is load-bearing
+//! # Never derived from a clock
 //!
-//! The source MUST be an independent, fully-random v4 UUID. It must never be a
-//! v7 UUID, and never anything else derived from a clock.
+//! Spec 005 US4 found codes taken from the leading characters of a v7 UUID,
+//! which front-loads a millisecond timestamp: two links made in the same
+//! millisecond collided on `world_invites_invite_code_key`. A code must come
+//! from a random source only.
 //!
-//! This is not a stylistic preference — it is a fix for a real, reproduced
-//! defect. v7 UUIDs front-load a millisecond timestamp, so taking the leading
-//! hex characters captures mostly that timestamp. Two links created inside the
-//! same millisecond then produced identical codes and collided on
-//! `world_invites_invite_code_key`. Spec 005 US4 hit this under ordinary
-//! concurrent load and again in its own rapid-succession e2e test. Deriving
-//! from v4 removes the collision class entirely rather than narrowing it.
+//! # Spec 088: Crockford base32 from the OS
+//!
+//! A code is now 16 bytes (128 bits) from the operating system's random
+//! source, written as 26 characters of Crockford base32 (FR-006). The
+//! alphabet leaves out I, L, O and U, so a code read aloud or copied by hand
+//! has no look-alike letters, and [`normalize_link_code`] maps the common
+//! slips back before a lookup. Old 20-character hex codes still work: hex is
+//! a subset of the alphabet and normalising leaves it unchanged.
 
-use uuid::Uuid;
+use rand::TryRng as _;
 
-/// Characters taken from the hex representation of a v4 UUID.
-///
-/// 20 hex characters is ~80 bits — far past the point where guessing is
-/// feasible, and comfortably inside the `VARCHAR(32)` that both
-/// `world_invites.invite_code` and every `world_*_shares.share_code` column
-/// already declare, so raising invites needs no width migration.
-const CODE_LENGTH: usize = 20;
+/// Crockford's base32 alphabet: digits and capitals without I, L, O and U.
+const CROCKFORD: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+/// Random bytes in a code: 128 bits, written as 26 characters.
+const CODE_BYTES: usize = 16;
 
 /// Generates an unguessable, non-time-derived link code.
-///
-/// Uppercase hex, so a code stays readable when a GM pastes it into chat and
-/// survives being retyped without case ambiguity.
 pub fn generate_link_code() -> String {
-    Uuid::new_v4()
-        .to_string()
-        .replace('-', "")
-        .chars()
-        .take(CODE_LENGTH)
-        .collect::<String>()
-        .to_uppercase()
+    let mut bytes = [0u8; CODE_BYTES];
+    if rand::rngs::SysRng.try_fill_bytes(&mut bytes).is_err() {
+        // The thread generator is a CSPRNG seeded from the same OS source;
+        // it stands in rather than failing the request.
+        rand::fill(&mut bytes);
+    }
+    encode_crockford(&bytes)
+}
+
+/// Writes bytes as Crockford base32, five bits per character, the last
+/// character padded with zero bits.
+pub(crate) fn encode_crockford(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity((bytes.len() * 8).div_ceil(5));
+    let mut buffer: u16 = 0;
+    let mut bits = 0u32;
+    for &byte in bytes {
+        buffer = (buffer << 8) | u16::from(byte);
+        bits += 8;
+        while bits >= 5 {
+            bits -= 5;
+            out.push(CROCKFORD[usize::from((buffer >> bits) & 0x1F)] as char);
+        }
+    }
+    if bits > 0 {
+        out.push(CROCKFORD[usize::from((buffer << (5 - bits)) & 0x1F)] as char);
+    }
+    out
+}
+
+/// Reads a code the way it was meant (FR-006): spaces and hyphens dropped,
+/// upper case, `O` as `0`, and `I` or `L` as `1`.
+pub fn normalize_link_code(code: &str) -> String {
+    code.chars()
+        .filter(|c| !c.is_whitespace() && *c != '-')
+        .map(|c| match c.to_ascii_uppercase() {
+            'O' => '0',
+            'I' | 'L' => '1',
+            other => other,
+        })
+        .collect()
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::collections::HashSet;
-
-    /// FR-006 / SC-007: codes are 20 characters of uppercase hex.
-    #[test]
-    fn codes_are_twenty_uppercase_hex_characters() {
-        for _ in 0..64 {
-            let code = generate_link_code();
-            assert_eq!(code.len(), CODE_LENGTH, "code length must be {CODE_LENGTH}");
-            assert!(
-                code.chars()
-                    .all(|c| c.is_ascii_hexdigit() && !c.is_lowercase()),
-                "code must be uppercase hex, got {code}"
-            );
-        }
-    }
-
-    /// The spec 005 regression guard. A v7-derived code would front-load a
-    /// millisecond timestamp, so a rapid burst would share a long common
-    /// prefix and eventually collide outright. Generating a large batch as
-    /// fast as possible and asserting both uniqueness and prefix diversity
-    /// fails loudly if the source is ever swapped back to a clock-based UUID.
-    #[test]
-    fn rapid_succession_codes_are_unique_and_show_no_time_ordering() {
-        let batch: Vec<String> = (0..5_000).map(|_| generate_link_code()).collect();
-
-        let unique: HashSet<&String> = batch.iter().collect();
-        assert_eq!(
-            unique.len(),
-            batch.len(),
-            "codes generated in rapid succession must not collide"
-        );
-
-        // With a v7 source, thousands of codes made in the same few
-        // milliseconds would share their leading characters. With v4 they
-        // should not: 5,000 draws over 16 first-characters makes a single
-        // dominant prefix vanishingly unlikely.
-        let mut first_char_counts = std::collections::HashMap::new();
-        for code in &batch {
-            *first_char_counts
-                .entry(code.chars().next().unwrap())
-                .or_insert(0usize) += 1;
-        }
-        assert!(
-            first_char_counts.len() >= 8,
-            "expected the leading character to vary widely; saw only {} distinct \
-             values, which is what a time-derived source looks like",
-            first_char_counts.len()
-        );
-
-        // Sorting must not reconstruct generation order for a v4 source. A
-        // time-derived source would be almost perfectly sorted already.
-        let mut sorted = batch.clone();
-        sorted.sort();
-        assert_ne!(
-            sorted, batch,
-            "generation order must not match sorted order — that is the \
-             signature of a timestamp-derived code"
-        );
-    }
-}
+#[path = "share_codes_tests.rs"]
+mod tests;

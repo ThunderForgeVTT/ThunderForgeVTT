@@ -15,6 +15,8 @@ import { Card } from "@/components/ui/card/Card";
 import { Input } from "@/components/ui/input";
 import { NewCharacterCard } from "@/pages/world/players/NewCharacterCard";
 import { PlayerHeroControls } from "@/pages/world/players/PlayerHeroControls";
+import { WorldLinksPanel } from "@/pages/world/players/WorldLinksPanel";
+import { IN_DEMO } from "@/lib/demoBuild";
 import { filterPlayers } from "@/pages/world/players/playerFilter";
 import { describeStanding } from "@/pages/world/players/playerStanding";
 import type { WorldActorRecord } from "@/types/actor";
@@ -240,10 +242,21 @@ export function PlayersPage({ worldId, isGm }: PlayersPageProps) {
         <h1 className="text-xl font-semibold">Players</h1>
         <p className="text-sm text-muted-foreground">
           {isGm
-            ? "See who's playing what character, and manage roles and membership."
+            ? "See who's playing what character, invite players, and manage roles and membership."
             : "See who's playing what character in this world."}
         </p>
       </header>
+
+      {/* Spec 088 (FR-001): the world's links, for those who run it. Not in
+          the demo, whose world lives in one browser (spec 074 FR-013). */}
+      {isGm && !IN_DEMO ? (
+        <WorldLinksPanel
+          worldId={worldId}
+          creatorName={(userId) =>
+            members.find((member) => member.userId === userId)?.username
+          }
+        />
+      ) : null}
 
       {isGm ? (
         <NewCharacterCard

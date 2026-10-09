@@ -116,7 +116,7 @@ test.describe("spec 051 US5 journey: what the table is told", () => {
 
     try {
       await test.step("a third person joins by the Game Master's link", async () => {
-        await table.gmPage.goto(`/world/${table.worldId}`);
+        await table.gmPage.goto(`/world/${table.worldId}/players`);
         await table.gmPage
           .getByRole("button", { name: "Generate Join Link" })
           .click();

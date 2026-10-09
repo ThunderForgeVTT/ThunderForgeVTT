@@ -125,7 +125,7 @@ test.describe("US3: DM assigns ownership; grantee gains edit rights", () => {
     await page
       .context()
       .grantPermissions(["clipboard-read", "clipboard-write"]);
-    await page.goto(`/world/${worldId}`);
+    await page.goto(`/world/${worldId}/players`);
     await page.getByRole("button", { name: "Generate Join Link" }).click();
     const inviteCode = await extractInviteCode(page);
     const playerContext = await browser.newContext();
@@ -210,7 +210,7 @@ test.describe("US3: DM assigns ownership; grantee gains edit rights", () => {
     await page
       .context()
       .grantPermissions(["clipboard-read", "clipboard-write"]);
-    await page.goto(`/world/${worldId}`);
+    await page.goto(`/world/${worldId}/players`);
     await page.getByRole("button", { name: "Generate Join Link" }).click();
     const inviteCode = await extractInviteCode(page);
     const contexts = await Promise.all([

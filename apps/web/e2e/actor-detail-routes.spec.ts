@@ -113,7 +113,7 @@ test.describe("US4: Viewer can view but is redirected away from /edit", () => {
     await page
       .context()
       .grantPermissions(["clipboard-read", "clipboard-write"]);
-    await page.goto(`/world/${worldId}`);
+    await page.goto(`/world/${worldId}/players`);
     await page.getByRole("button", { name: "Generate Join Link" }).click();
     const inviteCode = await extractInviteCode(page);
     const playerContext = await browser.newContext();

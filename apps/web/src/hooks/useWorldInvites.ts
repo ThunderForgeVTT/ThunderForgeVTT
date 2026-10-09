@@ -27,6 +27,10 @@ import {
 } from "@/api/world";
 import type { WorldInviteDoc } from "../db/collections/worldInvitesCollection";
 import { computeInviteDerivedData } from "../db/collections/worldInvitesCollection";
+import {
+  startWorldLinkSync,
+  subscribeToWorldEvents,
+} from "@/engine/world/sync";
 
 export interface UseWorldInvitesResult {
   invites: WorldInviteDoc[];
@@ -139,6 +143,29 @@ export function useWorldInvites(worldId: string): UseWorldInvitesResult {
   // transport here (see this file's header), so nothing else will reflect the
   // change — and a panel that kept showing a revoked link as active would be
   // worse than one that never showed state at all.
+  // Spec 088 (FR-004): a join or a revoke anywhere updates this list with no
+  // reload. Quietly: the list is replaced, not swapped for a loader.
+  useEffect(() => {
+    let active = true;
+    const stop = startWorldLinkSync({
+      events: subscribeToWorldEvents(worldId, { announcePause: false }),
+      onChange: () => {
+        fetchInvites()
+          .then((docs) => {
+            if (active) setInvites(docs);
+          })
+          .catch(() => {
+            // The next event or refetch tries again; the list on screen
+            // stays as it was.
+          });
+      },
+    });
+    return () => {
+      active = false;
+      stop();
+    };
+  }, [worldId, fetchInvites]);
+
   const revoke = useCallback(
     async (inviteId: string) => {
       await revokeInviteCode(inviteId);

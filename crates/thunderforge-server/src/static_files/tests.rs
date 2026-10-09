@@ -399,3 +399,56 @@ async fn the_config_and_the_demo_header_follow_the_three_states() {
         assert!(headers.get("content-security-policy").is_none());
     }
 }
+
+/// Spec 088 (T017, FR-011): a world link's page and an invitation's page both
+/// say not to index them and not to pass their address on as a referrer, and
+/// `robots.txt` leaves them crawlable so a crawler reads that header.
+#[tokio::test]
+async fn link_pages_are_not_indexed_and_send_no_referrer() {
+    let root = tempfile::tempdir().unwrap();
+    build_client(root.path());
+    let app: Router = router(&directories(root.path()));
+
+    for path in [
+        "/join/0123456789ABCDEFGHJKMNPQRS",
+        "/invite/CF289C5EC1C2487790FD",
+    ] {
+        let response = app
+            .clone()
+            .oneshot(Request::get(path).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK, "{path}");
+        let header = |name: &str| {
+            response
+                .headers()
+                .get(name)
+                .map(|value| value.to_str().unwrap().to_owned())
+        };
+        assert_eq!(
+            header("x-robots-tag").as_deref(),
+            Some("noindex, nofollow"),
+            "{path}"
+        );
+        assert_eq!(
+            header("referrer-policy").as_deref(),
+            Some("no-referrer"),
+            "{path}"
+        );
+    }
+
+    let robots = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../apps/web/public/robots.txt"),
+    )
+    .expect("the web app ships a robots.txt");
+    for line in robots.lines() {
+        let line = line.trim().to_ascii_lowercase();
+        if let Some(path) = line.strip_prefix("disallow:") {
+            let path = path.trim();
+            assert!(
+                path.is_empty() || !("/join/".starts_with(path) || "/invite/".starts_with(path)),
+                "robots.txt must not disallow the link pages: {line}"
+            );
+        }
+    }
+}

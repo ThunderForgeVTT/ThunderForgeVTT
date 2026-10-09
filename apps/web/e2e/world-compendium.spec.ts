@@ -361,7 +361,7 @@ test.describe("US2: a Player browses the Compendium with the same read access, m
     await page
       .context()
       .grantPermissions(["clipboard-read", "clipboard-write"]);
-    await page.goto(`/world/${worldId}`);
+    await page.goto(`/world/${worldId}/players`);
     await page.getByRole("button", { name: "Generate Join Link" }).click();
     const inviteInput = page.locator("input[readonly]");
     await expect(inviteInput).toBeVisible({ timeout: 10_000 });
@@ -521,7 +521,7 @@ test.describe("Spec 013 US4: a Player browses the Items tab with the same read a
     await page
       .context()
       .grantPermissions(["clipboard-read", "clipboard-write"]);
-    await page.goto(`/world/${worldId}`);
+    await page.goto(`/world/${worldId}/players`);
     await page.getByRole("button", { name: "Generate Join Link" }).click();
     const inviteInput = page.locator("input[readonly]");
     await expect(inviteInput).toBeVisible({ timeout: 10_000 });

@@ -16,6 +16,7 @@ use crate::schema::world_members;
 use crate::state::AppState;
 
 // Event codes for world_events audit trail
+/// A world link was made or changed (spec 088: revoking one too).
 const EVENT_CODE_INVITE_CREATED: i32 = 2;
 const EVENT_CODE_MEMBER_JOINED: i32 = 3;
 const EVENT_CODE_MEMBER_ROLE_CHANGED: i32 = 4;
@@ -90,11 +91,9 @@ pub async fn generate_invite_code_impl(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
     let world_id = input.world_id;
-    let max_uses = input.max_uses;
-
-    if max_uses <= 0 {
-        return Err(Error::new("max_uses must be greater than 0"));
-    }
+    // Spec 088 (FR-002): refused before anything is read or written.
+    let (max_uses, expires_at) =
+        link_options(input.max_uses, &input.expires_at, Utc::now()).map_err(Error::new)?;
 
     // Verify user is Owner/GM of the world. `require_world_member` (spec
     // 002, crates/thunderforge-server/src/auth/world_membership.rs) falls back to
@@ -140,17 +139,12 @@ pub async fn generate_invite_code_impl(
     let invite_code = generate_link_code();
 
     let now = Utc::now().naive_utc();
-    let expires_at = input.expires_at.as_ref().and_then(|s| {
-        chrono::DateTime::parse_from_rfc3339(s)
-            .ok()
-            .map(|dt| dt.naive_utc())
-    });
 
     let new_invite = NewWorldInvite {
         id: invite_id,
         world_id,
         invite_code: invite_code.clone(),
-        max_uses: Some(max_uses),
+        max_uses,
         used_count: 0,
         expires_at,
         created_by: user_id,
@@ -166,9 +160,11 @@ pub async fn generate_invite_code_impl(
         .map_err(|e| Error::new(format!("Failed to create invite: {}", e)))?;
 
     // Record event for audit trail and real-time sync
+    // Spec 088 (FR-001): every member of the world reads its events, so the
+    // code itself is never in one. A player must not learn a link from the
+    // stream that the players page refuses to show them.
     let event_payload = serde_json::json!({
         "invite_id": new_invite.id,
-        "invite_code": new_invite.invite_code,
         "max_uses": new_invite.max_uses,
     });
     record_world_event(
@@ -224,7 +220,8 @@ pub async fn join_world_impl(
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
-    let submitted_code = input.invite_code.clone();
+    // Spec 088 (FR-006): a code read aloud or retyped still finds its link.
+    let submitted_code = crate::graphql::share_codes::normalize_link_code(&input.invite_code);
 
     // Spec 027 (T042, US4-2): the already-a-member check runs FIRST, before any
     // use is consumed. A player who clicks a link twice must not burn a use of
@@ -259,7 +256,7 @@ pub async fn join_world_impl(
     };
 
     if already_a_member {
-        return Err(Error::new(ALREADY_A_MEMBER_MESSAGE));
+        return Err(already_member_refusal());
     }
 
     // Spec 027 (T019/T020, FR-011/FR-012): validate-and-consume atomically,
@@ -272,9 +269,8 @@ pub async fn join_world_impl(
     // whole validity predicate in the UPDATE's WHERE clause makes the check
     // and the increment one indivisible step.
     //
-    // It also delivers FR-011's uniform failure for free: zero rows updated
-    // means unusable, and the reason — unknown, revoked, expired, or
-    // exhausted — is never distinguished, here or to the caller.
+    // Zero rows updated means unusable. Spec 088 (FR-008) then reads the row
+    // to say why: revoked, expired, used up or unknown.
     let mut txn_conn = state
         .db_pool
         .get()
@@ -311,9 +307,8 @@ pub async fn join_world_impl(
             .get_result::<(Uuid, Uuid)>(conn)
             .optional()?;
 
-            // No row matched the predicate: the link is unusable. Rolling back
-            // with NotFound keeps the caller from learning which condition
-            // applied.
+            // No row matched the predicate: the link is unusable. NotFound
+            // rolls back, and the caller is told why below.
             let (_invite_id, world_id) = consumed.ok_or(diesel::result::Error::NotFound)?;
             // Asked again now that the invite row is locked: a second join by
             // the same person, racing this one, has committed by the time this
@@ -344,18 +339,27 @@ pub async fn join_world_impl(
         })
     })
     .await
-    .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|e| match e {
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?;
+
+    let new_member = match new_member {
+        Ok(new_member) => new_member,
+        Err(diesel::result::Error::NotFound) => {
+            return Err(link_refusal(
+                link_state_of(state, submitted_code.clone()).await?,
+            ));
+        }
         // Already a member (the re-check above), or the unique (world_id,
         // user_id) row written by a concurrent join of the same person.
         // Either way the transaction rolled back and burned nothing.
-        diesel::result::Error::RollbackTransaction
-        | diesel::result::Error::DatabaseError(
-            diesel::result::DatabaseErrorKind::UniqueViolation,
-            _,
-        ) => Error::new(ALREADY_A_MEMBER_MESSAGE),
-        e => refusal_or(e, LINK_UNAVAILABLE_MESSAGE),
-    })?;
+        Err(
+            diesel::result::Error::RollbackTransaction
+            | diesel::result::Error::DatabaseError(
+                diesel::result::DatabaseErrorKind::UniqueViolation,
+                _,
+            ),
+        ) => return Err(already_member_refusal()),
+        Err(e) => return Err(refusal_or(e, LINK_UNKNOWN_MESSAGE)),
+    };
 
     let world_id = new_member.world_id;
 
@@ -389,14 +393,42 @@ pub async fn join_world_impl(
     })
 }
 
-/// Spec 027 (FR-011 / SC-005): the single message every unusable link gets.
-///
-/// Unknown, revoked, expired, and exhausted codes are indistinguishable —
-/// identical text, identical shape. Possessing a dead code must reveal nothing
-/// about whether it was ever real or what world it belonged to. Wording
-/// deliberately matches `load_active_share`'s, so invites and content shares
-/// fail the same way.
-pub const LINK_UNAVAILABLE_MESSAGE: &str = "This invite link is no longer available.";
+/// Spec 088 (FR-008): the state of the link behind `code`, or `None` when
+/// there is none. Read after a join admitted no one, to say why. Spec 027's
+/// single message for every case is gone; the rate limit on `joinWorld` is
+/// what keeps `LINK_UNKNOWN` from being a useful oracle.
+pub(crate) async fn link_state_of(
+    state: &AppState,
+    code: String,
+) -> GraphQLResult<Option<WorldAccessLinkState>> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let row = tokio::task::spawn_blocking(move || {
+        world_invites::table
+            .filter(world_invites::invite_code.eq(code))
+            .select(WorldInvite::as_select())
+            .first::<WorldInvite>(&mut conn)
+            .optional()
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|e| Error::new(format!("Database error: {}", e)))?;
+    Ok(row.map(|invite| {
+        derive_link_state(
+            invite.revoked,
+            invite.expires_at,
+            invite.max_uses,
+            invite.used_count,
+        )
+    }))
+}
+
+/// Spec 088 (FR-008): not a failure of the link, and it uses nothing.
+fn already_member_refusal() -> Error {
+    Error::new(ALREADY_A_MEMBER_MESSAGE).extend_with(|_, ext| ext.set("code", "ALREADY_MEMBER"))
+}
 
 /// Distinct from the uniform failure on purpose: reaching this requires a
 /// *valid* code, so it leaks nothing an attacker could not already establish,
@@ -424,18 +456,31 @@ pub async fn revoke_invite_code_impl(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
     refuse_if_paused(&mut conn, world_id)?;
 
+    // Spec 088 (FR-004): the revoke is a world event too, so every list of
+    // the world's links updates without a reload. Code 2 is "a link was made
+    // or changed"; the payload never carries the code (FR-001).
     let updated = tokio::task::spawn_blocking(move || {
-        diesel::update(world_invites::table.find(invite_id))
-            .set((
-                world_invites::revoked.eq(true),
-                world_invites::updated_at.eq(Utc::now().naive_utc()),
-            ))
-            .returning(WorldInvite::as_select())
-            .get_result::<WorldInvite>(&mut conn)
+        conn.transaction::<WorldInvite, Error, _>(|conn| {
+            let updated = diesel::update(world_invites::table.find(invite_id))
+                .set((
+                    world_invites::revoked.eq(true),
+                    world_invites::updated_at.eq(Utc::now().naive_utc()),
+                ))
+                .returning(WorldInvite::as_select())
+                .get_result::<WorldInvite>(conn)
+                .map_err(|e| Error::new(format!("Failed to revoke invite: {}", e)))?;
+            record_world_event(
+                conn,
+                world_id,
+                EVENT_CODE_INVITE_CREATED,
+                Some(serde_json::json!({ "invite_id": invite_id, "revoked": true })),
+                user_id,
+            )?;
+            Ok(updated)
+        })
     })
     .await
-    .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|e| Error::new(format!("Failed to revoke invite: {}", e)))?;
+    .map_err(|_| Error::new("Failed to spawn blocking task"))??;
 
     Ok(WorldInvitePayload::from_row(&updated))
 }
@@ -577,7 +622,7 @@ async fn world_id_of_invite(state: &AppState, invite_id: Uuid) -> GraphQLResult<
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(|e| Error::new(format!("Database error: {}", e)))?
-    .ok_or_else(|| Error::new(LINK_UNAVAILABLE_MESSAGE))
+    .ok_or_else(|| Error::new(LINK_UNKNOWN_MESSAGE))
 }
 
 /// Spec 027 (FR-008): only a world's DM may create, revoke, or rotate its
@@ -687,3 +732,7 @@ mod tests;
 #[cfg(test)]
 #[path = "mutations_invites_use_tests.rs"]
 mod use_tests;
+
+#[cfg(test)]
+#[path = "mutations_invites_link_tests.rs"]
+mod link_tests;

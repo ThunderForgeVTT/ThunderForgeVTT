@@ -312,11 +312,23 @@ export function getWorldInvites(worldId: string): Promise<WorldInviteRecord[]> {
  * That copy called `response.json()` unconditionally, surfaced only the first
  * error, and had no timeout.
  */
+/**
+ * Spec 088 (FR-002): what a GM may choose for a link. A key left out takes
+ * the server's default: no use limit, and an expiry 7 days away. `expiresAt:
+ * null` is a link that never expires.
+ */
+export interface WorldLinkOptions {
+  maxUses?: number;
+  expiresAt?: string | null;
+}
+
 export function generateInviteCode(
   worldId: string,
-  maxUses: number,
-  expiresAt?: string | null,
+  options: WorldLinkOptions = {},
 ): Promise<WorldInviteRecord> {
+  const input: Record<string, unknown> = { worldId };
+  if (options.maxUses !== undefined) input.maxUses = options.maxUses;
+  if (options.expiresAt !== undefined) input.expiresAt = options.expiresAt;
   return postGraphQL<{ generateInviteCode: WorldInviteRecord }>(
     `
       mutation GenerateInviteCode($input: GenerateInviteCodeInput!) {
@@ -325,7 +337,7 @@ export function generateInviteCode(
         }
       }
     `,
-    { input: { worldId, maxUses, expiresAt: expiresAt ?? null } },
+    { input },
   ).then((data) => data.generateInviteCode);
 }
 

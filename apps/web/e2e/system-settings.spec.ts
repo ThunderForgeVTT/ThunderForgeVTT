@@ -158,7 +158,7 @@ test.describe("Spec 016: GM assigns a game system and its legal notice is persis
       `E2E System Settings Viewer ${uniqueSuffix()}`,
     );
 
-    await gmPage.goto(`/world/${worldId}`);
+    await gmPage.goto(`/world/${worldId}/players`);
     await gmPage.getByRole("button", { name: "Generate Join Link" }).click();
     const inviteInput = gmPage.locator("input[readonly]").first();
     await expect(inviteInput).toBeVisible({ timeout: 10_000 });
@@ -210,7 +210,7 @@ test.describe("Spec 016: GM assigns a game system and its legal notice is persis
       `E2E System Settings GIF ${uniqueSuffix()}`,
     );
 
-    await gmPage.goto(`/world/${worldId}`);
+    await gmPage.goto(`/world/${worldId}/players`);
     await gmPage.getByRole("button", { name: "Generate Join Link" }).click();
     const inviteInput = gmPage.locator("input[readonly]").first();
     await expect(inviteInput).toBeVisible({ timeout: 10_000 });

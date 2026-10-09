@@ -208,7 +208,7 @@ test.describe("US3: players get the same shell, read-only and independent of the
     await page
       .context()
       .grantPermissions(["clipboard-read", "clipboard-write"]);
-    await page.goto(`/world/${worldId}`);
+    await page.goto(`/world/${worldId}/players`);
     await page.getByRole("button", { name: "Generate Join Link" }).click();
     const inviteCode = await extractInviteCode(page);
     const playerContext = await browser.newContext();

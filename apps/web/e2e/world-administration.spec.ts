@@ -108,9 +108,14 @@ test("a Player is shown no administration and the server refuses it", async ({
       timeout: 15_000,
     });
     await expect(page.getByTestId("world-delete")).toBeVisible();
+    // Spec 088: links are made on the players page; the dashboard points there.
+    await expect(
+      page.getByTestId("campaign-settings-players-link"),
+    ).toBeVisible();
+    await page.goto(`/world/${worldId}/players`);
     await expect(
       page.getByRole("button", { name: "Generate Join Link" }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15_000 });
   });
 
   await test.step("the Player's dashboard carries none of them", async () => {
@@ -132,6 +137,11 @@ test("a Player is shown no administration and the server refuses it", async ({
     await expect(
       player.getByRole("button", { name: "Generate Join Link" }),
     ).toHaveCount(0);
+    await player.goto(`/world/${worldId}/players`);
+    await expect(player.getByTestId("world-nav-overview")).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(player.getByTestId("world-links-panel")).toHaveCount(0);
   });
 
   await test.step("the Player's world nav has no settings entry", async () => {

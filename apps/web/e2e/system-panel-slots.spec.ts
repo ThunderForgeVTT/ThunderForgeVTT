@@ -128,7 +128,7 @@ test.describe("Spec 032 T108: a pack's panels reach the pages that host them", (
       `E2E Panel Slots Viewer ${uniqueSuffix()}`,
     );
 
-    await gmPage.goto(`/world/${worldId}`);
+    await gmPage.goto(`/world/${worldId}/players`);
     await gmPage.getByRole("button", { name: "Generate Join Link" }).click();
     const inviteInput = gmPage.locator("input[readonly]").first();
     await expect(inviteInput).toBeVisible({ timeout: 10_000 });

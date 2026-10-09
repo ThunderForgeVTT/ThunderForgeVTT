@@ -115,6 +115,8 @@ test.describe("A GM invites a genuine second player (US4)", () => {
     // Bug 1 regression guard: this click used to fail outright with a
     // GraphQL argument-shape error ("argument input... is required but
     // not provided").
+    // Spec 088: links are made on the players page.
+    await gmPage.goto(`/world/${worldId}/players`);
     await gmPage.getByRole("button", { name: "Generate Join Link" }).click();
 
     // Bug 2 regression guard: this used to fail with "User is not a
@@ -157,25 +159,18 @@ test.describe("A GM invites a genuine second player (US4)", () => {
     await register(page, freshCredentials("e2ebadcode"));
     await page.goto("/join/NOTAREALCODE");
 
-    // Spec 027 (FR-011 / SC-005): every dead link gets the *same* message,
-    // whatever killed it — invalid, expired, used up, revoked. This test used
-    // to assert the opposite, checking for the words "invalid invite code",
-    // which is precisely the disclosure the product now withholds: telling the
-    // holder of a killed link which cause applied is what the server refuses
-    // to do, so the page must not do it either.
+    // Spec 088 (FR-008) replaces spec 027's single message: a signed-in
+    // visitor is told why a link admits no one, and is offered no Join.
     await expect(
-      page.getByRole("heading", { name: /this link is no longer available/i }),
+      page.getByRole("heading", { name: /no world behind this link/i }),
     ).toBeVisible({ timeout: 10_000 });
-    await expect(
-      page.getByText(/ask your gm for a new invite link/i),
-    ).toBeVisible();
+    await expect(page.getByText(/check it was copied whole/i)).toBeVisible();
     await expect(
       page.getByRole("button", { name: /return to my campaigns/i }),
     ).toBeVisible();
-
-    // The reason is not on the page. That is the requirement, not a detail.
-    await expect(page.getByText(/invalid/i)).toHaveCount(0);
-    await expect(page.getByText(/expired|revoked|used up/i)).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Join Campaign" }),
+    ).toHaveCount(0);
   });
 
   test("a user who is already a member sees the already-a-member state, not the join flow", async ({
@@ -189,6 +184,8 @@ test.describe("A GM invites a genuine second player (US4)", () => {
       gmPage,
       `E2E Already Member ${uniqueSuffix()}`,
     );
+    // Spec 088: links are made on the players page.
+    await gmPage.goto(`/world/${worldId}/players`);
     await gmPage.getByRole("button", { name: "Generate Join Link" }).click();
     const inviteCode = await extractInviteCode(gmPage);
 
@@ -204,11 +201,11 @@ test.describe("A GM invites a genuine second player (US4)", () => {
 
     // Revisit the same invite link as the same, now-a-member, user.
     await playerPage.goto(`/join/${inviteCode}`);
-    await expect(playerPage.getByText(/you are already a member/i)).toBeVisible(
-      {
-        timeout: 10_000,
-      },
-    );
+    await expect(
+      playerPage.getByText(/you.re already in this world/i),
+    ).toBeVisible({
+      timeout: 10_000,
+    });
     await expect(
       playerPage.getByRole("button", { name: /enter campaign/i }),
     ).toBeVisible();
@@ -236,14 +233,21 @@ test.describe("A GM invites a genuine second player (US4)", () => {
       gmPage,
       `E2E Owner Link ${uniqueSuffix()}`,
     );
+    // Spec 088: links are made on the players page.
+    await gmPage.goto(`/world/${worldId}/players`);
     await gmPage.getByRole("button", { name: "Generate Join Link" }).click();
     const inviteCode = await extractInviteCode(gmPage);
-    await expect(gmPage.getByText("5 of 5 uses left")).toBeVisible();
+    // Spec 088: a link made with the defaults has no use limit.
+    await expect(gmPage.getByTestId("invite-link-uses").first()).toHaveText(
+      "No joins yet",
+    );
 
     await gmPage.goto(`/join/${inviteCode}`);
-    await expect(gmPage.getByText(/you are already a member/i)).toBeVisible({
-      timeout: 10_000,
-    });
+    await expect(gmPage.getByText(/you.re already in this world/i)).toBeVisible(
+      {
+        timeout: 10_000,
+      },
+    );
     await expect(
       gmPage.getByRole("button", { name: /enter campaign/i }),
     ).toBeVisible();
@@ -254,24 +258,21 @@ test.describe("A GM invites a genuine second player (US4)", () => {
     // Opening the link twice more, as a refresh or a bot would, still burns
     // nothing.
     await gmPage.reload();
-    await expect(gmPage.getByText(/you are already a member/i)).toBeVisible({
-      timeout: 10_000,
-    });
+    await expect(gmPage.getByText(/you.re already in this world/i)).toBeVisible(
+      {
+        timeout: 10_000,
+      },
+    );
 
-    await gmPage.goto(`/world/${worldId}`);
-    await expect(gmPage.getByText("5 of 5 uses left")).toBeVisible({
-      timeout: 10_000,
-    });
+    await gmPage.goto(`/world/${worldId}/players`);
+    await expect(gmPage.getByTestId("invite-link-uses").first()).toHaveText(
+      "No joins yet",
+      { timeout: 10_000 },
+    );
 
     await gmContext.close();
   });
 
-  // An exhausted (max-uses-reached) invite is deliberately NOT covered
-  // here at the e2e level: CampaignSettingsPanel's "Generate Join Link"
-  // hard-codes maxUses to 5, so reaching that state through the real UI
-  // would require 5 separate registrations purely to exhaust one invite
-  // — excessive setup for a path already directly covered by
-  // `join_world_rejects_exhausted_invite` in mutations_invites.rs's
-  // resolver tests (see that file), which exercises the exact same
-  // rejection without the UI overhead.
+  // A used-up link is covered by world-links.spec.ts (spec 088), which
+  // makes a one-use link through the players page.
 });

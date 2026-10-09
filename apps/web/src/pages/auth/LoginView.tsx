@@ -48,6 +48,14 @@ function redirectTarget(search: string) {
   return returnTo && returnTo.startsWith("/") ? returnTo : null;
 }
 
+/**
+ * Spec 088 (FR-009): a world link admits existing accounts only, so a
+ * sign-in on the way to one offers no way to make an account.
+ */
+export function isWorldLinkReturn(search: string) {
+  return redirectTarget(search)?.startsWith("/join/") ?? false;
+}
+
 function statusVariant(message: string | null) {
   if (!message) {
     return "info" as const;
@@ -462,7 +470,15 @@ export function LoginView() {
       aside={
         <Card className="p-5">
           <div className="grid gap-2">
-            {accessPolicy === "open" ? (
+            {isWorldLinkReturn(location.search) ? (
+              <p
+                className="text-sm text-muted-foreground"
+                data-testid="world-link-sign-in-notice"
+              >
+                World links are for existing ThunderForge accounts. Sign in to
+                join; a link cannot be used to create an account.
+              </p>
+            ) : accessPolicy === "open" ? (
               <Link
                 to={`/register${location.search}`}
                 className="font-medium text-primary hover:underline"

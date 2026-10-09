@@ -453,7 +453,7 @@ test.describe("FR-021: entry-level Owner (not DM-only) can delete; Viewer cannot
     await page
       .context()
       .grantPermissions(["clipboard-read", "clipboard-write"]);
-    await page.goto(`/world/${worldId}`);
+    await page.goto(`/world/${worldId}/players`);
     await page.getByRole("button", { name: "Generate Join Link" }).click();
     const inviteCode = await extractInviteCode(page);
 

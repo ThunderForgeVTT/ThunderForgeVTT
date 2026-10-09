@@ -110,7 +110,7 @@ test("DM edits and saves Last Session Notes; a Player sees it read-only", async 
 
   // A Player sees the same text, read-only (no textarea/save control).
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
-  await page.goto(`/world/${worldId}`);
+  await page.goto(`/world/${worldId}/players`);
   await page.getByRole("button", { name: "Generate Join Link" }).click();
   const inviteInput = page.locator("input[readonly]");
   await expect(inviteInput).toBeVisible({ timeout: 10_000 });

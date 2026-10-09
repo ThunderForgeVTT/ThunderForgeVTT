@@ -80,15 +80,18 @@ where
     }
 
     if index.is_file() {
-        // An invitation link admits whoever holds it. The page's own robots
-        // meta is written by script, which not every crawler runs, so the
-        // response says it too.
-        router = router.nest_service(
-            "/invite",
-            get_service(ServeFile::new(&index))
-                .layer(map_response(asked_every_time))
-                .layer(map_response(not_indexed)),
-        );
+        // An invitation link admits whoever holds it, and a world link
+        // (spec 088, FR-011) joins a world. The page's own robots meta is
+        // written by script, which not every crawler runs, so the response
+        // says it too.
+        for prefix in ["/invite", "/join"] {
+            router = router.nest_service(
+                prefix,
+                get_service(ServeFile::new(&index))
+                    .layer(map_response(asked_every_time))
+                    .layer(map_response(not_indexed)),
+            );
+        }
         router.fallback_service(
             get_service(
                 ServeDir::new(client)
@@ -171,11 +174,16 @@ async fn asked_every_time(mut response: Response) -> Response {
     response
 }
 
-/// A page no search engine should list or follow links from.
+/// A page no search engine should list or follow links from, and whose
+/// address (it holds a code) no outbound request should carry as a referrer.
 async fn not_indexed(mut response: Response) -> Response {
     response.headers_mut().insert(
         header::HeaderName::from_static("x-robots-tag"),
         HeaderValue::from_static("noindex, nofollow"),
+    );
+    response.headers_mut().insert(
+        header::REFERRER_POLICY,
+        HeaderValue::from_static("no-referrer"),
     );
     response
 }

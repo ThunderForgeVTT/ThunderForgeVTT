@@ -921,8 +921,8 @@ async fn a_trusted_player_is_refused_what_a_game_master_may_do() {
             user_id,
             GenerateInviteCodeInput {
                 world_id,
-                max_uses: 1,
-                expires_at: None,
+                max_uses: Some(1),
+                expires_at: async_graphql::MaybeUndefined::Undefined,
             },
         )
     };

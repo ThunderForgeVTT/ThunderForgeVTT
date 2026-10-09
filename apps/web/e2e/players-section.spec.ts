@@ -41,7 +41,7 @@ async function generateInviteCode(
   gmPage: import("@playwright/test").Page,
   worldId: string,
 ): Promise<string> {
-  await gmPage.goto(`/world/${worldId}`);
+  await gmPage.goto(`/world/${worldId}/players`);
   await gmPage.getByRole("button", { name: "Generate Join Link" }).click();
   return extractInviteCode(gmPage);
 }

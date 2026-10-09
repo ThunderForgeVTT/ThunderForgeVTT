@@ -87,7 +87,7 @@ pub(super) fn insert_test_invite(
 }
 
 /// As above, but lets a test build an already-retired link.
-fn insert_test_invite_with_revocation(
+pub(super) fn insert_test_invite_with_revocation(
     conn: &mut PgConnection,
     world_id: Uuid,
     created_by: Uuid,
@@ -248,8 +248,8 @@ async fn generate_invite_code_rejects_non_member() {
         outsider_id,
         GenerateInviteCodeInput {
             world_id,
-            max_uses: 5,
-            expires_at: None,
+            max_uses: Some(5),
+            expires_at: async_graphql::MaybeUndefined::Undefined,
         },
     )
     .await;
@@ -272,8 +272,8 @@ async fn generate_invite_code_success_path() {
         owner_id,
         GenerateInviteCodeInput {
             world_id,
-            max_uses: 7,
-            expires_at: None,
+            max_uses: Some(7),
+            expires_at: async_graphql::MaybeUndefined::Undefined,
         },
     )
     .await
@@ -282,14 +282,11 @@ async fn generate_invite_code_success_path() {
     assert_eq!(payload.max_uses, Some(7));
     assert_eq!(payload.used_count, 0);
 
-    // Spec 027 (FR-006): this assertion previously expected 8 characters.
-    // Raising it to 20 is a **deliberate behaviour change**, not a test
-    // relaxed to fit an accident: an invite code grants membership in a
-    // world, and ~32 bits did not meet ADR-049's unguessable-code
-    // invariant while content share links already used ~80.
+    // Spec 027 raised codes from 8 characters to 20; spec 088 (FR-006) to
+    // 26 characters of Crockford base32, 128 bits from the OS.
     assert_eq!(
         payload.invite_code.len(),
-        20,
+        26,
         "invite codes must match content-share-link strength"
     );
 
@@ -613,58 +610,7 @@ async fn concurrent_joins_on_the_last_use_admit_exactly_one() {
     assert_eq!(members, 1, "only one membership may be created");
 }
 
-// ===== Spec 027 US4: unusable links fail identically =====
-
-/// FR-011 / SC-005: unknown, expired, exhausted and revoked are
-/// indistinguishable. Possessing a dead code must reveal nothing about
-/// whether it was ever real, or which world it belonged to.
-#[tokio::test]
-async fn every_unusable_code_fails_with_the_same_message() {
-    let state = test_app_state();
-    let mut conn = state.db_pool.get().unwrap();
-    let owner_id = insert_test_user(&mut conn);
-    let world_id = insert_test_world(&mut conn, owner_id);
-
-    let past = Utc::now().naive_utc() - chrono::Duration::days(1);
-    let (_, expired) = insert_test_invite(&mut conn, world_id, owner_id, 5, 0, Some(past));
-    let (_, exhausted) = insert_test_invite(&mut conn, world_id, owner_id, 3, 3, None);
-    let (_, revoked) =
-        insert_test_invite_with_revocation(&mut conn, world_id, owner_id, 5, 0, None, true);
-    let never_issued = "ZZZZZZZZZZZZZZZZZZZZ".to_string();
-    drop(conn);
-
-    let mut messages = Vec::new();
-    for (label, code) in [
-        ("expired", expired),
-        ("exhausted", exhausted),
-        ("revoked", revoked),
-        ("never issued", never_issued),
-    ] {
-        let joiner = {
-            let mut conn = state.db_pool.get().unwrap();
-            insert_test_user(&mut conn)
-        };
-        let err = join_world_impl(&state, joiner, JoinWorldInput { invite_code: code })
-            .await
-            .expect_err(&format!("a {label} code must be refused"));
-        messages.push((label, err.message));
-    }
-
-    for (label, message) in &messages {
-        assert_eq!(
-            message, LINK_UNAVAILABLE_MESSAGE,
-            "a {label} code must return the uniform message, not its own"
-        );
-    }
-
-    // Belt and braces: prove they are all literally equal to each other,
-    // so a future change that gives one case its own wording fails here.
-    let first = &messages[0].1;
-    assert!(
-        messages.iter().all(|(_, m)| m == first),
-        "all unusable-code failures must be indistinguishable: {messages:?}"
-    );
-}
+// ===== Spec 027 US4; the refusals by reason are in mutations_invites_link_tests.rs =====
 
 /// US4-2: an existing member gets their own message — and critically, this
 /// consumes **no use**, so a repeat click never burns the GM's cap.
@@ -702,7 +648,7 @@ async fn an_existing_member_gets_a_distinct_message_and_consumes_no_use() {
         "an existing member deserves a message that says what happened"
     );
     assert_ne!(
-        err.message, LINK_UNAVAILABLE_MESSAGE,
+        err.message, LINK_USED_UP_MESSAGE,
         "the link is fine — do not report it as dead"
     );
 
