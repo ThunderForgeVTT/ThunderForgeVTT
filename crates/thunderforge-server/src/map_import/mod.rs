@@ -351,6 +351,10 @@ pub async fn import_uvtt_impl(
                     scenes::width.eq(saved_background.width_px),
                     scenes::height.eq(saved_background.height_px),
                     scenes::ambient_light.eq(ambient_light),
+                    // The scene's art and size just changed; nothing else
+                    // bumps this (no trigger on `scenes`), and it is what
+                    // tells anyone reading the row that it moved.
+                    scenes::updated_at.eq(now),
                     // What the file said the map is, so a later disagreement
                     // between the grid and the background is answerable at all.
                     // Without it the worst case is undetectable: 4096/128 is
@@ -473,3 +477,7 @@ mod tests;
 #[cfg(test)]
 #[path = "dedupe_integration_tests.rs"]
 mod dedupe_integration_tests;
+
+#[cfg(test)]
+#[path = "scene_write_tests.rs"]
+mod scene_write_tests;
