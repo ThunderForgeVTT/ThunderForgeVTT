@@ -221,6 +221,51 @@ test.describe("A GM invites a genuine second player (US4)", () => {
     await playerContext.close();
   });
 
+  // Owner's rule, 2026-10-09: a use counts only when someone becomes a new
+  // member. The GM owns the world without a world_members row, so their own
+  // link used to offer Join, and the click burned a use and added a Player
+  // row beside the ownership.
+  test("the GM opening their own link sees they are already a member, and no use is burned", async ({
+    browser,
+  }) => {
+    const gmContext = await browser.newContext({
+      permissions: ["clipboard-read", "clipboard-write"],
+    });
+    const gmPage = await gmContext.newPage();
+    const worldId = await registerAndCreateWorldOnDashboard(
+      gmPage,
+      `E2E Owner Link ${uniqueSuffix()}`,
+    );
+    await gmPage.getByRole("button", { name: "Generate Join Link" }).click();
+    const inviteCode = await extractInviteCode(gmPage);
+    await expect(gmPage.getByText("5 of 5 uses left")).toBeVisible();
+
+    await gmPage.goto(`/join/${inviteCode}`);
+    await expect(gmPage.getByText(/you are already a member/i)).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(
+      gmPage.getByRole("button", { name: /enter campaign/i }),
+    ).toBeVisible();
+    await expect(
+      gmPage.getByRole("button", { name: "Join Campaign" }),
+    ).toHaveCount(0);
+
+    // Opening the link twice more, as a refresh or a bot would, still burns
+    // nothing.
+    await gmPage.reload();
+    await expect(gmPage.getByText(/you are already a member/i)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    await gmPage.goto(`/world/${worldId}`);
+    await expect(gmPage.getByText("5 of 5 uses left")).toBeVisible({
+      timeout: 10_000,
+    });
+
+    await gmContext.close();
+  });
+
   // An exhausted (max-uses-reached) invite is deliberately NOT covered
   // here at the e2e level: CampaignSettingsPanel's "Generate Join Link"
   // hard-codes maxUses to 5, so reaching that state through the real UI
