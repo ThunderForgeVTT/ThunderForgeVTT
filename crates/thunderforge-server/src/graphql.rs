@@ -327,6 +327,12 @@ mod play_pause_surface_tests;
 #[path = "graphql/world_tokens_retired_tests.rs"]
 mod world_tokens_retired_tests;
 
+/// A Player (or a stranger) cannot administer a world: hotfix for players
+/// seeing settings, delete and invite controls on vtt-dev.
+#[cfg(test)]
+#[path = "graphql/world_administration_tests.rs"]
+mod world_administration_tests;
+
 /// The tables that test reads, public to dependent crates' tests so the app
 /// crate can hold the schema merged with the packs' fields to the same list
 /// (spec 051 T074).
