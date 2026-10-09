@@ -33,7 +33,9 @@ pub struct StackCandidate {
 
 /// Ids of every token whose footprint contains `point`, topmost first.
 ///
-/// Ties on `z` fall back to id so the order is stable across calls. That is
+/// `z` is the draw order, so the first id is the token the player sees on
+/// top: every token has its own (see [`stacking_offset`]). Ties on `z` fall
+/// back to id so the order is stable across calls. That is
 /// not fussiness: the double-click picker renders this list, and entries
 /// that reshuffle between the click and the reach are worse than no picker
 /// at all.
@@ -52,6 +54,27 @@ pub fn tokens_at(candidates: &[StackCandidate], point: Vec2) -> Vec<String> {
     hits.into_iter()
         .map(|candidate| candidate.id.clone())
         .collect()
+}
+
+/// How far apart, in `z`, two neighbouring tokens in the draw order sit.
+///
+/// Small enough that a whole table's tokens fit under the one-unit lift a
+/// selected token gets, large enough that `f32` keeps them apart at the token
+/// layer's `z`.
+pub const STACKING_STEP: f32 = 1.0 / 1024.0;
+
+/// The `z` added to a token's layer for its place in the draw order, where
+/// `rank` 0 was added first and is drawn at the bottom.
+///
+/// Bevy draws 2D sprites by `z` and nothing else, so tokens sharing one `z`
+/// were drawn in whatever order the renderer happened to keep, while
+/// [`tokens_at`] broke the same tie by id. A click could take a token the
+/// player could not see. Giving every token its own `z` makes the drawing
+/// and the hit test read one order. Past 1023 tokens the offset stops
+/// growing, so it never reaches the selected tokens' lift; tokens beyond
+/// that share a `z`, and the id tie-break decides between them.
+pub fn stacking_offset(rank: usize) -> f32 {
+    rank.min(1023) as f32 * STACKING_STEP
 }
 
 #[cfg(test)]
@@ -86,6 +109,22 @@ mod tests {
             candidate("mid", 0.0, 0.0, 5.0),
         ];
         assert_eq!(tokens_at(&stack, Vec2::ZERO), vec!["high", "mid", "low"]);
+    }
+
+    #[test]
+    fn a_later_token_is_drawn_above_an_earlier_one() {
+        assert!(stacking_offset(1) > stacking_offset(0));
+        assert_eq!(stacking_offset(0), 0.0);
+        // Distinct at the token layer's z, where f32 is coarser than at 0.
+        let layer = 50.0_f32;
+        assert!(layer + stacking_offset(1) > layer + stacking_offset(0));
+        assert!(layer + stacking_offset(1023) > layer + stacking_offset(1022));
+    }
+
+    #[test]
+    fn the_draw_order_never_reaches_a_selected_token_s_lift() {
+        assert!(stacking_offset(usize::MAX) < 1.0);
+        assert_eq!(stacking_offset(5000), stacking_offset(1023));
     }
 
     #[test]

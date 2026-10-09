@@ -206,7 +206,10 @@ test("a token picked from a stack is the one the next drag moves, the pile can b
   const before = await serverTokens(page, sceneId);
   const pickedBefore = position(before, top);
   const leftBefore = position(before, lower);
-  expect(leftBefore, "the token left on the pile is on the server").not.toBeNull();
+  expect(
+    leftBefore,
+    "the token left on the pile is on the server",
+  ).not.toBeNull();
   expect(pickedBefore, "the picked token is on the server").not.toBeNull();
 
   // Drag the pile. Only the picked token should come away.
@@ -236,4 +239,139 @@ test("a token picked from a stack is the one the next drag moves, the pile can b
     position(await serverTokens(page, sceneId), lower),
     "the token left on the pile should not have moved",
   ).toEqual(leftBefore);
+});
+
+/**
+ * Which of a character (blue) and an NPC (red) the canvas shows at a page
+ * point, read from a screenshot rather than from the engine: the claim is
+ * about what the player sees. Pixels that are neither — grid lines, the
+ * board — are left out, and the colour more of the rest shows wins.
+ */
+async function kindShownAt(
+  page: Page,
+  at: { x: number; y: number },
+): Promise<"character" | "npc" | null> {
+  const half = 8;
+  const png = await page.screenshot({
+    clip: { x: at.x - half, y: at.y - half, width: half * 2, height: half * 2 },
+  });
+  return page.evaluate(async (base64: string) => {
+    const response = await fetch(`data:image/png;base64,${base64}`);
+    const bitmap = await createImageBitmap(await response.blob());
+    const surface = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const context = surface.getContext("2d");
+    if (!context) throw new Error("OffscreenCanvas 2D context unavailable");
+    context.drawImage(bitmap, 0, 0);
+    const { data } = context.getImageData(0, 0, bitmap.width, bitmap.height);
+    let red = 0;
+    let blue = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const lean = data[i] - data[i + 2];
+      if (lean > 60) red += 1;
+      else if (lean < -60) blue += 1;
+    }
+    if (red === 0 && blue === 0) return null;
+    return red > blue ? "npc" : "character";
+  }, png.toString("base64"));
+}
+
+/** A world point's offset from the canvas centre, in page pixels. One
+ * screen pixel is `scale` world units, and world y grows upward. */
+async function pageOffsetOf(
+  page: Page,
+  world: { x: number; y: number },
+): Promise<{ dx: number; dy: number }> {
+  const camera = await page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          __engineProbe?: {
+            camera: () => { x: number; y: number; scale: number } | null;
+          };
+        }
+      ).__engineProbe?.camera() ?? null,
+  );
+  if (!camera) throw new Error("the engine probe should report the camera");
+  return {
+    dx: (world.x - camera.x) / camera.scale,
+    dy: -(world.y - camera.y) / camera.scale,
+  };
+}
+
+test("a click on a pile takes the token drawn on top, not the one with the lowest id", async ({
+  page,
+}) => {
+  test.setTimeout(4 * 60_000);
+
+  const suffix = uniqueSuffix();
+  const worldId = await registerAndCreateWorld(page, `Pile ${suffix}`);
+  const active = await gql<{ world: { activeSceneId: string | null } }>(
+    page,
+    `query ($id: UUID!) { world(id: $id) { activeSceneId } }`,
+    { id: worldId },
+  );
+  const [firstScene] = await sceneIds(page, worldId);
+  const sceneId = active.world.activeSceneId ?? firstScene;
+
+  const create = async (
+    tokenType: string,
+    at: { x: number; y: number },
+  ): Promise<string> =>
+    (
+      await gql<{ createToken: { tokenId: string } }>(
+        page,
+        `mutation ($input: GraphQLCreateTokenInput!) {
+          createToken(input: $input) { tokenId }
+        }`,
+        { input: { sceneId, ...at, tokenType } },
+      )
+    ).createToken.tokenId;
+
+  // A pile of a character (blue) and an NPC (red). The character is on the
+  // board when it opens; the NPC is added while the table watches, the way
+  // a Game Master drops one onto a square that is already taken. Ids are
+  // time-ordered, so the NPC's sorts last. The picker used to break a tie on
+  // z by id and so took the character, while the NPC, added last, was drawn
+  // over it.
+  const at = { x: 0, y: 0 };
+  const character = await create("character", at);
+
+  await page.goto(`/world/${worldId}/play`);
+  await waitForEngineReady(page);
+  await expect.poll(() => storeTokenCount(page), { timeout: 60_000 }).toBe(1);
+
+  const npc = await create("npc", at);
+  expect(npc > character, "a later token's id sorts after").toBe(true);
+  await expect.poll(() => storeTokenCount(page), { timeout: 60_000 }).toBe(2);
+
+  // What the player sees on the pile: the NPC, added last, on top.
+  const centre = await canvasCentre(page);
+  const { dx, dy } = await pageOffsetOf(page, at);
+  await expect
+    .poll(
+      () => kindShownAt(page, { x: centre.x + dx + 4, y: centre.y + dy + 4 }),
+      { message: "the token added last is drawn on top", timeout: 30_000 },
+    )
+    .toBe("npc");
+
+  // A click takes the pile, the one on top first.
+  await expect
+    .poll(
+      async () => {
+        await clickCanvasAt(page, 320, 240);
+        await page.waitForTimeout(150);
+        await clickCanvasAt(page, dx, dy);
+        return [...(await selectedIds(page))].sort();
+      },
+      {
+        message: "a click on the pile should take both its tokens",
+        timeout: 60_000,
+        intervals: [1_000],
+      },
+    )
+    .toEqual([character, npc].sort());
+  expect(
+    (await selectedIds(page))[0],
+    "the token taken first should be the NPC the player sees on top",
+  ).toBe(npc);
 });

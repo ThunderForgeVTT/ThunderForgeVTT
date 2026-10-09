@@ -3,6 +3,7 @@ use crate::{ActiveWorld, TOKEN_SIZE, TokenIdentity, emit_event};
 use bevy::prelude::*;
 use serde_json::json;
 use thunderforge_canvas_core::grid::Footprint;
+use thunderforge_canvas_core::token_stack::stacking_offset;
 
 /// One full breath of the active token's ring, in seconds.
 pub(crate) const RING_PULSE_SECONDS: f32 = 1.4;
@@ -98,24 +99,66 @@ pub(crate) fn draw_selection_rings(
     }
 }
 
+/// When a token was first drawn on this board, counted from 0. Its place in
+/// the draw order: a token added later is drawn over one added earlier.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct TokenDrawOrder(pub(crate) u64);
+
 /// Update token visual feedback based on selection state: opacity and a
 /// z-order bump here; the ring is `draw_selection_rings`.
+///
+/// It also sets each token's place in the stack. Every token gets its own
+/// `z`: the token layer, plus a step per token added before it
+/// (`stacking_offset`), plus one if it is selected. Tokens used to share one
+/// `z`, which left their order on screen to the renderer and their order
+/// under a click to their ids, and a click could take a token hidden under
+/// another. With a `z` each, the renderer and `tokens_at` read one order.
 pub(crate) fn render_selection_feedback(
-    mut sprite_query: Query<(&TokenIdentity, &mut Sprite, &mut Transform)>,
+    mut commands: Commands,
+    mut sprite_query: Query<(
+        Entity,
+        &TokenIdentity,
+        &mut Sprite,
+        &mut Transform,
+        Option<&TokenDrawOrder>,
+    )>,
     selected_token: Res<SelectedToken>,
+    mut next_order: Local<u64>,
 ) {
     // On the token layer, where everything else assumes tokens are. They
     // used to be pinned at z 1 and 2 — under shapes, walls, and (playtest
     // 2026-09-10 P9) the darkness, which is drawn over the map and would
     // have covered every token in a dark scene.
     let layer = crate::resources::CanvasLayer::Tokens.z();
-    for (identity, mut sprite, mut transform) in sprite_query.iter_mut() {
-        // Selected token: opaque, on top. Unselected: slightly transparent.
-        let (alpha, z) = if selected_token.is_selected(&identity.0) {
-            (1.0, layer + 1.0)
-        } else {
-            (0.85, layer)
+
+    // Ranked rather than offset by the counter itself, so a long session's
+    // count never runs past what the step leaves room for: the rank is a
+    // token's place among those on the board now.
+    let mut order: Vec<(TokenDrawOrder, Entity)> = sprite_query
+        .iter()
+        .map(|(entity, _, _, _, drawn)| {
+            let drawn = drawn.copied().unwrap_or_else(|| {
+                let drawn = TokenDrawOrder(*next_order);
+                *next_order += 1;
+                commands.entity(entity).try_insert(drawn);
+                drawn
+            });
+            (drawn, entity)
+        })
+        .collect();
+    order.sort_unstable();
+
+    for (rank, (_, entity)) in order.into_iter().enumerate() {
+        let Ok((_, identity, mut sprite, mut transform, _)) = sprite_query.get_mut(entity) else {
+            continue;
         };
+        // Selected token: opaque, on top. Unselected: slightly transparent.
+        let (alpha, lift) = if selected_token.is_selected(&identity.0) {
+            (1.0, 1.0)
+        } else {
+            (0.85, 0.0)
+        };
+        let z = layer + lift + stacking_offset(rank);
         // Compared before writing. This runs every frame over every token,
         // and an unconditional write marked every `Transform` and `Sprite`
         // changed every frame — so every system keyed on a token having moved
@@ -225,6 +268,66 @@ mod tests {
         assert!(!is_ringed(&Visibility::Hidden));
         assert!(is_ringed(&Visibility::Inherited));
         assert!(is_ringed(&Visibility::Visible));
+    }
+
+    /// The token a click takes is the one the player sees.
+    ///
+    /// Two tokens on one square, the second added after the first. The second
+    /// is drawn on top, and the hit test must say so: it used to break a tie
+    /// on `z` by id, so whichever id sorted first was taken, which was the
+    /// hidden token half the time. Bevy draws 2D sprites by `z` alone, so a
+    /// distinct `z` per token is what makes "drawn on top" and "picked first"
+    /// one fact rather than two orders that happen to agree.
+    #[test]
+    fn a_click_on_a_pile_takes_the_token_drawn_on_top() {
+        use thunderforge_canvas_core::token_stack::{StackCandidate, tokens_at};
+
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.init_resource::<SelectedToken>();
+        app.add_systems(Update, render_selection_feedback);
+
+        let spawn = |app: &mut App, id: &str| {
+            app.world_mut().spawn((
+                Sprite::default(),
+                Transform::default(),
+                TokenIdentity(id.to_string()),
+            ));
+            app.update();
+        };
+        // Added in the order that disagrees with the ids: "zz" last, so it is
+        // on top, though "aa" sorts first.
+        spawn(&mut app, "aa");
+        spawn(&mut app, "zz");
+        app.update();
+
+        let candidates: Vec<StackCandidate> = app
+            .world_mut()
+            .query::<(&Transform, &TokenIdentity)>()
+            .iter(app.world())
+            .map(|(transform, identity)| StackCandidate {
+                id: identity.0.clone(),
+                center: transform.translation.truncate(),
+                footprint_side: 64.0,
+                z: transform.translation.z,
+            })
+            .collect();
+        assert_eq!(tokens_at(&candidates, Vec2::ZERO), vec!["zz", "aa"]);
+
+        // Selecting the lower one lifts it over the other, as before.
+        app.world_mut()
+            .resource_mut::<SelectedToken>()
+            .select("aa".to_string());
+        app.update();
+        let z_of = |app: &mut App, id: &str| {
+            app.world_mut()
+                .query::<(&Transform, &TokenIdentity)>()
+                .iter(app.world())
+                .find(|(_, identity)| identity.0 == id)
+                .map(|(transform, _)| transform.translation.z)
+                .unwrap()
+        };
+        assert!(z_of(&mut app, "aa") > z_of(&mut app, "zz"));
     }
 
     #[test]
