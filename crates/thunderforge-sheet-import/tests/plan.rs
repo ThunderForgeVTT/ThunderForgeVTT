@@ -325,7 +325,7 @@ fn a_derived_value_is_never_written() {
     );
 }
 
-fn derive_initiative(reading: &ImportedCharacter, plan: &mut ImportPlan) {
+fn derive_initiative(reading: &ImportedCharacter, _: &ActorSnapshot, plan: &mut ImportPlan) {
     let dex = reading.abilities["dex"].value.unwrap();
     let derived = (dex - 10).div_euclid(2);
     let sheet = reading.derived["initiative"].value.unwrap();
@@ -687,5 +687,93 @@ fn the_hash_of_a_small_plan_is_pinned() {
     assert_eq!(
         plan_hash(&plan),
         "af0c0a959c82af7b7de9c0398f32a1e81838474878db73793d64f419834d5d4c"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// The refine hook
+
+/// A refine that writes a target the declaration cannot express (a level
+/// that is a sum), and reshapes one it can (a race in capitals).
+fn sums_the_level(reading: &ImportedCharacter, current: &ActorSnapshot, plan: &mut ImportPlan) {
+    let level: i32 = reading
+        .classes
+        .iter()
+        .filter_map(|class| class.level.value)
+        .sum();
+    plan.set_field(
+        current,
+        FieldChange {
+            path: "classes".into(),
+            target: "trait_data.level".into(),
+            old: None,
+            new: Some(json!(level)),
+            certainty: PlanCertainty::Read,
+            reason: None,
+            source: None,
+            play_state: false,
+        },
+    );
+    if let Some(mut race) = plan.take_field("trait_data.race") {
+        race.new = race
+            .new
+            .and_then(|v| v.as_str().map(|s| json!(s.to_uppercase())));
+        plan.set_field(current, race);
+    }
+}
+
+fn run_refined(reading: &ImportedCharacter, current: &ActorSnapshot) -> ImportPlan {
+    plan(
+        &mapping(),
+        Some(sums_the_level),
+        reading,
+        &Corrections::new(),
+        current,
+        &Index::default(),
+    )
+}
+
+#[test]
+fn a_refined_field_carries_the_actors_current_value() {
+    let current = ActorSnapshot {
+        values: BTreeMap::from([("trait_data.level".to_string(), json!(2))]),
+        ..ActorSnapshot::default()
+    };
+    let plan = run_refined(&reading(), &current);
+    let level = plan
+        .fields
+        .iter()
+        .find(|f| f.target == "trait_data.level")
+        .expect("refine added the level");
+    assert_eq!(level.old, Some(json!(2)));
+    assert!(level.new.is_some());
+}
+
+#[test]
+fn a_refined_field_equal_to_the_actor_is_identical_not_a_change() {
+    let first = run_refined(&reading(), &first_import());
+    let race = first
+        .fields
+        .iter()
+        .find(|f| f.target == "trait_data.race")
+        .expect("a race")
+        .new
+        .clone()
+        .unwrap();
+    let current = ActorSnapshot {
+        values: BTreeMap::from([("trait_data.race".to_string(), race)]),
+        ..ActorSnapshot::default()
+    };
+    let again = run_refined(&reading(), &current);
+    assert!(again.fields.iter().all(|f| f.target != "trait_data.race"));
+    assert!(again.identical.contains(&"identity.species".to_string()));
+    assert_eq!(
+        again
+            .fields
+            .iter()
+            .filter(|f| f.target == "trait_data.level")
+            .count(),
+        1,
+        "set_field replaces, never duplicates"
     );
 }

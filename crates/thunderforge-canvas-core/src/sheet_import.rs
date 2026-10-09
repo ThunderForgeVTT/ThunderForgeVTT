@@ -24,10 +24,12 @@ pub trait SheetReaderHandle: Sync {
     fn read(&self, bytes: &[u8]) -> Result<String, SheetReadFailure>;
 }
 
-/// A pack's last word on a plan, over JSON: the reading, and the plan to
-/// adjust. For what the declaration cannot say: a level that is a sum, an
-/// attack that is an item or an ability.
-pub type SheetRefineFn = fn(&serde_json::Value, &mut serde_json::Value);
+/// A pack's last word on a plan, over JSON: the reading, the actor as it is
+/// now, and the plan to adjust. For what the declaration cannot say: a level
+/// that is a sum, an attack that is an item or an ability. The actor is
+/// there so a target the hook writes carries its current value, and a value
+/// the actor already has is identical rather than a change.
+pub type SheetRefineFn = fn(&serde_json::Value, &serde_json::Value, &mut serde_json::Value);
 
 /// Everything a pack contributes to bringing a character in.
 pub struct SheetImport {

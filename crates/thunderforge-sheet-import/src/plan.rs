@@ -25,7 +25,7 @@ use crate::mapping::{ContentTarget, SheetMapping};
 pub type Corrections = BTreeMap<String, Value>;
 
 /// A pack's last word on a plan: what data cannot say.
-pub type RefineFn = fn(&ImportedCharacter, &mut ImportPlan);
+pub type RefineFn = fn(&ImportedCharacter, &ActorSnapshot, &mut ImportPlan);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -139,7 +139,8 @@ pub struct CurrentLink {
 }
 
 /// The actor as it is before the import.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ActorSnapshot {
     /// Whether a sheet was imported onto this actor before.
     pub is_reimport: bool,
@@ -162,6 +163,31 @@ pub trait ContentIndex {
 }
 
 impl ImportPlan {
+    /// Take the change to `target` out of the plan, for a pack's refine hook
+    /// to reshape and put back with [`ImportPlan::set_field`].
+    pub fn take_field(&mut self, target: &str) -> Option<FieldChange> {
+        let index = self.fields.iter().position(|f| f.target == target)?;
+        Some(self.fields.remove(index))
+    }
+
+    /// Put a change to a target into the plan the way the planner would:
+    /// `old` is what the actor holds now, a value the actor already has is
+    /// identical rather than a change, and a change to the same target
+    /// replaces the one before it. For a pack's refine hook, which writes
+    /// targets the declaration cannot express.
+    pub fn set_field(&mut self, current: &ActorSnapshot, mut change: FieldChange) {
+        self.fields.retain(|f| f.target != change.target);
+        change.old = current.values.get(&change.target).cloned();
+        if change.certainty != PlanCertainty::Unread && change.new == change.old {
+            self.identical.push(change.path);
+            return;
+        }
+        if change.certainty == PlanCertainty::Unread {
+            change.new = None;
+        }
+        self.fields.push(change);
+    }
+
     /// The field changes an apply writes. A play-state change on a re-import
     /// is written only if `overwrite` names its target.
     pub fn writes<'a, 'b>(
@@ -369,7 +395,7 @@ pub fn plan(
     );
 
     if let Some(refine) = refine {
-        refine(reading, &mut out);
+        refine(reading, current, &mut out);
     }
 
     // A kind the declaration hands to the pack, which the pack left

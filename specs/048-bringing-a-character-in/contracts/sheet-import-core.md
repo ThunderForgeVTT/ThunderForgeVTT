@@ -104,6 +104,13 @@ names, such as the player's name). Corrections are `{neutral path: value}`;
 overwritten is not part of the plan or its hash: the plan marks the rows,
 and `ImportPlan::writes(overwrite)` applies the person's choice.
 
+**As built** (T033/T034): the refine hook also receives the
+`ActorSnapshot`, so a target only the hook writes (a summed level, the
+hit-dice string) carries the actor's current value, and a re-import that
+changes nothing reads as identical rather than as a change.
+`ImportPlan::take_field` and `ImportPlan::set_field` let a hook reshape a
+change and put it back the way the planner settles one.
+
 **Invariants** (each one is a test in the crate):
 
 - `plan` is pure and deterministic. The same inputs always give the same
@@ -128,7 +135,7 @@ and `ImportPlan::writes(overwrite)` applies the person's choice.
 ```rust
 pub struct SheetImport {
     pub readers: &'static [&'static (dyn SheetReaderHandle)],   // native readers the server runs
-    pub refine: Option<fn(&ImportedCharacterJson, &mut ImportPlanJson)>,
+    pub refine: Option<fn(&ImportedCharacterJson, &ActorSnapshotJson, &mut ImportPlanJson)>,
 }
 pub struct SystemContribution { /* … */ pub sheet_import: Option<&'static SheetImport> }
 ```
