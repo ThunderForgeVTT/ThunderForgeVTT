@@ -81,6 +81,13 @@ their labels by position, and the proficiency marks come through inconsistently
 as bullets or letters. A parser therefore reads by anchors and geometry, and it
 will sometimes be unsure.
 
+> **Measured 2026-10-09 (research R2, T010):** the owner's seven exports are
+> not flattened after all. Each keeps 775 to 874 named form fields with their
+> values in the fields, and draws only the labels; the catalog just does not
+> list them, so tools report `Form: none`. The reader reads the named fields
+> first and falls back to anchors and geometry where a value is drawn. The
+> rule below is unchanged: uncertainty is shown, never hidden.
+
 That is a design constraint, not a defect to hide: an import that guesses
 silently is worse than one that says it could not tell. Every scenario below
 turns on the player seeing what was read before anything is written.
@@ -267,7 +274,8 @@ and leaves current hit points and anything the table has changed in play alone.
   know how a PDF is structured. A second system's reader, and one day a source
   book's, MUST be able to sit beside it on the same crate.
 - **FR-002**: It MUST accept a D&D Beyond PDF export, flattened, with no form
-  fields.
+  fields. *(Measured: the export keeps its values in unlisted form fields;
+  it MUST accept the export as D&D Beyond produces it. See research R2.)*
 - **FR-003**: It MUST report, per field, whether a value was read, unread, or
   uncertain — and MUST NOT invent a value it did not find.
 - **FR-004**: It MUST refuse a file it cannot parse, a file that is not a

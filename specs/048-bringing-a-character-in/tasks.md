@@ -50,19 +50,19 @@ user's shareable set is a *collection*. Only the 5e system is a *pack*.
 
 ## Phase 1: Setup
 
-- [ ] T001 Create `crates/thunderforge-sheet-import` (lib, edition 2024, deps `thunderforge-pdf`, serde, serde_json, sha2) with empty `character.rs`, `reader.rs`, `mapping.rs`, `plan.rs` and `hash.rs`. Add it to the root workspace `Cargo.toml`.
-- [ ] T002 Create `packs/systems/dnd5e/sheet/` (`thunderforge-system-dnd5e-sheet`, cdylib+rlib, an optional `wasm` feature, deps `thunderforge-pdf` and `thunderforge-sheet-import`). Add it to the workspace.
-- [ ] T003 In `scripts/shared.mjs`, beside `buildPdf()` (:341), add `buildSheetReaders()`. It runs `wasm-pack` for each pack `sheet/` crate that has a `wasm` feature, into `dist/sheet-<system>`, as `@thunderforge/sheet-<system>`. Pre-cook the new crates in the `Dockerfile` beside lines 130-132.
+- [X] T001 Create `crates/thunderforge-sheet-import` (lib, edition 2024, deps `thunderforge-pdf`, serde, serde_json, sha2) with empty `character.rs`, `reader.rs`, `mapping.rs`, `plan.rs` and `hash.rs`. Add it to the root workspace `Cargo.toml`.
+- [X] T002 Create `packs/systems/dnd5e/sheet/` (`thunderforge-system-dnd5e-sheet`, cdylib+rlib, an optional `wasm` feature, deps `thunderforge-pdf` and `thunderforge-sheet-import`). Add it to the workspace.
+- [X] T003 In `scripts/shared.mjs`, beside `buildPdf()` (:341), add `buildSheetReaders()`. It runs `wasm-pack` for each pack `sheet/` crate that has a `wasm` feature, into `dist/sheet-<system>`, as `@thunderforge/sheet-<system>`. Pre-cook the new crates in the `Dockerfile` beside lines 130-132.
 - [ ] T004 [P] In `scripts/e2e/slices.json`:
   - add the `sheet-import` slice. It owns `sheet-import-`, and its `standalone` command is `pnpm -F @thunderforge/dnd5e test:sheet-reader` (T043), following `hero-builder`. Its paths are those listed in research R19, and its neighbours are those in the plan's Slice note;
   - remove `specs/048-bringing-a-character-in` from the `hero-builder` summary.
   Then run `node scripts/check-e2e-slices.mjs --fix` so `package.json` gains `e2e:sheet-import` and `e2e:sheet-import:standalone`.
-- [ ] T005 [P] Declare `feature.sheet_import`:
+- [X] T005 [P] Declare `feature.sheet_import`:
   - add a `Kind::Bool` in `crates/thunderforge-server/src/settings/registry/declarations.rs` with group "Features", env `THUNDERFORGE_FEATURE_SHEET_IMPORT`, default **false**, `since` the next release, `what_is_limited` "Players cannot bring a character in from a PDF.", and `what_to_set`;
   - add the constant and the `FEATURES` entry in `settings/features.rs`;
   - add the web key in `@/api/featureFlags`;
   - add a commented line in `.env.example`.
-- [ ] T006 [P] Draft ADR-115, `docs/adrs/20261008-115-character_sheets_are_read_twice_by_one_reader.md` (Nygard, with a Y-statement). It records research R1, R3 and R8. Add its row to `docs/adrs/README.md` with status Proposed.
+- [X] T006 [P] Draft ADR-115, `docs/adrs/20261008-115-character_sheets_are_read_twice_by_one_reader.md` (Nygard, with a Y-statement). It records research R1, R3 and R8. Add its row to `docs/adrs/README.md` with status Proposed.
 
 **Checkpoint**: the workspace builds, the slice exists, and the flag is off.
 
@@ -72,7 +72,7 @@ user's shareable set is a *collection*. Only the 5e system is a *pack*.
 
 ### The PDF crate (game-agnostic)
 
-- [ ] T007 [P] Write `crates/thunderforge-pdf/src/region_tests.rs` with synthetic runs, following `layout_tests.rs`. It covers:
+- [X] T007 [P] Write `crates/thunderforge-pdf/src/region_tests.rs` with synthetic runs, following `layout_tests.rs`. It covers:
   - `find` matching a label that appears twice;
   - two lines at one y;
   - `right_of` stopping at the next column;
@@ -80,16 +80,17 @@ user's shareable set is a *collection*. Only the 5e system is a *pack*.
   - `within`;
   - a rotated page refused as `Page{reason}`.
   The tests fail before T008.
-- [ ] T008 Implement `crates/thunderforge-pdf/src/region.rs` (`Rect`, `PositionedLine`, `PageText::{read, find, within, right_of, below}`) over the existing `lines()`. Export it from `lib.rs`. T007 goes green.
-- [ ] T009 [P] Write tests for the bounds and for encryption:
+- [X] T008 Implement `crates/thunderforge-pdf/src/region.rs` (`Rect`, `PositionedLine`, `PageText::{read, find, within, right_of, below}`) over the existing `lines()`. Export it from `lib.rs`. T007 goes green.
+- [X] T009 [P] Write tests for the bounds and for encryption:
   - `TooLarge` before parsing;
   - `TooManyPages`;
   - `Encrypted`, on a fixture written by lopdf with an `/Encrypt` dictionary;
   - an ordinary file that passes.
-- [ ] T010 Measure the owner's seven D&D Beyond exports with `cargo run -p thunderforge-pdf --example probe`, from a path outside the repository. Record in research R2 whether any field value is drawn inside a Form XObject. Record counts only, and no values.
-- [ ] T011 If T010 found values in Form XObjects, follow `Do` into the XObject in `content.rs`, apply its `/Matrix`, and add tests with a synthetic XObject. If T010 found none, record that here and close this task.
-- [ ] T012 Implement `Limits`, `Document::from_bytes_bounded` and the new `PdfError` variants in `lib.rs`. T009 goes green.
-- [ ] T013 [P] In `wasm.rs`, add `read_page_text(bytes, page)`. The existing `read_pdf` output must be unchanged, and a test pins it.
+- [X] T010 Measure the owner's seven D&D Beyond exports with `cargo run -p thunderforge-pdf --example probe`, from a path outside the repository. Record in research R2 whether any field value is drawn inside a Form XObject. Record counts only, and no values.
+- [X] T011 If T010 found values in Form XObjects, follow `Do` into the XObject in `content.rs`, apply its `/Matrix`, and add tests with a synthetic XObject. If T010 found none, record that here and close this task.
+  - **Closed by measurement (research R2)**: no value is drawn in a Form XObject, or drawn at all. The exports keep every value in widget `/V`. `Do` traversal is not added; `crates/thunderforge-pdf/src/form.rs` reads the widgets instead, with tests on a synthetic widget document.
+- [X] T012 Implement `Limits`, `Document::from_bytes_bounded` and the new `PdfError` variants in `lib.rs`. T009 goes green.
+- [X] T013 [P] In `wasm.rs`, add `read_page_text(bytes, page)`. The existing `read_pdf` output must be unchanged, and a test pins it.
 
 ### The neutral core
 

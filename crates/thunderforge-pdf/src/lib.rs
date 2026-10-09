@@ -31,6 +31,12 @@ mod page;
 mod repair;
 mod text;
 
+#[cfg(test)]
+#[path = "bounds_tests.rs"]
+mod bounds_tests;
+#[cfg(test)]
+mod test_pdf;
+
 pub use cmap::ToUnicode;
 pub use content::{Operand, Operation, operations};
 pub use font::{FontInfo, FontMap};
@@ -48,6 +54,15 @@ pub enum PdfError {
     /// the page number so a caller can report which — a book with one broken
     /// page is still worth reading.
     Page { page: u32, reason: String },
+    /// The document is password-protected. Nothing in it can be read
+    /// without the password, and this crate never asks for one.
+    Encrypted,
+    /// The file is bigger than the caller allows. Checked before parsing,
+    /// so an oversized file costs nothing to refuse.
+    TooLarge { bytes: usize, limit: usize },
+    /// The document has more pages than the caller allows. Checked once the
+    /// page tree is known and before any page's content is read.
+    TooManyPages { pages: u32, limit: u32 },
 }
 
 impl std::fmt::Display for PdfError {
@@ -55,11 +70,45 @@ impl std::fmt::Display for PdfError {
         match self {
             PdfError::Unreadable(why) => write!(f, "could not read the document: {why}"),
             PdfError::Page { page, reason } => write!(f, "page {page}: {reason}"),
+            PdfError::Encrypted => {
+                write!(f, "the document is protected by a password")
+            }
+            PdfError::TooLarge { bytes, limit } => {
+                write!(f, "the file is {bytes} bytes, over the limit of {limit}")
+            }
+            PdfError::TooManyPages { pages, limit } => {
+                write!(
+                    f,
+                    "the document has {pages} pages, over the limit of {limit}"
+                )
+            }
         }
     }
 }
 
 impl std::error::Error for PdfError {}
+
+/// How much of a document a caller is willing to read.
+///
+/// A character sheet is a few pages and a few hundred kilobytes; a book is
+/// neither, and a hostile upload could be anything. A caller that takes files
+/// from people states its bounds, and [`Document::from_bytes_bounded`] holds
+/// the document to them before doing any real work.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Limits {
+    pub max_bytes: usize,
+    pub max_pages: u32,
+}
+
+impl Default for Limits {
+    /// Ten megabytes and twenty pages: generous for a character sheet.
+    fn default() -> Self {
+        Self {
+            max_bytes: 10 * 1024 * 1024,
+            max_pages: 20,
+        }
+    }
+}
 
 /// An open document.
 pub struct Document {
@@ -101,6 +150,31 @@ impl Document {
         }
     }
 
+    /// Open a PDF a person handed over, within `limits`.
+    ///
+    /// The size is checked before parsing, encryption and the page count as
+    /// soon as the document opens, and no page's content is read here.
+    pub fn from_bytes_bounded(bytes: &[u8], limits: Limits) -> Result<Self, PdfError> {
+        if bytes.len() > limits.max_bytes {
+            return Err(PdfError::TooLarge {
+                bytes: bytes.len(),
+                limit: limits.max_bytes,
+            });
+        }
+        let document = Self::from_bytes(bytes)?;
+        if document.inner.is_encrypted() {
+            return Err(PdfError::Encrypted);
+        }
+        let pages = u32::try_from(document.page_count()).unwrap_or(u32::MAX);
+        if pages > limits.max_pages {
+            return Err(PdfError::TooManyPages {
+                pages,
+                limit: limits.max_pages,
+            });
+        }
+        Ok(document)
+    }
+
     /// How many pages the document has.
     pub fn page_count(&self) -> usize {
         self.inner.get_pages().len()
@@ -119,6 +193,12 @@ impl Document {
     /// every run before it can decide.
     pub fn runs(&self, page: &Page) -> Result<Vec<TextRun>, PdfError> {
         text::runs_on_page(&self.inner, page)
+    }
+
+    /// The form fields whose widgets sit on one page (spec 048, research
+    /// R2). Empty for a page with none, which is most pages of most books.
+    pub fn form_fields(&self, page: &Page) -> Vec<FormField> {
+        form::fields_on_page(&self.inner, page.id, page.number, page.geometry.height)
     }
 
     /// The document's own outline, when it has one.
@@ -141,7 +221,12 @@ pub struct OutlineEntry {
     pub page: Option<u32>,
 }
 
+pub mod form;
 pub mod layout;
+pub mod region;
+
+pub use form::{FieldKind, FormField};
+pub use region::{PageText, PositionedLine, Rect};
 
 /// Reading a PDF in the browser — see the module for why that is safe.
 #[cfg(feature = "wasm")]

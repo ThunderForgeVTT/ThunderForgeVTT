@@ -5,7 +5,7 @@ use lopdf::{Document, Object};
 use std::collections::HashMap;
 
 /// A page's box, in PDF units (72 to the inch).
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PageGeometry {
     pub width: f64,
     pub height: f64,
@@ -68,6 +68,37 @@ fn inherited_media_box(document: &Document, id: (u32, u16)) -> Option<PageGeomet
             .clone();
     }
     None
+}
+
+/// How far a page is turned when shown, in degrees: 0, 90, 180 or 270.
+///
+/// `/Rotate` is inheritable, as MediaBox is. A turned page draws its text
+/// sideways in page space, so a reader that measures "right of" and "below"
+/// would read it wrongly rather than fail; the region API refuses it instead.
+pub(crate) fn rotation(document: &Document, id: (u32, u16)) -> i64 {
+    let Ok(dictionary) = document.get_dictionary(id) else {
+        return 0;
+    };
+    let mut current = dictionary.clone();
+    for _ in 0..8 {
+        if let Ok(rotate) = current.get(b"Rotate") {
+            return match crate::font::resolve(document, rotate) {
+                Some(Object::Integer(degrees)) => degrees.rem_euclid(360),
+                Some(Object::Real(degrees)) => (*degrees as i64).rem_euclid(360),
+                _ => 0,
+            };
+        }
+        let Some(parent) = current
+            .get(b"Parent")
+            .ok()
+            .and_then(|parent| crate::font::resolve(document, parent))
+            .and_then(|parent| parent.as_dict().ok())
+        else {
+            return 0;
+        };
+        current = parent.clone();
+    }
+    0
 }
 
 fn media_box_of(document: &Document, object: &Object) -> Option<PageGeometry> {

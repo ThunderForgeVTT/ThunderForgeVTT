@@ -93,9 +93,40 @@ the door into it.
   traversal with the XObject's matrix applied. If none is, T011 records the
   measurement and closes.
 
-**Not added**: AcroForm field reading. FR-002 targets the flattened export.
-A sheet that still has form fields is read by its drawn text like any other
-sheet, if it draws any. A sheet that draws none is refused as unreadable.
+**Measured (T010, 2026-10-09)**: the owner's seven exports are not
+flattened. `cargo run -p thunderforge-pdf --example probe -- --structure`
+over them, counts only:
+
+| Pages | Drawn show-text ops | Form XObjects drawn (with text) | Widgets | Widgets with a value | Appearance streams with text |
+| ----- | ------------------- | ------------------------------- | ------- | -------------------- | ---------------------------- |
+| 4 (×3) | 277 each | 5 (0) | 775 | 209 to 319 | 0 |
+| 5 (×4) | 314 each | 5 (0) | 874 | 340 to 573 | 0 |
+
+- The drawn text is the same count in every export of a given length,
+  whatever the character: it is the form's labels and nothing else.
+- No field value is drawn anywhere: not in page content, not in a Form
+  XObject, not in a widget's appearance stream.
+- Every value sits in a widget annotation's `/V`, on a text field
+  (`/FT /Tx`, 767 or 866 per file) with a stable name in `/T`
+  (`CharacterName`, `STR`, `AcrobaticsProf`, `Eq Name12`, ...). Eight are
+  buttons. The catalog carries no `/AcroForm`, which is why a tool that asks
+  the catalog reports `Form: none`, and why the spec read them as flattened.
+- So T011's `Do` traversal would find nothing, and is not added.
+
+**Decision, from that measurement**: `thunderforge-pdf` gains `form.rs`,
+which reads widget annotations as `FormField{name, value, kind, page, rect}`,
+with the rect in the same top-left coordinates as `region.rs`. A page's
+`PageText` carries its `fields` beside its `lines`, so the review's
+highlight (`Source{page, rect, text}`) works for both. It is still
+game-agnostic: it knows annotations, not sheets. The D&D Beyond reader reads
+by field name first, which is far steadier than geometry, and keeps the
+anchor queries for a sheet whose values really are drawn (a printed-to-PDF
+export). FR-002 is read as "a D&D Beyond PDF export, as D&D Beyond produces
+it"; the word "flattened" described what the drafters believed the export
+was, and the measurement replaces that belief.
+
+**Still not added**: writing form fields, and form-field JavaScript or
+calculation order. A field's `/V` is taken as the sheet printed it.
 
 ## R3. The neutral character and the reader contract live in a new crate
 

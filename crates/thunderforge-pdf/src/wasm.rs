@@ -65,13 +65,18 @@ struct WasmDocument {
 /// the parse happened.
 #[wasm_bindgen]
 pub fn read_pdf(bytes: &[u8], from: u32, count: u32) -> Result<String, JsValue> {
+    read_pdf_json(bytes, from, count).map_err(|error| JsValue::from_str(&error))
+}
+
+/// [`read_pdf`] without the JavaScript boundary, so a host test can pin its
+/// output.
+fn read_pdf_json(bytes: &[u8], from: u32, count: u32) -> Result<String, String> {
     // Whether it needed repairing is worth reporting rather than hiding: 37%
     // of a real library does, and a caller that knows can say "this file was
     // damaged and we read it anyway" instead of leaving a person wondering.
     let repaired = lopdf::Document::load_mem(bytes).is_err();
 
-    let document =
-        Document::from_bytes(bytes).map_err(|error| JsValue::from_str(&error.to_string()))?;
+    let document = Document::from_bytes(bytes).map_err(|error| error.to_string())?;
 
     let pages = document.pages();
     let mut lines = Vec::new();
@@ -115,7 +120,25 @@ pub fn read_pdf(bytes: &[u8], from: u32, count: u32) -> Result<String, JsValue> 
         silent_pages,
         repaired,
     })
-    .map_err(|error| JsValue::from_str(&error.to_string()))
+    .map_err(|error| error.to_string())
+}
+
+/// One page's lines, each with the box it occupies, as JSON (spec 048).
+///
+/// A character sheet is read by asking what sits beside a label, so its
+/// reader needs positions, which [`read_pdf`] deliberately drops. The file is
+/// opened with the default [`crate::Limits`], the same bounds the server
+/// applies when it reads the same file again. `page` is one-based.
+#[wasm_bindgen]
+pub fn read_page_text(bytes: &[u8], page: u32) -> Result<String, JsValue> {
+    page_text_json(bytes, page).map_err(|error| JsValue::from_str(&error))
+}
+
+fn page_text_json(bytes: &[u8], page: u32) -> Result<String, String> {
+    let document = Document::from_bytes_bounded(bytes, crate::Limits::default())
+        .map_err(|error| error.to_string())?;
+    let text = crate::PageText::read(&document, page).map_err(|error| error.to_string())?;
+    serde_json::to_string(&text).map_err(|error| error.to_string())
 }
 
 /// How many pages a document has, without reading any of them.
@@ -259,3 +282,7 @@ pub fn read_content(
     })
     .map_err(|error| JsValue::from_str(&format!("could not report what was read: {error}")))
 }
+
+#[cfg(test)]
+#[path = "wasm_tests.rs"]
+mod tests;
