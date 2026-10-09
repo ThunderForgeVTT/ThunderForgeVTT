@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { Input } from "@/components/ui/input";
 import { NewCharacterCard } from "@/pages/world/players/NewCharacterCard";
+import { PlayerHeroControls } from "@/pages/world/players/PlayerHeroControls";
 import { filterPlayers } from "@/pages/world/players/playerFilter";
 import { describeStanding } from "@/pages/world/players/playerStanding";
 import type { WorldActorRecord } from "@/types/actor";
@@ -58,7 +59,7 @@ const NO_CHARACTER = "";
 export function PlayersPage({ worldId, isGm }: PlayersPageProps) {
   const { user } = useAuth();
   const [members, setMembers] = useState<WorldMemberRecord[] | null>(null);
-  const [characters, setCharacters] = useState<WorldActorRecord[]>([]);
+  const [actors, setActors] = useState<WorldActorRecord[]>([]);
   const [query, setQuery] = useState("");
   const [error, setError] = useState<Error | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
@@ -98,31 +99,39 @@ export function PlayersPage({ worldId, isGm }: PlayersPageProps) {
     };
   }, [worldId, refreshTick]);
 
-  // Only a GM can bind, so only a GM pays for the actor list. A failure
-  // here leaves the picker empty rather than breaking the roster — the
-  // roster is what every member came for.
+  // Every viewer reads the actor list: a GM to bind characters, and anyone to
+  // learn which claimed heroes they may edit (`myPermissionLevel` and
+  // `myMayChangeImagery` are answered per caller). A failure here leaves the
+  // picker empty and offers no hero controls rather than breaking the roster —
+  // the roster is what every member came for.
   useEffect(() => {
-    if (!isGm) {
-      return;
-    }
     let active = true;
 
     getWorldActors(worldId)
       .then((result) => {
         if (active) {
-          setCharacters(result.filter((actor) => !actor.isNpc));
+          setActors(result);
         }
       })
       .catch(() => {
         if (active) {
-          setCharacters([]);
+          setActors([]);
         }
       });
 
     return () => {
       active = false;
     };
-  }, [worldId, isGm, refreshTick]);
+  }, [worldId, refreshTick]);
+
+  const characters = useMemo(
+    () => actors.filter((actor) => !actor.isNpc),
+    [actors],
+  );
+  const actorsById = useMemo(
+    () => new Map(actors.map((actor) => [actor.id, actor])),
+    [actors],
+  );
 
   const visibleMembers = useMemo(
     () => (members ? filterPlayers(members, query) : []),
@@ -239,7 +248,7 @@ export function PlayersPage({ worldId, isGm }: PlayersPageProps) {
       {isGm ? (
         <NewCharacterCard
           worldId={worldId}
-          onCreated={(actor) => setCharacters((current) => [...current, actor])}
+          onCreated={(actor) => setActors((current) => [...current, actor])}
         />
       ) : null}
 
@@ -341,6 +350,13 @@ export function PlayersPage({ worldId, isGm }: PlayersPageProps) {
                   )}
                 </dd>
               </dl>
+
+              {member.claimedActor ? (
+                <PlayerHeroControls
+                  worldId={worldId}
+                  actor={actorsById.get(member.claimedActor.id)}
+                />
+              ) : null}
 
               {isGm && hasNoMembershipRecord ? (
                 <p
