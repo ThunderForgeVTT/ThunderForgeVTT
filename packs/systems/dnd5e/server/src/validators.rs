@@ -190,23 +190,32 @@ pub fn validate_resource_data(data: &serde_json::Value) -> Result<(), Validation
         }
     }
 
+    crate::validators_sheet::resource_fields(obj)?;
     Ok(())
 }
 
-/// `3d6`, `8d10+24`, `3d6-3`: a count, a die, and at most one flat modifier.
+/// `3d6`, `8d10+24`, `3d6-3`, and a multiclass character's `3d10 + 2d6`:
+/// one or more dice joined by `+`, and at most one flat modifier at the end.
 fn is_hit_dice(text: &str) -> bool {
-    let text = text.trim();
-    let Some((count, rest)) = text.split_once('d') else {
-        return false;
-    };
-    let (die, modifier) = match rest.find(['+', '-']) {
-        Some(at) => (&rest[..at], Some(&rest[at + 1..])),
-        None => (rest, None),
-    };
     let whole = |part: &str| {
         !part.is_empty() && part.len() <= 4 && part.bytes().all(|b| b.is_ascii_digit())
     };
-    whole(count) && whole(die) && modifier.is_none_or(whole)
+    let compact: String = text.chars().filter(|c| !c.is_whitespace()).collect();
+    let (dice, modifier) = match compact.rfind('-') {
+        Some(at) => (&compact[..at], Some(&compact[at + 1..])),
+        None => (compact.as_str(), None),
+    };
+    let mut terms: Vec<&str> = dice.split('+').collect();
+    let mut flat = modifier;
+    if flat.is_none() && terms.len() > 1 && !terms[terms.len() - 1].contains('d') {
+        flat = terms.pop();
+    }
+    !terms.is_empty()
+        && terms.iter().all(|term| match term.split_once('d') {
+            Some((count, die)) => whole(count) && whole(die),
+            None => false,
+        })
+        && flat.is_none_or(whole)
 }
 
 /// An optional whole number within `min..=max`. Absent or null is fine.
@@ -695,6 +704,7 @@ pub fn validate_trait_data(data: &serde_json::Value) -> Result<(), ValidationErr
         }
     }
 
+    crate::validators_sheet::trait_fields(obj)?;
     Ok(())
 }
 
@@ -831,6 +841,7 @@ pub fn validate_spell_data(data: &serde_json::Value) -> Result<(), ValidationErr
         }
     }
 
+    crate::validators_sheet::spell_fields(obj)?;
     Ok(())
 }
 

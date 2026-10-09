@@ -600,6 +600,59 @@
             "min": 0,
             "max": 3,
             "label": "Death Save Failures"
+          },
+          "hit_dice_pools": {
+            "type": "array",
+            "label": "Hit Dice",
+            "description": "One pool per die size: a multiclass character spends d10s and d6s separately.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "die": {
+                  "type": "string",
+                  "enum": ["d6", "d8", "d10", "d12"]
+                },
+                "total": {
+                  "type": "integer",
+                  "min": 0
+                },
+                "used": {
+                  "type": "integer",
+                  "min": 0
+                }
+              }
+            }
+          },
+          "coins": {
+            "type": "object",
+            "label": "Coins",
+            "properties": {
+              "cp": {
+                "type": "integer",
+                "min": 0,
+                "label": "CP"
+              },
+              "sp": {
+                "type": "integer",
+                "min": 0,
+                "label": "SP"
+              },
+              "ep": {
+                "type": "integer",
+                "min": 0,
+                "label": "EP"
+              },
+              "gp": {
+                "type": "integer",
+                "min": 0,
+                "label": "GP"
+              },
+              "pp": {
+                "type": "integer",
+                "min": 0,
+                "label": "PP"
+              }
+            }
           }
       },
       "required": [
@@ -933,6 +986,137 @@
             "min": 0,
             "label": "Dim Light",
             "description": "Feet of dim light beyond the bright. Declared in vision.carriedLight."
+          },
+          "classes": {
+            "type": "array",
+            "label": "Classes",
+            "description": "Each class the character has levels in. With more than one, level is their sum and class is the first.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "label": "Class"
+                },
+                "subclass": {
+                  "type": "string",
+                  "label": "Subclass"
+                },
+                "level": {
+                  "type": "integer",
+                  "min": 1,
+                  "max": 20,
+                  "label": "Level"
+                },
+                "hit_die": {
+                  "type": "string",
+                  "enum": ["d6", "d8", "d10", "d12"],
+                  "label": "Hit Die"
+                }
+              }
+            }
+          },
+          "age": {
+            "type": "string",
+            "maxLength": 100,
+            "label": "Age"
+          },
+          "height": {
+            "type": "string",
+            "maxLength": 100,
+            "label": "Height"
+          },
+          "weight": {
+            "type": "string",
+            "maxLength": 100,
+            "label": "Weight"
+          },
+          "eyes": {
+            "type": "string",
+            "maxLength": 100,
+            "label": "Eyes"
+          },
+          "skin": {
+            "type": "string",
+            "maxLength": 100,
+            "label": "Skin"
+          },
+          "hair": {
+            "type": "string",
+            "maxLength": 100,
+            "label": "Hair"
+          },
+          "gender": {
+            "type": "string",
+            "maxLength": 100,
+            "label": "Gender"
+          },
+          "faith": {
+            "type": "string",
+            "maxLength": 100,
+            "label": "Faith"
+          },
+          "personality_traits": {
+            "type": "string",
+            "maxLength": 8000,
+            "label": "Personality Traits"
+          },
+          "ideals": {
+            "type": "string",
+            "maxLength": 8000,
+            "label": "Ideals"
+          },
+          "bonds": {
+            "type": "string",
+            "maxLength": 8000,
+            "label": "Bonds"
+          },
+          "flaws": {
+            "type": "string",
+            "maxLength": 8000,
+            "label": "Flaws"
+          },
+          "backstory": {
+            "type": "string",
+            "maxLength": 8000,
+            "label": "Backstory"
+          },
+          "allies_and_organizations": {
+            "type": "string",
+            "maxLength": 8000,
+            "label": "Allies and Organizations"
+          },
+          "resistances": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "label": "Resistances",
+            "description": "Damage types, from this system's damageTypes."
+          },
+          "immunities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "label": "Damage Immunities",
+            "description": "Damage types, from this system's damageTypes."
+          },
+          "vulnerabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "label": "Vulnerabilities",
+            "description": "Damage types, from this system's damageTypes."
+          },
+          "condition_immunities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "label": "Condition Immunities",
+            "description": "Conditions, from this system's conditions."
           }
       }
     },
@@ -1052,6 +1236,56 @@
               "min": 0
             },
             "level_9": {
+              "type": "integer",
+              "min": 0
+            }
+          }
+        },
+        "spellcasting_classes": {
+          "type": "array",
+          "label": "Spellcasting Classes",
+          "description": "Each class that casts spells, with its own ability, save DC and attack bonus.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "class": {
+                "type": "string"
+              },
+              "ability": {
+                "type": "string",
+                "enum": [
+                  "strength",
+                  "dexterity",
+                  "constitution",
+                  "intelligence",
+                  "wisdom",
+                  "charisma"
+                ]
+              },
+              "save_dc": {
+                "type": "integer"
+              },
+              "attack_bonus": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "pact_slots": {
+          "type": "object",
+          "label": "Pact Slots",
+          "description": "Slots that come back on a short rest, all of one level.",
+          "properties": {
+            "level": {
+              "type": "integer",
+              "min": 1,
+              "max": 5
+            },
+            "total": {
+              "type": "integer",
+              "min": 0
+            },
+            "used": {
               "type": "integer",
               "min": 0
             }
@@ -1308,9 +1542,77 @@
         "pluralLabel": "Enchantments",
         "order": 2,
         "binds": "item"
+      },
+      {
+        "id": "feature",
+        "label": "Feature",
+        "pluralLabel": "Features",
+        "order": 3,
+        "binds": "character"
+      },
+      {
+        "id": "species_trait",
+        "label": "Species Trait",
+        "pluralLabel": "Species Traits",
+        "order": 4,
+        "binds": "character"
       }
     ]
   },
+  "damageTypes": [
+    {
+      "id": "acid",
+      "label": "Acid"
+    },
+    {
+      "id": "bludgeoning",
+      "label": "Bludgeoning"
+    },
+    {
+      "id": "cold",
+      "label": "Cold"
+    },
+    {
+      "id": "fire",
+      "label": "Fire"
+    },
+    {
+      "id": "force",
+      "label": "Force"
+    },
+    {
+      "id": "lightning",
+      "label": "Lightning"
+    },
+    {
+      "id": "necrotic",
+      "label": "Necrotic"
+    },
+    {
+      "id": "piercing",
+      "label": "Piercing"
+    },
+    {
+      "id": "poison",
+      "label": "Poison"
+    },
+    {
+      "id": "psychic",
+      "label": "Psychic"
+    },
+    {
+      "id": "radiant",
+      "label": "Radiant"
+    },
+    {
+      "id": "slashing",
+      "label": "Slashing"
+    },
+    {
+      "id": "thunder",
+      "label": "Thunder"
+    }
+  ],
   "conditions": [
     {
       "id": "blinded",

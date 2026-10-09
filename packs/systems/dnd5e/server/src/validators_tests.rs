@@ -311,11 +311,11 @@ fn resource_data_refuses_a_fourth_death_save() {
 
 #[test]
 fn resource_data_reads_hit_dice_as_dice() {
-    for good in ["3d6", "8d10+24", "3d6-3", "1d4"] {
+    for good in ["3d6", "8d10+24", "3d6-3", "1d4", "3d6+2d4"] {
         let data = json!({"max_hp": 5, "hit_dice": good});
         assert!(validate_resource_data(&data).is_ok(), "{good}");
     }
-    for bad in ["", "d6", "3d", "three d six", "3d6+", "3d6+2d4", "3x6"] {
+    for bad in ["", "d6", "3d", "three d six", "3d6+", "3x6"] {
         let data = json!({"max_hp": 5, "hit_dice": bad});
         assert!(validate_resource_data(&data).is_err(), "{bad:?}");
     }

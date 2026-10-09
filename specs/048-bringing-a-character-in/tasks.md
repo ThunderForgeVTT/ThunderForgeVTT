@@ -143,8 +143,8 @@ Content the world lacks is staged under their name and kept out of play.
 
 ### The 5e pack holds the whole sheet (Q1=C)
 
-- [ ] T026 [P] [US1] Write validator tests in `packs/systems/dnd5e/server/src/validators.rs`'s test module for every row in data-model.md's 5e table. Examples: `level` must equal the sum of `classes`, a pool's `used` must not exceed its `total`, coins cannot be negative, and an unknown damage type is refused.
-- [ ] T027 [US1] Grow `packs/systems/dnd5e/system.json`:
+- [X] T026 [P] [US1] Write validator tests in `packs/systems/dnd5e/server/src/validators.rs`'s test module for every row in data-model.md's 5e table. Examples: `level` must equal the sum of `classes`, a pool's `used` must not exceed its `total`, coins cannot be negative, and an unknown damage type is refused.
+- [X] T027 [US1] Grow `packs/systems/dnd5e/system.json`:
   - the `trait_data`, `resource_data` and `spell_data` fields;
   - a `damageTypes` list;
   - the vocabulary types `feature` and `species_trait`.

@@ -8,62 +8,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// D&D 5e Actor Data - Base stats only (stored in database)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DnD5eActorData {
-    /// Actor ID (token_id in world_tokens)
-    pub id: String,
-
-    /// Class name (e.g., "Rogue", "Cleric", "Wizard")
-    /// Phase 4.8.1 will add multiclassing support
-    pub class: String,
-
-    /// Character level (1-20)
-    pub level: u32,
-
-    /// BASE Ability Scores (before bonuses)
-    pub abilities: AbilityScores,
-
-    /// Proficiencies (skill, saving throw, weapon, armor, tool)
-    pub proficiencies: Proficiencies,
-
-    /// Hit Points (base, not including modifiers)
-    pub hit_points: i32,
-
-    /// Armor Class (base, not including DEX modifier)
-    pub armor_class: i32,
-
-    /// Experience points (for leveling)
-    pub experience: u32,
-
-    /// Money (copper pieces)
-    pub currency: CurrencyPurse,
-
-    /// Features and traits (text descriptions, not calculated)
-    pub features: Vec<String>,
-
-    /// Spell known/prepared list (just names, not availability/slots)
-    pub known_spells: Vec<String>,
-}
-
-impl Default for DnD5eActorData {
-    fn default() -> Self {
-        Self {
-            id: String::new(),
-            class: "Rogue".to_string(),
-            level: 1,
-            abilities: AbilityScores::default(),
-            proficiencies: Proficiencies::default(),
-            hit_points: 8,
-            armor_class: 12,
-            experience: 0,
-            currency: CurrencyPurse::default(),
-            features: vec![],
-            known_spells: vec![],
-        }
-    }
-}
-
 /// Six Ability Scores (Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma)
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct AbilityScores {
@@ -184,16 +128,6 @@ pub struct SavingThrowProficiencies {
     pub charisma: bool,
 }
 
-/// Currency purse (copper pieces are base unit)
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
-pub struct CurrencyPurse {
-    pub platinum: i32, // 100 pp = 1 gp
-    pub gold: i32,     // 10 gp = 1 pp
-    pub electrum: i32, // 5 ep = 1 gp
-    pub silver: i32,   // 10 sp = 1 gp
-    pub copper: i32,   // 100 cp = 1 gp
-}
-
 /// D&D 5e Item Data - Base item information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnD5eItemData {
@@ -257,13 +191,5 @@ mod tests {
         assert_eq!(scores.get("strength"), Some(15));
         assert_eq!(scores.get("STR"), Some(15));
         assert_eq!(scores.get("invalid"), None);
-    }
-
-    #[test]
-    fn test_actor_data_default() {
-        let actor = DnD5eActorData::default();
-        assert_eq!(actor.class, "Rogue");
-        assert_eq!(actor.level, 1);
-        assert_eq!(actor.hit_points, 8);
     }
 }

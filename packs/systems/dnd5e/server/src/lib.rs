@@ -30,8 +30,9 @@ pub mod rules;
 pub mod srd;
 pub mod stat_blocks;
 pub mod validators;
+mod validators_sheet;
 
-pub use models::{AbilityScores, DnD5eActorData, DnD5eItemData, Proficiencies};
+pub use models::{AbilityScores, DnD5eItemData, Proficiencies};
 pub use rules::{ability_modifier, proficiency_bonus, proficiency_bonus_for_challenge, DnD5eRules};
 pub use srd::{get_class, get_skill, get_spell_slots};
 pub use stat_blocks::{stat_blocks, StatBlock};

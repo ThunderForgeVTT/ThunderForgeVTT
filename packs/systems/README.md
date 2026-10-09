@@ -513,6 +513,7 @@ promise nobody keeps, and the place to find that out is before it ships.
 | `abilityVocabulary`, `abilityFacets` | The host's ability editor. `abilityFacets` is the older spelling.                  |
 | `skills`                             | Your own rules, if they publish a value per skill (5e's do). Not the host.         |
 | `conditions`                         | The host: the states a character may be in, and the marker the board draws.        |
+| `damageTypes`                        | Your own validators, which check a resistance names one (5e's do).                 |
 | `wishPoints`                         | Genie's rules.                                                                     |
 | `startingSkills`                     | Roll for Shoes' crate.                                                             |
 
