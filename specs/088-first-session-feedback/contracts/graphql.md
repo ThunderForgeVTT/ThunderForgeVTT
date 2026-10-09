@@ -14,8 +14,9 @@ type Query {
 }
 
 type Mutation {
-  # maxUses 1..50; expiresAt RFC 3339 or null. Defaults: 1 and now + 7 days
-  # when the client leaves them out.
+  # maxUses 1..50 or null (no limit); expiresAt RFC 3339 or null. Defaults:
+  # no limit and now + 7 days when the client leaves them out.
+  # WorldInvite.maxUses becomes nullable; usedCount counts joins.
   generateInviteCode(worldId: UUID!, maxUses: Int, expiresAt: String): WorldInvite!
   revokeInviteCode(...): WorldInvite!   # unchanged
   joinWorld(code: String!): GraphQLWorld!                              # error codes below
@@ -36,9 +37,13 @@ type Mutation {
 | --- | --- |
 | `LINK_REVOKED` | "The GM has withdrawn this link. Ask them for a new one." |
 | `LINK_EXPIRED` | "This link has expired. Ask your GM for a new one." |
-| `LINK_USED_UP` | "This link has already been used. Ask your GM for a new one." |
+| `LINK_USED_UP` | "This link has already been used. Ask your GM for a new one." Only a limited link, and also when a concurrent join took its last use. |
 | `LINK_UNKNOWN` | "There is no world behind this link. Check it was copied whole." |
-| `ALREADY_MEMBER` | not an error: `joinWorld` returns the world, uses nothing, and the page says "You're already in this world." |
+| `ALREADY_MEMBER` | not an error: `joinWorld` returns the world, uses nothing, and the page says "You're already in this world." The world's owner counts as a member. |
+
+A use is counted only when `joinWorld` makes a new membership, in the same
+transaction. `worldByInviteCode`, `alreadyMember`, and every refusal above
+count nothing.
 
 The join page reads the code to show the message. The rate limit on
 `joinWorld` is unchanged, and it is what keeps `LINK_UNKNOWN` from being a

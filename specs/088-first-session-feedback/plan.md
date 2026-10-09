@@ -42,7 +42,7 @@ the tree, for the CSPRNG), react-router-dom 7.18 (declarative). No new
 dependency. Crockford base32 is 20 lines written here, not a crate
 (research.md R3).
 **Storage**: PostgreSQL. Three migrations:
-- `world_invites.max_uses DEFAULT 1`;
+- `world_invites.max_uses` nullable, `NULL` = no limit (the default);
 - `canvas_image_assets.base_map_id TEXT NULL`;
 - `worlds.rolls_cleared_at TIMESTAMPTZ NULL`.
 
@@ -76,7 +76,7 @@ demo, plus three migrations, four guides, and `INSTANCE_CONFIGURATION.md`.
 | III. Ownership and authorization at the data boundary | Each new or changed resolver checks the caller's role per request (`runs_the_world` for links, the clear, and the walls a background adds). `worldByInviteCode` now needs a signed-in caller. The clear rule sits in `rolls/visibility.rs`, the one place a roll's visibility is decided. New rows carry `created_by`/`updated_by`, as their tables do. |
 | IV. Specs before divergent implementation | This spec. Open items are the owner's decisions, each with a default. |
 | V. Verify before claiming done | Each story ends on its slice. The pure cores are written test first. |
-| VI. Every feature is proven by its own slice | The new e2e specs go into existing slices: accounts, worlds, scenes, canvas, actors, rolls, instance and hero-builder. `pnpm e2e:which --diff` names any others. `schema.graphql` and `auth/**` ask for the full suite, and the slices stand in for it (Open item 8). |
+| VI. Every feature is proven by its own slice | The new e2e specs go into existing slices: accounts, worlds, scenes, canvas, actors, rolls, instance and hero-builder. `pnpm e2e:which --diff` names any others. `schema.graphql` and `auth/**` ask for the full suite, and the slices stand in for it (Open item 7). |
 | VII. Telemetry is on, anonymous, redirectable | The events in contracts/telemetry.md carry outcomes and buckets only: no code, id, name or setting value. |
 
 There are no violations.

@@ -25,8 +25,9 @@ decided, and what else was weighed.
   `components/campaign/CampaignSettingsPanel.tsx:116` and
   `components/world/SessionSetupInviteLink.tsx:32`: five uses, no expiry.
 
-**Decision**: keep the table and the mutations, and fill the gaps: the
-default, the limits, the expiry parse, the auth on the read, and a
+**Decision**: keep the table and the mutations, and fill the gaps: an
+optional use limit (the owner's decision: none by default, 1 to 50 when
+set, counted only when someone joins), the limits, the expiry parse, the auth on the read, and a
 distinct refusal per case. **Alternative**: a new `world_links` table. It
 was rejected because the existing one already has every column needed.
 
@@ -44,7 +45,9 @@ and an OAuth flow started from there carries a `sign_in_only` mark in its
 state, so the callback refuses to create a user (FR-009, FR-010). This
 task (T028) touches `auth/oauth.rs` and `auth/instance_access.rs`, which
 `hotfix-invite-uses` also changes, so it merges after that hotfix.
-**Alternative**: bind each link to a named account (Open item 3).
+**Alternative**: bind each link to a named account. Not built: the
+owner decided that a link is exclusive by admitting only existing
+accounts and by being revocable, with an optional use limit.
 
 ### R3 The code
 
@@ -59,7 +62,7 @@ dependency), written as 26 characters of Crockford base32, with no
 ambiguous letters (I, L, O, U). Lookup upper-cases and maps `O`→`0` and
 `I`/`L`→`1` before comparing, so a code read aloud still works. The
 encoder is about 20 lines with its own tests, not a new crate. Old codes
-stay valid (Open item 7), since lookup is by exact match after
+stay valid (Open item 6), since lookup is by exact match after
 normalising, and the old alphabet is a subset.
 
 ### R4 Keeping the page out of indexes and logs
@@ -100,7 +103,7 @@ output into the server image at `/srv/base-maps`, pointed to by
 the web app. **Alternatives**:
 - importing from the `.dd2vtt` files at runtime, which puts a base64
   decode and a WebP encode on every world creation;
-- seeding RustFS with one shared copy (Open item 6).
+- seeding RustFS with one shared copy (Open item 5).
 
 ### R6 The Starting Scene
 
@@ -239,8 +242,8 @@ settings, a single Save that sends one existing call per dirty key, with
 `mail.enabled` last so mail is never switched on before its host is saved,
 and a `useUnsavedChanges` hook for `beforeunload` and in-app navigation.
 **Alternatives**:
-- a transactional bulk mutation (Open item 4);
-- moving to a data router for `useBlocker` (Open item 5).
+- a transactional bulk mutation (Open item 3);
+- moving to a data router for `useBlocker` (Open item 4).
 
 ## US8 Hero polish
 

@@ -68,8 +68,9 @@ still passes. Commit: "Spec 088: the migrations and event 39".
 
 ## Phase 2: User Story 1 - World links (Priority: P1)
 
-**Goal**: GM-only, single-use, revocable links for existing accounts, with
-a clear message for each refusal.
+**Goal**: GM-only, revocable links for existing accounts, with an optional
+use limit counted only when someone joins, and a clear message for each
+refusal.
 
 **Depends on**: `hotfix-world-permissions` (all), `hotfix-invite-uses`
 (T028).
@@ -78,27 +79,28 @@ a clear message for each refusal.
 
 - [ ] T010 [P] [US1] TDD: tests in `graphql/share_codes_tests.rs` for the Crockford encoder (26 characters, alphabet, normalising `O`/`I`/`L`) and for 1000 codes with no repeat. See them fail.
 - [ ] T011 [US1] `generate_link_code()` in `graphql/share_codes.rs`: 16 bytes from `OsRng`, Crockford base32. Lookup normalises before comparing (FR-006). T010 passes.
-- [ ] T012 [P] [US1] Tests in `mutations_invites_tests.rs`: `maxUses` 0 and 51 refused; a bad `expiresAt` refused; a past one refused; the defaults 1 and 7 days when left out (FR-002, contracts/graphql.md).
-- [ ] T013 [US1] `generateInviteCode`: the limits, the expiry parse, the defaults. T012 passes.
-- [ ] T014 [P] [US1] Tests: `joinWorld` returns `LINK_REVOKED`, `LINK_EXPIRED`, `LINK_USED_UP` and `LINK_UNKNOWN`, each with its message, and a member re-joining uses nothing (FR-008).
+- [ ] T012 [P] [US1] Tests in `mutations_invites_tests.rs`: `maxUses` 0 and 51 refused; a bad `expiresAt` refused; a past one refused; no limit and 7 days when left out (FR-002, contracts/graphql.md). Migration M1 (nullable `max_uses`, data-model.md) lands with these.
+- [ ] T013 [US1] `generateInviteCode`: the limits, the expiry parse, the defaults; the join predicate reads `max_uses IS NULL` as no limit. T012 passes.
+- [ ] T014 [P] [US1] Tests: `joinWorld` returns `LINK_REVOKED`, `LINK_EXPIRED`, `LINK_USED_UP` and `LINK_UNKNOWN`, each with its message, and a member re-joining, the owner, a preview and a failed join use nothing (FR-008). The use-counting tests from `hotfix-invite-transactional` (`mutations_invites_use_tests.rs`) stay green.
 - [ ] T015 [US1] `joinWorld`: the four codes in place of `LINK_UNAVAILABLE_MESSAGE` (`mutations_invites.rs:358`). The use is still taken in the membership's transaction. T014 passes.
 - [ ] T016 [US1] `worldByInviteCode` and `alreadyMember` (`queries/invite.rs`) need a signed-in caller, with a test for the signed-out case (FR-007).
 - [ ] T017 [US1] A Tower layer on the `/join/*` and `/invite/*` SPA routes in `apps/thunderforge/src/main.rs`: `X-Robots-Tag: noindex, nofollow`, `Referrer-Policy: no-referrer`. A test asserts both headers, and that `robots.txt` does not disallow the paths (FR-011).
-- [ ] T018 [US1] `apps/web/src/pages/world/players/WorldLinksPanel.tsx` (new): create (1 to 50 uses, 1 d / 7 d / 30 d / none, defaults 1 and 7 d), list (active first, **Past links** folded), copy, and revoke with a confirmation (FR-001, FR-002, FR-004, FR-005). It reads through a fetch hook with `refetch()`, and refetches on the `world_invites` world event. Drawn only when the viewer runs the world.
+- [ ] T018 [US1] `apps/web/src/pages/world/players/WorldLinksPanel.tsx` (new): create (no limit or 1 to 50 uses, 1 d / 7 d / 30 d / none, defaults no limit and 7 d), list (active first, **Past links** folded), copy, and revoke with a confirmation (FR-001, FR-002, FR-004, FR-005). It reads through a fetch hook with `refetch()`, and refetches on the `world_invites` world event. Drawn only when the viewer runs the world.
 - [ ] T019 [US1] Put `WorldLinksPanel` on `PlayersPage.tsx`, and take link management out of `components/campaign/CampaignSettingsPanel.tsx` (the world page's Players card comes in T056).
 - [ ] T020 [P] [US1] `components/world/SessionSetupInviteLink.tsx`: the FR-002 defaults, and a link to the players page (FR-003).
 - [ ] T021 [P] [US1] `pages/world/JoinWorldPage.tsx`: a message per code, "You're already in this world." for a member, and no world name for a signed-out visitor (FR-008, FR-009).
 - [ ] T022 [P] [US1] `pages/auth/LoginPage.tsx`: with a `returnTo` under `/join/`, no **Register** and a line saying world links are for existing accounts (FR-009).
 - [ ] T023 [US1] e2e `apps/web/e2e/world-links.spec.ts` (accounts slice; add it to `scripts/e2e/slices.json` if the slice's globs miss it):
-  - a GM creates a link with the defaults; a player joins; a second account reads the used-up message;
+  - a GM creates a link with the defaults; a player joins; the list shows one join;
+  - a GM creates a one-use link; it is opened and refreshed, and still has its use; a player joins; a second account reads the used-up message;
   - a revoked link reads the revoked message;
   - a player sees no link panel on the players page;
   - signed out, `/join/<code>` leads to a sign-in page with no **Register**;
   - the list updates when the link is used, with no reload.
 - [ ] T024 [P] [US1] Extend `invite-membership.spec.ts` where it asserts the old single message or 5 uses.
 - [ ] T025 [P] [US1] Telemetry: `world_link.created`, `world_link.revoked`, `world_link.join`, and the `thunderforge.world_links.joins` counter (contracts/telemetry.md).
-- [ ] T026 [US1] `pnpm e2e:accounts`, then `pnpm e2e:which --diff` and each slice it names (not the full suite: Open item 8).
-- [ ] T027 [US1] Commit: "Spec 088: GM-only, single-use world links with a reason for every refusal".
+- [ ] T026 [US1] `pnpm e2e:accounts`, then `pnpm e2e:which --diff` and each slice it names (not the full suite: Open item 7).
+- [ ] T027 [US1] Commit: "Spec 088: GM-only world links with an optional use limit and a reason for every refusal".
 - [ ] T028 [US1] **After `hotfix-invite-uses` is on main.** OAuth sign-in only from a join page (FR-010): the authorize step marks the state `sign_in_only` when `returnTo` is under `/join/`, and the callback (`auth/oauth.rs:394`) refuses to create a user for it, with the FR-010 message and the `thunderforge.world_links.oauth_refused` counter. Tests in `auth/` for `open`, `invite_only` and `closed` modes (SC-002). An e2e case in `world-links.spec.ts` with the mock OAuth provider. Run `pnpm e2e:accounts`.
 - [ ] T029 [US1] Commit: "Spec 088: a world link never creates an account".
 
@@ -261,7 +263,7 @@ losing changes.
 
 ## Phase 10: Docs and proof
 
-- [ ] T110 [P] `docs/guides/inviting-players.md` (new): world links, single use, expiry, revoking, and why a new person needs an instance invitation (FR-080).
+- [ ] T110 [P] `docs/guides/inviting-players.md` (new): world links, the optional use limit and when a use counts, expiry, revoking, and why a new person needs an instance invitation (FR-080).
 - [ ] T111 [P] `docs/guides/your-first-world.md` (new): the starting map, **None**, and the credit.
 - [ ] T112 [P] `docs/guides/rolls.md`: clearing, and what clearing keeps.
 - [ ] T113 [P] `docs/guides/doors-and-walls.md`: the edge walls, the box, and how to remove them.

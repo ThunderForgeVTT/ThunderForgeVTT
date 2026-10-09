@@ -149,12 +149,20 @@ branches still pointed at `caafdd6d`, with their work uncommitted.
   never creates an account, whether by registration or by OAuth. To bring
   someone new to the instance, the administrator sends an instance
   invitation; that is unchanged.
-- **"Exclusive" means single-use by default.** A new link admits one
-  account and expires after 7 days. The GM may allow up to 50 uses, and may
-  pick 1 day, 7 days, 30 days or no expiry. There is no unlimited link: the
-  table's own `CHECK (max_uses > 0)` already says so, and the column default
-  moves from 0 to 1 to agree with it. Binding a link to one named account is
-  Open item 3.
+- **"Exclusive" means members only, revocable, and limited if the GM
+  wants.** The owner's decision, 2026-10-09. A world link admits only an
+  account that already exists on the instance (above), and the GM can
+  revoke it at any time. A use limit is optional: by default a link has
+  none, and the GM may set one from 1 to 50. A new link expires after 7
+  days; the GM may pick 1 day, 7 days, 30 days or no expiry. A link is not
+  bound to one named account.
+- **A use counts only when someone joins.** A use is spent only when an
+  account becomes a new member of the world, in the same transaction as
+  the membership row. Opening the link, viewing the join page, a crawler
+  or a link preview, a refresh, a second click, an account that is
+  already a member (the owner included), and a join that fails all spend
+  nothing. A limited link whose last use is taken by a concurrent join
+  refuses as used up.
 - **A refused link says why**, to a signed-in holder: revoked, expired,
   used up, or not a link at all. This reverses the single
   `LINK_UNAVAILABLE_MESSAGE` at the owner's request. Someone who holds the
@@ -193,8 +201,9 @@ branches still pointed at `caafdd6d`, with their work uncommitted.
 
 The GM opens the players page, makes a link for a player, and copies it.
 The player, already signed in to ThunderForge, opens it and joins the
-world. The link is then used up. The GM revokes a second link they shared by
-mistake, and the person who opens it is told it was revoked.
+world, and the link counts one join. A link the GM limited to one use is
+then used up. The GM revokes a second link they shared by mistake, and the
+person who opens it is told it was revoked.
 
 **Why this priority**: the GM shared a link in a group chat during the
 session. Anyone holding it could use it five times, forever, and the GM had
@@ -208,11 +217,16 @@ to find its controls on a different page.
 **Acceptance Scenarios**:
 
 1. **Given** a GM on the players page, **When** they create a link with the
-   defaults, **Then** it is listed with 1 use left and an expiry 7 days
+   defaults, **Then** it is listed with no use limit and an expiry 7 days
    away, and a Copy button puts its URL on the clipboard.
 2. **Given** a signed-in account that is not a member, **When** it opens an
    active link and joins, **Then** it is a Player in the world, and the
-   GM's list shows the link as used up without a reload.
+   GM's list shows one join on the link without a reload. A link limited to
+   one use shows as used up.
+2a. **Given** a link limited to one use, **When** it is opened, its join
+   page viewed and refreshed, and an existing member (the owner included)
+   presses Join, **Then** the link still has its one use, and the next new
+   member to join spends it.
 3. **Given** a revoked link, **When** a signed-in account opens it, **Then**
    it reads "This invite link was revoked by the world's Game Master. Ask
    them for a new one." and no Join button is shown.
@@ -466,12 +480,12 @@ puts the player back where they started.
 
 ### Edge Cases
 
-- **A link opened in the wrong account.** Someone opens a single-use link
-  while signed in as their second account. It joins that account and uses
-  the link up. The page names the account before the Join button, so they
-  can sign out first.
+- **A link opened in the wrong account.** Someone opens a link while
+  signed in as their second account. It joins that account, and a limited
+  link counts the use. The page names the account before the Join button,
+  so they can sign out first. Opening the page alone spends nothing.
 - **Old links.** Links made before this spec still have 5 uses and no
-  expiry. They keep working, are listed, and can be revoked (Open item 7).
+  expiry. They keep working, are listed, and can be revoked (Open item 6).
   Old 8- and 20-character codes stay valid. Lookup is not case-sensitive
   for new codes; old codes are uppercase hex, so they are unaffected.
 - **A rotated link.** `rotateInviteCode` is unchanged. The panel shows a
@@ -488,7 +502,7 @@ puts the player back where they started.
   (`collections/rescue.rs:169`) also calls `insert_world_sync`. It gets no
   map: nobody chose one.
 - **A world deleted later.** The map's copy is the world's own asset, so it
-  goes with the world, like any background (Open item 6).
+  goes with the world, like any background (Open item 5).
 - **A clear while a roll is in flight.** A roll committed after the clear
   time is shown. One committed before it is hidden, even if its event
   arrives after the clear event.
@@ -509,12 +523,12 @@ puts the player back where they started.
 - **A cleared background.** Clearing a background removes no walls. The
   perimeter is the GM's to delete.
 - **A resized scene.** A GM who resizes a scene by hand does not get a new
-  perimeter (Open item 10).
+  perimeter (Open item 9).
 - **The secret field.** The password is never compared with a loaded
   value, because the client never has one. It is dirty if and only if
   something is typed, or **Clear password** was pressed.
 - **The Back button.** In declarative routing, browser Back cannot be
-  cancelled before the route changes. Open item 5.
+  cancelled before the route changes. Open item 4.
 - **A setting changed elsewhere.** If another admin saves while this form
   is open, this form's baseline is stale. Saving sends only this admin's
   changed keys, so the other admin's untouched keys survive. A key changed
@@ -531,13 +545,15 @@ puts the player back where they started.
   copy and revoke. The panel MUST NOT be drawn for anyone else.
   `CampaignSettingsPanel`'s link management MUST move there. The world page
   keeps a summary card (FR-033).
-- **FR-002**: Create MUST default to 1 use and a 7-day expiry. Uses MUST be
-  1 to 50, and the expiry one of 1 day, 7 days, 30 days or none.
-  `generateInviteCode` MUST refuse a `maxUses` outside 1 to 50, and MUST
+- **FR-002**: Create MUST default to no use limit and a 7-day expiry. A use
+  limit, when the GM sets one, MUST be 1 to 50, and the expiry one of 1
+  day, 7 days, 30 days or none. `generateInviteCode` MUST treat a missing
+  `maxUses` as no limit, MUST refuse a `maxUses` outside 1 to 50, and MUST
   refuse an `expiresAt` that is not RFC 3339, instead of ignoring it.
 - **FR-003**: `SessionSetupInviteLink` MUST create links with the same
   defaults as FR-002, and MUST link to the players page for management.
-- **FR-004**: The list MUST show, for each link: its uses left, its expiry,
+- **FR-004**: The list MUST show, for each link: its joins, and its uses
+  left when it has a limit, its expiry,
   who created it, when, and its state. Active links come first; revoked,
   expired and used-up links are folded under **Past links**. The list MUST
   update when a link is used or revoked, through the existing world-event
@@ -552,9 +568,12 @@ puts the player back where they started.
   caller, and MUST return nothing to anyone else.
 - **FR-008**: `joinWorld` and the join page MUST tell these cases apart, each
   with its message and error code (contracts/graphql.md): revoked, expired,
-  used up, unknown, and already a member. The check MUST still use no use
-  for a member, and MUST still take a use in the same transaction as the
-  membership.
+  used up, unknown, and already a member. A use MUST be counted only when
+  the account becomes a new member, in the same transaction as the
+  membership row. Viewing the link or its join page, an existing member
+  (the world's owner included), and a join that fails MUST count nothing.
+  A limited link whose last use a concurrent join took MUST refuse as used
+  up.
 - **FR-009**: A signed-out visitor to `/join/<code>` MUST be asked to sign in
   with an existing account. The sign-in page reached from there
   (`returnTo=/join/...`) MUST NOT offer registration. It MUST NOT show the
@@ -568,8 +587,13 @@ puts the player back where they started.
   `Referrer-Policy: no-referrer` on `/join/*` and `/invite/*`. The pages keep
   their `noindex` meta. `robots.txt` MUST NOT disallow these paths, so that
   a crawler can read the header.
-- **FR-012**: A migration MUST set `world_invites.max_uses DEFAULT 1`, to
-  agree with its `CHECK (max_uses > 0)`.
+- **FR-012**: A migration MUST make `world_invites.max_uses` nullable, with
+  `NULL` meaning no limit and as the default, and replace its checks with
+  `CHECK (max_uses IS NULL OR max_uses > 0)` and
+  `CHECK (max_uses IS NULL OR used_count <= max_uses)`. `used_count` keeps
+  counting joins on a link with no limit. Today's default of 0 is one the
+  `CHECK (max_uses > 0)` refuses, and the join predicate's "0 means
+  unlimited" branch can never match.
 
 **US2 Base maps**
 
@@ -764,8 +788,9 @@ puts the player back where they started.
 **Docs**
 
 - **FR-080**: These guides MUST be written or extended:
-  - `docs/guides/inviting-players.md` (new): world links, single use,
-    revoking, and why a new person needs an instance invitation;
+  - `docs/guides/inviting-players.md` (new): world links, the optional use
+    limit and when a use counts, revoking, and why a new person needs an
+    instance invitation;
   - `docs/guides/your-first-world.md` (new): the starting map, **None**, and
     the credit;
   - `docs/guides/rolls.md`: clearing rolls, and what clearing keeps;
@@ -777,8 +802,8 @@ puts the player back where they started.
 
 ### Key Entities
 
-- **World link**: a `world_invites` row. It gains no column; its default
-  changes, and its code gets a new generator.
+- **World link**: a `world_invites` row. It gains no column; `max_uses`
+  becomes nullable (no limit), and its code gets a new generator.
 - **Base map**: an entry in the base-maps directory's `maps.json`. It is
   served, not stored in the database.
 - **Map credit**: the one credit in `examples/maps/credit.json`. A
@@ -795,8 +820,10 @@ puts the player back where they started.
 
 ### Measurable Outcomes
 
-- **SC-001**: A default link admits exactly one account. A second account
-  opening it reads the used-up message. A revoked link admits nobody, and
+- **SC-001**: A link limited to one use admits exactly one account, however
+  often it is opened. A second account opening it after the join reads the
+  used-up message. A default link admits every existing account that joins
+  until it expires or is revoked. A revoked link admits nobody, and
   its message names revocation.
 - **SC-002**: No path through a world link creates an account: not local
   registration, and not OAuth, in `open`, `invite_only` or `closed` mode.
@@ -841,7 +868,7 @@ its own slice as it lands. Then, after the final phase:
   - `pnpm e2e:instance` (US7);
 - `pnpm e2e:which --diff`, with each slice it names run. If it names the
   full suite (`schema.graphql` and `auth/**` are cross-cutting), the slices
-  above stand in for it (Open item 8).
+  above stand in for it (Open item 7).
 
 The full suite (`e2e-parallel`) is not run.
 
@@ -870,38 +897,34 @@ unless the owner says otherwise.
 2. **The default choice at world creation.** Default: the GM sees the picker
    with the default map selected. The alternatives are no picker at all, or
    **None** selected.
-3. **Binding a link to one account.** Default: not built. A link is
-   exclusive by being single-use. The alternative is to let the GM name the
-   account a link is for, which needs an account lookup the GM can use, and
-   that lookup would let a GM enumerate usernames.
-4. **Saving mail settings atomically.** Default: one `updateInstanceSetting`
+3. **Saving mail settings atomically.** Default: one `updateInstanceSetting`
    per changed key, in order, with `mail.enabled` last. This keeps the
    server's one-key design. The alternative is a new transactional
    `updateInstanceSettings` mutation, so that a host and a port are never
    saved apart.
-5. **The Back button.** Default: no router change. The guard covers reload,
+4. **The Back button.** Default: no router change. The guard covers reload,
    closing the tab, in-app links and section switches, but not browser Back.
    Covering Back means moving to a data router (`createBrowserRouter`, for
    `useBlocker`). That touches `routes/**` and `main.tsx`, which is a
    cross-cutting change with its own spec.
-6. **One copy of a base map per world.** Default: each world gets its own
+5. **One copy of a base map per world.** Default: each world gets its own
    copy, about 1 to 3 MB, so deleting a world or replacing its background
    behaves as for any image. The alternative is one shared, de-duplicated
    asset per map, which saves storage but needs reference counting in
    deletion.
-7. **Links made before this spec.** Default: they keep working with their 5
+6. **Links made before this spec.** Default: they keep working with their 5
    uses and no expiry, are listed, and can be revoked. The alternative is a
    migration that expires every link without an expiry, which would break
    links already shared on vtt-dev.
-8. **Slices in place of the full suite.** Default: the Proof slices stand in
+7. **Slices in place of the full suite.** Default: the Proof slices stand in
    for it, as for every other change, even though `schema.graphql` and
    `auth/**` are cross-cutting paths.
-9. **The ultrawide cap.** Default: 1800 px, the same as `WorldSectionShell`.
+8. **The ultrawide cap.** Default: 1800 px, the same as `WorldSectionShell`.
    The alternative is full width, which gives very long lines at 3840 px.
-10. **Edge walls on a resize.** Default: no. The perimeter is added only at
-    import, and when a background is set. A GM who resizes a scene by hand
-    keeps the walls they have. The alternative is to move the perimeter on
-    a resize too.
+9. **Edge walls on a resize.** Default: no. The perimeter is added only at
+   import, and when a background is set. A GM who resizes a scene by hand
+   keeps the walls they have. The alternative is to move the perimeter on
+   a resize too.
 
 ## Later
 

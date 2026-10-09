@@ -5,17 +5,35 @@ client-side models. Nothing is dropped or rewritten.
 
 ## Migrations
 
-### M1 `world_invites_default_one` (US1, FR-012)
+### M1 `world_invites_optional_limit` (US1, FR-012)
 
 ```sql
 -- up
-ALTER TABLE world_invites ALTER COLUMN max_uses SET DEFAULT 1;
--- down
+ALTER TABLE world_invites DROP CONSTRAINT positive_max_uses;
+ALTER TABLE world_invites DROP CONSTRAINT valid_used_count;
+ALTER TABLE world_invites ALTER COLUMN max_uses DROP NOT NULL;
+ALTER TABLE world_invites ALTER COLUMN max_uses SET DEFAULT NULL;
+ALTER TABLE world_invites
+    ADD CONSTRAINT positive_max_uses CHECK (max_uses IS NULL OR max_uses > 0),
+    ADD CONSTRAINT valid_used_count
+        CHECK (used_count >= 0 AND (max_uses IS NULL OR used_count <= max_uses));
+-- down: a link with no limit gets one it has not reached
+UPDATE world_invites SET max_uses = GREATEST(used_count, 1) + 50 WHERE max_uses IS NULL;
+ALTER TABLE world_invites DROP CONSTRAINT positive_max_uses;
+ALTER TABLE world_invites DROP CONSTRAINT valid_used_count;
+ALTER TABLE world_invites ALTER COLUMN max_uses SET NOT NULL;
 ALTER TABLE world_invites ALTER COLUMN max_uses SET DEFAULT 0;
+ALTER TABLE world_invites
+    ADD CONSTRAINT positive_max_uses CHECK (max_uses > 0),
+    ADD CONSTRAINT valid_used_count CHECK (used_count >= 0 AND used_count <= max_uses);
 ```
 
-No row changes. Links made before this keep their uses and expiry
-(Open item 7). `code` keeps its type (`TEXT`): the new codes are 26
+`NULL` is no limit. `used_count` still counts every join, limited or not,
+and is incremented only in the membership's transaction (FR-008). The
+join predicate's `max_uses = 0` branch becomes `max_uses IS NULL`.
+
+No existing row changes. Links made before this keep their uses and expiry
+(Open item 6). `code` keeps its type (`TEXT`): the new codes are 26
 characters, the old ones 20.
 
 ### M2 `base_map_assets` (US2, FR-029)
