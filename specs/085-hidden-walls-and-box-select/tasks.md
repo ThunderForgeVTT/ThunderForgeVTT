@@ -216,7 +216,7 @@ that passes them.
   - a token of theirs hidden by sight inside the box is not taken;
   - a group drag where one path crosses a wall leaves that token back and the other moved, on both boards;
   - one toast says "1 of 2 could not be moved." (SC-004).
-- [ ] T033 [US3] `pnpm e2e:canvas` green.
+- [x] T033 [US3] `pnpm e2e:canvas` green.
 
 **Checkpoint**: All three stories green.
 
@@ -225,8 +225,8 @@ that passes them.
 ## Phase 6: Polish & Proof
 
 - [x] T034 [P] `docs/guides/doors-and-walls.md`: hiding any wall from the table, and that a hidden wall still blocks and casts a shadow. `docs/guides/lights-and-drawings.md`: selecting several things with a box, shift, the Select bar, and what a player's box takes.
-- [ ] T035 [P] Demo check: in `pnpm -F @thunderforge/demo dev`, hide a wall and box a group as the GM and as a player (quickstart.md). It should need no `apps/demo` change. If one is needed, add it with a test in `apps/demo/src/backend/` and record why here.
-- [ ] T036 Run the following, each green:
+- [x] T035 [P] Demo check: in `pnpm -F @thunderforge/demo dev`, hide a wall and box a group as the GM and as a player (quickstart.md). It should need no `apps/demo` change. If one is needed, add it with a test in `apps/demo/src/backend/` and record why here.
+- [x] T036 Run the following, each green:
   - `make lint`;
   - `cargo test -p thunderforge-canvas-core`;
   - `cargo test -p thunderforge-engine`;
