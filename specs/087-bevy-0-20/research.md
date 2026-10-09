@@ -176,6 +176,19 @@ engine there would have put 0.20 under spec 086's runs. `make lint`
 says the change "improved performance in many cases". WebGL2 with
 thousands of instanced sprites is the case we measure (SC-003).
 
+**Result (T030)**: in 0.20 a token's quad is a `Mesh2d` with a
+`SpriteMeshMaterial`, in the `Mesh2d` visibility class; `Text2d` glyphs
+stay in the `Sprite` class and in `ExtractedSprites`. Left alone, the
+probe's two render-world counts fell from 748 to 474, the glyphs only,
+while the board drew every token. The probe now tells a sprite quad apart
+in the render world by its material (`RenderMaterial2dInstances`, the
+asset type `SpriteMeshMaterial`) and adds those to the glyphs, so each
+line keeps its label and its 0.19.1 meaning. It also logs the split, as
+a new line: `render: extracted text=… sprite meshes=…`. On the
+3200-token level, a dev 0.20 engine gives 3202 / 274 / 750 / 748 / 748,
+the baseline's counts exactly, with 474 text and 274 sprite meshes.
+`EngineStats` is unchanged.
+
 ## R6. Generic extraction
 
 **Decision**: add `#[extract_app(RenderApp)]` to `RenderProbeEnabled` if
@@ -308,6 +321,32 @@ demo) could make the two disagree by an ulp at a reach or budget boundary.
 The combat slice and `cargo test -p thunderforge-combat` cover this. A
 disagreement would be a finding for the owner, not something to tune
 away.
+
+**Result (T031–T034)**: no test changed.
+
+- canvas-core: 567 passed, 0 failed.
+- engine: 365 passed, 0 failed.
+- server (`RUST_MIN_STACK=16777216`): 1992 passed, 0 failed, 6 ignored.
+  Movement, reach, budget and redaction come out as before. In the run
+  beside another build, the doc-test step failed to find
+  `thunderforge_canvas_core` (E0463); `cargo test -p thunderforge-server
+  --doc` alone passes (the crate has no doc tests), so that was the
+  shared target directory, not the upgrade.
+- combat: all pass.
+- No fixture compared the host and wasm32 builds, so T034 adds one:
+  `crates/thunderforge-combat/tests/float_parity.json`, five reach cases
+  and seven move-cost cases on square, hex and gridless grids, at
+  awkward coordinates, with a wall and a large creature. The host test
+  (`tests/float_parity.rs`) and the demo's
+  `src/backend/handlers/floatParity.test.ts`, which loads
+  `dist/combat/combat_bg.wasm`, both assert each result bit for bit,
+  `-0.0` included. Both pass on glam 0.33, so x86_64 and wasm32 agree.
+- web: 906 tests in 111 files pass, and `typecheck` is clean. demo: 161
+  in 20 files (its `combat.test.ts` needs `pnpm -F @thunderforge/demo run
+  maps` first in a fresh worktree).
+- Scene switch (T036): `unload_previous_scene` despawns each token with
+  `commands.entity(e).despawn()`, which in 0.20 still despawns
+  `Children` recursively. No change; the scenes slice runs it.
 
 ## R16. wgpu 30 and wesl
 

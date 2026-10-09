@@ -42,9 +42,11 @@ use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use bevy::prelude::*;
 use bevy::render::extract_resource::{ExtractResource, ExtractResourcePlugin};
 use bevy::render::render_phase::ViewSortedRenderPhases;
+use bevy::render::sync_world::MainEntity;
 use bevy::render::view::{ExtractedView, RenderVisibleEntities};
 use bevy::render::{Render, RenderApp, RenderSystems};
-use bevy::sprite_render::ExtractedSprites;
+use bevy::sprite_render::{ExtractedSprites, RenderMaterial2dInstances, SpriteMeshMaterial};
+use std::any::TypeId;
 
 /// Whether the probe is currently drawing and tracing. Toggled by the
 /// `set_render_probe` external command (see `lib.rs`).
@@ -176,15 +178,19 @@ fn trace_main_world(
 fn trace_render_phases(
     enabled: Option<Res<RenderProbeEnabled>>,
     phases: Option<Res<ViewSortedRenderPhases<Transparent2d>>>,
-    // Mirrors the shape of `queue_sprites`' own view query. `Msaa` is in
-    // there deliberately: that system requires it on the view, so a view
-    // entity without one is silently skipped and queues nothing at all.
+    // Mirrors the shape of the 2D queue systems' own view query. `Msaa` is in
+    // there deliberately: they require it on the view, so a view entity
+    // without one is silently skipped and queues nothing at all.
     views: Query<(&RenderVisibleEntities, &ExtractedView, &Msaa)>,
     views_without_msaa: Query<&ExtractedView, Without<Msaa>>,
-    // The output of `extract_sprites`. `queue_sprites` iterates exactly this
-    // list, so an empty one queues nothing regardless of how healthy the
-    // view and its visible-entity set look.
-    extracted: Option<Res<ExtractedSprites>>,
+    // Since Bevy 0.20 a `Sprite` is drawn as a `Mesh2d` with a
+    // `SpriteMeshMaterial`. This map is how the render world knows which
+    // material each extracted mesh carries, so it is what tells a sprite's
+    // quad apart from any other `Mesh2d` (the darkness overlay, dice).
+    materials: Option<Res<RenderMaterial2dInstances>>,
+    // What is left on the old sprite backend: `Text2d` glyphs. Nameplates
+    // and dice readouts are extracted here, and nothing else is.
+    extracted_text: Option<Res<ExtractedSprites>>,
     mut frame: Local<u32>,
 ) {
     if !enabled.is_some_and(|e| e.0) {
@@ -217,7 +223,7 @@ fn trace_render_phases(
         let _ = view;
     }
 
-    // Does `queue_sprites`' view query match anything at all?
+    // Does the queue systems' view query match anything at all?
     info!(
         target: "render_probe",
         "render: views matching (RenderVisibleEntities, ExtractedView, Msaa)={} · views missing Msaa={}",
@@ -225,27 +231,58 @@ fn trace_render_phases(
         views_without_msaa.iter().count(),
     );
 
+    let sprite_material = TypeId::of::<SpriteMeshMaterial>();
+    let is_sprite_mesh = |entity: &MainEntity| {
+        materials
+            .as_ref()
+            .and_then(|m| m.get(entity))
+            .is_some_and(|id| id.type_id() == sprite_material)
+    };
+
+    // The count keeps its 0.19 meaning — every sprite and glyph copied into
+    // the render world — so a line from before the upgrade still compares.
+    let text = extracted_text.map_or(0, |e| e.sprites.len());
+    let sprite_meshes = materials.as_ref().map_or(0, |m| {
+        m.iter()
+            .filter(|(_, id)| id.type_id() == sprite_material)
+            .count()
+    });
     info!(
         target: "render_probe",
         "render: ExtractedSprites={}",
-        extracted.map_or_else(|| "<resource missing>".to_string(), |e| e.sprites.len().to_string()),
+        text + sprite_meshes,
+    );
+    info!(
+        target: "render_probe",
+        "render: extracted text={text} sprite meshes={sprite_meshes}",
     );
 
-    // And for the views that do match, is the sprite visibility class
-    // populated? `queue_sprites` skips every extracted sprite that is not in
-    // this set, so an empty set queues nothing even when sprites extracted
-    // fine and reported `view_visible == true` in the main world.
+    // And for the views that do match, is anything sprite-like visible? The
+    // queue systems skip every extracted entity that is not in its class's
+    // set, so an empty set queues nothing even when everything extracted fine
+    // and reported `view_visible == true` in the main world. The label keeps
+    // its 0.19 name; the count is the glyphs in the `Sprite` class plus the
+    // sprite quads in the `Mesh2d` class.
     for (visible, _, _) in views.iter() {
+        let glyphs = visible
+            .get::<Sprite>()
+            .map_or(0, |class| class.entities_cpu_culling.len());
+        let quads = visible.get::<Mesh2d>().map_or(0, |class| {
+            class
+                .entities_cpu_culling
+                .iter()
+                .filter(|(_, main)| is_sprite_mesh(main))
+                .count()
+                + class
+                    .entities_gpu_culling
+                    .keys()
+                    .filter(|main| is_sprite_mesh(main))
+                    .count()
+        });
         info!(
             target: "render_probe",
             "render: view RenderVisibleEntities<Sprite>={}",
-            // Bevy 0.19 replaced `iter::<Sprite>()` with a per-class lookup.
-            // Sprites are CPU-culled, so `entities_cpu_culling` is the list
-            // `queue_sprites` walks; an absent class means nothing sprite-like
-            // is visible from this view, which is the same zero.
-            visible
-                .get::<Sprite>()
-                .map_or(0, |class| class.entities_cpu_culling.len()),
+            glyphs + quads,
         );
     }
 }

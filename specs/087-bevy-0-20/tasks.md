@@ -92,19 +92,19 @@ one glam and one wgpu.
 **Goal**: every unit test passes, and the server's adjudication is
 unchanged.
 
-- [ ] T030 [US3] Move the render probe to 0.20 (FR-007, contracts/render-probe.md):
+- [x] T030 [US3] Move the render probe to 0.20 (FR-007, contracts/render-probe.md):
   - In `plugins/render_probe.rs`, read the visible, extracted and phase counts from the Mesh2d sprite pipeline.
   - Log `ExtractedSprites` as text if it still exists.
   - Keep the line's labels, and replace the comments that name `extract_sprites`/`queue_sprites`.
   - Leave `EngineStats` unchanged (data-model.md).
-- [ ] T031 [US2] `cargo test -p thunderforge-canvas-core`. Each failure is examined first:
+- [x] T031 [US2] `cargo test -p thunderforge-canvas-core`. Each failure is examined first:
   - **A float-only difference from glam 0.33** (R15), for example `door_icon_tests.rs:204`, `grid.rs:611` or `camera.rs:231`: it may move to an approximate comparison with a tolerance of at most `1e-5` (FR-006). List each such test here, with the old and new values.
   - **Anything else** is a regression and is fixed in code.
-- [ ] T032 [US2] `cargo test -p thunderforge-engine`, under the same rule as T031.
-- [ ] T033 [US2] `RUST_MIN_STACK=16777216 cargo test -p thunderforge-server` and `cargo test -p thunderforge-combat`. The server's movement and combat (reach, budget, redaction) tests pass unchanged. A changed result in them is a finding for the owner, not something to tune (R15).
-- [ ] T034 [P] [US2] Add a test in `crates/thunderforge-combat` that runs the same reach and budget fixtures as the server's tests and asserts the results bit for bit. Run it with `cargo test` (host) and through the combat wasm build. This catches FMA disagreement between x86_64 and wasm32 (R15). If such a fixture already exists, point to it here instead.
-- [ ] T035 [P] [US2] `pnpm -F @thunderforge/web test` and `pnpm -F @thunderforge/web typecheck`.
-- [ ] T036 [US2] Scene switch: confirm `scene_transition.rs:203` `unload_previous_scene` still empties the old scene under 0.20's despawn. Expect no change. `despawn_all` is listed under Later.
+- [x] T032 [US2] `cargo test -p thunderforge-engine`, under the same rule as T031.
+- [x] T033 [US2] `RUST_MIN_STACK=16777216 cargo test -p thunderforge-server` and `cargo test -p thunderforge-combat`. The server's movement and combat (reach, budget, redaction) tests pass unchanged. A changed result in them is a finding for the owner, not something to tune (R15).
+- [x] T034 [P] [US2] Add a test in `crates/thunderforge-combat` that runs the same reach and budget fixtures as the server's tests and asserts the results bit for bit. Run it with `cargo test` (host) and through the combat wasm build. This catches FMA disagreement between x86_64 and wasm32 (R15). If such a fixture already exists, point to it here instead.
+- [x] T035 [P] [US2] `pnpm -F @thunderforge/web test` and `pnpm -F @thunderforge/web typecheck`.
+- [x] T036 [US2] Scene switch: confirm `scene_transition.rs:203` `unload_previous_scene` still empties the old scene under 0.20's despawn. Expect no change. `despawn_all` is listed under Later.
 
 **Checkpoint**: all unit tests are green. Any test that was changed is
 listed in T031 and T032.
