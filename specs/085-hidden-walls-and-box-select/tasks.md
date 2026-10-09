@@ -232,7 +232,7 @@ that passes them.
   - `cargo test -p thunderforge-engine`;
   - `pnpm -F @thunderforge/web test`;
   - `pnpm -F @thunderforge/web typecheck`.
-- [ ] T037 **Proof**: `pnpm e2e:canvas`, which runs `apps/web/e2e/canvas-box-select.spec.ts`. Then `pnpm e2e:which --diff`, and run each slice it names. No cross-cutting path changes, so the full suite is not required.
+- [x] T037 **Proof**: `pnpm e2e:canvas`, which runs `apps/web/e2e/canvas-box-select.spec.ts`. Then `pnpm e2e:which --diff`, and run each slice it names. No cross-cutting path changes, so the full suite is not required.
 
 ---
 
