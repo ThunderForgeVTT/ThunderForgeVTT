@@ -14,21 +14,21 @@ behaviour can. **0** means we do not use the item.
 
 ## Summary table
 
-| #   | 0.20 change                                               | Our count                                   | Kind     |
-| --- | --------------------------------------------------------- | ------------------------------------------- | -------- |
-| R4  | WESL shaders replace naga_oil `#import`/`#{...}`          | 1 file (`darkness.wgsl`), 2 directives      | Hit      |
-| R5  | Sprites drawn as Mesh2d + `SpriteMaterial`                | `render_probe.rs` (4 internals); 75 `Sprite` in 24 files | Hit + implicit |
-| R6  | `ExtractResource`/`ExtractComponent` need `#[extract_app]` | 1 (`RenderProbeEnabled`)                    | Hit (maybe) |
-| R7  | Weak ordering of built-in sets                            | 1 (`render_probe.rs:84`)                     | Check    |
-| R8  | `Camera2d` defaults to `Tonemapping::Linear`              | 16 spawns in 11 files                       | Implicit |
-| R9  | Same-z sprite order under the new backend                 | every token on a shared square              | Implicit |
-| R10 | `Sprite.alpha_mode` field added                           | 5 literals, all `..default()`               | 0        |
-| R11 | `TextFont` default size is `Rem(1.)`                      | 9 in 4 files, all set `FontSize::Px`        | 0        |
-| R12 | `NextState::set_if_neq` → `set_if_different`              | 0 (9 `set_if_neq` are `DetectChangesMut`)   | 0        |
-| R13 | Observers `On<Add, A>` → `On<Add<A>>`, flat pointer events | 0                                          | 0        |
-| R14 | Smaller renames and removals                              | 0 each                                      | 0        |
-| R15 | glam 0.32 → 0.33                                          | canvas-core and all its dependants          | Implicit |
-| R16 | wgpu 29 → 30, wesl replaces naga_oil                      | lockfile                                    | Implicit |
+| #   | 0.20 change                                                | Our count                                                | Kind           |
+| --- | ---------------------------------------------------------- | -------------------------------------------------------- | -------------- |
+| R4  | WESL shaders replace naga_oil `#import`/`#{...}`           | 1 file (`darkness.wgsl`), 2 directives                   | Hit            |
+| R5  | Sprites drawn as Mesh2d + `SpriteMaterial`                 | `render_probe.rs` (4 internals); 75 `Sprite` in 24 files | Hit + implicit |
+| R6  | `ExtractResource`/`ExtractComponent` need `#[extract_app]` | 1 (`RenderProbeEnabled`)                                 | Hit (maybe)    |
+| R7  | Weak ordering of built-in sets                             | 1 (`render_probe.rs:84`)                                 | Check          |
+| R8  | `Camera2d` defaults to `Tonemapping::Linear`               | 16 spawns in 11 files                                    | Implicit       |
+| R9  | Same-z sprite order under the new backend                  | every token on a shared square                           | Implicit       |
+| R10 | `Sprite.alpha_mode` field added                            | 5 literals, all `..default()`                            | 0              |
+| R11 | `TextFont` default size is `Rem(1.)`                       | 9 in 4 files, all set `FontSize::Px`                     | 0              |
+| R12 | `NextState::set_if_neq` → `set_if_different`               | 0 (9 `set_if_neq` are `DetectChangesMut`)                | 0              |
+| R13 | Observers `On<Add, A>` → `On<Add<A>>`, flat pointer events | 0                                                        | 0              |
+| R14 | Smaller renames and removals                               | 0 each                                                   | 0              |
+| R15 | glam 0.32 → 0.33                                           | canvas-core and all its dependants                       | Implicit       |
+| R16 | wgpu 29 → 30, wesl replaces naga_oil                       | lockfile                                                 | Implicit       |
 
 ## R1. Versions and toolchain
 
@@ -198,7 +198,7 @@ the build asks for it.
 
 - One `ExtractResource`: `render_probe.rs:43/55/68`,
   `#[derive(Resource, Default, Debug, Clone, ExtractResource)] pub struct
-  RenderProbeEnabled(pub bool);`.
+RenderProbeEnabled(pub bool);`.
 - `ExtractComponent` and `SyncComponent`: 0.
 - The guide says extraction is generic over the target app in the new
   `bevy_extract` crate, and that the derives need `#[extract_app(...)]`.
@@ -262,23 +262,23 @@ changed (FR-009).
 
 ## R10–R14. Changes that do not hit us
 
-| Item                                                                                  | Count | Note                                                                                                                         |
-| ------------------------------------------------------------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `Sprite.alpha_mode` (defaults to Blend)                                               | 0     | 5 `Sprite {` literals: `app.rs:334`, `condition_markers.rs:282/293`, `background.rs:73/189`, all with `..default()`          |
-| `TextFont` default `Rem(1.)`                                                          | 0     | 9 uses: `dice/readout.rs:67/97/118/143`, `nameplate.rs:176/242`, `shape.rs:723`, `token_move.rs:466`. All set `FontSize::Px` |
-| `NextState::set_if_neq` → `set_if_different`                                          | 0     | 9 `set_if_neq` calls (`camera.rs:110/125/128`, `exploration.rs:296`, `nameplate.rs:239`, `lighting_vision.rs:49/95/143`, `token_move.rs:370`) are `DetectChangesMut`. `NextState` uses `.set` |
-| Observers `On<Add<A>>`, flat pointer events                                           | 0     | No `On<`, `add_observer` or `.observe(`. `touch.rs:54` defines our own `Pointer` `SystemParam`, a possible prelude clash      |
-| `iter_many` yields `Result`                                                            | 0     |                                                                                                                              |
-| `Font::from_bytes` without a family name, `FontSource`                                 | 0     |                                                                                                                              |
-| `Interaction`/`Button` deprecated                                                      | 0     | `DispatchInteraction` is ours, and `MouseButton` is input                                                                    |
-| `Entity::PLACEHOLDER` → `Option<Entity>` in `UiCameraMapper`, `RetainedViewEntity`     | 0     | The constant itself remains. The guide only replaces some of its uses                                                        |
-| `AssetId::invalid` deprecated, `ComponentInfo::id` removed, `Name` from `&'static str` | 0     |                                                                                                                              |
-| `SpriteMaterial` → `SpriteMeshMaterial`, `MeshTag`, `ShaderBuffer`, `WgpuWrapper`      | 0     |                                                                                                                              |
-| `BorderRadius`, `Val::Em/Rem`, retained UI rendering, `Node`                           | 0     | bevy_ui is compiled but unused                                                                                               |
-| `RenderDebugOverlay` added to `DefaultPlugins`                                         | check | `startup.rs:83` builds on `DefaultPlugins`. Confirm the overlay is off by default and adds nothing to the wasm, or `.disable::<>()` it |
-| Math primitives, curves, bounding volumes moved to bevy_shape/bevy_curve               | 0     |                                                                                                                              |
-| `ScheduleBuildSettings` shuffle_seed, OIT, `CompressedImageSaver`                      | 0     |                                                                                                                              |
-| Panics routed to the fallback error handler                                           | check | `startup.rs:90` disables `PanicHandlerPlugin` so that spec 070's `install_panic_hook` tells the page about a panic. Confirm the plugin still exists under that name and that the hook still fires (`canvas-engine-stopped.spec.ts`, canvas slice) |
+| Item                                                                                   | Count | Note                                                                                                                                                                                                                                              |
+| -------------------------------------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Sprite.alpha_mode` (defaults to Blend)                                                | 0     | 5 `Sprite {` literals: `app.rs:334`, `condition_markers.rs:282/293`, `background.rs:73/189`, all with `..default()`                                                                                                                               |
+| `TextFont` default `Rem(1.)`                                                           | 0     | 9 uses: `dice/readout.rs:67/97/118/143`, `nameplate.rs:176/242`, `shape.rs:723`, `token_move.rs:466`. All set `FontSize::Px`                                                                                                                      |
+| `NextState::set_if_neq` → `set_if_different`                                           | 0     | 9 `set_if_neq` calls (`camera.rs:110/125/128`, `exploration.rs:296`, `nameplate.rs:239`, `lighting_vision.rs:49/95/143`, `token_move.rs:370`) are `DetectChangesMut`. `NextState` uses `.set`                                                     |
+| Observers `On<Add<A>>`, flat pointer events                                            | 0     | No `On<`, `add_observer` or `.observe(`. `touch.rs:54` defines our own `Pointer` `SystemParam`, a possible prelude clash                                                                                                                          |
+| `iter_many` yields `Result`                                                            | 0     |                                                                                                                                                                                                                                                   |
+| `Font::from_bytes` without a family name, `FontSource`                                 | 0     |                                                                                                                                                                                                                                                   |
+| `Interaction`/`Button` deprecated                                                      | 0     | `DispatchInteraction` is ours, and `MouseButton` is input                                                                                                                                                                                         |
+| `Entity::PLACEHOLDER` → `Option<Entity>` in `UiCameraMapper`, `RetainedViewEntity`     | 0     | The constant itself remains. The guide only replaces some of its uses                                                                                                                                                                             |
+| `AssetId::invalid` deprecated, `ComponentInfo::id` removed, `Name` from `&'static str` | 0     |                                                                                                                                                                                                                                                   |
+| `SpriteMaterial` → `SpriteMeshMaterial`, `MeshTag`, `ShaderBuffer`, `WgpuWrapper`      | 0     |                                                                                                                                                                                                                                                   |
+| `BorderRadius`, `Val::Em/Rem`, retained UI rendering, `Node`                           | 0     | bevy_ui is compiled but unused                                                                                                                                                                                                                    |
+| `RenderDebugOverlay` added to `DefaultPlugins`                                         | check | `startup.rs:83` builds on `DefaultPlugins`. Confirm the overlay is off by default and adds nothing to the wasm, or `.disable::<>()` it                                                                                                            |
+| Math primitives, curves, bounding volumes moved to bevy_shape/bevy_curve               | 0     |                                                                                                                                                                                                                                                   |
+| `ScheduleBuildSettings` shuffle_seed, OIT, `CompressedImageSaver`                      | 0     |                                                                                                                                                                                                                                                   |
+| Panics routed to the fallback error handler                                            | check | `startup.rs:90` disables `PanicHandlerPlugin` so that spec 070's `install_panic_hook` tells the page about a panic. Confirm the plugin still exists under that name and that the hook still fires (`canvas-engine-stopped.spec.ts`, canvas slice) |
 
 `Material2d` and `MeshMaterial2d` appear 6 times in 2 files:
 `darkness.rs`, and `dice/throw.rs:133-141, 280-281`, which uses
@@ -330,7 +330,7 @@ away.
   Movement, reach, budget and redaction come out as before. In the run
   beside another build, the doc-test step failed to find
   `thunderforge_canvas_core` (E0463); `cargo test -p thunderforge-server
-  --doc` alone passes (the crate has no doc tests), so that was the
+--doc` alone passes (the crate has no doc tests), so that was the
   shared target directory, not the upgrade.
 - combat: all pass.
 - No fixture compared the host and wasm32 builds, so T034 adds one:
@@ -343,7 +343,7 @@ away.
   `-0.0` included. Both pass on glam 0.33, so x86_64 and wasm32 agree.
 - web: 906 tests in 111 files pass, and `typecheck` is clean. demo: 161
   in 20 files (its `combat.test.ts` needs `pnpm -F @thunderforge/demo run
-  maps` first in a fresh worktree).
+maps` first in a fresh worktree).
 - Scene switch (T036): `unload_previous_scene` despawns each token with
   `commands.entity(e).despawn()`, which in 0.20 still despawns
   `Children` recursively. No change; the scenes slice runs it.
@@ -366,16 +366,16 @@ away.
 
 **Verified** with `node scripts/e2e-slice.mjs which <path>`:
 
-| Path                                  | Slices                       |
-| ------------------------------------- | ---------------------------- |
-| `Cargo.lock`                          | FULL SUITE (cross-cutting)   |
-| `crates/thunderforge-engine/Cargo.toml`      | engine-limits, engine-other  |
-| `crates/thunderforge-canvas-core/Cargo.toml` | engine-other                 |
-| `plugins/darkness.wgsl`               | engine-other, lighting       |
-| `plugins/render_probe.rs`             | canvas                       |
-| `plugins/dice/readout.rs`             | combat, rolls                |
-| `systems/nameplate.rs`                | engine-limits, tokens        |
-| `systems/camera.rs`                   | canvas                       |
+| Path                                         | Slices                      |
+| -------------------------------------------- | --------------------------- |
+| `Cargo.lock`                                 | FULL SUITE (cross-cutting)  |
+| `crates/thunderforge-engine/Cargo.toml`      | engine-limits, engine-other |
+| `crates/thunderforge-canvas-core/Cargo.toml` | engine-other                |
+| `plugins/darkness.wgsl`                      | engine-other, lighting      |
+| `plugins/render_probe.rs`                    | canvas                      |
+| `plugins/dice/readout.rs`                    | combat, rolls               |
+| `systems/nameplate.rs`                       | engine-limits, tokens       |
+| `systems/camera.rs`                          | canvas                      |
 
 Fog (`plugins/exploration.rs`, `scene-exploration.spec.ts`) belongs to
 the **scenes** slice. Vision and darkvision belong to **lighting**.
@@ -395,7 +395,7 @@ before any version change (T003–T007).
   over main's `dist/engine`. The worktree resolves `@thunderforge/engine`
   through main's `dist/engine`, so a worktree build is not seen otherwise.
   Then run `pnpm e2e:engine-limits` and record each `[engine] tokens=…
-  fps=… frameTime=…` line for 3200, 4000, 4800, 5600 and 6400. Run it 3
+fps=… frameTime=…` line for 3200, 4000, 4800, 5600 and 6400. Run it 3
   times and take the median per level.
 - **Size.** Brotli the release `.wasm` with
   `node -e "zlib.brotliCompressSync"` at quality 11. That is the same
@@ -445,12 +445,12 @@ copied over main's: that would have put this engine under spec 086's runs.
 only when no e2e run, no build from another tree, and a 1-minute load
 under 4. All 4 tests passed in each run.
 
-| Run | Load at start (1/5/15 min) | 3200 | 4000 | 4800 | 5600 | 6400 |
-| --- | --- | --- | --- | --- | --- | --- |
-| 1 | 2.18 / 3.08 / 4.99 | 61 fps, 16.5 ms | 60, 16.7 | 58, 17.2 | 61, 16.5 | 60, 16.6 |
-| 2 | 2.41 / 4.54 / 5.32 | 61, 16.3 | 60, 16.7 | 60, 16.7 | 60, 16.7 | 60, 16.6 |
-| 3 | 3.82 / 4.16 / 4.73 | 60, 16.7 | 60, 16.7 | 60, 16.8 | 60, 16.8 | 60, 16.6 |
-| **Median** | | **61, 16.5** | **60, 16.7** | **60, 16.8** | **60, 16.7** | **60, 16.6** |
+| Run        | Load at start (1/5/15 min) | 3200            | 4000         | 4800         | 5600         | 6400         |
+| ---------- | -------------------------- | --------------- | ------------ | ------------ | ------------ | ------------ |
+| 1          | 2.18 / 3.08 / 4.99         | 61 fps, 16.5 ms | 60, 16.7     | 58, 17.2     | 61, 16.5     | 60, 16.6     |
+| 2          | 2.41 / 4.54 / 5.32         | 61, 16.3        | 60, 16.7     | 60, 16.7     | 60, 16.7     | 60, 16.6     |
+| 3          | 3.82 / 4.16 / 4.73         | 60, 16.7        | 60, 16.7     | 60, 16.8     | 60, 16.8     | 60, 16.6     |
+| **Median** |                            | **61, 16.5**    | **60, 16.7** | **60, 16.8** | **60, 16.7** | **60, 16.6** |
 
 Every level sits at the display's 60 Hz, so the slice measures whether a
 frame is dropped, not how much headroom there is. Run 1's report says
@@ -494,10 +494,10 @@ canvas. The four pictures are in `baseline/` (`sprite.png`, `stack.png`,
   `kind-b`, `kind-c`) on one square, added in two orders, reading the top
   pixel before a click.
 
-  | Added | Drawn on top | Click picks |
-  | --- | --- | --- |
-  | a, b, c | `kind-c` (amber `[229, 163, 64]`) | `kind-a` |
-  | c, b, a | `kind-a` (blue `[106, 137, 237]`) | `kind-a` |
+  | Added   | Drawn on top                      | Click picks |
+  | ------- | --------------------------------- | ----------- |
+  | a, b, c | `kind-c` (amber `[229, 163, 64]`) | `kind-a`    |
+  | c, b, a | `kind-a` (blue `[106, 137, 237]`) | `kind-a`    |
 
   The last token added is drawn on top, and a click picks the lowest id
   (`token_stack.rs`), whatever is drawn. When those disagree, the click
@@ -542,3 +542,53 @@ the same script in the same sandbox as the baseline (load 2.31 / 6.86 /
   disabled. RenderDevice lacks support: max_storage_buffers_per_shader_stage
   (0) < 3". It is `info`, and WebGL2 has no storage buffers; nothing
   draws differently.
+
+### Frame rate (T050)
+
+`pnpm e2e:engine-limits` on the release 0.20 engine, each run started only
+when no e2e run or build from another tree was going and the 1-minute load
+was under 4. Every run passed 4 of 4.
+
+| Run                     | Load at start / end (1/5/15 min)        | 3200             | 4000         | 4800         | 5600         | 6400          |
+| ----------------------- | --------------------------------------- | ---------------- | ------------ | ------------ | ------------ | ------------- |
+| 1                       | 2.89 / 2.71 / 3.83 → 3.95 / 3.47 / 3.62 | 60 fps, 16.65 ms | 60, 16.7     | 60, 16.6     | 59, 16.9     | 61, 16.5      |
+| 2                       | 3.95 / 3.47 / 3.62 → 2.69 / 3.30 / 3.51 | 60, 16.8         | 60, 16.7     | 60, 16.81    | 60, 16.6     | 60, 16.7      |
+| 3 (set aside)           | 2.69 / 3.30 / 3.51 → 2.88 / 3.27 / 3.35 | 82, 514.91       | 60, 16.69    | 59, 16.9     | 60, 16.6     | 60, 16.8      |
+| 4                       | 3.11 / 3.12 / 3.25 → 3.61 / 5.36 / 4.86 | 60, 16.8         | 60, 16.6     | 60, 16.6     | 60, 16.7     | 60, 16.7      |
+| **Median (1, 2, 4)**    |                                         | **60, 16.8**     | **60, 16.7** | **60, 16.6** | **60, 16.7** | **60, 16.7**  |
+| Baseline median         |                                         | 61, 16.5         | 60, 16.7     | 60, 16.8     | 60, 16.7     | 60, 16.6      |
+| fps / frame vs baseline |                                         | 98.4% / 101.8%   | 100% / 100%  | 100% / 98.8% | 100% / 100%  | 100% / 100.6% |
+
+SC-003 holds at every level (fps at least 95%, frame time at most 105%).
+Run 3's 3200 level read 82 fps and 514.91 ms together, which no steady
+frame rate produces: one long hitch inside the sampling window. The same
+run's other 3200-token measurements (culling on and off, status capacity)
+read 16.4–16.8 ms, so run 3 was set aside and run 4 taken in its place.
+Counted in, the medians are the same. The board is held at the display's
+60 Hz on this machine at every level on both versions, so this shows
+there is no regression, not how much headroom either version has.
+
+### Size (T051)
+
+Release `engine_bg.wasm`: 31,939,040 bytes raw (+4.98% on 30,424,557) and
+5,186,179 bytes brotli at quality 11 (+2.31% on 5,069,241). SC-004 allows
+10%.
+
+### Render probe (T052)
+
+The same 3200-token scene at the default camera, release engine:
+
+```
+main: sprites total=3202 view_visible=274
+render: Transparent2d view items=750
+render: views matching (RenderVisibleEntities, ExtractedView, Msaa)=1 · views missing Msaa=1
+render: ExtractedSprites=748
+render: extracted text=474 sprite meshes=274
+render: view RenderVisibleEntities<Sprite>=748
+```
+
+Every baseline line reads the same. The new line splits the 748 into the
+474 glyphs that still go through `ExtractedSprites` and the 274 sprite
+quads that 0.20 draws as `Mesh2d` (SC-006). `engineStats` read fps 60.24,
+frame 16.6 ms and `tokens_culled` 2020; the culled count is the
+baseline's.
