@@ -195,7 +195,26 @@ function engineLocalCrateDirs() {
   return [...dirs].sort();
 }
 
-function getEngineInputsHash(profile = engineProfile()) {
+/**
+ * Environment for the engine's `wasm-pack build`, by profile.
+ *
+ * The dev engine keeps line tables and drops the rest of the debug info
+ * (spec 087). wasm-bindgen strips DWARF from the shipped module either way,
+ * but full debug info still changes the code rustc emits: on bevy 0.20 it
+ * made the code section 86 MB where line tables give 70 MB. Set through the
+ * environment so it reaches only this build — the host's `cargo` runs keep
+ * the workspace's `[profile.dev]` — and only the dev one.
+ */
+export function engineBuildEnv(profile) {
+  return profile === "dev"
+    ? { CARGO_PROFILE_DEV_DEBUG: "line-tables-only" }
+    : {};
+}
+
+export function getEngineInputsHash(
+  profile = engineProfile(),
+  { buildEnv = engineBuildEnv(profile) } = {},
+) {
   const hash = createHash("sha256");
 
   if (existsSync(WORKSPACE_CARGO_TOML)) {
@@ -233,6 +252,13 @@ function getEngineInputsHash(profile = engineProfile()) {
   // you would get whichever bundle happened to be on disk, which is the worst
   // failure available here because it looks like it worked.
   hash.update(profile);
+  // So is how it is built: a bundle from before a build setting changed must
+  // not read as current.
+  const envKey = Object.entries(buildEnv)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}=${v}`)
+    .join("\n");
+  if (envKey) hash.update(envKey);
   return hash.digest("hex");
 }
 
@@ -308,6 +334,7 @@ export async function buildEngine({
     {
       cwd: ENGINE_DIR,
       prefix: "engine",
+      env: engineBuildEnv(profile),
     },
   );
   const result = await waitForProcess(child, "engine build");
