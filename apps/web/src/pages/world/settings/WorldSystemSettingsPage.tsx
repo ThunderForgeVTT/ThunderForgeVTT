@@ -38,6 +38,8 @@ import {
 } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { SystemLegalNotice } from "@/components/game-systems/legal/SystemLegalNotice";
+import { SessionSetupInviteLink } from "@/components/world/SessionSetupInviteLink";
+import { IN_DEMO } from "@/lib/demoBuild";
 import type { SystemManifest } from "@/types/systemManifest";
 import { resolvePanel } from "@/panels/systemPanels";
 import { useWorldRole } from "@/hooks/useWorldRole";
@@ -557,6 +559,32 @@ export default function WorldSystemSettingsPage() {
             description="How this world looks and behaves for everyone in it."
             columns={2}
           >
+            {/* A Game Master who opened "Manage settings" looking for a way
+                to invite their players found none here: the links lived only
+                on the dashboard's Campaign Settings panel and on Session
+                Setup. Same control, same `generateInviteCode`, one more door.
+                Not in the demo, whose world has no one to invite. */}
+            {isGm && !IN_DEMO ? (
+              <Card
+                className="grid gap-3 p-6"
+                data-testid="settings-invite-players-card"
+              >
+                <h3 className="text-lg font-semibold">Invite players</h3>
+                <p className="text-sm text-muted-foreground">
+                  Copy a join link to send to your players. Every link, and
+                  revoking one, is on the{" "}
+                  <Link
+                    to={`/world/${worldId}`}
+                    className="underline underline-offset-2"
+                  >
+                    world dashboard
+                  </Link>
+                  .
+                </p>
+                <SessionSetupInviteLink worldId={worldId} />
+              </Card>
+            ) : null}
+
             {/* Spec 032 (FR-008, FR-010). Rendered for everyone rather than
                 gated like the cards below it: a player seeing which look the
                 table is using, read-only, is honest, whereas hiding it would
