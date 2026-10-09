@@ -21,3 +21,9 @@ thunderforge-sheet-import = { path = "../../../../crates/thunderforge-sheet-impo
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 wasm-bindgen = { version = "0.2.127", optional = true }
+
+[dev-dependencies]
+# The fixture generator (tests/fixtures/gen.rs) writes PDFs with the same
+# lopdf the reader parses them with, and pins each one's sha256.
+lopdf = { version = "0.34", default-features = false, features = ["nom_parser"] }
+sha2 = "0.11.0"

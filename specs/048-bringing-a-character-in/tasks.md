@@ -123,7 +123,7 @@ user's shareable set is a *collection*. Only the 5e system is a *pack*.
 
 ### Fixtures
 
-- [ ] T024 Write the fixture generator `packs/systems/dnd5e/sheet/tests/fixtures/gen.rs`.
+- [X] T024 Write the fixture generator `packs/systems/dnd5e/sheet/tests/fixtures/gen.rs`.
   - It uses lopdf's writer, has no timestamps, and sets a fixed `/ID`.
   - It writes the eight fixtures in contracts/sheet-mapping-5e.md. The layout's labels and positions come from the owner's exports, and every value is invented.
   - A test asserts each generated file's sha256, so a generator change is a visible diff.

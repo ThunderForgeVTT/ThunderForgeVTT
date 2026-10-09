@@ -9209,8 +9209,10 @@ dependencies = [
 name = "thunderforge-system-dnd5e-sheet"
 version = "0.1.0"
 dependencies = [
+ "lopdf",
  "serde",
  "serde_json",
+ "sha2 0.11.0",
  "thunderforge-pdf",
  "thunderforge-sheet-import",
  "wasm-bindgen",

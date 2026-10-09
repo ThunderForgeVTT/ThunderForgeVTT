@@ -2,11 +2,19 @@
 //!
 //!     cargo run -p thunderforge-pdf --example probe -- <file>...
 //!     cargo run -p thunderforge-pdf --example probe -- --structure <file>...
+//!     cargo run -p thunderforge-pdf --example probe -- --layout <out.json> <file>...
 //!
 //! `--structure` answers where a document draws its text (spec 048 T010):
 //! in the page's own content, inside Form XObjects the page draws with `Do`,
 //! or in form-field appearance streams the page content never names. It
 //! prints counts only, never text, so it is safe to run over personal files.
+//!
+//! `--layout` writes a form's layout to `<out.json>` (spec 048 T024): each
+//! page's drawn runs, and each field's name, kind and box. It never writes a
+//! field's value. It writes a page's drawn runs only when every file with
+//! that many pages draws exactly the same runs there, which is what shows
+//! they are the form's labels rather than anybody's character; a page where
+//! the files differ is reported, and its runs left out.
 
 #![allow(clippy::print_stdout)] // a command-line tool: its output is the point
 
@@ -14,6 +22,10 @@ use thunderforge_pdf::{Document, layout};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().is_some_and(|a| a == "--layout") && args.len() > 2 {
+        layout_of(&args[1], &args[2..]);
+        return;
+    }
     if args.first().is_some_and(|a| a == "--structure") {
         for path in &args[1..] {
             structure(path);
@@ -231,4 +243,86 @@ fn structure(path: &str) {
         "{name:28.28} pages {:2}  page text ops {page_text_ops:5}  forms drawn {do_forms:3} (with text {do_forms_with_text:3}, ops {form_text_ops:5})  acroform fields {fields:4}  widgets {widgets:4} (value {widgets_with_value:4}, appearance with text {widgets_with_text:4}, none {widgets_no_appearance:4}, by state {widgets_state_appearance:4})",
         doc.get_pages().len()
     );
+}
+
+/// One page of a form, as `--layout` keeps it. Field values are never read.
+#[derive(serde::Serialize, PartialEq)]
+struct LayoutPage {
+    width: f64,
+    height: f64,
+    runs: Vec<thunderforge_pdf::TextRun>,
+    /// name, kind, and the box in PDF space (llx, lly, urx, ury).
+    fields: Vec<(String, String, [f64; 4])>,
+}
+
+fn layout_of(out: &str, paths: &[String]) {
+    use std::collections::BTreeMap;
+    // Page count to every file's pages.
+    let mut by_length: BTreeMap<usize, Vec<Vec<LayoutPage>>> = BTreeMap::new();
+    for path in paths {
+        let name = path.rsplit('/').next().unwrap_or(path);
+        let Ok(document) = Document::open(path) else {
+            println!("{name}: unreadable");
+            continue;
+        };
+        let pages = document
+            .pages()
+            .iter()
+            .map(|page| LayoutPage {
+                width: page.geometry.width,
+                height: page.geometry.height,
+                runs: document.runs(page).unwrap_or_default(),
+                fields: document
+                    .form_fields(page)
+                    .into_iter()
+                    .map(|f| {
+                        let h = page.geometry.height;
+                        (
+                            f.name,
+                            format!("{:?}", f.kind),
+                            [
+                                f64::from(f.rect.x0),
+                                h - f64::from(f.rect.y1),
+                                f64::from(f.rect.x1),
+                                h - f64::from(f.rect.y0),
+                            ],
+                        )
+                    })
+                    .collect(),
+            })
+            .collect::<Vec<_>>();
+        by_length.entry(pages.len()).or_default().push(pages);
+    }
+    let mut layouts = serde_json::Map::new();
+    for (length, mut files) in by_length {
+        let count = files.len();
+        let mut first = files.remove(0);
+        for (index, page) in first.iter_mut().enumerate() {
+            let same_runs = files.iter().all(|other| other[index].runs == page.runs);
+            let same_fields = files.iter().all(|other| other[index].fields == page.fields);
+            println!(
+                "{length} pages, page {}: {count} files, runs {} ({}), fields {} ({})",
+                index + 1,
+                page.runs.len(),
+                if same_runs {
+                    "identical"
+                } else {
+                    "DIFFER, left out"
+                },
+                page.fields.len(),
+                if same_fields { "identical" } else { "differ" },
+            );
+            if !same_runs {
+                page.runs.clear();
+            }
+        }
+        layouts.insert(
+            length.to_string(),
+            serde_json::to_value(&first).unwrap_or_default(),
+        );
+    }
+    let json = serde_json::to_string_pretty(&layouts).unwrap_or_default();
+    if std::fs::write(out, json).is_err() {
+        println!("could not write {out}");
+    }
 }
