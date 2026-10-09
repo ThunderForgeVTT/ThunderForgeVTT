@@ -77,8 +77,13 @@ async function provideIdentity(
 async function signInWithProvider(
   page: Page,
   baseURL: string,
+  returnTo?: string,
 ): Promise<{ status: string; message: string; challengeId: string | null }> {
-  const start = `/api/authentication/oauth/${PROVIDER}/start?redirect_uri=${encodeURIComponent(callbackUrl(baseURL))}`;
+  // `returnTo` is absolute, as the web app sends it.
+  const back = returnTo
+    ? `&return_to=${encodeURIComponent(new URL(returnTo, baseURL).toString())}`
+    : "";
+  const start = `/api/authentication/oauth/${PROVIDER}/start?redirect_uri=${encodeURIComponent(callbackUrl(baseURL))}${back}`;
   const response = await page.goto(start);
   const body = (await response?.json().catch(() => null)) as {
     status?: string;
@@ -282,6 +287,75 @@ test.describe("Spec 036 US6: external sign-in, against a real handshake", () => 
       ).toBe("success");
     } finally {
       await setPolicy(page, "OPEN").catch(() => {});
+      await visitor.close();
+    }
+  });
+
+  test("a sign-in that began on a world link never creates an account (spec 088, FR-010)", async ({
+    page,
+    browser,
+    baseURL,
+  }) => {
+    // Any join page will do: the rule is about where the flow began, and the
+    // server reads that from the authorization session, not the browser.
+    const joinPage = "/join/ZZZZZZZZZZZZZZZZZZZZZZZZZZ";
+
+    const stranger = `stub-link-new-${uniqueSuffix()}`;
+    await provideIdentity(page, {
+      sub: stranger,
+      email: `${stranger}@example.org`,
+      email_verified: true,
+    });
+    const refused = await signInWithProvider(page, baseURL!, joinPage);
+    expect(
+      refused.status,
+      "an open instance still makes no account from a world link",
+    ).toBe("world_link_sign_in_only");
+    expect(refused.message).toBe(
+      "World links are for existing ThunderForge accounts. Ask the instance's administrator for an invitation.",
+    );
+
+    // No session either: the refusal signed no one in, so the API turns
+    // the visitor away as a stranger.
+    await expect(
+      graphql(
+        page,
+        `
+          query MySessions {
+            mySessions {
+              id
+            }
+          }
+        `,
+        {},
+      ),
+    ).rejects.toThrow(/status 401/);
+
+    // An identity that already has an account signs in from a link as usual.
+    const visitor = await browser.newContext();
+    const visitorPage = await visitor.newPage();
+    try {
+      const known = `stub-link-known-${uniqueSuffix()}`;
+      await provideIdentity(visitorPage, {
+        sub: known,
+        email: `${known}@example.org`,
+        email_verified: true,
+      });
+      const made = await signInWithProvider(visitorPage, baseURL!);
+      expect(made.status, made.message).toBe("success");
+
+      await visitorPage.context().clearCookies();
+      await provideIdentity(visitorPage, {
+        sub: known,
+        email: `${known}@example.org`,
+        email_verified: true,
+      });
+      const again = await signInWithProvider(visitorPage, baseURL!, joinPage);
+      expect(
+        again.status,
+        `an existing account signs in from a world link: ${again.message}`,
+      ).toBe("success");
+    } finally {
       await visitor.close();
     }
   });

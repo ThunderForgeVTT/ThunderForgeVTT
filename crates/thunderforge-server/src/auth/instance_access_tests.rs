@@ -532,6 +532,7 @@ async fn oauth_signups_racing_for_the_last_use_admit_exactly_one() {
                 super::super::ClientDescription::unknown(),
                 super::super::OAuthResolveRequest {
                     invitation_code: Some(code),
+                    sign_in_only: false,
                     provider_key,
                     provider_user_id: suffix.clone(),
                     provider_email: Some(email.clone()),
@@ -638,6 +639,100 @@ async fn access_events_record_the_act_and_never_the_person() {
         assert!(
             !rendered.contains('@'),
             "an access event must never carry an address: {rendered}"
+        );
+    }
+}
+
+fn world_link_resolve(
+    provider_key: &str,
+    subject: &str,
+    email: &str,
+    invitation_code: Option<String>,
+    sign_in_only: bool,
+) -> super::super::OAuthResolveRequest {
+    super::super::OAuthResolveRequest {
+        invitation_code,
+        sign_in_only,
+        provider_key: provider_key.to_string(),
+        provider_user_id: subject.to_string(),
+        provider_email: Some(email.to_string()),
+        access_token: None,
+        refresh_token: None,
+        token_expires_at: None,
+    }
+}
+
+/// Spec 088 (FR-010, SC-002): a provider sign-in that began on a join page
+/// never creates an account, in any access mode, and holding an instance
+/// invitation does not change that. An identity that already has an account
+/// still signs in.
+#[tokio::test]
+async fn a_world_link_sign_in_never_creates_an_account_in_any_mode() {
+    use super::super::oauth::resolve_oauth_login;
+    use super::super::world_link_sign_in::WORLD_LINK_OAUTH_MESSAGE;
+    use axum::http::StatusCode;
+
+    for policy in ["open", "invite_only", "closed"] {
+        let (_policy, state, admin_id) = arrange("open").await;
+        let provider_key = insert_test_provider(&state);
+
+        // Someone who already has an account, made while the door was open.
+        let known = Uuid::now_v7().simple().to_string()[20..].to_string();
+        let known_email = format!("{known}@example.test");
+        let (status, _) = resolve_oauth_login(
+            state.clone(),
+            tower_cookies::Cookies::default(),
+            super::super::ClientDescription::unknown(),
+            world_link_resolve(&provider_key, &known, &known_email, None, false),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "the existing account is made");
+
+        let invitation = {
+            let mut conn = state.db_pool.get().unwrap();
+            set_instance_access_policy(&mut conn, policy);
+            insert_test_instance_invitation(&mut conn, admin_id, 5, None, false)
+        };
+
+        let stranger = Uuid::now_v7().simple().to_string()[20..].to_string();
+        let stranger_email = format!("{stranger}@example.test");
+        let (status, axum::Json(body)) = resolve_oauth_login(
+            state.clone(),
+            tower_cookies::Cookies::default(),
+            super::super::ClientDescription::unknown(),
+            world_link_resolve(
+                &provider_key,
+                &stranger,
+                &stranger_email,
+                Some(invitation.1.clone()),
+                true,
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{policy}: refused");
+        assert_eq!(body.status, "world_link_sign_in_only");
+        assert_eq!(body.message, WORLD_LINK_OAUTH_MESSAGE);
+        assert!(
+            user_with_email(&state, &stranger_email).is_none(),
+            "{policy}: no account is made"
+        );
+        assert_eq!(
+            used_count(&state, invitation.0),
+            0,
+            "{policy}: no use burned"
+        );
+
+        let (status, _) = resolve_oauth_login(
+            state.clone(),
+            tower_cookies::Cookies::default(),
+            super::super::ClientDescription::unknown(),
+            world_link_resolve(&provider_key, &known, &known_email, None, true),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::OK,
+            "{policy}: an existing account still signs in from a link"
         );
     }
 }

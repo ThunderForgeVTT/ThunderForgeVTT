@@ -1,6 +1,7 @@
 //! The OAuth/OIDC login flow: start, callback, code exchange, and resolving
 //! what an external identity means for an account that may or may not exist.
 
+use super::world_link_sign_in::is_world_link_return;
 use super::*;
 
 pub(crate) async fn oauth_start(
@@ -218,6 +219,7 @@ pub(crate) async fn handle_oauth_code_flow(
     let resolve_request = OAuthResolveRequest {
         // FR-016: whatever the visitor started the flow holding.
         invitation_code: auth_ctx.session.invitation_code.clone(),
+        sign_in_only: is_world_link_return(auth_ctx.session.return_to.as_deref()),
         provider_key,
         provider_user_id,
         provider_email,
@@ -311,6 +313,9 @@ pub(crate) async fn resolve_oauth_login(
         provider_email.as_deref(),
     )
     .await;
+    if would_provision && request.sign_in_only {
+        return super::world_link_sign_in::refused(); // Spec 088 (FR-010)
+    }
     let route = AdmissionRoute::OAuth(provider_key.clone());
     let admission = if would_provision {
         match ensure_admission_allowed(&state, &route, invitation_code.as_deref()).await {

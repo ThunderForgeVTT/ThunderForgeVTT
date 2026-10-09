@@ -27,6 +27,11 @@ pub(crate) struct OAuthResolveRequest {
     /// round trip, when the visitor arrived by one.
     #[serde(default)]
     pub(crate) invitation_code: Option<String>,
+    /// Spec 088 (FR-010): the flow began on a join page, so it may sign an
+    /// existing account in but never create one. A caller can only ask for
+    /// less with it, never more.
+    #[serde(default)]
+    pub(crate) sign_in_only: bool,
     pub(crate) provider_key: String,
     pub(crate) provider_user_id: String,
     pub(crate) provider_email: Option<String>,

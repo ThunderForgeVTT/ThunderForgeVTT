@@ -293,6 +293,8 @@ pub use two_factor::startup_reset::{StartupReset, apply_startup_second_factor_re
 
 #[path = "oauth.rs"]
 pub(crate) mod oauth;
+// Spec 088 (FR-010): a sign-in from a world link never creates an account.
+mod world_link_sign_in;
 pub(crate) use oauth::*;
 
 /// The two account-writing transactions, local signup and OAuth
