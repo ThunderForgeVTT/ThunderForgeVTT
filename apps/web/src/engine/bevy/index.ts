@@ -3,9 +3,10 @@ import {
   SDK_VERSION,
   type EngineSdkError,
 } from "@/engine/sdk/commands";
-import { createClient, type Client } from "graphql-ws";
+import type { Client } from "graphql-ws";
 
 import { postGraphQL } from "../../api/graphqlClient";
+import { createSocketClient } from "../world/sync/socketClient";
 import { download, downloadBytes } from "../../services/downloads";
 import { reportPlayPausedIn } from "../../api/playPauseSignal";
 import {
@@ -2135,11 +2136,9 @@ export async function startPeerTransfer(worldId: string): Promise<boolean> {
     // with it, so the cost is one socket for as long as the feature is on —
     // and sharing the other one would mean reaching into a module this change
     // does not own.
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const client = createClient({
-      url: `${protocol}//${window.location.host}/api/ws`,
-      retryAttempts: Infinity,
-    });
+    // Through the shared factory so it pings like the other socket: the
+    // server closes a socket that says nothing for a minute.
+    const client = createSocketClient({ retryAttempts: Infinity });
 
     const dispose = client.subscribe<{
       peerSignals: { fromSessionId: string; payload: string };

@@ -25,11 +25,12 @@
  * `for await` loops would split events between them, not broadcast).
  */
 
-import { createClient, type Client } from "graphql-ws";
+import type { Client } from "graphql-ws";
 
 import { reportPlayPausedIn } from "@/api/playPauseSignal";
 
 import { isHeartbeatOffline, subscribeToHeartbeat } from "./heartbeat";
+import { createSocketClient } from "./socketClient";
 
 export interface WorldEventLike {
   /**
@@ -551,9 +552,11 @@ export function resetSocketStateForTests(): void {
 
 function getClient(): Client {
   if (!client) {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    client = createClient({
-      url: `${protocol}//${window.location.host}/api/ws`,
+    // Pings (see `createSocketClient`), so a server idle-timeout close only
+    // ever lands on a client that is really gone. One that was closed while
+    // asleep retries here like any other drop, and the reconnect runs the
+    // catch-up below.
+    client = createSocketClient({
       retryAttempts: Infinity,
       retryWait: async (retries) => {
         noteSocketRetry(retries);
