@@ -44,8 +44,10 @@ import type { SystemManifest } from "@/types/systemManifest";
 import { resolvePanel } from "@/panels/systemPanels";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import { WorldSectionShell } from "@/layouts/world-layout/WorldSectionShell";
+import { ActiveSystemCard } from "@/pages/world/settings/ActiveSystemCard";
 import { AuthoringToolGrantsCard } from "@/pages/world/settings/AuthoringToolGrantsCard";
 import { CompendiumOverviewSettingsCard } from "@/pages/world/settings/CompendiumOverviewSettingsCard";
+import { GameMastersSideOfTheTable } from "@/pages/world/settings/GameMastersSideOfTheTable";
 import { LoreRepositoryCard } from "@/pages/world/settings/LoreRepositoryCard";
 import { PlayPauseHistoryCard } from "@/pages/world/settings/PlayPauseHistoryCard";
 import { WorldAppearanceSettingsCard } from "@/pages/world/settings/WorldAppearanceSettingsCard";
@@ -69,8 +71,8 @@ import { GRID_TYPE_OPTIONS, gridTypeLabel } from "@/utils/gridType";
  *
  * # Renders nothing when it holds nothing
  *
- * Most of what this page shows is gated by role — a player sees three of
- * these cards and a GM sees seven. A section whose every child was gated
+ * Most of what this page shows is gated by role — an Owner sees a card a
+ * Game Master does not. A section whose every child was gated
  * away would otherwise leave a heading over empty space, which reads as
  * something failing to load. `Children.toArray` drops `null` and `false`,
  * so "no cards" is exactly "nothing to head".
@@ -125,6 +127,9 @@ function SettingsSection({
  * easily discoverable location") — because no other system-selection UI
  * exists anywhere in the app today (spec 008 deliberately removed it from
  * world creation).
+ *
+ * The Game Master's page. A Player is shown `GameMastersSideOfTheTable`
+ * instead, and reads the legal notice on the Overview (`AboutThisTable`).
  */
 export default function WorldSystemSettingsPage() {
   const { id: worldId = "" } = useParams();
@@ -152,7 +157,7 @@ export default function WorldSystemSettingsPage() {
   );
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
-  const { isGm, role } = useWorldRole(worldId, world);
+  const { isGm, role, loading: roleLoading } = useWorldRole(worldId, world);
 
   // Reset during render rather than at the top of the effect below: this
   // is state derived from the arguments, and doing it in the effect commits
@@ -293,7 +298,9 @@ export default function WorldSystemSettingsPage() {
    */
   const selectedSystemId = pendingSystemId ?? world?.gameSystemId ?? null;
 
-  if (isLoading) {
+  // Waits for the role as well as the world: deciding before the members
+  // arrive would show a Game Master the Player's GIF for a moment.
+  if (isLoading || roleLoading) {
     return <Loader fullScreen label="Loading system settings" />;
   }
 
@@ -309,6 +316,26 @@ export default function WorldSystemSettingsPage() {
           </Card>
         </main>
       </Container>
+    );
+  }
+
+  // The owner's decision: a Player who types this address in gets a GIF and
+  // a way back, not the settings. What a Player may read here — the licence,
+  // the table's settings, the pause history — is on the Overview, under
+  // "About this table". Same line as the dashboard's (`isGm`, Owner or Game
+  // Master), and the server refuses every write regardless.
+  if (!isGm) {
+    return (
+      <>
+        <SEO
+          title={`${world.name} — System settings`}
+          description="World system settings"
+          noindex
+        />
+        <WorldSectionShell worldId={worldId} isGm={false}>
+          <GameMastersSideOfTheTable worldId={worldId} />
+        </WorldSectionShell>
+      </>
     );
   }
 
@@ -370,24 +397,7 @@ export default function WorldSystemSettingsPage() {
             title="Game system"
             description="The rules this world runs on, and the licence that comes with them. Changing it hides content authored for another system; it never deletes it."
           >
-            <Card className="grid gap-4 p-6" data-testid="active-system-card">
-              <h3 className="text-lg font-semibold">Active system</h3>
-              {activeManifest ? (
-                <div className="grid gap-3">
-                  <p className="text-sm">
-                    Currently using <strong>{activeManifest.title}</strong>.
-                  </p>
-                  <SystemLegalNotice
-                    legal={activeManifest.legal}
-                    variant="settings"
-                  />
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground italic">
-                  No system assigned yet.
-                </p>
-              )}
-            </Card>
+            <ActiveSystemCard manifest={activeManifest} />
 
             {isGm ? (
               <Card className="grid gap-4 p-6" data-testid="system-picker-card">
@@ -712,18 +722,6 @@ export default function WorldSystemSettingsPage() {
                 })
               : null;
           })()}
-
-          {!activeManifest && !isGm ? (
-            <p className="text-sm text-muted-foreground">
-              This world's GM hasn't assigned a system yet.{" "}
-              <Link
-                to={`/world/${worldId}/staging`}
-                className="underline underline-offset-2"
-              >
-                Back to Overview
-              </Link>
-            </p>
-          ) : null}
         </Container>
       </WorldSectionShell>
     </>

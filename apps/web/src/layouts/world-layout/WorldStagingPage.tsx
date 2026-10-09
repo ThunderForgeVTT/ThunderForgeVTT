@@ -3,6 +3,7 @@ import { Panel } from "@/components/ui/panel/Panel";
 import { resolvePanel } from "@/panels/systemPanels";
 import { SessionNotesPanel } from "@/components/world/SessionNotesPanel/SessionNotesPanel";
 import { SessionSetupInviteLink } from "@/components/world/SessionSetupInviteLink";
+import { AboutThisTable } from "@/components/world/AboutThisTable";
 import type { WorldRecord } from "@/types/world";
 import { IN_DEMO } from "@/lib/demoBuild";
 
@@ -113,6 +114,11 @@ export function WorldStagingPage({
       {SystemPanel
         ? createElement(SystemPanel, { worldId, world, isGm, currentUserId })
         : null}
+
+      {/* A Player is shown a GIF on the settings page, so what they may read
+       * there — the licence, the table's settings, the pause history — is
+       * read here instead. The Game Master reads it on the settings page. */}
+      {!isGm && world ? <AboutThisTable world={world} /> : null}
     </main>
   );
 }

@@ -146,11 +146,14 @@ test.describe("Spec 032 T108: a pack's panels reach the pages that host them", (
       { timeout: 15_000 },
     );
 
-    await playerPage.goto(`/world/${worldId}/settings/system`);
-    await expect(playerPage.getByTestId("active-system-card")).toContainText(
-      "Genie",
-      { timeout: 10_000 },
-    );
+    // A Player reads the system on the Overview, where "About this table"
+    // mounts the same `world-settings` slot with `isGm` false.
+    await playerPage.goto(`/world/${worldId}/staging`);
+    await expect(
+      playerPage
+        .getByTestId("about-this-table")
+        .getByTestId("active-system-card"),
+    ).toContainText("Genie", { timeout: 10_000 });
     await expect(
       playerPage.getByTestId("genie-resource-carryover-card"),
     ).toHaveCount(0);

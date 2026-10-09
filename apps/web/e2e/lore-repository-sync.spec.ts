@@ -275,8 +275,11 @@ test.describe("Spec 034: an instance with no repository integration", () => {
       { timeout: 15_000 },
     );
 
+    // A Player is shown a GIF on the settings page rather than the settings.
     await memberPage.goto(`/world/${worldId}/settings/system`);
-    await expect(memberPage.getByTestId("active-system-card")).toBeVisible({
+    await expect(
+      memberPage.getByTestId("settings-not-for-players"),
+    ).toBeVisible({
       timeout: 15_000,
     });
     await expect(memberPage.getByTestId("lore-repository-card")).toHaveCount(0);

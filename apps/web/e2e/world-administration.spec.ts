@@ -147,11 +147,12 @@ test("a Player is shown no administration and the server refuses it", async ({
     );
   });
 
-  await test.step("typed in, the settings page is read-only for a Player", async () => {
+  await test.step("typed in, the settings page shows a Player a GIF, not the settings", async () => {
     await player.goto(`/world/${worldId}/settings/system`);
-    await expect(player.getByTestId("active-system-card")).toBeVisible({
+    await expect(player.getByTestId("settings-not-for-players")).toBeVisible({
       timeout: 15_000,
     });
+    await expect(player.getByTestId("active-system-card")).toHaveCount(0);
     await expect(player.getByTestId("system-picker-card")).toHaveCount(0);
     await expect(player.getByTestId("default-scene-grid-card")).toHaveCount(0);
     await expect(

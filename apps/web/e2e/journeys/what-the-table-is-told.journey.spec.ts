@@ -21,7 +21,9 @@ import {
  *
  * *That* play is paused, and *since when*: on their world's card in the world
  * list, and in a quiet banner on the world's pages. After the lift, the
- * world's settings show the history as times only.
+ * history shows as times only: on the settings page for the Game Master, and
+ * on the Overview ("About this table") for everyone else, whom the settings
+ * page shows a GIF.
  *
  * # What they may never be told
  *
@@ -232,8 +234,9 @@ test.describe("spec 051 US5 journey: what the table is told", () => {
       });
 
       for (const { role, page } of seats) {
-        await test.step(`the ${role}'s settings show the history, times only`, async () => {
-          await page.goto(`/world/${table.worldId}/settings/system`);
+        await test.step(`the ${role}'s world shows the history, times only`, async () => {
+          const path = role === "Game Master" ? "settings/system" : "staging";
+          await page.goto(`/world/${table.worldId}/${path}`);
           const history = page.getByTestId("play-pause-history-card");
           await expect(history).toBeVisible({ timeout: 20_000 });
           const rows = history.getByTestId("play-pause-history-row");

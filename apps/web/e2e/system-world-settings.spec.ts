@@ -141,9 +141,12 @@ test("a Game Master turns a declared setting off and a player's open sheet follo
     page.getByTestId("world-system-setting-inspiration"),
   ).not.toBeChecked({ timeout: 15_000 });
 
-  // A player reads it and cannot change it.
-  await player.goto(`/world/${worldId}/settings/system`);
-  const playerToggle = player.getByTestId("world-system-setting-inspiration");
+  // A player reads it and cannot change it — on the Overview, under "About
+  // this table"; the settings page shows a Player a GIF, not the settings.
+  await player.goto(`/world/${worldId}/staging`);
+  const playerToggle = player
+    .getByTestId("about-this-table")
+    .getByTestId("world-system-setting-inspiration");
   await expect(playerToggle).toBeVisible({ timeout: 15_000 });
   await expect(playerToggle).not.toBeChecked();
   await expect(playerToggle).toBeDisabled();

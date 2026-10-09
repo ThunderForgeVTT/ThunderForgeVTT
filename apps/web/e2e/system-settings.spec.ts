@@ -10,7 +10,17 @@ import { expectNoAxeViolations } from "./fixtures/axe";
  * browser-level check that a GM can actually pick a system through the
  * real UI, see the legal notice before confirming, have it persist, and
  * that a non-GM sees the same info with no picker.
+ *
+ * A Player reads it on the world's Overview, under "About this table": the
+ * settings page shows a Player a GIF and a way back, not the settings.
  */
+
+/** Tenor's GIF, answered locally so the test never waits on Tenor. */
+const GM_SIDE_GIF = "https://media.tenor.com/ejjuR2cYxvoAAAAM/wait-nahhh.gif";
+const ONE_PIXEL_GIF = Buffer.from(
+  "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
+  "base64",
+);
 
 function uniqueSuffix(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
@@ -132,7 +142,7 @@ test.describe("Spec 016: GM assigns a game system and its legal notice is persis
     );
   });
 
-  test("a non-GM member sees the active system and its legal notice, but no picker", async ({
+  test("a non-GM member reads the active system and its legal notice on the Overview, and no picker anywhere", async ({
     browser,
   }) => {
     const gmContext = await browser.newContext({
@@ -168,15 +178,123 @@ test.describe("Spec 016: GM assigns a game system and its legal notice is persis
       },
     );
 
-    await playerPage.goto(`/world/${worldId}/settings/system`);
-    await expect(playerPage.getByTestId("active-system-card")).toContainText(
+    await playerPage.goto(`/world/${worldId}/staging`);
+    const about = playerPage.getByTestId("about-this-table");
+    await expect(about.getByTestId("active-system-card")).toContainText(
       "Genie",
       {
         timeout: 10_000,
       },
     );
-    // No GM-only picker for a non-GM member.
+    await expect(about.getByTestId("system-legal-notice")).toBeVisible();
+    // No GM-only picker for a non-GM member, here or on the settings page.
     await expect(playerPage.getByTestId("system-picker-card")).toHaveCount(0);
+    await playerPage.goto(`/world/${worldId}/settings/system`);
+    await expect(
+      playerPage.getByTestId("settings-not-for-players"),
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(playerPage.getByTestId("system-picker-card")).toHaveCount(0);
+
+    await gmContext.close();
+    await playerContext.close();
+  });
+
+  test("a Player who types in the settings address is shown the GIF, no settings, and a way back", async ({
+    browser,
+  }) => {
+    const gmContext = await browser.newContext();
+    const gmPage = await gmContext.newPage();
+    await register(gmPage, freshCredentials("e2esysgifgm"));
+    const worldId = await createWorld(
+      gmPage,
+      `E2E System Settings GIF ${uniqueSuffix()}`,
+    );
+
+    await gmPage.goto(`/world/${worldId}`);
+    await gmPage.getByRole("button", { name: "Generate Join Link" }).click();
+    const inviteInput = gmPage.locator("input[readonly]").first();
+    await expect(inviteInput).toBeVisible({ timeout: 10_000 });
+    const inviteCode = new URL(await inviteInput.inputValue()).pathname
+      .split("/")
+      .pop();
+    if (!inviteCode) throw new Error("Could not extract invite code");
+
+    const playerContext = await browser.newContext();
+    const playerPage = await playerContext.newPage();
+    await register(playerPage, freshCredentials("e2esysgifplayer"));
+    await playerPage.goto(`/join/${inviteCode}`);
+    await playerPage.getByRole("button", { name: "Join Campaign" }).click();
+    await playerPage.waitForURL(
+      (url) => url.pathname.startsWith(`/world/${worldId}`),
+      { timeout: 15_000 },
+    );
+
+    await test.step("the GIF and the line, and none of the settings", async () => {
+      await playerContext.route(GM_SIDE_GIF, (route) =>
+        route.fulfill({ contentType: "image/gif", body: ONE_PIXEL_GIF }),
+      );
+      await playerPage.goto(`/world/${worldId}/settings/system`);
+      const notice = playerPage.getByTestId("settings-not-for-players");
+      await expect(notice).toBeVisible({ timeout: 15_000 });
+      await expect(
+        notice.getByRole("heading", {
+          name: "Nice try — this is the Game Master's side of the table.",
+        }),
+      ).toBeVisible();
+      const gif = notice.getByTestId("settings-not-for-players-gif");
+      await expect(gif).toHaveAttribute("src", GM_SIDE_GIF);
+      await expect(gif).toHaveAttribute("alt", /\S/);
+      await expect(
+        playerPage.getByTestId("world-system-settings-page"),
+      ).toHaveCount(0);
+      for (const card of [
+        "active-system-card",
+        "system-picker-card",
+        "world-appearance-card",
+        "default-scene-grid-card",
+        "settings-invite-players-card",
+        "world-system-settings-card",
+      ]) {
+        await expect(playerPage.getByTestId(card)).toHaveCount(0);
+      }
+      await expectNoAxeViolations(
+        playerPage,
+        '[data-testid="settings-not-for-players"]',
+      );
+    });
+
+    await test.step("the line stands alone when the GIF cannot load", async () => {
+      await playerContext.unroute(GM_SIDE_GIF);
+      await playerContext.route(GM_SIDE_GIF, (route) => route.abort());
+      await playerPage.reload();
+      const notice = playerPage.getByTestId("settings-not-for-players");
+      await expect(notice).toContainText("Game Master's side of the table", {
+        timeout: 15_000,
+      });
+      await expect(
+        notice.getByTestId("settings-not-for-players-gif"),
+      ).toHaveCount(0);
+    });
+
+    await test.step("the button goes back to the world", async () => {
+      await playerPage.getByTestId("settings-back-to-world").click();
+      await expect(playerPage).toHaveURL(
+        new RegExp(`/world/${worldId}/staging$`),
+      );
+      await expect(playerPage.getByTestId("about-this-table")).toBeVisible({
+        timeout: 15_000,
+      });
+    });
+
+    await test.step("the Game Master still gets the settings", async () => {
+      await gmPage.goto(`/world/${worldId}/settings/system`);
+      await expect(gmPage.getByTestId("system-picker-card")).toBeVisible({
+        timeout: 15_000,
+      });
+      await expect(gmPage.getByTestId("settings-not-for-players")).toHaveCount(
+        0,
+      );
+    });
 
     await gmContext.close();
     await playerContext.close();
