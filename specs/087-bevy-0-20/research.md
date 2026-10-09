@@ -592,3 +592,81 @@ Every baseline line reads the same. The new line splits the 748 into the
 quads that 0.20 draws as `Mesh2d` (SC-006). `engineStats` read fps 60.24,
 frame 16.6 ms and `tokens_culled` 2020; the culled count is the
 baseline's.
+
+### Release-engine slices (T053)
+
+`pnpm e2e:resumable-downloads` on the release 0.20 engine (load at start
+2.82 / 4.46 / 4.59): standalone 21 of 21, integration 8 of 8. The
+"Engine download failed" lines in the log come from the test that fails
+the download on purpose. `pnpm e2e:engine-limits` is T050's four runs.
+
+### Dev-engine slices (T054)
+
+Each run started only when no e2e run from any tree was going. The load is
+the 1/5/15-minute average at the start.
+
+| Slice             | Dev engine                                                      | Release engine (rerun)                |
+| ----------------- | --------------------------------------------------------------- | ------------------------------------- |
+| engine-other      | 9 / 9 (2.96 / 3.46 / 3.59)                                      |                                       |
+| lighting          | 8 / 8 (3.08 / 2.72 / 2.65)                                      |                                       |
+| combat            | 25 / 25 (1.99 / 3.05 / 3.06)                                    |                                       |
+| worlds            | 20 / 20 (1.95 / 3.61 / 3.65)                                    |                                       |
+| rolls standalone  | 161 / 161 (3.57 / 4.23 / 3.77, and again at 2.44 / 3.39 / 3.42) |                                       |
+| rolls integration | 28 / 29, twice (1.09 / 1.15 / 2.04 and 13.52 / 10.45 / 7.52)    | 29 / 29 (5.15 / 4.99 / 3.73)          |
+| canvas            | 43 / 44, twice (2.54 / 2.84 / 3.28 and 3.35 / 3.60 / 3.02)      | 43 / 43 + 1 skip (1.11 / 1.19 / 1.13) |
+| tokens            | 23 / 24, three times (latest 3.31 / 4.50 / 4.50)                | 24 / 24 (2.76 / 2.41 / 1.89)          |
+| scenes            | 17 / 18, twice (latest 3.34 / 3.52 / 3.35)                      | 17 / 18 (6.38 / 5.39 / 3.47)          |
+
+The first engine-other and canvas runs (3 / 9 and 3 / 29) are not counted:
+a run from another checkout dropped `thunderforge_e2e_0` under them twice
+(01:24:33 and 01:28:59). The e2e lock is per checkout, while the database,
+ports and mail container are shared. Two first tries at rolls integration
+never started for the same reason (mail container, then ports held by
+another tree's run). The release canvas run's one skip is
+`canvas-engine-stopped.spec.ts:65`, which skips itself when the engine
+exports no `debug_panic`, as a release build does; it passed on the dev
+engine.
+
+**Not caused by 0.20.** `scene-live-launch.spec.ts:22` (no
+`scene-switcher`) fails on both engines here, and also fails in the
+`mapsync` worktree on 0.19.1, including on a quiet run.
+
+**Only on the 0.20 dev engine.** Three tests pass on the release engine,
+and passed on main's 0.19.1 dev engine, but fail on the 0.20 dev engine
+every time:
+
+- `board-loading.spec.ts:42` runs out of the default 30 s test timeout
+  waiting for `scene-load-indicator` to go (its own waits allow 120 s and
+  60 s). It has not failed on 0.19.1 in any tree's history.
+- `look-at-and-follow.spec.ts:98`, step "with it off, a turn change leaves
+  the camera where it is": after a reload, `__engineProbe` is not there
+  within the 30 s poll, though the screenshot shows a drawn board. It
+  failed once on main on 2026-09-22 and has passed there since.
+- `rolls-dice-on-screen.spec.ts:385` (SC-004 / SC-007) asserts a median
+  frame time of at most 18.2 ms during a 20d6 throw, and is not one of the
+  measured specs, so it runs on a dev engine. It read 19.7 ms and
+  22.2 ms. On main's 0.19.1 dev engine it passed in every rolls slice from
+  2026-10-08 03:51 on.
+
+The dev `engine_bg.wasm` grew from 274,300,485 to 352,608,993 bytes
+(+28.5%), against +5% for release. Both the slower start and the slower
+frames are what an unoptimised build that grew by that much would show.
+The release engine, which is what players get, passes all three. Making
+the dev-engine e2e runs green again is a change beyond this spec: it
+needs one of a longer timeout in two specs, running the dice spec on a
+release engine, or a lighter dev profile. That is left for the owner.
+
+### Full-suite rule (T055)
+
+`pnpm e2e:which --diff=main` names canvas, engine-limits, engine-other and
+lighting, all run above, and asks for the FULL SUITE because `Cargo.lock`
+changed. The slices above stand in for it (Open item 1, R17). It lists
+five paths no slice covers. Each has its own proof:
+
+| Path                                                       | Proven by                                   |
+| ---------------------------------------------------------- | ------------------------------------------- |
+| `apps/demo/src/backend/handlers/floatParity.test.ts`       | the demo's vitest run (T034, T056)          |
+| `crates/thunderforge-combat/tests/float_parity.json`       | `float_parity.rs` and `floatParity.test.ts` |
+| `crates/thunderforge-combat/tests/float_parity.rs`         | `cargo test -p thunderforge-combat` (T056)  |
+| `crates/thunderforge-engine/src/plugins/darkness_probe.rs` | the engine's unit tests (T056)              |
+| `scripts/e2e/slices.json`                                  | configuration; read by `e2e:which` itself   |

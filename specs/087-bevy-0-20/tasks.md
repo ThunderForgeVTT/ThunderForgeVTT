@@ -134,7 +134,7 @@ listed in T031 and T032.
 - [x] T050 [US3] Build a release engine, copy it over main's, and run `THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT=1 pnpm e2e:engine-limits` three times. Record the medians next to the baseline in research.md under `## Result`. SC-003 requires at least 95% of baseline fps and at most 105% of baseline frame time at every level. If it fails, stop and report the levels to the owner (Open item 3).
 - [x] T051 [P] [US4] Measure the release `.wasm` raw and brotli. Record it next to the baseline with the difference. SC-004 allows at most 10% growth. If it is above that, report it and pause for the owner (Open item 4).
 - [x] T052 [P] [US3] Render-probe lines on the same scene. Compare with the baseline per contracts/render-probe.md (SC-006).
-- [ ] T053 Run the release-engine slices: `pnpm e2e:engine-limits` (from T050) and `pnpm e2e:resumable-downloads`, both the standalone and the integration part.
+- [x] T053 Run the release-engine slices: `pnpm e2e:engine-limits` (from T050) and `pnpm e2e:resumable-downloads`, both the standalone and the integration part.
 - [ ] T054 Copy a dev engine across, then run each of these slices, all green:
   - `pnpm e2e:engine-other`, which holds the darkness shader;
   - `pnpm e2e:canvas`, which holds the render probe, the camera and `canvas-engine-stopped.spec.ts` (the panic hook);
@@ -147,7 +147,9 @@ listed in T031 and T032.
 
   Use `THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT=1` and `--workers=1` on the external stack.
 
-- [ ] T055 `pnpm e2e:which --diff` against `main`. Run each slice it names that T053 and T054 did not run. Record in research.md that it asks for the full suite because of `Cargo.lock`, and that the slices stand in for it (Open item 1).
+  **Open:** every slice is green on the release engine, apart from `scene-live-launch`, which fails on 0.19.1 too. On the dev engine, three tests fail every time, and they pass on 0.19.1's dev engine. See research.md, "Dev-engine slices (T054)". The owner decides how to proceed.
+
+- [x] T055 `pnpm e2e:which --diff` against `main`. Run each slice it names that T053 and T054 did not run. Record in research.md that it asks for the full suite because of `Cargo.lock`, and that the slices stand in for it (Open item 1).
 - [ ] T056 `make lint` and the units of T031–T035, again, on the final tree.
 
 **Checkpoint**: SC-001 to SC-006 are recorded in research.md under
