@@ -36,6 +36,9 @@ export const PERF_LANE_SPECS = [
   "engine-interaction-limits",
   "engine-loading",
   "canvas-authoring",
+  // SC-007's 18.2 ms frame during a 20d6 throw (spec 087 split it out of
+  // `rolls-dice-on-screen`, whose other tests assert on faces, not time).
+  "rolls-dice-frame-rate",
   // `status-systems` and `world-cache-isolated` used to be here too. Both had
   // failed in a four-shard run and passed alone, and the explanation was GPU
   // contention. Neither asserts on a duration, and a full run on 2026-09-11,

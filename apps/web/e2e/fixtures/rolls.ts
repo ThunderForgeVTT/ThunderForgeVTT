@@ -267,6 +267,18 @@ export async function waitForPlayView(page: Page): Promise<void> {
   await waitForEngineProbe(page);
 }
 
+/** A GM alone at a fresh world's play view. */
+export async function seatAlone(page: Page): Promise<string> {
+  const worldId = await registerAndCreateWorld(
+    page,
+    `E2E Dice ${uniqueSuffix()}`,
+    "e2edicegm",
+  );
+  await clickPlay(page);
+  await waitForPlayView(page);
+  return worldId;
+}
+
 export interface RollTable {
   worldId: string;
   gm: Page;

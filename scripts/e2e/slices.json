@@ -773,7 +773,7 @@
     },
     {
       "name": "rolls",
-      "summary": "Rolls at the table: every board animates a roll, the chat lists it as each viewer may see it, and the GM reveals hidden ones (specs/081-rolls-at-the-table)",
+      "summary": "Rolls at the table: every board animates a roll, the chat lists it as each viewer may see it, and the GM reveals hidden ones (specs/081-rolls-at-the-table, specs/083-dice-on-the-screen); rolls-dice-frame-rate is measured lane, so a run that includes it builds a release engine",
       "own": ["rolls-"],
       "neighbours": [
         {
