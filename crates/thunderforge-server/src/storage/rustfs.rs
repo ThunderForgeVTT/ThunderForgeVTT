@@ -474,8 +474,15 @@ pub async fn write_object(
 ///
 /// Spec 037 FR-016: retention has to be bounded, and bounded retention means
 /// deletion.
+///
+/// Spec 048 FR-031: an uploaded character sheet is the second such case. A
+/// player may delete their brought character, and its files go with it; a
+/// sheet is one row, one object, and never deduplicated either.
 pub async fn delete_object(cfg: &RustFsConfig, key: &str) -> Result<(), StorageError> {
-    if !key.starts_with(FEEDBACK_PREFIX) {
+    if !DELETABLE_PREFIXES
+        .iter()
+        .any(|prefix| key.starts_with(prefix))
+    {
         return Err(StorageError::DeleteRefused(key.to_string()));
     }
 
@@ -495,6 +502,14 @@ pub async fn delete_object(cfg: &RustFsConfig, key: &str) -> Result<(), StorageE
 /// feature module for a safety rule about its own bucket, and the test below
 /// pins the two together.
 pub const FEEDBACK_PREFIX: &str = "feedback/";
+
+/// Uploaded character sheets (spec 048). Duplicated from
+/// `sheet_import::storage::STORAGE_PREFIX` for the same reason, and pinned the
+/// same way.
+pub const SHEETS_PREFIX: &str = "sheets/";
+
+/// Every prefix `delete_object` will touch, and no other.
+pub const DELETABLE_PREFIXES: &[&str] = &[FEEDBACK_PREFIX, SHEETS_PREFIX];
 
 #[cfg(test)]
 mod tests {
@@ -568,5 +583,34 @@ mod tests {
     #[test]
     fn the_deletable_prefix_is_the_one_feedback_writes_under() {
         assert_eq!(FEEDBACK_PREFIX, crate::feedback::STORAGE_PREFIX);
+    }
+
+    #[test]
+    fn the_sheets_prefix_is_the_one_sheet_import_writes_under() {
+        assert_eq!(SHEETS_PREFIX, crate::sheet_import::storage::STORAGE_PREFIX);
+    }
+
+    /// Spec 048 T022: a sheet's key passes the prefix check, so the refusal
+    /// is not what stops it. The endpoint is unreachable, so the call fails
+    /// connecting instead, which is the proof that it got past the guard.
+    #[tokio::test]
+    async fn delete_object_accepts_a_sheet_key_and_still_refuses_others() {
+        let cfg = RustFsConfig {
+            endpoint: "http://127.0.0.1:1".to_string(),
+            region: "us-east-1".to_string(),
+            bucket: "b".to_string(),
+            root_access_key: "k".to_string(),
+            root_secret_key: "s".to_string(),
+        };
+        let key = crate::sheet_import::storage::object_key(Uuid::nil(), Uuid::nil(), 1);
+        let attempted = delete_object(&cfg, &key).await;
+        assert!(
+            matches!(attempted, Err(StorageError::DeleteObject(_))),
+            "{attempted:?}"
+        );
+        for refused in ["sheetsx/a.pdf", "a/sheets/b.pdf", "Sheets/a.pdf"] {
+            let refused = delete_object(&cfg, refused).await;
+            assert!(matches!(refused, Err(StorageError::DeleteRefused(_))));
+        }
     }
 }

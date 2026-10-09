@@ -14,6 +14,8 @@ fn insert_test_actor(
     let actor_id = Uuid::now_v7();
     diesel::insert_into(world_actors::table)
         .values((
+            world_actors::origin
+                .eq(thunderforge_server::compendium::origin::ContentOrigin::Authored),
             world_actors::id.eq(actor_id),
             world_actors::world_id.eq(world_id),
             world_actors::scene_id.eq(scene_id),
@@ -83,6 +85,8 @@ fn insert_test_item(conn: &mut PgConnection, world_id: Uuid, owner_id: Uuid, nam
     let item_id = Uuid::now_v7();
     diesel::insert_into(world_items::table)
         .values((
+            world_items::origin
+                .eq(thunderforge_server::compendium::origin::ContentOrigin::Authored),
             world_items::id.eq(item_id),
             world_items::world_id.eq(world_id),
             world_items::name.eq(name),

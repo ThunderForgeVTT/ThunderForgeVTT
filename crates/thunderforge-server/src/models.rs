@@ -1173,6 +1173,9 @@ pub struct WorldActor {
     /// Spec 044 FR-030b: the Game Master has locked this character's look, so
     /// its holder's grant (`auth::actor_imagery`) does not apply to it.
     pub art_locked: bool,
+    /// Spec 048 FR-033a: where this came from. Stated by every writer;
+    /// the database has no default.
+    pub origin: crate::compendium::origin::ContentOrigin,
 }
 
 /// New actor for insertion
@@ -1195,6 +1198,9 @@ pub struct NewWorldActor {
     /// Spec 046 FR-016: a named individual whose tokens place linked. Every
     /// insert decides, for the same reason as `visible_to_players`.
     pub is_unique: bool,
+    /// Spec 048 FR-033a: where this came from. Stated by every writer;
+    /// the database has no default.
+    pub origin: crate::compendium::origin::ContentOrigin,
 }
 
 /// Spec 010: an actor's "ownership block" entry — one explicit
@@ -1601,6 +1607,11 @@ pub struct WorldItem {
     pub multiattack: Vec<Option<uuid::Uuid>>,
     /// Spec 084: the item properties the system declares (`two_handed`).
     pub properties: Vec<Option<String>>,
+    /// Spec 048 FR-033a: where this came from. Stated by every writer;
+    /// the database has no default.
+    pub origin: crate::compendium::origin::ContentOrigin,
+    /// Spec 048: pounds, as a sheet lists it.
+    pub weight: Option<f64>,
 }
 
 /// New item for insertion.
@@ -1612,6 +1623,11 @@ pub struct NewWorldItem {
     pub description: Option<String>,
     pub icon_asset_id: Option<uuid::Uuid>,
     pub created_by: uuid::Uuid,
+    /// Spec 048 FR-033a: where this came from. Stated by every writer;
+    /// the database has no default.
+    pub origin: crate::compendium::origin::ContentOrigin,
+    /// Spec 048: pounds, as a sheet lists it.
+    pub weight: Option<f64>,
 }
 
 /// Spec 013: an item's ownership-block entry — direct structural mirror of
@@ -1713,6 +1729,11 @@ pub struct ActorInventoryEntry {
     /// inventing one would be a lie; every write site sets both.
     pub created_by: Option<uuid::Uuid>,
     pub updated_by: Option<uuid::Uuid>,
+    /// Spec 048: a link to a staged piece the GM has not adopted yet. Never
+    /// set together with `item_id`.
+    pub staged_id: Option<uuid::Uuid>,
+    pub equipped: bool,
+    pub attuned: bool,
 }
 
 /// New inventory entry for insertion.
@@ -2045,6 +2066,9 @@ pub struct WorldAbility {
     pub legendary_cost: i32,
     /// Abilities one use makes, in order (FR-044). Empty for a single attack.
     pub multiattack: Vec<Option<uuid::Uuid>>,
+    /// Spec 048 FR-033a: where this came from. Stated by every writer;
+    /// the database has no default.
+    pub origin: crate::compendium::origin::ContentOrigin,
 }
 
 /// New ability for insertion. `id`/timestamps come from DB defaults.
@@ -2059,6 +2083,9 @@ pub struct NewWorldAbility {
     pub gm_only: bool,
     pub created_by: uuid::Uuid,
     pub updated_by: uuid::Uuid,
+    /// Spec 048 FR-033a: where this came from. Stated by every writer;
+    /// the database has no default.
+    pub origin: crate::compendium::origin::ContentOrigin,
 }
 
 /// An ability an item carries (spec 033 FR-020).
@@ -2165,6 +2192,16 @@ pub struct ActorAbilityEntry {
     pub ability_name_snapshot: String,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// Spec 048: a link to a staged piece the GM has not adopted yet. Never
+    /// set together with `ability_id`.
+    pub staged_id: Option<uuid::Uuid>,
+    /// Spec 048: how the actor has this ability, as a sheet records it.
+    pub prepared: Option<bool>,
+    pub granted_by: Option<String>,
+    pub uses_max: Option<i16>,
+    pub uses_used: Option<i16>,
+    /// `short_rest`, `long_rest`, `dawn` or `none`.
+    pub recharge: Option<String>,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]

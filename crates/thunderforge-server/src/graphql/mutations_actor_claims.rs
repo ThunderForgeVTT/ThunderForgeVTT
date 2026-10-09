@@ -529,6 +529,8 @@ pub async fn create_and_claim_actor_impl(
                 .map_err(|_| "World has no scenes to assign the new character to".to_string())?;
 
             let new_actor = NewWorldActor {
+                // Made here, by a person: authored (spec 048 FR-033a).
+                origin: crate::compendium::origin::ContentOrigin::Authored,
                 world_id,
                 scene_id,
                 actor_type: "character".to_string(),

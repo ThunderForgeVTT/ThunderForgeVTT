@@ -352,6 +352,8 @@ fn copy_ability(
 
     let copy = diesel::insert_into(world_abilities::table)
         .values(&NewWorldAbility {
+            // Only authored content can be in a collection (spec 049 FR-054a).
+            origin: crate::compendium::origin::ContentOrigin::Authored,
             world_id: ctx.destination_world_id,
             name: source.name.clone(),
             description: source.description.clone(),
@@ -423,6 +425,7 @@ fn copy_item(
     let now = chrono::Utc::now().naive_utc();
     diesel::insert_into(world_items::table)
         .values((
+            world_items::origin.eq(crate::compendium::origin::ContentOrigin::Authored),
             world_items::id.eq(new_id),
             world_items::world_id.eq(ctx.destination_world_id),
             world_items::name.eq(&name),
@@ -574,6 +577,7 @@ fn copy_actor(
     let now = chrono::Utc::now().naive_utc();
     diesel::insert_into(world_actors::table)
         .values((
+            world_actors::origin.eq(crate::compendium::origin::ContentOrigin::Authored),
             world_actors::id.eq(new_id),
             world_actors::world_id.eq(ctx.destination_world_id),
             world_actors::scene_id.eq(destination_scene),

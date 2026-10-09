@@ -362,6 +362,7 @@ mod tests {
         let now = chrono::Utc::now().naive_utc();
         diesel::insert_into(world_actors::table)
             .values((
+                world_actors::origin.eq(crate::compendium::origin::ContentOrigin::Authored),
                 world_actors::id.eq(id),
                 world_actors::world_id.eq(world_id),
                 world_actors::scene_id.eq(scene_id),

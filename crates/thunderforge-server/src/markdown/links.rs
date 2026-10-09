@@ -299,6 +299,7 @@ mod tests {
         let now = chrono::Utc::now().naive_utc();
         diesel::insert_into(world_actors::table)
             .values((
+                world_actors::origin.eq(crate::compendium::origin::ContentOrigin::Authored),
                 world_actors::id.eq(id),
                 world_actors::world_id.eq(world_id),
                 world_actors::scene_id.eq(scene_id),
@@ -432,6 +433,7 @@ mod tests {
         use crate::schema::world_abilities;
         diesel::insert_into(world_abilities::table)
             .values((
+                world_abilities::origin.eq(crate::compendium::origin::ContentOrigin::Authored),
                 world_abilities::world_id.eq(world_id),
                 world_abilities::name.eq(name),
                 world_abilities::classification.eq("spell"),
@@ -481,6 +483,7 @@ mod tests {
         use crate::schema::world_items;
         let item_id = diesel::insert_into(world_items::table)
             .values((
+                world_items::origin.eq(crate::compendium::origin::ContentOrigin::Authored),
                 world_items::world_id.eq(world_id),
                 world_items::name.eq("Overlap"),
                 world_items::created_by.eq(owner_id),

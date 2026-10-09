@@ -2,6 +2,10 @@
 
 pub mod sql_types {
     #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "ActorImportKind"))]
+    pub struct ActorImportKind;
+
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "CanvasImageAssetKind"))]
     pub struct CanvasImageAssetKind;
 
@@ -24,6 +28,10 @@ pub mod sql_types {
     #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "PolicyEffect"))]
     pub struct PolicyEffect;
+
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "StagedState"))]
+    pub struct StagedState;
 }
 
 diesel::table! {
@@ -55,6 +63,27 @@ diesel::table! {
         appeal_note -> Nullable<Text>,
         closed_at -> Nullable<Timestamptz>,
         closed_reason -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::ActorImportKind;
+
+    actor_imports (id) {
+        id -> Uuid,
+        world_id -> Uuid,
+        actor_id -> Uuid,
+        version_id -> Nullable<Uuid>,
+        kind -> ActorImportKind,
+        restored_from -> Nullable<Uuid>,
+        before_snapshot -> Jsonb,
+        written -> Jsonb,
+        #[max_length = 64]
+        plan_hash -> Nullable<Bpchar>,
+        applied_at -> Timestamp,
+        created_by -> Uuid,
+        updated_by -> Uuid,
     }
 }
 
@@ -107,6 +136,21 @@ diesel::table! {
         id -> Int4,
         two_factor_required_for_all_users -> Bool,
         updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    brought_characters (id) {
+        id -> Uuid,
+        owner_user_id -> Uuid,
+        #[max_length = 64]
+        system_id -> Varchar,
+        #[max_length = 200]
+        name -> Varchar,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+        created_by -> Uuid,
+        updated_by -> Uuid,
     }
 }
 
@@ -805,6 +849,28 @@ diesel::table! {
 }
 
 diesel::table! {
+    sheet_import_versions (id) {
+        id -> Uuid,
+        character_id -> Uuid,
+        version_no -> Int4,
+        file_key -> Text,
+        #[max_length = 64]
+        file_sha256 -> Bpchar,
+        file_bytes -> Int4,
+        file_pages -> Int2,
+        #[max_length = 64]
+        reader_id -> Varchar,
+        #[max_length = 32]
+        reader_version -> Varchar,
+        reading -> Jsonb,
+        corrections -> Jsonb,
+        created_at -> Timestamp,
+        created_by -> Uuid,
+        updated_by -> Uuid,
+    }
+}
+
+diesel::table! {
     shelf_collection_versions (id) {
         id -> Uuid,
         compendium_id -> Uuid,
@@ -965,6 +1031,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::ContentOrigin;
+
     world_abilities (id) {
         id -> Uuid,
         world_id -> Uuid,
@@ -985,6 +1054,7 @@ diesel::table! {
         action_cost -> Text,
         legendary_cost -> Int4,
         multiattack -> Array<Nullable<Uuid>>,
+        origin -> ContentOrigin,
     }
 }
 
@@ -1037,6 +1107,14 @@ diesel::table! {
         ability_name_snapshot -> Text,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        staged_id -> Nullable<Uuid>,
+        prepared -> Nullable<Bool>,
+        #[max_length = 200]
+        granted_by -> Nullable<Varchar>,
+        uses_max -> Nullable<Int2>,
+        uses_used -> Nullable<Int2>,
+        #[max_length = 16]
+        recharge -> Nullable<Varchar>,
     }
 }
 
@@ -1083,6 +1161,9 @@ diesel::table! {
         updated_at -> Timestamp,
         created_by -> Nullable<Uuid>,
         updated_by -> Nullable<Uuid>,
+        staged_id -> Nullable<Uuid>,
+        equipped -> Bool,
+        attuned -> Bool,
     }
 }
 
@@ -1130,6 +1211,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::ContentOrigin;
+
     world_actors (id) {
         id -> Uuid,
         world_id -> Uuid,
@@ -1148,6 +1232,7 @@ diesel::table! {
         is_unique -> Bool,
         visible_to_players -> Bool,
         art_locked -> Bool,
+        origin -> ContentOrigin,
     }
 }
 
@@ -1446,6 +1531,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::ContentOrigin;
+
     world_items (id) {
         id -> Uuid,
         world_id -> Uuid,
@@ -1463,6 +1551,8 @@ diesel::table! {
         legendary_cost -> Int4,
         multiattack -> Array<Nullable<Uuid>>,
         properties -> Array<Nullable<Text>>,
+        origin -> ContentOrigin,
+        weight -> Nullable<Float8>,
     }
 }
 
@@ -1666,6 +1756,38 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::ContentOrigin;
+    use super::sql_types::StagedState;
+
+    world_staged_content (id) {
+        id -> Uuid,
+        world_id -> Uuid,
+        player_user_id -> Uuid,
+        #[max_length = 32]
+        kind -> Varchar,
+        #[max_length = 200]
+        name -> Varchar,
+        #[max_length = 200]
+        normalized_name -> Varchar,
+        #[max_length = 64]
+        content_hash -> Bpchar,
+        field_values -> Jsonb,
+        origin -> ContentOrigin,
+        state -> StagedState,
+        differs_from -> Nullable<Uuid>,
+        first_actor_id -> Nullable<Uuid>,
+        adopted_ability_id -> Nullable<Uuid>,
+        adopted_item_id -> Nullable<Uuid>,
+        decided_by -> Nullable<Uuid>,
+        decided_at -> Nullable<Timestamp>,
+        created_at -> Timestamp,
+        created_by -> Uuid,
+        updated_by -> Uuid,
+    }
+}
+
+diesel::table! {
     world_system_setting_changes (id) {
         id -> Int8,
         world_id -> Uuid,
@@ -1691,6 +1813,25 @@ diesel::table! {
 }
 
 diesel::table! {
+    world_unadopted_use_attempts (id) {
+        id -> Uuid,
+        world_id -> Uuid,
+        actor_id -> Uuid,
+        staged_id -> Uuid,
+        user_id -> Uuid,
+        #[max_length = 64]
+        operation -> Varchar,
+        first_at -> Timestamp,
+        last_at -> Timestamp,
+        attempts -> Int4,
+        reported -> Bool,
+        chat_message_id -> Nullable<Uuid>,
+        created_by -> Uuid,
+        updated_by -> Uuid,
+    }
+}
+
+diesel::table! {
     worlds (id) {
         id -> Uuid,
         name -> Varchar,
@@ -1712,6 +1853,9 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(actor_imports -> sheet_import_versions (version_id));
+diesel::joinable!(actor_imports -> world_actors (actor_id));
+diesel::joinable!(actor_imports -> worlds (world_id));
 diesel::joinable!(admin_bootstrap_oauth_sessions -> oauth_providers (provider_id));
 diesel::joinable!(attestations -> terms_versions (terms_version_id));
 diesel::joinable!(canvas_image_assets -> worlds (world_id));
@@ -1764,6 +1908,7 @@ diesel::joinable!(scene_state_fingerprints -> scenes (scene_id));
 diesel::joinable!(scene_state_fingerprints -> users (updated_by));
 diesel::joinable!(scenes -> users (owner_id));
 diesel::joinable!(shapes -> scenes (scene_id));
+diesel::joinable!(sheet_import_versions -> brought_characters (character_id));
 diesel::joinable!(shelf_collection_versions -> compendiums (compendium_id));
 diesel::joinable!(token_resource_disclosure -> tokens (token_id));
 diesel::joinable!(tokens -> scenes (scene_id));
@@ -1782,6 +1927,7 @@ diesel::joinable!(world_ability_shares -> users (created_by));
 diesel::joinable!(world_ability_shares -> world_abilities (ability_id));
 diesel::joinable!(world_actor_abilities -> world_abilities (ability_id));
 diesel::joinable!(world_actor_abilities -> world_actors (actor_id));
+diesel::joinable!(world_actor_abilities -> world_staged_content (staged_id));
 diesel::joinable!(world_actor_claims -> world_actors (actor_id));
 diesel::joinable!(world_actor_claims -> world_members (world_member_id));
 diesel::joinable!(world_actor_conditions -> users (applied_by));
@@ -1789,6 +1935,7 @@ diesel::joinable!(world_actor_conditions -> world_actors (actor_id));
 diesel::joinable!(world_actor_images -> world_actors (actor_id));
 diesel::joinable!(world_actor_inventory -> world_actors (actor_id));
 diesel::joinable!(world_actor_inventory -> world_items (item_id));
+diesel::joinable!(world_actor_inventory -> world_staged_content (staged_id));
 diesel::joinable!(world_actor_permissions -> users (user_id));
 diesel::joinable!(world_actor_permissions -> world_actors (actor_id));
 diesel::joinable!(world_actor_shares -> users (created_by));
@@ -1860,18 +2007,28 @@ diesel::joinable!(world_play_pause_triggers -> world_play_pauses (pause_id));
 diesel::joinable!(world_play_pauses -> world_play_pause_requests (request_id));
 diesel::joinable!(world_roll_records -> world_actors (actor_id));
 diesel::joinable!(world_roll_records -> worlds (world_id));
+diesel::joinable!(world_staged_content -> world_abilities (adopted_ability_id));
+diesel::joinable!(world_staged_content -> world_actors (first_actor_id));
+diesel::joinable!(world_staged_content -> world_items (adopted_item_id));
+diesel::joinable!(world_staged_content -> worlds (world_id));
 diesel::joinable!(world_system_setting_changes -> users (changed_by));
 diesel::joinable!(world_system_setting_changes -> worlds (world_id));
 diesel::joinable!(world_system_settings -> users (updated_by));
 diesel::joinable!(world_system_settings -> worlds (world_id));
+diesel::joinable!(world_unadopted_use_attempts -> world_actors (actor_id));
+diesel::joinable!(world_unadopted_use_attempts -> world_chat_messages (chat_message_id));
+diesel::joinable!(world_unadopted_use_attempts -> world_staged_content (staged_id));
+diesel::joinable!(world_unadopted_use_attempts -> worlds (world_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     account_notices,
     account_terminations,
+    actor_imports,
     admin_bootstrap_oauth_sessions,
     admin_bootstrap_setup,
     attestations,
     auth_security_settings,
+    brought_characters,
     canvas_image_assets,
     compendium_entries,
     compendiums,
@@ -1915,6 +2072,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     scene_state_fingerprints,
     scenes,
     shapes,
+    sheet_import_versions,
     shelf_collection_versions,
     terms_versions,
     token_resource_disclosure,
@@ -1972,7 +2130,9 @@ diesel::allow_tables_to_appear_in_same_query!(
     world_play_pause_triggers,
     world_play_pauses,
     world_roll_records,
+    world_staged_content,
     world_system_setting_changes,
     world_system_settings,
+    world_unadopted_use_attempts,
     worlds,
 );

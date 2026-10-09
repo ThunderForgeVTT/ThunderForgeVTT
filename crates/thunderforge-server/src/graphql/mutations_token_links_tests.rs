@@ -130,6 +130,7 @@ fn creature(
     let id = Uuid::now_v7();
     diesel::insert_into(world_actors::table)
         .values((
+            world_actors::origin.eq(crate::compendium::origin::ContentOrigin::Authored),
             world_actors::id.eq(id),
             world_actors::world_id.eq(t.world_id),
             world_actors::scene_id.eq(t.scene_id),

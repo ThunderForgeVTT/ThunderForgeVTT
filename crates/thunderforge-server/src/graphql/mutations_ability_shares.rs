@@ -460,6 +460,8 @@ pub async fn copy_shared_ability_to_world_impl(
 
             let copy = diesel::insert_into(world_abilities::table)
                 .values(&NewWorldAbility {
+                    // Spec 048 FR-033a: a copy carries where its source came from.
+                    origin: source.origin,
                     world_id: destination_world_id,
                     name: source.name.clone(),
                     description: source.description.clone(),

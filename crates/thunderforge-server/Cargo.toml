@@ -120,6 +120,7 @@ thunderforge-content = { path = "../../crates/thunderforge-content" }
 # to wasm — the readers above it must never become two implementations of
 # "what does this book say".
 thunderforge-pdf = { path = "../../crates/thunderforge-pdf" }
+thunderforge-sheet-import = { path = "../../crates/thunderforge-sheet-import" }
 thunderforge-pg = { path = "../../crates/thunderforge-pg" }
 thunderforge-pg-sockets = { path = "../../crates/thunderforge-pg-sockets" }
 thunderforge-presence = { path = "../../crates/thunderforge-presence" }

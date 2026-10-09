@@ -377,6 +377,8 @@ pub async fn create_ability_impl(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
     let new_ability = NewWorldAbility {
+        // Made here, by a person: authored (spec 048 FR-033a).
+        origin: crate::compendium::origin::ContentOrigin::Authored,
         world_id: input.world_id,
         name: input.name,
         description: input.description,

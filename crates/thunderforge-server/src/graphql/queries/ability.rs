@@ -292,6 +292,7 @@ mod tests {
     ) -> uuid::Uuid {
         diesel::insert_into(world_abilities::table)
             .values((
+                world_abilities::origin.eq(crate::compendium::origin::ContentOrigin::Authored),
                 world_abilities::world_id.eq(world_id),
                 world_abilities::name.eq(name),
                 world_abilities::classification.eq("spell"),

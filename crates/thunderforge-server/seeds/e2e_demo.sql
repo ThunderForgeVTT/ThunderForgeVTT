@@ -168,7 +168,7 @@ VALUES (
 ON CONFLICT (id) DO NOTHING;
 
 -- Items.
-INSERT INTO world_items (id, world_id, name, description, created_by, created_at, updated_at)
+INSERT INTO world_items (id, world_id, name, description, created_by, created_at, updated_at, origin)
 VALUES
   (
     '00000000-0000-0000-0000-000000001001',
@@ -177,7 +177,8 @@ VALUES
     'A tarnished brass lamp that suppresses a bound Genie''s power while held.',
     '00000000-0000-0000-0000-0000000000e2',
     now(),
-    now()
+    now(),
+    'Authored'
   ),
   (
     '00000000-0000-0000-0000-000000001002',
@@ -186,12 +187,13 @@ VALUES
     'A shifting cloak that hums faintly near gridless, reality-thin places.',
     '00000000-0000-0000-0000-0000000000e2',
     now(),
-    now()
+    now(),
+    'Authored'
   )
 ON CONFLICT (id) DO NOTHING;
 
 -- NPCs spanning size categories, to exercise TokenPanel's scale hint.
-INSERT INTO world_actors (id, world_id, scene_id, actor_type, game_system_id, label, created_by, owned_by, is_public, is_npc, created_at, updated_at, description, available_for_claim)
+INSERT INTO world_actors (id, world_id, scene_id, actor_type, game_system_id, label, created_by, owned_by, is_public, is_npc, created_at, updated_at, description, available_for_claim, origin)
 VALUES
   (
     '00000000-0000-0000-0000-000000002001',
@@ -207,7 +209,8 @@ VALUES
     now(),
     now(),
     'A diminutive, mischievous minor spirit.',
-    false
+    false,
+    'Authored'
   ),
   (
     '00000000-0000-0000-0000-000000002002',
@@ -223,7 +226,8 @@ VALUES
     now(),
     now(),
     'A medium-sized construct guarding the escape room''s exit.',
-    false
+    false,
+    'Authored'
   ),
   (
     '00000000-0000-0000-0000-000000002003',
@@ -239,7 +243,8 @@ VALUES
     now(),
     now(),
     'A colossal bound elemental, the encounter''s centerpiece threat.',
-    false
+    false,
+    'Authored'
   )
 ON CONFLICT (id) DO NOTHING;
 
@@ -288,7 +293,7 @@ ON CONFLICT (actor_id) DO NOTHING;
 
 -- Two more PCs — one per demo user, one leveled up to exercise the
 -- leveling UI (spec 019).
-INSERT INTO world_actors (id, world_id, scene_id, actor_type, game_system_id, label, created_by, owned_by, is_public, is_npc, created_at, updated_at, description, available_for_claim)
+INSERT INTO world_actors (id, world_id, scene_id, actor_type, game_system_id, label, created_by, owned_by, is_public, is_npc, created_at, updated_at, description, available_for_claim, origin)
 VALUES
   (
     '00000000-0000-0000-0000-000000003001',
@@ -304,7 +309,8 @@ VALUES
     now(),
     now(),
     'A level 3 Genie, still learning the shape of their own wishes.',
-    false
+    false,
+    'Authored'
   ),
   (
     '00000000-0000-0000-0000-000000003002',
@@ -320,7 +326,8 @@ VALUES
     now(),
     now(),
     'A freshly-bound Genie, level 1.',
-    false
+    false,
+    'Authored'
   )
 ON CONFLICT (id) DO NOTHING;
 

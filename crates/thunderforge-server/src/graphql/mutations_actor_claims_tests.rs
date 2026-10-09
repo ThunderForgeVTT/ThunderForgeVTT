@@ -22,6 +22,7 @@ pub(super) fn insert_test_pc(
     let now = chrono::Utc::now().naive_utc();
     diesel::insert_into(world_actors::table)
         .values((
+            world_actors::origin.eq(crate::compendium::origin::ContentOrigin::Authored),
             world_actors::id.eq(id),
             world_actors::world_id.eq(world_id),
             world_actors::scene_id.eq(scene_id),
@@ -330,6 +331,7 @@ async fn set_availability_rejects_npc() {
     let now = chrono::Utc::now().naive_utc();
     diesel::insert_into(world_actors::table)
         .values((
+            world_actors::origin.eq(crate::compendium::origin::ContentOrigin::Authored),
             world_actors::id.eq(npc_id),
             world_actors::world_id.eq(world_id),
             world_actors::scene_id.eq(scene_id),

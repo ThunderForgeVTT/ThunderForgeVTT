@@ -112,6 +112,8 @@ pub mod schema;
 pub mod session;
 pub mod settings;
 pub mod sheet;
+pub mod sheet_import;
+pub mod staged_content;
 pub mod state;
 pub mod static_files;
 pub mod status_display;

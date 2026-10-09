@@ -381,6 +381,9 @@ pub async fn copy_shared_item_to_world_impl(
                 .map_err(|_| UNAVAILABLE.to_string())?;
 
             let new_item_row = NewWorldItem {
+                weight: source.weight,
+                // Spec 048 FR-033a: a copy carries where its source came from.
+                origin: source.origin,
                 world_id: destination_world_id,
                 name: source.name.clone(),
                 description: source.description.clone(),

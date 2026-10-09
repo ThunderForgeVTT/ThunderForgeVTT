@@ -350,3 +350,153 @@ fn every_table_that_carries_content_outward_is_guarded() {
         ]
     );
 }
+
+// ---------------------------------------------------------------------------
+// Spec 048 FR-033a-d: actors, items and abilities carry their own origin.
+// ---------------------------------------------------------------------------
+
+fn set_origin(conn: &mut PgConnection, table: &str, id: Uuid, origin: &str) -> QueryResult<usize> {
+    diesel::sql_query(format!(
+        "UPDATE {table} SET origin = '{origin}' WHERE id = '{id}'"
+    ))
+    .execute(conn)
+}
+
+/// FR-033b: an item or an ability is written with its origin, and that is
+/// the origin it keeps. Neither direction is allowed.
+#[test]
+fn an_item_or_ability_origin_cannot_change() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let owner = insert_test_user(&mut conn);
+    let world = insert_test_world(&mut conn, owner);
+    let item = insert_test_item(&mut conn, world, owner);
+    let ability = insert_test_ability(&mut conn, world, owner);
+
+    for (table, id) in [("world_items", item), ("world_abilities", ability)] {
+        let refused = set_origin(&mut conn, table, id, "Uploaded")
+            .expect_err("an item or ability origin is immutable");
+        assert!(
+            refused.to_string().contains("origin is immutable"),
+            "{table}: {refused}"
+        );
+    }
+    // Writing the same origin back is not a change.
+    set_origin(&mut conn, "world_items", item, "Authored").expect("no change");
+}
+
+/// FR-033c: an applied import makes an authored actor uploaded. Nothing makes
+/// an uploaded actor authored again, not even a rollback.
+#[test]
+fn an_actor_becomes_uploaded_and_never_goes_back() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let owner = insert_test_user(&mut conn);
+    let world = insert_test_world(&mut conn, owner);
+    let scene = insert_test_scene(&mut conn, world, owner);
+    let actor = insert_test_actor(&mut conn, world, scene, owner);
+
+    set_origin(&mut conn, "world_actors", actor, "Uploaded").expect("Authored to Uploaded");
+    assert_eq!(
+        origin_of(&mut conn, "actor", actor).unwrap(),
+        Some(ContentOrigin::Uploaded)
+    );
+    let refused = set_origin(&mut conn, "world_actors", actor, "Authored")
+        .expect_err("an uploaded actor stays uploaded");
+    assert!(
+        refused.to_string().contains("may only become Uploaded"),
+        "{refused}"
+    );
+    assert_eq!(
+        origin_of(&mut conn, "actor", actor).unwrap(),
+        Some(ContentOrigin::Uploaded)
+    );
+}
+
+/// FR-033d: there is no permissive default. A writer that does not say where
+/// its content came from is refused.
+#[test]
+fn an_insert_without_an_origin_fails() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let owner = insert_test_user(&mut conn);
+    let world = insert_test_world(&mut conn, owner);
+    let scene = insert_test_scene(&mut conn, world, owner);
+
+    let attempts = [
+        format!(
+            "INSERT INTO world_items (id, world_id, name, created_by) \
+             VALUES ('{}', '{world}', 'No origin', '{owner}')",
+            Uuid::now_v7()
+        ),
+        format!(
+            "INSERT INTO world_abilities (world_id, name, classification, created_by, updated_by) \
+             VALUES ('{world}', 'No origin', 'spell', '{owner}', '{owner}')"
+        ),
+        format!(
+            "INSERT INTO world_actors (id, world_id, scene_id, actor_type, game_system_id, label, \
+             created_by, owned_by, is_public, is_npc) \
+             VALUES ('{}', '{world}', '{scene}', 'npc', 'dnd5e', 'No origin', '{owner}', '{owner}', \
+             false, true)",
+            Uuid::now_v7()
+        ),
+    ];
+    for attempt in attempts {
+        let refused = diesel::sql_query(&attempt)
+            .execute(&mut conn)
+            .expect_err("an insert with no origin must fail");
+        assert!(
+            refused.to_string().contains("origin"),
+            "{attempt}: {refused}"
+        );
+    }
+}
+
+/// FR-033a: `content_origin()` reads the column, so an uploaded actor, item
+/// or ability is refused a collection exactly as an uploaded entry is.
+#[test]
+fn content_origin_reads_the_column_for_actors_items_and_abilities() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let owner = insert_test_user(&mut conn);
+    let world = insert_test_world(&mut conn, owner);
+    let item = Uuid::now_v7();
+    diesel::sql_query(format!(
+        "INSERT INTO world_items (id, world_id, name, created_by, origin) \
+         VALUES ('{item}', '{world}', 'Read from a sheet', '{owner}', 'Uploaded')"
+    ))
+    .execute(&mut conn)
+    .unwrap();
+    let ability: Uuid = diesel::sql_query(format!(
+        "INSERT INTO world_abilities (world_id, name, classification, created_by, updated_by, origin) \
+         VALUES ('{world}', 'Read from a sheet', 'spell', '{owner}', '{owner}', 'Uploaded') \
+         RETURNING id"
+    ))
+    .get_result::<IdRow>(&mut conn)
+    .unwrap()
+    .id;
+    let scene = insert_test_scene(&mut conn, world, owner);
+    let actor = insert_test_actor(&mut conn, world, scene, owner);
+    set_origin(&mut conn, "world_actors", actor, "Uploaded").unwrap();
+
+    for (kind, id) in [("item", item), ("ability", ability), ("actor", actor)] {
+        assert_eq!(
+            origin_of(&mut conn, kind, id).unwrap(),
+            Some(ContentOrigin::Uploaded),
+            "{kind}"
+        );
+    }
+    let collection = a_collection(&mut conn, world, owner);
+    let refused = put_in_collection(&mut conn, collection, "item", item, owner)
+        .expect_err("an uploaded item cannot enter a collection");
+    assert_eq!(
+        refusal_from_database(&refused),
+        Some(LeaveRefusal::Uploaded)
+    );
+}
+
+#[derive(diesel::QueryableByName)]
+struct IdRow {
+    #[diesel(sql_type = diesel::sql_types::Uuid)]
+    id: Uuid,
+}

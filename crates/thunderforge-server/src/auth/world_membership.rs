@@ -117,6 +117,35 @@ pub fn actor_in_world(
     }
 }
 
+/// Why someone may not manage a world's content.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum ManagesContentError {
+    #[error("You are not at this table.")]
+    NotAMember,
+    #[error("Only a Game Master or Trusted Player can decide on this world's content.")]
+    NotPermitted,
+    #[error("database error: {0}")]
+    Database(String),
+}
+
+/// Spec 048 FR-033b: adopting or declining staged content is for the GM and
+/// a Trusted Player, as browsing the world's books is. A Player is refused,
+/// and so is a role this build cannot read.
+pub fn require_manages_content(
+    conn: &mut PgConnection,
+    world_id: Uuid,
+    user_id: Uuid,
+) -> Result<Role, ManagesContentError> {
+    let stored = require_world_member(conn, user_id, world_id).map_err(|e| match e {
+        WorldMembershipError::NotAMember => ManagesContentError::NotAMember,
+        WorldMembershipError::Database(msg) => ManagesContentError::Database(msg),
+    })?;
+    match Role::from_stored(&stored) {
+        Some(role) if role.manages_content() => Ok(role),
+        _ => Err(ManagesContentError::NotPermitted),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -222,6 +251,46 @@ mod dm_tests {
     // Spec 027 (T049): these moved here verbatim from `auth::actor_permissions`
     // alongside `is_dm_of_world` itself. The assertions are unchanged — only
     // their location is, so a test sits beside the function it exercises.
+
+    /// Spec 048 FR-033b (T021): the GM, the owner and a Trusted Player
+    /// manage content; a Player and a stranger do not.
+    #[test]
+    fn only_a_gm_or_trusted_player_manages_content() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner = insert_test_user(&mut conn);
+        let world = insert_test_world(&mut conn, owner);
+        let mut member = |role: &str| {
+            let id = insert_test_user(&mut conn);
+            insert_test_world_member(&mut conn, world, id, role);
+            id
+        };
+        let gm = member("GM");
+        let trusted = member("TrustedPlayer");
+        let player = member("Player");
+        let stranger = insert_test_user(&mut conn);
+
+        assert_eq!(
+            require_manages_content(&mut conn, world, owner),
+            Ok(Role::Owner)
+        );
+        assert_eq!(
+            require_manages_content(&mut conn, world, gm),
+            Ok(Role::GameMaster)
+        );
+        assert_eq!(
+            require_manages_content(&mut conn, world, trusted),
+            Ok(Role::TrustedPlayer)
+        );
+        assert_eq!(
+            require_manages_content(&mut conn, world, player),
+            Err(ManagesContentError::NotPermitted)
+        );
+        assert_eq!(
+            require_manages_content(&mut conn, world, stranger),
+            Err(ManagesContentError::NotAMember)
+        );
+    }
 
     /// FR-021 (research.md §3): a GM-role member counts as DM, same as Owner.
     #[tokio::test]

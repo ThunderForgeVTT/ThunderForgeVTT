@@ -138,7 +138,7 @@ ON CONFLICT (scene_id) DO NOTHING;
 -- A PC for each of user1/user2, so there's something to select and play
 -- immediately instead of an empty roster. Named for the demo heroes whose
 -- portraits and tokens `scripts/seed-demo-art.mjs` gives them.
-INSERT INTO world_actors (id, world_id, scene_id, actor_type, game_system_id, label, created_by, owned_by, is_public, is_npc, created_at, updated_at, description, available_for_claim)
+INSERT INTO world_actors (id, world_id, scene_id, actor_type, game_system_id, label, created_by, owned_by, is_public, is_npc, created_at, updated_at, description, available_for_claim, origin)
 VALUES
   (
     '00000000-0000-0000-0000-0000000000c1',
@@ -154,7 +154,8 @@ VALUES
     now(),
     now(),
     NULL,
-    false
+    false,
+    'Authored'
   ),
   (
     '00000000-0000-0000-0000-0000000000c2',
@@ -170,7 +171,8 @@ VALUES
     now(),
     now(),
     NULL,
-    false
+    false,
+    'Authored'
   )
 ON CONFLICT (id) DO NOTHING;
 
@@ -211,7 +213,7 @@ ON CONFLICT (actor_id) DO NOTHING;
 -- real upload once the backend is up, and `make dev` runs it.
 --
 -- `…f0NN` rather than `…eN`: `e2e_demo.sql` owns `…e1`-`…e3`.
-INSERT INTO world_actors (id, world_id, scene_id, actor_type, game_system_id, label, created_by, owned_by, is_public, is_npc, created_at, updated_at, description, available_for_claim)
+INSERT INTO world_actors (id, world_id, scene_id, actor_type, game_system_id, label, created_by, owned_by, is_public, is_npc, created_at, updated_at, description, available_for_claim, origin)
 SELECT
   hero.actor_id::uuid,
   '00000000-0000-0000-0000-0000000000b0',
@@ -226,7 +228,8 @@ SELECT
   now(),
   now(),
   hero.description,
-  false
+  false,
+  'Authored'
 FROM (VALUES
   ('00000000-0000-0000-0000-00000000f001', 'Nettle', 'The rogue.'),
   ('00000000-0000-0000-0000-00000000f002', 'Brother Oak', 'The cleric.'),

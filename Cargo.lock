@@ -9134,6 +9134,7 @@ dependencies = [
  "thunderforge-pg-sockets",
  "thunderforge-presence",
  "thunderforge-repo-host",
+ "thunderforge-sheet-import",
  "thunderforge-system-blades-in-the-dark",
  "thunderforge-system-cypher-system",
  "thunderforge-system-dnd5e",

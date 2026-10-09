@@ -412,6 +412,7 @@ pub fn insert_test_ability(conn: &mut PgConnection, world_id: Uuid, created_by: 
     use crate::schema::world_abilities;
     diesel::insert_into(world_abilities::table)
         .values((
+            world_abilities::origin.eq(crate::compendium::origin::ContentOrigin::Authored),
             world_abilities::world_id.eq(world_id),
             world_abilities::name.eq("Test Ability"),
             world_abilities::classification.eq("spell"),
@@ -436,6 +437,7 @@ pub fn insert_test_actor(
     let now = chrono::Utc::now().naive_utc();
     diesel::insert_into(world_actors::table)
         .values((
+            world_actors::origin.eq(crate::compendium::origin::ContentOrigin::Authored),
             world_actors::id.eq(id),
             world_actors::world_id.eq(world_id),
             world_actors::scene_id.eq(scene_id),
@@ -461,6 +463,7 @@ pub fn insert_test_item(conn: &mut PgConnection, world_id: Uuid, created_by: Uui
     let now = chrono::Utc::now().naive_utc();
     diesel::insert_into(world_items::table)
         .values((
+            world_items::origin.eq(crate::compendium::origin::ContentOrigin::Authored),
             world_items::id.eq(id),
             world_items::world_id.eq(world_id),
             world_items::name.eq("Test Item"),

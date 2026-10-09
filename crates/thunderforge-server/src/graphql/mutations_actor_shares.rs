@@ -396,6 +396,8 @@ pub async fn copy_shared_actor_to_world_impl(
                 .map_err(|_| "Destination world has no scenes".to_string())?;
 
             let new_actor_row = NewWorldActor {
+                // Spec 048 FR-033a: a copy carries where its source came from.
+                origin: source.origin,
                 world_id: destination_world_id,
                 scene_id: destination_scene_id,
                 actor_type: source.actor_type.clone(),
