@@ -2,7 +2,7 @@
 
 **Feature Branch**: `089-isolated-stacks`
 **Created**: 2026-10-09
-**Status**: Draft (spec only; plan.md and tasks.md not written)
+**Status**: Planned (plan.md, tasks.md)
 **Input**: The owner, 2026-10-09: "how feasible would it be to setup a
 compose network and only expose the app so i can do many pg databases on my
 system". The agreed answer was to give each checkout its own private stack,
@@ -240,9 +240,9 @@ checkout's stack with the variable set.
 - **FR-006**: The host processes the harness starts (Vite, backend, GitHub
   stub, OAuth stub) MUST take free ports from the OS for each run, not fixed
   bases.
-- **FR-007**: Mailpit MUST be one per shard inside the checkout's project,
-  or one per checkout with a mailbox per shard. The plan chooses which.
-  Either way, mail MUST never cross checkouts.
+- **FR-007**: Mailpit MUST stay one container per shard, scoped to the
+  checkout's project by name and label (plan.md Decision 1). Mail MUST
+  never cross shards or checkouts.
 - **FR-008**: The per-checkout lock MUST remain: one run per checkout at a
   time.
 - **FR-009**: The machine-wide lock MUST become a concurrency cap,
@@ -259,8 +259,9 @@ checkout's stack with the variable set.
   `gc` target MAY report orphans but MUST NOT delete them.
 - **FR-013**: `compose.dev.yml`, `make dev` and the default `cargo test`
   database MUST be unchanged.
-- **FR-014**: `cargo test` MUST accept `THUNDERFORGE_TEST_STACK=checkout`
-  to use this checkout's stack.
+- **FR-014**: `make test-rust STACK=checkout` MUST run `cargo test`
+  against this checkout's stack, by setting the `TEST_DATABASE_URL` and
+  `RUSTFS_ENDPOINT` it already reads (plan.md Decision 6).
 - **FR-015**: `docs/CONTRIBUTING.md` MUST replace the "One e2e run per
   machine" section with how stacks, ports, the cap and cleanup work.
 
@@ -313,11 +314,9 @@ checkout's stack with the variable set.
 
 ## Open items
 
-- **Mailpit:** per shard (as today, simplest) or one per checkout with a
-  mailbox per shard (fewer containers). Decided in plan.md.
-- **`tmpfs` Postgres for e2e stacks:** faster and leaves nothing on disk, but
-  the templates are rebuilt after every Docker restart. To be measured in the
-  plan.
-- **Operators upgrading:** anyone relying on `42432` and the other
-  published ports from `compose.yml` loses them. The release notes and the
-  install guide name the override file.
+All three were closed in plan.md:
+
+- **Mailpit:** one per shard (Decision 1).
+- **`tmpfs`:** off by default, available as an opt-in override (Decision 2).
+- **Operators upgrading:** `compose.ports.yml` keeps the old port numbers,
+  on `127.0.0.1` (Decision 7).
