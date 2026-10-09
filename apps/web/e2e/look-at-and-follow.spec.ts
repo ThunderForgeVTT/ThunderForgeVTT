@@ -67,11 +67,14 @@ async function drawnAt(
   return page.evaluate((id) => {
     const probe = (
       window as unknown as {
-        __engineProbe: {
+        __engineProbe?: {
           tokenFootprints: () => { tokenId: string; x: number; y: number }[];
         };
       }
     ).__engineProbe;
+    // Missing until the engine has loaded, as it is just after a reload.
+    // `expect.poll` stops on a throw, so "not yet" has to be a value.
+    if (!probe) return null;
     const found = probe.tokenFootprints().find((row) => row.tokenId === id);
     return found ? { x: found.x, y: found.y } : null;
   }, tokenId);
