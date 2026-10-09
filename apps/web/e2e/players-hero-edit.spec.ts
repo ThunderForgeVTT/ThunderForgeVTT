@@ -143,7 +143,7 @@ test.describe("A player edits their own hero from the Players screen", () => {
 
       const renamed = `${name} the Bold`;
       await player.locator("#actor-label").fill(renamed);
-      await player.getByRole("button", { name: "Save" }).click();
+      await player.getByRole("button", { name: "Save", exact: true }).click();
       await expect(player.getByText(/^saved\.?$/i)).toBeVisible({
         timeout: 10_000,
       });
@@ -154,10 +154,9 @@ test.describe("A player edits their own hero from the Players screen", () => {
         timeout: 15_000,
       });
       await gm.goto(`/world/${worldId}/actor/${actorId}/view`);
-      await expect(gm.getByTestId("dnd5e-score-strength")).toContainText(
-        "17",
-        { timeout: 15_000 },
-      );
+      await expect(gm.getByTestId("dnd5e-score-strength")).toContainText("17", {
+        timeout: 15_000,
+      });
 
       // 4. Another player sees the hero on the roster and nothing to change
       // it with, and the server agrees.
@@ -173,9 +172,13 @@ test.describe("A player edits their own hero from the Players screen", () => {
       ).toHaveCount(0);
       const refused = await graphql<{ errors?: { message: string }[] }>(
         other,
-        `mutation ($input: GraphQLUpdateActorSystemDataInput!) {
-          updateActorSystemData(input: $input) { actorId }
-        }`,
+        `
+          mutation ($input: GraphQLUpdateActorSystemDataInput!) {
+            updateActorSystemData(input: $input) {
+              actorId
+            }
+          }
+        `,
         {
           input: {
             actorId,
@@ -188,9 +191,13 @@ test.describe("A player edits their own hero from the Players screen", () => {
       expect(refused.errors?.length ?? 0).toBeGreaterThan(0);
       const renameRefused = await graphql<{ errors?: { message: string }[] }>(
         other,
-        `mutation ($input: UpdateActorInput!) {
-          updateActor(input: $input) { id }
-        }`,
+        `
+          mutation ($input: UpdateActorInput!) {
+            updateActor(input: $input) {
+              id
+            }
+          }
+        `,
         { input: { actorId, label: "Stolen" } },
       );
       expect(renameRefused.errors?.length ?? 0).toBeGreaterThan(0);
