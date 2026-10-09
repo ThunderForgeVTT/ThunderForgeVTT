@@ -36,6 +36,7 @@
 
 use crate::content_entry::{Entry as ContentEntry, SourceLine as ContentSourceLine};
 use crate::roll_facets::RollFacets;
+use crate::sheet_import::SheetImport;
 use crate::system_rules::SystemRules;
 
 /// Validates one of an actor's stored data slots for one system.
@@ -150,6 +151,9 @@ pub struct SystemContribution {
     /// Shapes this system's rolls and spends its rerolls (spec 084). A system
     /// without one rolls every formula as written and offers no reroll.
     pub roll_facets: Option<&'static RollFacets>,
+    /// Reads this system's character sheets (spec 048). A system without
+    /// one takes no sheets, whatever its manifest declares.
+    pub sheet_import: Option<&'static SheetImport>,
 }
 
 impl SystemContribution {
@@ -170,6 +174,7 @@ impl SystemContribution {
             world_setting: None,
             adjudicate: None,
             roll_facets: None,
+            sheet_import: None,
         }
     }
 }
@@ -202,5 +207,9 @@ mod tests {
         assert!(bare.ability_data.is_none());
         assert!(bare.rules.is_none());
         assert!(bare.roll_facets.is_none());
+        assert!(
+            bare.sheet_import.is_none(),
+            "a pack takes no sheets unless it says so"
+        );
     }
 }

@@ -41,6 +41,7 @@ pub mod seam_probe;
 pub mod shadow_map;
 pub mod shape;
 pub mod shape_geometry;
+pub mod sheet_import;
 pub mod snapping;
 pub mod system_contribution;
 pub mod system_rules;
