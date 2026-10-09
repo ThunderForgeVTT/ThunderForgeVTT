@@ -145,8 +145,22 @@ pub mod subscription_metrics {
 
     /// Events handed to a subscriber's socket.
     pub static DELIVERED: AtomicU64 = AtomicU64::new(0);
-    /// Subscriptions established.
+    /// Subscriptions established, ever. Cumulative: it only goes up.
+    ///
+    /// The metrics line printed this as `subs_open`, which read as a live
+    /// count. On vtt-dev it climbed to 168 with six sockets attached and was
+    /// taken for a leak; it was counting opens, and every one of them had
+    /// been released. [`OPEN`] is the live number.
     pub static OPENED: AtomicU64 = AtomicU64::new(0);
+    /// Subscriptions open right now: raised by [`OpenSubscription::begin`],
+    /// lowered when that guard drops.
+    ///
+    /// The guard lives inside the subscription's stream, so the decrement
+    /// does not depend on how the stream ends — a client `complete`, the
+    /// socket closing, the stream finishing on its own, or a panic unwinding
+    /// through it. A count lowered on only one of those paths would climb
+    /// for ever while nothing leaked.
+    pub static OPEN: AtomicI64 = AtomicI64::new(0);
     /// Subscriptions refused (no app state, bad id, not a member).
     pub static REFUSED: AtomicU64 = AtomicU64::new(0);
     /// Events a subscriber lost by falling behind the broadcast buffer.
@@ -158,6 +172,95 @@ pub mod subscription_metrics {
     /// from *the clients went away*, and telling those two apart is what the
     /// worst delivery investigation in this repository spent its time on.
     pub static SOCKETS_OPEN: AtomicI64 = AtomicI64::new(0);
+
+    #[cfg(test)]
+    thread_local! {
+        /// This thread's share of [`OPEN`], so a test can assert on its own
+        /// subscriptions while other tests open theirs in parallel.
+        static OPEN_ON_THIS_THREAD: std::cell::Cell<i64> = const { std::cell::Cell::new(0) };
+    }
+
+    /// Subscriptions opened and not yet released on the calling thread.
+    #[cfg(test)]
+    pub fn open_on_this_thread() -> i64 {
+        OPEN_ON_THIS_THREAD.with(std::cell::Cell::get)
+    }
+
+    fn adjust_open(by: i64) {
+        OPEN.fetch_add(by, Ordering::Relaxed);
+        #[cfg(test)]
+        OPEN_ON_THIS_THREAD.with(|open| open.set(open.get() + by));
+    }
+
+    /// One subscription, counted in [`OPEN`] for as long as this lives.
+    ///
+    /// Move it into the stream with [`OpenSubscription::hold`]; dropping the
+    /// stream is then the only way to release it, and every way a stream
+    /// ends drops it.
+    #[must_use = "the subscription counts as open only while this is held"]
+    pub struct OpenSubscription(());
+
+    impl OpenSubscription {
+        /// Count a subscription opened, both cumulatively and live.
+        pub fn begin() -> Self {
+            OPENED.fetch_add(1, Ordering::Relaxed);
+            adjust_open(1);
+            Self(())
+        }
+
+        /// The same stream, carrying this guard until it is dropped.
+        pub fn hold<S: futures_util::Stream>(self, inner: S) -> Held<S> {
+            Held {
+                inner: Box::pin(inner),
+                _open: self,
+            }
+        }
+    }
+
+    impl Drop for OpenSubscription {
+        fn drop(&mut self) {
+            adjust_open(-1);
+        }
+    }
+
+    /// A subscription stream that counts itself open until dropped.
+    pub struct Held<S> {
+        inner: std::pin::Pin<Box<S>>,
+        _open: OpenSubscription,
+    }
+
+    impl<S: futures_util::Stream> futures_util::Stream for Held<S> {
+        type Item = S::Item;
+
+        fn poll_next(
+            mut self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Option<S::Item>> {
+            self.inner.as_mut().poll_next(cx)
+        }
+
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            self.inner.size_hint()
+        }
+    }
+
+    /// One served WebSocket, counted in [`SOCKETS_OPEN`] until dropped — so
+    /// a connection task that panics is still uncounted as it unwinds.
+    #[must_use = "the socket counts as open only while this is held"]
+    pub struct OpenSocket(());
+
+    impl OpenSocket {
+        pub fn begin() -> Self {
+            SOCKETS_OPEN.fetch_add(1, Ordering::Relaxed);
+            Self(())
+        }
+    }
+
+    impl Drop for OpenSocket {
+        fn drop(&mut self) {
+            SOCKETS_OPEN.fetch_sub(1, Ordering::Relaxed);
+        }
+    }
 
     static SINCE: std::sync::LazyLock<std::time::Instant> =
         std::sync::LazyLock::new(std::time::Instant::now);
@@ -182,10 +285,11 @@ pub mod subscription_metrics {
             .is_ok()
     }
 
-    /// `(sockets_open, opened, refused, delivered, lagged_events)`.
-    pub fn snapshot() -> (i64, u64, u64, u64, u64) {
+    /// `(sockets_open, open, opened, refused, delivered, lagged_events)`.
+    pub fn snapshot() -> (i64, i64, u64, u64, u64, u64) {
         (
             SOCKETS_OPEN.load(Ordering::Relaxed),
+            OPEN.load(Ordering::Relaxed),
             OPENED.load(Ordering::Relaxed),
             REFUSED.load(Ordering::Relaxed),
             DELIVERED.load(Ordering::Relaxed),

@@ -310,6 +310,12 @@ mod play_pause_stream_tests;
 #[path = "graphql/roll_stream_tests.rs"]
 mod roll_stream_tests;
 
+/// Hotfix: a subscription is counted open only while it is, and gives its
+/// receiver back however it ends.
+#[cfg(test)]
+#[path = "graphql/subscription_release_tests.rs"]
+mod subscription_release_tests;
+
 /// Spec 051 T027: every root mutation and subscription is gated against a
 /// paused world, or says why it is not.
 #[cfg(test)]

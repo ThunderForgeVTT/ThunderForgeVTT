@@ -205,13 +205,16 @@ fn spawn_metrics_reporter(metrics: Arc<DeliveryMetrics>) {
             // subscriber on the subscription's own task — a blocking write to
             // a pipe, on the hot path, scaling with the thing it described.
             // See `crate::graphql::subscription_metrics`.
-            let (sockets, subs_opened, subs_refused, subs_delivered, subs_lagged) =
+            // `subs_open` is live and `subs_opened` cumulative. The line used
+            // to print the cumulative count under the live name, which on
+            // vtt-dev read as a leak: 168 "open" with six sockets attached.
+            let (sockets, subs_open, subs_opened, subs_refused, subs_delivered, subs_lagged) =
                 crate::graphql::subscription_metrics::snapshot();
 
             eprintln!(
                 "[PubSub] 📊 Metrics [{}s]: sent={} (+{}), dropped={} (+{}), polls={} (+{}), \
                  cursor={}, errors={}, panics={}, timeouts={}, sockets={}, subs_open={}, \
-                 subs_refused={}, subs_delivered={}, subs_lagged={}",
+                 subs_opened={}, subs_refused={}, subs_delivered={}, subs_lagged={}",
                 METRICS_LOG_INTERVAL_SECS,
                 sent,
                 sent.saturating_sub(last_sent),
@@ -224,6 +227,7 @@ fn spawn_metrics_reporter(metrics: Arc<DeliveryMetrics>) {
                 panics,
                 timeouts,
                 sockets,
+                subs_open,
                 subs_opened,
                 subs_refused,
                 subs_delivered,

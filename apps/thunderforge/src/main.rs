@@ -107,9 +107,10 @@ async fn graphql_ws_handler(
             // to say how many sockets are attached *now* — which is what
             // separates "the server stopped sending" from "the clients went
             // away". It is reported with the delivery counters every 10s.
-            use std::sync::atomic::Ordering;
-            use thunderforge_server::graphql::subscription_metrics::SOCKETS_OPEN;
-            SOCKETS_OPEN.fetch_add(1, Ordering::Relaxed);
+            // A guard rather than an add and a subtract around `serve`: a
+            // connection task that panics unwinds past the subtract, and the
+            // count would then say a socket is attached that is not.
+            let _open = thunderforge_server::graphql::subscription_metrics::OpenSocket::begin();
             GraphQLWebSocket::new(socket, schema, protocol)
                 .on_connection_init(move |_value| {
                     let auth_user = auth_user.clone();
@@ -121,7 +122,6 @@ async fn graphql_ws_handler(
                 })
                 .serve()
                 .await;
-            SOCKETS_OPEN.fetch_sub(1, Ordering::Relaxed);
         })
 }
 

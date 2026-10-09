@@ -150,8 +150,6 @@ impl SubscriptionRoot {
                 "[GraphQL Subscription] 🚫 Refused a subscription to world_id={world_id}: \
                  {error_msg}"
             );
-        } else {
-            subscription_metrics::OPENED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
 
         // Create a combined stream that works for both cases
@@ -269,14 +267,18 @@ impl SubscriptionRoot {
             // an operator pauses. See `session_lifetime`: the membership check
             // above runs once, which is right for membership and was wrong for
             // revocation.
-            match (app_state, session_id) {
+            let live = match (app_state, session_id) {
                 (Some(state), Some(session_id)) => Pin::new(Box::new(until_stream_must_end(
                     state, session_id, world_uuid, stream,
                 )))
                     as Pin<Box<dyn Stream<Item = Result<GraphQLWorldEvent, Error>> + Send>>,
                 _ => Pin::new(Box::new(stream))
                     as Pin<Box<dyn Stream<Item = Result<GraphQLWorldEvent, Error>> + Send>>,
-            }
+            };
+            // Counted open from here until the stream is dropped, however
+            // that happens. See `subscription_metrics::OPEN`.
+            Box::pin(subscription_metrics::OpenSubscription::begin().hold(live))
+                as Pin<Box<dyn Stream<Item = Result<GraphQLWorldEvent, Error>> + Send>>
         } else {
             // Error case: single error item. A pause keeps its own error, so
             // the client reads `WORLD_PLAY_PAUSED` rather than a sentence.
@@ -363,8 +365,6 @@ impl SubscriptionRoot {
                 "[GraphQL Subscription] 🚫 Refused a presence subscription to \
                  world_id={world_id}: {error_msg}"
             );
-        } else {
-            subscription_metrics::OPENED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
 
         // FR-010, same as `world_events_created`.
@@ -414,7 +414,7 @@ impl SubscriptionRoot {
                         }
                     }
                 });
-            match (app_state, session_id) {
+            let live = match (app_state, session_id) {
                 (Some(state), Some(session_id)) => Pin::new(Box::new(until_stream_must_end(
                     state,
                     session_id,
@@ -424,7 +424,10 @@ impl SubscriptionRoot {
                     as Pin<Box<dyn Stream<Item = Result<GraphQLPlayersOnlineList, Error>> + Send>>,
                 _ => Pin::new(Box::new(stream))
                     as Pin<Box<dyn Stream<Item = Result<GraphQLPlayersOnlineList, Error>> + Send>>,
-            }
+            };
+            // Same as `world_events_created`.
+            Box::pin(subscription_metrics::OpenSubscription::begin().hold(live))
+                as Pin<Box<dyn Stream<Item = Result<GraphQLPlayersOnlineList, Error>> + Send>>
         } else {
             // Error case: single error item, a pause keeping its own.
             let error = paused.unwrap_or_else(|| Error::new(error_msg));
