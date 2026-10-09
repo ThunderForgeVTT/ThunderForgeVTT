@@ -4,6 +4,7 @@ import {
   freshCredentials,
   inviteAndJoinAsPlayer,
   launchSceneByName,
+  openDockTab,
   register,
 } from "./fixtures/helpers";
 
@@ -81,8 +82,10 @@ test("launching a different scene live-switches every member already in Play, wi
   // The player's tab never navigated away from Play — this is the actual
   // live-broadcast assertion (FR-002b/SC-006): it must reflect the switch
   // via the open WebSocket subscription, with no manual refresh/rejoin.
-  await ensureSidebarOpen(playerPage);
-  await expect(playerPage.getByTestId("scene-switcher")).toContainText(
+  // Only the GM has the scenes dropdown (play panels by role, 9fdae875); a
+  // player follows the launched scene, which their Settings panel names.
+  await openDockTab(playerPage, "settings");
+  await expect(playerPage.getByTestId("settings-panel")).toContainText(
     secondSceneName,
     {
       timeout: 15_000,
