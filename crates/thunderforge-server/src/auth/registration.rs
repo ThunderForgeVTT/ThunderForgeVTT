@@ -27,8 +27,11 @@ pub(crate) const NOT_ACCEPTING: &str = "This instance is not accepting new accou
 pub(crate) enum Admission {
     /// Admit, consuming nothing.
     Allowed,
-    /// Admit, and consume one use of this invitation. Carries the row id so
-    /// the caller can write the redemption without looking the code up twice.
+    /// Admit on this invitation. Nothing is burned yet: the caller claims the
+    /// use in the same transaction that writes the account
+    /// ([`crate::auth::instance_access::redeem_for_account_sync`]), and
+    /// refuses as for an exhausted invitation if the claim fails. Carries the
+    /// row id so the claim does not look the code up twice.
     AllowedByInvitation(uuid::Uuid),
 }
 
@@ -93,14 +96,15 @@ pub(crate) async fn ensure_admission_allowed(
 
     match policy {
         InstanceAccessPolicy::Open => match invitation {
-            // An invitation presented on an open instance is still consumed:
-            // the operator issued it deliberately, and silently ignoring it
-            // would make the redemption list lie about how someone arrived.
-            Some(code) => consume_invitation(state, code, route).await,
+            // An invitation presented on an open instance still counts once
+            // the account exists: the operator issued it deliberately, and
+            // silently ignoring it would make the redemption list lie about
+            // how someone arrived.
+            Some(code) => judge_invitation(state, code, route).await,
             None => Ok(Admission::Allowed),
         },
         InstanceAccessPolicy::InviteOnly => match invitation {
-            Some(code) => consume_invitation(state, code, route).await,
+            Some(code) => judge_invitation(state, code, route).await,
             None => Err(AdmissionRefused::Policy(NOT_ACCEPTING.to_string())),
         },
         // No exception for a valid invitation. FR-001.
@@ -108,17 +112,17 @@ pub(crate) async fn ensure_admission_allowed(
     }
 }
 
-/// Consumes one use of an invitation, or refuses uniformly.
+/// Judges an invitation without burning a use, or refuses uniformly.
 ///
-/// Delegates to [`crate::auth::instance_access::consume_invitation_use`],
-/// which carries the whole validity predicate in a single conditional UPDATE
-/// so that check-and-increment is indivisible (SC-006).
-async fn consume_invitation(
+/// Delegates to [`crate::auth::instance_access::check_invitation_usable`].
+/// The use itself is claimed only when the account is written, in the same
+/// transaction (FR-016, SC-006).
+async fn judge_invitation(
     state: &AppState,
     code: &str,
     route: &crate::auth::instance_access::AdmissionRoute,
 ) -> Result<Admission, AdmissionRefused> {
-    crate::auth::instance_access::consume_invitation_use(state, code, route).await
+    crate::auth::instance_access::check_invitation_usable(state, code, route).await
 }
 
 async fn admin_exists(state: &AppState) -> Result<bool, String> {
@@ -144,7 +148,17 @@ async fn admin_exists(state: &AppState) -> Result<bool, String> {
 pub(super) enum RegisterUserError {
     UsernameTaken,
     EmailTaken,
+    /// The invitation was usable when admission was judged and is not now:
+    /// a concurrent signup took its last use, or it was revoked or expired in
+    /// between. Refused exactly as an exhausted invitation is (FR-011).
+    InvitationUnusable,
     Storage,
+}
+
+impl From<diesel::result::Error> for RegisterUserError {
+    fn from(_: diesel::result::Error) -> Self {
+        RegisterUserError::Storage
+    }
 }
 
 /// Derives a username from an auto-provisioned OAuth user's email (ADR-042),

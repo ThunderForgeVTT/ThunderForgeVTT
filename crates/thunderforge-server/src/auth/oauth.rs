@@ -331,6 +331,13 @@ pub(crate) async fn resolve_oauth_login(
     } else {
         None
     };
+    // Nothing is burned yet. The use is claimed in the transaction that writes
+    // the account and its identity link, below, or not at all (FR-016).
+    let invitation_id = match admission {
+        Some(Admission::AllowedByInvitation(id)) => Some(id),
+        _ => None,
+    };
+    let claim_route = route.clone();
 
     let outcome =
         tokio::task::spawn_blocking(move || -> Result<ResolveOutcome, diesel::result::Error> {
@@ -391,28 +398,12 @@ pub(crate) async fn resolve_oauth_login(
                     .expect("Failed to hash random password for auto-provisioned OAuth user");
 
                 let new_user_id = uuid::Uuid::now_v7();
-                diesel::insert_into(users::table)
-                    .values((
-                        users::id.eq(new_user_id),
-                        users::username.eq(&username),
-                        users::email.eq(&provider_email),
-                        users::is_admin.eq(false),
-                        users::password_hash.eq(random_password_hash),
-                        users::created_at.eq(now),
-                        users::updated_at.eq(now),
-                        users::two_factor_enabled.eq(false),
-                        users::two_factor_secret_encrypted.eq::<Option<String>>(None),
-                        users::two_factor_confirmed_at.eq::<Option<chrono::NaiveDateTime>>(None),
-                        users::two_factor_admin_required.eq(false),
-                    ))
-                    .execute(&mut conn)?;
-
-                let oauth_account = NewUserOAuthAccount {
+                let link = NewUserOAuthAccount {
                     id: uuid::Uuid::now_v7(),
                     user_id: new_user_id,
                     provider_id: provider.id,
                     provider_user_id,
-                    provider_email: Some(provider_email),
+                    provider_email: Some(provider_email.clone()),
                     access_token_encrypted,
                     refresh_token_encrypted,
                     token_expires_at,
@@ -420,10 +411,19 @@ pub(crate) async fn resolve_oauth_login(
                     created_at: now,
                     updated_at: now,
                 };
-
-                diesel::insert_into(user_oauth_accounts::table)
-                    .values(&oauth_account)
-                    .execute(&mut conn)?;
+                let invitation = invitation_id.map(|id| (id, &claim_route));
+                if !super::account_creation::provision_oauth_account_sync(
+                    &mut conn,
+                    &username,
+                    &provider_email,
+                    random_password_hash,
+                    &link,
+                    invitation,
+                )? {
+                    return Ok(ResolveOutcome::NotAdmitted(
+                        "This invitation is no longer valid".to_string(),
+                    ));
+                }
 
                 return Ok(ResolveOutcome::ProvisionedUser(new_user_id));
             };
@@ -454,20 +454,11 @@ pub(crate) async fn resolve_oauth_login(
         .ok()
         .and_then(Result::ok);
 
-    // FR-016 and FR-020a, settled together here.
-    //
-    // The gate consumed a use before the closure ran, on the strength of a
-    // pre-flight that said this call would provision. If the closure did
-    // something else — because the account was created by a concurrent
-    // request in between, or because the identity turned out to be linkable —
-    // then nobody was admitted by the invitation and the use goes back.
-    // A storage error or a panic counts as not provisioning: the use goes back.
-    let provisioned = match outcome {
-        Some(ResolveOutcome::ProvisionedUser(user_id)) => Some(user_id),
-        _ => None,
-    };
-    if let Some(Admission::AllowedByInvitation(invitation_id)) = admission {
-        settle_invitation_use(&state, invitation_id, provisioned, &route).await;
+    // FR-016: an invitation whose last use went to a concurrent signup
+    // between admission and the claim is refused here, as an exhausted one
+    // is at the gate, and the refusal is recorded the same way (FR-012).
+    if let Some(ResolveOutcome::NotAdmitted(_)) = outcome {
+        record_refusal(&state, &route).await;
     }
 
     let Some(outcome) = outcome else {
@@ -579,9 +570,8 @@ pub(crate) async fn resolve_oauth_login(
             "no_matching_user",
             "The OAuth provider did not return an email address, so this identity cannot be linked or auto-provisioned",
         ),
-        // Produced by the pre-flight gate above, which returns early; the
-        // blocking closure never yields it. Handled so the match stays
-        // exhaustive if that ever changes.
+        // The claim in the provisioning transaction found the invitation
+        // unusable. The same 409 and sentence as the gate's refusal (FR-011).
         ResolveOutcome::NotAdmitted(message) => {
             error_response(StatusCode::CONFLICT, "instance_closed", message.as_str())
         }

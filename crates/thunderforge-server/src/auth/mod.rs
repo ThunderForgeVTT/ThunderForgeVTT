@@ -54,7 +54,7 @@ pub mod account_ownership;
 /// authorization guard for canvas asset reads/writes.
 /// Spec 035 / ADR-072: the instance admission policy and its audit trail.
 pub mod instance_access;
-pub(crate) use instance_access::{AdmissionRoute, record_refusal, settle_invitation_use};
+pub(crate) use instance_access::{AdmissionRoute, record_refusal};
 pub mod world_membership;
 
 /// Spec 028 (T045c): `scenes.hidden` visibility for scenes and the canvas
@@ -294,6 +294,10 @@ pub use two_factor::startup_reset::{StartupReset, apply_startup_second_factor_re
 #[path = "oauth.rs"]
 pub(crate) mod oauth;
 pub(crate) use oauth::*;
+
+/// The two account-writing transactions, local signup and OAuth
+/// auto-provisioning, each claiming its invitation use with the account.
+mod account_creation;
 
 #[path = "admin_bootstrap.rs"]
 pub mod admin_bootstrap;

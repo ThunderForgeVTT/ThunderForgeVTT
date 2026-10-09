@@ -159,31 +159,38 @@ pub async fn record_access_event(
     Ok(())
 }
 
-/// Consumes one use of an invitation, or refuses uniformly (FR-011, FR-019a,
-/// FR-020a, SC-006).
+/// Judges whether an invitation could admit someone, burning nothing
+/// (FR-011, FR-016, FR-019a, FR-020a).
 ///
-/// # The order of these steps is the design
+/// # Judging and burning are two steps, on purpose
+///
+/// A use is burned only when the account it admits is written, in the same
+/// transaction as that write — see [`claim_invitation_use_sync`]. This step
+/// only answers "is this code usable right now?", so that a request refused
+/// later (a short password, a taken username, an abandoned OAuth flow, a bot
+/// replaying the link) leaves the count where it was. The owner's rule
+/// (2026-10-09): nothing but a created account counts.
 ///
 /// 0. **Rate limit, before the code is looked up.** An unguessable code is
 ///    unguessable only while the number of guesses is bounded, and the account
 ///    requirement that used to bound them is exactly what this feature
 ///    removes. Reuses the limiter already guarding the anonymous share reads.
-/// 1. **The conditional UPDATE**, carrying the whole validity predicate in its
-///    WHERE clause. Not a read, an in-memory check, and a write-back: that
-///    sequence loses updates, and spec 027 shipped it once — two redeemers
-///    racing the last use both read `used_count = N`, both computed `N + 1`,
-///    and both wrote it. Zero rows updated means unusable, and *which* of the
-///    four reasons is never distinguished.
+/// 1. **A read carrying the same validity predicate as the claim.** Revoked,
+///    expired, exhausted and never-existed all answer "unusable", and which of
+///    the four is never distinguished (FR-011). Admission is still judged
+///    here, before the caller's uniqueness probes, so a stranger holding a
+///    bad code learns nothing about which usernames exist.
 ///
-/// The already-a-user check is **not** here. It belongs to the caller, before
-/// this is ever reached, because it must not consume a use — see
-/// [`super::sessions`] and [`super::oauth`] (FR-020a).
-pub(crate) async fn consume_invitation_use(
+/// A usable answer is not a reservation. Two people may both be told the
+/// last use is available; the claim decides which of them gets it, and the
+/// other is refused exactly as an exhausted invitation is (SC-006).
+pub(crate) async fn check_invitation_usable(
     state: &AppState,
     code: &str,
     route: &AdmissionRoute,
 ) -> Result<super::registration::Admission, super::registration::AdmissionRefused> {
     use super::registration::{Admission, AdmissionRefused};
+    use crate::schema::instance_invitations as inv;
 
     // Step 0. FR-019a.
     let caller = route.as_db_str();
@@ -199,122 +206,104 @@ pub(crate) async fn consume_invitation_use(
         .map_err(|_| AdmissionRefused::Unavailable("Failed to get DB connection".to_string()))?;
     let code = code.to_string();
 
-    // Step 1. One statement: the check and the increment are indivisible.
-    let updated = tokio::task::spawn_blocking(move || {
+    // Step 1. Read-only: nothing is written until an account is.
+    let found = tokio::task::spawn_blocking(move || {
         let now = chrono::Utc::now().naive_utc();
-        diesel::update(
-            crate::schema::instance_invitations::table
-                .filter(crate::schema::instance_invitations::invite_code.eq(&code))
-                .filter(crate::schema::instance_invitations::revoked.eq(false))
-                .filter(
-                    crate::schema::instance_invitations::expires_at
-                        .is_null()
-                        .or(crate::schema::instance_invitations::expires_at.gt(now)),
-                )
-                .filter(
-                    crate::schema::instance_invitations::used_count
-                        .lt(crate::schema::instance_invitations::max_uses),
-                ),
-        )
-        .set((
-            crate::schema::instance_invitations::used_count
-                .eq(crate::schema::instance_invitations::used_count + 1),
-            crate::schema::instance_invitations::updated_at.eq(now),
-        ))
-        .returning(crate::schema::instance_invitations::id)
-        .get_result::<Uuid>(&mut conn)
-        .optional()
+        inv::table
+            .filter(inv::invite_code.eq(&code))
+            .filter(inv::revoked.eq(false))
+            .filter(inv::expires_at.is_null().or(inv::expires_at.gt(now)))
+            .filter(inv::used_count.lt(inv::max_uses))
+            .select(inv::id)
+            .first::<Uuid>(&mut conn)
+            .optional()
     })
     .await
     .map_err(|_| AdmissionRefused::Unavailable("Failed to spawn blocking task".to_string()))?
-    .map_err(|_| AdmissionRefused::Unavailable("Failed to redeem the invitation".to_string()))?;
+    .map_err(|_| AdmissionRefused::Unavailable("Failed to read the invitation".to_string()))?;
 
-    match updated {
+    match found {
         Some(id) => Ok(Admission::AllowedByInvitation(id)),
-        // Revoked, expired, exhausted and never-existed all arrive here, and
-        // all leave as one refusal. FR-011.
+        // FR-011: every unusable reason leaves as one refusal.
         None => Err(AdmissionRefused::InvitationUnusable),
     }
 }
 
-/// Releases a use taken by [`consume_invitation_use`] when the account it was
-/// taken for was never created.
+/// Burns one use of an invitation, inside the caller's transaction.
 ///
-/// A failed signup must not burn a use. The consume and the account insert
-/// cannot share one transaction — the account write lives in the auth flow and
-/// the consume must be visible to concurrent redeemers the instant it happens,
-/// which is what makes SC-006 hold — so the compensation is explicit.
+/// Call it in the same transaction that writes the account the use admits,
+/// and roll that transaction back when it returns `false`: the invitation
+/// became unusable between [`check_invitation_usable`] and now (exhausted by
+/// a concurrent signup, revoked, or expired), and the caller refuses exactly
+/// as it would for an exhausted invitation.
 ///
-/// # The window this leaves, and why it is the right way round
+/// # Why one conditional UPDATE
 ///
-/// Between the consume and the release, a concurrent redeemer of the last use
-/// is refused as though the invitation were exhausted, and then it is not.
-/// That is a transient over-refusal, and it errs in the safe direction: the
-/// count is never *under*-stated, so SC-006's "at most N" holds at every
-/// instant. The alternative — holding the row locked across the account
-/// insert — would serialise redemption behind a password hash, and trade a
-/// rare spurious refusal for a guaranteed slow one.
-pub(crate) async fn release_invitation_use(state: &AppState, invitation_id: Uuid) {
-    let Ok(mut conn) = state.db_pool.get() else {
-        return;
-    };
-    let _ = tokio::task::spawn_blocking(move || {
-        diesel::update(
-            crate::schema::instance_invitations::table
-                .filter(crate::schema::instance_invitations::id.eq(invitation_id))
-                .filter(crate::schema::instance_invitations::used_count.gt(0)),
-        )
-        .set(
-            crate::schema::instance_invitations::used_count
-                .eq(crate::schema::instance_invitations::used_count - 1),
-        )
-        .execute(&mut conn)
-    })
-    .await;
-}
-
-/// Settles a consumed use once the auth flow knows its outcome: recorded
-/// against the account it admitted, or released when none was made (FR-016).
-pub(crate) async fn settle_invitation_use(
-    state: &AppState,
+/// The whole validity predicate sits in the WHERE clause. Not a read, an
+/// in-memory check, and a write-back: that sequence loses updates, and spec
+/// 027 shipped it once — two redeemers racing the last use both read
+/// `used_count = N`, both computed `N + 1`, and both wrote it. Here the second
+/// racer waits on the first one's row lock, re-reads the row when it commits,
+/// finds `used_count = max_uses`, and matches nothing (SC-006). Because the
+/// claim and the account insert commit together, a signup that fails after
+/// the claim takes its use back with it, and an account never exists without
+/// the use that admitted it.
+pub(crate) fn claim_invitation_use_sync(
+    conn: &mut diesel::PgConnection,
     invitation_id: Uuid,
-    admitted: Option<Uuid>,
-    route: &AdmissionRoute,
-) {
-    match admitted {
-        Some(user_id) => {
-            let _ = record_redemption(state, invitation_id, user_id, route).await;
-        }
-        None => release_invitation_use(state, invitation_id).await,
-    }
+) -> QueryResult<bool> {
+    use crate::schema::instance_invitations as inv;
+    let now = chrono::Utc::now().naive_utc();
+    let updated = diesel::update(
+        inv::table
+            .filter(inv::id.eq(invitation_id))
+            .filter(inv::revoked.eq(false))
+            .filter(inv::expires_at.is_null().or(inv::expires_at.gt(now)))
+            .filter(inv::used_count.lt(inv::max_uses)),
+    )
+    .set((
+        inv::used_count.eq(inv::used_count + 1),
+        inv::updated_at.eq(now),
+    ))
+    .execute(conn)?;
+    Ok(updated == 1)
 }
 
-/// Records that an account was admitted by an invitation (FR-018).
-pub(crate) async fn record_redemption(
-    state: &AppState,
+/// Records that an account was admitted by an invitation (FR-018), inside the
+/// same transaction as the claim, so a recorded redemption always has a burned
+/// use and an account behind it.
+pub(crate) fn record_redemption_sync(
+    conn: &mut diesel::PgConnection,
     invitation_id: Uuid,
     user_id: Uuid,
     route: &AdmissionRoute,
-) -> Result<(), String> {
+) -> QueryResult<()> {
     let row = crate::models::NewInstanceInvitationRedemption {
         id: Uuid::now_v7(),
         invitation_id,
         user_id,
         route: route.as_db_str(),
     };
-    let mut conn = state
-        .db_pool
-        .get()
-        .map_err(|_| "Failed to get DB connection".to_string())?;
-    tokio::task::spawn_blocking(move || {
-        diesel::insert_into(crate::schema::instance_invitation_redemptions::table)
-            .values(&row)
-            .execute(&mut conn)
-    })
-    .await
-    .map_err(|_| "Failed to spawn blocking task".to_string())?
-    .map_err(|_| "Failed to record the redemption".to_string())?;
+    diesel::insert_into(crate::schema::instance_invitation_redemptions::table)
+        .values(&row)
+        .execute(conn)?;
     Ok(())
+}
+
+/// Claims a use and records the redemption for an account just written in
+/// this transaction. `Ok(false)` means the invitation is no longer usable and
+/// the caller must roll back and refuse (FR-011).
+pub(crate) fn redeem_for_account_sync(
+    conn: &mut diesel::PgConnection,
+    invitation_id: Uuid,
+    user_id: Uuid,
+    route: &AdmissionRoute,
+) -> QueryResult<bool> {
+    if !claim_invitation_use_sync(conn, invitation_id)? {
+        return Ok(false);
+    }
+    record_redemption_sync(conn, invitation_id, user_id, route)?;
+    Ok(true)
 }
 
 /// Records a refused admission (FR-012), best-effort.
@@ -338,406 +327,5 @@ pub(crate) async fn record_refusal(state: &AppState, route: &AdmissionRoute) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::auth::registration::{Admission, AdmissionRefused, ensure_admission_allowed};
-    use crate::schema::users;
-    use crate::test_support::{
-        insert_test_instance_invitation, insert_test_user, set_instance_access_policy,
-        test_app_state,
-    };
-
-    /// The instance's access policy is one row, and the events table is
-    /// global. So these tests cannot be isolated by giving each its own data
-    /// the way the rest of the suite is: whatever policy one sets, the next
-    /// one reads. They are serialised instead — `arrange` takes the lock and
-    /// hands it to the test, which holds it until it returns.
-    ///
-    /// Without this they pass alone and fail together, which is the worst way
-    /// for a test to be wrong: a `--test-threads=1` rerun says "green" and the
-    /// default command says "broken gate". `repo_host_tests.rs` serialises
-    /// process-global environment variables behind the same idiom.
-    static POLICY_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-
-    /// Holds the lock, and puts the instance back to `open` when it is
-    /// dropped.
-    ///
-    /// # Why the restore matters outside this file
-    ///
-    /// `instance_access_settings` is one global row, and it is the *same* row
-    /// the local dev instance reads. Whichever of these tests ran last used to
-    /// leave its policy behind — so a suite that finished on the `closed` case
-    /// left a closed instance, and the e2e suite running against the same
-    /// database then failed **every spec that registers an account**, with a
-    /// timeout on `#register-username` and nothing anywhere near the cause. It
-    /// looked exactly like a broken registration page.
-    ///
-    /// `open` is the right thing to restore to: it is what the migration's
-    /// conditional seed chooses for a database that already has users in it,
-    /// which every database this runs against does.
-    struct PolicyGuard {
-        _lock: tokio::sync::MutexGuard<'static, ()>,
-        pool: crate::state::DbPool,
-    }
-
-    impl Drop for PolicyGuard {
-        fn drop(&mut self) {
-            // Best-effort: a test that has already failed must not be reported
-            // as a panic in the cleanup instead.
-            if let Ok(mut conn) = self.pool.get() {
-                set_instance_access_policy(&mut conn, "open");
-            }
-        }
-    }
-
-    /// The policy must be set explicitly rather than inherited from the
-    /// migration's seed: the shared test database has users in it, so it
-    /// seeded `open`, and a test that assumed otherwise would pass for the
-    /// wrong reason.
-    async fn arrange(policy: &str) -> (PolicyGuard, crate::state::AppState, uuid::Uuid) {
-        let lock = POLICY_LOCK.lock().await;
-        crate::test_support::load_dotenv();
-        let state = test_app_state();
-        let mut conn = state.db_pool.get().unwrap();
-        // FR-010's exemption is unconditional and first, so every test that
-        // wants a policy honoured needs an administrator to exist.
-        let admin_exists = users::table
-            .filter(users::is_admin.eq(true))
-            .select(users::id)
-            .first::<uuid::Uuid>(&mut conn)
-            .optional()
-            .unwrap();
-        let admin_id = match admin_exists {
-            Some(id) => id,
-            None => {
-                let id = insert_test_user(&mut conn);
-                diesel::update(users::table.filter(users::id.eq(id)))
-                    .set(users::is_admin.eq(true))
-                    .execute(&mut conn)
-                    .unwrap();
-                id
-            }
-        };
-        set_instance_access_policy(&mut conn, policy);
-        drop(conn);
-        let guard = PolicyGuard {
-            _lock: lock,
-            pool: state.db_pool.clone(),
-        };
-        (guard, state, admin_id)
-    }
-
-    /// Fail shut. A stored policy this build does not understand must not be
-    /// read as an invitation to let everyone in.
-    #[test]
-    fn an_unknown_stored_policy_degrades_to_closed() {
-        assert_eq!(
-            InstanceAccessPolicy::from_db_str("open"),
-            InstanceAccessPolicy::Open
-        );
-        assert_eq!(
-            InstanceAccessPolicy::from_db_str("invite_only"),
-            InstanceAccessPolicy::InviteOnly
-        );
-        for nonsense in ["", "OPEN", "anything", "opened", "invite-only"] {
-            assert_eq!(
-                InstanceAccessPolicy::from_db_str(nonsense),
-                InstanceAccessPolicy::Closed,
-                "{nonsense:?} must fail shut"
-            );
-        }
-    }
-
-    /// FR-001 and the contract's decision table, all three states.
-    #[tokio::test]
-    async fn the_policy_decides_admission_on_every_route() {
-        let (_policy, state, admin_id) = arrange("open").await;
-        let route = AdmissionRoute::Local;
-
-        assert!(
-            matches!(
-                ensure_admission_allowed(&state, &route, None).await,
-                Ok(Admission::Allowed)
-            ),
-            "an open instance admits with no invitation"
-        );
-
-        {
-            let mut conn = state.db_pool.get().unwrap();
-            set_instance_access_policy(&mut conn, "invite_only");
-        }
-        assert!(
-            matches!(
-                ensure_admission_allowed(&state, &route, None).await,
-                Err(AdmissionRefused::Policy(_))
-            ),
-            "invite-only refuses without an invitation"
-        );
-
-        let code = {
-            let mut conn = state.db_pool.get().unwrap();
-            insert_test_instance_invitation(&mut conn, admin_id, 1, None, false).1
-        };
-        assert!(
-            matches!(
-                ensure_admission_allowed(&state, &route, Some(&code)).await,
-                Ok(Admission::AllowedByInvitation(_))
-            ),
-            "invite-only admits with a valid invitation"
-        );
-
-        // FR-001: closed refuses even a valid invitation. This is the case a
-        // reader is most likely to "fix" by adding an exception — it is not
-        // an omission.
-        {
-            let mut conn = state.db_pool.get().unwrap();
-            set_instance_access_policy(&mut conn, "closed");
-        }
-        let fresh = {
-            let mut conn = state.db_pool.get().unwrap();
-            insert_test_instance_invitation(&mut conn, admin_id, 1, None, false).1
-        };
-        assert!(
-            matches!(
-                ensure_admission_allowed(&state, &route, Some(&fresh)).await,
-                Err(AdmissionRefused::Policy(_))
-            ),
-            "a closed instance admits nobody, invitation or not"
-        );
-    }
-
-    /// FR-011: revoked, expired, exhausted and never-existed are one refusal.
-    /// Distinguishing them tells a stranger holding a guessed code whether
-    /// they guessed a real one.
-    #[tokio::test]
-    async fn every_unusable_invitation_refuses_identically() {
-        let (_policy, state, admin_id) = arrange("invite_only").await;
-        let route = AdmissionRoute::Local;
-
-        let (revoked, expired, exhausted) = {
-            let mut conn = state.db_pool.get().unwrap();
-            let revoked = insert_test_instance_invitation(&mut conn, admin_id, 1, None, true).1;
-            let past = chrono::Utc::now().naive_utc() - chrono::Duration::hours(1);
-            let expired =
-                insert_test_instance_invitation(&mut conn, admin_id, 1, Some(past), false).1;
-            let (id, code) = insert_test_instance_invitation(&mut conn, admin_id, 1, None, false);
-            diesel::update(
-                crate::schema::instance_invitations::table
-                    .filter(crate::schema::instance_invitations::id.eq(id)),
-            )
-            .set(crate::schema::instance_invitations::used_count.eq(1))
-            .execute(&mut conn)
-            .unwrap();
-            (revoked, expired, code)
-        };
-
-        for code in [
-            revoked.as_str(),
-            expired.as_str(),
-            exhausted.as_str(),
-            "NOTAREALCODEATALL0",
-        ] {
-            let result = ensure_admission_allowed(&state, &route, Some(code)).await;
-            assert!(
-                matches!(result, Err(AdmissionRefused::InvitationUnusable)),
-                "{code} must refuse as merely unusable, saying nothing about why"
-            );
-        }
-    }
-
-    /// FR-020a: an operator testing the link they issued must not destroy it.
-    /// The use is consumed only when an account is actually created, so a
-    /// consume followed by a release leaves the count where it started.
-    #[tokio::test]
-    async fn a_released_use_returns_to_the_invitation() {
-        let (_policy, state, admin_id) = arrange("invite_only").await;
-        let (id, code) = {
-            let mut conn = state.db_pool.get().unwrap();
-            insert_test_instance_invitation(&mut conn, admin_id, 1, None, false)
-        };
-
-        let Ok(Admission::AllowedByInvitation(invitation_id)) =
-            ensure_admission_allowed(&state, &AdmissionRoute::Local, Some(&code)).await
-        else {
-            panic!("a valid invitation must be consumable");
-        };
-        assert_eq!(invitation_id, id);
-
-        release_invitation_use(&state, invitation_id).await;
-
-        let mut conn = state.db_pool.get().unwrap();
-        let used = crate::schema::instance_invitations::table
-            .filter(crate::schema::instance_invitations::id.eq(id))
-            .select(crate::schema::instance_invitations::used_count)
-            .first::<i32>(&mut conn)
-            .unwrap();
-        assert_eq!(used, 0, "a use released must be a use available again");
-    }
-
-    /// FR-016: a signup the server refuses must not burn a use. The use is
-    /// consumed before the input is validated — admission is decided ahead of
-    /// every probe (FR-011) — so each refusal after it has to give it back. A
-    /// vtt-dev invitation read 7 of 7 used with three accounts made through
-    /// it, because a too-short password returned without releasing.
-    #[tokio::test]
-    async fn a_refused_signup_gives_back_the_use_it_took() {
-        let (_policy, state, admin_id) = arrange("invite_only").await;
-        let (id, code) = {
-            let mut conn = state.db_pool.get().unwrap();
-            insert_test_instance_invitation(&mut conn, admin_id, 7, None, false)
-        };
-        let suffix = &Uuid::now_v7().simple().to_string()[..12];
-
-        let refused = [
-            ("a too-short password", format!("u{suffix}"), "short"),
-            (
-                "a username with a space",
-                format!("u {suffix}"),
-                "a-long-enough-password",
-            ),
-        ];
-        for (why, username, password) in refused {
-            let (status, _) = super::super::sessions::register(
-                tower_cookies::Cookies::default(),
-                super::super::ClientDescription::unknown(),
-                axum::extract::State(state.clone()),
-                axum::Json(super::super::RegisterRequest {
-                    username,
-                    email: format!("{suffix}@example.test"),
-                    password: password.to_string(),
-                    invitation_code: Some(code.clone()),
-                }),
-            )
-            .await;
-            assert_eq!(status, axum::http::StatusCode::BAD_REQUEST, "{why}");
-
-            let mut conn = state.db_pool.get().unwrap();
-            let used = crate::schema::instance_invitations::table
-                .filter(crate::schema::instance_invitations::id.eq(id))
-                .select(crate::schema::instance_invitations::used_count)
-                .first::<i32>(&mut conn)
-                .unwrap();
-            assert_eq!(used, 0, "{why} must not burn a use of the invitation");
-        }
-    }
-
-    /// SC-006: an N-use invitation admits at most N, including when
-    /// redemptions race. This is the test that catches a regression from the
-    /// conditional UPDATE back to read-then-write.
-    #[tokio::test]
-    async fn an_n_use_invitation_admits_exactly_n_under_concurrency() {
-        let (_policy, state, admin_id) = arrange("invite_only").await;
-        const N: i32 = 3;
-        let attempts = (N + 2) as usize;
-
-        let (id, code) = {
-            let mut conn = state.db_pool.get().unwrap();
-            insert_test_instance_invitation(&mut conn, admin_id, N, None, false)
-        };
-
-        let mut handles = Vec::new();
-        for _ in 0..attempts {
-            let state = state.clone();
-            let code = code.clone();
-            handles.push(tokio::spawn(async move {
-                matches!(
-                    ensure_admission_allowed(&state, &AdmissionRoute::Local, Some(&code)).await,
-                    Ok(Admission::AllowedByInvitation(_))
-                )
-            }));
-        }
-
-        let mut admitted = 0;
-        for h in handles {
-            if h.await.unwrap() {
-                admitted += 1;
-            }
-        }
-
-        assert_eq!(
-            admitted, N,
-            "{attempts} concurrent redemptions of a {N}-use invitation must admit exactly {N}"
-        );
-
-        let mut conn = state.db_pool.get().unwrap();
-        let used = crate::schema::instance_invitations::table
-            .filter(crate::schema::instance_invitations::id.eq(id))
-            .select(crate::schema::instance_invitations::used_count)
-            .first::<i32>(&mut conn)
-            .unwrap();
-        assert_eq!(used, N, "the stored count must never exceed the cap");
-    }
-
-    /// FR-004 and FR-012: both event kinds are written, and neither carries an
-    /// address. The struct makes that structural, and this asserts it stays so.
-    #[tokio::test]
-    async fn access_events_record_the_act_and_never_the_person() {
-        let (_policy, state, admin_id) = arrange("closed").await;
-
-        // The events table is global, and this test asserts on the rows *it*
-        // wrote. `POLICY_LOCK` stops another test writing beside it, but
-        // earlier runs against the same database have left their own rows
-        // behind — so the ids already present are subtracted afterwards
-        // rather than trusting that the newest few are ours. A set difference
-        // is used in preference to a timestamp or id boundary because both
-        // order ambiguously for anything written in the same millisecond.
-        let existing: std::collections::HashSet<Uuid> = {
-            let mut conn = state.db_pool.get().unwrap();
-            crate::schema::instance_access_events::table
-                .select(crate::schema::instance_access_events::id)
-                .load::<Uuid>(&mut conn)
-                .unwrap()
-                .into_iter()
-                .collect()
-        };
-
-        record_refusal(&state, &AdmissionRoute::OAuth("google".to_string())).await;
-        crate::admin::update_instance_access_policy(
-            &state,
-            Some(admin_id),
-            InstanceAccessPolicy::InviteOnly,
-        )
-        .await
-        .expect("an administrator may change the policy");
-
-        let mut conn = state.db_pool.get().unwrap();
-        let rows = crate::schema::instance_access_events::table
-            .order(crate::schema::instance_access_events::occurred_at.desc())
-            .select(crate::models::InstanceAccessEvent::as_select())
-            .load::<crate::models::InstanceAccessEvent>(&mut conn)
-            .unwrap()
-            .into_iter()
-            .filter(|r| !existing.contains(&r.id))
-            .collect::<Vec<_>>();
-        assert_eq!(
-            rows.len(),
-            2,
-            "this test writes exactly one refusal and one policy change"
-        );
-
-        let refusal = rows
-            .iter()
-            .find(|r| r.event_type == "admission_refused")
-            .expect("a refusal must be recorded");
-        assert_eq!(refusal.attempted_route.as_deref(), Some("oauth:google"));
-        assert_eq!(refusal.policy_at_attempt.as_deref(), Some("closed"));
-
-        let change = rows
-            .iter()
-            .find(|r| r.event_type == "policy_changed")
-            .expect("a policy change must be recorded");
-        assert_eq!(change.actor_user_id, Some(admin_id));
-        assert_eq!(change.previous_policy.as_deref(), Some("closed"));
-        assert_eq!(change.new_policy.as_deref(), Some("invite_only"));
-
-        // The rendered row must contain nothing that identifies a person
-        // beyond the administrator who acted.
-        for row in &rows {
-            let rendered = format!("{row:?}");
-            assert!(
-                !rendered.contains('@'),
-                "an access event must never carry an address: {rendered}"
-            );
-        }
-    }
-}
+#[path = "instance_access_tests.rs"]
+mod tests;

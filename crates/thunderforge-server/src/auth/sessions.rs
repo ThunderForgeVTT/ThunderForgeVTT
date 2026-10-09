@@ -118,25 +118,24 @@ pub(crate) async fn register(
             }
         };
 
-    // A failed signup must not burn a use (FR-016). The consume already
-    // happened — it has to, so concurrent redeemers see it — so every refusal
-    // between it and the account existing gives the use back. They all leave
-    // through this one arm, so a new refusal cannot forget to.
-    let user_id = match create_local_account(&state, &request).await {
-        Ok(value) => value,
-        Err(response) => {
-            if let Admission::AllowedByInvitation(invitation_id) = admission {
-                crate::auth::instance_access::release_invitation_use(&state, invitation_id).await;
-            }
-            return response;
-        }
+    // A failed signup must not burn a use (FR-016). Nothing has been burned
+    // yet: the use is claimed inside the transaction that writes the account,
+    // so every refusal below leaves the invitation as it found it.
+    let invitation_id = match admission {
+        Admission::AllowedByInvitation(id) => Some(id),
+        Admission::Allowed => None,
     };
-
-    if let Admission::AllowedByInvitation(invitation_id) = admission {
-        let _ =
-            crate::auth::instance_access::record_redemption(&state, invitation_id, user_id, &route)
-                .await;
-    }
+    let user_id = match super::account_creation::create_local_account(
+        &state,
+        &request,
+        invitation_id,
+        &route,
+    )
+    .await
+    {
+        Ok(value) => value,
+        Err(response) => return *response,
+    };
 
     let session = match issue_session_cookie(&state, &cookies, user_id, client).await {
         Ok(value) => value,
@@ -164,102 +163,6 @@ pub(crate) async fn register(
             "session_error",
             message.as_str(),
         ),
-    }
-}
-
-/// Validates a registration and creates the account, or says why not.
-///
-/// Split out of [`register`] so that every refusal after admission returns
-/// through one place, where the invitation use it consumed is released. Each
-/// early return used to be its own path, and only the last of them released:
-/// a too-short password burned a use.
-async fn create_local_account(
-    state: &AppState,
-    request: &RegisterRequest,
-) -> Result<uuid::Uuid, (StatusCode, Json<AuthSessionResponse>)> {
-    let username = request.username.trim().to_string();
-    let email = request.email.trim().to_lowercase();
-
-    validate_registration_input(&username, &email, &request.password).map_err(|message| {
-        auth_session_error(StatusCode::BAD_REQUEST, "invalid_request", message.as_str())
-    })?;
-
-    let password_hash = hash_password(&request.password).map_err(|message| {
-        auth_session_error(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "password_hash_failed",
-            message.as_str(),
-        )
-    })?;
-
-    let registration_failed = || {
-        auth_session_error(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "registration_failed",
-            "Failed to create account",
-        )
-    };
-
-    let now = Utc::now().naive_utc();
-    let mut conn = state.db_pool.get().map_err(|_| registration_failed())?;
-    let create_result =
-        tokio::task::spawn_blocking(move || -> Result<uuid::Uuid, RegisterUserError> {
-            let username_exists = users::table
-                .filter(users::username.eq(&username))
-                .select(users::id)
-                .first::<uuid::Uuid>(&mut conn)
-                .optional()
-                .map_err(|_| RegisterUserError::Storage)?;
-            if username_exists.is_some() {
-                return Err(RegisterUserError::UsernameTaken);
-            }
-
-            let email_exists = users::table
-                .filter(users::email.eq(&email))
-                .select(users::id)
-                .first::<uuid::Uuid>(&mut conn)
-                .optional()
-                .map_err(|_| RegisterUserError::Storage)?;
-            if email_exists.is_some() {
-                return Err(RegisterUserError::EmailTaken);
-            }
-
-            let user_id = uuid::Uuid::now_v7();
-            diesel::insert_into(users::table)
-                .values((
-                    users::id.eq(user_id),
-                    users::username.eq(username),
-                    users::email.eq(email),
-                    users::is_admin.eq(false),
-                    users::password_hash.eq(password_hash),
-                    users::created_at.eq(now),
-                    users::updated_at.eq(now),
-                    users::two_factor_enabled.eq(false),
-                    users::two_factor_secret_encrypted.eq::<Option<String>>(None),
-                    users::two_factor_confirmed_at.eq::<Option<chrono::NaiveDateTime>>(None),
-                    users::two_factor_admin_required.eq(false),
-                ))
-                .execute(&mut conn)
-                .map_err(|_| RegisterUserError::Storage)?;
-
-            Ok(user_id)
-        })
-        .await
-        .map_err(|_| registration_failed())?;
-
-    match create_result {
-        Ok(value) => Ok(value),
-        Err(RegisterUserError::UsernameTaken) => Err(auth_session_error(
-            StatusCode::CONFLICT,
-            "username_taken",
-            "Username is already in use",
-        )),
-        Err(RegisterUserError::EmailTaken) => Err(auth_session_error(
-            StatusCode::CONFLICT,
-            "email_taken",
-            "Email is already in use",
-        )),
-        Err(RegisterUserError::Storage) => Err(registration_failed()),
     }
 }
 
