@@ -163,7 +163,7 @@ Content the world lacks is staged under their name and kept out of play.
 - [X] T030 [US1] Implement `recognise.rs` (the anchors) and `fields.rs` (label-relative regions built on `region.rs`). Add `glyphs.rs`, the proficiency mark table. Each `Uncertain` carries a reason a player can act on.
   Deviation: `fields.rs` reads each value by its form-field name, not by label-relative region, because every value in a D&D Beyond export sits in a named widget field (T011, closed by measurement). The labels are still the recognition anchors.
 - [X] T031 [US1] Implement `content.rs`, which reads the spell rows (with prepared marks and level), the FEATURES & TRAITS headings with uses and recharge, the equipment (with quantity, weight, and equipped and attuned marks), and the attack rows. T029 goes green.
-- [ ] T032 [US1] Implement `wasm.rs` (`readSheet(bytes) -> {recognised, reading | error}`). Export `sheetReader: () => import("@thunderforge/sheet-dnd5e")` from `packs/systems/dnd5e/web/src/index.ts`. Add `apps/web/src/pages/world/actor/systemSheetReaders.ts`, globbed like `systemActorSheets.ts`. `scripts/check-system-registry.mjs` stays green.
+- [X] T032 [US1] Implement `wasm.rs` (`readSheet(bytes) -> {recognised, reading | error}`). Export `sheetReader: () => import("@thunderforge/sheet-dnd5e")` from `packs/systems/dnd5e/web/src/index.ts`. Add `apps/web/src/pages/world/actor/systemSheetReaders.ts`, globbed like `systemActorSheets.ts`. `scripts/check-system-registry.mjs` stays green.
 
 ### The mapping (TDD)
 

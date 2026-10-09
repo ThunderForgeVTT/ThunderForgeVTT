@@ -8,16 +8,20 @@
 //! The reader is pure: the same bytes give the same reading in the browser
 //! (as wasm) and on the server, which is what lets the two agree on a plan.
 
+mod browser;
 mod content;
 mod fields;
 mod glyphs;
 mod recognise;
+#[cfg(feature = "wasm")]
+mod wasm;
 
 use thunderforge_pdf::Document;
 use thunderforge_sheet_import::{
     ImportedCharacter, ReadError, ReaderStamp, Recognition, SheetReader,
 };
 
+pub use browser::read_sheet_json;
 pub use recognise::NOT_A_SHEET;
 
 /// The `ddb-pdf` reader.
