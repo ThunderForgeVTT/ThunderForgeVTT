@@ -113,17 +113,17 @@ listed in T031 and T032.
 
 ## Phase 4: Visuals (US1)
 
-- [ ] T040 [US1] Stacked tokens (R9, FR-009):
+- [x] T040 [US1] Stacked tokens (R9, FR-009):
   - Capture three stacked tokens with one selected, and compare with `baseline/stack.png`.
   - Click the stack, and check that the token picked is the one drawn on top.
   - If the order changed, give each token a stable z offset within `CanvasLayer::Tokens` (below the handles' +2.0), derived from the same key as `token_stack.rs`. Add a test in the engine for the offset, and recheck.
-- [ ] T041 [US1] Colour (R8, FR-008):
+- [x] T041 [US1] Colour (R8, FR-008):
   - Capture the known sprite and compare it per channel with `baseline/sprite.png`.
   - If it is out by more than 1/255, set the 0.19.1-equivalent `Tonemapping` on every `Camera2d` spawn (16 in 11 files, research.md R8), and recheck.
-- [ ] T042 [P] [US1] Darkness: capture the lit scene and compare it with `baseline/darkness.png`. Falloff, wall shadows and the edge of sight should be the same by eye.
-- [ ] T043 [P] [US1] Text: capture nameplates and a dice readout, and compare with `baseline/text.png`. Check the size, position and order against the sprites (`Text2d` is still on the old backend).
-- [ ] T044 [P] [US1] `RenderDebugOverlay`: confirm that it is off by default under `DefaultPlugins` (`startup.rs:83`) and draws nothing. If it is on, or adds weight, `.disable::<>()` it.
-- [ ] T045 Save the four 0.20 captures beside the baseline in `specs/087-bevy-0-20/baseline/` with the suffix `-020`, and record the result of each comparison in research.md under `## Result`.
+- [x] T042 [P] [US1] Darkness: capture the lit scene and compare it with `baseline/darkness.png`. Falloff, wall shadows and the edge of sight should be the same by eye.
+- [x] T043 [P] [US1] Text: capture nameplates and a dice readout, and compare with `baseline/text.png`. Check the size, position and order against the sprites (`Text2d` is still on the old backend).
+- [x] T044 [P] [US1] `RenderDebugOverlay`: confirm that it is off by default under `DefaultPlugins` (`startup.rs:83`) and draws nothing. If it is on, or adds weight, `.disable::<>()` it.
+- [x] T045 Save the four 0.20 captures beside the baseline in `specs/087-bevy-0-20/baseline/` with the suffix `-020`, and record the result of each comparison in research.md under `## Result`.
 
 **Checkpoint**: SC-002 holds.
 

@@ -502,3 +502,43 @@ canvas. The four pictures are in `baseline/` (`sprite.png`, `stack.png`,
   The last token added is drawn on top, and a click picks the lowest id
   (`token_stack.rs`), whatever is drawn. When those disagree, the click
   takes a token the player cannot see. That is true on 0.19.1 already.
+
+## Result
+
+Measured on the release 0.20 engine unless a line says otherwise.
+
+### Visuals (T040–T045)
+
+The four captures are in `baseline/` with the suffix `-020`, taken by
+the same script in the same sandbox as the baseline (load 2.31 / 6.86 /
+9.97 at the start, no e2e running).
+
+- **Colour (T041).** `sprite-020.png` equals `sprite.png` to the pixel:
+  the red token reads `[203, 67, 75, 255]` on both. `Camera2d`'s new
+  `Tonemapping::Linear` default is the identity on our LDR cameras, so no
+  tonemapping is set.
+- **Darkness (T042).** `darkness-020.png` equals `darkness.png` to the
+  pixel, and so does every sampled value (torch, lit floor, wall shadow,
+  far dark). The WESL port draws the same falloff, shadows and edge of
+  sight.
+- **Text (T043).** `text-020.png` equals `text.png` to the pixel:
+  nameplates and the dice readout keep their size, position and order
+  against the sprites.
+- **Stacking (T040).** Same-z order did not change. The kind-colour check
+  gives the same top pixel and the same pick on both versions: the last
+  token added is drawn on top, and a click picks the lowest id. No
+  tie-break was added. `stack-020.png` differs from `stack.png` inside
+  the stack's box (3,694 pixels), as two 0.19.1 captures differ from each
+  other (1,924); that picture is not stable from run to run on either
+  version.
+  - Found on the way, and present on 0.19.1: when the token drawn on top
+    is not the lowest id, a click picks a token the player cannot see.
+    That is not a 0.20 change, so it is left for its own fix.
+- **RenderDebugOverlay (T044).** `DefaultPlugins` adds
+  `RenderDebugOverlayPlugin` only with bevy's `render_dev_tools` feature,
+  which we do not enable, and `bevy_dev_tools` is not in the engine's
+  wasm32 tree. It is absent, so nothing is disabled.
+- 0.20 logs one new line at startup on WebGL2: "Sparse buffer updates
+  disabled. RenderDevice lacks support: max_storage_buffers_per_shader_stage
+  (0) < 3". It is `info`, and WebGL2 has no storage buffers; nothing
+  draws differently.
