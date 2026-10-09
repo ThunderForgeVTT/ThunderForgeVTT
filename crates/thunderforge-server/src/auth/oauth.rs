@@ -451,8 +451,8 @@ pub(crate) async fn resolve_oauth_login(
             Ok(ResolveOutcome::PasswordRequired(challenge_id))
         })
         .await
-        .expect("Failed to spawn blocking task")
-        .expect("Failed to resolve oauth login");
+        .ok()
+        .and_then(Result::ok);
 
     // FR-016 and FR-020a, settled together here.
     //
@@ -461,22 +461,19 @@ pub(crate) async fn resolve_oauth_login(
     // something else — because the account was created by a concurrent
     // request in between, or because the identity turned out to be linkable —
     // then nobody was admitted by the invitation and the use goes back.
+    // A storage error or a panic counts as not provisioning: the use goes back.
+    let provisioned = match outcome {
+        Some(ResolveOutcome::ProvisionedUser(user_id)) => Some(user_id),
+        _ => None,
+    };
     if let Some(Admission::AllowedByInvitation(invitation_id)) = admission {
-        match outcome {
-            ResolveOutcome::ProvisionedUser(user_id) => {
-                let _ = crate::auth::instance_access::record_redemption(
-                    &state,
-                    invitation_id,
-                    user_id,
-                    &route,
-                )
-                .await;
-            }
-            _ => {
-                crate::auth::instance_access::release_invitation_use(&state, invitation_id).await;
-            }
-        }
+        settle_invitation_use(&state, invitation_id, provisioned, &route).await;
     }
+
+    let Some(outcome) = outcome else {
+        let status = StatusCode::INTERNAL_SERVER_ERROR;
+        return error_response(status, "oauth_failed", "OAuth login failed");
+    };
 
     match outcome {
         ResolveOutcome::ProviderNotFound => error_response(

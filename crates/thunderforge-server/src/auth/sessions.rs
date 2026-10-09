@@ -118,26 +118,90 @@ pub(crate) async fn register(
             }
         };
 
-    let username = request.username.trim().to_string();
-    let email = request.email.trim().to_lowercase();
+    // A failed signup must not burn a use (FR-016). The consume already
+    // happened — it has to, so concurrent redeemers see it — so every refusal
+    // between it and the account existing gives the use back. They all leave
+    // through this one arm, so a new refusal cannot forget to.
+    let user_id = match create_local_account(&state, &request).await {
+        Ok(value) => value,
+        Err(response) => {
+            if let Admission::AllowedByInvitation(invitation_id) = admission {
+                crate::auth::instance_access::release_invitation_use(&state, invitation_id).await;
+            }
+            return response;
+        }
+    };
 
-    if let Err(message) = validate_registration_input(&username, &email, &request.password) {
-        return auth_session_error(StatusCode::BAD_REQUEST, "invalid_request", message.as_str());
+    if let Admission::AllowedByInvitation(invitation_id) = admission {
+        let _ =
+            crate::auth::instance_access::record_redemption(&state, invitation_id, user_id, &route)
+                .await;
     }
 
-    let password_hash = match hash_password(&request.password) {
+    let session = match issue_session_cookie(&state, &cookies, user_id, client).await {
         Ok(value) => value,
         Err(message) => {
             return auth_session_error(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "password_hash_failed",
+                "session_error",
                 message.as_str(),
             );
         }
     };
 
+    match build_session_response(
+        &state,
+        user_id,
+        session.expires_at,
+        "success",
+        "Account created successfully",
+    )
+    .await
+    {
+        Ok(response) => (StatusCode::CREATED, Json(response)),
+        Err(message) => auth_session_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "session_error",
+            message.as_str(),
+        ),
+    }
+}
+
+/// Validates a registration and creates the account, or says why not.
+///
+/// Split out of [`register`] so that every refusal after admission returns
+/// through one place, where the invitation use it consumed is released. Each
+/// early return used to be its own path, and only the last of them released:
+/// a too-short password burned a use.
+async fn create_local_account(
+    state: &AppState,
+    request: &RegisterRequest,
+) -> Result<uuid::Uuid, (StatusCode, Json<AuthSessionResponse>)> {
+    let username = request.username.trim().to_string();
+    let email = request.email.trim().to_lowercase();
+
+    validate_registration_input(&username, &email, &request.password).map_err(|message| {
+        auth_session_error(StatusCode::BAD_REQUEST, "invalid_request", message.as_str())
+    })?;
+
+    let password_hash = hash_password(&request.password).map_err(|message| {
+        auth_session_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "password_hash_failed",
+            message.as_str(),
+        )
+    })?;
+
+    let registration_failed = || {
+        auth_session_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "registration_failed",
+            "Failed to create account",
+        )
+    };
+
     let now = Utc::now().naive_utc();
-    let mut conn = state.db_pool.get().expect("Failed to get DB connection");
+    let mut conn = state.db_pool.get().map_err(|_| registration_failed())?;
     let create_result =
         tokio::task::spawn_blocking(move || -> Result<uuid::Uuid, RegisterUserError> {
             let username_exists = users::table
@@ -181,74 +245,21 @@ pub(crate) async fn register(
             Ok(user_id)
         })
         .await
-        .expect("Failed to spawn blocking task");
+        .map_err(|_| registration_failed())?;
 
-    // A failed signup must not burn a use (FR-016). The consume already
-    // happened — it has to, so concurrent redeemers see it — so the
-    // compensation is explicit on every failure path below.
-    if create_result.is_err()
-        && let Admission::AllowedByInvitation(invitation_id) = admission
-    {
-        crate::auth::instance_access::release_invitation_use(&state, invitation_id).await;
-    }
-
-    let user_id = match create_result {
-        Ok(value) => value,
-        Err(RegisterUserError::UsernameTaken) => {
-            return auth_session_error(
-                StatusCode::CONFLICT,
-                "username_taken",
-                "Username is already in use",
-            );
-        }
-        Err(RegisterUserError::EmailTaken) => {
-            return auth_session_error(
-                StatusCode::CONFLICT,
-                "email_taken",
-                "Email is already in use",
-            );
-        }
-        Err(RegisterUserError::Storage) => {
-            return auth_session_error(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "registration_failed",
-                "Failed to create account",
-            );
-        }
-    };
-
-    if let Admission::AllowedByInvitation(invitation_id) = admission {
-        let _ =
-            crate::auth::instance_access::record_redemption(&state, invitation_id, user_id, &route)
-                .await;
-    }
-
-    let session = match issue_session_cookie(&state, &cookies, user_id, client).await {
-        Ok(value) => value,
-        Err(message) => {
-            return auth_session_error(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "session_error",
-                message.as_str(),
-            );
-        }
-    };
-
-    match build_session_response(
-        &state,
-        user_id,
-        session.expires_at,
-        "success",
-        "Account created successfully",
-    )
-    .await
-    {
-        Ok(response) => (StatusCode::CREATED, Json(response)),
-        Err(message) => auth_session_error(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "session_error",
-            message.as_str(),
-        ),
+    match create_result {
+        Ok(value) => Ok(value),
+        Err(RegisterUserError::UsernameTaken) => Err(auth_session_error(
+            StatusCode::CONFLICT,
+            "username_taken",
+            "Username is already in use",
+        )),
+        Err(RegisterUserError::EmailTaken) => Err(auth_session_error(
+            StatusCode::CONFLICT,
+            "email_taken",
+            "Email is already in use",
+        )),
+        Err(RegisterUserError::Storage) => Err(registration_failed()),
     }
 }
 

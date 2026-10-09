@@ -54,7 +54,7 @@ pub mod account_ownership;
 /// authorization guard for canvas asset reads/writes.
 /// Spec 035 / ADR-072: the instance admission policy and its audit trail.
 pub mod instance_access;
-pub(crate) use instance_access::{AdmissionRoute, record_refusal};
+pub(crate) use instance_access::{AdmissionRoute, record_refusal, settle_invitation_use};
 pub mod world_membership;
 
 /// Spec 028 (T045c): `scenes.hidden` visibility for scenes and the canvas

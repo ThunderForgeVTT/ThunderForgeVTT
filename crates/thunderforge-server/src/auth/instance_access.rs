@@ -273,6 +273,22 @@ pub(crate) async fn release_invitation_use(state: &AppState, invitation_id: Uuid
     .await;
 }
 
+/// Settles a consumed use once the auth flow knows its outcome: recorded
+/// against the account it admitted, or released when none was made (FR-016).
+pub(crate) async fn settle_invitation_use(
+    state: &AppState,
+    invitation_id: Uuid,
+    admitted: Option<Uuid>,
+    route: &AdmissionRoute,
+) {
+    match admitted {
+        Some(user_id) => {
+            let _ = record_redemption(state, invitation_id, user_id, route).await;
+        }
+        None => release_invitation_use(state, invitation_id).await,
+    }
+}
+
 /// Records that an account was admitted by an invitation (FR-018).
 pub(crate) async fn record_redemption(
     state: &AppState,
@@ -556,6 +572,53 @@ mod tests {
             .first::<i32>(&mut conn)
             .unwrap();
         assert_eq!(used, 0, "a use released must be a use available again");
+    }
+
+    /// FR-016: a signup the server refuses must not burn a use. The use is
+    /// consumed before the input is validated — admission is decided ahead of
+    /// every probe (FR-011) — so each refusal after it has to give it back. A
+    /// vtt-dev invitation read 7 of 7 used with three accounts made through
+    /// it, because a too-short password returned without releasing.
+    #[tokio::test]
+    async fn a_refused_signup_gives_back_the_use_it_took() {
+        let (_policy, state, admin_id) = arrange("invite_only").await;
+        let (id, code) = {
+            let mut conn = state.db_pool.get().unwrap();
+            insert_test_instance_invitation(&mut conn, admin_id, 7, None, false)
+        };
+        let suffix = &Uuid::now_v7().simple().to_string()[..12];
+
+        let refused = [
+            ("a too-short password", format!("u{suffix}"), "short"),
+            (
+                "a username with a space",
+                format!("u {suffix}"),
+                "a-long-enough-password",
+            ),
+        ];
+        for (why, username, password) in refused {
+            let (status, _) = super::super::sessions::register(
+                tower_cookies::Cookies::default(),
+                super::super::ClientDescription::unknown(),
+                axum::extract::State(state.clone()),
+                axum::Json(super::super::RegisterRequest {
+                    username,
+                    email: format!("{suffix}@example.test"),
+                    password: password.to_string(),
+                    invitation_code: Some(code.clone()),
+                }),
+            )
+            .await;
+            assert_eq!(status, axum::http::StatusCode::BAD_REQUEST, "{why}");
+
+            let mut conn = state.db_pool.get().unwrap();
+            let used = crate::schema::instance_invitations::table
+                .filter(crate::schema::instance_invitations::id.eq(id))
+                .select(crate::schema::instance_invitations::used_count)
+                .first::<i32>(&mut conn)
+                .unwrap();
+            assert_eq!(used, 0, "{why} must not burn a use of the invitation");
+        }
     }
 
     /// SC-006: an N-use invitation admits at most N, including when
