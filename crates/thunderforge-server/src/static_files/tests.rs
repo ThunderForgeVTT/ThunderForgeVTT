@@ -271,3 +271,51 @@ async fn a_built_file_goes_out_precompressed_and_still_in_parts() {
         .unwrap();
     assert_eq!(&body[..], b"scr");
 }
+
+/// An invitation link is a credential for joining the instance. The page's
+/// own `<meta name="robots">` is added by script, which a crawler that does
+/// not run scripts never sees, so the header says it on the response itself.
+#[tokio::test]
+async fn an_invitation_page_tells_crawlers_not_to_index_it() {
+    let root = tempfile::tempdir().unwrap();
+    build_client(root.path());
+    let app: Router = router(&directories(root.path()));
+
+    let robots = |response: &axum::response::Response| {
+        response
+            .headers()
+            .get("x-robots-tag")
+            .map(|value| value.to_str().unwrap().to_owned())
+    };
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::get("/invite/CF289C5EC1C2487790FD")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(robots(&response), Some("noindex, nofollow".to_owned()));
+    assert_eq!(
+        response
+            .headers()
+            .get(axum::http::header::CACHE_CONTROL)
+            .map(|value| value.to_str().unwrap().to_owned()),
+        Some("no-cache".to_owned())
+    );
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(body, "the client");
+
+    // Every other page is left for the page itself to decide.
+    let response = app
+        .clone()
+        .oneshot(Request::get("/world/abc/play").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(robots(&response), None);
+}
