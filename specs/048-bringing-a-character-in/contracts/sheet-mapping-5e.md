@@ -33,6 +33,7 @@ The reader is `ddb-pdf` in `packs/systems/dnd5e/sheet/`.
     "spell_data.pact_slots.used", "trait_data.inspiration",
     "trait_data.luck_points_used", "links.uses_used"
   ],
+  "ignore": ["identity.player_name"],           // read, shown as ignored, kept nowhere
   "notes": "trait_data.notes"                   // where `unmapped` values are appended, labelled
 }
 ```

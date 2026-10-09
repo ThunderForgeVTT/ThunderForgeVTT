@@ -11,3 +11,15 @@ pub mod hash;
 pub mod mapping;
 pub mod plan;
 pub mod reader;
+
+pub use character::{
+    Certainty, ClassLevel, ContentLink, Field, ImportedCharacter, Leaf, NamedContent, Note,
+    ReaderStamp, SkillMark, Source,
+};
+pub use hash::{content_hash, normalise_name};
+pub use mapping::{ContentTarget, MappingError, SheetMapping};
+pub use plan::{
+    ActorSnapshot, ContentChange, ContentIndex, Corrections, CurrentLink, FieldChange, ImportPlan,
+    Indexed, PlanCertainty, RefineFn, Resolution, plan, plan_hash,
+};
+pub use reader::{ReadError, Recognition, SheetReader};

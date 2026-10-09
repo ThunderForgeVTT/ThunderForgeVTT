@@ -94,6 +94,16 @@ pub fn normalise_name(name: &str) -> String;     // casefold, strip punctuation 
 pub fn content_hash(kind: &str, fields: &serde_json::Value) -> String;
 ```
 
+**As built** (T015/T016): a reading also carries `reader: {id, version}`,
+so the plan names the reader it came from; `notes` is `Vec<Note{label,
+text: Field<String>}>`, so an unmapped value keeps the sheet's own label;
+and the plan has three accounting lists beside the four parts, `identical`,
+`checked` (derived paths) and `ignored` (paths the declaration's `ignore`
+names, such as the player's name). Corrections are `{neutral path: value}`;
+`content.N.name` renames a piece of content. Whether play state is
+overwritten is not part of the plan or its hash: the plan marks the rows,
+and `ImportPlan::writes(overwrite)` applies the person's choice.
+
 **Invariants** (each one is a test in the crate):
 
 - `plan` is pure and deterministic. The same inputs always give the same

@@ -94,7 +94,7 @@ user's shareable set is a *collection*. Only the 5e system is a *pack*.
 
 ### The neutral core
 
-- [ ] T014 [P] Write tests in `crates/thunderforge-sheet-import/tests/plan.rs` for every invariant in contracts/sheet-import-core.md:
+- [X] T014 [P] Write tests in `crates/thunderforge-sheet-import/tests/plan.rs` for every invariant in contracts/sheet-import-core.md:
   - the plan is deterministic, byte for byte;
   - an unread field is never written;
   - an uncertain field is written only when shown;
@@ -104,8 +104,8 @@ user's shareable set is a *collection*. Only the 5e system is a *pack*.
   - `plan_hash` is stable;
   - `normalise_name` and `content_hash`.
   Use hand-built `ImportedCharacter` values with no PDF.
-- [ ] T015 Implement the types in `character.rs` and `reader.rs`: `ImportedCharacter`, `Field`, `Certainty`, `Source`, `SheetReader`, `Recognition` and `ReadError`.
-- [ ] T016 Implement `mapping.rs`, which parses the `sheetImport` declaration and validates its paths, and `plan.rs` and `hash.rs`, which hold `plan`, `plan_hash`, `normalise_name` and `content_hash`. T014 goes green.
+- [X] T015 Implement the types in `character.rs` and `reader.rs`: `ImportedCharacter`, `Field`, `Certainty`, `Source`, `SheetReader`, `Recognition` and `ReadError`.
+- [X] T016 Implement `mapping.rs`, which parses the `sheetImport` declaration and validates its paths, and `plan.rs` and `hash.rs`, which hold `plan`, `plan_hash`, `normalise_name` and `content_hash`. T014 goes green.
 - [ ] T017 In `crates/thunderforge-canvas-core/src/system_contribution.rs`, add the `SheetImport` slot and the object-safe `SheetReaderHandle` (bytes in, JSON out). Add a pack-load test: a malformed `sheetImport` block fails to load, and a pack with no block loads with `sheet_import: None`.
 
 ### Storage, origin, permissions, events
