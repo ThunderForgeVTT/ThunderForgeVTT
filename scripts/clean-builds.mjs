@@ -63,7 +63,7 @@
  *
  * # When it refuses
  *
- * While a live e2e run holds `.e2e-running` in the root (the run's backends
+ * While a live e2e run started from the root holds the e2e lock (the run's backends
  * and engine build read `target/`), and while a cargo, rustc or clippy
  * process is working in the root. Deleting under a running compiler is the
  * one way this could produce a wrong build rather than a slow one.

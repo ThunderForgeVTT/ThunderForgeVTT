@@ -974,6 +974,7 @@ async function main() {
     all: false,
     keep: false,
     recordDurations: false,
+    wait: true,
     only: null,
     slice: null,
     sliceSpecs: null,
@@ -997,6 +998,9 @@ async function main() {
     else if (sliceMatch) args.slice = sliceMatch[1];
     else if (argv === "--all") args.all = true;
     else if (argv === "--keep") args.keep = true;
+    // Fail, rather than wait, while another checkout's run holds the
+    // machine-wide lock (`scripts/e2e/run-lock.mjs`).
+    else if (argv === "--no-wait") args.wait = false;
     // Also write the `.e2e-shards-durations.json` baseline, and with
     // `--slice`, the slice's time to `scripts/e2e/slice-durations.json`.
     else if (argv === "--record-durations") args.recordDurations = true;
@@ -1043,7 +1047,17 @@ async function main() {
   const buildHint = buildOutputHint(ROOT_DIR);
   if (buildHint) log("e2e", `note: ${buildHint}`);
 
-  acquireRunLock(ROOT_DIR, process.argv.slice(2));
+  // Machine-wide: every checkout shares the shard databases, ports and mail
+  // containers, so this waits for a run from any of them.
+  try {
+    await acquireRunLock(ROOT_DIR, process.argv.slice(2), {
+      wait: args.wait,
+      log: (line) => log("e2e", line),
+    });
+  } catch (error) {
+    log("e2e", error.message, process.stderr);
+    process.exit(1);
+  }
   // The slice's recorded time starts here: stack start and engine build are
   // part of what a contributor waits for (research R10). The commit is taken
   // now too, since the run itself leaves files behind.
@@ -1460,7 +1474,7 @@ async function finish(exitCode = null) {
   }
 
   for (const line of digest) log("e2e", line);
-  releaseRunLock(ROOT_DIR);
+  releaseRunLock();
   process.exit(
     exitCode ?? (failed.length > 0 || run.results.length === 0 ? 1 : 0),
   );
@@ -1533,7 +1547,7 @@ function recordSlice(summary, exitCode) {
  * names a dead pid, which `run-lock.mjs` treats as stale.
  */
 function releaseOnSignals() {
-  process.once("exit", () => releaseRunLock(ROOT_DIR));
+  process.once("exit", () => releaseRunLock());
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
     process.once(signal, () => {
       log("e2e", `Received ${signal}; stopping.`, process.stderr);

@@ -260,6 +260,35 @@ equally, and a slice script in `package.json` that is missing or has
 drifted. Only the scripts are fixed for you. Which slice a spec belongs to
 is a judgement about the feature, so the check never guesses it.
 
+### One e2e run per machine
+
+Every checkout and worktree on a machine shares what an e2e run uses: the
+shard databases (`thunderforge_e2e_<shard>`) on one Postgres server, the
+shards' ports, and the mailpit containers. So the run lock is machine-wide,
+not per checkout: `/tmp/thunderforge-e2e.lock` (`THUNDERFORGE_E2E_LOCK_DIR`
+moves it), holding the pid, start time, arguments and checkout of the run
+that owns it (`scripts/e2e/run-lock.mjs`).
+
+- **A second run waits.** Started from any checkout while another run is
+  live, `e2e-parallel.mjs` (and every `pnpm e2e:<slice>`) prints which
+  checkout and pid it is waiting on, repeats that every five minutes, and
+  starts when the first run exits. `--no-wait` makes it fail instead.
+- **A stale lock never blocks.** A lock whose pid is dead, or now belongs to
+  something that is not an e2e run (a run killed with `kill -9`), is replaced.
+- **The hooks.** `pre-commit` refuses only during a run started from *this*
+  checkout, because `pnpm verify` writes into the tree that run's Vite servers
+  watch; another checkout's run is a one-line note. `pre-push` refuses during
+  a run from *any* checkout, because clippy competes with it for every core.
+  `THUNDERFORGE_IGNORE_E2E_LOCK=1` turns either refusal into a warning; it
+  never lets two e2e runs share the machine.
+- A checkout on a branch from before the machine-wide lock writes
+  `.e2e-running` inside itself instead. Those are read in every worktree of
+  the repository, so such a run is waited on too.
+
+```sh
+node scripts/e2e/run-lock.mjs check --any-checkout   # is any e2e run live? (exit 1 if so)
+```
+
 ### The test database
 
 `cargo test` never touches the development database. Database-backed tests use
