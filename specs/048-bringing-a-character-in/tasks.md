@@ -154,14 +154,15 @@ Content the world lacks is staged under their name and kept out of play.
 
 ### The reader (TDD)
 
-- [ ] T029 [P] [US1] Write tests in `packs/systems/dnd5e/sheet/tests/read.rs` against `fighter-5`, `fighter3-wizard2`, `cleric-7` and `rogue-4`:
+- [X] T029 [P] [US1] Write tests in `packs/systems/dnd5e/sheet/tests/read.rs` against `fighter-5`, `fighter3-wizard2`, `cleric-7` and `rogue-4`:
   - recognition;
   - every table row's value and certainty;
   - the spell, feature, equipment and attack rows;
   - a non-caster with no spell page.
   These fail before T030.
-- [ ] T030 [US1] Implement `recognise.rs` (the anchors) and `fields.rs` (label-relative regions built on `region.rs`). Add `glyphs.rs`, the proficiency mark table. Each `Uncertain` carries a reason a player can act on.
-- [ ] T031 [US1] Implement `content.rs`, which reads the spell rows (with prepared marks and level), the FEATURES & TRAITS headings with uses and recharge, the equipment (with quantity, weight, and equipped and attuned marks), and the attack rows. T029 goes green.
+- [X] T030 [US1] Implement `recognise.rs` (the anchors) and `fields.rs` (label-relative regions built on `region.rs`). Add `glyphs.rs`, the proficiency mark table. Each `Uncertain` carries a reason a player can act on.
+  Deviation: `fields.rs` reads each value by its form-field name, not by label-relative region, because every value in a D&D Beyond export sits in a named widget field (T011, closed by measurement). The labels are still the recognition anchors.
+- [X] T031 [US1] Implement `content.rs`, which reads the spell rows (with prepared marks and level), the FEATURES & TRAITS headings with uses and recharge, the equipment (with quantity, weight, and equipped and attuned marks), and the attack rows. T029 goes green.
 - [ ] T032 [US1] Implement `wasm.rs` (`readSheet(bytes) -> {recognised, reading | error}`). Export `sheetReader: () => import("@thunderforge/sheet-dnd5e")` from `packs/systems/dnd5e/web/src/index.ts`. Add `apps/web/src/pages/world/actor/systemSheetReaders.ts`, globbed like `systemActorSheets.ts`. `scripts/check-system-registry.mjs` stays green.
 
 ### The mapping (TDD)
