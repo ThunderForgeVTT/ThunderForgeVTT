@@ -38,6 +38,7 @@ use crate::config::Directories;
 use crate::errors::handler_404;
 use crate::settings::features::{DEMO, flag_on};
 use crate::state::AppState;
+use crate::telemetry::BrowserTelemetry;
 use axum::extract::{Request, State};
 use axum::http::{HeaderValue, header};
 use axum::middleware::Next;
@@ -45,6 +46,7 @@ use axum::response::{IntoResponse, Response};
 use axum::{Router, middleware::map_response, routing::get_service};
 use std::path::Path;
 use tower_http::services::{ServeDir, ServeFile};
+use tower_http::set_header::SetResponseHeaderLayer;
 
 pub fn router<S>(directories: &Directories) -> Router<S>
 where
@@ -110,7 +112,11 @@ where
 ///
 /// Whether the instance offers it is not decided here; see
 /// [`require_demo_offered`].
-pub fn demo_router<S>(directories: &Directories) -> Router<S>
+///
+/// Every answer under `/demo` carries the telemetry `connect-src` (spec 086,
+/// contracts/served-config-and-csp.md): `'self'`, plus the configured
+/// endpoint's origin when telemetry is on. Built once, here.
+pub fn demo_router<S>(directories: &Directories, telemetry: &BrowserTelemetry) -> Router<S>
 where
     S: Clone + Send + Sync + 'static,
 {
@@ -135,6 +141,11 @@ where
             )
             .layer(map_response(asked_every_time)),
         )
+        .layer(SetResponseHeaderLayer::overriding(
+            header::CONTENT_SECURITY_POLICY,
+            HeaderValue::from_str(&telemetry.connect_src())
+                .unwrap_or_else(|_| HeaderValue::from_static("connect-src 'self' data: blob:")),
+        ))
 }
 
 /// A built file, named by its own hash: kept until a build renames it. A miss

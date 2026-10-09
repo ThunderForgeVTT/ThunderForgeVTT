@@ -69,6 +69,7 @@ tower-http = { version = "0.7.0", features = [
   "cors",
   "compression-br",
   "compression-gzip",
+  "set-header",
 ] }
 tower-cookies = { version = "0.11.0", features = ["private"] }
 tracing = "0.1.44"

@@ -102,6 +102,9 @@ mod tests {
         assert_eq!(values[0], values[1]);
     }
 
+    // The env lock serialises tests that share the process's settings; it is
+    // meant to be held for the whole test, await included.
+    #[allow(clippy::await_holding_lock)]
     #[tokio::test]
     async fn the_row_is_not_reported_as_unrecognised() {
         let _lock = test_env::lock();

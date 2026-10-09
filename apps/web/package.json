@@ -71,6 +71,7 @@
     "@thunderforge/hero-builder": "workspace:^",
     "@thunderforge/heroes": "workspace:^",
     "@thunderforge/pdf": "workspace:^",
+    "@thunderforge/telemetry": "workspace:^",
     "@uiw/react-codemirror": "^4.25.11",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

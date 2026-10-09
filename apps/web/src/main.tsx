@@ -1,6 +1,7 @@
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
+import { bootTelemetry } from "@thunderforge/telemetry";
 import App from "./App";
 import { FeedbackLauncher } from "./components/feedback/FeedbackLauncher";
 import { AuthProvider } from "./hooks/useAuth";
@@ -41,6 +42,15 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   `services/feedbackLogBuffer.ts`.
 */
 startLogCapture();
+
+/*
+  Spec 086 FR-017: telemetry asks the server first and loads after the page.
+  Off, or any failure, imports nothing, so the chunk below is never fetched.
+*/
+void bootTelemetry({
+  configUrl: "/telemetry.json",
+  load: () => import("./telemetry").then((m) => m.start),
+});
 
 // Caches scene backgrounds, the largest thing this app repeatedly downloads.
 // Registered after render so it never competes with first paint.

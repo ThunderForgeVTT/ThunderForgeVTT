@@ -444,6 +444,12 @@ async fn run() {
         .with(JsonStorageLayer)
         .with(formatting_layer)
         .init();
+    // FR-008: once, after the exporter decision, so an operator reading the
+    // log is told where telemetry goes before anything is sent.
+    tracing::info!(
+        "{}",
+        telemetry::startup_line::startup_line(&telemetry_status)
+    );
 
     let app_state = AppState {
         config,
@@ -768,11 +774,16 @@ async fn run() {
         // The demo comes first: `/demo` is a second client, and the first
         // one's fallback would otherwise answer for it.
         .merge(
-            thunderforge_server::static_files::demo_router(&directories).layer(from_fn_with_state(
-                app_state.clone(),
-                thunderforge_server::static_files::require_demo_offered,
-            )),
+            thunderforge_server::static_files::demo_router(&directories, &telemetry_status.browser)
+                .layer(from_fn_with_state(
+                    app_state.clone(),
+                    thunderforge_server::static_files::require_demo_offered,
+                )),
         )
+        // Spec 086: the browser's runtime switch, before the clients' fallbacks.
+        .merge(thunderforge_server::telemetry::served_config::router(
+            &telemetry_status.browser,
+        ))
         .merge(thunderforge_server::static_files::router(&directories))
         .with_state(app_state.clone())
         .layer(from_fn(

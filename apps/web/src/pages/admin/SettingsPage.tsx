@@ -38,6 +38,7 @@ import { MetricsCard } from "./components/MetricsCard";
 import { OAuthProvidersTable } from "./components/OAuthProvidersTable";
 import { ReadinessPanel } from "./components/ReadinessPanel";
 import { SecurityPanel } from "./components/SecurityPanel";
+import { TelemetryPanel } from "./TelemetryPanel";
 
 type AdminSettingsSection =
   | "overview"
@@ -465,6 +466,17 @@ export default function SettingsPage({
                 </div>
                 <Card surface="stone" className="grid gap-4 p-6">
                   <ReadinessPanel />
+                </Card>
+                {/* Spec 086 FR-035.4: where telemetry goes is part of what
+                    this instance does, and like the rest it is fixed by the
+                    environment, so it is read here and changed there. */}
+                <Card
+                  id="telemetry"
+                  surface="parchment"
+                  className="grid scroll-mt-24 gap-4 p-6"
+                >
+                  <h3 className="text-lg font-semibold">Telemetry</h3>
+                  <TelemetryPanel />
                 </Card>
               </section>
             ) : null}

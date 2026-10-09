@@ -71,6 +71,9 @@ const ADMIN_ONLY: &[(&str, &str)] = &[
     // Spec 041 FR-021: counts, and admin-only because the shape of an
     // instance's coverage is an operator's business and nobody else's.
     ("twoFactorCoverage", "{ twoFactorCoverage { __typename } }"),
+    // Spec 086 FR-035.4: where this instance's telemetry goes. The panel that
+    // reads it is the operator's, and so is the install id it shows.
+    ("telemetryStatus", "{ telemetryStatus { __typename } }"),
     // Spec 039: what an old agreement actually said. The notice-handling
     // surface, not a public archive — admin-only for the reason
     // `moderationCase` is.

@@ -1,6 +1,9 @@
 //! The served browser config and the demo's `connect-src`
 //! (contracts/served-config-and-csp.md). Both are pure, so a table tests them.
 
+use axum::Router;
+use axum::http::header;
+use axum::routing::get;
 use serde_json::{Value, json};
 use thunderforge_telemetry_policy::{PROJECT_TELEMETRY_ENDPOINT, Tier};
 
@@ -58,6 +61,30 @@ impl BrowserTelemetry {
             None => "connect-src 'self' data: blob:".to_string(),
         }
     }
+}
+
+/// `/telemetry.json` and `/demo/telemetry.json`: `200`, JSON, never cached.
+/// The body is built once, at start; a change needs a restart (ADR-114).
+pub fn router<S>(telemetry: &BrowserTelemetry) -> Router<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    let body = telemetry.served_json().to_string();
+    let serve = move || {
+        let body = body.clone();
+        async move {
+            (
+                [
+                    (header::CONTENT_TYPE, "application/json"),
+                    (header::CACHE_CONTROL, "no-store"),
+                ],
+                body,
+            )
+        }
+    };
+    Router::new()
+        .route("/telemetry.json", get(serve.clone()))
+        .route("/demo/telemetry.json", get(serve))
 }
 
 /// `scheme://authority` of an http(s) URL, or nothing.

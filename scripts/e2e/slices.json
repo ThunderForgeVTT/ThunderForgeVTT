@@ -889,6 +889,20 @@
       ]
     },
     {
+      "name": "telemetry",
+      "summary": "Full telemetry: the served config, the browser reporter and the server's tiers (specs/086-full-telemetry)",
+      "own": ["telemetry-"],
+      "neighbours": [],
+      "paths": [
+        "packages/telemetry/**",
+        "apps/thunderforge/src/telemetry/**",
+        "crates/thunderforge-server/src/telemetry/**",
+        "crates/thunderforge-telemetry-policy/**",
+        "apps/web/src/telemetry/**"
+      ],
+      "standalone": "pnpm -F @thunderforge/telemetry test"
+    },
+    {
       "name": "tokens",
       "summary": "Token authoring, movement and links (specs/004-token-canvas-authoring, specs/006-token-authoring-polish, specs/045-token-movement-and-vision, specs/046-a-fight-that-resolves, specs/056-placing-and-reaching-things-on-a-map); token-movement-walls belongs to canvas by exact name",
       "own": [

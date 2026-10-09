@@ -1143,6 +1143,7 @@ type AppQueryRoot {
 	exportMyData: GraphQLExportMyDataPayload!
 	allWorlds: [GraphQLWorld!]!
 	adminWelcomeSummary: GraphQLAdminWelcomeSummary!
+	telemetryStatus: TelemetryStatus!
 	adminStats: GraphQLAdminStats!
 	systemManifest: GraphQLSystemManifest!
 	oauthProviders: [GraphQLOAuthProvider!]!
@@ -7213,6 +7214,21 @@ type SyncPlan {
 	produced the same way.
 	"""
 	canonicalVersion: Int!
+}
+
+"""
+Where this instance's telemetry goes (spec 086, contracts/served-config-and-csp.md).
+The tier is `full` on the wire, not `operator`, to match Appendix A.3.
+"""
+type TelemetryStatus {
+	enabled: Boolean!
+	serverExporting: Boolean!
+	serverTier: String!
+	serverEndpoint: String
+	browserEnabled: Boolean!
+	browserTier: String!
+	browserEndpoint: String
+	instanceId: String!
 }
 
 """

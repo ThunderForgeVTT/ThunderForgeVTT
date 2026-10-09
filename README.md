@@ -129,6 +129,32 @@ This simplified approach is designed to not be pretty for a version 0.0.1 and if
 
 This project is a larger project inspired by many great providers such as FoundryVTT, Roll20, and BattleMapp. The current initial release cannot be given a date becuase it takes time to create great software but rest assured this project is getting worked on daily.
 
+## Telemetry
+
+ThunderForge reports anonymous diagnostics to its developers by default,
+so we hear about the bugs on instances we don't run. That covers every
+build, including the server image you run yourself.
+
+- **What is sent:** errors with personal details stripped from them,
+  timings, counts, the ThunderForge version, and a random id for this
+  install.
+- **What is never sent:** anything anyone types, rolls, names or uploads;
+  emails, accounts, or world, character or scene ids; IP addresses;
+  machine hostnames; cookies.
+- **What we add when it arrives:** where it came from (our own sites,
+  your players' browsers and your site's domain, or your server), the
+  browser family and major version, and the country when our network edge
+  supplies it. Our endpoint uses your IP address only in memory, to limit
+  how fast one sender can post, and never stores or forwards it.
+- **Where it goes:** `https://telemetry.thunderforge.dev`, kept for 14 days.
+- **Send it to your own collector instead:** set
+  `OTEL_EXPORTER_OTLP_ENDPOINT` for the server and
+  `THUNDERFORGE_BROWSER_TELEMETRY_ENDPOINT` for browsers. Nothing then
+  reaches us.
+- **Turn it off:** `TELEMETRY=false`. Nothing is sent anywhere.
+
+Details: [docs/guides/telemetry.md](docs/guides/telemetry.md).
+
 ## License
 
 ThunderForgeVTT is licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0-or-later)](LICENSE). Self-hosting is always free, including for commercial/community use — the AGPL's only additional condition beyond ordinary open-source terms is that anyone who runs a _modified_ version of this software as a network service must also make that modified source available to their users (AGPL §13). No further restriction exists.

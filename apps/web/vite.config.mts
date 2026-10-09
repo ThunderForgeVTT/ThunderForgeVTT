@@ -159,6 +159,12 @@ export default defineConfig({
             return "react";
           }
 
+          // Spec 086: the lazy telemetry chunk keeps its name, so a test can
+          // tell that a session with telemetry off never fetched it.
+          if (id.includes("/apps/web/src/telemetry/")) {
+            return "telemetry";
+          }
+
           return undefined;
         },
         entryFileNames: "assets/entry/[name]-[hash].js",
@@ -240,6 +246,12 @@ export default defineConfig({
       // resolved against the page origin on wasm32, so this proxy is what
       // makes `AssetServer::load("map-imports/.../uuid.png")` resolve in dev.
       "/assets": {
+        target: backendOrigin,
+        changeOrigin: true,
+      },
+      // Spec 086: the backend says whether telemetry is on, as it does in
+      // production, so dev and e2e read the same answer.
+      "/telemetry.json": {
         target: backendOrigin,
         changeOrigin: true,
       },

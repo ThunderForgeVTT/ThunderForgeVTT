@@ -1,10 +1,13 @@
 use super::{demo_router, router};
 use crate::config::Directories;
+use crate::telemetry::BrowserTelemetry;
+use crate::telemetry::served_config;
 use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use std::fs;
 use std::path::Path;
+use thunderforge_telemetry_policy::Tier;
 use tower::ServiceExt;
 
 /// A data directory with uploads, and a client directory apart from it.
@@ -107,7 +110,8 @@ async fn the_demo_is_a_second_client_under_its_own_path() {
     let root = tempfile::tempdir().unwrap();
     build_client(root.path());
     let directories = build_demo(root.path());
-    let app: Router = demo_router(&directories).merge(router(&directories));
+    let app: Router =
+        demo_router(&directories, &BrowserTelemetry::off()).merge(router(&directories));
 
     for path in ["/demo", "/demo/", "/demo/world/demo/play"] {
         assert_eq!(
@@ -130,14 +134,14 @@ async fn the_demo_is_a_second_client_under_its_own_path() {
 #[tokio::test]
 async fn a_server_not_told_where_a_demo_is_has_none() {
     let root = tempfile::tempdir().unwrap();
-    let app: Router =
-        demo_router(&directories(root.path())).merge(router(&directories(root.path())));
+    let app: Router = demo_router(&directories(root.path()), &BrowserTelemetry::off())
+        .merge(router(&directories(root.path())));
     assert_eq!(get(&app, "/demo/").await.0, StatusCode::NOT_FOUND);
 
     // Named, but nothing built in it.
     let empty = directories(root.path())
         .with_demo_files(root.path().join("demo").to_str().unwrap().to_owned());
-    let app: Router = demo_router(&empty).merge(router(&empty));
+    let app: Router = demo_router(&empty, &BrowserTelemetry::off()).merge(router(&empty));
     assert_eq!(get(&app, "/demo/").await.0, StatusCode::NOT_FOUND);
 }
 
@@ -204,7 +208,8 @@ async fn the_demo_keeps_its_engine_and_asks_for_its_page() {
         "an engine",
     )
     .unwrap();
-    let app: Router = demo_router(&directories).merge(router(&directories));
+    let app: Router =
+        demo_router(&directories, &BrowserTelemetry::off()).merge(router(&directories));
 
     assert_eq!(
         cache_control(&app, "/demo/assets/engine_bg-D9SKK7e3.wasm").await,
@@ -318,4 +323,79 @@ async fn an_invitation_page_tells_crawlers_not_to_index_it() {
         .await
         .unwrap();
     assert_eq!(robots(&response), None);
+}
+
+// ---- Spec 086 T024 (R15): the served config and the demo's connect-src ----
+
+fn telemetry(enabled: bool, endpoint: &str, tier: Tier) -> BrowserTelemetry {
+    BrowserTelemetry {
+        enabled,
+        endpoint: endpoint.to_owned(),
+        sample_rate: 1.0,
+        environment: "self-hosted".to_owned(),
+        tier,
+        instance_id: "4f6c1c2e-8a53-4d8e-9a3b-0e2b9e7c6d11".to_owned(),
+    }
+}
+
+async fn headers_of(app: &Router, path: &str) -> (StatusCode, axum::http::HeaderMap, String) {
+    let response = app
+        .clone()
+        .oneshot(Request::get(path).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    let status = response.status();
+    let headers = response.headers().clone();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    (status, headers, String::from_utf8_lossy(&body).into_owned())
+}
+
+#[tokio::test]
+async fn the_config_and_the_demo_header_follow_the_three_states() {
+    let root = tempfile::tempdir().unwrap();
+    build_client(root.path());
+    let directories = build_demo(root.path());
+    let states = [
+        (
+            telemetry(true, "https://telemetry.thunderforge.dev", Tier::Anonymous),
+            "connect-src 'self' data: blob: https://telemetry.thunderforge.dev",
+            Some("anonymous"),
+        ),
+        (
+            telemetry(true, "https://otel.example.org/otlp", Tier::Operator),
+            "connect-src 'self' data: blob: https://otel.example.org",
+            Some("operator"),
+        ),
+        (
+            telemetry(false, "https://telemetry.thunderforge.dev", Tier::Anonymous),
+            "connect-src 'self' data: blob:",
+            None,
+        ),
+    ];
+    for (config, csp, tier) in states {
+        let app: Router = served_config::router(&config)
+            .merge(demo_router(&directories, &config))
+            .merge(router(&directories));
+        for path in ["/telemetry.json", "/demo/telemetry.json"] {
+            let (status, headers, body) = headers_of(&app, path).await;
+            assert_eq!(status, StatusCode::OK, "{path}");
+            assert_eq!(headers["content-type"], "application/json", "{path}");
+            assert_eq!(headers["cache-control"], "no-store", "{path}");
+            let json: serde_json::Value = serde_json::from_str(&body).unwrap();
+            match tier {
+                Some(tier) => assert_eq!(json["tier"], tier, "{path}"),
+                None => assert_eq!(body, r#"{"enabled":false}"#, "{path}"),
+            }
+        }
+        for path in ["/demo", "/demo/", "/demo/maps/NOTICE.txt"] {
+            let (status, headers, _) = headers_of(&app, path).await;
+            assert_eq!(status, StatusCode::OK, "{path}");
+            assert_eq!(headers["content-security-policy"], csp, "{path}");
+        }
+        // The first client is not the demo, and is left alone.
+        let (_, headers, _) = headers_of(&app, "/world/abc/play").await;
+        assert!(headers.get("content-security-policy").is_none());
+    }
 }

@@ -55,7 +55,7 @@ cross-cutting (R21). The named slices answer it. No task runs the full suite.
   - `crates/thunderforge-server/Cargo.toml`: `opentelemetry = "0.33.0"`, `thunderforge-telemetry-policy` by path, and add `v4` to `uuid`'s features;
   - `apps/thunderforge/Cargo.toml`: `opentelemetry = "0.33.0"`, `opentelemetry_sdk = "0.33.0"` (no `rt-tokio`, R1), `opentelemetry-otlp = { version = "0.33.0", default-features = false, features = ["http-proto", "reqwest-client", "reqwest-rustls", "trace", "metrics", "logs"] }`, `tracing-opentelemetry = "0.34.0"`, `opentelemetry-appender-tracing = "0.33.0"`, `thunderforge-telemetry-policy` by path, and `opentelemetry_sdk` with `testing` under `[dev-dependencies]`.
   - Check with `cargo tree -d -p thunderforge`: there must be no second `reqwest` or `tracing-subscriber`.
-- [ ] T004 Add the `telemetry` slice.
+- [X] T004 Add the `telemetry` slice.
   - `scripts/e2e/slices.json`: `own: ["telemetry"]`. The paths are `packages/telemetry/**`, `apps/thunderforge/src/telemetry/**`, `crates/thunderforge-server/src/telemetry/**`, `apps/web/src/telemetry/**`, `apps/web/src/components/AppErrorBoundary.tsx`, `apps/web/src/engine/bevy/{loadTelemetry,framesSummary}.ts`, `apps/demo/src/telemetry.ts`, `apps/demo/src/backend/telemetryTap.ts`, `apps/landing/src/telemetry.ts`, `apps/landing/e2e/**`, `apps/landing/nginx.conf.template`, `deploy/k8s/observability/**`, and `scripts/check-{observability.mjs,landing-nginx.sh}`. The standalone command is `pnpm -F @thunderforge/telemetry test && pnpm -F @thunderforge/demo e2e && pnpm -F @thunderforge/landing e2e`.
   - Root `package.json`: `e2e:telemetry` and `e2e:telemetry:integration` (`node ./scripts/e2e-parallel.mjs --shards=1 --slice=telemetry`), next to `e2e:feedback`.
   - Verify that `pnpm e2e:which packages/telemetry/src/index.ts` names `telemetry`.
@@ -172,19 +172,19 @@ any of these.
   - It builds the tracer, meter and logger providers per tier, with batch processors and bounded queues, and never blocks start (FR-003). The anonymous resource is built by hand, and the operator tier reads the standard `OTEL_*` variables.
   - It returns a guard that flushes on shutdown.
   - In `apps/thunderforge/src/main.rs`, wire it into the registry at line 350, beside `JsonStorageLayer` and `BunyanFormattingLayer`, and drop the guard after the server's graceful shutdown.
-- [ ] T024 [US6] Serve the config.
+- [X] T024 [US6] Serve the config.
   - Add the `/telemetry.json` handler (`200`, `application/json`, `Cache-Control: no-store`) in `crates/thunderforge-server/src/telemetry/served_config.rs`.
   - Mount it at `/telemetry.json` and `/demo/telemetry.json`.
   - In `static_files::demo_router` (`crates/thunderforge-server/src/static_files/mod.rs:104`), add a `SetResponseHeaderLayer` with `connect_src()`, built once.
   - Test with router `oneshot` for the default, redirected and off states (R15).
   - In `apps/thunderforge/src/main.rs`, build `BrowserTelemetry` from `TelemetrySettings` and `tier_for`, so that `tier_for` stays the only decision.
-- [ ] T025 [US6] Boot telemetry in the web app.
+- [X] T025 [US6] Boot telemetry in the web app.
   - `apps/web/src/telemetry/index.ts` is the app's lazy chunk: `createTelemetry`, `otlpHttpSink`, `redact` from `apps/web/src/services/feedbackRedaction.ts`, and `startCollectors`.
   - `apps/web/src/telemetry/routes.ts` reports page views by route template, never by path.
   - `apps/web/src/main.tsx` calls `bootTelemetry` after `startLogCapture`, with `() => import("./telemetry")`.
   - Add `apps/web/src/telemetry/__tests__/routes.test.ts`.
-- [ ] T026 [P] [US6] Write `apps/web/e2e/telemetry-off.spec.ts`. On the ordinary stack (`TELEMETRY=false`), `/telemetry.json` is `{"enabled":false}`, no `telemetry` chunk is requested, and no request leaves the instance's origin.
-- [ ] T027 [P] [US6] Write `apps/web/e2e/telemetry-redirected.spec.ts`.
+- [X] T026 [P] [US6] Write `apps/web/e2e/telemetry-off.spec.ts`. On the ordinary stack (`TELEMETRY=false`), `/telemetry.json` is `{"enabled":false}`, no `telemetry` chunk is requested, and no request leaves the instance's origin.
+- [X] T027 [P] [US6] Write `apps/web/e2e/telemetry-redirected.spec.ts`.
   - Route `**/telemetry.json` to an enabled operator config naming `https://otel.example.org`, and answer `https://otel.example.org/v1/*` with `204`.
   - Assert that a page view arrives there with `thunderforge.tier=operator` and the instance id, and that nothing goes to `telemetry.thunderforge.dev`.
   - A second test routes an anonymous config naming `https://telemetry.invalid`, and asserts that `deployment.environment=self-hosted` ignores the config's `environment` (FR-019a).
@@ -207,22 +207,22 @@ README and the guide, with Appendix A's words.
 - `apps/web/e2e/telemetry-admin-panel.spec.ts` passes under
   `pnpm e2e:telemetry`.
 
-- [ ] T028 [P] [US8] Write failing tests in `apps/thunderforge/src/telemetry/startup_line.rs`. They check Appendix A.3's text for each state: on, redirected, half redirected (server only, then browsers only), and off. They also check that `main` logs it exactly once (SC-012).
-- [ ] T029 [US8] Implement `startup_line.rs`, and log the line at `INFO` once in `apps/thunderforge/src/main.rs`, after `install`.
-- [ ] T030 [US8] Add `telemetry_status` to `AdminQuery` in `crates/thunderforge-server/src/graphql/queries/admin.rs`, returning `TelemetryStatus` as the contract gives it (wire tier `full`, not `operator`).
+- [X] T028 [P] [US8] Write failing tests in `apps/thunderforge/src/telemetry/startup_line.rs`. They check Appendix A.3's text for each state: on, redirected, half redirected (server only, then browsers only), and off. They also check that `main` logs it exactly once (SC-012).
+- [X] T029 [US8] Implement `startup_line.rs`, and log the line at `INFO` once in `apps/thunderforge/src/main.rs`, after `install`.
+- [X] T030 [US8] Add `telemetry_status` to `AdminQuery` in `crates/thunderforge-server/src/graphql/queries/admin.rs`, returning `TelemetryStatus` as the contract gives it (wire tier `full`, not `operator`).
   - Test that a non-admin is refused.
   - Regenerate `apps/thunderforge/schema.graphql` and the web's generated types with the repository's existing schema export.
   - `schema.graphql` is cross-cutting. The slices named in Phase 12 answer it.
-- [ ] T031 [US8] Add `apps/web/src/pages/admin/TelemetryPanel.tsx`, filled by a plain GraphQL fetch hook that exposes `refetch()` (AGENTS.md §2), and render it from `apps/web/src/pages/admin/SettingsPage.tsx`.
+- [X] T031 [US8] Add `apps/web/src/pages/admin/TelemetryPanel.tsx`, filled by a plain GraphQL fetch hook that exposes `refetch()` (AGENTS.md §2), and render it from `apps/web/src/pages/admin/SettingsPage.tsx`.
   - It is read-only, with Appendix A.4's text, both rows and the install id.
   - It names the variables to set and offers no toggle.
   - `apps/web/src/pages/admin/__tests__/TelemetryPanel.test.tsx` compares its strings with Appendix A.4.
-- [ ] T032 [P] [US8] Write the written disclosure.
+- [X] T032 [P] [US8] Write the written disclosure.
   - Add a **Telemetry** section to `README.md` with Appendix A.1.
   - Write `docs/guides/telemetry.md` with Appendix A.2 in full (FR-034), including the plain static host note of open item 6.
   - In `docs/CONTRIBUTING.md`, state the naming and cardinality rules, and that the anonymous allow-list is a Principle VII change.
-- [ ] T033 [US8] Add `apps/thunderforge/src/telemetry/disclosure_tests.rs` (`#[cfg(test)]`). It reads Appendix A from `specs/086-full-telemetry/spec.md`, plus `README.md` and `docs/guides/telemetry.md`, with `include_str!`. It asserts that each place holds its part verbatim, apart from markup and the angle-bracket values, and that `startup_line`'s templates equal A.3 (SC-012).
-- [ ] T034 [US8] Write `apps/web/e2e/telemetry-admin-panel.spec.ts`. An admin sees **Telemetry** with `off` on the test stack, both rows and an install id, and a non-admin cannot reach it.
+- [X] T033 [US8] Add `apps/thunderforge/src/telemetry/disclosure_tests.rs` (`#[cfg(test)]`). It reads Appendix A from `specs/086-full-telemetry/spec.md`, plus `README.md` and `docs/guides/telemetry.md`, with `include_str!`. It asserts that each place holds its part verbatim, apart from markup and the angle-bracket values, and that `startup_line`'s templates equal A.3 (SC-012).
+- [X] T034 [US8] Write `apps/web/e2e/telemetry-admin-panel.spec.ts`. An admin sees **Telemetry** with `off` on the test stack, both rows and an install id, and a non-admin cannot reach it.
 
 **Checkpoint**: All four places agree with Appendix A, and the test that
 compares them is green.

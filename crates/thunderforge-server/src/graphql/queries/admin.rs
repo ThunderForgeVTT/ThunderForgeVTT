@@ -11,6 +11,36 @@ use crate::graphql::*;
 #[derive(Default)]
 pub struct AdminQuery;
 
+/// Where this instance's telemetry goes (spec 086, contracts/served-config-and-csp.md).
+/// The tier is `full` on the wire, not `operator`, to match Appendix A.3.
+#[derive(async_graphql::SimpleObject, Clone, Debug, PartialEq)]
+#[graphql(name = "TelemetryStatus")]
+pub struct GraphQLTelemetryStatus {
+    pub enabled: bool,
+    pub server_exporting: bool,
+    pub server_tier: String,
+    pub server_endpoint: Option<String>,
+    pub browser_enabled: bool,
+    pub browser_tier: String,
+    pub browser_endpoint: Option<String>,
+    pub instance_id: String,
+}
+
+impl From<&crate::telemetry::TelemetryStatus> for GraphQLTelemetryStatus {
+    fn from(s: &crate::telemetry::TelemetryStatus) -> Self {
+        Self {
+            enabled: s.enabled,
+            server_exporting: s.server_exporting,
+            server_tier: s.server_tier_wire().to_string(),
+            server_endpoint: s.server_endpoint.clone(),
+            browser_enabled: s.browser.enabled,
+            browser_tier: s.browser_tier_wire().to_string(),
+            browser_endpoint: s.browser.enabled.then(|| s.browser.endpoint.clone()),
+            instance_id: s.instance_id.clone(),
+        }
+    }
+}
+
 #[async_graphql::Object]
 impl AdminQuery {
     async fn all_worlds(&self, ctx: &Context<'_>) -> GraphQLResult<Vec<GraphQLWorld>> {
@@ -31,6 +61,12 @@ impl AdminQuery {
             .await
             .map(GraphQLAdminWelcomeSummary::from)
             .map_err(Error::new)
+    }
+
+    async fn telemetry_status(&self, ctx: &Context<'_>) -> GraphQLResult<GraphQLTelemetryStatus> {
+        let state = app_state(ctx)?;
+        let _ = admin_user(ctx)?;
+        Ok(GraphQLTelemetryStatus::from(state.telemetry.as_ref()))
     }
 
     async fn admin_stats(&self, ctx: &Context<'_>) -> GraphQLResult<GraphQLAdminStats> {
@@ -125,5 +161,47 @@ impl AdminQuery {
             .await
             .map(|item| item.map(GraphQLAdminBootstrapSettings::from))
             .map_err(Error::new)
+    }
+}
+
+#[cfg(test)]
+mod telemetry_status_tests {
+    use super::*;
+    use crate::telemetry::{BrowserTelemetry, TelemetryStatus, Tier};
+
+    #[test]
+    fn off_is_off_on_both_rows_with_no_destination() {
+        let s = TelemetryStatus {
+            instance_id: "id-1".into(),
+            ..TelemetryStatus::off_for_tests()
+        };
+        let wire = GraphQLTelemetryStatus::from(&s);
+        assert_eq!(wire.server_tier, "off");
+        assert_eq!(wire.browser_tier, "off");
+        assert_eq!(wire.server_endpoint, None);
+        assert_eq!(wire.browser_endpoint, None);
+        assert_eq!(wire.instance_id, "id-1");
+    }
+
+    #[test]
+    fn operator_is_full_on_the_wire() {
+        let s = TelemetryStatus {
+            enabled: true,
+            server_exporting: true,
+            server_tier: Tier::Operator,
+            server_endpoint: Some("https://otel.example.org".into()),
+            browser: BrowserTelemetry {
+                enabled: true,
+                ..BrowserTelemetry::off()
+            },
+            instance_id: "id-2".into(),
+        };
+        let wire = GraphQLTelemetryStatus::from(&s);
+        assert_eq!(wire.server_tier, "full");
+        assert_eq!(wire.browser_tier, "anonymous");
+        assert_eq!(
+            wire.browser_endpoint.as_deref(),
+            Some("https://telemetry.thunderforge.dev")
+        );
     }
 }

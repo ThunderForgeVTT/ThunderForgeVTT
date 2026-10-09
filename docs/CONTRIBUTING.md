@@ -367,6 +367,37 @@ what moved; the steps it followed, in `quickstart.md`, are the ones to repeat.
   until it merges. After the merge, rebuild main's engine with
   `node scripts/build.mjs --only-wasm`.
 
+### Telemetry
+
+Spec 086 reports through OpenTelemetry, on by default, and the operator
+redirects or turns it off ([the guide](guides/telemetry.md)). Anything that
+adds a span, a metric or a log record follows these rules:
+
+- **Names.** Instruments are `thunderforge.<area>.<thing>`, with the unit in
+  the instrument, not the name; Prometheus adds `_total` and the unit suffix
+  after the collector. Browser events and spans use the names in
+  `packages/telemetry/src/allowList.ts`.
+- **Bounded labels only.** A label is one of a known, small set: a GraphQL
+  root field taken from the schema (never the client's operation name, and
+  `unknown` for one the schema lacks), an event code name, an outcome, a roll
+  visibility, a pool state. A query with several root fields is labelled by
+  its first, with `root_fields=multiple` on the span.
+- **No ids as labels.** No user, world, actor, scene or token id, no email,
+  and no session id is ever a Prometheus label or a Loki index label. A
+  browser session id is Loki structured metadata, nothing more. Page views
+  name the route template (`/world/:id/play`), never the path.
+- **The anonymous allow-list is code.** What the anonymous tier may send is
+  the constants in `crates/thunderforge-telemetry-policy` and the matching
+  lists in `packages/telemetry/src/allowList.ts`; a Rust test holds the two
+  together, and the server and the telemetry gateway read the same crate.
+  Adding an entry to either list is a constitution-level change
+  (Principle VII), reviewed as one: say what it sends, why it cannot
+  identify anyone, and update Appendix A of `specs/086-full-telemetry/spec.md`
+  and the places that quote it in the same change.
+- **Tests send nothing.** Every Rust test and e2e stack runs with
+  `TELEMETRY=false`. A test that needs telemetry installs an in-memory
+  exporter or routes the browser's requests in Playwright.
+
 ## Feature flags
 
 A feature can be merged before it is switched on. A flag is how: a boolean
