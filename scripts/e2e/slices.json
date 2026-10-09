@@ -1006,6 +1006,7 @@
         "worlds-list.spec.ts",
         "world-appearance.spec.ts",
         "world-dashboard-statistics.spec.ts",
+        "world-administration.spec.ts",
         "world-event-catchup.spec.ts",
         "world-session-tokens.spec.ts",
         "live-sync.spec.ts",
