@@ -196,6 +196,22 @@ pub async fn generate_invite_code_impl(
     })
 }
 
+/// Whether `user_id` already belongs to `world_id`: a `world_members` row,
+/// or ownership through `worlds.created_by` (the owner has no members row).
+pub(crate) fn is_member_or_owner(
+    conn: &mut diesel::PgConnection,
+    user_id: Uuid,
+    world_id: Uuid,
+) -> Result<bool, diesel::result::Error> {
+    match require_world_member(conn, user_id, world_id) {
+        Ok(_) => Ok(true),
+        Err(WorldMembershipError::NotAMember) => Ok(false),
+        Err(WorldMembershipError::Database(message)) => {
+            Err(diesel::result::Error::QueryBuilderError(message.into()))
+        }
+    }
+}
+
 /// Join a world using an invite code. Extracted as a free function for the
 /// same reason as `generate_invite_code_impl` above.
 pub async fn join_world_impl(
@@ -215,6 +231,11 @@ pub async fn join_world_impl(
     // their GM's cap on the second click. It is also not a failure — it needs
     // its own message, and it requires a *valid* code, so it reveals nothing a
     // uniform response would have protected.
+    //
+    // "Member" includes the owner, who has no `world_members` row: ownership
+    // is `worlds.created_by`. A GM opening their own link used to burn a use
+    // and gain a Player row beside their ownership (owner's rule, 2026-10-09:
+    // a use counts only when someone becomes a new member).
     let already_a_member = {
         let code = submitted_code.clone();
         let mut probe_conn = state
@@ -222,22 +243,22 @@ pub async fn join_world_impl(
             .get()
             .map_err(|_| Error::new("Failed to get DB connection"))?;
         tokio::task::spawn_blocking(move || {
-            world_invites::table
-                .inner_join(
-                    world_members::table.on(world_members::world_id.eq(world_invites::world_id)),
-                )
+            let world_id = world_invites::table
                 .filter(world_invites::invite_code.eq(code))
-                .filter(world_members::user_id.eq(user_id))
-                .select(world_members::id)
+                .select(world_invites::world_id)
                 .first::<Uuid>(&mut probe_conn)
-                .optional()
+                .optional()?;
+            match world_id {
+                Some(world_id) => is_member_or_owner(&mut probe_conn, user_id, world_id),
+                None => Ok(false),
+            }
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
         .map_err(|e| Error::new(format!("Database error: {}", e)))?
     };
 
-    if already_a_member.is_some() {
+    if already_a_member {
         return Err(Error::new(ALREADY_A_MEMBER_MESSAGE));
     }
 
@@ -291,6 +312,13 @@ pub async fn join_world_impl(
             // with NotFound keeps the caller from learning which condition
             // applied.
             let (_invite_id, world_id) = consumed.ok_or(diesel::result::Error::NotFound)?;
+            // Asked again now that the invite row is locked: a second join by
+            // the same person, racing this one, has committed by the time this
+            // statement runs, and must not count as a use (or report the link
+            // as unavailable). Rolls the use back.
+            if is_member_or_owner(conn, user_id, world_id)? {
+                return Err(diesel::result::Error::RollbackTransaction);
+            }
             // Rolls the use back with it.
             refuse_if_paused(conn, world_id)?;
 
@@ -314,7 +342,17 @@ pub async fn join_world_impl(
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|e| refusal_or(e, LINK_UNAVAILABLE_MESSAGE))?;
+    .map_err(|e| match e {
+        // Already a member (the re-check above), or the unique (world_id,
+        // user_id) row written by a concurrent join of the same person.
+        // Either way the transaction rolled back and burned nothing.
+        diesel::result::Error::RollbackTransaction
+        | diesel::result::Error::DatabaseError(
+            diesel::result::DatabaseErrorKind::UniqueViolation,
+            _,
+        ) => Error::new(ALREADY_A_MEMBER_MESSAGE),
+        e => refusal_or(e, LINK_UNAVAILABLE_MESSAGE),
+    })?;
 
     let world_id = new_member.world_id;
 
@@ -642,3 +680,7 @@ impl InviteMutation {
 #[cfg(test)]
 #[path = "mutations_invites_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "mutations_invites_use_tests.rs"]
+mod use_tests;

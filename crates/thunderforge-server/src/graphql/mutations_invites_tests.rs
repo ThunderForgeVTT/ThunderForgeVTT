@@ -73,7 +73,7 @@ use crate::test_support::{
 /// exactly the shape codes had before spec 027, so every test built on
 /// this helper doubles as coverage that pre-existing links still work
 /// (FR-007 / SC-006).
-fn insert_test_invite(
+pub(super) fn insert_test_invite(
     conn: &mut PgConnection,
     world_id: Uuid,
     created_by: Uuid,
@@ -300,7 +300,7 @@ async fn generate_invite_code_success_path() {
 
 // ===== Spec 027 US1: revoke and rotate =====
 
-fn load_invite(conn: &mut PgConnection, id: Uuid) -> WorldInvite {
+pub(super) fn load_invite(conn: &mut PgConnection, id: Uuid) -> WorldInvite {
     world_invites::table
         .find(id)
         .select(WorldInvite::as_select())

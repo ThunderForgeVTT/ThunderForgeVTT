@@ -290,14 +290,12 @@ pub async fn already_member_impl(
         return Ok(false);
     };
 
-    // Check if user is already a member
-    let is_member: bool = world_members::table
-        .filter(world_members::world_id.eq(invite.world_id))
-        .filter(world_members::user_id.eq(user_id))
-        .count()
-        .get_result::<i64>(&mut conn)
-        .map(|count| count > 0)
-        .map_err(|e| Error::new(format!("Database error: {}", e)))?;
+    // The owner counts as a member though they have no `world_members` row,
+    // so their own link shows "already a member" rather than a Join button
+    // that would burn a use (owner's rule, 2026-10-09).
+    let is_member =
+        crate::graphql::mutations_invites::is_member_or_owner(&mut conn, user_id, invite.world_id)
+            .map_err(|e| Error::new(format!("Database error: {}", e)))?;
 
     Ok(is_member)
 }
@@ -616,9 +614,16 @@ mod tests {
             "an already-accepted member must be reported as already a member"
         );
 
-        let not_yet = already_member_impl(&state, owner_id, &code).await;
-        // owner has no world_members row, so is_member is computed purely
-        // from world_members — the owner fallback does not apply here.
+        // The owner has no world_members row but is a member all the same:
+        // their own link must not offer a Join that would burn a use.
+        let owner = already_member_impl(&state, owner_id, &code).await;
+        assert!(matches!(owner, Ok(true)));
+
+        let stranger_id = {
+            let mut conn = state.db_pool.get().unwrap();
+            insert_test_user(&mut conn)
+        };
+        let not_yet = already_member_impl(&state, stranger_id, &code).await;
         assert!(matches!(not_yet, Ok(false)));
     }
 
