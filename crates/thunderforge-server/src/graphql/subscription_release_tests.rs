@@ -367,3 +367,204 @@ fn a_panicking_subscription_is_still_released() {
     assert!(panicked.is_err());
     assert_eq!(open_on_this_thread(), baseline);
 }
+
+// ---------------------------------------------------------------------------
+// The idle timeout: a client that vanishes without closing.
+//
+// A laptop lid shut or a network that drops without a FIN leaves a socket the
+// server cannot tell from a quiet one. Nothing is written to a quiet world, so
+// no write ever fails, and the socket and every subscription on it would stay
+// open indefinitely. The server now closes a socket that has sent nothing for
+// `IDLE_TIMEOUT`; a live client keeps it open with `graphql-ws` pings.
+//
+// These drive `websocket::serve` itself, the function the axum handler hands
+// the upgraded socket to, with a short timeout so the test runs in a second.
+// ---------------------------------------------------------------------------
+
+use axum::extract::ws::Message;
+
+/// One served socket: the client's half of it, and the task serving it.
+struct ServedSocket {
+    to_server: Option<mpsc::UnboundedSender<Result<Message, axum::Error>>>,
+    from_server: mpsc::UnboundedReceiver<Message>,
+    served: tokio::task::JoinHandle<()>,
+}
+
+impl ServedSocket {
+    fn send(&self, message: serde_json::Value) {
+        self.to_server
+            .as_ref()
+            .expect("the socket is open")
+            .send(Ok(Message::Text(message.to_string().into())))
+            .expect("the server is reading");
+    }
+
+    /// Read until a message satisfies `want`, failing if it never comes.
+    async fn until(&mut self, want: impl Fn(&Message) -> bool) -> Message {
+        let read = async {
+            while let Some(message) = self.from_server.recv().await {
+                if want(&message) {
+                    return message;
+                }
+            }
+            panic!("the socket ended before the expected message");
+        };
+        tokio::time::timeout(Duration::from_secs(5), read)
+            .await
+            .expect("the expected message arrives")
+    }
+}
+
+async fn graphql_transport_ws() -> async_graphql_axum::GraphQLProtocol {
+    use axum::extract::FromRequestParts as _;
+    let (mut parts, ()) = axum::http::Request::builder()
+        .header("sec-websocket-protocol", "graphql-transport-ws")
+        .body(())
+        .unwrap()
+        .into_parts();
+    async_graphql_axum::GraphQLProtocol::from_request_parts(&mut parts, &())
+        .await
+        .expect("graphql-transport-ws is a protocol the server speaks")
+}
+
+/// Serve one socket on this thread, so the per-thread gauge sees it.
+async fn serve_socket(
+    schema: crate::graphql::AppSchema,
+    caller: AuthenticatedUser,
+    idle_timeout: Duration,
+) -> ServedSocket {
+    let (to_server, server_reads) = mpsc::unbounded_channel();
+    let (server_writes, from_server) = mpsc::unbounded_channel::<Message>();
+    let sink = futures_util::sink::unfold(server_writes, |tx, message: Message| async move {
+        tx.send(message).map_err(|_| "the client is gone")?;
+        Ok::<_, &'static str>(tx)
+    });
+    let protocol = graphql_transport_ws().await;
+    let served = tokio::spawn(crate::graphql::websocket::serve(
+        Box::pin(sink),
+        UnboundedReceiverStream::new(server_reads),
+        schema,
+        protocol,
+        caller,
+        idle_timeout,
+    ));
+    ServedSocket {
+        to_server: Some(to_server),
+        from_server,
+        served,
+    }
+}
+
+fn text_containing(needle: &'static str) -> impl Fn(&Message) -> bool {
+    move |message| matches!(message, Message::Text(text) if text.as_str().contains(needle))
+}
+
+/// Wait until the world's channel has `want` receivers; the socket is being
+/// served on its own task, so there is nothing here to poll.
+async fn until_receivers(state: &AppState, world: Uuid, want: usize) {
+    let opened = async {
+        while state.world_events.subscriber_count(world) != want {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(5), opened)
+        .await
+        .expect("the world's receiver count settles");
+}
+
+#[test]
+fn the_idle_timeout_outlasts_several_missed_client_pings() {
+    // The web client pings every 15 s. A minute is four pings, so one
+    // dropped or late ping never costs a healthy table its connection.
+    assert_eq!(
+        crate::graphql::websocket::IDLE_TIMEOUT,
+        Duration::from_secs(60)
+    );
+}
+
+/// A client that goes silent without closing is closed by the server once the
+/// idle timeout passes, and everything it held is released.
+#[tokio::test]
+async fn a_silent_socket_is_closed_after_the_idle_timeout_and_releases_everything() {
+    let (state, world, caller) = world_with_owner().await;
+    let baseline = open_on_this_thread();
+    let mut socket = serve_socket(schema(state.clone()), caller, Duration::from_millis(300)).await;
+
+    socket.send(serde_json::json!({ "type": "connection_init" }));
+    socket.until(text_containing("connection_ack")).await;
+    for id in ["a", "b"] {
+        socket.send(serde_json::json!({
+            "id": id,
+            "type": "subscribe",
+            "payload": { "query": world_events_query(world) },
+        }));
+    }
+    until_receivers(&state, world, 2).await;
+    assert_eq!(open_on_this_thread(), baseline + 2);
+
+    // The client vanishes: its half of the socket is still there, it just
+    // never says anything again. That is the half-open connection.
+    let closed = socket.until(|m| matches!(m, Message::Close(_))).await;
+    let Message::Close(Some(frame)) = closed else {
+        panic!("the server closes with a reason");
+    };
+    assert_eq!(frame.code, 3008, "graphql-ws's timeout close code");
+
+    tokio::time::timeout(Duration::from_secs(5), &mut socket.served)
+        .await
+        .expect("serving the socket ends with the close")
+        .expect("serving the socket does not panic");
+    assert_eq!(open_on_this_thread(), baseline);
+    assert_eq!(state.world_events.subscriber_count(world), 0);
+    assert!(
+        socket.to_server.is_some(),
+        "the client never closed its end"
+    );
+}
+
+/// A client that keeps pinging keeps its socket and its subscriptions well
+/// past the idle timeout: the timeout is for silence, not for quiet worlds.
+#[tokio::test]
+async fn a_socket_that_keeps_pinging_outlives_the_idle_timeout() {
+    let (state, world, caller) = world_with_owner().await;
+    let baseline = open_on_this_thread();
+    let mut socket = serve_socket(
+        schema(state.clone()),
+        caller.clone(),
+        Duration::from_millis(300),
+    )
+    .await;
+
+    socket.send(serde_json::json!({ "type": "connection_init" }));
+    socket.until(text_containing("connection_ack")).await;
+    socket.send(serde_json::json!({
+        "id": "a",
+        "type": "subscribe",
+        "payload": { "query": world_events_query(world) },
+    }));
+    until_receivers(&state, world, 1).await;
+
+    // Four timeouts' worth of quiet world, pinging every third of one.
+    for _ in 0..12 {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        socket.send(serde_json::json!({ "type": "ping" }));
+        socket.until(text_containing(r#""pong""#)).await;
+    }
+    assert!(!socket.served.is_finished(), "a pinging socket stays open");
+    assert_eq!(open_on_this_thread(), baseline + 1);
+
+    // And it still delivers.
+    state
+        .world_events
+        .publish(world, event(world, caller.user_id, 9));
+    socket.until(text_containing(r#""eventCode":9"#)).await;
+
+    // A clean close still releases it at once.
+    socket.to_server = None;
+    tokio::time::timeout(Duration::from_secs(5), &mut socket.served)
+        .await
+        .expect("serving the socket ends when the client closes")
+        .expect("serving the socket does not panic");
+    assert_eq!(open_on_this_thread(), baseline);
+    assert_eq!(state.world_events.subscriber_count(world), 0);
+}

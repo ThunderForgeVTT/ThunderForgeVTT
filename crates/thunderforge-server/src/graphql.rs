@@ -115,6 +115,8 @@ pub use mutations_shapes::ShapeMutation;
 pub mod mutations_heartbeat;
 pub mod mutations_reconcile;
 pub mod mutations_tokens;
+/// Serving one GraphQL WebSocket: counting, the caller, the idle timeout.
+pub mod websocket;
 // Playtest 2026-09-10 P1: a token without a photo shows its character's art.
 pub(crate) mod token_art;
 pub use mutations_heartbeat::{HeartbeatMutation, PresenceQuery};

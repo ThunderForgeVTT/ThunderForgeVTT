@@ -17,9 +17,9 @@ mod schema_roots;
 mod system_packs; // Spec 032 FR-029: which packs are linked, and nothing more
 
 use crate::schema_roots::{AppMutationRoot, AppQueryRoot, AppSchema};
+use async_graphql::Schema;
 use async_graphql::http::{ALL_WEBSOCKET_PROTOCOLS, GraphQLPlaygroundConfig, playground_source};
-use async_graphql::{Data, Schema}; // Added Data
-use async_graphql_axum::{GraphQLProtocol, GraphQLRequest, GraphQLResponse, GraphQLWebSocket}; // Added GraphQLWebSocket
+use async_graphql_axum::{GraphQLProtocol, GraphQLRequest, GraphQLResponse};
 use axum::{
     Extension, Router,
     extract::{DefaultBodyLimit, State, WebSocketUpgrade},
@@ -32,6 +32,7 @@ use base64::{Engine as _, engine::general_purpose};
 use clap::Parser;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::{RunQueryDsl, pg::PgConnection};
+use futures_util::StreamExt as _;
 use std::net::SocketAddr;
 use thunderforge_server::config::{Config, Directories};
 use thunderforge_server::graphql::SubscriptionRoot;
@@ -101,27 +102,18 @@ async fn graphql_ws_handler(
     ws: WebSocketUpgrade,
 ) -> Response {
     ws.protocols(ALL_WEBSOCKET_PROTOCOLS)
-        .on_upgrade(move |socket| async move {
-            // Counted, never logged per connection: a reconnect storm is
-            // hundreds of these in a second, and the point of the number is
-            // to say how many sockets are attached *now* — which is what
-            // separates "the server stopped sending" from "the clients went
-            // away". It is reported with the delivery counters every 10s.
-            // A guard rather than an add and a subtract around `serve`: a
-            // connection task that panics unwinds past the subtract, and the
-            // count would then say a socket is attached that is not.
-            let _open = thunderforge_server::graphql::subscription_metrics::OpenSocket::begin();
-            GraphQLWebSocket::new(socket, schema, protocol)
-                .on_connection_init(move |_value| {
-                    let auth_user = auth_user.clone();
-                    async move {
-                        let mut data = Data::default();
-                        data.insert(auth_user);
-                        Ok(data)
-                    }
-                })
-                .serve()
-                .await;
+        .on_upgrade(move |socket| {
+            // Counting, the caller and the idle timeout live in the server
+            // crate, where they are tested; see `graphql::websocket`.
+            let (sink, stream) = socket.split();
+            thunderforge_server::graphql::websocket::serve(
+                sink,
+                stream,
+                schema,
+                protocol,
+                auth_user,
+                thunderforge_server::graphql::websocket::IDLE_TIMEOUT,
+            )
         })
 }
 
