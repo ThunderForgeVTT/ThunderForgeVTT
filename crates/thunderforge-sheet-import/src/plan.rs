@@ -396,6 +396,16 @@ pub fn plan(
 
     if let Some(refine) = refine {
         refine(reading, current, &mut out);
+        // A hook that reshaped a piece of content changed what will be
+        // staged: hash it again and look it up again, so the same sheet
+        // imported twice finds what it staged the first time.
+        for change in out.content.iter_mut().filter(|c| !c.removed) {
+            let hash = content_hash(&change.kind, &change.fields);
+            if hash != change.content_hash {
+                change.resolution = resolve(world, &change.kind, &change.normalised, &hash);
+                change.content_hash = hash;
+            }
+        }
     }
 
     // A kind the declaration hands to the pack, which the pack left
@@ -633,14 +643,7 @@ fn plan_content(
         }
         let fields = Value::Object(item.fields.clone().into_iter().collect());
         let hash = content_hash(&item.kind, &fields);
-        let resolution = match world.lookup(&item.kind, &normalised) {
-            Some(Indexed::World { id }) => Resolution::World { id },
-            Some(Indexed::Staged { id, content_hash }) if content_hash == hash => {
-                Resolution::StagedExisting { id }
-            }
-            Some(Indexed::Staged { id, .. }) => Resolution::Differs { id },
-            None => Resolution::StagedNew,
-        };
+        let resolution = resolve(world, &item.kind, &normalised, &hash);
         let mut link = item.link.clone();
         link.granted_by.sort();
         link.granted_by.dedup();
@@ -700,6 +703,19 @@ fn plan_content(
         }
     }
     out.content.extend(by_key.into_values());
+}
+
+/// Where a piece of content stands in the world: there already, staged the
+/// same, staged differently, or new.
+fn resolve(world: &dyn ContentIndex, kind: &str, normalised: &str, hash: &str) -> Resolution {
+    match world.lookup(kind, normalised) {
+        Some(Indexed::World { id }) => Resolution::World { id },
+        Some(Indexed::Staged { id, content_hash }) if content_hash == hash => {
+            Resolution::StagedExisting { id }
+        }
+        Some(Indexed::Staged { id, .. }) => Resolution::Differs { id },
+        None => Resolution::StagedNew,
+    }
 }
 
 /// The same content twice on a sheet (a spell two classes grant) is one

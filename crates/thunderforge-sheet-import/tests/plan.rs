@@ -777,3 +777,59 @@ fn a_refined_field_equal_to_the_actor_is_identical_not_a_change() {
         "set_field replaces, never duplicates"
     );
 }
+
+/// Decides the attack is an ability, and gives it the effects it rolls.
+fn attack_as_ability(_: &ImportedCharacter, _: &ActorSnapshot, plan: &mut ImportPlan) {
+    for change in &mut plan.content {
+        if change.kind == "attack" {
+            change.target = ContentTarget::Ability {
+                vocabulary: "feature".into(),
+            };
+            change.fields["effects"] = json!([{ "effectType": "ATTACK_ROLL" }]);
+        }
+    }
+}
+
+#[test]
+fn content_a_refine_reshapes_is_hashed_and_looked_up_again() {
+    let first = plan(
+        &mapping(),
+        Some(attack_as_ability),
+        &reading(),
+        &Corrections::new(),
+        &first_import(),
+        &Index::default(),
+    );
+    let attack = first.content.iter().find(|c| c.kind == "attack").unwrap();
+    assert_eq!(
+        attack.content_hash,
+        content_hash("attack", &attack.fields),
+        "the hash is of what will be staged"
+    );
+    assert_eq!(attack.resolution, Resolution::StagedNew);
+
+    // Staged by the first import, under the reshaped hash: the same sheet
+    // again finds it rather than staging it a second time.
+    let staged = Index(BTreeMap::from([(
+        ("attack".to_string(), attack.normalised.clone()),
+        Indexed::Staged {
+            id: "staged-1".into(),
+            content_hash: attack.content_hash.clone(),
+        },
+    )]));
+    let again = plan(
+        &mapping(),
+        Some(attack_as_ability),
+        &reading(),
+        &Corrections::new(),
+        &first_import(),
+        &staged,
+    );
+    let attack = again.content.iter().find(|c| c.kind == "attack").unwrap();
+    assert_eq!(
+        attack.resolution,
+        Resolution::StagedExisting {
+            id: "staged-1".into()
+        }
+    );
+}
