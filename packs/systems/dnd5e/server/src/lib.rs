@@ -16,6 +16,9 @@
 //! - **stat_blocks.rs**: SRD creature stat blocks, and where each line of one
 //!   is stored so the combat flow can use it
 //!
+//! - **sheet_import.rs**: bringing a D&D Beyond character in (spec 048):
+//!   the reader's slot and the refine hook behind `sheetImport`
+//!
 //! - **validators.rs**: Validation for system-specific JSONB data (Phase 4.8.1)
 //!   - Validates ability_data, resource_data, proficiency_data, trait_data, spell_data
 //!   - Manifest-driven schema from system.json
@@ -27,6 +30,7 @@ pub mod models;
 mod registration_tests;
 pub mod roll_facets;
 pub mod rules;
+pub mod sheet_import;
 pub mod srd;
 pub mod stat_blocks;
 pub mod validators;
@@ -62,6 +66,7 @@ inventory::submit! {
         rules: Some(|manifest| Box::new(crate::rules::DnD5eRules::from_manifest(manifest))),
         refine_content: Some(content_refine::refine),
         roll_facets: Some(&roll_facets::ROLL_FACETS),
+        sheet_import: Some(&sheet_import::SHEET_IMPORT),
         ..thunderforge_canvas_core::system_contribution::SystemContribution::new(SYSTEM_ID)
     }
 }

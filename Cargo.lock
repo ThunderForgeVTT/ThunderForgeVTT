@@ -9203,6 +9203,9 @@ dependencies = [
  "serde_json",
  "thunderforge-canvas-core",
  "thunderforge-dice",
+ "thunderforge-pdf",
+ "thunderforge-sheet-import",
+ "thunderforge-system-dnd5e-sheet",
 ]
 
 [[package]]

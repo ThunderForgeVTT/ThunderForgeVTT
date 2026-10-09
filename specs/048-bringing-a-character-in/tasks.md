@@ -167,8 +167,8 @@ Content the world lacks is staged under their name and kept out of play.
 
 ### The mapping (TDD)
 
-- [ ] T033 [P] [US1] Write tests in `packs/systems/dnd5e/server/src/sheet_import_tests.rs` that plan each fixture's reading onto an empty 5e actor. Check every target in the field table, and the refine rules: the level sum, the hit-dice string, an attack as an item when the weapon is in the equipment and as an ability otherwise, and a spell shared by two classes.
-- [ ] T034 [US1] Add the `sheetImport` block to `system.json` (contracts/sheet-mapping-5e.md). Implement `refine` in `server/src/sheet_import.rs` and register the `SheetImport` slot with the native reader in `server/src/lib.rs`. T033 goes green.
+- [X] T033 [P] [US1] Write tests in `packs/systems/dnd5e/server/src/sheet_import_tests.rs` that plan each fixture's reading onto an empty 5e actor. Check every target in the field table, and the refine rules: the level sum, the hit-dice string, an attack as an item when the weapon is in the equipment and as an ability otherwise, and a spell shared by two classes.
+- [X] T034 [US1] Add the `sheetImport` block to `system.json` (contracts/sheet-mapping-5e.md). Implement `refine` in `server/src/sheet_import.rs` and register the `SheetImport` slot with the native reader in `server/src/lib.rs`. T033 goes green.
 
 ### The server
 

@@ -14,6 +14,11 @@ serde_json = "1.0.151"
 inventory = "0.3"
 thunderforge-canvas-core = { path = "../../../../crates/thunderforge-canvas-core" }
 thunderforge-dice = { path = "../../../../crates/thunderforge-dice" }
+# Spec 048: the D&D Beyond reader, run natively, and the mapping engine its
+# refine hook writes through.
+thunderforge-pdf = { path = "../../../../crates/thunderforge-pdf" }
+thunderforge-sheet-import = { path = "../../../../crates/thunderforge-sheet-import" }
+thunderforge-system-dnd5e-sheet = { path = "../sheet" }
 
 [lib]
 path = "src/lib.rs"

@@ -69,7 +69,7 @@ A pack with a malformed block fails to load, and that failure is a test.
 | HIT POINT MAXIMUM | `resources.hp_max` | `resource_data.max_hp` | |
 | CURRENT HIT POINTS | `resources.hp_current` | `resource_data.current_hp` | Play state. The first import writes it, and a re-import keeps the table's value |
 | TEMPORARY HIT POINTS | `resources.hp_temp` | `resource_data.temporary_hp` | Play state |
-| HIT DICE | `resources.hit_dice[]` | `resource_data.hit_dice_pools` | Refine writes `hit_dice` ("3d10, 2d6") and `hit_dice_used` |
+| HIT DICE | `resources.hit_dice[]` | `resource_data.hit_dice_pools` | Refine writes `hit_dice` ("3d10 + 2d6", the form the validator takes) and `hit_dice_used` |
 | DEATH SAVES | `resources.death_saves` | `death_save_successes` / `failures` | Play state |
 | ADDITIONAL SENSES | `movement.senses` | `trait_data.darkvision`, `blindsight`, … | "Darkvision 60 ft." → 60 |
 | DEFENSES | `defences.*` | `trait_data.resistances`, `immunities`, `vulnerabilities`, `condition_immunities` | A Warforged's "Poison (resistance)" is read here |
