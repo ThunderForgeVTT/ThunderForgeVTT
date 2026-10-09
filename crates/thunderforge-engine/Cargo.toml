@@ -31,7 +31,7 @@ crate-type = ["cdylib", "rlib"]
 #
 # Not on by default, and deliberately not in the release bundle: the names are
 # `type_name` string *data*, which survives the symbol stripping that takes
-# the release build from 24.7MB to 4.15MB brotli. `scripts/shared.mjs` turns
+# the release build from 31.9MB to 5.19MB brotli (bevy 0.20.0). `scripts/shared.mjs` turns
 # it on for the `--dev` wasm-pack profile, where 71% of the bundle is already
 # unmangled symbols and the marginal cost is noise.
 debug-names = ["bevy/debug"]
@@ -78,7 +78,8 @@ bevy = { version = "0.20.0", default-features = false, features = [
   "bevy_gizmos",
   "bevy_render",
   "bevy_sprite",
-  # THE RENDER HALVES. In Bevy 0.18 each of these subsystems is split in two:
+  # THE RENDER HALVES. Since Bevy 0.18 (and still in 0.20) each of these
+  # subsystems is split in two:
   # `bevy_sprite`/`bevy_ui`/`bevy_gizmos` provide the components and the
   # main-world logic, while `*_render` provides the crate that actually draws
   # them (extraction, queueing, pipelines). Enabling only the first half of
@@ -98,7 +99,7 @@ bevy = { version = "0.20.0", default-features = false, features = [
   # queueing and batching) to draw a single string of developer text.
   #
   # Kept anyway, deliberately. Dropping them shrinks the bundle, but the
-  # release build already lands at ~4.15MB brotli, so the remaining size win
+  # release build already lands at ~5.19MB brotli, so the remaining size win
   # is small — and re-adding a render pipeline later is far more disruptive
   # than carrying it. If you are trimming features for size, measure first:
   # this is not the one that matters.

@@ -340,6 +340,33 @@ cargo process is working in the checkout, and it never touches anything outside
 one-line note when the build output has grown enough to be worth it.
 `--root=<path>` points it at another checkout.
 
+### Upgrading Bevy
+
+Spec 087 took the engine from 0.19.1 to 0.20.0. Its `research.md` records
+what moved; the steps it followed, in `quickstart.md`, are the ones to repeat.
+
+- **Take a baseline first, on the old version.** Frame rate from
+  `pnpm e2e:engine-limits` (three runs, on a quiet machine, with the load
+  average next to each), the release `.wasm` raw and brotli, the render-probe
+  lines, and the four captures. Once a version has moved, there is nothing to
+  compare against.
+- **bevy and glam move together.** `thunderforge-canvas-core` depends on
+  `glam` directly and must name the major the new bevy pulls in, or
+  `bevy::prelude::Vec2` and canvas-core's `Vec2` become two types. After the
+  bump, `cargo tree -d --workspace --target all` must show one `glam` and one
+  `wgpu`.
+- **Shaders are WESL.** They are `.wesl` files with `import …;` lines, not
+  naga_oil's `#import`. A shader that fails to compile does not fail the
+  build; it shows up at runtime, so check the darkness slice.
+- **The render halves.** `bevy_sprite`, `bevy_ui` and `bevy_gizmos` each need
+  their `*_render` feature. Without it everything compiles, runs and logs
+  nothing, and the canvas shows only the clear colour. The render probe
+  (`set_render_probe`) tells the two apart.
+- **Build in a worktree.** A worktree resolves `@thunderforge/engine` through
+  its own `dist/engine`, so the new engine stays out of other work's e2e runs
+  until it merges. After the merge, rebuild main's engine with
+  `node scripts/build.mjs --only-wasm`.
+
 ## Feature flags
 
 A feature can be merged before it is switched on. A flag is how: a boolean

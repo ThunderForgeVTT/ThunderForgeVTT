@@ -670,3 +670,17 @@ five paths no slice covers. Each has its own proof:
 | `crates/thunderforge-combat/tests/float_parity.rs`         | `cargo test -p thunderforge-combat` (T056)  |
 | `crates/thunderforge-engine/src/plugins/darkness_probe.rs` | the engine's unit tests (T056)              |
 | `scripts/e2e/slices.json`                                  | configuration; read by `e2e:which` itself   |
+
+### Lint and units on the final tree (T056)
+
+`make lint` passes. `cargo test` for canvas-core, engine and combat passes
+(the engine's 567, canvas-core's 365, and combat's suites with the three
+float-parity tests). `pnpm -F @thunderforge/web test` passes 906 of 906 and
+its typecheck is clean. The demo's `floatParity.test.ts` passes 12 of 12
+against `dist/combat`. `RUST_MIN_STACK=16777216 cargo test -p
+thunderforge-server` passed 1991 and failed one,
+`crypto::tests::a_tampered_payload_is_refused`, which passed on each of
+three reruns. That test is flaky in itself and not touched by this spec:
+it "tampers" by changing the payload's first character to `A`, so when
+that character is already `A` (about one run in 64) nothing changes and
+the decrypt succeeds.

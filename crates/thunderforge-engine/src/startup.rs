@@ -65,14 +65,15 @@ pub fn start(canvas_selector: &str) {
         // URL under `/api/canvas-assets/...` (scene backgrounds and pasted
         // canvas images — see `systems/background.rs`, the only two
         // `asset_server.load` call sites). Those paths are rooted ("/…"),
-        // which Bevy 0.18's `AssetPath::is_unapproved` treats as an escape
-        // from the asset root, and the default `UnapprovedPathMode::Forbid`
-        // then drops the load *before* any request is made — returning a
-        // default handle after an `error!` that used to go nowhere, because
-        // this crate did not enable `bevy_log` (it now does; see
-        // Cargo.toml). Verified live: with `Forbid`, an imported dd2vtt
-        // map's `set_scene_background` command arrived correctly and the
-        // image was never requested at all, with nothing logged anywhere.
+        // which Bevy's `AssetPath::is_unapproved` (0.18 onward, still 0.20)
+        // treats as an escape from the asset root, and the default
+        // `UnapprovedPathMode::Forbid` then drops the load *before* any
+        // request is made — returning a default handle after an `error!`
+        // that used to go nowhere, because this crate did not enable
+        // `bevy_log` (it now does; see Cargo.toml). Verified live: with
+        // `Forbid`, an imported dd2vtt map's `set_scene_background` command
+        // arrived correctly and the image was never requested at all, with
+        // nothing logged anywhere.
         // With `Allow`, the image is fetched and decoded, and the
         // background sprite reports `image_loaded == true`.
         // `Allow` is the right call for this app: the paths are not

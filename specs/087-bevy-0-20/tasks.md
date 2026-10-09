@@ -150,7 +150,7 @@ listed in T031 and T032.
   **Open:** every slice is green on the release engine, apart from `scene-live-launch`, which fails on 0.19.1 too. On the dev engine, three tests fail every time, and they pass on 0.19.1's dev engine. See research.md, "Dev-engine slices (T054)". The owner decides how to proceed.
 
 - [x] T055 `pnpm e2e:which --diff` against `main`. Run each slice it names that T053 and T054 did not run. Record in research.md that it asks for the full suite because of `Cargo.lock`, and that the slices stand in for it (Open item 1).
-- [ ] T056 `make lint` and the units of T031–T035, again, on the final tree.
+- [x] T056 `make lint` and the units of T031–T035, again, on the final tree.
 
 **Checkpoint**: SC-001 to SC-006 are recorded in research.md under
 `## Result`.
@@ -159,19 +159,19 @@ listed in T031 and T032.
 
 ## Phase 6: Docs and version references (US5)
 
-- [ ] T060 [P] [US5] Update the version references (FR-015):
+- [x] T060 [P] [US5] Update the version references (FR-015):
   - `crates/thunderforge-canvas-core/Cargo.toml:19` becomes "bevy 0.20 uses glam 0.33";
   - in `crates/thunderforge-engine/Cargo.toml`, the comments that name 0.18 (line 81) and the size note (the new brotli figure from T051);
   - `apps/engine-sandbox/README.md:119`;
   - the code comments that name a Bevy version as current: `cached_assets.rs:23`, `render_probe.rs:26` and `:241`, `startup.rs:68`. Keep a comment's version where it records history, such as "since 0.18".
-- [ ] T061 [P] [US5] Add a short **Upgrading Bevy** section to `docs/CONTRIBUTING.md`:
+- [x] T061 [P] [US5] Add a short **Upgrading Bevy** section to `docs/CONTRIBUTING.md`:
   - bevy and canvas-core's glam move together;
   - `cargo tree -d` must show one glam and one wgpu;
   - shaders are WESL (`.wesl`, `import …;`);
   - the render halves (`*_render` features) and the blank-canvas symptom;
   - take a baseline first (quickstart.md);
   - copy the worktree engine over main's `dist/engine`.
-- [ ] T062 Confirm `git grep -n "0\.19" -- crates/thunderforge-engine crates/thunderforge-canvas-core apps/engine-sandbox docs/CONTRIBUTING.md` shows no stale reference.
+- [x] T062 Confirm `git grep -n "0\.19" -- crates/thunderforge-engine crates/thunderforge-canvas-core apps/engine-sandbox docs/CONTRIBUTING.md` shows no stale reference.
 - [ ] T063 Set spec.md **Status** to "Implemented". Record the final numbers in spec.md under **What exists** for the next upgrade.
 - [ ] T064 Merge: `mcp__gitops__merge_ff_only` from main onto `087-bevy-0-20`. If it refuses because 086 has landed, stop and report (Open item 2). Do not rebase without the owner. Afterwards, rebuild main's own engine (`node scripts/build.mjs --only-wasm`) and remove the worktree.
 

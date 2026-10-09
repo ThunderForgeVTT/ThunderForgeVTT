@@ -20,7 +20,7 @@
 //! **Rejected — a custom [`bevy::asset::io::AssetReader`] behind an
 //! `AssetSource`.** It is the idiomatic Bevy answer and R1 named it as a
 //! candidate mechanism. Three facts rule it out here, and all three are
-//! properties of Bevy 0.18 rather than opinions:
+//! properties of Bevy (0.18, rechecked on 0.20) rather than opinions:
 //!
 //! 1. *It cannot be registered from a plugin added after `DefaultPlugins`.*
 //!    `App::register_asset_source` checks for an existing `AssetServer`

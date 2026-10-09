@@ -23,7 +23,7 @@
 //! every indirect signal is green, the only way forward is a direct one.
 //!
 //! What it found: `Cargo.toml` enabled `bevy_sprite`/`bevy_ui`/`bevy_gizmos`
-//! but none of the matching `*_render` features. Bevy 0.18 splits each of
+//! but none of the matching `*_render` features. Since 0.18, Bevy splits each of
 //! those subsystems in two — components and main-world logic in one crate,
 //! the code that actually draws them in another — so the engine had a fully
 //! working scene graph and no renderer for it. The render-world trace showed

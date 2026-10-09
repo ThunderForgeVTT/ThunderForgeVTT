@@ -116,7 +116,7 @@ said the renderer was healthy.
 
 The cause was in `crates/thunderforge-engine/Cargo.toml`: it enabled `bevy_sprite`, `bevy_ui`
 and `bevy_gizmos` but none of `bevy_sprite_render`, `bevy_ui_render`,
-`bevy_gizmos_render`. Bevy 0.18 splits each subsystem into a logic half and a
+`bevy_gizmos_render`. Since 0.18, Bevy (0.20 today) splits each subsystem into a logic half and a
 render half. With only the logic halves, components exist, visibility is
 computed, assets load and the camera clears the target — and nothing is ever
 queued to draw. No error is produced, because nothing is wrong: the renderer
