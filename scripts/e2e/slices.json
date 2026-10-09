@@ -184,7 +184,8 @@
         "actor-",
         "play-field-",
         "npc-visibility.spec.ts",
-        "players-section.spec.ts"
+        "players-section.spec.ts",
+        "players-hero-edit.spec.ts"
       ],
       "neighbours": [
         {
@@ -341,6 +342,10 @@
         {
           "spec": "status-display.spec.ts",
           "seam": "combat applies the conditions that status displays show"
+        },
+        {
+          "spec": "players-hero-edit.spec.ts",
+          "seam": "a player opens the 5e sheet from the Players screen and edits their hero's scores"
         }
       ],
       "paths": [
@@ -534,6 +539,10 @@
       "summary": "Hero builder (specs/044-hero-builder, specs/048-bringing-a-character-in)",
       "own": ["hero-builder-"],
       "neighbours": [
+        {
+          "spec": "players-hero-edit.spec.ts",
+          "seam": "a player opens the builder from the Players screen and saves their hero's look"
+        },
         {
           "spec": "actor-art.spec.ts",
           "seam": "the builder writes the actor imagery that the art panel shows"
