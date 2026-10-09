@@ -4,8 +4,8 @@
 
 **Created**: 2026-09-11
 
-**Status**: Draft. Three owner questions are open (see
-[Questions for the owner](#questions-for-the-owner)).
+**Status**: Planned ([plan.md](./plan.md), [tasks.md](./tasks.md)). All three
+owner questions are answered (see [Decisions](#decisions-owner-2026-09-12)).
 
 **Input**: Project owner: "i'd really like to build a 5e specific character
 sheet importer that works via the actor screen for a player, a subsystem
