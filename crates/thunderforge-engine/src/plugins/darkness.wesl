@@ -20,7 +20,7 @@
 // in a bright scene as in a dark one. Light says how far and how well; walls
 // say where at all.
 
-#import bevy_sprite::mesh2d_vertex_output::VertexOutput
+import bevy_sprite_render::mesh2d::vertex_output::VertexOutput;
 
 // Must match MAX_LIGHTS and SHADOW_BINS in plugins/darkness.rs. Fixed-size
 // because WebGL2 requires uniform arrays to have a compile-time length. The
@@ -51,11 +51,11 @@ struct Darkness {
     light_colors: array<vec4<f32>, 128>,
 };
 
-@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> darkness: Darkness;
+@group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> darkness: Darkness;
 // One row per light, one texel per direction: the reach, as a fraction of the
 // light's dim radius, packed into 16 bits across red (high) and green (low).
-@group(#{MATERIAL_BIND_GROUP}) @binding(1) var shadow_map: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(2) var shadow_sampler: sampler;
+@group(constants::MATERIAL_BIND_GROUP) @binding(1) var shadow_map: texture_2d<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(2) var shadow_sampler: sampler;
 
 // How far light `i` reaches in the direction of `offset`, in world units.
 fn reach(i: u32, offset: vec2<f32>, dim: f32) -> f32 {

@@ -66,7 +66,7 @@ use crate::systems::lighting_vision::Eyes;
 use thunderforge_canvas_core::lighting::LightSource;
 use thunderforge_canvas_core::vision::{Illumination, Rgb, shadow_map_row};
 
-/// Must match `MAX_LIGHTS` in `darkness.wgsl`.
+/// Must match `MAX_LIGHTS` in `darkness.wesl`.
 ///
 /// Fixed-size because WebGL2 requires compile-time uniform array lengths, so
 /// this is a real ceiling rather than a growable buffer. The budget is not
@@ -80,12 +80,12 @@ use thunderforge_canvas_core::vision::{Illumination, Rgb, shadow_map_row};
 pub const MAX_LIGHTS: usize = 128;
 
 /// Directions per light in the shadow map. Must match `SHADOW_BINS` in
-/// `darkness.wgsl`. 512 puts a shadow's edge within about 7 units of true at
+/// `darkness.wesl`. 512 puts a shadow's edge within about 7 units of true at
 /// a 600-unit radius, and the whole map is 256KB.
 pub const SHADOW_BINS: usize = 512;
 
 /// The shadow map's last row: the viewer's own line of sight (spec 076). Must
-/// match `SIGHT_ROW` in `darkness.wgsl`.
+/// match `SIGHT_ROW` in `darkness.wesl`.
 pub const SIGHT_ROW: usize = MAX_LIGHTS;
 
 /// The sight row's reach is rounded up to this, so a pan does not recompute it
@@ -155,7 +155,7 @@ impl Material2d for DarknessMaterial {
         // Embedded rather than fetched: the engine serves no assets of its
         // own, and a shader that fails to load renders as a black screen with
         // no error anyone sees.
-        "embedded://thunderforge_engine/plugins/darkness.wgsl".into()
+        "embedded://thunderforge_engine/plugins/darkness.wesl".into()
     }
 
     fn alpha_mode(&self) -> AlphaMode2d {
@@ -241,7 +241,7 @@ pub struct DarknessPlugin;
 
 impl Plugin for DarknessPlugin {
     fn build(&self, app: &mut App) {
-        bevy::asset::embedded_asset!(app, "darkness.wgsl");
+        bevy::asset::embedded_asset!(app, "darkness.wesl");
 
         app.add_plugins(Material2dPlugin::<DarknessMaterial>::default())
             // Owns `SceneAmbient`. Nothing else registered it, so
@@ -370,7 +370,7 @@ fn visible_lights<'a>(lights: &[Placed<'a>], view: Option<Rect>) -> Vec<Placed<'
 }
 
 /// One light's reach in each direction, as texels: the fraction of `reach`,
-/// in 16 bits across red (high byte) and green (low byte). `darkness.wgsl`'s
+/// in 16 bits across red (high byte) and green (low byte). `darkness.wesl`'s
 /// `reach` undoes exactly this.
 fn pack_row(distances: &[f32], reach: f32) -> Vec<u8> {
     let mut texels = Vec::with_capacity(distances.len() * 4);
@@ -697,7 +697,7 @@ fn sync_darkness(
 mod tests {
     use super::*;
 
-    /// What `darkness.wgsl`'s `reach` computes from a texel.
+    /// What `darkness.wesl`'s `reach` computes from a texel.
     fn unpack(texel: &[u8], reach: f32) -> f32 {
         let packed = f32::from(texel[0]) * 256.0 + f32::from(texel[1]);
         packed / 65535.0 * reach
@@ -750,7 +750,7 @@ mod tests {
 
         let row = shadow_map_row(Vec2::ZERO, reach, &walls, SHADOW_BINS);
         let texels = pack_row(&row.distances, reach);
-        // The bins `darkness.wgsl`'s `reach` reads for due east and due
+        // The bins `darkness.wesl`'s `reach` reads for due east and due
         // north: floor((angle + PI) / TAU * SHADOW_BINS).
         let east = SHADOW_BINS / 2;
         let north = SHADOW_BINS * 3 / 4;

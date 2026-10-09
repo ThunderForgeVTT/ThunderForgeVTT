@@ -53,6 +53,7 @@ use bevy::sprite_render::ExtractedSprites;
 /// trace below lives in the `RenderApp`, which is a separate world and cannot
 /// see main-world resources unless they are extracted into it.
 #[derive(Resource, Default, Debug, Clone, ExtractResource)]
+#[extract_app(RenderApp)]
 pub struct RenderProbeEnabled(pub bool);
 
 /// How many frames between trace lines. At ~60fps this is roughly one line a

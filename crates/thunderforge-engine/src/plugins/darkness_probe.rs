@@ -6,7 +6,7 @@
 //! texels, exactly as the shader will read them — and `sight_probe` answers
 //! the shader's question for one point with the shader's own arithmetic:
 //! which bin the point falls in, how far the row reaches there, and whether
-//! the point is within it. The same tolerance as `darkness.wgsl`'s `fragment`,
+//! the point is within it. The same tolerance as `darkness.wesl`'s `fragment`,
 //! so the two never disagree about a point on the line.
 
 use std::f32::consts::{PI, TAU};
@@ -38,7 +38,7 @@ pub(crate) fn mirror_sight(row: Option<SightRow>) {
     }
 }
 
-/// `darkness.wgsl`'s `reach`: how far the row lets sight travel towards
+/// `darkness.wesl`'s `reach`: how far the row lets sight travel towards
 /// `offset`, in world units, from the packed 16-bit fraction in red and green.
 pub(crate) fn unpack_reach(row: &SightRow, offset: Vec2) -> f32 {
     let angle = offset.y.atan2(offset.x);

@@ -95,6 +95,14 @@ default_font, png, webp, bevy_winit, webgl2 (still mapped to
 bevy_extract` and `-i bevy_curve` at T010. The 0.18 lesson was that a
 missing render half gives a blank canvas with no error.
 
+**Result (T011)**: confirmed on the bumped lockfile. `cargo tree
+--workspace --target all -d` lists no second glam or wgpu: glam 0.33.12
+and wgpu 30.0.1 only. `bevy_extract`, `bevy_curve` and `bevy_shape` are
+in the engine's wasm32 tree, naga_oil is gone and wesl 0.6.0 is in. The
+workspace has `default-members`, so a plain `cargo tree -i` finds
+nothing; it needs `--workspace --target all`, or `-p thunderforge-engine
+--target wasm32-unknown-unknown`.
+
 ## R4. WESL shaders
 
 **Decision**: port `plugins/darkness.wgsl` to `plugins/darkness.wesl`.
@@ -125,6 +133,21 @@ under `bevy_sprite_render`. T020 finds it in the 0.20 source
 128, SHADOW_BINS 512 and SIGHT_ROW 128. If WESL lowers them differently,
 the shader fails to link, and the only sign is a console error. The
 lighting slice and the visual check cover this.
+
+**Result (T020–T023)**: `VertexOutput` is at
+`bevy_sprite_render::mesh2d::vertex_output::VertexOutput` in 0.20, so line
+23 is now `import bevy_sprite_render::mesh2d::vertex_output::VertexOutput;`.
+The three bindings use `@group(constants::MATERIAL_BIND_GROUP)`;
+`constants` needs no import. The file moved to `darkness.wesl`, and
+`darkness.rs`, `darkness_probe.rs`, the `shadow_map.rs` comment and both
+slices that named the old path (`engine-other`, `lighting` in
+`scripts/e2e/slices.json`) follow it. The uniform layout and the three
+array sizes are unchanged, and WebGL2 links it: the dev engine draws the
+lit scene in the sandbox with no shader error, and the darkness capture
+matches the baseline to the pixel (T042). The smoke test ran in the
+engine sandbox rather than over main's `dist/engine`, because copying an
+engine there would have put 0.20 under spec 086's runs. `make lint`
+(lint-host and lint-wasm) is green with no new warning and no `allow`.
 
 ## R5. Sprites drawn as Mesh2d
 
@@ -169,6 +192,10 @@ the build asks for it.
   It names `ExtractComponent` and `SyncComponent` explicitly. It is not
   clear whether `ExtractResource` is included.
 
+**Result (T013)**: `ExtractResource` is included. The host build failed
+on `RenderProbeEnabled` until it had `#[extract_app(RenderApp)]`. That
+was the only compile error in the engine.
+
 ## R7. Weak ordering
 
 **Decision**: check the one ordering against a built-in render set.
@@ -187,6 +214,10 @@ the build asks for it.
 **Open**: whether `RenderSystems::PhaseSort` keeps its name in 0.20.
 `.after` a weakly ordered set still orders, because weak only means the
 built-in sets no longer force an order among themselves.
+
+**Result (T013)**: `RenderSystems::PhaseSort` keeps its name, and the
+probe's `.after` compiles unchanged. The probe's lines on 0.20 (T030)
+show it still runs after the sort.
 
 ## R8. Camera tonemapping
 
@@ -241,6 +272,12 @@ changed (FR-009).
 `ColorMaterial` with `Mesh2d`. The guide does not change `Material2d` for
 our use. `RenderDevice` is used at `cached_assets.rs:768`, where only the
 wgpu 30 signature can matter.
+
+**Result (T013)**: none of these needed a change. `PanicHandlerPlugin`
+keeps its path (`startup.rs`), our `Pointer` in `touch.rs` does not clash
+with the 0.20 prelude, and `RenderDevice` at `cached_assets.rs:768`
+compiles as it is. canvas-core needed nothing for glam 0.33 (T012), and
+no other crate changed (T014).
 
 ## R15. glam 0.33
 

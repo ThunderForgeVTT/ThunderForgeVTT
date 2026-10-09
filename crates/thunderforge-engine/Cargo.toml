@@ -47,7 +47,7 @@ thunderforge-canvas-core = { path = "../../crates/thunderforge-canvas-core" }
 thunderforge-cache-browser = { path = "../../crates/thunderforge-cache-browser" }
 thunderforge-cache-core = { path = "../../crates/thunderforge-cache-core" }
 thunderforge-dice = { path = "../../crates/thunderforge-dice" }
-bevy = { version = "0.19.1", default-features = false, features = [
+bevy = { version = "0.20.0", default-features = false, features = [
   "bevy_asset",
   # Without this, `LogPlugin` is absent and every Bevy-side `error!`/`warn!`
   # goes nowhere. That silence made real rendering bugs undiagnosable from
@@ -156,7 +156,7 @@ uuid = { version = "1.26.0", features = ["serde"] }
 # Same shape as `thunderforge-cache-browser` above, and for the same reason:
 # a wasm-only toolchain confined to a wasm-only section costs a native build
 # nothing.
-bevy = { version = "0.19.1", default-features = false, features = [
+bevy = { version = "0.20.0", default-features = false, features = [
   "bevy_winit",
   "webgl2",
 ] }

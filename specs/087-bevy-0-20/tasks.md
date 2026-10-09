@@ -50,22 +50,22 @@ changed.
 **Goal**: `cargo build` and `cargo check --all-targets` on the host, with
 one glam and one wgpu.
 
-- [ ] T010 Bump the versions together, in one commit (FR-002):
+- [x] T010 Bump the versions together, in one commit (FR-002):
   - `bevy = "0.20.0"` in both blocks of `crates/thunderforge-engine/Cargo.toml` (lines 50 and 159), with the feature lists unchanged;
   - `glam = "0.33"` in `crates/thunderforge-canvas-core/Cargo.toml`;
   - then `cargo update -p bevy -p glam`.
-- [ ] T011 `cargo tree -d | grep -E "^(glam|wgpu) "` prints nothing (FR-003). Then:
+- [x] T011 `cargo tree -d | grep -E "^(glam|wgpu) "` prints nothing (FR-003). Then:
   - confirm `bevy_extract`, `bevy_curve` and `bevy_shape` are in the tree (`cargo tree -i bevy_extract`, `-i bevy_curve`) and record the result in research.md R3;
   - confirm `naga_oil` is gone and `wesl` is present.
-- [ ] T012 `cargo check -p thunderforge-canvas-core --all-targets`, and fix what glam 0.33 breaks. The changelog points at `#[must_use]` on `as_dmat*` and at features that are now optional.
-- [ ] T013 `cargo check -p thunderforge-engine --all-targets`. Fix compile errors only, keeping behaviour the same. Each fix is recorded in research.md under the R entry it belongs to. The expected sites are:
+- [x] T012 `cargo check -p thunderforge-canvas-core --all-targets`, and fix what glam 0.33 breaks. The changelog points at `#[must_use]` on `as_dmat*` and at features that are now optional.
+- [x] T013 `cargo check -p thunderforge-engine --all-targets`. Fix compile errors only, keeping behaviour the same. Each fix is recorded in research.md under the R entry it belongs to. The expected sites are:
   - `render_probe.rs` imports (R5);
   - `RenderProbeEnabled` `#[extract_app(RenderApp)]` (R6);
   - `RenderSystems::PhaseSort` (R7);
   - the `PanicHandlerPlugin` name in `startup.rs:90`;
   - `touch.rs:54` `Pointer` against the prelude (R10–R14);
   - `cached_assets.rs:768` `RenderDevice` (R16).
-- [ ] T014 `cargo check --workspace --all-targets` for every other crate that depends on canvas-core (server, combat, content, pdf, pack-system-spec, apps/thunderforge, the pack crates). Expect no source change (FR-004).
+- [x] T014 `cargo check --workspace --all-targets` for every other crate that depends on canvas-core (server, combat, content, pdf, pack-system-spec, apps/thunderforge, the pack crates). Expect no source change (FR-004).
 
 **Checkpoint**: the host compiles, with a single glam and a single wgpu.
 
@@ -73,15 +73,15 @@ one glam and one wgpu.
 
 ## Phase 2: wasm32 build and `make lint`
 
-- [ ] T020 [US1] Port the shader (R4, FR-005):
+- [x] T020 [US1] Port the shader (R4, FR-005):
   - Move `crates/thunderforge-engine/src/plugins/darkness.wgsl` to `darkness.wesl` (`git mv`).
   - Change `#import bevy_sprite::mesh2d_vertex_output::VertexOutput` to the 0.20 WESL `import …;`, with the module path read from `bevy_sprite_render-0.20.0`'s shaders.
   - Change `#{MATERIAL_BIND_GROUP}` to `constants::MATERIAL_BIND_GROUP` at bindings 0–2.
   - Keep `MAX_LIGHTS`, `SHADOW_BINS`, `SIGHT_ROW` and the uniform layout as they are.
   - Point `darkness.rs:244` `embedded_asset!` and `darkness.rs:158` `fragment_shader()` at `darkness.wesl`.
-- [ ] T021 `cargo check -p thunderforge-engine --target wasm32-unknown-unknown`, then `ENGINE_PROFILE=dev node scripts/build.mjs --only-wasm`. Both are green.
-- [ ] T022 `make lint`, both `lint-host` and `lint-wasm`, which also covers cache-browser, opfs, combat `--features wasm` and dice wasm. Fix every new clippy warning without `allow`, unless research.md records why one is needed.
-- [ ] T023 [US1] Smoke test: copy the dev engine over main's `dist/engine`, open a lit scene with `make dev`, and check that the canvas is not blank and the console shows no shader error. A blank canvas is the 0.18 failure (missing render half). If it happens, go back to T011.
+- [x] T021 `cargo check -p thunderforge-engine --target wasm32-unknown-unknown`, then `ENGINE_PROFILE=dev node scripts/build.mjs --only-wasm`. Both are green.
+- [x] T022 `make lint`, both `lint-host` and `lint-wasm`, which also covers cache-browser, opfs, combat `--features wasm` and dice wasm. Fix every new clippy warning without `allow`, unless research.md records why one is needed.
+- [x] T023 [US1] Smoke test: copy the dev engine over main's `dist/engine`, open a lit scene with `make dev`, and check that the canvas is not blank and the console shows no shader error. A blank canvas is the 0.18 failure (missing render half). If it happens, go back to T011.
 
 **Checkpoint**: wasm builds, lint is green, and the board draws.
 

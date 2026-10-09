@@ -16,7 +16,7 @@ use crate::wall::WallSet;
 /// a cost per pixel of one lookup per light rather than one test per wall.
 ///
 /// Direction `k` points at `-π + 2π(k + ½)/bins`, so bin `k` covers the angles
-/// `[-π + 2πk/bins, -π + 2π(k+1)/bins)` — the convention `darkness.wgsl`
+/// `[-π + 2πk/bins, -π + 2π(k+1)/bins)` — the convention `darkness.wesl`
 /// indexes by, from `atan2`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ShadowRow {
