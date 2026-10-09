@@ -38,6 +38,15 @@ export const TOKEN_TRAVELLED_EVENT_CODE = 34;
 
 const TOKEN_EVENT_CODE = 14;
 
+/**
+ * A map was imported into a scene (`world_events` code 13,
+ * `EVENT_CODE_MAP_IMPORTED`). The import writes the scene's art and size, and
+ * the database mirrors them onto the entry level — which is where the board
+ * takes its art from. So for the board it is a level change: without reading
+ * the levels again, no client's board showed the new map.
+ */
+export const MAP_IMPORTED_EVENT_CODE = 13;
+
 /** What a world event means for the level on screen. */
 export type LevelEventKind =
   /** The list of levels may differ: re-read it. */
@@ -61,6 +70,7 @@ export function levelEventKind(
   const code = event.event_code ?? event.eventCode;
   if (
     code !== SCENE_LEVEL_CHANGED_EVENT_CODE &&
+    code !== MAP_IMPORTED_EVENT_CODE &&
     code !== TOKEN_TRAVELLED_EVENT_CODE &&
     code !== TOKEN_EVENT_CODE
   ) {
@@ -75,7 +85,12 @@ export function levelEventKind(
     return null;
   }
 
-  if (code === SCENE_LEVEL_CHANGED_EVENT_CODE) return "levels";
+  if (
+    code === SCENE_LEVEL_CHANGED_EVENT_CODE ||
+    code === MAP_IMPORTED_EVENT_CODE
+  ) {
+    return "levels";
+  }
   if (code === TOKEN_TRAVELLED_EVENT_CODE) return "travel";
   return "token";
 }

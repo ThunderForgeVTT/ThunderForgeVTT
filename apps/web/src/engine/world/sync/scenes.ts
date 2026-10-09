@@ -31,3 +31,29 @@ export function parseSceneLaunchedEvent(event: WorldEventLike): string | null {
 
   return payload?.sceneId ?? payload?.scene_id ?? null;
 }
+
+/** `crates/thunderforge-server/src/world_events.rs::EVENT_CODE_MAP_IMPORTED`. */
+const MAP_IMPORTED_EVENT_CODE = 13;
+
+/**
+ * Returns the scene id a map was just imported into, or `null` for any other
+ * event.
+ *
+ * A map import writes walls, doors, lights and the scene's art straight to
+ * Postgres in one request and announces all of it with this one event — no
+ * per-wall or per-light events follow. So a client that is not the importer
+ * learns about the new map only here, and has to re-read the scene's content
+ * itself.
+ */
+export function parseMapImportedEvent(event: WorldEventLike): string | null {
+  const eventCode = event.event_code ?? event.eventCode;
+  if (eventCode !== MAP_IMPORTED_EVENT_CODE) {
+    return null;
+  }
+
+  const payload = (event.token_event ?? event.tokenEvent) as
+    | { sceneId?: string; scene_id?: string }
+    | undefined;
+
+  return payload?.scene_id ?? payload?.sceneId ?? null;
+}

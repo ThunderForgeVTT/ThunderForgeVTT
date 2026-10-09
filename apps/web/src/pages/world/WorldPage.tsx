@@ -43,6 +43,7 @@ import {
   subscribeToLiveSyncState,
   subscribeToWorldEvents,
 } from "@/engine/world/sync";
+import { parseMapImportedEvent } from "@/engine/world/sync/scenes";
 import {
   queueAdjudicatedChange,
   reconcileWorld,
@@ -2004,6 +2005,11 @@ export default function WorldPage() {
   // backend transport (Postgres listener -> broadcast channel -> this
   // `worldEventsCreated` GraphQL subscription -> /api/ws) already existed
   // in full; this is the first thing in apps/web to actually open it.
+  // Read through a ref by the world-event loop below, which is declared
+  // before the callback and must not reopen its stream when it changes.
+  const reloadImportedSceneRef = useRef<(importedSceneId: string) => void>(
+    () => {},
+  );
   useEffect(() => {
     if (!id || !sceneId || !bridgeReady) {
       return;
@@ -2037,6 +2043,11 @@ export default function WorldPage() {
           // first and not awaited — it re-reads which level this viewer is on
           // and reloads the board itself if the answer moved.
           onLevelWorldEvent(event);
+          // A map was imported into this scene. Nothing else announces its
+          // walls, lights or art, so they are re-read here.
+          if (parseMapImportedEvent(event) === sceneId) {
+            reloadImportedSceneRef.current(sceneId);
+          }
           await Promise.all([
             applyWallWorldEvent(worldStore, sceneId, event),
             applyTokenWorldEvent(worldStore, sceneId, event),
@@ -2831,33 +2842,59 @@ export default function WorldPage() {
     return unsubscribe;
   }, [worldStore]);
 
+  // A map import writes walls, doors, lights and the scene's art straight to
+  // Postgres (the REST endpoint, not the GraphQL mutation bridge), and says so
+  // with one world event (code 13) and nothing else. So every client — the
+  // importer's and everyone else's — re-runs the same loaders used on mount to
+  // pull the new content in without a reload. The art reaches the board two
+  // ways, both covered: the scene's levels are re-read by `useSceneLevels`
+  // (the import's art is mirrored onto the entry level, which is the board's
+  // art), and the scene record is re-read here for a board with no levels.
+  const reloadImportedScene = useCallback(
+    (importedSceneId: string) => {
+      if (!id) {
+        return;
+      }
+      void loadWallsIntoStore(worldStore, importedSceneId).catch((error) => {
+        console.error("Failed to reload scene walls after map import:", error);
+      });
+      void loadLightsIntoStore(worldStore, importedSceneId).catch((error) => {
+        console.error("Failed to reload scene lights after map import:", error);
+      });
+      void loadShapesIntoStore(worldStore, importedSceneId).catch((error) => {
+        console.error("Failed to reload scene shapes after map import:", error);
+      });
+      void getScenes(id)
+        .then(setScenes)
+        .catch((error) => {
+          console.error("Failed to reload scenes after map import:", error);
+        });
+      // A player's list leaves out a hidden scene — and a world's own
+      // Starting Scene is hidden — so the record they play from is the one
+      // fetched by id, and that is the one that has to be fetched again.
+      void getScene(importedSceneId)
+        .then((scene) => {
+          if (scene) {
+            setActiveSceneRecord(scene);
+          }
+        })
+        .catch((error) => {
+          console.error("Failed to reload the scene after map import:", error);
+        });
+    },
+    [id, worldStore],
+  );
+  useEffect(() => {
+    reloadImportedSceneRef.current = reloadImportedScene;
+  }, [reloadImportedScene]);
+
   const handleMapImportComplete = useCallback(() => {
-    if (!sceneId || !id) {
+    if (!sceneId) {
       return;
     }
-
-    // Map import creates walls/doors/lights directly in Postgres (via the
-    // REST endpoint, not the GraphQL mutation bridge), so re-run the same
-    // loaders used on initial mount to pull the newly imported content into
-    // the world store without requiring a manual page reload.
-    void loadWallsIntoStore(worldStore, sceneId).catch((error) => {
-      console.error("Failed to reload scene walls after map import:", error);
-    });
-    void loadLightsIntoStore(worldStore, sceneId).catch((error) => {
-      console.error("Failed to reload scene lights after map import:", error);
-    });
-    void loadShapesIntoStore(worldStore, sceneId).catch((error) => {
-      console.error("Failed to reload scene shapes after map import:", error);
-    });
-    // Import also sets the scene's background_asset_id — refetch scenes so
-    // the background-dispatch effect above (reading `backgroundUrl`) picks
-    // up the new art.
-    void getScenes(id)
-      .then(setScenes)
-      .catch((error) => {
-        console.error("Failed to reload scenes after map import:", error);
-      });
-  }, [sceneId, id, worldStore]);
+    // The importer's own tab does not wait for the event to come back round.
+    reloadImportedScene(sceneId);
+  }, [sceneId, reloadImportedScene]);
 
   // T023/T030 (specs/002-canvas-authoring-asset-storage): a pasted image
   // is already persisted by the time AssetPasteTool calls this (the

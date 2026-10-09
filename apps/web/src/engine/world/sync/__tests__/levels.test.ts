@@ -64,6 +64,22 @@ describe("levelEventKind", () => {
     expect(levelEventKind({ eventCode: 14 }, SCENE)).toBe("token");
   });
 
+  it("reads the levels again when a map is imported into the scene", () => {
+    // The import's art lands on the entry level, which is the board's art.
+    expect(
+      levelEventKind(
+        { event_code: 13, token_event: { scene_id: SCENE } },
+        SCENE,
+      ),
+    ).toBe("levels");
+    expect(
+      levelEventKind(
+        { event_code: 13, token_event: { scene_id: "elsewhere" } },
+        SCENE,
+      ),
+    ).toBeNull();
+  });
+
   it("says nothing about any other event", () => {
     expect(levelEventKind({ event_code: 11 }, SCENE)).toBeNull();
     expect(levelEventKind({}, SCENE)).toBeNull();
