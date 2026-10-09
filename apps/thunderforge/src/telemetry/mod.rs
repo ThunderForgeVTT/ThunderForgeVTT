@@ -2,6 +2,8 @@
 //! leave.
 
 pub mod anonymous;
+pub mod bunyan;
+pub mod http;
 pub mod install;
 pub mod settings;
 pub mod startup_line;
@@ -11,5 +13,7 @@ pub use settings::TelemetrySettings;
 
 #[cfg(test)]
 mod disclosure_tests;
+#[cfg(test)]
+mod pipeline_tests;
 #[cfg(test)]
 mod tests;

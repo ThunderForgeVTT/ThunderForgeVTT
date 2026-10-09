@@ -1,4 +1,4 @@
-.PHONY: gc image push landing-image push-landing clean-builds test-db-reset dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-rust test-mail bench-blob-store test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean container container-up container-down container-down-clean
+.PHONY: gc image push landing-image push-landing clean-builds test-db-reset dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-rust test-mail bench-blob-store test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean container container-up container-down container-down-clean observability observability-check
 
 # Loads DATABASE_URL (and anything else) from the repo-root .env for targets
 # that shell out to tools which don't read it themselves (diesel-cli).
@@ -206,6 +206,35 @@ push-landing: landing-image
 	docker push $(LANDING_IMAGE)
 	kubectl --context $(KUBE_CONTEXT) -n $(KUBE_NAMESPACE) rollout restart deploy/$(LANDING_DEPLOY)
 	kubectl --context $(KUBE_CONTEXT) -n $(KUBE_NAMESPACE) rollout status deploy/$(LANDING_DEPLOY) --timeout=5m
+
+# Spec 086 (contracts/observability-apply.md): dashboards, alert rules and the
+# landing's nginx exporter. thunderforge-dev is not Flux-managed, so this is
+# how a change ships; every command is idempotent. The server's export goes to
+# the in-cluster collector on the operator tier.
+OBS_DIR ?= deploy/k8s/observability
+OTEL_IN_CLUSTER ?= http://otel-collector.monitoring.svc.cluster.local:4318
+observability: observability-check
+	kubectl --context $(KUBE_CONTEXT) apply -k $(OBS_DIR)
+	@if [ -f $(OBS_DIR)/landing/exporter-sidecar.yaml ]; then \
+	  kubectl --context $(KUBE_CONTEXT) -n $(KUBE_NAMESPACE) patch deployment $(LANDING_DEPLOY) \
+	    --type strategic --patch-file $(OBS_DIR)/landing/exporter-sidecar.yaml; \
+	fi
+	kubectl --context $(KUBE_CONTEXT) -n $(KUBE_NAMESPACE) set env deployment/$(DEPLOY) \
+	  OTEL_EXPORTER_OTLP_ENDPOINT=$(OTEL_IN_CLUSTER)
+
+# Offline: the kustomization builds, every dashboard parses, every name a
+# panel or alert reads is one something sends (SC-008), and promtool agrees
+# with the rules (it reads a rule file, so it is given the PrometheusRule's spec).
+observability-check:
+	kubectl kustomize $(OBS_DIR) > /dev/null
+	OBS_DIR=$(OBS_DIR) node scripts/check-observability.mjs
+	@if command -v promtool >/dev/null 2>&1; then \
+	  rules=$$(mktemp); \
+	  sed -n '/^spec:/,$$p' $(OBS_DIR)/prometheus-rules.yaml | tail -n +2 | sed 's/^  //' > $$rules; \
+	  promtool check rules $$rules; status=$$?; rm -f $$rules; exit $$status; \
+	else \
+	  echo "observability-check: promtool not installed, rule syntax not checked (https://prometheus.io/download/)"; \
+	fi
 
 # Trim cargo's build output without throwing away the warm cache: incremental
 # sessions no crate reads, cargo units unused for a week, and agent worktrees

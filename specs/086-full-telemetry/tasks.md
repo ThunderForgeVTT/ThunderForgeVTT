@@ -242,37 +242,41 @@ read them.
   the name table.
 - `make observability-check` passes offline.
 
-- [ ] T035 [P] [US3] Write failing tests in `crates/thunderforge-server/src/telemetry/instruments.rs`, using an in-memory `MeterProvider` (dev-dependency `opentelemetry_sdk` with `testing`). They check that every FR-010 series is reported, and that each value equals its atomic after the atomics are bumped (SC-002).
-- [ ] T036 [US3] Implement `instruments.rs` with observable counters and gauges over the existing atomics, and the `static DELIVERY: OnceLock<Arc<DeliveryMetrics>>`.
+- [X] T035 [P] [US3] Write failing tests in `crates/thunderforge-server/src/telemetry/instruments.rs`, using an in-memory `MeterProvider` (dev-dependency `opentelemetry_sdk` with `testing`). They check that every FR-010 series is reported, and that each value equals its atomic after the atomics are bumped (SC-002).
+- [X] T036 [US3] Implement `instruments.rs` with observable counters and gauges over the existing atomics, and the `static DELIVERY: OnceLock<Arc<DeliveryMetrics>>`.
   - Register `DELIVERY` in `crates/thunderforge-server/src/network/listener.rs` where the listener builds its metrics.
   - Add `static WORLD_CHANNELS_REAPED: AtomicU64`, bumped by the reaper (R19).
   - Leave `spawn_metrics_reporter`'s stderr lines unchanged.
-- [ ] T037 [P] [US3] Write the failing scan test in `crates/thunderforge-server/src/telemetry/event_names.rs`. It reads `world_events.rs` with `include_str!`, finds every `EVENT_CODE_*` (29 today), and asserts that each has a name.
-- [ ] T038 [US3] Implement the name table in `event_names.rs`.
+- [X] T037 [P] [US3] Write the failing scan test in `crates/thunderforge-server/src/telemetry/event_names.rs`. It reads `world_events.rs` with `include_str!`, finds every `EVENT_CODE_*` (29 today), and asserts that each has a name.
+- [X] T038 [US3] Implement the name table in `event_names.rs`.
   - Add the two counter calls (`thunderforge.world_events`, `thunderforge.world_event_record_failures`) in `record_world_event` (`crates/thunderforge-server/src/world_events.rs:344`).
   - Add `thunderforge.rolls{event, visibility}` where `crates/thunderforge-server/src/graphql/mutations_roll.rs` records a roll, using `Visibility::as_str` (`everyone`, `gm_eyes`, `gm_only`).
-- [ ] T039 [P] [US3] Write failing tests in `crates/thunderforge-server/src/telemetry/graphql_extension.rs`. A mutation gives one span named `graphql.mutation <field>` and one histogram point with `root_field=<field>`. They also check:
+  - *Done centrally (2026-10-09):* `record_world_event` counts codes 36 and 37 as rolls, so a roll recorded by any path, rerolls included, is counted once, and `mutations_roll.rs` is unchanged.
+- [X] T039 [P] [US3] Write failing tests in `crates/thunderforge-server/src/telemetry/graphql_extension.rs`. A mutation gives one span named `graphql.mutation <field>` and one histogram point with `root_field=<field>`. They also check:
   - a field not in the schema gives `unknown`, and two root fields give `root_fields=multiple`;
   - `FORBIDDEN`, `UNAUTHENTICATED` and `NOT_IN_DEMO` give `outcome=refused`;
   - an error with no code counts as `code=internal`;
   - the client's operation name is on the span and in no metric label (SC-002, R20);
   - a subscription's span covers only its setup.
-- [ ] T040 [US3] Implement `graphql_extension.rs`, and register it at `Schema::build` in `apps/thunderforge/src/main.rs:559`.
-- [ ] T041 [P] [US3] Implement `crates/thunderforge-server/src/telemetry/pool_events.rs`, with tests.
+- [X] T040 [US3] Implement `graphql_extension.rs`, and register it at `Schema::build` in `apps/thunderforge/src/main.rs:559`.
+- [X] T041 [P] [US3] Implement `crates/thunderforge-server/src/telemetry/pool_events.rs`, with tests.
   - An r2d2 `HandleEvent` records `thunderforge.db.pool.checkout_wait` and `checkout_timeouts` (R18).
   - Observable gauges read `pool.state()`.
   - Set it with `Builder::event_handler` at `apps/thunderforge/src/main.rs:398`.
-- [ ] T042 [US3] Implement `apps/thunderforge/src/telemetry/http.rs` and use it for the `TraceLayer` at `apps/thunderforge/src/main.rs:767`.
+  - *Deferred:* the operator-only span event on a checkout. Every one would be a Bunyan line too; the histogram carries the wait.
+- [X] T042 [US3] Implement `apps/thunderforge/src/telemetry/http.rs` and use it for the `TraceLayer` at `apps/thunderforge/src/main.rs:767`.
   - `make_span` gives an OTel server span with `http.route` (the matched template), the method and the status, and declares `trace_id` and `span_id` as `Empty`. `on_request` records them, so that Bunyan carries them (FR-004, R17).
   - It records `thunderforge.http.server.duration{route, method, status_class}`.
   - The W3C `traceparent` of an incoming request becomes the parent.
   - Test that a Bunyan line written inside a request holds `trace_id`.
-- [ ] T043 [US3] Re-run and extend the SC-011 leak test (`apps/thunderforge/src/telemetry/tests.rs`) now that the GraphQL, HTTP and roll instruments exist. The anonymous tier holds only allow-listed attributes, and the operator tier holds `world.id`.
-- [ ] T044 [US3] Create `deploy/k8s/observability/` as `contracts/observability-apply.md` gives it:
+  - *As built:* the duration is a `from_fn` middleware beside the `TraceLayer`, whose `OnResponse` never sees the request. Every OTel span is at INFO on `SPAN_TARGET`; `telemetry/bunyan.rs` hides their START and END lines and skips their fields (`SPAN_FIELDS`), so a line gains only `trace_id` and `span_id` (SC-001).
+- [X] T043 [US3] Re-run and extend the SC-011 leak test (`apps/thunderforge/src/telemetry/tests.rs`) now that the GraphQL, HTTP and roll instruments exist. The anonymous tier holds only allow-listed attributes, and the operator tier holds `world.id`.
+  - *Done in `apps/thunderforge/src/telemetry/pipeline_tests.rs`:* the real HTTP span, GraphQL extension, `world_event.record` span and recorders, into the installed providers.
+- [X] T044 [US3] Create `deploy/k8s/observability/` as `contracts/observability-apply.md` gives it:
   - `kustomization.yaml`, and `dashboards/kustomization.yaml` with a `configMapGenerator` labelled `grafana_dashboard: "1"`, annotated `grafana_folder: ThunderForge`, in `monitoring`;
   - `dashboards/{server,graphql,backplane,database,world-events}.json`, each using `${prometheus}`, `${loki}` and `${tempo}`, with no fixed UID;
   - `prometheus-rules.yaml`, labelled `release: kube-prometheus-stack`, with FR-030's nine server alerts (the two landing alerts are added in US4, and the two gateway alerts in US9, T101).
-- [ ] T045 [US3] Add `scripts/check-observability.mjs` (SC-008, as the contract gives it, reading `print_instruments` from `cargo test -p thunderforge-telemetry-policy`), and the `observability` and `observability-check` targets in `Makefile`, using the existing `KUBE_CONTEXT`, `KUBE_NAMESPACE`, `DEPLOY` and `LANDING_DEPLOY`, and the new `OBS_DIR` and `OTEL_IN_CLUSTER`.
+- [X] T045 [US3] Add `scripts/check-observability.mjs` (SC-008, as the contract gives it, reading `print_instruments` from `cargo test -p thunderforge-telemetry-policy`), and the `observability` and `observability-check` targets in `Makefile`, using the existing `KUBE_CONTEXT`, `KUBE_NAMESPACE`, `DEPLOY` and `LANDING_DEPLOY`, and the new `OBS_DIR` and `OTEL_IN_CLUSTER`.
   - `promtool` is skipped with a note when it is absent.
   - Run `make observability-check`.
 

@@ -129,6 +129,8 @@ chrono = "0.4.45"
 futures-util = "0.3.34"
 # Spec 086: in-memory exporters for the telemetry tests.
 opentelemetry_sdk = { version = "0.33.0", features = ["testing"] }
+# Spec 086: `oneshot`, to drive the router through its `TraceLayer`.
+tower = { version = "0.5.3", features = ["util"] }
 
 # Linked for their `inventory::submit!` blocks alone — see `system_packs.rs`.
 [dependencies.thunderforge-system-dnd5e]

@@ -321,6 +321,18 @@ pub fn announce_actor_access_changed(
     );
 }
 
+/// Spec 086: the span a world event is recorded under. `world.id` stays on
+/// the operator tier; the anonymous tier's processor drops it.
+pub fn record_span(world_id: Uuid, event_code: i32) -> tracing::Span {
+    tracing::info_span!(
+        target: crate::telemetry::SPAN_TARGET,
+        "world_event.record",
+        event = crate::telemetry::event_names::event_name(event_code),
+        visibility = tracing::field::Empty,
+        world.id = %world_id,
+    )
+}
+
 /// Record a world event to the audit trail and trigger NOTIFY for real-time sync.
 ///
 /// # Failures are logged here, not at the call sites
@@ -348,7 +360,26 @@ pub fn record_world_event(
     event_payload: Option<serde_json::Value>,
     user_id: Uuid,
 ) -> GraphQLResult<i64> {
+    let recorders = crate::telemetry::instruments::recorders();
+    let roll = crate::telemetry::instruments::is_roll(event_code);
+    let span = record_span(world_id, event_code);
+    let _entered = span.enter();
+    // Only a roll's payload is read, and only for its visibility.
+    let roll_payload = (roll && recorders.is_some())
+        .then(|| event_payload.clone())
+        .flatten();
     let result = record_world_event_inner(conn, world_id, event_code, event_payload, user_id);
+    if let Some(r) = recorders {
+        let visibility = crate::telemetry::instruments::count_world_event(
+            r,
+            event_code,
+            roll_payload.as_ref(),
+            result.is_ok(),
+        );
+        if let Some(v) = visibility {
+            span.record("visibility", v);
+        }
+    }
     if let Err(err) = &result {
         // Deliberately loud. A world event that was not recorded means every
         // other client in that world is now looking at stale state until

@@ -1,0 +1,22 @@
+# One ConfigMap per dashboard, picked up by Grafana's dashboard sidecar.
+# No name hash, so a re-apply replaces each map instead of adding one.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: ThunderForge
+configMapGenerator:
+  - name: thunderforge-dashboard-server
+    files: [server.json]
+  - name: thunderforge-dashboard-graphql
+    files: [graphql.json]
+  - name: thunderforge-dashboard-backplane
+    files: [backplane.json]
+  - name: thunderforge-dashboard-database
+    files: [database.json]
+  - name: thunderforge-dashboard-world-events
+    files: [world-events.json]

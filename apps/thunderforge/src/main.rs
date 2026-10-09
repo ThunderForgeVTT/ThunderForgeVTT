@@ -42,9 +42,8 @@ use tower_cookies::{CookieManagerLayer, Key};
 use tower_http::compression::CompressionLayer;
 use tower_http::compression::predicate::{DefaultPredicate, NotForContentType, Predicate};
 use tower_http::cors::{Any, CorsLayer};
-use tower_http::trace::TraceLayer;
-use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
-use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_bunyan_formatter::JsonStorageLayer;
+use tracing_subscriber::{Registry, layer::SubscriberExt, util::SubscriberInitExt};
 
 async fn graphql_playground() -> impl IntoResponse {
     Html(playground_source(
@@ -386,6 +385,10 @@ async fn run() {
         .connection_timeout(std::time::Duration::from_secs(
             sizing.connection_timeout_secs,
         ))
+        // Spec 086: the checkout wait and timeouts (FR-013, R18).
+        .event_handler(Box::new(
+            thunderforge_server::telemetry::pool_events::PoolEvents::default(),
+        ))
         .build(manager)
         .expect("Failed to create DB pool.");
 
@@ -429,14 +432,18 @@ async fn run() {
         telemetry::install::install(telemetry_plan.as_ref(), telemetry::install::Sink::Otlp);
     if let Some(installed) = &telemetry_guard {
         installed.set_global();
+        let meter = opentelemetry::global::meter("thunderforge");
+        thunderforge_server::telemetry::instruments::register(&meter);
+        thunderforge_server::telemetry::pool_events::observe_pool(&meter, db_pool.clone());
     }
     let telemetry_layers = telemetry_guard
         .as_ref()
         .map(|installed| installed.layers::<Registry>())
         .unwrap_or_default();
 
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    let formatting_layer = BunyanFormattingLayer::new("thunderforge".into(), std::io::stdout);
+    // Spec 086: the OTel spans pass the filter and print nothing (SC-001).
+    let env_filter = telemetry::bunyan::env_filter();
+    let formatting_layer = telemetry::bunyan::formatter("thunderforge", std::io::stdout);
 
     Registry::default()
         .with(telemetry_layers)
@@ -592,6 +599,7 @@ async fn run() {
         SubscriptionRoot,
     )
     .data(app_state.clone())
+    .extension(thunderforge_server::telemetry::graphql_extension::GraphQLTelemetry::installed())
     .finish();
 
     thunderforge_server::auth::ensure_admin_bootstrap_code(&app_state)
@@ -799,7 +807,8 @@ async fn run() {
                 .allow_methods(Any)
                 .allow_headers(Any),
         )
-        .layer(TraceLayer::new_for_http())
+        .layer(telemetry::http::layer())
+        .layer(from_fn(telemetry::http::record_duration))
         // Compress responses. The engine wasm dominates first load and was
         // going out uncompressed: ~24.7MB release-built, ~4.15MB brotli. That
         // ratio is not incidental — wasm is highly repetitive, so it

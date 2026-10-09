@@ -231,3 +231,7 @@ specs/043-worker-blob-store/raw/
 # Deployment files for the owner's own dev cluster. A real chart comes later;
 # until then these are local and may hold generated credentials.
 k8s/
+# Spec 086: the observability manifests hold no credentials and are shared.
+!deploy/k8s/
+deploy/k8s/*
+!deploy/k8s/observability/

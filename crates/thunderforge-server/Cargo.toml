@@ -234,3 +234,9 @@ path = "../../packs/systems/year_zero_engine/server"
 
 [dev-dependencies.thunderforge-system-roll-for-shoes]
 path = "../../packs/systems/roll_for_shoes/server"
+
+# The in-memory meter for the instrument tests (spec 086). The library itself
+# depends only on the `opentelemetry` API crate.
+[dev-dependencies.opentelemetry_sdk]
+version = "0.33.0"
+features = ["testing"]

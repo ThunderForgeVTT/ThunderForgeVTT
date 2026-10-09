@@ -1,0 +1,80 @@
+# Spec 086 FR-030: the server's alerts. Each summary says what to look at.
+# The landing's two alerts arrive with US4, and the gateway's with US9.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: thunderforge
+  namespace: thunderforge-dev
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: thunderforge.server
+      rules:
+        - alert: ThunderForgeBackplaneStalled
+          expr: increase(thunderforge_backplane_polls_total[2m]) == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: The backplane has stopped polling. Look at the Backplane dashboard's polls and errors, then the server's logs for the LISTEN connection.
+        - alert: ThunderForgeBackplanePanicked
+          expr: increase(thunderforge_backplane_panics_total[5m]) > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: The backplane task panicked. Look for the panic in the server's logs and check the Backplane dashboard's cursor is moving again.
+        - alert: ThunderForgeBackplaneErrors
+          expr: (rate(thunderforge_backplane_errors_total[5m]) + rate(thunderforge_backplane_timeouts_total[5m])) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: The backplane is failing or timing out more than once every ten seconds. Look at the Backplane and Database dashboards.
+        - alert: ThunderForgeSubscribersLagging
+          expr: rate(thunderforge_subscriptions_lagged_total[5m]) > 1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: Subscribers are falling behind and missing events. Look at the Backplane dashboard's delivered and lagged rates, and open sockets.
+        - alert: ThunderForgeWorldEventsNotRecorded
+          expr: sum(increase(thunderforge_world_event_record_failures_total[5m])) > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: World events failed to record, so clients missed changes. Look at the World events dashboard's failures by event and the server's error logs.
+        - alert: ThunderForgeGraphQLErrorRatio
+          expr: |
+            sum(rate(thunderforge_graphql_operation_duration_seconds_count{outcome="error"}[5m]))
+              / sum(rate(thunderforge_graphql_operation_duration_seconds_count[5m])) > 0.05
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: Over 5% of GraphQL operations end in an error. Look at the GraphQL dashboard's error ratio by root field and errors by code.
+        - alert: ThunderForgeGraphQLSlow
+          expr: histogram_quantile(0.95, sum by (le) (rate(thunderforge_graphql_operation_duration_seconds_bucket[5m]))) > 1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: GraphQL p95 is over one second. Look at the GraphQL dashboard's p95 by root field, and follow the slow field to its traces.
+        - alert: ThunderForgeDbPoolSaturated
+          expr: |
+            (
+              sum(thunderforge_db_pool_connections{state="in_use"})
+                / sum(thunderforge_db_pool_max_connections) > 0.9
+            )
+            or (sum(increase(thunderforge_db_pool_checkout_timeouts_total[5m])) > 0)
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: The database pool is nearly exhausted or a checkout timed out. Look at the Database dashboard's in use against max and checkout wait.
+        - alert: ThunderForgeServerSilent
+          expr: absent_over_time(thunderforge_backplane_polls_total[5m])
+          labels:
+            severity: critical
+          annotations:
+            summary: No metrics from the server for five minutes. It is down or not exporting; check the pod and OTEL_EXPORTER_OTLP_ENDPOINT.

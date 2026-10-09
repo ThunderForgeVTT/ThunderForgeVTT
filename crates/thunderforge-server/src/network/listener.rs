@@ -139,7 +139,8 @@ impl EventSink for RouterSink {
 /// load. What stays here is the part that genuinely needs Postgres and the
 /// router: the two adapters above, and the reporting below.
 pub fn spawn_listen_task(pool: DbPool, router: SharedWorldRouter<WorldEvent>) {
-    let metrics = Arc::new(DeliveryMetrics::default());
+    // The process's one set, so the OpenTelemetry instruments read it.
+    let metrics = crate::telemetry::instruments::delivery();
     let source = Arc::new(PoolEventSource { pool });
     let sink = Arc::new(RouterSink {
         router,
@@ -173,6 +174,8 @@ fn spawn_channel_reaper(router: SharedWorldRouter<WorldEvent>) {
         loop {
             sleep(Duration::from_secs(5)).await;
             let reaped = router.reap();
+            crate::telemetry::instruments::WORLD_CHANNELS_REAPED
+                .fetch_add(reaped as u64, std::sync::atomic::Ordering::Relaxed);
             if reaped > 0 {
                 eprintln!("[PubSub] 🧹 Released {reaped} idle world channel(s)");
             }
