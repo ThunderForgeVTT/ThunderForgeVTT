@@ -32,7 +32,6 @@ use base64::{Engine as _, engine::general_purpose};
 use clap::Parser;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::{RunQueryDsl, pg::PgConnection};
-use futures_util::StreamExt as _;
 use std::net::SocketAddr;
 use thunderforge_server::config::{Config, Directories};
 use thunderforge_server::graphql::SubscriptionRoot;
@@ -105,14 +104,8 @@ async fn graphql_ws_handler(
         .on_upgrade(move |socket| {
             // Counting, the caller and the idle timeout live in the server
             // crate, where they are tested; see `graphql::websocket`.
-            let (sink, stream) = socket.split();
-            thunderforge_server::graphql::websocket::serve(
-                sink,
-                stream,
-                schema,
-                protocol,
-                auth_user,
-                thunderforge_server::graphql::websocket::IDLE_TIMEOUT,
+            thunderforge_server::graphql::websocket::serve_upgraded(
+                socket, schema, protocol, auth_user,
             )
         })
 }

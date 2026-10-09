@@ -26,10 +26,21 @@ use crate::graphql::subscription_metrics::OpenSocket;
 /// reconnect replays what was missed through the catch-up query.
 pub const IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// Serve one upgraded socket until it closes, times out, or its client goes.
+/// Serve one upgraded axum socket with `IDLE_TIMEOUT`: what the handler calls.
+pub async fn serve_upgraded<E: Executor>(
+    socket: axum::extract::ws::WebSocket,
+    executor: E,
+    protocol: GraphQLProtocol,
+    caller: AuthenticatedUser,
+) {
+    use futures_util::StreamExt as _;
+    let (sink, stream) = socket.split();
+    serve(sink, stream, executor, protocol, caller, IDLE_TIMEOUT).await;
+}
+
+/// Serve one socket until it closes, times out, or its client goes.
 ///
-/// Takes the socket as its two halves so a test can serve one over channels;
-/// the handler passes `IDLE_TIMEOUT`.
+/// Takes the socket as its two halves so a test can serve one over channels.
 pub async fn serve<Si, St, E>(
     sink: Si,
     stream: St,
