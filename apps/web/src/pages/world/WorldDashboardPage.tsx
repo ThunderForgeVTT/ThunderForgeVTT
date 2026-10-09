@@ -89,7 +89,11 @@ export default function WorldDashboardPage() {
   // Spec 017 (FR-001): a non-GM member with no claimed character yet is
   // redirected to Actor Selection before this dashboard renders.
   const { cleared: claimGateCleared } = useActorClaimGate(id, world);
-  const { role, loading: roleLoading } = useWorldRole(id, world);
+  const { role, isGm, loading: roleLoading } = useWorldRole(id, world);
+  // Deleting ends the world for everyone, so it is the Owner's alone — the
+  // same line `deleteWorld` draws on the server (`is_owner_of_world`). A Game
+  // Master runs the table and is still not shown it.
+  const ownsWorld = role === "Owner";
 
   const handleDelete = async () => {
     if (!world || isDeleting) {
@@ -172,14 +176,28 @@ export default function WorldDashboardPage() {
                   <Button asChild icon="worlds">
                     <Link to={`/world/${world.id}/staging`}>Enter world</Link>
                   </Button>
-                  <Button variant="secondary" icon="settings" disabled>
-                    Manage settings
-                  </Button>
+                  {/* This was a permanently disabled placeholder, drawn for
+                      every member: a Game Master pressing it got nothing, and a
+                      Player was shown a control that was never theirs. It now
+                      goes to the world's settings, for the people who run it. */}
+                  {isGm ? (
+                    <Button
+                      asChild
+                      variant="secondary"
+                      icon="settings"
+                      data-testid="world-manage-settings"
+                    >
+                      <Link to={`/world/${world.id}/settings/system`}>
+                        Manage settings
+                      </Link>
+                    </Button>
+                  ) : null}
                   {/* Spec 074 FR-013: the demo has the one world, kept in
                       this browser; deleting or adding worlds is an instance's
                       business. */}
-                  {IN_DEMO ? null : (
+                  {IN_DEMO || !ownsWorld ? null : (
                     <Button
+                      data-testid="world-delete"
                       variant="danger"
                       icon="skull"
                       onClick={() => void handleDelete()}
@@ -218,13 +236,17 @@ export default function WorldDashboardPage() {
                         Game system
                       </dt>
                       <dd className="font-medium">
-                        <Link
-                          to={`/world/${world.id}/settings/system`}
-                          className="underline underline-offset-2 hover:text-primary"
-                          data-testid="world-system-settings-link"
-                        >
-                          {world.gameSystemId ?? "Not yet assigned"} — manage
-                        </Link>
+                        {isGm ? (
+                          <Link
+                            to={`/world/${world.id}/settings/system`}
+                            className="underline underline-offset-2 hover:text-primary"
+                            data-testid="world-system-settings-link"
+                          >
+                            {world.gameSystemId ?? "Not yet assigned"} — manage
+                          </Link>
+                        ) : (
+                          (world.gameSystemId ?? "Not yet assigned")
+                        )}
                       </dd>
                     </div>
                     <div>
@@ -287,20 +309,27 @@ export default function WorldDashboardPage() {
                         >
                           Create another world
                         </Link>
-                        <button
-                          type="button"
-                          onClick={() => void handleDelete()}
-                          className="text-left text-destructive underline-offset-4 hover:underline"
-                        >
-                          Permanently delete this world
-                        </button>
+                        {ownsWorld ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleDelete()}
+                            className="text-left text-destructive underline-offset-4 hover:underline"
+                            data-testid="world-delete-permanently"
+                          >
+                            Permanently delete this world
+                          </button>
+                        ) : null}
                       </>
                     )}
                   </div>
                 </Card>
               </section>
 
-              <CampaignSettingsPanel worldId={world.id} />
+              {/* Invite links and the campaign's switches are the Game
+                  Master's; every write behind them is `is_dm_of_world` on the
+                  server. It used to render for every member, which is how a
+                  Player came to see "Generate invite link". */}
+              {isGm ? <CampaignSettingsPanel worldId={world.id} /> : null}
             </>
           )}
         </main>
