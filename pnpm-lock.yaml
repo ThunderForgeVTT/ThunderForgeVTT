@@ -426,6 +426,22 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
 
+  packages/telemetry:
+    dependencies:
+      web-vitals:
+        specifier: 6.2.3
+        version: 6.2.3
+    devDependencies:
+      '@types/node':
+        specifier: ^26.2.0
+        version: 26.2.0
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.10
+        version: 8.0.10(@types/node@26.2.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.46.2)
+
   packs/systems/dnd5e/web:
     dependencies:
       '@radix-ui/react-popover':
@@ -5153,6 +5169,9 @@ packages:
 
   w3c-keyname@2.2.8:
     resolution: {integrity: sha512-dpojBhNsCNN7T82Tm7k26A6G9ML3NkhDsnw9n/eoxSRlVBB4CEtIQ/KTCLI2Fwf3ataSXRhYFkQi3SlnFwPvPQ==}
+
+  web-vitals@6.2.3:
+    resolution: {integrity: sha512-Dmy+vdO1UPMqXiAtZSNayhl4f794Bxfd94W4HIj2HlYtczEQfEOon969memlcpcHrTuOKLa5baFjX7WbgmOq+A==}
 
   which@2.0.2:
     resolution: {integrity: sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA==}
@@ -10321,6 +10340,8 @@ snapshots:
       - msw
 
   w3c-keyname@2.2.8: {}
+
+  web-vitals@6.2.3: {}
 
   which@2.0.2:
     dependencies:

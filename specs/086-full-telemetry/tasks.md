@@ -7,6 +7,8 @@ contracts/browser-events.md, contracts/collector-count-connector.md,
 contracts/observability-apply.md, contracts/telemetry-gateway.md,
 quickstart.md
 
+**083 status (T001, 2026-10-09):** `git status --short apps/demo` and `git diff --cached --name-only` are clean; spec 083 is merged, so the [083] tasks may start.
+
 **Spec 083 is being implemented in this tree.** 086 edits none of 083's
 files. The demo's funnel hooks go in `record()` in
 `apps/demo/src/backend/events.ts`, not in `handlers/dice.ts` or `actors.ts`.
@@ -44,11 +46,11 @@ cross-cutting (R21). The named slices answer it. No task runs the full suite.
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirm spec 083's state with `git status --short apps/demo` and `git diff --cached --name-only`. Record in this file's header which 083 files are still open. Until they are clean, the [083] tasks wait, and nothing else here touches `apps/demo/e2e/`.
-- [ ] T002 [P] Create `packages/telemetry/package.json` and `packages/telemetry/tsconfig.json`, modelled on `packages/downloads`.
+- [X] T001 Confirm spec 083's state with `git status --short apps/demo` and `git diff --cached --name-only`. Record in this file's header which 083 files are still open. Until they are clean, the [083] tasks wait, and nothing else here touches `apps/demo/e2e/`.
+- [X] T002 [P] Create `packages/telemetry/package.json` and `packages/telemetry/tsconfig.json`, modelled on `packages/downloads`.
   - `package.json`: name `@thunderforge/telemetry`, `"type": "module"`, exports `.`, `./otlp`, `./browser` and `./vite`, `"test": "node --test src/*.test.ts src/**/*.test.ts"`, dependency `web-vitals` `6.2.3` (R10, R11).
   - Run `pnpm install`, and confirm that `pnpm-workspace.yaml` already covers `packages/*`.
-- [ ] T003 [P] Add the Rust dependencies (R1, R2), each crate declaring its own, as the workspace does today:
+- [X] T003 [P] Add the Rust dependencies (R1, R2), each crate declaring its own, as the workspace does today:
   - create `crates/thunderforge-telemetry-policy` (an empty `lib.rs`, no dependencies, `regex` under `[dev-dependencies]`) and add it to the root `Cargo.toml`'s `members` (R25);
   - `crates/thunderforge-server/Cargo.toml`: `opentelemetry = "0.33.0"`, `thunderforge-telemetry-policy` by path, and add `v4` to `uuid`'s features;
   - `apps/thunderforge/Cargo.toml`: `opentelemetry = "0.33.0"`, `opentelemetry_sdk = "0.33.0"` (no `rt-tokio`, R1), `opentelemetry-otlp = { version = "0.33.0", default-features = false, features = ["http-proto", "reqwest-client", "reqwest-rustls", "trace", "metrics", "logs"] }`, `tracing-opentelemetry = "0.34.0"`, `opentelemetry-appender-tracing = "0.33.0"`, `thunderforge-telemetry-policy` by path, and `opentelemetry_sdk` with `testing` under `[dev-dependencies]`.
@@ -67,8 +69,8 @@ the server crate's API-only module, the tier, the settings and the instance id.
 
 ### Telemetry off in every test stack (FR-036, SC-013)
 
-- [ ] T005 [P] Add `TELEMETRY = "false"` to `[env]` in `.cargo/config.toml`, with a comment that `[env]` never overrides a variable already set, so a test that wants telemetry sets it itself.
-- [ ] T006 [P] Add `TELEMETRY: "false"` next to `THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT` in each of these:
+- [X] T005 [P] Add `TELEMETRY = "false"` to `[env]` in `.cargo/config.toml`, with a comment that `[env]` never overrides a variable already set, so a test that wants telemetry sets it itself.
+- [X] T006 [P] Add `TELEMETRY: "false"` next to `THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT` in each of these:
   - `apps/web/playwright.config.ts:154`;
   - `scripts/e2e-parallel.mjs:631`;
   - `scripts/journeys.mjs:530`;
@@ -76,41 +78,41 @@ the server crate's API-only module, the tier, the settings and the instance id.
 
 ### `packages/telemetry`: the core, the OTLP adapter and the Vite plugin (FR-015 to FR-020)
 
-- [ ] T007 [P] Write failing `node --test` tests in `packages/telemetry/src/`.
+- [X] T007 [P] Write failing `node --test` tests in `packages/telemetry/src/`.
   - `config.test.ts`: `parseConfig` gives off for a non-200 answer, an unparseable body, a missing `enabled`, an endpoint that is not `http(s)`, and `{"enabled":false}`. It strips a trailing slash.
   - `allowList.test.ts`: enumerates `ALLOWED_ATTRIBUTES` and `EVENT_NAMES` exactly, and an unknown attribute is dropped before it is queued.
   - `privacy.test.ts`: GPC or DNT limits the session to `error`.
   - `session.test.ts`: the `sessionStorage` key is `thunderforge.telemetry`, `sampled` is decided once, and `funnel(step)` sends each step once.
-- [ ] T008 [P] Write failing tests in `packages/telemetry/src/`.
+- [X] T008 [P] Write failing tests in `packages/telemetry/src/`.
   - `queue.test.ts`: the queue holds 200 and drops the oldest. The caps are 50 errors and 2,000 events, and a repeated error is folded. A dead endpoint keeps the queue bounded.
   - `errors.test.ts`: the `Redactor` port is applied, `error.message` is cut at 512 and `error.stack` at 4096, and frames are reduced to path and line with no query string.
   - `otlp/encode.test.ts`: the OTLP/JSON shape of a log and of a span, the resource attributes of FR-019 and FR-019a for each tier, and a 60 KB split.
-- [ ] T009 Implement the core so those tests pass:
+- [X] T009 Implement the core so those tests pass:
   - `config.ts`, `session.ts`, `allowList.ts`, `privacy.ts`, `ua.ts` (the browser family and major version, the OS family, the mobile flag, and the viewport, memory and core-count buckets);
   - `queue.ts`;
   - `telemetry.ts`, with `createTelemetry`, `noopTelemetry`, and the `TelemetrySink` and `Redactor` ports, as `contracts/browser-events.md` gives them.
 
   None of these imports a DOM global at module scope, so that `node --test` loads them.
-- [ ] T010 Implement `packages/telemetry/src/otlp/encode.ts` and `otlp/index.ts` (`otlpHttpSink`). It posts `/v1/logs` and `/v1/traces` with `credentials: "omit"` and `keepalive`, and flushes every 5 s, on `visibilitychange` to hidden, and on `pagehide` (FR-020).
-- [ ] T011 Implement `packages/telemetry/src/browser.ts` (`startCollectors`) and `boot.ts` (`bootTelemetry`).
+- [X] T010 Implement `packages/telemetry/src/otlp/encode.ts` and `otlp/index.ts` (`otlpHttpSink`). It posts `/v1/logs` and `/v1/traces` with `credentials: "omit"` and `keepalive`, and flushes every 5 s, on `visibilitychange` to hidden, and on `pagehide` (FR-020).
+- [X] T011 Implement `packages/telemetry/src/browser.ts` (`startCollectors`) and `boot.ts` (`bootTelemetry`).
   - `startCollectors` covers `error`, `unhandledrejection`, page views, navigation timing, and the flush hooks. Web vitals (`web-vitals`) and long tasks run only in sampled sessions.
   - `bootTelemetry` fetches the config before `load` (`credentials: "omit"`, `cache: "no-store"`), decides GPC/DNT, waits for `load`, and only then calls the app's `import()` loader.
   - `src/index.ts` exports the public surface of `contracts/browser-events.md`.
-- [ ] T012 [P] Write `packages/telemetry/src/vite.test.ts`, then implement `src/vite.ts`.
+- [X] T012 [P] Write `packages/telemetry/src/vite.test.ts`, then implement `src/vite.ts`.
   - `servedTelemetry()` serves `telemetry.json` (and `/demo/telemetry.json`) in dev and preview from `THUNDERFORGE_PREVIEW_TELEMETRY`, and `{"enabled":false}` when that is unset.
   - `connectSrcFor(config)` gives the three rows of the contract's connect-src table, and the plugin sets `preview.headers` and `server.headers` from it (R14).
 
 ### Server crate: API only (FR-005, FR-007, FR-026)
 
-- [ ] T013 [P] Write failing tests in `crates/thunderforge-server/src/telemetry/instance_id.rs` (`#[cfg(test)]`, against the `thunderforge_test` database, as the `settings/` tests do):
+- [X] T013 [P] Write failing tests in `crates/thunderforge-server/src/telemetry/instance_id.rs` (`#[cfg(test)]`, against the `thunderforge_test` database, as the `settings/` tests do):
   - the id is created once and parses as a UUIDv4;
   - a second call returns the same value;
   - a value already present is not touched, even one that is not a UUID;
   - two concurrent calls return one value;
   - the row is invisible to `settings::resolver`'s unrecognised-rows report.
-- [ ] T014 Implement `crates/thunderforge-server/src/telemetry/instance_id.rs` (`ensure_instance_id`): `INSERT ... ON CONFLICT (key) DO NOTHING`, then `SELECT`, with key `system.telemetry_instance_id` (R23). Add `pub mod telemetry` with `telemetry/mod.rs` to `crates/thunderforge-server/src/lib.rs`. Call it in `apps/thunderforge/src/main.rs` after migrations, whatever `TELEMETRY` is.
-- [ ] T015 [P] Write failing table tests in `crates/thunderforge-server/src/telemetry/served_config.rs` for `BrowserTelemetry::served_json()` and `connect_src()`. They cover every row of `contracts/served-config-and-csp.md`'s field and connect-src tables, including off with no other keys and a sample rate clamped to 0..1.
-- [ ] T016 Implement the following:
+- [X] T014 Implement `crates/thunderforge-server/src/telemetry/instance_id.rs` (`ensure_instance_id`): `INSERT ... ON CONFLICT (key) DO NOTHING`, then `SELECT`, with key `system.telemetry_instance_id` (R23). Add `pub mod telemetry` with `telemetry/mod.rs` to `crates/thunderforge-server/src/lib.rs`. Call it in `apps/thunderforge/src/main.rs` after migrations, whatever `TELEMETRY` is.
+- [X] T015 [P] Write failing table tests in `crates/thunderforge-server/src/telemetry/served_config.rs` for `BrowserTelemetry::served_json()` and `connect_src()`. They cover every row of `contracts/served-config-and-csp.md`'s field and connect-src tables, including off with no other keys and a sample rate clamped to 0..1.
+- [X] T016 Implement the following:
   - a re-export of the policy crate's `Tier` (no decision logic) in `crates/thunderforge-server/src/telemetry/mod.rs`;
   - `BrowserTelemetry` in `served_config.rs`;
   - `TelemetryStatus` in `status.rs`;
@@ -120,12 +122,12 @@ the server crate's API-only module, the tier, the settings and the instance id.
 
 ### The policy crate and the app: tier and settings (FR-002, FR-006, FR-009, FR-038)
 
-- [ ] T017 [P] Write failing tests in `crates/thunderforge-telemetry-policy/src/{tier,lists}.rs`.
+- [X] T017 [P] Write failing tests in `crates/thunderforge-telemetry-policy/src/{tier,lists}.rs`.
   - `tier_for` runs over the normalisation table in `contracts/served-config-and-csp.md`.
   - `ANONYMOUS_SPAN_ATTRIBUTES`, `ANONYMOUS_RESOURCE_ATTRIBUTES`, `SERVER_ERROR_ATTRIBUTES` and `INSTRUMENTS` are each enumerated exactly.
   - Every `INSTRUMENTS` name matches `PUBLIC_METRIC_NAME_FILTER` (`^(thunderforge\.|http\.server\.|db\.client\.)`).
-- [ ] T018 Implement `crates/thunderforge-telemetry-policy/src/{lib,tier,lists}.rs` as `contracts/server-instruments.md` and `contracts/telemetry-gateway.md` give them, with `print_instruments`, the `#[test]` that prints each instrument's Prometheus name for `scripts/check-observability.mjs`. Then add `apps/thunderforge/src/telemetry/{mod,tier}.rs`, where `tier.rs` only re-exports the crate's tier and lists and adapts them to the SDK's types. Add `mod telemetry;` to `apps/thunderforge/src/main.rs`. No list is written twice.
-- [ ] T019 [P] Implement `apps/thunderforge/src/telemetry/settings.rs` (`TelemetrySettings::from_env`) with table tests:
+- [X] T018 Implement `crates/thunderforge-telemetry-policy/src/{lib,tier,lists}.rs` as `contracts/server-instruments.md` and `contracts/telemetry-gateway.md` give them, with `print_instruments`, the `#[test]` that prints each instrument's Prometheus name for `scripts/check-observability.mjs`. Then add `apps/thunderforge/src/telemetry/{mod,tier}.rs`, where `tier.rs` only re-exports the crate's tier and lists and adapts them to the SDK's types. Add `mod telemetry;` to `apps/thunderforge/src/main.rs`. No list is written twice.
+- [X] T019 [P] Implement `apps/thunderforge/src/telemetry/settings.rs` (`TelemetrySettings::from_env`) with table tests:
   - `TELEMETRY` false, 0, no or off in any case;
   - `OTEL_SDK_DISABLED`;
   - the general and per-signal endpoints, where any per-signal endpoint that is not the project's makes every signal operator (data-model.md);
@@ -152,20 +154,21 @@ any of these.
 - `pnpm e2e:telemetry` runs `apps/web/e2e/telemetry-off.spec.ts` and
   `telemetry-redirected.spec.ts`.
 
-- [ ] T020 [P] [US6] Write failing tests in `apps/thunderforge/src/telemetry/tests.rs` (`#[cfg(test)]`), with in-memory span, metric and log exporters injected into `install`. They cover SC-001:
+- [X] T020 [P] [US6] Write failing tests in `apps/thunderforge/src/telemetry/tests.rs` (`#[cfg(test)]`), with in-memory span, metric and log exporters injected into `install`. They cover SC-001:
   - `TELEMETRY=false` installs no provider and builds no exporter;
   - with no variable, every exporter targets `PROJECT_TELEMETRY_ENDPOINT`, there is no log bridge, the resource is exactly `ANONYMOUS_RESOURCE_ATTRIBUTES`, and the sampler is `parentbased_traceidratio` 0.1;
   - with `OTEL_EXPORTER_OTLP_ENDPOINT` set, that endpoint only, with the log bridge and the standard detectors;
   - `OTEL_SDK_DISABLED=true` installs nothing, while `/telemetry.json` is unchanged.
-- [ ] T021 [P] [US6] Write the SC-011 leak test in `apps/thunderforge/src/telemetry/tests.rs`.
+- [X] T021 [P] [US6] Write the SC-011 leak test in `apps/thunderforge/src/telemetry/tests.rs`.
   - Seed admin `canary-7f3a@example.org`, and a world, actor, scene and token named `zq-canary-7f3a`.
   - Send a chat line and a mutation carrying the canary, and log an `ERROR` whose message holds the email.
   - On the anonymous tier, assert that no exported record holds the email, the canary, the hostname or any seeded id, and that every span and resource attribute is on the policy crate's lists.
   - On the operator tier, assert that `world.id` (or the existing `world_id` field) is present.
-- [ ] T022 [US6] Implement `apps/thunderforge/src/telemetry/anonymous.rs`.
+  - *Done as a pipeline test (2026-10-09):* the canary request is played through `tracing` (the HTTP and GraphQL spans, a chat line, and the `ERROR`) into the installed providers, rather than through seeded rows. The server's GraphQL span (T042) does not exist yet; when it does, this test is where a seeded run belongs.
+- [X] T022 [US6] Implement `apps/thunderforge/src/telemetry/anonymous.rs`.
   - `AllowListSpanProcessor` keeps the span name, status, duration and `ANONYMOUS_SPAN_ATTRIBUTES`. It drops other attributes, links, and every event except the redacted `exception`.
   - `ServerErrorLayer` turns each `ERROR` event into a `server.error` log record with `error.type`, `error.message` (redacted, 512 characters) and a backtrace reduced to crate paths and lines (4096 characters). It redacts through `crates/thunderforge-server/src/feedback/redaction.rs`'s rule set from `config/feedback-redaction.json`.
-- [ ] T023 [US6] Implement `apps/thunderforge/src/telemetry/install.rs`.
+- [X] T023 [US6] Implement `apps/thunderforge/src/telemetry/install.rs`.
   - It builds the tracer, meter and logger providers per tier, with batch processors and bounded queues, and never blocks start (FR-003). The anonymous resource is built by hand, and the operator tier reads the standard `OTEL_*` variables.
   - It returns a guard that flushes on shutdown.
   - In `apps/thunderforge/src/main.rs`, wire it into the registry at line 350, beside `JsonStorageLayer` and `BunyanFormattingLayer`, and drop the guard after the server's graceful shutdown.

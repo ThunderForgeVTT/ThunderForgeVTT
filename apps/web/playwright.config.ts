@@ -152,6 +152,8 @@ export default defineConfig({
           // `reuseExistingServer` means an already-running stack keeps
           // whatever environment it was launched with.
           THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT: "1",
+          // Spec 086 (FR-036): a test stack never exports telemetry.
+          TELEMETRY: "false",
         },
       },
 });

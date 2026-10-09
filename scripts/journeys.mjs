@@ -528,6 +528,8 @@ async function main() {
     // registers a Game Master and a player and signs an operator in, all from
     // one IP, and a 429 there reads as a broken login page.
     THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT: "1",
+    // Spec 086 (FR-036): a test stack never exports telemetry.
+    TELEMETRY: "false",
     // One browser at a time drives this backend; see `startShard` for why the
     // default pool of 32 is wrong for a harness.
     DATABASE_POOL_MAX_SIZE: "8",

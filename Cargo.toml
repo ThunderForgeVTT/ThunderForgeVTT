@@ -26,6 +26,7 @@ members = [
     "crates/thunderforge-presence",
     "crates/thunderforge-repo-host",
     "crates/thunderforge-pg-sockets",
+    "crates/thunderforge-telemetry-policy",
     "packs/systems/dnd5e/server",
     "packs/systems/genie/server",
     "packs/systems/pathfinder2e/server",

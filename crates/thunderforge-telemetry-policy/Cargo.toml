@@ -1,0 +1,23 @@
+[lints]
+workspace = true
+
+[package]
+name = "thunderforge-telemetry-policy"
+version = "0.1.0"
+edition = "2024"
+repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
+license.workspace = true
+
+# What telemetry may say, decided once (spec 086, R25).
+#
+# The tier an endpoint gets, the attributes the anonymous tier may carry, the
+# instruments the server emits, and what the public gateway accepts. The
+# server's SDK and the gateway's protobuf both call into this, so the two can
+# never hold different lists. Pure: `std` only, no SDK, no IO.
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+
+[dev-dependencies]
+regex = "1"

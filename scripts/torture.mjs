@@ -284,6 +284,8 @@ try {
     // The stack is also on a throwaway database on a random port that dies
     // with the run.
     THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT: "1",
+    // Spec 086 (FR-036): a test stack never exports telemetry.
+    TELEMETRY: "false",
   };
 
   // The backend, started here rather than by Playwright.

@@ -55,6 +55,9 @@ pub struct AppState {
     /// sending it. See `feedback::FeedbackSeam`, which is `mail::MailSeam`
     /// again and for the same reasons.
     pub feedback: crate::feedback::FeedbackSeam,
+    /// Spec 086: what telemetry this instance runs with, fixed at start. The
+    /// admin query, the startup line and `/telemetry.json` read it.
+    pub telemetry: std::sync::Arc<crate::telemetry::TelemetryStatus>,
 }
 
 impl FromRef<AppState> for Key {

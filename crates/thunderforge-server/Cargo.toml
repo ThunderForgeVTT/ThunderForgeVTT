@@ -72,6 +72,10 @@ tower-http = { version = "0.7.0", features = [
 ] }
 tower-cookies = { version = "0.11.0", features = ["private"] }
 tracing = "0.1.44"
+# Spec 086: the API only. The SDK and exporters live in the binary, which
+# installs them; without an installed provider every call here is a no-op.
+opentelemetry = "0.33.0"
+thunderforge-telemetry-policy = { path = "../thunderforge-telemetry-policy" }
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 tracing-bunyan-formatter = "0.3.10"
 futures-util = "0.3.34"
@@ -98,7 +102,7 @@ chrono = { version = "0.4.45", features = ["serde"] }
 # packs' tests.
 diesel_migrations = { version = "2.3.1", features = ["postgres"] }
 diesel-derive-enum = { version = "2.1.0", features = ["postgres"] }
-uuid = { version = "1.26.0", features = ["serde", "v7"] }
+uuid = { version = "1.26.0", features = ["serde", "v4", "v7"] }
 once_cell = "1.21.4"
 # `world_hooks` collects each pack's world-creation hook through the linker.
 inventory = "0.3"

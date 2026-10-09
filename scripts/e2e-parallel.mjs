@@ -629,6 +629,8 @@ async function startShard(
     // auth limiter accounted for 18 of the 42 failures the last full sweep
     // started from, and every shard registers users from the same IP.
     THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT: "1",
+    // Spec 086 (FR-036): a test stack never exports telemetry.
+    TELEMETRY: "false",
     // One declared setting, fixed in the environment on purpose — and, since
     // spec 064 declared the object store's connection as settings, no longer
     // the only env-fixed one on this harness. `RUSTFS_BUCKET` is set below,

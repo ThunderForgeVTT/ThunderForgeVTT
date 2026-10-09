@@ -15,6 +15,7 @@
 mod play_pause_surface_tests;
 mod schema_roots;
 mod system_packs; // Spec 032 FR-029: which packs are linked, and nothing more
+mod telemetry; // Spec 086: the server's own telemetry
 
 use crate::schema_roots::{AppMutationRoot, AppQueryRoot, AppSchema};
 use async_graphql::Schema;
@@ -332,15 +333,6 @@ async fn run() {
     dotenvy::dotenv().ok();
     let cli = Cli::parse();
 
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    let formatting_layer = BunyanFormattingLayer::new("thunderforge".into(), std::io::stdout);
-
-    Registry::default()
-        .with(env_filter)
-        .with(JsonStorageLayer)
-        .with(formatting_layer)
-        .init();
-
     let mut config = Config::from_env();
     if let Some(data_path) = cli.data_path {
         config.data_path = data_path;
@@ -407,6 +399,52 @@ async fn run() {
     // above (research.md §4) rather than validating lazily on first use.
     let adjudicator = build_adjudicator();
 
+    // Spec 086: the instance id is minted whatever `TELEMETRY` says (FR-007),
+    // and the tier is decided once, by `tier_for`, in the settings.
+    let telemetry_settings = telemetry::TelemetrySettings::from_env();
+    let instance_id = {
+        let pool = db_pool.clone();
+        tokio::task::spawn_blocking(move || {
+            pool.get().map_err(|e| e.to_string()).and_then(|mut c| {
+                thunderforge_server::telemetry::ensure_instance_id(&mut c)
+                    .map_err(|e| e.to_string())
+            })
+        })
+        .await
+        .map_err(|e| e.to_string())
+        .and_then(|r| r)
+        .unwrap_or_else(|err| {
+            eprintln!("[Server] ⚠️  Could not read the telemetry instance id: {err}");
+            String::new()
+        })
+    };
+    let telemetry_status = std::sync::Arc::new(telemetry_settings.status(&instance_id));
+
+    // The registry waits for the instance id, because the providers' resource
+    // carries it. Nothing above logs through `tracing`. Off builds nothing.
+    let telemetry_env: std::collections::HashMap<String, String> = std::env::vars().collect();
+    let telemetry_plan =
+        telemetry::install::plan(&telemetry_settings, &instance_id, &telemetry_env);
+    let telemetry_guard =
+        telemetry::install::install(telemetry_plan.as_ref(), telemetry::install::Sink::Otlp);
+    if let Some(installed) = &telemetry_guard {
+        installed.set_global();
+    }
+    let telemetry_layers = telemetry_guard
+        .as_ref()
+        .map(|installed| installed.layers::<Registry>())
+        .unwrap_or_default();
+
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let formatting_layer = BunyanFormattingLayer::new("thunderforge".into(), std::io::stdout);
+
+    Registry::default()
+        .with(telemetry_layers)
+        .with(env_filter)
+        .with(JsonStorageLayer)
+        .with(formatting_layer)
+        .init();
+
     let app_state = AppState {
         config,
         directories: directories.clone(),
@@ -423,6 +461,7 @@ async fn run() {
         // application are read for each attempt, so configuring feedback takes
         // effect without a restart.
         feedback: thunderforge_server::feedback::FeedbackSeam::from_settings(),
+        telemetry: telemetry_status.clone(),
     };
 
     // Materialize any OAUTH_*-env-var-configured provider instances (ADR-041)
@@ -779,6 +818,12 @@ async fn run() {
         .with_graceful_shutdown(shutdown_signal())
         .await
         .unwrap();
+
+    // Spec 086: flush what is queued, off the async workers, since the
+    // providers' shutdown waits on their export threads.
+    if let Some(installed) = telemetry_guard {
+        let _ = tokio::task::spawn_blocking(move || drop(installed)).await;
+    }
 }
 
 async fn shutdown_signal() {

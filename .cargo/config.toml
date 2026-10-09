@@ -12,3 +12,8 @@
 # `TS_RS_EXPORT_DIR` itself, and it wins: `[env]` never overrides a variable
 # already present in the environment.
 TS_RS_EXPORT_DIR = { value = "target/ts-rs", relative = true }
+
+# Spec 086 (FR-036): no test run exports telemetry anywhere. Like the line
+# above, `[env]` never overrides a variable already set, so a test that wants
+# telemetry on sets `TELEMETRY` itself (or passes its settings in directly).
+TELEMETRY = "false"

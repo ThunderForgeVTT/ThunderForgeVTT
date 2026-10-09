@@ -116,6 +116,7 @@ pub mod static_files;
 pub mod status_display;
 pub mod storage;
 pub mod systems;
+pub mod telemetry;
 #[cfg(test)]
 pub mod test_packs;
 /// Shared database fixtures.

@@ -82,6 +82,25 @@ tower-http = { version = "0.7.0", features = [
 tracing = "0.1.44"
 tracing-bunyan-formatter = "0.3.10"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
+# Spec 086: the SDK, the OTLP exporter and the bridges from `tracing`. No
+# `rt-tokio` (R1): the batch processors run on their own threads, so start
+# never waits on an exporter. Those threads have no async runtime, so the
+# exporter uses the blocking reqwest client, never the async one.
+opentelemetry = "0.33.0"
+# `spec_unstable_metrics_views`: the anonymous view keeps only the contract's
+# labels (`Stream::with_allowed_attribute_keys`).
+opentelemetry_sdk = { version = "0.33.0", features = ["spec_unstable_metrics_views"] }
+opentelemetry-otlp = { version = "0.33.0", default-features = false, features = [
+  "http-proto",
+  "reqwest-blocking-client",
+  "reqwest-rustls",
+  "trace",
+  "metrics",
+  "logs",
+] }
+tracing-opentelemetry = "0.34.0"
+opentelemetry-appender-tracing = "0.33.0"
+thunderforge-telemetry-policy = { path = "../../crates/thunderforge-telemetry-policy" }
 uuid = { version = "1.26.0", features = ["serde", "v7"] }
 serde = { version = "1.0.229", features = ["derive"] }
 # `thunderforge-demo-maps` writes its listing with it; the tests already did.
@@ -108,6 +127,8 @@ thunderforge-server = { path = "../../crates/thunderforge-server", default-featu
 ] }
 chrono = "0.4.45"
 futures-util = "0.3.34"
+# Spec 086: in-memory exporters for the telemetry tests.
+opentelemetry_sdk = { version = "0.33.0", features = ["testing"] }
 
 # Linked for their `inventory::submit!` blocks alone — see `system_packs.rs`.
 [dependencies.thunderforge-system-dnd5e]

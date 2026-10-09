@@ -1,0 +1,27 @@
+{
+  "name": "@thunderforge/telemetry",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "description": "Browser telemetry: an allow-listed, bounded, OTLP/JSON reporter that loads after the page and sends nothing when told not to",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./otlp": "./src/otlp/index.ts",
+    "./browser": "./src/browser.ts",
+    "./vite": "./src/vite.ts"
+  },
+  "scripts": {
+    "test": "node --test src/*.test.ts src/**/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "check": "tsc --noEmit && node --test src/*.test.ts src/**/*.test.ts"
+  },
+  "dependencies": {
+    "web-vitals": "6.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "typescript": "6.0.3",
+    "vite": "^8.0.10"
+  }
+}

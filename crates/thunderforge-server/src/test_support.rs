@@ -276,6 +276,8 @@ pub fn test_app_state() -> AppState {
         // feedback goes sets one, and a test that does not gets an instance
         // with no destination configured — which is what most instances are.
         feedback: crate::feedback::FeedbackSeam::from_settings(),
+        // Off, as every test stack runs (spec 086 FR-036).
+        telemetry: std::sync::Arc::new(crate::telemetry::TelemetryStatus::off_for_tests()),
     }
 }
 
