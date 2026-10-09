@@ -147,7 +147,10 @@ listed in T031 and T032.
 
   Use `THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT=1` and `--workers=1` on the external stack.
 
-  **Open:** every slice is green on the release engine, apart from `scene-live-launch`, which fails on 0.19.1 too. On the dev engine, three tests fail every time, and they pass on 0.19.1's dev engine. See research.md, "Dev-engine slices (T054)". The owner decides how to proceed.
+  **Open:** every slice is green on the release engine, apart from `scene-live-launch`, which fails on 0.19.1 too. On the dev engine, three tests failed every time, though they pass on 0.19.1's dev engine. See research.md, "Dev-engine slices (T054)".
+  - The dice frame-time check now runs on a release engine.
+  - `board-loading` passes on the lighter dev engine.
+  - `look-at-and-follow.spec.ts:98` still fails. It is a race in the test, because `drawnAt` throws before the engine probe exists. See research.md, "After the owner's decision". The owner decides the fix.
 
 - [x] T055 `pnpm e2e:which --diff` against `main`. Run each slice it names that T053 and T054 did not run. Record in research.md that it asks for the full suite because of `Cargo.lock`, and that the slices stand in for it (Open item 1).
 - [x] T056 `make lint` and the units of T031–T035, again, on the final tree.

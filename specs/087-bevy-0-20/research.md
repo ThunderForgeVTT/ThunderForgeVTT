@@ -656,6 +656,63 @@ the dev-engine e2e runs green again is a change beyond this spec: it
 needs one of a longer timeout in two specs, running the dice spec on a
 release engine, or a lighter dev profile. That is left for the owner.
 
+### After the owner's decision (T054, second round)
+
+The owner chose a lighter dev profile, the dice frame-time check on a
+release engine, and a fix for click picking.
+
+**Lighter dev profile** (fd016101). `scripts/shared.mjs` builds the dev
+engine with `CARGO_PROFILE_DEV_DEBUG=line-tables-only`. The setting is
+part of the engine's cache key, so an older dev wasm is not reused.
+
+| `engine_bg.wasm`           | Raw (bytes)         | Brotli q11 (bytes) |
+| -------------------------- | ------------------- | ------------------ |
+| 0.19.1 dev                 | 274,300,485         | 14,381,816         |
+| 0.20 dev, full debug info  | 352,608,993         | 15,866,613         |
+| 0.20 dev, line tables only | 335,575,245 (−4.8%) | 14,610,549 (−7.9%) |
+
+**Dice frame time** (46800f11). The 18.2 ms median check is now
+`rolls-dice-frame-rate.spec.ts`, one of `PERF_LANE_SPECS`, so it always
+runs on a release engine.
+
+**Click picking** (ca4b0e64). Every token was drawn at the layer's z, 50
+(51 when selected). Bevy 0.20's `Transparent2d` sorts on z alone, and
+ties keep the renderer's own order, which draws the token added last on
+top (R9). `token_stack::tokens_at` broke ties on the lowest id, so a click
+on a pile could take a token hidden under another. Each token now gets a
+draw rank when it appears, and its z is the layer + `stacking_offset(rank)`
+(1/1024 per rank, capped below the selection lift). The renderer and the
+hit test now read one order. An engine unit test and a new test in
+`token-stack-picker.spec.ts` failed before the fix and pass after it
+(2 / 2, load 3.16 / 3.42 / 6.17).
+
+**Reruns on the dev engine with line tables only.**
+
+| Run                        | Load at start                             | Result                                                  |
+| -------------------------- | ----------------------------------------- | ------------------------------------------------------- |
+| tokens slice               | 5.17 / 4.76 / 6.32                        | 24 / 25: `look-at-and-follow.spec.ts:98`                |
+| `look-at-and-follow` alone | 5.40 / 17.83 / 22.26                      | 0 / 1, the same step                                    |
+| `board-loading` alone      | 5.31 / 13.66 / 20.15                      | 1 / 1, no timeout changed                               |
+| canvas slice, twice        | 13.48, then 5.95, both rising to about 30 | 39 / 44, then 35 / 44; noise, from another tree's build |
+| scenes slice               | 38.67 / 27.50 / 20.66                     | 16 / 18, noise                                          |
+
+The canvas and scenes runs ran while another checkout built a Docker image
+and compiled Rust, with the load at 23 to 38. Their failures are not
+counted either way.
+
+**`look-at-and-follow.spec.ts:98` is a race in the test.** After the
+reload, the step "with it off, a turn change leaves the camera where it
+is" polls `drawnAt`, which reads `window.__engineProbe.tokenFootprints`.
+The probe is installed once `wasm.default()` resolves. Playwright's
+`expect.poll` does not retry when its callback throws: `await actual()`
+sits outside the matcher's try (`playwright/lib/matchers/expect.js`,
+1.62.1, line 13387). So when the dev engine is still loading, the step
+fails at once with `Cannot read properties of undefined`, and the 30 s
+poll never runs. The release engine and 0.19.1's smaller dev engine
+load before that line is reached. A fix that needs no longer timeout is
+to have `drawnAt` return `null` while the probe is missing. That is left
+for the owner.
+
 ### Full-suite rule (T055)
 
 `pnpm e2e:which --diff=main` names canvas, engine-limits, engine-other and
