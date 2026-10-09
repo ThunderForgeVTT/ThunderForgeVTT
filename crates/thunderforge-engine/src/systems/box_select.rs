@@ -374,7 +374,12 @@ pub(crate) fn handle_box_select(
     is_gm: Res<IsGameMaster>,
     viewer: Option<Res<ViewerUserId>>,
     filter: Option<Res<SelectionFilter>>,
+    handles: Option<Res<crate::systems::token::TokenDragState>>,
 ) {
+    // A press a token's resize or rotate handle took is not a box.
+    if handles.is_some_and(|handles| handles.handle_held()) {
+        return;
+    }
     let Some(cursor_px) = pointer.position() else {
         return;
     };

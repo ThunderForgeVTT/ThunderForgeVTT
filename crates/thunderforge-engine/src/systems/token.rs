@@ -139,6 +139,15 @@ pub(crate) struct TokenDragState {
     mode: TokenDragMode,
 }
 
+impl TokenDragState {
+    /// Whether a resize or rotate handle has the press. Spec 085: the box
+    /// gesture leaves such a press alone, or its release would empty the
+    /// selection and the handle's release would find no token to save.
+    pub(crate) fn handle_held(&self) -> bool {
+        self.mode != TokenDragMode::Idle
+    }
+}
+
 /// Convert the cursor's window-pixel position into Bevy world space,
 /// duplicated from `systems/wall.rs` (itself duplicated from this module's
 /// prior private copy) — each canvas-authoring system module keeps its own
@@ -780,6 +789,14 @@ mod token_press_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_handle_is_held_only_while_resizing_or_rotating() {
+        assert!(!TokenDragState::default().handle_held());
+        for mode in [TokenDragMode::Resizing, TokenDragMode::Rotating] {
+            assert!(TokenDragState { mode }.handle_held());
+        }
+    }
 
     #[test]
     fn resize_handle_world_pos_at_identity_transform() {

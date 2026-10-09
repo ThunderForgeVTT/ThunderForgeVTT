@@ -13,7 +13,7 @@ use crate::systems::box_select::{
 use crate::systems::group_move::{
     GroupDrag, GroupStamps, delete_group_selection, drive_group_drag, start_group_drag,
 };
-use crate::systems::token::handle_token_drag;
+use crate::systems::token::{handle_token_drag, handle_token_rotate_drag};
 
 pub struct GroupSelectPlugin;
 
@@ -35,8 +35,11 @@ impl Plugin for GroupSelectPlugin {
                 Update,
                 handle_box_select
                     .run_if(in_state(AuthoringMode::Select))
-                    // Before the token drag, so a press the group owns is
-                    // decided before the drag picks anything up.
+                    // After the token's handles, so a press on a resize or
+                    // rotate handle is theirs; before the token drag, so a
+                    // press the group owns is decided before the drag picks
+                    // anything up.
+                    .after(handle_token_rotate_drag)
                     .before(handle_token_drag)
                     .after(crate::app::ExternalCommandsApplied),
             )
