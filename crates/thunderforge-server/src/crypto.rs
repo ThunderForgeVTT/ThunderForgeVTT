@@ -178,12 +178,16 @@ mod tests {
         let k = key();
         let encrypted = encrypt_secret("hunter2", &k).expect("encrypts");
         let mut parts: Vec<&str> = encrypted.split('.').collect();
-        let payload = parts[2].to_string();
-        let flipped: String = payload
-            .chars()
-            .enumerate()
-            .map(|(i, c)| if i == 0 && c != 'A' { 'A' } else { c })
-            .collect();
+        // Flip a bit of the decoded ciphertext rather than overwrite a base64
+        // character with a fixed value: overwriting is a no-op whenever the
+        // random payload already holds that value (1 run in 64), and an
+        // unchanged payload decrypts fine.
+        let mut bytes = general_purpose::URL_SAFE_NO_PAD
+            .decode(parts[2])
+            .expect("payload is base64");
+        bytes[0] ^= 0x01;
+        let flipped = general_purpose::URL_SAFE_NO_PAD.encode(&bytes);
+        assert_ne!(flipped, parts[2], "the tamper must change the payload");
         parts[2] = &flipped;
         assert!(decrypt_secret(&parts.join("."), &k).is_err());
     }
