@@ -178,12 +178,18 @@ export function startShapeEventSync(
   sceneId: string,
   graphqlSubscription: AsyncIterable<WorldEventLike>,
 ): () => void {
-  const abortController = new AbortController();
+  // Held directly, not through `for await` with an abort flag: the flag is
+  // read only between events, so on a quiet world `stop` left the loop parked
+  // in `next()` and the server-side subscription open until some later event
+  // arrived. `.return()` disposes it at once (see `startAppearanceEventSync`).
+  const iterator = graphqlSubscription[Symbol.asyncIterator]();
+  let cancelled = false;
 
-  (async () => {
+  void (async () => {
     try {
-      for await (const event of graphqlSubscription) {
-        if (abortController.signal.aborted) break;
+      while (!cancelled) {
+        const { value: event, done } = await iterator.next();
+        if (done || cancelled || !event) break;
         await applyShapeWorldEvent(worldStore, sceneId, event);
       }
     } catch (error) {
@@ -192,7 +198,8 @@ export function startShapeEventSync(
   })();
 
   return () => {
-    abortController.abort();
+    cancelled = true;
+    void iterator.return?.();
   };
 }
 
