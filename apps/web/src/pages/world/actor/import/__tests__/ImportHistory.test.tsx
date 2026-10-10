@@ -52,6 +52,14 @@ describe("ImportHistory (T078)", () => {
     );
   });
 
+  it("says when the file is no longer kept", () => {
+    const gone = record({ versionNo: null, versionId: null });
+    expect(historyText(gone, [gone])).toBe(
+      "A sheet brought in by Wren Player, file no longer kept",
+    );
+    expect(row(gone, false)).not.toContain("import-history-download");
+  });
+
   it("offers the download only where the server allows it", () => {
     expect(row(record({ fileAvailable: true }), false)).toContain(
       "/api/sheet-imports/v1/file",

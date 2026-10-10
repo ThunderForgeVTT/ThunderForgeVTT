@@ -122,12 +122,13 @@ impl StandingMutation {
             .db_pool
             .get()
             .map_err(|_| Error::new("Failed to get DB connection"))?;
-        tokio::task::spawn_blocking(move || {
+        let sheet_files = tokio::task::spawn_blocking(move || {
             standing::execute_by_administrator_sync(&mut conn, account_id, Utc::now())
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
         .map_err(Error::new)?;
+        crate::sheet_import::account::delete_sheet_files(state, &sheet_files).await;
         Ok(true)
     }
 }

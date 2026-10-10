@@ -125,8 +125,9 @@ fn an_import_names_its_version_and_a_rollback_what_it_restores() {
         .unwrap();
     assert_eq!(import.kind, ActorImportKind::Import);
 
+    // An import whose file is no longer kept has no version (T085): the
+    // uploader's account was deleted and the foreign key cleared it.
     for (kind, version_id, restored_from) in [
-        (ActorImportKind::Import, None, None),
         (ActorImportKind::Import, Some(version.id), Some(import.id)),
         (ActorImportKind::Rollback, None, None),
     ] {
@@ -142,4 +143,14 @@ fn an_import_names_its_version_and_a_rollback_what_it_restores() {
         .values(&row(ActorImportKind::Rollback, None, Some(import.id)))
         .execute(&mut conn)
         .expect("a rollback names the import it undoes");
+
+    diesel::delete(sheet_import_versions::table.find(version.id))
+        .execute(&mut conn)
+        .expect("the version can go");
+    let kept: Option<Uuid> = actor_imports::table
+        .find(import.id)
+        .select(actor_imports::version_id)
+        .first(&mut conn)
+        .expect("and the record stays");
+    assert_eq!(kept, None, "file no longer kept");
 }

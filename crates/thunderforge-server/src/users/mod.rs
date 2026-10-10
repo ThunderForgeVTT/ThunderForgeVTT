@@ -58,6 +58,11 @@ pub struct ExportCounts {
     pub abilities: usize,
     pub lore_entries: usize,
     pub collections: usize,
+    /// Spec 048: characters brought in from sheets, their versions, and the
+    /// import records of the characters this person owns.
+    pub brought_characters: usize,
+    pub sheet_versions: usize,
+    pub actor_imports: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -91,6 +96,10 @@ pub struct UserDataExport {
     /// What this person holds that the export does not carry, each with the
     /// reason (spec 049 FR-052, FR-053). Their uploaded books today.
     pub withheld: Vec<WithheldFromExport>,
+    /// Spec 048 T083: characters brought in from sheets, each version's
+    /// reading, and the files under `sheets/` in the ZIP.
+    pub brought_characters: Vec<export_content::ExportedBroughtCharacter>,
+    pub actor_imports: Vec<export_content::ExportedActorImport>,
     /// Still reserved: neither is something a person makes.
     pub asset_packs: Vec<PlaceholderDomainExport>,
     pub game_systems: Vec<PlaceholderDomainExport>,
@@ -108,6 +117,11 @@ pub struct UserDataDeleteSummary {
     pub users_deleted: i64,
     /// Drawings the account made in worlds it did not create (spec 082 R9).
     pub shapes_deleted: i64,
+    /// Characters the account brought in, with their sheet versions (spec 048).
+    pub brought_characters_deleted: i64,
+    /// The kept sheet files, deleted after the transaction commits.
+    #[serde(skip)]
+    pub sheet_file_keys: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -233,7 +247,9 @@ pub async fn export_user_data_payload(
             // v2: the person's own content, as shapes (ADR-011 as amended).
             // v3: without `world_tokens`, whose table was dropped — a scene's
             // tokens were never in it (ADR-040).
-            schema_version: "v3",
+            // v4: characters brought in from sheets, and their files in the
+            // ZIP under `sheets/` (spec 048).
+            schema_version: "v4",
             exported_at: Utc::now(),
             counts: ExportCounts {
                 worlds: owned_worlds.len(),
@@ -245,6 +261,13 @@ pub async fn export_user_data_payload(
                 abilities: content.abilities.len(),
                 lore_entries: content.lore_entries.len(),
                 collections: content.collections.len(),
+                brought_characters: content.brought_characters.len(),
+                sheet_versions: content
+                    .brought_characters
+                    .iter()
+                    .map(|c| c.versions.len())
+                    .sum(),
+                actor_imports: content.actor_imports.len(),
             },
         },
         user: PublicUser::from(user),
@@ -258,6 +281,8 @@ pub async fn export_user_data_payload(
         lore_entries: content.lore_entries,
         collections: content.collections,
         withheld: content.withheld,
+        brought_characters: content.brought_characters,
+        actor_imports: content.actor_imports,
         asset_packs: Vec::new(),
         game_systems: Vec::new(),
     })
@@ -268,9 +293,13 @@ pub async fn delete_user_data_owned(
     user_id: uuid::Uuid,
 ) -> Result<UserDataDeleteSummary, String> {
     let state_for_delete = state.clone();
-    tokio::task::spawn_blocking(move || delete_user_data_sync(&state_for_delete, user_id))
-        .await
-        .map_err(|_| "Failed to spawn blocking task".to_string())?
+    let summary =
+        tokio::task::spawn_blocking(move || delete_user_data_sync(&state_for_delete, user_id))
+            .await
+            .map_err(|_| "Failed to spawn blocking task".to_string())??;
+    // Spec 048 T085: the rows are gone and committed; now the files.
+    crate::sheet_import::account::delete_sheet_files(state, &summary.sheet_file_keys).await;
+    Ok(summary)
 }
 
 async fn export_user_data(
@@ -320,7 +349,10 @@ async fn export_user_data(
             )
                 .into_response(),
         },
-        "zip" => match build_zip_export(&export) {
+        "zip" => match export_content::sheet_files_of(&state, auth_user.user_id, &export)
+            .await
+            .and_then(|sheets| build_zip_export(&export, &sheets))
+        {
             Ok(body) => {
                 build_download_response(body, "application/zip", "thunderforge-user-export.zip")
             }
@@ -436,6 +468,12 @@ pub(crate) fn delete_user_data_on(
         // user row goes, or its foreign keys refuse the deletion.
         summary.shapes_deleted += shape_cleanup::forget_shapes_of(conn, user_id)?;
 
+        // Spec 048 T085: the sheets the account brought go with it; the
+        // files are deleted by the caller once this commits.
+        let sheets = crate::sheet_import::account::forget_sheets_of_sync(conn, user_id)?;
+        summary.brought_characters_deleted += sheets.characters;
+        summary.sheet_file_keys = sheets.keys;
+
         summary.world_events_deleted +=
             diesel::delete(world_events::table.filter(world_events::created_by.eq(user_id)))
                 .execute(conn)? as i64;
@@ -499,7 +537,10 @@ fn normalize_export_format(format: Option<&str>) -> Result<&'static str, &'stati
     }
 }
 
-fn build_zip_export(export: &UserDataExport) -> Result<Vec<u8>, String> {
+fn build_zip_export(
+    export: &UserDataExport,
+    sheets: &[(String, Vec<u8>)],
+) -> Result<Vec<u8>, String> {
     let export_json =
         serde_json::to_vec_pretty(export).map_err(|_| "Failed to serialize export payload")?;
     let manifest_json = serde_json::to_vec_pretty(&export.manifest)
@@ -518,6 +559,15 @@ fn build_zip_export(export: &UserDataExport) -> Result<Vec<u8>, String> {
         .map_err(|e| format!("Failed to create export entry: {e}"))?;
     zip.write_all(&export_json)
         .map_err(|e| format!("Failed to write export entry: {e}"))?;
+
+    // A PDF is compressed already.
+    let stored = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    for (path, bytes) in sheets {
+        zip.start_file(path.as_str(), stored)
+            .map_err(|e| format!("Failed to create a sheet entry: {e}"))?;
+        zip.write_all(bytes)
+            .map_err(|e| format!("Failed to write a sheet entry: {e}"))?;
+    }
 
     zip.finish()
         .map(|cursor| cursor.into_inner())
@@ -545,6 +595,10 @@ mod library_deletion_tests;
 #[cfg(test)]
 #[path = "shape_cleanup_tests.rs"]
 mod shape_cleanup_tests;
+
+#[cfg(test)]
+#[path = "sheet_data_tests.rs"]
+mod sheet_data_tests;
 
 #[cfg(test)]
 mod tests {
@@ -799,7 +853,7 @@ mod tests {
             .await
             .expect("export");
 
-        assert_eq!(export.manifest.schema_version, "v3");
+        assert_eq!(export.manifest.schema_version, "v4");
         let exported_actor = export
             .actors
             .iter()

@@ -370,10 +370,13 @@ pub fn execute_termination_sync(
     conn: &mut PgConnection,
     termination: &AccountTermination,
     now: DateTime<Utc>,
-) -> QueryResult<()> {
+) -> QueryResult<Vec<String>> {
     conn.transaction(|conn| {
-        crate::users::delete_user_data_on(conn, termination.account_id)?;
-        close_termination_sync(conn, termination, closed_reason::DELETED, now)
+        let summary = crate::users::delete_user_data_on(conn, termination.account_id)?;
+        close_termination_sync(conn, termination, closed_reason::DELETED, now)?;
+        // Spec 048: the stored sheet files, for the caller to delete once
+        // this has committed.
+        Ok(summary.sheet_file_keys)
     })
 }
 
@@ -417,11 +420,14 @@ fn why_below_threshold(
 }
 
 /// What one sweep did.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SweepReport {
     pub opened: usize,
     pub closed: usize,
     pub deleted: usize,
+    /// Sheet files the deleted accounts kept (spec 048), deleted from
+    /// storage after the sweep's transactions commit.
+    pub sheet_files: Vec<String>,
 }
 
 /// The sweep, given the ladder and the time. Idempotent.
@@ -478,7 +484,8 @@ pub fn sweep_scoped_sync(
             continue;
         }
         if is_due_for_deletion(&termination, now) && !termination.requires_human {
-            execute_termination_sync(conn, &termination, now)?;
+            let files = execute_termination_sync(conn, &termination, now)?;
+            report.sheet_files.extend(files);
             report.deleted += 1;
         }
     }
@@ -493,10 +500,12 @@ pub async fn run_due_standing_work(state: &AppState) -> Result<SweepReport, Stri
         .map_err(|_| "Failed to get DB connection".to_string())?;
     let ladder = Ladder::from_env();
 
-    tokio::task::spawn_blocking(move || sweep_sync(&mut conn, ladder, Utc::now()))
+    let report = tokio::task::spawn_blocking(move || sweep_sync(&mut conn, ladder, Utc::now()))
         .await
         .map_err(|_| "Failed to spawn blocking task".to_string())?
-        .map_err(|e| format!("Failed to sweep account standing: {e}"))
+        .map_err(|e| format!("Failed to sweep account standing: {e}"))?;
+    crate::sheet_import::account::delete_sheet_files(state, &report.sheet_files).await;
+    Ok(report)
 }
 
 /// The sweep for one account, now — for the moment something about that
@@ -512,12 +521,14 @@ pub async fn run_due_standing_work_for(
         .map_err(|_| "Failed to get DB connection".to_string())?;
     let ladder = Ladder::from_env();
 
-    tokio::task::spawn_blocking(move || {
+    let report = tokio::task::spawn_blocking(move || {
         sweep_scoped_sync(&mut conn, ladder, Utc::now(), Some(account_id))
     })
     .await
     .map_err(|_| "Failed to spawn blocking task".to_string())?
-    .map_err(|e| format!("Failed to sweep account standing: {e}"))
+    .map_err(|e| format!("Failed to sweep account standing: {e}"))?;
+    crate::sheet_import::account::delete_sheet_files(state, &report.sheet_files).await;
+    Ok(report)
 }
 
 /// How often the backstop runs.
@@ -718,7 +729,7 @@ pub fn execute_by_administrator_sync(
     conn: &mut PgConnection,
     account_id: Uuid,
     now: DateTime<Utc>,
-) -> Result<(), String> {
+) -> Result<Vec<String>, String> {
     let termination = open_termination_of(conn, account_id)
         .map_err(|_| "Failed to read the account's standing".to_string())?
         .ok_or_else(|| "There is no open decision on this account".to_string())?;

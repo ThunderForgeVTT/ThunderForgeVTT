@@ -6,6 +6,7 @@
 //!
 //! [`SystemContribution`]: thunderforge_canvas_core::system_contribution::SystemContribution
 
+pub mod account;
 pub mod apply;
 pub mod error;
 pub mod index;

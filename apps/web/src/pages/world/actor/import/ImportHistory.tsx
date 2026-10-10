@@ -31,7 +31,11 @@ export function historyText(
       ? `Rolled back to before version ${target.versionNo} by ${who}`
       : `Rolled back by ${who}`;
   }
-  return `Version ${record.versionNo ?? "?"} brought in by ${who}`;
+  // The uploader's account was deleted and its files with it (spec 048 T085).
+  if (record.versionNo == null) {
+    return `A sheet brought in by ${who}, file no longer kept`;
+  }
+  return `Version ${record.versionNo} brought in by ${who}`;
 }
 
 export function HistoryRow({

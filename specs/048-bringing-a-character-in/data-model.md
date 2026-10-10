@@ -95,7 +95,10 @@ CREATE TABLE actor_imports (
   applied_at       timestamp NOT NULL DEFAULT now(),
   created_by       uuid NOT NULL REFERENCES users(id),
   updated_by       uuid NOT NULL REFERENCES users(id),
-  CHECK ((kind = 'import'   AND version_id IS NOT NULL AND restored_from IS NULL)
+  -- An import names its version when written; the version goes to NULL when
+  -- the uploader's account is deleted ("file no longer kept"), so the check
+  -- does not demand it (T085, migration 2026-10-10-204800).
+  CHECK ((kind = 'import'   AND restored_from IS NULL)
       OR (kind = 'rollback' AND restored_from IS NOT NULL))
 );
 CREATE INDEX actor_imports_actor ON actor_imports (actor_id, applied_at DESC);

@@ -222,6 +222,135 @@ pub struct ExportedContent {
     pub scenes: Vec<ExportedScene>,
     pub collections: Vec<ExportedCollection>,
     pub withheld: Vec<WithheldFromExport>,
+    pub brought_characters: Vec<ExportedBroughtCharacter>,
+    pub actor_imports: Vec<ExportedActorImport>,
+}
+
+/// A character the person brought in from a sheet (spec 048 T083), with
+/// every version: the file's facts and the server's reading of it. The file
+/// itself is in the ZIP at `file`.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ExportedBroughtCharacter {
+    pub id: Uuid,
+    pub system_id: String,
+    pub name: String,
+    pub created_at: NaiveDateTime,
+    pub versions: Vec<ExportedSheetVersion>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ExportedSheetVersion {
+    pub id: Uuid,
+    pub version_no: i32,
+    /// Where the ZIP keeps the file: `sheets/{character}/v{n}.pdf`.
+    pub file: String,
+    pub file_sha256: String,
+    pub file_bytes: i32,
+    pub file_pages: i16,
+    pub reader_id: String,
+    pub reader_version: String,
+    pub reading: serde_json::Value,
+    pub corrections: serde_json::Value,
+    pub created_at: NaiveDateTime,
+}
+
+/// One import onto, or rollback of, a character the person owns: what was
+/// written, from which version, and when.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ExportedActorImport {
+    pub id: Uuid,
+    pub world_id: Uuid,
+    pub actor_id: Uuid,
+    /// `import` or `rollback`.
+    pub kind: &'static str,
+    /// The version applied; absent once its file is no longer kept.
+    pub version_id: Option<Uuid>,
+    pub restored_from: Option<Uuid>,
+    pub written: serde_json::Value,
+    pub applied_at: NaiveDateTime,
+}
+
+/// Where the ZIP keeps a version's file.
+pub fn sheet_zip_path(character: Uuid, version_no: i32) -> String {
+    format!("sheets/{character}/v{version_no}.pdf")
+}
+
+/// The person's brought characters, oldest first, and the import records of
+/// the characters they own. Storage keys stay out: they mean nothing
+/// outside this instance.
+fn load_sheets_sync(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    actor_ids: &[Uuid],
+) -> QueryResult<(Vec<ExportedBroughtCharacter>, Vec<ExportedActorImport>)> {
+    use crate::schema::{actor_imports, brought_characters, sheet_import_versions};
+    use crate::sheet_import::{ActorImport, ActorImportKind, BroughtCharacter, SheetImportVersion};
+
+    let characters: Vec<BroughtCharacter> = brought_characters::table
+        .filter(brought_characters::owner_user_id.eq(user_id))
+        .order(brought_characters::created_at.asc())
+        .select(BroughtCharacter::as_select())
+        .load(conn)?;
+    let ids: Vec<Uuid> = characters.iter().map(|c| c.id).collect();
+    let mut versions = grouped(
+        sheet_import_versions::table
+            .filter(sheet_import_versions::character_id.eq_any(&ids))
+            .order(sheet_import_versions::version_no.asc())
+            .select(SheetImportVersion::as_select())
+            .load(conn)?
+            .into_iter()
+            .map(|v| {
+                (
+                    v.character_id,
+                    ExportedSheetVersion {
+                        id: v.id,
+                        version_no: v.version_no,
+                        file: sheet_zip_path(v.character_id, v.version_no),
+                        file_sha256: v.file_sha256,
+                        file_bytes: v.file_bytes,
+                        file_pages: v.file_pages,
+                        reader_id: v.reader_id,
+                        reader_version: v.reader_version,
+                        reading: v.reading,
+                        corrections: v.corrections,
+                        created_at: v.created_at,
+                    },
+                )
+            })
+            .collect(),
+    );
+    let characters = characters
+        .into_iter()
+        .map(|c| ExportedBroughtCharacter {
+            versions: versions.remove(&c.id).unwrap_or_default(),
+            id: c.id,
+            system_id: c.system_id,
+            name: c.name,
+            created_at: c.created_at,
+        })
+        .collect();
+
+    let imports = actor_imports::table
+        .filter(actor_imports::actor_id.eq_any(actor_ids))
+        .order((actor_imports::applied_at.asc(), actor_imports::id.asc()))
+        .select(ActorImport::as_select())
+        .load::<ActorImport>(conn)?
+        .into_iter()
+        .map(|i| ExportedActorImport {
+            id: i.id,
+            world_id: i.world_id,
+            actor_id: i.actor_id,
+            kind: match i.kind {
+                ActorImportKind::Import => "import",
+                ActorImportKind::Rollback => "rollback",
+            },
+            version_id: i.version_id,
+            restored_from: i.restored_from,
+            written: i.written,
+            applied_at: i.applied_at,
+        })
+        .collect();
+    Ok((characters, imports))
 }
 
 /// Group `(key, value)` pairs by key, keeping order.
@@ -469,6 +598,8 @@ pub fn load_content_sync(conn: &mut PgConnection, user_id: Uuid) -> QueryResult<
         })
         .collect();
 
+    let (brought_characters, actor_imports) = load_sheets_sync(conn, user_id, &actor_ids)?;
+
     // The books on this person's shelf, which the export does not carry.
     //
     // Decided by each book's origin rather than by its being a compendium:
@@ -505,5 +636,37 @@ pub fn load_content_sync(conn: &mut PgConnection, user_id: Uuid) -> QueryResult<
         scenes,
         collections,
         withheld,
+        brought_characters,
+        actor_imports,
     })
+}
+
+/// Each kept sheet the export lists, as its ZIP path and bytes (spec 048
+/// T083). Read from storage by the keys the database holds for this person,
+/// never by a path the export carries.
+pub(super) async fn sheet_files_of(
+    state: &crate::AppState,
+    user_id: uuid::Uuid,
+    export: &super::UserDataExport,
+) -> Result<Vec<(String, Vec<u8>)>, String> {
+    if export.brought_characters.is_empty() {
+        return Ok(Vec::new());
+    }
+    let pool = state.db_pool.clone();
+    let keys = tokio::task::spawn_blocking(move || {
+        let mut conn = pool.get().map_err(|_| "Failed to get DB connection")?;
+        crate::sheet_import::storage::file_keys_of_sync(&mut conn, user_id)
+            .map_err(|_| "Failed to query sheet files")
+    })
+    .await
+    .map_err(|_| "Failed to spawn blocking task".to_string())??;
+    let cfg = crate::storage::rustfs::RustFsConfig::resolve(state).await;
+    let mut files = Vec::with_capacity(keys.len());
+    for (character, version_no, key) in keys {
+        let bytes = crate::storage::rustfs::read_object(&cfg, &key)
+            .await
+            .map_err(|e| format!("Failed to read a kept sheet: {e}"))?;
+        files.push((sheet_zip_path(character, version_no), bytes));
+    }
+    Ok(files)
 }

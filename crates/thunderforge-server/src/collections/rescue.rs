@@ -78,6 +78,15 @@ pub fn rescue_characters_sync(
         let destination = personal_world_sync(conn, player, &source)?;
         let ctx = crate::collections::copy::rescue_actors_sync(conn, destination, player, &actors)
             .map_err(|e| diesel::result::Error::QueryBuilderError(e.0.into()))?;
+        // Spec 048: the character keeps the record of what was imported onto it.
+        crate::sheet_import::account::keep_imports_of_rescued_sync(
+            conn,
+            player,
+            destination,
+            &ctx.actor_map,
+            &ctx.ability_map,
+            &ctx.item_map,
+        )?;
 
         let collection_id = file_as_collection(conn, destination, player, &source.name, &ctx)?;
         let characters: Vec<&str> = ctx

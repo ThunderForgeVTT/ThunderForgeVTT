@@ -396,13 +396,17 @@ without throwing play away.
 
 ### The account's data
 
-- [ ] T082 [P] Write export tests: `export_user_data_payload` (`users/mod.rs:187`) carries brought characters, versions and import records at manifest v4, and `build_zip_export` (:502) adds each kept file under `sheets/`.
-- [ ] T083 Implement T082 in `users/mod.rs` and `users/export_content.rs`.
-- [ ] T084 [P] Write deletion tests:
+- [X] T082 [P] Write export tests: `export_user_data_payload` (`users/mod.rs:187`) carries brought characters, versions and import records at manifest v4, and `build_zip_export` (:502) adds each kept file under `sheets/`.
+  - Done: `users/sheet_data_tests.rs`: the export carries brought characters, versions and import records at v4 (no snapshot or plan hash), and the ZIP holds each file at `sheets/{character}/v{n}.pdf`.
+- [X] T083 Implement T082 in `users/mod.rs` and `users/export_content.rs`.
+  - Done: `users/export_content.rs` (`load_sheets_sync`, `sheet_files_of`, `sheet_zip_path`) and `users/mod.rs` (counts, manifest v4, stored ZIP entries). The GraphQL projection gained no sheet counts.
+- [X] T084 [P] Write deletion tests:
   - `delete_user_data_on` (:406) removes the rows in its transaction;
   - the objects are deleted after commit, following `feedback/schedule.rs:179`;
   - a rescued character (`collections/rescue.rs:47`) keeps its import records, marked "file no longer kept" (open item 1's default).
-- [ ] T085 Implement T084.
+  - Done: `users/sheet_data_tests.rs`: rows deleted and keys collected in the transaction; the files deleted after commit (RustFS); a rescued character keeps both import records, the departing GM's with no version; a co-GM's records in a world that stays pass to its owner. `models_tests` now proves a record survives its version.
+- [X] T085 Implement T084.
+  - Done: `sheet_import/account.rs`: `forget_sheets_of_sync` (in `delete_user_data_on`), `keep_imports_of_rescued_sync` (in `rescue.rs`, links remapped, staged links dropped) and `delete_sheet_files` after commit in `delete_user_data_owned`, the termination sweep and the administrator's execute. Found and fixed: the import check demanded a version, so SET NULL refused the deletion; migration `2026-10-10-204800-0000_actor_import_file_not_kept` relaxes it. The history says "file no longer kept".
 - [ ] T086 [P] Extend `apps/web/e2e/user-data-export.spec.ts` (the `accounts` slice) and `library-account-deletion.spec.ts` (the `collections` slice) with an imported sheet.
 
 ### Telemetry, coordinated with spec 086
