@@ -7,3 +7,4 @@ export const DEMO = "/demo/";
 export const MAPS_SOURCE = "https://github.com/mbround18/vtt-maps";
 export const MAPS_CATALOG = "https://vtt-maps.dnd-apps.dev/catalog";
 export const CC_BY_SA = "https://creativecommons.org/licenses/by-sa/4.0/";
+export const TELEMETRY_GUIDE = `${REPO}/blob/main/docs/guides/telemetry.md`;

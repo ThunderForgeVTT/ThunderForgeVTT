@@ -1332,6 +1332,18 @@ main {
   }
 }
 
+/* what we measure */
+
+.measure-copy {
+  display: grid;
+  gap: 1rem;
+  max-width: 46rem;
+}
+.measure-copy code {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
 /* support */
 
 /* the star chart */

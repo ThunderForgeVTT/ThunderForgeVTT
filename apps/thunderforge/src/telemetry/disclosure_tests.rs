@@ -7,6 +7,7 @@ use super::startup_line::{OFF_LINE, ON_TAIL};
 const SPEC: &str = include_str!("../../../../specs/086-full-telemetry/spec.md");
 const README: &str = include_str!("../../../../README.md");
 const GUIDE: &str = include_str!("../../../../docs/guides/telemetry.md");
+const LANDING: &str = include_str!("../../../landing/src/sections/WhatWeMeasure.tsx");
 
 /// The words, without Markdown or line breaks.
 fn words(text: &str) -> String {
@@ -32,6 +33,57 @@ fn appendix_block(heading: &str) -> &'static str {
     let body = &rest[open..];
     let close = body.find("\n```\n").expect("closing fence");
     &body[..close]
+}
+
+/// The blockquote under an appendix heading, its `>` markers removed.
+fn appendix_quote(heading: &str) -> String {
+    let at = SPEC.find(heading).unwrap_or_else(|| panic!("{heading}"));
+    SPEC[at..]
+        .lines()
+        .skip(1)
+        .skip_while(|l| !l.starts_with('>'))
+        .take_while(|l| l.starts_with('>'))
+        .map(|l| l.trim_start_matches('>'))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// `[text](url)` as `text`.
+fn link_text(markdown: &str) -> String {
+    let mut out = String::new();
+    let mut rest = markdown;
+    while let Some(open) = rest.find('[') {
+        let Some(mid) = rest[open..].find("](").map(|m| open + m) else {
+            break;
+        };
+        let Some(close) = rest[mid..].find(')').map(|c| mid + c) else {
+            break;
+        };
+        out.push_str(&rest[..open]);
+        out.push_str(&rest[open + 1..mid]);
+        rest = &rest[close + 1..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// The text a JSX element renders: tags dropped, `{" "}` a space.
+fn jsx_text(source: &str) -> String {
+    let source = source.replace("{\" \"}", " ");
+    let mut out = String::new();
+    let mut in_tag = false;
+    for c in source.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' if in_tag => {
+                in_tag = false;
+                out.push(' ');
+            }
+            c if !in_tag => out.push(c),
+            _ => {}
+        }
+    }
+    out
 }
 
 /// The A.3 line that starts with `label`.
@@ -71,6 +123,33 @@ fn the_startup_line_is_a3() {
     assert!(on.starts_with(
         "telemetry: server → <server destination> (<tier>), browsers → <browser destination> (<tier>). "
     ));
+}
+
+#[test]
+fn the_landing_holds_a5() {
+    let a5 = words(&link_text(&appendix_quote("### A.5")));
+    assert!(
+        a5.starts_with("What we measure. We count what happens"),
+        "{a5}"
+    );
+    let at = LANDING.find("<section").expect("a section");
+    let end = LANDING.find("</section>").expect("its end");
+    let landing = words(&jsx_text(&LANDING[at..end]));
+    assert_eq!(
+        landing, a5,
+        "apps/landing/src/sections/WhatWeMeasure.tsx differs from A.5"
+    );
+}
+
+#[test]
+fn jsx_text_drops_tags_and_keeps_spaces() {
+    assert_eq!(
+        words(&jsx_text(
+            "<p>\n  a <code>b</code>.{\" \"}\n  <a href={X}>c</a>\n</p>"
+        )),
+        "a b . c"
+    );
+    assert_eq!(link_text("see [How](https://x/y) now"), "see How now");
 }
 
 #[test]

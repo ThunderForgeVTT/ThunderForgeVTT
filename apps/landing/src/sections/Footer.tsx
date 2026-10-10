@@ -10,7 +10,7 @@ export function Footer() {
       <p>
         Open source under the{" "}
         <a href={`${REPO}/blob/main/LICENSE`}>GNU AGPL v3.0 or later</a>.{" "}
-        <a href={REPO}>Source on GitHub</a>.
+        <a href={REPO}>Source on GitHub</a>. <a href="#telemetry">What we measure</a>.
       </p>
       <p>
         Example map by MBRound18, from <a href={MAPS_SOURCE}>vtt-maps</a>, shared under{" "}

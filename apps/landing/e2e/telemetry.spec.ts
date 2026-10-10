@@ -211,6 +211,7 @@ test("scroll depth is the deepest section reached, sent once when the page is le
     "map",
     "numbers",
     "self-host",
+    "telemetry",
     "stance",
     "stars",
     "support",
@@ -231,5 +232,45 @@ test("scroll depth is the deepest section reached, sent once when the page is le
       timeout: 30_000,
     })
     .toEqual(["footer"]);
+  expect(outside).toEqual([]);
+});
+
+test("What we measure says what is collected, and the footer links to it", async ({ page }) => {
+  await open(page, null);
+  const section = page.locator("#telemetry");
+  await expect(section.getByRole("heading", { level: 2 })).toHaveText("What we measure.");
+  await expect(section).toContainText("We count what happens, not what you say.");
+  await expect(section).toContainText("we receive errors only.");
+  await expect(section).toContainText("turn them off with TELEMETRY=false.");
+  await expect(section.getByRole("link", { name: "How" })).toHaveAttribute(
+    "href",
+    /docs\/guides\/telemetry\.md$/,
+  );
+  await expect(page.locator("footer a[href='#telemetry']")).toHaveText("What we measure");
+});
+
+test("with Global Privacy Control, the landing sends errors only", async ({ page }) => {
+  await page.addInitScript(() =>
+    Object.defineProperty(Navigator.prototype, "globalPrivacyControl", {
+      get: () => true,
+      configurable: true,
+    }),
+  );
+  const { telemetry, outside } = await open(page, CONFIG);
+  await expect(page.locator("#telemetry")).toBeAttached();
+  // A visit that would otherwise send a page view, a click and a depth.
+  await page.locator("[data-cta]").first().click();
+  await page.locator("footer").scrollIntoViewIfNeeded();
+  await page.evaluate(() => {
+    setTimeout(() => {
+      throw new Error("landing-e2e gpc");
+    });
+  });
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pagehide")));
+  await expect.poll(() => named(telemetry, "error").length, { timeout: 30_000 }).toBe(1);
+  await page.waitForTimeout(6_000); // past one flush interval
+  expect([...new Set(records(telemetry).map((r) => attr(r.attributes, "event.name")))]).toEqual([
+    "error",
+  ]);
   expect(outside).toEqual([]);
 });

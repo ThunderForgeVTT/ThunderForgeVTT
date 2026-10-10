@@ -56,11 +56,24 @@ function loaded(): Promise<void> {
 export async function bootTelemetry(opts: {
   configUrl: string;
   fetchImpl?: typeof fetch;
+  /** Told the served config, or `null` for off, before anything loads. The
+   *  demo's notice says where counts go from it. */
+  onConfig?: (config: TelemetryConfig | null) => void;
   load: () => Promise<(cfg: TelemetryConfig) => Telemetry>;
 }): Promise<Telemetry> {
+  let config: TelemetryConfig | null = null;
   try {
     const fetchImpl = opts.fetchImpl ?? globalThis.fetch.bind(globalThis);
-    const config = await readConfig(opts.configUrl, fetchImpl);
+    config = await readConfig(opts.configUrl, fetchImpl);
+  } catch {
+    config = null;
+  }
+  try {
+    opts.onConfig?.(config);
+  } catch {
+    // A listener's failure is not telemetry's.
+  }
+  try {
     if (!config) return noopTelemetry;
     await loaded();
     const start = await opts.load();

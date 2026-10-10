@@ -1,10 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { NOT_IN_DEMO_EVENT } from "./backend/notInDemo";
 import { currentViewer, forgetSavedWorld, setViewer } from "./backend/state";
 import { MAP_CREDIT } from "./credit";
 import { refusalArea } from "./backend/refusalNames";
 import { runYourOwnClicked, startedOver, viewSwitched } from "./telemetry";
+import { noticeStore } from "./telemetryNotice";
 
 /**
  * FR-006, FR-018: on every page, what this is, how to undo it, and whose
@@ -31,6 +32,10 @@ export function DemoNotice() {
     return () => window.removeEventListener(NOT_IN_DEMO_EVENT, onRefused);
   }, []);
 
+  const telemetryLine = useSyncExternalStore(
+    noticeStore.subscribe,
+    noticeStore.get,
+  );
   const asPlayer = currentViewer() === "player";
   const switchView = () => {
     setViewer(asPlayer ? "gm" : "player");
@@ -53,6 +58,15 @@ export function DemoNotice() {
       <span>
         <strong>Demo.</strong> Nothing is saved anywhere but this browser.
       </span>
+      {telemetryLine && (
+        <a
+          href={telemetryLine.href}
+          data-testid="demo-telemetry-line"
+          className="underline underline-offset-2"
+        >
+          {telemetryLine.text}
+        </a>
+      )}
       <span data-testid="demo-viewer">
         Viewing as {asPlayer ? "a player" : "the Game Master"}.{" "}
         <button

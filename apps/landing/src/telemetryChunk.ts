@@ -41,6 +41,7 @@ export const SECTIONS = [
   "map",
   "numbers",
   "self-host",
+  "telemetry",
   "stance",
   "stars",
   "support",

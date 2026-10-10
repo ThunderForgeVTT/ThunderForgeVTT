@@ -5,6 +5,7 @@ import { Systems } from "./sections/Systems.tsx";
 import { Numbers } from "./sections/Numbers.tsx";
 import { SelfHost } from "./sections/SelfHost.tsx";
 import { Stance } from "./sections/Stance.tsx";
+import { WhatWeMeasure } from "./sections/WhatWeMeasure.tsx";
 import { Support } from "./sections/Support.tsx";
 import { Footer } from "./sections/Footer.tsx";
 
@@ -46,6 +47,7 @@ export function App() {
         <Systems />
         <Numbers />
         <SelfHost />
+        <WhatWeMeasure />
         <Stance />
         <Suspense fallback={<div className="section stars" />}>
           <StarChart />

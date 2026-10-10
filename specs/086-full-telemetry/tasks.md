@@ -419,19 +419,19 @@ never appears in a body, and GPC or DNT limits a session to errors.
 `apps/demo/e2e/telemetry.spec.ts`, and the landing's **What we measure**
 test.
 
-- [ ] T070 [US5] Add `apps/landing/src/sections/WhatWeMeasure.tsx`, at `id="telemetry"`, with Appendix A.5's text. Render it in `apps/landing/src/App.tsx` after `SelfHost`, and link it from `apps/landing/src/sections/Footer.tsx`. Extend `apps/thunderforge/src/telemetry/disclosure_tests.rs` to compare its text with A.5.
-- [ ] T071 [US5] Add the notice's telemetry line to `apps/demo/src/DemoNotice.tsx`, set from the served config:
+- [X] T070 [US5] Add `apps/landing/src/sections/WhatWeMeasure.tsx`, at `id="telemetry"`, with Appendix A.5's text. Render it in `apps/landing/src/App.tsx` after `SelfHost`, and link it from `apps/landing/src/sections/Footer.tsx`. Extend `apps/thunderforge/src/telemetry/disclosure_tests.rs` to compare its text with A.5.
+- [X] T071 [US5] Add the notice's telemetry line to `apps/demo/src/DemoNotice.tsx`, set from the served config:
   - anonymous: "Anonymous usage counts go to ThunderForge; what you type does not.", linking to `/#telemetry`;
   - operator: "go to this server's operator";
   - off: nothing.
 
   Add a unit test for the three.
-- [ ] T072 [US5] Add SC-004 and SC-005 tests to `apps/demo/e2e/telemetry.spec.ts`.
+- [X] T072 [US5] Add SC-004 and SC-005 tests to `apps/demo/e2e/telemetry.spec.ts`.
   - The canary typed into chat, used as a token name, and used as an uploaded file's name is in no telemetry body.
   - With the config off, no telemetry request is made and no chunk loads.
   - With a redirected endpoint, every post goes there.
   - With `Sec-GPC: 1` (`navigator.globalPrivacyControl` stubbed with `addInitScript`), only `error` is sent.
-- [ ] T073 [P] [US5] Extend `apps/landing/e2e/telemetry.spec.ts`: `#telemetry` holds A.5's headings, and GPC limits the landing to `error`.
+- [X] T073 [P] [US5] Extend `apps/landing/e2e/telemetry.spec.ts`: `#telemetry` holds A.5's headings, and GPC limits the landing to `error`.
 
 **Checkpoint**: The demo and landing e2e are green, and the disclosure test
 covers all five places.

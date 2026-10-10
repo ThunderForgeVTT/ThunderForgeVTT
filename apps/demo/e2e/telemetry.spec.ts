@@ -1,6 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 import { connectSrcFor } from "@thunderforge/telemetry/vite";
-import { enterPlay, openDemo, TELEMETRY_ORIGIN, WORLD_ID } from "./support";
+import {
+  activeSceneId,
+  data,
+  enterPlay,
+  openDemo,
+  TELEMETRY_ORIGIN,
+  WORLD_ID,
+} from "./support";
 
 /**
  * Spec 086 US1, SC-003: a visitor plays the demo's funnel, and each step is
@@ -81,13 +88,13 @@ function funnel(bodies: string[]) {
 }
 
 /** Telemetry on, for this page only. */
-async function turnOn(page: Page) {
+async function turnOn(page: Page, config: object = CONFIG) {
   await page.route("**/telemetry.json", (route) =>
     route.fulfill({
       status: 200,
       contentType: "application/json",
       headers: { "cache-control": "no-store" },
-      body: JSON.stringify(CONFIG),
+      body: JSON.stringify(config),
     }),
   );
   await page.route("**/demo/**", async (route) => {
@@ -100,7 +107,7 @@ async function turnOn(page: Page) {
       response,
       headers: {
         ...response.headers(),
-        "content-security-policy": connectSrcFor(CONFIG as never),
+        "content-security-policy": connectSrcFor(config as never),
       },
     });
   });
@@ -280,6 +287,161 @@ test("a thrown error is posted redacted, with a stack of path and line only", as
     expect(frame).toMatch(/^[^\s?#]*:\d+$/);
     expect(frame).not.toMatch(/^https?:/);
   }
+  expect(outside).toEqual([]);
+  await page.context().close();
+});
+
+/** Spec 086 SC-004: what a visitor types, names or uploads never leaves. */
+const CANARY = "zz-canary-7f3a91";
+
+test("the canary typed into chat, named on a token and on an upload is in no telemetry body", async ({
+  browser,
+  baseURL,
+}) => {
+  const { page, outside, telemetry } = await openDemo(browser, baseURL);
+  await turnOn(page);
+  await page.goto("/demo/");
+  await expect(page.getByTestId("demo-telemetry-line")).toHaveText(
+    "Anonymous usage counts go to ThunderForge; what you type does not.",
+  );
+  await expect(page.getByTestId("demo-telemetry-line")).toHaveAttribute(
+    "href",
+    "/#telemetry",
+  );
+  await enterPlay(page);
+  const sceneId = await activeSceneId(page);
+
+  // Chat, the way the dock sends it.
+  await data(
+    page,
+    `mutation ($input: SendChatMessageInput!) {
+      sendChatMessage(input: $input) { body }
+    }`,
+    { input: { worldId: WORLD_ID, body: `hello ${CANARY}` } },
+  );
+  // A token named with it.
+  await data(
+    page,
+    `mutation ($input: GraphQLCreateTokenInput!) {
+      createToken(input: $input) { tokenId }
+    }`,
+    { input: { sceneId, x: 0, y: 0, metadata: { label: CANARY } } },
+  );
+  // A map uploaded under its name, through the level's file input.
+  const png = await page.evaluate(async () => {
+    const canvas = new OffscreenCanvas(64, 64);
+    const context = canvas.getContext(
+      "2d",
+    ) as OffscreenCanvasRenderingContext2D;
+    context.fillRect(0, 0, 64, 64);
+    const blob = await canvas.convertToBlob({ type: "image/png" });
+    return Array.from(new Uint8Array(await blob.arrayBuffer()));
+  });
+  await page.getByTestId("level-manage-toggle").click();
+  await page
+    .getByTestId("level-background-input")
+    .first()
+    .setInputFiles({
+      name: `${CANARY}.png`,
+      mimeType: "image/png",
+      buffer: Buffer.from(png),
+    });
+  // Everything queued goes out.
+  await page.evaluate(() =>
+    window.dispatchEvent(new PageTransitionEvent("pagehide")),
+  );
+  // Chat, a created token and an upload are not counted actions, so what
+  // goes out is the funnel and whatever else the session queued.
+  await expect
+    .poll(() => funnel(telemetry).length, { timeout: 30_000 })
+    .toBeGreaterThan(0);
+  await page.waitForTimeout(6_000); // past one flush interval
+
+  const bodies = telemetry.join("\n");
+  expect(bodies.length).toBeGreaterThan(0);
+  expect(bodies).not.toContain(CANARY);
+  expect(outside).toEqual([]);
+  await page.context().close();
+});
+
+test("with a redirected endpoint, every post goes there and none to the project", async ({
+  browser,
+  baseURL,
+}) => {
+  const REDIRECTED = "https://otel.invalid";
+  const { page, outside, telemetry } = await openDemo(browser, baseURL);
+  const redirected: string[] = [];
+  await page.context().route(`${REDIRECTED}/**`, async (route) => {
+    const request = route.request();
+    if (request.method() === "POST") redirected.push(request.url());
+    await route.fulfill({
+      status: 204,
+      headers: {
+        "access-control-allow-origin": "*",
+        "access-control-allow-methods": "POST",
+        "access-control-allow-headers": "content-type",
+      },
+    });
+  });
+  await turnOn(page, {
+    ...CONFIG,
+    endpoint: `${REDIRECTED}/otlp`,
+    tier: "operator",
+  });
+  await page.goto("/demo/");
+  await expect(page.getByTestId("demo-telemetry-line")).toHaveText(
+    "Anonymous usage counts go to this server's operator; what you type does not.",
+  );
+  await expect
+    .poll(() => redirected.length, { timeout: 30_000 })
+    .toBeGreaterThan(0);
+  await page.waitForTimeout(6_000);
+  expect(
+    redirected.every((url) => url.startsWith(`${REDIRECTED}/otlp/v1/`)),
+    redirected.join(", "),
+  ).toBe(true);
+  expect(redirected).toContain(`${REDIRECTED}/otlp/v1/logs`);
+  expect(telemetry).toEqual([]);
+  expect(outside.filter((r) => !r.includes(REDIRECTED))).toEqual([]);
+  await page.context().close();
+});
+
+test("with Global Privacy Control, only errors are sent", async ({
+  browser,
+  baseURL,
+}) => {
+  const { page, outside, telemetry } = await openDemo(browser, baseURL);
+  await page.addInitScript(() =>
+    Object.defineProperty(Navigator.prototype, "globalPrivacyControl", {
+      get: () => true,
+      configurable: true,
+    }),
+  );
+  await turnOn(page);
+  await page.goto("/demo/");
+  await expect(page.getByTestId("demo-notice")).toBeVisible();
+  await page.getByRole("button", { name: "View as player" }).click();
+  await expect(page.getByTestId("demo-viewer")).toContainText("a player");
+  await page.evaluate(() => {
+    setTimeout(() => {
+      throw new Error("demo-e2e gpc");
+    });
+  });
+
+  await expect
+    .poll(
+      () =>
+        records(telemetry).filter(
+          (r) => attr(r.attributes, "event.name") === "error",
+        ).length,
+      { timeout: 30_000 },
+    )
+    .toBeGreaterThan(0);
+  await page.waitForTimeout(6_000);
+  const names = new Set(
+    records(telemetry).map((r) => attr(r.attributes, "event.name")),
+  );
+  expect([...names]).toEqual(["error"]);
   expect(outside).toEqual([]);
   await page.context().close();
 });

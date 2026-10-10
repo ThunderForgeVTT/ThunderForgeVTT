@@ -10,11 +10,13 @@
 import { bootTelemetry, telemetry } from "@thunderforge/telemetry";
 import { staticFetch } from "./guard/install";
 import { countAction } from "./backend/telemetryTap";
+import { noticeStore } from "./telemetryNotice";
 
 export function bootDemoTelemetry(): void {
   void bootTelemetry({
     configUrl: `${import.meta.env.BASE_URL}telemetry.json`,
     fetchImpl: staticFetch,
+    onConfig: (config) => noticeStore.set(config),
     load: () => import("./telemetryChunk").then((m) => m.start),
   });
 }
