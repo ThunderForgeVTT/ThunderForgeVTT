@@ -1,0 +1,118 @@
+{
+  "resourceSpans": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "thunderforge-web"
+            }
+          },
+          {
+            "key": "service.version",
+            "value": {
+              "stringValue": "1.4.0"
+            }
+          },
+          {
+            "key": "deployment.environment",
+            "value": {
+              "stringValue": "production"
+            }
+          },
+          {
+            "key": "thunderforge.tier",
+            "value": {
+              "stringValue": "anonymous"
+            }
+          },
+          {
+            "key": "thunderforge.instance.id",
+            "value": {
+              "stringValue": "0192f1a4-7b3c-7d2e-9f10-3a4b5c6d7e8f"
+            }
+          },
+          {
+            "key": "browser.family",
+            "value": {
+              "stringValue": "chrome"
+            }
+          },
+          {
+            "key": "browser.major",
+            "value": {
+              "stringValue": "131"
+            }
+          },
+          {
+            "key": "os.family",
+            "value": {
+              "stringValue": "linux"
+            }
+          },
+          {
+            "key": "device.mobile",
+            "value": {
+              "boolValue": false
+            }
+          },
+          {
+            "key": "viewport.bucket",
+            "value": {
+              "stringValue": "1280-1919"
+            }
+          }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": {
+            "name": "@thunderforge/telemetry"
+          },
+          "spans": [
+            {
+              "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+              "spanId": "00f067aa0ba902b7",
+              "name": "engine.load",
+              "kind": 1,
+              "startTimeUnixNano": "1790856000000000000",
+              "endTimeUnixNano": "1790856002400000000",
+              "attributes": [
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "6b1f0c2d9e8a4b7c"
+                  }
+                },
+                {
+                  "key": "bytes",
+                  "value": {
+                    "intValue": "18400000"
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+              "spanId": "53995c3f42cd8ad8",
+              "name": "download",
+              "kind": 1,
+              "startTimeUnixNano": "1790856000000000000",
+              "endTimeUnixNano": "1790856001200000000",
+              "attributes": [
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "6b1f0c2d9e8a4b7c"
+                  }
+                }
+              ],
+              "parentSpanId": "00f067aa0ba902b7"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

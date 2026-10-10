@@ -398,6 +398,64 @@ adds a span, a metric or a log record follows these rules:
   `TELEMETRY=false`. A test that needs telemetry installs an in-memory
   exporter or routes the browser's requests in Playwright.
 
+#### The public gateway and the policy crate
+
+`telemetry.thunderforge.dev` is not the collector. It is
+`apps/telemetry-gateway` (`thunderforge-telemetry-gateway`), a small Axum
+service in front of the collector's public receiver. It is the project's
+alone: a self-hosted operator never runs it, and their server sends straight
+to their own collector. The contract is
+`specs/086-full-telemetry/contracts/telemetry-gateway.md`.
+
+- **One list.** Everything the gateway decides comes from
+  `crates/thunderforge-telemetry-policy`: the service names, the attribute
+  allow-lists per place, the size caps, the metric names (`INSTRUMENTS`,
+  exactly; R27), the labels it sets and the drop reasons. The server reads
+  the same crate, so the gateway cannot drift from what a release sends.
+  `scripts/check-observability.mjs` reads the instrument names from the same
+  place (`print_instruments`), so a dashboard cannot read a series the
+  gateway would refuse.
+- **What it does.** It decodes OTLP protobuf or JSON, drops a resource whose
+  service is not ours or whose instance id is malformed, drops a record with
+  an attribute over its cap, strips (and counts) an attribute not on the
+  list, drops a metric whose name is not listed, sets the labels below, and
+  forwards a freshly built protobuf request with only `Content-Type`. What
+  it dropped comes back in OTLP's `partial_success`, merged with the
+  collector's own.
+- **The labels.** `thunderforge.ingress`, `thunderforge.source`
+  (`owner_site`, `self_hosted_browser`, `server`), `thunderforge.origin.host`,
+  `thunderforge.instance.id`, `thunderforge.client.version`,
+  `thunderforge.user_agent.family` and `.major`, and `thunderforge.country`
+  when Cloudflare gave one. They overwrite a sender's attribute of the same
+  name, and are resource attributes: none becomes a Prometheus or Loki index
+  label. `Origin`, `User-Agent` and `CF-IPCountry` can be forged, so the
+  labels are indicative.
+- **The IP address.** It is read from `X-Forwarded-For` at
+  `TELEMETRY_GATEWAY_TRUSTED_HOPS`, hashed with a per-process random key to
+  find its rate-limit bucket, and dropped when the request ends. It is never
+  logged, never a metric attribute and never forwarded. A test holds this:
+  the address and the user agent appear in no byte the fake collector
+  received, no log line and no metric.
+- **The drop reasons.** `thunderforge.telemetry_gateway.dropped` counts once
+  per request per `reason`: `rate_limited_ip` and `rate_limited_instance`
+  (`429` with `Retry-After`), `body_too_large` (`413`), `undecodable`
+  (`400`), `unknown_service`, `instance_id`, `attribute_too_large` and
+  `metric_name` (`200` with `partial_success`), and `overloaded` and
+  `upstream_error` (`503`). `DropReason::ALL` is the list; a new reason is
+  added there, to the contract and to the Server dashboard's row together.
+- **Shipping order (R27).** The gateway refuses a metric it does not list,
+  so a release that adds an instrument ships its gateway with it or before
+  it: `make push-telemetry-gateway`, then restart the Flux Deployment, then
+  release the server. A server released first loses the new series until
+  the gateway catches up; nothing else breaks.
+- **Running it.** `cargo test -p thunderforge-telemetry-gateway` runs the
+  router in process against a fake collector. The fixtures in
+  `apps/telemetry-gateway/tests/fixtures/` are captured, not written: the
+  browser's with `node apps/telemetry-gateway/tests/fixtures/capture-browser.mts`,
+  the server's with
+  `cargo test -p thunderforge-telemetry-gateway capture_server_fixtures -- --ignored`.
+  Recapture them when either encoder changes.
+
 ## Feature flags
 
 A feature can be merged before it is switched on. A flag is how: a boolean

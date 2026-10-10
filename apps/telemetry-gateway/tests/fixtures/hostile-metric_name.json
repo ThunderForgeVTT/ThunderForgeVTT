@@ -1,0 +1,59 @@
+{
+  "resourceMetrics": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "thunderforge"
+            }
+          },
+          {
+            "key": "service.version",
+            "value": {
+              "stringValue": "1.4.0"
+            }
+          },
+          {
+            "key": "thunderforge.instance.id",
+            "value": {
+              "stringValue": "0192f1a4-7b3c-7d2e-9f10-3a4b5c6d7e8f"
+            }
+          }
+        ]
+      },
+      "scopeMetrics": [
+        {
+          "scope": {
+            "name": "thunderforge"
+          },
+          "metrics": [
+            {
+              "name": "evil.metric",
+              "unit": "1",
+              "sum": {
+                "aggregationTemporality": 2,
+                "isMonotonic": true,
+                "dataPoints": [
+                  {
+                    "asInt": "7",
+                    "timeUnixNano": "1759320000000000000",
+                    "attributes": [
+                      {
+                        "key": "outcome",
+                        "value": {
+                          "stringValue": "ok"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

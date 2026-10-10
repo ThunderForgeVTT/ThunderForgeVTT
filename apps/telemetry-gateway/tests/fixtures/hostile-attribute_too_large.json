@@ -1,0 +1,167 @@
+{
+  "resourceLogs": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "thunderforge-web"
+            }
+          },
+          {
+            "key": "service.version",
+            "value": {
+              "stringValue": "1.4.0"
+            }
+          },
+          {
+            "key": "deployment.environment",
+            "value": {
+              "stringValue": "production"
+            }
+          },
+          {
+            "key": "thunderforge.tier",
+            "value": {
+              "stringValue": "anonymous"
+            }
+          },
+          {
+            "key": "thunderforge.instance.id",
+            "value": {
+              "stringValue": "0192f1a4-7b3c-7d2e-9f10-3a4b5c6d7e8f"
+            }
+          },
+          {
+            "key": "browser.family",
+            "value": {
+              "stringValue": "chrome"
+            }
+          },
+          {
+            "key": "browser.major",
+            "value": {
+              "stringValue": "131"
+            }
+          },
+          {
+            "key": "os.family",
+            "value": {
+              "stringValue": "linux"
+            }
+          },
+          {
+            "key": "device.mobile",
+            "value": {
+              "boolValue": false
+            }
+          },
+          {
+            "key": "viewport.bucket",
+            "value": {
+              "stringValue": "1280-1919"
+            }
+          }
+        ]
+      },
+      "scopeLogs": [
+        {
+          "scope": {
+            "name": "@thunderforge/telemetry"
+          },
+          "logRecords": [
+            {
+              "timeUnixNano": "1790856000000000000",
+              "observedTimeUnixNano": "1790856000000000000",
+              "severityNumber": 9,
+              "severityText": "INFO",
+              "body": {
+                "stringValue": "page.view"
+              },
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "page.view"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "6b1f0c2d9e8a4b7c"
+                  }
+                },
+                {
+                  "key": "route",
+                  "value": {
+                    "stringValue": "/worlds"
+                  }
+                },
+                {
+                  "key": "nav.type",
+                  "value": {
+                    "stringValue": "navigate"
+                  }
+                }
+              ]
+            },
+            {
+              "timeUnixNano": "1790856001500000000",
+              "observedTimeUnixNano": "1790856001500000000",
+              "severityNumber": 17,
+              "severityText": "ERROR",
+              "body": {
+                "stringValue": "TypeError: x is undefined"
+              },
+              "attributes": [
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "error"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "6b1f0c2d9e8a4b7c"
+                  }
+                },
+                {
+                  "key": "error.source",
+                  "value": {
+                    "stringValue": "window"
+                  }
+                },
+                {
+                  "key": "error.type",
+                  "value": {
+                    "stringValue": "TypeError"
+                  }
+                },
+                {
+                  "key": "error.message",
+                  "value": {
+                    "stringValue": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                  }
+                },
+                {
+                  "key": "error.count",
+                  "value": {
+                    "intValue": "1"
+                  }
+                },
+                {
+                  "key": "t.ms",
+                  "value": {
+                    "doubleValue": 1500.5
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

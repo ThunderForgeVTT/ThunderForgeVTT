@@ -89,3 +89,19 @@ spec:
             severity: critical
           annotations:
             summary: The landing's exporter cannot reach nginx's stub_status. Look at the thunderforge-landing pods in thunderforge-dev and the nginx container's logs.
+    - name: thunderforge.telemetry-gateway
+      rules:
+        - alert: ThunderForgeTelemetryIntakeFailing
+          expr: sum(rate(thunderforge_telemetry_gateway_dropped_total{reason=~"upstream_error|overloaded"}[5m])) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: The public telemetry gateway is dropping honest batches because the collector is slow, down or every upstream slot is taken. Look at the Server dashboard's Public telemetry intake row and the otel-collector pods in monitoring.
+        - alert: ThunderForgeTelemetrySpam
+          expr: sum(rate(thunderforge_telemetry_gateway_dropped_total{reason!~"upstream_error|overloaded"}[5m])) > 5 * sum(rate(thunderforge_telemetry_gateway_accepted_total[5m])) + 1
+          for: 15m
+          labels:
+            severity: info
+          annotations:
+            summary: The public telemetry gateway is refusing five times more than it accepts. Someone is sending what no ThunderForge build sends; the dropped-by-reason panel says what.

@@ -192,6 +192,34 @@ COPY --from=landing-build /build/apps/landing/dist /usr/share/nginx/html
 COPY --from=build /build/data/demo /usr/share/nginx/html/demo
 EXPOSE 8080
 
+# --- the public telemetry gateway (spec 086) ---------------------------------
+#
+# Its own image: the OTLP intake in front of the collector, published by
+# `make push-telemetry-gateway`. Before `server`, so `server` stays the stage a
+# plain `docker build` ends on. It cooks only its own dependencies, so a
+# gateway image does not wait on the wasm crates.
+FROM toolchain AS gateway-cook
+WORKDIR /build
+ENV CARGO_TERM_COLOR=never
+COPY .cargo .cargo
+COPY --from=planner /build/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json -p thunderforge-telemetry-gateway
+
+FROM gateway-cook AS gateway-build
+COPY . .
+RUN cargo build --release -p thunderforge-telemetry-gateway \
+  && install -D target/release/thunderforge-telemetry-gateway /out/thunderforge-telemetry-gateway \
+  && strip /out/thunderforge-telemetry-gateway
+
+FROM debian:bookworm-slim AS telemetry-gateway
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+COPY --from=gateway-build /out/thunderforge-telemetry-gateway /usr/local/bin/
+USER 65532:65532
+EXPOSE 4318
+ENTRYPOINT ["/usr/local/bin/thunderforge-telemetry-gateway"]
+
 # --- the server ---------------------------------------------------------------
 #
 # The same Debian release the binary was linked on, so glibc and libpq match.

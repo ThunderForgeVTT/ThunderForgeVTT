@@ -1,0 +1,58 @@
+[package]
+name = "thunderforge-telemetry-gateway"
+version = "0.1.0"
+edition = "2024"
+repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
+license.workspace = true
+description = "The public telemetry intake: checks, labels and limits every OTLP batch before the collector sees it (spec 086 US9)"
+
+[lints]
+workspace = true
+
+# The project's own service, in front of `otel-collector-public`
+# (contracts/telemetry-gateway.md). A self-hosted operator never runs it.
+[[bin]]
+name = "thunderforge-telemetry-gateway"
+path = "src/main.rs"
+
+[dependencies]
+thunderforge-telemetry-policy = { path = "../../crates/thunderforge-telemetry-policy" }
+# R26: the OTLP messages as prost types, with serde for OTLP/JSON. No tonic.
+opentelemetry-proto = { version = "0.33.0", default-features = false, features = [
+  "gen-tonic-messages",
+  "trace",
+  "logs",
+  "metrics",
+  "with-serde",
+] }
+prost = "0.14"
+serde = "1.0.229"
+serde_json = "1.0.151"
+axum = "0.8.9"
+tower = { version = "0.5.3", features = ["limit", "load-shed", "timeout", "util"] }
+tower-http = { version = "0.7.0", features = ["cors", "limit", "trace"] }
+tokio = { version = "1.53.1", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+# Plain HTTP to the in-cluster collector.
+reqwest = { version = "0.13.4", default-features = false }
+clap = { version = "4.6.6", features = ["derive", "env"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
+# The gateway's own metrics, as `apps/thunderforge` exports them.
+opentelemetry = "0.33.0"
+opentelemetry_sdk = "0.33.0"
+opentelemetry-otlp = { version = "0.33.0", default-features = false, features = [
+  "http-proto",
+  "reqwest-blocking-client",
+  "metrics",
+] }
+
+[dev-dependencies]
+opentelemetry_sdk = { version = "0.33.0", features = ["testing"] }
+# `capture_server_fixtures`: the server's own exporter, against a socket.
+opentelemetry-otlp = { version = "0.33.0", default-features = false, features = [
+  "http-proto",
+  "reqwest-blocking-client",
+  "trace",
+  "logs",
+  "metrics",
+] }

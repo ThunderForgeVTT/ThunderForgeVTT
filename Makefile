@@ -1,4 +1,4 @@
-.PHONY: gc image push landing-image push-landing clean-builds test-db-reset dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-rust test-mail bench-blob-store test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean container container-up container-down container-down-clean observability observability-check
+.PHONY: gc image push landing-image push-landing telemetry-gateway-image push-telemetry-gateway clean-builds test-db-reset dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-rust test-mail bench-blob-store test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean container container-up container-down container-down-clean observability observability-check
 
 # Loads DATABASE_URL (and anything else) from the repo-root .env for targets
 # that shell out to tools which don't read it themselves (diesel-cli).
@@ -32,6 +32,8 @@ help:
 	@echo "  make image            Build the dev image (IMAGE) from the tree"
 	@echo "  make push             Build, push the dev image (IMAGE) and restart its deployment (KUBE_CONTEXT/KUBE_NAMESPACE/DEPLOY)"
 	@echo "  make push-landing     Build and push the thunderforge.dev image (LANDING_IMAGE, a release build) and restart deploy/$(LANDING_DEPLOY)"
+	@echo "  make telemetry-gateway-image  Build the public telemetry gateway image (TELEMETRY_GATEWAY_IMAGE)"
+	@echo "  make push-telemetry-gateway   Build and push it; Flux's Deployment pulls Always, so restart it to roll out"
 	@echo "  make clean-builds     Show what old cargo output and finished worktrees can go (ARGS=--apply deletes it)"
 	@echo "  make format           Run prettier + cargo fmt"
 	@echo "  make lint             Run cargo clippy (-D warnings) plus the file-length check"
@@ -206,6 +208,15 @@ push-landing: landing-image
 	docker push $(LANDING_IMAGE)
 	kubectl --context $(KUBE_CONTEXT) -n $(KUBE_NAMESPACE) rollout restart deploy/$(LANDING_DEPLOY)
 	kubectl --context $(KUBE_CONTEXT) -n $(KUBE_NAMESPACE) rollout status deploy/$(LANDING_DEPLOY) --timeout=5m
+
+# Spec 086 (contracts/telemetry-gateway.md): the public OTLP intake in front of
+# the collector. The Deployment is Flux's, so this only builds and pushes.
+TELEMETRY_GATEWAY_IMAGE ?= mbround18/thunderforgevtt:telemetry-gateway
+telemetry-gateway-image:
+	docker build --target telemetry-gateway -t $(TELEMETRY_GATEWAY_IMAGE) .
+
+push-telemetry-gateway: telemetry-gateway-image
+	docker push $(TELEMETRY_GATEWAY_IMAGE)
 
 # Spec 086 (contracts/observability-apply.md): dashboards, alert rules and the
 # landing's nginx exporter. thunderforge-dev is not Flux-managed, so this is
