@@ -24,18 +24,18 @@ use crate::test_support::{
 };
 use crate::world_events::EVENT_CODE_STAGED_CONTENT_DECIDED;
 
-struct World {
-    state: AppState,
-    gm: Uuid,
-    trusted: Uuid,
-    player: Uuid,
-    other: Uuid,
-    stranger: Uuid,
-    world: Uuid,
-    scene: Uuid,
+pub(crate) struct World {
+    pub(crate) state: AppState,
+    pub(crate) gm: Uuid,
+    pub(crate) trusted: Uuid,
+    pub(crate) player: Uuid,
+    pub(crate) other: Uuid,
+    pub(crate) stranger: Uuid,
+    pub(crate) world: Uuid,
+    pub(crate) scene: Uuid,
 }
 
-fn world() -> World {
+pub(crate) fn world() -> World {
     let state = test_app_state();
     let mut conn = state.db_pool.get().expect("conn");
     let gm = insert_test_user(&mut conn);
@@ -65,18 +65,18 @@ fn world() -> World {
 }
 
 impl World {
-    fn conn(
+    pub(crate) fn conn(
         &self,
     ) -> diesel::r2d2::PooledConnection<diesel::r2d2::ConnectionManager<diesel::PgConnection>> {
         self.state.db_pool.get().expect("conn")
     }
 
-    fn actor(&self) -> Uuid {
+    pub(crate) fn actor(&self) -> Uuid {
         insert_test_actor(&mut self.conn(), self.world, self.scene, self.gm)
     }
 
     /// A pending piece `by` brought, with the given fields.
-    fn stage(&self, by: Uuid, kind: &str, name: &str, fields: Value) -> Uuid {
+    pub(crate) fn stage(&self, by: Uuid, kind: &str, name: &str, fields: Value) -> Uuid {
         use crate::schema::world_staged_content as staged;
         let hash = format!("{:0>64}", Uuid::now_v7().simple());
         diesel::insert_into(staged::table)
@@ -100,7 +100,7 @@ impl World {
     }
 
     /// The actor holds the piece as an ability link.
-    fn link_ability(&self, actor: Uuid, staged: Uuid, name: &str) -> Uuid {
+    pub(crate) fn link_ability(&self, actor: Uuid, staged: Uuid, name: &str) -> Uuid {
         use crate::schema::world_actor_abilities as abilities;
         diesel::insert_into(abilities::table)
             .values((
@@ -113,7 +113,7 @@ impl World {
             .expect("linked")
     }
 
-    fn link_item(&self, actor: Uuid, staged: Uuid, name: &str) -> Uuid {
+    pub(crate) fn link_item(&self, actor: Uuid, staged: Uuid, name: &str) -> Uuid {
         use crate::schema::world_actor_inventory as inventory;
         diesel::insert_into(inventory::table)
             .values((
@@ -127,7 +127,7 @@ impl World {
             .expect("carried")
     }
 
-    fn ability_link(&self, link: Uuid) -> (Option<Uuid>, Option<Uuid>) {
+    pub(crate) fn ability_link(&self, link: Uuid) -> (Option<Uuid>, Option<Uuid>) {
         use crate::schema::world_actor_abilities as abilities;
         abilities::table
             .find(link)
@@ -136,7 +136,7 @@ impl World {
             .unwrap()
     }
 
-    fn state_of(&self, staged: Uuid) -> StagedState {
+    pub(crate) fn state_of(&self, staged: Uuid) -> StagedState {
         use crate::schema::world_staged_content as s;
         s::table
             .find(staged)
@@ -146,7 +146,7 @@ impl World {
     }
 
     /// The event-41 payloads naming this piece.
-    fn decisions(&self, staged: Uuid) -> Vec<Value> {
+    pub(crate) fn decisions(&self, staged: Uuid) -> Vec<Value> {
         use crate::schema::world_events as events;
         events::table
             .filter(events::world_id.eq(self.world))
@@ -161,7 +161,10 @@ impl World {
             .collect()
     }
 
-    fn abilities_named(&self, name: &str) -> Vec<(Uuid, ContentOrigin, Uuid, String, Option<i32>)> {
+    pub(crate) fn abilities_named(
+        &self,
+        name: &str,
+    ) -> Vec<(Uuid, ContentOrigin, Uuid, String, Option<i32>)> {
         use crate::schema::world_abilities as a;
         a::table
             .filter(a::world_id.eq(self.world))

@@ -170,6 +170,19 @@ pub async fn adjust_inventory_quantity_impl(
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
+    // Spec 048 FR-036: spending an item the world has not adopted is refused.
+    // Removing it is not spending it, so `removeInventoryEntry` still works.
+    let (back, unadopted) = tokio::task::spawn_blocking(move || {
+        let found = crate::staged_content::guard::carried_by_entry(&mut conn, entry_id);
+        (conn, found)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?;
+    let mut conn = back;
+    if let Some(piece) = unadopted.map_err(|_| Error::new("Failed to read the entry"))? {
+        return Err(piece.refusal());
+    }
+
     let quantity = input.quantity;
 
     if quantity == 0 {

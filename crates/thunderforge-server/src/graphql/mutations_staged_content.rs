@@ -190,4 +190,4 @@ impl StagedContentMutation {
 
 #[cfg(test)]
 #[path = "mutations_staged_content_tests.rs"]
-mod tests;
+pub(crate) mod tests;

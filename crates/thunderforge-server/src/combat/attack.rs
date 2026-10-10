@@ -89,6 +89,8 @@ pub enum FightRefusal {
     Invalid(String),
     /// Something failed that is nobody's fault; retrying may help.
     Failed(String),
+    /// Spec 048 FR-036a: a piece the world has not adopted.
+    NotAdopted(crate::staged_content::guard::Unadopted),
 }
 
 /// C2's sentence.
@@ -103,6 +105,7 @@ impl FightRefusal {
             FightRefusal::NotFound(sentence)
             | FightRefusal::Invalid(sentence)
             | FightRefusal::Failed(sentence) => sentence.clone(),
+            FightRefusal::NotAdopted(_) => crate::staged_content::guard::NOT_ADOPTED.into(),
         }
     }
 }
@@ -118,6 +121,7 @@ impl From<FightRefusal> for async_graphql::Error {
         match refusal {
             // The gate's own error, with its code, as every paused mutation.
             FightRefusal::Paused(gate) => gate.into(),
+            FightRefusal::NotAdopted(piece) => piece.refusal(),
             other => async_graphql::Error::new(other.message()),
         }
     }

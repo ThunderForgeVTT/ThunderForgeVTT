@@ -276,8 +276,20 @@ stale.
   - Done: 10 tests, all green. The last one applies `fighter3-wizard2.pdf` onto two actors as the GM and checks that each piece is staged once and one adoption serves both. Each decision test reads event 41 back by `stagedId`.
 - [X] T055 [US3] Implement `staged_content/decide.rs` and `StagedContentMutation` (`adoptStagedContent`, `adoptAllStagedContent`, `declineStagedContent`, `revisitStagedContent`), and the `stagedContent` query. Each checks `require_manages_content`. T054 goes green.
   - Done: the rules are in `decide.rs`, and the resolvers only convert. `StagedContentQuery` sits beside the mutations in `mutations_staged_content.rs`, not in `queries/sheet_import.rs`. `StagedContent` also carries `adoptedAbilityId` and `adoptedItemId`. `ActorSummary` is `{id, label}`. The contract records both. An adopted item becomes a `world_items` row; anything else becomes a `world_abilities` row whose classification is the kind. Declining an adopted piece is refused with `VALIDATION_FAILED`. Revisit starts only from declined. A stranger gets `FORBIDDEN`. `--lib staged_content` gives 10/10, `--lib sheet_import` gives 30/30, and clippy is clean on the server, sheet-import and both dnd5e crates.
-- [ ] T056 [P] [US3] Write refusal tests: `rollCheck`, `makeAttack`, ability use, item use and share each refuse a staged link with `CONTENT_NOT_ADOPTED` and the FR-036a sentence.
-- [ ] T057 [US3] Implement `staged_content/guard.rs`, one check called from each of those mutations. T056 goes green.
+- [X] T056 [P] [US3] Write refusal tests: `rollCheck`, `makeAttack`, ability use, item use and share each refuse a staged link with `CONTENT_NOT_ADOPTED` and the FR-036a sentence.
+  - Done: there are 6 tests in `staged_content/guard_tests.rs`.
+    - `makeAttack` with a staged ability or item refuses with the code and the sentence. A declined piece is refused too.
+    - An adopted piece's staged id gives the ordinary not-found, and the world's id works.
+    - Spending a staged item through `adjustInventoryQuantity` is refused and leaves the quantity unchanged. This is "item use".
+    - Both share links are refused for the bringer, the GM and a Trusted Player.
+    - Another player, a stranger, or a creature that does not hold the piece gets the path's ordinary answer, so the refusal never reveals a piece.
+    - Deviation: `rollCheck` has no test. It takes a check the system declared and never names an ability or item, so it cannot name a piece. Ability use has no test either, because there is no ability-use mutation yet: an ability is used through `makeAttack`, which is covered. Both are recorded in the guard's module doc.
+- [X] T057 [US3] Implement `staged_content/guard.rs`, one check called from each of those mutations. T056 goes green.
+  - Done: `guard.rs` has three lookups, one for each way a path can name a piece (an attacker's link, an inventory entry, a share), plus `Unadopted::refusal()`.
+    - `find_weapon` asks the guard only after its own lookup misses, so the lair, the reroll and the preview are all covered. `FightRefusal::NotAdopted` carries the piece for T058's report.
+    - The offline reconcile path rejects a not-adopted attack as `PermissionDenied`.
+    - The share check runs before the readiness gate, because it answers only people who can already see the piece.
+    - Test counts: `--lib staged_content` 16/16, combat 126/126, inventory 5/5, ability shares 10/10, item shares 8/8, reconcile 26/26. Clippy is clean.
 - [ ] T058 [P] [US3] Write report tests in `staged_content/report_tests.rs`:
   - the first attempt is recorded and posts one GM-only chat message stating facts only;
   - a second attempt within 10 minutes is counted and not posted;

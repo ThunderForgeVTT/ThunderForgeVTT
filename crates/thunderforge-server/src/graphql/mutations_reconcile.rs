@@ -492,7 +492,9 @@ fn apply_attack_intent(
         Err(FightRefusal::NotYourTurn(sentence)) => {
             GraphQLReconcileOutcome::not_your_turn(local_id, sentence)
         }
-        Err(FightRefusal::NotControlled) => {
+        // Spec 048 FR-036: a piece the world has not adopted is not this
+        // player's to use, whenever the intent was made.
+        Err(FightRefusal::NotControlled) | Err(FightRefusal::NotAdopted(_)) => {
             GraphQLReconcileOutcome::rejected(local_id, GraphQLRejectionReason::PermissionDenied)
         }
         Err(FightRefusal::Paused(_)) => {

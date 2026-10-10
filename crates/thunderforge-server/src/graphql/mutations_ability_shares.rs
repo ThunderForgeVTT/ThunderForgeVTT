@@ -250,6 +250,10 @@ pub async fn create_ability_share_link_impl(
     ability_id: Uuid,
     attestation: &crate::publishing::AttestationInput,
 ) -> GraphQLResult<AbilityShare> {
+    // Spec 048 FR-036: a piece the world has not adopted is not shared. Asked
+    // before the readiness gate, because it answers only its bringer and
+    // whoever manages the world's content, who can already see it.
+    crate::staged_content::guard::refuse_share(state, user_id, ability_id).await?;
     // Spec 040 FR-026: an instance with no contact for copyright notices
     // publishes nothing beyond a world. Asked first, before ownership, so a
     // misconfigured instance answers the same sentence to every caller

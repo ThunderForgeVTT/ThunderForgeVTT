@@ -141,7 +141,45 @@ fn part_from(
 /// attacker has: an ability its actor knows, an item in its actor's
 /// inventory, or an ability one of those items carries. A Game-Master-only
 /// ability is not there for a player at all (spec 025 FR-024b).
+///
+/// Spec 048 FR-036a: an id that is none of those but is a piece the world has
+/// not adopted, held by the attacker, is refused as that, and says why.
 pub(crate) fn find_weapon(
+    conn: &mut PgConnection,
+    world_id: Uuid,
+    actor_id: Option<Uuid>,
+    runs_the_world: bool,
+    ability_id: Option<Uuid>,
+    item_id: Option<Uuid>,
+) -> Result<Weapon, FightRefusal> {
+    match find_world_weapon(
+        conn,
+        world_id,
+        actor_id,
+        runs_the_world,
+        ability_id,
+        item_id,
+    ) {
+        Err(FightRefusal::NotFound(sentence)) => {
+            let Some(named) = ability_id.or(item_id) else {
+                return Err(FightRefusal::NotFound(sentence));
+            };
+            match crate::staged_content::guard::named_by_attacker(
+                conn,
+                world_id,
+                actor_id,
+                runs_the_world,
+                named,
+            )? {
+                Some(piece) => Err(FightRefusal::NotAdopted(piece)),
+                None => Err(FightRefusal::NotFound(sentence)),
+            }
+        }
+        found => found,
+    }
+}
+
+fn find_world_weapon(
     conn: &mut PgConnection,
     world_id: Uuid,
     actor_id: Option<Uuid>,
