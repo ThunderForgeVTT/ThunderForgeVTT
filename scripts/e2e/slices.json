@@ -874,58 +874,6 @@
       ]
     },
     {
-      "name": "sheet-import",
-      "summary": "Bringing a character in from a sheet (specs/048-bringing-a-character-in)",
-      "own": ["sheet-import-"],
-      "standalone": "pnpm -F @thunderforge/dnd5e test:sheet-reader",
-      "neighbours": [
-        {
-          "spec": "actor-detail-routes.spec.ts",
-          "seam": "the door to bring a sheet in sits on the actor screen"
-        },
-        {
-          "spec": "players-hero-edit.spec.ts",
-          "seam": "a player reaches their own hero, where the import door is"
-        },
-        {
-          "spec": "abilities-compendium.spec.ts",
-          "seam": "an adopted piece appears in the world's abilities, a staged one does not"
-        },
-        {
-          "spec": "world-compendium.spec.ts",
-          "seam": "an adopted piece appears in the world's compendium, a staged one does not"
-        },
-        {
-          "spec": "combat-attack.spec.ts",
-          "seam": "an imported attack is used in a fight"
-        },
-        {
-          "spec": "dnd5e-sheet.spec.ts",
-          "seam": "the 5e sheet grows the sections an import fills"
-        },
-        {
-          "spec": "pdf-reader.spec.ts",
-          "seam": "the PDF crate gains regions and bounds under the book reader"
-        },
-        {
-          "spec": "content-origin.spec.ts",
-          "seam": "origin becomes a column on actors, items and abilities"
-        },
-        {
-          "spec": "library-account-deletion.spec.ts",
-          "seam": "deleting an account removes the kept sheet files"
-        },
-        {
-          "spec": "user-data-export.spec.ts",
-          "seam": "a person's export carries their brought characters and kept files"
-        }
-      ],
-      "paths": [
-        "crates/thunderforge-sheet-import/**",
-        "packs/systems/dnd5e/sheet/**"
-      ]
-    },
-    {
       "name": "status",
       "summary": "In-engine status displays (specs/029-in-engine-status-displays)",
       "own": ["status-"],

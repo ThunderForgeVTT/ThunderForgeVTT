@@ -27,6 +27,7 @@
 
 import type { Client } from "graphql-ws";
 
+import { noteLastEvent } from "@/api/lastEvent";
 import { reportPlayPausedIn } from "@/api/playPauseSignal";
 
 import { isHeartbeatOffline, subscribeToHeartbeat } from "./heartbeat";
@@ -148,6 +149,7 @@ function noteSeen(worldId: string, event: WorldEventLike): void {
   if (typeof event.id !== "number") return;
   const current = lastSeenEventId.get(worldId) ?? 0;
   if (event.id > current) lastSeenEventId.set(worldId, event.id);
+  noteLastEvent(worldId, event.id);
 }
 
 /** What this tab believes it has processed for a world. */
@@ -798,6 +800,7 @@ export async function catchUpWorldEvents(
     // rather than from a point we are about to abandon.
     if (typeof payload.latestId === "number") {
       lastSeenEventId.set(worldId, payload.latestId);
+      noteLastEvent(worldId, payload.latestId);
     }
     return "resync-required";
   }

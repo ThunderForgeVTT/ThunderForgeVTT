@@ -587,12 +587,19 @@ impl AbilityShareMutation {
     ) -> GraphQLResult<GraphQLAbilityShareLink> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        let row = create_ability_share_link_impl(
+        let row = crate::staged_content::report::on_refusal(
+            ctx,
             state,
             auth_user.user_id,
-            auth_user.is_admin,
-            ability_id,
-            &attestation,
+            "createAbilityShareLink",
+            create_ability_share_link_impl(
+                state,
+                auth_user.user_id,
+                auth_user.is_admin,
+                ability_id,
+                &attestation,
+            )
+            .await,
         )
         .await?;
         Ok(GraphQLAbilityShareLink {

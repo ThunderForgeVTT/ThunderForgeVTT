@@ -366,7 +366,14 @@ impl AttackMutation {
         let user = authenticated_user(ctx)?;
         // The same RNG `rollDice` uses, for the same reason (ADR-044).
         let rng = rand::rngs::StdRng::from_rng(&mut rand::rng());
-        make_attack_impl(state, user.user_id, user.is_admin, input, rng).await
+        crate::staged_content::report::on_refusal(
+            ctx,
+            state,
+            user.user_id,
+            "makeAttack",
+            make_attack_impl(state, user.user_id, user.is_admin, input, rng).await,
+        )
+        .await
     }
 
     /// Take or decline an offer, once. By a controller of its creature, or a

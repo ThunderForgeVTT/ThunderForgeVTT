@@ -49,7 +49,18 @@ pub struct Unadopted {
 impl Unadopted {
     /// The refusal every play path returns.
     pub fn refusal(&self) -> Error {
-        Error::new(NOT_ADOPTED).extend_with(|_, ext| ext.set("code", NOT_ADOPTED_CODE))
+        // The piece and the character ride along for the report
+        // (`report::on_refusal`). Only someone who could already see the
+        // piece is ever refused with it.
+        let staged_id = self.staged_id.to_string();
+        let actor_id = self.actor_id.map(|id| id.to_string());
+        Error::new(NOT_ADOPTED).extend_with(move |_, ext| {
+            ext.set("code", NOT_ADOPTED_CODE);
+            ext.set("stagedId", staged_id.clone());
+            if let Some(actor_id) = &actor_id {
+                ext.set("actorId", actor_id.clone());
+            }
+        })
     }
 }
 

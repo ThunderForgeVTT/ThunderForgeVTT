@@ -1,4 +1,5 @@
 import { withCsrf } from "@/api/auth";
+import { withLastEvent } from "@/api/lastEvent";
 import { traceRequest } from "@/api/requestTracing";
 import { reportPlayPausedIn } from "@/api/playPauseSignal";
 import { reportSessionRefused } from "@/api/sessionExpiry";
@@ -364,10 +365,12 @@ export async function postGraphQL<TData>(
       {
         method: "POST",
         credentials: "same-origin",
-        headers: withCsrf({
-          "Content-Type": "application/json",
-          ...(trace ? { traceparent: trace.traceparent } : {}),
-        }),
+        headers: withLastEvent(
+          withCsrf({
+            "Content-Type": "application/json",
+            ...(trace ? { traceparent: trace.traceparent } : {}),
+          }),
+        ),
         body: JSON.stringify({ query, variables }),
       },
       operation,
@@ -415,7 +418,7 @@ export async function postGraphQLTolerating<TData>(
     {
       method: "POST",
       credentials: "same-origin",
-      headers: withCsrf({ "Content-Type": "application/json" }),
+      headers: withLastEvent(withCsrf({ "Content-Type": "application/json" })),
       body: JSON.stringify({ query, variables }),
     },
     operation,
@@ -477,7 +480,7 @@ export async function postGraphQLMultipart<TData>(
   const response = options.onUploadProgress
     ? await sendWithProgress(
         url,
-        { headers: withCsrf(), body: formData },
+        { headers: withLastEvent(withCsrf()), body: formData },
         operation,
         options.onUploadProgress,
       )
@@ -488,7 +491,7 @@ export async function postGraphQLMultipart<TData>(
           credentials: "same-origin",
           // Deliberately no Content-Type: the browser sets the multipart
           // boundary itself when the body is a FormData instance.
-          headers: withCsrf(),
+          headers: withLastEvent(withCsrf()),
           body: formData,
         },
         operation,

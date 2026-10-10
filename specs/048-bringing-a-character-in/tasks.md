@@ -290,13 +290,21 @@ stale.
     - The offline reconcile path rejects a not-adopted attack as `PermissionDenied`.
     - The share check runs before the readiness gate, because it answers only people who can already see the piece.
     - Test counts: `--lib staged_content` 16/16, combat 126/126, inventory 5/5, ability shares 10/10, item shares 8/8, reconcile 26/26. Clippy is clean.
-- [ ] T058 [P] [US3] Write report tests in `staged_content/report_tests.rs`:
+- [X] T058 [P] [US3] Write report tests in `staged_content/report_tests.rs`:
   - the first attempt is recorded and posts one GM-only chat message stating facts only;
   - a second attempt within 10 minutes is counted and not posted;
   - a header older than the declining event is suppressed;
   - a missing header is suppressed;
   - a piece never delivered (always pending) is always reported.
-- [ ] T059 [US3] Implement `staged_content/report.rs`. Send `x-tf-last-event` from `apps/web/src/api/graphqlClient.ts`, using the world store's last applied event id. T058 goes green.
+  - Done: 5 tests in `staged_content/report_tests.rs`, one per bullet (the header-older and header-missing cases share a test), plus the header parsing and the sentence.
+- [X] T059 [US3] Implement `staged_content/report.rs`. Send `x-tf-last-event` from `apps/web/src/api/graphqlClient.ts`, using the world store's last applied event id. T058 goes green.
+  - Done: `report.rs` records an attempt per player, piece and character in a 10-minute window. The first posts one GM-only chat message of facts ("… tried to use X on Y at … UTC. It came in with the character and has not been adopted."); later ones only add to the count.
+    - It reports only when the client's `x-tf-last-event` is at or past the piece's newest decision (event 41). An older or missing header is suppressed; a piece never decided is always reported.
+    - `on_refusal` wraps `makeAttack`, `adjustInventoryQuantity` and both share links, and reads the piece from the refusal's `stagedId`/`actorId` extensions. `graphql_handler` puts the header into the request data.
+    - Web: `api/lastEvent.ts` keeps the newest applied id per world, fed by the subscription client's cursor; every request sends the lowest, so a tab watching two worlds errs towards not reporting. Vitest: `api/__tests__/lastEvent.test.ts`, 4 tests.
+    - Deviation: the server has no OpenTelemetry metrics crate, so the counter is a `tracing` event on target `thunderforge.unadopted_use_attempts` with `result` = reported, counted or suppressed_stale.
+    - Deviation: the chat message is authored by the player with the label "ThunderForge", since chat rows need an author. A share names no character, so it reports against the piece's first character.
+    - Test counts: `--lib staged_content` 21/21; combat, inventory, shares, reconcile, attack 245/245. Clippy is clean.
 - [ ] T060 [US3] Add `apps/web/src/components/world/staged/BroughtByPlayers.tsx` and `StagedRow.tsx`, the GM and Trusted Player queue. They are grouped under one heading per player, with Adopt, Adopt all, Decline and Revisit, and show where a piece differs from another character's. Mount the queue as a "Brought by players" tab on the world compendium screen, behind `manages_content`. Add vitest tests.
 - [ ] T061 [P] [US3] Show the refusal sentence when a player's action names staged content. The marks in `LinkedContent.tsx` follow event 41.
 - [ ] T062 [US3] Write `apps/web/e2e/sheet-import-adopt.spec.ts`:

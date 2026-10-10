@@ -291,9 +291,15 @@ impl InventoryMutation {
     ) -> GraphQLResult<Option<GraphQLInventoryEntry>> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        let result =
+        let result = crate::staged_content::report::on_refusal(
+            ctx,
+            state,
+            auth_user.user_id,
+            "adjustInventoryQuantity",
             adjust_inventory_quantity_impl(state, auth_user.user_id, auth_user.is_admin, input)
-                .await?;
+                .await,
+        )
+        .await?;
         Ok(result.map(GraphQLInventoryEntry::from))
     }
 

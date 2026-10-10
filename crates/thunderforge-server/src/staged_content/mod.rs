@@ -17,6 +17,7 @@ use crate::schema::{world_staged_content, world_unadopted_use_attempts};
 
 pub mod decide;
 pub mod guard;
+pub mod report;
 
 /// Where a staged piece stands. `Adopted` is final in spec 048.
 #[derive(DbEnum, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

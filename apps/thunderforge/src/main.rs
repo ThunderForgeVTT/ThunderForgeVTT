@@ -53,10 +53,20 @@ async fn graphql_playground() -> impl IntoResponse {
 async fn graphql_handler(
     Extension(schema): Extension<AppSchema>,
     Extension(auth_user): Extension<thunderforge_server::auth_middleware::AuthenticatedUser>,
+    headers: axum::http::HeaderMap,
     req: GraphQLRequest,
 ) -> GraphQLResponse {
+    // Spec 048 FR-038b: the newest world event the client has applied, so a
+    // refused use of unadopted content can tell a stale client from one that
+    // was never sent the piece.
+    use thunderforge_server::staged_content::report::{LAST_EVENT_HEADER, LastEvent};
+    let last_event = LastEvent::from_header(
+        headers
+            .get(LAST_EVENT_HEADER)
+            .and_then(|value| value.to_str().ok()),
+    );
     schema
-        .execute(req.into_inner().data(auth_user))
+        .execute(req.into_inner().data(auth_user).data(last_event))
         .await
         .into()
 }

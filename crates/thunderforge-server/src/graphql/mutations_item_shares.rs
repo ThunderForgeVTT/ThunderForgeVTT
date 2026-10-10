@@ -506,12 +506,19 @@ impl ItemShareMutation {
     ) -> GraphQLResult<GraphQLItemShareLink> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        create_item_share_link_impl(
+        crate::staged_content::report::on_refusal(
+            ctx,
             state,
             auth_user.user_id,
-            auth_user.is_admin,
-            item_id,
-            &attestation,
+            "createItemShareLink",
+            create_item_share_link_impl(
+                state,
+                auth_user.user_id,
+                auth_user.is_admin,
+                item_id,
+                &attestation,
+            )
+            .await,
         )
         .await
         .map(GraphQLItemShareLink::from)
