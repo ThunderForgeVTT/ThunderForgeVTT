@@ -38,6 +38,7 @@ pub fn event_name(code: i32) -> &'static str {
         EVENT_CODE_ROLL_MADE => "roll_made",
         EVENT_CODE_ROLL_REVEALED => "roll_revealed",
         EVENT_CODE_AUTHORING_TOOLS_CHANGED => "authoring_tools_changed",
+        EVENT_CODE_ROLLS_CLEARED => "rolls_cleared",
         _ => "unknown",
     }
 }
@@ -68,7 +69,7 @@ mod tests {
     #[test]
     fn every_event_code_has_its_own_name() {
         let codes = declared();
-        assert_eq!(codes.len(), 29, "the contract covers 29 codes today");
+        assert_eq!(codes.len(), 30, "the contract covers 30 codes today");
         for (name, code) in codes {
             assert_eq!(event_name(code), name, "EVENT_CODE_{}", name.to_uppercase());
         }

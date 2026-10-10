@@ -71,7 +71,7 @@ These are set with SDK views in `install.rs`.
 | `method` | `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`, `HEAD`, `other` |
 | `status_class` | `1xx` .. `5xx` |
 | `state` | `idle`, `in_use` |
-| `event` | a name from `telemetry/event_names.rs`, covering 29 codes |
+| `event` | a name from `telemetry/event_names.rs`, covering 30 codes (spec 088 added `rolls_cleared`, 39) |
 | `visibility` | `everyone`, `gm_eyes`, `gm_only`: `rolls::visibility::Visibility::as_str()`, a closed enum |
 
 `code` is bounded by the server's own error codes. Nothing outside the server
