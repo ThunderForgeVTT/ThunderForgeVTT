@@ -7088,6 +7088,10 @@ type SheetContentChange {
 	worldId: String
 	stagedId: String
 	removed: Boolean!
+	"""
+	On a re-import: on the sheet and linked already.
+	"""
+	linked: Boolean!
 }
 
 """

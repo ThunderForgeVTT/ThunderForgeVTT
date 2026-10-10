@@ -107,6 +107,8 @@ pub struct GraphQLSheetContentChange {
     pub world_id: Option<String>,
     pub staged_id: Option<String>,
     pub removed: bool,
+    /// On a re-import: on the sheet and linked already.
+    pub linked: bool,
 }
 
 impl From<&ContentChange> for GraphQLSheetContentChange {
@@ -130,6 +132,7 @@ impl From<&ContentChange> for GraphQLSheetContentChange {
             world_id,
             staged_id,
             removed: change.removed,
+            linked: change.linked,
         }
     }
 }

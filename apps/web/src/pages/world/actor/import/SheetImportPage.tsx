@@ -24,7 +24,7 @@ import { ContentRow } from "./ContentRow";
 import { FieldRow } from "./FieldRow";
 import { CrossChecks, KeptInPlayList, UnmappedList } from "./PlanNotes";
 import { refusalProblem, SheetRefused, type Problem } from "./refusal";
-import { filterFields, type FieldFilter } from "./rows";
+import { contentToReview, filterFields, type FieldFilter } from "./rows";
 
 /** What the person is reviewing: the reading, their corrections, the plan. */
 interface Review {
@@ -186,6 +186,10 @@ export default function SheetImportPage() {
   const review =
     step.kind === "review" || step.kind === "applying" ? step : null;
   const plan = review?.plan ?? null;
+  const content = contentToReview(
+    plan?.content ?? [],
+    plan?.isReimport ?? false,
+  );
   const locked =
     step.kind === "applying" || (step.kind === "review" && step.busy);
 
@@ -266,7 +270,7 @@ export default function SheetImportPage() {
               <ul className="grid" data-testid="sheet-import-fields">
                 {filterFields(plan.fields, filter).map((field) => (
                   <FieldRow
-                    key={field.path}
+                    key={`${field.path}->${field.target}`}
                     field={field}
                     disabled={locked}
                     onCorrect={(path, value) => void onCorrect(path, value)}
@@ -281,17 +285,27 @@ export default function SheetImportPage() {
               onToggle={onToggleKept}
               disabled={locked}
             />
-            {plan.content.length > 0 ? (
+            {content.shown.length > 0 || content.unchanged > 0 ? (
               <Card className="grid gap-2 p-4">
                 <h2 className="font-semibold">Spells, features and items</h2>
                 <ul className="grid" data-testid="sheet-import-content">
-                  {plan.content.map((change) => (
+                  {content.shown.map((change) => (
                     <ContentRow
                       key={`${change.kind}:${change.name}`}
                       change={change}
                     />
                   ))}
                 </ul>
+                {content.unchanged > 0 ? (
+                  <p
+                    className="text-sm text-muted-foreground"
+                    data-testid="sheet-import-content-unchanged"
+                  >
+                    {content.unchanged === 1
+                      ? "1 more is on the character already, unchanged."
+                      : `${content.unchanged} more are on the character already, unchanged.`}
+                  </p>
+                ) : null}
               </Card>
             ) : null}
             <UnmappedList unmapped={plan.unmapped} />

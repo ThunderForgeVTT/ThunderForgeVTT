@@ -123,7 +123,19 @@ impl Table {
     }
 
     async fn preview(&self, user: Uuid, corrections: Option<Value>) -> Result<String, String> {
-        let (_, reading) = read_natively("dnd5e", FIGHTER_WIZARD).expect("the fixture reads");
+        self.plan_of(user, FIGHTER_WIZARD, corrections)
+            .await
+            .map(|plan| plan_hash(&plan))
+    }
+
+    /// The review `user` would see for `bytes`.
+    async fn plan_of(
+        &self,
+        user: Uuid,
+        bytes: &[u8],
+        corrections: Option<Value>,
+    ) -> Result<thunderforge_sheet_import::ImportPlan, String> {
+        let (_, reading) = read_natively("dnd5e", bytes).expect("the fixture reads");
         sheet_import_preview_impl(
             &self.state,
             &systems_dir(),
@@ -134,7 +146,6 @@ impl Table {
             corrections.as_ref(),
         )
         .await
-        .map(|plan| plan_hash(&plan))
         .map_err(|e| e.code())
     }
 
@@ -443,9 +454,9 @@ async fn a_system_with_no_mapping_is_refused_and_writes_nothing() {
     {
         let mut conn = t.state.db_pool.get().expect("conn");
         diesel::update(world_actors::table.find(t.actor))
-            .set(world_actors::game_system_id.eq("roll_for_shoes"))
+            .set(world_actors::game_system_id.eq("fate_core"))
             .execute(&mut conn)
-            .expect("a Roll for Shoes character");
+            .expect("a Fate Core character");
     }
     let before = t.counts();
     assert_eq!(
@@ -657,3 +668,6 @@ async fn the_sheet_reads_its_staged_links_and_a_stranger_does_not() {
         .unwrap_err();
     assert_eq!(refused.code(), "FORBIDDEN");
 }
+
+#[path = "mutations_sheet_import_reimport_tests.rs"]
+mod reimport;

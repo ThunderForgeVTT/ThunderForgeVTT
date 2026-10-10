@@ -9,6 +9,8 @@ import { CrossChecks, KeptInPlayList, UnmappedList } from "../PlanNotes";
 import { refusalProblem, SheetRefused } from "../refusal";
 import {
   changeKind,
+  contentToReview,
+  correctable,
   contentText,
   fieldLabel,
   filterFields,
@@ -39,6 +41,7 @@ const content = (over: Partial<SheetContentChange>): SheetContentChange => ({
   worldId: "w1",
   stagedId: null,
   removed: false,
+  linked: false,
   ...over,
 });
 
@@ -83,6 +86,24 @@ describe("FieldRow", () => {
     expect(shownValue(null)).toBe("—");
     expect(shownValue(["Common", "Elvish"])).toBe("Common, Elvish");
     expect(shownValue({ gp: 3 })).toBe('{"gp":3}');
+    expect(
+      shownValue([
+        { id: "a", name: "Do Anything", level: 1, parentId: null },
+        { id: "b", name: "Sneak", level: 2, parentId: "a" },
+      ]),
+    ).toBe("Do Anything 1, Sneak 2");
+  });
+
+  it("offers no retyping for a list of records (T068)", () => {
+    const skills = field({
+      path: "skills",
+      target: "trait_data.skills",
+      old: null,
+      new: [{ id: "a", name: "Bake", level: 1, parentId: null }],
+      certainty: "UNCERTAIN",
+    });
+    expect(correctable(skills)).toBe(false);
+    expect(correctable(field({ certainty: "UNCERTAIN" }))).toBe(true);
   });
 });
 
@@ -278,5 +299,28 @@ describe("stagedEntries", () => {
       { id: "b", kind: "item", name: "Rope", staged: "declined" },
       { id: "d", kind: "feature", name: "Rage", staged: "pending" },
     ]);
+  });
+});
+
+describe("contentToReview (T073)", () => {
+  const list = [
+    content({ name: "Shield", linked: true }),
+    content({ name: "Misty Step", removed: true, linked: true }),
+    content({ name: "Fireball" }),
+    content({ name: "Longsword", linked: true, resolution: "DIFFERS" }),
+  ];
+
+  it("lists everything on a first import", () => {
+    expect(contentToReview(list, false)).toEqual({ shown: list, unchanged: 0 });
+  });
+
+  it("lists only what changes on a re-import, and counts the rest", () => {
+    const { shown, unchanged } = contentToReview(list, true);
+    expect(shown.map((c) => c.name)).toEqual([
+      "Misty Step",
+      "Fireball",
+      "Longsword",
+    ]);
+    expect(unchanged).toBe(1);
   });
 });

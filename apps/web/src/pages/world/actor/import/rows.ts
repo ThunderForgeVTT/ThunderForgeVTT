@@ -24,11 +24,28 @@ export function shownValue(value: unknown): string {
     return String(value);
   }
   if (Array.isArray(value)) {
-    return value.every((v) => typeof v !== "object" || v === null)
-      ? value.map(String).join(", ")
-      : JSON.stringify(value);
+    if (value.every((v) => typeof v !== "object" || v === null)) {
+      return value.map(String).join(", ");
+    }
+    // A list of named things, a lineage of skills say, reads as its names.
+    if (value.every(isNamed)) {
+      return value
+        .map((v) =>
+          typeof v.level === "number" ? `${v.name} ${v.level}` : v.name,
+        )
+        .join(", ");
+    }
+    return JSON.stringify(value);
   }
   return JSON.stringify(value);
+}
+
+function isNamed(value: unknown): value is { name: string; level?: unknown } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { name?: unknown }).name === "string"
+  );
 }
 
 export const CERTAINTY_TEXT: Record<FieldCertainty, string> = {
@@ -85,8 +102,15 @@ export function filterFields(
 }
 
 /** A field the person may correct: one the reader was not sure of. */
+/**
+ * Whether the review offers to correct a field. A list of records, a skill
+ * lineage say, is not one value to retype: it is fixed on the sheet after.
+ */
 export function correctable(field: SheetFieldChange): boolean {
-  return field.certainty !== "READ";
+  const value = field.new ?? field.old;
+  const records =
+    Array.isArray(value) && value.some((v) => typeof v === "object" && v);
+  return field.certainty !== "READ" && !records;
 }
 
 /**
@@ -125,4 +149,21 @@ export function parseCorrection(
 export function goesToText(goesTo: string): string {
   const leaf = goesTo.split(".").pop() ?? goesTo;
   return leaf.replace(/_/g, " ");
+}
+
+/**
+ * What the review lists of the content (T073). On a re-import it is only
+ * what changes: what is new, what differs from the world's, and what leaves
+ * the sheet. Content linked already, and the same, is counted instead.
+ */
+export function contentToReview(
+  content: SheetContentChange[],
+  isReimport: boolean,
+): { shown: SheetContentChange[]; unchanged: number } {
+  if (!isReimport) return { shown: content, unchanged: 0 };
+  const shown = content.filter(
+    (change) =>
+      change.removed || !change.linked || change.resolution === "DIFFERS",
+  );
+  return { shown, unchanged: content.length - shown.length };
 }

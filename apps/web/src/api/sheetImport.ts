@@ -40,6 +40,8 @@ export interface SheetContentChange {
   worldId: string | null;
   stagedId: string | null;
   removed: boolean;
+  /** On a re-import: on the sheet and linked already. */
+  linked: boolean;
 }
 
 export interface SheetUnmapped {
@@ -108,7 +110,7 @@ const PLAN_FIELDS = `
     source { page x0 y0 x1 y1 text }
     playState
   }
-  content { kind name resolution worldId stagedId removed }
+  content { kind name resolution worldId stagedId removed linked }
   unmapped { path value goesTo }
   crossChecks { path sheet derived }
   keptInPlay { target current sheet }
