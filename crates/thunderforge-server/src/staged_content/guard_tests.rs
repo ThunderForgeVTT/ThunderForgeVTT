@@ -8,7 +8,7 @@
 
 use async_graphql::Value as GqlValue;
 use diesel::prelude::*;
-use serde_json::json;
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 use super::{NOT_ADOPTED, NOT_ADOPTED_CODE};
@@ -231,4 +231,59 @@ fn an_entry_that_carries_a_world_item_is_not_a_staged_piece() {
         super::carried_by_entry(&mut w.conn(), entry).expect("read"),
         None
     );
+}
+
+/// Spec 048 T064: a weapon the sheet brought in is an attack once adopted.
+/// The 5e hook puts the printed to-hit and damage on the piece as spec 046's
+/// effects; adoption writes them onto the world's row, or the attack flow
+/// finds nothing to roll.
+#[test]
+fn an_adopted_weapon_or_attack_carries_its_effects_and_reach() {
+    use crate::combat::weapon::parts_of;
+    let w = world();
+    let actor = w.actor();
+    let attack = |reach: Value, normal: Value, long: Value| {
+        json!({ "attack": {
+            "effects": [
+                { "effect_type": "ATTACK_ROLL", "formula": "1d20+6" },
+                { "effect_type": "DAMAGE", "formula": "1d8+3" }
+            ],
+            "reach": reach, "range_normal": normal, "range_long": long,
+        } })
+    };
+    let sword = w.stage(
+        w.player,
+        "item",
+        "Longsword",
+        attack(json!(5), Value::Null, Value::Null),
+    );
+    w.link_item(actor, sword, "Longsword");
+    let bow = w.stage(
+        w.player,
+        "attack",
+        "Shortbow",
+        attack(Value::Null, json!(80), json!(320)),
+    );
+    w.link_ability(actor, bow, "Shortbow");
+    let sword = adopt(&mut w.conn(), w.gm, sword).expect("adopted");
+    let bow = adopt(&mut w.conn(), w.gm, bow).expect("adopted");
+
+    for (ability, item, reach, normal) in [
+        (None, sword.adopted_item_id, Some(5.0), None),
+        (bow.adopted_ability_id, None, None, Some(80.0)),
+    ] {
+        let Ok(weapon) = find_weapon(&mut w.conn(), w.world, Some(actor), false, ability, item)
+        else {
+            panic!("the adopted piece is a weapon");
+        };
+        let parts = match parts_of(&mut w.conn(), w.world, &weapon) {
+            Ok(parts) => parts,
+            Err(refusal) => panic!("{}", refusal.message()),
+        };
+        assert_eq!(parts.len(), 1);
+        assert_eq!(parts[0].to_hit, "1d20+6");
+        assert_eq!(parts[0].damage, vec!["1d8+3".to_string()]);
+        assert_eq!(parts[0].reach.reach, reach);
+        assert_eq!(parts[0].reach.range_normal, normal);
+    }
 }

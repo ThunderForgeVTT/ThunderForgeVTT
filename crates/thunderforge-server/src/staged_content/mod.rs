@@ -15,6 +15,7 @@ use uuid::Uuid;
 use crate::compendium::origin::ContentOrigin;
 use crate::schema::{world_staged_content, world_unadopted_use_attempts};
 
+pub mod attack;
 pub mod decide;
 pub mod guard;
 pub mod report;

@@ -181,6 +181,7 @@ fn adopt_locked(
     }
     let actor_ids = linked_actors(conn, piece.id).map_err(db)?;
     let (ability_id, item_id) = write_world_row(conn, user_id, &piece)?;
+    super::attack::write(conn, &piece.field_values, ability_id, item_id).map_err(db)?;
     let now = Utc::now().naive_utc();
     if let Some(id) = ability_id {
         diesel::update(abilities::table.filter(abilities::staged_id.eq(piece.id)))
