@@ -612,21 +612,64 @@ fn movement(sheet: &Sheet, c: &mut ImportedCharacter) {
     }
 }
 
+/// A character casting from two or more classes: the export prints them in
+/// the one column, "Cleric / Wizard" over "WIS / INT", "15 / 13" and
+/// "+7 / +5". Each part is a caster of its own, read from the same box.
+/// `None` when the column holds one class, or its parts do not line up.
+fn casting_columns(sheet: &Sheet, index: usize) -> Option<Vec<Spellcasting>> {
+    let parts = |name: &str| -> Option<(Vec<String>, &Entry)> {
+        let entry = sheet.filled(&format!("{name}{index}"))?;
+        let parts = entry.text().split('/').map(|p| p.trim().to_string());
+        Some((parts.collect(), entry))
+    };
+    let (classes, class_entry) = parts("spellCastingClass")?;
+    if classes.len() < 2 || classes.iter().any(String::is_empty) {
+        return None;
+    }
+    let lined_up = |name: &str| parts(name).filter(|(p, _)| p.len() == classes.len());
+    let (abilities, ability_entry) = lined_up("spellCastingAbility")?;
+    let (dcs, dc_entry) = lined_up("spellSaveDC")?;
+    let (attacks, attack_entry) = lined_up("spellAtkBonus")?;
+    let number = |text: &str, entry: &Entry| match parse_int(text) {
+        Some(n) => Field::read(n as i32, Some(entry.source())),
+        None => not_a_number(entry),
+    };
+    Some(
+        (0..classes.len())
+            .map(|i| Spellcasting {
+                class: Field::read(classes[i].clone(), Some(class_entry.source())),
+                ability: Field::read(abilities[i].to_lowercase(), Some(ability_entry.source())),
+                save_dc: number(&dcs[i], dc_entry),
+                attack_bonus: number(&attacks[i], attack_entry),
+                slots: BTreeMap::new(),
+                pact_slots: None,
+            })
+            .collect(),
+    )
+}
+
 fn spellcasting(sheet: &Sheet) -> Vec<Spellcasting> {
     let mut out = Vec::new();
     for index in 0.. {
         if sheet.filled(&format!("spellCastingClass{index}")).is_none() {
             break;
         }
+        if let Some(split) = casting_columns(sheet, index) {
+            out.extend(split);
+            continue;
+        }
+        let class = sheet.string(&format!("spellCastingClass{index}"));
         let ability = sheet.string(&format!("spellCastingAbility{index}"));
+        let save_dc = sheet.number(&format!("spellSaveDC{index}"));
+        let attack_bonus = sheet.number(&format!("spellAtkBonus{index}"));
         out.push(Spellcasting {
-            class: sheet.string(&format!("spellCastingClass{index}")),
+            class,
             ability: Field {
                 value: ability.value.map(|a| a.to_lowercase()),
                 ..ability
             },
-            save_dc: sheet.number(&format!("spellSaveDC{index}")),
-            attack_bonus: sheet.number(&format!("spellAtkBonus{index}")),
+            save_dc,
+            attack_bonus,
             slots: BTreeMap::new(),
             pact_slots: None,
         });

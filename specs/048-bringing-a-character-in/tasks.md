@@ -442,7 +442,8 @@ without throwing play away.
   - `measure_corpus`;
   - how to add a system's reader.
 - [ ] T092 Move ADR-115 to Accepted, with what was built. Update the README row.
-- [ ] T093 Run `measure_corpus` on the owner's seven exports. Record per-field read, uncertain and unread counts in research R17, with no values, for SC-002. Each field the corpus reads wrong becomes a reader fix and a fixture case, before T097.
+- [X] T093 Run `measure_corpus` on the owner's seven exports. Record per-field read, uncertain and unread counts in research R17, with no values, for SC-002. Each field the corpus reads wrong becomes a reader fix and a fixture case, before T097.
+  - Done: Done 2026-10-10: 7 of 7 read, 1,180 leaves read, 0 uncertain, 27 unread (research R17). The first run found 2 uncertain on one sheet: two casting classes printed in one column. Fixed in `casting_columns` (fields.rs) with the invented case `two_casting_classes_in_one_column_are_two_casters`; the unread are subclass (no field on the export), hit dice used and current HP (blank, kept in play) and 2 empty alignments.
 - [ ] T094 [P] Add `apps/web/playtest/bring-a-character.playtest.ts` (FR-061). A player brings `cleric-7.pdf` in from the actor screen, the GM adopts their domain spell, and the character casts it at the table. It runs with `pnpm playtest`, last.
 
 ### Verify and prove

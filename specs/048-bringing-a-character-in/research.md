@@ -589,6 +589,33 @@ Tests run with `TELEMETRY=false`.
 - **Other games**: a page with none of D&D Beyond's anchors, such as a 049
   book fixture, proves the "not a D&D Beyond sheet" refusal.
 
+### R17 measurement, 2026-10-10 (T093, SC-002)
+
+`measure_corpus` on the owner's seven D&D Beyond exports. Counts only; no
+value, file name or reason was recorded.
+
+- **Sheets**: 7 read, 0 refused. 122 field patterns; 1,180 leaves read,
+  0 uncertain, 27 unread. Content rows per sheet: 26 to 86.
+- **First run**: one sheet had 2 uncertain leaves,
+  `spellcasting.*.save_dc` and `spellcasting.*.attack_bonus`. The export
+  prints a character casting from two classes in the one column
+  ("Class A / Class B" over "13 / 14"). The reader now splits the column
+  into one caster per class (`casting_columns` in `fields.rs`), with the
+  invented case `two_casting_classes_in_one_column_are_two_casters` in
+  `tests/read.rs`. After the fix: 0 uncertain.
+- **Unread, and why each is right**:
+
+  | Field | Unread | Why |
+  |---|---|---|
+  | `classes.*.subclass` | 9 of 9 | The export has no subclass field, so the reader leaves it unread by design. |
+  | `resources.hit_dice.*.used` | 9 of 9 | Blank on every export: kept in play, not on the sheet. |
+  | `resources.hp_current` | 7 of 7 | Blank on every export: kept in play. |
+  | `identity.alignment` | 2 of 7 | The box is empty on those sheets. |
+
+- **Read wrong**: none shown. Counts cannot show a value that was read
+  plainly but wrongly; that needs the owner to compare a review against
+  D&D Beyond, which has not been done yet.
+
 ## R18. The door: the actor screen, and the Players screen beside it
 
 - **Actor screen** (`ActorDetailPage.tsx`): "Bring in a sheet" goes in the

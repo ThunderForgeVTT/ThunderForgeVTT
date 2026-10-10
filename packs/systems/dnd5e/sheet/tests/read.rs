@@ -679,3 +679,41 @@ fn reading_is_deterministic() {
         );
     }
 }
+
+/// A character casting from two classes: the export prints both in the one
+/// column, "Cleric / Wizard" over "13 / 14". Found by `measure_corpus` on a
+/// real export (T093); the values here are invented.
+#[test]
+fn two_casting_classes_in_one_column_are_two_casters() {
+    let mut c = characters::cleric_7();
+    c.overrides = vec![
+        ("spellCastingClass0", "Cleric / Wizard"),
+        ("spellCastingAbility0", "WIS / INT"),
+        ("spellSaveDC0", "15 / 13"),
+        ("spellAtkBonus0", "+7 / +5"),
+    ];
+    let doc = Document::from_bytes(&generator::sheet(&c)).unwrap();
+    let read = DdbPdf.read(&doc).unwrap();
+    let casters: Vec<(String, String, i32, i32)> = read
+        .spellcasting
+        .iter()
+        .map(|s| {
+            (
+                got(&s.class),
+                got(&s.ability),
+                got(&s.save_dc),
+                got(&s.attack_bonus),
+            )
+        })
+        .collect();
+    assert_eq!(
+        casters,
+        [
+            ("Cleric".into(), "wis".into(), 15, 7),
+            ("Wizard".into(), "int".into(), 13, 5),
+        ]
+    );
+    // The slots are the character's, and stay on the first caster.
+    assert!(!read.spellcasting[0].slots.is_empty());
+    assert!(read.spellcasting[1].slots.is_empty());
+}
