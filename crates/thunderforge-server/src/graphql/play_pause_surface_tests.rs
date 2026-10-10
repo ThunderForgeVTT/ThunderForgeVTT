@@ -564,6 +564,46 @@ async fn seed(
             ids.insert($key, id.to_string());
         }};
     }
+    // Spec 048: a piece a player's sheet brought in, waiting on the GM, and
+    // sheet import switched on so the apply reaches the pause at all.
+    {
+        use crate::schema::world_staged_content as staged;
+        let fields = serde_json::json!({});
+        let piece: Uuid = diesel::insert_into(staged::table)
+            .values(&crate::staged_content::NewStagedContent {
+                world_id: world,
+                player_user_id: player,
+                kind: "spell",
+                name: "Paused Bolt",
+                normalized_name: "paused bolt",
+                content_hash: &"c".repeat(64),
+                field_values: &fields,
+                origin: crate::compendium::origin::ContentOrigin::Uploaded,
+                differs_from: None,
+                first_actor_id: None,
+                created_by: player,
+                updated_by: player,
+            })
+            .returning(staged::id)
+            .get_result(&mut conn)
+            .expect("a staged piece");
+        ids.insert("staged", piece.to_string());
+        use crate::schema::instance_settings as settings;
+        let now = chrono::Utc::now().naive_utc();
+        diesel::insert_into(settings::table)
+            .values((
+                settings::key.eq(crate::settings::features::SHEET_IMPORT),
+                settings::value.eq("true"),
+                settings::updated_at.eq(now),
+                settings::created_at.eq(now),
+            ))
+            .on_conflict(settings::key)
+            .do_update()
+            .set(settings::value.eq("true"))
+            .execute(&mut conn)
+            .expect("sheet import on");
+    }
+
     share!("actorShare", world_actor_shares, actor_id, "actor");
     share!("itemShare", world_item_shares, item_id, "item");
     share!("abilityShare", world_ability_shares, ability_id, "ability");
@@ -589,7 +629,7 @@ async fn seed(
 }
 
 /// A multipart upload, built the way a browser sends one (GraphQL multipart
-/// request spec), for the three mutations that take a file.
+/// request spec), for the mutations that take a file.
 fn upload_request(name: &str, ids: &BTreeMap<&'static str, String>) -> Request {
     let (document, variables) = match name {
         "uploadCanvasImage" => (
@@ -603,6 +643,10 @@ fn upload_request(name: &str, ids: &BTreeMap<&'static str, String>) -> Request {
         "uploadLoreImage" => (
             "mutation($f: Upload!, $l: UUID!) { uploadLoreImage(loreEntryId: $l, file: $f) { __typename } }",
             serde_json::json!({ "f": null, "l": ids["lore"] }),
+        ),
+        "applySheetImport" => (
+            r#"mutation($f: Upload!, $a: UUID!) { applySheetImport(actorId: $a, file: $f, planHash: "x") { __typename } }"#,
+            serde_json::json!({ "f": null, "a": ids["actor"] }),
         ),
         other => panic!("no upload request for {other}"),
     };

@@ -17,6 +17,7 @@ use super::error::SheetImportError;
 use super::snapshot::{self, AbilityLink, ActorState, DATA_TYPES, InventoryLink};
 use super::{ActorImport, ActorImportKind, NewActorImport};
 use crate::auth::world_membership::actor_in_world;
+use crate::play_pause::gate::refuse_if_paused;
 use crate::staged_content::StagedState;
 use crate::state::AppState;
 
@@ -74,6 +75,7 @@ fn roll_back(
             "Only the Game Master can roll a character back.".into(),
         ));
     }
+    refuse_if_paused(conn, world_id)?;
     let target = actor_imports::table
         .find(to_import_id)
         .select(ActorImport::as_select())

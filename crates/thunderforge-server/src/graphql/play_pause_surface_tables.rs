@@ -710,6 +710,30 @@ pub const GATED: &[(&str, &str)] = &[
         "setWorldSystemSetting",
         r#"mutation { setWorldSystemSetting(worldId: "{world}", key: "any", value: true) { __typename } }"#,
     ),
+    // --- spec 048: bringing a character in --------------------------------
+    ("applySheetImport", r#"UPLOAD applySheetImport"#),
+    (
+        // The pause is checked before the import is looked up, so the
+        // world's own id stands in for one.
+        "rollBackActor",
+        r#"mutation { rollBackActor(actorId: "{actor}", toImportId: "{world}") { __typename } }"#,
+    ),
+    (
+        "adoptStagedContent",
+        r#"mutation { adoptStagedContent(id: "{staged}") { __typename } }"#,
+    ),
+    (
+        "adoptAllStagedContent",
+        r#"mutation { adoptAllStagedContent(worldId: "{world}", playerId: "{player}") { __typename } }"#,
+    ),
+    (
+        "declineStagedContent",
+        r#"mutation { declineStagedContent(id: "{staged}") { __typename } }"#,
+    ),
+    (
+        "revisitStagedContent",
+        r#"mutation { revisitStagedContent(id: "{staged}", state: PENDING) { __typename } }"#,
+    ),
 ];
 
 /// Who calls a gated field.
@@ -796,6 +820,26 @@ pub const CALLED_AS: &[(&str, &[Who], &str)] = &[
         "restoreWorldEntry",
         &[Who::GameMaster],
         "managing a world's books has no site-admin bypass (spec 050)",
+    ),
+    (
+        "adoptStagedContent",
+        &[Who::GameMaster],
+        "deciding staged content is a content manager's, with no site-admin bypass (spec 048)",
+    ),
+    (
+        "adoptAllStagedContent",
+        &[Who::GameMaster],
+        "deciding staged content is a content manager's, with no site-admin bypass (spec 048)",
+    ),
+    (
+        "declineStagedContent",
+        &[Who::GameMaster],
+        "deciding staged content is a content manager's, with no site-admin bypass (spec 048)",
+    ),
+    (
+        "revisitStagedContent",
+        &[Who::GameMaster],
+        "deciding staged content is a content manager's, with no site-admin bypass (spec 048)",
     ),
 ];
 

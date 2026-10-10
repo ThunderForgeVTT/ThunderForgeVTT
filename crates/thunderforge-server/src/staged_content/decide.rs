@@ -14,6 +14,7 @@ use uuid::Uuid;
 use super::{StagedContent, StagedState};
 use crate::auth::world_membership::{ManagesContentError, require_manages_content};
 use crate::compendium::origin::ContentOrigin;
+use crate::play_pause::gate::refuse_if_paused;
 use crate::sheet_import::error::SheetImportError;
 use crate::sheet_import::records::{Person, person};
 use crate::sheet_import::telemetry;
@@ -64,6 +65,7 @@ fn load_for_decision(
         ManagesContentError::NotAMember => not_found(),
         other => refused(other),
     })?;
+    refuse_if_paused(conn, piece.world_id)?;
     Ok(piece)
 }
 
@@ -277,6 +279,7 @@ pub fn adopt_all(
     use crate::schema::world_staged_content as staged;
     conn.transaction(|conn| {
         require_manages_content(conn, world_id, user_id).map_err(refused)?;
+        refuse_if_paused(conn, world_id)?;
         let pieces = staged::table
             .filter(staged::world_id.eq(world_id))
             .filter(staged::player_user_id.eq(player_id))

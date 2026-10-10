@@ -82,6 +82,14 @@ impl SheetImportError {
     }
 }
 
+/// A paused world refuses with the pause's own code (spec 051), which
+/// `from_permission` keeps as a refusal rather than a FORBIDDEN.
+impl From<crate::play_pause::gate::GateError> for SheetImportError {
+    fn from(e: crate::play_pause::gate::GateError) -> Self {
+        Self::from_permission(e.into())
+    }
+}
+
 impl std::fmt::Display for SheetImportError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}: {}", self.code(), self.message())
