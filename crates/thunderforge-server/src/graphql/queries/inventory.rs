@@ -37,6 +37,8 @@ pub async fn actor_inventory_impl(
     tokio::task::spawn_blocking(move || {
         world_actor_inventory::table
             .filter(world_actor_inventory::actor_id.eq(actor_id))
+            // Spec 048 FR-037: a link to staged content is not delivered.
+            .filter(world_actor_inventory::staged_id.is_null())
             .select(ActorInventoryEntry::as_select())
             .load::<ActorInventoryEntry>(&mut conn)
     })

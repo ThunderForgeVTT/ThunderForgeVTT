@@ -311,6 +311,30 @@ pub fn plan(
     current: &ActorSnapshot,
     world: &dyn ContentIndex,
 ) -> ImportPlan {
+    let refine = refine.map(|hook| move |r: &_, c: &_, p: &mut _| hook(r, c, p));
+    plan_with(
+        mapping,
+        refine.as_ref().map(|hook| hook as &RefineHook),
+        reading,
+        corrections,
+        current,
+        world,
+    )
+}
+
+/// A refine hook that need not be a plain function: the host's adapter over
+/// a pack's JSON hook is a closure.
+pub type RefineHook = dyn Fn(&ImportedCharacter, &ActorSnapshot, &mut ImportPlan);
+
+/// [`plan`], with the refine hook as any callable.
+pub fn plan_with(
+    mapping: &SheetMapping,
+    refine: Option<&RefineHook>,
+    reading: &ImportedCharacter,
+    corrections: &Corrections,
+    current: &ActorSnapshot,
+    world: &dyn ContentIndex,
+) -> ImportPlan {
     let mut out = ImportPlan {
         reader_id: reading.reader.id.clone(),
         reader_version: reading.reader.version.clone(),

@@ -79,6 +79,8 @@ pub mod mutations_shelf_collections;
 // Spec 049 Phase 15 / spec 050 FR-100 to FR-105: a world's changes synced back
 // to its collection, shown first and confirmed by stamp.
 pub mod mutations_sync_back;
+// Spec 048: `applySheetImport`, and the types the plan and history travel as.
+pub mod mutations_sheet_import;
 // Spec 040 US5: `githubApplications`, `setGithubApplication` and
 // `checkGithubApplication` — one application for everything, or one per
 // subsystem, and which acts for what. Resolution itself is `crate::github_apps`.
@@ -473,6 +475,8 @@ pub struct QueryRoot(
     mutations_library::LibraryWorldQuery,
     // Spec 050 FR-103: `worldSyncBackPlan` — what a sync back would do.
     mutations_sync_back::SyncBackQuery,
+    // Spec 048: the plan for bringing a sheet in, and an actor's imports.
+    queries::sheet_import::SheetImportQuery,
     // Spec 051: the pause record and the worlds an operator might pause
     // (operators), and `worldPlayState` — *that and when* (members).
     queries::PlayPauseQuery,
@@ -551,6 +555,8 @@ pub struct MutationRoot(
     mutations_library::LibraryWorldMutation,
     // Spec 050 FR-100: `syncBackToCollection`, only with a plan's stamp.
     mutations_sync_back::SyncBackMutation,
+    // Spec 048: bringing a reviewed sheet onto an actor.
+    mutations_sheet_import::SheetImportMutation,
     ActorAbilityMutation,
     ItemMutation,
     ItemPermissionMutation,

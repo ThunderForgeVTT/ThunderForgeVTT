@@ -172,7 +172,7 @@ Content the world lacks is staged under their name and kept out of play.
 
 ### The server
 
-- [ ] T035 [P] [US1] Write `crates/thunderforge-server/src/graphql/mutations_sheet_import_tests.rs`:
+- [X] T035 [P] [US1] Write `crates/thunderforge-server/src/graphql/mutations_sheet_import_tests.rs`:
   - the preview writes nothing;
   - an apply writes the fields, links, version, record, origin `Uploaded` and event 40 in one transaction;
   - a player whose claim granted Editor may import;
@@ -182,8 +182,9 @@ Content the world lacks is staged under their name and kept out of play.
   - a changed plan is refused with `PLAN_CHANGED` and writes nothing;
   - a failed transaction deletes the object;
   - a decline uploads nothing.
-- [ ] T036 [US1] Implement `sheet_import/preview.rs`, `apply.rs`, `snapshot.rs` and the `SheetImportMutation` and `SheetImportQuery` (`sheetImportPreview`, `applySheetImport`, `actorImports`) per contracts/graphql-sheet-import.md. Merge them into `graphql.rs`. Run `node scripts/check-graphql-contract.mjs --schema --fix`.
-- [ ] T037 [US1] In `apply.rs`, upsert `world_staged_content` by its unique key and write links with `staged_id`. Reuse world content by kind and normalised name (FR-031). Write a test that a staged link is absent from every play read: `play_field.rs`, `sheet.rs`, the combat panel, the roll buttons' query and the world compendium. T035 goes green.
+- [X] T036 [US1] Implement `sheet_import/preview.rs`, `apply.rs`, `snapshot.rs` and the `SheetImportMutation` and `SheetImportQuery` (`sheetImportPreview`, `applySheetImport`, `actorImports`) per contracts/graphql-sheet-import.md. Merge them into `graphql.rs`. Run `node scripts/check-graphql-contract.mjs --schema --fix`.
+- [X] T037 [US1] In `apply.rs`, upsert `world_staged_content` by its unique key and write links with `staged_id`. Reuse world content by kind and normalised name (FR-031). Write a test that a staged link is absent from every play read: `play_field.rs`, `sheet.rs`, the combat panel, the roll buttons' query and the world compendium. T035 goes green.
+  - Done: `play_field.rs` and `sheet.rs` hold no link reads (the claim registry and the sheet declarations). The play reads are `actorAbilities` and `actorInventory` (the roll buttons and the combat menu), `find_weapon` (attacks), and `worldAbilities`/`worldItems` (the compendium). The first two now leave out a link with `staged_id`; the rest never see one, because they join by world id. The test covers all five, for the player and the GM.
 
 ### The web
 

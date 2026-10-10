@@ -6,7 +6,13 @@
 //!
 //! [`SystemContribution`]: thunderforge_canvas_core::system_contribution::SystemContribution
 
+pub mod apply;
+pub mod error;
+pub mod index;
 pub mod mapping;
+pub mod preview;
+pub mod records;
+pub mod snapshot;
 pub mod storage;
 
 use diesel::prelude::*;

@@ -106,6 +106,24 @@ type ActiveEncounterSummary {
 	combatants: Int!
 }
 
+type ActorImportRecord {
+	id: UUID!
+	"""
+	"import" or "rollback".
+	"""
+	kind: String!
+	appliedAt: DateTime!
+	appliedBy: UserSummary!
+	versionNo: Int
+	restoredFrom: UUID
+	correctedFields: [String!]!
+	fileAvailable: Boolean!
+	"""
+	The version whose file `GET /api/sheet-imports/{id}/file` serves.
+	"""
+	versionId: UUID
+}
+
 """
 Effective permission level a caller holds on one actor. `Owner` is
 always implicit for the world's DM (Owner/GM role) regardless of any
@@ -846,6 +864,12 @@ type AppMutationRoot {
 	synced (FR-105).
 	"""
 	syncBackToCollection(worldId: UUID!, compendiumId: UUID!, stamp: String!): SyncBackOutcome!
+	"""
+	Bring a reviewed sheet onto an actor. The server reads the file
+	again and refuses with `PLAN_CHANGED` unless its plan hashes to
+	`planHash`.
+	"""
+	applySheetImport(actorId: UUID!, file: Upload!, corrections: JSON, overwritePlayState: [String!], planHash: String!): ActorImportRecord!
 	attachAbilityToActor(input: AttachAbilityToActorInput!): GraphQLActorAbilityEntry!
 	detachAbilityFromActor(entryId: UUID!): Boolean!
 	createItem(input: CreateItemInput!): GraphQLItem!
@@ -1888,6 +1912,15 @@ type AppQueryRoot {
 	"""
 	worldSyncBackPlan(worldId: UUID!, compendiumId: UUID!): SyncBackPlan!
 	"""
+	What bringing this reading onto the actor would change. Writes
+	nothing; its `planHash` is what `applySheetImport` must match.
+	"""
+	sheetImportPreview(actorId: UUID!, reading: JSON!, corrections: JSON): SheetImportPlan!
+	"""
+	Every import and rollback on the actor, newest first.
+	"""
+	actorImports(actorId: UUID!): [ActorImportRecord!]!
+	"""
 	Worlds whose name contains `search`, or whose id it is, for an
 	operator deciding what to pause.
 	"""
@@ -2444,6 +2477,13 @@ enum ContentOrigin {
 	UPLOADED
 }
 
+enum ContentResolution {
+	WORLD
+	STAGED_EXISTING
+	STAGED_NEW
+	DIFFERS
+}
+
 type CopiedRecord {
 	memberType: String!
 	id: UUID!
@@ -2759,6 +2799,13 @@ type FeedbackSubmission {
 	unaffected, which is what the person was told before they submitted.
 	"""
 	attachmentsExpireAt: String!
+}
+
+enum FieldCertainty {
+	READ
+	UNCERTAIN
+	UNREAD
+	CORRECTED
 }
 
 input GenerateInviteCodeInput {
@@ -6982,6 +7029,51 @@ type SharedItemPreview {
 	effects: [GraphQLItemEffect!]!
 }
 
+type SheetContentChange {
+	kind: String!
+	name: String!
+	resolution: ContentResolution!
+	worldId: String
+	stagedId: String
+	removed: Boolean!
+}
+
+type SheetFieldChange {
+	path: String!
+	target: String!
+	old: JSON
+	new: JSON
+	certainty: FieldCertainty!
+	reason: String
+	source: SheetSource
+	playState: Boolean!
+}
+
+type SheetImportPlan {
+	readerId: String!
+	readerVersion: String!
+	fields: [SheetFieldChange!]!
+	content: [SheetContentChange!]!
+	unmapped: [SheetUnmapped!]!
+	isReimport: Boolean!
+	planHash: String!
+}
+
+type SheetSource {
+	page: Int!
+	x0: Float!
+	y0: Float!
+	x1: Float!
+	y1: Float!
+	text: String!
+}
+
+type SheetUnmapped {
+	path: String!
+	value: JSON!
+	goesTo: String!
+}
+
 type ShelfChange {
 	kind: String!
 	name: String!
@@ -7691,6 +7783,12 @@ input UpdateWorldSessionNotesInput {
 A multipart file upload
 """
 scalar Upload
+
+type UserSummary {
+	id: UUID!
+	username: String!
+	displayName: String!
+}
 
 """
 A document, its sections, and the identity to attest to.

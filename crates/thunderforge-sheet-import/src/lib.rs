@@ -20,6 +20,6 @@ pub use hash::{content_hash, normalise_name};
 pub use mapping::{ContentTarget, MappingError, SheetMapping};
 pub use plan::{
     ActorSnapshot, ContentChange, ContentIndex, Corrections, CurrentLink, FieldChange, ImportPlan,
-    Indexed, PlanCertainty, RefineFn, Resolution, plan, plan_hash,
+    Indexed, PlanCertainty, RefineFn, RefineHook, Resolution, Unmapped, plan, plan_hash, plan_with,
 };
 pub use reader::{ReadError, Recognition, SheetReader};

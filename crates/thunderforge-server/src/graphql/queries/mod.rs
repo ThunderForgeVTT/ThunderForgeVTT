@@ -40,6 +40,8 @@ mod roll_offers_tests;
 pub mod scene;
 // Spec 082: `shapeCreators(sceneId)` — who drew on a scene, for the GM.
 pub mod shape_creators;
+// Spec 048: `sheetImportPreview` and `actorImports`.
+pub mod sheet_import;
 // Spec 039 US5: `myStanding`, `accountStanding`, `myNotices`.
 pub mod standing;
 pub mod token_attributes;

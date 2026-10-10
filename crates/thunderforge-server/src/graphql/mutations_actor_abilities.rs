@@ -125,6 +125,8 @@ pub async fn actor_abilities_impl(
                     .on(world_actor_abilities::ability_id.eq(world_abilities::id.nullable())),
             )
             .filter(world_actor_abilities::actor_id.eq(actor_id))
+            // Spec 048 FR-037: a link to staged content is not delivered.
+            .filter(world_actor_abilities::staged_id.is_null())
             .order(world_actor_abilities::ability_name_snapshot.asc())
             .select((
                 ActorAbilityEntry::as_select(),
