@@ -11,3 +11,10 @@
  * only when somebody imports a sheet.
  */
 export const sheetReader = () => import("@thunderforge/sheet-dnd5e");
+
+/**
+ * The play dock's and sheet page's stat rolls, by this pack's rules: checks
+ * from scores, proficient saves, and nothing for Armor Class. The host finds
+ * it through `apps/web/src/lib/systemPackIndexes.ts`.
+ */
+export { statRolls } from "./statRolls.ts";
