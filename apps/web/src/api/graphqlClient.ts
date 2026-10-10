@@ -72,6 +72,11 @@ export interface GraphQLRequestOptions {
    * switch for a stream.
    */
   announcePause?: boolean;
+  /**
+   * Upload progress for a multipart request, in bytes. `fetch` cannot report
+   * it, so a call that asks for progress is sent with `XMLHttpRequest`.
+   */
+  onUploadProgress?: (sent: number, total: number) => void;
 }
 
 /**
@@ -304,6 +309,44 @@ async function send(
   }
 }
 
+/**
+ * `send` for a request whose upload progress is wanted. The response is
+ * rebuilt as a `Response`, so the rest of the client reads it unchanged.
+ * Like an upload through `send`, it has no timeout.
+ */
+function sendWithProgress(
+  url: string,
+  init: { headers: HeadersInit; body: FormData },
+  operation: string | undefined,
+  onProgress: (sent: number, total: number) => void,
+): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    for (const [name, value] of new Headers(init.headers)) {
+      xhr.setRequestHeader(name, value);
+    }
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress(event.loaded, event.total);
+    };
+    xhr.onload = () =>
+      resolve(
+        new Response(xhr.responseText, {
+          status: xhr.status,
+          statusText: xhr.statusText,
+        }),
+      );
+    xhr.onerror = () =>
+      reject(
+        new GraphQLRequestError(
+          "Could not reach the server. Check your connection.",
+          { operation, transport: true },
+        ),
+      );
+    xhr.send(init.body);
+  });
+}
+
 /** POST a GraphQL query or mutation. */
 export async function postGraphQL<TData>(
   query: string,
@@ -430,19 +473,27 @@ export async function postGraphQLMultipart<TData>(
   );
   formData.append("0", file);
 
-  const response = await send(
-    options.endpoint ?? GRAPHQL_ENDPOINT,
-    {
-      method: "POST",
-      credentials: "same-origin",
-      // Deliberately no Content-Type: the browser sets the multipart boundary
-      // itself when the body is a FormData instance.
-      headers: withCsrf(),
-      body: formData,
-    },
-    operation,
-    options.timeoutMs === undefined ? null : options.timeoutMs,
-  );
+  const url = options.endpoint ?? GRAPHQL_ENDPOINT;
+  const response = options.onUploadProgress
+    ? await sendWithProgress(
+        url,
+        { headers: withCsrf(), body: formData },
+        operation,
+        options.onUploadProgress,
+      )
+    : await send(
+        url,
+        {
+          method: "POST",
+          credentials: "same-origin",
+          // Deliberately no Content-Type: the browser sets the multipart
+          // boundary itself when the body is a FormData instance.
+          headers: withCsrf(),
+          body: formData,
+        },
+        operation,
+        options.timeoutMs === undefined ? null : options.timeoutMs,
+      );
 
   return unwrap<TData>(
     await readPayload<TData>(response),

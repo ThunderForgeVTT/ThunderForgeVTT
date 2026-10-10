@@ -281,6 +281,95 @@ describe("postGraphQLMultipart", () => {
       postGraphQLMultipart(UPLOAD, {}, new Blob(["x"]), "file"),
     ).rejects.toThrow(/Upload failed.*413/);
   });
+
+  describe("with upload progress (spec 048)", () => {
+    /** Just enough of XMLHttpRequest to send, report and answer. */
+    class FakeXhr {
+      static last: FakeXhr | null = null;
+      static answer = { status: 200, body: "{}" };
+      static fail = false;
+      headers: Record<string, string> = {};
+      upload: { onprogress: ((e: ProgressEvent) => void) | null } = {
+        onprogress: null,
+      };
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      status = 0;
+      statusText = "";
+      responseText = "";
+      body: unknown = null;
+      open() {}
+      setRequestHeader(name: string, value: string) {
+        this.headers[name] = value;
+      }
+      send(body: unknown) {
+        FakeXhr.last = this;
+        this.body = body;
+        this.upload.onprogress?.({
+          lengthComputable: true,
+          loaded: 1,
+          total: 2,
+        } as ProgressEvent);
+        if (FakeXhr.fail) {
+          this.onerror?.();
+          return;
+        }
+        this.status = FakeXhr.answer.status;
+        this.responseText = FakeXhr.answer.body;
+        this.onload?.();
+      }
+    }
+
+    beforeEach(() => {
+      FakeXhr.last = null;
+      FakeXhr.fail = false;
+      vi.stubGlobal("XMLHttpRequest", FakeXhr);
+    });
+
+    it("reports progress and reads the answer like any other", async () => {
+      FakeXhr.answer = {
+        status: 200,
+        body: JSON.stringify({ data: { uploadLoreImage: { id: "i1" } } }),
+      };
+      const progress: Array<[number, number]> = [];
+      const data = await postGraphQLMultipart<{
+        uploadLoreImage: { id: string };
+      }>(UPLOAD, { loreEntryId: "l1" }, new Blob(["x"]), "file", {
+        onUploadProgress: (sent, total) => progress.push([sent, total]),
+      });
+      expect(data.uploadLoreImage.id).toBe("i1");
+      expect(progress).toEqual([[1, 2]]);
+      expect(fetchMock).not.toHaveBeenCalled();
+      const form = FakeXhr.last?.body as FormData;
+      expect(form.get("0")).toBeInstanceOf(Blob);
+    });
+
+    it("carries a refusal's code", async () => {
+      FakeXhr.answer = {
+        status: 200,
+        body: JSON.stringify({
+          data: null,
+          errors: [
+            { message: "changed", extensions: { code: "PLAN_CHANGED" } },
+          ],
+        }),
+      };
+      await expect(
+        postGraphQLMultipart(UPLOAD, {}, new Blob(["x"]), "file", {
+          onUploadProgress: () => {},
+        }),
+      ).rejects.toMatchObject({ codes: ["PLAN_CHANGED"] });
+    });
+
+    it("names a lost connection as one", async () => {
+      FakeXhr.fail = true;
+      await expect(
+        postGraphQLMultipart(UPLOAD, {}, new Blob(["x"]), "file", {
+          onUploadProgress: () => {},
+        }),
+      ).rejects.toThrow(/Could not reach the server/);
+    });
+  });
 });
 
 describe("operationNameOf", () => {

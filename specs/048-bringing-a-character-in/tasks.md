@@ -188,7 +188,8 @@ Content the world lacks is staged under their name and kept out of play.
 
 ### The web
 
-- [ ] T038 [P] [US1] Add `apps/web/src/api/sheetImport.ts`, the typed calls, with `applySheetImport` sent through `postGraphQLMultipart` with progress. Add the hook `useSheetImport(actorId)` with `refetch()`.
+- [X] T038 [P] [US1] Add `apps/web/src/api/sheetImport.ts`, the typed calls, with `applySheetImport` sent through `postGraphQLMultipart` with progress. Add the hook `useSheetImport(actorId)` with `refetch()`.
+  - Done: `postGraphQLMultipart` sends with `XMLHttpRequest` when `onUploadProgress` is given, because `fetch` cannot report upload progress. It has three tests.
 - [ ] T039 [US1] Add the route `/world/:id/actor/:actorId/import`, loaded with `React.lazy`, to `apps/web/src/pages/world/actor/import/SheetImportPage.tsx`. The page:
   - picks a file;
   - reads it with the pack's lazy reader;
