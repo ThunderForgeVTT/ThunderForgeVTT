@@ -814,11 +814,12 @@
       ],
       "paths": [
         "apps/web/src/components/world/PlayDock/{RollEntry,CharacterRollButtons}.tsx",
-        "apps/web/src/components/world/PlayDock/{feedTime,useCharacterRolls}.ts",
+        "apps/web/src/components/world/PlayDock/{feedTime,useCharacterRolls,systemStatRolls}.ts",
+        "apps/web/src/lib/systemPackIndexes.ts",
         "apps/web/src/components/world/RollVisibility/**",
         "apps/web/src/pages/world/actor/ActorRollsPanel.tsx",
         "apps/web/e2e/fixtures/rolls.ts",
-        "apps/web/src/components/world/PlayDock/__tests__/{feedTime,upsertRoll}.test.ts",
+        "apps/web/src/components/world/PlayDock/__tests__/{feedTime,upsertRoll,systemStatRolls,dnd5eStatRolls}.test.ts",
         "apps/web/src/engine/world/sync/rolls.ts",
         "apps/web/src/engine/world/sync/__tests__/rolls.test.ts",
         "apps/web/src/hooks/useWorldRolls.ts",
@@ -924,6 +925,7 @@
         "crates/thunderforge-sheet-import/**",
         "packs/systems/dnd5e/sheet/**",
         "packs/systems/roll_for_shoes/sheet/**",
+        "apps/web/src/lib/systemPackIndexes.ts",
         "packs/systems/*/server/src/{sheet_import,sheet_import_tests}.rs",
         "packs/systems/dnd5e/web/{e2e,sheet-reader}/**",
         "packs/systems/dnd5e/web/{playwright.config,vite.sheet-reader.config}.ts"
