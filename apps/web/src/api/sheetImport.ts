@@ -48,12 +48,28 @@ export interface SheetUnmapped {
   goesTo: string;
 }
 
+/** A derived number the sheet prints that the rules disagree with. */
+export interface SheetCrossCheck {
+  path: string;
+  sheet: unknown;
+  derived: unknown;
+}
+
+/** Re-import: a value in play kept unless named in `overwritePlayState`. */
+export interface SheetKeptInPlay {
+  target: string;
+  current: unknown;
+  sheet: unknown;
+}
+
 export interface SheetImportPlan {
   readerId: string;
   readerVersion: string;
   fields: SheetFieldChange[];
   content: SheetContentChange[];
   unmapped: SheetUnmapped[];
+  crossChecks: SheetCrossCheck[];
+  keptInPlay: SheetKeptInPlay[];
   isReimport: boolean;
   planHash: string;
 }
@@ -94,6 +110,8 @@ const PLAN_FIELDS = `
   }
   content { kind name resolution worldId stagedId removed }
   unmapped { path value goesTo }
+  crossChecks { path sheet derived }
+  keptInPlay { target current sheet }
   isReimport
   planHash
 `;

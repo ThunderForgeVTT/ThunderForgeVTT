@@ -6,6 +6,7 @@
 use async_graphql::{Context, Enum, Json, Result as GraphQLResult, SimpleObject, Upload};
 use chrono::{DateTime, Utc};
 use serde_json::Value;
+use thunderforge_sheet_import::plan::{CrossCheck, KeptInPlay};
 use thunderforge_sheet_import::{
     ContentChange, FieldChange, ImportPlan, PlanCertainty, Resolution, Source, Unmapped, plan_hash,
 };
@@ -151,6 +152,46 @@ impl From<&Unmapped> for GraphQLSheetUnmapped {
     }
 }
 
+/// A number the sheet prints that the rules derive, where the two differ.
+/// Never written; its base field is marked uncertain.
+#[derive(SimpleObject, Debug, Clone)]
+#[graphql(name = "SheetCrossCheck")]
+pub struct GraphQLSheetCrossCheck {
+    pub path: String,
+    pub sheet: Json<Value>,
+    pub derived: Json<Value>,
+}
+
+impl From<&CrossCheck> for GraphQLSheetCrossCheck {
+    fn from(check: &CrossCheck) -> Self {
+        Self {
+            path: check.path.clone(),
+            sheet: Json(check.sheet.clone()),
+            derived: Json(check.derived.clone()),
+        }
+    }
+}
+
+/// A value in play (hit points, slots spent) that a re-import keeps unless
+/// the person names it in `overwritePlayState`.
+#[derive(SimpleObject, Debug, Clone)]
+#[graphql(name = "SheetKeptInPlay")]
+pub struct GraphQLSheetKeptInPlay {
+    pub target: String,
+    pub current: Option<Json<Value>>,
+    pub sheet: Option<Json<Value>>,
+}
+
+impl From<&KeptInPlay> for GraphQLSheetKeptInPlay {
+    fn from(kept: &KeptInPlay) -> Self {
+        Self {
+            target: kept.target.clone(),
+            current: kept.current.clone().map(Json),
+            sheet: kept.sheet.clone().map(Json),
+        }
+    }
+}
+
 #[derive(SimpleObject, Debug, Clone)]
 #[graphql(name = "SheetImportPlan")]
 pub struct GraphQLSheetImportPlan {
@@ -159,6 +200,8 @@ pub struct GraphQLSheetImportPlan {
     pub fields: Vec<GraphQLSheetFieldChange>,
     pub content: Vec<GraphQLSheetContentChange>,
     pub unmapped: Vec<GraphQLSheetUnmapped>,
+    pub cross_checks: Vec<GraphQLSheetCrossCheck>,
+    pub kept_in_play: Vec<GraphQLSheetKeptInPlay>,
     pub is_reimport: bool,
     pub plan_hash: String,
 }
@@ -171,6 +214,8 @@ impl From<&ImportPlan> for GraphQLSheetImportPlan {
             fields: plan.fields.iter().map(Into::into).collect(),
             content: plan.content.iter().map(Into::into).collect(),
             unmapped: plan.unmapped.iter().map(Into::into).collect(),
+            cross_checks: plan.cross_checks.iter().map(Into::into).collect(),
+            kept_in_play: plan.kept_in_play.iter().map(Into::into).collect(),
             is_reimport: plan.is_reimport,
             plan_hash: plan_hash(plan),
         }

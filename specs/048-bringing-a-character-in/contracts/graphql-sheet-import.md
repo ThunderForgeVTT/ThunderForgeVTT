@@ -61,12 +61,22 @@ type SheetContentChange {
 
 type SheetUnmapped { path: String!  value: JSON!  goesTo: String! }
 
+# A derived number the sheet prints that the rules disagree with (FR-020).
+# Never written; the base field it comes from is UNCERTAIN.
+type SheetCrossCheck { path: String!  sheet: JSON!  derived: JSON! }
+
+# Re-import: a value in play the import keeps unless its target is named in
+# applySheetImport's overwritePlayState (FR-028).
+type SheetKeptInPlay { target: String!  current: JSON  sheet: JSON }
+
 type SheetImportPlan {
   readerId: String!
   readerVersion: String!
   fields: [SheetFieldChange!]!
   content: [SheetContentChange!]!
   unmapped: [SheetUnmapped!]!
+  crossChecks: [SheetCrossCheck!]!   # added in T049
+  keptInPlay: [SheetKeptInPlay!]!    # added in T049
   isReimport: Boolean!
   planHash: String!
 }

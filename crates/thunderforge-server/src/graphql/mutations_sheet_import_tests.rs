@@ -293,6 +293,42 @@ async fn an_apply_writes_the_sheet_links_version_record_origin_and_event() {
     assert!(history[0].file_available, "the owner may download");
 }
 
+/// Spec 048 T050 (FR-022): what the player corrected is kept apart from
+/// what the server read, and the GM sees which fields they were.
+#[tokio::test]
+async fn a_correction_is_kept_apart_from_the_reading_and_the_gm_sees_it() {
+    use crate::schema::sheet_import_versions as versions;
+    let t = table();
+    let player = t.claimant().await;
+    let corrections = json!({ "abilities.str": 15 });
+    let hash = t
+        .preview(player, Some(corrections.clone()))
+        .await
+        .expect("a plan");
+    let import = t
+        .apply(player, FIGHTER_WIZARD, Some(corrections.clone()), hash)
+        .await
+        .expect("applied");
+
+    let (ability_data, _) = t.system_data().expect("system data written");
+    assert_eq!(ability_data.unwrap()["strength"], json!(15));
+
+    let mut conn = t.state.db_pool.get().expect("conn");
+    let (reading, stored): (Value, Value) = versions::table
+        .find(import.version_id.expect("a version"))
+        .select((versions::reading, versions::corrections))
+        .first(&mut conn)
+        .unwrap();
+    assert_eq!(stored, corrections);
+    assert_eq!(reading["abilities"]["str"]["value"], json!(13), "as read");
+    drop(conn);
+
+    let history = actor_imports_impl(&t.state, t.gm, false, t.actor)
+        .await
+        .unwrap();
+    assert_eq!(history[0].corrected, ["abilities.str"]);
+}
+
 #[tokio::test]
 async fn the_gm_may_import_onto_any_actor_in_the_world() {
     let t = table();

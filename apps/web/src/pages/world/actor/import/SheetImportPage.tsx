@@ -6,8 +6,7 @@
 import { useEffect, useState, type ChangeEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { getActor } from "@/api/actors";
-import { GraphQLRequestError } from "@/api/graphqlClient";
-import type { SheetImportPlan } from "@/api/sheetImport";
+import type { SheetCorrections, SheetImportPlan } from "@/api/sheetImport";
 import { WorldAppearance } from "@/appearance/WorldAppearance";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
@@ -23,29 +22,30 @@ import { readSheet } from "@/pages/world/actor/systemSheetReaders";
 import type { WorldActorRecord } from "@/types/actor";
 import { ContentRow } from "./ContentRow";
 import { FieldRow } from "./FieldRow";
+import { CrossChecks, KeptInPlayList, UnmappedList } from "./PlanNotes";
+import { refusalProblem, SheetRefused, type Problem } from "./refusal";
+import { filterFields, type FieldFilter } from "./rows";
+
+/** What the person is reviewing: the reading, their corrections, the plan. */
+interface Review {
+  file: File;
+  reading: unknown;
+  corrections: SheetCorrections;
+  overwrite: string[];
+  plan: SheetImportPlan;
+}
 
 type Step =
   | { kind: "pick" }
   | { kind: "reading" }
-  | { kind: "review"; file: File; plan: SheetImportPlan }
-  | { kind: "applying"; file: File; plan: SheetImportPlan; sent: number };
+  | ({ kind: "review"; busy: boolean } & Review)
+  | ({ kind: "applying"; sent: number } & Review);
 
-/** What a refusal says to the person, from its code where there is one. */
-export function refusalText(err: unknown): string {
-  if (err instanceof GraphQLRequestError) {
-    if (err.codes.includes("PLAN_CHANGED")) {
-      return "The character changed while you were reviewing. Read the sheet again.";
-    }
-    if (err.codes.includes("FORBIDDEN")) {
-      return "You may not change this character.";
-    }
-    if (err.codes.includes("FEATURE_DISABLED")) {
-      return "Bringing in sheets is switched off on this server.";
-    }
-    return err.errors[0] ?? err.message;
-  }
-  return err instanceof Error ? err.message : String(err);
-}
+const FILTERS: { id: FieldFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "uncertain", label: "Check this" },
+  { id: "unread", label: "Not read" },
+];
 
 export default function SheetImportPage() {
   const { id: worldId = "", actorId = "" } = useParams();
@@ -53,7 +53,8 @@ export default function SheetImportPage() {
   const [actor, setActor] = useState<WorldActorRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [step, setStep] = useState<Step>({ kind: "pick" });
-  const [problem, setProblem] = useState<string | null>(null);
+  const [problem, setProblem] = useState<Problem | null>(null);
+  const [filter, setFilter] = useState<FieldFilter>("all");
   const { preview, apply } = useSheetImport(actorId);
   const viewPath = `/world/${worldId}/actor/${actorId}/view`;
 
@@ -61,6 +62,7 @@ export default function SheetImportPage() {
     setIsLoading(true);
     setStep({ kind: "pick" });
     setProblem(null);
+    setFilter("all");
   });
 
   useEffect(() => {
@@ -104,44 +106,88 @@ export default function SheetImportPage() {
         throw new Error("This game system cannot read a character sheet.");
       }
       if (!answer.recognised || answer.reading === undefined) {
-        throw new Error(answer.error ?? "This is not a sheet we can read.");
+        throw new SheetRefused(
+          answer.error ?? "This is not a sheet we can read.",
+          answer.code,
+        );
       }
       const plan = await preview(answer.reading);
-      setStep({ kind: "review", file, plan });
+      setFilter("all");
+      setStep({
+        kind: "review",
+        busy: false,
+        file,
+        reading: answer.reading,
+        corrections: {},
+        overwrite: [],
+        plan,
+      });
     } catch (err) {
-      setProblem(refusalText(err));
+      setProblem(refusalProblem(err));
       setStep({ kind: "pick" });
     }
   };
 
-  const onAccept = async () => {
+  /** A correction asks for the plan again; the server marks it CORRECTED. */
+  const onCorrect = async (path: string, value: unknown) => {
     if (step.kind !== "review") return;
-    const { file, plan } = step;
+    const review: Review = step;
+    const corrections = { ...review.corrections, [path]: value };
     setProblem(null);
-    setStep({ kind: "applying", file, plan, sent: 0 });
+    setStep({ ...review, kind: "review", busy: true });
+    try {
+      const plan = await preview(review.reading, corrections);
+      const kept = new Set(plan.keptInPlay.map((row) => row.target));
+      setStep({
+        ...review,
+        kind: "review",
+        busy: false,
+        corrections,
+        overwrite: review.overwrite.filter((target) => kept.has(target)),
+        plan,
+      });
+    } catch (err) {
+      setProblem(refusalProblem(err));
+      setStep({ ...review, kind: "review", busy: false });
+    }
+  };
+
+  const onToggleKept = (target: string, on: boolean) => {
+    if (step.kind !== "review") return;
+    const rest = step.overwrite.filter((t) => t !== target);
+    setStep({ ...step, overwrite: on ? [...rest, target] : rest });
+  };
+
+  const onAccept = async () => {
+    if (step.kind !== "review" || step.busy) return;
+    const review: Review = step;
+    setProblem(null);
+    setStep({ ...review, kind: "applying", sent: 0 });
     try {
       await apply({
-        file,
-        corrections: {},
-        overwritePlayState: [],
-        planHash: plan.planHash,
+        file: review.file,
+        corrections: review.corrections,
+        overwritePlayState: review.overwrite,
+        planHash: review.plan.planHash,
         onProgress: (sent, total) =>
           setStep({
+            ...review,
             kind: "applying",
-            file,
-            plan,
             sent: total > 0 ? Math.round((sent / total) * 100) : 0,
           }),
       });
       navigate(viewPath);
     } catch (err) {
-      setProblem(refusalText(err));
-      setStep({ kind: "review", file, plan });
+      setProblem(refusalProblem(err));
+      setStep({ ...review, kind: "review", busy: false });
     }
   };
 
-  const plan =
-    step.kind === "review" || step.kind === "applying" ? step.plan : null;
+  const review =
+    step.kind === "review" || step.kind === "applying" ? step : null;
+  const plan = review?.plan ?? null;
+  const locked =
+    step.kind === "applying" || (step.kind === "review" && step.busy);
 
   return (
     <WorldAppearance worldId={worldId}>
@@ -166,8 +212,9 @@ export default function SheetImportPage() {
             role="alert"
             className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
             data-testid="sheet-import-problem"
+            data-code={problem.code}
           >
-            {problem}
+            {problem.text}
           </p>
         ) : null}
 
@@ -197,12 +244,43 @@ export default function SheetImportPage() {
               <h2 className="font-semibold">
                 {plan.isReimport ? "What changes" : "What the sheet writes"}
               </h2>
+              <div
+                className="flex flex-wrap gap-1"
+                role="group"
+                aria-label="Show"
+                data-testid="sheet-import-filters"
+              >
+                {FILTERS.map(({ id, label }) => (
+                  <Button
+                    key={id}
+                    size="sm"
+                    variant={filter === id ? "secondary" : "ghost"}
+                    aria-pressed={filter === id}
+                    onClick={() => setFilter(id)}
+                    data-testid={`sheet-import-filter-${id}`}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
               <ul className="grid" data-testid="sheet-import-fields">
-                {plan.fields.map((field) => (
-                  <FieldRow key={field.path} field={field} />
+                {filterFields(plan.fields, filter).map((field) => (
+                  <FieldRow
+                    key={field.path}
+                    field={field}
+                    disabled={locked}
+                    onCorrect={(path, value) => void onCorrect(path, value)}
+                  />
                 ))}
               </ul>
             </Card>
+            <CrossChecks checks={plan.crossChecks} />
+            <KeptInPlayList
+              kept={plan.keptInPlay}
+              overwrite={review?.overwrite ?? []}
+              onToggle={onToggleKept}
+              disabled={locked}
+            />
             {plan.content.length > 0 ? (
               <Card className="grid gap-2 p-4">
                 <h2 className="font-semibold">Spells, features and items</h2>
@@ -216,20 +294,11 @@ export default function SheetImportPage() {
                 </ul>
               </Card>
             ) : null}
-            {plan.unmapped.length > 0 ? (
-              <p
-                className="text-sm text-muted-foreground"
-                data-testid="sheet-import-unmapped"
-              >
-                {plan.unmapped.length} value
-                {plan.unmapped.length === 1 ? "" : "s"} the system does not
-                track will go into the notes.
-              </p>
-            ) : null}
+            <UnmappedList unmapped={plan.unmapped} />
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 onClick={() => void onAccept()}
-                disabled={step.kind === "applying"}
+                disabled={locked}
                 data-testid="sheet-import-accept"
               >
                 {step.kind === "applying"

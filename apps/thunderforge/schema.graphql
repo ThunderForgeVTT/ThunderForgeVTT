@@ -7060,6 +7060,16 @@ type SheetContentChange {
 	removed: Boolean!
 }
 
+"""
+A number the sheet prints that the rules derive, where the two differ.
+Never written; its base field is marked uncertain.
+"""
+type SheetCrossCheck {
+	path: String!
+	sheet: JSON!
+	derived: JSON!
+}
+
 type SheetFieldChange {
 	path: String!
 	target: String!
@@ -7077,8 +7087,20 @@ type SheetImportPlan {
 	fields: [SheetFieldChange!]!
 	content: [SheetContentChange!]!
 	unmapped: [SheetUnmapped!]!
+	crossChecks: [SheetCrossCheck!]!
+	keptInPlay: [SheetKeptInPlay!]!
 	isReimport: Boolean!
 	planHash: String!
+}
+
+"""
+A value in play (hit points, slots spent) that a re-import keeps unless
+the person names it in `overwritePlayState`.
+"""
+type SheetKeptInPlay {
+	target: String!
+	current: JSON
+	sheet: JSON
 }
 
 type SheetSource {
