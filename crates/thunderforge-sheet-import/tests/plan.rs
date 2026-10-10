@@ -283,6 +283,22 @@ fn an_uncertain_field_is_written_only_as_shown_and_marked() {
     assert!(dex.source.is_some(), "the review can point at it");
 }
 
+/// A doubted value that read as nothing, onto an actor that holds nothing,
+/// is not "unchanged": the review shows it so the person can correct it.
+#[test]
+fn a_doubted_value_with_nothing_read_stays_in_the_review() {
+    let mut r = reading();
+    r.abilities.insert(
+        "str".into(),
+        Field::uncertain(None, "\"l6\" is not a number", src(1, "l6")),
+    );
+    let plan = run(&r, &Corrections::new(), &first_import());
+    let strength = field(&plan, "abilities.str").expect("shown for checking");
+    assert_eq!(strength.certainty, PlanCertainty::Uncertain);
+    assert_eq!(strength.new, None);
+    assert!(!plan.identical.iter().any(|p| p == "abilities.str"));
+}
+
 #[test]
 fn an_uncertain_field_corrected_is_written_as_corrected() {
     let mut r = reading();
@@ -637,6 +653,38 @@ fn content_no_longer_on_the_sheet_is_marked_removed() {
     assert_eq!(removed[0].resolution, Resolution::World { id: "w9".into() });
 }
 
+#[test]
+fn content_linked_already_is_marked_for_the_diff() {
+    let mut current = reimport();
+    current.links.push(CurrentLink {
+        kind: "feature".into(),
+        name: "second wind".into(),
+        id: "w3".into(),
+        staged: false,
+    });
+    let plan = run(&reading(), &Corrections::new(), &current);
+    let wind = plan
+        .content
+        .iter()
+        .find(|c| c.name == "Second Wind")
+        .unwrap();
+    assert!(wind.linked && !wind.removed);
+    assert!(
+        plan.content
+            .iter()
+            .filter(|c| c.name != "Second Wind" && !c.removed)
+            .all(|c| !c.linked)
+    );
+    // A first import marks nothing, and leaves the field out of the plan.
+    let first = run(&reading(), &Corrections::new(), &ActorSnapshot::default());
+    assert!(first.content.iter().all(|c| !c.linked));
+    assert!(
+        !serde_json::to_string(&first)
+            .unwrap()
+            .contains("\"linked\"")
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Names and hashes
 
@@ -686,7 +734,7 @@ fn the_hash_of_a_small_plan_is_pinned() {
     let plan = run(&r, &Corrections::new(), &first_import());
     assert_eq!(
         plan_hash(&plan),
-        "af0c0a959c82af7b7de9c0398f32a1e81838474878db73793d64f419834d5d4c"
+        "4eb36451fb455448fc0e0684ef5d9819621ea9e69bfde6566a933328cf82cb03"
     );
 }
 

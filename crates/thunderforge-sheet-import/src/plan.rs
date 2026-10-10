@@ -80,6 +80,11 @@ pub struct ContentChange {
     pub source: Option<Source>,
     /// On a re-import: linked now, not on the sheet.
     pub removed: bool,
+    /// On a re-import: on the sheet and linked already, so the review's
+    /// diff can leave it out. Absent when false, so a first import's plan,
+    /// and its hash, are what they were.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub linked: bool,
     /// The reading's `content.N` paths this change came from.
     pub from: Vec<String>,
 }
@@ -509,7 +514,11 @@ fn field_change(
         compose(declared, &group, old.as_ref())
     };
 
-    if certainty != PlanCertainty::Unread && new == old {
+    // Only a value the reader is sure of can be left out as unchanged. One
+    // it doubts stays in the review even when it matches, or when it read
+    // nothing and the actor holds nothing, so the person can correct it.
+    let sure = matches!(certainty, PlanCertainty::Read | PlanCertainty::Corrected);
+    if sure && new == old {
         out.identical.push(declared.to_string());
         return;
     }
@@ -686,6 +695,7 @@ fn plan_content(
                 reason,
                 source: item.name.source.clone(),
                 removed: false,
+                linked: false,
                 from: vec![path],
             },
         );
@@ -694,7 +704,8 @@ fn plan_content(
     if current.is_reimport {
         for link in &current.links {
             let key = (link.kind.clone(), normalise_name(&link.name));
-            if by_key.contains_key(&key) {
+            if let Some(change) = by_key.get_mut(&key) {
+                change.linked = true;
                 continue;
             }
             let Some(target) = mapping.content.get(&link.kind) else {
@@ -722,6 +733,7 @@ fn plan_content(
                 reason: None,
                 source: None,
                 removed: true,
+                linked: true,
                 from: Vec::new(),
             });
         }
