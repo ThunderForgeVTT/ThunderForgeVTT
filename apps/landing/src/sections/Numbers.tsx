@@ -29,7 +29,7 @@ const MEASURES = [
 
 export function Numbers() {
   return (
-    <section className="section numbers" aria-labelledby="numbers-title">
+    <section data-section="numbers" className="section numbers" aria-labelledby="numbers-title">
       <h2 id="numbers-title" className="marker-head">
         Measured, not promised.
       </h2>

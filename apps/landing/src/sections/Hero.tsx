@@ -367,7 +367,7 @@ export function Hero() {
       : null;
 
   return (
-    <header className="hero" ref={heroRef}>
+    <header className="hero" data-section="hero" ref={heroRef}>
       <Nav />
       <div className="hero-body">
         <div className="room" ref={roomRef}>
@@ -382,16 +382,16 @@ export function Hero() {
             </span>
           </p>
           <div className="actions">
-            <a className="ink-btn ink-btn--blue" href={DEMO}>
+            <a className="ink-btn ink-btn--blue" data-cta="try_demo" data-placement="hero" href={DEMO}>
               Play the demo world
               <ArrowMark />
             </a>
             <div className="actions-pair">
-              <a className="ink-btn ink-btn--red-line" href={SPONSORS}>
+              <a className="ink-btn ink-btn--red-line" data-cta="sponsor" data-placement="hero" href={SPONSORS}>
                 <HeartMark />
                 Donate
               </a>
-              <a className="ink-btn ink-btn--line" href={REPO}>
+              <a className="ink-btn ink-btn--line" data-cta="github" data-placement="hero" href={REPO}>
                 <StarMark />
                 Star<span className="wide-only"> on GitHub</span>
               </a>

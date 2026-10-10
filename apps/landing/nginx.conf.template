@@ -20,12 +20,85 @@ map "${GITHUB_TOKEN}" $github_auth {
   default "Bearer ${GITHUB_TOKEN}";
 }
 
+# Spec 086: browser telemetry for the landing and the demo
+# (specs/086-full-telemetry/contracts/served-config-and-csp.md). The image
+# defines ${TELEMETRY} and the two THUNDERFORGE_BROWSER_TELEMETRY_* values;
+# `TELEMETRY=false` turns both pages' reporting off, and the pages then load
+# nothing for it.
+
+# 1. Is it on?
+map "${TELEMETRY}" $telemetry_on {
+  default               1;
+  ~*^(false|0|no|off)$  0;
+}
+
+# 2. The tier, by the same normalisation as the server's tier_for.
+map "${THUNDERFORGE_BROWSER_TELEMETRY_ENDPOINT}" $telemetry_tier {
+  default                                            operator;
+  ~*^https://telemetry\.thunderforge\.dev(:443)?/?$  anonymous;
+  ~^[^:]*$                                           anonymous;
+}
+
+# 3. The endpoint's origin, for connect-src.
+map "${THUNDERFORGE_BROWSER_TELEMETRY_ENDPOINT}" $telemetry_origin_raw {
+  ~^(?<o>https?://[^/]+)  $o;
+  default                 "";
+}
+map $telemetry_on $telemetry_origin {
+  1       $telemetry_origin_raw;
+  default "";
+}
+
+# 4. The served config.
+map $telemetry_on $telemetry_json {
+  1       '{"enabled":true,"endpoint":"${THUNDERFORGE_BROWSER_TELEMETRY_ENDPOINT}","sampleRate":${THUNDERFORGE_BROWSER_TELEMETRY_SAMPLE_RATE},"environment":"production","tier":"$telemetry_tier"}';
+  default '{"enabled":false}';
+}
+
+# 5. The demo's connect-src: its own files, and the endpoint when on.
+map $telemetry_origin $telemetry_connect {
+  ""      "connect-src 'self' data: blob:";
+  default "connect-src 'self' data: blob: $telemetry_origin";
+}
+
+# Spec 086 FR-027: the access log is JSON and holds no visitor. No address,
+# no X-Forwarded-For, no user agent, no query string, and the referrer only
+# as its origin. The path is the one asked for, before try_files rewrote it.
+map $request_uri $request_path {
+  ~^(?<rp>[^?#]*)  $rp;
+  default          "";
+}
+map $http_referer $referrer_origin {
+  ~^(?<ro>https?://[^/?#]+)  $ro;
+  default                    "";
+}
+
+log_format landing_json escape=json
+  '{"time":"$time_iso8601","method":"$request_method","path":"$request_path",'
+  '"status":$status,"bytes":$body_bytes_sent,"request_time":$request_time,'
+  '"cache":"$upstream_cache_status","referrer_origin":"$referrer_origin"}';
+
+# Connection counts for the exporter sidecar, on the pod's loopback only:
+# nothing outside the pod, the Service included, can reach it.
+server {
+  listen 127.0.0.1:8081;
+  server_name _;
+  access_log off;
+  location = /stub_status {
+    stub_status;
+  }
+  location / {
+    return 404;
+  }
+}
+
 server {
   listen 8080;
   server_name _;
   root /usr/share/nginx/html;
 
   server_tokens off;
+  access_log /var/log/nginx/access.log landing_json;
   # Behind the gateway, a redirect must not name this pod's port or scheme.
   absolute_redirect off;
   gzip on;
@@ -41,18 +114,40 @@ server {
     try_files $uri =404;
   }
 
-  # The demo is a single-page app under its own base path.
+  # The served telemetry config, for the landing and the demo. Never cached:
+  # turning it off takes effect on the next page load.
+  location = /telemetry.json {
+    default_type application/json;
+    add_header Cache-Control "no-store" always;
+    add_header X-Content-Type-Options nosniff always;
+    return 200 $telemetry_json;
+  }
+  location = /demo/telemetry.json {
+    default_type application/json;
+    add_header Cache-Control "no-store" always;
+    add_header X-Content-Type-Options nosniff always;
+    return 200 $telemetry_json;
+  }
+
+  # The demo is a single-page app under its own base path. Its page's own
+  # <meta> policy lets it reach any https or http origin, and this header
+  # narrows that to the telemetry endpoint; a browser enforces both.
   location /demo/ {
+    add_header Content-Security-Policy $telemetry_connect always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
     try_files $uri $uri/ /demo/index.html;
   }
   location = /demo {
+    add_header Content-Security-Policy $telemetry_connect always;
     return 301 /demo/;
   }
 
   location / {
     # The dice are WebAssembly, the hero portraits are data: URIs, and the
-    # only outside images are stargazers' GitHub avatars.
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://avatars.githubusercontent.com; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'" always;
+    # only outside images are stargazers' GitHub avatars. The page reaches
+    # only itself and, when telemetry is on, its endpoint (spec 086).
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://avatars.githubusercontent.com; font-src 'self'; connect-src 'self' $telemetry_origin; frame-ancestors 'none'; base-uri 'self'; form-action 'none'" always;
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy strict-origin-when-cross-origin always;
     add_header Cache-Control "no-cache";

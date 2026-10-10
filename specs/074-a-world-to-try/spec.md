@@ -26,6 +26,12 @@ before they can move one token.
 A demo answers all three: a world that anybody can open, run as its Game
 Master, and wreck, because nothing they do leaves their browser.
 
+> **Amended by [spec 086](../086-full-telemetry/spec.md).** The world the
+> visitor builds still never leaves the browser. When the served
+> `telemetry.json` says so, the demo also posts allow-listed, content-free
+> telemetry (which funnel steps were reached, actions counted by kind,
+> errors) to the one configured telemetry origin.
+
 It answers a fourth for us. A client that runs with no server is a client
 whose features can be exercised with no database, no stack and no session,
 which is most of what makes an end-to-end run slow.
@@ -82,6 +88,13 @@ That is the work, and it is the part to keep honest (FR-009, FR-010).
   carries a content security policy that forbids loading from any other
   origin. This is a property of the bundle and is tested as one (SC-003), not
   a mode the real client is trusted to stay in.
+
+  > **Amended by [spec 086](../086-full-telemetry/spec.md) (FR-021, R24).**
+  > The guard passes one more thing: a `POST` to the configured telemetry
+  > origin's `/v1/logs` or `/v1/traces`, and only while the served config is
+  > enabled. The page's `<meta>` `connect-src` is widened to
+  > `'self' data: blob: https: http:`, and the server's (or nginx's) header
+  > narrows it to that one origin. Everything else is still refused.
 - **The visitor is the Game Master.** One person, full powers, no account, no
   sign-in. There is nobody else in the world, so nothing that exists to stop
   one member from another applies.
@@ -198,9 +211,10 @@ That is the work, and it is the part to keep honest (FR-009, FR-010).
 - **SC-002** In the same run a wall is drawn, a door is opened, a light is
   placed and a character sheet rolls, each through the tool a Game Master
   uses.
-- **SC-003** Across the whole of that run the browser makes no request to any
-  path outside the demo's own static files, and opens no socket. The test
-  fails on the first one.
+- **SC-003** Across the whole of that run the browser makes no request
+  outside the demo's own static files, except telemetry to the configured
+  telemetry origin, and opens no socket. The test fails on the first one.
+  (Amended by [spec 086](../086-full-telemetry/spec.md), FR-032.)
 - **SC-004** Starting over restores the shipped world.
 - **SC-005** An operation the demo does not answer produces the notice of
   FR-009.

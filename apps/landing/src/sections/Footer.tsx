@@ -2,7 +2,7 @@ import { CC_BY_SA, MAPS_SOURCE, REPO } from "../links.ts";
 
 export function Footer() {
   return (
-    <footer className="footer">
+    <footer className="footer" data-section="footer">
       <div className="footer-brand">
         <img src="/brand-mark.svg" alt="" width="32" height="32" />
         <span>ThunderForgeVTT</span>

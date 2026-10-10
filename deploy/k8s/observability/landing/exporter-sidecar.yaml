@@ -1,0 +1,33 @@
+# Spec 086 US4 (contracts/observability-apply.md): the landing's nginx
+# exporter, as a sidecar reading stub_status on the pod's loopback.
+#
+# A strategic-merge patch for deployment/thunderforge-landing, whose base is in
+# no repository: `make observability` applies it with `kubectl patch`, and it
+# is deliberately not a kustomize resource. Re-applying it is a no-op.
+#
+# The image is the newest 1.x on Docker Hub at the time of writing, pinned by
+# tag and index digest.
+spec:
+  template:
+    spec:
+      containers:
+        - name: nginx-exporter
+          image: nginx/nginx-prometheus-exporter:1.5.3@sha256:85666e7fde7e253f1c6d978f9a961245df4c9cdb7677e1866d9bb28e8f9ee41d
+          args:
+            - --nginx.scrape-uri=http://127.0.0.1:8081/stub_status
+          ports:
+            - name: metrics
+              containerPort: 9113
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 5m
+              memory: 16Mi
+            limits:
+              memory: 32Mi
+          securityContext:
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]

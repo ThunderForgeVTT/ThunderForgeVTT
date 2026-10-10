@@ -2,6 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { servedTelemetry } from "@thunderforge/telemetry/vite";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -36,8 +37,22 @@ const ghProxy = {
 
 export default defineConfig({
   root: __dirname,
-  plugins: [react()],
-  resolve: { dedupe: ["react", "react-dom"] },
+  plugins: [
+    react(),
+    // Spec 086: `/telemetry.json` and its `connect-src`, as nginx serves them.
+    // Off unless THUNDERFORGE_PREVIEW_TELEMETRY holds a config.
+    servedTelemetry({ paths: ["/telemetry.json", "/demo/telemetry.json"] }),
+  ],
+  resolve: {
+    dedupe: ["react", "react-dom"],
+    alias: {
+      // Spec 086 R12: the web app's redaction, not a second copy of it.
+      "@thunderforge/feedback-redaction": path.resolve(
+        __dirname,
+        "../web/src/services/feedbackRedaction.ts",
+      ),
+    },
+  },
   server: { host: "127.0.0.1", port: devPort, strictPort: true, proxy: ghProxy },
   preview: { host: "127.0.0.1", port: previewPort, strictPort: true, proxy: ghProxy },
   build: { outDir: "dist", emptyOutDir: true },

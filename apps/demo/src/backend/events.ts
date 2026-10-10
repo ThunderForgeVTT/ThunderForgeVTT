@@ -7,6 +7,7 @@
  */
 import { demoState, type Row } from "./state";
 import { DEMO_USER } from "../seed/world";
+import { tapEvent } from "./telemetryTap";
 
 export type WorldEvent = Row & { id: number; eventCode: number };
 
@@ -67,6 +68,8 @@ export function record(eventCode: number, payload: Row): void {
   pending.push(event);
   log.push(event);
   if (log.length > LOG_LIMIT) log.splice(0, log.length - LOG_LIMIT);
+  // Spec 086: the kind of change, counted; never what it was.
+  tapEvent(eventCode, payload);
 }
 
 /**

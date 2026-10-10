@@ -208,7 +208,7 @@ export default function StarChart() {
   const failed = sky !== null && sky.stargazers === null && sky.contributors === null;
 
   return (
-    <section id="stars" className="section stars" aria-labelledby="stars-title">
+    <section id="stars" data-section="stars" className="section stars" aria-labelledby="stars-title">
       <h2 id="stars-title" className="marker-head">
         Written in the stars.
       </h2>
@@ -262,7 +262,7 @@ export default function StarChart() {
         <p className="stars-note">GitHub didn't share its list of stargazers just now; the builders are up there.</p>
       ) : null}
       <div className="stars-foot">
-        <a className="ink-btn ink-btn--black" href={REPO}>
+        <a className="ink-btn ink-btn--black" data-cta="github" data-placement="star_chart" href={REPO}>
           <StarMark />
           Add your star
         </a>

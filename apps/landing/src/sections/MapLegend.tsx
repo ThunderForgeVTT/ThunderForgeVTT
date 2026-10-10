@@ -228,7 +228,7 @@ export default function MapLegend() {
           ))}
         </ul>
         <p className="legend-hint">Tap a line of the legend to lift that layer off the map.</p>
-        <a className="ink-btn ink-btn--blue" href={DEMO}>
+        <a className="ink-btn ink-btn--blue" data-cta="try_demo" data-placement="map_legend" href={DEMO}>
           Walk these maps in the demo
         </a>
       </div>

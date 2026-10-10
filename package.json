@@ -49,7 +49,7 @@
     "e2e:feedback": "pnpm run e2e:feedback:integration",
     "e2e:feedback:integration": "node ./scripts/e2e-parallel.mjs --shards=1 --slice=feedback",
     "e2e:telemetry": "pnpm run e2e:telemetry:standalone && pnpm run e2e:telemetry:integration",
-    "e2e:telemetry:standalone": "pnpm -F @thunderforge/telemetry test",
+    "e2e:telemetry:standalone": "pnpm -F @thunderforge/telemetry test && pnpm -F @thunderforge/demo e2e telemetry && pnpm -F @thunderforge/landing e2e",
     "e2e:telemetry:integration": "node ./scripts/e2e-parallel.mjs --shards=1 --slice=telemetry",
     "e2e:game-systems": "pnpm run e2e:game-systems:integration",
     "e2e:game-systems:integration": "node ./scripts/e2e-parallel.mjs --shards=1 --slice=game-systems",

@@ -6,6 +6,7 @@
  * notice turns it into something the visitor can read.
  */
 import { refusalArea } from "./refusalNames";
+import { tapNotInDemo } from "./telemetryTap";
 
 export const NOT_IN_DEMO_EVENT = "thunderforge-demo:not-in-demo";
 export const NOT_IN_DEMO_CODE = "NOT_IN_DEMO";
@@ -23,6 +24,7 @@ export function notInDemoMessage(what: string): string {
 
 export function reportNotInDemo(what: string): void {
   refused.push(what);
+  tapNotInDemo(what);
   window.dispatchEvent(new CustomEvent(NOT_IN_DEMO_EVENT, { detail: what }));
 }
 

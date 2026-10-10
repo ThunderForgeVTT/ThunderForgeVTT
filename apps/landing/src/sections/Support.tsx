@@ -5,7 +5,7 @@ import { useStars } from "../useStars.ts";
 export function Support() {
   const stars = useStars();
   return (
-    <section id="support" className="section support" aria-labelledby="support-title">
+    <section id="support" data-section="support" className="section support" aria-labelledby="support-title">
       <h2 id="support-title" className="marker-head marker-head--big">
         Pull up a chair.
       </h2>
@@ -19,7 +19,7 @@ export function Support() {
           <h3>Fund the work</h3>
           <p>Every sponsor buys hours away from the day job and toward the table.</p>
           <div className="way-actions">
-            <a className="ink-btn ink-btn--red" href={SPONSORS}>
+            <a className="ink-btn ink-btn--red" data-cta="sponsor" data-placement="support" href={SPONSORS}>
               <HeartMark />
               Sponsor on GitHub
             </a>
@@ -33,7 +33,7 @@ export function Support() {
           <h3>Follow the build</h3>
           <p>A star tells other players this is worth a look. Progress happens in the open.</p>
           <div className="way-actions">
-            <a className="ink-btn ink-btn--black" href={REPO}>
+            <a className="ink-btn ink-btn--black" data-cta="github" data-placement="support" href={REPO}>
               <StarMark />
               Star on GitHub
               {stars !== null && <span className="count">{stars.toLocaleString("en-US")}</span>}

@@ -19,7 +19,7 @@ export function SelfHost() {
     }
   }
   return (
-    <section id="self-host" className="section self-host" aria-labelledby="host-title">
+    <section id="self-host" data-section="self-host" className="section self-host" aria-labelledby="host-title">
       <div className="host-copy">
         <h2 id="host-title" className="marker-head">
           Yours to keep.

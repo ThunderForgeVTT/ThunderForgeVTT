@@ -6,6 +6,9 @@ import "@fontsource/atkinson-hyperlegible-next/700.css";
 import "@fontsource/atkinson-hyperlegible-mono/400.css";
 import "./styles.css";
 import { App } from "./App.tsx";
+import { bootLandingTelemetry } from "./telemetry.ts";
+
+bootLandingTelemetry();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

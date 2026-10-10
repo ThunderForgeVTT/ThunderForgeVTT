@@ -4,6 +4,7 @@ import { NOT_IN_DEMO_EVENT } from "./backend/notInDemo";
 import { currentViewer, forgetSavedWorld, setViewer } from "./backend/state";
 import { MAP_CREDIT } from "./credit";
 import { refusalArea } from "./backend/refusalNames";
+import { runYourOwnClicked, startedOver, viewSwitched } from "./telemetry";
 
 /**
  * FR-006, FR-018: on every page, what this is, how to undo it, and whose
@@ -33,11 +34,13 @@ export function DemoNotice() {
   const asPlayer = currentViewer() === "player";
   const switchView = () => {
     setViewer(asPlayer ? "gm" : "player");
+    viewSwitched();
     window.location.reload();
   };
 
   const startOver = () => {
     forgetSavedWorld();
+    startedOver();
     window.location.assign(import.meta.env.BASE_URL);
   };
 
@@ -67,6 +70,15 @@ export function DemoNotice() {
       >
         Start over
       </button>
+      <a
+        href="/#self-host"
+        data-cta="run_your_own"
+        data-testid="demo-run-your-own"
+        onClick={runYourOwnClicked}
+        className="text-primary font-medium underline underline-offset-2"
+      >
+        Run your own
+      </a>
       <span className="text-muted-foreground">
         Maps by{" "}
         <a

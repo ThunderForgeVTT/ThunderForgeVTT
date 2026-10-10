@@ -1,5 +1,7 @@
 # Spec 086 FR-030: the server's alerts. Each summary says what to look at.
-# The landing's two alerts arrive with US4, and the gateway's with US9.
+# The gateway's arrive with US9. The landing's 5xx alert is a Loki rule
+# (loki-rules/thunderforge-landing.yaml): nginx's status codes are only in its
+# access log.
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
@@ -78,3 +80,12 @@ spec:
             severity: critical
           annotations:
             summary: No metrics from the server for five minutes. It is down or not exporting; check the pod and OTEL_EXPORTER_OTLP_ENDPOINT.
+    - name: thunderforge.landing
+      rules:
+        - alert: ThunderForgeLandingDown
+          expr: nginx_up{namespace="thunderforge-dev"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: The landing's exporter cannot reach nginx's stub_status. Look at the thunderforge-landing pods in thunderforge-dev and the nginx container's logs.

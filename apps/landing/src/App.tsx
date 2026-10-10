@@ -20,7 +20,7 @@ export function App() {
       <Hero />
       <main>
         <Dream />
-        <section id="dice" className="section dice-section" aria-labelledby="dice-title">
+        <section id="dice" data-section="dice" className="section dice-section" aria-labelledby="dice-title">
           <div className="dice-copy">
             <h2 id="dice-title" className="marker-head">
               Roll the real dice.
@@ -35,7 +35,7 @@ export function App() {
             <DiceTray />
           </Suspense>
         </section>
-        <section id="map" className="section map-section" aria-labelledby="map-title">
+        <section id="map" data-section="map" className="section map-section" aria-labelledby="map-title">
           <h2 id="map-title" className="marker-head">
             Everything on the map is real.
           </h2>

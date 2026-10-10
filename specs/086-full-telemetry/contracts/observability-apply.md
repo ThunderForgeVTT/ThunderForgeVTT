@@ -45,7 +45,7 @@ spec:
     spec:
       containers:
         - name: nginx-exporter
-          image: nginx/nginx-prometheus-exporter:1.5.1
+          image: nginx/nginx-prometheus-exporter:1.5.3@sha256:85666e7fde7e253f1c6d978f9a961245df4c9cdb7677e1866d9bb28e8f9ee41d
           args: ["--nginx.scrape-uri=http://127.0.0.1:8081/stub_status"]
           ports: [{ name: metrics, containerPort: 9113 }]
           resources: { requests: { cpu: 5m, memory: 16Mi }, limits: { memory: 32Mi } }
@@ -53,7 +53,8 @@ spec:
 ```
 
 Pin the image to the newest 1.x tag on Docker Hub at implementation time, and
-record the tag here.
+record the tag here. Implemented with `1.5.3`, pinned by its index digest
+(2026-10-09).
 
 ### The PodMonitor
 

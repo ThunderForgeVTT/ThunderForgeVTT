@@ -24,7 +24,7 @@ export function Nav() {
           <a href="#self-host">Self-host</a>
         </li>
         <li>
-          <a className="nav-star" href={REPO}>
+          <a className="nav-star" data-cta="github" data-placement="nav" href={REPO}>
             <GitHubMark />
             <span className="wide-only">Star</span>
             {stars !== null && (
@@ -36,7 +36,7 @@ export function Nav() {
           </a>
         </li>
         <li>
-          <a className="ink-btn ink-btn--red ink-btn--small" href={SPONSORS}>
+          <a className="ink-btn ink-btn--red ink-btn--small" data-cta="sponsor" data-placement="nav" href={SPONSORS}>
             Donate
           </a>
         </li>

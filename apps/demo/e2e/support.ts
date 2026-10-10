@@ -1,4 +1,9 @@
-import { expect, type Browser, type Page } from "@playwright/test";
+import {
+  expect,
+  type Browser,
+  type BrowserContext,
+  type Page,
+} from "@playwright/test";
 
 /**
  * What the demo's feature specs share: a page whose every request outside
@@ -8,10 +13,49 @@ import { expect, type Browser, type Page } from "@playwright/test";
 
 export const WORLD_ID = "d0000000-0000-4000-0002-000000000001";
 
+/**
+ * Spec 086 FR-033: where a test's telemetry goes. Nothing answers there; the
+ * context does, with a 204, so nothing leaves the machine.
+ */
+export const TELEMETRY_ORIGIN = "https://telemetry.invalid";
+const TELEMETRY_PATHS = new Set(["/v1/logs", "/v1/traces"]);
+
 export interface Opened {
   page: Page;
-  /** Every request and socket that is not one of the demo's own files. */
+  /**
+   * Every request and socket that is not one of the demo's own files, nor a
+   * telemetry post to the configured origin.
+   */
   outside: string[];
+  /** The body of every telemetry post, in the order they were sent. */
+  telemetry: string[];
+}
+
+/** Whether a request is a telemetry post to the test's origin. */
+export function isTelemetry(url: URL): boolean {
+  return url.origin === TELEMETRY_ORIGIN && TELEMETRY_PATHS.has(url.pathname);
+}
+
+/**
+ * Answers the telemetry origin as a collector would, preflight included, and
+ * keeps each post's body.
+ */
+export async function routeTelemetry(
+  context: BrowserContext,
+  telemetry: string[],
+): Promise<void> {
+  await context.route(`${TELEMETRY_ORIGIN}/**`, async (route) => {
+    const request = route.request();
+    if (request.method() === "POST") telemetry.push(request.postData() ?? "");
+    await route.fulfill({
+      status: 204,
+      headers: {
+        "access-control-allow-origin": "*",
+        "access-control-allow-methods": "POST",
+        "access-control-allow-headers": "content-type",
+      },
+    });
+  });
 }
 
 export async function openDemo(
@@ -23,15 +67,18 @@ export async function openDemo(
   });
   const page = await context.newPage();
   const outside: string[] = [];
+  const telemetry: string[] = [];
+  await routeTelemetry(context, telemetry);
   const origin = new URL(baseURL as string).origin;
   context.on("request", (request) => {
     const url = new URL(request.url());
     if (url.protocol === "blob:" || url.protocol === "data:") return;
     if (url.origin === origin && url.pathname.startsWith("/demo/")) return;
+    if (isTelemetry(url)) return;
     outside.push(`${request.method()} ${request.url()}`);
   });
   page.on("websocket", (socket) => outside.push(`SOCKET ${socket.url()}`));
-  return { page, outside };
+  return { page, outside, telemetry };
 }
 
 export type Answer<T> = {

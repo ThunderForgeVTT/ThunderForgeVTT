@@ -1,0 +1,24 @@
+# Spec 086 FR-030: the landing's 5xx alert, read by the Loki ruler.
+#
+# nginx's stub_status counts requests but not their status codes, and no
+# gateway series reaches Prometheus, so the one record of a 5xx is the
+# landing's JSON access log (apps/landing/nginx.conf.template, landing_json),
+# which Alloy ships to Loki. The ruler evaluates this file beside the audit
+# rules: fluxified's loki.yaml projects this ConfigMap into
+# /etc/loki/rules/fake, optional, so Loki starts without it.
+groups:
+  - name: thunderforge.landing
+    interval: 1m
+    rules:
+      - alert: ThunderForgeLanding5xx
+        expr: |
+          (
+            sum(count_over_time({namespace="thunderforge-dev", container="nginx"} | json | __error__="" | status >= 500 [5m]))
+            /
+            sum(count_over_time({namespace="thunderforge-dev", container="nginx"} | json | __error__="" | status > 0 [5m]))
+          ) > 0.01
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Over 1 % of the landing's requests are failing with a 5xx. Look at the Landing dashboard's requests by status, then the nginx container's logs in thunderforge-dev.

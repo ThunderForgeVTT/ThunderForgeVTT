@@ -1,0 +1,10 @@
+# The Loki ruler's ThunderForge rules, as one ConfigMap in `monitoring`.
+# fluxified's loki.yaml mounts it; no name hash, so a re-apply replaces it.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+generatorOptions:
+  disableNameSuffixHash: true
+configMapGenerator:
+  - name: loki-thunderforge-rules
+    files: [thunderforge-landing.yaml]

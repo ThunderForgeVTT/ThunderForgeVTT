@@ -1,6 +1,6 @@
 export function Stance() {
   return (
-    <section className="section stance" aria-labelledby="stance-title">
+    <section data-section="stance" className="section stance" aria-labelledby="stance-title">
       <svg className="screen" viewBox="0 0 300 120" aria-hidden="true">
         <path className="marker marker--wall" d="M10 112 L36 18 L112 10 L112 104 Z" />
         <path className="marker marker--wall" d="M112 10 L188 10 L188 104 L112 104" />

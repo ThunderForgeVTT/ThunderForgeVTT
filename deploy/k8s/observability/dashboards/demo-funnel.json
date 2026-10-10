@@ -1,0 +1,697 @@
+{
+  "title": "ThunderForge: Demo funnel",
+  "description": "From the landing to Run your own: the seven funnel steps, conversion between them, the time to each, what visitors do in the demo (spec 086 US1), and the errors they meet (US2).",
+  "tags": [
+    "thunderforge",
+    "spec-086"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "editable": true,
+  "refresh": "5m",
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "prometheus",
+        "label": "Prometheus",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {},
+        "hide": 0
+      },
+      {
+        "name": "loki",
+        "label": "Loki",
+        "type": "datasource",
+        "query": "loki",
+        "current": {},
+        "hide": 0
+      },
+      {
+        "name": "tempo",
+        "label": "Tempo",
+        "type": "datasource",
+        "query": "tempo",
+        "current": {},
+        "hide": 0
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "type": "bargauge",
+      "title": "Funnel: sessions reaching each step",
+      "description": "Each step is sent once per session (contracts/browser-events.md), so a count of funnel records is a count of sessions. landing_viewed is the landing's; the rest are the demo's.",
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki}"
+          },
+          "expr": "sum(count_over_time({service_name=~\"thunderforge-landing|thunderforge-demo\"} | event_name=\"funnel\" | step=\"landing_viewed\" [$__range]))",
+          "legendFormat": "landing_viewed",
+          "instant": true,
+          "queryType": "instant"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki}"
+          },
+          "expr": "sum(count_over_time({service_name=~\"thunderforge-landing|thunderforge-demo\"} | event_name=\"funnel\" | step=\"demo_opened\" [$__range]))",
+          "legendFormat": "demo_opened",
+          "instant": true,
+          "queryType": "instant"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki}"
+          },
+          "expr": "sum(count_over_time({service_name=~\"thunderforge-landing|thunderforge-demo\"} | event_name=\"funnel\" | step=\"map_loaded\" [$__range]))",
+          "legendFormat": "map_loaded",
+          "instant": true,
+          "queryType": "instant"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki}"
+          },
+          "expr": "sum(count_over_time({service_name=~\"thunderforge-landing|thunderforge-demo\"} | event_name=\"funnel\" | step=\"token_moved\" [$__range]))",
+          "legendFormat": "token_moved",
+          "instant": true,
+          "queryType": "instant"
+        },
+        {
+          "refId": "E",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki}"
+          },
+          "expr": "sum(count_over_time({service_name=~\"thunderforge-landing|thunderforge-demo\"} | event_name=\"funnel\" | step=\"dice_rolled\" [$__range]))",
+          "legendFormat": "dice_rolled",
+          "instant": true,
+          "queryType": "instant"
+        },
+        {
+          "refId": "F",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki}"
+          },
+          "expr": "sum(count_over_time({service_name=~\"thunderforge-landing|thunderforge-demo\"} | event_name=\"funnel\" | step=\"view_switched\" [$__range]))",
+          "legendFormat": "view_switched",
+          "instant": true,
+          "queryType": "instant"
+        },
+        {
+          "refId": "G",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki}"
+          },
+          "expr": "sum(count_over_time({service_name=~\"thunderforge-landing|thunderforge-demo\"} | event_name=\"funnel\" | step=\"cta_clicked\" [$__range]))",
+          "legendFormat": "cta_clicked",
+          "instant": true,
+          "queryType": "instant"
+        }
+      ],
+      "id": 1,
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Conversion from the step before",
+      "description": "The share of sessions at one step that reached the next, over the dashboard's range, from the collector's count connector.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(thunderforge_browser_events_total{event_name=\"funnel\",step=\"demo_opened\"}[$__range])) / sum(increase(thunderforge_browser_events_total{event_name=\"funnel\",step=\"landing_viewed\"}[$__range]))",
+          "legendFormat": "landing_viewed → demo_opened",
+          "instant": true,
+          "queryType": "instant"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(thunderforge_browser_events_total{event_name=\"funnel\",step=\"map_loaded\"}[$__range])) / sum(increase(thunderforge_browser_events_total{event_name=\"funnel\",step=\"demo_opened\"}[$__range]))",
+          "legendFormat": "demo_opened → map_loaded",
+          "instant": true,
+          "queryType": "instant"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(thunderforge_browser_events_total{event_name=\"funnel\",step=\"token_moved\"}[$__range])) / sum(increase(thunderforge_browser_events_total{event_name=\"funnel\",step=\"map_loaded\"}[$__range]))",
+          "legendFormat": "map_loaded → token_moved",
+          "instant": true,
+          "queryType": "instant"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(thunderforge_browser_events_total{event_name=\"funnel\",step=\"dice_rolled\"}[$__range])) / sum(increase(thunderforge_browser_events_total{event_name=\"funnel\",step=\"token_moved\"}[$__range]))",
+          "legendFormat": "token_moved → dice_rolled",
+          "instant": true,
+          "queryType": "instant"
+        },
+        {
+          "refId": "E",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(thunderforge_browser_events_total{event_name=\"funnel\",step=\"view_switched\"}[$__range])) / sum(increase(thunderforge_browser_events_total{event_name=\"funnel\",step=\"dice_rolled\"}[$__range]))",
+          "legendFormat": "dice_rolled → view_switched",
+          "instant": true,
+          "queryType": "instant"
+        },
+        {
+          "refId": "F",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(thunderforge_browser_events_total{event_name=\"funnel\",step=\"cta_clicked\"}[$__range])) / sum(increase(thunderforge_browser_events_total{event_name=\"funnel\",step=\"view_switched\"}[$__range]))",
+          "legendFormat": "view_switched → cta_clicked",
+          "instant": true,
+          "queryType": "instant"
+        }
+      ],
+      "id": 2,
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Median time to each step",
+      "description": "t.ms on each funnel record: milliseconds since the session began, so the time from the first page to this step.",
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki}"
+          },
+          "expr": "quantile_over_time(0.5, {service_name=~\"thunderforge-landing|thunderforge-demo\"} | event_name=\"funnel\" | step=\"demo_opened\" | unwrap t_ms [$__range]) by ()",
+          "legendFormat": "demo_opened",
+          "instant": true,
+          "queryType": "instant"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki}"
+          },
+          "expr": "quantile_over_time(0.5, {service_name=~\"thunderforge-landing|thunderforge-demo\"} | event_name=\"funnel\" | step=\"map_loaded\" | unwrap t_ms [$__range]) by ()",
+          "legendFormat": "map_loaded",
+          "instant": true,
+          "queryType": "instant"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki}"
+          },
+          "expr": "quantile_over_time(0.5, {service_name=~\"thunderforge-landing|thunderforge-demo\"} | event_name=\"funnel\" | step=\"token_moved\" | unwrap t_ms [$__range]) by ()",
+          "legendFormat": "token_moved",
+          "instant": true,
+          "queryType": "instant"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki}"
+          },
+          "expr": "quantile_over_time(0.5, {service_name=~\"thunderforge-landing|thunderforge-demo\"} | event_name=\"funnel\" | step=\"dice_rolled\" | unwrap t_ms [$__range]) by ()",
+          "legendFormat": "dice_rolled",
+          "instant": true,
+          "queryType": "instant"
+        },
+        {
+          "refId": "E",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki}"
+          },
+          "expr": "quantile_over_time(0.5, {service_name=~\"thunderforge-landing|thunderforge-demo\"} | event_name=\"funnel\" | step=\"view_switched\" | unwrap t_ms [$__range]) by ()",
+          "legendFormat": "view_switched",
+          "instant": true,
+          "queryType": "instant"
+        },
+        {
+          "refId": "F",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki}"
+          },
+          "expr": "quantile_over_time(0.5, {service_name=~\"thunderforge-landing|thunderforge-demo\"} | event_name=\"funnel\" | step=\"cta_clicked\" | unwrap t_ms [$__range]) by ()",
+          "legendFormat": "cta_clicked",
+          "instant": true,
+          "queryType": "instant"
+        }
+      ],
+      "id": 3,
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 10
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Funnel steps over time",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum by (step) (increase(thunderforge_browser_events_total{event_name=\"funnel\"}[$__rate_interval]))",
+          "legendFormat": "{{step}}"
+        }
+      ],
+      "id": 4,
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 10
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Demo actions by kind",
+      "description": "Each accepted demo action, counted by kind, with no content (demo.action).",
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "sum"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki}"
+          },
+          "expr": "sum by (action) (count_over_time({service_name=\"thunderforge-demo\"} | event_name=\"demo.action\" [$__interval]))",
+          "legendFormat": "{{action}}"
+        }
+      ],
+      "id": 5,
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 20
+      }
+    },
+    {
+      "type": "table",
+      "title": "What visitors asked for that the demo does not have",
+      "description": "demo.not_in_demo by the refused root field, a schema field name or unknown.",
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Value",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "reduce",
+          "options": {
+            "reducers": [
+              "sum"
+            ]
+          }
+        }
+      ],
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki}"
+          },
+          "expr": "sum by (root_field) (count_over_time({service_name=\"thunderforge-demo\"} | event_name=\"demo.not_in_demo\" [$__range]))",
+          "legendFormat": "{{root_field}}",
+          "instant": true,
+          "queryType": "instant"
+        }
+      ],
+      "id": 6,
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 20
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "How visitors entered the demo",
+      "description": "demo_opened by entry: from the landing on this origin, or directly.",
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "sum"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki}"
+          },
+          "expr": "sum by (entry) (count_over_time({service_name=\"thunderforge-demo\"} | event_name=\"funnel\" | step=\"demo_opened\" [$__interval]))",
+          "legendFormat": "{{entry}}"
+        }
+      ],
+      "id": 7,
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 29
+      }
+    },
+    {
+      "type": "table",
+      "title": "Errors by message",
+      "description": "Error records from the demo and the web app (spec 086 US2), by redacted message. Repeats fold into one record with error.count, so the count is the sum of error_count, not the number of records.",
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Value",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "reduce",
+          "options": {
+            "reducers": [
+              "sum"
+            ]
+          }
+        }
+      ],
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki}"
+          },
+          "expr": "sum by (service_name, error_source, error_message) (sum_over_time({service_name=~\"thunderforge-demo|thunderforge-web\"} | event_name=\"error\" | unwrap error_count [$__range]))",
+          "legendFormat": "{{service_name}} {{error_source}}: {{error_message}}",
+          "instant": true,
+          "queryType": "instant"
+        }
+      ],
+      "id": 8,
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 37
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Engine failures by reason",
+      "description": "engine.load_failed by its closed reason: a browser that cannot run the board, before anything is downloaded.",
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki}"
+          },
+          "expr": "sum by (service_name, reason) (count_over_time({service_name=~\"thunderforge-demo|thunderforge-web\"} | event_name=\"engine.load_failed\" [$__range]))",
+          "legendFormat": "{{service_name}} {{reason}}",
+          "instant": true,
+          "queryType": "instant"
+        }
+      ],
+      "id": 9,
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 37
+      }
+    },
+    {
+      "type": "logs",
+      "title": "A sample of redacted stacks",
+      "description": "The latest error records, message and stack as sent: redacted, and each frame reduced to path:line.",
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki}"
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "dedupStrategy": "signature"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki}"
+          },
+          "expr": "{service_name=~\"thunderforge-demo|thunderforge-web\"} | event_name=\"error\" | line_format \"{{.service_name}} {{.error_source}} x{{.error_count}}: {{.error_message}}\\n{{.error_stack}}\"",
+          "maxLines": 50
+        }
+      ],
+      "id": 10,
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 47
+      }
+    }
+  ]
+}

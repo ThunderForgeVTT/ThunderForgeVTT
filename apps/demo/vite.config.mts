@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { servedTelemetry } from "@thunderforge/telemetry/vite";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const web = path.resolve(__dirname, "../web");
@@ -17,13 +18,20 @@ const web = path.resolve(__dirname, "../web");
  * asks for, an `<img>` pointed at another site being the case that found it.
  * Build only: the dev server's module reload needs inline scripts and a
  * socket of its own.
+ *
+ * Spec 086 (R24): `connect-src` is widened here, not dropped, because
+ * `default-src` would otherwise govern `fetch` and block the telemetry
+ * origin whatever the header said. The `Content-Security-Policy` header that
+ * the server, the landing's nginx and `servedTelemetry()` send narrows it to
+ * the one configured origin; a browser enforces both and the stricter wins.
+ * On a host that sends no header, the guard is what limits posts.
  */
 function sealedPage(): Plugin {
   const policy = [
     "default-src 'self' data: blob:",
     "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:",
     "style-src 'self' 'unsafe-inline'",
-    "connect-src 'self' data: blob:",
+    "connect-src 'self' data: blob: https: http:",
     "form-action 'none'",
   ].join("; ");
   return {
@@ -72,7 +80,14 @@ export default defineConfig({
       "react/jsx-runtime": path.resolve(web, "node_modules/react/jsx-runtime"),
     },
   },
-  plugins: [tailwindcss(), react(), sealedPage()],
+  plugins: [
+    tailwindcss(),
+    react(),
+    sealedPage(),
+    // Spec 086 R14: `telemetry.json` and its `connect-src` in dev and preview,
+    // off unless THUNDERFORGE_PREVIEW_TELEMETRY holds a config.
+    servedTelemetry({ paths: ["/telemetry.json", "/demo/telemetry.json"] }),
+  ],
   build: {
     outDir: path.resolve(__dirname, "../../data/demo"),
     emptyOutDir: true,

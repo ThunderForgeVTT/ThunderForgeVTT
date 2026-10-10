@@ -18,6 +18,7 @@ import type { WorldStore } from "../world/store";
 import type { WorldCommand } from "../world/types";
 import type { WorldRollRecord } from "../../types/roll";
 import { buildDiceThrow, setDiceTimingsSource } from "./diceThrow";
+import { emitEngineLoad } from "./loadSignals";
 
 type BevyWasmModule = {
   default: (moduleOrPath?: unknown) => Promise<unknown>;
@@ -553,14 +554,19 @@ export async function mountEngine(
   onProgress?: EngineLoadListener,
 ): Promise<void> {
   const unavailable = webgl2Unavailable();
-  if (unavailable) throw new Error(unavailable);
+  if (unavailable) {
+    emitEngineLoad({ stage: "unavailable", reason: "no_webgl2" });
+    throw new Error(unavailable);
+  }
   onStageChange?.("downloading");
+  emitEngineLoad({ stage: "downloading" });
   const module = await getWasmModule(onProgress);
   // FR-031: "starting" is a distinct phase, not the tail of the download.
   // Instantiation of a bundle this size is perceptible, and reporting it as
   // a download stalled at 100% is exactly the "is it broken?" moment this
   // story exists to remove.
   onStageChange?.("starting");
+  emitEngineLoad({ stage: "starting" });
   onProgress?.({ stage: "starting", loaded: 0, total: null });
 
   state.canvasSelector = options.canvasSelector;

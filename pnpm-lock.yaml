@@ -20,6 +20,9 @@ importers:
       '@thunderforge/heroes':
         specifier: workspace:^
         version: link:../../packages/heroes
+      '@thunderforge/telemetry':
+        specifier: workspace:^
+        version: link:../../packages/telemetry
       graphql:
         specifier: ^16.14.2
         version: 16.14.2
@@ -143,6 +146,9 @@ importers:
       '@thunderforge/heroes':
         specifier: workspace:^
         version: link:../../packages/heroes
+      '@thunderforge/telemetry':
+        specifier: workspace:^
+        version: link:../../packages/telemetry
       react:
         specifier: ^19.2.5
         version: 19.2.5

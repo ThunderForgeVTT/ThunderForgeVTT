@@ -3,7 +3,10 @@
   "compilerOptions": {
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
-    "types": ["vite/client", "node"]
+    "types": ["vite/client", "node"],
+    "paths": {
+      "@thunderforge/feedback-redaction": ["../web/src/services/feedbackRedaction.ts"]
+    }
   },
   "include": ["src", "vite.config.mts", "e2e", "playwright.config.ts"]
 }

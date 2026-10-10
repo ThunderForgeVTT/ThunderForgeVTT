@@ -16,7 +16,13 @@
  *  2. the browser allow-list and event names, read from
  *     `packages/telemetry/src/allowList.ts`;
  *  3. the collector `count` connector's two series, `nginx_*`, `target_info`
- *     and `up`.
+ *     and `up`;
+ *  4. for a LogQL query over the landing's access log (a stream selector
+ *     naming `container="nginx"`), the stream labels Alloy sets and the
+ *     fields of `landing_json`, read from `apps/landing/nginx.conf.template`.
+ *
+ * It reads the dashboards, `prometheus-rules.yaml` and the Loki ruler's
+ * `loki-rules/*.yaml`.
  *
  * Exits 1 naming the file, the panel or alert, and the name.
  */
@@ -27,7 +33,10 @@ import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..");
-const OBS_DIR = resolve(ROOT, process.env.OBS_DIR ?? "deploy/k8s/observability");
+const OBS_DIR = resolve(
+  ROOT,
+  process.env.OBS_DIR ?? "deploy/k8s/observability",
+);
 
 /** The connector's series (contracts/collector-count-connector.md). */
 const CONNECTOR_SERIES = [
@@ -121,6 +130,25 @@ export function logqlFilters(expr) {
   return filters;
 }
 
+/** The fields of the landing's `landing_json` access-log format. */
+export function accessLogFields(template) {
+  const at = template.indexOf("log_format landing_json");
+  if (at < 0) return [];
+  const body = template.slice(at, template.indexOf(";", at));
+  return [...body.matchAll(/"([a-z_]+)":/g)].map((m) => m[1]);
+}
+
+/** What Alloy labels a pod's log stream with, and LogQL's own error label. */
+const STREAM_LABELS = new Set([
+  "namespace",
+  "pod",
+  "container",
+  "node",
+  "stream",
+  "__error__",
+]);
+const ACCESS_LOG = /container\s*=\s*"nginx"/;
+
 /** The `expr:` values of a PrometheusRule file, with their alert names. */
 export function ruleExprs(yaml) {
   const out = [];
@@ -158,6 +186,13 @@ function main() {
   );
   const attributes = new Set(quotedList(allowList, "ALLOWED_ATTRIBUTES"));
   const events = new Set(quotedList(allowList, "EVENT_NAMES"));
+  const logFields = new Set(
+    accessLogFields(
+      readFileSync(join(ROOT, "apps/landing/nginx.conf.template"), "utf8"),
+    ),
+  );
+  if (logFields.size === 0)
+    throw new Error("no landing_json log_format in nginx.conf.template");
   const known = (name) =>
     series.has(name) || PREFIXES.some((p) => name.startsWith(p));
 
@@ -168,6 +203,29 @@ function main() {
     }
   };
   const checkLogql = (where, expr) => {
+    if (ACCESS_LOG.test(expr)) {
+      for (const { key } of logqlFilters(expr)) {
+        if (!STREAM_LABELS.has(key) && !logFields.has(key))
+          problems.push(
+            `${where}: ${key} is neither a stream label nor a landing_json field`,
+          );
+      }
+      for (const m of expr.matchAll(/\b(?:unwrap|by\s*\()\s*([a-z_, ]+)/g)) {
+        for (const key of m[1]
+          .split(",")
+          .map((k) => k.trim())
+          .filter(Boolean))
+          if (!STREAM_LABELS.has(key) && !logFields.has(key))
+            problems.push(
+              `${where}: ${key} is neither a stream label nor a landing_json field`,
+            );
+      }
+      for (const m of expr.matchAll(/\|\s*([a-z_]+)\s*[<>]=?\s*\d/g)) {
+        if (!logFields.has(m[1]))
+          problems.push(`${where}: ${m[1]} is not a landing_json field`);
+      }
+      return;
+    }
     for (const { key, op, value } of logqlFilters(expr)) {
       const regex = op.endsWith("~");
       const values = regex ? value.split("|") : [value];
@@ -228,12 +286,24 @@ function main() {
     checkPromql(`${relative(ROOT, rulesPath)} ${alert}`, expr);
   }
 
+  const lokiDir = join(OBS_DIR, "loki-rules");
+  let lokiRules = 0;
+  for (const file of readdirSync(lokiDir).filter(
+    (f) => f.endsWith(".yaml") && f !== "kustomization.yaml",
+  )) {
+    const path = join(lokiDir, file);
+    for (const { alert, expr } of ruleExprs(readFileSync(path, "utf8"))) {
+      checkLogql(`${relative(ROOT, path)} ${alert}`, expr);
+      lokiRules++;
+    }
+  }
+
   if (problems.length > 0) {
     for (const p of problems) console.error(`observability: ${p}`);
     process.exit(1);
   }
   console.log(
-    `observability: ${dashboards.length} dashboards and ${rules.length} alert expressions read only names that are sent`,
+    `observability: ${dashboards.length} dashboards, ${rules.length} Prometheus and ${lokiRules} Loki alert expressions read only names that are sent`,
   );
 }
 

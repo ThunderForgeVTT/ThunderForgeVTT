@@ -135,7 +135,7 @@ export function buildSeed(maps: MapListing[], base: string): DemoState {
       id: DEMO_WORLD_ID,
       name: "A World To Try",
       description:
-        "A table of your own. You are its Game Master, and nothing you do here leaves this browser.",
+        "A table of your own. You are its Game Master, and what you build here stays in this browser.",
       gameSystemId: world.gameSystemId,
       interfacePackId: world.interfacePackId,
       scenes: [],

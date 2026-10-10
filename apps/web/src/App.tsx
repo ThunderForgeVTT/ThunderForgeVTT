@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect } from "react";
 import { useLocation } from "react-router-dom";
+import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
@@ -86,10 +87,12 @@ export default function App() {
           setupStatus.setup_required ? ["/setup"] : ["/login", "/signup"]
         }
       />
-      <AppRoutes
-        setupStatus={setupStatus}
-        onSetupStatusRefresh={refreshSetupStatus}
-      />
+      <AppErrorBoundary>
+        <AppRoutes
+          setupStatus={setupStatus}
+          onSetupStatusRefresh={refreshSetupStatus}
+        />
+      </AppErrorBoundary>
       {/*
         Where every `toast(...)` in the application renders.
 

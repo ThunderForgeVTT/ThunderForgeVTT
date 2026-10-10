@@ -898,9 +898,23 @@
         "apps/thunderforge/src/telemetry/**",
         "crates/thunderforge-server/src/telemetry/**",
         "crates/thunderforge-telemetry-policy/**",
-        "apps/web/src/telemetry/**"
+        "apps/web/src/telemetry/**",
+        "apps/web/src/components/AppErrorBoundary.tsx",
+        "apps/web/src/engine/bevy/loadSignals.ts",
+        "apps/web/src/engine/bevy/loadTelemetry.ts",
+        "apps/demo/src/telemetry.ts",
+        "apps/demo/src/telemetryChunk.ts",
+        "apps/demo/src/backend/telemetryTap.ts",
+        "apps/demo/src/guard/telemetryPass.ts",
+        "apps/demo/e2e/telemetry.spec.ts",
+        "apps/landing/src/telemetry.ts",
+        "apps/landing/src/telemetryChunk.ts",
+        "apps/landing/e2e/**",
+        "apps/landing/nginx.conf.template",
+        "deploy/k8s/observability/**",
+        "scripts/check-observability.mjs"
       ],
-      "standalone": "pnpm -F @thunderforge/telemetry test"
+      "standalone": "pnpm -F @thunderforge/telemetry test && pnpm -F @thunderforge/demo e2e telemetry && pnpm -F @thunderforge/landing e2e"
     },
     {
       "name": "tokens",

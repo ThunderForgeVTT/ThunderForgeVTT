@@ -81,7 +81,7 @@ function worldRow(state: DemoState): Row {
   return {
     ...state.world,
     description:
-      "A table of your own, seen as one of its players. Nothing you do here leaves this browser.",
+      "A table of your own, seen as one of its players. What you build here stays in this browser.",
   };
 }
 

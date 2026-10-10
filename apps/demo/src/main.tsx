@@ -9,6 +9,11 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
 import { DemoApp } from "./DemoApp";
 import "./demo.css";
+import { bootDemoTelemetry } from "./telemetry";
+
+// Spec 086 FR-017: asks the served config first and loads after the page.
+// Off, or any failure, imports nothing.
+bootDemoTelemetry();
 
 // The web app's own tree, without the three things that exist to talk to an
 // instance: the feedback launcher, the log capture behind it, and the service

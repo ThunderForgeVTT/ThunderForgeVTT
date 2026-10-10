@@ -14,6 +14,7 @@ import {
 } from "@thunderforge/telemetry";
 import { pageView, startCollectors } from "@thunderforge/telemetry/browser";
 import { otlpHttpSink } from "@thunderforge/telemetry/otlp";
+import { watchEngineLoad } from "../engine/bevy/loadTelemetry";
 import { redact } from "../services/feedbackRedaction";
 import { routeTemplate, watchRoutes } from "./routes";
 
@@ -26,7 +27,8 @@ interface NavigatorExtras {
   deviceMemory?: number;
 }
 
-function device() {
+/** The device facts for the resource; the demo reads them the same way. */
+export function device() {
   const nav = navigator as Navigator & NavigatorExtras;
   return deviceAttributes({
     userAgent: nav.userAgent,
@@ -60,5 +62,6 @@ export function start(config: TelemetryConfig): Telemetry {
     routeTemplate: () => routeTemplate(location.pathname),
   });
   watchRoutes((route) => pageView(t, route));
+  watchEngineLoad(t);
   return t;
 }

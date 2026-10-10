@@ -10,7 +10,7 @@ const WANTED = ["Easy to host.", "Easy to use.", "Resilient."];
 
 export function Dream() {
   return (
-    <section id="dream" className="section dream" aria-labelledby="dream-title">
+    <section id="dream" data-section="dream" className="section dream" aria-labelledby="dream-title">
       <div className="dream-burned">
         <h2 id="dream-title" className="marker-head">
           Burned one too many times.

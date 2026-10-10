@@ -293,48 +293,53 @@ call to action, are each sent once per session.
 **Independent Test**: `pnpm -F @thunderforge/demo e2e telemetry` passes for
 SC-003, and the whole demo e2e still asserts `outside` equal to `[]`.
 
-- [ ] T046 [US1] [083] Change `openDemo` in `apps/demo/e2e/support.ts:17`, and `demo.spec.ts`'s own copy, as FR-033 says.
+- [X] T046 [US1] [083] Change `openDemo` in `apps/demo/e2e/support.ts:17`, and `demo.spec.ts`'s own copy, as FR-033 says.
   - Route the telemetry origin's `/v1/*` to `204`, and keep the bodies in a new `telemetry` list.
   - Every other outside request stays in `outside`, which stays asserted `[]` in all 15 places.
-- [ ] T047 [US1] Change the demo's config and page.
+- [X] T047 [US1] Change the demo's config and page.
   - In `apps/demo/vite.config.mts`, widen `sealedPage()`'s `<meta>` `connect-src` to `'self' data: blob: https: http:`, leaving every other directive unchanged (R24).
   - Add `servedTelemetry()` from `@thunderforge/telemetry/vite`, which sets `preview.headers` and `server.headers`.
   - Change `apps/demo/index.html:10`'s description so it no longer says that nothing leaves the browser.
-- [ ] T048 [US1] In `apps/demo/src/guard/install.ts`, pass a `POST` to `<telemetry origin>/v1/logs` or `/v1/traces` through to the real `fetch`, and only when the config is enabled and names that origin. Every other cross-origin request is still refused (`refuse("Reaching another website")`, line 143). Add a unit test beside the guard's existing tests.
-- [ ] T049 [US1] Add `apps/demo/src/telemetry.ts`.
+- [X] T048 [US1] In `apps/demo/src/guard/install.ts`, pass a `POST` to `<telemetry origin>/v1/logs` or `/v1/traces` through to the real `fetch`, and only when the config is enabled and names that origin. Every other cross-origin request is still refused (`refuse("Reaching another website")`, line 143). Add a unit test beside the guard's existing tests.
+- [X] T049 [US1] Add `apps/demo/src/telemetry.ts`.
   - It reads the config with the guard's own static fetch, boots, and sends `demo_opened` with `entry=landing|direct`, from `document.referrer`'s origin.
   - `map_loaded` is sent on the engine's first frame with the scene's map drawn.
   - `view_switched` is sent from `switchView` in `apps/demo/src/DemoNotice.tsx:34`.
   - Call it from `apps/demo/src/main.tsx`.
-- [ ] T050 [US1] Add `apps/demo/src/backend/telemetryTap.ts`, called from `record()` in `apps/demo/src/backend/events.ts:53`, which every accepted mutation passes through. No edit to `handlers/*` is needed.
+  - Done as `telemetry.ts` (eager: the config read through the guard's `staticFetch`, and the click/switch calls) and `telemetryChunk.ts` (lazy: the reporter, `demo_opened`, `map_loaded`). `map_loaded` is the engine's first-frame report (`onGridSnapChanged`, or `getEngineState().started` when the engine was up first) while the active scene has a map, so no engine change was needed.
+- [X] T050 [US1] Add `apps/demo/src/backend/telemetryTap.ts`, called from `record()` in `apps/demo/src/backend/events.ts:53`, which every accepted mutation passes through. No edit to `handlers/*` is needed.
   - It sends `token_moved` on the first token event, and `dice_rolled` on the first `EVENT.rollMade`.
   - It counts `demo.action` by kind for tokens, walls, doors, lights, shapes, rolls, scene changes, map imports and start-over, with no content.
   - Have `apps/demo/src/backend/notInDemo.ts` send `demo.not_in_demo` with the refused root field.
   - Add `telemetryTap.test.ts`. The seed must not trigger `token_moved`.
-- [ ] T051 [US1] Add the calls to action.
+  - Known approximation: the demo records any token change as token "updated", so an HP edit before a drag also counts as `token_moved`.
+- [X] T051 [US1] Add the calls to action.
   - `DemoNotice` gains **Run your own**, linking to `/#self-host`.
   - `apps/demo/src/telemetry.ts` sends `cta_clicked` with `cta=run_your_own`.
   - Add `data-cta` to the landing's links: **Try the demo** in `apps/landing/src/sections/Hero.tsx:385` and `MapLegend.tsx:231`, **GitHub** in `apps/landing/src/Nav.tsx:27`, and **Sponsor** in `Nav.tsx:39` and `sections/Support.tsx:24`.
-- [ ] T052 [US1] Add `apps/landing/src/telemetry.ts`.
+- [X] T052 [US1] Add `apps/landing/src/telemetry.ts`.
   - It sends `landing_viewed` and `cta_clicked` from a delegated click listener on `[data-cta]`.
   - Call it from `apps/landing/src/main.tsx`.
   - In `apps/landing/vite.config.mts`, add `servedTelemetry()`, and alias `@thunderforge/feedback-redaction` to `apps/web/src/services/feedbackRedaction.ts` (R12).
-- [ ] T053 [US1] In `apps/landing/nginx.conf.template`, add the maps, `location = /telemetry.json` and `location = /demo/telemetry.json`, and the `connect-src` header on `location /demo/` and `= /demo`. Also add the telemetry origin to `location /`'s `connect-src`, as `contracts/served-config-and-csp.md` gives them.
+  - A landing click sends only the `cta_clicked` event, not the funnel step: the step is the demo's **Run your own**, and a **Try the demo** click taking it first would end the funnel before the demo began. `data-placement` sits beside `data-cta` on all nine links (hero, nav, map legend, star chart, support).
+- [X] T053 [US1] In `apps/landing/nginx.conf.template`, add the maps, `location = /telemetry.json` and `location = /demo/telemetry.json`, and the `connect-src` header on `location /demo/` and `= /demo`. Also add the telemetry origin to `location /`'s `connect-src`, as `contracts/served-config-and-csp.md` gives them.
   - In the `Dockerfile`, the `landing` stage gains `ENV TELEMETRY=true` and the two `THUNDERFORGE_BROWSER_TELEMETRY_*` defaults, and the `server` stage gains `ENV TELEMETRY=true`.
-- [ ] T054 [US1] Write `apps/demo/e2e/telemetry.spec.ts`.
+- [X] T054 [US1] Write `apps/demo/e2e/telemetry.spec.ts`.
   - Route the document, rewriting its CSP header to `connectSrcFor` for `https://telemetry.invalid`. Route `**/telemetry.json` to an enabled config, and answer `/v1/*` with `204` (R14).
   - Play the whole funnel: open from a landing referrer, wait for the map, drag a token, roll, switch the view, and click **Run your own**.
   - Assert seven `funnel` records, in order, once each, under one `session.id` (SC-003). Every request outside the demo's files goes to `/v1/logs` or `/v1/traces`.
-- [ ] T055 [P] [US1] Add the landing's e2e.
+  - It asserts the demo's six steps (`demo_opened` to `cta_clicked`), in order, once each, under one session; `landing_viewed` is the landing's, proved by T055, and in production the two share the session through `sessionStorage` on one origin. The spec waits for `demo_opened` to be posted before the next full page load, so a keepalive post racing the unload cannot make it flaky.
+- [X] T055 [P] [US1] Add the landing's e2e.
   - Add `apps/landing/playwright.config.ts`, modelled on `apps/demo/playwright.config.ts`, with its own preview port.
   - Add `"e2e": "pnpm run build && playwright test"` to `apps/landing/package.json`.
   - Write `apps/landing/e2e/telemetry.spec.ts`: `landing_viewed`, and `cta_clicked` for each `data-cta`, with telemetry routed as in the demo spec.
-- [ ] T056 [US1] Add `deploy/k8s/observability/dashboards/demo-funnel.json`.
+- [X] T056 [US1] Add `deploy/k8s/observability/dashboards/demo-funnel.json`.
   - The funnel panels: the seven steps, step-to-step conversion, and the median time to each step.
   - `demo.action` by kind, and `demo.not_in_demo` by root field.
   - LogQL uses `{service_name="thunderforge-demo"} | event_name="funnel"` (R5).
   - Run `make observability-check`.
-- [ ] T057 [P] [US1] Amend `specs/074-a-world-to-try/spec.md` at the Why (line 27), the decision (line 76) and SC-003, each with a note pointing to spec 086. SC-003 reads as FR-032 gives it.
+  - The median time uses `t.ms` (ms since the session began) through `unwrap t_ms`; conversion uses the count connector's `thunderforge_browser_events_total` by `step`.
+- [X] T057 [P] [US1] Amend `specs/074-a-world-to-try/spec.md` at the Why (line 27), the decision (line 76) and SC-003, each with a note pointing to spec 086. SC-003 reads as FR-032 gives it.
 
 **Checkpoint**: `pnpm -F @thunderforge/demo e2e` (every spec) and
 `pnpm -F @thunderforge/landing e2e` are green.
@@ -349,14 +354,15 @@ arrive redacted, folded and capped.
 **Independent Test**: The `AppErrorBoundary` unit test (SC-006), the demo
 spec's error test, and `apps/web/e2e/telemetry-errors.spec.ts`.
 
-- [ ] T058 [P] [US2] Write the failing test `apps/web/src/components/__tests__/AppErrorBoundary.test.tsx`. A child that throws in render shows the boundary's fallback, and the boundary posts one `error` event through a fake sink, with an email in the message redacted.
-- [ ] T059 [US2] Implement `apps/web/src/components/AppErrorBoundary.tsx`, which reports through the telemetry chunk when it is loaded and through nothing otherwise. Wrap the routes in `apps/web/src/App.tsx`.
-- [ ] T060 [US2] Send `engine.load_failed` with `webgl2Unavailable`'s reason (`apps/web/src/engine/bevy/index.ts:475`), through a stage hook that `apps/web/src/telemetry/index.ts` subscribes to. The engine code calls no telemetry API. `resumable-downloads` owns this file.
-- [ ] T061 [P] [US2] Write `apps/web/e2e/telemetry-errors.spec.ts`.
+- [X] T058 [P] [US2] Write the failing test `apps/web/src/components/__tests__/AppErrorBoundary.test.tsx`. A child that throws in render shows the boundary's fallback, and the boundary posts one `error` event through a fake sink, with an email in the message redacted.
+- [X] T059 [US2] Implement `apps/web/src/components/AppErrorBoundary.tsx`, which reports through the telemetry chunk when it is loaded and through nothing otherwise. Wrap the routes in `apps/web/src/App.tsx`.
+- [X] T060 [US2] Send `engine.load_failed` with `webgl2Unavailable`'s reason (`apps/web/src/engine/bevy/index.ts:475`), through a stage hook that `apps/web/src/telemetry/index.ts` subscribes to. The engine code calls no telemetry API. `resumable-downloads` owns this file.
+  - Done as `engine/bevy/loadSignals.ts`, a dependency-free signal bus that `mountEngine` emits to and that replays its last few signals, because the chunk arrives after a no-WebGL2 failure. The reason is the closed `no_webgl2`, never the visitor-facing words; `stage` is `probe`. The demo's chunk subscribes too. T074 reuses the same bus.
+- [X] T061 [P] [US2] Write `apps/web/e2e/telemetry-errors.spec.ts`.
   - An uncaught error and an unhandled rejection, raised with `page.evaluate`, each post one `error` event, with the email in the message redacted.
   - The same error thrown 500 times posts one record with a count, within the 50-error cap.
-- [ ] T062 [US2] Add an error test to `apps/demo/e2e/telemetry.spec.ts`: a thrown error is posted redacted, with a stack reduced to path and line.
-- [ ] T063 [US2] Add the errors panels to `deploy/k8s/observability/dashboards/demo-funnel.json`: errors by message, a sample of redacted stacks, and engine failures by reason, for `thunderforge-demo` and `thunderforge-web`. Run `make observability-check`.
+- [X] T062 [US2] Add an error test to `apps/demo/e2e/telemetry.spec.ts`: a thrown error is posted redacted, with a stack reduced to path and line.
+- [X] T063 [US2] Add the errors panels to `deploy/k8s/observability/dashboards/demo-funnel.json`: errors by message, a sample of redacted stacks, and engine failures by reason, for `thunderforge-demo` and `thunderforge-web`. Run `make observability-check`.
 
 **Checkpoint**: The boundary test, `telemetry-errors.spec.ts` and the demo
 spec are green, and `pnpm e2e:feedback` stays green.
@@ -373,23 +379,31 @@ dashboard.
 e2e, the 25 KB check in `pnpm -F @thunderforge/landing build` (SC-007), and
 `make observability-check`.
 
-- [ ] T064 [US4] Change `apps/landing/nginx.conf.template` for FR-027.
+- [X] T064 [US4] Change `apps/landing/nginx.conf.template` for FR-027.
   - Add a `log_format` with `escape=json`, holding the time, method, `$uri`, status, bytes, request time, `$upstream_cache_status`, and the referrer reduced to its origin by a `map`. It holds no address, `X-Forwarded-For` or user agent, and `/healthz` stays unlogged.
   - Add `stub_status` on `127.0.0.1:8081` only.
-- [ ] T065 [US4] Add `scripts/check-landing-nginx.sh` (R16). It builds the `Dockerfile`'s `landing` stage and runs it three times: with the defaults, with `TELEMETRY=false`, and with a redirected endpoint. It checks both `telemetry.json` files, both `connect-src` values, that the access-log line for `/?utm_source=x` parses as JSON with no query, address or user agent, and that `stub_status` is not reachable on 8080. It skips with a note when Docker is not running.
-- [ ] T066 [US4] In `apps/landing/src/telemetry.ts`, add:
+- [X] T065 [US4] Add `scripts/check-landing-nginx.sh` (R16). It builds the `Dockerfile`'s `landing` stage and runs it three times: with the defaults, with `TELEMETRY=false`, and with a redirected endpoint. It checks both `telemetry.json` files, both `connect-src` values, that the access-log line for `/?utm_source=x` parses as JSON with no query, address or user agent, and that `stub_status` is not reachable on 8080. It skips with a note when Docker is not running.
+- [X] T066 [US4] In `apps/landing/src/telemetry.ts`, add:
   - page views with the referrer's origin and `utm_source`, `utm_medium` and `utm_campaign`;
   - scroll depth by section reached, with an `IntersectionObserver` over the section ids (`dice`, `map`, `self-host`, `telemetry` and the rest);
   - web vitals and long tasks through `startCollectors`.
 
   Extend `apps/landing/e2e/telemetry.spec.ts` for the page view's UTM attributes and the scroll depth.
-- [ ] T067 [US4] Add `apps/landing/scripts/check-telemetry-size.mjs`, run at the end of `apps/landing/package.json`'s `build`. It fails when the telemetry chunk is over 25 KB brotli, or when the initial document requests a different number of scripts than before (SC-007).
-- [ ] T068 [P] [US4] Add `deploy/k8s/observability/landing/exporter-sidecar.yaml`, a strategic-merge patch adding `nginx/nginx-prometheus-exporter` with the newest 1.x image pinned by tag and digest. It scrapes `http://127.0.0.1:8081/stub_status` and serves port `metrics` (9113). Add `landing/podmonitor.yaml`, in `thunderforge-dev`, labelled `release: kube-prometheus-stack`. Include the PodMonitor, not the patch, in the kustomization.
-- [ ] T069 [US4] Add `deploy/k8s/observability/dashboards/landing.json`.
+- [X] T067 [US4] Add `apps/landing/scripts/check-telemetry-size.mjs`, run at the end of `apps/landing/package.json`'s `build`. It fails when the telemetry chunk is over 25 KB brotli, or when the initial document requests a different number of scripts than before (SC-007).
+- [X] T068 [P] [US4] Add `deploy/k8s/observability/landing/exporter-sidecar.yaml`, a strategic-merge patch adding `nginx/nginx-prometheus-exporter` with the newest 1.x image pinned by tag and digest. It scrapes `http://127.0.0.1:8081/stub_status` and serves port `metrics` (9113). Add `landing/podmonitor.yaml`, in `thunderforge-dev`, labelled `release: kube-prometheus-stack`. Include the PodMonitor, not the patch, in the kustomization.
+- [X] T069 [US4] Add `deploy/k8s/observability/dashboards/landing.json`.
   - From nginx: requests by path and status, bytes, the `/gh/` cache status, and connections.
   - From Loki: page views, referrers, UTM sources, CTA clicks, scroll depth, and web vitals at p75 by page.
 
   Add `ThunderForgeLandingDown` and `ThunderForgeLanding5xx` to `prometheus-rules.yaml`. Run `make observability-check`.
+
+  Done (2026-10-09):
+  - T064 logs `$request_uri` without its query, not `$uri`: after `try_files`, `$uri` is `/index.html` for every page.
+  - T065 passes with `--template-only` (the template in stock nginx). The full `landing` image build was not run here; `LANDING_IMAGE=<tag>` checks a built one.
+  - T066 sends `utm.*` on the first page view only, reduced to `[A-Za-z0-9._-]`, 64 characters. Sections are marked with `data-section`.
+  - T067's baseline is the built `index.html`: one script and one modulepreload, neither the telemetry chunk (6.9 KB brotli).
+  - T068 pins the exporter at `1.5.3` by its index digest.
+  - T069: `ThunderForgeLanding5xx` is a Loki ruler rule, `loki-rules/thunderforge-landing.yaml`, not a Prometheus one. stub_status carries no status codes and no gateway series reaches Prometheus, so the access log is the only record of a 5xx. fluxified's `loki.yaml` projects the `loki-thunderforge-rules` ConfigMap beside the audit rules (T105). The dashboard's per-path, status, bytes and cache panels read the access log in Loki too. `check-observability.mjs` checks those queries against Alloy's stream labels and `landing_json`'s fields, and reads the Loki rules.
 
 **Checkpoint**: `scripts/check-landing-nginx.sh`, the landing build and its
 e2e, and `make observability-check` pass.
@@ -526,6 +540,7 @@ in-cluster endpoint, then the gateway, then the Flux changes.
   ```
 
   Grafana's **ThunderForge** folder holds the seven dashboards. **Backplane** shows poll rates from vtt-dev within 2 minutes, and **Landing** shows `nginx_up 1`.
+- [ ] T105 In the Flux repository, mount the Loki ruler's ThunderForge rules (T069). In `overlays/system/monitoring/loki.yaml`, the `audit-rules` volume becomes a projected volume of `loki-audit-rules` and `loki-thunderforge-rules` (`optional: true`), still at `/etc/loki/rules/fake`. Check that `ThunderForgeLanding5xx` is listed by the ruler (`/loki/api/v1/rules`).
 - [ ] T088 In the Flux repository, add the `count` connector from `contracts/collector-count-connector.md` to the public and in-cluster logs pipelines (R8). Confirm that `thunderforge_browser_events_total` appears in Prometheus.
 - [ ] T103 Push the gateway image and deploy it, as `contracts/telemetry-gateway.md`'s Shipping section gives it:
 

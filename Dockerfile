@@ -182,6 +182,11 @@ FROM nginx:stable-alpine AS landing
 # The image fills in the template at start; an empty token is allowed and
 # leaves the star chart to contributors only.
 ENV GITHUB_TOKEN=""
+# Spec 086: browser telemetry to the project's endpoint, on by default.
+# `TELEMETRY=false` serves `{"enabled":false}` and the pages load nothing for it.
+ENV TELEMETRY=true \
+  THUNDERFORGE_BROWSER_TELEMETRY_ENDPOINT=https://telemetry.thunderforge.dev \
+  THUNDERFORGE_BROWSER_TELEMETRY_SAMPLE_RATE=1.0
 COPY apps/landing/nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=landing-build /build/apps/landing/dist /usr/share/nginx/html
 COPY --from=build /build/data/demo /usr/share/nginx/html/demo
@@ -232,6 +237,8 @@ RUN chmod 0755 /usr/local/bin/thunderforge-entrypoint
 ENV THUNDERFORGE_DATA_PATH=/srv/thunderforge/data \
   STATIC_DIR=/srv/thunderforge/client \
   DEMO_DIR=/srv/thunderforge/demo
+# Spec 086: the binary's default, written down so `docker inspect` shows it.
+ENV TELEMETRY=true
 EXPOSE 30000
 
 ENTRYPOINT ["/usr/local/bin/thunderforge-entrypoint"]

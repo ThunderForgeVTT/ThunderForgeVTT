@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { isTelemetry, routeTelemetry } from "./support";
 
 /**
  * Spec 074: the demo, as it ships. One visitor, one tab, one world, served
@@ -36,8 +37,13 @@ type Scene = {
 };
 
 let page: Page;
-/** Every request and socket that is not one of the demo's own files. */
+/**
+ * Every request and socket that is not one of the demo's own files, nor a
+ * telemetry post to the configured origin (spec 086 FR-033).
+ */
 const outside: string[] = [];
+/** The body of every telemetry post. */
+const telemetry: string[] = [];
 
 /**
  * Ask the demo's own backend, the way the app does. The page's `fetch` is the
@@ -149,6 +155,7 @@ test.beforeAll(async ({ browser, baseURL }) => {
     viewport: { width: 1440, height: 900 },
   });
   page = await context.newPage();
+  await routeTelemetry(context, telemetry);
   // Which actor pictures were asked of the page's `fetch`, and by whom it was
   // called: whatever the guard installs as `window.fetch` is wrapped as it is
   // read, so a call from the engine is seen as well as one from a script.
@@ -176,6 +183,7 @@ test.beforeAll(async ({ browser, baseURL }) => {
     const url = new URL(request.url());
     if (url.protocol === "blob:" || url.protocol === "data:") return;
     if (url.origin === origin && url.pathname.startsWith("/demo/")) return;
+    if (isTelemetry(url)) return;
     outside.push(`${request.method()} ${request.url()}`);
   });
   page.on("websocket", (socket) => outside.push(`SOCKET ${socket.url()}`));

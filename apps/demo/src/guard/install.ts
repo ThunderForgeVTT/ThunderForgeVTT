@@ -43,6 +43,7 @@ import { multipartOperation } from "./multipart";
 import { svgToPng } from "./rasterize";
 import { answerRest } from "./rest";
 import { installSocketGuard } from "./socket";
+import { isTelemetryPost } from "./telemetryPass";
 import { refusingXmlHttpRequest } from "./xhr";
 
 const BASE = import.meta.env.BASE_URL;
@@ -50,6 +51,12 @@ const BASE = import.meta.env.BASE_URL;
 const EVENT_DELAY_MS = 10;
 
 const fetchStatic = window.fetch.bind(window);
+
+/**
+ * The browser's own `fetch`, for the demo's static files: what the telemetry
+ * module reads its config with (spec 086).
+ */
+export const staticFetch: typeof fetch = fetchStatic;
 
 /**
  * Spec 081: an operation on the world, as the member who asked. Saved before
@@ -137,6 +144,10 @@ async function demoFetch(
 
   // Bytes already in the page.
   if (url.protocol === "blob:" || url.protocol === "data:") {
+    return fetchStatic(request);
+  }
+  // Spec 086 FR-021: telemetry to the origin the served config named.
+  if (isTelemetryPost(request.method, url)) {
     return fetchStatic(request);
   }
   if (url.origin !== window.location.origin) {

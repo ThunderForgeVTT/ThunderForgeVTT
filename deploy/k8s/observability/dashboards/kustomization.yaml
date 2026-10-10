@@ -20,3 +20,7 @@ configMapGenerator:
     files: [database.json]
   - name: thunderforge-dashboard-world-events
     files: [world-events.json]
+  - name: thunderforge-dashboard-demo-funnel
+    files: [demo-funnel.json]
+  - name: thunderforge-dashboard-landing
+    files: [landing.json]
