@@ -162,11 +162,11 @@ edge-wall check there.
 
 **Independent Test**: `pnpm e2e:worlds`.
 
-- [ ] T055 [US4] `WorldDashboardPage.tsx:135`: the page's own wrapper and the grid of contracts/layouts.md (FR-033, FR-036).
-- [ ] T056 [US4] The Players card: member count, active link count (for those who run the world), and a link to the players page. It replaces what T019 moved out.
-- [ ] T057 [US4] `layout-widths.spec.ts`, world page part (worlds slice), as T051.
-- [ ] T058 [US4] `pnpm e2e:worlds`, then `pnpm e2e:which --diff`.
-- [ ] T059 [US4] Commit: "Spec 088: the world page uses the width it has".
+- [X] T055 [US4] `WorldDashboardPage.tsx:135`: the page's own wrapper and the grid of contracts/layouts.md (FR-033, FR-036).
+- [X] T056 [US4] The Players card: member count, active link count (for those who run the world), and a link to the players page. It replaces what T019 moved out.
+- [X] T057 [US4] `layout-widths.spec.ts`, world page part (worlds slice), as T051.
+- [X] T058 [US4] `pnpm e2e:worlds`, then `pnpm e2e:which --diff`. worlds 25/0 (with world-layout-widths), beside instance 45/0 and actors 32/0.
+- [X] T059 [US4] Commit: "Spec 088: the world page uses the width it has".
 
 ---
 

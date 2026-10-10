@@ -1046,6 +1046,7 @@
         "world-administration.spec.ts",
         "world-event-catchup.spec.ts",
         "world-session-tokens.spec.ts",
+        "world-layout-widths.spec.ts",
         "live-sync.spec.ts",
         "demo-first-session.spec.ts",
         "world-base-map.spec.ts"
