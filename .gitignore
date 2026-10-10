@@ -235,3 +235,6 @@ k8s/
 !deploy/k8s/
 deploy/k8s/*
 !deploy/k8s/observability/
+
+# Spec 048: real D&D Beyond exports for measure_corpus. Personal; never committed.
+sheet-corpus/

@@ -127,7 +127,7 @@ user's shareable set is a *collection*. Only the 5e system is a *pack*.
   - It uses lopdf's writer, has no timestamps, and sets a fixed `/ID`.
   - It writes the eight fixtures in contracts/sheet-mapping-5e.md. The layout's labels and positions come from the owner's exports, and every value is invented.
   - A test asserts each generated file's sha256, so a generator change is a visible diff.
-- [ ] T025 [P] Add `packs/systems/dnd5e/sheet/examples/measure_corpus.rs`. No test runs it. It reads `THUNDERFORGE_SHEET_CORPUS` and exits with a note when the variable is unset. For each file it prints the read, uncertain and unread counts per field, and no value. Add `sheet-corpus/` to `.gitignore`.
+- [X] T025 [P] Add `packs/systems/dnd5e/sheet/examples/measure_corpus.rs`. No test runs it. It reads `THUNDERFORGE_SHEET_CORPUS` and exits with a note when the variable is unset. For each file it prints the read, uncertain and unread counts per field, and no value. Add `sheet-corpus/` to `.gitignore`.
 
 **Checkpoint**: `cargo test -p thunderforge-pdf -p thunderforge-sheet-import -p thunderforge-canvas-core` is green, the migrations run up and down, and the fixtures generate the same bytes twice.
 
