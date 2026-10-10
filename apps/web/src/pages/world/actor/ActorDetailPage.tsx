@@ -1,7 +1,13 @@
 import { createElement, useEffect, useState } from "react";
 import { AttestationDialog } from "@/components/legal/AttestationDialog";
 import { useResetOnChange } from "@/hooks/useResetOnChange";
-import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import {
+  Link,
+  Navigate,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import { isClaimChanged } from "@/api/actorClaims";
 import { createActorShareLink, revokeActorShareLink } from "@/api/actorShares";
 import {
@@ -58,6 +64,11 @@ export interface ActorDetailPageProps {
 export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
   const { id: worldId = "", actorId = "" } = useParams();
   const navigate = useNavigate();
+  // Spec 088 FR-062: opened from the Players screen, the back control goes
+  // back there, and the view/edit switch keeps it so.
+  const [searchParams] = useSearchParams();
+  const fromPlayers = searchParams.get("from") === "players";
+  const keepFrom = fromPlayers ? "?from=players" : "";
   const [world, setWorld] = useState<WorldRecord | null>(null);
   const [actor, setActor] = useState<WorldActorRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -185,7 +196,12 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
   // FR-011: a Viewer-only caller reaching /edit is redirected to /view —
   // the server independently rejects the mutation regardless (Principle III).
   if (mode === "edit" && actor.myPermissionLevel === "VIEWER") {
-    return <Navigate to={`/world/${worldId}/actor/${actorId}/view`} replace />;
+    return (
+      <Navigate
+        to={`/world/${worldId}/actor/${actorId}/view${keepFrom}`}
+        replace
+      />
+    );
   }
 
   const canEdit = mayEditActor(actor);
@@ -397,9 +413,16 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
           size="sm"
           icon="arrow-left"
           className="justify-self-start"
-          onClick={() => navigate(`/world/${worldId}/staging`)}
+          onClick={() =>
+            navigate(
+              fromPlayers
+                ? `/world/${worldId}/players`
+                : `/world/${worldId}/staging`,
+            )
+          }
+          data-testid="actor-back"
         >
-          Back to world
+          {fromPlayers ? "Back to players" : "Back to world"}
         </Button>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -414,7 +437,7 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
               <Button
                 variant="secondary"
                 onClick={() =>
-                  navigate(`/world/${worldId}/actor/${actorId}/edit`)
+                  navigate(`/world/${worldId}/actor/${actorId}/edit${keepFrom}`)
                 }
               >
                 Edit
@@ -505,7 +528,9 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
                     <Button
                       variant="ghost"
                       onClick={() =>
-                        navigate(`/world/${worldId}/actor/${actorId}/view`)
+                        navigate(
+                          `/world/${worldId}/actor/${actorId}/view${keepFrom}`,
+                        )
                       }
                     >
                       Cancel

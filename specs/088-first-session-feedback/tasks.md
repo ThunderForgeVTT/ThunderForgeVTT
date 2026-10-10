@@ -250,14 +250,14 @@ losing changes.
 
 **Independent Test**: `pnpm e2e:actors`, `pnpm e2e:hero-builder`.
 
-- [ ] T100 [US8] `PlayersPage.tsx`: at under 640 px the viewer's card first; **Open sheet** and **Edit look** full width and at least 44 px tall (FR-060).
-- [ ] T101 [US8] "Ask your GM for a character" on a player's card with no claimed character (FR-063).
-- [ ] T102 [US8] The hero builder dialog full screen at under 640 px, closing back to where it opened (FR-061).
-- [ ] T103 [US8] `?from=players` on the links from the card; `ActorDetailPage` sends its back control to the players page when set (FR-062).
-- [ ] T104 [US8] Extend `players-hero-edit.spec.ts` (from the hotfix) at 375 px: card order, control sizes, a full-screen builder, the back control, and the empty state.
-- [ ] T105 [P] [US8] Telemetry: `hero.opened_from_players`.
-- [ ] T106 [US8] `pnpm e2e:actors`, `pnpm e2e:hero-builder`, then `pnpm e2e:which --diff`.
-- [ ] T107 [US8] Commit: "Spec 088: a player opens their own sheet and look from the players screen".
+- [X] T100 [US8] `PlayersPage.tsx`: at under 640 px the viewer's card first; **Open sheet** and **Edit look** full width and at least 44 px tall (FR-060).
+- [X] T101 [US8] "Ask your GM for a character" on a player's card with no claimed character (FR-063).
+- [X] T102 [US8] The hero builder dialog full screen at under 640 px, closing back to where it opened (FR-061). No code change: the builder dialog was already full screen at under 640 px; T104 proves it at 375x812.
+- [X] T103 [US8] `?from=players` on the links from the card; `ActorDetailPage` sends its back control to the players page when set (FR-062).
+- [X] T104 [US8] Extend `players-hero-edit.spec.ts` (from the hotfix) at 375 px: card order, control sizes, a full-screen builder, the back control, and the empty state.
+- [ ] T105 [P] [US8] Telemetry: `hero.opened_from_players`. (waits on 086)
+- [X] T106 [US8] `pnpm e2e:actors`, `pnpm e2e:hero-builder`, then `pnpm e2e:which --diff`. actors 32/0; hero-builder 18/1 (standalone 7/0). The one failure is Quick NPC (hero-builder-npc.spec.ts:468: the preview does not change after Open in builder, then Use), and it fails again alone (6/1). Nothing 088 changes is on that path (QuickNpcDialog, apps/hero-builder and packages/heroes are untouched), so it is not this story.
+- [X] T107 [US8] Commit: "Spec 088: a player opens their own sheet and look from the players screen".
 
 ---
 

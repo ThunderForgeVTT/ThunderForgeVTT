@@ -17,6 +17,7 @@ import { NewCharacterCard } from "@/pages/world/players/NewCharacterCard";
 import { PlayerHeroControls } from "@/pages/world/players/PlayerHeroControls";
 import { WorldLinksPanel } from "@/pages/world/players/WorldLinksPanel";
 import { IN_DEMO } from "@/lib/demoBuild";
+import { cn } from "@/lib/utils";
 import { filterPlayers } from "@/pages/world/players/playerFilter";
 import { describeStanding } from "@/pages/world/players/playerStanding";
 import type { WorldActorRecord } from "@/types/actor";
@@ -306,7 +307,11 @@ export function PlayersPage({ worldId, isGm }: PlayersPageProps) {
           return (
             <Card
               key={member.id}
-              className="grid content-start gap-3 p-4"
+              // Spec 088 FR-060: on a phone the viewer's own card comes first.
+              className={cn(
+                "grid content-start gap-3 p-4",
+                isYou && "max-sm:order-first",
+              )}
               data-testid={`player-card-${member.id}`}
               data-runs-the-table={standing.runsTheTable ? "true" : "false"}
             >
@@ -351,7 +356,7 @@ export function PlayersPage({ worldId, isGm }: PlayersPageProps) {
                 <dd>
                   {member.claimedActor ? (
                     <Link
-                      to={`/world/${worldId}/actor/${member.claimedActor.id}/view`}
+                      to={`/world/${worldId}/actor/${member.claimedActor.id}/view?from=players`}
                       className="font-medium hover:underline"
                     >
                       {member.claimedActor.label}
@@ -369,6 +374,15 @@ export function PlayersPage({ worldId, isGm }: PlayersPageProps) {
                   worldId={worldId}
                   actor={actorsById.get(member.claimedActor.id)}
                 />
+              ) : isYou && !isGm ? (
+                // FR-063: a player with no character is told who gives one,
+                // rather than left with an empty card.
+                <p
+                  className="text-sm text-muted-foreground"
+                  data-testid={`player-ask-gm-${member.id}`}
+                >
+                  Ask your GM for a character.
+                </p>
               ) : null}
 
               {isGm && hasNoMembershipRecord ? (

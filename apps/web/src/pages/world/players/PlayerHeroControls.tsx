@@ -50,16 +50,21 @@ export function PlayerHeroControls({
     }
   };
 
+  // Spec 088 FR-060: on a phone the two controls are full width and at
+  // least 44 px tall, the size a thumb can hit; from `sm` they are the small
+  // buttons they were.
+  const control = "min-h-11 w-full sm:min-h-0 sm:w-auto";
   return (
     <div className="grid gap-1">
-      <div className="flex flex-wrap gap-2">
+      <div className="grid gap-2 sm:flex sm:flex-wrap">
         {controls.sheet ? (
-          <Button asChild variant="secondary" size="sm">
+          <Button asChild variant="secondary" size="sm" className={control}>
+            {/* FR-062: the sheet's back control returns here. */}
             <Link
-              to={`/world/${worldId}/actor/${actor.id}/edit`}
+              to={`/world/${worldId}/actor/${actor.id}/edit?from=players`}
               data-testid={`player-hero-sheet-${actor.id}`}
             >
-              Character sheet
+              Open sheet
             </Link>
           </Button>
         ) : null}
@@ -67,10 +72,11 @@ export function PlayerHeroControls({
           <Button
             variant="secondary"
             size="sm"
+            className={control}
             onClick={() => void openBuilder()}
             data-testid={`player-hero-build-${actor.id}`}
           >
-            Edit hero
+            Edit look
           </Button>
         ) : null}
       </div>
