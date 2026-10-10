@@ -384,7 +384,14 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
         description="Actor detail"
         noindex
       />
-      <Container className="grid max-w-2xl gap-6 py-10">
+      {/* Spec 088 US3 (contracts/layouts.md): the page's own wrapper, as wide
+          as the world's other pages, and three columns where there is room.
+          Column A is who the character is, B the sheet, C the rolls and the
+          Game Master's switches; between 1024 and 1535 px, C sits under A. */}
+      <div
+        className="mx-auto grid w-full max-w-[1800px] gap-6 px-4 py-6 sm:px-6 lg:py-10"
+        data-testid="actor-view"
+      >
         <Button
           variant="ghost"
           size="sm"
@@ -453,80 +460,91 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
           </Card>
         ) : null}
 
-        <Card className="grid gap-4 p-6">
-          {mode === "edit" ? (
-            <>
-              <Field label="Name" htmlFor="actor-label">
-                <Input
-                  id="actor-label"
-                  value={label}
-                  onChange={(e) => setLabel(e.target.value)}
-                />
-              </Field>
-              <Field label="Description" htmlFor="actor-description">
-                <Textarea
-                  id="actor-description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="A short description of this actor…"
-                  rows={4}
-                />
-              </Field>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={!isNpc}
-                  onChange={(e) => setIsNpc(!e.target.checked)}
-                />
-                This is a player character
-              </label>
-              <div className="flex gap-3">
-                <Button onClick={() => void handleSave()} disabled={isSaving}>
-                  {isSaving ? "Saving..." : "Save"}
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() =>
-                    navigate(`/world/${worldId}/actor/${actorId}/view`)
-                  }
-                >
-                  Cancel
-                </Button>
-              </div>
-              {status ? (
-                <StatusBadge
-                  variant={status === "Saved." ? "success" : "danger"}
-                >
-                  {status}
-                </StatusBadge>
-              ) : null}
-            </>
-          ) : (
-            <div className="grid gap-2">
-              <p className="text-sm text-muted-foreground">
-                Classification:{" "}
-                {actor.isNpc ? "Non-Player Character" : "Player Character"}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Type: {actor.actorType}
-              </p>
-              {actor.gameSystemId ? (
-                <p className="text-sm text-muted-foreground">
-                  Game system: {actor.gameSystemId}
-                </p>
-              ) : null}
-              <p className="text-sm whitespace-pre-wrap">
-                {actor.description || (
-                  <span className="text-muted-foreground italic">
-                    No description.
-                  </span>
-                )}
-              </p>
-            </div>
-          )}
-        </Card>
+        <div
+          className="grid items-start gap-6 lg:grid-cols-2 2xl:grid-cols-3"
+          data-testid="actor-view-grid"
+        >
+          <div
+            className="grid min-w-0 content-start gap-6"
+            data-testid="actor-view-column-a"
+          >
+            <Card className="grid gap-4 p-6">
+              {mode === "edit" ? (
+                <>
+                  <Field label="Name" htmlFor="actor-label">
+                    <Input
+                      id="actor-label"
+                      value={label}
+                      onChange={(e) => setLabel(e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Description" htmlFor="actor-description">
+                    <Textarea
+                      id="actor-description"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="A short description of this actor…"
+                      rows={4}
+                    />
+                  </Field>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={!isNpc}
+                      onChange={(e) => setIsNpc(!e.target.checked)}
+                    />
+                    This is a player character
+                  </label>
+                  <div className="flex gap-3">
+                    <Button
+                      onClick={() => void handleSave()}
+                      disabled={isSaving}
+                    >
+                      {isSaving ? "Saving..." : "Save"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() =>
+                        navigate(`/world/${worldId}/actor/${actorId}/view`)
+                      }
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                  {status ? (
+                    <StatusBadge
+                      variant={status === "Saved." ? "success" : "danger"}
+                    >
+                      {status}
+                    </StatusBadge>
+                  ) : null}
+                </>
+              ) : (
+                <div className="grid gap-2">
+                  <p className="text-sm text-muted-foreground">
+                    Classification:{" "}
+                    {actor.isNpc ? "Non-Player Character" : "Player Character"}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Type: {actor.actorType}
+                  </p>
+                  {actor.gameSystemId ? (
+                    <p className="text-sm text-muted-foreground">
+                      Game system: {actor.gameSystemId}
+                    </p>
+                  ) : null}
+                  <p className="max-w-prose text-sm whitespace-pre-wrap">
+                    {actor.description || (
+                      <span className="text-muted-foreground italic">
+                        No description.
+                      </span>
+                    )}
+                  </p>
+                </div>
+              )}
+            </Card>
 
-        {/*
+            {/*
           Owner, 2026-09-15: "This screen doesn't show the ability to upload
           icons, which is a pain, especially for the Genie system. I expected
           to see a token and/or a portrait."
@@ -554,278 +572,301 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
           much theirs to change there. Everyone else sees the pictures
           without the controls.
         */}
-        <div className="grid gap-3">
-          <ActorImageryPanel
-            worldId={worldId}
-            actorId={actorId}
-            actorLabel={actor.label}
-            canEdit={actor.myMayChangeImagery}
-          />
-          {heldByMe && !actor.myMayChangeImagery ? (
-            <p
-              className="text-sm text-muted-foreground"
-              data-testid="actor-imagery-refusal"
-            >
-              {actor.artLocked
-                ? "The Game Master has locked this character's look."
-                : world?.allowPlayerActorArt === false
-                  ? "The Game Master has turned off players changing their character's art in this world."
-                  : null}
-            </p>
-          ) : null}
-        </div>
+            <div className="grid gap-3">
+              <ActorImageryPanel
+                worldId={worldId}
+                actorId={actorId}
+                actorLabel={actor.label}
+                canEdit={actor.myMayChangeImagery}
+              />
+              {heldByMe && !actor.myMayChangeImagery ? (
+                <p
+                  className="text-sm text-muted-foreground"
+                  data-testid="actor-imagery-refusal"
+                >
+                  {actor.artLocked
+                    ? "The Game Master has locked this character's look."
+                    : world?.allowPlayerActorArt === false
+                      ? "The Game Master has turned off players changing their character's art in this world."
+                      : null}
+                </p>
+              ) : null}
+            </div>
+          </div>
 
-        {/* Spec 012 (T037, FR-006): lore entries that reference this actor —
-            and, since spec 031 (FR-039), the place to write or attach one
-            without leaving this page. The list itself is unchanged; it moved
-            into the panel because a list and the controls that add to it are
-            one thing to the person looking at them. */}
-        <ActorLorePanel
-          worldId={worldId}
-          actorLabel={actor.label}
-          linkedFrom={actor.loreLinkedFrom}
-          canManage={canEdit}
-          onChanged={refreshActor}
-        />
+          <div
+            className="grid min-w-0 content-start gap-6 lg:row-span-2"
+            data-testid="actor-view-column-b"
+          >
+            {(() => {
+              // Spec 032. The registry had one hand-written entry, so six of the
+              // seven bundled systems had no character sheet at all — its own
+              // header said adding a system should not mean editing this page, and
+              // it meant exactly that.
+              //
+              // The pack-driven sheet is the sheet now: the server publishes what
+              // the system declares and the world's interface pack says how to lay
+              // it out, so a system gets a sheet by having a manifest. A pack's own
+              // container survives only for what a declared-value sheet cannot do —
+              // editing a level and recomputing a resource from it, say — and where
+              // one exists it is still what mounts, because replacing it would be
+              // removing working behaviour rather than generalising it.
+              //
+              // Which container that is, is no longer written here or anywhere else
+              // in shared code: `resolveActorSheet` finds the ones bundled packs
+              // ship. `null` covers all three ways there can be nothing to mount.
+              //
+              // `createElement` with a lowercase local, for the reason
+              // `InPaneCharacterSheet` writes out at its own mount point: a
+              // component value chosen at render time is what
+              // `react-hooks/static-components` exists to catch, and the rule
+              // cannot see that this one comes from a module-level registry keyed
+              // by a string. Writing the call out keeps the rule on everywhere
+              // else rather than disabling it here.
+              const sheet = resolveActorSheet(actor.gameSystemId);
+              return sheet ? (
+                createElement(sheet, {
+                  // Prefixed: the abilities panel below is a sibling that also
+                  // remounts on `sheetVersion`, and two siblings with one key
+                  // left the old sheet on the page beside the new one.
+                  key: `sheet-${sheetVersion}`,
+                  actor,
+                  canEdit: canEdit && mode === "edit",
+                })
+              ) : (
+                <PackActorSheet
+                  key={`sheet-${sheetVersion}`}
+                  actorId={actorId}
+                />
+              );
+            })()}
 
-        {(() => {
-          // Spec 032. The registry had one hand-written entry, so six of the
-          // seven bundled systems had no character sheet at all — its own
-          // header said adding a system should not mean editing this page, and
-          // it meant exactly that.
-          //
-          // The pack-driven sheet is the sheet now: the server publishes what
-          // the system declares and the world's interface pack says how to lay
-          // it out, so a system gets a sheet by having a manifest. A pack's own
-          // container survives only for what a declared-value sheet cannot do —
-          // editing a level and recomputing a resource from it, say — and where
-          // one exists it is still what mounts, because replacing it would be
-          // removing working behaviour rather than generalising it.
-          //
-          // Which container that is, is no longer written here or anywhere else
-          // in shared code: `resolveActorSheet` finds the ones bundled packs
-          // ship. `null` covers all three ways there can be nothing to mount.
-          //
-          // `createElement` with a lowercase local, for the reason
-          // `InPaneCharacterSheet` writes out at its own mount point: a
-          // component value chosen at render time is what
-          // `react-hooks/static-components` exists to catch, and the rule
-          // cannot see that this one comes from a module-level registry keyed
-          // by a string. Writing the call out keeps the rule on everywhere
-          // else rather than disabling it here.
-          const sheet = resolveActorSheet(actor.gameSystemId);
-          return sheet ? (
-            createElement(sheet, {
-              // Prefixed: the abilities panel below is a sibling that also
-              // remounts on `sheetVersion`, and two siblings with one key
-              // left the old sheet on the page beside the new one.
-              key: `sheet-${sheetVersion}`,
-              actor,
-              canEdit: canEdit && mode === "edit",
-            })
-          ) : (
-            <PackActorSheet key={`sheet-${sheetVersion}`} actorId={actorId} />
-          );
-        })()}
-
-        {/* GM-only, NPC-only: put one of the system's stat blocks on this
+            {/* GM-only, NPC-only: put one of the system's stat blocks on this
             creature. Nothing renders for a system that ships none; which
             systems do is found by `systemStatBlocks.ts`, not written here. */}
-        {isDm && actor.isNpc && mode === "edit" ? (
-          <ActorStatBlockPanel
-            actor={actor}
-            onApplied={() => setSheetVersion((version) => version + 1)}
-          />
-        ) : null}
+            {isDm && actor.isNpc && mode === "edit" ? (
+              <ActorStatBlockPanel
+                actor={actor}
+                onApplied={() => setSheetVersion((version) => version + 1)}
+              />
+            ) : null}
 
-        {/* Spec 081 US2: the character's rolls, for whoever may play them.
-            Rolled here, they animate on the play view's board. */}
-        {canEdit ? (
-          <ActorRollsPanel worldId={worldId} actor={actor} isGm={isDm} />
-        ) : null}
-
-        {/* Spec 036 US3b (FR-036): rolling a check from the sheet. Renders
+            {/* Spec 036 US3b (FR-036): rolling a check from the sheet. Renders
             nothing at all for a system that declares none, which is seven of
             the eight bundled packs — FR-037 is an absence, not a message. */}
-        <SystemChecksPanel worldId={worldId} actorId={actorId} />
+            <SystemChecksPanel worldId={worldId} actorId={actorId} />
 
-        <ActorInventoryPanel
-          actorId={actorId}
-          worldId={worldId}
-          canManage={canEdit}
-        />
+            <ActorInventoryPanel
+              actorId={actorId}
+              worldId={worldId}
+              canManage={canEdit}
+            />
 
-        {/* Spec 025 (T055): known abilities, beside inventory. `canManage` is
+            {/* Spec 025 (T055): known abilities, beside inventory. `canManage` is
             the ACTOR's own permission (FR-022) — not the caller's permission on
             any ability — and, matching inventory, it is available from the view
             route rather than gated on `mode === "edit"`. */}
-        <ActorAbilitiesPanel
-          key={`abilities-${sheetVersion}`}
-          actorId={actorId}
-          worldId={worldId}
-          gameSystemId={actor.gameSystemId}
-          canManage={canEdit}
-        />
+            <ActorAbilitiesPanel
+              key={`abilities-${sheetVersion}`}
+              actorId={actorId}
+              worldId={worldId}
+              gameSystemId={actor.gameSystemId}
+              canManage={canEdit}
+            />
 
-        {/* Whatever this actor's system contributes to an NPC's page — spec
+            {/* Whatever this actor's system contributes to an NPC's page — spec
             020's shop is one such panel, and this page used to name it and
             the system that ships it (`032/T108`). Only `isNpc` survives the
             move, because whether an actor is an NPC is a fact about the
             actor rather than a decision about a game system; everything
             else, including whether a non-GM viewer sees an empty shop, is
             the panel's own. */}
-        {actor.isNpc
-          ? (() => {
-              // `createElement` with a lowercase local, for the same reason
-              // the sheet above writes its call out: a component value chosen
-              // at render time from a registry keyed by a string is what
-              // `react-hooks/static-components` exists to catch, and the rule
-              // cannot tell this one is safe.
-              const panel = resolvePanel(actor.gameSystemId, "npc-detail");
-              return panel
-                ? createElement(panel, {
-                    worldId,
-                    actorId,
-                    actor,
-                    currentUserId: user?.id,
-                    isGm: isDm,
-                  })
-                : null;
-            })()
-          : null}
+            {actor.isNpc
+              ? (() => {
+                  // `createElement` with a lowercase local, for the same reason
+                  // the sheet above writes its call out: a component value chosen
+                  // at render time from a registry keyed by a string is what
+                  // `react-hooks/static-components` exists to catch, and the rule
+                  // cannot tell this one is safe.
+                  const panel = resolvePanel(actor.gameSystemId, "npc-detail");
+                  return panel
+                    ? createElement(panel, {
+                        worldId,
+                        actorId,
+                        actor,
+                        currentUserId: user?.id,
+                        isGm: isDm,
+                      })
+                    : null;
+                })()
+              : null}
+          </div>
 
-        {/* Owner decision 2026-09-15: GM-only, NPC-only. Whether players see
+          <div
+            className="grid min-w-0 content-start gap-6"
+            data-testid="actor-view-column-c"
+          >
+            {/* Spec 081 US2: the character's rolls, for whoever may play them.
+            Rolled here, they animate on the play view's board. */}
+            {canEdit ? (
+              <ActorRollsPanel worldId={worldId} actor={actor} isGm={isDm} />
+            ) : null}
+
+            {/* Spec 012 (T037, FR-006): lore entries that reference this actor —
+            and, since spec 031 (FR-039), the place to write or attach one
+            without leaving this page. The list itself is unchanged; it moved
+            into the panel because a list and the controls that add to it are
+            one thing to the person looking at them. */}
+            <ActorLorePanel
+              worldId={worldId}
+              actorLabel={actor.label}
+              linkedFrom={actor.loreLinkedFrom}
+              canManage={canEdit}
+              onChanged={refreshActor}
+            />
+
+            {/* Owner decision 2026-09-15: GM-only, NPC-only. Whether players see
             this NPC at all. The server withholds a hidden NPC from every
             player's list and sheet; this is only the switch. */}
-        {isDm && actor.isNpc ? (
-          <Card className="grid gap-3 p-4" data-testid="actor-visibility-block">
-            <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
-              Players
-            </h2>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                data-testid="actor-visible-toggle"
-                checked={actor.visibleToPlayers}
-                disabled={isUpdatingVisibility}
-                onChange={(e) =>
-                  void handleToggleVisibleToPlayers(e.target.checked)
-                }
-              />
-              Visible to players
-            </label>
-            <p className="text-sm text-muted-foreground">
-              {actor.visibleToPlayers
-                ? "Players see this NPC in the character list and can open its sheet."
-                : "Hidden: players cannot find this NPC in any list or open its sheet."}{" "}
-              A token's name follows its own setting either way.
-            </p>
-          </Card>
-        ) : null}
+            {isDm && actor.isNpc ? (
+              <Card
+                className="grid gap-3 p-4"
+                data-testid="actor-visibility-block"
+              >
+                <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+                  Players
+                </h2>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    data-testid="actor-visible-toggle"
+                    checked={actor.visibleToPlayers}
+                    disabled={isUpdatingVisibility}
+                    onChange={(e) =>
+                      void handleToggleVisibleToPlayers(e.target.checked)
+                    }
+                  />
+                  Visible to players
+                </label>
+                <p className="text-sm text-muted-foreground">
+                  {actor.visibleToPlayers
+                    ? "Players see this NPC in the character list and can open its sheet."
+                    : "Hidden: players cannot find this NPC in any list or open its sheet."}{" "}
+                  A token's name follows its own setting either way.
+                </p>
+              </Card>
+            ) : null}
 
-        {/* Spec 046 FR-016: GM-only, NPC-only. A unique NPC is one creature
+            {/* Spec 046 FR-016: GM-only, NPC-only. A unique NPC is one creature
             wherever it stands, so its tokens are placed linked to it; any
             other NPC's tokens are copies with hit points of their own. */}
-        {isDm && actor.isNpc ? (
-          <Card className="grid gap-3 p-4" data-testid="actor-unique-block">
-            <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
-              On the board
-            </h2>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                data-testid="actor-unique-toggle"
-                checked={actor.isUnique}
-                disabled={isUpdatingUnique}
-                onChange={(e) => void handleToggleUnique(e.target.checked)}
-              />
-              Unique — a named individual, placed linked to this sheet
-            </label>
-            <p className="text-sm text-muted-foreground">
-              {actor.isUnique
-                ? "New tokens share this NPC's hit points."
-                : "New tokens are copies, each with hit points of its own."}{" "}
-              Tokens already placed keep what they are.
-            </p>
-          </Card>
-        ) : null}
+            {isDm && actor.isNpc ? (
+              <Card className="grid gap-3 p-4" data-testid="actor-unique-block">
+                <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+                  On the board
+                </h2>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    data-testid="actor-unique-toggle"
+                    checked={actor.isUnique}
+                    disabled={isUpdatingUnique}
+                    onChange={(e) => void handleToggleUnique(e.target.checked)}
+                  />
+                  Unique — a named individual, placed linked to this sheet
+                </label>
+                <p className="text-sm text-muted-foreground">
+                  {actor.isUnique
+                    ? "New tokens share this NPC's hit points."
+                    : "New tokens are copies, each with hit points of its own."}{" "}
+                  Tokens already placed keep what they are.
+                </p>
+              </Card>
+            ) : null}
 
-        {/* Spec 044 FR-030b: GM-only, PC-only. Locks the holder out of
+            {/* Spec 044 FR-030b: GM-only, PC-only. Locks the holder out of
             changing this one character's portrait and token; the Game Master
             may still change them, and nothing else about the character is
             locked. */}
-        {isDm && !actor.isNpc ? (
-          <Card className="grid gap-3 p-4" data-testid="actor-art-lock-block">
-            <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
-              Look
-            </h2>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                data-testid="actor-art-lock-toggle"
-                checked={actor.artLocked}
-                disabled={isUpdatingArtLock}
-                onChange={(e) => void handleToggleArtLocked(e.target.checked)}
-              />
-              Lock this character&apos;s look (portrait and token)
-            </label>
-            <p className="text-sm text-muted-foreground">
-              {actor.artLocked
-                ? "Locked: the player holding this character cannot change its portrait or token."
-                : "The player holding this character may change its portrait and token, if the world allows it."}{" "}
-              The sheet is not locked, and you may still change the look.
-            </p>
-          </Card>
-        ) : null}
-
-        {/* Spec 017 (T028, US3): GM-only, PC-only "available for claiming"
-            control plus who currently has this character claimed. */}
-        {isDm && !actor.isNpc ? (
-          <Card className="grid gap-3 p-4" data-testid="actor-claim-block">
-            <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
-              Player claiming
-            </h2>
-            {actor.claimedBy ? (
-              <div className="flex flex-wrap items-center justify-between gap-3">
+            {isDm && !actor.isNpc ? (
+              <Card
+                className="grid gap-3 p-4"
+                data-testid="actor-art-lock-block"
+              >
+                <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+                  Look
+                </h2>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    data-testid="actor-art-lock-toggle"
+                    checked={actor.artLocked}
+                    disabled={isUpdatingArtLock}
+                    onChange={(e) =>
+                      void handleToggleArtLocked(e.target.checked)
+                    }
+                  />
+                  Lock this character&apos;s look (portrait and token)
+                </label>
                 <p className="text-sm text-muted-foreground">
-                  Claimed by{" "}
-                  <span className="font-medium text-foreground">
-                    {actor.claimedBy.username}
-                  </span>
+                  {actor.artLocked
+                    ? "Locked: the player holding this character cannot change its portrait or token."
+                    : "The player holding this character may change its portrait and token, if the world allows it."}{" "}
+                  The sheet is not locked, and you may still change the look.
                 </p>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => void handleUnclaim()}
-                  disabled={isUpdatingClaim}
-                >
-                  {isUpdatingClaim ? "Un-claiming..." : "Un-claim"}
-                </Button>
-              </div>
-            ) : (
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={actor.availableForClaim}
-                  disabled={isUpdatingClaim}
-                  onChange={(e) =>
-                    void handleToggleAvailability(e.target.checked)
-                  }
-                />
-                Available for a joining player to claim
-              </label>
-            )}
-          </Card>
-        ) : null}
+              </Card>
+            ) : null}
 
-        {isDm && mode === "edit" ? (
-          <ActorOwnershipBlock
-            actorId={actorId}
-            worldId={worldId}
-            world={world}
-          />
-        ) : null}
-      </Container>
+            {/* Spec 017 (T028, US3): GM-only, PC-only "available for claiming"
+            control plus who currently has this character claimed. */}
+            {isDm && !actor.isNpc ? (
+              <Card className="grid gap-3 p-4" data-testid="actor-claim-block">
+                <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+                  Player claiming
+                </h2>
+                {actor.claimedBy ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm text-muted-foreground">
+                      Claimed by{" "}
+                      <span className="font-medium text-foreground">
+                        {actor.claimedBy.username}
+                      </span>
+                    </p>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => void handleUnclaim()}
+                      disabled={isUpdatingClaim}
+                    >
+                      {isUpdatingClaim ? "Un-claiming..." : "Un-claim"}
+                    </Button>
+                  </div>
+                ) : (
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={actor.availableForClaim}
+                      disabled={isUpdatingClaim}
+                      onChange={(e) =>
+                        void handleToggleAvailability(e.target.checked)
+                      }
+                    />
+                    Available for a joining player to claim
+                  </label>
+                )}
+              </Card>
+            ) : null}
+
+            {isDm && mode === "edit" ? (
+              <ActorOwnershipBlock
+                actorId={actorId}
+                worldId={worldId}
+                world={world}
+              />
+            ) : null}
+          </div>
+        </div>
+      </div>
     </WorldAppearance>
   );
 }

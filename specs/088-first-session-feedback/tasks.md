@@ -149,10 +149,10 @@ edge-wall check there.
 **Independent Test**: `pnpm e2e:actors`, then `pnpm e2e:combat` and
 `pnpm e2e:game-systems`.
 
-- [ ] T050 [US3] `ActorDetailPage.tsx:387`: replace `Container … max-w-2xl` with the page's own wrapper and the three-column grid of contracts/layouts.md. `max-w-prose` on long text. No change to `Container` or `components/ui/**` (FR-034, FR-036).
-- [ ] T051 [US3] e2e `apps/web/e2e/layout-widths.spec.ts` (actors slice), actor view part: 375, 1280 and 2560 px; no sideways scroll; 1, 2 and 3 columns; 1800 px ±1 at 2560 (SC-004). Also 320 px and 3840 px for no sideways scroll (FR-035).
-- [ ] T052 [US3] `pnpm e2e:actors`, `pnpm e2e:combat`, `pnpm e2e:game-systems`, then `pnpm e2e:which --diff`.
-- [ ] T053 [US3] Commit: "Spec 088: the actor view uses the width it has".
+- [X] T050 [US3] `ActorDetailPage.tsx:387`: replace `Container … max-w-2xl` with the page's own wrapper and the three-column grid of contracts/layouts.md. `max-w-prose` on long text. No change to `Container` or `components/ui/**` (FR-034, FR-036).
+- [X] T051 [US3] e2e `apps/web/e2e/layout-widths.spec.ts` (actors slice), actor view part: 375, 1280 and 2560 px; no sideways scroll; 1, 2 and 3 columns; 1800 px ±1 at 2560 (SC-004). Also 320 px and 3840 px for no sideways scroll (FR-035).
+- [ ] T052 [US3] `pnpm e2e:actors`, `pnpm e2e:combat`, `pnpm e2e:game-systems`, then `pnpm e2e:which --diff`. So far: actors passed actor-layout-widths (US8 edits in the same run aside); combat and game-systems run with the T116 proof.
+- [X] T053 [US3] Commit: "Spec 088: the actor view uses the width it has".
 
 ---
 
