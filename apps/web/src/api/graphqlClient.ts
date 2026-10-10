@@ -350,6 +350,57 @@ export async function postGraphQL<TData>(
 }
 
 /**
+ * `postGraphQL` for an operation whose server may answer with complete data
+ * and a non-fatal error beside it.
+ *
+ * Partial responses still throw everywhere else (see the top of this file).
+ * This is the exception, and it is narrow: only when data came back and every
+ * error carries one of `tolerated` as its code. Those codes come back to the
+ * caller, which says what they mean. Any other error throws as `postGraphQL`
+ * would. `createWorld`'s `STARTING_MAP_FAILED` (spec 088 FR-025) is the case:
+ * the world was made, and only its map was not.
+ */
+export async function postGraphQLTolerating<TData>(
+  query: string,
+  variables: Record<string, unknown> | undefined,
+  tolerated: readonly string[],
+  options: GraphQLRequestOptions = {},
+): Promise<{ data: TData; notices: string[] }> {
+  const operation = operationNameOf(query);
+  const response = await send(
+    options.endpoint ?? GRAPHQL_ENDPOINT,
+    {
+      method: "POST",
+      credentials: "same-origin",
+      headers: withCsrf({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ query, variables }),
+    },
+    operation,
+    options.timeoutMs === undefined ? DEFAULT_TIMEOUT_MS : options.timeoutMs,
+  );
+  const payload = await readPayload<TData>(response);
+  const errors = payload?.errors ?? [];
+  const codes = collectCodes(errors);
+  if (
+    response.ok &&
+    payload?.data != null &&
+    errors.length > 0 &&
+    codes.length === errors.length &&
+    codes.every((code) => tolerated.includes(code))
+  ) {
+    return { data: payload.data, notices: codes };
+  }
+  const data = unwrap<TData>(
+    payload,
+    response,
+    operation,
+    "Request failed",
+    options.announcePause ?? true,
+  );
+  return { data, notices: [] };
+}
+
+/**
  * POST a GraphQL mutation carrying one file, per the GraphQL multipart request
  * spec. Used by the lore and canvas image uploads.
  *

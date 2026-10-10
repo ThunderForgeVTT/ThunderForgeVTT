@@ -4,6 +4,7 @@ import {
   operationNameOf,
   postGraphQL,
   postGraphQLMultipart,
+  postGraphQLTolerating,
 } from "@/api/graphqlClient";
 import { alreadyLiftedBy } from "@/api/playPause";
 import { onPlayPaused, rearmPlayPaused } from "@/api/playPauseSignal";
@@ -462,5 +463,79 @@ describe("postGraphQL — traceparent (spec 086 US7)", () => {
     fetchMock.mockResolvedValue(jsonResponse({ data: { worldAbilities: [] } }));
     await postGraphQL(QUERY, { worldId: "w1" });
     expect(headersOf().has("traceparent")).toBe(false);
+  });
+});
+
+describe("postGraphQLTolerating", () => {
+  const CREATE = `mutation CreateWorld($input: GraphQLCreateWorldInput!) { createWorld(input: $input) { id } }`;
+  const failed = {
+    message: "The world was made, but its starting map was not.",
+    extensions: { code: "STARTING_MAP_FAILED" },
+  };
+
+  it("returns the data and the code when every error is tolerated", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ data: { createWorld: { id: "w1" } }, errors: [failed] }),
+    );
+
+    const result = await postGraphQLTolerating<{ createWorld: { id: string } }>(
+      CREATE,
+      { input: {} },
+      ["STARTING_MAP_FAILED"],
+    );
+
+    expect(result).toEqual({
+      data: { createWorld: { id: "w1" } },
+      notices: ["STARTING_MAP_FAILED"],
+    });
+  });
+
+  it("returns no notices on a clean answer", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ data: { createWorld: { id: "w1" } } }),
+    );
+
+    const result = await postGraphQLTolerating(CREATE, { input: {} }, [
+      "STARTING_MAP_FAILED",
+    ]);
+
+    expect(result.notices).toEqual([]);
+  });
+
+  it("throws when any error is not tolerated", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        data: { createWorld: { id: "w1" } },
+        errors: [
+          failed,
+          { message: "Nope", extensions: { code: "FORBIDDEN" } },
+        ],
+      }),
+    );
+
+    await expect(
+      postGraphQLTolerating(CREATE, { input: {} }, ["STARTING_MAP_FAILED"]),
+    ).rejects.toBeInstanceOf(GraphQLRequestError);
+  });
+
+  it("throws a tolerated code that came with no data", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ data: null, errors: [failed] }));
+
+    await expect(
+      postGraphQLTolerating(CREATE, { input: {} }, ["STARTING_MAP_FAILED"]),
+    ).rejects.toBeInstanceOf(GraphQLRequestError);
+  });
+
+  it("throws an error with no code even beside data", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        data: { createWorld: { id: "w1" } },
+        errors: [failed, { message: "uncoded" }],
+      }),
+    );
+
+    await expect(
+      postGraphQLTolerating(CREATE, { input: {} }, ["STARTING_MAP_FAILED"]),
+    ).rejects.toBeInstanceOf(GraphQLRequestError);
   });
 });

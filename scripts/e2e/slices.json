@@ -1046,15 +1046,16 @@
         "world-event-catchup.spec.ts",
         "world-session-tokens.spec.ts",
         "live-sync.spec.ts",
-        "demo-first-session.spec.ts"
+        "demo-first-session.spec.ts",
+        "world-base-map.spec.ts"
       ],
       "neighbours": [],
       "paths": [
-        "apps/web/src/api/{world,worldContent,worldStatistics,worldMembers,reconcile}.ts",
+        "apps/web/src/api/{world,worldContent,worldStatistics,worldMembers,reconcile,baseMaps}.ts",
         "apps/web/src/appearance/**",
         "apps/web/src/components/seo/**",
         "apps/web/src/components/world/PlayDock/{WorldDock,SettingsPanel,HelpPanel}.tsx",
-        "apps/web/src/components/world/{ConnectionStatus,SessionSetupInviteLink,ReconcileReport}.tsx",
+        "apps/web/src/components/world/{ConnectionStatus,SessionSetupInviteLink,ReconcileReport,MapCredit}.tsx",
         "apps/web/src/engine/world/__tests__/store.test.ts",
         "apps/web/src/engine/world/facets/**",
         "apps/web/src/engine/world/sync/__tests__/{adjudicatedReconcile,appearance,connectivity,discrepancies,heartbeat,reconcile,socketWiring}.test.ts",
@@ -1066,17 +1067,19 @@
         "apps/web/src/pages/world/components/**",
         "apps/web/src/pages/world/settings/{WorldAppearanceSettingsCard,AuthoringToolGrantsCard}.tsx",
         "apps/web/src/pages/world/worldsView.ts",
-        "apps/web/src/pages/world/{WorldListPage,CreateWorldPage,JoinWorldPage,WorldDashboardPage,WorldPage}.tsx",
+        "apps/web/src/pages/world/{WorldListPage,CreateWorldPage,JoinWorldPage,WorldDashboardPage,WorldPage,BaseMapPicker}.tsx",
         "apps/web/src/types/{world,seo}.ts",
         "apps/web/src/utils/env.ts",
         "packs/interface/**",
         "scripts/seed-demo-art.mjs",
+        "scripts/e2e/base-maps.mjs",
         "crates/thunderforge-core/**",
         "crates/thunderforge-engine/src/network/**",
         "crates/thunderforge-engine/src/plugins/websocket_plugin.rs",
         "crates/thunderforge-server/src/graphql/queries/{mod,world_events_since,world_statistics,world_statistics_tests,world_content}.rs",
         "crates/thunderforge-server/src/graphql/{mutations_worlds,mutations_heartbeat,mutations_reconcile,mutations_reconcile_tests}.rs",
         "crates/thunderforge-server/src/world/**",
+        "crates/thunderforge-server/src/base_maps/**",
         "crates/thunderforge-server/src/{world_hooks,interface_packs,interface_packs_tests,interface_packs_integration_tests,graphql_world_interface_pack_tests,graphql_tests}.rs"
       ]
     }

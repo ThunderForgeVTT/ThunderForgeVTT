@@ -5,7 +5,9 @@ import {
   titleFor,
   type GameSystemSummary,
 } from "@/api/gameSystems";
+import { listBaseMaps, type BaseMap } from "@/api/baseMaps";
 import { createWorld } from "@/api/world";
+import { BaseMapPicker } from "@/pages/world/BaseMapPicker";
 import { myLibrary, type LibraryBook } from "@/pages/library/library";
 import { switchOn } from "@/pages/world/compendium/worldBooks";
 import { SEO } from "@/components/seo/SEO";
@@ -61,6 +63,20 @@ export default function CreateWorldPage() {
    */
   const [shelf, setShelf] = useState<LibraryBook[]>([]);
   const [ticked, setTicked] = useState<string[]>([]);
+  /**
+   * Spec 088 FR-025, FR-027: the map the Starting Scene opens on.
+   *
+   * `undefined` until the list has arrived, and it is sent that way: the
+   * server then applies its own default, which is what the picker would have
+   * preselected. A form submitted before the list loads, or on a deployment
+   * whose list failed, still makes the world a new Game Master expects.
+   */
+  const [baseMaps, setBaseMaps] = useState<BaseMap[]>([]);
+  const [baseMapId, setBaseMapId] = useState<string | null | undefined>(
+    undefined,
+  );
+  /** Set when the world was made but its map was not (FR-025). */
+  const [madeWithoutMap, setMadeWithoutMap] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -116,6 +132,27 @@ export default function CreateWorldPage() {
     [ticked, matchingBooks],
   );
 
+  useEffect(() => {
+    let live = true;
+    listBaseMaps()
+      .then((choices) => {
+        if (!live) return;
+        setBaseMaps(choices.maps);
+        // Only preselect; never overwrite a choice already made.
+        setBaseMapId((current) =>
+          current === undefined ? choices.defaultId : current,
+        );
+      })
+      // No list, no picker: `baseMapId` stays undefined and the server
+      // decides, as it does for every client that does not ask.
+      .catch(() => {
+        if (live) setBaseMaps([]);
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
   const descriptionCount = useMemo(
     () => description.trim().length,
     [description],
@@ -130,10 +167,11 @@ export default function CreateWorldPage() {
       // Unset means unset. `prepare_world_input` falls back to the realm's
       // configured default, and a realm with no default makes a world with no
       // system — a state the product handles, unlike a guess made here.
-      const world = await createWorld({
+      const { world, startingMapFailed } = await createWorld({
         name,
         description,
         gameSystemId: gameSystemId || null,
+        ...(baseMapId === undefined ? {} : { baseMapId }),
       });
 
       // One at a time, and after the world exists, through the same mutation
@@ -150,6 +188,13 @@ export default function CreateWorldPage() {
       }
       if (!everyBookOn) {
         void navigate(`/world/${world.id}/compendium?tab=books`);
+        return;
+      }
+      // FR-025: the world is real and only its map is missing. Say so here,
+      // with the way on, rather than landing on a blank board unexplained.
+      if (startingMapFailed) {
+        setMadeWithoutMap(world.id);
+        setIsSaving(false);
         return;
       }
       // Spec 010: straight to staging (not the canvas, and not the
@@ -285,6 +330,13 @@ export default function CreateWorldPage() {
                   </SelectContent>
                 </Select>
               </Field>
+              {baseMaps.length > 0 && baseMapId !== undefined ? (
+                <BaseMapPicker
+                  maps={baseMaps}
+                  value={baseMapId}
+                  onChange={setBaseMapId}
+                />
+              ) : null}
               {matchingBooks.length > 0 && (
                 <Field
                   label="Books from your library"
@@ -324,13 +376,36 @@ export default function CreateWorldPage() {
             {status ? (
               <StatusBadge variant="danger">{status}</StatusBadge>
             ) : null}
+            {madeWithoutMap ? (
+              <div
+                className="grid gap-2 rounded-lg border border-border p-3 text-sm"
+                role="status"
+                data-testid="starting-map-failed"
+              >
+                <p>
+                  Your world was created, but its starting map could not be put
+                  on it. The Starting Scene is blank; you can import a map into
+                  it from Scenes.
+                </p>
+                <Link
+                  to={`/world/${madeWithoutMap}/staging`}
+                  className="font-medium underline underline-offset-2"
+                >
+                  Continue to the world
+                </Link>
+              </div>
+            ) : null}
 
             <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border pt-4">
               <p className="text-sm text-muted-foreground">
                 Ownership is bound automatically to your authenticated session
                 at creation time.
               </p>
-              <Button type="submit" icon="spark" disabled={isSaving}>
+              <Button
+                type="submit"
+                icon="spark"
+                disabled={isSaving || madeWithoutMap !== null}
+              >
                 {isSaving ? "Creating world..." : "Create world"}
               </Button>
             </div>

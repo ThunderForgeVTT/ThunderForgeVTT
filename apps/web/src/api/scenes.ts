@@ -22,6 +22,7 @@ const SCENE_FIELDS = `
   hidden
   previewUrl
   ambientLight
+  backgroundCredit { author licence licenceUrl source catalog shareAlike }
 `;
 
 /**

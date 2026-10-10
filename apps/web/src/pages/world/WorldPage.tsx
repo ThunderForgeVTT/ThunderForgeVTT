@@ -189,6 +189,7 @@ import { ChatPanel } from "@/components/world/PlayDock/ChatPanel";
 import { ActorsPanel } from "@/components/world/PlayDock/ActorsPanel";
 import { CombatPanel } from "@/components/world/PlayDock/CombatPanel";
 import { AttackLog } from "@/components/world/PlayDock/AttackLog/AttackLog";
+import { MapCreditLine } from "@/components/world/MapCredit";
 import { OfferPrompt } from "@/components/world/PlayDock/OfferPrompt/OfferPrompt";
 import { SystemDockPanel } from "@/components/world/PlayDock/SystemDockPanel";
 import { useSystemDockTitle } from "@/panels/systemPanels";
@@ -3308,6 +3309,10 @@ export default function WorldPage() {
                   className="pointer-events-none absolute bottom-3 left-1/2 z-[1040] flex w-80 max-w-[40%] -translate-x-1/2 flex-col-reverse gap-2"
                   data-testid="table-feed"
                 >
+                  {/* Spec 088 FR-030: a base map is credited while it is shown. */}
+                  {selectedScene?.backgroundCredit ? (
+                    <MapCreditLine credit={selectedScene.backgroundCredit} />
+                  ) : null}
                   <OfferPrompt worldId={id} isGm={isSceneOwner} />
                   <AttackLog worldId={id} sceneId={sceneId} />
                 </div>

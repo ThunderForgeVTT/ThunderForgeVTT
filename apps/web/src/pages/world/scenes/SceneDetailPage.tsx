@@ -20,6 +20,7 @@ import {
   describeArrival,
 } from "@/pages/world/scenes/bringParty";
 import { preloadScene } from "@/services/scenePreload";
+import { FullMapCredit } from "@/components/world/MapCredit";
 import type { SceneRecord } from "@/types/scene";
 
 // Spec 068 FR-002: the summary editor is CodeMirror, and most visits to a
@@ -321,6 +322,13 @@ export function SceneDetailPage({
             No map preview yet
           </div>
         )}
+        {/* Spec 088 FR-030: whose the map is, beside the map. */}
+        {scene.backgroundCredit ? (
+          <FullMapCredit
+            credit={scene.backgroundCredit}
+            className="text-sm text-muted-foreground"
+          />
+        ) : null}
       </Card>
 
       {isGm ? (

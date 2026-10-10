@@ -1,4 +1,4 @@
-import { postGraphQL } from "@/api/graphqlClient";
+import { postGraphQL, postGraphQLTolerating } from "@/api/graphqlClient";
 import type {
   CreateWorldInput,
   DeleteWorldResult,
@@ -103,8 +103,23 @@ export function getWorld(id: string): Promise<WorldRecord | null> {
   ).then((data) => data.world);
 }
 
-export function createWorld(input: CreateWorldInput): Promise<WorldRecord> {
-  return postGraphQL<CreateWorldMutation>(
+/** Spec 088 FR-025: the world was made, but its starting map was not put on it. */
+export const STARTING_MAP_FAILED = "STARTING_MAP_FAILED";
+
+export interface CreatedWorld {
+  world: WorldRecord;
+  /**
+   * The world exists with a blank Starting Scene, because the base map asked
+   * for could not be applied. The form says so and lets the Game Master go
+   * on; nothing about the world itself went wrong.
+   */
+  startingMapFailed: boolean;
+}
+
+export async function createWorld(
+  input: CreateWorldInput,
+): Promise<CreatedWorld> {
+  const { data, notices } = await postGraphQLTolerating<CreateWorldMutation>(
     `
       mutation CreateWorld($input: GraphQLCreateWorldInput!) {
         createWorld(input: $input) {
@@ -113,7 +128,12 @@ export function createWorld(input: CreateWorldInput): Promise<WorldRecord> {
       }
     `,
     { input },
-  ).then((data) => data.createWorld);
+    [STARTING_MAP_FAILED],
+  );
+  return {
+    world: data.createWorld,
+    startingMapFailed: notices.includes(STARTING_MAP_FAILED),
+  };
 }
 
 export function deleteWorld(id: string): Promise<DeleteWorldResult> {

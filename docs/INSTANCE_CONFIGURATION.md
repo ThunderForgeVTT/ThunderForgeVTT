@@ -120,6 +120,28 @@ world (spec 040 FR-026, spec 039 FR-053). The single
 `THUNDERFORGE_NOTICE_CONTACT` variable spec 039's plan anticipated was
 superseded by those settings before it was built.
 
+## Starting maps
+
+The maps a new world can open on (spec 088). Like the moderation values,
+these two are **read from the environment only**, once, at start-up; a
+change takes effect on restart.
+
+| Variable | Default | What it sets |
+|---|---|---|
+| `THUNDERFORGE_BASE_MAPS_DIR` | unset (no maps) | The directory holding `maps.json`, `credit.json`, `NOTICE.txt` and each map's `<id>.webp` and `<id>.thumb.webp`. The container image sets it to `/srv/base-maps`; for a checkout, `make base-maps` writes `target/base-maps` |
+| `THUNDERFORGE_BASE_MAPS_DEFAULT` | `grassy-path-ambush` | The map a world made without naming one opens on, and the one the create form picks first. `none` gives such a world a blank scene |
+
+The directory is the operator's switch. Unset, missing, empty, or with a
+`maps.json` that does not parse, the server logs one warning naming the path
+and the reason, offers no maps, and every new world starts on a blank scene.
+A map whose image is missing is left out with its own warning; the rest are
+still offered.
+
+The maps are MBRound18's, under CC BY-SA 4.0. The directory carries the
+licence notice and the credit, and the product shows the credit wherever a
+map is shown. Keep `NOTICE.txt` and `credit.json` with the maps if you copy
+them elsewhere.
+
 ## What is never rendered
 
 No credential, anywhere: not masked, not truncated, not length-hinted. The

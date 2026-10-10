@@ -5,6 +5,7 @@ import { createScene, getScenes } from "@/api/scenes";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button/Button";
 import { Input } from "@/components/ui/input";
+import { FullMapCredit } from "@/components/world/MapCredit";
 import type { SceneRecord } from "@/types/scene";
 
 export interface ScenesPageProps {
@@ -152,6 +153,13 @@ export function ScenesPage({ worldId, isGm }: ScenesPageProps) {
                     >
                       {scene.name}
                     </Link>
+                    {/* Spec 088 FR-030: a base map is credited in the list too. */}
+                    {scene.backgroundCredit ? (
+                      <FullMapCredit
+                        credit={scene.backgroundCredit}
+                        className="mt-1 text-xs font-normal text-muted-foreground"
+                      />
+                    ) : null}
                   </td>
                   <td className="max-w-md p-2 text-muted-foreground">
                     {scene.description ? (

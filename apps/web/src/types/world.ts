@@ -109,6 +109,11 @@ export interface CreateWorldInput {
   description?: string;
   gameSystemId?: string | null;
   interfacePackId?: string | null;
+  /**
+   * Spec 088 FR-025: the base map the Starting Scene opens on. Left out, the
+   * server applies its default; `null` asks for a blank scene.
+   */
+  baseMapId?: string | null;
 }
 
 export interface DeleteWorldResult {

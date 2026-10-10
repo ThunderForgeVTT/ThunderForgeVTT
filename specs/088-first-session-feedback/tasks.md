@@ -115,25 +115,25 @@ refusal.
 **Independent Test**: `pnpm e2e:worlds`, then `pnpm e2e:scenes` and
 `pnpm e2e:canvas`.
 
-- [ ] T030 [US2] Move `apps/demo/credit.json` to `examples/maps/credit.json`, and point `apps/demo/src/credit.ts` at it. The demo's tests pass (FR-028).
-- [ ] T031 [US2] A `make base-maps` target that runs `thunderforge-demo-maps examples/maps target/base-maps` and copies `credit.json`. A `base-maps` Dockerfile stage, copied to `/srv/base-maps` in `server`, with `THUNDERFORGE_BASE_MAPS_DIR` set (contracts/base-maps.md). Check that `NOTICE.txt` is in the output (FR-031).
-- [ ] T032 [P] [US2] `crates/thunderforge-server/src/base_maps/mod.rs` (new): load the directory at start-up, with tests for a missing directory, a bad `maps.json` and a missing image (FR-022).
-- [ ] T033 [US2] `--base-maps-dir` / `THUNDERFORGE_BASE_MAPS_DIR` in `apps/thunderforge/src/main.rs` (clap, `env`), into the app state.
-- [ ] T034 [P] [US2] `base_maps/routes.rs`: the three HTTP routes, matched by id against the loaded set, signed-in only, with the cache header. A test that `..` and an unknown id are 404.
-- [ ] T035 [US2] `baseMaps` and `defaultBaseMapId` queries, and the `MapCredit` type (contracts/graphql.md, FR-021).
-- [ ] T036 [US2] Tests for `createWorld`'s `baseMapId`: absent applies the default, `null` applies none, an unknown id is refused before anything is created, and the rescue flow applies none (FR-023, FR-026).
-- [ ] T037 [US2] `createWorld` (`mutations_worlds.rs`): after the world's transaction commits, apply the map as contracts/base-maps.md describes: the upload with `base_map_id`, then size, grid, walls (perimeter included, from `maps.json`), doors and lights in one transaction, and `MAP_IMPORTED`. A failure adds `STARTING_MAP_FAILED` and leaves the world (FR-024, FR-025). The `thunderforge.base_maps.applied` counter. T036 passes.
-- [ ] T038 [P] [US2] Replace the stale `STARTER_SCENE_NAME` comment (`mutations_worlds.rs:22-41`) with the licence as settled (FR-032).
-- [ ] T039 [US2] `GraphQLScene.backgroundCredit`, resolved through `base_map_id`, null otherwise, with a test (FR-029).
-- [ ] T040 [US2] `apps/web/src/pages/world/BaseMapPicker.tsx` (new): a keyboard-usable radio group of thumbnail cards plus **None**, the default selected, the credit beside it, usable at 375 px. Put it on `CreateWorldPage.tsx`, sending `baseMapId`, and show the `STARTING_MAP_FAILED` notice (FR-027, FR-030).
-- [ ] T041 [P] [US2] `apps/web/src/components/world/MapCredit.tsx` (new): the short credit line on the board's React chrome while the scene's `backgroundCredit` is set, expanding to the full credit with its three links. Also shown in the scene list and the scene's settings (FR-030).
-- [ ] T042 [US2] e2e `apps/web/e2e/world-base-map.spec.ts` (worlds slice):
+- [X] T030 [US2] Move `apps/demo/credit.json` to `examples/maps/credit.json`, and point `apps/demo/src/credit.ts` at it. The demo's tests pass (FR-028).
+- [X] T031 [US2] A `make base-maps` target that runs `thunderforge-demo-maps examples/maps target/base-maps` and copies `credit.json`. A `base-maps` Dockerfile stage, copied to `/srv/base-maps` in `server`, with `THUNDERFORGE_BASE_MAPS_DIR` set (contracts/base-maps.md). Check that `NOTICE.txt` is in the output (FR-031).
+- [X] T032 [P] [US2] `crates/thunderforge-server/src/base_maps/mod.rs` (new): load the directory at start-up, with tests for a missing directory, a bad `maps.json` and a missing image (FR-022).
+- [X] T033 [US2] `--base-maps-dir` / `THUNDERFORGE_BASE_MAPS_DIR` in `apps/thunderforge/src/main.rs` (clap, `env`), into the app state.
+- [X] T034 [P] [US2] `base_maps/routes.rs`: the three HTTP routes, matched by id against the loaded set, signed-in only, with the cache header. A test that `..` and an unknown id are 404.
+- [X] T035 [US2] `baseMaps` and `defaultBaseMapId` queries, and the `MapCredit` type (contracts/graphql.md, FR-021).
+- [X] T036 [US2] Tests for `createWorld`'s `baseMapId`: absent applies the default, `null` applies none, an unknown id is refused before anything is created, and the rescue flow applies none (FR-023, FR-026).
+- [X] T037 [US2] `createWorld` (`mutations_worlds.rs`): after the world's transaction commits, apply the map as contracts/base-maps.md describes: the upload with `base_map_id`, then size, grid, walls (perimeter included, from `maps.json`), doors and lights in one transaction, and `MAP_IMPORTED`. A failure adds `STARTING_MAP_FAILED` and leaves the world (FR-024, FR-025). The `thunderforge.base_maps.applied` counter (waits on 086). T036 passes.
+- [X] T038 [P] [US2] Replace the stale `STARTER_SCENE_NAME` comment (`mutations_worlds.rs:22-41`) with the licence as settled (FR-032).
+- [X] T039 [US2] `GraphQLScene.backgroundCredit`, resolved through `base_map_id`, null otherwise, with a test (FR-029).
+- [X] T040 [US2] `apps/web/src/pages/world/BaseMapPicker.tsx` (new): a keyboard-usable radio group of thumbnail cards plus **None**, the default selected, the credit beside it, usable at 375 px. Put it on `CreateWorldPage.tsx`, sending `baseMapId`, and show the `STARTING_MAP_FAILED` notice (FR-027, FR-030).
+- [X] T041 [P] [US2] `apps/web/src/components/world/MapCredit.tsx` (new): the short credit line on the board's React chrome while the scene's `backgroundCredit` is set, expanding to the full credit with its three links. Also shown in the scene list and the scene's settings (FR-030).
+- [X] T042 [US2] e2e `apps/web/e2e/world-base-map.spec.ts` (worlds slice):
   - create with the default: the board shows the map and the credit, with no step after Create;
   - create with **None**: the Starting Scene matches today's, field for field (SC-003);
   - the credit's links point at the licence, the source and the catalog.
-- [ ] T043 [P] [US2] Telemetry: `world.created` (contracts/telemetry.md).
-- [ ] T044 [US2] `pnpm e2e:worlds`, `pnpm e2e:scenes`, `pnpm e2e:canvas`, then `pnpm e2e:which --diff` and its slices.
-- [ ] T045 [US2] Commit: "Spec 088: a new world opens on one of our maps, credited".
+- [ ] T043 [P] [US2] Telemetry: `world.created` (contracts/telemetry.md). (waits on 086)
+- [X] T044 [US2] `pnpm e2e:worlds`, `pnpm e2e:scenes`, `pnpm e2e:canvas`, then `pnpm e2e:which --diff` and its slices. worlds 24/0, scenes 19/0, canvas 44/0; the slices `e2e:which --diff` names run with T116.
+- [X] T045 [US2] Commit: "Spec 088: a new world opens on one of our maps, credited".
 
 **Checkpoint**: SC-003 holds. The walls a base map arrives with already
 include the perimeter, once Phase 7's T079 has rebuilt `maps.json`. If US6
@@ -264,10 +264,10 @@ losing changes.
 ## Phase 10: Docs and proof
 
 - [ ] T110 [P] `docs/guides/inviting-players.md` (new): world links, the optional use limit and when a use counts, expiry, revoking, and why a new person needs an instance invitation (FR-080).
-- [ ] T111 [P] `docs/guides/your-first-world.md` (new): the starting map, **None**, and the credit.
+- [X] T111 [P] `docs/guides/your-first-world.md` (new): the starting map, **None**, and the credit.
 - [ ] T112 [P] `docs/guides/rolls.md`: clearing, and what clearing keeps.
 - [ ] T113 [P] `docs/guides/doors-and-walls.md`: the edge walls, the box, and how to remove them.
-- [ ] T114 [P] `docs/INSTANCE_CONFIGURATION.md` and `.env.example`: `THUNDERFORGE_BASE_MAPS_DIR` (FR-081).
+- [X] T114 [P] `docs/INSTANCE_CONFIGURATION.md` and `.env.example`: `THUNDERFORGE_BASE_MAPS_DIR` (FR-081).
 - [ ] T115 [P] `docs/CONTRIBUTING.md`: `useUnsavedChanges`, the settings form model, the clear rule beside the visibility rule, and the perimeter mark.
 - [ ] T116 The Proof run (spec.md, Proof): `make lint`, `cargo test -p thunderforge-server`, the web's tests and typecheck, the demo's tests, every slice listed, then `pnpm e2e:which --diff` and each slice it names. Record the results in research.md under `## Proof` (SC-007).
 - [ ] T117 Mark spec.md's status "Implemented", and commit: "Spec 088: proven by its slices".
