@@ -269,8 +269,8 @@ losing changes.
 - [X] T113 [P] `docs/guides/doors-and-walls.md`: the edge walls, the box, and how to remove them.
 - [X] T114 [P] `docs/INSTANCE_CONFIGURATION.md` and `.env.example`: `THUNDERFORGE_BASE_MAPS_DIR` (FR-081).
 - [X] T115 [P] `docs/CONTRIBUTING.md`: `useUnsavedChanges`, the settings form model, the clear rule beside the visibility rule, and the perimeter mark.
-- [ ] T116 The Proof run (spec.md, Proof): `make lint`, `cargo test -p thunderforge-server`, the web's tests and typecheck, the demo's tests, every slice listed, then `pnpm e2e:which --diff` and each slice it names. Record the results in research.md under `## Proof` (SC-007).
-- [ ] T117 Mark spec.md's status "Implemented", and commit: "Spec 088: proven by its slices".
+- [X] T116 The Proof run (spec.md, Proof): `make lint`, `cargo test -p thunderforge-server`, the web's tests and typecheck, the demo's tests, every slice listed, then `pnpm e2e:which --diff` and each slice it names. Record the results in research.md under `## Proof` (SC-007). Done: see research.md, Proof.
+- [X] T117 Mark spec.md's status "Implemented", and commit: "Spec 088: proven by its slices".
 - [ ] T118 `mcp__gitops__merge_ff_only` onto main. If it refuses, stop and ask the owner.
 
 ---

@@ -2,7 +2,7 @@
 
 **Feature Branch**: `088-first-session-feedback`
 **Created**: 2026-10-09
-**Status**: Planned (plan.md, tasks.md)
+**Status**: Implemented
 **Input**: The owner's notes from the first real session on vtt-dev, with
 three players, 2026-10-09:
 

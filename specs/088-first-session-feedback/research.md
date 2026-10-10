@@ -297,3 +297,50 @@ CONTRIBUTING (:314-375) allows only instance-wide flags (`feature.<name>`),
 for a feature merged unfinished or one an operator has a reason to switch
 off. None of the stories is either, and the operator's switch for base
 maps is the directory. **Decision**: no flags.
+
+## Proof
+
+Run on 2026-10-10 in the 088 worktree, with
+`THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT=1`, `ENGINE_PROFILE=dev`, one worker,
+under the machine e2e lock (T116, SC-007).
+
+- `make lint`: clean, after 9df09614 collapsed a clippy `collapsible_if`.
+- `cargo test -p thunderforge-server` (`RUST_MIN_STACK=16777216`, its own
+  test database): 2095 passed, 0 failed, 6 ignored.
+- Web: `tsc` clean; vitest 963/963 in 121 files.
+- Demo: vitest 160/160 in 19 files; its e2e 3/0, `rolls-across-tabs` included.
+
+The slices `pnpm e2e:which --diff` names, passed/failed:
+
+| Slice | Result | Slice | Result |
+| --- | --- | --- | --- |
+| accounts | 71/0 | hero-builder | 19/0 |
+| actors | 32/0 | instance | 45/0 |
+| canvas | 46/0 | lore | 13/0, 1 skipped |
+| collections | 30/0 | play-pause | 13/0 |
+| combat | 27/0 (rerun) | resumable-downloads | 7/1 |
+| companion | 13/0 (rerun) | rolls | 30/0 |
+| compendium | 26/0 | scenes | 19/0 |
+| engine-other | 9/0 | tokens | 24/0 (rerun) |
+| game-systems | 33/0 | world-cache | 23/0 |
+| genie | 21/0 (rerun) | worlds | 25/0 |
+
+What the first pass found, and what became of it:
+
+- combat 25/2 and genie 20/1: the portrait sat under the basics card in
+  column A. It now heads the column (contracts/layouts.md), and the 5e and
+  Genie sheet specs check it is beside the sheet. Fixed in 30c9cb3f.
+- companion 12/1: `session-notes.spec.ts` read a bare "Players", which US1's
+  "See and revoke links on the Players page" doubled. It reads the sidebar
+  link by test id now. Fixed in 30c9cb3f.
+- combat-reach.spec.ts:99 (combat) and look-at-and-follow.spec.ts:98
+  (tokens) failed once and passed on the rerun; 088 touches neither path.
+- hero-builder: Quick NPC (hero-builder-npc.spec.ts:468) failed twice during
+  US8 and passed here, 19/0. A flake.
+- resumable-downloads 7/1: `resumable-downloads-scene.spec.ts:49`, the canvas
+  is never visible. The 086 worktree fails it the same way (7/1), so it is
+  not this spec's.
+
+`e2e:which --diff` also says a cross-cutting path changed (`schema.graphql`,
+`auth/**`; R14) and recommends the full suite. By the owner's rule the
+slices are the proof, so the full suite was not run.
