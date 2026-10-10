@@ -1,4 +1,4 @@
-.PHONY: gc image push landing-image push-landing telemetry-gateway-image push-telemetry-gateway clean-builds test-db-reset dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-rust test-mail bench-blob-store test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean container container-up container-down container-down-clean observability observability-check
+.PHONY: gc base-maps image push landing-image push-landing telemetry-gateway-image push-telemetry-gateway clean-builds test-db-reset dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-rust test-mail bench-blob-store test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean container container-up container-down container-down-clean observability observability-check
 
 # Loads DATABASE_URL (and anything else) from the repo-root .env for targets
 # that shell out to tools which don't read it themselves (diesel-cli).
@@ -151,6 +151,14 @@ gc:
 	else \
 		echo "gc: docker not running, its build cache left as is"; \
 	fi
+
+# The maps a new world can open on (spec 088), written where .env.example's
+# THUNDERFORGE_BASE_MAPS_DIR points: each example map as the server serves it,
+# with maps.json, the credit and NOTICE.txt beside them. The image builds the
+# same thing into /srv/base-maps.
+base-maps:
+	cargo run -q -p thunderforge --bin thunderforge-demo-maps --features demo-maps -- examples/maps target/base-maps
+	@test -f target/base-maps/NOTICE.txt || { echo "base-maps: no NOTICE.txt was written"; exit 1; }
 
 clean:
 	pnpm clean

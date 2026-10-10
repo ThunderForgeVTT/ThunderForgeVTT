@@ -1928,6 +1928,14 @@ type AppQueryRoot {
 	Empty when the world has no system or the system declares none.
 	"""
 	worldSystemConditions(worldId: UUID!): [WorldSystemCondition!]!
+	"""
+	The maps a new world can open on; empty when the instance has none.
+	"""
+	baseMaps: [BaseMap!]!
+	"""
+	The map the create-world form starts on, or `null` for **None**.
+	"""
+	defaultBaseMapId: ID
 	genieSession(worldId: UUID!): GraphQLGenieSession
 	"""
 	What the table has asked for with its wishes, oldest first (FR-014).
@@ -2148,6 +2156,19 @@ input AttestationInput {
 	The `versionId` from `sharingTerms`, echoed back unmodified.
 	"""
 	termsVersionId: String!
+}
+
+"""
+One map a new world can open on.
+"""
+type BaseMap {
+	id: ID!
+	name: String!
+	width: Int!
+	height: Int!
+	gridSize: Int!
+	thumbnailUrl: String!
+	credit: MapCredit!
 }
 
 """
@@ -3596,6 +3617,12 @@ input GraphQLCreateWorldInput {
 	description: String
 	gameSystemId: String
 	interfacePackId: String
+	"""
+	Spec 088 (FR-023): the map the Starting Scene opens on. Left out:
+	the instance's default, when it has one. `null`: none. An id this
+	instance does not have is refused before the world is created.
+	"""
+	baseMapId: ID = null
 }
 
 """
@@ -4852,6 +4879,11 @@ type GraphQLScene {
 	client showing this scene hands its engine.
 	"""
 	ambientLight: String!
+	"""
+	Spec 088 (FR-029): whose the background is, when it is one of the
+	base maps; `null` for any other background, or none.
+	"""
+	backgroundCredit: MapCredit
 }
 
 """
@@ -5952,6 +5984,21 @@ type MailAvailability {
 	What is limited while mail is unavailable, in sentences.
 	"""
 	limitedFeatures: [String!]!
+}
+
+"""
+Whose a base map is (FR-028, FR-030).
+"""
+type MapCredit {
+	author: String!
+	licence: String!
+	licenceUrl: String!
+	source: String!
+	catalog: String!
+	"""
+	"The copies here are offered under the same licence."
+	"""
+	shareAlike: String!
 }
 
 """

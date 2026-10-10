@@ -36,6 +36,10 @@ there.
 - A map whose image is missing is left out, with a `warn` naming it.
 - The default is `grassy-path-ambush` (Open item 1). If it is not in the
   set, `defaultBaseMapId` is `null` and the form selects **None**.
+- An operator can name another default, or `none`, with
+  `THUNDERFORGE_BASE_MAPS_DEFAULT` (`--base-maps-default`). The e2e harness
+  sets `none`, so the worlds its specs make keep a blank Starting Scene while
+  the maps are still offered (`scripts/e2e/base-maps.mjs`).
 
 ## HTTP
 

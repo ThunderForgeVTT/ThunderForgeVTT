@@ -12,6 +12,7 @@ use crate::models::WorldActor;
 // ========== Phase 3.5: Scene System GraphQL Types ==========
 
 #[derive(SimpleObject, Debug, Clone)]
+#[graphql(complex)]
 pub struct GraphQLScene {
     pub scene_id: uuid::Uuid,
     pub world_id: uuid::Uuid,
@@ -70,6 +71,40 @@ pub struct GraphQLScene {
     /// Playtest 2026-09-10 P9: `bright`, `dim` or `dark` — the light every
     /// client showing this scene hands its engine.
     pub ambient_light: String,
+}
+
+#[async_graphql::ComplexObject]
+impl GraphQLScene {
+    /// Spec 088 (FR-029): whose the background is, when it is one of the
+    /// base maps; `null` for any other background, or none.
+    async fn background_credit(
+        &self,
+        ctx: &Context<'_>,
+    ) -> GraphQLResult<Option<crate::base_maps::graphql::GraphQLMapCredit>> {
+        let Some(asset_id) = self.background_asset_id else {
+            return Ok(None);
+        };
+        let state = app_state(ctx)?;
+        let pool = state.db_pool.clone();
+        let base_map_id = tokio::task::spawn_blocking(move || {
+            use crate::schema::canvas_image_assets;
+            use diesel::prelude::*;
+            let mut conn = pool.get().ok()?;
+            canvas_image_assets::table
+                .filter(canvas_image_assets::asset_id.eq(asset_id))
+                .select(canvas_image_assets::base_map_id)
+                .first::<Option<String>>(&mut conn)
+                .ok()
+                .flatten()
+        })
+        .await
+        .ok()
+        .flatten();
+        Ok(crate::base_maps::graphql::credit_for(
+            &state.base_maps,
+            base_map_id.as_deref(),
+        ))
+    }
 }
 
 impl From<crate::models::Scene> for GraphQLScene {

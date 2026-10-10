@@ -23,6 +23,7 @@ async fn create_world_always_yields_exactly_one_scene() {
             description: None,
             game_system_id: None,
             interface_pack_id: None,
+            base_map_id: async_graphql::MaybeUndefined::Undefined,
         },
     )
     .await
@@ -76,6 +77,7 @@ async fn create_world_rejects_invalid_name_before_any_write() {
             description: None,
             game_system_id: None,
             interface_pack_id: None,
+            base_map_id: async_graphql::MaybeUndefined::Undefined,
         },
     )
     .await;
@@ -115,6 +117,7 @@ fn prepare_world_input_trims_optional_fields() {
             description: Some("  A fallen kingdom  ".to_string()),
             game_system_id: Some("  systemless-sandbox ".to_string()),
             interface_pack_id: Some(" guild-hall-default ".to_string()),
+            base_map_id: async_graphql::MaybeUndefined::Undefined,
         },
         None,
     )
@@ -177,6 +180,7 @@ async fn the_starter_scene_is_not_named_after_its_world() {
             description: None,
             game_system_id: None,
             interface_pack_id: None,
+            base_map_id: async_graphql::MaybeUndefined::Undefined,
         },
     )
     .await
@@ -239,6 +243,7 @@ fn prepare_world_input_rejects_empty_name() {
             description: None,
             game_system_id: None,
             interface_pack_id: None,
+            base_map_id: async_graphql::MaybeUndefined::Undefined,
         },
         None,
     );

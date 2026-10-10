@@ -140,10 +140,60 @@ pub async fn save_background_image(
         .map_err(|e| MapImportError::Storage(e.to_string()))?;
     let grid_size = i32::try_from(background.grid_size).unwrap_or(i32::MAX);
     let transcoded = background.image;
+    store_background_webp(
+        cfg,
+        StoredPlace {
+            owner_user_id,
+            world_id,
+            scene_id,
+        },
+        PreparedBackground {
+            webp_bytes: transcoded.webp_bytes,
+            original_format: transcoded.original_format,
+            width: transcoded.width,
+            height: transcoded.height,
+            grid_size,
+        },
+        db_pool,
+    )
+    .await
+}
 
+/// Whose background, and on which scene.
+pub struct StoredPlace {
+    pub owner_user_id: Uuid,
+    pub world_id: Uuid,
+    pub scene_id: Uuid,
+}
+
+/// A background that is already WebP and already inside the texture cap:
+/// what `transcode_map_background` produced, or a base map that
+/// `thunderforge-demo-maps` prepared ahead of time (spec 088, US2).
+pub struct PreparedBackground {
+    pub webp_bytes: Vec<u8>,
+    pub original_format: String,
+    pub width: u32,
+    pub height: u32,
+    pub grid_size: i32,
+}
+
+/// Stores a prepared background, sharing the object with any earlier one
+/// holding the same bytes. Every world that opens on the same base map
+/// points at one object.
+pub async fn store_background_webp(
+    cfg: &crate::storage::rustfs::RustFsConfig,
+    place: StoredPlace,
+    background: PreparedBackground,
+    db_pool: Option<crate::state::DbPool>,
+) -> Result<SavedBackgroundImage, MapImportError> {
     let asset_id = Uuid::now_v7();
-    let key = crate::storage::rustfs::object_key(owner_user_id, world_id, Some(scene_id), asset_id);
-    let byte_size = transcoded.webp_bytes.len() as i64;
+    let key = crate::storage::rustfs::object_key(
+        place.owner_user_id,
+        place.world_id,
+        Some(place.scene_id),
+        asset_id,
+    );
+    let byte_size = background.webp_bytes.len() as i64;
 
     // Spec 028 FR-005, the same rule and the same reasoning as
     // `upload_canvas_image_impl`: fingerprint the bytes about to be STORED,
@@ -154,7 +204,7 @@ pub async fn save_background_image(
     // mean pulling every object back out of RustFS on every sync, which is
     // the load this feature exists to remove.
     let content_hash =
-        thunderforge_cache_core::Fingerprint::of_bytes(&transcoded.webp_bytes).to_hex();
+        thunderforge_cache_core::Fingerprint::of_bytes(&background.webp_bytes).to_hex();
 
     // The same map imported into a second world stores no second copy. The
     // scene still gets its own asset row, with its own world, scene and owner
@@ -176,7 +226,7 @@ pub async fn save_background_image(
     let key = match existing_object {
         Some(path) => path,
         None => {
-            crate::storage::rustfs::write_object(cfg, &key, transcoded.webp_bytes, "image/webp")
+            crate::storage::rustfs::write_object(cfg, &key, background.webp_bytes, "image/webp")
                 .await
                 .map_err(|e| MapImportError::Storage(e.to_string()))?;
             key
@@ -185,13 +235,30 @@ pub async fn save_background_image(
 
     Ok(SavedBackgroundImage {
         asset_id,
-        grid_size,
+        grid_size: background.grid_size,
         storage_path: key,
-        original_format: transcoded.original_format,
-        width_px: transcoded.width as i32,
-        height_px: transcoded.height as i32,
+        original_format: background.original_format,
+        width_px: background.width as i32,
+        height_px: background.height as i32,
         byte_size,
         content_hash,
+    })
+}
+
+/// Stores a thumbnail that is already WebP as the scene's preview.
+pub async fn store_scene_preview_webp(
+    cfg: &crate::storage::rustfs::RustFsConfig,
+    webp_bytes: Vec<u8>,
+) -> Result<SavedScenePreview, MapImportError> {
+    let asset_id = Uuid::now_v7();
+    let key = crate::assets_serve::scene::preview_key(asset_id);
+    let byte_size = webp_bytes.len() as i64;
+    crate::storage::rustfs::write_object(cfg, &key, webp_bytes, "image/webp")
+        .await
+        .map_err(|e| MapImportError::Storage(e.to_string()))?;
+    Ok(SavedScenePreview {
+        asset_id,
+        byte_size,
     })
 }
 

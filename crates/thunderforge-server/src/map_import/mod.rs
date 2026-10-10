@@ -36,6 +36,7 @@ use axum::{Extension, Router};
 use base64::Engine as _;
 #[cfg(test)]
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+#[cfg(test)]
 use chrono::Utc;
 use diesel::prelude::*;
 use serde_json::json;
@@ -43,7 +44,6 @@ use uuid::Uuid;
 
 use crate::auth_middleware::AuthenticatedUser;
 use crate::state::AppState;
-use crate::world_events::{EVENT_CODE_MAP_IMPORTED, record_world_event};
 
 pub mod alignment;
 mod ambient;
@@ -51,11 +51,14 @@ mod geometry;
 mod image;
 mod offline;
 mod parse;
+mod scene_write;
 mod types;
 mod warnings;
 
 pub use geometry::{LightInsert, WallInsert};
+pub use image::{PreparedBackground, StoredPlace, store_background_webp, store_scene_preview_webp};
 pub use offline::{OfflineImport, import_offline};
+pub use scene_write::{MapWrite, SourceMap, write_map};
 pub use types::MapImportError;
 
 use ambient::ambient_level;
@@ -249,159 +252,28 @@ pub async fn import_uvtt_impl(
     // Game Master chose, as it resets the walls: the map is being replaced.
     let ambient_light = ambient_level(&parsed.file.environment);
 
+    let write = MapWrite {
+        world_id,
+        scene_id,
+        user_id,
+        background: saved_background,
+        preview: saved_preview,
+        walls,
+        doors,
+        lights,
+        ambient_light: ambient_light.to_string(),
+        source_map: Some(SourceMap {
+            cells_x: source_map_cells_x,
+            cells_y: source_map_cells_y,
+            pixels_per_grid: source_pixels_per_grid,
+        }),
+        base_map_id: None,
+    };
     let result = tokio::task::spawn_blocking(move || -> Result<(), diesel::result::Error> {
         let mut conn = db_pool
             .get()
             .expect("Failed to get DB connection for map import transaction");
-        conn.transaction::<_, diesel::result::Error, _>(|conn| {
-            use crate::schema::{light_sources, scenes, walls as walls_table};
-
-            let now = Utc::now().naive_utc();
-
-            for wall in walls.iter().chain(doors.iter()) {
-                diesel::insert_into(walls_table::table)
-                    .values((
-                        walls_table::wall_id.eq(Uuid::now_v7()),
-                        walls_table::scene_id.eq(scene_id),
-                        walls_table::x1.eq(wall.x1),
-                        walls_table::y1.eq(wall.y1),
-                        walls_table::x2.eq(wall.x2),
-                        walls_table::y2.eq(wall.y2),
-                        walls_table::blocks_vision.eq(wall.blocks_vision),
-                        walls_table::blocks_movement.eq(wall.blocks_movement),
-                        walls_table::door_state.eq(wall.door_state),
-                        walls_table::created_by.eq(user_id),
-                        walls_table::updated_by.eq(user_id),
-                        walls_table::created_at.eq(now),
-                        walls_table::updated_at.eq(now),
-                    ))
-                    .execute(conn)?;
-            }
-
-            for light in &lights {
-                diesel::insert_into(light_sources::table)
-                    .values((
-                        light_sources::light_id.eq(Uuid::now_v7()),
-                        light_sources::scene_id.eq(scene_id),
-                        light_sources::x.eq(light.x),
-                        light_sources::y.eq(light.y),
-                        light_sources::radius.eq(light.radius),
-                        // A dd2vtt light has one range; it looks as a light
-                        // with one radius always has (spec 045 FR-062).
-                        light_sources::bright_radius.eq(light.radius * 0.5),
-                        light_sources::intensity.eq(light.intensity),
-                        light_sources::color.eq(&light.color),
-                        light_sources::attached_token_id.eq(None::<Uuid>),
-                        light_sources::casts_shadows.eq(light.casts_shadows),
-                        light_sources::metadata.eq(None::<serde_json::Value>),
-                        light_sources::created_by.eq(user_id),
-                        light_sources::updated_by.eq(user_id),
-                        light_sources::created_at.eq(now),
-                        light_sources::updated_at.eq(now),
-                    ))
-                    .execute(conn)?;
-            }
-
-            use crate::schema::canvas_image_assets;
-            diesel::insert_into(canvas_image_assets::table)
-                .values((
-                    canvas_image_assets::asset_id.eq(saved_background.asset_id),
-                    canvas_image_assets::world_id.eq(world_id),
-                    canvas_image_assets::scene_id.eq(Some(scene_id)),
-                    canvas_image_assets::owner_user_id.eq(user_id),
-                    canvas_image_assets::storage_path.eq(&saved_background.storage_path),
-                    canvas_image_assets::original_format.eq(&saved_background.original_format),
-                    canvas_image_assets::width_px.eq(saved_background.width_px),
-                    canvas_image_assets::height_px.eq(saved_background.height_px),
-                    canvas_image_assets::byte_size.eq(saved_background.byte_size),
-                    // Without this the row is NULL here and the background is
-                    // permanently uncacheable; see `SavedBackgroundImage`.
-                    canvas_image_assets::content_hash
-                        .eq(Some(saved_background.content_hash.clone())),
-                    canvas_image_assets::kind
-                        .eq(crate::db_types::CanvasImageAssetKindEnum::Background),
-                    canvas_image_assets::created_by.eq(user_id),
-                    canvas_image_assets::updated_by.eq(user_id),
-                    canvas_image_assets::created_at.eq(now),
-                    canvas_image_assets::updated_at.eq(now),
-                ))
-                .execute(conn)?;
-
-            // `width`/`height` are set from the imported art's real pixel
-            // dimensions, not left at whatever the scene was created with.
-            // The engine sizes the background sprite with
-            // `custom_size: Vec2::new(scene.width, scene.height)`
-            // (`systems/background.rs`), so a freshly-created scene's
-            // default 100x100 rendered a 6144x3456 map as a 100-unit
-            // sliver — a second, independent reason an imported dd2vtt
-            // appeared not to render at all. Pixels are the right unit
-            // here: `grid_size` above is already the file's own
-            // `pixels_per_grid`, so image-pixel width/height makes the
-            // grid line up 1:1 with the art.
-            let existing_metadata: Option<serde_json::Value> = scenes::table
-                .filter(scenes::scene_id.eq(scene_id))
-                .select(scenes::metadata)
-                .first::<Option<serde_json::Value>>(conn)?;
-
-            diesel::update(scenes::table.filter(scenes::scene_id.eq(scene_id)))
-                .set((
-                    scenes::background_asset_id.eq(saved_background.asset_id),
-                    scenes::grid_size.eq(new_grid_size),
-                    scenes::grid_type.eq("square"),
-                    scenes::width.eq(saved_background.width_px),
-                    scenes::height.eq(saved_background.height_px),
-                    scenes::ambient_light.eq(ambient_light),
-                    // The scene's art and size just changed; nothing else
-                    // bumps this (no trigger on `scenes`), and it is what
-                    // tells anyone reading the row that it moved.
-                    scenes::updated_at.eq(now),
-                    // What the file said the map is, so a later disagreement
-                    // between the grid and the background is answerable at all.
-                    // Without it the worst case is undetectable: 4096/128 is
-                    // exactly 32 and 2304/128 exactly 18, so a scene that is
-                    // uniformly 1.5x wrong looks perfectly self-consistent.
-                    scenes::metadata.eq(Some(crate::map_import::alignment::record_source_map(
-                        existing_metadata,
-                        source_map_cells_x,
-                        source_map_cells_y,
-                        source_pixels_per_grid,
-                    ))),
-                ))
-                .execute(conn)?;
-
-            if let Some(preview) = &saved_preview {
-                use crate::schema::scene_preview_images;
-                diesel::insert_into(scene_preview_images::table)
-                    .values((
-                        scene_preview_images::id.eq(preview.asset_id),
-                        scene_preview_images::scene_id.eq(scene_id),
-                        scene_preview_images::byte_size.eq(preview.byte_size),
-                        scene_preview_images::created_at.eq(now),
-                    ))
-                    .execute(conn)?;
-                diesel::update(scenes::table.filter(scenes::scene_id.eq(scene_id)))
-                    .set(scenes::preview_asset_id.eq(preview.asset_id))
-                    .execute(conn)?;
-            }
-
-            // T027: best-effort NOTIFY for the whole batch — do not fail
-            // the import if this fails.
-            let _ = record_world_event(
-                conn,
-                world_id,
-                EVENT_CODE_MAP_IMPORTED,
-                Some(json!({
-                    "scene_id": scene_id,
-                    "walls_created": walls_created,
-                    "doors_created": doors_created,
-                    "lights_created": lights_created,
-                    "background_image_set": true,
-                })),
-                user_id,
-            );
-
-            Ok(())
-        })
+        conn.transaction(|conn| write_map(conn, &write))
     })
     .await
     .map_err(|_| MapImportError::Io("Failed to spawn blocking task".to_string()))?;

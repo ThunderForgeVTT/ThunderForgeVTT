@@ -484,6 +484,8 @@ pub struct QueryRoot(
     world_system_settings::WorldSystemSettingsQuery,
     // Spec 067: the conditions a world's game system declares.
     actor_conditions::ActorConditionsQuery,
+    // Spec 088 (US2): the maps a new world can open on.
+    crate::base_maps::graphql::BaseMapQuery,
 );
 
 #[derive(MergedObject, Default)]

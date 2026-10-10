@@ -164,7 +164,9 @@ RUN if [ "$BUILD_PROFILE" = dev ]; then flag=""; dir=debug; else flag=--release;
   && install -m 755 /usr/local/cargo/bin/diesel /out/diesel \
   && strip /out/diesel \
   && cargo run $flag -q -p thunderforge --bin thunderforge-demo-maps \
-  --features demo-maps -- examples/maps apps/demo/public/maps
+  --features demo-maps -- examples/maps apps/demo/public/maps \
+  && test -f apps/demo/public/maps/NOTICE.txt \
+  && cp -r apps/demo/public/maps /out/base-maps
 
 # The demo (spec 074), written to data/demo: static files and nothing else.
 # Its scenes are the example maps the step above just imported, which is why
@@ -257,6 +259,11 @@ COPY --from=build /build/data/client /srv/thunderforge/client
 # setting `feature.demo` is on; off by default.
 COPY --from=build /build/data/demo /srv/thunderforge/demo
 
+# The maps a new world can open on (spec 088): the same import the demo's
+# scenes come from, with its credit and NOTICE.txt. Not under the data
+# directory, for the client's reason: an image rebuild replaces them.
+COPY --from=build /out/base-maps /srv/base-maps
+
 COPY scripts/container-entrypoint.sh /usr/local/bin/thunderforge-entrypoint
 # Belt and braces: COPY carries the host's mode, and a script that arrives
 # without the execute bit fails at `docker run`, not at `docker build`.
@@ -264,7 +271,8 @@ RUN chmod 0755 /usr/local/bin/thunderforge-entrypoint
 
 ENV THUNDERFORGE_DATA_PATH=/srv/thunderforge/data \
   STATIC_DIR=/srv/thunderforge/client \
-  DEMO_DIR=/srv/thunderforge/demo
+  DEMO_DIR=/srv/thunderforge/demo \
+  THUNDERFORGE_BASE_MAPS_DIR=/srv/base-maps
 # Spec 086: the binary's default, written down so `docker inspect` shows it.
 ENV TELEMETRY=true
 EXPOSE 30000

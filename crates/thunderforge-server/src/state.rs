@@ -58,6 +58,9 @@ pub struct AppState {
     /// Spec 086: what telemetry this instance runs with, fixed at start. The
     /// admin query, the startup line and `/telemetry.json` read it.
     pub telemetry: std::sync::Arc<crate::telemetry::TelemetryStatus>,
+    /// Spec 088 (US2): the maps a new world can open on, read once at
+    /// start-up from `--base-maps-dir`. Empty when none is configured.
+    pub base_maps: std::sync::Arc<crate::base_maps::BaseMaps>,
 }
 
 impl FromRef<AppState> for Key {

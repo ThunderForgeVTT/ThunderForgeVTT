@@ -31,6 +31,7 @@ pub mod attestation;
 pub mod attributes;
 pub mod auth;
 pub mod auth_middleware;
+pub mod base_maps;
 pub mod collections;
 /// Spec 046: what a fight's turns do — hit points that change, and a turn
 /// that holds a player to it.

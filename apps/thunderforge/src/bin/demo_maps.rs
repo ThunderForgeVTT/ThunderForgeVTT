@@ -16,6 +16,8 @@
 //! For every `<name>.dd2vtt` it writes `<name>.webp`, `<name>.thumb.webp`
 //! when a thumbnail could be made, and one `maps.json` listing every map's
 //! size, grid, walls and lights in the field names the GraphQL API uses.
+//! When the source holds a `credit.json`, it is copied across with a
+//! `NOTICE.txt` beside it, so the maps never travel without their credit.
 //!
 //! `synthetic-*` files are left out: they are parser fixtures written by
 //! hand, not maps.
@@ -87,7 +89,33 @@ fn run(source: &Path, out: &Path) -> Result<usize, String> {
 
     let listing = serde_json::Value::Array(maps).to_string();
     write(&out.join("maps.json"), listing.as_bytes())?;
+
+    let credit_path = source.join("credit.json");
+    if credit_path.exists() {
+        let raw = std::fs::read(&credit_path).map_err(|e| at(&credit_path, &e))?;
+        let credit: serde_json::Value =
+            serde_json::from_slice(&raw).map_err(|e| at(&credit_path, &e))?;
+        write(&out.join("credit.json"), &raw)?;
+        write(&out.join("NOTICE.txt"), notice(&credit).as_bytes())?;
+    }
     Ok(files.len())
+}
+
+/// The same notice the demo's `prepare-static.mjs` writes.
+fn notice(credit: &serde_json::Value) -> String {
+    let field = |name: &str| credit[name].as_str().unwrap_or_default().to_owned();
+    let licence = field("licence");
+    [
+        format!("The maps in this directory are by {},", field("author")),
+        format!("licensed under {licence} ({}).", field("licenceUrl")),
+        format!("Source: {}", field("source")),
+        format!("More of them: {}", field("catalog")),
+        String::new(),
+        "They were resized and re-encoded to fit a scene; nothing else was changed.".to_owned(),
+        format!("These copies are offered under the same licence, {licence}."),
+        String::new(),
+    ]
+    .join("\n")
 }
 
 fn name_of(path: &Path) -> String {

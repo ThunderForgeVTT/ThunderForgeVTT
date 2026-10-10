@@ -214,6 +214,18 @@ struct Cli {
     )]
     demo_dir: Option<String>,
     #[arg(
+        long,
+        env = "THUNDERFORGE_BASE_MAPS_DIR",
+        help = "Where the base maps a new world can open on are (`make base-maps`; default: none)"
+    )]
+    base_maps_dir: Option<String>,
+    #[arg(
+        long,
+        env = "THUNDERFORGE_BASE_MAPS_DEFAULT",
+        help = "The base map a new world opens on when none is named, or `none` (default: grassy-path-ambush)"
+    )]
+    base_maps_default: Option<String>,
+    #[arg(
         short,
         long,
         default_value = "redis://127.0.0.1/",
@@ -470,6 +482,13 @@ async fn run() {
         // effect without a restart.
         feedback: thunderforge_server::feedback::FeedbackSeam::from_settings(),
         telemetry: telemetry_status.clone(),
+        // Spec 088 (US2): read once. Nothing here can stop the server.
+        base_maps: std::sync::Arc::new(
+            thunderforge_server::base_maps::BaseMaps::load(
+                cli.base_maps_dir.as_deref().map(std::path::Path::new),
+            )
+            .with_default(cli.base_maps_default.as_deref()),
+        ),
     };
 
     // Materialize any OAUTH_*-env-var-configured provider instances (ADR-041)
@@ -681,6 +700,12 @@ async fn run() {
             app_state.clone(),
             thunderforge_server::auth_middleware::require_authenticated_user,
         ));
+    // Spec 088 (US2): the base maps' pictures, for a signed-in caller.
+    let base_maps_router =
+        thunderforge_server::base_maps::routes::router().route_layer(from_fn_with_state(
+            app_state.clone(),
+            thunderforge_server::auth_middleware::require_authenticated_user,
+        ));
 
     let graphql_router = Router::new()
         .route(
@@ -748,7 +773,8 @@ async fn run() {
         .merge(lore_assets_router)
         .merge(actor_assets_router)
         .merge(feedback_assets_router)
-        .merge(scene_assets_router);
+        .merge(scene_assets_router)
+        .merge(base_maps_router);
 
     let systems_admin_router =
         thunderforge_server::systems::admin_router().route_layer(from_fn_with_state(

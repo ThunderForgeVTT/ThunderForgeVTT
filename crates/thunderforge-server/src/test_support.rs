@@ -278,6 +278,9 @@ pub fn test_app_state() -> AppState {
         feedback: crate::feedback::FeedbackSeam::from_settings(),
         // Off, as every test stack runs (spec 086 FR-036).
         telemetry: std::sync::Arc::new(crate::telemetry::TelemetryStatus::off_for_tests()),
+        // No maps: a world a test creates starts blank unless the test
+        // gives it some (`base_maps::BaseMaps::for_tests`).
+        base_maps: std::sync::Arc::default(),
     }
 }
 

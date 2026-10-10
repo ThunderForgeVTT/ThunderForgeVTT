@@ -72,7 +72,10 @@ await writeFile(
 );
 
 const credit = JSON.parse(
-  await readFile(path.resolve(here, "../credit.json"), "utf8"),
+  await readFile(
+    path.resolve(here, "../../../examples/maps/credit.json"),
+    "utf8",
+  ),
 );
 await mkdir(path.join(out, "maps"), { recursive: true });
 await writeFile(

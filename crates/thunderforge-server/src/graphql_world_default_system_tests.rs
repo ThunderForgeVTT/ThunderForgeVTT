@@ -7,6 +7,7 @@ fn input(game_system_id: Option<&str>) -> GraphQLCreateWorldInput {
         description: None,
         game_system_id: game_system_id.map(str::to_string),
         interface_pack_id: None,
+        base_map_id: async_graphql::MaybeUndefined::Undefined,
     }
 }
 

@@ -16,6 +16,11 @@ pub struct GraphQLCreateWorldInput {
     pub description: Option<String>,
     pub game_system_id: Option<String>,
     pub interface_pack_id: Option<String>,
+    /// Spec 088 (FR-023): the map the Starting Scene opens on. Left out:
+    /// the instance's default, when it has one. `null`: none. An id this
+    /// instance does not have is refused before the world is created.
+    #[graphql(default)]
+    pub base_map_id: MaybeUndefined<async_graphql::ID>,
 }
 
 /// Input for creating a new scene

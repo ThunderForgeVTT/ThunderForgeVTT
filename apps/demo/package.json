@@ -10,7 +10,7 @@
     "dev": "pnpm run static && vite",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "format": "prettier --check \"{index.html,vite.config.mts,vitest.config.mts,playwright.config.ts,credit.json,world.json,src/**/*.{ts,tsx,css},e2e/**/*.ts,scripts/**/*.mjs}\"",
+    "format": "prettier --check \"{index.html,vite.config.mts,vitest.config.mts,playwright.config.ts,world.json,src/**/*.{ts,tsx,css},e2e/**/*.ts,scripts/**/*.mjs}\"",
     "e2e": "VITE_ENGINE_PROBE=1 pnpm run build && playwright test",
     "test": "vitest run"
   },

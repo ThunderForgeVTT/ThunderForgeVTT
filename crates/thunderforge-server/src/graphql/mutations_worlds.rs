@@ -29,15 +29,14 @@ use crate::state::AppState;
 /// collection preview sends no world field at all and was never the leak; the
 /// leak was here, in data the author is presumed to have chosen and did not.
 ///
-/// Deliberately plain rather than evocative. The intent recorded in spec 026 is
-/// that a new world starts on something playable — a real starter map rather
-/// than an empty grid — and `examples/maps/README.md` already names the shape
-/// that map should have. It is **not** seeded yet: every file in that directory
-/// came from a personal, non-redistributable map collection, and that README
-/// says in as many words not to ship them in a release artifact. Naming this
-/// scene after art it does not have would be the worse half of the change.
-/// When a licensed starter map exists, this constant and the scene it names are
-/// the one place to change.
+/// Deliberately plain rather than evocative. A new world starts on something
+/// playable all the same: `createWorld` puts one of the base maps on this
+/// scene once the world exists (spec 088, US2). Those maps are MBRound18's
+/// own, from <https://github.com/mbround18/vtt-maps>, under CC BY-SA 4.0
+/// (spec 074 settled that they may ship). The credit travels with every copy:
+/// `examples/maps/credit.json` is its one source, the base-maps directory
+/// carries it with a `NOTICE.txt`, and a scene whose background is one of
+/// them answers `backgroundCredit`.
 pub const STARTER_SCENE_NAME: &str = "Starting Scene";
 
 /// The whole of "a world exists": the row, its starter scene made active, and
@@ -99,6 +98,46 @@ pub(crate) fn insert_world_sync(
             created_by: world.created_by,
         },
     )
+}
+
+/// What `createWorld` made: the world, and whether its map failed to go on.
+pub struct CreatedWorld {
+    pub world: GraphQLWorld,
+    pub starting_map_failed: bool,
+}
+
+/// Spec 088 (FR-023 to FR-025): the world, then its map.
+///
+/// The map is chosen before anything is written, so an unknown id creates
+/// nothing. It is applied after the world's transaction commits, because a
+/// storage upload cannot share a database transaction and a failed one
+/// should not cost the GM their world.
+pub async fn create_world_with_map_impl(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    input: GraphQLCreateWorldInput,
+) -> Result<CreatedWorld, String> {
+    let base_map = crate::base_maps::apply::choose(&state.base_maps, &input.base_map_id)?;
+    let world = create_world_impl(state, user_id, input).await?;
+    let mut starting_map_failed = false;
+    if let (Some(base_map_id), Some(scene_id)) = (base_map, world.active_scene_id) {
+        // The `thunderforge.base_maps.applied` counter waits on spec 086.
+        if let Err(error) =
+            crate::base_maps::apply::apply(state, user_id, world.id, scene_id, &base_map_id).await
+        {
+            tracing::warn!(
+                world_id = %world.id,
+                base_map_id = %base_map_id,
+                %error,
+                "a new world's base map could not be applied"
+            );
+            starting_map_failed = true;
+        }
+    }
+    Ok(CreatedWorld {
+        world,
+        starting_map_failed,
+    })
 }
 
 pub async fn create_world_impl(
@@ -653,9 +692,19 @@ impl WorldMutation {
     ) -> GraphQLResult<GraphQLWorld> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        create_world_impl(state, auth_user.user_id, input)
+        let created = create_world_with_map_impl(state, auth_user.user_id, input)
             .await
-            .map_err(Error::new)
+            .map_err(Error::new)?;
+        if created.starting_map_failed {
+            // Non-fatal: `data.createWorld` is still the world.
+            use async_graphql::ErrorExtensions;
+            ctx.add_error(
+                Error::new(crate::base_maps::apply::STARTING_MAP_FAILED_MESSAGE)
+                    .extend_with(|_, e| e.set("code", crate::base_maps::apply::STARTING_MAP_FAILED))
+                    .into_server_error(ctx.item.pos),
+            );
+        }
+        Ok(created.world)
     }
 
     async fn update_world_session_notes(
