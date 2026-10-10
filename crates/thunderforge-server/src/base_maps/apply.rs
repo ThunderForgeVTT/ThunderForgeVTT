@@ -112,6 +112,9 @@ pub async fn apply(
         ambient_light: map.ambient_light.clone(),
         source_map: None,
         base_map_id: Some(map.id.clone()),
+        // A new world's scene has no edge walls to replace; the map's own
+        // carry their mark from `maps.json`.
+        replace_perimeter: false,
     };
     let pool = state.db_pool.clone();
     tokio::task::spawn_blocking(move || -> Result<(), MapImportError> {

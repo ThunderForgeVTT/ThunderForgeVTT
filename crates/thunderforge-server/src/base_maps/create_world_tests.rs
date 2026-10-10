@@ -51,6 +51,7 @@ fn wall(door_state: &'static str) -> WallInsert {
         blocks_vision: true,
         blocks_movement: true,
         door_state,
+        perimeter: false,
     }
 }
 

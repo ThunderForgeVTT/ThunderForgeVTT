@@ -29,10 +29,10 @@ async fn the_same_map_imported_into_two_worlds_is_stored_once() {
     drop(conn);
 
     let raw = super::tests::read_fixture("chamber-of-echoing-grief.dd2vtt");
-    import_uvtt_impl(&state, owner_a, false, scene_a, raw.clone())
+    import_uvtt_impl(&state, owner_a, false, scene_a, raw.clone(), false)
         .await
         .expect("first import should succeed");
-    import_uvtt_impl(&state, owner_b, false, scene_b, raw)
+    import_uvtt_impl(&state, owner_b, false, scene_b, raw, false)
         .await
         .expect("second import should succeed");
 

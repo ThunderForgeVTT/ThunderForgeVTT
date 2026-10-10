@@ -4,7 +4,13 @@
  * code-13 event for the batch.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { ambientLevel, importUvtt, storedCellSize } from "./mapImport";
+import {
+  ambientLevel,
+  importUvtt,
+  liesOnBounds,
+  perimeterWalls,
+  storedCellSize,
+} from "./mapImport";
 import type { DemoState, Row } from "./state";
 import { freshWorld, heard, releaseEvents } from "./testing/world";
 import { imaging, type Fit } from "./uploads";
@@ -67,10 +73,11 @@ function uvtt(overrides: Row = {}): Row {
   };
 }
 
-function form(body: Row | string): FormData {
+function form(body: Row | string, wallEdges?: boolean): FormData {
   const f = new FormData();
   const text = typeof body === "string" ? body : JSON.stringify(body);
   f.append("file", new Blob([text]), "map.dd2vtt");
+  if (wallEdges !== undefined) f.append("wallEdges", String(wallEdges));
   return f;
 }
 
@@ -89,10 +96,11 @@ describe("importUvtt", () => {
   it("lays the map's walls, door and light on its art, centred and y up", async () => {
     const events = heard();
     const before = { walls: state.walls.length, lights: state.lights.length };
-    const answer = await importUvtt(sceneId, form(uvtt()), "gm");
+    const answer = await importUvtt(sceneId, form(uvtt(), false), "gm");
     expect(answer.status).toBe(200);
     expect(answer.body).toMatchObject({
       wallsCreated: 2,
+      perimeterWallsCreated: 0,
       doorsCreated: 1,
       lightsCreated: 1,
       backgroundImageSet: true,
@@ -197,5 +205,93 @@ describe("ambientLevel", () => {
     expect(ambientLevel("ff8a7a60")).toBe("dim");
     expect(ambientLevel("#1a2233")).toBe("dark");
     expect(ambientLevel("night")).toBe("bright");
+  });
+});
+
+/** A wall from (x1, y1) to (x2, y2), as the importer writes one. */
+function seg(x1: number, y1: number, x2: number, y2: number) {
+  return { x1, y1, x2, y2 };
+}
+
+describe("perimeterWalls (spec 088 FR-090, as perimeter.rs)", () => {
+  it("walls all four edges of an open map, centred and y up", () => {
+    expect(
+      perimeterWalls(1280, 768, []).map((w) => [w.x1, w.y1, w.x2, w.y2]),
+    ).toEqual([
+      [-640, 384, 640, 384],
+      [640, -384, 640, 384],
+      [-640, -384, 640, -384],
+      [-640, -384, -640, 384],
+    ]);
+  });
+
+  it("leaves a covered edge alone and fills the gaps of a split one", () => {
+    const walls = perimeterWalls(1280, 768, [
+      seg(640, 384, -640, 384), // the top, drawn backwards
+      seg(-640, -384, -100, -384), // the bottom's left part
+      seg(100, -384.4, 640, -384), // and its right, within 0.5 px
+      seg(-640, 0, 640, 0), // across the middle: no edge's
+    ]);
+    expect(walls.map((w) => [w.x1, w.y1, w.x2, w.y2])).toEqual([
+      [640, -384, 640, 384],
+      [-100, -384, 100, -384],
+      [-640, -384, -640, 384],
+    ]);
+  });
+
+  it("knows a wall still on the edges from one moved off them", () => {
+    expect(liesOnBounds(seg(-640, 384, 0, 384), 1280, 768)).toBe(true);
+    expect(liesOnBounds(seg(-576, 345, 576, 345), 1280, 768)).toBe(false);
+  });
+});
+
+describe("importUvtt walls the map's edges (spec 088 FR-091)", () => {
+  /** The scene's walls marked as edge walls. */
+  const marked = () =>
+    state.walls.filter(
+      (w) =>
+        w.sceneId === sceneId && (w.metadata as Row | null)?.perimeter === true,
+    );
+
+  it("adds the edges the file leaves open, marked, and says so", async () => {
+    const events = heard();
+    const answer = await importUvtt(sceneId, form(uvtt()), "gm");
+    expect(answer.body).toMatchObject({
+      wallsCreated: 4,
+      perimeterWallsCreated: 2,
+    });
+    expect(marked().map((w) => [w.x1, w.y1, w.x2, w.y2])).toEqual([
+      [-640, -384, 640, -384],
+      [-640, -384, -640, 384],
+    ]);
+    releaseEvents();
+    expect(events[0].tokenEvent).toMatchObject({
+      walls_created: 4,
+      perimeter_walls_created: 2,
+    });
+  });
+
+  it("replaces its edge walls on a re-import rather than adding more", async () => {
+    await importUvtt(sceneId, form(uvtt()), "gm");
+    await importUvtt(sceneId, form(uvtt()), "gm");
+    expect(marked()).toHaveLength(2);
+  });
+
+  it("adds none when the box is unticked", async () => {
+    const answer = await importUvtt(sceneId, form(uvtt(), false), "gm");
+    expect(answer.body.perimeterWallsCreated).toBe(0);
+    expect(marked()).toHaveLength(0);
+  });
+
+  it("keeps an edge wall the Game Master moved", async () => {
+    await importUvtt(sceneId, form(uvtt()), "gm");
+    const moved = marked()[0];
+    Object.assign(moved, {
+      y1: (moved.y1 as number) * 0.9,
+      y2: (moved.y2 as number) * 0.9,
+    });
+    await importUvtt(sceneId, form(uvtt()), "gm");
+    expect(state.walls).toContain(moved);
+    expect(marked()).toHaveLength(3);
   });
 });

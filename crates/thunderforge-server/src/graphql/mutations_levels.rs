@@ -40,6 +40,10 @@ pub struct GraphQLUpdateSceneLevelInput {
     /// `true` makes this the scene's entry level. There is no un-making one:
     /// name another level the entry instead.
     pub make_entry: Option<bool>,
+    /// Spec 088 FR-092: used only when `backgroundAssetId` changes. Wall the
+    /// image's edges, replacing the edge walls the old background had.
+    /// Defaults to `true`.
+    pub wall_edges: Option<bool>,
 }
 
 fn said(e: LevelError, fallback: &str) -> Error {
@@ -137,6 +141,7 @@ impl SceneLevelMutation {
                         background_asset_id: input.background_asset_id,
                         clear_background: input.clear_background.unwrap_or(false),
                         make_entry: input.make_entry.unwrap_or(false),
+                        wall_edges: input.wall_edges.unwrap_or(true),
                     },
                 )?;
                 Ok(gm_view(conn, level))

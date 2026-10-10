@@ -47,6 +47,12 @@ const WALLS = `
   }
 `;
 
+const EDGE_WALLS = `
+  query BaseMapEdgeWalls($sceneId: UUID!) {
+    walls(sceneId: $sceneId) { x1 y1 x2 y2 metadata }
+  }
+`;
+
 const BASE_MAPS = `
   query BaseMapSizes { baseMaps { id width height gridSize } }
 `;
@@ -76,6 +82,34 @@ async function contents(page: Page, sceneId: string) {
     walls: result.data?.walls?.length ?? -1,
     lights: result.data?.lightSources?.length ?? -1,
   };
+}
+
+type Wall = {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  metadata: { perimeter?: boolean } | null;
+};
+
+/**
+ * The scene's walls that lie along one of its edges. The board is centred on
+ * the origin, so an edge is `x = ±width/2` or `y = ±height/2`.
+ */
+async function edgeWalls(page: Page, scene: Scene): Promise<Wall[]> {
+  const result = await graphql<{ data?: { walls?: Wall[] } }>(
+    page,
+    EDGE_WALLS,
+    { sceneId: scene.sceneId },
+  );
+  const halfW = Number(scene.width) / 2;
+  const halfH = Number(scene.height) / 2;
+  const near = (a: number, b: number) => Math.abs(Math.abs(a) - b) <= 0.5;
+  return (result.data?.walls ?? []).filter(
+    (w) =>
+      (near(w.x1, halfW) && near(w.x2, halfW) && w.x1 === w.x2) ||
+      (near(w.y1, halfH) && near(w.y2, halfH) && w.y1 === w.y2),
+  );
 }
 
 /** The create form, filled with a name, with the picker on screen. */
@@ -126,8 +160,13 @@ test.describe("A new world opens on one of our maps, credited", () => {
       licence: "CC BY-SA 4.0",
       ...CREDIT,
     });
-    // The scene takes the map's own size and grid. The map is an outdoor one
-    // with no walls of its own; its edge walls are proven with US6.
+    // The map is an outdoor one with no walls of its own, so its only walls
+    // are the four at its edges (spec 088 FR-094), marked as such.
+    const edges = await edgeWalls(page, scene);
+    expect(edges, "the map is walled at its four edges").toHaveLength(4);
+    expect(edges.every((w) => w.metadata?.perimeter === true)).toBe(true);
+
+    // The scene takes the map's own size and grid.
     const listed = await graphql<{
       data?: {
         baseMaps?: {
@@ -137,7 +176,7 @@ test.describe("A new world opens on one of our maps, credited", () => {
           gridSize: number;
         }[];
       };
-    }>(page, BASE_MAPS);
+    }>(page, BASE_MAPS, {});
     const map = listed.data?.baseMaps?.find(
       (m) => m.id === "grassy-path-ambush",
     );

@@ -203,20 +203,20 @@ deleted.
 
 **Independent Test**: `pnpm e2e:canvas`, then `pnpm e2e:scenes`.
 
-- [ ] T075 [P] [US6] TDD: `map_import/perimeter_tests.rs` with every fixture in data-model.md (the ambush map's 4 walls, a covered edge, a split edge, a crossing wall, overlapping walls, the 0.5 px tolerance). See them fail.
-- [ ] T076 [US6] `map_import/perimeter.rs` (new): `perimeter_walls(placement, existing)` (FR-090). T075 passes.
-- [ ] T077 [US6] Tests in `map_import/tests.rs`: importing the ambush map gives `wallsCreated: 4`, `perimeterWallsCreated: 4`; a re-import leaves 4 edge walls; `wallEdges=false` adds none; a moved perimeter wall survives a re-import; the existing wall, door and light tests are unchanged (FR-091, FR-096).
-- [ ] T078 [US6] `import_uvtt_impl` (`map_import/mod.rs:115`): the `wallEdges` form field, the replace-then-add in the import's transaction, `perimeter_walls_created` in the `MAP_IMPORTED` payload and the answer, and the `thunderforge.map_import.perimeter_walls` histogram. T077 passes.
-- [ ] T079 [US6] `import_offline` (`offline.rs:75`) adds the perimeter, marked `perimeter: true` in `maps.json` (FR-094). Update `offline.rs`'s tests, rebuild the demo's maps and `make base-maps`, and check the demo seed and the base maps carry the walls.
-- [ ] T080 [US6] Tests in `mutations_levels` tests: `updateSceneLevel` with a new `backgroundAssetId` and `wallEdges` default adds the perimeter for the image's size; a second background moves it; `wallEdges: false` adds none; clearing the background removes none; any other field change leaves walls alone (FR-092).
-- [ ] T081 [US6] `updateSceneLevel` (`mutations_levels.rs:116`): `wallEdges` on its input, the perimeter replacement in the level's transaction, and `WALL_CHANGED` (10) events for the walls. T080 passes.
-- [ ] T082 [US6] Web: **Wall the map's edges**, ticked by default, in `MapImportTool.tsx` and in the background picker that sets a plain image; both send `wallEdges` (FR-093).
-- [ ] T083 [P] [US6] Demo, TDD: `apps/demo/src/backend/mapImport.test.ts` with the same fixtures, then `mapImport.ts` mirrors FR-090 and FR-091 (FR-095).
-- [ ] T084 [US6] e2e `apps/web/e2e/canvas-map-edge-walls.spec.ts` (canvas slice; add to `slices.json` if needed): import `grassy-path-ambush.dd2vtt` with the defaults; the scene has 4 walls on its edges; a token dragged 10 cells past an edge ends inside the map; a re-import leaves 4; with the box unticked, none (SC-008).
-- [ ] T085 [P] [US6] If US2 has landed, add to `world-base-map.spec.ts`: a world created on the default map has its 4 edge walls.
-- [ ] T086 [P] [US6] Telemetry: `map.imported`.
-- [ ] T087 [US6] `pnpm e2e:canvas`, `pnpm e2e:scenes`, the demo's tests, then `pnpm e2e:which --diff` and its slices.
-- [ ] T088 [US6] Commit: "Spec 088: an imported map is walled at its edges".
+- [X] T075 [P] [US6] TDD: `map_import/perimeter_tests.rs` with every fixture in data-model.md (the ambush map's 4 walls, a covered edge, a split edge, a crossing wall, overlapping walls, the 0.5 px tolerance). See them fail.
+- [X] T076 [US6] `map_import/perimeter.rs` (new): `perimeter_walls(placement, existing)` (FR-090). T075 passes.
+- [X] T077 [US6] Tests in `map_import/tests.rs`: importing the ambush map gives `wallsCreated: 4`, `perimeterWallsCreated: 4`; a re-import leaves 4 edge walls; `wallEdges=false` adds none; a moved perimeter wall survives a re-import; the existing wall, door and light tests are unchanged (FR-091, FR-096).
+- [X] T078 [US6] `import_uvtt_impl` (`map_import/mod.rs:115`): the `wallEdges` form field, the replace-then-add in the import's transaction, `perimeter_walls_created` in the `MAP_IMPORTED` payload and the answer, and the `thunderforge.map_import.perimeter_walls` histogram (the histogram waits on 086). T077 passes.
+- [X] T079 [US6] `import_offline` (`offline.rs:75`) adds the perimeter, marked `perimeter: true` in `maps.json` (FR-094). Update `offline.rs`'s tests, rebuild the demo's maps and `make base-maps`, and check the demo seed and the base maps carry the walls.
+- [X] T080 [US6] Tests in `mutations_levels` tests: `updateSceneLevel` with a new `backgroundAssetId` and `wallEdges` default adds the perimeter for the image's size; a second background moves it; `wallEdges: false` adds none; clearing the background removes none; any other field change leaves walls alone (FR-092).
+- [X] T081 [US6] `updateSceneLevel` (`mutations_levels.rs:116`): `wallEdges` on its input, the perimeter replacement in the level's transaction, and `WALL_CHANGED` (10) events for the walls. T080 passes.
+- [X] T082 [US6] Web: **Wall the map's edges**, ticked by default, in `MapImportTool.tsx` and in the background picker that sets a plain image; both send `wallEdges` (FR-093).
+- [X] T083 [P] [US6] Demo, TDD: `apps/demo/src/backend/mapImport.test.ts` with the same fixtures, then `mapImport.ts` mirrors FR-090 and FR-091 (FR-095).
+- [X] T084 [US6] e2e `apps/web/e2e/canvas-map-edge-walls.spec.ts` (canvas slice; add to `slices.json` if needed): import `grassy-path-ambush.dd2vtt` with the defaults; the scene has 4 walls on its edges; a token dragged 10 cells past an edge ends inside the map; a re-import leaves 4; with the box unticked, none (SC-008). canvas 46/0 (the move off the map through `moveOwnToken`, as `drawn-walls-block.spec.ts` sends its moves).
+- [X] T085 [P] [US6] If US2 has landed, add to `world-base-map.spec.ts`: a world created on the default map has its 4 edge walls. worlds 24/0.
+- [ ] T086 [P] [US6] Telemetry: `map.imported`. (waits on 086)
+- [ ] T087 [US6] `pnpm e2e:canvas`, `pnpm e2e:scenes`, the demo's tests, then `pnpm e2e:which --diff` and its slices. So far: canvas 46/0, scenes 19/0, worlds 24/0, the demo's tests 160/160; the rolls slice is re-run with US5 (its demo `rolls-across-tabs` failed once, a board never played the die).
+- [X] T088 [US6] Commit: "Spec 088: an imported map is walled at its edges".
 
 **Checkpoint**: SC-008 holds.
 
@@ -266,7 +266,7 @@ losing changes.
 - [ ] T110 [P] `docs/guides/inviting-players.md` (new): world links, the optional use limit and when a use counts, expiry, revoking, and why a new person needs an instance invitation (FR-080).
 - [X] T111 [P] `docs/guides/your-first-world.md` (new): the starting map, **None**, and the credit.
 - [ ] T112 [P] `docs/guides/rolls.md`: clearing, and what clearing keeps.
-- [ ] T113 [P] `docs/guides/doors-and-walls.md`: the edge walls, the box, and how to remove them.
+- [X] T113 [P] `docs/guides/doors-and-walls.md`: the edge walls, the box, and how to remove them.
 - [X] T114 [P] `docs/INSTANCE_CONFIGURATION.md` and `.env.example`: `THUNDERFORGE_BASE_MAPS_DIR` (FR-081).
 - [ ] T115 [P] `docs/CONTRIBUTING.md`: `useUnsavedChanges`, the settings form model, the clear rule beside the visibility rule, and the perimeter mark.
 - [ ] T116 The Proof run (spec.md, Proof): `make lint`, `cargo test -p thunderforge-server`, the web's tests and typecheck, the demo's tests, every slice listed, then `pnpm e2e:which --diff` and each slice it names. Record the results in research.md under `## Proof` (SC-007).

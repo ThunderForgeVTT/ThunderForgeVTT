@@ -32,6 +32,8 @@ export interface MapListing {
     blocksVision: boolean;
     blocksMovement: boolean;
     doorState: string;
+    /** Spec 088 FR-091: one of the walls added at the map's edges. */
+    perimeter?: boolean;
   }>;
   lights: Array<{
     x: number;
@@ -308,7 +310,7 @@ export function buildSeed(maps: MapListing[], base: string): DemoState {
         doorState: w.doorState.toUpperCase(),
         locked: false,
         secret: false,
-        metadata: null,
+        metadata: w.perimeter ? { perimeter: true } : null,
         ...by,
         ...stamp,
       });

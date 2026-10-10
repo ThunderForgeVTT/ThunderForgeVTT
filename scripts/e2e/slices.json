@@ -866,8 +866,9 @@
         "crates/thunderforge-server/src/assets_serve/scene.rs",
         "crates/thunderforge-server/src/collections/scene_copy.rs",
         "crates/thunderforge-server/src/graphql/queries/scene.rs",
-        "crates/thunderforge-server/src/graphql/{mutations_scenes,types_scene,exploration,mutations_party}.rs",
-        "crates/thunderforge-server/src/{exploration,exploration_tests,scene_fingerprint}.rs"
+        "crates/thunderforge-server/src/graphql/{mutations_scenes,mutations_levels,types_scene,exploration,mutations_party}.rs",
+        "crates/thunderforge-server/src/{exploration,exploration_tests,scene_fingerprint}.rs",
+        "crates/thunderforge-server/src/scene_levels{,_tests,_perimeter,_perimeter_tests}.rs"
       ]
     },
     {

@@ -240,6 +240,9 @@ struct ListedWall {
     blocks_vision: bool,
     blocks_movement: bool,
     door_state: String,
+    /// Spec 088 FR-094: an edge wall `import_offline` added.
+    #[serde(default)]
+    perimeter: bool,
 }
 
 #[derive(Deserialize)]
@@ -310,6 +313,7 @@ fn read_dir(dir: &Path) -> Result<BaseMaps, String> {
                 blocks_vision: wall.blocks_vision,
                 blocks_movement: wall.blocks_movement,
                 door_state: state,
+                perimeter: wall.perimeter,
             });
         }
         if bad_wall {

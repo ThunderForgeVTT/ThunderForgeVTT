@@ -57,6 +57,9 @@ pub struct WallInsert {
     pub blocks_vision: bool,
     pub blocks_movement: bool,
     pub door_state: &'static str,
+    /// Spec 088 FR-090: one of the walls along the map's edges, written with
+    /// `metadata.perimeter = true` so a later import can find it again.
+    pub perimeter: bool,
 }
 
 /// One `light_sources` table insert row's worth of plain values.
@@ -91,6 +94,7 @@ fn wall(
         // through regardless.
         blocks_movement: true,
         door_state,
+        perimeter: false,
     }
 }
 

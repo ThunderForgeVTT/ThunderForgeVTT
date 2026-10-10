@@ -31,6 +31,7 @@ async fn an_import_bumps_the_scenes_updated_at() {
         false,
         scene_id,
         read_fixture("little-fish-academy.dd2vtt"),
+        false,
     )
     .await
     .expect("little-fish-academy should import");

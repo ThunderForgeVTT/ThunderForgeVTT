@@ -922,6 +922,11 @@ type AppMutationRoot {
 	acknowledgeOperatorStatement(attestation: AttestationInput!): OperatorAcknowledgementState!
 	rollDice(input: RollDiceInput!): GraphQLRollResolution!
 	"""
+	Spec 088: empty the roll feed for everyone. GM or admin. The rolls
+	are kept in the world's record.
+	"""
+	clearWorldRolls(worldId: UUID!): ClearRollsResult!
+	"""
 	Spec 081: show a hidden roll to the table. GM or admin; idempotent.
 	"""
 	revealRoll(worldId: UUID!, rollId: UUID!): WorldRoll!
@@ -2244,6 +2249,14 @@ type BudgetLine {
 	allowed: Float!
 	spent: Float!
 	remaining: Float!
+}
+
+"""
+Spec 088: what `clearWorldRolls` answers, the time every client drops its
+feed's entries at or before.
+"""
+type ClearRollsResult {
+	clearedAt: DateTime!
 }
 
 type CollectionTypeCount {
@@ -5288,6 +5301,12 @@ input GraphQLUpdateSceneLevelInput {
 	name another level the entry instead.
 	"""
 	makeEntry: Boolean
+	"""
+	Spec 088 FR-092: used only when `backgroundAssetId` changes. Wall the
+	image's edges, replacing the edge walls the old background had.
+	Defaults to `true`.
+	"""
+	wallEdges: Boolean
 }
 
 """

@@ -42,6 +42,21 @@ just as with a door locked as a wall.
 Making a hidden wall into a door keeps it hidden, so it becomes a secret
 door. Untick **Hidden from the table** to show it again.
 
+## The walls along a map's edges
+
+When you import a map, or set a plain image as a level's background,
+ThunderForge walls the map's outer edges, so no token can walk off the side
+of the art. The map import tool and the background picker both have **Wall
+the map's edges**, ticked by default; untick it to add none.
+
+Where the map's own walls already run along an edge, that stretch is not
+walled twice. Re-importing a map, or changing the background, replaces the
+edge walls rather than adding a second set. A starting map a world opens on
+(see [Your first world](your-first-world.md)) arrives walled the same way.
+
+The edge walls are ordinary walls. Select one with the **Walls** tool to move
+or delete it. An edge wall you have moved is left alone by a later import.
+
 ## As a player
 
 Right-click a door to open or close it. A locked door says **Locked**; ask

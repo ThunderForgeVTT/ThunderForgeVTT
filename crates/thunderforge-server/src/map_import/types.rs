@@ -156,7 +156,10 @@ pub enum MapImportError {
 /// doesn't use those fields (FR-014).
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ImportResult {
+    /// Every wall written, the edge walls included.
     pub walls_created: usize,
+    /// Spec 088 FR-090: how many of `walls_created` are edge walls.
+    pub perimeter_walls_created: usize,
     pub doors_created: usize,
     pub lights_created: usize,
     pub background_image_set: bool,

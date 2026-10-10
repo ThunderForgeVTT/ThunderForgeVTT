@@ -112,6 +112,12 @@ export interface UpdateSceneLevelInput {
   clearBackground?: boolean;
   /** Make this the level the scene opens on; the old entry level stops being it. */
   makeEntry?: boolean;
+  /**
+   * With a new `backgroundAssetId`: wall the image's edges, replacing the
+   * edge walls the old image had (spec 088 FR-092). The server's default is
+   * `true`.
+   */
+  wallEdges?: boolean;
 }
 
 export function updateSceneLevel(

@@ -15,6 +15,9 @@
  * - `geometry.rs`: grid units from the image's top-left, y down, become the
  *   scene's coordinates, centred, y up.
  * - `ambient.rs` and `warnings.rs`, word for word.
+ * - `perimeter.rs` (spec 088 FR-090, FR-091): walls along the map's edges
+ *   where the file leaves them open, marked `metadata.perimeter`, replacing
+ *   the marked walls an earlier import left on the old edges.
  *
  * Everything here but the image work is arithmetic on the parsed file, and
  * could be the server's own code compiled for the page, as the dice are,
@@ -191,6 +194,108 @@ export function placed(
   return [p.x * grid - width / 2, height / 2 - p.y * grid];
 }
 
+/** `perimeter::TOLERANCE`: how far off an edge a wall may sit and lie on it. */
+const TOLERANCE = 0.5;
+
+interface Segment {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+/** `perimeter::Edge`: `horizontal` edges sit at `y = at`, from x `from` to `to`. */
+interface Edge {
+  horizontal: boolean;
+  at: number;
+  from: number;
+  to: number;
+}
+
+/** `perimeter::edges`: top, right, bottom, left; centred, y up. */
+function edgesOf(width: number, height: number): Edge[] {
+  const [w, h] = [width / 2, height / 2];
+  return [
+    { horizontal: true, at: h, from: -w, to: w },
+    { horizontal: false, at: w, from: -h, to: h },
+    { horizontal: true, at: -h, from: -w, to: w },
+    { horizontal: false, at: -w, from: -h, to: h },
+  ];
+}
+
+/** `Edge::local`: (distance off the edge's line, position along it). */
+function local(edge: Edge, x: number, y: number): [number, number] {
+  return edge.horizontal
+    ? [Math.abs(y - edge.at), x]
+    : [Math.abs(x - edge.at), y];
+}
+
+/** `Edge::covered_by`. */
+function coveredBy(edge: Edge, wall: Segment): [number, number] | null {
+  const [offA, alongA] = local(edge, wall.x1, wall.y1);
+  const [offB, alongB] = local(edge, wall.x2, wall.y2);
+  if (offA > TOLERANCE || offB > TOLERANCE) return null;
+  const start = Math.max(Math.min(alongA, alongB), edge.from);
+  const end = Math.min(Math.max(alongA, alongB), edge.to);
+  return end > start ? [start, end] : null;
+}
+
+function edgeWall(edge: Edge, start: number, end: number): Segment {
+  return edge.horizontal
+    ? { x1: start, y1: edge.at, x2: end, y2: edge.at }
+    : { x1: edge.at, y1: start, x2: edge.at, y2: end };
+}
+
+/** `perimeter::perimeter_walls`: the edges, less what `existing` covers. */
+export function perimeterWalls(
+  width: number,
+  height: number,
+  existing: Segment[],
+): Segment[] {
+  const walls: Segment[] = [];
+  for (const edge of edgesOf(width, height)) {
+    const covered = existing
+      .map((wall) => coveredBy(edge, wall))
+      .filter((c): c is [number, number] => c !== null)
+      .sort((a, b) => a[0] - b[0]);
+    let cursor = edge.from;
+    for (const [start, end] of covered) {
+      if (start - cursor > TOLERANCE) walls.push(edgeWall(edge, cursor, start));
+      cursor = Math.max(cursor, end);
+    }
+    if (edge.to - cursor > TOLERANCE) {
+      walls.push(edgeWall(edge, cursor, edge.to));
+    }
+  }
+  return walls;
+}
+
+/** `perimeter::lies_on_bounds`. */
+export function liesOnBounds(
+  wall: Segment,
+  width: number,
+  height: number,
+): boolean {
+  return edgesOf(width, height).some((edge) => {
+    const [offA, alongA] = local(edge, wall.x1, wall.y1);
+    const [offB, alongB] = local(edge, wall.x2, wall.y2);
+    const inside = (along: number) =>
+      along >= edge.from - TOLERANCE && along <= edge.to + TOLERANCE;
+    return (
+      offA <= TOLERANCE && offB <= TOLERANCE && inside(alongA) && inside(alongB)
+    );
+  });
+}
+
+/** `perimeter::is_marked`. */
+function isMarked(metadata: unknown): boolean {
+  return (
+    !!metadata &&
+    typeof metadata === "object" &&
+    (metadata as Row).perimeter === true
+  );
+}
+
 /** The bytes of the file's `image`, checked as `save_background_image` does. */
 function imageBytes(base64: string): Uint8Array {
   let binary: string;
@@ -219,6 +324,7 @@ async function importUvttFile(
   sceneId: string,
   raw: string,
   viewer: Viewer,
+  wallEdges: boolean,
 ): Promise<Row> {
   const { file, skipped } = parseUvtt(raw);
   const warnings = warningsFor(file);
@@ -266,30 +372,38 @@ async function importUvttFile(
   }
   const width = background.widthPx as number;
   const height = background.heightPx as number;
+  // The scene's size before this import: where an earlier one's edges are.
+  const oldWidth = scene.width as number;
+  const oldHeight = scene.height as number;
   const at = now();
   const levelId = levelsOf(state, sceneId).find((l) => l.isEntry)?.levelId;
   const by = { createdBy: DEMO_USER.id, updatedBy: DEMO_USER.id };
+  const row = (
+    { x1, y1, x2, y2 }: Segment,
+    doorState: string,
+    perimeter = false,
+  ): Row => ({
+    wallId: crypto.randomUUID(),
+    sceneId,
+    levelId,
+    x1,
+    y1,
+    x2,
+    y2,
+    blocksVision: true,
+    blocksMovement: true,
+    doorState,
+    locked: false,
+    secret: false,
+    metadata: perimeter ? { perimeter: true } : null,
+    ...by,
+    createdAt: at,
+    updatedAt: at,
+  });
   const wall = (a: Point, b: Point, doorState: string): Row => {
     const [x1, y1] = placed(a, grid, width, height);
     const [x2, y2] = placed(b, grid, width, height);
-    return {
-      wallId: crypto.randomUUID(),
-      sceneId,
-      levelId,
-      x1,
-      y1,
-      x2,
-      y2,
-      blocksVision: true,
-      blocksMovement: true,
-      doorState,
-      locked: false,
-      secret: false,
-      metadata: null,
-      ...by,
-      createdAt: at,
-      updatedAt: at,
-    };
+    return row({ x1, y1, x2, y2 }, doorState);
   };
   const pairs = (polygons: Point[][]) =>
     polygons.flatMap((polygon) =>
@@ -331,6 +445,25 @@ async function importUvttFile(
       updatedAt: at,
     };
   });
+  const edges = wallEdges
+    ? perimeterWalls(width, height, [
+        ...walls,
+        ...doors,
+      ] as unknown as Segment[]).map((segment) => row(segment, "NONE", true))
+    : [];
+  walls.push(...edges);
+  if (wallEdges) {
+    // `scene_write::remove_old_perimeter`: an earlier import's edge walls
+    // still on the old edges go; one the Game Master moved stays.
+    const stale = (w: Row) =>
+      w.sceneId === sceneId &&
+      w.levelId === levelId &&
+      isMarked(w.metadata) &&
+      liesOnBounds(w as unknown as Segment, oldWidth, oldHeight);
+    for (let i = state.walls.length - 1; i >= 0; i -= 1) {
+      if (stale(state.walls[i])) state.walls.splice(i, 1);
+    }
+  }
   state.walls.push(...walls, ...doors);
   state.lights.push(...lights);
 
@@ -364,6 +497,7 @@ async function importUvttFile(
     walls_created: walls.length,
     doors_created: doors.length,
     lights_created: lights.length,
+    perimeter_walls_created: edges.length,
     background_image_set: true,
   });
   markChanged();
@@ -373,11 +507,21 @@ async function importUvttFile(
     lightsCreated: lights.length,
     backgroundImageSet: true,
     skippedDegeneratePolygons: skipped,
+    perimeterWallsCreated: edges.length,
     warnings,
   };
 }
 
-/** The endpoint: the multipart `file` field, as `import_uvtt` reads it. */
+/** `map_import::wall_edges_from`. */
+function wallEdgesFrom(value: FormDataEntryValue | null | undefined): boolean {
+  if (typeof value !== "string") return true;
+  return !["false", "0", "off"].includes(value.trim().toLowerCase());
+}
+
+/**
+ * The endpoint: the multipart `file` field, as `import_uvtt` reads it, and
+ * `wallEdges`, on unless it says `false`, `0` or `off`.
+ */
 export async function importUvtt(
   sceneId: string,
   form: FormData | null,
@@ -394,7 +538,12 @@ export async function importUvtt(
     }
     return {
       status: 200,
-      body: await importUvttFile(sceneId, await field.text(), viewer),
+      body: await importUvttFile(
+        sceneId,
+        await field.text(),
+        viewer,
+        wallEdgesFrom(form?.get("wallEdges")),
+      ),
     };
   } catch (error) {
     if (error instanceof ImportError) {

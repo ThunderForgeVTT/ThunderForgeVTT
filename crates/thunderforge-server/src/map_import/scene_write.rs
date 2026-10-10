@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 use super::geometry::{LightInsert, WallInsert};
 use super::image::{SavedBackgroundImage, SavedScenePreview};
+use super::perimeter::{is_marked, lies_on_bounds, perimeter_metadata};
 use crate::world_events::{EVENT_CODE_MAP_IMPORTED, record_world_event};
 
 /// What the source file said the map is. See `alignment::record_source_map`.
@@ -39,6 +40,9 @@ pub struct MapWrite {
     /// Spec 088 (FR-029): the base map the background came from, so the
     /// scene can carry its credit. `None` for a GM's own file.
     pub base_map_id: Option<String>,
+    /// Spec 088 FR-091: before writing, delete the edge walls a previous
+    /// map left on the entry level, those still lying on its old bounds.
+    pub replace_perimeter: bool,
 }
 
 /// Writes the map. Run it inside a transaction.
@@ -55,6 +59,10 @@ pub fn write_map(conn: &mut PgConnection, write: &MapWrite) -> QueryResult<()> {
     let (world_id, scene_id, user_id) = (*world_id, *scene_id, *user_id);
     let now = Utc::now().naive_utc();
 
+    if write.replace_perimeter {
+        remove_old_perimeter(conn, scene_id)?;
+    }
+
     for wall in write.walls.iter().chain(write.doors.iter()) {
         diesel::insert_into(walls_table::table)
             .values((
@@ -67,6 +75,7 @@ pub fn write_map(conn: &mut PgConnection, write: &MapWrite) -> QueryResult<()> {
                 walls_table::blocks_vision.eq(wall.blocks_vision),
                 walls_table::blocks_movement.eq(wall.blocks_movement),
                 walls_table::door_state.eq(wall.door_state),
+                walls_table::metadata.eq(wall.perimeter.then(perimeter_metadata)),
                 walls_table::created_by.eq(user_id),
                 walls_table::updated_by.eq(user_id),
                 walls_table::created_at.eq(now),
@@ -185,6 +194,7 @@ pub fn write_map(conn: &mut PgConnection, write: &MapWrite) -> QueryResult<()> {
         Some(json!({
             "scene_id": scene_id,
             "walls_created": write.walls.len(),
+            "perimeter_walls_created": write.walls.iter().filter(|wall| wall.perimeter).count(),
             "doors_created": write.doors.len(),
             "lights_created": write.lights.len(),
             "background_image_set": true,
@@ -193,4 +203,72 @@ pub fn write_map(conn: &mut PgConnection, write: &MapWrite) -> QueryResult<()> {
     );
 
     Ok(())
+}
+
+/// The edge walls the scene's last map left on its entry level: marked, and
+/// still on the bounds the scene had. One the GM moved off the edge stays.
+fn remove_old_perimeter(conn: &mut PgConnection, scene_id: Uuid) -> QueryResult<()> {
+    use crate::schema::{scenes, walls};
+
+    let (width, height) = scenes::table
+        .filter(scenes::scene_id.eq(scene_id))
+        .select((scenes::width, scenes::height))
+        .first::<(i32, i32)>(conn)?;
+    let level_id = crate::auth::level_visibility::entry_level(conn, scene_id)?;
+    let stale = stale_perimeter(
+        conn,
+        scene_id,
+        level_id,
+        &[(f64::from(width), f64::from(height))],
+    )?;
+    if !stale.is_empty() {
+        diesel::delete(walls::table.filter(walls::wall_id.eq_any(stale))).execute(conn)?;
+    }
+    Ok(())
+}
+
+/// Spec 088 FR-091: the level's walls that are marked as edge walls and
+/// still lie on one of `bounds` (each a width and height). These are the
+/// ones a new map replaces.
+pub fn stale_perimeter(
+    conn: &mut PgConnection,
+    scene_id: Uuid,
+    level_id: Uuid,
+    bounds: &[(f64, f64)],
+) -> QueryResult<Vec<Uuid>> {
+    use crate::schema::walls;
+
+    let marked: Vec<(Uuid, f64, f64, f64, f64, Option<serde_json::Value>)> = walls::table
+        .filter(walls::scene_id.eq(scene_id))
+        .filter(walls::level_id.eq(level_id))
+        .filter(walls::metadata.is_not_null())
+        .select((
+            walls::wall_id,
+            walls::x1,
+            walls::y1,
+            walls::x2,
+            walls::y2,
+            walls::metadata,
+        ))
+        .load(conn)?;
+    Ok(marked
+        .into_iter()
+        .filter(|(_, x1, y1, x2, y2, metadata)| {
+            let wall = WallInsert {
+                x1: *x1,
+                y1: *y1,
+                x2: *x2,
+                y2: *y2,
+                blocks_vision: true,
+                blocks_movement: true,
+                door_state: "none",
+                perimeter: true,
+            };
+            is_marked(metadata.as_ref())
+                && bounds
+                    .iter()
+                    .any(|&(width, height)| lies_on_bounds(&wall, width, height))
+        })
+        .map(|(id, ..)| id)
+        .collect())
 }

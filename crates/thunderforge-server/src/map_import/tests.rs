@@ -413,7 +413,7 @@ async fn assert_round_trip_matches_fixture(fixture_name: &str) {
     let raw = read_fixture(fixture_name);
     let parsed = parse_uvtt(&raw).expect("fixture should parse");
 
-    let result = import_uvtt_impl(&state, owner_id, false, scene_id, raw.clone())
+    let result = import_uvtt_impl(&state, owner_id, false, scene_id, raw.clone(), false)
         .await
         .expect("import should succeed");
 
@@ -591,7 +591,7 @@ async fn hand_built_edits_on_top_of_an_import_persist_exactly() {
     drop(conn);
 
     let raw = read_fixture("dwarven-forge.dd2vtt");
-    import_uvtt_impl(&state, owner_id, false, scene_id, raw)
+    import_uvtt_impl(&state, owner_id, false, scene_id, raw, false)
         .await
         .expect("import should succeed");
 
@@ -760,7 +760,7 @@ async fn import_and_get_warnings(fixture_name: &str) -> Vec<String> {
     drop(conn);
 
     let raw = read_fixture(fixture_name);
-    let result = import_uvtt_impl(&state, owner_id, false, scene_id, raw)
+    let result = import_uvtt_impl(&state, owner_id, false, scene_id, raw, false)
         .await
         .unwrap_or_else(|e| panic!("{fixture_name} should import successfully: {e}"));
     result.warnings
@@ -793,6 +793,7 @@ async fn an_import_sets_the_scenes_light_from_its_file() {
         false,
         scene_id,
         read_fixture("little-fish-academy.dd2vtt"),
+        false,
     )
     .await
     .expect("little-fish-academy should import");

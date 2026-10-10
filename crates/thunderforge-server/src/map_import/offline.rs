@@ -32,7 +32,7 @@ pub struct OfflineImport {
     pub height: u32,
     /// The stored background's cell size: the scene's `grid_size`.
     pub grid_size: u32,
-    /// Walls first, then doors, in the order an import inserts them.
+    /// Walls first, then doors, then the edge walls (spec 088).
     pub walls: Vec<WallInsert>,
     pub lights: Vec<LightInsert>,
     pub ambient_light: &'static str,
@@ -54,6 +54,9 @@ impl OfflineImport {
                 "blocksVision": wall.blocks_vision,
                 "blocksMovement": wall.blocks_movement,
                 "doorState": wall.door_state,
+                // Spec 088 FR-094: an edge wall says so, so a world made on
+                // the map marks it and a later import can replace it.
+                "perimeter": wall.perimeter,
             })).collect::<Vec<_>>(),
             "lights": self.lights.iter().map(|light| json!({
                 "x": light.x,
@@ -94,14 +97,18 @@ pub fn import_offline(raw: &[u8]) -> Result<OfflineImport, MapImportError> {
         width: f64::from(background.image.width),
         height: f64::from(background.image.height),
     };
-    let walls = walls_from_line_of_sight(&parsed.file.line_of_sight, &placement)
-        .into_iter()
-        .chain(walls_from_line_of_sight(
-            &parsed.file.objects_line_of_sight,
-            &placement,
-        ))
-        .chain(walls_from_portals(&parsed.file.portals, &placement))
-        .collect();
+    let mut walls: Vec<WallInsert> =
+        walls_from_line_of_sight(&parsed.file.line_of_sight, &placement)
+            .into_iter()
+            .chain(walls_from_line_of_sight(
+                &parsed.file.objects_line_of_sight,
+                &placement,
+            ))
+            .chain(walls_from_portals(&parsed.file.portals, &placement))
+            .collect();
+    // The edges, as an import with **Wall the map's edges** ticked adds them.
+    let edges = super::perimeter::perimeter_walls(&placement, &walls);
+    walls.extend(edges);
     let lights = lights_from_uvtt(&parsed.file.lights, &placement);
 
     Ok(OfflineImport {
@@ -156,5 +163,34 @@ mod tests {
         assert_eq!(map.lights.len(), 4);
         let json = map.geometry_json();
         assert_eq!(json["lights"][0]["brightRadius"], 5.0 * 85.0 * 0.5);
+    }
+
+    #[test]
+    fn a_room_walled_at_its_edges_gets_no_second_set() {
+        // Spec 088 FR-094: the chamber's own four walls are its edges.
+        let map = import_offline(&example("chamber-of-echoing-grief")).expect("imports");
+        assert_eq!(map.walls.len(), 4);
+        assert!(map.walls.iter().all(|wall| !wall.perimeter));
+    }
+
+    #[test]
+    fn an_open_map_arrives_walled_at_its_edges_and_says_which_they_are() {
+        let map = import_offline(&example("grassy-path-ambush")).expect("imports");
+        let edges: Vec<_> = map.walls.iter().filter(|wall| wall.perimeter).collect();
+        assert_eq!(edges.len(), 4, "a map with no walls of its own");
+        let (w, h) = (f64::from(map.width), f64::from(map.height));
+        assert!(
+            edges
+                .iter()
+                .all(|wall| super::super::perimeter::lies_on_bounds(wall, w, h))
+        );
+        let json = map.geometry_json();
+        let marked = json["walls"]
+            .as_array()
+            .expect("walls")
+            .iter()
+            .filter(|wall| wall["perimeter"] == true)
+            .count();
+        assert_eq!(marked, 4);
     }
 }

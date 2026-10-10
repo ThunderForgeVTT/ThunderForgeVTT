@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { SceneLevel } from "@/api/levels";
 import { Button } from "@/components/ui/button/Button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { playerSeesLevelName } from "@/engine/world/sync";
@@ -151,6 +152,8 @@ function LevelManager({
   const [name, setName] = useState(level.name);
   const [newName, setNewName] = useState("");
   const fileInput = useRef<HTMLInputElement | null>(null);
+  // Spec 088 FR-093: a new map is walled at its edges unless this is unticked.
+  const [wallEdges, setWallEdges] = useState(true);
 
   const index = levels.findIndex((each) => each.levelId === level.levelId);
   const others = levels.filter((each) => each.levelId !== level.levelId);
@@ -223,7 +226,7 @@ function LevelManager({
               // Cleared so choosing the same file twice asks twice.
               event.target.value = "";
               if (file) {
-                void actions.setBackground(level.levelId, file);
+                void actions.setBackground(level.levelId, file, wallEdges);
               }
             }}
           />
@@ -236,6 +239,14 @@ function LevelManager({
           >
             {level.backgroundUrl ? "Replace map" : "Set map"}
           </Button>
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Checkbox
+              checked={wallEdges}
+              data-testid="level-wall-edges"
+              onCheckedChange={(checked) => setWallEdges(checked === true)}
+            />
+            Wall the map's edges
+          </label>
           {level.backgroundUrl ? (
             <Button
               type="button"

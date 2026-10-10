@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button/Button";
 import { Panel } from "@/components/ui/panel/Panel";
 import { Loader } from "@/components/ui/loader/Loader";
 import { withCsrf } from "@/api/auth";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export interface MapImportResult {
   wallsCreated: number;
@@ -10,6 +11,8 @@ export interface MapImportResult {
   lightsCreated: number;
   backgroundImageSet: boolean;
   skippedDegeneratePolygons: number;
+  /** Of `wallsCreated`, the walls added at the map's edges (spec 088 FR-091). */
+  perimeterWallsCreated?: number;
 }
 
 export interface MapImportToolProps {
@@ -54,6 +57,8 @@ export function MapImportTool({
   const [status, setStatus] = useState<ImportStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<MapImportResult | null>(null);
+  // Spec 088 FR-093: on by default, so a token cannot walk off the map.
+  const [wallEdges, setWallEdges] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const openFilePicker = useCallback(() => {
@@ -75,6 +80,7 @@ export function MapImportTool({
 
       try {
         const formData = new FormData();
+        formData.append("wallEdges", wallEdges ? "true" : "false");
         formData.append("file", file);
 
         const response = await fetch(`/api/scenes/${sceneId}/import/uvtt`, {
@@ -119,7 +125,7 @@ export function MapImportTool({
         setStatus("error");
       }
     },
-    [sceneId, onImportComplete],
+    [sceneId, onImportComplete, wallEdges],
   );
 
   return (
@@ -141,6 +147,15 @@ export function MapImportTool({
       >
         Import map
       </Button>
+
+      <label className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Checkbox
+          checked={wallEdges}
+          data-testid="map-import-wall-edges"
+          onCheckedChange={(checked) => setWallEdges(checked === true)}
+        />
+        Wall the map's edges
+      </label>
 
       {status === "uploading" ? (
         <Panel variant="stone" className="grid gap-2">
@@ -188,6 +203,9 @@ export function MapImportTool({
           <p className="text-sm text-muted-foreground">
             {lastResult.wallsCreated} walls, {lastResult.doorsCreated} doors,{" "}
             {lastResult.lightsCreated} lights
+            {lastResult.perimeterWallsCreated
+              ? ` (${lastResult.perimeterWallsCreated} of the walls at the map's edges)`
+              : ""}
             {lastResult.skippedDegeneratePolygons > 0
               ? ` (${lastResult.skippedDegeneratePolygons} skipped)`
               : ""}

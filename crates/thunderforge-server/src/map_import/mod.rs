@@ -51,14 +51,15 @@ mod geometry;
 mod image;
 mod offline;
 mod parse;
+pub mod perimeter;
 mod scene_write;
 mod types;
 mod warnings;
 
-pub use geometry::{LightInsert, WallInsert};
+pub use geometry::{LightInsert, ScenePlacement, WallInsert};
 pub use image::{PreparedBackground, StoredPlace, store_background_webp, store_scene_preview_webp};
 pub use offline::{OfflineImport, import_offline};
-pub use scene_write::{MapWrite, SourceMap, write_map};
+pub use scene_write::{MapWrite, SourceMap, stale_perimeter, write_map};
 pub use types::MapImportError;
 
 use ambient::ambient_level;
@@ -121,6 +122,9 @@ pub async fn import_uvtt_impl(
     is_admin: bool,
     scene_id: Uuid,
     file_bytes: Vec<u8>,
+    // Spec 088 FR-090: wall the map's edges, replacing the edge walls a
+    // previous import left.
+    wall_edges: bool,
 ) -> Result<ImportResult, MapImportError> {
     // Parse + validate the whole file before touching the DB (T026c).
     let parsed = parse_uvtt(&file_bytes)?;
@@ -244,6 +248,18 @@ pub async fn import_uvtt_impl(
     let doors: Vec<WallInsert> = walls_from_portals(&parsed.file.portals, &placement);
     let lights: Vec<LightInsert> = lights_from_uvtt(&parsed.file.lights, &placement);
 
+    // Walled where the file's own walls and doors leave an edge open.
+    let mut walls = walls;
+    let perimeter_walls_created = if wall_edges {
+        let file_walls: Vec<WallInsert> = walls.iter().chain(doors.iter()).cloned().collect();
+        let edges = perimeter::perimeter_walls(&placement, &file_walls);
+        let count = edges.len();
+        walls.extend(edges);
+        count
+    } else {
+        0
+    };
+
     let walls_created = walls.len();
     let doors_created = doors.len();
     let lights_created = lights.len();
@@ -268,6 +284,7 @@ pub async fn import_uvtt_impl(
             pixels_per_grid: source_pixels_per_grid,
         }),
         base_map_id: None,
+        replace_perimeter: wall_edges,
     };
     let result = tokio::task::spawn_blocking(move || -> Result<(), diesel::result::Error> {
         let mut conn = db_pool
@@ -282,6 +299,7 @@ pub async fn import_uvtt_impl(
 
     Ok(ImportResult {
         walls_created,
+        perimeter_walls_created,
         doors_created,
         lights_created,
         background_image_set: true,
@@ -302,8 +320,10 @@ async fn import_uvtt(
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     let user_id = auth_user.user_id;
 
-    // Read the uploaded file field, enforcing the size cap as we go.
+    // Read the uploaded file field, enforcing the size cap as we go, and
+    // `wallEdges` (spec 088 FR-091), which is on unless it says otherwise.
     let mut file_bytes: Option<Vec<u8>> = None;
+    let mut wall_edges = true;
     while let Some(field) = multipart.next_field().await.map_err(|e| {
         (
             StatusCode::BAD_REQUEST,
@@ -321,25 +341,44 @@ async fn import_uvtt(
                 return Err(error_response(&MapImportError::PayloadTooLarge));
             }
             file_bytes = Some(bytes.to_vec());
-            break;
+        } else if field.name() == Some("wallEdges") {
+            let value = field.text().await.unwrap_or_default();
+            wall_edges = wall_edges_from(&value);
         }
     }
     let Some(file_bytes) = file_bytes else {
         return Err(error_response(&MapImportError::MissingFileField));
     };
 
-    let result = import_uvtt_impl(&state, user_id, auth_user.is_admin, scene_id, file_bytes)
-        .await
-        .map_err(|e| error_response(&e))?;
+    let result = import_uvtt_impl(
+        &state,
+        user_id,
+        auth_user.is_admin,
+        scene_id,
+        file_bytes,
+        wall_edges,
+    )
+    .await
+    .map_err(|e| error_response(&e))?;
 
     Ok(Json(json!({
         "wallsCreated": result.walls_created,
+        "perimeterWallsCreated": result.perimeter_walls_created,
         "doorsCreated": result.doors_created,
         "lightsCreated": result.lights_created,
         "backgroundImageSet": result.background_image_set,
         "skippedDegeneratePolygons": result.skipped_degenerate_polygons,
         "warnings": result.warnings,
     })))
+}
+
+/// The multipart `wallEdges` field: `false`, `0` or `off` turn it off;
+/// anything else, or no field at all, leaves it on.
+fn wall_edges_from(value: &str) -> bool {
+    !matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "false" | "0" | "off"
+    )
 }
 
 #[cfg(test)]
@@ -353,3 +392,7 @@ mod dedupe_integration_tests;
 #[cfg(test)]
 #[path = "scene_write_tests.rs"]
 mod scene_write_tests;
+
+#[cfg(test)]
+#[path = "perimeter_import_tests.rs"]
+mod perimeter_import_tests;

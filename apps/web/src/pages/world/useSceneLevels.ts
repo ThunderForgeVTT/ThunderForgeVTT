@@ -48,7 +48,12 @@ export interface SceneLevelActions {
   shift: (levelId: string, by: -1 | 1) => Promise<void>;
   remove: (levelId: string) => Promise<void>;
   makeEntry: (levelId: string) => Promise<void>;
-  setBackground: (levelId: string, file: Blob) => Promise<void>;
+  /** `wallEdges`: wall the image's edges (spec 088 FR-093). Defaults to true. */
+  setBackground: (
+    levelId: string,
+    file: Blob,
+    wallEdges?: boolean,
+  ) => Promise<void>;
   clearBackground: (levelId: string) => Promise<void>;
   /** `bright`, `dim` or `dark`. Resolves `false` when the server refused. */
   setAmbient: (levelId: string, ambientLight: string) => Promise<boolean>;
@@ -279,7 +284,7 @@ export function useSceneLevels({
           updateSceneLevel(levelId, { makeEntry: true }),
         );
       },
-      setBackground: async (levelId, file) => {
+      setBackground: async (levelId, file, wallEdges = true) => {
         if (!worldId || !sceneId) return;
         await change("Could not set the level's map", async () => {
           const asset = await uploadCanvasImage(
@@ -295,6 +300,7 @@ export function useSceneLevels({
             backgroundAssetId: asset.id,
             width: asset.widthPx,
             height: asset.heightPx,
+            wallEdges,
           });
         });
       },

@@ -81,6 +81,9 @@ pub struct LevelChanges {
     pub clear_background: bool,
     /// Make this the scene's entry level.
     pub make_entry: bool,
+    /// Spec 088 FR-092: with a new `background_asset_id`, wall the image's
+    /// edges, replacing the edge walls the old background had.
+    pub wall_edges: bool,
 }
 
 fn checked_name(name: &str) -> Result<String, LevelError> {
@@ -305,6 +308,23 @@ pub fn update_level(
                 scene_levels::ambient_light.eq(&ambient),
             ))
             .execute(conn)?;
+
+        // Spec 088 FR-092: only a new background moves the edge walls.
+        if let (Some(asset), false, true) = (
+            changes.background_asset_id,
+            changes.clear_background,
+            changes.wall_edges,
+        ) {
+            perimeter::replace_level_perimeter(
+                conn,
+                user_id,
+                scene_id,
+                level_id,
+                (level.width, level.height),
+                level.background_asset_id,
+                asset,
+            )?;
+        }
 
         if changes.make_entry && !level.is_entry {
             // One entry per scene is a unique index, so the old one steps
@@ -559,6 +579,13 @@ pub fn token_counts(
         .collect())
 }
 
+#[path = "scene_levels_perimeter.rs"]
+mod perimeter;
+
 #[cfg(test)]
 #[path = "scene_levels_tests.rs"]
 pub(crate) mod tests;
+
+#[cfg(test)]
+#[path = "scene_levels_perimeter_tests.rs"]
+mod perimeter_tests;
