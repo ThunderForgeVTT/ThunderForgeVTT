@@ -82,7 +82,7 @@ functions record through the meter; the call sites do not move.
 | `method` | `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`, `HEAD`, `other` |
 | `status_class` | `1xx` .. `5xx` |
 | `state` | `idle`, `in_use` |
-| `event` | a name from `telemetry/event_names.rs`, covering 30 codes (spec 088 added `rolls_cleared`, 39) |
+| `event` | a name from `telemetry/event_names.rs`, covering 33 codes (spec 088 added `rolls_cleared`, 39; spec 048 added `sheet_import_applied`, `staged_content_decided` and `actor_rolled_back`, 40 to 42) |
 | `visibility` | `everyone`, `gm_eyes`, `gm_only`: `rolls::visibility::Visibility::as_str()`, a closed enum |
 | `system` | a pack's game-system id with a `sheetImport` block, or `none` before the actor's system is known (spec 048) |
 | `reader` | a pack-declared reader id (`ddb-pdf`, ...), or `none` before the sheet was read (spec 048) |
