@@ -686,6 +686,16 @@ the wrong count, every sender shares one bucket (too few hops) or a sender
 can choose its own key (too many). The cluster task checks the header
 once, with a test pod, and sets the count.
 
+**Measured** (2026-10-09, after the route switch, T103): a capture inside
+a gateway pod showed `X-Forwarded-For: <client>, <Cloudflare edge>`. A
+request that sent its own `X-Forwarded-For: 198.51.100.7` arrived as
+`198.51.100.7, <client>, <Cloudflare edge>`: Cloudflare appends the client
+and the shared gateway appends its peer, the edge. The count is `2`
+(fluxified 2a0d05b), so a sender cannot choose its own key. A request that
+reached the shared gateway without Cloudflare would carry only its own
+address and whatever it sent, so the count holds only while every request
+comes through Cloudflare.
+
 ## R29. The country, from `CF-IPCountry` only
 
 **Unverified**: Whether Cloudflare proxies `telemetry.thunderforge.dev`.
@@ -698,6 +708,10 @@ proxied (orange cloud) or DNS only.
 `CF-IPCountry` is present and is two capital letters other than `XX`
 (unknown) and `T1` (Tor). When the header is absent, no country is added.
 The gateway never looks an address up in a GeoIP database.
+
+**Measured** (2026-10-09, T103): Cloudflare proxies the host. Every request
+carried `CF-IPCountry` (`US` in the test) and `CF-Connecting-IP`, and the
+logs reached Loki with `thunderforge_country="US"`.
 
 **Why**: A country from the edge costs nothing and needs no database. A
 lookup from the IP would mean shipping and updating a GeoIP file and
