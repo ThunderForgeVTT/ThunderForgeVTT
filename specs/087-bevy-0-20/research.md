@@ -713,6 +713,35 @@ load before that line is reached. A fix that needs no longer timeout is
 to have `drawnAt` return `null` while the probe is missing. That is left
 for the owner.
 
+### Final dev-engine proof (T054)
+
+The worktree was rebuilt from nothing first, after a machine-wide cleanup
+removed `node_modules`, `target` and `dist`: `pnpm install
+--frozen-lockfile`, a dev engine (`engine_bg.wasm` 335,712,147 bytes) and
+the server. Each run started only when no e2e run, Cargo build or Docker
+build was going on the machine and the 1-minute load was under 8.
+
+| Run                                             | Engine  | Load at start      | Result  |
+| ----------------------------------------------- | ------- | ------------------ | ------- |
+| `look-at-and-follow` alone (160d13fd)           | dev     | 1.41 / 2.08 / 3.34 | 1 / 1   |
+| `rolls-dice-on-screen` alone                    | dev     | 3.70 / 2.59 / 3.45 | 5 / 5   |
+| rolls integration, with `rolls-dice-frame-rate` | release | 3.14 / 2.82 / 3.42 | 29 / 29 |
+| canvas slice                                    | dev     | 2.69 / 7.84 / 9.30 | 44 / 44 |
+| scenes slice                                    | dev     | 1.59 / 3.62 / 6.74 | 17 / 18 |
+| `scene-live-launch` alone, main's test          | dev     | 2.54 / 1.65 / 1.52 | 1 / 1   |
+
+The rolls integration slice holds `rolls-dice-frame-rate`, a measured
+spec, so the harness built a release engine for the whole slice. The
+frame-rate check passed there, and every rolls test besides it passed on
+the dev engine in the earlier rounds above.
+
+The scenes slice's one failure is `scene-live-launch.spec.ts:22`, which
+fails the same way on 0.19.1. Main fixed the test in 0add03cc: a player
+no longer has the scene switcher, so the test now reads the Settings
+panel. With main's version of that one file in place, it passes on the
+0.20 dev engine. The file was then restored, so it reaches this branch
+through main.
+
 ### Full-suite rule (T055)
 
 `pnpm e2e:which --diff=main` names canvas, engine-limits, engine-other and

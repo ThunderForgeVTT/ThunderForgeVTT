@@ -2,7 +2,7 @@
 
 **Feature Branch**: `087-bevy-0-20`
 **Created**: 2026-10-08
-**Status**: Planned (plan.md, tasks.md)
+**Status**: Implemented (plan.md, tasks.md, research.md)
 **Input**: "Upgrade the engine from Bevy 0.19.1 to 0.20.0. The board looks
 and behaves the same, the frame rate is no worse, and the engine bundle
 stays within budget."
@@ -22,7 +22,22 @@ listed under **Later**.
 
 ## What exists
 
-Counted on 2026-10-08 against `main` at `3f4cb3b2`. research.md has every
+**After this spec** (2026-10-09, for the next upgrade; research.md,
+`## Result`, has the detail):
+
+- bevy 0.20.0, glam 0.33, wgpu 30, wesl in place of naga_oil. The darkness
+  shader is `plugins/darkness.wesl`.
+- Release `engine_bg.wasm`: 31,939,040 bytes raw, 5,186,179 brotli
+  (q11), +4.98% and +2.31% on 0.19.1.
+- Dev `engine_bg.wasm`, built with `CARGO_PROFILE_DEV_DEBUG=line-tables-only`:
+  335,575,245 bytes raw, 14,610,549 brotli.
+- `pnpm e2e:engine-limits` medians: 60 fps at every level from 3200 to
+  6400 tokens, 16.6–16.8 ms a frame, within 2% of 0.19.1.
+- Tokens no longer share one z: each token is drawn at its layer plus
+  `token_stack::stacking_offset(rank)` in creation order, so a click picks
+  the token drawn on top.
+
+**Before this spec**, counted on 2026-10-08 against `main` at `3f4cb3b2`. research.md has every
 count, with files.
 
 - `crates/thunderforge-engine/Cargo.toml:50` and `:159` pin

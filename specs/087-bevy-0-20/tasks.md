@@ -135,7 +135,7 @@ listed in T031 and T032.
 - [x] T051 [P] [US4] Measure the release `.wasm` raw and brotli. Record it next to the baseline with the difference. SC-004 allows at most 10% growth. If it is above that, report it and pause for the owner (Open item 4).
 - [x] T052 [P] [US3] Render-probe lines on the same scene. Compare with the baseline per contracts/render-probe.md (SC-006).
 - [x] T053 Run the release-engine slices: `pnpm e2e:engine-limits` (from T050) and `pnpm e2e:resumable-downloads`, both the standalone and the integration part.
-- [ ] T054 Copy a dev engine across, then run each of these slices, all green:
+- [x] T054 Copy a dev engine across, then run each of these slices, all green:
   - `pnpm e2e:engine-other`, which holds the darkness shader;
   - `pnpm e2e:canvas`, which holds the render probe, the camera and `canvas-engine-stopped.spec.ts` (the panic hook);
   - `pnpm e2e:tokens`;
@@ -147,10 +147,7 @@ listed in T031 and T032.
 
   Use `THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT=1` and `--workers=1` on the external stack.
 
-  **Open:** every slice is green on the release engine, apart from `scene-live-launch`, which fails on 0.19.1 too. On the dev engine, three tests failed every time, though they pass on 0.19.1's dev engine. See research.md, "Dev-engine slices (T054)".
-  - The dice frame-time check now runs on a release engine.
-  - `board-loading` passes on the lighter dev engine.
-  - `look-at-and-follow.spec.ts:98` still fails. It is a race in the test, because `drawnAt` throws before the engine probe exists. See research.md, "After the owner's decision". The owner decides the fix.
+  **Done** (2026-10-09, quiet machine): every slice above is green. The dev engine keeps line tables only, the dice frame-time check runs on a release engine, and `look-at-and-follow` waits for the engine probe (160d13fd). `scene-live-launch` fails only from its test, which main fixed in 0add03cc; with that version it passes on 0.20. See research.md, "Final dev-engine proof".
 
 - [x] T055 `pnpm e2e:which --diff` against `main`. Run each slice it names that T053 and T054 did not run. Record in research.md that it asks for the full suite because of `Cargo.lock`, and that the slices stand in for it (Open item 1).
 - [x] T056 `make lint` and the units of T031–T035, again, on the final tree.
@@ -175,7 +172,7 @@ listed in T031 and T032.
   - take a baseline first (quickstart.md);
   - copy the worktree engine over main's `dist/engine`.
 - [x] T062 Confirm `git grep -n "0\.19" -- crates/thunderforge-engine crates/thunderforge-canvas-core apps/engine-sandbox docs/CONTRIBUTING.md` shows no stale reference.
-- [ ] T063 Set spec.md **Status** to "Implemented". Record the final numbers in spec.md under **What exists** for the next upgrade.
+- [x] T063 Set spec.md **Status** to "Implemented". Record the final numbers in spec.md under **What exists** for the next upgrade.
 - [ ] T064 Merge: `mcp__gitops__merge_ff_only` from main onto `087-bevy-0-20`. If it refuses because 086 has landed, stop and report (Open item 2). Do not rebase without the owner. Afterwards, rebuild main's own engine (`node scripts/build.mjs --only-wasm`) and remove the worktree.
 
 ---
