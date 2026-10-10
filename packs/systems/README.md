@@ -43,6 +43,15 @@ at build time, and a file anywhere else is reached only if one of them
 imports it. A pack with none of them has no `web/`, and its sheet is drawn
 from the manifest.
 
+`web/src/index.ts` is globbed too, for optional exports the host looks for
+by name (`apps/web/src/lib/systemPackIndexes.ts`): `sheetReader`, which
+lazily imports the browser build of `sheet/`, and `statRolls`, which turns
+the actor's system data into the play dock's stat rolls
+(`{ key, label, formula }[]`). A pack without `statRolls` gets the host's
+generic reading, which offers every number in `ability_data` as a d20
+modifier; a pack that stores scores, or a defence beside them, exports its
+own. 5e's `web/src/statRolls.ts` is the worked example.
+
 **`sheet/` is a character sheet reader** (spec 048): a Rust crate with a
 `wasm` feature that turns an exported sheet into the system-neutral
 character `crates/thunderforge-sheet-import` defines. The server links it
