@@ -6,6 +6,7 @@ import { Tabs } from "@/components/ui/tabs/Tabs";
 import { ActorPreviewPanel } from "@/pages/world/compendium/ActorPreviewPanel";
 import { AbilityCompendiumTab } from "@/pages/world/compendium/AbilityCompendiumTab";
 import { BookListTab } from "@/pages/world/compendium/BookListTab";
+import { BroughtByPlayers } from "@/components/world/staged/BroughtByPlayers";
 import { AbilityPreviewPanel } from "@/pages/world/compendium/AbilityPreviewPanel";
 import { ItemCompendiumTab } from "@/pages/world/compendium/ItemCompendiumTab";
 import { ItemPreviewPanel } from "@/pages/world/compendium/ItemPreviewPanel";
@@ -39,7 +40,14 @@ export interface WorldCompendiumPageProps {
  * a plain array so a future tab is a one-line addition, not a
  * restructuring (research.md §4).
  */
-const COMPENDIUM_TAB_VALUES = ["npcs", "lore", "items", "abilities", "books"];
+const COMPENDIUM_TAB_VALUES = [
+  "npcs",
+  "lore",
+  "items",
+  "abilities",
+  "books",
+  "brought",
+];
 
 export function WorldCompendiumPage({
   worldId,
@@ -50,9 +58,6 @@ export function WorldCompendiumPage({
   // always opening to NPCs.
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
-  const activeTab = COMPENDIUM_TAB_VALUES.includes(requestedTab ?? "")
-    ? requestedTab!
-    : "npcs";
   const [selectedActorId, setSelectedActorId] = useState<string | null>(null);
   const [roster, setRoster] = useState<WorldActorRecord[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -72,6 +77,13 @@ export function WorldCompendiumPage({
   const [vocabulary, setVocabulary] =
     useState<AbilityVocabulary>(DEFAULT_VOCABULARY);
   const { isGm, role, managesContent } = useWorldRole(worldId, world);
+  // Spec 048 US3: the queue of what players brought is for whoever manages
+  // the world's content; anyone else asking for it lands on NPCs.
+  const activeTab =
+    COMPENDIUM_TAB_VALUES.includes(requestedTab ?? "") &&
+    (requestedTab !== "brought" || managesContent)
+      ? requestedTab!
+      : "npcs";
 
   // Spec 021: the header blurb is GM-authored Markdown (a reserved lore
   // entry, edited from System settings), not a hardcoded sentence — `null`
@@ -259,6 +271,18 @@ export function WorldCompendiumPage({
               </div>
             ),
           },
+          ...(managesContent
+            ? [
+                {
+                  // Spec 048 US3 (FR-034): what players brought in on their
+                  // sheets, waiting to be adopted into this world.
+                  value: "brought",
+                  label: "Brought by players",
+                  icon: "actors" as const,
+                  content: <BroughtByPlayers worldId={worldId} />,
+                },
+              ]
+            : []),
         ]}
       />
     </main>
