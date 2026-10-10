@@ -45,11 +45,13 @@ function humanise(key: string): string {
 }
 
 /**
- * The d20-plus-modifier check every system in this app expresses the same
- * way. `1d20` is the base because that is what the existing dice roller
- * defaults to; a system that checks differently will contribute its own roll
- * surface when packs can (spec 032), and until then this is the honest floor
- * rather than a guess dressed up as a rule.
+ * The generic reading: every number in `ability_data` is a d20 modifier.
+ * `1d20` is the base because that is what the existing dice roller defaults
+ * to. It is only right for a system that stores modifiers there, so a pack
+ * whose numbers are scores, or that keeps a defence beside them, exports its
+ * own `statRolls` and this is not used for it (`systemStatRolls.ts`). For
+ * every other pack this is the honest floor rather than a guess dressed up
+ * as a rule.
  */
 export function statRolls(
   abilityData: Record<string, unknown> | null | undefined,

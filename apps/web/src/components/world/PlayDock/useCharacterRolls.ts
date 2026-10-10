@@ -7,7 +7,8 @@ import type { WorldAbilityRecord } from "@/types/ability";
 import type { ActorAbilityEntryRecord } from "@/types/actorAbility";
 import type { WorldActorRecord } from "@/types/actor";
 
-import { abilityRolls, statRolls, type CharacterRoll } from "./characterRolls";
+import { abilityRolls, type CharacterRoll } from "./characterRolls";
+import { loadStatRolls, rollsFor, type PackStatRolls } from "./systemStatRolls";
 
 /**
  * A character's rolls: its numeric stats, then its abilities' formulas.
@@ -16,6 +17,11 @@ import { abilityRolls, statRolls, type CharacterRoll } from "./characterRolls";
  * for it. A failure on either leaves the ability rolls absent rather than
  * taking the sheet down: the stats still roll, which is most of why the
  * player opened it. Shared by the dock's sheet and the sheet page (spec 081).
+ *
+ * The stats come from the actor's pack where it exports its own `statRolls`
+ * (`systemStatRolls.ts`), and from the generic reading where it does not.
+ * Until the pack's index has loaded no stat is offered, so a pack whose
+ * numbers are scores never flashes them as modifiers.
  */
 export function useCharacterRolls(
   worldId: string,
@@ -29,6 +35,28 @@ export function useCharacterRolls(
     null,
   );
   const [catalog, setCatalog] = useState<WorldAbilityRecord[] | null>(null);
+  const systemId = actor.gameSystemId ?? null;
+  const [pack, setPack] = useState<{
+    systemId: string | null;
+    statRolls: PackStatRolls | null;
+  } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    loadStatRolls(systemId)
+      .then((statRolls) => {
+        if (active) setPack({ systemId, statRolls });
+      })
+      .catch(() => {
+        // A pack index that failed to load offers no stats rather than the
+        // generic reading, which may be the very misreading the pack exists
+        // to prevent.
+        if (active) setPack({ systemId, statRolls: () => [] });
+      });
+    return () => {
+      active = false;
+    };
+  }, [systemId]);
 
   useEffect(() => {
     let active = true;
@@ -50,8 +78,14 @@ export function useCharacterRolls(
     };
   }, [actor.id, worldId]);
 
+  const packReady = pack !== null && pack.systemId === systemId;
   return useMemo(
-    () => [...statRolls(data?.ability_data), ...abilityRolls(entries, catalog)],
-    [data?.ability_data, entries, catalog],
+    () => [
+      ...(packReady
+        ? rollsFor(pack.statRolls, data as Record<string, unknown> | null)
+        : []),
+      ...abilityRolls(entries, catalog),
+    ],
+    [packReady, pack, data, entries, catalog],
   );
 }
