@@ -37,7 +37,8 @@ members = [
     "packs/systems/fate_core/server",
     "packs/systems/blades_in_the_dark/server",
     "packs/systems/year_zero_engine/server",
-    "packs/systems/roll_for_shoes/server"
+    "packs/systems/roll_for_shoes/server",
+    "packs/systems/roll_for_shoes/sheet"
 ]
 default-members = ["apps/thunderforge", "crates/thunderforge-server", "crates/thunderforge-core"]
 

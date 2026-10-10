@@ -88,5 +88,23 @@
       "name": "Do Anything",
       "level": 1
     }
-  ]
+  ],
+  "sheetImport": {
+    "readers": [
+      "tf-rfs-pdf"
+    ],
+    "fields": {
+      "identity.name": "actor.label",
+      "identity.xp": "resource_data.xp"
+    },
+    "content": {
+      "skill": {
+        "refine": true
+      }
+    },
+    "playState": [
+      "resource_data.xp"
+    ],
+    "notes": "trait_data.description"
+  }
 }

@@ -21,6 +21,10 @@ serde_json = "1.0.151"
 inventory = "0.3"
 tokio = { version = "1.53", features = ["full"] }
 thunderforge-canvas-core = { path = "../../../../crates/thunderforge-canvas-core" }
+# Bringing a character in from the one-page sheet (spec 048 US4).
+thunderforge-pdf = { path = "../../../../crates/thunderforge-pdf" }
+thunderforge-sheet-import = { path = "../../../../crates/thunderforge-sheet-import" }
+thunderforge-system-roll-for-shoes-sheet = { path = "../sheet" }
 
 thunderforge-server = { path = "../../../../crates/thunderforge-server" }
 diesel = { version = "2.3.12", features = [

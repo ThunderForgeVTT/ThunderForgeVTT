@@ -1,0 +1,29 @@
+[lints]
+workspace = true
+
+[package]
+name = "thunderforge-system-roll-for-shoes-sheet"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+# Spec 048 US4: the one-page ThunderForge Roll for Shoes sheet's reader. The
+# server links it natively and the browser loads it as wasm, so both read a
+# sheet the same way, as the D&D Beyond reader does.
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+wasm = ["dep:wasm-bindgen"]
+
+[dependencies]
+thunderforge-pdf = { path = "../../../../crates/thunderforge-pdf" }
+thunderforge-sheet-import = { path = "../../../../crates/thunderforge-sheet-import" }
+serde_json = "1"
+wasm-bindgen = { version = "0.2.127", optional = true }
+
+[dev-dependencies]
+# The fixture generator writes PDFs with the same lopdf the reader parses
+# them with, and pins each one's sha256.
+lopdf = { version = "0.34", default-features = false, features = ["nom_parser"] }
+sha2 = "0.11.0"

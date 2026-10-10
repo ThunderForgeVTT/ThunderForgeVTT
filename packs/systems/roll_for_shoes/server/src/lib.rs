@@ -22,6 +22,7 @@
 
 pub mod roll;
 pub mod settings;
+pub mod sheet_import;
 pub mod table;
 pub mod validators;
 
@@ -100,6 +101,7 @@ inventory::submit! {
         resource_data: Some(validators::validate_resource_data_for_registry),
         trait_data: Some(validators::validate_trait_data_for_registry),
         adjudicate: Some(roll::adjudicate),
+        sheet_import: Some(&sheet_import::SHEET_IMPORT),
         ..thunderforge_canvas_core::system_contribution::SystemContribution::new(SYSTEM_ID)
     }
 }
