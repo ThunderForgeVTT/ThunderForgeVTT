@@ -11,7 +11,7 @@ use chrono::Utc;
 use diesel::prelude::*;
 use serde_json::{Map, Value, json};
 use thunderforge_canvas_core::system_contribution::contribution_for;
-use thunderforge_pdf::{Document, Limits};
+use thunderforge_pdf::{Document, Limits, PdfError};
 use thunderforge_sheet_import::{
     ContentChange, ContentTarget, ImportPlan, ImportedCharacter, PlanCertainty, Resolution,
     SheetMapping, normalise_name, plan_hash,
@@ -69,13 +69,12 @@ pub async fn apply_sheet_import_impl(
         .map_err(SheetImportError::from_permission)?;
     let limits = Limits::default();
     if input.bytes.len() > limits.max_bytes {
-        return Err(SheetImportError::sheet(
-            "SHEET_TOO_LARGE",
-            format!(
-                "The sheet is over {} megabytes.",
-                limits.max_bytes / 1024 / 1024
-            ),
-        ));
+        // Before the body is parsed, in the reader's own words.
+        let error = thunderforge_sheet_import::ReadError::Pdf(PdfError::TooLarge {
+            bytes: input.bytes.len(),
+            limit: limits.max_bytes,
+        });
+        return Err(SheetImportError::sheet(error.code(), error.sentence()));
     }
     let corrections_value = input.corrections.clone().unwrap_or_else(|| json!({}));
     let corrections = parse_corrections(Some(&corrections_value))?;

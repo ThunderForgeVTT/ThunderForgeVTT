@@ -616,6 +616,41 @@ pub fn not_a_sheet() -> Vec<u8> {
     write(&[(&page, Vec::new())])
 }
 
+/// A one-page document that says what it is, for the refusal fixtures.
+fn plain_page(lines: &[&str]) -> LayoutPage {
+    LayoutPage {
+        width: 612.0,
+        height: 792.0,
+        runs: lines
+            .iter()
+            .enumerate()
+            .map(|(i, line)| {
+                (
+                    line.to_string(),
+                    72.0,
+                    700.0 - 20.0 * i as f64,
+                    12.0,
+                    i == 0,
+                )
+            })
+            .collect(),
+        fields: Vec::new(),
+    }
+}
+
+/// A PDF with a password, which nothing reads (SHEET_ENCRYPTED).
+pub fn password_protected() -> Vec<u8> {
+    let page = plain_page(&["Password protected", "Nothing in here can be read."]);
+    write_with(&[(&page, Vec::new())], true)
+}
+
+/// One page more than a character sheet may have (SHEET_TOO_MANY_PAGES).
+pub fn too_many_pages() -> Vec<u8> {
+    let page = plain_page(&["Twenty-one pages", "A sheet has at most twenty."]);
+    let pages: Vec<(&LayoutPage, Vec<Widget>)> = (0..21).map(|_| (&page, Vec::new())).collect();
+    write(&pages)
+}
+
 fn text_string(value: &str) -> Object {
     if value.is_ascii() {
         return Object::String(value.as_bytes().to_vec(), StringFormat::Literal);
@@ -634,6 +669,10 @@ fn real(value: f64) -> Object {
 }
 
 fn write(pages: &[(&LayoutPage, Vec<Widget>)]) -> Vec<u8> {
+    write_with(pages, false)
+}
+
+fn write_with(pages: &[(&LayoutPage, Vec<Widget>)], encrypted: bool) -> Vec<u8> {
     let mut doc = Document::with_version("1.7");
     let pages_id = doc.new_object_id();
     let font = |doc: &mut Document, base: &str| {
@@ -713,6 +752,19 @@ fn write(pages: &[(&LayoutPage, Vec<Widget>)]) -> Vec<u8> {
     doc.trailer.set("Root", catalog);
     let id = Object::String(b"thunderforge-048".to_vec(), StringFormat::Hexadecimal);
     doc.trailer.set("ID", vec![id.clone(), id]);
+    if encrypted {
+        // The standard handler's dictionary, which is all a reader needs
+        // to know a password is asked for.
+        let encrypt = doc.add_object(dictionary! {
+            "Filter" => "Standard",
+            "V" => 1,
+            "R" => 2,
+            "O" => Object::String(vec![0u8; 32], StringFormat::Literal),
+            "U" => Object::String(vec![0u8; 32], StringFormat::Literal),
+            "P" => -4,
+        });
+        doc.trailer.set("Encrypt", encrypt);
+    }
     let mut bytes = Vec::new();
     doc.save_to(&mut bytes).expect("the fixture writes");
     bytes

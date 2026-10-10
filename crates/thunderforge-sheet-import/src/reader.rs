@@ -46,6 +46,51 @@ impl fmt::Display for ReadError {
     }
 }
 
+impl ReadError {
+    /// The refusal code the browser and the server both answer with
+    /// (contracts/graphql-sheet-import.md, "Common errors").
+    pub fn code(&self) -> &'static str {
+        match self {
+            ReadError::Pdf(PdfError::Encrypted) => "SHEET_ENCRYPTED",
+            ReadError::Pdf(PdfError::TooLarge { .. }) => "SHEET_TOO_LARGE",
+            ReadError::Pdf(PdfError::TooManyPages { .. }) => "SHEET_TOO_MANY_PAGES",
+            ReadError::Pdf(PdfError::Unreadable(_) | PdfError::Page { .. })
+            | ReadError::Page { .. } => "SHEET_UNREADABLE",
+            ReadError::NotRecognised(_) => "SHEET_NOT_RECOGNISED",
+        }
+    }
+
+    /// What a player reads, and what to do about it.
+    pub fn sentence(&self) -> String {
+        const MB: usize = 1024 * 1024;
+        match self {
+            ReadError::Pdf(PdfError::Encrypted) => {
+                "The sheet is protected by a password. Export it again without one.".into()
+            }
+            ReadError::Pdf(PdfError::TooLarge { limit, .. }) => format!(
+                "The file is over {} MB, which is more than a character sheet needs.",
+                limit.div_ceil(MB)
+            ),
+            ReadError::Pdf(PdfError::TooManyPages { pages, limit }) => {
+                format!("The file has {pages} pages, and a character sheet has at most {limit}.")
+            }
+            ReadError::Pdf(PdfError::Unreadable(_)) => {
+                "The file could not be read as a PDF.".into()
+            }
+            ReadError::Pdf(PdfError::Page { page, .. }) => {
+                format!("Page {page} of the file could not be read.")
+            }
+            ReadError::Page { page, reason } => {
+                format!(
+                    "Page {page} of the sheet could not be read: {}.",
+                    reason.trim_end_matches('.')
+                )
+            }
+            ReadError::NotRecognised(reason) => reason.clone(),
+        }
+    }
+}
+
 impl std::error::Error for ReadError {}
 
 impl From<PdfError> for ReadError {

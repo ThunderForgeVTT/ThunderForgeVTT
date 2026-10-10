@@ -358,15 +358,72 @@ async fn a_changed_plan_is_refused_and_writes_nothing() {
     assert_eq!(t.system_data(), None);
 }
 
+const PASSWORD_PROTECTED: &[u8] =
+    include_bytes!("../../../../packs/systems/dnd5e/sheet/tests/fixtures/password-protected.pdf");
+const TOO_MANY_PAGES: &[u8] =
+    include_bytes!("../../../../packs/systems/dnd5e/sheet/tests/fixtures/too-many-pages.pdf");
+
+/// Spec 048 T047: each refusal in contracts/graphql-sheet-import.md, with
+/// its code, and nothing written.
 #[tokio::test]
-async fn a_document_that_is_not_a_sheet_is_not_recognised() {
+async fn each_document_refusal_has_its_code_and_writes_nothing() {
     let t = table();
     let player = t.claimant().await;
-    let error = t
-        .apply(player, NOT_A_SHEET, None, "0".repeat(64))
-        .await
-        .unwrap_err();
-    assert_eq!(error, "SHEET_NOT_RECOGNISED");
+    let before = t.counts();
+    // Not a PDF at all: parsed, it would be SHEET_UNREADABLE, so the size is
+    // checked before the body is.
+    let oversized = vec![b'x'; thunderforge_pdf::Limits::default().max_bytes + 1];
+    let cases: [(&[u8], &str); 5] = [
+        (PASSWORD_PROTECTED, "SHEET_ENCRYPTED"),
+        (&oversized, "SHEET_TOO_LARGE"),
+        (TOO_MANY_PAGES, "SHEET_TOO_MANY_PAGES"),
+        (b"not a pdf at all", "SHEET_UNREADABLE"),
+        (NOT_A_SHEET, "SHEET_NOT_RECOGNISED"),
+    ];
+    for (bytes, code) in cases {
+        let error = t
+            .apply(player, bytes, None, "0".repeat(64))
+            .await
+            .unwrap_err();
+        assert_eq!(error, code);
+    }
+    assert_eq!(t.counts(), before);
+    assert_eq!(t.system_data(), None);
+}
+
+#[tokio::test]
+async fn a_refusal_says_what_to_do_in_a_sentence() {
+    let error = read_natively("dnd5e", PASSWORD_PROTECTED).unwrap_err();
+    assert_eq!(error.code(), "SHEET_ENCRYPTED");
+    assert!(error.message().contains("password"), "{error}");
+    assert!(error.message().ends_with('.'), "{error}");
+}
+
+#[tokio::test]
+async fn a_system_with_no_mapping_is_refused_and_writes_nothing() {
+    use crate::schema::world_actors;
+    let t = table();
+    let player = t.claimant().await;
+    {
+        let mut conn = t.state.db_pool.get().expect("conn");
+        diesel::update(world_actors::table.find(t.actor))
+            .set(world_actors::game_system_id.eq("roll_for_shoes"))
+            .execute(&mut conn)
+            .expect("a Roll for Shoes character");
+    }
+    let before = t.counts();
+    assert_eq!(
+        t.preview(player, None).await.unwrap_err(),
+        "SYSTEM_HAS_NO_MAPPING"
+    );
+    assert_eq!(
+        t.apply(player, FIGHTER_WIZARD, None, "0".repeat(64))
+            .await
+            .unwrap_err(),
+        "SYSTEM_HAS_NO_MAPPING"
+    );
+    assert_eq!(t.counts(), before);
+    assert_eq!(t.system_data(), None);
 }
 
 #[tokio::test]

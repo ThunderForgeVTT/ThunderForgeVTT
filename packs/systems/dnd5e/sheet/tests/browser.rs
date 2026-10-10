@@ -47,10 +47,27 @@ fn another_pdf_answers_not_recognised_with_the_reason() {
 fn bytes_that_are_not_a_pdf_answer_not_recognised_with_an_error() {
     let answer: Value = serde_json::from_str(&read_sheet_json(b"not a pdf at all")).unwrap();
     assert_eq!(answer["recognised"], false);
+    assert_eq!(answer["code"], "SHEET_UNREADABLE");
     assert!(
         answer["error"].as_str().is_some_and(|e| !e.is_empty()),
         "{answer}"
     );
+}
+
+#[test]
+fn a_file_the_server_would_refuse_is_refused_here_with_its_code() {
+    for (file, code) in [
+        ("password-protected.pdf", "SHEET_ENCRYPTED"),
+        ("too-many-pages.pdf", "SHEET_TOO_MANY_PAGES"),
+        ("not-a-ddb-sheet.pdf", "SHEET_NOT_RECOGNISED"),
+    ] {
+        let answer = answer(file);
+        assert_eq!(answer["recognised"], false, "{file}");
+        assert_eq!(answer["code"], code, "{file}");
+    }
+    let oversized = vec![b'%'; 10 * 1024 * 1024 + 1];
+    let answer: Value = serde_json::from_str(&read_sheet_json(&oversized)).unwrap();
+    assert_eq!(answer["code"], "SHEET_TOO_LARGE");
 }
 
 /// The native answer for every fixture, written where the browser harness

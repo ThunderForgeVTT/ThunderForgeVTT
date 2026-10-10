@@ -49,6 +49,14 @@ const PINNED: &[(&str, &str)] = &[
         "not-a-ddb-sheet.pdf",
         "5b79f2ae7c900abcad6a61c16074315f2a57c19a5925f66b1477589c93997f8f",
     ),
+    (
+        "password-protected.pdf",
+        "2f12827c4559ee8a9e2c081d553f60980c6efd09ee0610c109ee4756927691ba",
+    ),
+    (
+        "too-many-pages.pdf",
+        "5bf944377e47787b6ba9e1276262b531eb397efd0040f64024711b4e12fa4bdb",
+    ),
 ];
 
 fn generated() -> Vec<(&'static str, Vec<u8>)> {
@@ -57,6 +65,8 @@ fn generated() -> Vec<(&'static str, Vec<u8>)> {
         .map(|c| (c.file, generator::sheet(c)))
         .collect();
     out.push(("not-a-ddb-sheet.pdf", generator::not_a_sheet()));
+    out.push(("password-protected.pdf", generator::password_protected()));
+    out.push(("too-many-pages.pdf", generator::too_many_pages()));
     out
 }
 

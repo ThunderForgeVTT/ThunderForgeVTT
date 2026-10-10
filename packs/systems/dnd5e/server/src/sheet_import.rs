@@ -17,7 +17,7 @@
 use serde_json::{json, Map, Value};
 use std::collections::BTreeSet;
 use thunderforge_canvas_core::sheet_import::{SheetImport, SheetReadFailure, SheetReaderHandle};
-use thunderforge_pdf::{Document, Limits, PdfError};
+use thunderforge_pdf::{Document, Limits};
 use thunderforge_sheet_import::plan::Unmapped;
 use thunderforge_sheet_import::{
     ActorSnapshot, ContentTarget, FieldChange, ImportPlan, ImportedCharacter, ReadError,
@@ -65,31 +65,23 @@ impl SheetReaderHandle for DdbPdfHandle {
     }
 
     fn read(&self, bytes: &[u8]) -> Result<String, SheetReadFailure> {
-        let doc = Document::from_bytes_bounded(bytes, Limits::default()).map_err(pdf_failure)?;
-        let reading = DdbPdf.read(&doc).map_err(|error| match error {
-            ReadError::Pdf(error) => pdf_failure(error),
-            ReadError::NotRecognised(reason) => failure("SHEET_NOT_RECOGNISED", reason),
-            error @ ReadError::Page { .. } => failure("SHEET_UNREADABLE", error.to_string()),
-        })?;
-        serde_json::to_string(&reading).map_err(|e| failure("SHEET_UNREADABLE", e.to_string()))
+        let doc = Document::from_bytes_bounded(bytes, Limits::default())
+            .map_err(|error| failure(ReadError::Pdf(error)))?;
+        let reading = DdbPdf.read(&doc).map_err(failure)?;
+        serde_json::to_string(&reading).map_err(|e| SheetReadFailure {
+            code: "SHEET_UNREADABLE",
+            message: format!("The reading could not be written: {e}."),
+        })
     }
 }
 
-fn failure(code: &'static str, message: impl Into<String>) -> SheetReadFailure {
+/// The code and the sentence a player reads, the same ones the browser's
+/// reader answers with.
+fn failure(error: ReadError) -> SheetReadFailure {
     SheetReadFailure {
-        code,
-        message: message.into(),
+        code: error.code(),
+        message: error.sentence(),
     }
-}
-
-fn pdf_failure(error: PdfError) -> SheetReadFailure {
-    let code = match &error {
-        PdfError::Encrypted => "SHEET_ENCRYPTED",
-        PdfError::TooLarge { .. } => "SHEET_TOO_LARGE",
-        PdfError::TooManyPages { .. } => "SHEET_TOO_MANY_PAGES",
-        PdfError::Unreadable(_) | PdfError::Page { .. } => "SHEET_UNREADABLE",
-    };
-    failure(code, error.to_string())
 }
 
 /// The hook as the host's slot holds it: over JSON. A value that does not

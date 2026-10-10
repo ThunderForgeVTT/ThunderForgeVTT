@@ -27,8 +27,15 @@ export interface SheetReaderModule {
  * `ImportedCharacter`, which the host passes on and never interprets.
  */
 export type SheetAnswer =
-  | { recognised: true; reading: unknown; error?: undefined }
-  | { recognised: boolean; error: string; reading?: undefined };
+  | { recognised: true; reading: unknown; error?: undefined; code?: undefined }
+  | {
+      recognised: boolean;
+      /** The sentence the server would refuse with. */
+      error: string;
+      /** The server's refusal code: `SHEET_ENCRYPTED`, `SHEET_TOO_LARGE`, … */
+      code?: string;
+      reading?: undefined;
+    };
 
 type PackIndex = { sheetReader?: () => Promise<unknown> };
 
