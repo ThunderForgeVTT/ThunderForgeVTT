@@ -47,6 +47,7 @@ export default function LinkedContent({ entries }: { entries: LinkedEntry[] }) {
                   className="flex flex-wrap items-baseline gap-x-2 text-sm"
                   data-testid={`dnd5e-linked-${entry.id}`}
                   data-staged={entry.staged ?? "no"}
+                  data-kind={entry.kind}
                 >
                   <span
                     className={

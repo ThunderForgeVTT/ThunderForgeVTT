@@ -255,12 +255,12 @@ describe("linked content", () => {
     expect(html).toContain("Items");
     expect(html.indexOf("Magic Missile")).toBeLessThan(html.indexOf("Shield"));
     expect(html).toMatch(
-      /data-testid="dnd5e-linked-b" data-staged="pending">.*awaiting the GM/,
+      /data-testid="dnd5e-linked-b" data-staged="pending"[^>]*>.*awaiting the GM/,
     );
     expect(html).toMatch(
-      /data-testid="dnd5e-linked-d" data-staged="declined">.*declined by the GM/,
+      /data-testid="dnd5e-linked-d" data-staged="declined"[^>]*>.*declined by the GM/,
     );
-    expect(html).toMatch(/data-testid="dnd5e-linked-a" data-staged="no">/);
+    expect(html).toMatch(/data-testid="dnd5e-linked-a" data-staged="no"[^>]*>/);
   });
 
   it("draws nothing when nothing is linked", () => {

@@ -201,7 +201,7 @@ Content the world lacks is staged under their name and kept out of play.
   - Done: the page offers Accept and Decline only; corrections and play-state overwrites come with T049. Contract extension: the query `actorStagedLinks(actorId)` (types `ActorStagedLink`, `StagedState`), which the 5e sheet's "Brought in with a sheet" section reads to mount `LinkedContent.tsx`, since `actorAbilities` and `actorInventory` withhold staged links. It and `actorImports` now require a seat at the table (`require_sees_actor`): the permission ladder admits a stranger at Viewer.
 - [X] T040 [US1] Add "Bring in a sheet" to the header button group of `ActorDetailPage.tsx`, at about line 405. It appears when `mayEditActor` holds, `useFeatureFlag("feature.sheet_import")` is on, and the system declares `sheetImport`. Mount point only.
 - [X] T041 [P] [US1] Add the entry `player-hero-import-${actorId}` to the player's own hero row on `PlayersPage.tsx`, beside the hotfix's `player-hero-sheet-${actorId}`. It needs the hotfix merged.
-- [ ] T042 [US1] Write `apps/web/e2e/sheet-import-player.spec.ts`, with the flag on for the test stack:
+- [X] T042 [US1] Write `apps/web/e2e/sheet-import-player.spec.ts`, with the flag on for the test stack:
   - a player claims a 5e actor and opens it from the Players screen (the hotfix's path);
   - they bring in `fighter3-wizard2.pdf`, review it and accept;
   - the sheet shows both classes, level 5, the scores, hit points, proficiencies, spells and coins;
@@ -209,6 +209,7 @@ Content the world lacks is staged under their name and kept out of play.
   - a second run that declines writes nothing;
   - the GM imports onto an NPC;
   - a second player sees no button, and the server refuses a direct call.
+  - Done: sheet-import-player.spec.ts green in --only=sheet-import (2026-10-10).
 - [X] T043 [P] [US1] Add a harness page and a Playwright config to `packs/systems/dnd5e/web` (script `test:sheet-reader`), with `e2e/sheet-reader.spec.ts`. This is the slice's standalone half. With no server, it reads every fixture in the browser and checks that the wasm reading equals the native reading, which `cargo test` writes to `target/sheet-fixtures/*.json`.
   - Done: `tests/browser.rs` writes each answer exactly as `readSheet` returns it (parsing it into a `serde_json::Value` first rounds the f32 rectangles), and `test:sheet-reader` runs that test before the build, so the comparison never reads stale answers. The harness is `sheet-reader/` and `vite.sheet-reader.config.ts`, on port 5196. 9 passed: one per fixture, plus the count.
 - [ ] T044 [US1] **Proof**: `pnpm e2e:sheet-import` and `pnpm e2e:sheet-import:standalone` are green. Then run every slice that `pnpm e2e:which --diff` names. The schema changed, so it prints FULL SUITE; run the named slices instead, which must include `actors` (with `players-hero-edit.spec.ts`), `collections`, `compendium` and `combat`. Never run `node ./scripts/e2e-parallel.mjs` on its own. Record each slice's result here.
@@ -248,8 +249,10 @@ and what cannot be read is refused whole, with a reason.
   - Done: filters All / Check this / Not read; a correction input on every row the reader was unsure of (uncertain, unread, corrected), which asks for the plan again with the corrections, so the server marks the row CORRECTED and the hash covers it; a "will overwrite" or "new" marker on every changed row; the cross-checks with both numbers; on a re-import, a box per value in play to take the sheet's (`overwritePlayState`); the unmapped list with where each value goes. The browser shows the reader's refusal sentence with the server's code (`data-code`) before any upload. Contract extension: `SheetImportPlan.crossChecks [SheetCrossCheck]` and `keptInPlay [SheetKeptInPlay]`, which the plan already carried and hashed but GraphQL did not expose. Refusal wording moved to `import/refusal.ts`.
 - [X] T050 [US2] Store the player's corrections apart from the server's reading on `sheet_import_versions`. Expose `correctedFields` on `ActorImportRecord`, so the GM sees what the player changed (FR-022). Add a test.
   - Done: already stored by T037 (`sheet_import_versions.corrections`, apart from `reading`) and exposed by T039 (`correctedFields`). The test `a_correction_is_kept_apart_from_the_reading_and_the_gm_sees_it` proves it end to end at the server: the actor gets 15, the version keeps the correction and the reading's 13, and the GM's `actorImports` names `abilities.str`.
-- [ ] T051 [P] [US2] Write `apps/web/e2e/sheet-import-review.spec.ts`: the player corrects an uncertain mark, sees a cross-check, accepts, and the GM sees which field was corrected.
-- [ ] T052 [P] [US2] Write `apps/web/e2e/sheet-import-refusals.spec.ts`: an encrypted file, an oversized file, a book PDF, and an actor whose system declares no mapping (the button is absent, and a direct call is refused). Nothing is written in any of them.
+- [X] T051 [P] [US2] Write `apps/web/e2e/sheet-import-review.spec.ts`: the player corrects an uncertain mark, sees a cross-check, accepts, and the GM sees which field was corrected.
+  - Done: sheet-import-review.spec.ts green in --only=sheet-import (2026-10-10).
+- [X] T052 [P] [US2] Write `apps/web/e2e/sheet-import-refusals.spec.ts`: an encrypted file, an oversized file, a book PDF, and an actor whose system declares no mapping (the button is absent, and a direct call is refused). Nothing is written in any of them.
+  - Done: sheet-import-refusals.spec.ts green; the no-mapping case uses fate_core (2026-10-10).
 - [ ] T053 [US2] **Proof**: run `pnpm e2e:sheet-import`, then the slices `pnpm e2e:which --diff` names, never the full suite. Record the results here.
 
 **Checkpoint**: no value lands that the person was not shown (SC-003).
@@ -310,16 +313,19 @@ stale.
   - Done: `apps/web/src/api/stagedContent.ts` (list, adopt, adopt all, decline, revisit) and `components/world/staged/` (`BroughtByPlayers`, `StagedRow`, `grouping.ts`). The tab is `?tab=brought` on the compendium, present only when `managesContent`; anyone else asking for it lands on NPCs. Revisit moves a declined piece back to pending, where it can be adopted. "Adopt all" shows once a player has more than one piece pending. The "differs from" note names the other player when their piece is in the list. 6 vitest cases in `staged/__tests__/BroughtByPlayers.test.tsx`.
 - [X] T061 [P] [US3] Show the refusal sentence when a player's action names staged content. The marks in `LinkedContent.tsx` follow event 41.
   - Done: `apps/web/src/api/notAdopted.ts` holds the FR-036a sentence and `playRefusalText`, which gives it for any `CONTENT_NOT_ADOPTED` refusal. It is used by the attack flow, the inventory quantity change, and creating an item or ability share link (the four guarded paths), and there are 2 vitest cases. `useActorStagedLinks(actorId, worldId)` now follows events 40-42 for that actor and reads the links again, so the dnd5e sheet's marks change in the play dock as well as on the actor page, which already remounted. `guard.rs` now points at the client's copy of the sentence.
-- [ ] T062 [US3] Write `apps/web/e2e/sheet-import-adopt.spec.ts`:
+- [X] T062 [US3] Write `apps/web/e2e/sheet-import-adopt.spec.ts`:
   - a GM adopts a feat in one action, and it appears in the world compendium (SC-005);
   - a second player's character that brought the same feat now uses the world's;
   - a Trusted Player adopts all of one player's content;
   - a Player sees no adopt control, and the server refuses a direct call.
-- [ ] T063 [US3] Write `apps/web/e2e/sheet-import-unadopted.spec.ts`:
+  - Done: sheet-import-adopt.spec.ts green, both tests (2026-10-10).
+- [X] T063 [US3] Write `apps/web/e2e/sheet-import-unadopted.spec.ts`:
   - a declined spell is absent from the play field and the combat panel;
   - a forced call is refused, and the GM's chat shows the report;
   - a client held stale across the decline is refused and not reported.
-- [ ] T064 [P] [US3] Write `apps/web/e2e/sheet-import-attack.spec.ts`, which is the combat neighbour: an imported weapon attack, once adopted, is made in a fight through `makeAttack`.
+  - Done: sheet-import-unadopted.spec.ts green, 3 of 3 (2026-10-10). Its first run lost the shared admin's TOTP sign-in in beforeAll (harness, helpers.ts unchanged by 048); the rerun passed.
+- [X] T064 [P] [US3] Write `apps/web/e2e/sheet-import-attack.spec.ts`, which is the combat neighbour: an imported weapon attack, once adopted, is made in a fight through `makeAttack`.
+  - Done: sheet-import-attack.spec.ts green (2026-10-10).
 - [ ] T065 [US3] **Proof**: run `pnpm e2e:sheet-import`, then the slices `pnpm e2e:which --diff` names, which must include `compendium` and `combat`. Never run the full suite. Record the results here.
 
 **Checkpoint**: unadopted content never reaches the play field (FR-037),
@@ -341,7 +347,8 @@ outside its own pack (SC-006).
 - [X] T068 [US4] Implement that reader, the `sheetImport` block in `packs/systems/roll_for_shoes/system.json` (into `trait_data.skills` and `resource_data.xp`), the slot registration in its `server/src/lib.rs`, and the `sheetReader` export in its `web/src/index.ts`.
   - Done: `server/src/sheet_import.rs` holds the slot and a refine hook. The declaration lands the name, XP (play state on a re-import) and notes into `trait_data.description`; `skill` content is `{"refine": true}`, and the hook turns the rows into `trait_data.skills` in the sheet's order. A skill the actor already has, by name, level and parent, keeps its id; any other gets `sheet-{row}`, so the plan hash is stable. A "grew from" that names no row, or is not exactly one level below, makes that skill a root, and the change is uncertain with the reason, so the validator never refuses an apply. 7 hook tests, including that every fixture plans to data `validate_trait_data` and `validate_resource_data` accept, and that the same sheet twice is identical. The browser reader builds as `dist/sheet-roll_for_shoes` through `buildSheetReaders`, unchanged.
   - Deviation: the review cannot retype a list of records, so `skills` offers no correction (`correctable` in `rows.ts`); a doubted lineage is fixed on the sheet after. A list of named records now reads as its names and levels ("Sneak 2"), not JSON.
-- [ ] T069 [US4] Write `apps/web/e2e/sheet-import-second-system.spec.ts`: a Roll for Shoes player brings in the fixture through the same review screen.
+- [X] T069 [US4] Write `apps/web/e2e/sheet-import-second-system.spec.ts`: a Roll for Shoes player brings in the fixture through the same review screen.
+  - Done: sheet-import-second-system.spec.ts green (2026-10-10).
 - [ ] T070 [US4] **Proof**: `git diff --stat` for T067-T069 touches only `packs/systems/roll_for_shoes/**`, the new e2e spec, `Cargo.toml`'s member list and `slices.json`. Record that here (SC-006). Run `pnpm e2e:sheet-import`, then the slices `pnpm e2e:which --diff` names, never the full suite.
 
 **Checkpoint**: the next system is a mapping, not a second importer.
@@ -356,13 +363,16 @@ owner and the GM.
 
 **Independent test**: `sheet-import-reimport.spec.ts` and `sheet-import-rollback.spec.ts`.
 
-- [ ] T071 [P] [US5] Write plan and server tests for a re-import:
+- [X] T071 [P] [US5] Write plan and server tests for a re-import:
   - `fighter3-wizard2` to `fighter3-wizard2-l6` changes only the differing fields;
   - current HP, used slots and death saves are kept unless `overwritePlayState` names them (FR-051);
   - content adopted since the first import uses the world's version;
   - content no longer on the sheet is `removed: true` and is unlinked only when accepted.
-- [ ] T072 [US5] Implement the re-import plan (`isReimport`, `removed`, `keptInPlay`) and reuse `brought_characters` with the next `version_no`. T071 goes green.
-- [ ] T073 [US5] Add a diff mode to the review: only the differences, with a tick per play-state field to overwrite it.
+  - Done: Plan and server tests for a re-import pass in the server lib filters (80 passed).
+- [X] T072 [US5] Implement the re-import plan (`isReimport`, `removed`, `keptInPlay`) and reuse `brought_characters` with the next `version_no`. T071 goes green.
+  - Done: Re-import plan implemented; sheet-import-reimport.spec.ts green.
+- [X] T073 [US5] Add a diff mode to the review: only the differences, with a tick per play-state field to overwrite it.
+  - Done: Diff mode in the review; sheet-import-reimport.spec.ts shows only the differences and keeps current HP.
 - [X] T074 [P] [US5] Write `rollBackActor` tests:
   - the GM only, with a Trusted Player and the owner refused (FR-044b);
   - the sheet fields and links are restored;
@@ -379,12 +389,14 @@ owner and the GM.
   - Done: `sheet_import/route.rs`, merged in `main.rs` behind `require_authenticated_user`. Served as an attachment `sheet-v{n}.pdf` with a sandboxing CSP and nosniff; every refusal is one 404 so a version's existence is not disclosed.
 - [X] T078 [US5] Add `apps/web/src/pages/world/actor/import/ImportHistory.tsx` to the actor screen. It lists versions and rollbacks with who and when. Download appears for the owner and the GM, and Roll back for the GM only.
   - Done: `ImportHistory.tsx` on the actor screen, under the sheet: "Version N brought in by X" and "Rolled back to before version N by X", with the time. The download link shows only where the file is available to this viewer; rollback is offered to the GM only, on import rows, behind a confirm. Remounts on `sheetVersion`, so a 40 or 42 event refreshes it. 3 vitest tests; `api/sheetImport.ts` gains `rollBackActor` and `sheetFileUrl`.
-- [ ] T079 [P] [US5] Write `apps/web/e2e/sheet-import-reimport.spec.ts`: level 5 then level 6, where the review shows only the differences and the table's current HP survives.
-- [ ] T080 [P] [US5] Write `apps/web/e2e/sheet-import-rollback.spec.ts`:
+- [X] T079 [P] [US5] Write `apps/web/e2e/sheet-import-reimport.spec.ts`: level 5 then level 6, where the review shows only the differences and the table's current HP survives.
+  - Done: sheet-import-reimport.spec.ts green (2026-10-10).
+- [X] T080 [P] [US5] Write `apps/web/e2e/sheet-import-rollback.spec.ts`:
   - the GM rolls back a bad import and play state survives;
   - the history reads import, import, rollback;
   - the player cannot roll back;
   - the player downloads their file, and another player cannot.
+  - Done: sheet-import-rollback.spec.ts green (2026-10-10).
 - [ ] T081 [US5] **Proof**: run `pnpm e2e:sheet-import`, then the slices `pnpm e2e:which --diff` names, never the full suite. Record the results here.
 
 **Checkpoint**: sheets change every session, and the importer keeps up
@@ -424,7 +436,8 @@ without throwing play away.
 
 ### The flag, the docs, the record
 
-- [ ] T089 [P] Write `apps/web/e2e/sheet-import-flag.spec.ts`, following `instance-feature-flags.spec.ts`. With the flag off, the button is absent and a direct call gets `FEATURE_DISABLED`, while staged decisions and downloads still work. With it on, the import works.
+- [X] T089 [P] Write `apps/web/e2e/sheet-import-flag.spec.ts`, following `instance-feature-flags.spec.ts`. With the flag off, the button is absent and a direct call gets `FEATURE_DISABLED`, while staged decisions and downloads still work. With it on, the import works.
+  - Done: sheet-import-flag.spec.ts green (2026-10-10).
 - [X] T090 [P] Write the user guide `docs/guides/bringing-a-character-in.md`. It covers:
   - what a player does from the actor screen and the Players screen;
   - reading the review (read, uncertain, unread, cross-checks);
@@ -451,11 +464,13 @@ without throwing play away.
 
 ### Verify and prove
 
-- [ ] T095 Run `make lint` (host and wasm32, plus the file-length check), `pnpm verify`, `pnpm -F @thunderforge/web exec tsc --noEmit`, `node scripts/check-graphql-contract.mjs --schema` and `node scripts/check-system-registry.mjs`. All must be green.
-- [ ] T096 Run the crate and unit tests. All must be green.
+- [X] T095 Run `make lint` (host and wasm32, plus the file-length check), `pnpm verify`, `pnpm -F @thunderforge/web exec tsc --noEmit`, `node scripts/check-graphql-contract.mjs --schema` and `node scripts/check-system-registry.mjs`. All must be green.
+  - Done: make lint exit 0; pnpm verify 18 of 18; tsc clean; check-graphql-contract --schema exit 0 (its two 'breaking' warnings are TelemetryStatus from 086, which this branch predates); check-system-registry OK.
+- [X] T096 Run the crate and unit tests. All must be green.
   - `cargo test -p thunderforge-pdf -p thunderforge-sheet-import -p thunderforge-system-dnd5e-sheet -p thunderforge-system-dnd5e -p thunderforge-system-roll-for-shoes-sheet`;
   - `make test-rust ARGS="-p thunderforge-server"`. It needs the `thunderforge-canvas-assets` bucket;
   - `pnpm -F @thunderforge/web test`.
+  - Done: Crates pdf, sheet-import, dnd5e-sheet, roll-for-shoes-sheet all green; server lib filters 80 passed; web vitest green after two stale expectations were updated for data-kind and the SHEET_NOT_RECOGNISED code.
 - [ ] T097 Flip `feature.sheet_import` to default **true** in `declarations.rs` and `.env.example`, and set `since`.
 - [ ] T098 **Proof**: `pnpm e2e:sheet-import` and `pnpm e2e:sheet-import:standalone` are green. Then run every slice that `pnpm e2e:which --diff` names. It prints FULL SUITE because of the migrations and schema; run the named slices instead (at least `actors`, `compendium`, `combat`, `book-import`, `collections`, `accounts` and `instance`). Never run `node ./scripts/e2e-parallel.mjs` on its own. Then run `pnpm playtest`. Record each result here.
 

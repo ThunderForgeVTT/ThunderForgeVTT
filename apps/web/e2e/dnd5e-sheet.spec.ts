@@ -32,14 +32,20 @@ import { expect, test } from "./fixtures/test";
  *     number by hand on the same sheet.
  */
 
+// Spec 048 added classes, defences, coins and persona: the regions a
+// D&D Beyond sheet fills that the sheet had no place for.
 const REGION_ORDER = [
   "identity",
   "abilities",
   "combat",
+  "classes",
+  "defences",
   "skills",
   "spellcasting",
   "proficiencies",
+  "coins",
   "features",
+  "persona",
   "notes",
 ];
 

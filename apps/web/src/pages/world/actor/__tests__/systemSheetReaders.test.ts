@@ -63,6 +63,7 @@ describe("the dnd5e reader in the browser build", () => {
     ) as SheetAnswer;
     expect(answer).toEqual({
       recognised: false,
+      code: "SHEET_NOT_RECOGNISED",
       error: "This does not look like a D&D Beyond character sheet.",
     });
   });
