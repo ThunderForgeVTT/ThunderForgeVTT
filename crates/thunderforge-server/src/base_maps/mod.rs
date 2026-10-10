@@ -140,13 +140,14 @@ impl BaseMaps {
     /// maps themselves are still offered and can still be chosen.
     pub fn with_default(mut self, choice: Option<&str>) -> BaseMaps {
         self.default_choice = choice.map(str::trim).map(str::to_owned);
-        if let Some(id) = self.default_choice.as_deref() {
-            if id != NO_DEFAULT && self.get(id).is_none() {
-                tracing::warn!(
-                    base_map = %id,
-                    "the configured default base map is not in the set; new worlds start blank"
-                );
-            }
+        if let Some(id) = self.default_choice.as_deref()
+            && id != NO_DEFAULT
+            && self.get(id).is_none()
+        {
+            tracing::warn!(
+                base_map = %id,
+                "the configured default base map is not in the set; new worlds start blank"
+            );
         }
         self
     }
