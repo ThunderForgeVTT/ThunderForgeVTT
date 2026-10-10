@@ -2,7 +2,7 @@
 
 **Feature Branch**: `086-full-telemetry`
 **Created**: 2026-10-07
-**Status**: Planned (plan.md, tasks.md)
+**Status**: Implemented through Phase 12; the gateway cutover (T089) and hop count (T103) are live. T084's hand walk, the T086 image rollout and the rest of T087 remain with the owner.
 **Amended**: 2026-10-07, to the owner's decision to put a proxy in front of the public route: "could our telemetry proxy to our in cluster otel ? and add necessary labels and optics about where the event came from and drop anything when its considered spam". User Story 9, FR-037 to FR-046, SC-014 and SC-015, and R25 to R31 record it.
 **Input**: The owner, 2026-10-07: "full telemetry for the landing and the demo, like a crazy amount of telemetry, so i can act on it", plus server telemetry and Grafana dashboards on the k8s cluster.
 **Revised**: 2026-10-07, to the owner's decision: "for the base image i want TELEMETRY=true default and i want to change our constitution to allow telemetry of people's thunderforge instances to tell me what's going on not just my own but they can override the otel endpoint if they want their own telemetry else i see it and they can do false and this all goes into a disclaimer and spec". Constitution v1.5.0, Principle VII, and [ADR-114](../../docs/adrs/20261007-114-telemetry_is_on_and_the_operators_to_redirect.md) record it.
