@@ -13,6 +13,7 @@ import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { createAndGiveItem } from "@/pages/world/actor/actorContent";
 import type { InventoryEntryRecord } from "@/types/inventory";
 import type { WorldItemRecord } from "@/types/item";
+import { playRefusalText } from "@/api/notAdopted";
 
 export interface ActorInventoryPanelProps {
   actorId: string;
@@ -187,9 +188,7 @@ export function ActorInventoryPanel({
       await adjustInventoryQuantity(entry.id, nextQuantity);
       refresh();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to adjust quantity",
-      );
+      setError(playRefusalText(err, "Failed to adjust quantity"));
     } finally {
       setPendingEntryId(null);
     }

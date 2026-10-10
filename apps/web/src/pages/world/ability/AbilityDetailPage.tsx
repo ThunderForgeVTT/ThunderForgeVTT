@@ -40,6 +40,7 @@ import {
   labelFor,
   type AbilityVocabulary,
 } from "@/abilities/vocabulary";
+import { playRefusalText } from "@/api/notAdopted";
 
 export interface AbilityDetailPageProps {
   mode: "view" | "edit";
@@ -274,9 +275,7 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
       setShareLinkId(link.id);
       await navigator.clipboard.writeText(url).catch(() => {});
     } catch (err) {
-      setStatus(
-        err instanceof Error ? err.message : "Failed to create share link",
-      );
+      setStatus(playRefusalText(err, "Failed to create share link"));
     } finally {
       setIsSharing(false);
     }

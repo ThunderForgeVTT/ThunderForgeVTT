@@ -31,6 +31,7 @@ import {
 import { ItemOwnershipBlock } from "@/pages/world/item/ItemOwnershipBlock";
 import type { WorldItemRecord } from "@/types/item";
 import type { WorldRecord } from "@/types/world";
+import { playRefusalText } from "@/api/notAdopted";
 
 export interface ItemDetailPageProps {
   mode: "view" | "edit";
@@ -224,9 +225,7 @@ export default function ItemDetailPage({ mode }: ItemDetailPageProps) {
       setShareLinkId(link.id);
       await navigator.clipboard.writeText(url).catch(() => {});
     } catch (err) {
-      setStatus(
-        err instanceof Error ? err.message : "Failed to create share link",
-      );
+      setStatus(playRefusalText(err, "Failed to create share link"));
     } finally {
       setIsSharing(false);
     }

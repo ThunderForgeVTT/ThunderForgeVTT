@@ -14,6 +14,7 @@ import { attackSummary, warningTexts } from "../AttackLog/attackText";
 import { useSelectedTokenIds } from "../useSelectedTokenIds";
 import { AdvantagePicker } from "@/components/world/RollAdvantage/AdvantagePicker";
 import type { Advantage } from "@/types/roll";
+import { playRefusalText } from "@/api/notAdopted";
 
 /** The value of the "no target" choice. */
 const NO_TARGET = "";
@@ -210,7 +211,7 @@ export function AttackFlow({
       const made = await makeAttack({ ...input, advantage: chosen });
       setResult(made);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "The attack failed");
+      setError(playRefusalText(err, "The attack failed"));
     } finally {
       setRolling(false);
     }

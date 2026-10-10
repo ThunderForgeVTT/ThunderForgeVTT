@@ -1403,7 +1403,7 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
           </section>
         ))}
       </div>
-      <StagedLinks actorId={actor.id} />
+      <StagedLinks actorId={actor.id} worldId={actor.worldId} />
     </div>
   );
 }

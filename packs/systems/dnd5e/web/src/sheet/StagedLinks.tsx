@@ -7,8 +7,14 @@ import { stagedEntries } from "./stagedEntries";
  * Spec 048: what came in with a sheet that the world does not hold yet. The
  * host's ability and inventory panels list only the world's pieces.
  */
-export default function StagedLinks({ actorId }: { actorId: string }) {
-  const entries = stagedEntries(useActorStagedLinks(actorId).links);
+export default function StagedLinks({
+  actorId,
+  worldId,
+}: {
+  actorId: string;
+  worldId?: string;
+}) {
+  const entries = stagedEntries(useActorStagedLinks(actorId, worldId).links);
   if (entries.length === 0) return null;
   return (
     <section

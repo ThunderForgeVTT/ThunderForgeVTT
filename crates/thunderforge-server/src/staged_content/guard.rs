@@ -32,7 +32,7 @@ use crate::state::AppState;
 pub const NOT_ADOPTED_CODE: &str = "CONTENT_NOT_ADOPTED";
 
 /// FR-036a: why, in the player's terms. The web client shows the same words
-/// (`apps/web/src/pages/world/actor/import/refusal.ts`).
+/// (`apps/web/src/api/notAdopted.ts`).
 pub const NOT_ADOPTED: &str =
     "This came in with the character, and the Game Master has not adopted it yet.";
 
