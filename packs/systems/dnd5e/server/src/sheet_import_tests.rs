@@ -483,6 +483,13 @@ fn a_smudged_mark_is_uncertain_and_nothing_is_invented() {
 fn a_warforged_s_poison_is_a_resistance() {
     let plan = planned("warforged-defences.pdf");
     assert_eq!(new(&plan, "trait_data.resistances"), json!(["poison"]));
+    // Immune to disease has no field: it is unmapped, and goes to the notes.
+    let disease = plan
+        .unmapped
+        .iter()
+        .find(|u| u.value.as_str().is_some_and(|v| v.contains("Disease")))
+        .expect("disease immunity is unmapped");
+    assert_eq!(disease.goes_to, "trait_data.notes");
 }
 
 #[test]
@@ -505,6 +512,65 @@ fn a_printed_number_the_rules_disagree_with_makes_its_base_uncertain() {
     for path in ["classes", "abilities.str"] {
         let field = plan.fields.iter().find(|f| f.path == path).expect(path);
         assert_eq!(field.certainty, PlanCertainty::Uncertain, "{path}");
+    }
+}
+
+#[test]
+fn a_printed_perception_the_rules_disagree_with_shows_both_numbers() {
+    let mut sheet = reading("fighter3-wizard2.pdf");
+    let printed = sheet.derived["skill.perception"]
+        .value
+        .expect("perception is printed");
+    sheet.derived.insert(
+        "skill.perception".to_string(),
+        Field::read(printed + 2, None),
+    );
+    let plan = plan_onto(&sheet, &ActorSnapshot::default());
+    let check = plan
+        .cross_checks
+        .iter()
+        .find(|c| c.path == "derived.skill.perception")
+        .expect("perception is cross-checked");
+    assert_eq!(check.sheet, json!(printed + 2));
+    assert_eq!(check.derived, json!(printed));
+    let marks = plan
+        .fields
+        .iter()
+        .find(|f| f.path == "proficiencies.skills")
+        .expect("the skill marks are planned");
+    assert_eq!(marks.certainty, PlanCertainty::Uncertain);
+    let reason = marks.reason.as_deref().unwrap_or_default();
+    assert!(reason.contains(&(printed + 2).to_string()) && reason.contains(&printed.to_string()));
+    // A derived value is never written.
+    assert!(plan.fields.iter().all(|f| !f.path.starts_with("derived.")));
+}
+
+#[test]
+fn perception_counts_half_proficiency_and_expertise() {
+    for (mark, times_two) in [
+        (SkillMark::None, 0),
+        (SkillMark::Half, 1),
+        (SkillMark::Proficient, 2),
+        (SkillMark::Expertise, 4),
+    ] {
+        let mut sheet = reading("fighter-5.pdf");
+        sheet
+            .proficiencies
+            .skills
+            .insert("perception".to_string(), Field::read(mark, None));
+        let wis = crate::rules::ability_modifier(sheet.abilities["wis"].value.expect("wis"));
+        // Fighter 5: proficiency bonus +3, half of it rounded down.
+        let expected = wis + (3 * times_two) / 2;
+        sheet
+            .derived
+            .insert("skill.perception".to_string(), Field::read(expected, None));
+        let plan = plan_onto(&sheet, &ActorSnapshot::default());
+        assert!(
+            plan.cross_checks
+                .iter()
+                .all(|c| c.path != "derived.skill.perception"),
+            "{mark:?}"
+        );
     }
 }
 

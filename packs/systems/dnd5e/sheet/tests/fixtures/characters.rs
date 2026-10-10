@@ -597,14 +597,14 @@ Common, Halfling, Thieves' Cant";
     c
 }
 
-/// A resistance in the defences block, and an immunity only the trait text
-/// mentions.
+/// A resistance in the defences block, and an immunity to disease, which no
+/// damage type or condition names, printed there and in the trait text.
 pub fn warforged_defences() -> Character {
     let mut c = fighter_5();
     c.file = "warforged-defences.pdf";
     c.name = "Ledger";
     c.species = "Warforged";
-    c.defenses = "Poison - Resistance";
+    c.defenses = "Poison - Resistance, Disease - Immunity";
     c.features = vec![
         FIGHTER_FEATURES,
         "=== WARFORGED TRAITS ===

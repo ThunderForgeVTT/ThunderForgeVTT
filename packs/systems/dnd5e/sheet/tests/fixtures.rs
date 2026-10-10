@@ -39,7 +39,7 @@ const PINNED: &[(&str, &str)] = &[
     ),
     (
         "warforged-defences.pdf",
-        "5617a016cd3c7f6b9041941e37fb4507b5e8b44671f3f34c68c7e944beef3cb1",
+        "2008f1613ae89c324c18b0ee6c50bb449700829a6f7d6cfb2ba56d5b391b5d23",
     ),
     (
         "uncertain-mark.pdf",

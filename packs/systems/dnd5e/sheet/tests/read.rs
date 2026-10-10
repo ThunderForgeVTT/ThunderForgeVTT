@@ -636,6 +636,13 @@ fn warforged_poison_is_a_resistance() {
             .as_str()
             .is_some_and(|d| d.contains("immune to disease"))
     );
+    // Disease is neither a damage type nor a condition: a note, not a list.
+    let defences = c
+        .notes
+        .iter()
+        .find(|n| n.label == "Defenses")
+        .expect("the unknown defence is a note");
+    assert_eq!(defences.text.value.as_deref(), Some("Disease - Immunity"));
 }
 
 #[test]

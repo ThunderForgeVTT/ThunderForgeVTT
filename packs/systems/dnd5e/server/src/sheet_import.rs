@@ -21,7 +21,7 @@ use thunderforge_pdf::{Document, Limits, PdfError};
 use thunderforge_sheet_import::plan::Unmapped;
 use thunderforge_sheet_import::{
     ActorSnapshot, ContentTarget, FieldChange, ImportPlan, ImportedCharacter, ReadError,
-    SheetReader,
+    SheetReader, SkillMark,
 };
 use thunderforge_system_dnd5e_sheet::DdbPdf;
 
@@ -583,9 +583,10 @@ fn feet(range: &str) -> Option<i64> {
 }
 
 /// What the sheet printed that the rules derive. A modifier is checked
-/// against its score, and the proficiency bonus against the level; skills,
-/// saves and passives are not, because a feat or an item moves them and the
-/// rules here would cry wolf.
+/// against its score, the proficiency bonus against the level, and
+/// Perception against Wisdom and its mark, which is what the table rolls
+/// most. Other skills, saves and passives are not, because a feat or an item
+/// moves them and the rules here would cry wolf.
 fn cross_checks(reading: &ImportedCharacter, plan: &mut ImportPlan) {
     for (short, _) in ABILITIES {
         let printed = reading
@@ -611,8 +612,8 @@ fn cross_checks(reading: &ImportedCharacter, plan: &mut ImportPlan) {
         .derived
         .get("proficiency_bonus")
         .and_then(|f| f.value);
-    if let (Some(printed), Some(bonus)) = (printed, level.and_then(crate::rules::proficiency_bonus))
-    {
+    let bonus = level.and_then(crate::rules::proficiency_bonus);
+    if let (Some(printed), Some(bonus)) = (printed, bonus) {
         plan.cross_check(
             "derived.proficiency_bonus",
             json!(printed),
@@ -620,6 +621,39 @@ fn cross_checks(reading: &ImportedCharacter, plan: &mut ImportPlan) {
             &["classes"],
         );
     }
+    if let Some(bonus) = bonus {
+        perception(reading, bonus, plan);
+    }
+}
+
+/// Wisdom's modifier plus the bonus the mark gives: half of it rounded down
+/// for Jack of All Trades, double for expertise.
+fn perception(reading: &ImportedCharacter, bonus: i32, plan: &mut ImportPlan) {
+    let printed = reading
+        .derived
+        .get("skill.perception")
+        .and_then(|f| f.value);
+    let wis = reading.abilities.get("wis").and_then(|f| f.value);
+    let mark = reading
+        .proficiencies
+        .skills
+        .get("perception")
+        .and_then(|f| f.value);
+    let (Some(printed), Some(wis), Some(mark)) = (printed, wis, mark) else {
+        return;
+    };
+    let from_mark = match mark {
+        SkillMark::None => 0,
+        SkillMark::Half => bonus / 2,
+        SkillMark::Proficient => bonus,
+        SkillMark::Expertise => bonus * 2,
+    };
+    plan.cross_check(
+        "derived.skill.perception",
+        json!(printed),
+        json!(crate::rules::ability_modifier(wis) + from_mark),
+        &["proficiencies.skills"],
+    );
 }
 
 #[cfg(test)]

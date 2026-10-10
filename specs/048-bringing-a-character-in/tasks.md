@@ -226,13 +226,14 @@ and what cannot be read is refused whole, with a reason.
 
 **Independent test**: `sheet-import-review.spec.ts` and `sheet-import-refusals.spec.ts`.
 
-- [ ] T045 [P] [US2] Write reader and plan tests:
+- [X] T045 [P] [US2] Write reader and plan tests:
   - `uncertain-mark.pdf` gives an Uncertain field with its reason;
   - a printed Perception that disagrees with the pack's derivation becomes a cross-check showing both numbers, and the derived value is not written;
   - an unread field stays as it was;
   - a correction is written and marked `CORRECTED`;
   - `warforged-defences.pdf` sends disease immunity to unmapped notes.
-- [ ] T046 [US2] Make T045 pass in `fields.rs` and the core `plan.rs`. Have `refine` append unmapped values to `trait_data.notes` under "From the imported sheet" (FR-013).
+- [X] T046 [US2] Make T045 pass in `fields.rs` and the core `plan.rs`. Have `refine` append unmapped values to `trait_data.notes` under "From the imported sheet" (FR-013).
+  - Done: the uncertain, unread, corrected and cross-check rules were already in the core `plan.rs` (T035); the new rule is the pack's Perception cross-check in `packs/systems/dnd5e/server/src/sheet_import.rs` (Wisdom's modifier plus the mark's share of the bonus: half for Jack of All Trades, double for expertise), against the skill marks. The warforged fixture now prints "Disease - Immunity" in its Defenses box, where D&D Beyond prints it; the reader's unknown-defence path makes it a "Defenses" note, and it plans as unmapped to `trait_data.notes` (fixture re-pinned). The notes block is written by `notes_with_unmapped` in `sheet_import/apply.rs`, now tested in `apply_tests.rs`. On the owner's 7 real exports the plan raises no cross-checks.
 - [ ] T047 [P] [US2] Write server tests for each refusal code in contracts/graphql-sheet-import.md: `SHEET_ENCRYPTED`, `SHEET_TOO_LARGE` (before the body is parsed), `SHEET_TOO_MANY_PAGES`, `SHEET_UNREADABLE`, `SHEET_NOT_RECOGNISED` (`not-a-ddb-sheet.pdf`) and `SYSTEM_HAS_NO_MAPPING` (a pack with no block). Each writes nothing.
 - [ ] T048 [US2] Map the `PdfError` and `ReadError` values to those codes in `sheet_import/mod.rs`, with the sentence a player reads. T047 goes green.
 - [ ] T049 [US2] Grow the review in `SheetImportPage.tsx`:

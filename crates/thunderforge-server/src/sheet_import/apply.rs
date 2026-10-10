@@ -725,3 +725,7 @@ fn write_item_link(
     }
     .map_err(db)
 }
+
+#[cfg(test)]
+#[path = "apply_tests.rs"]
+mod tests;
