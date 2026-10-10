@@ -168,6 +168,9 @@ docs/IMPLEMENTATION_GUIDE.md
 ### Playwright ###
 apps/web/test-results/
 apps/web/playwright-report/
+# Spec 048: the 5e sheet reader's harness build and its Playwright output.
+packs/systems/dnd5e/web/sheet-reader-dist/
+packs/systems/dnd5e/web/test-results/
 apps/web/e2e/screenshots/
 apps/web/e2e/fixtures/.demo/
 # A cached admin session written by the e2e suite so one registration can serve

@@ -52,3 +52,32 @@ fn bytes_that_are_not_a_pdf_answer_not_recognised_with_an_error() {
         "{answer}"
     );
 }
+
+/// The native answer for every fixture, written where the browser harness
+/// (`pnpm -F @thunderforge/dnd5e test:sheet-reader`, T043) compares the wasm
+/// answer against it: `target/sheet-fixtures/<fixture>.json`.
+#[test]
+fn every_fixture_answers_and_the_answer_is_kept_for_the_browser() {
+    let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let out = std::env::var_os("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../../target"))
+        .join("sheet-fixtures");
+    std::fs::create_dir_all(&out).expect("the fixtures directory");
+    let mut written = 0;
+    for entry in std::fs::read_dir(&fixtures).expect("the fixtures") {
+        let path = entry.expect("a fixture").path();
+        if path.extension().is_none_or(|ext| ext != "pdf") {
+            continue;
+        }
+        let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+        // Written as `readSheet` returns it: parsing it into a `Value` and
+        // printing it again would round its f32 rectangles.
+        let raw = read_sheet_json(&bytes(&format!("{stem}.pdf")));
+        let answer: Value = serde_json::from_str(&raw).expect("readSheet answers JSON");
+        assert!(answer["recognised"].is_boolean(), "{stem}: {answer}");
+        std::fs::write(out.join(format!("{stem}.json")), raw).expect("the native answer");
+        written += 1;
+    }
+    assert!(written >= 8, "only {written} fixtures");
+}

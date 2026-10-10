@@ -208,7 +208,8 @@ Content the world lacks is staged under their name and kept out of play.
   - a second run that declines writes nothing;
   - the GM imports onto an NPC;
   - a second player sees no button, and the server refuses a direct call.
-- [ ] T043 [P] [US1] Add a harness page and a Playwright config to `packs/systems/dnd5e/web` (script `test:sheet-reader`), with `e2e/sheet-reader.spec.ts`. This is the slice's standalone half. With no server, it reads every fixture in the browser and checks that the wasm reading equals the native reading, which `cargo test` writes to `target/sheet-fixtures/*.json`.
+- [X] T043 [P] [US1] Add a harness page and a Playwright config to `packs/systems/dnd5e/web` (script `test:sheet-reader`), with `e2e/sheet-reader.spec.ts`. This is the slice's standalone half. With no server, it reads every fixture in the browser and checks that the wasm reading equals the native reading, which `cargo test` writes to `target/sheet-fixtures/*.json`.
+  - Done: `tests/browser.rs` writes each answer exactly as `readSheet` returns it (parsing it into a `serde_json::Value` first rounds the f32 rectangles), and `test:sheet-reader` runs that test before the build, so the comparison never reads stale answers. The harness is `sheet-reader/` and `vite.sheet-reader.config.ts`, on port 5196. 9 passed: one per fixture, plus the count.
 - [ ] T044 [US1] **Proof**: `pnpm e2e:sheet-import` and `pnpm e2e:sheet-import:standalone` are green. Then run every slice that `pnpm e2e:which --diff` names. The schema changed, so it prints FULL SUITE; run the named slices instead, which must include `actors` (with `players-hero-edit.spec.ts`), `collections`, `compendium` and `combat`. Never run `node ./scripts/e2e-parallel.mjs` on its own. Record each slice's result here.
 
 **Checkpoint (MVP)**: a player brings a D&D Beyond character onto the actor
