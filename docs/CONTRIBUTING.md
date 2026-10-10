@@ -90,6 +90,16 @@ catch-up all go through it. A new path to a roll must use it too, rather
 than check visibility itself. A `MaskedRoll` cannot be built from a roll's
 row, so a masked roll cannot carry its numbers by mistake.
 
+Clearing the feed (spec 088) is the rule asked before that one.
+`clearWorldRolls` stamps `worlds.rolls_cleared_at` and records
+`ROLLS_CLEARED` (39). `visibility::cleared` then answers, for every path
+above, whether a roll was made at or before the last clear; a cleared roll
+reaches no one, the GM included, and cannot be revealed or rerolled. Rows are
+never deleted, so the world's record keeps them. The stream and the catch-up
+judge a `ROLL_MADE` event by the clear recorded before it, not by the
+world's current stamp, so a client replaying history sees each roll vanish
+where the GM cleared it. A client drops what it holds when the 39 arrives.
+
 The demo answers GraphQL in the browser, so it mirrors the rule in
 `apps/demo/src/backend/handlers/dice.ts` and `events.ts`. Its tabs share one
 world through `apps/demo/src/backend/tabs.ts`. The tab holding the
@@ -208,6 +218,44 @@ other people's worlds (`users/shape_cleanup.rs`), announced by each world's
 owner, because `shapes.created_by` and `updated_by` have no `ON DELETE`.
 
 The demo mirrors all of it in `apps/demo/src/backend/handlers/shapes.ts`.
+
+### Edge walls
+
+Spec 088 US6. A map import, a base map and a level's new background wall the
+rectangle the art covers, except where the file's own walls already lie on
+it. The geometry is pure and lives in
+`crates/thunderforge-server/src/map_import/perimeter.rs`:
+`perimeter_walls` walls each gap wider than `TOLERANCE` (0.5 px) along the
+four edges, and `lies_on_bounds` says whether a wall still sits on them.
+
+An edge wall is an ordinary wall with `metadata.perimeter = true`. A
+re-import, or a new background, deletes the marked walls that still lie on
+the *old* bounds and adds the new ones in the same transaction, so a scene
+never collects a second set. A marked wall the GM has moved off the edge
+fails `lies_on_bounds` and is kept. Nothing else reads the mark; walls are
+drawn, blocked and synced the same with or without it. The demo mirrors the
+rule in its map import.
+
+### Settings forms and unsaved changes
+
+Spec 088 US7. The mail page is one form over a pure model,
+`apps/web/src/pages/admin/settingsForm.ts`: the loaded baseline, and a change
+per key (`set` or `clear`). A plain key is dirty when its draft, trimmed,
+differs from the baseline, because the server trims too; a secret is dirty
+only when typed into or cleared while set; a key fixed by the environment is
+never dirty. Save sends one `updateInstanceSetting` per dirty key, in form
+order with `mail.enabled` last, then `applyResults` moves each saved key into
+the baseline and keeps a refused one dirty beside its reason, and `rebase`
+re-reads the settings and keeps only what still differs. Client checks
+(`errors`) hold Save off; the server's refusals (`refused`) do not.
+
+`useUnsavedChanges(dirty)` (`apps/web/src/hooks/`) asks before a dirty form
+is lost: `beforeunload` for a reload or a closed tab, and a confirm on any
+in-app link, caught on the document in the capture phase ahead of the
+router. The app mounts a `BrowserRouter`, so there is no `useBlocker`; a
+page that calls `navigate()` itself asks with `window.confirm` first. The
+other settings panels keep their per-row Save, and `SettingRow` follows its
+`setting` prop while it is clean, so a reload never leaves a stale draft.
 
 ### Proving a change
 
