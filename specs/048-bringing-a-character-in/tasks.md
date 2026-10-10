@@ -425,7 +425,7 @@ without throwing play away.
 ### The flag, the docs, the record
 
 - [ ] T089 [P] Write `apps/web/e2e/sheet-import-flag.spec.ts`, following `instance-feature-flags.spec.ts`. With the flag off, the button is absent and a direct call gets `FEATURE_DISABLED`, while staged decisions and downloads still work. With it on, the import works.
-- [ ] T090 [P] Write the user guide `docs/guides/bringing-a-character-in.md`. It covers:
+- [X] T090 [P] Write the user guide `docs/guides/bringing-a-character-in.md`. It covers:
   - what a player does from the actor screen and the Players screen;
   - reading the review (read, uncertain, unread, cross-checks);
   - what "awaiting the GM" and "declined by the GM" mean;
@@ -433,7 +433,8 @@ without throwing play away.
   - re-import and rollback;
   - where the file is kept and who can download it.
   Link it from `docs/guides/characters-for-your-players.md`.
-- [ ] T091 [P] In `docs/CONTRIBUTING.md`, add a "Bringing a character in" section. It covers:
+  - Done: Done 2026-10-10: `docs/guides/bringing-a-character-in.md`, linked from characters-for-your-players.md.
+- [X] T091 [P] In `docs/CONTRIBUTING.md`, add a "Bringing a character in" section. It covers:
   - the reader trait and the `SheetImport` slot;
   - the `sheetImport` block;
   - the read-twice rule and the plan hash;
@@ -441,7 +442,9 @@ without throwing play away.
   - the fixture policy: generated, deterministic, nobody's sheet;
   - `measure_corpus`;
   - how to add a system's reader.
-- [ ] T092 Move ADR-115 to Accepted, with what was built. Update the README row.
+  - Done: Done 2026-10-10: CONTRIBUTING "Bringing a character in": reader and slot, sheetImport block, read twice, staged content, fixtures, measure_corpus, adding a reader.
+- [X] T092 Move ADR-115 to Accepted, with what was built. Update the README row.
+  - Done: Done 2026-10-10: ADR-115 Accepted with "What Was Built"; README row updated.
 - [X] T093 Run `measure_corpus` on the owner's seven exports. Record per-field read, uncertain and unread counts in research R17, with no values, for SC-002. Each field the corpus reads wrong becomes a reader fix and a fixture case, before T097.
   - Done: Done 2026-10-10: 7 of 7 read, 1,180 leaves read, 0 uncertain, 27 unread (research R17). The first run found 2 uncertain on one sheet: two casting classes printed in one column. Fixed in `casting_columns` (fields.rs) with the invented case `two_casting_classes_in_one_column_are_two_casters`; the unread are subclass (no field on the export), hit dice used and current HP (blank, kept in play) and 2 empty alignments.
 - [ ] T094 [P] Add `apps/web/playtest/bring-a-character.playtest.ts` (FR-061). A player brings `cleric-7.pdf` in from the actor screen, the GM adopts their domain spell, and the character casts it at the table. It runs with `pnpm playtest`, last.

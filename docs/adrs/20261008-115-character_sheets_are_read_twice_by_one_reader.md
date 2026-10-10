@@ -1,7 +1,7 @@
 # ADR-115: Character Sheets Are Read Twice, by One Reader
 
 **Date:** 2026-10-08
-**Status:** Proposed
+**Status:** Accepted (2026-10-10)
 **Participants:** ThunderForgeVTT Team
 **Related:** spec 048 (FR-001, FR-001a, FR-003, FR-005, FR-011, FR-030 to FR-037), spec 049 (reading a source book in the browser), [ADR-113](./20261006-113-the_rules_of_a_fight_are_one_crate.md) (one crate, two targets), [ADR-062](./20260902-062-packs_extend_the_engine_with_data_not_code.md) (packs extend the engine with data, not code)
 
@@ -100,3 +100,26 @@ system that reads sheets**.
   the two reads shows up as `PLAN_CHANGED`, never as a silent difference.
 - The GM's "Brought by players" queue reads `world_staged_content` only;
   nothing in play joins it.
+
+## What Was Built (2026-10-10)
+
+Spec 048 built the decision as written.
+
+- `crates/thunderforge-sheet-import` holds `ImportedCharacter`, the
+  `SheetReader` trait, `plan` and `plan_hash`. Canvas core's `SheetImport`
+  slot carries a pack's readers and its `refine` hook.
+- Two readers: `ddb-pdf` (`packs/systems/dnd5e/sheet`, D&D Beyond's export)
+  and `tf-rfs-pdf` (`packs/systems/roll_for_shoes/sheet`). Each is built to
+  wasm as `dist/sheet-<system>` and linked natively by the server.
+- `sheetImportPreview` plans without writing; `applySheetImport` uploads,
+  reads again and writes only on a matching plan hash, else `PLAN_CHANGED`.
+- `world_staged_content` holds undecided content, one row per world, kind,
+  normalised name and content hash. Play joins world content only; a use of
+  a staged piece is refused and reported to the GM.
+- The file is kept per version (`sheet_import_versions`), downloadable by
+  its uploader and the world's GM, carried in the account's export, and
+  deleted with the account.
+- `feature.sheet_import` gates the preview and the apply only; decisions,
+  rollbacks and downloads stay available when it is off.
+- On the owner's seven real exports, the reader read every sheet, with no
+  uncertain leaf after one fix (two casting classes in one column).

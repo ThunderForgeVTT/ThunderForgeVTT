@@ -124,7 +124,7 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20261004-111](./20261004-111-four_homes_and_why_packs_is_its_own.md) | Accepted | Four Homes, and Why `packs/` Is Its Own |
 | [20261004-112](./20261004-112-a_world_s_system_settings_are_declared_rows.md) | Accepted | A World's System Settings Are Declared Rows |
 | [20261007-114](./20261007-114-telemetry_is_on_and_the_operators_to_redirect.md) | Accepted | Telemetry Is On, Anonymous, and the Operator's to Redirect |
-| [20261008-115](./20261008-115-character_sheets_are_read_twice_by_one_reader.md) | Proposed | Character Sheets Are Read Twice, by One Reader |
+| [20261008-115](./20261008-115-character_sheets_are_read_twice_by_one_reader.md) | Accepted | Character Sheets Are Read Twice, by One Reader |
 
 > **Note (2026-08-19):** ADRs 020–024 originally collided with an unrelated "pack system" batch that reused the same day-020 through day-024 numbers. The world-domain ADRs (020–024 above) were committed first and are documented here; the colliding pack-system ADRs were renumbered to 026–030. See `docs/SYSTEM_HOOKS_API_GUIDE.md` and ADR-036's "Related Decisions" for the corrected references.
 

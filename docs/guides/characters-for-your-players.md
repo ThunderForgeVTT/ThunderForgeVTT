@@ -32,3 +32,9 @@ look builder instead of waiting on you.
 
 Open the character's page and press **Un-claim**. It can be offered again
 from there.
+
+## Bringing one in from a sheet
+
+A player who already has the character on D&D Beyond, or on a Roll for Shoes
+sheet, can bring it in from its PDF. See
+[Bringing a character in](./bringing-a-character-in.md).
