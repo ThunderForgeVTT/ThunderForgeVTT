@@ -44,6 +44,7 @@ import { startSheetImportEventSync } from "@/engine/world/sync/sheetImport";
 import { subscribeToWorldEvents } from "@/engine/world/sync/subscriptionClient";
 import { mayEditActor } from "@/pages/world/actor/actorEditRight";
 import { BringInSheetButton } from "@/pages/world/actor/import/BringInSheetButton";
+import { ImportHistory } from "@/pages/world/actor/import/ImportHistory";
 import { PackActorSheet } from "@/pages/world/actor/PackActorSheet";
 import { SystemChecksPanel } from "@/pages/world/actor/SystemChecksPanel";
 import { resolvePanel } from "@/panels/systemPanels";
@@ -714,6 +715,14 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
                 onApplied={() => setSheetVersion((version) => version + 1)}
               />
             ) : null}
+
+            {/* Spec 048 US5: the sheets brought onto this character. Remounts
+            on an import or a rollback, so the list reads again. */}
+            <ImportHistory
+              key={`history-${sheetVersion}`}
+              actorId={actorId}
+              isGm={isDm}
+            />
 
             {/* Spec 036 US3b (FR-036): rolling a check from the sheet. Renders
             nothing at all for a system that declares none, which is seven of

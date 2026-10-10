@@ -377,7 +377,8 @@ owner and the GM.
   - Done: `graphql/mutations_sheet_import_file_tests.rs`: the owner and the GM get 200 with `private, no-store` and the exact bytes; a Trusted Player, another world's GM and a stranger get the same 404 a missing version gets.
 - [X] T077 [US5] Implement `GET /api/sheet-imports/{versionId}/file` in `sheet_import/route.rs` and register it with the server's routes. T076 goes green.
   - Done: `sheet_import/route.rs`, merged in `main.rs` behind `require_authenticated_user`. Served as an attachment `sheet-v{n}.pdf` with a sandboxing CSP and nosniff; every refusal is one 404 so a version's existence is not disclosed.
-- [ ] T078 [US5] Add `apps/web/src/pages/world/actor/import/ImportHistory.tsx` to the actor screen. It lists versions and rollbacks with who and when. Download appears for the owner and the GM, and Roll back for the GM only.
+- [X] T078 [US5] Add `apps/web/src/pages/world/actor/import/ImportHistory.tsx` to the actor screen. It lists versions and rollbacks with who and when. Download appears for the owner and the GM, and Roll back for the GM only.
+  - Done: `ImportHistory.tsx` on the actor screen, under the sheet: "Version N brought in by X" and "Rolled back to before version N by X", with the time. The download link shows only where the file is available to this viewer; rollback is offered to the GM only, on import rows, behind a confirm. Remounts on `sheetVersion`, so a 40 or 42 event refreshes it. 3 vitest tests; `api/sheetImport.ts` gains `rollBackActor` and `sheetFileUrl`.
 - [ ] T079 [P] [US5] Write `apps/web/e2e/sheet-import-reimport.spec.ts`: level 5 then level 6, where the review shows only the differences and the table's current HP survives.
 - [ ] T080 [P] [US5] Write `apps/web/e2e/sheet-import-rollback.spec.ts`:
   - the GM rolls back a bad import and play state survives;

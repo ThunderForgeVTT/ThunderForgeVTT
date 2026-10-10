@@ -207,6 +207,31 @@ export function applySheetImport({
   ).then((data) => data.applySheetImport);
 }
 
+/**
+ * Roll the actor back to before `toImportId`. The world's GM only; the
+ * values in play keep what the table has now.
+ */
+export function rollBackActor(
+  actorId: string,
+  toImportId: string,
+): Promise<ActorImportRecord> {
+  return postGraphQL<{ rollBackActor: ActorImportRecord }>(
+    `
+      mutation RollBackActor($actorId: UUID!, $toImportId: UUID!) {
+        rollBackActor(actorId: $actorId, toImportId: $toImportId) {
+          ${RECORD_FIELDS}
+        }
+      }
+    `,
+    { actorId, toImportId },
+  ).then((data) => data.rollBackActor);
+}
+
+/** Where the owner and the GM download a version's file. */
+export function sheetFileUrl(versionId: string): string {
+  return `/api/sheet-imports/${encodeURIComponent(versionId)}/file`;
+}
+
 export type StagedState = "PENDING" | "ADOPTED" | "DECLINED";
 
 /** An actor's link to a piece the world does not hold yet. */
