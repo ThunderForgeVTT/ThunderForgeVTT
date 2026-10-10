@@ -447,11 +447,15 @@ server's spans.
 **Independent Test**: The unit tests for `loadTelemetry`, `framesSummary`
 and `graphqlClient`, and `apps/web/e2e/telemetry-engine.spec.ts`.
 
-- [ ] T074 [P] [US7] Add `apps/web/src/engine/bevy/loadTelemetry.ts` with a unit test. It turns `mountEngine`'s stage callbacks (`apps/web/src/engine/bevy/index.ts:522`) into an `engine.load` span with `download`, `compile` and `start` children. Add the stage hooks to `index.ts` without a telemetry import.
-- [ ] T075 [P] [US7] Add `apps/web/src/engine/bevy/framesSummary.ts` with a unit test. It turns `apps/web/src/engine/bevy/stats.ts`'s mirror into one `engine.frames` record per minute, with frame-rate percentiles and no ids, in sampled sessions only.
-- [ ] T076 [US7] In `apps/web/src/api/graphqlClient.ts`, next to `withCsrf` (line 318), add `traceparent` in sampled sessions only. Test that it is absent when telemetry is off or unsampled.
-- [ ] T077 [US7] Write `apps/web/e2e/telemetry-engine.spec.ts`. With an enabled, fully sampled routed config, mounting the board posts an `engine.load` trace with three child spans, and a GraphQL request carries a `traceparent` whose trace id matches a posted span.
-- [ ] T078 [US7] Add the engine load time and frame-rate panels to `deploy/k8s/observability/dashboards/demo-funnel.json`, and the Tempo link from a slow field in `graphql.json`. Run `make observability-check`.
+- [X] T074 [P] [US7] Add `apps/web/src/engine/bevy/loadTelemetry.ts` with a unit test. It turns `mountEngine`'s stage callbacks (`apps/web/src/engine/bevy/index.ts:522`) into an `engine.load` span with `download`, `compile` and `start` children. Add the stage hooks to `index.ts` without a telemetry import.
+  - Done. `engine.load` has `download`, `compile` and `start`; `compile` is what is left of the wasm instantiation once the download is taken out, because the browser does not report the two apart. `resumed` (a download picked up from the cache) is left off: the resumable-download path reports no stage of its own. The stages arrive as `loadSignals.ts` signals stamped with `at` when emitted, so the span's times are the stages' own and not when telemetry heard of them.
+- [X] T075 [P] [US7] Add `apps/web/src/engine/bevy/framesSummary.ts` with a unit test. It turns `apps/web/src/engine/bevy/stats.ts`'s mirror into one `engine.frames` record per minute, with frame-rate percentiles and no ids, in sampled sessions only.
+  - Done. One `engine.frames` record per minute is the contract; it is also sent at `pagehide`, so a visit shorter than a minute still reports.
+- [X] T076 [US7] In `apps/web/src/api/graphqlClient.ts`, next to `withCsrf` (line 318), add `traceparent` in sampled sessions only. Test that it is absent when telemetry is off or unsampled.
+  - Done through `apps/web/src/api/requestTracing.ts`, a registry the telemetry chunk fills, so `graphqlClient.ts` imports no telemetry code. `Telemetry.begin()` returns an open span (its `traceparent` and `end`), and the browser's `graphql.request` span is the parent the server's span joins.
+- [X] T077 [US7] Write `apps/web/e2e/telemetry-engine.spec.ts`. With an enabled, fully sampled routed config, mounting the board posts an `engine.load` trace with three child spans, and a GraphQL request carries a `traceparent` whose trace id matches a posted span.
+- [X] T078 [US7] Add the engine load time and frame-rate panels to `deploy/k8s/observability/dashboards/demo-funnel.json`, and the Tempo link from a slow field in `graphql.json`. Run `make observability-check`.
+  - Done. `graphql.json` also gains a Tempo link from the browser's `graphql.request` spans, beside the one from a slow field.
 
 **Checkpoint**: `pnpm e2e:telemetry` and `pnpm e2e:resumable-downloads` are
 green.

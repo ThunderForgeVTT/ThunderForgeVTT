@@ -24,6 +24,8 @@ export const telemetry: Telemetry = {
   error: (source, error) => current.error(source, error),
   span: (name, start, end, attrs, parent) =>
     current.span(name, start, end, attrs, parent),
+  begin: (name, start, attrs, parent) =>
+    current.begin(name, start, attrs, parent),
   funnel: (step, attrs) => {
     if (current === noopTelemetry)
       addPendingStep(sessionStore(), step as FunnelStep);

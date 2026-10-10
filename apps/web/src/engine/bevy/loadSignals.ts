@@ -15,17 +15,28 @@ import type { EngineLoadStage } from "./index";
 /** The closed set of reasons the board cannot load before it downloads. */
 export type EngineUnavailableReason = "no_webgl2";
 
+/**
+ * `downloaded` is the wasm's last byte, `started` the frame after the
+ * engine's first (spec 086 US7). Neither is a stage the loader shows.
+ */
 export type EngineLoadSignal =
   | { stage: EngineLoadStage }
+  | { stage: "downloaded"; bytes: number }
+  | { stage: "started" }
   | { stage: "unavailable"; reason: EngineUnavailableReason };
 
+/** A signal with the time it was emitted, in epoch milliseconds. */
+export type StampedLoadSignal = EngineLoadSignal & { at: number };
+
 export type EngineLoadSubscribe = (
-  listener: (signal: EngineLoadSignal) => void,
+  listener: (signal: StampedLoadSignal) => void,
 ) => () => void;
 
-export function createLoadSignals(keep = 8) {
-  const history: EngineLoadSignal[] = [];
-  const listeners = new Set<(signal: EngineLoadSignal) => void>();
+const epochNow = () => performance.timeOrigin + performance.now();
+
+export function createLoadSignals(keep = 8, now: () => number = epochNow) {
+  const history: StampedLoadSignal[] = [];
+  const listeners = new Set<(signal: StampedLoadSignal) => void>();
   const subscribe: EngineLoadSubscribe = (listener) => {
     for (const signal of history) listener(signal);
     listeners.add(listener);
@@ -33,7 +44,8 @@ export function createLoadSignals(keep = 8) {
       listeners.delete(listener);
     };
   };
-  const emit = (signal: EngineLoadSignal) => {
+  const emit = (unstamped: EngineLoadSignal) => {
+    const signal = { ...unstamped, at: now() } as StampedLoadSignal;
     history.push(signal);
     if (history.length > keep) history.shift();
     for (const listener of listeners) {

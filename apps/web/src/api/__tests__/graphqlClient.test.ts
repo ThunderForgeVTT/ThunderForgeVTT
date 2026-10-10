@@ -7,6 +7,7 @@ import {
 } from "@/api/graphqlClient";
 import { alreadyLiftedBy } from "@/api/playPause";
 import { onPlayPaused, rearmPlayPaused } from "@/api/playPauseSignal";
+import { setRequestTracer } from "@/api/requestTracing";
 
 /**
  * Covers the failure modes the 23 duplicated `postGraphQL` copies handled
@@ -405,5 +406,61 @@ describe("announcePause", () => {
       stop();
       rearmPlayPaused("w-paused");
     }
+  });
+});
+
+describe("postGraphQL — traceparent (spec 086 US7)", () => {
+  afterEach(() => setRequestTracer(null));
+
+  const headersOf = () =>
+    new Headers((fetchMock.mock.calls[0][1] as RequestInit).headers);
+
+  it("sends no traceparent when telemetry is off", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ data: { worldAbilities: [] } }));
+    await postGraphQL(QUERY, { worldId: "w1" });
+    expect(headersOf().has("traceparent")).toBe(false);
+  });
+
+  it("sends no traceparent in an unsampled session", async () => {
+    setRequestTracer(() => null);
+    fetchMock.mockResolvedValue(jsonResponse({ data: { worldAbilities: [] } }));
+    await postGraphQL(QUERY, { worldId: "w1" });
+    expect(headersOf().has("traceparent")).toBe(false);
+  });
+
+  it("sends the tracer's traceparent and ends the span when sampled", async () => {
+    const tp = `00-${"a".repeat(32)}-${"b".repeat(16)}-01`;
+    const ended: boolean[] = [];
+    const seen: string[] = [];
+    setRequestTracer((query) => {
+      seen.push(query);
+      return { traceparent: tp, end: (ok) => ended.push(ok) };
+    });
+    fetchMock.mockResolvedValue(jsonResponse({ data: { worldAbilities: [] } }));
+    await postGraphQL(QUERY, { worldId: "w1" });
+    expect(headersOf().get("traceparent")).toBe(tp);
+    expect(headersOf().get("Content-Type")).toBe("application/json");
+    expect(seen).toEqual([QUERY]);
+    expect(ended).toEqual([true]);
+  });
+
+  it("ends the span as failed when the request fails", async () => {
+    const ended: boolean[] = [];
+    setRequestTracer(() => ({
+      traceparent: `00-${"a".repeat(32)}-${"b".repeat(16)}-01`,
+      end: (ok) => ended.push(ok),
+    }));
+    fetchMock.mockResolvedValue(textResponse("<html>", 502));
+    await expect(postGraphQL(QUERY, { worldId: "w1" })).rejects.toThrow();
+    expect(ended).toEqual([false]);
+  });
+
+  it("a tracer that throws never stops the request", async () => {
+    setRequestTracer(() => {
+      throw new Error("tracer broke");
+    });
+    fetchMock.mockResolvedValue(jsonResponse({ data: { worldAbilities: [] } }));
+    await postGraphQL(QUERY, { worldId: "w1" });
+    expect(headersOf().has("traceparent")).toBe(false);
   });
 });

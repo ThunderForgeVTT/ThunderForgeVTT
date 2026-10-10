@@ -14,7 +14,10 @@ import {
 } from "@thunderforge/telemetry";
 import { pageView, startCollectors } from "@thunderforge/telemetry/browser";
 import { otlpHttpSink } from "@thunderforge/telemetry/otlp";
+import { watchFrames } from "../engine/bevy/framesSummary";
 import { watchEngineLoad } from "../engine/bevy/loadTelemetry";
+import { setRequestTracer } from "../api/requestTracing";
+import { requestTracer } from "./graphqlSpan";
 import { redact } from "../services/feedbackRedaction";
 import { routeTemplate, watchRoutes } from "./routes";
 
@@ -58,10 +61,13 @@ export function start(config: TelemetryConfig): Telemetry {
     privacy: privacyOf(navigator as Navigator & Record<string, unknown>),
     resource: device(),
   });
+  // Before the collectors, whose `pagehide` flush sends what this queues.
+  watchFrames(t);
   startCollectors(t, {
     routeTemplate: () => routeTemplate(location.pathname),
   });
   watchRoutes((route) => pageView(t, route));
   watchEngineLoad(t);
+  setRequestTracer(requestTracer(t));
   return t;
 }

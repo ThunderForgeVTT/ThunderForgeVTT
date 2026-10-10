@@ -1,6 +1,6 @@
 {
   "title": "ThunderForge: Demo funnel",
-  "description": "From the landing to Run your own: the seven funnel steps, conversion between them, the time to each, what visitors do in the demo (spec 086 US1), and the errors they meet (US2).",
+  "description": "From the landing to Run your own: the seven funnel steps, conversion between them, the time to each, what visitors do in the demo (spec 086 US1), the errors they meet (US2), and how the board loads and runs (US7).",
   "tags": [
     "thunderforge",
     "spec-086"
@@ -691,6 +691,192 @@
         "w": 24,
         "x": 0,
         "y": 47
+      }
+    },
+    {
+      "type": "table",
+      "title": "Engine loads",
+      "description": "The latest engine.load traces from sampled sessions (spec 086 US7): the whole load, from the first request to the frame after the engine's first. Open one for its download, compile and start stages.",
+      "datasource": {
+        "type": "tempo",
+        "uid": "${tempo}"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Start time",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "tempo",
+            "uid": "${tempo}"
+          },
+          "queryType": "traceql",
+          "query": "{ name = \"engine.load\" }",
+          "limit": 50,
+          "tableType": "traces"
+        }
+      ],
+      "id": 11,
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 59
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Engine load stages, p95",
+      "description": "The 95th percentile of each engine.load stage, from Tempo's TraceQL metrics.",
+      "datasource": {
+        "type": "tempo",
+        "uid": "${tempo}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "tempo",
+            "uid": "${tempo}"
+          },
+          "queryType": "traceql",
+          "query": "{ name =~ \"engine.load|download|compile|start\" } | quantile_over_time(duration, .95) by (name)",
+          "metricsQueryType": "range"
+        }
+      ],
+      "id": 12,
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 59
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Frame rate",
+      "description": "engine.frames, one record per board session at pagehide (spec 086 US7): the median frame rate, and the frame rate the slowest 5% of seconds stayed under, by app and tokens on the board.",
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "fps",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki}"
+          },
+          "expr": "quantile_over_time(0.5, {service_name=~\"thunderforge-demo|thunderforge-web\"} | event_name=\"engine.frames\" | unwrap fps_p50 [$__interval]) by (service_name, tokens_bucket)",
+          "legendFormat": "{{service_name}} median, {{tokens_bucket}} tokens"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki}"
+          },
+          "expr": "quantile_over_time(0.5, {service_name=~\"thunderforge-demo|thunderforge-web\"} | event_name=\"engine.frames\" | unwrap fps_p5 [$__interval]) by (service_name, tokens_bucket)",
+          "legendFormat": "{{service_name}} slowest 5%, {{tokens_bucket}} tokens"
+        }
+      ],
+      "id": 13,
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 69
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Frame time, p95",
+      "description": "frame_ms.p95 from engine.frames: how long the slowest 5% of frames took.",
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki}"
+          },
+          "expr": "quantile_over_time(0.5, {service_name=~\"thunderforge-demo|thunderforge-web\"} | event_name=\"engine.frames\" | unwrap frame_ms_p95 [$__interval]) by (service_name, tokens_bucket)",
+          "legendFormat": "{{service_name}}, {{tokens_bucket}} tokens"
+        }
+      ],
+      "id": 14,
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 69
       }
     }
   ]

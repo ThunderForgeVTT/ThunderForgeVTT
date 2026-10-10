@@ -489,8 +489,26 @@ async function fetchWasmWithProgress(
 
   // Content-Type must survive, or `instantiateStreaming` refuses the stream.
   const response = got.toResponse();
-  return new Response(response.body, {
+  return new Response(response.body?.pipeThrough(countBytes()), {
     headers: { "Content-Type": "application/wasm" },
+  });
+}
+
+/**
+ * Passes the wasm through unchanged and says when its last byte went by
+ * (spec 086 US7), so the load's `download` stage ends there and not when
+ * the first answer arrived. Streaming compilation is unaffected.
+ */
+function countBytes(): TransformStream<Uint8Array, Uint8Array> {
+  let bytes = 0;
+  return new TransformStream({
+    transform(chunk, controller) {
+      bytes += chunk.byteLength;
+      controller.enqueue(chunk);
+    },
+    flush() {
+      emitEngineLoad({ stage: "downloaded", bytes });
+    },
   });
 }
 
@@ -575,6 +593,9 @@ export async function mountEngine(
   if (!state.started) {
     module.start(options.canvasSelector);
     state.started = true;
+    // The engine draws its first frame in the next animation frame; this
+    // callback, queued after it, runs once that frame is done (spec 086 US7).
+    requestAnimationFrame(() => emitEngineLoad({ stage: "started" }));
   }
 }
 

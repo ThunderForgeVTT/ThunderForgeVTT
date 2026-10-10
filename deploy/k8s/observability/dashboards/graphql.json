@@ -102,6 +102,10 @@
             {
               "title": "Traces for this field in Tempo",
               "url": "/explore?left={\"datasource\":\"${tempo}\",\"queries\":[{\"queryType\":\"traceql\",\"query\":\"{ name =~ \\\"graphql\\\\..* ${__field.labels.root_field}\\\" }\"}]}"
+            },
+            {
+              "title": "Browser requests for this field in Tempo",
+              "url": "/explore?left={\"datasource\":\"${tempo}\",\"queries\":[{\"queryType\":\"traceql\",\"query\":\"{ name = \\\"graphql.request\\\" && span.graphql.root_field = \\\"${__field.labels.root_field}\\\" }\"}]}"
             }
           ]
         },
@@ -135,7 +139,8 @@
         "w": 12,
         "x": 12,
         "y": 0
-      }
+      },
+      "description": "A slow field links to its traces in Tempo: the server's spans, and the browser's graphql.request spans that sampled sessions send (spec 086 US7), which the server's spans join through traceparent."
     },
     {
       "type": "timeseries",

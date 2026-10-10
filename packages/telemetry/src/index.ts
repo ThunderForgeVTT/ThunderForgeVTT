@@ -24,6 +24,7 @@ export {
 export type {
   CreateTelemetryOptions,
   SpanRef,
+  OpenSpan,
   Telemetry,
   TelemetrySink,
 } from "./telemetry.ts";

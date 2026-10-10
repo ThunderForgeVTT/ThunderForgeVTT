@@ -1,4 +1,5 @@
 import { withCsrf } from "@/api/auth";
+import { traceRequest } from "@/api/requestTracing";
 import { reportPlayPausedIn } from "@/api/playPauseSignal";
 import { reportSessionRefused } from "@/api/sessionExpiry";
 
@@ -310,25 +311,42 @@ export async function postGraphQL<TData>(
   options: GraphQLRequestOptions = {},
 ): Promise<TData> {
   const operation = operationNameOf(query);
-  const response = await send(
-    options.endpoint ?? GRAPHQL_ENDPOINT,
-    {
-      method: "POST",
-      credentials: "same-origin",
-      headers: withCsrf({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ query, variables }),
-    },
-    operation,
-    options.timeoutMs === undefined ? DEFAULT_TIMEOUT_MS : options.timeoutMs,
-  );
+  // Spec 086 US7: a sampled session's request names its browser span, and
+  // the server's span joins it. Off or unsampled, there is no header.
+  const trace = traceRequest(query);
+  let ok = false;
+  try {
+    const response = await send(
+      options.endpoint ?? GRAPHQL_ENDPOINT,
+      {
+        method: "POST",
+        credentials: "same-origin",
+        headers: withCsrf({
+          "Content-Type": "application/json",
+          ...(trace ? { traceparent: trace.traceparent } : {}),
+        }),
+        body: JSON.stringify({ query, variables }),
+      },
+      operation,
+      options.timeoutMs === undefined ? DEFAULT_TIMEOUT_MS : options.timeoutMs,
+    );
 
-  return unwrap<TData>(
-    await readPayload<TData>(response),
-    response,
-    operation,
-    "Request failed",
-    options.announcePause ?? true,
-  );
+    const data = unwrap<TData>(
+      await readPayload<TData>(response),
+      response,
+      operation,
+      "Request failed",
+      options.announcePause ?? true,
+    );
+    ok = true;
+    return data;
+  } finally {
+    try {
+      trace?.end(ok);
+    } catch {
+      // Telemetry never fails a request.
+    }
+  }
 }
 
 /**

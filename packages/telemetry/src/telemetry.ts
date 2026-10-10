@@ -48,6 +48,15 @@ export interface SpanRef {
   spanId: string;
 }
 
+/** A span whose end is not known yet: a request in flight. */
+export interface OpenSpan {
+  ref: SpanRef;
+  /** The `traceparent` naming this span, or `null` in an unsampled session. */
+  traceparent: string | null;
+  /** Record the span. A second call does nothing. */
+  end(end: number, attrs?: Attrs): void;
+}
+
 export interface Telemetry {
   event(name: EventName, attrs?: Attrs): void;
   error(source: ErrorSource, error: unknown): void;
@@ -58,6 +67,12 @@ export interface Telemetry {
     attrs?: Attrs,
     parent?: SpanRef,
   ): SpanRef;
+  begin(
+    name: SpanName,
+    start: number,
+    attrs?: Attrs,
+    parent?: SpanRef,
+  ): OpenSpan;
   funnel(step: FunnelStep, attrs?: Attrs): void;
   traceparent(): string | null;
   flush(keepalive: boolean): void;
@@ -69,6 +84,7 @@ export const noopTelemetry: Telemetry = {
   event() {},
   error() {},
   span: () => NO_SPAN,
+  begin: () => ({ ref: NO_SPAN, traceparent: null, end() {} }),
   funnel() {},
   traceparent: () => null,
   flush() {},
@@ -206,25 +222,42 @@ export function createTelemetry(o: CreateTelemetryOptions): Telemetry {
     },
 
     span(name, start, end, attrs, parent) {
+      const open = t.begin(name, start, attrs, parent);
+      open.end(end);
+      return open.ref;
+    },
+
+    begin(name, start, attrs, parent) {
       const ref: SpanRef = {
         traceId: parent?.traceId ?? randomHex(16, o.random),
         spanId: randomHex(8, o.random),
       };
-      guard(() => {
-        if (!sampled || events >= MAX_EVENTS) return;
-        events += 1;
-        queue.push({
-          kind: "span",
-          name,
-          traceId: ref.traceId,
-          spanId: ref.spanId,
-          parentSpanId: parent?.spanId,
-          start,
-          end: Math.max(start, end),
-          attrs: { ...filterSpanAttributes(attrs), "session.id": session.id },
-        });
-      });
-      return ref;
+      let ended = false;
+      return {
+        ref,
+        traceparent: sampled ? `00-${ref.traceId}-${ref.spanId}-01` : null,
+        end(end, more) {
+          if (ended) return;
+          ended = true;
+          guard(() => {
+            if (!sampled || events >= MAX_EVENTS) return;
+            events += 1;
+            queue.push({
+              kind: "span",
+              name,
+              traceId: ref.traceId,
+              spanId: ref.spanId,
+              parentSpanId: parent?.spanId,
+              start,
+              end: Math.max(start, end),
+              attrs: {
+                ...filterSpanAttributes({ ...attrs, ...more }),
+                "session.id": session.id,
+              },
+            });
+          });
+        },
+      };
     },
 
     funnel(step, attrs) {
