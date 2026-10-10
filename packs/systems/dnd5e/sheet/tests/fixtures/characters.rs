@@ -628,6 +628,17 @@ pub fn uncertain_mark() -> Character {
     c
 }
 
+/// Two things the review must show (spec 048 T051): a score printed as
+/// "l6", which is not a number, and a Perception printed two more than
+/// Wisdom and the proficiency bonus give (+4).
+pub fn review_checks() -> Character {
+    let mut c = fighter_5();
+    c.file = "review-checks.pdf";
+    c.persona = Persona::default();
+    c.overrides = vec![("STR", "l6"), ("Perception", "+6")];
+    c
+}
+
 pub fn all() -> Vec<Character> {
     vec![
         fighter_5(),
@@ -637,5 +648,6 @@ pub fn all() -> Vec<Character> {
         rogue_4(),
         warforged_defences(),
         uncertain_mark(),
+        review_checks(),
     ]
 }

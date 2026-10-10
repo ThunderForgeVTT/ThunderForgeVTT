@@ -46,6 +46,10 @@ const PINNED: &[(&str, &str)] = &[
         "f8d7aca062afdc4699d1a414c6fffeae202ebbd3108413fed3d9b3ddd7ff5d51",
     ),
     (
+        "review-checks.pdf",
+        "92c3992794b3f8bb3137a60b61557a1279c7572ebdd103a67b2136349cfc9622",
+    ),
+    (
         "not-a-ddb-sheet.pdf",
         "5b79f2ae7c900abcad6a61c16074315f2a57c19a5925f66b1477589c93997f8f",
     ),

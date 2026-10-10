@@ -479,6 +479,31 @@ fn a_smudged_mark_is_uncertain_and_nothing_is_invented() {
     assert!(value.get("athletics").is_none(), "{value}");
 }
 
+/// The fixture the review e2e reads (T051): a misprinted score to correct,
+/// and a printed Perception the rules disagree with.
+#[test]
+fn the_review_fixture_has_a_score_to_correct_and_a_cross_check() {
+    let plan = planned("review-checks.pdf");
+    let strength = plan
+        .fields
+        .iter()
+        .find(|f| f.path == "abilities.str")
+        .expect("strength is planned");
+    assert_eq!(strength.certainty, PlanCertainty::Uncertain);
+    assert_eq!(strength.new, None);
+    assert!(strength.reason.as_deref().is_some_and(|r| r.contains("l6")));
+    let checks: Vec<(&str, &Value, &Value)> = plan
+        .cross_checks
+        .iter()
+        .map(|c| (c.path.as_str(), &c.sheet, &c.derived))
+        .collect();
+    assert_eq!(
+        checks,
+        [("derived.skill.perception", &json!(6), &json!(4))],
+        "only Perception disagrees"
+    );
+}
+
 #[test]
 fn a_warforged_s_poison_is_a_resistance() {
     let plan = planned("warforged-defences.pdf");
