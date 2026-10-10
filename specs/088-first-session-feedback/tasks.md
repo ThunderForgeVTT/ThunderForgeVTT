@@ -229,16 +229,16 @@ losing changes.
 
 **Independent Test**: `pnpm e2e:instance`.
 
-- [ ] T090 [P] [US7] TDD: `apps/web/src/pages/admin/settingsForm.test.ts` for every function in data-model.md: trimming, the secret rule, fixed keys, form order with `mail.enabled` last, partial results, and rebase. See them fail.
-- [ ] T091 [US7] `apps/web/src/pages/admin/settingsForm.ts`. T090 passes (FR-050, FR-051).
-- [ ] T092 [P] [US7] `apps/web/src/hooks/useUnsavedChanges.ts`, with tests for `beforeunload` and the link-click guard (FR-054).
-- [ ] T093 [US7] `MailPanel.tsx`: one form over the model, one Save and one Discard, "N unsaved changes", "k of n saved", the guard on, and the settings page's section switches routed through it (FR-052, FR-053, FR-054).
-- [ ] T094 [US7] `SettingRow` (`InstanceSettingsPanel.tsx:163-339`): follow the `setting` prop while clean (FR-055).
-- [ ] T095 [US7] e2e `apps/web/e2e/instance-mail-form.spec.ts` (instance slice): **Save** disabled when clean; change 2 keys and count exactly 2 `updateInstanceSetting` requests by interception (SC-006); the section-switch guard; a refused key stays dirty with its error.
-- [ ] T096 [P] [US7] Adjust `instance-mail.spec.ts` and `mail-delivery.spec.ts` where they press a per-row Save.
-- [ ] T097 [P] [US7] Telemetry: `settings.saved`, `settings.unsaved_warning`.
-- [ ] T098 [US7] `pnpm e2e:instance`, then `pnpm e2e:which --diff` and its slices.
-- [ ] T099 [US7] Commit: "Spec 088: the mail settings save only what changed".
+- [X] T090 [P] [US7] TDD: `apps/web/src/pages/admin/settingsForm.test.ts` for every function in data-model.md: trimming, the secret rule, fixed keys, form order with `mail.enabled` last, partial results, and rebase. See them fail.
+- [X] T091 [US7] `apps/web/src/pages/admin/settingsForm.ts`. T090 passes (FR-050, FR-051).
+- [X] T092 [P] [US7] `apps/web/src/hooks/useUnsavedChanges.ts`, with tests for `beforeunload` and the link-click guard (FR-054).
+- [X] T093 [US7] `MailPanel.tsx`: one form over the model, one Save and one Discard, "N unsaved changes", "k of n saved", the guard on, and the settings page's section switches routed through it (FR-052, FR-053, FR-054).
+- [X] T094 [US7] `SettingRow` (`InstanceSettingsPanel.tsx:163-339`): follow the `setting` prop while clean (FR-055).
+- [X] T095 [US7] e2e `apps/web/e2e/instance-mail-form.spec.ts` (instance slice): **Save** disabled when clean; change 2 keys and count exactly 2 `updateInstanceSetting` requests by interception (SC-006); the section-switch guard; a refused key stays dirty with its error.
+- [X] T096 [P] [US7] Adjust `instance-mail.spec.ts` and `mail-delivery.spec.ts` where they press a per-row Save. instance-mail.spec.ts pressed no per-row Save; only mail-delivery.spec.ts changed.
+- [ ] T097 [P] [US7] Telemetry: `settings.saved`, `settings.unsaved_warning`. (waits on 086)
+- [X] T098 [US7] `pnpm e2e:instance`, then `pnpm e2e:which --diff` and its slices. instance 45/0 (with instance-mail-form and the reworked mail-delivery).
+- [X] T099 [US7] Commit: "Spec 088: the mail settings save only what changed".
 
 ---
 

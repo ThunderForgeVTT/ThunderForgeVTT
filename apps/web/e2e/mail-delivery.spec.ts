@@ -111,10 +111,38 @@ async function setThroughPanel(key: string, value: string): Promise<void> {
     await field.fill(value);
   }
 
-  await admin.getByTestId(`instance-setting-save-${key}`).click();
-  await expect(admin.getByTestId(`instance-setting-${key}`)).toContainText(
-    "Saved.",
-    { timeout: 20_000 },
+  await saveTheForm(key, value, "Saved.");
+}
+
+/**
+ * Spec 088 US7: the mail page is one form with one Save, so a row has no Save
+ * of its own. A value already stored leaves the form clean and Save off, and
+ * there is nothing to send.
+ */
+async function saveTheForm(
+  key: string,
+  value: string | null,
+  notice: string,
+): Promise<void> {
+  const row = admin.getByTestId(`instance-setting-${key}`);
+  // A secret never reads back: a typed one is always a change, and a clear
+  // is one only while a secret is stored.
+  const stored = await readSetting(admin, key);
+  const unchanged =
+    stored.secretState !== null
+      ? value === null && stored.secretState !== "SET"
+      : stored.value === value;
+  if (unchanged) {
+    await expect(row.getByTestId(`instance-setting-dirty-${key}`)).toHaveCount(
+      0,
+    );
+    return;
+  }
+  await expect(row.getByTestId(`instance-setting-dirty-${key}`)).toBeVisible();
+  await admin.getByTestId("mail-form-save").click();
+  await expect(row).toContainText(notice, { timeout: 20_000 });
+  await expect(admin.getByTestId("mail-form-unsaved")).toHaveText(
+    "No unsaved changes",
   );
 }
 
@@ -123,7 +151,8 @@ async function setThroughPanel(key: string, value: string): Promise<void> {
  * proves them — that is where an operator configuring mail is, and where the
  * eight `mail.*` rows are rendered. They are the same `SettingRow` over the
  * same mutation the instance settings panel uses, so every `instance-setting-*`
- * testid below is unchanged; only the page they are read on has moved.
+ * testid below is unchanged; only the page they are read on has moved. Since
+ * spec 088 the page saves them through its one form (`saveTheForm`).
  */
 async function gotoMailSetup(): Promise<void> {
   await admin.goto("/admin/mail");
@@ -247,10 +276,7 @@ test.describe("Spec 040 Scenario D: mail, end to end", () => {
     // Cleared, not merely disabled: step 6 says every `mail.*` setting.
     for (const key of ["mail.host", "mail.from_address", "mail.password"]) {
       await admin.getByTestId(`instance-setting-clear-${key}`).click();
-      await expect(admin.getByTestId(`instance-setting-${key}`)).toContainText(
-        "Cleared.",
-        { timeout: 20_000 },
-      );
+      await saveTheForm(key, null, "Cleared.");
     }
 
     await admin.goto("/admin/readiness");

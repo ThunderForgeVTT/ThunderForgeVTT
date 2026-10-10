@@ -579,6 +579,8 @@
       "paths": [
         "apps/web/src/api/{admin,instanceAccess,instanceSettings,mail,operatorAcknowledgement}.ts",
         "apps/web/src/hooks/useSetupStatus.ts",
+        "apps/web/src/hooks/useUnsavedChanges{,.test}.ts",
+        "apps/web/src/pages/admin/settingsForm{,.test}.ts",
         "apps/web/src/pages/admin/components/__tests__/**",
         "apps/web/src/pages/admin/components/adminSections.ts",
         "apps/web/src/pages/admin/components/{AccessPanel,AdminSectionShell,AdminSidebarNav,AdminTable,DiskUsageChart,GitHubAppsPanel,InstanceSettingsPanel,MailPanel,ManifestEditor,MetricsCard,OperatorAcknowledgementBanner,ReadinessPanel}.tsx",

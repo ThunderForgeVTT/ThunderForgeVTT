@@ -7,6 +7,24 @@ import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { AdminTable } from "./AdminTable";
 import { SettingRow } from "./InstanceSettingsPanel";
 import {
+  applyResults,
+  baselineOf,
+  canSave,
+  clear,
+  dirtyKeys,
+  discard,
+  draftOf,
+  edit,
+  emptyForm,
+  isDirty,
+  rebase,
+  savedNotice,
+  sendValue,
+  type FormState,
+  type SaveResult,
+} from "@/pages/admin/settingsForm";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
+import {
   fetchMailAvailability,
   fetchMailOutbox,
   retryOutboxMessage,
@@ -16,6 +34,7 @@ import {
 } from "@/api/mail";
 import {
   fetchInstanceSettings,
+  updateInstanceSetting,
   type ResolvedSetting,
 } from "@/api/instanceSettings";
 
@@ -39,13 +58,23 @@ import {
  * is also why a failed test leaves a row behind: the failure is findable later
  * by whoever is actually debugging it.
  *
+ * # One form, one Save (spec 088 US7)
+ *
+ * The rows used to save one at a time, so an admin who filled in five boxes
+ * and pressed one Save lost four. Now the page is one form over
+ * `settingsForm.ts`: Save sends one `updateInstanceSetting` per dirty key and
+ * nothing for the rest, in form order with `mail.enabled` last, says how many
+ * landed, and keeps a refused key dirty with its reason. While anything is
+ * unsaved, leaving the page asks first.
+ *
  * # Why the settings ARE edited here now, and why that is not a second writer
  *
  * This file used to say the opposite, and the reasoning was sound but the
  * conclusion was wrong: it argued that editing `mail.*` here would be "a
  * second write path to the same keys". It would only be a second write path
  * if it were a second *implementation*. It is not. The rows below are
- * `SettingRow` — the same component the instance settings panel renders, over
+ * `SettingRow` (in its form mode) — the same component the instance settings
+ * panel renders, over
  * the same `updateInstanceSetting` mutation, with the same `editable`
  * refusals, the same secret handling and the same change record. There is one
  * writer; this page is a second place it is mounted, filtered to the eight
@@ -91,6 +120,28 @@ const SERVER_KEYS = [
 
 const IDENTITY_KEYS = ["mail.from_address", "mail.from_name"] as const;
 
+/** Form order: `dirtyKeys` puts `mail.enabled` last when it sends. */
+const FORM_ORDER = ["mail.enabled", ...SERVER_KEYS, ...IDENTITY_KEYS];
+
+/**
+ * The client's own check. Only a port is checked here; an address is left to
+ * the server, which already says what is wrong with one.
+ */
+function validatorFor(setting: ResolvedSetting) {
+  if (setting.kind !== "PORT") {
+    return undefined;
+  }
+  return (value: string) => {
+    if (value === "") {
+      return null;
+    }
+    const port = Number(value);
+    return /^\d+$/.test(value) && port >= 1 && port <= 65535
+      ? null
+      : "A port is a whole number from 1 to 65535.";
+  };
+}
+
 const OUTBOX_COLUMNS = [
   "To",
   "State",
@@ -112,6 +163,10 @@ export function MailPanel() {
   const [result, setResult] = useState<string | null>(null);
   const [resultOk, setResultOk] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState<FormState | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [notices, setNotices] = useState<Record<string, string>>({});
+  const [saveResult, setSaveResult] = useState<string | null>(null);
 
   const load = useCallback(
     () =>
@@ -124,6 +179,12 @@ export function MailPanel() {
           setAvailability(nextAvailability);
           setOutbox(nextOutbox);
           setSettings(nextSettings);
+          // A reload keeps what the admin has not saved yet, and only that:
+          // a change the fresh settings already hold is no longer a change.
+          const fresh = baselineOf(nextSettings);
+          setForm((current) =>
+            current ? rebase(current, fresh) : emptyForm(fresh),
+          );
           setError(null);
         })
         .catch((cause: unknown) => {
@@ -148,15 +209,69 @@ export function MailPanel() {
     [settings],
   );
 
+  const dirty = form ? dirtyKeys(form, FORM_ORDER) : [];
+  useUnsavedChanges(dirty.length > 0);
+
+  const touched = (key: string) => {
+    setSaveResult(null);
+    setNotices((current) => {
+      if (!(key in current)) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  };
+
   /**
-   * A saved setting changes what this instance can do, so the whole page is
-   * re-read rather than the one row patched. Leaving "cannot send mail yet"
+   * A save changes what this instance can do, so the whole page is re-read
+   * afterwards rather than the rows patched. Leaving "cannot send mail yet"
    * on screen above a host that was just filled in is the specific way this
    * page could lie.
    */
-  const onSettingSaved = useCallback(() => {
-    void load();
-  }, [load]);
+  const handleSave = async () => {
+    if (!form) {
+      return;
+    }
+    const keys = dirtyKeys(form, FORM_ORDER);
+    setSaving(true);
+    setSaveResult(null);
+    const results: SaveResult[] = [];
+    for (const key of keys) {
+      try {
+        await updateInstanceSetting(key, sendValue(form, key));
+        results.push({ key, saved: true });
+      } catch (caught) {
+        results.push({
+          key,
+          saved: false,
+          error:
+            caught instanceof Error
+              ? caught.message
+              : "The change was refused.",
+        });
+      }
+    }
+    const saved: Record<string, string> = {};
+    for (const result of results) {
+      if (result.saved) {
+        saved[result.key] =
+          form.changes[result.key]?.kind === "clear" ? "Cleared." : "Saved.";
+      }
+    }
+    setNotices(saved);
+    setSaveResult(savedNotice(results));
+    setForm((current) => (current ? applyResults(current, results) : current));
+    await load();
+    setSaving(false);
+  };
+
+  const handleDiscard = () => {
+    setForm((current) => (current ? discard(current) : current));
+    setNotices({});
+    setSaveResult(null);
+  };
 
   const renderSettings = (keys: readonly string[]) =>
     keys
@@ -166,7 +281,39 @@ export function MailPanel() {
         <SettingRow
           key={setting.key}
           setting={setting}
-          onSaved={onSettingSaved}
+          form={
+            form
+              ? {
+                  draft: draftOf(form, setting.key),
+                  dirty: isDirty(form, setting.key),
+                  error:
+                    form.errors[setting.key] ??
+                    form.refused[setting.key] ??
+                    null,
+                  notice: notices[setting.key] ?? null,
+                  busy: saving,
+                  onChange: (value) => {
+                    touched(setting.key);
+                    setForm((current) =>
+                      current
+                        ? edit(
+                            current,
+                            setting.key,
+                            value,
+                            validatorFor(setting),
+                          )
+                        : current,
+                    );
+                  },
+                  onClear: () => {
+                    touched(setting.key);
+                    setForm((current) =>
+                      current ? clear(current, setting.key) : current,
+                    );
+                  },
+                }
+              : undefined
+          }
         />
       ));
 
@@ -236,9 +383,9 @@ export function MailPanel() {
           </StatusBadge>
         </div>
         <p className="max-w-[70ch] text-sm text-muted-foreground">
-          Set the server details, save each one, then send yourself a test
-          message. Nothing is lost while this is unconfigured: messages wait in
-          the outbox and are sent once mail works.
+          Set the server details, save them, then send yourself a test message.
+          Nothing is lost while this is unconfigured: messages wait in the
+          outbox and are sent once mail works.
         </p>
       </div>
 
@@ -283,8 +430,8 @@ export function MailPanel() {
         <div className="grid gap-1">
           <h4 className="text-lg font-semibold">The server it sends through</h4>
           <p className="text-sm text-muted-foreground">
-            Your SMTP provider's details. Each row saves on its own, and says
-            where its current value came from.
+            Your SMTP provider's details. Each row says where its current value
+            came from.
           </p>
         </div>
         {renderSettings(SERVER_KEYS)}
@@ -306,6 +453,50 @@ export function MailPanel() {
           </p>
         </div>
         {renderSettings(IDENTITY_KEYS)}
+      </section>
+
+      <section
+        className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card p-4 shadow-sm"
+        data-testid="mail-form-bar"
+        data-dirty={dirty.length > 0 ? "true" : "false"}
+      >
+        <p
+          className="text-sm font-medium"
+          data-testid="mail-form-unsaved"
+          aria-live="polite"
+        >
+          {dirty.length === 0
+            ? "No unsaved changes"
+            : `${dirty.length} unsaved ${dirty.length === 1 ? "change" : "changes"}`}
+        </p>
+        <div className="ml-auto flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={saving || dirty.length === 0}
+            onClick={handleDiscard}
+            data-testid="mail-form-discard"
+          >
+            Discard
+          </Button>
+          <Button
+            type="button"
+            icon="quill"
+            disabled={saving || !form || !canSave(form)}
+            onClick={() => void handleSave()}
+            data-testid="mail-form-save"
+          >
+            {saving ? "Saving..." : "Save"}
+          </Button>
+        </div>
+        {saveResult ? (
+          <p
+            className="basis-full text-sm text-muted-foreground"
+            data-testid="mail-form-result"
+          >
+            {saveResult}
+          </p>
+        ) : null}
       </section>
 
       <section className="grid gap-2 rounded-lg border border-border bg-secondary/40 p-4">

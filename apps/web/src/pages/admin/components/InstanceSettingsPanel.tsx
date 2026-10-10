@@ -155,14 +155,43 @@ export function SettingChangeRow({
   );
 }
 
-interface SettingRowProps {
-  setting: ResolvedSetting;
-  onSaved: (updated: ResolvedSetting) => void;
+/**
+ * Spec 088 US7: a row inside a form that saves for it. The form holds the
+ * draft and the save; the row draws the field, its Clear, and what the form
+ * says about this key. There is no per-row Save in this mode.
+ */
+export interface SettingRowForm {
+  draft: string;
+  dirty: boolean;
+  /** The client's own check, or the server's refusal of the last save. */
+  error: string | null;
+  /** "Saved." or "Cleared.", after a save that took this key. */
+  notice: string | null;
+  busy: boolean;
+  onChange: (value: string) => void;
+  onClear: () => void;
 }
 
-export function SettingRow({ setting, onSaved }: SettingRowProps) {
+interface SettingRowProps {
+  setting: ResolvedSetting;
+  onSaved?: (updated: ResolvedSetting) => void;
+  form?: SettingRowForm;
+}
+
+export function SettingRow({ setting, onSaved, form }: SettingRowProps) {
   const isSecret = setting.secretState !== null;
-  const [draft, setDraft] = useState(isSecret ? "" : (setting.value ?? ""));
+  const base = isSecret ? "" : (setting.value ?? "");
+  const [draft, setDraft] = useState(base);
+  // Spec 088 FR-055: while the row is clean its draft follows the `setting`
+  // prop, so a reload never leaves a stale value in the box. A draft the
+  // admin has changed is theirs, and is kept.
+  const [seen, setSeen] = useState(base);
+  if (seen !== base) {
+    setSeen(base);
+    if (draft === seen) {
+      setDraft(base);
+    }
+  }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -175,7 +204,7 @@ export function SettingRow({ setting, onSaved }: SettingRowProps) {
     setNotice(null);
     try {
       const updated = await updateInstanceSetting(setting.key, value);
-      onSaved(updated);
+      onSaved?.(updated);
       setDraft(updated.secretState !== null ? "" : (updated.value ?? ""));
       setNotice(value === null ? "Cleared." : "Saved.");
       // The history on screen is now a version behind the value above it.
@@ -220,8 +249,10 @@ export function SettingRow({ setting, onSaved }: SettingRowProps) {
       {setting.editable ? (
         <SettingField
           setting={asRequiredSetting(setting)}
-          value={draft}
-          onChange={(_key, value) => setDraft(value)}
+          value={form ? form.draft : draft}
+          onChange={(_key, value) =>
+            form ? form.onChange(value) : setDraft(value)
+          }
         />
       ) : (
         <div className="grid gap-1">
@@ -264,25 +295,35 @@ export function SettingRow({ setting, onSaved }: SettingRowProps) {
             written. Set it again.
           </StatusBadge>
         ) : null}
+        {form?.dirty ? (
+          <StatusBadge
+            variant="warning"
+            data-testid={`instance-setting-dirty-${setting.key}`}
+          >
+            Not saved yet
+          </StatusBadge>
+        ) : null}
       </div>
 
       {setting.editable ? (
         <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            icon="quill"
-            disabled={busy}
-            onClick={() => void write(draft)}
-            data-testid={`instance-setting-save-${setting.key}`}
-          >
-            {busy ? "Saving..." : "Save"}
-          </Button>
+          {form ? null : (
+            <Button
+              type="button"
+              variant="secondary"
+              icon="quill"
+              disabled={busy}
+              onClick={() => void write(draft)}
+              data-testid={`instance-setting-save-${setting.key}`}
+            >
+              {busy ? "Saving..." : "Save"}
+            </Button>
+          )}
           <Button
             type="button"
             variant="ghost"
-            disabled={busy}
-            onClick={() => void write(null)}
+            disabled={form ? form.busy : busy}
+            onClick={() => (form ? form.onClear() : void write(null))}
             data-testid={`instance-setting-clear-${setting.key}`}
           >
             Clear
@@ -309,8 +350,14 @@ export function SettingRow({ setting, onSaved }: SettingRowProps) {
         </div>
       )}
 
-      {error ? <StatusBadge variant="danger">{error}</StatusBadge> : null}
-      {notice ? <StatusBadge variant="success">{notice}</StatusBadge> : null}
+      {(form?.error ?? error) ? (
+        <StatusBadge variant="danger">{form?.error ?? error}</StatusBadge>
+      ) : null}
+      {(form ? form.notice : notice) ? (
+        <StatusBadge variant="success">
+          {form ? form.notice : notice}
+        </StatusBadge>
+      ) : null}
 
       {historyOpen ? (
         <div
