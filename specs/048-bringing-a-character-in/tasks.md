@@ -212,7 +212,8 @@ Content the world lacks is staged under their name and kept out of play.
   - Done: sheet-import-player.spec.ts green in --only=sheet-import (2026-10-10).
 - [X] T043 [P] [US1] Add a harness page and a Playwright config to `packs/systems/dnd5e/web` (script `test:sheet-reader`), with `e2e/sheet-reader.spec.ts`. This is the slice's standalone half. With no server, it reads every fixture in the browser and checks that the wasm reading equals the native reading, which `cargo test` writes to `target/sheet-fixtures/*.json`.
   - Done: `tests/browser.rs` writes each answer exactly as `readSheet` returns it (parsing it into a `serde_json::Value` first rounds the f32 rectangles), and `test:sheet-reader` runs that test before the build, so the comparison never reads stale answers. The harness is `sheet-reader/` and `vite.sheet-reader.config.ts`, on port 5196. 9 passed: one per fixture, plus the count.
-- [ ] T044 [US1] **Proof**: `pnpm e2e:sheet-import` and `pnpm e2e:sheet-import:standalone` are green. Then run every slice that `pnpm e2e:which --diff` names. The schema changed, so it prints FULL SUITE; run the named slices instead, which must include `actors` (with `players-hero-edit.spec.ts`), `collections`, `compendium` and `combat`. Never run `node ./scripts/e2e-parallel.mjs` on its own. Record each slice's result here.
+- [X] T044 [US1] **Proof**: `pnpm e2e:sheet-import` and `pnpm e2e:sheet-import:standalone` are green. Then run every slice that `pnpm e2e:which --diff` names. The schema changed, so it prints FULL SUITE; run the named slices instead, which must include `actors` (with `players-hero-edit.spec.ts`), `collections`, `compendium` and `combat`. Never run `node ./scripts/e2e-parallel.mjs` on its own. Record each slice's result here.
+  - Done: Covered by the T098 run. 2026-10-10, the slices e2e:which --diff names, each run alone: sheet-import 46, accounts 69, actors 30, book-import 17, canvas 44, collections 31, combat 26, companion 13, compendium 26, engine-other 9, game-systems 33, genie 21, instance 42, lore 13 (+1 skip, the real-repository mirror), moderation 14, scenes 19, tokens 24, worlds 21, all passed with 0 failed; resumable-downloads 7 passed, 1 failed (resumable-downloads-scene, which fails identically in the 086, 088 and clearrolls worktrees: its 16 KB part override also governs the 274 MB dev-profile engine download, so the canvas misses its 15 s window; not caused by 048). Never the full suite.
 
 **Checkpoint (MVP)**: a player brings a D&D Beyond character onto the actor
 they hold, from the actor screen, and nothing is written without their
@@ -253,7 +254,8 @@ and what cannot be read is refused whole, with a reason.
   - Done: sheet-import-review.spec.ts green in --only=sheet-import (2026-10-10).
 - [X] T052 [P] [US2] Write `apps/web/e2e/sheet-import-refusals.spec.ts`: an encrypted file, an oversized file, a book PDF, and an actor whose system declares no mapping (the button is absent, and a direct call is refused). Nothing is written in any of them.
   - Done: sheet-import-refusals.spec.ts green; the no-mapping case uses fate_core (2026-10-10).
-- [ ] T053 [US2] **Proof**: run `pnpm e2e:sheet-import`, then the slices `pnpm e2e:which --diff` names, never the full suite. Record the results here.
+- [X] T053 [US2] **Proof**: run `pnpm e2e:sheet-import`, then the slices `pnpm e2e:which --diff` names, never the full suite. Record the results here.
+  - Done: Covered by the T098 run. 2026-10-10, the slices e2e:which --diff names, each run alone: sheet-import 46, accounts 69, actors 30, book-import 17, canvas 44, collections 31, combat 26, companion 13, compendium 26, engine-other 9, game-systems 33, genie 21, instance 42, lore 13 (+1 skip, the real-repository mirror), moderation 14, scenes 19, tokens 24, worlds 21, all passed with 0 failed; resumable-downloads 7 passed, 1 failed (resumable-downloads-scene, which fails identically in the 086, 088 and clearrolls worktrees: its 16 KB part override also governs the 274 MB dev-profile engine download, so the canvas misses its 15 s window; not caused by 048). Never the full suite.
 
 **Checkpoint**: no value lands that the person was not shown (SC-003).
 
@@ -326,7 +328,8 @@ stale.
   - Done: sheet-import-unadopted.spec.ts green, 3 of 3 (2026-10-10). Its first run lost the shared admin's TOTP sign-in in beforeAll (harness, helpers.ts unchanged by 048); the rerun passed.
 - [X] T064 [P] [US3] Write `apps/web/e2e/sheet-import-attack.spec.ts`, which is the combat neighbour: an imported weapon attack, once adopted, is made in a fight through `makeAttack`.
   - Done: sheet-import-attack.spec.ts green (2026-10-10).
-- [ ] T065 [US3] **Proof**: run `pnpm e2e:sheet-import`, then the slices `pnpm e2e:which --diff` names, which must include `compendium` and `combat`. Never run the full suite. Record the results here.
+- [X] T065 [US3] **Proof**: run `pnpm e2e:sheet-import`, then the slices `pnpm e2e:which --diff` names, which must include `compendium` and `combat`. Never run the full suite. Record the results here.
+  - Done: Covered by the T098 run, including compendium (26) and combat (26). 2026-10-10, the slices e2e:which --diff names, each run alone: sheet-import 46, accounts 69, actors 30, book-import 17, canvas 44, collections 31, combat 26, companion 13, compendium 26, engine-other 9, game-systems 33, genie 21, instance 42, lore 13 (+1 skip, the real-repository mirror), moderation 14, scenes 19, tokens 24, worlds 21, all passed with 0 failed; resumable-downloads 7 passed, 1 failed (resumable-downloads-scene, which fails identically in the 086, 088 and clearrolls worktrees: its 16 KB part override also governs the 274 MB dev-profile engine download, so the canvas misses its 15 s window; not caused by 048). Never the full suite.
 
 **Checkpoint**: unadopted content never reaches the play field (FR-037),
 and nobody is accused for a stale screen (FR-038b).
@@ -349,7 +352,8 @@ outside its own pack (SC-006).
   - Deviation: the review cannot retype a list of records, so `skills` offers no correction (`correctable` in `rows.ts`); a doubted lineage is fixed on the sheet after. A list of named records now reads as its names and levels ("Sneak 2"), not JSON.
 - [X] T069 [US4] Write `apps/web/e2e/sheet-import-second-system.spec.ts`: a Roll for Shoes player brings in the fixture through the same review screen.
   - Done: sheet-import-second-system.spec.ts green (2026-10-10).
-- [ ] T070 [US4] **Proof**: `git diff --stat` for T067-T069 touches only `packs/systems/roll_for_shoes/**`, the new e2e spec, `Cargo.toml`'s member list and `slices.json`. Record that here (SC-006). Run `pnpm e2e:sheet-import`, then the slices `pnpm e2e:which --diff` names, never the full suite.
+- [X] T070 [US4] **Proof**: `git diff --stat` for T067-T069 touches only `packs/systems/roll_for_shoes/**`, the new e2e spec, `Cargo.toml`'s member list and `slices.json`. Record that here (SC-006). Run `pnpm e2e:sheet-import`, then the slices `pnpm e2e:which --diff` names, never the full suite.
+  - Done: adb242ae (T066-T068) touches packs/systems/roll_for_shoes/**, Cargo.toml's member list and scripts/e2e/slices.json, plus the lockfiles that follow mechanically from those (Cargo.lock, pnpm-lock.yaml); the e2e spec landed in d37ab5d6. No importer code outside the pack changed for the second system (SC-006). Slices: see T098.
 
 **Checkpoint**: the next system is a mapping, not a second importer.
 
@@ -397,7 +401,8 @@ owner and the GM.
   - the player cannot roll back;
   - the player downloads their file, and another player cannot.
   - Done: sheet-import-rollback.spec.ts green (2026-10-10).
-- [ ] T081 [US5] **Proof**: run `pnpm e2e:sheet-import`, then the slices `pnpm e2e:which --diff` names, never the full suite. Record the results here.
+- [X] T081 [US5] **Proof**: run `pnpm e2e:sheet-import`, then the slices `pnpm e2e:which --diff` names, never the full suite. Record the results here.
+  - Done: Covered by the T098 run. 2026-10-10, the slices e2e:which --diff names, each run alone: sheet-import 46, accounts 69, actors 30, book-import 17, canvas 44, collections 31, combat 26, companion 13, compendium 26, engine-other 9, game-systems 33, genie 21, instance 42, lore 13 (+1 skip, the real-repository mirror), moderation 14, scenes 19, tokens 24, worlds 21, all passed with 0 failed; resumable-downloads 7 passed, 1 failed (resumable-downloads-scene, which fails identically in the 086, 088 and clearrolls worktrees: its 16 KB part override also governs the 274 MB dev-profile engine download, so the canvas misses its 15 s window; not caused by 048). Never the full suite.
 
 **Checkpoint**: sheets change every session, and the importer keeps up
 without throwing play away.
@@ -461,7 +466,8 @@ without throwing play away.
   - Done: Done 2026-10-10: ADR-115 Accepted with "What Was Built"; README row updated.
 - [X] T093 Run `measure_corpus` on the owner's seven exports. Record per-field read, uncertain and unread counts in research R17, with no values, for SC-002. Each field the corpus reads wrong becomes a reader fix and a fixture case, before T097.
   - Done: Done 2026-10-10: 7 of 7 read, 1,180 leaves read, 0 uncertain, 27 unread (research R17). The first run found 2 uncertain on one sheet: two casting classes printed in one column. Fixed in `casting_columns` (fields.rs) with the invented case `two_casting_classes_in_one_column_are_two_casters`; the unread are subclass (no field on the export), hit dice used and current HP (blank, kept in play) and 2 empty alignments.
-- [ ] T094 [P] Add `apps/web/playtest/bring-a-character.playtest.ts` (FR-061). A player brings `cleric-7.pdf` in from the actor screen, the GM adopts their domain spell, and the character casts it at the table. It runs with `pnpm playtest`, last.
+- [X] T094 [P] Add `apps/web/playtest/bring-a-character.playtest.ts` (FR-061). A player brings `cleric-7.pdf` in from the actor screen, the GM adopts their domain spell, and the character casts it at the table. It runs with `pnpm playtest`, last.
+  - Done: playtest/bring-a-character.playtest.ts plays the shipped default (no administrator). It runs green apart from one soft FINDING: Bless comes off a D&D Beyond sheet with no dice, so once adopted it cannot be cast from the dock until the GM gives it an effect; with that effect it casts. Also seen at that table, before 048: the dock's generic stat rolls offer 5e ability_data raw ("Wisdom 1d20+18", "Armor class 1d20+18") because characterRolls.ts statRolls treats every number as a modifier.
 
 ### Verify and prove
 
@@ -474,7 +480,8 @@ without throwing play away.
   - Done: Crates pdf, sheet-import, dnd5e-sheet, roll-for-shoes-sheet all green; server lib filters 80 passed; web vitest green after two stale expectations were updated for data-kind and the SHEET_NOT_RECOGNISED code.
 - [X] T097 Flip `feature.sheet_import` to default **true** in `declarations.rs` and `.env.example`, and set `since`.
   - Done: Default true in declarations.rs and .env.example; since stays 0.81, the release the flag first ships in. Registry, sheet_import, staged_content and features server tests pass.
-- [ ] T098 **Proof**: `pnpm e2e:sheet-import` and `pnpm e2e:sheet-import:standalone` are green. Then run every slice that `pnpm e2e:which --diff` names. It prints FULL SUITE because of the migrations and schema; run the named slices instead (at least `actors`, `compendium`, `combat`, `book-import`, `collections`, `accounts` and `instance`). Never run `node ./scripts/e2e-parallel.mjs` on its own. Then run `pnpm playtest`. Record each result here.
+- [X] T098 **Proof**: `pnpm e2e:sheet-import` and `pnpm e2e:sheet-import:standalone` are green. Then run every slice that `pnpm e2e:which --diff` names. It prints FULL SUITE because of the migrations and schema; run the named slices instead (at least `actors`, `compendium`, `combat`, `book-import`, `collections`, `accounts` and `instance`). Never run `node ./scripts/e2e-parallel.mjs` on its own. Then run `pnpm playtest`. Record each result here.
+  - Done: 2026-10-10, the slices e2e:which --diff names, each run alone: sheet-import 46, accounts 69, actors 30, book-import 17, canvas 44, collections 31, combat 26, companion 13, compendium 26, engine-other 9, game-systems 33, genie 21, instance 42, lore 13 (+1 skip, the real-repository mirror), moderation 14, scenes 19, tokens 24, worlds 21, all passed with 0 failed; resumable-downloads 7 passed, 1 failed (resumable-downloads-scene, which fails identically in the 086, 088 and clearrolls worktrees: its 16 KB part override also governs the 274 MB dev-profile engine download, so the canvas misses its 15 s window; not caused by 048). Never the full suite. Playtest: combat-5e, dungeon-crawl genie and dnd5e green; bring-a-character red only on its soft FINDING (see T094).
 
 ---
 

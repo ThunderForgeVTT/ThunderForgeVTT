@@ -1,13 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
-import {
-  openAdminPage,
-  readSetting,
-  writeSetting,
-  writeSettingOrThrow,
-} from "../e2e/fixtures/admin";
 import { openDockTab } from "../e2e/fixtures/helpers";
 import {
-  SHEET_IMPORT_FLAG,
   openBroughtByPlayers,
   review,
   stagedPiece,
@@ -31,6 +24,9 @@ import {
  * who adopts it from "Brought by players". Then she casts it at the table,
  * from her sheet in the play dock.
  *
+ * It plays the shipped default: `feature.sheet_import` is on (T097), so no
+ * administrator signs in to turn it on.
+ *
  * A gap goes in as a soft check whose message starts FINDING.
  */
 
@@ -50,17 +46,6 @@ test("a player brings a cleric in from her sheet and casts her domain spell", as
   browser,
 }, testInfo) => {
   test.setTimeout(600_000);
-
-  const admin = await openAdminPage(browser);
-  const found = await readSetting(admin, SHEET_IMPORT_FLAG);
-  test.skip(
-    found.source === "ENVIRONMENT" && found.value !== "true",
-    `${SHEET_IMPORT_FLAG} is fixed off by ${found.fixedBy}`,
-  );
-  const original = found.source === "INSTANCE" ? found.value : null;
-  if (found.source !== "ENVIRONMENT") {
-    await writeSettingOrThrow(admin, SHEET_IMPORT_FLAG, "true");
-  }
 
   const table = await openTable({
     browser,
@@ -125,11 +110,14 @@ test("a player brings a cleric in from her sheet and casts her domain spell", as
 
     await test.step("Aubrel casts Bless at the table", async () => {
       await sitDown(table, aubrel.page);
+      // The sheet's rolls are loaded once its stats are offered. Her mace is
+      // not among them: a weapon swings through an attack on a target, not
+      // from this list.
       await expect
         .poll(
           async () =>
             (await rollsOnSheet(aubrel.page, actorId)).some((text) =>
-              text.includes("Mace"),
+              text.includes("Wisdom"),
             ),
           { timeout: 20_000 },
         )
@@ -185,9 +173,5 @@ test("a player brings a cleric in from her sheet and casts her domain spell", as
     });
   } finally {
     await closeTable(table);
-    if (found.source !== "ENVIRONMENT") {
-      await writeSetting(admin, SHEET_IMPORT_FLAG, original);
-    }
-    await admin.context().close();
   }
 });
