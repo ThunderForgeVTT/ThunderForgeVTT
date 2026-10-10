@@ -182,10 +182,10 @@ export interface StagedSeen {
   id: string;
   kind: string;
   name: string;
-  state: "PENDING" | "ADOPTED" | "DECLINED";
+  state: "PENDING" | "ACCEPTED" | "DECLINED";
   broughtBy: { id: string; displayName: string };
-  adoptedAbilityId: string | null;
-  adoptedItemId: string | null;
+  abilityId: string | null;
+  itemId: string | null;
 }
 
 /** What players brought into the world, as `page` may see it. */
@@ -198,7 +198,7 @@ export async function stagedIn(
     `query ($worldId: UUID!) {
       stagedContent(worldId: $worldId) {
         id kind name state broughtBy { id displayName }
-        adoptedAbilityId adoptedItemId
+        abilityId itemId
       }
     }`,
     { worldId },

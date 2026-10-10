@@ -27,8 +27,8 @@ function piece(over: Partial<StagedPiece>): StagedPiece {
     differsFrom: null,
     decidedBy: null,
     decidedAt: null,
-    adoptedAbilityId: null,
-    adoptedItemId: null,
+    abilityId: null,
+    itemId: null,
     ...over,
   };
 }
@@ -94,7 +94,7 @@ describe("BroughtByPlayersView", () => {
     const html = render([
       piece({ id: "p", name: "Alert" }),
       piece({ id: "d", name: "Tough", state: "DECLINED" }),
-      piece({ id: "a", name: "Lucky", state: "ADOPTED" }),
+      piece({ id: "a", name: "Lucky", state: "ACCEPTED" }),
     ]);
     expect(html).toContain('aria-label="Adopt Alert"');
     expect(html).toContain('aria-label="Decline Alert"');

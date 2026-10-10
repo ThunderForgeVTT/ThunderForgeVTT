@@ -18,7 +18,9 @@ use crate::staged_content::StagedState;
 #[graphql(name = "StagedState")]
 pub enum GraphQLStagedState {
     Pending,
-    Adopted,
+    // Named ACCEPTED, not after the internal state: spec 039 keeps that
+    // word out of the schema.
+    Accepted,
     Declined,
 }
 
@@ -26,7 +28,7 @@ impl From<StagedState> for GraphQLStagedState {
     fn from(state: StagedState) -> Self {
         match state {
             StagedState::Pending => Self::Pending,
-            StagedState::Adopted => Self::Adopted,
+            StagedState::Adopted => Self::Accepted,
             StagedState::Declined => Self::Declined,
         }
     }

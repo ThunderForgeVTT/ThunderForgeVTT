@@ -94,7 +94,7 @@ test("a player brings a cleric in from her sheet and casts her domain spell", as
         .getByTestId("staged-row")
         .filter({ hasText: "Bless" });
       await row.getByRole("button", { name: "Adopt Bless" }).click();
-      await expect(row).toHaveAttribute("data-state", "ADOPTED", {
+      await expect(row).toHaveAttribute("data-state", "ACCEPTED", {
         timeout: 15_000,
       });
       await snapshot(table, "3 · Bless adopted");
@@ -106,7 +106,7 @@ test("a player brings a cleric in from her sheet and casts her domain spell", as
       "spell",
       "Bless",
     );
-    expect(adopted.adoptedAbilityId).toBeTruthy();
+    expect(adopted.abilityId).toBeTruthy();
 
     await test.step("Aubrel casts Bless at the table", async () => {
       await sitDown(table, aubrel.page);
@@ -139,7 +139,7 @@ test("a player brings a cleric in from her sheet and casts her domain spell", as
             addAbilityEffect(abilityId: $abilityId, effect: $effect) { id }
           }`,
           {
-            abilityId: adopted.adoptedAbilityId,
+            abilityId: adopted.abilityId,
             effect: {
               effectType: "MODIFIER",
               formula: "1d4",

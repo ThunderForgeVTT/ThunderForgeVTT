@@ -232,7 +232,7 @@ export function sheetFileUrl(versionId: string): string {
   return `/api/sheet-imports/${encodeURIComponent(versionId)}/file`;
 }
 
-export type StagedState = "PENDING" | "ADOPTED" | "DECLINED";
+export type StagedState = "PENDING" | "ACCEPTED" | "DECLINED";
 
 /** An actor's link to a piece the world does not hold yet. */
 export interface ActorStagedLink {

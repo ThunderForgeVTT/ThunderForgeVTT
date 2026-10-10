@@ -19,7 +19,7 @@ impl From<GraphQLStagedState> for StagedState {
     fn from(state: GraphQLStagedState) -> Self {
         match state {
             GraphQLStagedState::Pending => Self::Pending,
-            GraphQLStagedState::Adopted => Self::Adopted,
+            GraphQLStagedState::Accepted => Self::Adopted,
             GraphQLStagedState::Declined => Self::Declined,
         }
     }
@@ -48,9 +48,9 @@ pub struct GraphQLStagedContent {
     pub differs_from: Option<Uuid>,
     pub decided_by: Option<GraphQLUserSummary>,
     pub decided_at: Option<DateTime<Utc>>,
-    /// What it became, once adopted.
-    pub adopted_ability_id: Option<Uuid>,
-    pub adopted_item_id: Option<Uuid>,
+    /// What it became, once accepted.
+    pub ability_id: Option<Uuid>,
+    pub item_id: Option<Uuid>,
 }
 
 impl From<StagedView> for GraphQLStagedContent {
@@ -71,8 +71,8 @@ impl From<StagedView> for GraphQLStagedContent {
             differs_from: piece.differs_from,
             decided_by: view.decided_by.map(Into::into),
             decided_at: piece.decided_at.map(|at| at.and_utc()),
-            adopted_ability_id: piece.adopted_ability_id,
-            adopted_item_id: piece.adopted_item_id,
+            ability_id: piece.adopted_ability_id,
+            item_id: piece.adopted_item_id,
         }
     }
 }
@@ -169,7 +169,7 @@ impl StagedContentMutation {
         .and_then(one)
     }
 
-    /// Move a declined piece back to pending, or straight to adopted.
+    /// Move a declined piece back to pending, or straight to accepted.
     async fn revisit_staged_content(
         &self,
         ctx: &Context<'_>,

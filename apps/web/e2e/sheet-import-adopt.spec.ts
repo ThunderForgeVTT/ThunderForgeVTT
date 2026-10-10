@@ -80,7 +80,7 @@ test.describe("Spec 048: adopting what players brought in", () => {
       const row = gm.getByTestId("staged-row").filter({ hasText: "Alert" });
       await expect(row).toHaveAttribute("data-state", "PENDING");
       await row.getByRole("button", { name: "Adopt Alert" }).click();
-      await expect(row).toHaveAttribute("data-state", "ADOPTED", {
+      await expect(row).toHaveAttribute("data-state", "ACCEPTED", {
         timeout: 15_000,
       });
       await expect(row.getByRole("button")).toHaveCount(0);
@@ -213,7 +213,7 @@ test.describe("Spec 048: adopting what players brought in", () => {
         group.locator('[data-testid="staged-row"][data-state="PENDING"]'),
       ).toHaveCount(0, { timeout: 20_000 });
       await expect(
-        group.locator('[data-testid="staged-row"][data-state="ADOPTED"]'),
+        group.locator('[data-testid="staged-row"][data-state="ACCEPTED"]'),
       ).toHaveCount(pending.length);
 
       // On the server too, and the character holds the world's pieces.

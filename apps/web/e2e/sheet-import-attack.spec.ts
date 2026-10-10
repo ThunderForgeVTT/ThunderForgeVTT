@@ -128,15 +128,15 @@ test("an imported weapon is refused in a fight until adopted, and then it swings
 
     // The Game Master adopts it, and the character carries the world's.
     const { adoptStagedContent } = await must<{
-      adoptStagedContent: { adoptedItemId: string | null };
+      adoptStagedContent: { itemId: string | null };
     }>(
       table.gm,
       `mutation ($id: UUID!) {
-        adoptStagedContent(id: $id) { adoptedItemId }
+        adoptStagedContent(id: $id) { itemId }
       }`,
       { id: sword.id },
     );
-    const itemId = adoptStagedContent.adoptedItemId;
+    const itemId = adoptStagedContent.itemId;
     expect(itemId).not.toBeNull();
     const { actorInventory } = await must<{
       actorInventory: { itemId: string | null; itemName: string }[];

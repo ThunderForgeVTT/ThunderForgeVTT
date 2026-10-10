@@ -914,7 +914,7 @@ type AppMutationRoot {
 	"""
 	declineStagedContent(id: UUID!): StagedContent!
 	"""
-	Move a declined piece back to pending, or straight to adopted.
+	Move a declined piece back to pending, or straight to accepted.
 	"""
 	revisitStagedContent(id: UUID!, state: StagedState!): StagedContent!
 	attachAbilityToActor(input: AttachAbilityToActorInput!): GraphQLActorAbilityEntry!
@@ -7268,15 +7268,15 @@ type StagedContent {
 	decidedBy: UserSummary
 	decidedAt: DateTime
 	"""
-	What it became, once adopted.
+	What it became, once accepted.
 	"""
-	adoptedAbilityId: UUID
-	adoptedItemId: UUID
+	abilityId: UUID
+	itemId: UUID
 }
 
 enum StagedState {
 	PENDING
-	ADOPTED
+	ACCEPTED
 	DECLINED
 }
 

@@ -16,7 +16,7 @@ export interface StagedRowProps {
 
 const STATE_LABEL: Record<StagedPiece["state"], string> = {
   PENDING: "Waiting",
-  ADOPTED: "Adopted",
+  ACCEPTED: "Adopted",
   DECLINED: "Declined",
 };
 

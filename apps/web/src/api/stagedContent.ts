@@ -24,8 +24,8 @@ export interface StagedPiece {
   differsFrom: string | null;
   decidedBy: UserSummary | null;
   decidedAt: string | null;
-  adoptedAbilityId: string | null;
-  adoptedItemId: string | null;
+  abilityId: string | null;
+  itemId: string | null;
 }
 
 const FIELDS = `
@@ -34,7 +34,7 @@ const FIELDS = `
   actors { id label }
   differsFrom
   decidedBy { id username displayName }
-  decidedAt adoptedAbilityId adoptedItemId
+  decidedAt abilityId itemId
 `;
 
 export function listStagedContent(

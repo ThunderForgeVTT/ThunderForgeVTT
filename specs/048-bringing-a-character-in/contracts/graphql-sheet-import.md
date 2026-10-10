@@ -36,7 +36,7 @@ hidden controls are only courtesy.
 
 ```graphql
 enum FieldCertainty { READ UNCERTAIN UNREAD CORRECTED }
-enum StagedState { PENDING ADOPTED DECLINED }
+enum StagedState { PENDING ACCEPTED DECLINED }   # ACCEPTED is the adopted state; spec 039 keeps "adopted" out of the schema
 enum ContentResolution { WORLD STAGED_EXISTING STAGED_NEW DIFFERS }
 
 type SheetSource { page: Int!  x0: Float!  y0: Float!  x1: Float!  y1: Float!  text: String! }
@@ -105,8 +105,8 @@ type StagedContent {
   differsFrom: ID
   decidedBy: UserSummary
   decidedAt: DateTime
-  adoptedAbilityId: ID          # what it became, once adopted
-  adoptedItemId: ID
+  abilityId: ID                 # what it became, once accepted
+  itemId: ID
 }
 
 type ActorSummary {

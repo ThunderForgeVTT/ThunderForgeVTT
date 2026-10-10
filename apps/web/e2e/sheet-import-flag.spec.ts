@@ -121,7 +121,7 @@ test.describe("Spec 048: the sheet import flag", () => {
           `mutation ($id: UUID!) { adoptStagedContent(id: $id) { state } }`,
           { id: pending[0].id },
         );
-        expect(adoptStagedContent.state).toBe("ADOPTED");
+        expect(adoptStagedContent.state).toBe("ACCEPTED");
       });
 
       await test.step("off: the player still downloads their sheet", async () => {

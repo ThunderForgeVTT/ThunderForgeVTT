@@ -291,7 +291,7 @@ describe("stagedEntries", () => {
       stagedEntries([
         { id: "a", kind: "feat", name: "Alert", state: "PENDING" },
         { id: "b", kind: "item", name: "Rope", state: "DECLINED" },
-        { id: "c", kind: "spell", name: "Shield", state: "ADOPTED" },
+        { id: "c", kind: "spell", name: "Shield", state: "ACCEPTED" },
         { id: "d", kind: "class_feature", name: "Rage", state: "PENDING" },
       ]),
     ).toEqual([

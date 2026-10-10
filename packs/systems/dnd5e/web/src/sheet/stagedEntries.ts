@@ -5,7 +5,7 @@ export interface StagedLinkLike {
   id: string;
   kind: string;
   name: string;
-  state: "PENDING" | "ADOPTED" | "DECLINED";
+  state: "PENDING" | "ACCEPTED" | "DECLINED";
 }
 
 const KINDS: LinkedEntry["kind"][] = [
@@ -22,7 +22,7 @@ const KINDS: LinkedEntry["kind"][] = [
  */
 export function stagedEntries(links: StagedLinkLike[]): LinkedEntry[] {
   return links.flatMap((link): LinkedEntry[] => {
-    if (link.state === "ADOPTED") return [];
+    if (link.state === "ACCEPTED") return [];
     const kind = KINDS.find((k) => k === link.kind) ?? "feature";
     return [
       {
