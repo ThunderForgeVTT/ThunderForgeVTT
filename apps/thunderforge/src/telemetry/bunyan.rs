@@ -8,9 +8,10 @@
 use thunderforge_server::telemetry::{SPAN_FIELDS, SPAN_TARGET};
 use tracing::span::{Attributes, Id};
 use tracing::{Event, Subscriber};
-use tracing_bunyan_formatter::BunyanFormattingLayer;
+use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
+use tracing_subscriber::Registry;
 use tracing_subscriber::fmt::MakeWriter;
-use tracing_subscriber::layer::{Context, Layer};
+use tracing_subscriber::layer::{Context, Layer, SubscriberExt};
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::{EnvFilter, filter::Directive};
 
@@ -37,6 +38,28 @@ where
         .skip_fields(SPAN_FIELDS.iter().copied())
         .expect("no Bunyan core field is skipped");
     QuietSpans(layer)
+}
+
+/// What OpenTelemetry adds to the registry, when telemetry installed any.
+pub type OtelLayers = Vec<Box<dyn Layer<Registry> + Send + Sync + 'static>>;
+
+/// The process's subscriber: the OTel layers, `filter`, and Bunyan on
+/// `writer`. An empty list goes in as `None`: an empty `Vec` layer answers
+/// every callsite `Interest::never()`, which the global dispatcher caches,
+/// and the whole log goes quiet.
+pub fn subscriber<W>(
+    otel: Option<OtelLayers>,
+    filter: EnvFilter,
+    writer: W,
+) -> impl Subscriber + Send + Sync
+where
+    W: for<'a> MakeWriter<'a> + Send + Sync + 'static,
+{
+    Registry::default()
+        .with(otel.filter(|layers| !layers.is_empty()))
+        .with(filter)
+        .with(JsonStorageLayer)
+        .with(formatter("thunderforge", writer))
 }
 
 pub struct QuietSpans<L>(pub L);
@@ -106,9 +129,6 @@ impl<'a> MakeWriter<'a> for Captured {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tracing_bunyan_formatter::JsonStorageLayer;
-    use tracing_subscriber::Registry;
-    use tracing_subscriber::layer::SubscriberExt;
 
     fn keys(line: &serde_json::Value) -> Vec<String> {
         let mut k: Vec<String> = line.as_object().unwrap().keys().cloned().collect();
@@ -161,6 +181,33 @@ mod tests {
         assert_eq!(lines.len(), 2);
         assert_eq!(lines[0]["msg"], "[JOB - START]");
         assert_eq!(lines[1]["msg"], "[JOB - END]");
+    }
+
+    /// The OTel layers are what telemetry installed: none when it is off,
+    /// and possibly an empty list. An empty `Vec` layer answers every
+    /// callsite with `Interest::never()`, which would silence the whole
+    /// log, the setup link with it.
+    #[test]
+    fn every_line_prints_whatever_telemetry_installed() {
+        for otel in [None, Some(Vec::new())] {
+            let out = Captured::default();
+            let sub = subscriber(otel, EnvFilter::new("info"), out.clone());
+            // A scoped dispatcher falls back to `enabled()`, which an empty
+            // `Vec` passes, so ask what the global one would cache.
+            let meta = tracing::warn_span!("probe")
+                .metadata()
+                .expect("span metadata");
+            assert!(
+                !sub.register_callsite(meta).is_never(),
+                "the callsite is silenced"
+            );
+            tracing::subscriber::with_default(sub, || {
+                tracing::warn!("Initial admin setup: /setup/abc12345");
+            });
+            let lines = out.lines();
+            assert_eq!(lines.len(), 1, "{lines:?}");
+            assert_eq!(lines[0]["msg"], "Initial admin setup: /setup/abc12345");
+        }
     }
 
     #[test]

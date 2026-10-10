@@ -42,8 +42,7 @@ use tower_cookies::{CookieManagerLayer, Key};
 use tower_http::compression::CompressionLayer;
 use tower_http::compression::predicate::{DefaultPredicate, NotForContentType, Predicate};
 use tower_http::cors::{Any, CorsLayer};
-use tracing_bunyan_formatter::JsonStorageLayer;
-use tracing_subscriber::{Registry, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{Registry, util::SubscriberInitExt};
 
 async fn graphql_playground() -> impl IntoResponse {
     Html(playground_source(
@@ -438,19 +437,15 @@ async fn run() {
     }
     let telemetry_layers = telemetry_guard
         .as_ref()
-        .map(|installed| installed.layers::<Registry>())
-        .unwrap_or_default();
+        .map(|installed| installed.layers::<Registry>());
 
     // Spec 086: the OTel spans pass the filter and print nothing (SC-001).
-    let env_filter = telemetry::bunyan::env_filter();
-    let formatting_layer = telemetry::bunyan::formatter("thunderforge", std::io::stdout);
-
-    Registry::default()
-        .with(telemetry_layers)
-        .with(env_filter)
-        .with(JsonStorageLayer)
-        .with(formatting_layer)
-        .init();
+    telemetry::bunyan::subscriber(
+        telemetry_layers,
+        telemetry::bunyan::env_filter(),
+        std::io::stdout,
+    )
+    .init();
     // FR-008: once, after the exporter decision, so an operator reading the
     // log is told where telemetry goes before anything is sent.
     tracing::info!(
