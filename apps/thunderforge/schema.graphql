@@ -135,6 +135,23 @@ enum ActorPermissionLevel {
 	OWNER
 }
 
+"""
+An actor's link to a piece the world does not hold yet.
+"""
+type ActorStagedLink {
+	"""
+	The link: an actor ability or an inventory entry.
+	"""
+	id: UUID!
+	stagedId: UUID!
+	"""
+	A vocabulary type, or `item`.
+	"""
+	kind: String!
+	name: String!
+	state: StagedState!
+}
+
 input AddCollectionMemberInput {
 	collectionId: UUID!
 	memberType: String!
@@ -1920,6 +1937,11 @@ type AppQueryRoot {
 	Every import and rollback on the actor, newest first.
 	"""
 	actorImports(actorId: UUID!): [ActorImportRecord!]!
+	"""
+	The actor's links to staged pieces, which the play reads withhold:
+	the sheet marks them "awaiting the GM" or "declined by the GM".
+	"""
+	actorStagedLinks(actorId: UUID!): [ActorStagedLink!]!
 	"""
 	Worlds whose name contains `search`, or whose id it is, for an
 	operator deciding what to pause.
@@ -7165,6 +7187,12 @@ type SourceFlip {
 	settingKey: String!
 	was: SettingSource!
 	now: SettingSource!
+}
+
+enum StagedState {
+	PENDING
+	ADOPTED
+	DECLINED
 }
 
 """

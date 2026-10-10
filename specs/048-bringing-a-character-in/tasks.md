@@ -190,15 +190,16 @@ Content the world lacks is staged under their name and kept out of play.
 
 - [X] T038 [P] [US1] Add `apps/web/src/api/sheetImport.ts`, the typed calls, with `applySheetImport` sent through `postGraphQLMultipart` with progress. Add the hook `useSheetImport(actorId)` with `refetch()`.
   - Done: `postGraphQLMultipart` sends with `XMLHttpRequest` when `onUploadProgress` is given, because `fetch` cannot report upload progress. It has three tests.
-- [ ] T039 [US1] Add the route `/world/:id/actor/:actorId/import`, loaded with `React.lazy`, to `apps/web/src/pages/world/actor/import/SheetImportPage.tsx`. The page:
+- [X] T039 [US1] Add the route `/world/:id/actor/:actorId/import`, loaded with `React.lazy`, to `apps/web/src/pages/world/actor/import/SheetImportPage.tsx`. The page:
   - picks a file;
   - reads it with the pack's lazy reader;
   - asks for the preview;
   - shows `FieldRow.tsx` (certainty, old and new values, source text) and `ContentRow.tsx` (world, staged or new);
   - ends in Accept and Decline.
   Add vitest tests for the rows.
-- [ ] T040 [US1] Add "Bring in a sheet" to the header button group of `ActorDetailPage.tsx`, at about line 405. It appears when `mayEditActor` holds, `useFeatureFlag("feature.sheet_import")` is on, and the system declares `sheetImport`. Mount point only.
-- [ ] T041 [P] [US1] Add the entry `player-hero-import-${actorId}` to the player's own hero row on `PlayersPage.tsx`, beside the hotfix's `player-hero-sheet-${actorId}`. It needs the hotfix merged.
+  - Done: the page offers Accept and Decline only; corrections and play-state overwrites come with T049. Contract extension: the query `actorStagedLinks(actorId)` (types `ActorStagedLink`, `StagedState`), which the 5e sheet's "Brought in with a sheet" section reads to mount `LinkedContent.tsx`, since `actorAbilities` and `actorInventory` withhold staged links. It and `actorImports` now require a seat at the table (`require_sees_actor`): the permission ladder admits a stranger at Viewer.
+- [X] T040 [US1] Add "Bring in a sheet" to the header button group of `ActorDetailPage.tsx`, at about line 405. It appears when `mayEditActor` holds, `useFeatureFlag("feature.sheet_import")` is on, and the system declares `sheetImport`. Mount point only.
+- [X] T041 [P] [US1] Add the entry `player-hero-import-${actorId}` to the player's own hero row on `PlayersPage.tsx`, beside the hotfix's `player-hero-sheet-${actorId}`. It needs the hotfix merged.
 - [ ] T042 [US1] Write `apps/web/e2e/sheet-import-player.spec.ts`, with the flag on for the test stack:
   - a player claims a 5e actor and opens it from the Players screen (the hotfix's path);
   - they bring in `fighter3-wizard2.pdf`, review it and accept;

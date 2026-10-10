@@ -2,6 +2,7 @@ import { Suspense, useState } from "react";
 import { Link } from "react-router-dom";
 import { getWorldActorImages } from "@/api/actors";
 import { Button } from "@/components/ui/button/Button";
+import { BringInSheetButton } from "@/pages/world/actor/import/BringInSheetButton";
 import { LazyHeroBuilderDialog } from "@/pages/world/actor/heroBuilderLazy";
 import { heroControlsFor } from "@/pages/world/players/heroControls";
 import type { WorldActorRecord } from "@/types/actor";
@@ -78,6 +79,14 @@ export function PlayerHeroControls({
           >
             Edit look
           </Button>
+        ) : null}
+        {controls.sheet ? (
+          <BringInSheetButton
+            worldId={worldId}
+            actor={actor}
+            size="sm"
+            testId={`player-hero-import-${actor.id}`}
+          />
         ) : null}
       </div>
       {error ? (

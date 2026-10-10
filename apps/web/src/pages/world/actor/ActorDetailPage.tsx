@@ -43,6 +43,7 @@ import { startActorAccessEventSync } from "@/engine/world/sync/actorAccess";
 import { startSheetImportEventSync } from "@/engine/world/sync/sheetImport";
 import { subscribeToWorldEvents } from "@/engine/world/sync/subscriptionClient";
 import { mayEditActor } from "@/pages/world/actor/actorEditRight";
+import { BringInSheetButton } from "@/pages/world/actor/import/BringInSheetButton";
 import { PackActorSheet } from "@/pages/world/actor/PackActorSheet";
 import { SystemChecksPanel } from "@/pages/world/actor/SystemChecksPanel";
 import { resolvePanel } from "@/panels/systemPanels";
@@ -477,6 +478,9 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
               >
                 Edit
               </Button>
+            ) : null}
+            {mode === "view" ? (
+              <BringInSheetButton worldId={worldId} actor={actor} />
             ) : null}
             {canShare ? (
               <Button

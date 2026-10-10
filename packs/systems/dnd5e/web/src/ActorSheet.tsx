@@ -20,6 +20,7 @@ import ClassesSection from "./sheet/ClassesSection";
 import CoinsSection from "./sheet/CoinsSection";
 import DefencesSection from "./sheet/DefencesSection";
 import PersonaSection from "./sheet/PersonaSection";
+import StagedLinks from "./sheet/StagedLinks";
 import {
   classesPatch,
   readClasses,
@@ -1402,6 +1403,7 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
           </section>
         ))}
       </div>
+      <StagedLinks actorId={actor.id} />
     </div>
   );
 }

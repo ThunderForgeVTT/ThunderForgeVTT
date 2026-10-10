@@ -51,6 +51,7 @@ const SceneDetailRoutePage = lazy(pageLoaders.worldSceneDetail);
 const PlayersRoutePage = lazy(pageLoaders.worldPlayers);
 const ActorSelectionPage = lazy(pageLoaders.actorSelection);
 const ActorDetailPage = lazy(pageLoaders.actorView);
+const SheetImportPage = lazy(pageLoaders.actorImport);
 const LoreEntryDetailPage = lazy(pageLoaders.loreEntryView);
 const LoreRevisionHistory = lazy(pageLoaders.loreEntryHistory);
 const SharedActorPage = lazy(pageLoaders.sharedActor);
@@ -740,6 +741,14 @@ export default function AppRoutes({
           element={
             <RequireAuthenticated>
               {renderLazyPage(<ActorDetailPage mode="edit" />, "Loading actor")}
+            </RequireAuthenticated>
+          }
+        />
+        <Route
+          path="/world/:id/actor/:actorId/import"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<SheetImportPage />, "Loading actor")}
             </RequireAuthenticated>
           }
         />

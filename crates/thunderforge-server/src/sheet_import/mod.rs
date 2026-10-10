@@ -13,6 +13,7 @@ pub mod mapping;
 pub mod preview;
 pub mod records;
 pub mod snapshot;
+pub mod staged_links;
 pub mod storage;
 
 use diesel::prelude::*;

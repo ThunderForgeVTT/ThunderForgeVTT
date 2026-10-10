@@ -323,13 +323,17 @@ async fn a_viewer_and_a_stranger_are_refused() {
         );
     }
     assert_eq!(t.counts().0, 0);
-    // The viewer still sees the (empty) history.
+    // The viewer still sees the (empty) history; the stranger does not.
     assert!(
         actor_imports_impl(&t.state, viewer, false, t.actor)
             .await
             .unwrap()
             .is_empty()
     );
+    let refused = actor_imports_impl(&t.state, stranger, false, t.actor)
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code(), "FORBIDDEN");
 }
 
 #[test]
@@ -514,4 +518,49 @@ async fn a_staged_link_is_absent_from_every_play_read() {
             );
         }
     }
+}
+
+#[tokio::test]
+async fn the_sheet_reads_its_staged_links_and_a_stranger_does_not() {
+    use crate::sheet_import::staged_links::actor_staged_links_impl;
+    use crate::staged_content::StagedState;
+    let t = table();
+    let player = t.claimant().await;
+    let hash = t.preview(player, None).await.expect("a plan");
+    t.apply(player, FIGHTER_WIZARD, None, hash)
+        .await
+        .expect("applied");
+    let staged = {
+        use crate::schema::{world_actor_abilities as a, world_actor_inventory as i};
+        let mut conn = t.state.db_pool.get().expect("conn");
+        let abilities: i64 = a::table
+            .filter(a::actor_id.eq(t.actor))
+            .filter(a::staged_id.is_not_null())
+            .count()
+            .get_result(&mut conn)
+            .unwrap();
+        let items: i64 = i::table
+            .filter(i::actor_id.eq(t.actor))
+            .filter(i::staged_id.is_not_null())
+            .count()
+            .get_result(&mut conn)
+            .unwrap();
+        (abilities + items) as usize
+    };
+    for user in [player, t.gm] {
+        let links = actor_staged_links_impl(&t.state, user, false, t.actor)
+            .await
+            .unwrap();
+        assert_eq!(links.len(), staged);
+        assert!(links.iter().all(|l| l.state == StagedState::Pending));
+        assert!(links.iter().any(|l| l.kind == "item"));
+    }
+    let stranger = {
+        let mut conn = t.state.db_pool.get().expect("conn");
+        insert_test_user(&mut conn)
+    };
+    let refused = actor_staged_links_impl(&t.state, stranger, false, t.actor)
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code(), "FORBIDDEN");
 }

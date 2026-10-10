@@ -29,6 +29,7 @@ export const pageLoaders = {
   actorSelection: () => import("@/pages/world/ActorSelectionPage"),
   actorView: () => import("@/pages/world/actor/ActorDetailPage"),
   actorEdit: () => import("@/pages/world/actor/ActorDetailPage"),
+  actorImport: () => import("@/pages/world/actor/import/SheetImportPage"),
   loreEntryView: () => import("@/pages/world/lore/LoreEntryDetailPage"),
   loreEntryEdit: () => import("@/pages/world/lore/LoreEntryDetailPage"),
   loreEntryHistory: () => import("@/pages/world/lore/LoreRevisionHistory"),

@@ -113,14 +113,15 @@ pub fn record(
         .ok_or_else(|| SheetImportError::Database("the import record vanished".into()))
 }
 
-/// `actorImports`: Viewer or above on the actor. Not behind the flag, like
-/// downloads: switching imports off does not hide what was imported.
-pub async fn actor_imports_impl(
+/// Viewer or above on the actor, the actor visible to them, and a seat at
+/// its table. The permission ladder's floor is Viewer for anyone, so the
+/// seat is checked here: a stranger reads nothing about a character.
+pub async fn require_sees_actor(
     state: &AppState,
     user_id: Uuid,
     is_admin: bool,
     actor_id: Uuid,
-) -> Result<Vec<ImportRecord>, SheetImportError> {
+) -> Result<(), SheetImportError> {
     require_actor_permission(
         state,
         user_id,
@@ -130,6 +131,47 @@ pub async fn actor_imports_impl(
     )
     .await
     .map_err(SheetImportError::from_permission)?;
+    crate::auth::npc_visibility::require_actor_visible(state, user_id, is_admin, actor_id)
+        .await
+        .map_err(SheetImportError::from_permission)?;
+    let pool = state.db_pool.clone();
+    let seated = tokio::task::spawn_blocking(move || {
+        use crate::schema::world_actors;
+        let mut conn = pool
+            .get()
+            .map_err(|e| SheetImportError::Database(e.to_string()))?;
+        let world_id = world_actors::table
+            .find(actor_id)
+            .select(world_actors::world_id)
+            .first::<Uuid>(&mut conn)?;
+        Ok::<_, SheetImportError>(
+            actor_in_world(&mut conn, user_id, is_admin, world_id)
+                .role
+                .is_some()
+                || is_admin,
+        )
+    })
+    .await
+    .map_err(|e| SheetImportError::Database(e.to_string()))??;
+    if seated {
+        Ok(())
+    } else {
+        Err(SheetImportError::Forbidden(
+            "You are not at this table.".into(),
+        ))
+    }
+}
+
+/// `actorImports`: anyone who may see the actor ([`require_sees_actor`]).
+/// Not behind the flag, like downloads: switching imports off does not hide
+/// what was imported.
+pub async fn actor_imports_impl(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    actor_id: Uuid,
+) -> Result<Vec<ImportRecord>, SheetImportError> {
+    require_sees_actor(state, user_id, is_admin, actor_id).await?;
     let pool = state.db_pool.clone();
     tokio::task::spawn_blocking(move || {
         let mut conn = pool

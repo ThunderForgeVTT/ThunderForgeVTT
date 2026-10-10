@@ -186,3 +186,29 @@ export function applySheetImport({
     { onUploadProgress: onProgress },
   ).then((data) => data.applySheetImport);
 }
+
+export type StagedState = "PENDING" | "ADOPTED" | "DECLINED";
+
+/** An actor's link to a piece the world does not hold yet. */
+export interface ActorStagedLink {
+  id: string;
+  stagedId: string;
+  /** A vocabulary type, or `item`. */
+  kind: string;
+  name: string;
+  state: StagedState;
+}
+
+/** The actor's links to staged pieces, which the play reads withhold. */
+export function getActorStagedLinks(
+  actorId: string,
+): Promise<ActorStagedLink[]> {
+  return postGraphQL<{ actorStagedLinks: ActorStagedLink[] }>(
+    `
+      query ActorStagedLinks($actorId: UUID!) {
+        actorStagedLinks(actorId: $actorId) { id stagedId kind name state }
+      }
+    `,
+    { actorId },
+  ).then((data) => data.actorStagedLinks);
+}

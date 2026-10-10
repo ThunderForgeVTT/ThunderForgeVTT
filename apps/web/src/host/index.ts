@@ -130,6 +130,13 @@ export { getActorInventory } from "@/api/inventory";
 export { useResetOnChange } from "@/hooks/useResetOnChange";
 
 /**
+ * The actor's links to staged pieces (spec 048), which the ability and
+ * inventory reads withhold, so a sheet can mark them "awaiting the GM".
+ */
+export { useActorStagedLinks } from "@/hooks/useActorStagedLinks";
+export type { ActorStagedLink } from "@/api/sheetImport";
+
+/**
  * A world's answers to the settings its system declares (spec 067).
  *
  * A pack declares a setting in its manifest's `settings` block and the host
