@@ -1,6 +1,16 @@
 import { execFileSync } from "node:child_process";
 import { expect, test } from "./fixtures/test";
-import { freshCredentials, graphql, register } from "./fixtures/helpers";
+import {
+  freshCredentials,
+  graphql,
+  inviteAndJoinAsPlayer,
+  register,
+  registerAndCreateWorld,
+  setWorldSystem,
+  uniqueSuffix,
+} from "./fixtures/helpers";
+import { bringIn, withSheetImportOn } from "./fixtures/sheetImport";
+import { must } from "../playtest/table";
 
 /**
  * Deleting an account leaves nothing of its library (spec 049 T091, T092;
@@ -131,10 +141,7 @@ function libraryBytes(
       `t.compendium_id IN (${ids}) OR t.name IN (${named})`,
     ),
     // A collection's earlier versions (spec 050 FR-104) hold its entries too.
-    versions: bytes(
-      "shelf_collection_versions",
-      `t.compendium_id IN (${ids})`,
-    ),
+    versions: bytes("shelf_collection_versions", `t.compendium_id IN (${ids})`),
   };
 }
 
@@ -250,5 +257,105 @@ test("deleting an account from its page leaves zero bytes of its library", async
     bookLists: 0,
     deltas: 0,
     versions: 0,
+  });
+});
+
+/**
+ * Spec 048 T086: a deleted GM's sheets go with the account, and the
+ * character a player made in that GM's world is rescued with the record of
+ * what was brought onto it. The player's own sheet stays theirs; the GM's
+ * file is no longer kept. The sheets are invented (the 5e pack's fixtures).
+ */
+test.describe("Spec 048: brought sheets when an account is deleted", () => {
+  withSheetImportOn();
+
+  test("a deleted GM's sheets go, and the rescued character keeps its history", async ({
+    page: gm,
+    browser,
+  }) => {
+    test.setTimeout(300_000);
+    const worldId = await registerAndCreateWorld(
+      gm,
+      `Sheets Gone ${uniqueSuffix()}`,
+      "sheetsgone",
+    );
+    await setWorldSystem(gm, worldId, SYSTEM);
+    await must(
+      gm,
+      `mutation ($input: UpdateWorldAllowPlayerCreatedActorsInput!) {
+        updateWorldAllowPlayerCreatedActors(input: $input) { id }
+      }`,
+      { input: { worldId, allow: true } },
+    );
+    const player = await inviteAndJoinAsPlayer(browser, gm, worldId);
+    const name = `Isolde ${uniqueSuffix()}`;
+    const { createAndClaimActor } = await must<{
+      createAndClaimActor: { actorId: string };
+    }>(
+      player,
+      `mutation ($worldId: UUID!, $name: String!) {
+        createAndClaimActor(worldId: $worldId, name: $name) { actorId }
+      }`,
+      { worldId, name },
+    );
+    const actorId = uuid(createAndClaimActor.actorId);
+
+    // The player brings their sheet in; the GM brings one of their own.
+    await bringIn(player, worldId, actorId, "fighter3-wizard2.pdf");
+    await bringIn(gm, worldId, actorId, "fighter3-wizard2-l6.pdf");
+
+    const gmId = uuid(
+      sql(`SELECT created_by FROM worlds WHERE id = '${uuid(worldId)}';`),
+    );
+    const playerId = uuid(
+      sql(`SELECT owned_by FROM world_actors WHERE id = '${actorId}';`),
+    );
+    const sheetsOf = (owner: string) =>
+      sql(
+        `SELECT count(*) FROM sheet_import_versions v
+           JOIN brought_characters c ON c.id = v.character_id
+          WHERE c.owner_user_id = '${owner}';`,
+      );
+    expect(sheetsOf(gmId)).toBe("1");
+    expect(sheetsOf(playerId)).toBe("1");
+
+    await gm.goto("/settings/account");
+    await gm.getByRole("button", { name: "Delete account" }).click();
+    await gm.getByRole("button", { name: "Delete permanently" }).click();
+    await gm.waitForURL(/\/login/, { timeout: 30_000 });
+
+    expect(
+      sql(
+        `SELECT count(*) FROM brought_characters WHERE owner_user_id = '${gmId}';`,
+      ),
+      "the GM's sheets went with the account",
+    ).toBe("0");
+    expect(sheetsOf(playerId), "the player's sheet is theirs").toBe("1");
+
+    // By owner, not by name: the sheet renamed the character when it came in,
+    // and the world the rescue made for this player holds only what it moved.
+    const [rescuedId, rescuedWorld] = sql(
+      `SELECT a.id || ' ' || a.world_id FROM world_actors a
+         JOIN worlds w ON w.id = a.world_id
+        WHERE w.created_by = '${playerId}' AND a.owned_by = '${playerId}';`,
+    ).split(" ");
+    await player.goto(
+      `/world/${uuid(rescuedWorld)}/actor/${uuid(rescuedId)}/view`,
+    );
+    const rows = player
+      .getByTestId("import-history")
+      .getByTestId("import-history-row");
+    await expect(rows).toHaveCount(2, { timeout: 15_000 });
+    await expect(rows.first()).toContainText(
+      "A sheet brought in by a deleted account, file no longer kept",
+    );
+    await expect(
+      rows.first().getByTestId("import-history-download"),
+    ).toHaveCount(0);
+    await expect(rows.nth(1)).toContainText("Version 1 brought in by");
+    await expect(
+      rows.nth(1).getByTestId("import-history-download"),
+    ).toHaveCount(1);
+    await player.context().close();
   });
 });

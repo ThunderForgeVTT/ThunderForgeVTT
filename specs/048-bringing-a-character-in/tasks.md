@@ -419,7 +419,8 @@ without throwing play away.
   - Done: `users/sheet_data_tests.rs`: rows deleted and keys collected in the transaction; the files deleted after commit (RustFS); a rescued character keeps both import records, the departing GM's with no version; a co-GM's records in a world that stays pass to its owner. `models_tests` now proves a record survives its version.
 - [X] T085 Implement T084.
   - Done: `sheet_import/account.rs`: `forget_sheets_of_sync` (in `delete_user_data_on`), `keep_imports_of_rescued_sync` (in `rescue.rs`, links remapped, staged links dropped) and `delete_sheet_files` after commit in `delete_user_data_owned`, the termination sweep and the administrator's execute. Found and fixed: the import check demanded a version, so SET NULL refused the deletion; migration `2026-10-10-204800-0000_actor_import_file_not_kept` relaxes it. The history says "file no longer kept".
-- [ ] T086 [P] Extend `apps/web/e2e/user-data-export.spec.ts` (the `accounts` slice) and `library-account-deletion.spec.ts` (the `collections` slice) with an imported sheet.
+- [X] T086 [P] Extend `apps/web/e2e/user-data-export.spec.ts` (the `accounts` slice) and `library-account-deletion.spec.ts` (the `collections` slice) with an imported sheet.
+  - Done: user-data-export.spec.ts green in the accounts slice (69 passed) and library-account-deletion.spec.ts green in the collections slice (31 passed), 2026-10-10. The rescued character is found by owner, since the sheet renames it.
 
 ### Telemetry, coordinated with spec 086
 

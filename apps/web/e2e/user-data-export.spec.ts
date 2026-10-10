@@ -5,8 +5,10 @@ import {
   login,
   register,
   registerAndCreateWorld,
+  setWorldSystem,
 } from "./fixtures/helpers";
 import { createNpcViaCompendium } from "./fixtures/content";
+import { bringIn, createNpc, withSheetImportOn } from "./fixtures/sheetImport";
 
 /**
  * ADR-011 (Export-My-Data Contract): `exportMyData`, `GET /api/user/data/export`
@@ -109,7 +111,7 @@ test.describe("ADR-011: the export answers for the person signed in", () => {
 
     const payload = await exportFor(page);
 
-    expect(payload.manifest.schemaVersion).toBe("v3");
+    expect(payload.manifest.schemaVersion).toBe("v4");
     expect(Number.isNaN(new Date(payload.manifest.exportedAt).getTime())).toBe(
       false,
     );
@@ -197,7 +199,7 @@ test.describe("ADR-011: the export answers for the person signed in", () => {
       manifest: { schema_version: string; counts: { worlds: number } };
       worlds: { id: string }[];
     };
-    expect(downloaded.manifest.schema_version).toBe("v3");
+    expect(downloaded.manifest.schema_version).toBe("v4");
     expect(downloaded.worlds.map((world) => world.id)).toContain(worldId);
     expect(downloaded.manifest.counts.worlds).toBe(downloaded.worlds.length);
 
@@ -353,5 +355,64 @@ test.describe("ADR-011: deleting my data", () => {
 
     await keeperContext.close();
     await leaverContext.close();
+  });
+});
+
+/**
+ * Spec 048 T086: a sheet brought in is the person's data. The download
+ * names it, and the ZIP carries the file itself. The sheet is invented (the
+ * 5e pack's fixtures).
+ */
+test.describe("Spec 048: a brought sheet in the export", () => {
+  withSheetImportOn();
+
+  test("the download lists the sheet and its import, and the ZIP holds the file", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    const worldId = await registerAndCreateWorld(
+      page,
+      `Sheet Export ${Date.now().toString(36)}`,
+      "e2eexpsheet",
+    );
+    await setWorldSystem(page, worldId, "dnd5e");
+    const actorId = await createNpc(page, worldId, "dnd5e");
+    await bringIn(page, worldId, actorId, "fighter3-wizard2.pdf");
+
+    const response = await page.request.get("/api/user/data/export");
+    expect(response.status()).toBe(200);
+    const downloaded = (await response.json()) as {
+      manifest: {
+        schema_version: string;
+        counts: {
+          brought_characters: number;
+          sheet_versions: number;
+          actor_imports: number;
+        };
+      };
+      brought_characters: {
+        versions: { file: string; file_bytes: number }[];
+      }[];
+      actor_imports: { actor_id: string; kind: string }[];
+    };
+    expect(downloaded.manifest.schema_version).toBe("v4");
+    expect(downloaded.manifest.counts).toMatchObject({
+      brought_characters: 1,
+      sheet_versions: 1,
+      actor_imports: 1,
+    });
+    expect(downloaded.actor_imports).toEqual([
+      expect.objectContaining({ actor_id: actorId, kind: "import" }),
+    ]);
+    const [version] = downloaded.brought_characters[0].versions;
+    expect(version.file).toMatch(/^sheets\/[0-9a-f-]{36}\/v1\.pdf$/);
+
+    // A ZIP keeps each entry's name in the clear, and a sheet is stored
+    // uncompressed, so the file is findable in the bytes as it was sent.
+    const zip = await page.request.get("/api/user/data/export?format=zip");
+    expect(zip.status()).toBe(200);
+    const bytes = await zip.body();
+    expect(bytes.includes(Buffer.from(version.file))).toBe(true);
+    expect(bytes.includes(Buffer.from("%PDF-"))).toBe(true);
   });
 });

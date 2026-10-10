@@ -31,9 +31,10 @@ export function historyText(
       ? `Rolled back to before version ${target.versionNo} by ${who}`
       : `Rolled back by ${who}`;
   }
-  // The uploader's account was deleted and its files with it (spec 048 T085).
+  // The uploader's account was deleted and its files with it (spec 048
+  // T085). The record stays under someone still here, so it names nobody.
   if (record.versionNo == null) {
-    return `A sheet brought in by ${who}, file no longer kept`;
+    return "A sheet brought in by a deleted account, file no longer kept";
   }
   return `Version ${record.versionNo} brought in by ${who}`;
 }

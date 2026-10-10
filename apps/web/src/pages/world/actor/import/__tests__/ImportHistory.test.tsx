@@ -55,7 +55,7 @@ describe("ImportHistory (T078)", () => {
   it("says when the file is no longer kept", () => {
     const gone = record({ versionNo: null, versionId: null });
     expect(historyText(gone, [gone])).toBe(
-      "A sheet brought in by Wren Player, file no longer kept",
+      "A sheet brought in by a deleted account, file no longer kept",
     );
     expect(row(gone, false)).not.toContain("import-history-download");
   });
