@@ -53,6 +53,7 @@ import {
   ROOT_DIR,
   ensureEngineBuild,
   ensurePdfBuild,
+  buildSheetReaders,
   engineProfile,
   skipWasmOpt,
   log,
@@ -1108,6 +1109,7 @@ async function main() {
     );
   }
   await ensurePdfBuild({});
+  await buildSheetReaders({});
   await ensureEngineBuild({
     profile,
     noOpt: skipWasmOpt() && !measuredWillRun,

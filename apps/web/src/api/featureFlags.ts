@@ -34,6 +34,9 @@ export const FEATURE_DEMO = "feature.demo";
 /** Whether large files download in resumable parts (spec 080). Public. */
 export const FEATURE_DOWNLOAD_IN_PARTS = "feature.download_in_parts";
 
+/** Guards bringing a character in from a sheet PDF (spec 048). */
+export const FEATURE_SHEET_IMPORT = "feature.sheet_import";
+
 /** The settings group a flag is declared in, as the server names it. */
 export const FEATURES_GROUP = "Features";
 

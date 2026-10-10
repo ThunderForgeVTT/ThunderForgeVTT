@@ -9160,6 +9160,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "thunderforge-sheet-import"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "thunderforge-pdf",
+]
+
+[[package]]
 name = "thunderforge-system-blades-in-the-dark"
 version = "0.1.0"
 dependencies = [
@@ -9192,6 +9202,17 @@ dependencies = [
  "serde_json",
  "thunderforge-canvas-core",
  "thunderforge-dice",
+]
+
+[[package]]
+name = "thunderforge-system-dnd5e-sheet"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thunderforge-pdf",
+ "thunderforge-sheet-import",
+ "wasm-bindgen",
 ]
 
 [[package]]

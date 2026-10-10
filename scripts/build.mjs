@@ -7,6 +7,7 @@ import {
   engineProfile,
   ensureEngineBuild,
   ensurePdfBuild,
+  buildSheetReaders,
   log,
   parseArgs,
   runCommand,
@@ -34,6 +35,7 @@ async function run() {
   // The web imports this the same way it imports the engine, so it has to
   // exist before the frontend is built. Cheap when it already does.
   await ensurePdfBuild({ force: args.force });
+  await buildSheetReaders({ force: args.force });
   // The demo's in-page backend rolls with this (spec 074).
   await ensureDiceBuild({ force: args.force });
   // The demo's fight rules (spec 079): the demo build imports them, and the

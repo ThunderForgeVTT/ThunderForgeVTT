@@ -18,6 +18,7 @@ what decides.
 packs/systems/<pack-id>/
 ├── system.json      # required — everything below is declared here
 ├── server/          # optional — a Rust crate, bundled packs only
+├── sheet/           # optional — a Rust crate that reads a character sheet (spec 048)
 ├── web/             # optional — only with something the host mounts
 ├── seed-content/    # optional
 └── README.md        # optional
@@ -41,6 +42,14 @@ of `web/src/ActorSheet.tsx`, `web/src/StatBlocks.ts` or
 at build time, and a file anywhere else is reached only if one of them
 imports it. A pack with none of them has no `web/`, and its sheet is drawn
 from the manifest.
+
+**`sheet/` is a character sheet reader** (spec 048): a Rust crate with a
+`wasm` feature that turns an exported sheet into the system-neutral
+character `crates/thunderforge-sheet-import` defines. The server links it
+natively, and `scripts/shared.mjs` builds it for the browser into
+`dist/sheet-<pack-id>`, so a player's browser and the server read a sheet
+with the same code. The pack's `system.json` says where each part of the
+reading lands, under `sheetImport`.
 
 `system.json` alone makes a working pack. Every bundled system renders a
 usable character sheet from its manifest and nothing else (SC-012) — the base

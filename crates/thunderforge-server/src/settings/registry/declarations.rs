@@ -27,7 +27,7 @@ const NONE: &[Validator] = &[];
 const MAIL_SECURITY: &[&str] = &["none", "starttls", "implicit"];
 const ACCESS_POLICIES: &[&str] = &["open", "invite_only", "closed"];
 
-pub(super) static DECLARATIONS: [SettingDeclaration; 42] = [
+pub(super) static DECLARATIONS: [SettingDeclaration; 43] = [
     // -- What kind of instance this is --------------------------------------
     //
     // First, and deliberately. Spec 052 US1/US2: what an operator is asked for
@@ -847,5 +847,22 @@ pub(super) static DECLARATIONS: [SettingDeclaration; 42] = [
         what_is_limited: "Every file is one plain request again: a dropped connection starts a large download over from the beginning.",
         group: "Features",
         since: "0.80",
+    },
+    SettingDeclaration {
+        key: "feature.sheet_import",
+        kind: Kind::Bool,
+        backing: Backing::Row,
+        env_var: Some("THUNDERFORGE_FEATURE_SHEET_IMPORT"),
+        env_aliases: &[],
+        requirement: Requirement::Optional,
+        setup: SetupVisibility::Offered,
+        secret: false,
+        default: Some("false"),
+        validators: &[Validator::BoolLike],
+        capability: None,
+        what_to_set: "Whether a player may bring a character in from an exported character sheet PDF, onto a character they hold in a world.",
+        what_is_limited: "Players cannot bring a character in from a PDF.",
+        group: "Features",
+        since: "0.81",
     },
 ];

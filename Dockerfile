@@ -127,7 +127,7 @@ RUN if [ "$BUILD_PROFILE" = dev ]; then flag=""; engine="--features debug-names"
   && cargo chef cook $flag --recipe-path recipe.json -p thunderforge \
   && cargo chef cook $flag --recipe-path recipe.json --target wasm32-unknown-unknown \
   -p thunderforge-engine $engine \
-  && for crate in thunderforge-dice thunderforge-pdf thunderforge-combat; do \
+  && for crate in thunderforge-dice thunderforge-pdf thunderforge-combat thunderforge-system-dnd5e-sheet; do \
   cargo chef cook --release --recipe-path recipe.json --target wasm32-unknown-unknown \
   -p "$crate" --features wasm || exit 1; \
   done
@@ -138,7 +138,7 @@ ARG BUILD_PROFILE
 
 COPY . .
 
-# Order matters. `dist/engine`, `dist/pdf` and `dist/dice` are pnpm workspace
+# Order matters. `dist/engine`, `dist/pdf`, `dist/dice` and `dist/sheet-*` are pnpm workspace
 # packages that wasm-pack writes, and `apps/web` and `apps/demo` depend on
 # them, so they have to exist before `pnpm install` can resolve the
 # workspace. `target/` is the cooked one from the stage above: only this

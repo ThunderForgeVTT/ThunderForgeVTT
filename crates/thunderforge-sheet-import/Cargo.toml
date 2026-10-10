@@ -1,0 +1,17 @@
+[lints]
+workspace = true
+
+[package]
+name = "thunderforge-sheet-import"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+# Spec 048: the system-neutral half of bringing a character in. It holds the
+# character a reader produces, the reader trait, and the mapping engine that
+# turns a reading into a plan. It names no game system.
+[dependencies]
+thunderforge-pdf = { path = "../thunderforge-pdf" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.11.0"

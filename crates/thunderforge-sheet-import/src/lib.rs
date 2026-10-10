@@ -1,0 +1,13 @@
+//! Bringing a character in from a sheet (spec 048).
+//!
+//! A pack's reader turns a document into an [`ImportedCharacter`]: a
+//! system-neutral character in which every leaf says how sure the reader is
+//! and where on the page it came from. The mapping engine then plans that
+//! reading onto an actor, from the pack's `sheetImport` declaration and its
+//! optional refine hook. Nothing here names a game system.
+
+pub mod character;
+pub mod hash;
+pub mod mapping;
+pub mod plan;
+pub mod reader;

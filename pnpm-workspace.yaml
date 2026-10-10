@@ -7,6 +7,8 @@ packages:
   - dist/pdf
   # Spec 074: the dice the demo's in-page backend rolls with, built likewise.
   - dist/dice
+  # Spec 048: each system pack's character sheet reader, built likewise.
+  - "dist/sheet-*"
   - "crates/*"
   - "packs/*"
   - "packs/systems/*/web"

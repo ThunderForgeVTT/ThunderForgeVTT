@@ -276,6 +276,21 @@ test("a server directory with no Cargo.toml is refused", () => {
   assert.match(problems[0], /Cargo\.toml/);
 });
 
+test("a sheet reader crate is part of a pack (spec 048)", () => {
+  const files = wholePack({
+    "packs/systems/shoes/sheet/Cargo.toml": '[package]\nname = "shoes-sheet"\n',
+    "packs/systems/shoes/sheet/src/lib.rs": "",
+  });
+  assert.deepEqual(packProblems(...tree(files)), []);
+});
+
+test("a sheet directory with no Cargo.toml is refused", () => {
+  const files = wholePack({ "packs/systems/shoes/sheet/src/lib.rs": "" });
+  const problems = packProblems(...tree(files));
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /sheet: has no Cargo\.toml/);
+});
+
 test("a server crate the server library's tests do not link is refused", () => {
   const problems = packProblems(...tree(wholePack({ [TEST_LINKAGE]: "" })));
   assert.equal(problems.length, 1);

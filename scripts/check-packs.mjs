@@ -2,8 +2,9 @@
 /**
  * Spec 066, FR-005: the shape of a system pack, written as a check.
  *
- * A pack is `system.json`, and at most a `server/` crate, a `web/` half,
- * `seed-content/`, a README and data files its own crate reads. That is the
+ * A pack is `system.json`, and at most a `server/` crate, a `sheet/` reader
+ * crate (spec 048), a `web/` half, `seed-content/`, a README and data files
+ * its own crate reads. That is the
  * contract in `packs/systems/README.md`, and Roll for Shoes is the pack that
  * has exactly it.
  *
@@ -124,6 +125,7 @@ function keyProblems(manifest, source, keys) {
 const LISTED = new Set([
   "system.json",
   "server",
+  "sheet",
   "web",
   "seed-content",
   "README.md",
@@ -234,6 +236,12 @@ export function packProblems(files, read) {
           ? `${pack}/${file}: cannot be checked, because no PanelSlot list was found in ${SLOT_SOURCE}`
           : `${pack}/${file}: "${panel[1]}" is not a panel slot, so the host never mounts it. ` +
               `The slots are ${slots.join(", ")}`,
+      );
+    }
+
+    if (entries.has("sheet") && !inside.includes("sheet/Cargo.toml")) {
+      problems.push(
+        `${pack}/sheet: has no Cargo.toml, so it is not a reader the server or the browser can load`,
       );
     }
 

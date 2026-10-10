@@ -419,6 +419,84 @@ export async function ensurePdfBuild({ force = false } = {}) {
   await buildPdf();
 }
 
+/**
+ * The sheet readers each system pack ships (spec 048): a `sheet/` crate
+ * beside the pack's `server/`, with a `wasm` feature. The browser reads a
+ * character sheet with the same crate the server re-reads it with, so the
+ * plan a player reviews is the plan the server applies.
+ *
+ * Found by looking, never by name: the host does not name a system.
+ */
+function sheetReaderCrates() {
+  const packsDir = join(ROOT_DIR, "packs/systems");
+  if (!existsSync(packsDir)) return [];
+  return readdirSync(packsDir)
+    .sort()
+    .map((system) => ({ system, dir: join(packsDir, system, "sheet") }))
+    .filter(({ dir }) => {
+      const manifest = join(dir, "Cargo.toml");
+      return (
+        existsSync(manifest) &&
+        /^\s*wasm\s*=/m.test(readFileSync(manifest, "utf-8"))
+      );
+    });
+}
+
+/** What a sheet reader is built from: its own crate, the core, the PDF reader. */
+function getSheetReaderInputsHash(dir) {
+  const hash = createHash("sha256");
+  if (existsSync(WORKSPACE_CARGO_LOCK)) {
+    hashFile(hash, WORKSPACE_CARGO_LOCK);
+  }
+  for (const source of [
+    dir,
+    join(ROOT_DIR, "crates/thunderforge-sheet-import"),
+    ...PDF_SOURCE_DIRS,
+  ]) {
+    hashFile(hash, join(source, "Cargo.toml"));
+    hashDirectoryRecursive(hash, join(source, "src"));
+  }
+  return hash.digest("hex");
+}
+
+/**
+ * Build every pack's sheet reader for the browser, into
+ * `dist/sheet-<system>` as `@thunderforge/sheet-<system>`. Release only, for
+ * the PDF reader's reason.
+ */
+export async function buildSheetReaders({ force = false } = {}) {
+  for (const { system, dir } of sheetReaderCrates()) {
+    const outDir = join(ROOT_DIR, "dist", `sheet-${system}`);
+    const sumPath = join(outDir, "pkg.sum");
+    const inputs = getSheetReaderInputsHash(dir);
+    if (
+      !force &&
+      existsSync(sumPath) &&
+      readFileSync(sumPath, "utf-8").trim() === inputs
+    ) {
+      log("sheet", `The ${system} sheet reader is up to date, skipping build...`);
+      continue;
+    }
+    log("sheet", `Building the ${system} sheet reader...`);
+    const child = spawnManaged(
+      `wasm-pack build ./ --release --target web --out-dir ${outDir} --scope thunderforge --out-name sheet -- --features wasm`,
+      { cwd: dir, prefix: "sheet" },
+    );
+    const result = await waitForProcess(child, `${system} sheet reader build`);
+    if (result.code !== 0) {
+      throw new Error(
+        `The ${system} sheet reader build failed with exit code ${result.code}`,
+      );
+    }
+    const manifest = join(outDir, "package.json");
+    const pkg = JSON.parse(readFileSync(manifest, "utf-8"));
+    pkg.name = `@thunderforge/sheet-${system}`;
+    writeFileSync(manifest, JSON.stringify(pkg, null, 2), "utf-8");
+    writeFileSync(sumPath, inputs, "utf-8");
+    log("sheet", `The ${system} sheet reader is built and pkg.sum updated.`);
+  }
+}
+
 const DICE_DIR = join(ROOT_DIR, "crates/thunderforge-dice");
 const DICE_PKG_DIR = join(ROOT_DIR, "dist/dice");
 

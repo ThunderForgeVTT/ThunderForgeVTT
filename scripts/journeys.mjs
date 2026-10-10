@@ -53,6 +53,7 @@ import {
   engineProfile,
   ensureEngineBuild,
   ensurePdfBuild,
+  buildSheetReaders,
   log,
   runCommand,
   skipWasmOpt,
@@ -426,6 +427,7 @@ async function main() {
   // `dist/engine`, and two runs asking for different profiles would rebuild it
   // under each other.
   await ensurePdfBuild({});
+  await buildSheetReaders({});
   await ensureEngineBuild({
     profile: engineProfile("dev"),
     noOpt: skipWasmOpt(),

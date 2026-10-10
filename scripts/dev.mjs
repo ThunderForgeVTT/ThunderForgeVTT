@@ -17,6 +17,7 @@ import {
   ROOT_DIR,
   ensureEngineBuild,
   ensurePdfBuild,
+  buildSheetReaders,
   engineProfile,
   log,
   parseArgs,
@@ -317,6 +318,7 @@ async function run() {
   // Release always, even in dev: there is no debugging value in an
   // unoptimised PDF reader, and the difference is megabytes a person waits for.
   await ensurePdfBuild({ force: args.force });
+  await buildSheetReaders({ force: args.force });
 
   // Started in dependency order, each gated on the next being ready — the
   // database is already waited for by the Makefile's `services-up`.

@@ -43,6 +43,9 @@ pub const DEMO: &str = "feature.demo";
 /// Fetching a large file in resumable parts (spec 080).
 pub const DOWNLOAD_IN_PARTS: &str = "feature.download_in_parts";
 
+/// Bringing a character in from an exported sheet (spec 048).
+pub const SHEET_IMPORT: &str = "feature.sheet_import";
+
 /// One flag, and who may be told how it is set.
 #[derive(Debug, Clone, Copy)]
 pub struct Feature {
@@ -67,6 +70,10 @@ pub const FEATURES: &[Feature] = &[
     Feature {
         key: DOWNLOAD_IN_PARTS,
         public: true,
+    },
+    Feature {
+        key: SHEET_IMPORT,
+        public: false,
     },
 ];
 
