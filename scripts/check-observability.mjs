@@ -102,6 +102,8 @@ export function promqlMetrics(expr) {
     .replace(/"(?:[^"\\]|\\.)*"/g, '""')
     .replace(/\{[^}]*\}/g, "")
     .replace(/\[[^\]]*\]/g, "")
+    // `offset 10m`: a duration, not a metric called `m`.
+    .replace(/\boffset\s+-?(?:\d+[smhdwy]+)+/gi, "")
     .replace(
       /\b(by|without|on|ignoring|group_left|group_right)\s*\([^)]*\)/g,
       "",

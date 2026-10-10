@@ -550,8 +550,10 @@ in-cluster endpoint, then the gateway, then the Flux changes.
   ```
 
   Grafana's **ThunderForge** folder holds the seven dashboards. **Backplane** shows poll rates from vtt-dev within 2 minutes, and **Landing** shows `nginx_up 1`.
-- [ ] T105 In the Flux repository, mount the Loki ruler's ThunderForge rules (T069). In `overlays/system/monitoring/loki.yaml`, the `audit-rules` volume becomes a projected volume of `loki-audit-rules` and `loki-thunderforge-rules` (`optional: true`), still at `/etc/loki/rules/fake`. Check that `ThunderForgeLanding5xx` is listed by the ruler (`/loki/api/v1/rules`).
-- [ ] T088 In the Flux repository, add the `count` connector from `contracts/collector-count-connector.md` to the public and in-cluster logs pipelines (R8). Confirm that `thunderforge_browser_events_total` appears in Prometheus.
+- [X] T105 In the Flux repository, mount the Loki ruler's ThunderForge rules (T069). In `overlays/system/monitoring/loki.yaml`, the `audit-rules` volume becomes a projected volume of `loki-audit-rules` and `loki-thunderforge-rules` (`optional: true`), still at `/etc/loki/rules/fake`. Check that `ThunderForgeLanding5xx` is listed by the ruler (`/loki/api/v1/rules`).
+  - Done in fluxified e14c2bc. After `kubectl apply -k deploy/k8s/observability` created `loki-thunderforge-rules`, the ruler lists `ThunderForgeLanding5xx` (`/prometheus/api/v1/rules`) without a restart.
+- [X] T088 In the Flux repository, add the `count` connector from `contracts/collector-count-connector.md` to the public and in-cluster logs pipelines (R8). Confirm that `thunderforge_browser_events_total` appears in Prometheus.
+  - Done in fluxified e14c2bc; the merged config passed `otelcol-contrib validate` first. A test post through the gateway gave `thunderforge_browser_events_total` and `thunderforge_browser_errors_total` in Prometheus. The exporter expires a series five minutes after its last count, so a quiet hour shows none.
 - [ ] T103 Push the gateway image and deploy it, as `contracts/telemetry-gateway.md`'s Shipping section gives it:
 
   ```sh
@@ -565,7 +567,8 @@ in-cluster endpoint, then the gateway, then the Flux changes.
   - `helmrelease.yaml`: remove the `otlp/public` receiver's `cors` block. `filter/public`, `transform/public` and `public-service.yaml` stay.
   - Check: a preflight from `https://game.example.org` gets `Access-Control-Allow-Origin: *`, and a post from vtt-dev still arrives, now labelled `owner_site`.
 - [ ] T104 Confirm SC-015 in the cluster: a post from an origin other than the project's reaches Loki with `thunderforge.source="self_hosted_browser"`, and the **Public telemetry intake** row shows accepted and dropped batches. Run `make observability KUBE_CONTEXT=<your context>` if T101's rules are not yet applied.
-- [ ] T090 Once the connector's series exist, add `ThunderForgeBrowserErrorSpike` and `ThunderForgeDemoFunnelStepSilent` from `contracts/collector-count-connector.md` to `deploy/k8s/observability/prometheus-rules.yaml`. Then run `make observability-check` and `make observability KUBE_CONTEXT=<your context>`.
+- [X] T090 Once the connector's series exist, add `ThunderForgeBrowserErrorSpike` and `ThunderForgeDemoFunnelStepSilent` from `contracts/collector-count-connector.md` to `deploy/k8s/observability/prometheus-rules.yaml`. Then run `make observability-check` and `make observability KUBE_CONTEXT=<your context>`.
+  - Done. `check-observability.mjs` read `offset 10m` as a metric called `m`; it now strips an offset's duration. 14 Prometheus alert expressions pass.
 
 ---
 

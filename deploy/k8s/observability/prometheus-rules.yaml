@@ -105,3 +105,21 @@ spec:
             severity: info
           annotations:
             summary: The public telemetry gateway is refusing five times more than it accepts. Someone is sending what no ThunderForge build sends; the dropped-by-reason panel says what.
+    # Spec 086 T090: from the collector's count connector
+    # (contracts/collector-count-connector.md), so only once those series exist.
+    - name: thunderforge.browser
+      rules:
+        - alert: ThunderForgeBrowserErrorSpike
+          expr: sum by (job) (rate(thunderforge_browser_errors_total[10m])) > 3 * sum by (job) (rate(thunderforge_browser_errors_total[6h] offset 10m)) and sum by (job) (increase(thunderforge_browser_errors_total[10m])) > 20
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.job }}: browser errors are 3x their 6-hour rate. Open the Demo funnel and errors dashboard, Errors by message."
+        - alert: ThunderForgeDemoFunnelStepSilent
+          expr: sum by (step) (increase(thunderforge_browser_events_total{job="thunderforge-demo",event_name="funnel",step=~"demo_opened|map_loaded"}[1h])) == 0 and on() sum(increase(thunderforge_browser_events_total{job="thunderforge-landing",event_name="page_view"}[1h])) > 20
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Landing has visitors but nobody reached {{ $labels.step }} in the demo for an hour. Check the demo loads, then the Demo funnel and errors dashboard."
