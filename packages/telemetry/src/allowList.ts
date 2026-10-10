@@ -79,6 +79,7 @@ export const EVENT_NAMES = [
   "nav_timing",
   "engine.frames",
   "telemetry.internal",
+  "sheet_import.step",
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];

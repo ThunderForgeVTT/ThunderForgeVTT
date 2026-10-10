@@ -57,7 +57,7 @@ impl LastEvent {
 /// How long one report covers.
 pub const WINDOW_MINUTES: i64 = 10;
 
-/// The telemetry target the outcomes are logged on (research R16).
+/// The log target for an attempt that could not be recorded (research R16).
 const TARGET: &str = crate::sheet_import::telemetry::UNADOPTED_USE_ATTEMPTS;
 
 /// What became of an attempt.
@@ -126,7 +126,7 @@ pub fn record_attempt(
     if let Some(decided) = latest_decision(conn, &piece)?
         && last_event.0.is_none_or(|seen| seen < decided)
     {
-        tracing::info!(target: TARGET, result = Outcome::SuppressedStale.result());
+        crate::sheet_import::telemetry::record_attempt(Outcome::SuppressedStale.result());
         return Ok(Some(Outcome::SuppressedStale));
     }
 
@@ -149,7 +149,7 @@ pub fn record_attempt(
                     attempts::updated_by.eq(user_id),
                 ))
                 .execute(conn)?;
-            tracing::info!(target: TARGET, result = Outcome::Counted.result());
+            crate::sheet_import::telemetry::record_attempt(Outcome::Counted.result());
             return Ok(Some(Outcome::Counted));
         }
 
@@ -197,7 +197,7 @@ pub fn record_attempt(
         let outcome = Outcome::Reported {
             chat_message_id: message.id,
         };
-        tracing::info!(target: TARGET, result = outcome.result());
+        crate::sheet_import::telemetry::record_attempt(outcome.result());
         Ok(Some(outcome))
     })
 }

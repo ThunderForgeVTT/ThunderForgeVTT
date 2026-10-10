@@ -162,4 +162,4 @@ step, sent on the first click only.
 | web | error boundary | `apps/web/src/components/AppErrorBoundary.tsx`, around `App`'s routes |
 | web | `engine.load` and `engine.load_failed` | `apps/web/src/engine/bevy/loadTelemetry.ts`, subscribed to `mountEngine`'s stages |
 | web | `engine.frames` | `apps/web/src/engine/bevy/framesSummary.ts`, which samples `stats.ts` once a second into a fixed 600-entry ring |
-| web | `sheet_import.step` | `apps/web/src/pages/world/actor/import/telemetry.ts`, called by the review's step changes. Until this package is on spec 048's branch it is a no-op |
+| web | `sheet_import.step` | `apps/web/src/pages/world/actor/import/telemetry.ts`, called by the review's step changes, recording through this package's `telemetry` |

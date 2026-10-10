@@ -1,11 +1,10 @@
 //! The five server points of spec 048 research R16, against spec 086's
 //! contract (`specs/086-full-telemetry/contracts/server-instruments.md`).
 //!
-//! 086's policy crate is not on this branch yet, so each point is a
-//! `tracing` event whose target is the OTel instrument's name and whose
-//! fields are its attributes. When the branch meets 086, the names go into
-//! the policy's `INSTRUMENTS` and these calls record through
-//! `opentelemetry::global::meter("thunderforge")`; the call sites stay.
+//! Each point records through spec 086's [`Recorders`], whose names and
+//! units are the policy crate's `INSTRUMENTS`. Before the meter provider is
+//! installed, or with `TELEMETRY=false`, there are no recorders and each
+//! call records nothing.
 //!
 //! Every attribute value comes from a closed set below. `system` and
 //! `reader` are pack-declared ids, so they are bounded too. Nothing here
@@ -13,9 +12,11 @@
 
 use std::time::Duration;
 
+use opentelemetry::KeyValue;
 use thunderforge_sheet_import::{ImportPlan, PlanCertainty};
 
 use super::error::SheetImportError;
+use crate::telemetry::instruments::{Recorders, recorders};
 
 pub const SHEET_IMPORTS: &str = "thunderforge.sheet_imports";
 pub const READ_DURATION: &str = "thunderforge.sheet_import.read_duration";
@@ -76,20 +77,48 @@ fn certainty(c: &PlanCertainty) -> &'static str {
 
 /// One apply, whatever it ended in.
 pub fn record_import(system: &str, reader: &str, outcome: &'static str) {
-    tracing::info!(target: SHEET_IMPORTS, system, reader, outcome);
+    if let Some(r) = recorders() {
+        count_import(r, system, reader, outcome);
+    }
+}
+
+fn count_import(r: &Recorders, system: &str, reader: &str, outcome: &'static str) {
+    r.sheet_imports.add(
+        1,
+        &[
+            KeyValue::new("system", system.to_owned()),
+            KeyValue::new("reader", reader.to_owned()),
+            KeyValue::new("outcome", outcome),
+        ],
+    );
 }
 
 /// How long the server's own reading took.
 pub fn record_read_duration(reader: &str, took: Duration) {
-    let seconds = took.as_secs_f64();
-    tracing::info!(target: READ_DURATION, reader, seconds);
+    if let Some(r) = recorders() {
+        time_read(r, reader, took);
+    }
+}
+
+fn time_read(r: &Recorders, reader: &str, took: Duration) {
+    r.sheet_import_read_duration.record(
+        took.as_secs_f64(),
+        &[KeyValue::new("reader", reader.to_owned())],
+    );
 }
 
 /// How many fields of an applied plan were read, uncertain, unread or
-/// corrected: one event per certainty that occurred, with its count.
+/// corrected: one add per certainty that occurred, by its count.
 pub fn record_fields(plan: &ImportPlan) {
+    if let Some(r) = recorders() {
+        count_fields(r, plan);
+    }
+}
+
+fn count_fields(r: &Recorders, plan: &ImportPlan) {
     for (name, count) in field_counts(plan) {
-        tracing::info!(target: FIELDS, certainty = name, count);
+        r.sheet_import_fields
+            .add(count, &[KeyValue::new("certainty", name)]);
     }
 }
 
@@ -109,10 +138,31 @@ fn field_counts(plan: &ImportPlan) -> Vec<(&'static str, u64)> {
         .collect()
 }
 
-/// A GM's decision on staged content, once it has committed.
+/// A GM's decision on staged content, once it has committed: one add by
+/// the number of pieces it decided.
 pub fn record_decision(decision: &'static str, pieces: usize) {
     debug_assert!(DECISION_KINDS.contains(&decision));
-    tracing::info!(target: DECISIONS, decision, count = pieces as u64);
+    if let Some(r) = recorders() {
+        count_decision(r, decision, pieces);
+    }
+}
+
+fn count_decision(r: &Recorders, decision: &'static str, pieces: usize) {
+    r.staged_content_decisions
+        .add(pieces as u64, &[KeyValue::new("decision", decision)]);
+}
+
+/// One use of content the GM has not adopted, by what became of it.
+pub fn record_attempt(result: &'static str) {
+    debug_assert!(ATTEMPT_RESULTS.contains(&result));
+    if let Some(r) = recorders() {
+        count_attempt(r, result);
+    }
+}
+
+fn count_attempt(r: &Recorders, result: &'static str) {
+    r.unadopted_use_attempts
+        .add(1, &[KeyValue::new("result", result)]);
 }
 
 #[cfg(test)]
@@ -177,5 +227,33 @@ mod tests {
         for o in &outcomes {
             assert!(ATTEMPT_RESULTS.contains(&o.result()));
         }
+    }
+
+    #[test]
+    fn each_point_records_its_instrument_with_its_labels() {
+        use crate::telemetry::instruments::testing::TestMeter;
+        let m = TestMeter::new();
+        let r = Recorders::new(&m.meter);
+        count_import(&r, "dnd5e", "ddb-pdf", "applied");
+        time_read(&r, "ddb-pdf", Duration::from_millis(40));
+        count_decision(&r, "adopt_all", 3);
+        count_attempt(&r, "rate_limited");
+        let seen = m.collect();
+        assert_eq!(
+            seen["thunderforge.sheet_imports{outcome=applied,reader=ddb-pdf,system=dnd5e}"],
+            1.0
+        );
+        assert_eq!(
+            seen["thunderforge.sheet_import.read_duration{reader=ddb-pdf}"],
+            1.0
+        );
+        assert_eq!(
+            seen["thunderforge.staged_content.decisions{decision=adopt_all}"],
+            3.0
+        );
+        assert_eq!(
+            seen["thunderforge.unadopted_use_attempts{result=rate_limited}"],
+            1.0
+        );
     }
 }

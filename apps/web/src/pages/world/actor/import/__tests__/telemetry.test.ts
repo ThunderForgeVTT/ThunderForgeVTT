@@ -1,4 +1,9 @@
-import { afterEach, describe, expect, it } from "vitest";
+import {
+  ALLOWED_ATTRIBUTES,
+  EVENT_NAMES,
+  telemetry,
+} from "@thunderforge/telemetry";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   REASONS,
@@ -11,7 +16,10 @@ import {
 
 /** Spec 048 T088: `sheet_import.step` carries only the closed sets. */
 
-afterEach(() => setStepSink(() => {}));
+afterEach(() => {
+  setStepSink(undefined);
+  vi.restoreAllMocks();
+});
 
 describe("sheet_import.step", () => {
   it("carries a reason on failed only", () => {
@@ -51,5 +59,20 @@ describe("sheet_import.step", () => {
       ["sheet_import.step", { step: "opened" }],
       ["sheet_import.step", { step: "failed", reason: "plan_changed" }],
     ]);
+  });
+
+  it("records through @thunderforge/telemetry by default", () => {
+    const event = vi.spyOn(telemetry, "event").mockImplementation(() => {});
+    recordStep("failed", "SHEET_TOO_LARGE");
+    expect(event).toHaveBeenCalledWith("sheet_import.step", {
+      step: "failed",
+      reason: "too_large",
+    });
+  });
+
+  it("is a name and attributes the package allows", () => {
+    expect(EVENT_NAMES).toContain("sheet_import.step");
+    expect(ALLOWED_ATTRIBUTES).toContain("step");
+    expect(ALLOWED_ATTRIBUTES).toContain("reason");
   });
 });

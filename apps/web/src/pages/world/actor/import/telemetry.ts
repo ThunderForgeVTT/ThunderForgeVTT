@@ -2,12 +2,13 @@
  * Spec 048 research R16: the browser event `sheet_import.step`, against
  * spec 086's events table (`contracts/browser-events.md`).
  *
- * `packages/telemetry` is not on this branch yet, so `recordStep` hands the
- * event to a sink that does nothing. When the branches meet, the sink is
- * the package's `event("sheet_import.step", attributes)`, the name joins
- * its `EventName` type and the attributes its `ALLOWED_ATTRIBUTES`. The
- * call sites stay where they are.
+ * `recordStep` hands the event to `@thunderforge/telemetry`'s `telemetry`,
+ * which records nothing until the telemetry chunk has loaded, and nothing
+ * at all with `TELEMETRY=false`. `step` and `reason` are already on the
+ * package's `ALLOWED_ATTRIBUTES`.
  */
+
+import { telemetry } from "@thunderforge/telemetry";
 
 export const STEPS = [
   "opened",
@@ -59,11 +60,14 @@ export function stepAttributes(
 
 type Sink = (name: "sheet_import.step", attributes: StepAttributes) => void;
 
-let sink: Sink = () => {};
+const recordToTelemetry: Sink = (name, attributes) =>
+  telemetry.event(name, { ...attributes });
 
-/** For the tests, and for 086's package once it is here. */
-export function setStepSink(next: Sink): void {
-  sink = next;
+let sink: Sink = recordToTelemetry;
+
+/** For the tests: `undefined` puts the package's recording back. */
+export function setStepSink(next: Sink | undefined): void {
+  sink = next ?? recordToTelemetry;
 }
 
 export function recordStep(step: SheetImportStep, code?: string): void {

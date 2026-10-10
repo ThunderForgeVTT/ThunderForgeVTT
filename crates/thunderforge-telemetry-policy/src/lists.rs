@@ -60,6 +60,11 @@ pub const SERVER_METRIC_ATTRIBUTES: &[&str] = &[
     "state",
     "event",
     "visibility",
+    "system",
+    "reader",
+    "certainty",
+    "decision",
+    "result",
 ];
 
 /// A browser's resource (contracts/browser-events.md).
@@ -239,6 +244,15 @@ pub const INSTRUMENTS: &[(&str, InstrumentKind, &str)] = &[
         "{event}",
     ),
     ("thunderforge.rolls", Counter, "{roll}"),
+    ("thunderforge.sheet_imports", Counter, "{import}"),
+    ("thunderforge.sheet_import.read_duration", Histogram, "s"),
+    ("thunderforge.sheet_import.fields", Counter, "{field}"),
+    (
+        "thunderforge.staged_content.decisions",
+        Counter,
+        "{decision}",
+    ),
+    ("thunderforge.unadopted_use_attempts", Counter, "{attempt}"),
 ];
 
 /// The gateway's own instruments (contracts/telemetry-gateway.md).
@@ -356,7 +370,7 @@ mod tests {
         assert_eq!(BROWSER_RECORD_ATTRIBUTES.len(), 39);
         assert_eq!(BROWSER_SPAN_ATTRIBUTES.len(), 7);
         assert_eq!(GATEWAY_LABELS.len(), 8);
-        assert_eq!(INSTRUMENTS.len(), 23);
+        assert_eq!(INSTRUMENTS.len(), 28);
         assert_eq!(GATEWAY_INSTRUMENTS.len(), 4);
     }
 

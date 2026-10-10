@@ -64,11 +64,11 @@ Histogram buckets:
 
 These are set with SDK views in `install.rs`.
 
-Spec 048's five rows were added on a branch without this crate. There they
-are `tracing` events whose target is the instrument's name and whose fields
-are its attributes (`crates/thunderforge-server/src/sheet_import/telemetry.rs`).
-When the branches meet, the names join the policy's `INSTRUMENTS` and those
-functions record through the meter; the call sites do not move.
+Spec 048's five rows are in the policy's `INSTRUMENTS`, and record through
+`Recorders` from `crates/thunderforge-server/src/sheet_import/telemetry.rs`.
+Their labels (`system`, `reader`, `certainty`, `decision`, `result`) are in
+`SERVER_METRIC_ATTRIBUTES`, so the anonymous tier keeps them; every value is
+from a closed set or a pack-declared id, never a name, an id or content.
 
 ### Bounded label values
 

@@ -70,6 +70,7 @@ test("EVENT_NAMES is exactly the contract's table", () => {
       "nav_timing",
       "engine.frames",
       "telemetry.internal",
+      "sheet_import.step",
     ],
   );
 });

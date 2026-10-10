@@ -53,6 +53,11 @@ pub struct Recorders {
     pub http_duration: Histogram<f64>,
     pub pool_checkout_wait: Histogram<f64>,
     pub pool_checkout_timeouts: Counter<u64>,
+    pub sheet_imports: Counter<u64>,
+    pub sheet_import_read_duration: Histogram<f64>,
+    pub sheet_import_fields: Counter<u64>,
+    pub staged_content_decisions: Counter<u64>,
+    pub unadopted_use_attempts: Counter<u64>,
 }
 
 impl Recorders {
@@ -69,6 +74,11 @@ impl Recorders {
             http_duration: histogram("thunderforge.http.server.duration"),
             pool_checkout_wait: histogram("thunderforge.db.pool.checkout_wait"),
             pool_checkout_timeouts: counter("thunderforge.db.pool.checkout_timeouts"),
+            sheet_imports: counter("thunderforge.sheet_imports"),
+            sheet_import_read_duration: histogram("thunderforge.sheet_import.read_duration"),
+            sheet_import_fields: counter("thunderforge.sheet_import.fields"),
+            staged_content_decisions: counter("thunderforge.staged_content.decisions"),
+            unadopted_use_attempts: counter("thunderforge.unadopted_use_attempts"),
         }
     }
 }
@@ -368,6 +378,11 @@ mod tests {
         r.http_duration.record(0.01, &none);
         r.pool_checkout_wait.record(0.01, &none);
         r.pool_checkout_timeouts.add(1, &none);
+        r.sheet_imports.add(1, &none);
+        r.sheet_import_read_duration.record(0.01, &none);
+        r.sheet_import_fields.add(1, &none);
+        r.staged_content_decisions.add(1, &none);
+        r.unadopted_use_attempts.add(1, &none);
         let seen = m.collect();
         for (name, kind, _) in INSTRUMENTS {
             if matches!(kind, InstrumentKind::Counter | InstrumentKind::Histogram) {

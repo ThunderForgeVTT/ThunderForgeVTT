@@ -1652,13 +1652,16 @@ by our endpoint, from the same crate:
   page loads and the board's engine take; frame rates.
 - **Counts**: requests, GraphQL operations by their field name, world
   events by kind, rolls by visibility, open connections, backplane
-  deliveries.
+  deliveries, character sheets brought in (by game system, sheet reader and
+  outcome) with how many of their fields were read, and the GM's decisions
+  on the content they bring.
 - **Versions and coarse environment**: the ThunderForge version, the
   operating system family and CPU architecture, the browser family and
   major version, a mobile flag, and bucketed screen width, memory and core
   count.
-- **Steps reached** in the demo and on the landing, and page views by route
-  pattern (`/world/:worldId/play`, never the id itself).
+- **Steps reached** in the demo, on the landing and in bringing a character
+  sheet in, and page views by route pattern (`/world/:worldId/play`, never
+  the id itself).
 - **A random install id**: a random UUID made the first time your server
   starts, stored in your database (`instance_settings`,
   `system.telemetry_instance_id`), and never changed. It is made from nothing
