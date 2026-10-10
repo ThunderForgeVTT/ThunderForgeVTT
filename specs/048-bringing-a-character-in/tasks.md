@@ -106,20 +106,20 @@ user's shareable set is a *collection*. Only the 5e system is a *pack*.
   Use hand-built `ImportedCharacter` values with no PDF.
 - [X] T015 Implement the types in `character.rs` and `reader.rs`: `ImportedCharacter`, `Field`, `Certainty`, `Source`, `SheetReader`, `Recognition` and `ReadError`.
 - [X] T016 Implement `mapping.rs`, which parses the `sheetImport` declaration and validates its paths, and `plan.rs` and `hash.rs`, which hold `plan`, `plan_hash`, `normalise_name` and `content_hash`. T014 goes green.
-- [ ] T017 In `crates/thunderforge-canvas-core/src/system_contribution.rs`, add the `SheetImport` slot and the object-safe `SheetReaderHandle` (bytes in, JSON out). Add a pack-load test: a malformed `sheetImport` block fails to load, and a pack with no block loads with `sheet_import: None`.
+- [X] T017 In `crates/thunderforge-canvas-core/src/system_contribution.rs`, add the `SheetImport` slot and the object-safe `SheetReaderHandle` (bytes in, JSON out). Add a pack-load test: a malformed `sheetImport` block fails to load, and a pack with no block loads with `sheet_import: None`.
 
 ### Storage, origin, permissions, events
 
-- [ ] T018 [P] Write server tests in `compendium/origin_tests.rs`:
+- [X] T018 [P] Write server tests in `compendium/origin_tests.rs`:
   - an item or ability origin cannot change;
   - an actor goes from Authored to Uploaded, and never back;
   - an insert with no origin fails;
   - `content_origin()` reads the column for actors, items and abilities.
-- [ ] T019 Write the migration `2026-10-09-100000-0000_content_origin_columns` (data-model.md §1) with its `down.sql`, and run `diesel print-schema`. Make every `Insertable` for `world_actors`, `world_items` and `world_abilities` state `origin`. The compiler finds them once the field is not `Option`. Make `origin.rs` `origin_of` read the column. T018 goes green. `content-origin.spec.ts` must stay green.
-- [ ] T020 Write the migration `2026-10-09-110000-0000_sheet_import` (data-model.md §2) and `2026-10-09-120000-0000_unadopted_use_attempts` (§3), with down files. Add the Diesel models in `sheet_import/mod.rs` and `staged_content/mod.rs`.
-- [ ] T021 [P] Add `require_manages_content(conn, world_id, user_id)` in `auth/world_membership.rs`. It allows the GM and a Trusted Player (`manages_content()`) and refuses a Player. Add tests.
-- [ ] T022 [P] Add `sheet_import/storage.rs` with `object_key(owner, character, version)` under `sheets/`, following `feedback/mod.rs`. Allow `sheets/` in `delete_object` (`rustfs.rs:477`). Test that a `sheets/` key deletes and any other prefix is still refused.
-- [ ] T023 [P] Add world event codes 39 `SHEET_IMPORT_APPLIED`, 40 `STAGED_CONTENT_DECIDED` and 41 `ACTOR_ROLLED_BACK` in `world_events.rs`. In the web event sync, refetch the actor's sheet and links on 39 and 41, and the staged queue on 40.
+- [X] T019 Write the migration `2026-10-09-100000-0000_content_origin_columns` (data-model.md §1) with its `down.sql`, and run `diesel print-schema`. Make every `Insertable` for `world_actors`, `world_items` and `world_abilities` state `origin`. The compiler finds them once the field is not `Option`. Make `origin.rs` `origin_of` read the column. T018 goes green. `content-origin.spec.ts` must stay green.
+- [X] T020 Write the migration `2026-10-09-110000-0000_sheet_import` (data-model.md §2) and `2026-10-09-120000-0000_unadopted_use_attempts` (§3), with down files. Add the Diesel models in `sheet_import/mod.rs` and `staged_content/mod.rs`.
+- [X] T021 [P] Add `require_manages_content(conn, world_id, user_id)` in `auth/world_membership.rs`. It allows the GM and a Trusted Player (`manages_content()`) and refuses a Player. Add tests.
+- [X] T022 [P] Add `sheet_import/storage.rs` with `object_key(owner, character, version)` under `sheets/`, following `feedback/mod.rs`. Allow `sheets/` in `delete_object` (`rustfs.rs:477`). Test that a `sheets/` key deletes and any other prefix is still refused.
+- [X] T023 [P] Add world event codes 40 `SHEET_IMPORT_APPLIED`, 41 `STAGED_CONTENT_DECIDED` and 42 `ACTOR_ROLLED_BACK` in `world_events.rs` (39 went to spec 088). In the web event sync, refetch the actor's sheet and links on 40 and 42, and the staged queue on 41.
 
 ### Fixtures
 
@@ -172,7 +172,7 @@ Content the world lacks is staged under their name and kept out of play.
 
 - [ ] T035 [P] [US1] Write `crates/thunderforge-server/src/graphql/mutations_sheet_import_tests.rs`:
   - the preview writes nothing;
-  - an apply writes the fields, links, version, record, origin `Uploaded` and event 39 in one transaction;
+  - an apply writes the fields, links, version, record, origin `Uploaded` and event 40 in one transaction;
   - a player whose claim granted Editor may import;
   - the GM may import onto any actor in the world;
   - a Viewer and a stranger are refused with `FORBIDDEN`;
@@ -262,7 +262,7 @@ stale.
   - a Trusted Player is allowed;
   - the same piece from two characters is one row;
   - the same name with different content is two rows with `differs_from`;
-  - each decision records event 40.
+  - each decision records event 41.
 - [ ] T055 [US3] Implement `staged_content/decide.rs` and `StagedContentMutation` (`adoptStagedContent`, `adoptAllStagedContent`, `declineStagedContent`, `revisitStagedContent`), and the `stagedContent` query. Each checks `require_manages_content`. T054 goes green.
 - [ ] T056 [P] [US3] Write refusal tests: `rollCheck`, `makeAttack`, ability use, item use and share each refuse a staged link with `CONTENT_NOT_ADOPTED` and the FR-036a sentence.
 - [ ] T057 [US3] Implement `staged_content/guard.rs`, one check called from each of those mutations. T056 goes green.
@@ -274,7 +274,7 @@ stale.
   - a piece never delivered (always pending) is always reported.
 - [ ] T059 [US3] Implement `staged_content/report.rs`. Send `x-tf-last-event` from `apps/web/src/api/graphqlClient.ts`, using the world store's last applied event id. T058 goes green.
 - [ ] T060 [US3] Add `apps/web/src/components/world/staged/BroughtByPlayers.tsx` and `StagedRow.tsx`, the GM and Trusted Player queue. They are grouped under one heading per player, with Adopt, Adopt all, Decline and Revisit, and show where a piece differs from another character's. Mount the queue as a "Brought by players" tab on the world compendium screen, behind `manages_content`. Add vitest tests.
-- [ ] T061 [P] [US3] Show the refusal sentence when a player's action names staged content. The marks in `LinkedContent.tsx` follow event 40.
+- [ ] T061 [P] [US3] Show the refusal sentence when a player's action names staged content. The marks in `LinkedContent.tsx` follow event 41.
 - [ ] T062 [US3] Write `apps/web/e2e/sheet-import-adopt.spec.ts`:
   - a GM adopts a feat in one action, and it appears in the world compendium (SC-005);
   - a second player's character that brought the same feat now uses the world's;
@@ -328,7 +328,7 @@ owner and the GM.
   - the GM only, with a Trusted Player and the owner refused (FR-044b);
   - the sheet fields and links are restored;
   - play state is kept (FR-044a);
-  - a `rollback` record and event 41 are written;
+  - a `rollback` record and event 42 are written;
   - origin stays `Uploaded`;
   - rolling back to "before any import" restores the first snapshot.
 - [ ] T075 [US5] Implement `sheet_import/rollback.rs` and `rollBackActor`. T074 goes green.

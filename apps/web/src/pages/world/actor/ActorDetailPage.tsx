@@ -40,6 +40,7 @@ import { ActorRollsPanel } from "@/pages/world/actor/ActorRollsPanel";
 import { ActorStatBlockPanel } from "@/pages/world/actor/ActorStatBlockPanel";
 import { WorldAppearance } from "@/appearance/WorldAppearance";
 import { startActorAccessEventSync } from "@/engine/world/sync/actorAccess";
+import { startSheetImportEventSync } from "@/engine/world/sync/sheetImport";
 import { subscribeToWorldEvents } from "@/engine/world/sync/subscriptionClient";
 import { mayEditActor } from "@/pages/world/actor/actorEditRight";
 import { PackActorSheet } from "@/pages/world/actor/PackActorSheet";
@@ -160,6 +161,40 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
       },
       // Not play: this page stays open to a world's members while its play
       // is paused, as `WorldAppearance` explains for the same choice.
+      subscribeToWorldEvents(worldId, { announcePause: false }),
+    );
+    return () => {
+      active = false;
+      stop();
+    };
+  }, [worldId, actorId]);
+
+  // Spec 048: an import, a rollback, or an adoption of staged content the
+  // character carries rewrites its sheet fields and links. Unlike an access
+  // change, this is a deliberate rewrite of the character, so the name and
+  // description are taken from the server, and every panel that reads the
+  // sheet or its links remounts on `sheetVersion`.
+  useEffect(() => {
+    let active = true;
+    const stop = startSheetImportEventSync(
+      {
+        onActorSheetChanged: (changedActorId) => {
+          if (changedActorId !== actorId) {
+            return;
+          }
+          void getActor(worldId, actorId)
+            .then((fresh) => {
+              if (!active || !fresh) {
+                return;
+              }
+              setActor(fresh);
+              setLabel(fresh.label);
+              setDescription(fresh.description ?? "");
+              setSheetVersion((version) => version + 1);
+            })
+            .catch(() => undefined);
+        },
+      },
       subscribeToWorldEvents(worldId, { announcePause: false }),
     );
     return () => {
@@ -682,6 +717,7 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
             <SystemChecksPanel worldId={worldId} actorId={actorId} />
 
             <ActorInventoryPanel
+              key={`inventory-${sheetVersion}`}
               actorId={actorId}
               worldId={worldId}
               canManage={canEdit}

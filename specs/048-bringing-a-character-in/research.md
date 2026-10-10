@@ -494,15 +494,19 @@ New codes after `EVENT_CODE_AUTHORING_TOOLS_CHANGED = 38`:
 
 | Code | Name | Payload (no content, ids only) | Reaches |
 | --- | --- | --- | --- |
-| 39 | `SHEET_IMPORT_APPLIED` | `actor_id`, `import_id` | everyone who can see the actor |
-| 40 | `STAGED_CONTENT_DECIDED` | `staged_id`, `state`, `actor_ids` | everyone in the world |
-| 41 | `ACTOR_ROLLED_BACK` | `actor_id`, `import_id` | everyone who can see the actor |
+| 40 | `SHEET_IMPORT_APPLIED` | `actor_id`, `import_id` | everyone who can see the actor |
+| 41 | `STAGED_CONTENT_DECIDED` | `staged_id`, `state`, `actor_ids` | everyone in the world |
+| 42 | `ACTOR_ROLLED_BACK` | `actor_id`, `import_id` | everyone who can see the actor |
 
 Each is recorded with `record_world_event` (`world_events.rs:344`) inside
 the transaction that made the change. The event sync for actors refetches
-the actor's sheet and links. Code 40 is the withdrawing event that R13's
+the actor's sheet and links. Code 41 is the withdrawing event that R13's
 staleness check compares against. The ids are world-event payloads, not
 telemetry, so Principle VII is not involved.
+
+**Deviation (implementation)**: the codes are 40-42, not 39-41. Spec 088
+(first-session feedback) took 39 for `ROLLS_CLEARED` while this spec was
+in progress. The order is unchanged.
 
 ## R15. Feature flag
 

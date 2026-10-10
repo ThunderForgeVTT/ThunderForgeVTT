@@ -282,6 +282,21 @@ pub fn is_roll_event(event_code: i32) -> bool {
     event_code == EVENT_CODE_ROLL_MADE || event_code == EVENT_CODE_ROLL_REVEALED
 }
 
+/// Spec 048: a sheet was applied to an actor, or a re-import was. Its sheet
+/// fields and links changed; the actor's page reads them again. Payload:
+/// `{"actorId": <the actor>, "importId": <the import record>}`. Spec 048 planned 39-41; 39 went to spec 088's
+/// roll clearing, so these start at 40.
+pub const EVENT_CODE_SHEET_IMPORT_APPLIED: i32 = 40;
+/// Spec 048: a GM or Trusted Player adopted or declined staged content. The
+/// staged queue is read again; an adoption also repoints links, so each
+/// actor named reads its links again. Payload:
+/// `{"stagedId": <the piece>, "state": "adopted" | "declined",
+/// "actorIds": [<actors linked to it>]}`.
+pub const EVENT_CODE_STAGED_CONTENT_DECIDED: i32 = 41;
+/// Spec 048: an actor was rolled back to before an import. Same payload as
+/// [`EVENT_CODE_SHEET_IMPORT_APPLIED`], `importId` naming the rollback record.
+pub const EVENT_CODE_ACTOR_ROLLED_BACK: i32 = 42;
+
 /// The whole payload of a roll event (FR-002).
 pub fn roll_event_payload(
     roll_id: Uuid,

@@ -149,7 +149,7 @@ order:
      content as `staged_id`, upserting `world_staged_content` by its unique
      key;
    - set `world_actors.origin = 'Uploaded'`;
-   - record world event 39.
+   - record world event 40.
 6. If the transaction fails, delete the object and return the error.
 
 Play-state fields (`playState` in the mapping) keep their current value
@@ -164,7 +164,7 @@ a rollback to "before any import" restores.
 - Restores the sheet fields and links from `toImportId`'s before-snapshot.
   It keeps the play-state fields as they are now (FR-044a).
 - Writes an `actor_imports` row of kind `rollback` with `restored_from`, and
-  records event 41.
+  records event 42.
 - The actor's origin stays `Uploaded`.
 
 ### `adoptStagedContent(id: ID!): StagedContent!`
@@ -177,21 +177,21 @@ a rollback to "before any import" restores.
     who brought it;
   - repoint every link with that `staged_id`;
   - set the state to `adopted`, with `decided_by` and `decided_at`;
-  - record event 40.
+  - record event 41.
 
 ### `adoptAllStagedContent(worldId: ID!, playerId: ID!): [StagedContent!]!`
 
 - The same rule as `adoptStagedContent`.
 - Adopts that player's pending pieces as they are at this moment. Pieces
   staged afterwards stay pending (FR-033a, "a snapshot"). One transaction,
-  one event 40 per piece.
+  one event 41 per piece.
 
 ### `declineStagedContent(id: ID!): StagedContent!` and `revisitStagedContent(id: ID!, state: StagedState!): StagedContent!`
 
 - The same rule as `adoptStagedContent`.
 - Decline sets the state to `declined`. Revisit moves a declined piece to
   `pending` or straight to `adopted` (FR-036b).
-- Each records event 40. That event is the withdrawing event R13's
+- Each records event 41. That event is the withdrawing event R13's
   staleness check compares against.
 
 ## Refusal in play paths (FR-036a, FR-037a, FR-038)
@@ -201,7 +201,7 @@ a `staged_id`. These include `rollCheck`, `makeAttack`, ability use, item
 use and share. If it does, the mutation:
 
 1. refuses with `CONTENT_NOT_ADOPTED`;
-2. reads `x-tf-last-event` and compares it with the piece's latest event 40;
+2. reads `x-tf-last-event` and compares it with the piece's latest event 41;
 3. if the header is missing or older than that event, increments
    `thunderforge.unadopted_use_attempts{result="suppressed_stale"}` and
    reports nothing (FR-038b);
@@ -232,4 +232,4 @@ use and share. If it does, the mutation:
 - Components never import the client directly. The import route and the
   staged-content screen call hooks that expose `refetch()`, as AGENTS.md
   asks for reads the store does not hold. The actor itself returns through
-  event 39's sync.
+  event 40's sync.

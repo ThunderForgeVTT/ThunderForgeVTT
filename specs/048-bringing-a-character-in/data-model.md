@@ -138,7 +138,9 @@ ALTER TABLE world_actor_inventory
   ADD COLUMN equipped   boolean NOT NULL DEFAULT false,
   ADD COLUMN attuned    boolean NOT NULL DEFAULT false,
   ADD CONSTRAINT one_target CHECK (NOT (item_id IS NOT NULL AND staged_id IS NOT NULL));
-ALTER TABLE world_items ADD COLUMN weight numeric(8,2) CHECK (weight >= 0);
+ALTER TABLE world_items ADD COLUMN weight double precision CHECK (weight >= 0);
+-- Implemented as double precision, not numeric(8,2): Diesel's numeric
+-- support needs a new dependency, and a sheet's weight is a display value.
 ```
 
 `world_actor_inventory.item_id` and `world_actor_abilities.ability_id` are

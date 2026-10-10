@@ -67,7 +67,7 @@ By layer:
     GM;
   - `CONTENT_NOT_ADOPTED` refusals in play mutations, with GM reports
     suppressed for a stale client (R13);
-  - world events 39-41;
+  - world events 40-42 (39 went to spec 088);
   - the export and account deletion paths cover the new rows and files
     (R12);
   - `feature.sheet_import` (R15).
@@ -197,10 +197,10 @@ migrations, 10 new e2e specs, a standalone reader suite and 1 playtest scenario.
 | Principle | How this plan holds it |
 | --- | --- |
 | I. The server is the authority | The server re-reads the uploaded file natively, plans again, and writes only on a matching plan hash. Permission, the flag, the bounds, origin and the staged state are all checked on the server. A reading sent by the client is never written. |
-| II. React and Bevy are isolated from the network | The review route and the staged queue call `apps/web/src/api/sheetImport.ts` through hooks that expose `refetch()`. The actor reaches the world store through event 39's sync, like any actor change. Bevy is not touched: staged content has no ability id, so it never reaches the board. |
+| II. React and Bevy are isolated from the network | The review route and the staged queue call `apps/web/src/api/sheetImport.ts` through hooks that expose `refetch()`. The actor reaches the world store through event 40's sync, like any actor change. Bevy is not touched: staged content has no ability id, so it never reaches the board. |
 | III. Optimistic updates with rollback | An import is deliberately not optimistic. The review is the preview, and the actor changes when the server confirms. A GM's decision on staged content is not optimistic either, because a refused decision must not show as made. |
 | IV. Base data vs derived data | Skill and save modifiers, passives, initiative and the proficiency bonus are cross-checked and never stored (R6). `level` is kept as the sum of `classes`, which is validated, not trusted. |
-| V. One pub/sub backplane | Events 39-41 go through `record_world_event` inside each change's transaction. There is no new channel. |
+| V. One pub/sub backplane | Events 40-42 go through `record_world_event` inside each change's transaction. There is no new channel. |
 | VI. Every feature is proven by its own slice | The new `sheet-import` slice owns `sheet-import-*.spec.ts` and has a standalone half. Its neighbours (actors, compendium, combat, book-import, collections, accounts) are declared. `pnpm e2e:sheet-import`, plus every slice `pnpm e2e:which --diff` names, proves each story. The full suite is never the gate. |
 | VII. Telemetry is on and anonymous | Five server instruments and one browser event are declared against spec 086's contract (R16). The only attributes are closed-set outcomes, certainties and pack ids. There are no names, ids or file content. Until 086 lands, the same points are `tracing` spans. |
 
@@ -247,7 +247,7 @@ crates/
         ├── compendium/origin.rs                          read the column
         ├── storage/rustfs.rs                             delete_object allows sheets/
         ├── settings/registry/declarations.rs · settings/features.rs   feature.sheet_import
-        ├── world_events.rs                               codes 39–41
+        ├── world_events.rs                               codes 40–42
         └── users/mod.rs · users/export_content.rs        export v4 and deletion
 packs/systems/
 ├── dnd5e/
