@@ -857,7 +857,7 @@ pub(super) static DECLARATIONS: [SettingDeclaration; 43] = [
         requirement: Requirement::Optional,
         setup: SetupVisibility::Offered,
         secret: false,
-        default: Some("false"),
+        default: Some("true"),
         validators: &[Validator::BoolLike],
         capability: None,
         what_to_set: "Whether a player may bring a character in from an exported character sheet PDF, onto a character they hold in a world.",

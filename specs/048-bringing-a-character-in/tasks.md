@@ -471,7 +471,8 @@ without throwing play away.
   - `make test-rust ARGS="-p thunderforge-server"`. It needs the `thunderforge-canvas-assets` bucket;
   - `pnpm -F @thunderforge/web test`.
   - Done: Crates pdf, sheet-import, dnd5e-sheet, roll-for-shoes-sheet all green; server lib filters 80 passed; web vitest green after two stale expectations were updated for data-kind and the SHEET_NOT_RECOGNISED code.
-- [ ] T097 Flip `feature.sheet_import` to default **true** in `declarations.rs` and `.env.example`, and set `since`.
+- [X] T097 Flip `feature.sheet_import` to default **true** in `declarations.rs` and `.env.example`, and set `since`.
+  - Done: Default true in declarations.rs and .env.example; since stays 0.81, the release the flag first ships in. Registry, sheet_import, staged_content and features server tests pass.
 - [ ] T098 **Proof**: `pnpm e2e:sheet-import` and `pnpm e2e:sheet-import:standalone` are green. Then run every slice that `pnpm e2e:which --diff` names. It prints FULL SUITE because of the migrations and schema; run the named slices instead (at least `actors`, `compendium`, `combat`, `book-import`, `collections`, `accounts` and `instance`). Never run `node ./scripts/e2e-parallel.mjs` on its own. Then run `pnpm playtest`. Record each result here.
 
 ---
