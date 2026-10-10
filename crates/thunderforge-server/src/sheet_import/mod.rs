@@ -18,6 +18,7 @@ pub mod route;
 pub mod snapshot;
 pub mod staged_links;
 pub mod storage;
+pub mod telemetry;
 
 use diesel::prelude::*;
 use diesel_derive_enum::DbEnum;

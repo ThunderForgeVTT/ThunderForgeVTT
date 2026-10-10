@@ -411,14 +411,16 @@ without throwing play away.
 
 ### Telemetry, coordinated with spec 086
 
-- [ ] T087 Instrument the five server points in research R16 at the places they occur: `apply.rs` outcomes, the read duration, the field certainties, `decide.rs` and `report.rs`.
+- [X] T087 Instrument the five server points in research R16 at the places they occur: `apply.rs` outcomes, the read duration, the field certainties, `decide.rs` and `report.rs`.
   - If 086's `crates/thunderforge-telemetry-policy` exists, add the names to `INSTRUMENTS` and to its contract table in `specs/086-full-telemetry/contracts/server-instruments.md`, and record the instruments with `opentelemetry::global::meter("thunderforge")`.
   - If it does not, emit the same points as `tracing` spans with those field names, and add a row to 086's contract so its tasks pick them up.
   - Add a test that the attributes are only the closed sets.
-- [ ] T088 [P] Add the browser event `sheet_import.step` (`step`, and `reason` on `failed` only) at the review's steps.
+  - Done: 086's policy crate is on main but not on this branch, so the five points are `tracing` events whose target is the OTel name and whose fields are the attributes (`sheet_import/telemetry.rs`): `record_import` wraps `apply_sheet_import_impl` with `system`, `reader` (`none` before known) and `outcome`; `record_read_duration` times the server's own reading; `record_fields` counts the applied plan's certainties; `record_decision` runs after adopt, adopt all, decline and revisit commit; `report.rs` logs `result` from `Outcome::result()` (a counted repeat is `rate_limited`) and no longer logs ids. Rows added to 086's `server-instruments.md` with their label sets. Tests: every outcome is produced and declared, certainties and report results are the closed sets (63 sheet_import/staged_content tests pass). When the branch meets 086 the names go into `INSTRUMENTS` and these functions record through the meter.
+- [X] T088 [P] Add the browser event `sheet_import.step` (`step`, and `reason` on `failed` only) at the review's steps.
   - If `packages/telemetry` exists, use it: the `EventName` type, `ALLOWED_ATTRIBUTES` and its test.
   - If it does not, add a row to 086's `contracts/browser-events.md` events table and a no-op call site.
   - Tests run with `TELEMETRY=false`.
+  - Done: `packages/telemetry` is not on this branch: `import/telemetry.ts` declares `sheet_import.step` with its closed `STEPS` and `REASONS`, maps refusal codes to a reason on `failed` only (others carry none), and sends to a no-op sink that 086's `event()` replaces. The review page records opened, read, reviewed, applied, declined and failed. Row added to 086's `browser-events.md` events and call-site tables. `__tests__/telemetry.test.ts` (3 tests) runs with `TELEMETRY=false`.
 
 ### The flag, the docs, the record
 

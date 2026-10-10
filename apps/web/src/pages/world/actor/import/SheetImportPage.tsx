@@ -25,6 +25,7 @@ import { FieldRow } from "./FieldRow";
 import { CrossChecks, KeptInPlayList, UnmappedList } from "./PlanNotes";
 import { refusalProblem, SheetRefused, type Problem } from "./refusal";
 import { contentToReview, filterFields, type FieldFilter } from "./rows";
+import { recordStep } from "./telemetry";
 
 /** What the person is reviewing: the reading, their corrections, the plan. */
 interface Review {
@@ -64,6 +65,10 @@ export default function SheetImportPage() {
     setProblem(null);
     setFilter("all");
   });
+
+  useEffect(() => {
+    recordStep("opened");
+  }, [worldId, actorId]);
 
   useEffect(() => {
     let active = true;
@@ -112,6 +117,7 @@ export default function SheetImportPage() {
         );
       }
       const plan = await preview(answer.reading);
+      recordStep("read");
       setFilter("all");
       setStep({
         kind: "review",
@@ -123,7 +129,9 @@ export default function SheetImportPage() {
         plan,
       });
     } catch (err) {
-      setProblem(refusalProblem(err));
+      const problem = refusalProblem(err);
+      recordStep("failed", problem.code);
+      setProblem(problem);
       setStep({ kind: "pick" });
     }
   };
@@ -161,6 +169,7 @@ export default function SheetImportPage() {
   const onAccept = async () => {
     if (step.kind !== "review" || step.busy) return;
     const review: Review = step;
+    recordStep("reviewed");
     setProblem(null);
     setStep({ ...review, kind: "applying", sent: 0 });
     try {
@@ -176,11 +185,19 @@ export default function SheetImportPage() {
             sent: total > 0 ? Math.round((sent / total) * 100) : 0,
           }),
       });
+      recordStep("applied");
       navigate(viewPath);
     } catch (err) {
-      setProblem(refusalProblem(err));
+      const problem = refusalProblem(err);
+      recordStep("failed", problem.code);
+      setProblem(problem);
       setStep({ ...review, kind: "review", busy: false });
     }
+  };
+
+  const onDecline = () => {
+    recordStep("declined");
+    navigate(viewPath);
   };
 
   const review =
@@ -321,7 +338,7 @@ export default function SheetImportPage() {
               </Button>
               <Button
                 variant="ghost"
-                onClick={() => navigate(viewPath)}
+                onClick={onDecline}
                 disabled={step.kind === "applying"}
                 data-testid="sheet-import-decline"
               >

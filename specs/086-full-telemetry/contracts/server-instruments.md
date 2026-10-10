@@ -51,6 +51,11 @@ All instruments come from `opentelemetry::global::meter("thunderforge")`.
 | `thunderforge.world_events` | counter | `{event}` | `event` | `thunderforge_world_events_total` | `record_world_event` (ok) |
 | `thunderforge.world_event.record_failures` | counter | `{event}` | `event` | `thunderforge_world_event_record_failures_total` | `record_world_event` (err) |
 | `thunderforge.rolls` | counter | `{roll}` | `event`, `visibility` | `thunderforge_rolls_total` | `record_world_event` for codes 36 and 37 |
+| `thunderforge.sheet_imports` | counter | `{import}` | `system`, `reader`, `outcome` (spec 048 values) | `thunderforge_sheet_imports_total` | `sheet_import::telemetry::record_import`, once per `applySheetImport` (spec 048) |
+| `thunderforge.sheet_import.read_duration` | histogram | `s` | `reader` | `thunderforge_sheet_import_read_duration_seconds_{bucket,sum,count}` | `record_read_duration`, around the server's own reading (spec 048) |
+| `thunderforge.sheet_import.fields` | counter | `{field}` | `certainty` | `thunderforge_sheet_import_fields_total` | `record_fields`, per applied plan (spec 048) |
+| `thunderforge.staged_content.decisions` | counter | `{decision}` | `decision` | `thunderforge_staged_content_decisions_total` | `record_decision`, after the decision commits (spec 048) |
+| `thunderforge.unadopted_use_attempts` | counter | `{attempt}` | `result` | `thunderforge_unadopted_use_attempts_total` | `staged_content::report::record_attempt` (spec 048) |
 
 Histogram buckets:
 
@@ -58,6 +63,12 @@ Histogram buckets:
 - the pool wait uses `0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5, 30`.
 
 These are set with SDK views in `install.rs`.
+
+Spec 048's five rows were added on a branch without this crate. There they
+are `tracing` events whose target is the instrument's name and whose fields
+are its attributes (`crates/thunderforge-server/src/sheet_import/telemetry.rs`).
+When the branches meet, the names join the policy's `INSTRUMENTS` and those
+functions record through the meter; the call sites do not move.
 
 ### Bounded label values
 
@@ -73,6 +84,12 @@ These are set with SDK views in `install.rs`.
 | `state` | `idle`, `in_use` |
 | `event` | a name from `telemetry/event_names.rs`, covering 30 codes (spec 088 added `rolls_cleared`, 39) |
 | `visibility` | `everyone`, `gm_eyes`, `gm_only`: `rolls::visibility::Visibility::as_str()`, a closed enum |
+| `system` | a pack's game-system id with a `sheetImport` block, or `none` before the actor's system is known (spec 048) |
+| `reader` | a pack-declared reader id (`ddb-pdf`, ...), or `none` before the sheet was read (spec 048) |
+| `outcome` on `thunderforge.sheet_imports` | `applied`, `refused_flag`, `refused_permission`, `refused_bounds`, `refused_unrecognised`, `refused_unmapped_system`, `refused_plan_changed`, `failed` |
+| `certainty` | `read`, `uncertain`, `unread`, `corrected` |
+| `decision` | `adopt`, `adopt_all`, `decline`, `revisit` |
+| `result` | `reported`, `suppressed_stale`, `rate_limited` |
 
 `code` is bounded by the server's own error codes. Nothing outside the server
 can set it, because errors are produced by our resolvers. An `internal`

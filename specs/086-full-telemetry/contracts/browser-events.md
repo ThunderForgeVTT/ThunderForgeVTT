@@ -97,6 +97,7 @@ test enumerates it.
 | `nav_timing` | once, after `load` | `dns.ms`, `connect.ms`, `ttfb.ms`, `dom.ms`, `load.ms`, `transfer.bytes` | yes |
 | `engine.frames` | `pagehide` with the board open (web and demo) | `fps.p5`, `fps.p50`, `frame_ms.p95`, `tokens.bucket` (`0`, `1-10`, `11-50`, `51-200`, `>200`) | yes |
 | `telemetry.internal` | with the next batch, when the counter is above zero | `internal_errors`, `dropped` | no |
+| `sheet_import.step` | each step of bringing a sheet in (spec 048) | `step` = `opened`, `read`, `reviewed`, `applied`, `declined`, `failed`; `reason` on `failed` only = `encrypted`, `too_large`, `too_many_pages`, `unrecognised`, `unreadable`, `plan_changed` | no |
 
 The funnel steps, in order, are:
 
@@ -161,3 +162,4 @@ step, sent on the first click only.
 | web | error boundary | `apps/web/src/components/AppErrorBoundary.tsx`, around `App`'s routes |
 | web | `engine.load` and `engine.load_failed` | `apps/web/src/engine/bevy/loadTelemetry.ts`, subscribed to `mountEngine`'s stages |
 | web | `engine.frames` | `apps/web/src/engine/bevy/framesSummary.ts`, which samples `stats.ts` once a second into a fixed 600-entry ring |
+| web | `sheet_import.step` | `apps/web/src/pages/world/actor/import/telemetry.ts`, called by the review's step changes. Until this package is on spec 048's branch it is a no-op |

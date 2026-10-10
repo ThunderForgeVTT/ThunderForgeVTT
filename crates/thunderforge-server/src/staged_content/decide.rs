@@ -16,6 +16,7 @@ use crate::auth::world_membership::{ManagesContentError, require_manages_content
 use crate::compendium::origin::ContentOrigin;
 use crate::sheet_import::error::SheetImportError;
 use crate::sheet_import::records::{Person, person};
+use crate::sheet_import::telemetry;
 use crate::state::AppState;
 use crate::world_events::{EVENT_CODE_STAGED_CONTENT_DECIDED, record_world_event};
 
@@ -262,6 +263,7 @@ pub fn adopt(
         let piece = load_for_decision(conn, user_id, staged_id)?;
         adopt_locked(conn, user_id, piece)
     })
+    .inspect(|_| telemetry::record_decision("adopt", 1))
 }
 
 /// `adoptAllStagedContent`: the player's pending pieces as they stand now,
@@ -289,6 +291,7 @@ pub fn adopt_all(
             .map(|piece| adopt_locked(conn, user_id, piece))
             .collect()
     })
+    .inspect(|pieces: &Vec<StagedContent>| telemetry::record_decision("adopt_all", pieces.len()))
 }
 
 /// `declineStagedContent`. An adopted piece is the world's now, and is
@@ -306,6 +309,7 @@ pub fn decline(
             StagedState::Pending => set_state(conn, user_id, &piece, StagedState::Declined),
         }
     })
+    .inspect(|_| telemetry::record_decision("decline", 1))
 }
 
 /// `revisitStagedContent`: a declined piece goes back to pending, or
@@ -329,6 +333,7 @@ pub fn revisit(
             StagedState::Declined => Ok(piece),
         }
     })
+    .inspect(|_| telemetry::record_decision("revisit", 1))
 }
 
 /// `stagedContent`: everything for the GM and a Trusted Player; a Player

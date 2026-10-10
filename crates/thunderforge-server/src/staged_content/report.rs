@@ -57,8 +57,8 @@ impl LastEvent {
 /// How long one report covers.
 pub const WINDOW_MINUTES: i64 = 10;
 
-/// The telemetry target the outcomes are logged on.
-const TARGET: &str = "thunderforge.unadopted_use_attempts";
+/// The telemetry target the outcomes are logged on (research R16).
+const TARGET: &str = crate::sheet_import::telemetry::UNADOPTED_USE_ATTEMPTS;
 
 /// What became of an attempt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,6 +69,18 @@ pub enum Outcome {
     Counted,
     /// The client may only have been stale: nothing stored.
     SuppressedStale,
+}
+
+impl Outcome {
+    /// The `result` attribute: one of `telemetry::ATTEMPT_RESULTS`. A
+    /// counted attempt is the window's rate limit at work.
+    pub fn result(&self) -> &'static str {
+        match self {
+            Self::Reported { .. } => "reported",
+            Self::Counted => "rate_limited",
+            Self::SuppressedStale => "suppressed_stale",
+        }
+    }
 }
 
 /// The facts, in the order FR-038a names them.
@@ -114,7 +126,7 @@ pub fn record_attempt(
     if let Some(decided) = latest_decision(conn, &piece)?
         && last_event.0.is_none_or(|seen| seen < decided)
     {
-        tracing::info!(target: TARGET, result = "suppressed_stale", operation, %staged_id);
+        tracing::info!(target: TARGET, result = Outcome::SuppressedStale.result());
         return Ok(Some(Outcome::SuppressedStale));
     }
 
@@ -137,7 +149,7 @@ pub fn record_attempt(
                     attempts::updated_by.eq(user_id),
                 ))
                 .execute(conn)?;
-            tracing::info!(target: TARGET, result = "counted", operation, %staged_id);
+            tracing::info!(target: TARGET, result = Outcome::Counted.result());
             return Ok(Some(Outcome::Counted));
         }
 
@@ -182,10 +194,11 @@ pub fn record_attempt(
             Some(serde_json::json!({ "messageId": message.id })),
             user_id,
         );
-        tracing::info!(target: TARGET, result = "reported", operation, %staged_id);
-        Ok(Some(Outcome::Reported {
+        let outcome = Outcome::Reported {
             chat_message_id: message.id,
-        }))
+        };
+        tracing::info!(target: TARGET, result = outcome.result());
+        Ok(Some(outcome))
     })
 }
 

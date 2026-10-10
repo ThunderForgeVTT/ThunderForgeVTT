@@ -6,6 +6,8 @@
 //! lands in one transaction, and the file is deleted if that fails.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use chrono::Utc;
 use diesel::prelude::*;
@@ -22,6 +24,7 @@ use super::error::SheetImportError;
 use super::index::staged_kind;
 use super::preview::{parse_corrections, plan_for, require_may_import};
 use super::snapshot::{self, ActorContext};
+use super::telemetry;
 use super::{ActorImport, ActorImportKind, NewActorImport, NewSheetImportVersion};
 use crate::compendium::origin::ContentOrigin;
 use crate::graphql::permissioned_entity_resolvers::{PausableContent, refuse_content_if_paused};
@@ -56,12 +59,40 @@ struct Planned {
     name: String,
 }
 
+/// What the apply learnt before it ended, for its telemetry: the actor's
+/// system and the reader that read the sheet.
+#[derive(Default)]
+struct Seen {
+    system: Option<String>,
+    reader: Option<String>,
+}
+
 pub async fn apply_sheet_import_impl(
     state: &AppState,
     systems_dir: &str,
     user_id: Uuid,
     is_admin: bool,
     input: ApplyInput,
+) -> Result<ActorImport, SheetImportError> {
+    let seen = Arc::new(Mutex::new(Seen::default()));
+    let result = apply_unrecorded(state, systems_dir, user_id, is_admin, input, seen.clone()).await;
+    let seen = seen.lock().map(|s| (s.system.clone(), s.reader.clone()));
+    let (system, reader) = seen.unwrap_or_default();
+    telemetry::record_import(
+        system.as_deref().unwrap_or(telemetry::UNKNOWN),
+        reader.as_deref().unwrap_or(telemetry::UNKNOWN),
+        telemetry::outcome(&result.as_ref().map(|_| ())),
+    );
+    result
+}
+
+async fn apply_unrecorded(
+    state: &AppState,
+    systems_dir: &str,
+    user_id: Uuid,
+    is_admin: bool,
+    input: ApplyInput,
+    seen: Arc<Mutex<Seen>>,
 ) -> Result<ActorImport, SheetImportError> {
     require_may_import(state, user_id, is_admin, input.actor_id).await?;
     refuse_content_if_paused(state, PausableContent::Actor(input.actor_id))
@@ -94,7 +125,15 @@ pub async fn apply_sheet_import_impl(
                 .game_system_id
                 .clone()
                 .ok_or(SheetImportError::NoMapping)?;
+            if let Ok(mut seen) = seen.lock() {
+                seen.system = Some(system.clone());
+            }
+            let started = Instant::now();
             let (reading, reading_value) = read_natively(&system, &bytes)?;
+            telemetry::record_read_duration(&reading.reader.id, started.elapsed());
+            if let Ok(mut seen) = seen.lock() {
+                seen.reader = Some(reading.reader.id.clone());
+            }
             let pages = Document::from_bytes_bounded(&bytes, Limits::default())
                 .map(|doc| doc.page_count().min(i16::MAX as usize) as i16)
                 .unwrap_or(1)
@@ -147,11 +186,15 @@ pub async fn apply_sheet_import_impl(
                 corrections: &corrections_value,
             };
             write_import(&mut conn, user_id, &planned, &file, &overwrite)
+                .map(|record| (record, planned.plan))
         })
         .await
     };
     match written {
-        Ok(record) => Ok(record),
+        Ok((record, plan)) => {
+            telemetry::record_fields(&plan);
+            Ok(record)
+        }
         Err(error) => {
             let _ = delete_object(&cfg, &key).await;
             Err(error)
