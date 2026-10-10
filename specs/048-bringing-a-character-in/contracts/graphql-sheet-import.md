@@ -4,7 +4,9 @@ These operations live in three new files, each with its own `_tests.rs`:
 
 - `crates/thunderforge-server/src/graphql/mutations_sheet_import.rs` holds
   `SheetImportMutation`;
-- `mutations_staged_content.rs` holds `StagedContentMutation`;
+- `mutations_staged_content.rs` holds `StagedContentMutation` and
+  `StagedContentQuery` (the `stagedContent` read lives beside the decisions it
+  feeds, and the rules for both live in `staged_content/decide.rs`);
 - `queries/sheet_import.rs` holds `SheetImportQuery`.
 
 All three are merged into `QueryRoot` and `MutationRoot` in `graphql.rs`.
@@ -103,6 +105,13 @@ type StagedContent {
   differsFrom: ID
   decidedBy: UserSummary
   decidedAt: DateTime
+  adoptedAbilityId: ID          # what it became, once adopted
+  adoptedItemId: ID
+}
+
+type ActorSummary {
+  id: ID!
+  label: String!
 }
 ```
 

@@ -152,6 +152,14 @@ type ActorStagedLink {
 	state: StagedState!
 }
 
+"""
+An actor that links a piece.
+"""
+type ActorSummary {
+	id: UUID!
+	label: String!
+}
+
 input AddCollectionMemberInput {
 	collectionId: UUID!
 	memberType: String!
@@ -887,6 +895,23 @@ type AppMutationRoot {
 	`planHash`.
 	"""
 	applySheetImport(actorId: UUID!, file: Upload!, corrections: JSON, overwritePlayState: [String!], planHash: String!): ActorImportRecord!
+	"""
+	Take a piece into the world's books. Every character using it now
+	uses the world's row.
+	"""
+	adoptStagedContent(id: UUID!): StagedContent!
+	"""
+	Adopt everything one player has pending, as it stands now.
+	"""
+	adoptAllStagedContent(worldId: UUID!, playerId: UUID!): [StagedContent!]!
+	"""
+	Keep a piece out of play. It can be revisited.
+	"""
+	declineStagedContent(id: UUID!): StagedContent!
+	"""
+	Move a declined piece back to pending, or straight to adopted.
+	"""
+	revisitStagedContent(id: UUID!, state: StagedState!): StagedContent!
 	attachAbilityToActor(input: AttachAbilityToActorInput!): GraphQLActorAbilityEntry!
 	detachAbilityFromActor(entryId: UUID!): Boolean!
 	createItem(input: CreateItemInput!): GraphQLItem!
@@ -1942,6 +1967,11 @@ type AppQueryRoot {
 	the sheet marks them "awaiting the GM" or "declined by the GM".
 	"""
 	actorStagedLinks(actorId: UUID!): [ActorStagedLink!]!
+	"""
+	What players brought into the world. The GM and a Trusted Player
+	see everything; a Player sees only their own.
+	"""
+	stagedContent(worldId: UUID!, state: StagedState, playerId: UUID): [StagedContent!]!
 	"""
 	Worlds whose name contains `search`, or whose id it is, for an
 	operator deciding what to pause.
@@ -7209,6 +7239,30 @@ type SourceFlip {
 	settingKey: String!
 	was: SettingSource!
 	now: SettingSource!
+}
+
+type StagedContent {
+	id: UUID!
+	"""
+	A vocabulary type, or `item`.
+	"""
+	kind: String!
+	name: String!
+	fieldValues: JSON!
+	state: StagedState!
+	broughtBy: UserSummary!
+	actors: [ActorSummary!]!
+	"""
+	The piece of the same name this one differs from.
+	"""
+	differsFrom: UUID
+	decidedBy: UserSummary
+	decidedAt: DateTime
+	"""
+	What it became, once adopted.
+	"""
+	adoptedAbilityId: UUID
+	adoptedItemId: UUID
 }
 
 enum StagedState {

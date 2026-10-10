@@ -30,7 +30,7 @@ pub struct ImportRecord {
     pub file_available: bool,
 }
 
-fn person(conn: &mut PgConnection, id: Uuid) -> QueryResult<Person> {
+pub(crate) fn person(conn: &mut PgConnection, id: Uuid) -> QueryResult<Person> {
     use crate::schema::users;
     let (username, first, last) = users::table
         .find(id)

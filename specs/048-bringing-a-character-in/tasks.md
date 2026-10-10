@@ -264,7 +264,7 @@ stale.
 
 **Independent test**: `sheet-import-adopt.spec.ts` and `sheet-import-unadopted.spec.ts`.
 
-- [ ] T054 [P] [US3] Write `graphql/mutations_staged_content_tests.rs`:
+- [X] T054 [P] [US3] Write `graphql/mutations_staged_content_tests.rs`:
   - an adopt creates one `world_abilities` row with origin `Uploaded`, repoints every link and leaves no duplicate (FR-034);
   - adopt all takes a snapshot, so a piece staged afterwards stays pending;
   - decline and revisit;
@@ -273,7 +273,9 @@ stale.
   - the same piece from two characters is one row;
   - the same name with different content is two rows with `differs_from`;
   - each decision records event 41.
-- [ ] T055 [US3] Implement `staged_content/decide.rs` and `StagedContentMutation` (`adoptStagedContent`, `adoptAllStagedContent`, `declineStagedContent`, `revisitStagedContent`), and the `stagedContent` query. Each checks `require_manages_content`. T054 goes green.
+  - Done: 10 tests, all green. The last one applies `fighter3-wizard2.pdf` onto two actors as the GM and checks that each piece is staged once and one adoption serves both. Each decision test reads event 41 back by `stagedId`.
+- [X] T055 [US3] Implement `staged_content/decide.rs` and `StagedContentMutation` (`adoptStagedContent`, `adoptAllStagedContent`, `declineStagedContent`, `revisitStagedContent`), and the `stagedContent` query. Each checks `require_manages_content`. T054 goes green.
+  - Done: the rules are in `decide.rs`, and the resolvers only convert. `StagedContentQuery` sits beside the mutations in `mutations_staged_content.rs`, not in `queries/sheet_import.rs`. `StagedContent` also carries `adoptedAbilityId` and `adoptedItemId`. `ActorSummary` is `{id, label}`. The contract records both. An adopted item becomes a `world_items` row; anything else becomes a `world_abilities` row whose classification is the kind. Declining an adopted piece is refused with `VALIDATION_FAILED`. Revisit starts only from declined. A stranger gets `FORBIDDEN`. `--lib staged_content` gives 10/10, `--lib sheet_import` gives 30/30, and clippy is clean on the server, sheet-import and both dnd5e crates.
 - [ ] T056 [P] [US3] Write refusal tests: `rollCheck`, `makeAttack`, ability use, item use and share each refuse a staged link with `CONTENT_NOT_ADOPTED` and the FR-036a sentence.
 - [ ] T057 [US3] Implement `staged_content/guard.rs`, one check called from each of those mutations. T056 goes green.
 - [ ] T058 [P] [US3] Write report tests in `staged_content/report_tests.rs`:

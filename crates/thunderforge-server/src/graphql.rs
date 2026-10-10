@@ -81,6 +81,7 @@ pub mod mutations_shelf_collections;
 pub mod mutations_sync_back;
 // Spec 048: `applySheetImport`, and the types the plan and history travel as.
 pub mod mutations_sheet_import;
+pub mod mutations_staged_content;
 // Spec 040 US5: `githubApplications`, `setGithubApplication` and
 // `checkGithubApplication` — one application for everything, or one per
 // subsystem, and which acts for what. Resolution itself is `crate::github_apps`.
@@ -477,6 +478,8 @@ pub struct QueryRoot(
     mutations_sync_back::SyncBackQuery,
     // Spec 048: the plan for bringing a sheet in, and an actor's imports.
     queries::sheet_import::SheetImportQuery,
+    // Spec 048: what players brought, for the GM's queue.
+    mutations_staged_content::StagedContentQuery,
     // Spec 051: the pause record and the worlds an operator might pause
     // (operators), and `worldPlayState` — *that and when* (members).
     queries::PlayPauseQuery,
@@ -557,6 +560,8 @@ pub struct MutationRoot(
     mutations_sync_back::SyncBackMutation,
     // Spec 048: bringing a reviewed sheet onto an actor.
     mutations_sheet_import::SheetImportMutation,
+    // Spec 048: adopt, adopt all, decline and revisit what players brought.
+    mutations_staged_content::StagedContentMutation,
     ActorAbilityMutation,
     ItemMutation,
     ItemPermissionMutation,
