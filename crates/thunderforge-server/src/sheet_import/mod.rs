@@ -12,6 +12,8 @@ pub mod index;
 pub mod mapping;
 pub mod preview;
 pub mod records;
+pub mod rollback;
+pub mod route;
 pub mod snapshot;
 pub mod staged_links;
 pub mod storage;

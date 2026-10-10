@@ -896,6 +896,11 @@ type AppMutationRoot {
 	"""
 	applySheetImport(actorId: UUID!, file: Upload!, corrections: JSON, overwritePlayState: [String!], planHash: String!): ActorImportRecord!
 	"""
+	Roll an actor back to before an import. The world's GM only; the
+	play-state values keep what the table has now (FR-044).
+	"""
+	rollBackActor(actorId: UUID!, toImportId: UUID!): ActorImportRecord!
+	"""
 	Take a piece into the world's books. Every character using it now
 	uses the world's row.
 	"""

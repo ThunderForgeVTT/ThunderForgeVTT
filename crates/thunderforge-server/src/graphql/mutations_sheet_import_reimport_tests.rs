@@ -63,7 +63,9 @@ impl Table {
             .filter(data::actor_id.eq(self.actor))
             .select((data::resource_data, data::spell_data))
             .first(&mut conn)
-            .unwrap();
+            .optional()
+            .unwrap()
+            .unwrap_or_default();
         let resources = resources.unwrap_or_default();
         let spells = spells.unwrap_or_default();
         resources
@@ -238,3 +240,9 @@ async fn content_adopted_since_uses_the_world_s_and_what_left_the_sheet_goes_on_
     }
     assert!(after.iter().any(|l| l == "Shield"));
 }
+
+#[path = "mutations_sheet_import_rollback_tests.rs"]
+mod rollback;
+
+#[path = "mutations_sheet_import_file_tests.rs"]
+mod file;

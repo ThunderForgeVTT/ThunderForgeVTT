@@ -53,10 +53,11 @@ user's shareable set is a *collection*. Only the 5e system is a *pack*.
 - [X] T001 Create `crates/thunderforge-sheet-import` (lib, edition 2024, deps `thunderforge-pdf`, serde, serde_json, sha2) with empty `character.rs`, `reader.rs`, `mapping.rs`, `plan.rs` and `hash.rs`. Add it to the root workspace `Cargo.toml`.
 - [X] T002 Create `packs/systems/dnd5e/sheet/` (`thunderforge-system-dnd5e-sheet`, cdylib+rlib, an optional `wasm` feature, deps `thunderforge-pdf` and `thunderforge-sheet-import`). Add it to the workspace.
 - [X] T003 In `scripts/shared.mjs`, beside `buildPdf()` (:341), add `buildSheetReaders()`. It runs `wasm-pack` for each pack `sheet/` crate that has a `wasm` feature, into `dist/sheet-<system>`, as `@thunderforge/sheet-<system>`. Pre-cook the new crates in the `Dockerfile` beside lines 130-132.
-- [ ] T004 [P] In `scripts/e2e/slices.json`:
+- [X] T004 [P] In `scripts/e2e/slices.json`:
   - add the `sheet-import` slice. It owns `sheet-import-`, and its `standalone` command is `pnpm -F @thunderforge/dnd5e test:sheet-reader` (T043), following `hero-builder`. Its paths are those listed in research R19, and its neighbours are those in the plan's Slice note;
   - remove `specs/048-bringing-a-character-in` from the `hero-builder` summary.
   Then run `node scripts/check-e2e-slices.mjs --fix` so `package.json` gains `e2e:sheet-import` and `e2e:sheet-import:standalone`.
+  - Done: the `sheet-import` slice landed with T043 in a0ee811f; `check-e2e-slices.mjs` is clean and `hero-builder`'s summary no longer names 048.
 - [X] T005 [P] Declare `feature.sheet_import`:
   - add a `Kind::Bool` in `crates/thunderforge-server/src/settings/registry/declarations.rs` with group "Features", env `THUNDERFORGE_FEATURE_SHEET_IMPORT`, default **false**, `since` the next release, `what_is_limited` "Players cannot bring a character in from a PDF.", and `what_to_set`;
   - add the constant and the `FEATURES` entry in `settings/features.rs`;
@@ -333,9 +334,13 @@ outside its own pack (SC-006).
 
 **Independent test**: `sheet-import-second-system.spec.ts`.
 
-- [ ] T066 [US4] Confirm open item 2's default: Roll for Shoes with a one-page ThunderForge sheet. If the owner names another system, change the paths in T067-T070.
-- [ ] T067 [P] [US4] Create `packs/systems/roll_for_shoes/sheet/` (`thunderforge-system-roll-for-shoes-sheet`) with a fixture generator for the one-page sheet (name, skills with levels, XP) and reader tests, test-first.
-- [ ] T068 [US4] Implement that reader, the `sheetImport` block in `packs/systems/roll_for_shoes/system.json` (into `trait_data.skills` and `resource_data.xp`), the slot registration in its `server/src/lib.rs`, and the `sheetReader` export in its `web/src/index.ts`.
+- [X] T066 [US4] Confirm open item 2's default: Roll for Shoes with a one-page ThunderForge sheet. If the owner names another system, change the paths in T067-T070.
+  - Done: the default stands. The owner named no other system, so T067-T070 keep their paths.
+- [X] T067 [P] [US4] Create `packs/systems/roll_for_shoes/sheet/` (`thunderforge-system-roll-for-shoes-sheet`) with a fixture generator for the one-page sheet (name, skills with levels, XP) and reader tests, test-first.
+  - Done: reader `tf-rfs-pdf` v1. It recognises a one-page document carrying "ROLL FOR SHOES" and "GREW FROM", and reads `Name`, `XP` and twelve rows of `Skill{n}`/`Level{n}`/`From{n}`. A skill is carried as `skill` content with `{row, level, grew_from}`; a level or "grew from" that is not a number makes the name uncertain, with the reason. Four generated fixtures with invented characters, pinned by sha256: `wren-4.pdf`, `wren-5.pdf` (a skill more, XP spent), `misprinted-lineage.pdf` (a level written "two", a skill two levels above its parent) and `not-a-rfs-sheet.pdf`. 9 tests (3 fixture, 6 reader).
+- [X] T068 [US4] Implement that reader, the `sheetImport` block in `packs/systems/roll_for_shoes/system.json` (into `trait_data.skills` and `resource_data.xp`), the slot registration in its `server/src/lib.rs`, and the `sheetReader` export in its `web/src/index.ts`.
+  - Done: `server/src/sheet_import.rs` holds the slot and a refine hook. The declaration lands the name, XP (play state on a re-import) and notes into `trait_data.description`; `skill` content is `{"refine": true}`, and the hook turns the rows into `trait_data.skills` in the sheet's order. A skill the actor already has, by name, level and parent, keeps its id; any other gets `sheet-{row}`, so the plan hash is stable. A "grew from" that names no row, or is not exactly one level below, makes that skill a root, and the change is uncertain with the reason, so the validator never refuses an apply. 7 hook tests, including that every fixture plans to data `validate_trait_data` and `validate_resource_data` accept, and that the same sheet twice is identical. The browser reader builds as `dist/sheet-roll_for_shoes` through `buildSheetReaders`, unchanged.
+  - Deviation: the review cannot retype a list of records, so `skills` offers no correction (`correctable` in `rows.ts`); a doubted lineage is fixed on the sheet after. A list of named records now reads as its names and levels ("Sneak 2"), not JSON.
 - [ ] T069 [US4] Write `apps/web/e2e/sheet-import-second-system.spec.ts`: a Roll for Shoes player brings in the fixture through the same review screen.
 - [ ] T070 [US4] **Proof**: `git diff --stat` for T067-T069 touches only `packs/systems/roll_for_shoes/**`, the new e2e spec, `Cargo.toml`'s member list and `slices.json`. Record that here (SC-006). Run `pnpm e2e:sheet-import`, then the slices `pnpm e2e:which --diff` names, never the full suite.
 
@@ -358,16 +363,20 @@ owner and the GM.
   - content no longer on the sheet is `removed: true` and is unlinked only when accepted.
 - [ ] T072 [US5] Implement the re-import plan (`isReimport`, `removed`, `keptInPlay`) and reuse `brought_characters` with the next `version_no`. T071 goes green.
 - [ ] T073 [US5] Add a diff mode to the review: only the differences, with a tick per play-state field to overwrite it.
-- [ ] T074 [P] [US5] Write `rollBackActor` tests:
+- [X] T074 [P] [US5] Write `rollBackActor` tests:
   - the GM only, with a Trusted Player and the owner refused (FR-044b);
   - the sheet fields and links are restored;
   - play state is kept (FR-044a);
   - a `rollback` record and event 42 are written;
   - origin stays `Uploaded`;
   - rolling back to "before any import" restores the first snapshot.
-- [ ] T075 [US5] Implement `sheet_import/rollback.rs` and `rollBackActor`. T074 goes green.
-- [ ] T076 [P] [US5] Write tests for the file route. The owner gets 200. The GM of a world where the version was applied gets 200. A Trusted Player, another world's GM and a stranger each get 404. Check `Cache-Control: private, no-store`.
-- [ ] T077 [US5] Implement `GET /api/sheet-imports/{versionId}/file` in `sheet_import/route.rs` and register it with the server's routes. T076 goes green.
+  - Done: `graphql/mutations_sheet_import_rollback_tests.rs`, 3 tests: only the world's GM rolls back (the character's owner and a Trusted Player granted Editor get FORBIDDEN, another actor's import VALIDATION_FAILED); a rollback restores links, max HP and the label while current HP, a failed death save and spent slots stay, history reads rollback, import, import, one event 42; rolling back the first import restores the actor as it was before any. Plus 2 pure tests in `sheet_import/rollback_tests.rs`.
+- [X] T075 [US5] Implement `sheet_import/rollback.rs` and `rollBackActor`. T074 goes green.
+  - Done: `sheet_import/rollback.rs`. One transaction restores the label, each data type with the play-state paths copied from now, and the ability and inventory links by snapshot id (a staged piece adopted since resolves to what it became), then writes a `rollback` row whose before-snapshot is the state it replaced, and records event 42. The character's origin is untouched. Deviation: a data type absent from the snapshot is cleared rather than given partial play-state data.
+- [X] T076 [P] [US5] Write tests for the file route. The owner gets 200. The GM of a world where the version was applied gets 200. A Trusted Player, another world's GM and a stranger each get 404. Check `Cache-Control: private, no-store`.
+  - Done: `graphql/mutations_sheet_import_file_tests.rs`: the owner and the GM get 200 with `private, no-store` and the exact bytes; a Trusted Player, another world's GM and a stranger get the same 404 a missing version gets.
+- [X] T077 [US5] Implement `GET /api/sheet-imports/{versionId}/file` in `sheet_import/route.rs` and register it with the server's routes. T076 goes green.
+  - Done: `sheet_import/route.rs`, merged in `main.rs` behind `require_authenticated_user`. Served as an attachment `sheet-v{n}.pdf` with a sandboxing CSP and nosniff; every refusal is one 404 so a version's existence is not disclosed.
 - [ ] T078 [US5] Add `apps/web/src/pages/world/actor/import/ImportHistory.tsx` to the actor screen. It lists versions and rollbacks with who and when. Download appears for the owner and the GM, and Roll back for the GM only.
 - [ ] T079 [P] [US5] Write `apps/web/e2e/sheet-import-reimport.spec.ts`: level 5 then level 6, where the review shows only the differences and the table's current HP survives.
 - [ ] T080 [P] [US5] Write `apps/web/e2e/sheet-import-rollback.spec.ts`:

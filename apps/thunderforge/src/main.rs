@@ -705,6 +705,13 @@ async fn run() {
             app_state.clone(),
             thunderforge_server::auth_middleware::require_authenticated_user,
         ));
+    // Spec 048 FR-043b: an uploaded sheet, for the player who brought it and
+    // the GM of a world where it was applied.
+    let sheet_file_router =
+        thunderforge_server::sheet_import::route::router().route_layer(from_fn_with_state(
+            app_state.clone(),
+            thunderforge_server::auth_middleware::require_authenticated_user,
+        ));
     let scene_assets_router =
         thunderforge_server::assets_serve::scene::router().route_layer(from_fn_with_state(
             app_state.clone(),
@@ -783,6 +790,7 @@ async fn run() {
         .merge(lore_assets_router)
         .merge(actor_assets_router)
         .merge(feedback_assets_router)
+        .merge(sheet_file_router)
         .merge(scene_assets_router)
         .merge(base_maps_router);
 

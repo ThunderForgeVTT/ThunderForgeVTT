@@ -16,6 +16,7 @@ use super::{app_state, authenticated_user};
 use crate::sheet_import::apply::{ApplyInput, apply_sheet_import_impl};
 use crate::sheet_import::error::SheetImportError;
 use crate::sheet_import::records::{ImportRecord, Person, record};
+use crate::sheet_import::rollback::roll_back_actor_impl;
 
 #[derive(Enum, Copy, Clone, Debug, PartialEq, Eq)]
 #[graphql(name = "FieldCertainty")]
@@ -320,6 +321,41 @@ impl SheetImportMutation {
                 .map_err(SheetImportError::into_graphql)?;
         let pool = state.db_pool.clone();
         let (user_id, is_admin) = (user.user_id, user.is_admin);
+        let record = tokio::task::spawn_blocking(move || {
+            let mut conn = pool
+                .get()
+                .map_err(|e| SheetImportError::Database(e.to_string()))?;
+            record(&mut conn, user_id, is_admin, &import)
+        })
+        .await
+        .map_err(|e| async_graphql::Error::new(e.to_string()))?
+        .map_err(SheetImportError::into_graphql)?;
+        Ok(record.into())
+    }
+
+    /// Roll an actor back to before an import. The world's GM only; the
+    /// play-state values keep what the table has now (FR-044).
+    async fn roll_back_actor(
+        &self,
+        ctx: &Context<'_>,
+        actor_id: Uuid,
+        to_import_id: Uuid,
+    ) -> GraphQLResult<GraphQLActorImportRecord> {
+        let state = app_state(ctx)?;
+        let user = authenticated_user(ctx)?;
+        let systems_dir = state.directories.systems_dir.clone();
+        let (user_id, is_admin) = (user.user_id, user.is_admin);
+        let import = roll_back_actor_impl(
+            state,
+            &systems_dir,
+            user_id,
+            is_admin,
+            actor_id,
+            to_import_id,
+        )
+        .await
+        .map_err(SheetImportError::into_graphql)?;
+        let pool = state.db_pool.clone();
         let record = tokio::task::spawn_blocking(move || {
             let mut conn = pool
                 .get()
