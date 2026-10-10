@@ -200,9 +200,12 @@ test("the 5e sheet lays out, derives, persists, and its proficiencies reach the 
   expect(abilities.y).toBeCloseTo(identity.y, 0);
   expect(abilities.x).toBeGreaterThan(identity.x + identity.width - 1);
   expect(abilities.width).toBeGreaterThan(identity.width * 1.5);
-  // The host draws the portrait above; the sheet draws no picture of its own.
+  // The host draws the portrait at the head of column A, beside the sheet in
+  // column B (spec 088 contracts/layouts.md); the sheet draws no picture of
+  // its own.
   const imagery = await boxOf(page.getByTestId("actor-imagery-panel"));
-  expect(imagery.y).toBeLessThan(identity.y);
+  expect(imagery.y).toBeLessThanOrEqual(identity.y + 1);
+  expect(imagery.x + imagery.width).toBeLessThanOrEqual(identity.x + 1);
   await expect(sheet.locator('input[type="file"], img')).toHaveCount(0);
   await expectNoAxeViolations(page, '[data-testid="dnd5e-actor-sheet"]');
 

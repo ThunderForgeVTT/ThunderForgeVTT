@@ -120,10 +120,12 @@ test("Genie's sheet is laid out in columns on a wide screen and one column at 37
   expect(notes.y).toBeCloseTo(traits.y, 0);
   expect(notes.width).toBeGreaterThan(traits.width * 1.5);
 
-  // The host's imagery panel sits above the sheet, and the sheet draws no
-  // picture or uploader of its own.
+  // The host's imagery panel heads column A, beside the sheet in column B
+  // (spec 088 contracts/layouts.md), and the sheet draws no picture or
+  // uploader of its own.
   const imagery = await boxOf(page.getByTestId("actor-imagery-panel"));
-  expect(imagery.y).toBeLessThan(identity.y);
+  expect(imagery.y).toBeLessThanOrEqual(identity.y + 1);
+  expect(imagery.x + imagery.width).toBeLessThanOrEqual(identity.x + 1);
   await expect(sheet.locator('input[type="file"], img')).toHaveCount(0);
 
   // Every control is still there and labelled.

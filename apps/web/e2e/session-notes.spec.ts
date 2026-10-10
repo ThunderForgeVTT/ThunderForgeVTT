@@ -84,7 +84,9 @@ test("Session Setup shows exactly Play, Players, and Last Session Notes", async 
   await registerAndCreateWorld(page, `E2E Session Shape ${uniqueSuffix()}`);
 
   await expect(page.getByTestId("play-button")).toBeVisible();
-  await expect(page.getByText("Players")).toBeVisible();
+  // The sidebar's Players link. Spec 088 US1's invite link adds "See and
+  // revoke links on the Players page", so a bare getByText("Players") finds two.
+  await expect(page.getByTestId("world-nav-players")).toBeVisible();
   await expect(page.getByTestId("session-notes-panel")).toBeVisible();
   // The authoring entry point, not the old inline form's placeholder: that
   // placeholder no longer exists anywhere, so asserting its absence here

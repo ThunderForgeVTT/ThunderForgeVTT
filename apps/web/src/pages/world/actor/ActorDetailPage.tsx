@@ -491,6 +491,55 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
             className="grid min-w-0 content-start gap-6"
             data-testid="actor-view-column-a"
           >
+            {/*
+          Owner, 2026-09-15: "This screen doesn't show the ability to upload
+          icons, which is a pain, especially for the Genie system. I expected
+          to see a token and/or a portrait."
+
+          The same panel the NPC editor mounts, not a second uploader. Spec
+          031's context recorded the gap and it stayed open: a portrait and a
+          token could only be set from `/world/:id/compendium/npc/:id/edit`,
+          which is a Game Master's route for NPCs — so the page where a
+          player's own character lives had no imagery controls at all, and the
+          one way to give a character a face was a screen that character never
+          appears on.
+
+          Who is offered the controls is the server's answer, not this page's:
+          `myMayChangeImagery` is B6 of spec 044 (ADR-105), the rule
+          `uploadActorImage` itself enforces — Editor or above granted by hand,
+          or the player holding this character while the world allows it and
+          the Game Master has not locked its look (the Editor a claim grants
+          does not get past either switch: spec 063 FR-009). The server refuses the upload
+          regardless (Constitution Principle III); this only decides what is
+          offered.
+
+          Both modes, since spec 044 phase (c). A holder has been able to
+          reach /edit since spec 063 gave a claim Editor, but the view route
+          is where a player lands on their own character, and the look is as
+          much theirs to change there. Everyone else sees the pictures
+          without the controls.
+        */}
+            <div className="grid gap-3">
+              <ActorImageryPanel
+                worldId={worldId}
+                actorId={actorId}
+                actorLabel={actor.label}
+                canEdit={actor.myMayChangeImagery}
+              />
+              {heldByMe && !actor.myMayChangeImagery ? (
+                <p
+                  className="text-sm text-muted-foreground"
+                  data-testid="actor-imagery-refusal"
+                >
+                  {actor.artLocked
+                    ? "The Game Master has locked this character's look."
+                    : world?.allowPlayerActorArt === false
+                      ? "The Game Master has turned off players changing their character's art in this world."
+                      : null}
+                </p>
+              ) : null}
+            </div>
+
             <Card className="grid gap-4 p-6">
               {mode === "edit" ? (
                 <>
@@ -568,55 +617,6 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
                 </div>
               )}
             </Card>
-
-            {/*
-          Owner, 2026-09-15: "This screen doesn't show the ability to upload
-          icons, which is a pain, especially for the Genie system. I expected
-          to see a token and/or a portrait."
-
-          The same panel the NPC editor mounts, not a second uploader. Spec
-          031's context recorded the gap and it stayed open: a portrait and a
-          token could only be set from `/world/:id/compendium/npc/:id/edit`,
-          which is a Game Master's route for NPCs — so the page where a
-          player's own character lives had no imagery controls at all, and the
-          one way to give a character a face was a screen that character never
-          appears on.
-
-          Who is offered the controls is the server's answer, not this page's:
-          `myMayChangeImagery` is B6 of spec 044 (ADR-105), the rule
-          `uploadActorImage` itself enforces — Editor or above granted by hand,
-          or the player holding this character while the world allows it and
-          the Game Master has not locked its look (the Editor a claim grants
-          does not get past either switch: spec 063 FR-009). The server refuses the upload
-          regardless (Constitution Principle III); this only decides what is
-          offered.
-
-          Both modes, since spec 044 phase (c). A holder has been able to
-          reach /edit since spec 063 gave a claim Editor, but the view route
-          is where a player lands on their own character, and the look is as
-          much theirs to change there. Everyone else sees the pictures
-          without the controls.
-        */}
-            <div className="grid gap-3">
-              <ActorImageryPanel
-                worldId={worldId}
-                actorId={actorId}
-                actorLabel={actor.label}
-                canEdit={actor.myMayChangeImagery}
-              />
-              {heldByMe && !actor.myMayChangeImagery ? (
-                <p
-                  className="text-sm text-muted-foreground"
-                  data-testid="actor-imagery-refusal"
-                >
-                  {actor.artLocked
-                    ? "The Game Master has locked this character's look."
-                    : world?.allowPlayerActorArt === false
-                      ? "The Game Master has turned off players changing their character's art in this world."
-                      : null}
-                </p>
-              ) : null}
-            </div>
           </div>
 
           <div

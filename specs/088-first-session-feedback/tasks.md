@@ -44,7 +44,7 @@ on.
 
 - [X] T001 Check which hotfix branches are on main (`git log --oneline main` and `mcp__gitops__workspace_scan`). Record the result at the top of research.md under `## Base`.
 - [X] T002 Create the worktree: `git worktree add ../ThunderForgeVTT-088 -b 088-first-session-feedback main`. Record the base commit under `## Base`.
-- [ ] T003 [P] `pnpm install`, `cargo check -p thunderforge-server`, and confirm the RustFS bucket `thunderforge-canvas-assets` exists (quickstart.md, step 0).
+- [X] T003 [P] `pnpm install`, `cargo check -p thunderforge-server`, and confirm the RustFS bucket `thunderforge-canvas-assets` exists (quickstart.md, step 0). Done: the install and check are clean, and the storage tests pass, so the bucket is there.
 
 **Checkpoint**: the worktree builds on main with the landed hotfixes.
 
@@ -99,10 +99,10 @@ refusal.
   - the list updates when the link is used, with no reload.
 - [X] T024 [P] [US1] Extend `invite-membership.spec.ts` where it asserts the old single message or 5 uses. Also moved every spec that made a link from `/world/:id` to `/world/:id/players` (19 call sites plus `journeyTable.ts`, `access-links`, `abilities-ux`, `map-editor-tooling`, `world-administration`, three journeys).
 - [ ] T025 [P] [US1] Telemetry: `world_link.created`, `world_link.revoked`, `world_link.join`, and the `thunderforge.world_links.joins` counter (contracts/telemetry.md). (waits on 086)
-- [ ] T026 [US1] `pnpm e2e:accounts`, then `pnpm e2e:which --diff` and each slice it names (not the full suite: Open item 7).
-- [ ] T027 [US1] Commit: "Spec 088: GM-only world links with an optional use limit and a reason for every refusal".
+- [X] T026 [US1] `pnpm e2e:accounts`, then `pnpm e2e:which --diff` and each slice it names (not the full suite: Open item 7). accounts 71/0 on 2026-10-09, after fixing the failures in two earlier runs (69/1, 70/1).
+- [X] T027 [US1] Commit: "Spec 088: GM-only world links with an optional use limit and a reason for every refusal". b6929095.
 - [X] T028 [US1] **After `hotfix-invite-uses` is on main.** OAuth sign-in only from a join page (FR-010): the authorize step marks the state `sign_in_only` when `returnTo` is under `/join/`, and the callback (`auth/oauth.rs:394`) refuses to create a user for it, with the FR-010 message and the `thunderforge.world_links.oauth_refused` counter. Tests in `auth/` for `open`, `invite_only` and `closed` modes (SC-002). An e2e case in `world-links.spec.ts` with the mock OAuth provider. Run `pnpm e2e:accounts`. *Done: the mark is the authorization session's own `return_to` (no new column), read in the callback as `sign_in_only`; the refusal is `auth/world_link_sign_in.rs` (403 `world_link_sign_in_only`), checked before the admission gate so no invitation use is judged or burned. Tests: `auth/instance_access_tests.rs` walks `open`, `invite_only` and `closed`. The e2e case is in `oauth-provider.spec.ts` (accounts slice) beside the stub's helpers. The `thunderforge.world_links.oauth_refused` counter is (waits on 086).*
-- [ ] T029 [US1] Commit: "Spec 088: a world link never creates an account".
+- [X] T029 [US1] Commit: "Spec 088: a world link never creates an account". f178979e.
 
 **Checkpoint**: SC-001 and SC-002 hold. `pnpm e2e:accounts` is green.
 
@@ -151,7 +151,7 @@ edge-wall check there.
 
 - [X] T050 [US3] `ActorDetailPage.tsx:387`: replace `Container … max-w-2xl` with the page's own wrapper and the three-column grid of contracts/layouts.md. `max-w-prose` on long text. No change to `Container` or `components/ui/**` (FR-034, FR-036).
 - [X] T051 [US3] e2e `apps/web/e2e/layout-widths.spec.ts` (actors slice), actor view part: 375, 1280 and 2560 px; no sideways scroll; 1, 2 and 3 columns; 1800 px ±1 at 2560 (SC-004). Also 320 px and 3840 px for no sideways scroll (FR-035).
-- [ ] T052 [US3] `pnpm e2e:actors`, `pnpm e2e:combat`, `pnpm e2e:game-systems`, then `pnpm e2e:which --diff`. So far: actors passed actor-layout-widths (US8 edits in the same run aside); combat and game-systems run with the T116 proof.
+- [X] T052 [US3] `pnpm e2e:actors`, `pnpm e2e:combat`, `pnpm e2e:game-systems`, then `pnpm e2e:which --diff`. actors 32/0, game-systems 33/0, combat 27/0, genie 21/0. The proof run found the portrait under the basics in column A (combat 25/2, genie 20/1). It now heads column A, as contracts/layouts.md says, and dnd5e-sheet and genie-sheet-layout now check that it sits beside the sheet, not above it. The other combat failure (combat-reach.spec.ts:99) passed on the rerun.
 - [X] T053 [US3] Commit: "Spec 088: the actor view uses the width it has".
 
 ---
@@ -256,7 +256,7 @@ losing changes.
 - [X] T103 [US8] `?from=players` on the links from the card; `ActorDetailPage` sends its back control to the players page when set (FR-062).
 - [X] T104 [US8] Extend `players-hero-edit.spec.ts` (from the hotfix) at 375 px: card order, control sizes, a full-screen builder, the back control, and the empty state.
 - [ ] T105 [P] [US8] Telemetry: `hero.opened_from_players`. (waits on 086)
-- [X] T106 [US8] `pnpm e2e:actors`, `pnpm e2e:hero-builder`, then `pnpm e2e:which --diff`. actors 32/0; hero-builder 18/1 (standalone 7/0). The one failure is Quick NPC (hero-builder-npc.spec.ts:468: the preview does not change after Open in builder, then Use), and it fails again alone (6/1). Nothing 088 changes is on that path (QuickNpcDialog, apps/hero-builder and packages/heroes are untouched), so it is not this story.
+- [X] T106 [US8] `pnpm e2e:actors`, `pnpm e2e:hero-builder`, then `pnpm e2e:which --diff`. actors 32/0; hero-builder 18/1 (standalone 7/0). The one failure is Quick NPC (hero-builder-npc.spec.ts:468: the preview does not change after Open in builder, then Use), and it fails again alone (6/1). Nothing 088 changes is on that path (QuickNpcDialog, apps/hero-builder and packages/heroes are untouched), so it is not this story. The T116 proof run then passed it: hero-builder 19/0, so the earlier failures were a flake.
 - [X] T107 [US8] Commit: "Spec 088: a player opens their own sheet and look from the players screen".
 
 ---
