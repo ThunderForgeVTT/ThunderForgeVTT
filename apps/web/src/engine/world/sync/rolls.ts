@@ -12,6 +12,9 @@
  * tab is no exception — it animates from its own announcement like every
  * other client, which is what lets a sheet in another tab roll onto this
  * board.
+ *
+ * Spec 088: a clear (code 39) names a time; every roll made at or before it
+ * leaves the feed, and a roll still being fetched when it came is dropped.
  */
 
 import { fetchWorldRoll } from "@/api/roll";
@@ -44,6 +47,38 @@ export function rollIdOf(event: WorldEventLike): string | undefined {
   return typeof rollId === "string" ? rollId : undefined;
 }
 
+/** The time a clear event names, or `undefined` for any other event. */
+export function clearedAtOf(event: WorldEventLike): string | undefined {
+  const code = event.event_code ?? event.eventCode;
+  if (code !== ROLLS_CLEARED_EVENT_CODE) return undefined;
+  const payload = (event.token_event ?? event.tokenEvent) as
+    | Record<string, unknown>
+    | undefined;
+  const clearedAt = payload?.clearedAt;
+  return typeof clearedAt === "string" ? clearedAt : undefined;
+}
+
+/**
+ * A timestamp in microseconds since the epoch. `Date.parse` stops at the
+ * millisecond, and the server's times carry six digits, so a roll made a
+ * microsecond after a clear would read as made at it. A time with no zone
+ * (the demo's, as the server's `NaiveDateTime` prints) is read as UTC.
+ */
+export function microsOf(at: string): number {
+  const fraction = /\.(\d+)/.exec(at)?.[1] ?? "";
+  let whole = at.replace(/\.\d+/, "");
+  if (!/(Z|[+-]\d{2}:?\d{2})$/.test(whole)) whole += "Z";
+  return Date.parse(whole) * 1000 + Number(fraction.padEnd(6, "0").slice(0, 6));
+}
+
+/** Whether a roll made at `createdAt` was cleared by a clear at `clearedAt`. */
+export function wasCleared(
+  createdAt: string,
+  clearedAt: string | null,
+): boolean {
+  return clearedAt !== null && microsOf(createdAt) <= microsOf(clearedAt);
+}
+
 /** Whether a board animates this roll (research R3). */
 export function shouldAnimate(input: {
   entry: WorldRollEntry | null;
@@ -68,6 +103,8 @@ export interface RollSyncOptions {
   animate?: (roll: WorldRollRecord) => void;
   /** Each roll as this viewer may see it, as it arrives or is revealed. */
   onRoll?: (entry: WorldRollEntry) => void;
+  /** Spec 088: the GM cleared every roll made at or before `clearedAt`. */
+  onCleared?: (clearedAt: string) => void;
   /** Overridable for tests. */
   fetchRoll?: (
     worldId: string,
@@ -86,11 +123,14 @@ export function startRollSync({
   events,
   animate,
   onRoll,
+  onCleared,
   fetchRoll = fetchWorldRoll,
   now = () => performance.now(),
 }: RollSyncOptions): () => void {
   const iterator = events[Symbol.asyncIterator]();
   let cancelled = false;
+  // The latest clear seen, so a fetch in flight when it came is dropped.
+  let clearedAt: string | null = null;
 
   const handle = async (event: WorldEventLike, rollId: string) => {
     const receivedAt = now();
@@ -102,6 +142,7 @@ export function startRollSync({
       return;
     }
     if (cancelled || entry === null) return;
+    if (wasCleared(entry.createdAt, clearedAt)) return;
     if (
       animate &&
       entry.__typename === "WorldRoll" &&
@@ -122,6 +163,12 @@ export function startRollSync({
       while (!cancelled) {
         const { value: event, done } = await iterator.next();
         if (done || cancelled || !event) break;
+        const cleared = clearedAtOf(event);
+        if (cleared) {
+          clearedAt = cleared;
+          onCleared?.(cleared);
+          continue;
+        }
         const rollId = rollIdOf(event);
         // Not awaited: one slow fetch must not hold the next roll back
         // past its window.

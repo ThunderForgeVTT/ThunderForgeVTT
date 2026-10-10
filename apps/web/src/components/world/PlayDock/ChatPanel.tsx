@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getWorldChatMessages, sendChatMessage } from "@/api/chat";
+import { clearWorldRolls } from "@/api/roll";
 import { Button } from "@/components/ui/button/Button";
 import {
   subscribeToWorldEvents,
@@ -67,6 +68,7 @@ export function ChatPanel({
   const [gmOnly, setGmOnly] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [clearing, setClearing] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const {
     rolls,
@@ -134,8 +136,44 @@ export function ChatPanel({
     }
   };
 
+  // Spec 088 FR-045: the feed empties when the clear's event arrives, on
+  // this screen as on every other, so nothing is dropped here.
+  const handleClearRolls = async () => {
+    if (
+      clearing ||
+      !window.confirm(
+        "Clear every roll from the feed for everyone? The rolls are kept in the world's record.",
+      )
+    ) {
+      return;
+    }
+    setClearing(true);
+    setError(null);
+    try {
+      await clearWorldRolls(worldId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to clear rolls");
+    } finally {
+      setClearing(false);
+    }
+  };
+
   return (
     <div className="flex h-full flex-col gap-3" data-testid="chat-panel">
+      {isGm ? (
+        <div className="flex items-center justify-end">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={clearing}
+            onClick={() => void handleClearRolls()}
+            data-testid="chat-clear-rolls"
+          >
+            {clearing ? "Clearing…" : "Clear rolls"}
+          </Button>
+        </div>
+      ) : null}
       <div
         ref={scrollRef}
         className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1"

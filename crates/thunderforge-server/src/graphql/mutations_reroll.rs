@@ -117,6 +117,12 @@ pub async fn reroll_roll_impl<R: rand::Rng>(
                 .first::<RollRecord>(conn)
                 .optional()?
                 .ok_or_else(|| said(ONLY_MAKER))?;
+            // Spec 088 FR-043: a roll the GM cleared from the feed is past
+            // spending on, whatever the window says.
+            let cleared_at = crate::graphql::queries::roll::rolls_cleared_at(conn, world_id)?;
+            if crate::rolls::visibility::cleared(row.created_at, cleared_at) {
+                return Err(said(crate::graphql::mutations_roll::ROLL_WAS_CLEARED));
+            }
             let acts = match row.actor_id {
                 Some(actor_id) => may_act(conn, user_id, is_admin, world_id, actor_id)?,
                 None => false,

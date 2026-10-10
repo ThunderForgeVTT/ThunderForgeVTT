@@ -586,3 +586,22 @@ async fn a_luck_point_is_not_offered_or_spent_at_disadvantage() {
     );
     assert_eq!(table.luck_used(), json!(0));
 }
+
+/// Spec 088 T066 (FR-043): a roll the GM has cleared from the feed cannot be
+/// rerolled, inside the window or not, and nothing is spent.
+#[tokio::test]
+async fn a_cleared_roll_is_not_rerolled() {
+    let table = a_table();
+    let first = table.check(table.player, Advantage::Normal).await;
+    crate::graphql::mutations_roll::clear_world_rolls_impl(
+        &table.state,
+        table.gm,
+        false,
+        table.world,
+    )
+    .await
+    .expect("the GM clears");
+    table
+        .refused(table.player, &first, "That roll was cleared.")
+        .await;
+}

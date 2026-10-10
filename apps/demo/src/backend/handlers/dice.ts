@@ -367,7 +367,17 @@ function rerollTarget(record: Row) {
   };
 }
 
+/**
+ * Spec 088 FR-042: a roll the GM cleared, withheld from everyone. The demo
+ * marks the rolls a clear took rather than comparing times: its rolls are
+ * stamped to the millisecond, and a roll made in the clear's millisecond
+ * must not read as cleared.
+ */
+const ROLL_WAS_CLEARED = "That roll was cleared.";
+const isCleared = (record: Row) => record.cleared === true;
+
 function entryFor(record: Row, state: DemoState): Row | null {
+  if (isCleared(record)) return null;
   const visibility = visibilityOf(record);
   const whole =
     record.revealedAt != null ||
@@ -429,6 +439,7 @@ export const diceQueries = {
     }
     const take = Math.min(Math.max(limit ?? 50, 1), KEPT);
     return [...(state.rolls ?? [])]
+      .filter((record) => !isCleared(record))
       .reverse()
       .slice(0, take)
       .map((record) => ({
@@ -494,6 +505,7 @@ export const diceMutations = {
     }
     const found = (state.rolls ?? []).find((record) => record.id === rollId);
     if (!found) throw new GraphQLError("Roll not found");
+    if (isCleared(found)) throw new GraphQLError(ROLL_WAS_CLEARED);
     // Spec 084: a reroll and the roll it replaced are revealed together.
     for (const link of wholeChain(found, state)) {
       const visibility = visibilityOf(link);
@@ -507,6 +519,24 @@ export const diceMutations = {
     return entryFor(found, state);
   },
   /**
+   * Spec 088 `clear_world_rolls_impl`: the GM empties every feed at the
+   * table. Nothing is deleted; the rolls are withheld, and the table is told
+   * the time so each feed drops what it holds.
+   */
+  clearWorldRolls: () => {
+    const state = demoState();
+    if (!viewerIsGm(state)) {
+      throw new GraphQLError("Only the GM can clear the rolls.");
+    }
+    for (const roll of state.rolls ?? []) roll.cleared = true;
+    const clearedAt = new Date().toISOString();
+    state.world.rollsClearedAt = clearedAt;
+    record(EVENT.rollsCleared, { clearedAt });
+    state.world.rollsClearedEventId = state.nextEventId - 1;
+    markChanged();
+    return { clearedAt };
+  },
+  /**
    * Spec 084 `reroll_roll_impl`: the maker spends a facet to roll their own
    * d20 test again: the lowest d20 once more (Heroic Inspiration), or the
    * whole roll through a reshaped formula that keeps its dice (a Luck Point);
@@ -516,6 +546,7 @@ export const diceMutations = {
     await diceReady();
     const state = demoState();
     const found = (state.rolls ?? []).find((r) => r.id === rollId);
+    if (found && isCleared(found)) throw new GraphQLError(ROLL_WAS_CLEARED);
     const actor = mayReroll(found, state);
     const original = found!;
     const sheet = systemDataOf(state, actor.id as string);

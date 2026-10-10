@@ -803,3 +803,85 @@ describe("rerollRoll with a Luck Point", () => {
     expect(luckUsed(actor)).toBe(1);
   });
 });
+
+/** Spec 088 FR-040 to FR-044: the GM clears the roll feed for everyone. */
+describe("clearWorldRolls", () => {
+  const CLEAR = `mutation ($worldId: UUID!) {
+    clearWorldRolls(worldId: $worldId) { clearedAt }
+  }`;
+
+  beforeEach(() => {
+    delete demoState().world.rollsClearedAt;
+  });
+
+  async function clear() {
+    const worldId = demoState().world.id;
+    return (await ask(CLEAR, { worldId })).data?.clearWorldRolls as
+      | { clearedAt: string }
+      | undefined;
+  }
+
+  it("is the GM's alone", async () => {
+    await rollAs({});
+    demoState().viewer = "player";
+    expect(await refusal(CLEAR, { worldId: demoState().world.id })).toBe(
+      "Only the GM can clear the rolls.",
+    );
+    demoState().viewer = "gm";
+    expect(await feed()).toHaveLength(1);
+  });
+
+  it("withholds every roll made before it, keeps them in the record, and lists a roll made after", async () => {
+    const before = await rollAs({});
+    const hidden = await rollAs({ visibility: "GM_ONLY" });
+    releaseEvents();
+    const events = heard();
+    const answer = await clear();
+    releaseEvents();
+    expect(answer?.clearedAt).toBeTruthy();
+    expect(events.map((e) => [e.eventCode, e.tokenEvent])).toEqual([
+      [39, { clearedAt: answer!.clearedAt }],
+    ]);
+    expect(demoState().rolls).toHaveLength(2);
+
+    for (const viewer of ["gm", "player"] as const) {
+      demoState().viewer = viewer;
+      expect(await feed()).toEqual([]);
+      expect(await entryOf(before.id)).toBeNull();
+      expect(await entryOf(hidden.id)).toBeNull();
+    }
+    demoState().viewer = "gm";
+    const history = await ask(HISTORY, { worldId: demoState().world.id });
+    expect(history.data?.worldRollRecords).toEqual([]);
+
+    const after = await rollAs({});
+    expect((await feed()).map((entry) => entry.id)).toEqual([after.id]);
+  });
+
+  it("refuses a reveal or a reroll of a cleared roll", async () => {
+    const { id } = await rollAs({ visibility: "GM_ONLY" });
+    await clear();
+    const worldId = demoState().world.id;
+    expect(await refusal(REVEAL, { worldId, rollId: id })).toBe(
+      "That roll was cleared.",
+    );
+    expect(
+      await refusal(
+        `mutation ($worldId: UUID!, $rollId: UUID!, $spend: String!) {
+          rerollRoll(worldId: $worldId, rollId: $rollId, spend: $spend) { id }
+        }`,
+        { worldId, rollId: id, spend: "heroic_inspiration" },
+      ),
+    ).toBe("That roll was cleared.");
+  });
+
+  it("leaves the cleared rolls' events out of a catch-up, and keeps the clear's", async () => {
+    const start = demoState().nextEventId - 1;
+    await rollAs({});
+    await clear();
+    await rollAs({});
+    releaseEvents();
+    const codes = (eventsSince(start).events as Row[]).map((e) => e.eventCode);
+    expect(codes).toEqual([39, 36]);
+  });
+});

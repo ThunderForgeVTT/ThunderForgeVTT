@@ -736,3 +736,158 @@ async fn revealing_a_roll_reveals_its_reroll_and_the_reverse() {
         assert!(revealed.contains(&id.to_string()));
     }
 }
+
+// ============================================================================
+// Spec 088 US5: the GM clears the feed (T064, T066).
+// ============================================================================
+
+fn world_cleared_at(state: &AppState, world_id: Uuid) -> Option<chrono::DateTime<chrono::Utc>> {
+    use crate::schema::worlds;
+    let mut conn = state.db_pool.get().unwrap();
+    worlds::table
+        .find(world_id)
+        .select(worlds::rolls_cleared_at)
+        .first(&mut conn)
+        .unwrap()
+}
+
+fn clear_events(state: &AppState, world_id: Uuid) -> Vec<serde_json::Value> {
+    let mut conn = state.db_pool.get().unwrap();
+    world_events::table
+        .filter(world_events::world_id.eq(world_id))
+        .filter(world_events::event_code.eq(crate::world_events::EVENT_CODE_ROLLS_CLEARED))
+        .select(world_events::token_event)
+        .load::<Option<serde_json::Value>>(&mut conn)
+        .unwrap()
+        .into_iter()
+        .map(Option::unwrap_or_default)
+        .collect()
+}
+
+fn attack_count(state: &AppState, world_id: Uuid) -> i64 {
+    use crate::schema::world_attacks;
+    let mut conn = state.db_pool.get().unwrap();
+    world_attacks::table
+        .filter(world_attacks::world_id.eq(world_id))
+        .count()
+        .get_result(&mut conn)
+        .unwrap()
+}
+
+#[tokio::test]
+async fn the_gm_clears_the_rolls_without_deleting_one() {
+    let state = test_app_state();
+    let (world, gm, player) = gm_and_player(&state);
+    roll_as(&state, player, world, None, None).await.unwrap();
+    roll_as(&state, gm, world, Some(RollVisibility::GmOnly), None)
+        .await
+        .unwrap();
+    let (rolls, attacks) = (roll_count(&state, world), attack_count(&state, world));
+
+    let result = clear_world_rolls_impl(&state, gm, false, world)
+        .await
+        .expect("the GM may clear");
+
+    let stored = world_cleared_at(&state, world).expect("the clear is stored");
+    assert_eq!(result.cleared_at, stored);
+    assert_eq!(
+        clear_events(&state, world),
+        vec![serde_json::json!({ "clearedAt": stored.to_rfc3339() })],
+        "one event 39, carrying the time and nothing else"
+    );
+    // FR-041: withheld, not deleted.
+    assert_eq!(roll_count(&state, world), rolls);
+    assert_eq!(attack_count(&state, world), attacks);
+
+    // A later clear moves the time forward.
+    let again = clear_world_rolls_impl(&state, gm, false, world)
+        .await
+        .unwrap();
+    assert!(again.cleared_at > stored);
+}
+
+#[tokio::test]
+async fn a_site_admin_may_clear_a_world_they_do_not_sit_at() {
+    let state = test_app_state();
+    let (world, _gm, _player) = gm_and_player(&state);
+    let admin = insert_test_user(&mut state.db_pool.get().unwrap());
+    clear_world_rolls_impl(&state, admin, true, world)
+        .await
+        .expect("an admin may clear");
+    assert!(world_cleared_at(&state, world).is_some());
+}
+
+#[tokio::test]
+async fn a_player_and_a_demoted_gm_may_not_clear() {
+    use crate::schema::world_members;
+    let state = test_app_state();
+    let (world, _gm, player) = gm_and_player(&state);
+    let co_gm = insert_test_user(&mut state.db_pool.get().unwrap());
+    insert_test_world_member(&mut state.db_pool.get().unwrap(), world, co_gm, "GM");
+    clear_world_rolls_impl(&state, co_gm, false, world)
+        .await
+        .expect("a GM may clear");
+    let first = world_cleared_at(&state, world);
+
+    // Demoted: asked per request, so the old role counts for nothing.
+    diesel::update(
+        world_members::table
+            .filter(world_members::world_id.eq(world))
+            .filter(world_members::user_id.eq(co_gm)),
+    )
+    .set(world_members::role.eq("Player"))
+    .execute(&mut state.db_pool.get().unwrap())
+    .unwrap();
+
+    for who in [player, co_gm] {
+        let refused = clear_world_rolls_impl(&state, who, false, world)
+            .await
+            .expect_err("only those who run the world clear it");
+        assert_eq!(refused.message, "Only the GM can clear the rolls.");
+    }
+    assert_eq!(world_cleared_at(&state, world), first, "nothing moved");
+    assert_eq!(clear_events(&state, world).len(), 1);
+}
+
+#[tokio::test]
+async fn a_paused_world_is_not_cleared() {
+    let state = test_app_state();
+    let (world, gm, _player) = gm_and_player(&state);
+    let operator = insert_test_user(&mut state.db_pool.get().unwrap());
+    crate::play_pause::pause_world(
+        &mut state.db_pool.get().unwrap(),
+        operator,
+        world,
+        "Stopping play.",
+        crate::play_pause::TriggerDetail::operator(),
+    )
+    .expect("paused");
+
+    let refused = clear_world_rolls_impl(&state, gm, false, world)
+        .await
+        .expect_err("a pause stops a clear");
+    // The same refusal every gated write gives (`play_pause::gate`).
+    assert!(refused.message.contains("paused"), "{}", refused.message);
+    assert!(world_cleared_at(&state, world).is_none());
+    assert!(clear_events(&state, world).is_empty());
+}
+
+/// T066 (FR-043): a cleared roll cannot be revealed.
+#[tokio::test]
+async fn a_cleared_roll_is_not_revealed() {
+    let state = test_app_state();
+    let (world, gm, _player) = gm_and_player(&state);
+    roll_as(&state, gm, world, Some(RollVisibility::GmOnly), None)
+        .await
+        .unwrap();
+    let hidden = newest_roll(&state, world);
+    clear_world_rolls_impl(&state, gm, false, world)
+        .await
+        .unwrap();
+
+    let refused = reveal_roll_impl(&state, gm, false, world, hidden.id)
+        .await
+        .expect_err("a cleared roll is not revealed");
+    assert_eq!(refused.message, "That roll was cleared.");
+    assert!(newest_roll(&state, world).revealed_at.is_none());
+}

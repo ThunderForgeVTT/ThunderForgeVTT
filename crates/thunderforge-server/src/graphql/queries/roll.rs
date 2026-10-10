@@ -22,6 +22,43 @@ use thunderforge_dice::DiceFormula;
 
 const DEFAULT_ROLL_RECORD_LIMIT: i64 = 50;
 
+/// When the GM last cleared this world's rolls, if ever (spec 088 FR-040).
+/// Every read of a roll asks it first: a roll made at or before it reaches
+/// no one, the GM included (`rolls::visibility::cleared`).
+pub fn rolls_cleared_at(
+    conn: &mut PgConnection,
+    world_id: Uuid,
+) -> QueryResult<Option<chrono::DateTime<chrono::Utc>>> {
+    use crate::schema::worlds;
+    Ok(worlds::table
+        .find(world_id)
+        .select(worlds::rolls_cleared_at)
+        .first::<Option<chrono::DateTime<chrono::Utc>>>(conn)
+        .optional()?
+        .flatten())
+}
+
+/// Whether a roll event recorded at `recorded_at` falls under the world's
+/// last clear (spec 088 FR-042). A database that cannot answer withholds
+/// nothing: the clear is a convenience, not a secret, and a lost roll event is
+/// a stale feed.
+pub async fn roll_event_cleared(
+    state: &AppState,
+    world_id: Uuid,
+    recorded_at: chrono::NaiveDateTime,
+) -> bool {
+    let Ok(mut conn) = state.db_pool.get() else {
+        return false;
+    };
+    tokio::task::spawn_blocking(move || rolls_cleared_at(&mut conn, world_id))
+        .await
+        .ok()
+        .and_then(Result::ok)
+        .is_some_and(|cleared_at| {
+            crate::rolls::visibility::cleared(recorded_at.and_utc(), cleared_at)
+        })
+}
+
 /// Testable core of `RollQuery::world_roll_records`. DM-only (this
 /// contract's stated floor — contracts/graphql-roll.md), newest first.
 pub async fn world_roll_records_impl(
@@ -47,12 +84,16 @@ pub async fn world_roll_records_impl(
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
     let records: Vec<RollRecord> = tokio::task::spawn_blocking(move || {
-        world_roll_records::table
+        let mut query = world_roll_records::table
             .filter(world_roll_records::world_id.eq(world_id))
             .order(world_roll_records::created_at.desc())
             .limit(take)
             .select(RollRecord::as_select())
-            .load::<RollRecord>(&mut conn)
+            .into_boxed();
+        if let Some(cleared_at) = rolls_cleared_at(&mut conn, world_id)? {
+            query = query.filter(world_roll_records::created_at.gt(cleared_at));
+        }
+        query.load::<RollRecord>(&mut conn)
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -239,6 +280,12 @@ pub async fn world_roll_impl(
         let Some(row) = row else {
             return Ok(None);
         };
+        let cleared_at = rolls_cleared_at(&mut conn, world_id)
+            .map_err(|_| Error::new("Failed to load the roll"))?;
+        if crate::rolls::visibility::cleared(row.created_at, cleared_at) {
+            // Answered as a roll that does not exist, like a hidden one.
+            return Ok(None);
+        }
         Ok(
             entries(&mut conn, &systems_dir, world_id, vec![row], viewer)
                 .map_err(|_| Error::new("Failed to load the roll"))?
@@ -287,6 +334,11 @@ pub async fn world_rolls_impl(
             .into_boxed();
         if let Some(before) = before {
             query = query.filter(world_roll_records::created_at.lt(before));
+        }
+        let cleared_at = rolls_cleared_at(&mut conn, world_id)
+            .map_err(|_| Error::new("Failed to load rolls"))?;
+        if let Some(cleared_at) = cleared_at {
+            query = query.filter(world_roll_records::created_at.gt(cleared_at));
         }
         if !(viewer.is_gm || viewer.is_admin) {
             query = query.filter(

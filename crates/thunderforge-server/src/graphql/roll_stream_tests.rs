@@ -23,7 +23,9 @@ use crate::state::AppState;
 use crate::test_support::{
     insert_test_user, insert_test_world, insert_test_world_member, test_app_state,
 };
-use crate::world_events::{EVENT_CODE_ROLL_MADE, EVENT_CODE_ROLL_REVEALED, roll_event_payload};
+use crate::world_events::{
+    EVENT_CODE_ROLL_MADE, EVENT_CODE_ROLL_REVEALED, EVENT_CODE_ROLLS_CLEARED, roll_event_payload,
+};
 
 fn schema(state: AppState) -> crate::graphql::AppSchema {
     async_graphql::Schema::build(
@@ -177,4 +179,128 @@ async fn the_gm_receives_every_roll() {
             (999, None),
         ]
     );
+}
+
+/// Spec 088 T062 (FR-042): once the GM has cleared the feed, a roll event
+/// recorded before the clear is not delivered, even replayed afterwards, to a
+/// player or to the GM. One recorded after it is, and so is the clear itself.
+async fn received_after_a_clear(as_gm: bool) -> Vec<(i64, Option<String>)> {
+    use crate::schema::worlds;
+    use diesel::prelude::*;
+
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let owner = insert_test_user(&mut conn);
+    let player = insert_test_user(&mut conn);
+    let world = insert_test_world(&mut conn, owner);
+    insert_test_world_member(&mut conn, world, player, "Player");
+    // At the database's precision, so "the very instant" below is the same
+    // instant once stored.
+    let cleared_at = chrono::SubsecRound::trunc_subsecs(chrono::Utc::now(), 6);
+    diesel::update(worlds::table.find(world))
+        .set(worlds::rolls_cleared_at.eq(Some(cleared_at)))
+        .execute(&mut conn)
+        .unwrap();
+    drop(conn);
+
+    let watcher = signed_in(&state, if as_gm { owner } else { player }).await;
+    let schema = schema(state.clone());
+    let mut stream = schema.execute_stream(
+        Request::new(format!(
+            r#"subscription {{ worldEventsCreated(worldId: "{world}") {{ eventCode tokenEvent }} }}"#
+        ))
+        .data(watcher),
+    );
+    let opened = async {
+        while state.world_events.subscriber_count(world) == 0 {
+            tokio::task::yield_now().await;
+            let _ = tokio::time::timeout(Duration::from_millis(20), stream.next()).await;
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(5), opened)
+        .await
+        .expect("the stream subscribes");
+
+    let at = |e: WorldEvent, when: chrono::DateTime<chrono::Utc>| WorldEvent {
+        created_at: when.naive_utc(),
+        ..e
+    };
+    let before = cleared_at - chrono::Duration::seconds(1);
+    let later = cleared_at + chrono::Duration::seconds(1);
+    let roll = |v: Visibility| Some(roll_event_payload(Uuid::now_v7(), v));
+    let cleared = Some(serde_json::json!({ "clearedAt": cleared_at.to_rfc3339() }));
+    for e in [
+        // Replayed after the clear, recorded before it.
+        at(
+            event(
+                world,
+                player,
+                EVENT_CODE_ROLL_MADE,
+                roll(Visibility::Everyone),
+            ),
+            before,
+        ),
+        at(
+            event(
+                world,
+                owner,
+                EVENT_CODE_ROLL_REVEALED,
+                roll(Visibility::GmOnly),
+            ),
+            before,
+        ),
+        // At the very instant of the clear: cleared too.
+        at(
+            event(
+                world,
+                player,
+                EVENT_CODE_ROLL_MADE,
+                roll(Visibility::Everyone),
+            ),
+            cleared_at,
+        ),
+        at(
+            event(world, owner, EVENT_CODE_ROLLS_CLEARED, cleared),
+            cleared_at,
+        ),
+        at(
+            event(
+                world,
+                player,
+                EVENT_CODE_ROLL_MADE,
+                roll(Visibility::GmEyes),
+            ),
+            later,
+        ),
+        event(world, owner, 999, None),
+    ] {
+        state.world_events.publish(world, e);
+    }
+
+    let mut seen = Vec::new();
+    while let Ok(Some(response)) = tokio::time::timeout(Duration::from_secs(5), stream.next()).await
+    {
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let data = response.data.into_json().unwrap();
+        let ev = &data["worldEventsCreated"];
+        let code = ev["eventCode"].as_i64().unwrap();
+        let visibility = ev["tokenEvent"]["visibility"].as_str().map(str::to_string);
+        seen.push((code, visibility));
+        if code == 999 {
+            break;
+        }
+    }
+    seen
+}
+
+#[tokio::test]
+async fn no_one_receives_a_roll_event_from_before_the_clear() {
+    for as_gm in [false, true] {
+        let seen = received_after_a_clear(as_gm).await;
+        assert_eq!(
+            codes(&seen),
+            vec![(39, None), (36, Some("gm_eyes")), (999, None)],
+            "as the GM: {as_gm}"
+        );
+    }
 }

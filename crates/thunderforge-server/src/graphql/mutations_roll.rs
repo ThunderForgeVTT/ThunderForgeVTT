@@ -25,7 +25,8 @@ use crate::rolls::visibility::{Visibility, may_roll};
 use crate::schema::world_roll_records;
 use crate::state::AppState;
 use crate::world_events::{
-    EVENT_CODE_ROLL_MADE, EVENT_CODE_ROLL_REVEALED, record_world_event, roll_event_payload,
+    EVENT_CODE_ROLL_MADE, EVENT_CODE_ROLL_REVEALED, EVENT_CODE_ROLLS_CLEARED, record_world_event,
+    roll_event_payload,
 };
 use thunderforge_canvas_core::system_contribution::RollOutcome;
 use thunderforge_dice::{DiceFormula, FormulaError, ResolutionKind, RollResolution};
@@ -279,6 +280,11 @@ pub async fn reveal_roll_impl(
                 .optional()
                 .map_err(|_| Error::new("Failed to load the roll"))?
                 .ok_or_else(|| Error::new("Roll not found"))?;
+            let cleared_at = crate::graphql::queries::roll::rolls_cleared_at(conn, world_id)
+                .map_err(|_| Error::new("Failed to load the roll"))?;
+            if crate::rolls::visibility::cleared(row.created_at, cleared_at) {
+                return Err(Error::new(ROLL_WAS_CLEARED));
+            }
             // Spec 084: a roll and its rerolls are revealed together, each
             // with its own event, so no one sees half of what happened.
             let chain = crate::rolls::reroll::whole_chain(conn, &row)
@@ -330,6 +336,63 @@ pub async fn reveal_roll_impl(
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
 }
 
+/// Spec 088: what `clearWorldRolls` answers, the time every client drops its
+/// feed's entries at or before.
+#[derive(async_graphql::SimpleObject, Debug, Clone)]
+pub struct ClearRollsResult {
+    pub cleared_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// The one refusal a cleared roll gets from a write (FR-043).
+pub const ROLL_WAS_CLEARED: &str = "That roll was cleared.";
+
+/// Spec 088 FR-040: `clearWorldRolls`. Those who run the world, and site
+/// admins, empty the feed for everyone. Nothing is deleted (FR-041): the
+/// world remembers when, and every read of a roll leaves out what came
+/// before (`rolls::visibility::cleared`).
+pub async fn clear_world_rolls_impl(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    world_id: Uuid,
+) -> GraphQLResult<ClearRollsResult> {
+    // Asked on every request, so a GM demoted a moment ago is refused.
+    if !is_dm_of_world(state, user_id, is_admin, world_id).await? {
+        return Err(Error::new("Only the GM can clear the rolls."));
+    }
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    tokio::task::spawn_blocking(move || -> GraphQLResult<ClearRollsResult> {
+        refuse_if_paused(&mut conn, world_id)?;
+        conn.transaction::<_, Error, _>(|conn| {
+            use crate::schema::worlds;
+            // The transaction's own time, so the clear and its event agree.
+            let cleared_at = diesel::update(worlds::table.find(world_id))
+                .set(worlds::rolls_cleared_at.eq(diesel::dsl::sql::<
+                    diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>,
+                >("now()")))
+                .returning(worlds::rolls_cleared_at)
+                .get_result::<Option<chrono::DateTime<chrono::Utc>>>(conn)
+                .optional()
+                .map_err(|_| Error::new("Failed to clear the rolls"))?
+                .flatten()
+                .ok_or_else(|| Error::new("World not found"))?;
+            record_world_event(
+                conn,
+                world_id,
+                EVENT_CODE_ROLLS_CLEARED,
+                Some(serde_json::json!({ "clearedAt": cleared_at.to_rfc3339() })),
+                user_id,
+            )?;
+            Ok(ClearRollsResult { cleared_at })
+        })
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+}
+
 #[derive(Default)]
 pub struct RollMutation;
 
@@ -350,6 +413,18 @@ impl RollMutation {
         // no such restriction.
         let mut rng = rand::rngs::StdRng::from_rng(&mut rand::rng());
         roll_dice_impl(state, auth_user.user_id, input, &mut rng).await
+    }
+
+    /// Spec 088: empty the roll feed for everyone. GM or admin. The rolls
+    /// are kept in the world's record.
+    async fn clear_world_rolls(
+        &self,
+        ctx: &Context<'_>,
+        world_id: Uuid,
+    ) -> GraphQLResult<ClearRollsResult> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        clear_world_rolls_impl(state, auth_user.user_id, auth_user.is_admin, world_id).await
     }
 
     /// Spec 081: show a hidden roll to the table. GM or admin; idempotent.

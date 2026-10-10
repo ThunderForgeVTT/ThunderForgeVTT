@@ -162,10 +162,23 @@ pub(crate) fn catch_up(
     let withheld =
         !crate::auth::world_membership::actor_in_world(conn, user_id, is_admin, world_id)
             .runs_the_world();
+    // Spec 088 FR-042: a roll event recorded at or before the GM's last clear
+    // is caught up by no one, the GM included.
+    let cleared_at = crate::graphql::queries::roll::rolls_cleared_at(conn, world_id)?;
     let visible = move || {
-        let query = world_events::table
+        let mut query = world_events::table
             .filter(world_events::world_id.eq(world_id))
             .into_boxed();
+        if let Some(cleared_at) = cleared_at {
+            query = query.filter(
+                world_events::event_code
+                    .ne_all(vec![
+                        crate::world_events::EVENT_CODE_ROLL_MADE,
+                        crate::world_events::EVENT_CODE_ROLL_REVEALED,
+                    ])
+                    .or(world_events::created_at.gt(cleared_at.naive_utc())),
+            );
+        }
         if withheld {
             query.filter(diesel::dsl::sql::<diesel::sql_types::Bool>(&format!(
                 "NOT (event_code = {} AND token_event->>'visibility' = 'gm_only')",
@@ -430,5 +443,63 @@ mod tests {
         let admin = insert_test_user(&mut conn);
         let (rows, _, _) = catch_up(&mut conn, admin, true, world, start).unwrap();
         assert_eq!(ids(rows), vec![open, eyes, hidden]);
+    }
+
+    /// Spec 088 T062 (FR-042): after a clear, catching up brings back no
+    /// roll event recorded before it, for the GM or a player, and the cursor
+    /// points at what the caller may still see.
+    #[tokio::test]
+    async fn a_catch_up_after_a_clear_brings_back_no_cleared_roll() {
+        use crate::rolls::visibility::Visibility;
+        use crate::schema::worlds;
+        use crate::world_events::{
+            EVENT_CODE_ROLL_MADE, EVENT_CODE_ROLL_REVEALED, EVENT_CODE_ROLLS_CLEARED,
+            roll_event_payload,
+        };
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner = insert_test_user(&mut conn);
+        let player = insert_test_user(&mut conn);
+        let world = insert_test_world(&mut conn, owner);
+        insert_test_world_member(&mut conn, world, player, "Player");
+
+        let start = world_high_water(&mut conn, world);
+        let roll = |conn: &mut diesel::PgConnection, code: i32| {
+            record_world_event(
+                conn,
+                world,
+                code,
+                Some(roll_event_payload(Uuid::now_v7(), Visibility::Everyone)),
+                owner,
+            )
+            .unwrap()
+        };
+        let made = roll(&mut conn, EVENT_CODE_ROLL_MADE);
+        let revealed = roll(&mut conn, EVENT_CODE_ROLL_REVEALED);
+        let other = record_world_event(&mut conn, world, 29, None, owner).unwrap();
+        let cleared_at = chrono::Utc::now();
+        diesel::update(worlds::table.find(world))
+            .set(worlds::rolls_cleared_at.eq(Some(cleared_at)))
+            .execute(&mut conn)
+            .unwrap();
+        let clear = record_world_event(
+            &mut conn,
+            world,
+            EVENT_CODE_ROLLS_CLEARED,
+            Some(serde_json::json!({ "clearedAt": cleared_at.to_rfc3339() })),
+            owner,
+        )
+        .unwrap();
+        let after = roll(&mut conn, EVENT_CODE_ROLL_MADE);
+
+        let ids = |rows: Vec<WorldEvent>| rows.into_iter().map(|e| e.id).collect::<Vec<_>>();
+        for who in [player, owner] {
+            let (rows, _, latest) = catch_up(&mut conn, who, false, world, start).unwrap();
+            let seen = ids(rows);
+            assert_eq!(seen, vec![other, clear, after]);
+            assert!(!seen.contains(&made) && !seen.contains(&revealed));
+            assert_eq!(latest, after);
+        }
     }
 }

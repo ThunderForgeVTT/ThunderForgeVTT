@@ -82,8 +82,12 @@ export function record(eventCode: number, payload: Row): void {
 export function eventsSince(afterId: number): Row {
   const latestId = demoState().nextEventId - 1;
   const isGm = viewerIsGm();
+  const clearedBy = Number(demoState().world.rollsClearedEventId ?? 0);
   const after = log.filter(
-    (event) => event.id > afterId && eventReaches(event, isGm),
+    (event) =>
+      event.id > afterId &&
+      eventReaches(event, isGm) &&
+      !clearedRollEvent(event, clearedBy),
   );
   const oldestKept = log[0]?.id ?? latestId + 1;
   const forgotten = afterId + 1 < oldestKept && afterId < latestId;
@@ -92,6 +96,18 @@ export function eventsSince(afterId: number): Row {
     truncated: forgotten || after.length > CATCH_UP_LIMIT,
     latestId: Math.max(latestId, 0),
   };
+}
+
+/**
+ * Spec 088 FR-042: a roll's event recorded before the GM's clear (the event
+ * `clearedBy`) is never caught up; the clear itself is.
+ */
+function clearedRollEvent(event: WorldEvent, clearedBy: number): boolean {
+  return (
+    event.id < clearedBy &&
+    (event.eventCode === EVENT.rollMade ||
+      event.eventCode === EVENT.rollRevealed)
+  );
 }
 
 /**

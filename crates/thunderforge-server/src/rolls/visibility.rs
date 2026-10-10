@@ -106,6 +106,17 @@ pub fn event_reaches(visibility: Visibility, is_gm_or_admin: bool) -> bool {
     visibility != Visibility::GmOnly || is_gm_or_admin
 }
 
+/// Spec 088 FR-040: whether a roll made at `created_at` was cleared by the
+/// GM's last clear at `rolls_cleared_at`. A cleared roll reaches no one, GM
+/// included, so this is asked before any visibility rule. A roll made in the
+/// same instant as the clear counts as cleared: the GM saw it when they chose.
+pub fn cleared(
+    created_at: chrono::DateTime<chrono::Utc>,
+    rolls_cleared_at: Option<chrono::DateTime<chrono::Utc>>,
+) -> bool {
+    rolls_cleared_at.is_some_and(|cleared_at| created_at <= cleared_at)
+}
+
 #[cfg(test)]
 #[path = "visibility_tests.rs"]
 mod tests;

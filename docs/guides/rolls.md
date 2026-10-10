@@ -38,6 +38,20 @@ kept from. A reload lists past rolls again, but it never replays them.
   shows its numbers in every chat, marked "revealed by" you. A reveal cannot
   be taken back.
 
+### Clearing the feed
+
+**Clear rolls**, in the feed's header, empties the roll feed for everyone at
+the table at once, after you confirm. Only those who run the world see it.
+
+Clearing hides rolls; it deletes nothing. Every roll stays in the world's
+record, and the attacks that used them keep them. What changes:
+
+- No one sees a cleared roll again, you included: not after a reload, not
+  after reconnecting, and not under **Older rolls**.
+- A cleared roll cannot be revealed or rerolled.
+- Rolls made after the clear appear as usual.
+- A paused world cannot be cleared.
+
 ## Dice on the board
 
 A roll is thrown as real dice. They tumble up from the bottom of the board

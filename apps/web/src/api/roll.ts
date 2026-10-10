@@ -168,6 +168,24 @@ export function revealRoll(
 }
 
 /**
+ * Spec 088: for those who run the world, clear the roll feed for everyone.
+ * The rolls are kept in the world's record; every feed drops those made at
+ * or before the answered time, this one by the event like the rest.
+ */
+export function clearWorldRolls(worldId: string): Promise<string> {
+  return postGraphQL<{ clearWorldRolls: { clearedAt: string } }>(
+    `
+      mutation ClearWorldRolls($worldId: UUID!) {
+        clearWorldRolls(worldId: $worldId) {
+          clearedAt
+        }
+      }
+    `,
+    { worldId },
+  ).then((data) => data.clearWorldRolls.clearedAt);
+}
+
+/**
  * Spec 084: spend `spend` (an id from the roll's `rerollOffers`) to roll
  * one of your own d20 tests again. The server answers with the new roll, or
  * refuses in a sentence meant for the person who asked.

@@ -234,3 +234,60 @@ async fn a_feed_of_two_chained_rolls_shows_both_links() {
     assert_eq!(new.spent.map(|s| s.id), Some("inspiration".to_string()));
     assert!(old.reroll_offers.is_empty() && old.reroll_until.is_none());
 }
+
+/// What the GM's clear writes, without the mutation, so this proves the read
+/// paths alone (spec 088 FR-040). The mutation is proven in
+/// `mutations_roll_tests.rs`.
+fn clear_now(t: &Table) {
+    use crate::schema::worlds;
+    let mut conn = t.state.db_pool.get().unwrap();
+    diesel::update(worlds::table.find(t.world))
+        .set(worlds::rolls_cleared_at.eq(Some(chrono::Utc::now())))
+        .execute(&mut conn)
+        .unwrap();
+}
+
+/// Spec 088 T062: after a clear, no read path returns a cleared roll, to a
+/// player or to the GM, and a roll made after the clear is returned as ever.
+#[tokio::test]
+async fn a_cleared_roll_is_gone_from_every_read_for_everyone() {
+    let t = a_table();
+    let open = roll(&t, t.roller, RollVisibility::Everyone).await;
+    let hidden = roll(&t, t.gm, RollVisibility::GmOnly).await;
+    clear_now(&t);
+    let after = roll(&t, t.roller, RollVisibility::Everyone).await;
+
+    for (who, is_admin) in [(t.roller, false), (t.gm, false), (t.admin, true)] {
+        let feed = world_rolls_impl(&t.state, who, is_admin, t.world, None, None)
+            .await
+            .expect("a member may read the feed");
+        assert_eq!(
+            ids(&feed),
+            vec![after],
+            "only the roll made after the clear"
+        );
+        for cleared in [open, hidden] {
+            assert_eq!(as_seen_by(&t, who, is_admin, cleared).await, Seen::Nothing);
+        }
+        assert_eq!(as_seen_by(&t, who, is_admin, after).await, Seen::Whole);
+    }
+
+    let records = super::roll::world_roll_records_impl(&t.state, t.gm, false, t.world, None)
+        .await
+        .expect("the GM may read the history");
+    let record_ids: Vec<Uuid> = records.iter().map(|r| r.id).collect();
+    assert_eq!(
+        record_ids,
+        vec![after],
+        "the GM's history is cleared as well"
+    );
+
+    // Nothing was deleted: the clear withholds, it does not erase.
+    let mut conn = t.state.db_pool.get().unwrap();
+    let kept: i64 = world_roll_records::table
+        .filter(world_roll_records::world_id.eq(t.world))
+        .count()
+        .get_result(&mut conn)
+        .unwrap();
+    assert_eq!(kept, 3);
+}

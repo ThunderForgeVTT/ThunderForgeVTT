@@ -100,3 +100,33 @@ fn an_unknown_stored_value_reads_as_the_most_hidden() {
     assert_eq!(Visibility::parse("gm_only"), Visibility::GmOnly);
     assert_eq!(Visibility::parse("whisper"), Visibility::GmOnly);
 }
+
+// Spec 088 FR-040: the clear rule, applied before any visibility rule.
+mod cleared_rule {
+    use super::super::cleared;
+    use chrono::{Duration, TimeZone, Utc};
+
+    fn at(seconds: i64) -> chrono::DateTime<Utc> {
+        Utc.timestamp_opt(1_800_000_000, 0).unwrap() + Duration::seconds(seconds)
+    }
+
+    #[test]
+    fn a_world_never_cleared_clears_nothing() {
+        assert!(!cleared(at(0), None));
+    }
+
+    #[test]
+    fn a_roll_before_the_clear_is_cleared() {
+        assert!(cleared(at(-1), Some(at(0))));
+    }
+
+    #[test]
+    fn a_roll_at_the_instant_of_the_clear_is_cleared() {
+        assert!(cleared(at(0), Some(at(0))));
+    }
+
+    #[test]
+    fn a_roll_after_the_clear_is_not() {
+        assert!(!cleared(at(1), Some(at(0))));
+    }
+}

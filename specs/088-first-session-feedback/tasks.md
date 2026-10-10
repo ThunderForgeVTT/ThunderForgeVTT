@@ -177,21 +177,21 @@ deleted.
 
 **Independent Test**: `pnpm e2e:rolls` (both parts).
 
-- [ ] T060 [P] [US5] TDD: tests in `rolls/visibility_tests.rs` for `cleared(created_at, rolls_cleared_at)`: never cleared, before, at, and after the clear. See them fail.
-- [ ] T061 [US5] `cleared` in `rolls/visibility.rs`. T060 passes.
-- [ ] T062 [US5] Tests in `roll_feed_tests.rs` and `roll_stream_tests.rs`: after a clear, `worldRolls`, `worldRoll`, `worldRollRecords`, the live stream and the catch-up return no cleared roll, for a player and for the GM. A roll made after the clear is returned. A `ROLL_MADE` event recorded before the clear and replayed after it is not delivered (FR-042).
-- [ ] T063 [US5] Apply `cleared` on every path named in T062. T062 passes.
-- [ ] T064 [US5] Tests in `mutations_roll_tests.rs`: `clearWorldRolls` by the GM sets `rolls_cleared_at`, records event 39 with `{clearedAt}`, and leaves the `world_roll_records` and `world_attacks` counts unchanged; by a player it is refused; while paused it is refused; for a demoted GM it is refused (FR-040, FR-041).
-- [ ] T065 [US5] `clearWorldRolls` in `graphql/mutations_roll.rs`, with the `thunderforge.rolls.cleared` counter. T064 passes.
-- [ ] T066 [US5] `revealRoll` (`mutations_roll.rs:255`) and `rerollRoll` (`mutations_reroll.rs`) refuse a cleared roll with "That roll was cleared.", with tests (FR-043).
-- [ ] T067 [US5] Web: `engine/world/sync/rolls.ts` handles event 39; `hooks/useWorldRolls.ts` drops every entry at or before `clearedAt` and does not animate it again; tests in `sync/__tests__/rolls.test.ts` (FR-044).
-- [ ] T068 [P] [US5] Demo, TDD: tests first in the demo's dice and events tests, then `apps/demo/src/backend/handlers/dice.ts` and `events.ts` mirror FR-040 to FR-044 across tabs (FR-046).
-- [ ] T069 [US5] **Clear rolls** in the feed's header (`components/world/PlayDock/ChatPanel.tsx`), for those who run the world only, with the FR-045 confirmation.
-- [ ] T070 [US5] e2e `apps/web/e2e/rolls-clear.spec.ts` (rolls slice): a GM and two players roll (one for the GM's eyes, one GM only); the GM clears; every feed empties with no reload; a reload and a reconnect bring nothing back; a player sees no **Clear rolls**.
-- [ ] T071 [P] [US5] Extend `apps/demo/e2e/rolls-across-tabs.spec.ts` with a clear across two tabs.
-- [ ] T072 [P] [US5] Telemetry: `rolls.cleared`.
-- [ ] T073 [US5] `pnpm e2e:rolls`, then `pnpm e2e:which --diff` and its slices.
-- [ ] T074 [US5] Commit: "Spec 088: the GM clears the roll feed for everyone".
+- [X] T060 [P] [US5] TDD: tests in `rolls/visibility_tests.rs` for `cleared(created_at, rolls_cleared_at)`: never cleared, before, at, and after the clear. See them fail.
+- [X] T061 [US5] `cleared` in `rolls/visibility.rs`. T060 passes.
+- [X] T062 [US5] Tests in `roll_feed_tests.rs` and `roll_stream_tests.rs`: after a clear, `worldRolls`, `worldRoll`, `worldRollRecords`, the live stream and the catch-up return no cleared roll, for a player and for the GM. A roll made after the clear is returned. A `ROLL_MADE` event recorded before the clear and replayed after it is not delivered (FR-042).
+- [X] T063 [US5] Apply `cleared` on every path named in T062. T062 passes.
+- [X] T064 [US5] Tests in `mutations_roll_tests.rs`: `clearWorldRolls` by the GM sets `rolls_cleared_at`, records event 39 with `{clearedAt}`, and leaves the `world_roll_records` and `world_attacks` counts unchanged; by a player it is refused; while paused it is refused; for a demoted GM it is refused (FR-040, FR-041).
+- [X] T065 [US5] `clearWorldRolls` in `graphql/mutations_roll.rs`, with the `thunderforge.rolls.cleared` counter. T064 passes. The counter waits on 086.
+- [X] T066 [US5] `revealRoll` (`mutations_roll.rs:255`) and `rerollRoll` (`mutations_reroll.rs`) refuse a cleared roll with "That roll was cleared.", with tests (FR-043).
+- [X] T067 [US5] Web: `engine/world/sync/rolls.ts` handles event 39; `hooks/useWorldRolls.ts` drops every entry at or before `clearedAt` and does not animate it again; tests in `sync/__tests__/rolls.test.ts` (FR-044).
+- [X] T068 [P] [US5] Demo, TDD: tests first in the demo's dice and events tests, then `apps/demo/src/backend/handlers/dice.ts` and `events.ts` mirror FR-040 to FR-044 across tabs (FR-046).
+- [X] T069 [US5] **Clear rolls** in the feed's header (`components/world/PlayDock/ChatPanel.tsx`), for those who run the world only, with the FR-045 confirmation.
+- [X] T070 [US5] e2e `apps/web/e2e/rolls-clear.spec.ts` (rolls slice): a GM and two players roll (one for the GM's eyes, one GM only); the GM clears; every feed empties with no reload; a reload and a reconnect bring nothing back; a player sees no **Clear rolls**.
+- [X] T071 [P] [US5] Extend `apps/demo/e2e/rolls-across-tabs.spec.ts` with a clear across two tabs.
+- [ ] T072 [P] [US5] Telemetry: `rolls.cleared`. (waits on 086)
+- [X] T073 [US5] `pnpm e2e:rolls`, then `pnpm e2e:which --diff` and its slices. rolls 30/0 (web), the demo\'s tests 160/160 and its e2e 3/0, `rolls-across-tabs` included; the rest of `e2e:which --diff` runs in T116.
+- [X] T074 [US5] Commit: "Spec 088: the GM clears the roll feed for everyone".
 
 **Checkpoint**: SC-005 holds.
 
@@ -215,7 +215,7 @@ deleted.
 - [X] T084 [US6] e2e `apps/web/e2e/canvas-map-edge-walls.spec.ts` (canvas slice; add to `slices.json` if needed): import `grassy-path-ambush.dd2vtt` with the defaults; the scene has 4 walls on its edges; a token dragged 10 cells past an edge ends inside the map; a re-import leaves 4; with the box unticked, none (SC-008). canvas 46/0 (the move off the map through `moveOwnToken`, as `drawn-walls-block.spec.ts` sends its moves).
 - [X] T085 [P] [US6] If US2 has landed, add to `world-base-map.spec.ts`: a world created on the default map has its 4 edge walls. worlds 24/0.
 - [ ] T086 [P] [US6] Telemetry: `map.imported`. (waits on 086)
-- [ ] T087 [US6] `pnpm e2e:canvas`, `pnpm e2e:scenes`, the demo's tests, then `pnpm e2e:which --diff` and its slices. So far: canvas 46/0, scenes 19/0, worlds 24/0, the demo's tests 160/160; the rolls slice is re-run with US5 (its demo `rolls-across-tabs` failed once, a board never played the die).
+- [X] T087 [US6] `pnpm e2e:canvas`, `pnpm e2e:scenes`, the demo's tests, then `pnpm e2e:which --diff` and its slices. So far: canvas 46/0, scenes 19/0, worlds 24/0, the demo's tests 160/160; rolls 30/0 with US5, whose demo `rolls-across-tabs` (3/0) passed on the re-run after failing once (a board never played the die).
 - [X] T088 [US6] Commit: "Spec 088: an imported map is walled at its edges".
 
 **Checkpoint**: SC-008 holds.
@@ -265,7 +265,7 @@ losing changes.
 
 - [ ] T110 [P] `docs/guides/inviting-players.md` (new): world links, the optional use limit and when a use counts, expiry, revoking, and why a new person needs an instance invitation (FR-080).
 - [X] T111 [P] `docs/guides/your-first-world.md` (new): the starting map, **None**, and the credit.
-- [ ] T112 [P] `docs/guides/rolls.md`: clearing, and what clearing keeps.
+- [X] T112 [P] `docs/guides/rolls.md`: clearing, and what clearing keeps.
 - [X] T113 [P] `docs/guides/doors-and-walls.md`: the edge walls, the box, and how to remove them.
 - [X] T114 [P] `docs/INSTANCE_CONFIGURATION.md` and `.env.example`: `THUNDERFORGE_BASE_MAPS_DIR` (FR-081).
 - [ ] T115 [P] `docs/CONTRIBUTING.md`: `useUnsavedChanges`, the settings form model, the clear rule beside the visibility rule, and the perimeter mark.

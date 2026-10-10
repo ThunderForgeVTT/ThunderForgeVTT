@@ -3,9 +3,11 @@ import { describe, expect, it, vi } from "vitest";
 import type { MaskedRollRecord, WorldRollRecord } from "@/types/roll";
 
 import {
+  clearedAtOf,
   REPLAY_WINDOW_MS,
   ROLL_MADE_EVENT_CODE,
   ROLL_REVEALED_EVENT_CODE,
+  ROLLS_CLEARED_EVENT_CODE,
   shouldAnimate,
   startRollSync,
 } from "../rolls";
@@ -225,6 +227,92 @@ describe("startRollSync", () => {
       eventCode: ROLL_MADE_EVENT_CODE,
       tokenEvent: { rollId: "roll-1", visibility: "gm_only" },
     });
+    await settle();
+    await settle();
+    expect(animate).not.toHaveBeenCalled();
+    expect(onRoll).not.toHaveBeenCalled();
+    stop();
+  });
+});
+
+/** Spec 088 FR-044: the GM cleared the feed. */
+describe("a clear (event 39)", () => {
+  it("reads the clear's time from its own event only", () => {
+    expect(
+      clearedAtOf({
+        id: 1,
+        eventCode: ROLLS_CLEARED_EVENT_CODE,
+        tokenEvent: { clearedAt: "2026-10-07T12:00:00.123456Z" },
+      }),
+    ).toBe("2026-10-07T12:00:00.123456Z");
+    expect(
+      clearedAtOf({
+        id: 2,
+        eventCode: ROLL_MADE_EVENT_CODE,
+        tokenEvent: { clearedAt: "2026-10-07T12:00:00Z" },
+      }),
+    ).toBeUndefined();
+    expect(
+      clearedAtOf({ id: 3, eventCode: ROLLS_CLEARED_EVENT_CODE }),
+    ).toBeUndefined();
+  });
+
+  it("hands the clear on, and fetches and animates nothing for it", async () => {
+    const { events, push } = feed();
+    const animate = vi.fn();
+    const onRoll = vi.fn();
+    const onCleared = vi.fn();
+    const fetchRoll = vi.fn().mockResolvedValue(whole);
+    const stop = startRollSync({
+      worldId: "w",
+      events,
+      animate,
+      onRoll,
+      onCleared,
+      fetchRoll,
+    });
+    push({
+      id: 7,
+      event_code: ROLLS_CLEARED_EVENT_CODE,
+      token_event: { clearedAt: "2026-10-07T12:00:00Z" },
+    });
+    await settle();
+    await settle();
+    expect(onCleared).toHaveBeenCalledExactlyOnceWith("2026-10-07T12:00:00Z");
+    expect(fetchRoll).not.toHaveBeenCalled();
+    expect(animate).not.toHaveBeenCalled();
+    expect(onRoll).not.toHaveBeenCalled();
+    stop();
+  });
+
+  it("drops a roll whose fetch was in flight when the clear arrived", async () => {
+    const { events, push } = feed();
+    const animate = vi.fn();
+    const onRoll = vi.fn();
+    let answer: (entry: WorldRollRecord) => void = () => {};
+    const fetchRoll = vi.fn(
+      () => new Promise<WorldRollRecord>((resolve) => (answer = resolve)),
+    );
+    const stop = startRollSync({
+      worldId: "w",
+      events,
+      animate,
+      onRoll,
+      fetchRoll,
+    });
+    push({
+      id: 8,
+      eventCode: ROLL_MADE_EVENT_CODE,
+      tokenEvent: { rollId: "roll-1", visibility: "everyone" },
+    });
+    await settle();
+    push({
+      id: 9,
+      eventCode: ROLLS_CLEARED_EVENT_CODE,
+      tokenEvent: { clearedAt: "2026-10-07T12:00:00.000001Z" },
+    });
+    await settle();
+    answer(whole);
     await settle();
     await settle();
     expect(animate).not.toHaveBeenCalled();

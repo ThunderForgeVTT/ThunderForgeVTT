@@ -317,6 +317,11 @@ pub const GATED: &[(&str, &str)] = &[
         r#"mutation { revealRoll(worldId: "{world}", rollId: "{world}") { __typename } }"#,
     ),
     (
+        // Spec 088: the GM's clear is a write like any other.
+        "clearWorldRolls",
+        r#"mutation { clearWorldRolls(worldId: "{world}") { __typename } }"#,
+    ),
+    (
         "rollCheck",
         r#"mutation { rollCheck(worldId: "{world}", actorId: "{actor}", checkId: "x") { __typename } }"#,
     ),

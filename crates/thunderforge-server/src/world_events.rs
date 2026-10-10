@@ -276,6 +276,12 @@ pub const EVENT_CODE_AUTHORING_TOOLS_CHANGED: i32 = 38;
 /// entries at or before the time. Payload: `{"clearedAt": <RFC 3339>}`.
 pub const EVENT_CODE_ROLLS_CLEARED: i32 = 39;
 
+/// Whether this event is about one roll, and so falls under the GM's clear
+/// (spec 088 FR-042).
+pub fn is_roll_event(event_code: i32) -> bool {
+    event_code == EVENT_CODE_ROLL_MADE || event_code == EVENT_CODE_ROLL_REVEALED
+}
+
 /// The whole payload of a roll event (FR-002).
 pub fn roll_event_payload(
     roll_id: Uuid,

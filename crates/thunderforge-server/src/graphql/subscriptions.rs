@@ -239,6 +239,21 @@ impl SubscriptionRoot {
             let stream = Box::pin(futures_util::StreamExt::filter_map(stream, move |item| {
                 let state = rolls_state.clone();
                 async move {
+                    // Spec 088 FR-042: a roll event recorded at or before the
+                    // GM's last clear reaches no one, the GM included. Asked
+                    // only of roll events, so every other event still passes
+                    // without a query.
+                    if let (Ok(event), Some(state)) = (&item, &state)
+                        && crate::world_events::is_roll_event(event.event_code)
+                        && crate::graphql::queries::roll::roll_event_cleared(
+                            state,
+                            world_uuid,
+                            event.created_at,
+                        )
+                        .await
+                    {
+                        return None;
+                    }
                     let withheld = match &item {
                         Ok(event) => !crate::world_events::roll_event_reaches(
                             event.event_code,

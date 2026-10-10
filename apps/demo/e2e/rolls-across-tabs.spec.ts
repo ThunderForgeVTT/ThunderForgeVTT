@@ -5,7 +5,8 @@ import { ask, enterPlay, openDemo, WORLD_ID } from "./support";
  * Spec 081 US6: the demo's tabs share one world. Two tabs of one browser,
  * one switched to the player: a roll in either animates on both boards, a
  * GM only roll stays on the GM's, the second tab keeps working when the
- * first closes, and a reload of both reads one world.
+ * first closes, and a reload of both reads one world. Spec 088 US5: a GM
+ * who clears the rolls in one tab empties the other tab's feed too.
  */
 
 type Visibility = "EVERYONE" | "GM_ONLY";
@@ -204,6 +205,89 @@ test("two tabs throw the same dice: the same faces in the same places", async ({
       throws.push(landed);
     }
     expect(throws[1].dice).toEqual(throws[0].dice);
+
+    expect(outside, "nothing leaves the demo's own static files").toEqual([]);
+  } finally {
+    await context.close();
+  }
+});
+
+const entries = (page: Page) => page.getByTestId("roll-entry");
+
+async function openChat(page: Page): Promise<void> {
+  const trigger = page.getByTestId("world-dock-tab-chat");
+  await expect(trigger).toBeVisible({ timeout: 15_000 });
+  if ((await trigger.getAttribute("aria-expanded")) !== "true") {
+    await trigger.click();
+  }
+  await expect(page.getByTestId("chat-panel")).toBeVisible({ timeout: 15_000 });
+}
+
+test("the GM clears the rolls in one tab: the other tab's feed empties, and a reload keeps it empty", async ({
+  browser,
+  baseURL,
+}) => {
+  test.setTimeout(240_000);
+  const { page: gm, outside } = await openDemo(browser, baseURL);
+  const context = gm.context();
+  try {
+    await enterPlay(gm);
+    await boardReady(gm);
+    const player = await context.newPage();
+    await player.goto(`/demo/world/${WORLD_ID}/play`);
+    await expect(player.getByTestId("demo-viewer")).toBeVisible({
+      timeout: 60_000,
+    });
+    await player.getByRole("button", { name: "View as player" }).click();
+    await expect(player.getByTestId("demo-viewer")).toContainText(
+      "Viewing as a player",
+    );
+    await boardReady(player);
+    await gm.reload();
+    await boardReady(gm);
+
+    await roll(player, "1d20", "EVERYONE");
+    await roll(gm, "1d6", "GM_ONLY");
+    await openChat(gm);
+    await openChat(player);
+    await expect(entries(gm)).toHaveCount(2, { timeout: 15_000 });
+    await expect(entries(player)).toHaveCount(1, { timeout: 15_000 });
+
+    // The player has no button, and the backend refuses the player too.
+    await expect(player.getByTestId("chat-clear-rolls")).toHaveCount(0);
+    const refused = await ask(
+      player,
+      `mutation ($worldId: UUID!) { clearWorldRolls(worldId: $worldId) { clearedAt } }`,
+      { worldId: WORLD_ID },
+    );
+    expect(JSON.stringify(refused.body.errors)).toContain(
+      "Only the GM can clear the rolls.",
+    );
+
+    const playedBefore = (await dicePlayed(player)).length;
+    gm.once("dialog", (dialog) => void dialog.accept());
+    await gm.getByTestId("chat-clear-rolls").click();
+    await expect(entries(gm)).toHaveCount(0, { timeout: 15_000 });
+    await expect(entries(player)).toHaveCount(0, { timeout: 15_000 });
+    // Nothing is thrown again on the other tab's board.
+    await player.waitForTimeout(3_000);
+    expect(await dicePlayed(player)).toHaveLength(playedBefore);
+
+    // A reload of both reads the cleared world.
+    await gm.reload();
+    await player.reload();
+    await Promise.all([boardReady(gm), boardReady(player)]);
+    expect(await rollIds(gm)).toEqual([]);
+    expect(await rollIds(player)).toEqual([]);
+    await openChat(gm);
+    await openChat(player);
+    await expect(entries(gm)).toHaveCount(0);
+    await expect(entries(player)).toHaveCount(0);
+
+    // A roll after the clear is listed on both tabs.
+    await roll(player, "1d8", "EVERYONE");
+    await expect(entries(gm)).toHaveCount(1, { timeout: 15_000 });
+    await expect(entries(player)).toHaveCount(1, { timeout: 15_000 });
 
     expect(outside, "nothing leaves the demo's own static files").toEqual([]);
   } finally {
