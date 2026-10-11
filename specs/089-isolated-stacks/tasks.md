@@ -45,7 +45,7 @@ the full suite.
 - [X] T004 [US2] README.md install section: only the app is exposed, and
   how to add `compose.ports.yml` (for example for `pg_dump`). Add a release
   note line for operators who relied on the old ports.
-- [ ] T005 [US2] **Proof:**
+- [X] T005 [US2] **Proof:**
   - run `docker compose -p tf-install-check -f compose.yml up -d --build`;
   - `docker compose -p tf-install-check ps --format json` shows exactly one
     published port (SC-003);
