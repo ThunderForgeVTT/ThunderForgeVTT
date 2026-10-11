@@ -49,8 +49,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
-import { createServer } from "node:net";
 import { join, relative } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 
 import {
   ROOT_DIR,
@@ -69,6 +69,7 @@ import { checkDependencies, describeProblems } from "./e2e/deps.mjs";
 import { acquireRunLock, releaseRunLock } from "./e2e/run-lock.mjs";
 import { buildOutputHint } from "./clean-builds.mjs";
 import { removeContainers, startMailpitContainer } from "./e2e/mailpit.mjs";
+import { freePorts } from "./e2e/ports.mjs";
 import { ensureStack } from "./e2e/stack.mjs";
 import { startLoadMonitor } from "./e2e/load.mjs";
 import { digestLines, writeRunSummary } from "./e2e/report.mjs";
@@ -91,29 +92,17 @@ import {
   isPerfSpec,
 } from "./e2e/specs.mjs";
 
-/** Away from 5173/30000 on purpose, so a `pnpm dev` can stay up while this runs. */
-const WEB_PORT_BASE = 5200;
-const BACKEND_PORT_BASE = 30100;
 // One Mailpit per shard, exactly as backends, vite servers and buckets already
 // get one (contracts/e2e-fixtures.md § 2 rule 2). Sharing the dev stack's
 // single sink would make "the newest message" mean whichever shard sent last.
-const MAILPIT_SMTP_PORT_BASE = 31025;
-const MAILPIT_API_PORT_BASE = 38025;
+//
+// Every host port a shard uses — Vite, backend, the GitHub stub (spec 037)
+// and the OAuth stub (spec 036 US6) — comes from `freePorts` since spec 089,
+// so two checkouts' runs never meet on one, and a fresh port can't have a
+// leftover process from an earlier run answering on it.
 const MAILPIT_IMAGE = "axllent/mailpit:v1.21";
-// Spec 037: a GitHub that is not GitHub, one per shard. The backend reaches it
-// through `GITHUB_API_BASE`, which is the same configuration value an operator
-// running GitHub Enterprise sets — so delivery is exercised through the
-// production code path rather than a test branch.
-const GITHUB_STUB_PORT_BASE = 31500;
-/**
- * Spec 036 US6 (T063): this shard's OAuth provider.
- *
- * A port per shard for the same reason every other service gets one — two
- * shards sharing a provider would share the identity a scenario chose through
- * `/_control/identity`, and one shard's "the provider returned no email" would
- * become another shard's mystery refusal.
- */
-const OAUTH_STUB_PORT_BASE = 31600;
+/** Vite, backend, GitHub stub, OAuth stub. */
+const SHARD_PORTS = 4;
 
 const DB_USER = process.env.THUNDERFORGE_DB_USER ?? "postgres";
 /**
@@ -341,53 +330,6 @@ function recordDurations(shardDirs, previous, { baseline = false } = {}) {
   }
 }
 
-/**
- * Fail loudly if anything already holds a port this run needs.
- *
- * The lock above stops a *second run* starting while a first is alive. It
- * does not stop a first run's **children** outliving it: kill the runner and
- * its backends, vite servers and stubs keep their ports. The next run then
- * starts, fails to bind, and — because readiness is a `fetch` that the corpse
- * answers perfectly well — decides the stack came up and runs the whole suite
- * against the *previous build*. That is worse than a crash: it produced a
- * green run of code that was never compiled, and a red one for a fix that was
- * already in.
- *
- * So bind rather than fetch. A port that cannot be bound is somebody else's,
- * whatever answers on it.
- */
-async function assertPortsFree(total) {
-  const wanted = [];
-  for (let index = 0; index < total; index += 1) {
-    wanted.push([WEB_PORT_BASE + index, `vite ${index}`]);
-    wanted.push([BACKEND_PORT_BASE + index, `backend ${index}`]);
-    wanted.push([GITHUB_STUB_PORT_BASE + index, `github stub ${index}`]);
-    wanted.push([OAUTH_STUB_PORT_BASE + index, `oauth stub ${index}`]);
-    wanted.push([MAILPIT_SMTP_PORT_BASE + index, `mailpit smtp ${index}`]);
-    wanted.push([MAILPIT_API_PORT_BASE + index, `mailpit api ${index}`]);
-  }
-
-  const taken = [];
-  for (const [port, name] of wanted) {
-    const free = await new Promise((resolve) => {
-      const probe = createServer();
-      probe.once("error", () => resolve(false));
-      probe.once("listening", () => probe.close(() => resolve(true)));
-      probe.listen(port, "127.0.0.1");
-    });
-    if (!free) taken.push(`${port} (${name})`);
-  }
-
-  if (taken.length) {
-    throw new Error(
-      `these ports are already in use: ${taken.join(", ")}. ` +
-        "Something from an earlier run is still alive — the runner would " +
-        "otherwise test against it rather than against this build. Find it " +
-        "with `ss -ltnp` and kill it, then run again.",
-    );
-  }
-}
-
 function psql(database, sql) {
   return stack.psql(database, sql);
 }
@@ -531,7 +473,7 @@ async function provisionFirstRunTemplate() {
  */
 const clonedDatabases = new Set();
 
-function cloneShardDatabase(index, { firstRun = false } = {}) {
+function cloneShardDatabase(index, { firstRun = false, oauthStubPort } = {}) {
   const name = shardDbName(index);
   const template = firstRun ? FIRST_RUN_TEMPLATE_DB : TEMPLATE_DB;
   psql("postgres", `DROP DATABASE IF EXISTS ${name} WITH (FORCE);`);
@@ -544,7 +486,7 @@ function cloneShardDatabase(index, { firstRun = false } = {}) {
   // scenario chose through `/_control/identity` arrived in another shard's
   // sign-in, and the failure would read as a provisioning bug.
   if (!firstRun) {
-    const stub = `http://127.0.0.1:${OAUTH_STUB_PORT_BASE + index}`;
+    const stub = `http://127.0.0.1:${oauthStubPort}`;
     psql(
       name,
       `UPDATE oauth_providers
@@ -617,12 +559,10 @@ async function waitForUrl(url, name, timeoutMs = 180_000) {
 const startedMailpits = [];
 
 async function startMailpit(index) {
-  const smtpPort = MAILPIT_SMTP_PORT_BASE + index;
-  const apiPort = MAILPIT_API_PORT_BASE + index;
-  const name = await startMailpitContainer({
+  const { name, smtpPort, apiPort } = await startMailpitContainer({
+    project: stack.project,
+    checkout: stack.checkout,
     index,
-    smtpPort,
-    apiPort,
     image: MAILPIT_IMAGE,
     onCreated: (created) => startedMailpits.push(created),
     log: (message) => log("e2e", message, process.stderr),
@@ -717,14 +657,24 @@ function blankedOauthEnv() {
   return Object.fromEntries([...keys].map((key) => [key, ""]));
 }
 
-/** Starts one shard's backend and frontend, and resolves once both answer. */
+/**
+ * Starts one shard's backend and frontend, and resolves once both answer.
+ *
+ * Every process it spawns goes into `spawned`, so a failed attempt can be
+ * stopped before `startStack` tries again on fresh ports.
+ */
 async function startShard(
   index,
-  { firstRun = false, githubApps = false } = {},
+  { firstRun = false, githubApps = false, spawned = [] } = {},
 ) {
-  const database = cloneShardDatabase(index, { firstRun });
-  const backendPort = BACKEND_PORT_BASE + index;
-  const webPort = WEB_PORT_BASE + index;
+  const [webPort, backendPort, githubStubPort, oauthStubPort] =
+    await freePorts(SHARD_PORTS);
+  const database = cloneShardDatabase(index, { firstRun, oauthStubPort });
+  const spawn = (command, options) => {
+    const child = spawnManaged(command, options);
+    spawned.push(child);
+    return child;
+  };
   const dataPath = join(SHARD_DIR, `shard-${index}`, "data");
   mkdirSync(dataPath, { recursive: true });
   linkPacks(dataPath);
@@ -787,8 +737,8 @@ async function startShard(
     // set: the web base decides the `html_url` a delivered issue is recorded
     // under, and leaving it pointing at github.com would put a real URL on a
     // row that describes a stub.
-    GITHUB_API_BASE: `http://127.0.0.1:${GITHUB_STUB_PORT_BASE + index}`,
-    GITHUB_WEB_BASE: `http://127.0.0.1:${GITHUB_STUB_PORT_BASE + index}`,
+    GITHUB_API_BASE: `http://127.0.0.1:${githubStubPort}`,
+    GITHUB_WEB_BASE: `http://127.0.0.1:${githubStubPort}`,
     // The feedback subsystem's own application, so delivery resolves
     // credentials the way spec 040 FR-021 says it must — a whole application,
     // not a client id borrowed from one place and a key from another. The key
@@ -843,18 +793,15 @@ async function startShard(
   const mailpit = await startMailpit(index);
   if (!mailpit) return null;
 
-  spawnManaged(
-    `node scripts/github-stub.mjs ${GITHUB_STUB_PORT_BASE + index}`,
-    {
-      cwd: ROOT_DIR,
-      prefix: `gh${index}`,
-    },
-  );
+  spawn(`node scripts/github-stub.mjs ${githubStubPort}`, {
+    cwd: ROOT_DIR,
+    prefix: `gh${index}`,
+  });
 
   // Spec 036 US6. Started before the backend for no reason other than
   // symmetry: the server never calls it until a test drives a sign-in, and
   // the seeded provider row names its URLs rather than discovering them.
-  spawnManaged(`node scripts/oauth-stub.mjs ${OAUTH_STUB_PORT_BASE + index}`, {
+  spawn(`node scripts/oauth-stub.mjs ${oauthStubPort}`, {
     cwd: ROOT_DIR,
     prefix: `oa${index}`,
   });
@@ -867,7 +814,7 @@ async function startShard(
     ? join(SHARD_DIR, `shard-${index}`, "backend.log")
     : null;
 
-  spawnManaged(`./target/debug/thunderforge --port ${backendPort}`, {
+  spawn(`./target/debug/thunderforge --port ${backendPort}`, {
     cwd: ROOT_DIR,
     prefix: `be${index}`,
     env: shared,
@@ -886,7 +833,7 @@ async function startShard(
     return null;
   }
 
-  spawnManaged("pnpm -F @thunderforge/web run dev", {
+  spawn("pnpm -F @thunderforge/web run dev", {
     cwd: ROOT_DIR,
     prefix: `fe${index}`,
     env: {
@@ -902,7 +849,7 @@ async function startShard(
   }
   if (
     !(await waitForUrl(
-      `http://127.0.0.1:${GITHUB_STUB_PORT_BASE + index}/_control/issues`,
+      `http://127.0.0.1:${githubStubPort}/_control/issues`,
       `github stub ${index}`,
       30_000,
     ))
@@ -911,7 +858,7 @@ async function startShard(
   }
   if (
     !(await waitForUrl(
-      `http://127.0.0.1:${OAUTH_STUB_PORT_BASE + index}/_control/calls`,
+      `http://127.0.0.1:${oauthStubPort}/_control/calls`,
       `oauth stub ${index}`,
       30_000,
     ))
@@ -924,6 +871,8 @@ async function startShard(
     database,
     webPort,
     backendPort,
+    githubStubPort,
+    oauthStubPort,
     firstRun,
     backendLog,
     mailpit,
@@ -992,8 +941,8 @@ function runShard(shard, files, label = "parallel", suite = null) {
       // The specs and global setup `docker exec` into Postgres by this name.
       // It is the checkout's stack's, so they reach this run's databases.
       THUNDERFORGE_POSTGRES_CONTAINER: stack.postgresContainer,
-      THUNDERFORGE_E2E_GITHUB_STUB: `http://127.0.0.1:${GITHUB_STUB_PORT_BASE + shard.index}`,
-      THUNDERFORGE_E2E_OAUTH_STUB: `http://127.0.0.1:${OAUTH_STUB_PORT_BASE + shard.index}`,
+      THUNDERFORGE_E2E_GITHUB_STUB: `http://127.0.0.1:${shard.githubStubPort}`,
+      THUNDERFORGE_E2E_OAUTH_STUB: `http://127.0.0.1:${shard.oauthStubPort}`,
       THUNDERFORGE_E2E_MAILPIT_API: shard.mailpit.api,
       THUNDERFORGE_E2E_MAILPIT_SMTP_PORT: String(shard.mailpit.smtpPort),
       // A headless browser has no business on the machine's *system* message
@@ -1117,8 +1066,8 @@ async function main() {
     else if (sliceMatch) args.slice = sliceMatch[1];
     else if (argv === "--all") args.all = true;
     else if (argv === "--keep") args.keep = true;
-    // Fail, rather than wait, while another checkout's run holds the
-    // machine-wide lock (`scripts/e2e/run-lock.mjs`).
+    // Fail, rather than wait, while this checkout's run or the machine's
+    // slots are taken (`scripts/e2e/run-lock.mjs`).
     else if (argv === "--no-wait") args.wait = false;
     // Also write the `.e2e-shards-durations.json` baseline, and with
     // `--slice`, the slice's time to `scripts/e2e/slice-durations.json`.
@@ -1166,9 +1115,9 @@ async function main() {
   const buildHint = buildOutputHint(ROOT_DIR);
   if (buildHint) log("e2e", `note: ${buildHint}`);
 
-  // Machine-wide: since spec 089 each checkout has its own databases, but
-  // every checkout still shares the shard ports and mail containers, so this
-  // waits for a run from any of them.
+  // One run per checkout (its stack is one set of databases), and at most
+  // THUNDERFORGE_E2E_MAX_CONCURRENT per machine (spec 089): runs no longer
+  // share databases, ports or mail containers, only cores and memory.
   try {
     await acquireRunLock(ROOT_DIR, process.argv.slice(2), {
       wait: args.wait,
@@ -1187,10 +1136,6 @@ async function main() {
   if (args.slice) log("e2e", sliceHeader(args, total));
   run.load = startLoadMonitor();
   logLoadAtStart(run.load.snapshot());
-  // Two past the sharded stacks: the first-run lane runs on index `total` and
-  // the GitHub-applications lane on `total + 1`, and a port either finds taken
-  // is the same stale-corpse hazard as a shard's.
-  await assertPortsFree(total + 2);
   log("e2e", `Preparing ${total} shard${total === 1 ? "" : "s"}.`);
   rmSync(SHARD_DIR, { recursive: true, force: true });
   mkdirSync(SHARD_DIR, { recursive: true });
@@ -1488,20 +1433,55 @@ function firstLine(error) {
  * service that never became ready both become a reason the summary can print.
  */
 async function startStack(index, options = {}) {
-  try {
-    const shard = await startShard(index, options);
-    if (shard) {
-      run.shards.push(shard);
-      return { shard };
+  // Twice at most (plan.md Decision 4): a port `freePorts` handed out can be
+  // taken by something else before the child binds it, which shows up here as
+  // a service that never became ready. Fresh ports make a second collision
+  // vanishingly unlikely, so a second failure is a real one.
+  for (let attempt = 1; ; attempt += 1) {
+    const spawned = [];
+    try {
+      const shard = await startShard(index, { ...options, spawned });
+      if (shard) {
+        run.shards.push(shard);
+        return { shard };
+      }
+      if (attempt === 1) {
+        log(
+          "e2e",
+          `Stack ${index} did not come up; retrying once on fresh ports.`,
+          process.stderr,
+        );
+        await stopProcesses(spawned);
+        continue;
+      }
+      return {
+        reason:
+          "stack failed to start: a service never became ready (see the log above)",
+      };
+    } catch (error) {
+      log("e2e", String(error?.stack ?? error), process.stderr);
+      return { reason: `stack failed to start: ${firstLine(error)}` };
     }
-    return {
-      reason:
-        "stack failed to start: a service never became ready (see the log above)",
-    };
-  } catch (error) {
-    log("e2e", String(error?.stack ?? error), process.stderr);
-    return { reason: `stack failed to start: ${firstLine(error)}` };
   }
+}
+
+/** Stop a failed attempt's processes (each its own group) and wait for them. */
+async function stopProcesses(children) {
+  const closed = children.map(
+    (child) =>
+      new Promise((resolve) => {
+        if (child.exitCode !== null || child.signalCode !== null) resolve();
+        else child.once("close", resolve);
+      }),
+  );
+  for (const child of children) {
+    try {
+      process.kill(-child.pid, "SIGTERM");
+    } catch {
+      // Already gone.
+    }
+  }
+  await Promise.race([Promise.all(closed), sleep(10_000)]);
 }
 
 function stackFailure(index, label, reason) {

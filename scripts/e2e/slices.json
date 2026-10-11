@@ -110,7 +110,7 @@
       "why": "the e2e runner itself"
     },
     {
-      "glob": "scripts/e2e/{deps,load,mailpit,report,run-lock,select,slice-durations,slices,specs}.mjs",
+      "glob": "scripts/e2e/{deps,load,mailpit,ports,report,run-lock,select,slice-durations,slices,specs,stack}.mjs",
       "why": "the e2e runner's modules: which specs run, on which stack, and how results are read"
     },
     {

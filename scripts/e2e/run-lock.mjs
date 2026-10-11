@@ -1,62 +1,69 @@
 #!/usr/bin/env node
 /**
- * The e2e run lock: one e2e run per *machine*, not per checkout.
+ * The e2e run lock: one run per checkout, and at most N per machine
+ * (spec 089).
  *
  * # What it guards against
  *
- * Every checkout on the machine shares what an e2e run uses: the shard
- * databases (`thunderforge_e2e_<shard>`) and their template on one Postgres
- * server, the shards' ports, and the mailpit containers. A lock kept inside
- * each checkout let a run started from a second worktree drop the first
- * worktree's live databases mid-run and fail to start against its mail
- * containers. So the lock lives outside every checkout, at a path named for
- * those shared resources rather than for a repository path:
+ * Since spec 089 every checkout tests against its own stack
+ * (`scripts/e2e/stack.mjs`) on ports nobody else holds, so two checkouts'
+ * runs no longer meet in a database or on a port. What is still shared is the
+ * machine: a run holds a few Vite servers, a backend per shard and a browser
+ * each, and two of them is about what a workstation takes. So:
  *
- *     /tmp/thunderforge-e2e.lock     (THUNDERFORGE_E2E_LOCK_DIR overrides /tmp)
+ * - **one run per checkout**: `<checkout>/.e2e-running`. Two runs here would
+ *   share one stack and drop each other's databases.
+ * - **N runs per machine**: slot files outside every checkout,
+ *
+ *       /tmp/thunderforge-e2e.slot-<n>   (THUNDERFORGE_E2E_LOCK_DIR overrides /tmp)
+ *
+ *   `THUNDERFORGE_E2E_MAX_CONCURRENT` sets N (default 2).
  *
  * A fixed `/tmp` rather than `$TMPDIR` or `$XDG_RUNTIME_DIR`: those differ
  * between a terminal, a cron job and a sandboxed agent on the same machine, and
- * a lock two runs look for in different places locks nothing.
+ * a slot two runs look for in different places limits nothing.
  *
- * Things that look harmless break a run from the side too:
- *
- * - committing or pushing: the hooks run `pnpm verify`, whose formatters and
- *   generators can write into the tree the shards' Vite servers watch (the
- *   bindings step once rewrote `apps/web/src` and reloaded every page), and a
- *   push runs clippy, which competes with the suite for every core;
- * - (not `cargo test`, any more: it has its own database, `thunderforge_test`,
- *   and refuses the development and shard databases — `test_support.rs`).
+ * Things that look harmless break a run from the side too: the hooks run
+ * `pnpm verify`, whose formatters and generators can write into the tree the
+ * shards' Vite servers watch, and a push runs clippy, which competes with the
+ * suite for every core. (Not `cargo test`: it has its own database.)
  *
  * # How it behaves
  *
- * The harness creates the file exclusively (pid, start time, arguments, and the
- * checkout it runs from) when it starts and removes it on exit and on signals.
- * A second run, from any checkout, **waits** for the first and says which
- * checkout and pid it is waiting on; `--no-wait` makes it fail instead. A file
- * whose pid is dead or no longer an e2e run — a run killed with `kill -9` — is
- * stale: it is replaced, never waited on, and nobody has to delete it by hand.
+ * The harness takes this checkout's lock first, then holds it while it waits
+ * for a slot, so a second run from here waits however many slots are free.
+ * Every file is created exclusively and holds the pid, start time, arguments
+ * and checkout; all are removed on exit and on signals. A waiting run says
+ * which runs it waits on; `--no-wait` makes it fail instead. A file whose pid
+ * is dead or no longer an e2e run — a run killed with `kill -9` — is stale: it
+ * is replaced, never waited on, and nobody has to delete it by hand.
  *
- * A checkout on a branch from before this file still writes its lock inside
- * the checkout (`.e2e-running`, or the older `.e2e-shards.lock`). Those are
- * read too, in every worktree of the repository, so such a run is waited on
- * and seen by the hooks as well.
+ * # Older branches
+ *
+ * A run from a branch before spec 089 holds `/tmp/thunderforge-e2e.lock` and
+ * tests against the shared dev Postgres, so while it is live it holds every
+ * slot (FR-010). New runs read that file and never write it. Branches older
+ * still wrote only `.e2e-running` (or `.e2e-shards.lock`) in their checkout;
+ * the hooks read those in every worktree.
  *
  * # From the command line
  *
- *     node scripts/e2e/run-lock.mjs check                  # a run from this checkout
- *     node scripts/e2e/run-lock.mjs check --any-checkout   # a run from any checkout
+ *     node scripts/e2e/run-lock.mjs check                  # before a commit
+ *     node scripts/e2e/run-lock.mjs check --any-checkout   # before a push
  *
- * exits 1 with an explanation while a live run blocks, and 0 otherwise. The
- * pre-commit hook uses the first (its `pnpm verify` writes into this tree);
- * the pre-push hook the second (its clippy competes with any run).
+ * exits 1 with an explanation while a live run blocks, and 0 otherwise. A
+ * commit is refused during this checkout's run (its `pnpm verify` writes into
+ * this tree). A push is refused during this checkout's run and during any
+ * pre-089 run, which still uses shared state (FR-011); another checkout's run
+ * since 089 touches nothing this checkout owns, and is only a note.
  * `THUNDERFORGE_IGNORE_E2E_LOCK=1` turns the refusal into a warning, for the
  * moment someone knows better (the run is theirs and already failed, say).
- * It never lets two e2e runs share the machine.
  */
 
 import { execFileSync } from "node:child_process";
 import {
   readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
   writeFileSync,
@@ -66,20 +73,40 @@ import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
+/** The pre-089 machine-wide lock: read, never written. */
 export const LOCK_FILE = "thunderforge-e2e.lock";
+export const SLOT_PREFIX = "thunderforge-e2e.slot-";
 export const LOCK_DIR_ENV = "THUNDERFORGE_E2E_LOCK_DIR";
+export const MAX_ENV = "THUNDERFORGE_E2E_MAX_CONCURRENT";
 export const OVERRIDE_ENV = "THUNDERFORGE_IGNORE_E2E_LOCK";
+export const DEFAULT_MAX = 2;
 
-/** The in-checkout files older branches write: the current, then the oldest. */
-export const LEGACY_LOCK_NAMES = [".e2e-running", ".e2e-shards.lock"];
+/** This checkout's lock. */
+export const CHECKOUT_LOCK = ".e2e-running";
+/** The in-checkout files any branch may have written: the current, then the oldest. */
+export const LEGACY_LOCK_NAMES = [CHECKOUT_LOCK, ".e2e-shards.lock"];
 
 const DEFAULT_ROOT = join(fileURLToPath(import.meta.url), "..", "..", "..");
 
-/** The machine-wide lock file. */
+/** Where the slots (and the pre-089 lock) live. */
+export function lockDir(env = process.env) {
+  return env[LOCK_DIR_ENV] || (process.platform === "win32" ? tmpdir() : "/tmp");
+}
+
+export function slotPath(dir, n) {
+  return join(dir, `${SLOT_PREFIX}${n}`);
+}
+
+/** The pre-089 machine-wide lock file. */
 export function machineLockPath(env = process.env) {
-  const dir =
-    env[LOCK_DIR_ENV] || (process.platform === "win32" ? tmpdir() : "/tmp");
-  return join(dir, LOCK_FILE);
+  return join(lockDir(env), LOCK_FILE);
+}
+
+/** How many runs the machine takes at once; anything not a positive integer is the default. */
+export function maxConcurrent(env = process.env) {
+  const text = String(env[MAX_ENV] ?? "");
+  const n = Number(text);
+  return /^\d+$/.test(text) && n > 0 ? n : DEFAULT_MAX;
 }
 
 /** Parse a lock file: JSON with a pid, or an older harness's bare pid. */
@@ -132,26 +159,53 @@ function canonical(path) {
   }
 }
 
-/** The machine-wide lock if a live run holds it; null when absent or stale. */
-export function machineLock({ lockPath = machineLockPath() } = {}) {
-  const lock = readLockFile(lockPath);
+function live(lock) {
   return lock && isLiveRun(lock.pid) ? lock : null;
 }
 
-/** A live lock an older branch left inside `root`, or null. */
-export function legacyLock(root) {
+/** The pre-089 machine-wide lock if a live run holds it; null when absent or stale. */
+export function machineLock({ lockDir: dir = lockDir() } = {}) {
+  return live(readLockFile(join(dir, LOCK_FILE)));
+}
+
+/** The live lock inside checkout `root`, from this branch or an older one, or null. */
+export function checkoutLock(root) {
   for (const name of LEGACY_LOCK_NAMES) {
-    const lock = readLockFile(join(root, name));
-    if (lock && isLiveRun(lock.pid)) return { ...lock, cwd: root };
+    const lock = live(readLockFile(join(root, name)));
+    if (lock) return { cwd: root, ...lock };
   }
   return null;
 }
 
+/** Every live slot, whatever the cap: `{ ...lock, slot }`, lowest first. */
+export function liveSlots({ lockDir: dir = lockDir() } = {}) {
+  let names;
+  try {
+    names = readdirSync(dir);
+  } catch {
+    return [];
+  }
+  return names
+    .filter((name) => name.startsWith(SLOT_PREFIX))
+    .map((name) => Number(name.slice(SLOT_PREFIX.length)))
+    .filter((n) => Number.isInteger(n) && n >= 0)
+    .sort((a, b) => a - b)
+    .flatMap((n) => {
+      const lock = live(readLockFile(slotPath(dir, n)));
+      return lock ? [{ ...lock, slot: n }] : [];
+    });
+}
+
 /** The lock of a live run started from checkout `root`, or null. */
-export function liveLock(root, { lockPath = machineLockPath() } = {}) {
-  const lock = machineLock({ lockPath });
-  if (lock && canonical(lock.cwd ?? "") === canonical(root)) return lock;
-  return legacyLock(root);
+export function liveLock(root, { lockDir: dir = lockDir() } = {}) {
+  const here = canonical(root);
+  const isHere = (lock) => canonical(lock.cwd ?? "") === here;
+  return (
+    checkoutLock(root) ??
+    liveSlots({ lockDir: dir }).find(isHere) ??
+    [machineLock({ lockDir: dir })].find((lock) => lock && isHere(lock)) ??
+    null
+  );
 }
 
 /** Every worktree of the repository `root` belongs to, `root` included. */
@@ -170,124 +224,153 @@ export function worktreePaths(root) {
   }
 }
 
-/** Every live run on the machine that this lock knows of. */
-export function liveRuns(
-  root,
-  { lockPath = machineLockPath(), worktrees = worktreePaths(root) } = {},
-) {
-  const runs = [];
-  const lock = machineLock({ lockPath });
-  if (lock) runs.push(lock);
-  for (const path of worktrees) {
-    const legacy = legacyLock(path);
-    if (legacy && legacy.pid !== lock?.pid) runs.push(legacy);
+/**
+ * Create `path` exclusively with `text`. Returns `{ taken: true }`, or
+ * `{ holder }` when a live run other than this process holds it. A stale file
+ * is removed only if it still holds what was read as stale, then creation is
+ * retried; a file this process left behind counts as ours.
+ */
+function createExclusive(path, text) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      writeFileSync(path, text, { flag: "wx" });
+      return { taken: true };
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+    }
+    const held = readLockFile(path);
+    if (!held) continue; // released between the two calls
+    if (held.pid === process.pid) return { taken: true };
+    if (isLiveRun(held.pid)) return { holder: held };
+    if (readLockFile(path)?.raw === held.raw) rmSync(path, { force: true });
   }
-  return runs;
+  const held = live(readLockFile(path));
+  if (held && held.pid !== process.pid) return { holder: held };
+  throw new Error(`could not take the e2e lock at ${path}`);
 }
 
 /**
- * One attempt at the lock. Returns `{ lock }` when taken, `{ holder }` when a
- * live run holds it.
+ * One attempt at a run. Returns `{ lock }` (with its `slot`) when taken, or
+ * `{ holders }`: the runs in the way.
  *
- * Creation is exclusive (`wx`), so two runs starting together cannot both
- * win. A stale file is removed only if it still holds what was read as stale,
- * then creation is retried.
+ * Order matters: this checkout's lock first, held while slots are full, so a
+ * second run from here can never slip into a slot ahead of the first.
  */
 export function tryAcquireRunLock(
   root,
   args = [],
-  { lockPath = machineLockPath(), worktrees } = {},
+  { lockDir: dir = lockDir(), max = maxConcurrent() } = {},
 ) {
-  const legacy = (worktrees ?? worktreePaths(root))
-    .map((path) => legacyLock(path))
-    .find((lock) => lock && lock.pid !== process.pid);
-  if (legacy) return { holder: legacy };
+  const cwd = canonical(root);
+  const base = { pid: process.pid, startedAt: new Date().toISOString(), args, cwd };
+  const text = (extra = {}) => `${JSON.stringify({ ...base, ...extra }, null, 2)}\n`;
 
-  const lock = {
-    pid: process.pid,
-    startedAt: new Date().toISOString(),
-    args,
-    cwd: canonical(root),
-  };
-  const text = `${JSON.stringify(lock, null, 2)}\n`;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      writeFileSync(lockPath, text, { flag: "wx" });
-      return { lock };
-    } catch (error) {
-      if (error?.code !== "EEXIST") throw error;
-    }
-    const held = readLockFile(lockPath);
-    if (!held) continue; // released between the two calls
-    if (held.pid !== process.pid && isLiveRun(held.pid)) return { holder: held };
-    // Stale (or our own pid from a run that never released): replace it.
-    if (readLockFile(lockPath)?.raw === held.raw) {
-      rmSync(lockPath, { force: true });
-    }
+  for (const name of LEGACY_LOCK_NAMES.slice(1)) {
+    const older = live(readLockFile(join(cwd, name)));
+    if (older && older.pid !== process.pid) return { holders: [{ cwd, ...older }] };
   }
-  const held = readLockFile(lockPath);
-  if (held && isLiveRun(held.pid)) return { holder: held };
-  throw new Error(`could not take the e2e lock at ${lockPath}`);
+  const own = createExclusive(join(cwd, CHECKOUT_LOCK), text());
+  if (own.holder) return { holders: [{ cwd, ...own.holder }] };
+
+  // A pre-089 run tests against the shared dev Postgres: it holds every slot.
+  const old = machineLock({ lockDir: dir });
+  if (old) return { holders: [old] };
+
+  const taken = liveSlots({ lockDir: dir });
+  const others = taken.filter((lock) => lock.pid !== process.pid);
+  const mine = taken.find((lock) => lock.pid === process.pid);
+  if (mine) return { lock: { ...base, slot: mine.slot } };
+  if (others.length >= max) return { holders: others };
+
+  for (let n = 0; n < max; n += 1) {
+    if (others.some((lock) => lock.slot === n)) continue;
+    const result = createExclusive(slotPath(dir, n), text({ slot: n }));
+    if (result.taken) return { lock: { ...base, slot: n } };
+  }
+  // Another run took the last free slot between the listing and the create.
+  return { holders: liveSlots({ lockDir: dir }).filter((l) => l.pid !== process.pid) };
 }
 
 /**
- * Take the lock, waiting for whichever run holds it. `wait: false` throws
- * naming the holder instead.
+ * Take a run, waiting for whichever runs are in the way. `wait: false` throws
+ * naming them instead, and gives back this checkout's lock.
  */
 export async function acquireRunLock(
   root,
   args = [],
   {
-    lockPath = machineLockPath(),
+    lockDir: dir = lockDir(),
+    max = maxConcurrent(),
     wait = true,
     pollMs = 2_000,
     reportEveryMs = 5 * 60_000,
     log = (line) => process.stdout.write(`[e2e] ${line}\n`),
-    worktrees,
   } = {},
 ) {
   let lastReport = 0;
-  let lastHolder = null;
+  let lastKey = null;
   for (;;) {
-    const result = tryAcquireRunLock(root, args, { lockPath, worktrees });
+    const result = tryAcquireRunLock(root, args, { lockDir: dir, max });
     if (result.lock) {
-      if (lastHolder) log("The other e2e run finished; starting.");
+      if (lastKey) log("A slot came free; starting.");
       return result.lock;
     }
-    const { holder } = result;
+    const { holders } = result;
+    const what = waitingFor(root, holders, max);
+    const list = holders.map((lock) => `  ${describeLock(lock)}`).join("\n");
     if (!wait) {
+      releaseRunLock({ root, lockDir: dir });
       throw new Error(
-        `another e2e run is active on this machine (${describeLock(holder)}). ` +
-          "Every checkout shares its databases, ports and mail containers; " +
-          "wait for it to finish, or drop --no-wait to wait automatically.",
+        `${what[0].toUpperCase()}${what.slice(1)} is in use:\n${list}\n` +
+          "Wait for one to finish, or drop --no-wait to wait automatically.",
       );
     }
+    const key = holders.map((lock) => lock.pid).sort().join(",");
     const now = Date.now();
-    if (holder.pid !== lastHolder?.pid || now - lastReport >= reportEveryMs) {
+    if (key !== lastKey || now - lastReport >= reportEveryMs) {
       log(
-        `${lastHolder?.pid === holder.pid ? "Still waiting" : "Waiting"} for ` +
-          `the e2e run already on this machine (${describeLock(holder)}): ` +
-          "every checkout shares the thunderforge_e2e_* databases, the ports " +
-          "and the mail containers. Ctrl-C to give up; --no-wait to fail " +
-          "instead of waiting.",
+        `${key === lastKey ? "Still waiting" : "Waiting"} for ${what}:\n${list}\n` +
+          `Ctrl-C to give up; --no-wait to fail instead of waiting; ${MAX_ENV} ` +
+          "sets how many runs the machine takes.",
       );
       lastReport = now;
-      lastHolder = holder;
+      lastKey = key;
     }
     await sleep(pollMs);
   }
 }
 
+function waitingFor(root, holders, max) {
+  const here = canonical(root);
+  if (holders.some((lock) => canonical(lock.cwd ?? "") === here)) {
+    return "the e2e run already going in this checkout";
+  }
+  if (holders.length === 1 && holders[0].slot === undefined) {
+    return "an e2e slot: a run from before spec 089 holds them all";
+  }
+  return `an e2e slot (${holders.length} of ${max} held)`;
+}
+
 /**
- * Release the lock, but **only if it is still ours**.
+ * Release this run's checkout lock and slot, but **only if they are still
+ * ours**.
  *
  * Teardown outlives the moment a run is judged finished, so a new run can
- * already have taken the lock; deleting that unconditionally once left the new
+ * already have taken them; deleting that unconditionally once left the new
  * run unprotected while the old one dropped its databases.
  */
-export function releaseRunLock({ lockPath = machineLockPath() } = {}) {
-  if (readLockFile(lockPath)?.pid === process.pid) {
-    rmSync(lockPath, { force: true });
+export function releaseRunLock({ root = DEFAULT_ROOT, lockDir: dir = lockDir() } = {}) {
+  const own = join(canonical(root), CHECKOUT_LOCK);
+  if (readLockFile(own)?.pid === process.pid) rmSync(own, { force: true });
+  let names = [];
+  try {
+    names = readdirSync(dir).filter((name) => name.startsWith(SLOT_PREFIX));
+  } catch {
+    // No directory, no slots.
+  }
+  for (const name of names) {
+    const path = join(dir, name);
+    if (readLockFile(path)?.pid === process.pid) rmSync(path, { force: true });
   }
 }
 
@@ -305,22 +388,40 @@ export function describeLock(lock) {
 /**
  * The hooks' question: is a run in the way of `purpose`? Returns the exit code
  * and writes the explanation to `stderr`.
+ *
+ * A commit (`anyCheckout: false`) is refused during this checkout's run. A
+ * push (`anyCheckout: true`) is refused during this checkout's run and during
+ * any pre-089 run: a live machine lock, or another worktree's lock whose pid
+ * holds no slot. Every other live run is a one-line note.
  */
 export function check(
   root,
   {
     anyCheckout = false,
     purpose = "this",
-    lockPath = machineLockPath(),
+    lockDir: dir = lockDir(),
     worktrees,
     env = process.env,
     stderr = process.stderr,
   } = {},
 ) {
   const self = canonical(root);
-  const runs = liveRuns(root, { lockPath, worktrees });
   const isHere = (lock) => canonical(lock.cwd ?? "") === self;
-  const blocking = runs.filter((lock) => anyCheckout || isHere(lock));
+  const slots = liveSlots({ lockDir: dir });
+  const old = machineLock({ lockDir: dir });
+  const inCheckouts = (worktrees ?? worktreePaths(root))
+    .map((path) => checkoutLock(path))
+    .filter(Boolean);
+
+  const runs = [];
+  for (const lock of [...inCheckouts, ...slots, old].filter(Boolean)) {
+    if (!runs.some((run) => run.pid === lock.pid)) runs.push(lock);
+  }
+  const preSpec089 = (lock) =>
+    lock.pid === old?.pid || !slots.some((slot) => slot.pid === lock.pid);
+  const blocking = runs.filter(
+    (lock) => isHere(lock) || (anyCheckout && preSpec089(lock)),
+  );
 
   if (blocking.length === 0) {
     // Another checkout's run is not this commit's problem, but it is load
@@ -332,12 +433,12 @@ export function check(
   }
 
   const lines = blocking.map((lock) => `  ${describeLock(lock)}`);
+  const why = blocking.some(isHere)
+    ? "the hooks' `pnpm verify` can write into the tree every shard's Vite is watching, and competes for CPU.\n"
+    : "a run from before spec 089 shares the machine's databases, ports and mail containers, and the push's clippy competes with it for every core.\n";
   const message =
     `e2e: an e2e run is in progress — refusing ${purpose}.\n${lines.join("\n")}\n` +
-    `  ${purpose[0].toUpperCase()}${purpose.slice(1)} now would break it: ` +
-    (anyCheckout
-      ? "a run from any checkout shares this machine's Postgres server and its cores.\n"
-      : "the hooks' `pnpm verify` can write into the tree every shard's Vite is watching, and competes for CPU.\n") +
+    `  ${purpose[0].toUpperCase()}${purpose.slice(1)} now would break it: ${why}` +
     `  Wait for the run to finish, or set ${OVERRIDE_ENV}=1 to proceed anyway.\n`;
 
   if (env[OVERRIDE_ENV] === "1") {

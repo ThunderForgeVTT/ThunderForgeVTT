@@ -16,8 +16,10 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
-# Not during an e2e run from any checkout on this machine: clippy competes
-# with it for every core. See scripts/e2e/run-lock.mjs.
+# Not during this checkout's e2e run, nor a run from a branch before spec 089
+# in any checkout, which still uses shared state. Since 089 another
+# checkout's run touches nothing this one owns, so it is only a note.
+# See scripts/e2e/run-lock.mjs.
 # Override with THUNDERFORGE_IGNORE_E2E_LOCK=1.
 node ./scripts/e2e/run-lock.mjs check --any-checkout --purpose="a push"
 

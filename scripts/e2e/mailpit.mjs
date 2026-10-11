@@ -8,27 +8,30 @@
  * and `clearInbox` — which the fixtures contract requires between tests —
  * would delete a neighbour's evidence mid-assertion.
  *
- * # Why the name carries this run's pid
+ * # Names and ports (spec 089)
  *
- * It used to be `thunderforge-e2e-mailpit-<index>`, the same every run, so the
- * next run could `docker rm -f` a corpse by name. On 2026-09-14 that raced:
- * `docker rm -f` returned while an earlier `--rm` container of that name was
- * still being removed, `docker run --name` hit a conflict, and the uncaught
- * error took the whole harness down with no summary for the lane.
+ * The name is `<project>-mailpit-<index>`, `<project>` being the checkout's
+ * e2e stack (`stack.mjs`), and the container carries the same checkout label
+ * as the stack. Two checkouts' runs can't meet on a name, and the checkout
+ * lock means two runs never share a project. Both ports are published as
+ * `127.0.0.1::<port>`: Docker picks free ones and they are read back, so two
+ * runs can't meet on a port either, and nothing is reachable off the machine.
  *
- * So the name is unique per run and cannot collide at all. Leftovers from
- * earlier runs are still found — by the index prefix, and by who publishes the
- * ports — removed, and *waited for* until docker no longer knows them. A
- * leftover that belongs to a run that is still alive (its label names a live
- * pid) is never removed; that is a second run, and the error says so.
+ * # Leftovers
  *
- * A conflict that survives all of that is retried once, and then reported with
- * docker's own message and the command that shows the culprit.
+ * A run killed with `kill -9` leaves its containers behind. On 2026-09-14 a
+ * `docker rm -f` returned while an earlier `--rm` container of the same name
+ * was still being removed, and `docker run --name` hit a conflict. So a
+ * leftover of this project's index is removed and *waited for* until docker
+ * no longer knows it. One whose pid label names a live run is never removed;
+ * the error says so. A conflict that survives all of that is retried once,
+ * then reported with docker's own message.
  */
 
 import { spawnSync } from "node:child_process";
 
-export const MAILPIT_PREFIX = "thunderforge-e2e-mailpit-";
+import { CHECKOUT_LABEL, parsePort } from "./stack.mjs";
+
 const LABEL_PID = "thunderforge.e2e.pid";
 const CONFLICT =
   /Conflict\.|is already in use|already allocated|address already in use|removal of container .* is already in progress/i;
@@ -55,6 +58,11 @@ function pidAlive(pid) {
   } catch (error) {
     return error?.code === "EPERM";
   }
+}
+
+/** Shard `index`'s container name in compose project `project`. */
+export function mailpitName(project, index) {
+  return `${project}-mailpit-${index}`;
 }
 
 /** `[{ name, pid }]` for containers matching a `docker ps -a` filter. */
@@ -92,72 +100,58 @@ export async function removeAndWait(name, timeoutMs = 30_000) {
 }
 
 /**
- * Clear what earlier runs left on this index or these ports.
- *
- * Throws, rather than removing, when a leftover belongs to a live run or is
- * not one of this harness's containers at all.
+ * Clear what an earlier run of this checkout left under `name`. Throws,
+ * rather than removing, when the leftover belongs to a live run.
  */
-async function clearLeftovers(index, ports) {
-  const mine = new RegExp(`^${MAILPIT_PREFIX}${index}(-.+)?$`);
-  const byName = listContainers(`name=${MAILPIT_PREFIX}`).filter((c) =>
-    mine.test(c.name),
-  );
-  const byPort = ports.flatMap((port) =>
-    listContainers(`publish=${port}`).map((c) => ({ ...c, port })),
-  );
-
-  const foreign = byPort.filter((c) => !c.name.startsWith(MAILPIT_PREFIX));
-  if (foreign.length) {
-    throw new Error(
-      foreign
-        .map(
-          (c) =>
-            `port ${c.port} is published by container "${c.name}", which this harness did not start`,
-        )
-        .join("; ") +
-        `. Stop it (\`docker rm -f ${foreign[0].name}\`) or free the port, then run again.`,
-    );
-  }
-
-  const seen = new Set();
-  for (const container of [...byName, ...byPort]) {
-    if (seen.has(container.name)) continue;
-    seen.add(container.name);
+async function clearLeftovers(name) {
+  // `name=` filters by substring: `-mailpit-1` would match `-mailpit-10`.
+  for (const container of listContainers(`name=${name}`)) {
+    if (container.name !== name) continue;
     if (
       container.pid &&
       container.pid !== process.pid &&
       pidAlive(container.pid)
     ) {
       throw new Error(
-        `container "${container.name}" belongs to an e2e run that is still alive (pid ${container.pid}). ` +
-          "Two runs cannot share mail ports; wait for it to finish.",
+        `container "${name}" belongs to an e2e run that is still alive (pid ${container.pid}). ` +
+          "Two runs from one checkout cannot share a stack; wait for it to finish.",
       );
     }
-    if (!(await removeAndWait(container.name))) {
+    if (!(await removeAndWait(name))) {
       throw new Error(
-        `leftover container "${container.name}" would not go away within 30s ` +
+        `leftover container "${name}" would not go away within 30s ` +
           "(`docker ps -a` shows it); remove it by hand and run again.",
       );
     }
   }
 }
 
+/** The host port Docker published for `name`'s container port `target`. */
+function publishedPort(name, target) {
+  const out = docker(["port", name, `${target}/tcp`]);
+  if (out.status !== 0) {
+    throw new Error(`mailpit "${name}": no port for ${target}: ${out.stderr.trim()}`);
+  }
+  return parsePort(out.stdout);
+}
+
 /**
- * Start shard `index`'s Mailpit and return its container name.
+ * Start shard `index`'s Mailpit in `project` and return `{ name, smtpPort,
+ * apiPort }`.
  *
  * `onCreated` is called as soon as docker has created the container, before
  * any readiness check, because a container that started and never answered is
  * exactly the one that must still be torn down.
  */
 export async function startMailpitContainer({
+  project,
+  checkout,
   index,
-  smtpPort,
-  apiPort,
   image,
   onCreated,
   log = () => {},
 }) {
-  const name = `${MAILPIT_PREFIX}${index}-${process.pid}`;
+  const name = mailpitName(project, index);
   const run = () =>
     docker([
       "run",
@@ -167,10 +161,12 @@ export async function startMailpitContainer({
       name,
       "--label",
       `${LABEL_PID}=${process.pid}`,
+      "--label",
+      `${CHECKOUT_LABEL}=${checkout}`,
       "-p",
-      `${smtpPort}:1025`,
+      "127.0.0.1::1025",
       "-p",
-      `${apiPort}:8025`,
+      "127.0.0.1::8025",
       // The dev stack's settings: Mailpit's SMTP listener is plaintext, which
       // is what the `none` security option exists for, and it accepts any
       // credentials so a spec can prove the username/password path is wired
@@ -183,11 +179,15 @@ export async function startMailpitContainer({
     ]);
 
   for (let attempt = 1; ; attempt += 1) {
-    await clearLeftovers(index, [smtpPort, apiPort]);
+    await clearLeftovers(name);
     const result = run();
     if (result.status === 0) {
       onCreated?.(name);
-      return name;
+      return {
+        name,
+        smtpPort: publishedPort(name, 1025),
+        apiPort: publishedPort(name, 8025),
+      };
     }
     const message = result.stderr.trim() || `exit ${result.status}`;
     if (attempt === 1 && CONFLICT.test(message)) {
@@ -202,8 +202,7 @@ export async function startMailpitContainer({
         attempt > 1 ? " twice" : ""
       }: ${message}` +
         (CONFLICT.test(message)
-          ? ` — something keeps holding the name or port ${smtpPort}/${apiPort}; ` +
-            `\`docker ps -a --filter publish=${apiPort}\` shows what.`
+          ? ` — something keeps holding the name "${name}"; \`docker ps -a --filter name=${name}\` shows what.`
           : ""),
     );
   }
