@@ -1,0 +1,22 @@
+# Publishes the install's backing services on the host, for an operator who
+# needs them there: a `pg_dump`, a look at the Mailpit inbox, an S3 client
+# pointed at RustFS. `compose.yml` publishes only the app; add this on top:
+#
+#   docker compose -f compose.yml -f compose.ports.yml up -d
+#
+# Every port binds 127.0.0.1, so nothing here is reachable from off the
+# machine. The numbers are the ones `compose.yml` published before spec 089,
+# so anything scripted against them keeps working once this file is added.
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:${THUNDERFORGE_POSTGRES_PORT:-42432}:5432"
+
+  rustfs:
+    ports:
+      - "127.0.0.1:${THUNDERFORGE_RUSTFS_PORT:-42900}:9000"
+
+  mailpit:
+    ports:
+      - "127.0.0.1:${THUNDERFORGE_MAILPIT_SMTP_PORT:-42025}:1025"
+      - "127.0.0.1:${THUNDERFORGE_MAILPIT_UI_PORT:-42825}:8025"

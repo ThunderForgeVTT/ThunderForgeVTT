@@ -37,17 +37,27 @@ Open the setup link the last command prints. It runs the first-run wizard:
 your administrator account, who may join, and how the instance sends mail.
 After that the app is at **http://localhost:42080**.
 
-| Service      | Address                | What for                                            |
-| ------------ | ---------------------- | --------------------------------------------------- |
-| ThunderForge | http://localhost:42080 | the app                                             |
-| Mailpit      | http://localhost:42825 | every mail the instance sends, delivered nowhere    |
-| PostgreSQL   | localhost:42432        | the database (user `postgres`, password `password`) |
-| RustFS       | localhost:42900        | object storage for uploaded images                  |
+The app is the only thing published on the host. Its database, object
+storage and mail catcher (Mailpit) stay inside the stack's own network.
+`THUNDERFORGE_PORT` moves the app, and `THUNDERFORGE_PUBLIC_URL` has to move
+with it; see the comments at the top of `compose.yml` for the other knobs,
+and for what is and is not a secret in that file.
 
-Everything is on the 42xxx port block so it collides with nothing a developer
-already runs. `THUNDERFORGE_PORT` moves the app, and `THUNDERFORGE_PUBLIC_URL`
-has to move with it; see the comments at the top of `compose.yml` for the
-other knobs, and for what is and is not a secret in that file.
+Need the database or the Mailpit inbox on the host, for a backup or a look?
+Add `compose.ports.yml`, which publishes them on `127.0.0.1` only:
+
+```sh
+docker compose -f compose.yml -f compose.ports.yml up -d
+```
+
+[Running your own instance](docs/guides/running-your-own-instance.md) has the
+details.
+
+> **Upgrading from an earlier install?** `compose.yml` no longer publishes
+> PostgreSQL (42432), RustFS (42900) or Mailpit (42025, 42825), and its
+> containers no longer have fixed names. If you relied on either, add
+> `compose.ports.yml` (same port numbers, now on `127.0.0.1`) and use
+> `docker compose exec <service>` in place of `docker exec <name>`.
 
 Useful afterwards:
 

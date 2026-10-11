@@ -164,7 +164,8 @@ clean:
 	pnpm clean
 
 # The whole app in containers, built from source, on a port block that
-# collides with nothing: http://localhost:42080. compose.yml is the install;
+# collides with nothing: http://localhost:42080. compose.yml is the install,
+# and publishes only the app (compose.ports.yml adds the rest on 127.0.0.1);
 # compose.dev.yml is the dependency stack a host-run `make dev` uses.
 #
 # Nothing here needs a host toolchain: the Dockerfile's build stage compiles
@@ -176,8 +177,8 @@ container:
 container-up:
 	docker compose up -d
 	@echo "ThunderForge is coming up at http://localhost:42080"
-	@echo "Mailpit is at http://localhost:42825 — the instance starts unconfigured,"
-	@echo "so the first-run wizard greets you; its setup link is in the app log:"
+	@echo "It starts unconfigured, so the first-run wizard greets you; its setup"
+	@echo "link is in the app log:"
 	@echo "  docker compose logs app | grep /setup/"
 
 container-down:

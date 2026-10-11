@@ -28,21 +28,21 @@ the full suite.
 
 ## Phase 1: The install exposes only the app (US2)
 
-- [ ] T001 [US2] `compose.yml`:
+- [X] T001 [US2] `compose.yml`:
   - remove `ports:` from `postgres`, `rustfs` and `mailpit`;
   - remove every `container_name`;
   - keep the app's `${THUNDERFORGE_PORT:-42080}:30000`;
   - update the file's header comment.
-- [ ] T002 [P] [US2] New `compose.ports.yml` publishing Postgres
+- [X] T002 [P] [US2] New `compose.ports.yml` publishing Postgres
   `127.0.0.1:${THUNDERFORGE_POSTGRES_PORT:-42432}`, RustFS `…:42900`, and
   Mailpit `…:42025` and `…:42825`. Include a header comment on when to use
   it.
-- [ ] T003 [US2] Search the repo for `thunderforge-app-postgres`,
+- [X] T003 [US2] Search the repo for `thunderforge-app-postgres`,
   `thunderforge-app-rustfs`, `thunderforge-app-mailpit`, `thunderforge-app`,
   `42432`, `42900`, `42025` and `42825`. Update every Makefile target
   (`container*`), script and doc that used a fixed name or port, to use
   `docker compose -f compose.yml exec <service>` or the override.
-- [ ] T004 [US2] README.md install section: only the app is exposed, and
+- [X] T004 [US2] README.md install section: only the app is exposed, and
   how to add `compose.ports.yml` (for example for `pg_dump`). Add a release
   note line for operators who relied on the old ports.
 - [ ] T005 [US2] **Proof:**

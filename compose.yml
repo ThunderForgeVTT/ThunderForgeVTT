@@ -9,11 +9,22 @@
 #
 # # Ports
 #
-# Everything is published on the 42xxx block so this collides with nothing: a
-# host-run `make dev` keeps 5432, 9000, 1025 and 8025 (see compose.dev.yml),
-# and the e2e lanes take 30100+, 31000+, 38000+ and 5200+. One number to
-# remember: 42080. `THUNDERFORGE_PORT` moves it, and `THUNDERFORGE_PUBLIC_URL`
-# has to move with it, because that is the host the setup link names.
+# Only the app is published: 42080, on a block that collides with nothing a
+# developer already runs. `THUNDERFORGE_PORT` moves it, and
+# `THUNDERFORGE_PUBLIC_URL` has to move with it, because that is the host the
+# setup link names.
+#
+# Postgres, RustFS and Mailpit are reachable by service name inside this
+# project's network and from nowhere else. To reach them from the host (a
+# `pg_dump`, a look at the Mailpit inbox), add the override, which publishes
+# them on 127.0.0.1 at the port numbers this file used to publish:
+#
+#   docker compose -f compose.yml -f compose.ports.yml up -d
+#
+# No service has a fixed container name, so a second project (`-p other`) can
+# run beside this one. Reach a service through compose, not by name:
+#
+#   docker compose exec postgres psql -U postgres thunderforge
 #
 # # What is a secret here, and what is not
 #
@@ -30,19 +41,19 @@
 # wins over a stored answer, so setting SMTP here would take the question away
 # from the wizard. Mailpit is in the stack for a local try — answer the mail
 # step with host `mailpit`, port `1025`, no security — and read what arrives at
-# http://localhost:42825. A real table points the same step at a real relay.
+# http://localhost:42825 once `compose.ports.yml` is added. A real table points
+# the same step at a real relay.
 name: thunderforge-app
 
 services:
   # The one address to remember: the server, which serves the client too.
-  # Everything else in this file is published only for a look inside.
+  # It is the only service published on the host.
   app:
     build:
       context: .
       dockerfile: Dockerfile
       target: server
     image: thunderforge-app:local
-    container_name: thunderforge-app
     restart: unless-stopped
     ports:
       - "${THUNDERFORGE_PORT:-42080}:30000"
@@ -101,14 +112,11 @@ services:
 
   postgres:
     image: postgres:18-alpine
-    container_name: thunderforge-app-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
       POSTGRES_DB: thunderforge
-    ports:
-      - "${THUNDERFORGE_POSTGRES_PORT:-42432}:5432"
     volumes:
       - app_db:/var/lib/postgresql
     healthcheck:
@@ -119,13 +127,10 @@ services:
 
   rustfs:
     image: rustfs/rustfs:1.0.0-rc.2
-    container_name: thunderforge-app-rustfs
     restart: unless-stopped
     environment:
       RUSTFS_ACCESS_KEY: ${RUSTFS_ROOT_ACCESS_KEY:-thunderforge-rustfs-root}
       RUSTFS_SECRET_KEY: ${RUSTFS_ROOT_SECRET_KEY:-thunderforge-rustfs-root-secret}
-    ports:
-      - "${THUNDERFORGE_RUSTFS_PORT:-42900}:9000"
     volumes:
       - app_rustfs:/data
 
@@ -133,14 +138,10 @@ services:
   # the note on mail at the top of this file.
   mailpit:
     image: axllent/mailpit:v1.21
-    container_name: thunderforge-app-mailpit
     restart: unless-stopped
     environment:
       MP_SMTP_AUTH_ACCEPT_ANY: 1
       MP_SMTP_AUTH_ALLOW_INSECURE: 1
-    ports:
-      - "${THUNDERFORGE_MAILPIT_SMTP_PORT:-42025}:1025"
-      - "${THUNDERFORGE_MAILPIT_UI_PORT:-42825}:8025"
 
 volumes:
   app_db:
