@@ -1,4 +1,4 @@
-.PHONY: gc base-maps image push landing-image push-landing telemetry-gateway-image push-telemetry-gateway clean-builds test-db-reset dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-rust test-mail bench-blob-store test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean container container-up container-down container-down-clean observability observability-check
+.PHONY: gc base-maps image push landing-image push-landing telemetry-gateway-image push-telemetry-gateway clean-builds test-db-reset dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-rust e2e-stacks e2e-stacks-rm test-mail bench-blob-store test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean container container-up container-down container-down-clean observability observability-check
 
 # Loads DATABASE_URL (and anything else) from the repo-root .env for targets
 # that shell out to tools which don't read it themselves (diesel-cli).
@@ -151,6 +151,7 @@ gc:
 	else \
 		echo "gc: docker not running, its build cache left as is"; \
 	fi
+	@node scripts/e2e/stack.mjs gone-note || true
 
 # The maps a new world can open on (spec 088), written where .env.example's
 # THUNDERFORGE_BASE_MAPS_DIR points: each example map as the server serves it,
@@ -307,8 +308,30 @@ check-file-length:
 # database's global settings rows, and a `cargo test` turned a green run red.
 # It no longer refuses while one is live; it still competes for CPU.
 #   make test-rust ARGS="-p thunderforge-server --lib settings"
+#
+# STACK=checkout runs them against this checkout's own e2e stack instead of
+# the development one (spec 089): its postgres, and its RustFS with the
+# canvas bucket made. The stack is started if it is not up.
+#   make test-rust STACK=checkout
 test-rust:
+ifeq ($(STACK),checkout)
+	@eval "$$(node scripts/e2e/stack.mjs env)" && \
+		export TEST_DATABASE_URL RUSTFS_ENDPOINT && \
+		RUST_MIN_STACK=16777216 cargo test $(ARGS)
+else
 	RUST_MIN_STACK=16777216 cargo test $(ARGS)
+endif
+
+# Every checkout's e2e stack (spec 089): status, the checkout it belongs to
+# (or that it is gone), and what its volumes hold.
+e2e-stacks:
+	@node scripts/e2e/stack.mjs list
+
+# Remove one, with its volumes, after a y/N:
+#   make e2e-stacks-rm STACK=tf-keen-oak-44oe-c82e03
+e2e-stacks-rm:
+	@test -n "$(STACK)" || { echo "e2e-stacks-rm: name one, STACK=<project> (make e2e-stacks lists them)"; exit 2; }
+	@node scripts/e2e/stack.mjs rm $(STACK)
 
 # Drop the test database and rebuild it, migrated and empty. Tests recreate it
 # on demand anyway; this is for starting clean. A running `cargo test` loses

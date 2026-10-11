@@ -19,6 +19,7 @@ import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import process from "node:process";
 
+import { publishedPort } from "./e2e/stack.mjs";
 import { SCENARIOS, scenarioById, scenarioEnv } from "./torture-scenarios.mjs";
 
 const TIERS = [5, 10, 25, 50, 100, 250, 500, 1000];
@@ -58,15 +59,13 @@ if (!TIERS.includes(requested)) {
 
 const runId = randomBytes(4).toString("hex");
 const project = `tf-torture-${runId}`;
-// Derived from the run id so overlapping runs do not fight over ports.
-const pgPort = 55_000 + (parseInt(runId, 16) % 400);
-const rustfsPort = 59_000 + (parseInt(runId, 16) % 400);
+// Host ports are Docker's: compose.torture.yml publishes `127.0.0.1::<port>`
+// and they are read back after `up`. `TORTURE_PG_PORT`/`TORTURE_RUSTFS_PORT`
+// in the environment still pin one.
+let pgPort = null;
+let rustfsPort = null;
 
-const composeEnv = {
-  ...process.env,
-  TORTURE_PG_PORT: String(pgPort),
-  TORTURE_RUSTFS_PORT: String(rustfsPort),
-};
+const composeEnv = { ...process.env };
 
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -195,22 +194,27 @@ async function assertContainerRunning(service) {
   }
 }
 
-const databaseUrl = `postgres://postgres:password@localhost:${pgPort}/thunderforge`;
+let databaseUrl = null;
 
 let started = false;
 let backendProcess = null;
 try {
   console.log(
-    `[torture] tier=${requested} project=${project} pg=${pgPort} rustfs=${rustfsPort}`,
+    `[torture] tier=${requested} project=${project}`,
   );
 
   await compose("up", "-d");
   started = true;
+  const composeArgs = ["-f", "compose.torture.yml", "-p", project];
+  pgPort = publishedPort(composeArgs, "postgres", 5432, composeEnv);
+  rustfsPort = publishedPort(composeArgs, "rustfs", 9000, composeEnv);
+  databaseUrl = `postgres://postgres:password@127.0.0.1:${pgPort}/thunderforge`;
+  console.log(`[torture] pg=${pgPort} rustfs=${rustfsPort}`);
   await waitForPostgres();
   // `up -d` succeeds for a container that starts and immediately dies, which
   // is exactly what RustFS was doing here.
   await assertContainerRunning("rustfs");
-  await waitForHttp(`http://localhost:${rustfsPort}/`, "rustfs");
+  await waitForHttp(`http://127.0.0.1:${rustfsPort}/`, "rustfs");
 
   // Schema. The stack is empty every run, so this is a full migrate, not an
   // incremental one — which incidentally means a broken migration fails here
@@ -266,7 +270,7 @@ try {
   const stackEnv = {
     ...composeEnv,
     DATABASE_URL: databaseUrl,
-    RUSTFS_ENDPOINT: `http://localhost:${rustfsPort}`,
+    RUSTFS_ENDPOINT: `http://127.0.0.1:${rustfsPort}`,
     TORTURE_SESSIONS: String(requested),
     // A scenario's own settings win over anything inherited, so a run is
     // determined by its name rather than by whatever happened to be exported

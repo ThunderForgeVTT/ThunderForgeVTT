@@ -59,6 +59,7 @@ import {
   skipWasmOpt,
   terminateChildren,
 } from "./shared.mjs";
+import { publishedPort } from "./e2e/stack.mjs";
 
 const COMPOSE_FILE = join(ROOT_DIR, "compose.journeys.yml");
 const JOURNEY_DIR = join(ROOT_DIR, "apps/web/e2e/journeys");
@@ -399,22 +400,20 @@ async function main() {
     );
   }
 
-  const [pgPort, rustfsPort, smtpPort, mailApiPort, backendPort, webPort] =
-    await Promise.all(Array.from({ length: 6 }, freePort));
-  composeEnv = {
-    ...process.env,
-    JOURNEYS_PG_PORT: String(pgPort),
-    JOURNEYS_RUSTFS_PORT: String(rustfsPort),
-    JOURNEYS_MAILPIT_SMTP_PORT: String(smtpPort),
-    JOURNEYS_MAILPIT_API_PORT: String(mailApiPort),
-  };
+  // The app's two ports are ours to pick. The containers' are Docker's: the
+  // compose file publishes `127.0.0.1::<port>` and they are read back after
+  // `up`, so nothing can take one between choosing it and binding it.
+  // `JOURNEYS_*_PORT` in the environment still pins one.
+  const [backendPort, webPort] = await Promise.all(
+    Array.from({ length: 2 }, freePort),
+  );
+  composeEnv = { ...process.env };
 
   mkdirSync(runDir, { recursive: true });
   mkdirSync(resultsDir, { recursive: true });
   log(
     "journeys",
-    `run ${runId}: project=${project} pg=${pgPort} rustfs=${rustfsPort} ` +
-      `smtp=${smtpPort} mailpit-api=${mailApiPort} backend=${backendPort} web=${webPort}`,
+    `run ${runId}: project=${project} backend=${backendPort} web=${webPort}`,
   );
   log("journeys", `${selected.length} journey file(s): ${selected.join(", ")}`);
 
@@ -448,6 +447,21 @@ async function main() {
   });
   assertContainerRunning("rustfs");
   assertContainerRunning("mailpit");
+  const port = (service, containerPort) =>
+    publishedPort(
+      ["-f", COMPOSE_FILE, "-p", project],
+      service,
+      containerPort,
+      composeEnv,
+    );
+  const pgPort = port("postgres", 5432);
+  const rustfsPort = port("rustfs", 9000);
+  const smtpPort = port("mailpit", 1025);
+  const mailApiPort = port("mailpit", 8025);
+  log(
+    "journeys",
+    `pg=${pgPort} rustfs=${rustfsPort} smtp=${smtpPort} mailpit-api=${mailApiPort}`,
+  );
   // Any HTTP status counts for RustFS, as in torture: an anonymous request to
   // `/` is refused, and the refusal is proof enough that it is serving.
   await waitForUrl(`http://127.0.0.1:${rustfsPort}/`, "rustfs", 60_000, null, {

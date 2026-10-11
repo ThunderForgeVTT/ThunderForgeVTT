@@ -308,39 +308,66 @@ equally, and a slice script in `package.json` that is missing or has
 drifted. Only the scripts are fixed for you. Which slice a spec belongs to
 is a judgement about the feature, so the check never guesses it.
 
-### One e2e run per machine
+### E2E stacks: one per checkout, two runs at a time
 
-Each checkout has its own e2e Postgres and RustFS: the compose project
-`tf-<checkout>-<hash>` from `compose.e2e.yml`, on random `127.0.0.1` ports,
-brought up by the run (`scripts/e2e/stack.mjs`). It stays up between runs, so
-its templates are reused while the migrations and seeds are unchanged. It
-writes nothing into the checkout beyond `.e2e-shards/`.
+Each checkout has its own e2e stack: the compose project
+`tf-<checkout>-<hash>` from `compose.e2e.yml`, with its own Postgres and
+RustFS, brought up by the run (`scripts/e2e/stack.mjs`). It stays up between
+runs, so its templates are reused while the migrations and seeds are
+unchanged. It writes nothing into the checkout beyond `.e2e-shards/`.
+`THUNDERFORGE_E2E_TMPFS=1` adds `compose.e2e.tmpfs.yml`, which puts the
+stack's Postgres on tmpfs: faster, and gone when the stack stops.
 
-Every checkout still shares the shards' ports and the mailpit containers,
-though. So the run lock is machine-wide,
-not per checkout: `/tmp/thunderforge-e2e.lock` (`THUNDERFORGE_E2E_LOCK_DIR`
-moves it), holding the pid, start time, arguments and checkout of the run
-that owns it (`scripts/e2e/run-lock.mjs`).
+Nothing a run uses is shared with another checkout's run:
 
-- **A second run waits.** Started from any checkout while another run is
-  live, `e2e-parallel.mjs` (and every `pnpm e2e:<slice>`) prints which
-  checkout and pid it is waiting on, repeats that every five minutes, and
-  starts when the first run exits. `--no-wait` makes it fail instead.
-- **A stale lock never blocks.** A lock whose pid is dead, or now belongs to
-  something that is not an e2e run (a run killed with `kill -9`), is replaced.
-- **The hooks.** `pre-commit` refuses only during a run started from *this*
-  checkout, because `pnpm verify` writes into the tree that run's Vite servers
-  watch; another checkout's run is a one-line note. `pre-push` refuses during
-  a run from *any* checkout, because clippy competes with it for every core.
-  `THUNDERFORGE_IGNORE_E2E_LOCK=1` turns either refusal into a warning; it
-  never lets two e2e runs share the machine.
-- A checkout on a branch from before the machine-wide lock writes
-  `.e2e-running` inside itself instead. Those are read in every worktree of
-  the repository, so such a run is waited on too.
+- **Ports.** The stack publishes `127.0.0.1::<port>` and Docker picks each
+  one. Every shard's web, backend and stub ports come from the kernel
+  (`scripts/e2e/ports.mjs`); if one is taken before a shard binds it, the
+  shard is restarted once on fresh ports. Nothing listens beyond loopback.
+- **Mail.** Each shard's Mailpit is `<project>-mailpit-<shard>`, labelled
+  with the run's pid and checkout, on Docker-picked ports.
+- **Databases.** Shard databases are clones inside the checkout's own
+  Postgres, so dropping one cannot touch another checkout's.
+
+So runs from different checkouts overlap. What is still machine-wide is the
+CPU and memory, and a cap on concurrent runs guards that
+(`scripts/e2e/run-lock.mjs`):
+
+- **Slots.** A run takes one of `THUNDERFORGE_E2E_MAX_CONCURRENT` slots
+  (default 2), files named `thunderforge-e2e.slot-<n>` in `/tmp`
+  (`THUNDERFORGE_E2E_LOCK_DIR` moves them). A run past the cap waits, names
+  the runs holding the slots, repeats that every five minutes, and starts
+  when one exits. `--no-wait` makes it fail instead.
+- **One run per checkout.** A checkout's run also takes `.e2e-running`
+  inside it, first and for as long as it waits; two runs in one checkout
+  would share `.e2e-shards/` and its Vite servers.
+- **A stale lock never blocks.** A slot or checkout lock whose pid is dead,
+  or now belongs to something that is not an e2e run (a run killed with
+  `kill -9`), is replaced.
+- **The hooks.** `pre-commit` refuses only during this checkout's run,
+  because `pnpm verify` writes into the tree that run's Vite servers watch.
+  `pre-push` refuses during this checkout's run too. A run in another
+  checkout is a one-line note for both. `THUNDERFORGE_IGNORE_E2E_LOCK=1`
+  turns a refusal into a warning; it never lifts the cap.
+
+**Beside a branch from before spec 089.** An older branch's run takes the
+machine-wide `/tmp/thunderforge-e2e.lock`, or `.e2e-running` in its own
+checkout, and uses the fixed ports and the shared dev Postgres. A new run
+treats a live machine lock as holding every slot and waits for it, and
+`pre-push` refuses while any such run is live, since that run shares the
+machine's databases, ports and mail containers. The old run does not know
+about slots, so start it only when no new run is going.
 
 ```sh
 node scripts/e2e/run-lock.mjs check --any-checkout   # is any e2e run live? (exit 1 if so)
 ```
+
+**Cleaning up stacks.** A stack outlives its runs and, unless removed, its
+checkout. `make e2e-stacks` lists every `tf-*` project with its status, the
+checkout it belongs to (or that the checkout is gone) and the size of its
+volumes. `make e2e-stacks-rm STACK=<project>` shows what it would remove,
+asks, and takes the containers, the shard Mailpits and the volumes. `make gc`
+says when a stack's checkout is gone, and never removes one itself.
 
 ### The test database
 
@@ -363,6 +390,13 @@ node scripts/cleanup-dev-test-rows.mjs   # one-off: count (or --apply to delete)
 
 `cargo test -p thunderforge` needs `RUST_MIN_STACK=16777216`; `make test-rust`
 sets it.
+
+`make test-rust STACK=checkout` runs the tests against this checkout's e2e
+stack instead of the development one: `TEST_DATABASE_URL` names
+`thunderforge_test` in the stack's Postgres, and `RUSTFS_ENDPOINT` its RustFS,
+with the `thunderforge-canvas-assets` bucket made. The stack is started if it
+is down. Two worktrees can then run `cargo test` at once without sharing a
+database.
 
 ### Cleaning up build output
 

@@ -8,8 +8,11 @@
 # 2. `tmpfs` instead of named volumes. Nothing reaches disk at all, so
 #    "nuke it" is just stopping the containers. No `down -v`, no orphaned
 #    volumes accumulating after a dozen runs.
-# 3. Non-default ports, so a torture run cannot accidentally point at — or be
-#    pointed at by — the dev stack on 5432/9000.
+# 3. No fixed host ports. Each one is `127.0.0.1::<port>`, so Docker picks a
+#    free port on loopback and `scripts/torture.mjs` reads it back with
+#    `docker compose port` (spec 089). A torture run cannot point at the dev
+#    stack on 5432/9000, and two runs cannot collide. `TORTURE_PG_PORT` and
+#    `TORTURE_RUSTFS_PORT` pin one when set.
 #
 # Driven by scripts/torture.mjs; not intended to be run by hand.
 services:
@@ -20,7 +23,7 @@ services:
       - POSTGRES_PASSWORD=password
       - POSTGRES_DB=thunderforge
     ports:
-      - "${TORTURE_PG_PORT:-55432}:5432"
+      - "127.0.0.1:${TORTURE_PG_PORT:-}:5432"
     tmpfs:
       # In RAM on purpose. A torture run writes a lot and keeps none of it,
       # and this also removes disk I/O as a confound in the numbers.
@@ -43,7 +46,7 @@ services:
       - RUSTFS_ACCESS_KEY=${RUSTFS_ROOT_ACCESS_KEY:-thunderforge-rustfs-root}
       - RUSTFS_SECRET_KEY=${RUSTFS_ROOT_SECRET_KEY:-thunderforge-rustfs-root-secret}
     ports:
-      - "${TORTURE_RUSTFS_PORT:-59000}:9000"
+      - "127.0.0.1:${TORTURE_RUSTFS_PORT:-}:9000"
     tmpfs:
       # `mode=1777`, and `/logs` as well as `/data`, are both load-bearing.
       # The image runs as the non-root `rustfs` user, and a bare `tmpfs: -

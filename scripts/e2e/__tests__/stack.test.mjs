@@ -12,7 +12,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, test } from "node:test";
 
-import { parsePort, projectName } from "../stack.mjs";
+import {
+  parsePort,
+  parseSize,
+  projectName,
+  summarizeStacks,
+} from "../stack.mjs";
 
 describe("projectName", () => {
   let dir;
@@ -76,5 +81,65 @@ describe("parsePort", () => {
 
   test("refuses a port that is not a number", () => {
     assert.throws(() => parsePort("127.0.0.1:abc"), /not a port/);
+  });
+});
+
+describe("summarizeStacks (T040)", () => {
+  const projects = [
+    { Name: "slam-usa", Status: "running(8)", ConfigFiles: "/x/compose.yaml" },
+    { Name: "tf-keen-oak-c82e03", Status: "running(2)", ConfigFiles: "/w/keen/compose.e2e.yml" },
+    { Name: "tf-old-088-aaaaaa", Status: "exited(2)", ConfigFiles: "/w/old/compose.e2e.yml" },
+  ];
+  const labels = [
+    "tf-keen-oak-c82e03\t/w/keen",
+    "tf-keen-oak-c82e03\t/w/keen",
+    "tf-old-088-aaaaaa\t/w/old",
+    "\t/w/keen", // a mailpit: no compose project
+  ].join("\n");
+  const volumes = [
+    { Name: "tf-keen-oak-c82e03_db", Labels: "com.docker.compose.project=tf-keen-oak-c82e03,com.docker.compose.volume=db", Size: "180MB" },
+    { Name: "tf-keen-oak-c82e03_rustfs_data", Labels: "com.docker.compose.project=tf-keen-oak-c82e03,com.docker.compose.volume=rustfs_data", Size: "2.1MB" },
+    { Name: "tf-gone-bbbbbb_db", Labels: "com.docker.compose.project=tf-gone-bbbbbb,com.docker.compose.volume=db", Size: "1.5GB" },
+    { Name: "thunderforge_db", Labels: "com.docker.compose.project=thunderforge", Size: "3GB" },
+  ];
+  const exists = (path) => path === "/w/keen";
+  const stacks = summarizeStacks({ projects, labels, volumes }, exists);
+  const byName = Object.fromEntries(stacks.map((s) => [s.project, s]));
+
+  test("lists only tf- projects, including ones left with volumes alone", () => {
+    assert.deepEqual(
+      stacks.map((s) => s.project),
+      ["tf-gone-bbbbbb", "tf-keen-oak-c82e03", "tf-old-088-aaaaaa"],
+    );
+    assert.equal(byName["tf-gone-bbbbbb"].status, "volumes only");
+  });
+
+  test("names each checkout from its label, and whether it still exists", () => {
+    assert.equal(byName["tf-keen-oak-c82e03"].checkout, "/w/keen");
+    assert.equal(byName["tf-keen-oak-c82e03"].gone, false);
+    assert.equal(byName["tf-old-088-aaaaaa"].gone, true);
+    // No container left to carry the label: unknown, which is not gone.
+    assert.equal(byName["tf-gone-bbbbbb"].checkout, null);
+    assert.equal(byName["tf-gone-bbbbbb"].gone, null);
+  });
+
+  test("sizes the volumes", () => {
+    const keen = byName["tf-keen-oak-c82e03"];
+    assert.deepEqual(
+      keen.volumes.map((v) => [v.name, v.size]),
+      [
+        ["tf-keen-oak-c82e03_db", "180MB"],
+        ["tf-keen-oak-c82e03_rustfs_data", "2.1MB"],
+      ],
+    );
+    assert.equal(keen.bytes, 180e6 + 2.1e6);
+    assert.equal(byName["tf-old-088-aaaaaa"].bytes, 0);
+  });
+
+  test("parses docker's sizes", () => {
+    assert.equal(parseSize("0B"), 0);
+    assert.equal(parseSize("512kB"), 512e3);
+    assert.equal(parseSize("1.5GB"), 1.5e9);
+    assert.equal(parseSize("N/A"), 0);
   });
 });

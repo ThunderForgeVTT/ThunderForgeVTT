@@ -16,12 +16,10 @@
 #    journey run could not coexist — and coexisting with them is the point.
 # 2. `tmpfs` instead of named volumes. Nothing reaches disk, so teardown is
 #    stopping the containers. No orphaned volumes after a week of runs.
-# 3. Non-default ports, so a journey cannot accidentally point at — or be
-#    pointed at by — the dev stack on 5432/9000/1025/8025. The defaults below
-#    are also clear of torture's 55000-55399 and 59000-59399 and of
-#    e2e-parallel's per-shard 31025+/38025+ Mailpits, but they are only
-#    defaults: `scripts/journeys.mjs` asks the kernel for free ports on every
-#    run and passes them in, so two journey runs can overlap.
+# 3. No fixed host ports. Each one is `127.0.0.1::<port>`, so Docker picks a
+#    free port on loopback and `scripts/journeys.mjs` reads it back with
+#    `docker compose port` (spec 089): two journey runs, an e2e run and the dev
+#    stack can all overlap. The `JOURNEYS_*_PORT` variables pin one when set.
 #
 # Driven by scripts/journeys.mjs; not intended to be run by hand.
 services:
@@ -32,7 +30,7 @@ services:
       - POSTGRES_PASSWORD=password
       - POSTGRES_DB=thunderforge
     ports:
-      - "${JOURNEYS_PG_PORT:-56432}:5432"
+      - "127.0.0.1:${JOURNEYS_PG_PORT:-}:5432"
     tmpfs:
       # In RAM on purpose: a journey writes a handful of accounts and worlds
       # and keeps none of them.
@@ -55,7 +53,7 @@ services:
       - RUSTFS_ACCESS_KEY=${RUSTFS_ROOT_ACCESS_KEY:-thunderforge-rustfs-root}
       - RUSTFS_SECRET_KEY=${RUSTFS_ROOT_SECRET_KEY:-thunderforge-rustfs-root-secret}
     ports:
-      - "${JOURNEYS_RUSTFS_PORT:-56900}:9000"
+      - "127.0.0.1:${JOURNEYS_RUSTFS_PORT:-}:9000"
     tmpfs:
       # `mode=1777`, and `/logs` as well as `/data`, are both load-bearing —
       # see `compose.torture.yml`. The image runs as the non-root `rustfs`
@@ -76,5 +74,5 @@ services:
       - MP_SMTP_AUTH_ACCEPT_ANY=1
       - MP_SMTP_AUTH_ALLOW_INSECURE=1
     ports:
-      - "${JOURNEYS_MAILPIT_SMTP_PORT:-56025}:1025"
-      - "${JOURNEYS_MAILPIT_API_PORT:-56825}:8025"
+      - "127.0.0.1:${JOURNEYS_MAILPIT_SMTP_PORT:-}:1025"
+      - "127.0.0.1:${JOURNEYS_MAILPIT_API_PORT:-}:8025"
