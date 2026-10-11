@@ -1,0 +1,54 @@
+# The e2e stack: one per checkout (spec 089). `scripts/e2e/stack.mjs` runs it
+# as the project `tf-<checkout>-<hash>`, so two worktrees never share a
+# database, a template or a bucket. Nothing here has a fixed name or a fixed
+# host port; the harness reads the ports back with `docker compose port`.
+#
+# Not for running by hand. `node scripts/e2e-parallel.mjs` brings it up.
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=thunderforge
+    # The runner caps each shard's pool at 8 (`DATABASE_POOL_MAX_SIZE`), and
+    # diesel, the seeds and `psql` take a few more. 100 was enough when four
+    # shards shared it with a dev stack; this one is the checkout's alone, and
+    # 200 keeps eight shards under half of it.
+    command: ["postgres", "-c", "max_connections=200"]
+    ports:
+      - "127.0.0.1::5432"
+    volumes:
+      - db:/var/lib/postgresql
+    labels:
+      thunderforge.checkout: ${THUNDERFORGE_CHECKOUT:?set by scripts/e2e/stack.mjs}
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # The same version as `compose.dev.yml`, with the same dev-only root
+  # credentials the server defaults to. Each shard gets its own bucket.
+  rustfs:
+    image: rustfs/rustfs:1.0.0-rc.2
+    restart: unless-stopped
+    environment:
+      - RUSTFS_ACCESS_KEY=${RUSTFS_ROOT_ACCESS_KEY:-thunderforge-rustfs-root}
+      - RUSTFS_SECRET_KEY=${RUSTFS_ROOT_SECRET_KEY:-thunderforge-rustfs-root-secret}
+    ports:
+      - "127.0.0.1::9000"
+    volumes:
+      - rustfs_data:/data
+    labels:
+      thunderforge.checkout: ${THUNDERFORGE_CHECKOUT:?set by scripts/e2e/stack.mjs}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:9000/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  db:
+  rustfs_data:

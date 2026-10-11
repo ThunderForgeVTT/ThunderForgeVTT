@@ -310,9 +310,14 @@ is a judgement about the feature, so the check never guesses it.
 
 ### One e2e run per machine
 
-Every checkout and worktree on a machine shares what an e2e run uses: the
-shard databases (`thunderforge_e2e_<shard>`) on one Postgres server, the
-shards' ports, and the mailpit containers. So the run lock is machine-wide,
+Each checkout has its own e2e Postgres and RustFS: the compose project
+`tf-<checkout>-<hash>` from `compose.e2e.yml`, on random `127.0.0.1` ports,
+brought up by the run (`scripts/e2e/stack.mjs`). It stays up between runs, so
+its templates are reused while the migrations and seeds are unchanged. It
+writes nothing into the checkout beyond `.e2e-shards/`.
+
+Every checkout still shares the shards' ports and the mailpit containers,
+though. So the run lock is machine-wide,
 not per checkout: `/tmp/thunderforge-e2e.lock` (`THUNDERFORGE_E2E_LOCK_DIR`
 moves it), holding the pid, start time, arguments and checkout of the run
 that owns it (`scripts/e2e/run-lock.mjs`).

@@ -16,7 +16,9 @@
  *
  * # Layers, not container stacks
  *
- * One Postgres and one RustFS serve every shard. Postgres hosts many
+ * One Postgres and one RustFS serve every shard of a run. They are this
+ * checkout's own (`compose.e2e.yml`, brought up by `e2e/stack.mjs`, spec 089),
+ * so another worktree's run never touches them. Postgres hosts many
  * databases at negligible cost, and `storage/rustfs.rs`'s `ensure_bucket`
  * already creates a bucket on demand — so a shard needs a `DATABASE_URL` and
  * a `RUSTFS_BUCKET`, not a container of its own. Starting N full container
@@ -46,6 +48,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { createHash } from "node:crypto";
 import { createServer } from "node:net";
 import { join, relative } from "node:path";
 
@@ -66,6 +69,7 @@ import { checkDependencies, describeProblems } from "./e2e/deps.mjs";
 import { acquireRunLock, releaseRunLock } from "./e2e/run-lock.mjs";
 import { buildOutputHint } from "./clean-builds.mjs";
 import { removeContainers, startMailpitContainer } from "./e2e/mailpit.mjs";
+import { ensureStack } from "./e2e/stack.mjs";
 import { startLoadMonitor } from "./e2e/load.mjs";
 import { digestLines, writeRunSummary } from "./e2e/report.mjs";
 import {
@@ -111,9 +115,60 @@ const GITHUB_STUB_PORT_BASE = 31500;
  */
 const OAUTH_STUB_PORT_BASE = 31600;
 
-const POSTGRES_CONTAINER =
-  process.env.THUNDERFORGE_POSTGRES_CONTAINER ?? "thunderforge-postgres";
 const DB_USER = process.env.THUNDERFORGE_DB_USER ?? "postgres";
+/**
+ * The Postgres and RustFS this run tests against: `{ project, databaseUrl,
+ * psql, rustfsEndpoint }`. Set once in `main`, after the run lock is held.
+ */
+let stack = null;
+
+/**
+ * Spec 089: `THUNDERFORGE_POSTGRES_CONTAINER` still names a container to use
+ * instead of the checkout's stack, but only when set on purpose. It is the old
+ * shared setup, so it brings back the collisions the stack exists to prevent.
+ */
+function legacyStack(container) {
+  return {
+    project: `container ${container} (shared)`,
+    postgresContainer: container,
+    databaseUrl: (name) =>
+      `postgres://${DB_USER}:password@localhost:5432/${name}`,
+    rustfsEndpoint: undefined,
+    psql: (database, sql) =>
+      execFileSync(
+        "docker",
+        [
+          "exec",
+          "-i",
+          container,
+          "psql",
+          "-U",
+          DB_USER,
+          "-d",
+          database,
+          "-v",
+          "ON_ERROR_STOP=1",
+          "-q",
+        ],
+        { input: sql, encoding: "utf-8" },
+      ),
+  };
+}
+
+function openStack() {
+  const container = process.env.THUNDERFORGE_POSTGRES_CONTAINER;
+  if (container) {
+    log(
+      "e2e",
+      `THUNDERFORGE_POSTGRES_CONTAINER=${container}: testing against a shared ` +
+        "Postgres instead of this checkout's stack. Another worktree's run can " +
+        "drop these databases; unset it to isolate this run.",
+      process.stderr,
+    );
+    return legacyStack(container);
+  }
+  return ensureStack(ROOT_DIR);
+}
 const TEMPLATE_DB = "thunderforge_e2e_template";
 /**
  * The other template: migrated, and deliberately **not** seeded.
@@ -334,23 +389,7 @@ async function assertPortsFree(total) {
 }
 
 function psql(database, sql) {
-  return execFileSync(
-    "docker",
-    [
-      "exec",
-      "-i",
-      POSTGRES_CONTAINER,
-      "psql",
-      "-U",
-      DB_USER,
-      "-d",
-      database,
-      "-v",
-      "ON_ERROR_STOP=1",
-      "-q",
-    ],
-    { input: sql, encoding: "utf-8" },
-  );
+  return stack.psql(database, sql);
 }
 
 function psqlFile(database, file) {
@@ -362,20 +401,77 @@ function shardDbName(index) {
 }
 
 /**
- * Migrate and seed one template database, then clone it per shard.
+ * A hash of everything a template is built from: the migrations, and for the
+ * seeded template the seeds too.
  *
- * Dropped and rebuilt every run rather than reused: a template that survives a
- * migration being added is a template that silently omits it, and a shard
- * cloned from it fails for a reason no one would look for here.
+ * Stored as the template database's comment. A template whose stamp still
+ * matches is reused (spec 089 SC-004): the checkout's stack outlives the run,
+ * so rebuilding it every time would spend a full migration chain on nothing.
+ * A template whose stamp differs is rebuilt, because a template that survives
+ * a migration being added silently omits it, and a shard cloned from it fails
+ * for a reason no one would look for here.
  */
+function templateStamp({ seeded }) {
+  const hash = createHash("sha1");
+  const migrations = join(ROOT_DIR, "crates/thunderforge-server/migrations");
+  const walk = (dir) => {
+    const entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+    for (const entry of entries) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(path);
+      } else {
+        hash.update(relative(ROOT_DIR, path));
+        hash.update(readFileSync(path));
+      }
+    }
+  };
+  walk(migrations);
+  if (seeded) {
+    for (const seed of TEMPLATE_SEEDS) {
+      hash.update(seed);
+      hash.update(readFileSync(join(ROOT_DIR, seed)));
+    }
+  }
+  return hash.digest("hex");
+}
+
+const TEMPLATE_SEEDS = [
+  "crates/thunderforge-server/seeds/demo_accounts.sql",
+  "crates/thunderforge-server/seeds/e2e_demo.sql",
+];
+
+/** True when `database` exists and carries `stamp` as its comment. */
+function templateCurrent(database, stamp) {
+  const out = psql(
+    "postgres",
+    `\\pset tuples_only on
+SELECT shobj_description(oid, 'pg_database') FROM pg_database
+ WHERE datname = '${database}';`,
+  );
+  return out.trim() === `tf-template:${stamp}`;
+}
+
+function stampTemplate(database, stamp) {
+  psql("postgres", `COMMENT ON DATABASE ${database} IS 'tf-template:${stamp}';`);
+}
+
+/** Migrate and seed one template database, then clone it per shard. */
 async function provisionTemplate() {
+  const stamp = templateStamp({ seeded: true });
+  if (templateCurrent(TEMPLATE_DB, stamp)) {
+    log("e2e", `Template database (${TEMPLATE_DB}) up to date; reusing it.`);
+    return;
+  }
   log("e2e", `Building the template database (${TEMPLATE_DB})...`);
   // No connections may exist to a database being used as a template, and
   // `WITH (FORCE)` covers a previous run that died holding one.
   psql("postgres", `DROP DATABASE IF EXISTS ${TEMPLATE_DB} WITH (FORCE);`);
   psql("postgres", `CREATE DATABASE ${TEMPLATE_DB};`);
 
-  const templateUrl = `postgres://${DB_USER}:password@localhost:5432/${TEMPLATE_DB}`;
+  const templateUrl = stack.databaseUrl(TEMPLATE_DB);
   await runCommand("diesel migration run", {
     name: "migrate template",
     cwd: join(ROOT_DIR, "crates/thunderforge-server"),
@@ -387,8 +483,9 @@ async function provisionTemplate() {
   // (demo_accounts) and Playwright's own global setup applies e2e_demo. The
   // latter is idempotent and will run again per shard; having it here too
   // means a shard starts from the same place a developer's stack does.
-  psqlFile(TEMPLATE_DB, "crates/thunderforge-server/seeds/demo_accounts.sql");
-  psqlFile(TEMPLATE_DB, "crates/thunderforge-server/seeds/e2e_demo.sql");
+  for (const seed of TEMPLATE_SEEDS) psqlFile(TEMPLATE_DB, seed);
+  // Last, so a run that dies mid-build leaves no stamp and the next rebuilds.
+  stampTemplate(TEMPLATE_DB, stamp);
   log("e2e", "Template ready.");
 }
 
@@ -400,6 +497,14 @@ async function provisionTemplate() {
  * to do with setup.
  */
 async function provisionFirstRunTemplate() {
+  const stamp = templateStamp({ seeded: false });
+  if (templateCurrent(FIRST_RUN_TEMPLATE_DB, stamp)) {
+    log(
+      "e2e",
+      `First-run template (${FIRST_RUN_TEMPLATE_DB}) up to date; reusing it.`,
+    );
+    return;
+  }
   log("e2e", `Building the first-run template (${FIRST_RUN_TEMPLATE_DB})...`);
   psql(
     "postgres",
@@ -412,9 +517,10 @@ async function provisionFirstRunTemplate() {
     cwd: join(ROOT_DIR, "crates/thunderforge-server"),
     prefix: "e2e",
     env: {
-      DATABASE_URL: `postgres://${DB_USER}:password@localhost:5432/${FIRST_RUN_TEMPLATE_DB}`,
+      DATABASE_URL: stack.databaseUrl(FIRST_RUN_TEMPLATE_DB),
     },
   });
+  stampTemplate(FIRST_RUN_TEMPLATE_DB, stamp);
 
   log("e2e", "First-run template ready (migrated, unseeded).");
 }
@@ -624,8 +730,12 @@ async function startShard(
   linkPacks(dataPath);
 
   const shared = {
-    DATABASE_URL: `postgres://${DB_USER}:password@localhost:5432/${database}`,
+    DATABASE_URL: stack.databaseUrl(database),
     RUSTFS_BUCKET: `tf-e2e-${index}`,
+    // The checkout's own RustFS. Set here, so a developer's `.env` pointing
+    // at the dev stack's `localhost:9000` never wins (`dotenvy` fills in only
+    // what is absent).
+    ...(stack.rustfsEndpoint ? { RUSTFS_ENDPOINT: stack.rustfsEndpoint } : {}),
     THUNDERFORGE_DATA_PATH: dataPath,
     // The single highest-leverage variable in the whole harness: the per-IP
     // auth limiter accounted for 18 of the 42 failures the last full sweep
@@ -879,6 +989,9 @@ function runShard(shard, files, label = "parallel", suite = null) {
       THUNDERFORGE_E2E_EXTERNAL_STACK: "1",
       THUNDERFORGE_E2E_DEMO_DIR: demoDir,
       THUNDERFORGE_DB_NAME: shard.database,
+      // The specs and global setup `docker exec` into Postgres by this name.
+      // It is the checkout's stack's, so they reach this run's databases.
+      THUNDERFORGE_POSTGRES_CONTAINER: stack.postgresContainer,
       THUNDERFORGE_E2E_GITHUB_STUB: `http://127.0.0.1:${GITHUB_STUB_PORT_BASE + shard.index}`,
       THUNDERFORGE_E2E_OAUTH_STUB: `http://127.0.0.1:${OAUTH_STUB_PORT_BASE + shard.index}`,
       THUNDERFORGE_E2E_MAILPIT_API: shard.mailpit.api,
@@ -1053,8 +1166,9 @@ async function main() {
   const buildHint = buildOutputHint(ROOT_DIR);
   if (buildHint) log("e2e", `note: ${buildHint}`);
 
-  // Machine-wide: every checkout shares the shard databases, ports and mail
-  // containers, so this waits for a run from any of them.
+  // Machine-wide: since spec 089 each checkout has its own databases, but
+  // every checkout still shares the shard ports and mail containers, so this
+  // waits for a run from any of them.
   try {
     await acquireRunLock(ROOT_DIR, process.argv.slice(2), {
       wait: args.wait,
@@ -1122,6 +1236,16 @@ async function main() {
     prefix: "e2e",
   });
   await ensureBaseMaps();
+
+  // Spec 089: this checkout's own Postgres and RustFS. Never the shared dev
+  // stack as a fallback; a stack that won't come up ends the run here.
+  try {
+    stack = openStack();
+  } catch (error) {
+    log("e2e", error.message, process.stderr);
+    return finish(1);
+  }
+  log("e2e", `Stack: ${stack.project}.`);
 
   await provisionTemplate();
 

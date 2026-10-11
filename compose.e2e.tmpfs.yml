@@ -1,0 +1,12 @@
+# Opt-in: the e2e Postgres keeps its data in memory. Added on top of
+# `compose.e2e.yml` when `THUNDERFORGE_E2E_TMPFS=1` (spec 089 plan.md,
+# Decision 2).
+#
+# Faster writes, but the templates go with every container restart, so the
+# next run rebuilds them. Unmeasured; the default stays on disk until a
+# measurement says otherwise.
+services:
+  postgres:
+    volumes: !reset []
+    tmpfs:
+      - /var/lib/postgresql

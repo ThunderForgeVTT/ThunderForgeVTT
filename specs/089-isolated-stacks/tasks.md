@@ -62,14 +62,14 @@ before the others.
 
 ## Phase 2: A stack per checkout (US1 data isolation, US3)
 
-- [ ] T010 [P] [US3] Test, then `stack.mjs` `projectName(root)`:
+- [X] T010 [P] [US3] Test, then `stack.mjs` `projectName(root)`:
   - the basename, sanitised to `[a-z0-9-]`, plus a 6-hex SHA-1 of the
     realpath;
   - stable for one path, different for two same-named checkouts.
-- [ ] T011 [P] [US3] Test, then `parsePort(output)` for
+- [X] T011 [P] [US3] Test, then `parsePort(output)` for
   `docker compose port` output (`127.0.0.1:49153`, `0.0.0.0:…`, IPv6
   `[::1]:…`, empty). It refuses anything not bound to loopback.
-- [ ] T012 [US3] New `compose.e2e.yml`:
+- [X] T012 [US3] New `compose.e2e.yml`:
   - **Postgres** (`postgres:18-alpine`, the same as dev): healthcheck,
     `max_connections` raised to match today's shard pool maths, and the
     volume `db`.
@@ -77,10 +77,10 @@ before the others.
   - **Ports:** both on `127.0.0.1::<port>`.
   - **Labels:** `thunderforge.checkout=${THUNDERFORGE_CHECKOUT}`.
   - **Names:** no `container_name`.
-- [ ] T013 [P] [US3] New `compose.e2e.tmpfs.yml` override, which puts
+- [X] T013 [P] [US3] New `compose.e2e.tmpfs.yml` override, which puts
   Postgres's data on `tmpfs`, used when `THUNDERFORGE_E2E_TMPFS=1`
   (plan.md Decision 2).
-- [ ] T014 [US3] `stack.mjs` `ensureStack(root)`:
+- [X] T014 [US3] `stack.mjs` `ensureStack(root)`:
   - runs `up -d --wait` (Compose's own health wait) with the project name and
     the checkout label;
   - reads the ports;
@@ -89,18 +89,18 @@ before the others.
 
   If it fails, it reports which project and service, plus the last 20 log
   lines. It never falls back to `thunderforge-postgres` (spec Edge Cases).
-- [ ] T015 [US1] `e2e-parallel.mjs`:
+- [X] T015 [US1] `e2e-parallel.mjs`:
   - `psql`, `provisionTemplate`, `provisionFirstRunTemplate`,
     `cloneShardDatabase` and `startShard` take the stack;
   - every `localhost:5432` becomes `stack.databaseUrl(…)`;
   - `RUSTFS_ENDPOINT` goes in the shard env from `stack.rustfsEndpoint`;
   - `THUNDERFORGE_POSTGRES_CONTAINER` is honoured only as an explicit
     override, with a warning that it brings back sharing.
-- [ ] T016 [US3] Template reuse: the migration stamp check that decides
+- [X] T016 [US3] Template reuse: the migration stamp check that decides
   whether to rebuild templates now reads the stamp from the checkout's
   Postgres. The second run in a worktree logs "templates up to date"
   (SC-004).
-- [ ] T017 [US1] `.gitignore` and CONTRIBUTING: nothing new is written to
+- [X] T017 [US1] `.gitignore` and CONTRIBUTING: nothing new is written to
   the checkout except what `.e2e-shards/` already holds.
 
 **Checkpoint**: data is isolated, but runs still take turns under the
