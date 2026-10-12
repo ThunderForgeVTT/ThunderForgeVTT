@@ -194,30 +194,45 @@ container-down-clean:
 # touched the image: pushing alone shipped whatever image was last built. The
 # image is a dev build (unoptimised engine, debug server) unless CI=true;
 # BUILD_PROFILE=release forces the other.
-IMAGE ?= mbround18/thunderforgevtt:develop
+#
+# thunderforge-dev is Flux's (fluxified overlays/applications/thunderforge).
+# Every image carries its commit (sha-<short>, plus -dirty-<time> for a tree
+# with uncommitted changes) beside the moving IMAGE tag, and the deploy is
+# scripts/flux-deploy.sh pointing fluxified at that tag. Rolling back is
+# reverting that commit in fluxified.
+IMAGE_REPO ?= mbround18/thunderforgevtt
+IMAGE ?= $(IMAGE_REPO):develop
 KUBE_CONTEXT ?= default
 KUBE_NAMESPACE ?= thunderforge-dev
 DEPLOY ?= thunderforge
 BUILD_PROFILE ?= $(if $(filter true,$(CI)),release,dev)
+GIT_SHORT := $(shell git rev-parse --short=8 HEAD 2>/dev/null)
+GIT_DIRTY := $(shell git status --porcelain 2>/dev/null | head -c1)
+BUILD_STAMP := $(shell date -u +%Y%m%d%H%M%S)
+IMAGE_VERSION ?= sha-$(GIT_SHORT)$(if $(GIT_DIRTY),-dirty-$(BUILD_STAMP))
 image:
-	docker build --target server --build-arg BUILD_PROFILE=$(BUILD_PROFILE) -t $(IMAGE) .
+	docker build --target server --build-arg BUILD_PROFILE=$(BUILD_PROFILE) \
+	  -t $(IMAGE) -t $(IMAGE_REPO):$(IMAGE_VERSION) .
 
 push: image
 	docker push $(IMAGE)
-	kubectl --context $(KUBE_CONTEXT) -n $(KUBE_NAMESPACE) rollout restart deploy/$(DEPLOY)
-	kubectl --context $(KUBE_CONTEXT) -n $(KUBE_NAMESPACE) rollout status deploy/$(DEPLOY) --timeout=5m
+	docker push $(IMAGE_REPO):$(IMAGE_VERSION)
+	KUBE_CONTEXT=$(KUBE_CONTEXT) KUBE_NAMESPACE=$(KUBE_NAMESPACE) scripts/flux-deploy.sh \
+	  app-deployment.yaml $(IMAGE_REPO) $(IMAGE_REPO):$(IMAGE_VERSION) $(DEPLOY)
 
 # thunderforge.dev: the homepage and the demo, served by nginx (the Dockerfile's
 # `landing` stage). Always a release build: it is the public site.
-LANDING_IMAGE ?= mbround18/thunderforgevtt:landing
+LANDING_IMAGE ?= $(IMAGE_REPO):landing
 LANDING_DEPLOY ?= thunderforge-landing
 landing-image:
-	docker build --target landing --build-arg BUILD_PROFILE=release -t $(LANDING_IMAGE) .
+	docker build --target landing --build-arg BUILD_PROFILE=release \
+	  -t $(LANDING_IMAGE) -t $(IMAGE_REPO):landing-$(IMAGE_VERSION) .
 
 push-landing: landing-image
 	docker push $(LANDING_IMAGE)
-	kubectl --context $(KUBE_CONTEXT) -n $(KUBE_NAMESPACE) rollout restart deploy/$(LANDING_DEPLOY)
-	kubectl --context $(KUBE_CONTEXT) -n $(KUBE_NAMESPACE) rollout status deploy/$(LANDING_DEPLOY) --timeout=5m
+	docker push $(IMAGE_REPO):landing-$(IMAGE_VERSION)
+	KUBE_CONTEXT=$(KUBE_CONTEXT) KUBE_NAMESPACE=$(KUBE_NAMESPACE) scripts/flux-deploy.sh \
+	  landing.yaml $(IMAGE_REPO) $(IMAGE_REPO):landing-$(IMAGE_VERSION) $(LANDING_DEPLOY)
 
 # Spec 086 (contracts/telemetry-gateway.md): the public OTLP intake in front of
 # the collector. The Deployment is Flux's, so this only builds and pushes.
@@ -228,20 +243,13 @@ telemetry-gateway-image:
 push-telemetry-gateway: telemetry-gateway-image
 	docker push $(TELEMETRY_GATEWAY_IMAGE)
 
-# Spec 086 (contracts/observability-apply.md): dashboards, alert rules and the
-# landing's nginx exporter. thunderforge-dev is not Flux-managed, so this is
-# how a change ships; every command is idempotent. The server's export goes to
-# the in-cluster collector on the operator tier.
+# Spec 086 (contracts/observability-apply.md): dashboards and alert rules.
+# The landing's exporter sidecar and the server's OTLP endpoint are in the
+# Deployments themselves now, in fluxified; this applies what is left, and is
+# idempotent.
 OBS_DIR ?= deploy/k8s/observability
-OTEL_IN_CLUSTER ?= http://otel-collector.monitoring.svc.cluster.local:4318
 observability: observability-check
 	kubectl --context $(KUBE_CONTEXT) apply -k $(OBS_DIR)
-	@if [ -f $(OBS_DIR)/landing/exporter-sidecar.yaml ]; then \
-	  kubectl --context $(KUBE_CONTEXT) -n $(KUBE_NAMESPACE) patch deployment $(LANDING_DEPLOY) \
-	    --type strategic --patch-file $(OBS_DIR)/landing/exporter-sidecar.yaml; \
-	fi
-	kubectl --context $(KUBE_CONTEXT) -n $(KUBE_NAMESPACE) set env deployment/$(DEPLOY) \
-	  OTEL_EXPORTER_OTLP_ENDPOINT=$(OTEL_IN_CLUSTER)
 
 # Offline: the kustomization builds, every dashboard parses, every name a
 # panel or alert reads is one something sends (SC-008), and promtool agrees

@@ -1,5 +1,5 @@
 # Spec 086 US4: Prometheus scrapes the landing's nginx exporter sidecar
-# (landing/exporter-sidecar.yaml) every 30 seconds.
+# (in fluxified's overlays/applications/thunderforge/landing.yaml) every 30 seconds.
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:

@@ -3,8 +3,8 @@
 # go to `monitoring`, where Grafana's sidecar looks, and the rules sit beside
 # the app in `thunderforge-dev`.
 #
-# `landing/exporter-sidecar.yaml` is not listed: it patches a Deployment whose
-# base is in no repository, so the Makefile applies it with `kubectl patch`.
+# The landing's exporter sidecar, which the PodMonitor scrapes, is in the
+# landing Deployment itself, in fluxified overlays/applications/thunderforge.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
