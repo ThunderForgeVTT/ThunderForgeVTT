@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # `paws run` is newer than paws's latest release (v0.0.1-prerelease.53),
       # so this builds paws from a pinned commit. Swap `git-ref` for
       # `version: <tag>` once a release carries it.
