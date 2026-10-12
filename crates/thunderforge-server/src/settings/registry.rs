@@ -252,6 +252,12 @@ impl SettingDeclaration {
 /// not set this", and reading it as a configured empty string is how an
 /// instance ends up with a blank operator name it cannot edit.
 pub(crate) fn read_env(name: &str) -> Option<String> {
+    #[cfg(test)]
+    if let Some(value) = crate::settings::test_env::thread_override(name) {
+        return value
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty());
+    }
     std::env::var(name)
         .ok()
         .map(|v| v.trim().to_string())

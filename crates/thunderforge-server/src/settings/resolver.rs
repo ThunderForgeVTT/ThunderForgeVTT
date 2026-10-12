@@ -346,7 +346,7 @@ pub fn is_a_startup_failure(_requirement: Requirement) -> bool {
 mod tests {
     use super::*;
     use crate::settings::registry::{Backing, declarations};
-    use crate::settings::test_env::temp_env;
+    use crate::settings::test_env::thread_env;
     use crate::test_support::test_app_state;
 
     fn block_on<F: std::future::Future>(f: F) -> F::Output {
@@ -396,7 +396,7 @@ mod tests {
             let mut vars: Vec<(&str, Option<&str>)> = vec![(name, Some("from-the-environment"))];
             vars.extend(d.env_aliases.iter().map(|alias| (*alias, None)));
 
-            temp_env(&vars, || {
+            thread_env(&vars, || {
                 let settings = block_on(resolve_all(&state)).expect("resolves");
                 let r = settings.get(d.key).expect("declared settings resolve");
                 assert_eq!(
@@ -432,7 +432,7 @@ mod tests {
                 .map(|name| (name, None))
                 .collect();
 
-            temp_env(&vars, || {
+            thread_env(&vars, || {
                 write_row(&state, d.key, &stored);
                 let settings = block_on(resolve_all(&state)).expect("resolves");
                 let r = settings.get(d.key).expect("resolves");
@@ -461,7 +461,7 @@ mod tests {
     #[test]
     fn a_secret_that_will_not_decrypt_resolves_as_unset() {
         let state = test_app_state();
-        temp_env(&[("THUNDERFORGE_SMTP_PASSWORD", None)], || {
+        thread_env(&[("THUNDERFORGE_SMTP_PASSWORD", None)], || {
             write_row(&state, "mail.password", "v1.not-a-real.ciphertext");
             let settings = block_on(resolve_all(&state)).expect("resolves rather than panicking");
             let r = settings.get("mail.password").expect("resolves");
@@ -477,7 +477,7 @@ mod tests {
     #[test]
     fn an_alias_is_reported_as_the_variable_that_fixed_the_value() {
         let state = test_app_state();
-        temp_env(
+        thread_env(
             &[
                 (crate::repo_host::APP_PRIVATE_KEY_ENV, None),
                 (crate::repo_host::APP_PRIVATE_KEY_FILE_ENV, None),
@@ -503,7 +503,7 @@ mod tests {
     #[test]
     fn an_empty_variable_is_not_a_value() {
         let state = test_app_state();
-        temp_env(&[("THUNDERFORGE_OPERATOR_NAME", Some("   "))], || {
+        thread_env(&[("THUNDERFORGE_OPERATOR_NAME", Some("   "))], || {
             let settings = block_on(resolve_all(&state)).expect("resolves");
             let r = settings.get("operator.name").expect("resolves");
             assert_ne!(r.source, Source::Environment);

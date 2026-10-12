@@ -338,7 +338,7 @@ pub(crate) async fn evaluate(state: &AppState) -> Result<SetupCompletion, String
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::settings::test_env::temp_env;
+    use crate::settings::test_env::thread_env;
     use crate::test_support::test_app_state;
 
     /// The three environment variables behind the `RequiredAtSetup`
@@ -365,7 +365,7 @@ mod tests {
         let cleared: Vec<(&str, Option<&str>)> =
             required_env_vars().into_iter().map(|v| (v, None)).collect();
 
-        let settings = temp_env_async(&cleared, || resolve_all(&state));
+        let settings = thread_env_async(&cleared, || resolve_all(&state));
 
         let missing = missing_required_settings(&settings);
         let expected: Vec<&'static str> = declarations()
@@ -412,7 +412,7 @@ mod tests {
             .expect("the declaration the variable came from")
             .key;
 
-        let settings = temp_env_async(&[(var, Some("A Real Operator"))], || resolve_all(&state));
+        let settings = thread_env_async(&[(var, Some("A Real Operator"))], || resolve_all(&state));
 
         let reported = required_settings(&settings)
             .into_iter()
@@ -541,7 +541,7 @@ mod tests {
             .filter_map(|d| d.env_var)
             .map(|v| (v, None))
             .collect();
-        let settings = temp_env_async(&cleared, || resolve_all(&state));
+        let settings = thread_env_async(&cleared, || resolve_all(&state));
 
         let offered: Vec<&'static str> = required_settings(&settings)
             .into_iter()
@@ -599,7 +599,7 @@ mod tests {
     #[test]
     fn saying_the_instance_publishes_adds_the_duties_publishing_creates() {
         let state = test_app_state();
-        let settings = temp_env_async(
+        let settings = thread_env_async(
             &[("THUNDERFORGE_INSTANCE_PUBLISHES_BEYOND_WORLD", Some("true"))],
             || resolve_all(&state),
         );
@@ -642,7 +642,7 @@ mod tests {
     #[test]
     fn what_setup_merely_offers_is_marked_as_such() {
         let state = test_app_state();
-        let settings = temp_env_async(&[], || resolve_all(&state));
+        let settings = thread_env_async(&[], || resolve_all(&state));
 
         for entry in required_settings(&settings) {
             let d = crate::settings::registry::declaration(entry.key).expect("declared");
@@ -665,7 +665,7 @@ mod tests {
     #[test]
     fn no_prefilled_value_is_a_secret_or_an_environment_value() {
         let state = test_app_state();
-        let settings = temp_env_async(&[], || resolve_all(&state));
+        let settings = thread_env_async(&[], || resolve_all(&state));
 
         for entry in required_settings(&settings) {
             let d = crate::settings::registry::declaration(entry.key).expect("declared");
@@ -681,19 +681,19 @@ mod tests {
         }
     }
 
-    /// `settings::test_env::temp_env` takes a synchronous body, and
+    /// `settings::test_env::thread_env` takes a synchronous body, and
     /// `resolve_all` is async. Blocking on the future inside the body keeps
     /// the environment lock held for exactly as long as the resolution reads
     /// the environment, which is the property the lock exists for — spawning
     /// the resolution and awaiting it outside would restore the variables
     /// while it was still running.
-    fn temp_env_async<F, Fut>(vars: &[(&str, Option<&str>)], body: F) -> Settings
+    fn thread_env_async<F, Fut>(vars: &[(&str, Option<&str>)], body: F) -> Settings
     where
         F: FnOnce() -> Fut,
         Fut: std::future::Future<Output = Result<Settings, String>>,
     {
         let mut out = None;
-        temp_env(vars, || {
+        thread_env(vars, || {
             out = Some(
                 tokio::runtime::Builder::new_current_thread()
                     .enable_all()

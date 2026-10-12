@@ -677,7 +677,7 @@ mod tests {
             let mut vars: Vec<(&str, Option<&str>)> = vec![(name, Some("from-the-environment"))];
             vars.extend(d.env_aliases.iter().map(|alias| (*alias, None)));
 
-            crate::settings::test_env::temp_env(&vars, || {
+            crate::settings::test_env::thread_env(&vars, || {
                 let stored_before = stored_row(&state, d.key);
 
                 let refusal = block_on(write_setting(

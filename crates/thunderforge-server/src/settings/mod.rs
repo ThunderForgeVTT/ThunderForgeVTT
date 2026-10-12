@@ -152,6 +152,52 @@ pub(crate) mod test_env {
         }
     }
 
+    thread_local! {
+        static THREAD_ENV: std::cell::RefCell<Option<Vec<(String, Option<String>)>>> =
+            const { std::cell::RefCell::new(None) };
+    }
+
+    /// What [`thread_env`] says `name` is on this thread: `Some(None)` for a
+    /// variable it unset, `None` when it says nothing about `name`. A name
+    /// given twice takes its last value, as it would set in order.
+    pub fn thread_override(name: &str) -> Option<Option<String>> {
+        THREAD_ENV.with(|vars| {
+            vars.borrow()
+                .as_ref()?
+                .iter()
+                .rev()
+                .find(|(k, _)| k == name)
+                .map(|(_, v)| v.clone())
+        })
+    }
+
+    /// Like [`temp_env`], but the variables are seen only by
+    /// `registry::read_env` **on this thread**; the process environment is
+    /// never touched.
+    ///
+    /// For tests that set or clear every declared variable at once. Through
+    /// the process environment, that changed `RUSTFS_ENDPOINT` under every
+    /// storage test running beside them, and an upload went to one object
+    /// store while the read-back went to another. Resolution here runs on a
+    /// current-thread runtime, so the thread is the test. The lock is still
+    /// taken, for the settings rows a caller may clear.
+    pub fn thread_env(vars: &[(&str, Option<&str>)], body: impl FnOnce()) {
+        let _guard = lock();
+        let owned = vars
+            .iter()
+            .map(|(k, v)| ((*k).to_string(), v.map(str::to_string)))
+            .collect();
+        THREAD_ENV.with(|slot| *slot.borrow_mut() = Some(owned));
+        struct Clear;
+        impl Drop for Clear {
+            fn drop(&mut self) {
+                THREAD_ENV.with(|slot| *slot.borrow_mut() = None);
+            }
+        }
+        let _clear = Clear;
+        body();
+    }
+
     /// Set some variables, run, restore — with the same lock held.
     pub fn temp_env(vars: &[(&str, Option<&str>)], body: impl FnOnce()) {
         let _guard = lock();

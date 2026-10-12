@@ -435,7 +435,7 @@ async fn store_snapshot(
 mod tests {
     use super::*;
     use crate::settings::registry::{Kind, RESERVED_PREFIX, declaration};
-    use crate::settings::test_env::temp_env;
+    use crate::settings::test_env::thread_env;
     use crate::test_support::test_app_state;
 
     fn block_on<F: std::future::Future>(f: F) -> F::Output {
@@ -469,7 +469,7 @@ mod tests {
             .iter()
             .filter_map(|d| d.env_var.map(|name| (name, Some(a_valid_value(d)))))
             .collect();
-        temp_env(&vars, || {
+        thread_env(&vars, || {
             let settings = block_on(resolve_all(&state)).expect("resolves");
             body(settings);
         });
@@ -496,7 +496,7 @@ mod tests {
         // T005), which made this helper quietly describe a *configured*
         // instance while claiming the opposite.
         let keys: Vec<&str> = declarations().iter().map(|d| d.key).collect();
-        temp_env(&vars, || {
+        thread_env(&vars, || {
             let _rows = crate::settings::test_env::without_rows(&state, &keys);
             let settings = block_on(resolve_all(&state)).expect("resolves");
             body(settings);
@@ -515,7 +515,7 @@ mod tests {
             .filter_map(|d| d.env_var.map(|name| (name, Some(secret))))
             .collect();
 
-        temp_env(&vars, || {
+        thread_env(&vars, || {
             let settings = block_on(resolve_all(&state)).expect("resolves");
             let reports = assess(&settings, &[]);
             for report in &reports {
@@ -594,7 +594,7 @@ mod tests {
     #[test]
     fn a_shipped_placeholder_that_is_set_is_still_a_gap() {
         let state = test_app_state();
-        temp_env(
+        thread_env(
             &[(
                 "THUNDERFORGE_SUPPORT_EMAIL",
                 Some("stewards@thunderforge.local"),
@@ -716,7 +716,7 @@ mod tests {
             .flat_map(|d| d.env_var.into_iter().chain(d.env_aliases.iter().copied()))
             .map(|name| (name, None))
             .collect();
-        temp_env(&vars, || {
+        thread_env(&vars, || {
             let report = block_on(report(&state)).expect("the report answers");
             assert!(!report.fully_configured);
             assert_eq!(report.capabilities.len(), Capability::all().len());
@@ -763,7 +763,7 @@ mod tests {
             .map(|name| (name, None))
             .collect();
 
-        temp_env(&vars, || {
+        thread_env(&vars, || {
             let schema = async_graphql::Schema::build(
                 crate::graphql::QueryRoot::default(),
                 crate::graphql::MutationRoot::default(),
@@ -851,7 +851,7 @@ mod tests {
             .collect();
         vars.push(("THUNDERFORGE_INSTANCE_PUBLISHES_BEYOND_WORLD", Some("true")));
 
-        temp_env(&vars, || {
+        thread_env(&vars, || {
             let _rows = crate::settings::test_env::without_rows(&state, &keys);
             let settings = block_on(resolve_all(&state)).expect("resolves");
             let reports = assess(&settings, &[]);
