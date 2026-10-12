@@ -9,7 +9,7 @@ import type {
   AttackPreviewRecord,
   AttackRecord,
 } from "@/types/attack";
-import type { TokenRecord } from "@/types/token";
+import type { SceneToken } from "@/types/token";
 import { attackSummary, warningTexts } from "../AttackLog/attackText";
 import { useSelectedTokenIds } from "../useSelectedTokenIds";
 import { AdvantagePicker } from "@/components/world/RollAdvantage/AdvantagePicker";
@@ -37,7 +37,7 @@ export interface AttackFlowProps {
   abilityId: string;
   abilityName: string;
   /** Every token on the scene, as this viewer was sent them. */
-  tokens: TokenRecord[];
+  tokens: SceneToken[];
   /**
    * The creature the flow opens aimed at — the one right-clicked on the
    * board. Unset, the token selected on the board is the target, if any.
@@ -58,7 +58,7 @@ export interface AttackFlowProps {
   onClose: () => void;
 }
 
-function tokenLabel(token: TokenRecord): string {
+function tokenLabel(token: SceneToken): string {
   return token.name?.trim() || "Unnamed creature";
 }
 

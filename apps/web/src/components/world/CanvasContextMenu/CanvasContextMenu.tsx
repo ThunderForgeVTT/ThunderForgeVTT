@@ -7,12 +7,7 @@ import {
   type WorldSystemCondition,
 } from "@/api/actorConditions";
 import { changeHitPoints } from "@/api/combat";
-import {
-  createToken,
-  deleteToken,
-  getTokens,
-  setTokenLink,
-} from "@/api/tokens";
+import { createToken, deleteToken, setTokenLink } from "@/api/tokens";
 import { Button } from "@/components/ui/button/Button";
 import {
   Dialog,
@@ -31,11 +26,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { didApply, type TokenControlFacet } from "@/engine/world/facets";
 import type { WorldStore } from "@/engine/world/store";
+import { sceneTokensOf } from "@/engine/world/useSceneTokens";
 import type { WorldLight, WorldShape, WorldWall } from "@/engine/world/types";
 import type { WorldActorRecord } from "@/types/actor";
 import type { HitPointChange } from "@/types/combat";
 import type { SceneUnits } from "@/types/light";
-import type { TokenRecord } from "@/types/token";
+import type { SceneToken } from "@/types/token";
 import { AttackFlow } from "../PlayDock/AttackFlow/AttackFlow";
 import { abilityRolls } from "../PlayDock/characterRolls";
 import {
@@ -72,9 +68,9 @@ export interface CanvasContextMenuProps {
 /** What the menu found out about the right-click, once it had asked. */
 interface Resolved {
   request: CanvasMenuRequest;
-  tokens: TokenRecord[];
-  target: TokenRecord | null;
-  attacker: TokenRecord | null;
+  tokens: SceneToken[];
+  target: SceneToken | null;
+  attacker: SceneToken | null;
   actions: CanvasMenuAction[];
   /** What the world's system declares, for a Game Master on a character. */
   conditions: WorldSystemCondition[];
@@ -120,15 +116,15 @@ type Follow =
   | {
       kind: "attack";
       attack: SheetAttack;
-      target: TokenRecord;
-      attacker: TokenRecord;
-      tokens: TokenRecord[];
+      target: SceneToken;
+      attacker: SceneToken;
+      tokens: SceneToken[];
     }
-  | { kind: "hit-points"; change: HitPointChange; target: TokenRecord }
-  | { kind: "remove"; target: TokenRecord }
+  | { kind: "hit-points"; change: HitPointChange; target: SceneToken }
+  | { kind: "remove"; target: SceneToken }
   | {
       kind: "conditions";
-      target: TokenRecord;
+      target: SceneToken;
       declared: WorldSystemCondition[];
     }
   | { kind: "place-token"; at: { x: number; y: number } };
@@ -137,7 +133,7 @@ type Follow =
 const LIGHT_BRIGHT_SQUARES = 4;
 const LIGHT_DIM_SQUARES = 8;
 
-function nameOf(token: TokenRecord | null, fallback?: string): string {
+function nameOf(token: SceneToken | null, fallback?: string): string {
   return token?.name?.trim() || fallback || "this creature";
 }
 
@@ -260,7 +256,9 @@ export function CanvasContextMenu({
         if (actions.length > 0) return about(request, actions, { wall });
         // Nothing to offer on it: it is board, as far as this viewer goes.
       }
-      const tokens = await getTokens(sceneId);
+      // The store's tokens: what this viewer was sent to draw the board with,
+      // as of the latest token event, so no round trip before the menu opens.
+      const tokens = sceneTokensOf(worldStore.getState().tokens, sceneId);
       const target = request.tokenId
         ? (tokens.find((token) => token.tokenId === request.tokenId) ?? null)
         : null;
@@ -729,7 +727,7 @@ function HitPointsDialog({
   onBack,
 }: {
   change: HitPointChange;
-  target: TokenRecord;
+  target: SceneToken;
   onClose: () => void;
   onBack: () => void;
 }) {

@@ -1,4 +1,4 @@
-import type { TokenRecord } from "@/types/token";
+import type { SceneToken } from "@/types/token";
 import type { WorldLight, WorldShape, WorldWall } from "@/engine/world/types";
 
 /**
@@ -68,9 +68,9 @@ export interface CanvasMenuViewer {
 
 /** The token this viewer attacks from: their own, primary first. */
 export function attackerTokenOf(
-  tokens: TokenRecord[],
+  tokens: SceneToken[],
   userId: string | null,
-): TokenRecord | null {
+): SceneToken | null {
   if (!userId) return null;
   const mine = tokens.filter(
     (token) => token.ownerUserId === userId && token.actorId !== null,
@@ -81,11 +81,11 @@ export function attackerTokenOf(
 export function canvasMenuActions(options: {
   viewer: CanvasMenuViewer;
   /** The right-clicked token's row, or `null` for bare board. */
-  target: TokenRecord | null;
+  target: SceneToken | null;
   /** Whether the target's name is hidden from players right now. */
   nameHidden: boolean;
   /** The token the viewer attacks from, if they have one here. */
-  attacker: TokenRecord | null;
+  attacker: SceneToken | null;
   /** That token's character's attacks. */
   attacks: SheetAttack[];
   /** Whether the world's system declares any condition (spec 067). */

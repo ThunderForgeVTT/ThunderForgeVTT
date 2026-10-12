@@ -12,19 +12,22 @@ import {
   setActorVisibleToPlayers,
   type ActorImageRecord,
 } from "@/api/actors";
-import { getTokens } from "@/api/tokens";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
 import { mayLookAt } from "@/engine/lookAt";
+import type { WorldStore } from "@/engine/world/store";
+import { useSceneTokens } from "@/engine/world/useSceneTokens";
 import { cn } from "@/lib/utils";
 import { portraitOf, tokenImageOf } from "@/pages/world/actor/actorImagery";
 import type { WorldActorRecord } from "@/types/actor";
-import type { TokenRecord } from "@/types/token";
+import type { SceneToken } from "@/types/token";
 import { InPaneCharacterSheet } from "./InPaneCharacterSheet";
 import { LookAtButton } from "./LookAtButton";
 import { appHref } from "@/lib/appHref";
 
 export interface ActorsPanelProps {
   worldId: string;
+  /** The world store, whose tokens say where each creature stands. */
+  worldStore: WorldStore;
   /** Spec 046: the scene in play, for attacks made from a character's sheet. */
   sceneId?: string | null;
   /**
@@ -99,6 +102,7 @@ function Folder({
  */
 export function ActorsPanel({
   worldId,
+  worldStore,
   sceneId = null,
   isGm = false,
 }: ActorsPanelProps) {
@@ -176,26 +180,11 @@ export function ActorsPanel({
    * rule for whether they may look at it at all. A failure here costs the
    * target icons and nothing else: the roster, its search and every existing
    * control carry on.
+   *
+   * Read from the world store, so a token placed or removed after the panel
+   * opened is offered (or stops being) without a refetch.
    */
-  const [sceneTokens, setSceneTokens] = useState<TokenRecord[]>([]);
-
-  useEffect(() => {
-    // No scene, nothing to fetch. Tokens held from a previous scene are left
-    // in place rather than cleared here: `tokenByActor` only reads the ones on
-    // the scene in play, so they can offer nothing.
-    if (!sceneId) return;
-    let active = true;
-    getTokens(sceneId)
-      .then((tokens) => {
-        if (active) setSceneTokens(tokens);
-      })
-      .catch(() => {
-        if (active) setSceneTokens([]);
-      });
-    return () => {
-      active = false;
-    };
-  }, [sceneId]);
+  const sceneTokens = useSceneTokens(worldStore, sceneId);
 
   /**
    * One token per actor: the primary when there is one, else the first.
@@ -206,16 +195,16 @@ export function ActorsPanel({
    * "the" token for an actor.
    */
   const tokenByActor = useMemo(() => {
-    const byActor = new Map<string, TokenRecord>();
+    const byActor = new Map<string, SceneToken>();
     for (const token of sceneTokens) {
-      if (!token.actorId || token.sceneId !== sceneId) continue;
+      if (!token.actorId) continue;
       const held = byActor.get(token.actorId);
       if (!held || (token.isPrimary && !held.isPrimary)) {
         byActor.set(token.actorId, token);
       }
     }
     return byActor;
-  }, [sceneTokens, sceneId]);
+  }, [sceneTokens]);
 
   useEffect(() => {
     let active = true;
@@ -347,6 +336,7 @@ export function ActorsPanel({
     return (
       <InPaneCharacterSheet
         worldId={worldId}
+        worldStore={worldStore}
         sceneId={sceneId}
         actor={viewing}
         isGm={isGm}

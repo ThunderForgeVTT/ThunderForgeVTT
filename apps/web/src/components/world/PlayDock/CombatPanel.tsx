@@ -12,21 +12,17 @@ import {
 } from "@/api/combat";
 import { getWorldActors } from "@/api/actors";
 import { setCombatAutoApply } from "@/api/attacks";
-import { getTokens } from "@/api/tokens";
 import { Button } from "@/components/ui/button/Button";
 import {
   subscribeToWorldEvents,
   startPlayPanelEventSync,
 } from "@/engine/world/sync";
+import type { WorldStore } from "@/engine/world/store";
+import { useSceneTokens } from "@/engine/world/useSceneTokens";
 import { cn } from "@/lib/utils";
 import type { CombatRecord, HitPointChange } from "@/types/combat";
 import type { WorldActorRecord } from "@/types/actor";
-import type { TokenRecord } from "@/types/token";
-import {
-  buildRosterOffer,
-  unattemptedIds,
-  type RosterCandidate,
-} from "./combatRoster";
+import { buildRosterOffer, type RosterCandidate } from "./combatRoster";
 import { CombatantHitPoints, CombatantOutMark } from "./CombatantHitPoints";
 import { CombatantBudget } from "./CombatantBudget";
 import { CombatantAct } from "./CombatantAct";
@@ -38,6 +34,8 @@ import { FOLLOW_SURROUND_CELLS, lookAtToken, mayLookAt } from "@/engine/lookAt";
 
 export interface CombatPanelProps {
   worldId: string;
+  /** The world store, holding the scene's tokens. */
+  worldStore: WorldStore;
   sceneId: string | null;
   isGm: boolean;
 }
@@ -65,7 +63,12 @@ export interface CombatPanelProps {
  * "Next turn" (FR-031's turn structure is the game system's to define, which
  * is spec 032's work, not this one's).
  */
-export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
+export function CombatPanel({
+  worldId,
+  worldStore,
+  sceneId,
+  isGm,
+}: CombatPanelProps) {
   const [combat, setCombat] = useState<CombatRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [actors, setActors] = useState<WorldActorRecord[]>([]);
@@ -74,10 +77,6 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const selectedTokenIds = useSelectedTokenIds();
-  const [sceneTokens, setSceneTokens] = useState<TokenRecord[]>([]);
-  // Ids already asked about, so a selected token that will never be persisted
-  // (the engine's demo tokens) cannot drive a refetch on every render.
-  const lookedUp = useRef<Set<string>>(new Set());
 
   const refresh = useCallback(() => {
     return getActiveCombat(worldId)
@@ -116,45 +115,22 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
    * server already sends a player these tokens to draw the board with, so this
    * asks for nothing new — and everything the offer drives is still rendered
    * under `isGm`.
+   *
+   * Read from the world store, so a token placed moments ago is already here
+   * when it is selected.
    */
-  const loadSceneTokens = useCallback(() => {
-    if (!sceneId) return;
-    getTokens(sceneId)
-      // A failure here costs the offer and the target icons, not the tracker:
-      // the roster, the round and every existing control keep working without
-      // it.
-      .then(setSceneTokens)
-      .catch(() => undefined);
-  }, [sceneId]);
-
-  useEffect(() => {
-    lookedUp.current = new Set();
-    loadSceneTokens();
-  }, [loadSceneTokens]);
+  const sceneTokens = useSceneTokens(worldStore, sceneId);
 
   const offer = useMemo(
     () =>
       buildRosterOffer({
         selectedTokenIds,
-        // Filtered rather than cleared on a scene change: the previous
-        // scene's tokens are still in hand until the new fetch answers, and
-        // labelling this scene's selection from them would name the wrong
-        // character for as long as the request takes.
-        tokens: sceneTokens.filter((token) => token.sceneId === sceneId),
+        tokens: sceneTokens,
         actors,
         combatants: combat?.combatants ?? [],
       }),
-    [selectedTokenIds, sceneTokens, sceneId, actors, combat],
+    [selectedTokenIds, sceneTokens, actors, combat],
   );
-
-  useEffect(() => {
-    // A token placed moments ago is selected before this panel has heard of
-    // it. One look per id is enough to catch that without polling.
-    const pending = unattemptedIds(offer.unresolvedTokenIds, lookedUp.current);
-    if (pending.length === 0) return;
-    for (const id of pending) lookedUp.current.add(id);
-    loadSceneTokens();
-  }, [offer.unresolvedTokenIds, loadSceneTokens]);
 
   /**
    * Spec: the camera follows whoever's turn it is (owner decision 2026-09-15).
@@ -461,9 +437,7 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
             const isTurn = combatant.id === combat.activeCombatantId;
             const tokenId = combatant.tokenId;
             const actKind = combatantActKind(combatant);
-            const token = sceneTokens.find(
-              (row) => row.sceneId === sceneId && row.tokenId === tokenId,
-            );
+            const token = sceneTokens.find((row) => row.tokenId === tokenId);
             const locatable = mayLookAt(token, isGm) ? token : undefined;
             return (
               <li
@@ -602,9 +576,7 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
                   <CombatantAct
                     worldId={worldId}
                     combatant={combatant}
-                    tokens={sceneTokens.filter(
-                      (token) => token.sceneId === sceneId,
-                    )}
+                    tokens={sceneTokens}
                     kind={actKind}
                   />
                 ) : null}

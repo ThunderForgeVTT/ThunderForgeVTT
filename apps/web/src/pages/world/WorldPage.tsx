@@ -2956,7 +2956,12 @@ export default function WorldPage() {
       label: "Actors",
       icon: "actors",
       content: (
-        <ActorsPanel worldId={id} sceneId={sceneId} isGm={isSceneOwner} />
+        <ActorsPanel
+          worldId={id}
+          worldStore={worldStore}
+          sceneId={sceneId}
+          isGm={isSceneOwner}
+        />
       ),
     },
     {
@@ -2964,7 +2969,12 @@ export default function WorldPage() {
       label: "Combat",
       icon: "shield",
       content: (
-        <CombatPanel worldId={id} sceneId={sceneId} isGm={isSceneOwner} />
+        <CombatPanel
+          worldId={id}
+          worldStore={worldStore}
+          sceneId={sceneId}
+          isGm={isSceneOwner}
+        />
       ),
     },
     // Spec 067: the tab is the pack's, titled by the pack, and absent for a

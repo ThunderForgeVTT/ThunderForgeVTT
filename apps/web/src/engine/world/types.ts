@@ -40,6 +40,17 @@ export type WorldToken = {
    * "leave them alone", an empty list clears them.
    */
   conditions?: { id: string; glyph: string; color: string }[];
+  /**
+   * Where the token stands and what it is, as the server read it: the scene
+   * and level, its character, and whether it is that character (spec 046).
+   * The panels read these from the store rather than fetching their own
+   * copy. Optional because the engine's own moves carry only the transform,
+   * and the store merges a move into the token as it stands.
+   */
+  sceneId?: string;
+  levelId?: string;
+  actorId?: string | null;
+  linked?: boolean;
 };
 
 export type DoorState = "none" | "open" | "closed";

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getTrackerAbilities, type TrackerAbilityRecord } from "@/api/attacks";
 import type { CombatantRecord } from "@/types/combat";
-import type { TokenRecord } from "@/types/token";
+import type { SceneToken } from "@/types/token";
 import { AttackFlow } from "./AttackFlow/AttackFlow";
 import { abilitiesFor, type CombatantActKind } from "./combatantActions";
 
@@ -23,7 +23,7 @@ export function CombatantAct({
 }: {
   worldId: string;
   combatant: CombatantRecord;
-  tokens: TokenRecord[];
+  tokens: SceneToken[];
   kind: CombatantActKind;
 }) {
   const [open, setOpen] = useState(false);

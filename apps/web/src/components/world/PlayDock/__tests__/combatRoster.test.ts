@@ -1,11 +1,7 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildRosterOffer,
-  sameTokenIds,
-  unattemptedIds,
-} from "../combatRoster";
+import { buildRosterOffer, sameTokenIds } from "../combatRoster";
 import type { CombatantRecord } from "@/types/combat";
-import type { TokenRecord } from "@/types/token";
+import type { SceneToken } from "@/types/token";
 import type { WorldActorRecord } from "@/types/actor";
 
 /**
@@ -20,19 +16,12 @@ import type { WorldActorRecord } from "@/types/actor";
  * that the button reaches the server is e2e's to prove.
  */
 
-function token(over: Partial<TokenRecord> = {}): TokenRecord {
+function token(over: Partial<SceneToken> = {}): SceneToken {
   return {
     tokenId: "token-1",
     sceneId: "scene-1",
     levelId: "level-1",
     actorId: null,
-    x: 0,
-    y: 0,
-    rotation: 0,
-    scale: 1,
-    metadata: null,
-    createdAt: "2026-09-01T00:00:00Z",
-    updatedAt: "2026-09-01T00:00:00Z",
     ownerUserId: null,
     isPrimary: false,
     photoUrl: null,
@@ -105,7 +94,7 @@ describe("buildRosterOffer", () => {
   it("names a token after the actor it stands for", () => {
     const offer = buildRosterOffer({
       selectedTokenIds: ["token-1"],
-      tokens: [token({ actorId: "actor-1", metadata: { label: "Pawn" } })],
+      tokens: [token({ actorId: "actor-1", name: "Pawn" })],
       actors: [actor()],
       combatants: [],
     });
@@ -121,8 +110,8 @@ describe("buildRosterOffer", () => {
     const offer = buildRosterOffer({
       selectedTokenIds: ["token-1", "token-2", "token-3"],
       tokens: [
-        token({ tokenId: "token-1", metadata: { label: "Wolf" } }),
-        token({ tokenId: "token-2", metadata: { label: "   " } }),
+        token({ tokenId: "token-1", name: "Wolf" }),
+        token({ tokenId: "token-2", name: "   " }),
         token({ tokenId: "token-3" }),
       ],
       actors: [],
@@ -258,16 +247,6 @@ describe("buildRosterOffer", () => {
       alreadyPresent: [],
       unresolvedTokenIds: [],
     });
-  });
-});
-
-describe("unattemptedIds", () => {
-  it("asks about an id once and never again", () => {
-    const attempted = new Set(["demo-token"]);
-    expect(unattemptedIds(["demo-token", "fresh"], attempted)).toEqual([
-      "fresh",
-    ]);
-    expect(unattemptedIds(["demo-token"], attempted)).toEqual([]);
   });
 });
 

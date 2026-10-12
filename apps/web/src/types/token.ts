@@ -44,6 +44,29 @@ export interface TokenRecord {
 }
 
 /**
+ * What a panel reads of a token: the fields the world store holds of it.
+ * Panels take this rather than a whole `TokenRecord` so they can read the
+ * store, which follows every token event, instead of fetching a copy that
+ * goes stale (`useSceneTokens`). No position: a panel never needs one, and
+ * leaving it out keeps a drag from re-rendering every panel on every step.
+ */
+export type SceneToken = Pick<
+  TokenRecord,
+  | "tokenId"
+  | "sceneId"
+  | "levelId"
+  | "actorId"
+  | "ownerUserId"
+  | "isPrimary"
+  | "photoUrl"
+  | "tokenType"
+  | "linked"
+  | "name"
+  | "nameVisibleToPlayers"
+  | "conditions"
+>;
+
+/**
  * One condition's marker: an identifier the world's system declares, a glyph
  * and a colour token from the host's lists. What it is called and what it
  * means are the system's (`worldSystemConditions`).

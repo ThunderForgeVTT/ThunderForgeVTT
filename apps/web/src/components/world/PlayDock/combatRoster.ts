@@ -1,5 +1,5 @@
 import type { CombatantRecord } from "@/types/combat";
-import type { TokenRecord } from "@/types/token";
+import type { SceneToken } from "@/types/token";
 import type { WorldActorRecord } from "@/types/actor";
 
 /**
@@ -54,13 +54,13 @@ export interface RosterOffer {
 const UNNAMED = "Unnamed token";
 
 function tokenLabel(
-  token: TokenRecord,
+  token: SceneToken,
   actor: WorldActorRecord | undefined,
 ): string {
   if (actor) return actor.label;
-  const written = token.metadata?.label;
-  // A blank metadata label is the same as none: the token sync writes the key
-  // through from whatever authored it, so an empty string reaches here.
+  const written = token.name;
+  // A blank label is the same as none: the token sync writes the key through
+  // from whatever authored it, so an empty string reaches here.
   if (typeof written === "string" && written.trim() !== "") {
     return written.trim();
   }
@@ -87,7 +87,7 @@ function matches(
 
 export function buildRosterOffer(input: {
   selectedTokenIds: string[];
-  tokens: TokenRecord[];
+  tokens: SceneToken[];
   actors: WorldActorRecord[];
   combatants: CombatantRecord[];
 }): RosterOffer {
@@ -132,22 +132,6 @@ export function buildRosterOffer(input: {
   }
 
   return { additions, alreadyPresent, unresolvedTokenIds };
-}
-
-/**
- * Ids worth asking the server about, given what has already been asked.
- *
- * Guards the refetch loop: a demo token never becomes a persisted one, so
- * "some selected id is unresolved" would otherwise mean "fetch the scene's
- * tokens forever". One attempt per id is enough to catch the case this exists
- * for — a token placed seconds ago — and costs nothing for the case it does
- * not.
- */
-export function unattemptedIds(
-  unresolvedTokenIds: string[],
-  attempted: ReadonlySet<string>,
-): string[] {
-  return unresolvedTokenIds.filter((id) => !attempted.has(id));
 }
 
 /** Whether two selections are the same, in the same order. */

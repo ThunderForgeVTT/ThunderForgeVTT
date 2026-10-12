@@ -99,6 +99,10 @@ function tokenRecordToWorldToken(record: TokenRecord): WorldToken {
     // Spec 067: what the character is under. Left out when the reply did not
     // ask, which the engine reads as "no change".
     ...(record.conditions ? { conditions: record.conditions } : {}),
+    sceneId: record.sceneId,
+    levelId: record.levelId,
+    actorId: record.actorId,
+    linked: record.linked,
   };
 }
 

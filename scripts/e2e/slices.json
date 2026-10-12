@@ -1011,6 +1011,7 @@
         "apps/web/src/components/world/SelectionCount/**",
         "apps/web/src/components/world/PlayDock/{LookAtButton.tsx,useSelectedTokenIds.ts}",
         "apps/web/src/components/{TokenPanel,TokenDisclosureControl}.tsx",
+        "apps/web/src/engine/world/{useSceneTokens.ts,__tests__/useSceneTokens.test.ts}",
         "apps/web/src/db/collections/worldTokensSceneCollection.ts",
         "apps/web/src/engine/world/facets/**",
         "apps/web/src/engine/world/probe.ts",

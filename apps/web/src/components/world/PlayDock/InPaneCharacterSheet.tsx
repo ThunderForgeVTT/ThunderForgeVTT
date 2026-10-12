@@ -1,7 +1,7 @@
-import { createElement, useEffect, useMemo, useRef, useState } from "react";
-import { getTokens } from "@/api/tokens";
+import { createElement, useMemo, useRef, useState } from "react";
+import type { WorldStore } from "@/engine/world/store";
+import { useSceneTokens } from "@/engine/world/useSceneTokens";
 import { useAuth } from "@/hooks/useAuth";
-import type { TokenRecord } from "@/types/token";
 import { AttackFlow } from "./AttackFlow/AttackFlow";
 import { mayEditActor } from "@/pages/world/actor/actorEditRight";
 import { resolveActorSheet } from "@/pages/world/actor/systemActorSheets";
@@ -67,6 +67,8 @@ import { useCharacterRolls } from "./useCharacterRolls";
 
 export interface InPaneCharacterSheetProps {
   worldId: string;
+  /** The world store, holding the scene's tokens. */
+  worldStore: WorldStore;
   /** The scene in play, where this character's token is and its targets are. */
   sceneId?: string | null;
   actor: WorldActorRecord;
@@ -78,43 +80,28 @@ export interface InPaneCharacterSheetProps {
 
 export function InPaneCharacterSheet({
   worldId,
+  worldStore,
   sceneId = null,
   actor,
   isGm = false,
   onDismiss,
 }: InPaneCharacterSheetProps) {
   const { user } = useAuth();
-  const [sceneTokens, setSceneTokens] = useState<TokenRecord[]>([]);
   const [attacking, setAttacking] = useState<CharacterRoll | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const sheet = resolveActorSheet(actor.gameSystemId);
 
   // Spec 046: an attack is made from this character's token on the scene, at
   // another token there.
-  useEffect(() => {
-    let active = true;
-    if (!sceneId) return;
-    getTokens(sceneId)
-      .then((tokens) => {
-        if (active) setSceneTokens(tokens);
-      })
-      .catch(() => {
-        if (active) setSceneTokens([]);
-      });
-    return () => {
-      active = false;
-    };
-  }, [sceneId]);
+  const sceneTokens = useSceneTokens(worldStore, sceneId);
 
   /** This character's token here: the viewer's own, else the first. */
   const attackerToken = useMemo(() => {
-    const mine = sceneTokens.filter(
-      (token) => token.sceneId === sceneId && token.actorId === actor.id,
-    );
+    const mine = sceneTokens.filter((token) => token.actorId === actor.id);
     return (
       mine.find((token) => token.ownerUserId === user?.id) ?? mine[0] ?? null
     );
-  }, [sceneTokens, sceneId, actor.id, user?.id]);
+  }, [sceneTokens, actor.id, user?.id]);
 
   const rolls = useCharacterRolls(worldId, actor);
 
