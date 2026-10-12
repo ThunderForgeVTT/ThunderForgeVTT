@@ -308,6 +308,29 @@ equally, and a slice script in `package.json` that is missing or has
 drifted. Only the scripts are fixed for you. Which slice a spec belongs to
 is a judgement about the feature, so the check never guesses it.
 
+### CI
+
+`make ci` is the CI pipeline, and GitHub Actions runs the same command
+(`.github/workflows/ci.yaml`). It runs in a container through
+[paws](https://github.com/mbround18/paws), so a red build on GitHub is red on
+your machine too, and you can reproduce it before you push:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/mbround18/paws/main/scripts/install.sh | sh
+paws init    # installs the dagger CLI
+make ci
+```
+
+It runs every `pnpm verify` check, `make lint`, and the web typecheck and
+unit tests, against the tree as a fresh checkout would hold it: paws uploads
+the working directory filtered by `.gitignore`, uncommitted edits included.
+`scripts/ci.sh` holds the steps and the toolchain versions, which follow the
+Dockerfile's.
+
+`cargo test` is not in it: the server's tests need Postgres and RustFS, and
+`paws run` has no service containers. Run `make test-rust`. E2E is not in it
+either; slices prove a change (above).
+
 ### E2E stacks: one per checkout, two runs at a time
 
 Each checkout has its own e2e stack: the compose project

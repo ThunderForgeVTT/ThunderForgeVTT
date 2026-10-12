@@ -1,4 +1,4 @@
-.PHONY: gc base-maps image push landing-image push-landing telemetry-gateway-image push-telemetry-gateway clean-builds test-db-reset dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-rust e2e-stacks e2e-stacks-rm test-mail bench-blob-store test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean container container-up container-down container-down-clean observability observability-check
+.PHONY: ci gc base-maps image push landing-image push-landing telemetry-gateway-image push-telemetry-gateway clean-builds test-db-reset dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-rust e2e-stacks e2e-stacks-rm test-mail bench-blob-store test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean container container-up container-down container-down-clean observability observability-check
 
 # Loads DATABASE_URL (and anything else) from the repo-root .env for targets
 # that shell out to tools which don't read it themselves (diesel-cli).
@@ -36,6 +36,7 @@ help:
 	@echo "  make push-telemetry-gateway   Build and push it; Flux's Deployment pulls Always, so restart it to roll out"
 	@echo "  make clean-builds     Show what old cargo output and finished worktrees can go (ARGS=--apply deletes it)"
 	@echo "  make format           Run prettier + cargo fmt"
+	@echo "  make ci               The CI pipeline (verify, lint, web typecheck + unit tests) in a container, via paws"
 	@echo "  make lint             Run cargo clippy (-D warnings) plus the file-length check"
 	@echo "  make lint-host        Clippy the workspace for the host target (everything but the wasm-only engine)"
 	@echo "  make lint-wasm        Clippy the browser crates for wasm32-unknown-unknown, the target they ship to"
@@ -291,6 +292,11 @@ format:
 # Conversely the wasm pass cannot replace the host pass: `thunderforge-server`
 # and everything it pulls in does not build for wasm at all.
 lint: lint-host lint-wasm check-file-length
+
+# What GitHub Actions runs (.github/workflows/ci.yaml), in the same container,
+# through paws. Needs paws and dagger; scripts/ci.sh says how to install paws.
+ci:
+	@./scripts/ci.sh
 
 lint-host:
 	cargo clippy --workspace --exclude thunderforge-engine --all-targets -- -D warnings

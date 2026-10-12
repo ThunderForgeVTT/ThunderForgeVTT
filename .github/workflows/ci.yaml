@@ -1,0 +1,29 @@
+# The same pipeline as `make ci` on a laptop: scripts/ci.sh, through paws.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      # `paws run` is newer than paws's latest release (v0.0.1-prerelease.53),
+      # so this builds paws from a pinned commit. Swap `git-ref` for
+      # `version: <tag>` once a release carries it.
+      - uses: mbround18/paws/actions/paws-up@f84ca66721b657788672c06b41661a79afe07dd7
+        with:
+          git-ref: f84ca66721b657788672c06b41661a79afe07dd7
+      - run: make ci
