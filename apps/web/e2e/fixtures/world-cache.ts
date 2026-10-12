@@ -789,10 +789,11 @@ export async function openWorldAndSync(
   page: Page,
   worldId: string,
   sync: ReturnType<typeof watchCacheSync>,
+  { engineTimeout }: { engineTimeout?: number } = {},
 ): Promise<SyncSummary> {
   const before = sync.count();
   await page.goto(`/world/${worldId}/play`);
-  await waitForEngineReady(page);
+  await waitForEngineReady(page, { timeout: engineTimeout });
   return sync.next(before);
 }
 

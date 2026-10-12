@@ -94,8 +94,10 @@ test("a background part cut halfway is asked for again from where it stopped", a
   });
 
   // An asset imported after a sync is planned and prefetched on the next
-  // open; that prefetch is the world cache's download.
-  await openWorldAndSync(page, worldId, sync);
+  // open; that prefetch is the world cache's download. With the HTTP cache
+  // off the engine downloads again too, and a dev build of it is ~320 MB, so
+  // the canvas gets the time that download takes rather than 15 seconds.
+  await openWorldAndSync(page, worldId, sync, { engineTimeout: 180_000 });
 
   await expect
     .poll(() => holdsFingerprint(page, worldId, fingerprint), {

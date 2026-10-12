@@ -497,9 +497,12 @@ export async function launchSceneByName(
   return sceneId;
 }
 
-export async function waitForEngineReady(page: Page): Promise<void> {
+export async function waitForEngineReady(
+  page: Page,
+  { timeout = 15_000 }: { timeout?: number } = {},
+): Promise<void> {
   const canvas = page.locator("canvas");
-  await expect(canvas).toBeVisible({ timeout: 15_000 });
+  await expect(canvas).toBeVisible({ timeout });
   await page.waitForTimeout(3_000);
   await canvas.scrollIntoViewIfNeeded();
   const box = await canvas.boundingBox();
