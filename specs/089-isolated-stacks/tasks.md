@@ -147,7 +147,7 @@ are ready (plan.md Risks).
   - `clearLeftovers` clears only this project's containers.
 - [X] T028 [US1] `.hooks/pre-push` and `.hooks/pre-commit` follow plan.md
   Decision 8. `THUNDERFORGE_IGNORE_E2E_LOCK` keeps working.
-- [ ] T029 [US1] **Proof, SC-001 and SC-002:**
+- [X] T029 [US1] **Proof, SC-001 and SC-002:**
   - **Setup:** two worktrees on this branch, the machine quiet.
   - **The runs:** start `pnpm e2e:book-import` in one and another
     non-engine slice in the other, within 5 seconds of each other.
@@ -156,8 +156,15 @@ are ready (plan.md Risks).
   - **Database check:** a scripted
     `DROP DATABASE … ; CREATE DATABASE … TEMPLATE …` on one worktree's
     shard mid-run, and the other run shows no database errors.
-- [ ] T030 [US1] **Proof:** the cap. Start a third run while two are going.
+  - *Proved 2026-10-11:* `book-import` 17 passed (stack
+    `tf-089-proof-bbabde`) and `feedback` 19 passed (`tf-keen-oak-44oe-c82e03`),
+    started 2 s apart, neither waited; the drop and re-create ran in the
+    proof stack mid-`feedback` with no database errors.
+- [X] T030 [US1] **Proof:** the cap. Start a third run while two are going.
   It waits and names both, then starts when one ends.
+  *Proved 2026-10-11:* the `status` slice printed "Waiting for an e2e slot
+  (2 of 2 held)" naming both, started one second after `book-import` ended,
+  and passed 14 of 14 (`tf-089-proof2-f721fd`).
 - [X] T031 [US1] **Proof:** one engine slice (`tokens`) alone, green. This
   shows the engine path is unaffected by the new ports.
 
@@ -185,18 +192,25 @@ are ready (plan.md Risks).
   bucket).
 - [X] T044 [US4] Update spec.md FR-014's wording to match plan.md
   Decision 6.
-- [ ] T045 [US4] **Proof:**
+- [X] T045 [US4] **Proof:**
   - `make test-rust` (the default) passes against the dev Postgres;
   - `make test-rust STACK=checkout` passes against the checkout's stack;
   - both together from two worktrees, each with `STACK=checkout`, both
     pass.
+  - *Proved 2026-10-11:* 2205 passed each way. Two worktrees ran
+    17:38:08–17:40:44 side by side, each on its own Postgres and RustFS.
+    The first `STACK=checkout` run exposed a settings-test race on
+    `RUSTFS_ENDPOINT` that the dev stack hid; fixed in `0c67a339`.
 - [X] T046 [P] [US1] `compose.journeys.yml` and `compose.torture.yml`
   publish `127.0.0.1::<port>`, and `scripts/journeys.mjs` and
   `scripts/torture.mjs` read the ports back through `stack.mjs`'s
   `parsePort`. Keep their `JOURNEYS_*`/`TORTURE_*` port variables as
   explicit overrides.
-- [ ] T047 [US1] **Proof:** `pnpm journeys` on one file, plus
+- [X] T047 [US1] **Proof:** `pnpm journeys` on one file, plus
   `make test-torture-session-5`, green.
+  *Proved 2026-10-11:* `pnpm journeys --only=the-lane-stands-up` 1 passed;
+  tier 5 7 passed once the throwaway stack's access policy was opened
+  (`0471d1ef`; it had refused every registration since 2026-09-06).
 - [X] T048 [P] [US1] Check that `make dev` and `compose.dev.yml` are
   unchanged on a fresh clone (SC-005).
 
