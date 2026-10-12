@@ -1,6 +1,6 @@
 import { useEffect } from "react";
-import { createToken } from "@/api/tokens";
 import { onPlacementConfirmed } from "@/engine/bevy";
+import type { WorldStore } from "@/engine/world/store";
 
 /**
  * Turns an actor's placement into a token — playtest 2026-09-10 P1, and the
@@ -14,15 +14,17 @@ import { onPlacementConfirmed } from "@/engine/bevy";
  * nothing listened for an actor's drop, so Place made a square follow the
  * pointer and then vanish.
  *
- * Nothing is dispatched to the store here. The world event the server records
- * brings the new token to every client, this one included, by the same path
- * as any other token change — so what this tab sees is what everybody sees.
+ * The token goes into the store under an id minted here, so it shows at once;
+ * the token bridge asks the server for it under that same id and takes it
+ * back off if refused. The world event the server records brings it to every
+ * other client, and confirms it on this one.
  *
  * `enabled` is whoever runs the scene: the engine only starts a carry for a
  * Game Master, and the server refuses anyone else, so a player's tab has no
  * drop to answer.
  */
 export function usePlaceActorTokens(
+  worldStore: WorldStore,
   sceneId: string | null,
   enabled: boolean,
 ): void {
@@ -31,14 +33,20 @@ export function usePlaceActorTokens(
     return onPlacementConfirmed((event) => {
       // A prop is `InteractionTool`'s; only an actor's drop is ours.
       if (event.kind !== "actor") return;
-      createToken({
-        sceneId,
-        actorId: event.reference,
-        x: event.x,
-        y: event.y,
-      }).catch((error: unknown) => {
-        console.error("Placing the token failed:", error);
-      });
+      worldStore.dispatch(
+        {
+          type: "upsert_token",
+          token: {
+            id: crypto.randomUUID(),
+            sceneId,
+            actorId: event.reference,
+            x: event.x,
+            y: event.y,
+            z: 0,
+          },
+        },
+        "ui",
+      );
     });
-  }, [sceneId, enabled]);
+  }, [worldStore, sceneId, enabled]);
 }

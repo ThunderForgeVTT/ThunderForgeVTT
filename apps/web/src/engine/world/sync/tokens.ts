@@ -55,7 +55,7 @@ import { GraphQLRequestError } from "@/api/graphqlClient";
 import { loadTokenVisionIntoEngine } from "./tokenVision";
 import { loadTokenGridIntoEngine } from "./tokenGrid";
 import { toast } from "sonner";
-import type { TokenRecord, UpdateTokenInput } from "@/types/token";
+import type { TokenRecord, TokenType, UpdateTokenInput } from "@/types/token";
 import type { WorldStore } from "../store";
 import type { GroupStamp, WorldCommand, WorldToken } from "../types";
 import { settleGroup } from "./groupMoves";
@@ -70,6 +70,8 @@ type WorldEventLike = {
 };
 
 const TOKEN_EVENT_CODE = 14;
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function tokenRecordToWorldToken(record: TokenRecord): WorldToken {
   // Playtest 2026-09-10 P7: the server resolves the name — the token's own
@@ -454,6 +456,14 @@ export function startTokenMutationBridge(
 ): () => void {
   const engineIdToTokenId = new Map<string, string>();
   const creating = new Set<string>();
+  // Each token as it last stood, so a refused delete can be put back.
+  const lastSeen = new Map<string, WorldToken>();
+
+  // A create the server will not make: off the board again, and said so.
+  const unplace = (tokenId: string, message: string) => {
+    worldStore.dispatch({ type: "remove_token", tokenId }, "sync");
+    toast.error(message);
+  };
 
   const ready = getTokens(sceneId)
     .then((tokens) => {
@@ -469,6 +479,13 @@ export function startTokenMutationBridge(
     });
 
   const unsubscribe = worldStore.subscribe((event) => {
+    if (event.command.type === "upsert_token") {
+      const stood = event.state.tokens[event.command.token.id];
+      if (stood) {
+        lastSeen.set(stood.id, stood);
+      }
+    }
+
     // A `sync` dispatch is not ours to send anywhere — but it is how this
     // client learns that a token exists server-side, and the map has to hear
     // it. Seeding once at start left the map frozen at scene-load: a token
@@ -488,6 +505,7 @@ export function startTokenMutationBridge(
         engineIdToTokenId.set(event.command.token.id, event.command.token.id);
       } else if (event.command.type === "remove_token") {
         engineIdToTokenId.delete(event.command.tokenId);
+        lastSeen.delete(event.command.tokenId);
       }
       return;
     }
@@ -507,7 +525,11 @@ export function startTokenMutationBridge(
         if (worldId && shouldQueue()) {
           if (!knownTokenId) {
             // A token this scene has never seen is a creation, and FR-035a
-            // refuses those offline.
+            // refuses those offline. Taken back off the board, so nothing
+            // shows a token the server will never hear of.
+            if (isSceneOwner) {
+              unplace(token.id, "Tokens can't be placed while offline.");
+            }
             return;
           }
           await queueTokenEditWhileOffline(
@@ -611,24 +633,43 @@ export function startTokenMutationBridge(
 
         // First time this engine id has been seen for this scene: create
         // it. Guard against a second drag firing before this request
-        // resolves (createToken always mints a fresh server tokenId, so a
-        // duplicate call here would create a duplicate row).
+        // resolves, which would ask for the same token twice.
         if (creating.has(token.id)) {
           return;
         }
         creating.add(token.id);
 
+        // The token is created under the id the store already holds it by,
+        // so the server's row and this optimistic copy are one token. An
+        // engine id that is not a UUID cannot be a row's key: the server's
+        // id is used instead and the engine's copy is dropped once the row
+        // exists, since the world event brings the row in under its own id.
+        const tokenId = UUID.test(token.id) ? token.id : crypto.randomUUID();
         void createToken({
+          tokenId,
           sceneId,
+          levelId: token.levelId,
+          actorId: token.actorId ?? undefined,
           x: token.x,
           y: token.y,
+          rotation: token.rotation,
+          scale: token.scale,
+          tokenType: (token.tokenType ?? undefined) as TokenType | undefined,
+          linked: token.linked,
           metadata: token.label ? { label: token.label } : undefined,
         })
-          .then((created) => {
-            engineIdToTokenId.set(token.id, created.tokenId);
+          .then(() => {
+            if (tokenId !== token.id) {
+              worldStore.dispatch(
+                { type: "remove_token", tokenId: token.id },
+                "sync",
+              );
+            }
+            engineIdToTokenId.set(token.id, tokenId);
           })
-          .catch((error) => {
+          .catch((error: unknown) => {
             console.error("Failed to create token:", error);
+            unplace(token.id, "The token could not be placed.");
           })
           .finally(() => {
             creating.delete(token.id);
@@ -647,15 +688,32 @@ export function startTokenMutationBridge(
           return;
         }
 
+        // Already off the board here, so a refusal puts it back as it was.
+        const before = lastSeen.get(engineId);
+        const restore = () => {
+          if (before) {
+            worldStore.dispatch(
+              { type: "upsert_token", token: before },
+              "sync",
+            );
+          }
+          if (!group) {
+            toast.error("The token could not be deleted.");
+          }
+        };
         void deleteToken(knownTokenId)
           .then((ok) => {
             if (ok) {
               engineIdToTokenId.delete(engineId);
+              lastSeen.delete(engineId);
+            } else {
+              restore();
             }
             settleGroup(group, ok, "deleted");
           })
           .catch((error) => {
             console.error("Failed to delete token:", error);
+            restore();
             settleGroup(group, false, "deleted");
           });
       });

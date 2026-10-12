@@ -41,8 +41,12 @@ vi.mock("../groupMoves", () => ({
 }));
 
 const toastWarning = vi.fn();
+const toastError = vi.fn();
 vi.mock("sonner", () => ({
-  toast: { warning: (...args: unknown[]) => toastWarning(...args) },
+  toast: {
+    warning: (...args: unknown[]) => toastWarning(...args),
+    error: (...args: unknown[]) => toastError(...args),
+  },
 }));
 
 const { createWorldStore } = await import("../../store");
@@ -130,6 +134,9 @@ describe("startTokenMutationBridge", () => {
 
     expect(queueEdit).not.toHaveBeenCalled();
     expect(createToken).not.toHaveBeenCalled();
+    // And it does not stay on the board as if it had been placed.
+    expect(store.getState().tokens[TOKEN_ID]).toBeUndefined();
+    expect(toastError).toHaveBeenCalledTimes(1);
     stop();
   });
 
@@ -143,6 +150,71 @@ describe("startTokenMutationBridge", () => {
     await settle();
 
     expect(deleteToken).not.toHaveBeenCalled();
+    stop();
+  });
+});
+
+describe("creates and deletes through the store", () => {
+  it("creates a token under the id the store holds it by, so there is one", async () => {
+    const { store, stop } = bridgeOnStore();
+    await settle();
+    store.dispatch(
+      {
+        type: "upsert_token",
+        token: { ...tokenAt(10, 20), sceneId: SCENE_ID, actorId: "a-1" },
+      },
+      "ui",
+    );
+    await settle();
+    expect(createToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tokenId: TOKEN_ID,
+        sceneId: SCENE_ID,
+        actorId: "a-1",
+        x: 10,
+        y: 20,
+      }),
+    );
+    expect(Object.keys(store.getState().tokens)).toEqual([TOKEN_ID]);
+
+    // Known now: the next drag is a move, not a second create.
+    store.dispatch({ type: "upsert_token", token: tokenAt(30, 20) }, "ui");
+    await settle();
+    expect(createToken).toHaveBeenCalledTimes(1);
+    expect(updateToken).toHaveBeenCalledWith(TOKEN_ID, { x: 30, y: 20 });
+    stop();
+  });
+
+  it("takes a refused create back off the board, and says so", async () => {
+    createToken.mockRejectedValueOnce(new Error("Play is paused"));
+    const { store, stop } = bridgeOnStore();
+    await settle();
+    store.dispatch({ type: "upsert_token", token: tokenAt(10, 20) }, "ui");
+    await vi.waitFor(() =>
+      expect(store.getState().tokens[TOKEN_ID]).toBeUndefined(),
+    );
+    expect(toastError).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
+  it("puts a refused delete back as it stood, and says so", async () => {
+    deleteToken.mockRejectedValueOnce(new Error("Play is paused"));
+    const { store, stop } = bridgeOnStore();
+    await settle();
+    store.dispatch(
+      { type: "upsert_token", token: { ...tokenAt(5, 6), label: "Goblin" } },
+      "sync",
+    );
+    store.dispatch({ type: "remove_token", tokenId: TOKEN_ID }, "ui");
+    expect(store.getState().tokens[TOKEN_ID]).toBeUndefined();
+    await vi.waitFor(() =>
+      expect(store.getState().tokens[TOKEN_ID]).toMatchObject({
+        x: 5,
+        y: 6,
+        label: "Goblin",
+      }),
+    );
+    expect(toastError).toHaveBeenCalledTimes(1);
     stop();
   });
 });

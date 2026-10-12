@@ -95,6 +95,11 @@ export const TOKEN_TYPES: { value: TokenType; label: string }[] = [
 ];
 
 export interface CreateTokenInput {
+  /**
+   * The new token's id. Omitted, the server mints one; named, the store's
+   * optimistic copy and the stored row are the same token.
+   */
+  tokenId?: string;
   sceneId: string;
   /** Omitted, the level this browser is showing; failing that, the entry level. */
   levelId?: string;

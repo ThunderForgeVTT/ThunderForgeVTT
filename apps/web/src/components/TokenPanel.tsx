@@ -1,10 +1,12 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Popover from "@radix-ui/react-popover";
 import {
-  createToken,
-  deleteToken,
-  getTokens,
   setOwnPrimaryTokenPhoto,
   setTokenLink,
   updateToken,
@@ -19,15 +21,19 @@ import {
   sizeIdOnSheet,
   type DeclaredSizes,
 } from "../utils/sizeCategory";
-import { TOKEN_TYPES, type TokenRecord, type TokenType } from "../types/token";
+import { TOKEN_TYPES, type SceneToken, type TokenType } from "../types/token";
 import { TokenDisclosureControl } from "./TokenDisclosureControl";
 import { getTokenStatus, type TokenStatus } from "@/api/tokenStatus";
 import { tokenFallbackArt } from "@/hooks/useAvatar";
 import type { WorldActorRecord } from "../types/actor";
+import type { WorldStore } from "@/engine/world/store";
+import { useSceneTokens } from "@/engine/world/useSceneTokens";
 import "../styles/TokenPanel.scss";
 
 interface TokenPanelProps {
   sceneId: string;
+  /** Where the scene's tokens are read from and created and deleted through. */
+  worldStore: WorldStore;
   /** Current authenticated user's id, for gating primary-photo edits. */
   currentUserId: string | null;
   /** Whether the current user is this scene's GM (owner). */
@@ -53,13 +59,14 @@ interface TokenPanelProps {
  */
 export const TokenPanel: React.FC<TokenPanelProps> = ({
   sceneId,
+  worldStore,
   currentUserId,
   isSceneOwner,
   isOpen,
   onOpenChange,
   worldId,
 }) => {
-  const [tokens, setTokens] = useState<TokenRecord[]>([]);
+  const tokens = useSceneTokens(worldStore, sceneId);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -189,11 +196,6 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
       .catch((err) => {
         console.error("Failed to load token disclosure:", err);
       });
-    getTokens(sceneId)
-      .then(setTokens)
-      .catch((err) => {
-        console.error("Failed to load scene tokens:", err);
-      });
   }, [sceneId]);
 
   useEffect(() => {
@@ -201,50 +203,39 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
     refresh();
   }, [isOpen, refresh]);
 
-  const handleCreateToken = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      await createToken({
-        sceneId,
-        x: 0,
-        y: 0,
-        // No `scale`: a creature's size is its footprint, which the server
-        // resolves from its sheet (spec 046 T077). Scale is only its art.
-        actorId: newTokenActorId || undefined,
-        tokenType: effectiveTokenType,
-      });
-      setNewTokenActorId("");
-      setNewTokenTypeChoice(null);
-      setCreateDialogOpen(false);
-      refresh();
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Unknown error creating token",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [sceneId, newTokenActorId, effectiveTokenType, refresh]);
+  // Into the store, which shows the token at once; the token bridge asks
+  // the server for it and takes it back off, with a toast, if refused.
+  const handleCreateToken = useCallback(() => {
+    worldStore.dispatch(
+      {
+        type: "upsert_token",
+        token: {
+          id: crypto.randomUUID(),
+          sceneId,
+          x: 0,
+          y: 0,
+          z: 0,
+          // No `scale`: a creature's size is its footprint, which the server
+          // resolves from its sheet (spec 046 T077). Scale is only its art.
+          actorId: newTokenActorId || undefined,
+          tokenType: effectiveTokenType,
+        },
+      },
+      "ui",
+    );
+    setNewTokenActorId("");
+    setNewTokenTypeChoice(null);
+    setCreateDialogOpen(false);
+  }, [worldStore, sceneId, newTokenActorId, effectiveTokenType]);
 
+  // Off the board at once; the bridge puts it back if the server refuses.
   const handleDeleteToken = useCallback(
-    async (tokenId: string) => {
+    (tokenId: string) => {
       if (!window.confirm("Delete this token?")) return;
-      setLoading(true);
-      setError(null);
-      try {
-        await deleteToken(tokenId);
-        setSelectedTokenId(null);
-        refresh();
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Unknown error deleting token",
-        );
-      } finally {
-        setLoading(false);
-      }
+      setSelectedTokenId(null);
+      worldStore.dispatch({ type: "remove_token", tokenId }, "ui");
     },
-    [refresh],
+    [worldStore],
   );
 
   const handleSetPrimaryPhoto = useCallback(
@@ -279,30 +270,34 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
       // one. Found live while writing this feature's e2e coverage
       // (spec 004 T022): a real user could plausibly click again during
       // that window, thinking the first click didn't register.
-      let rollbackTokens: TokenRecord[] | null = null;
-      setTokens((prev) => {
-        rollbackTokens = prev;
-        return prev.map((t) => {
-          if (t.tokenId === tokenId) {
-            return { ...t, ownerUserId, isPrimary };
-          }
-          // Mirror the server's "exactly one primary per (scene, owner)"
-          // invariant locally too, so a second token belonging to the
-          // same owner doesn't transiently also show as primary.
-          if (isPrimary && ownerUserId && t.ownerUserId === ownerUserId) {
-            return { ...t, isPrimary: false };
-          }
-          return t;
-        });
-      });
+      //
+      // Written to the store as `sync`: the store shows it, and the token
+      // bridge, which would turn a `ui` upsert into a move, leaves it alone.
+      // The server's event confirms it for every client.
+      const before = Object.values(worldStore.getState().tokens).filter(
+        (t) =>
+          t.id === tokenId ||
+          (isPrimary && ownerUserId && t.ownerUserId === ownerUserId),
+      );
+      const put = (token: (typeof before)[number]) =>
+        worldStore.dispatch({ type: "upsert_token", token }, "sync");
+      for (const t of before) {
+        // Mirror the server's "exactly one primary per (scene, owner)"
+        // invariant locally too, so a second token belonging to the
+        // same owner doesn't transiently also show as primary.
+        put(
+          t.id === tokenId
+            ? { ...t, ownerUserId: ownerUserId ?? undefined, isPrimary }
+            : { ...t, isPrimary: false },
+        );
+      }
       try {
         await updateToken(tokenId, {
           ownerUserId: ownerUserId ?? undefined,
           isPrimary,
         });
-        refresh();
       } catch (err) {
-        if (rollbackTokens) setTokens(rollbackTokens);
+        before.forEach(put);
         setError(
           err instanceof Error
             ? err.message
@@ -312,10 +307,10 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
         setLoading(false);
       }
     },
-    [refresh],
+    [worldStore],
   );
 
-  const getTokenAvatar = (token: TokenRecord): string =>
+  const getTokenAvatar = (token: SceneToken): string =>
     token.photoUrl ?? tokenFallbackArt(token.tokenId);
 
   /** GM-only (spec 046 FR-016): make a token its actor, or a copy of it. */
@@ -396,9 +391,10 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
                     >
                       <div className="token-details">
                         <h4>Token Details</h4>
-                        <p data-testid={`token-position-${token.tokenId}`}>
-                          Position: ({token.x.toFixed(1)}, {token.y.toFixed(1)})
-                        </p>
+                        <TokenPosition
+                          worldStore={worldStore}
+                          tokenId={token.tokenId}
+                        />
                         <p>ID: {token.tokenId}</p>
 
                         {canEditPhoto && (
@@ -654,3 +650,29 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
     </Dialog.Root>
   );
 };
+
+/**
+ * Where a token stands, read live from the store. Its own component so that
+ * only an open popover follows a drag; the list does not re-render with it.
+ */
+function TokenPosition({
+  worldStore,
+  tokenId,
+}: {
+  worldStore: WorldStore;
+  tokenId: string;
+}) {
+  const x = useSyncExternalStore(
+    worldStore.subscribe,
+    () => worldStore.getState().tokens[tokenId]?.x ?? 0,
+  );
+  const y = useSyncExternalStore(
+    worldStore.subscribe,
+    () => worldStore.getState().tokens[tokenId]?.y ?? 0,
+  );
+  return (
+    <p data-testid={`token-position-${tokenId}`}>
+      Position: ({x.toFixed(1)}, {y.toFixed(1)})
+    </p>
+  );
+}

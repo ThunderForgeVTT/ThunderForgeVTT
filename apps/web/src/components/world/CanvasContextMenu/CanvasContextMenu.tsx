@@ -7,7 +7,7 @@ import {
   type WorldSystemCondition,
 } from "@/api/actorConditions";
 import { changeHitPoints } from "@/api/combat";
-import { createToken, deleteToken, setTokenLink } from "@/api/tokens";
+import { setTokenLink } from "@/api/tokens";
 import { Button } from "@/components/ui/button/Button";
 import {
   Dialog,
@@ -671,15 +671,13 @@ export function CanvasContextMenu({
                 variant="danger"
                 data-testid="canvas-menu-remove-confirm"
                 onClick={() => {
-                  void deleteToken(follow.target.tokenId)
-                    .catch((error: unknown) =>
-                      setNotice(
-                        error instanceof Error
-                          ? error.message
-                          : "Removing the token failed",
-                      ),
-                    )
-                    .finally(endFollow);
+                  // The token bridge sends it, and puts the token back with
+                  // a toast if the server refuses.
+                  worldStore.dispatch(
+                    { type: "remove_token", tokenId: follow.target.tokenId },
+                    "ui",
+                  );
+                  endFollow();
                 }}
               >
                 Remove
@@ -691,6 +689,7 @@ export function CanvasContextMenu({
 
       {follow?.kind === "place-token" && sceneId ? (
         <PlaceTokenDialog
+          worldStore={worldStore}
           worldId={worldId}
           sceneId={sceneId}
           at={follow.at}
@@ -813,12 +812,14 @@ function HitPointsDialog({
 
 /** Which actor, then Place: a token where the Game Master right-clicked. */
 function PlaceTokenDialog({
+  worldStore,
   worldId,
   sceneId,
   at,
   onClose,
   onBack,
 }: {
+  worldStore: WorldStore;
   worldId: string;
   sceneId: string;
   at: { x: number; y: number };
@@ -827,7 +828,6 @@ function PlaceTokenDialog({
 }) {
   const [actors, setActors] = useState<WorldActorRecord[] | null>(null);
   const [actorId, setActorId] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const selectId = useId();
 
   useEffect(() => {
@@ -862,15 +862,23 @@ function PlaceTokenDialog({
           onSubmit={(event) => {
             event.preventDefault();
             if (!actorId) return;
-            createToken({ sceneId, actorId, x: at.x, y: at.y })
-              .then(onClose)
-              .catch((err: unknown) =>
-                setError(
-                  err instanceof Error
-                    ? err.message
-                    : "Placing the token failed",
-                ),
-              );
+            // Shown at once; the token bridge creates it, and takes it back
+            // off with a toast if the server refuses.
+            worldStore.dispatch(
+              {
+                type: "upsert_token",
+                token: {
+                  id: crypto.randomUUID(),
+                  sceneId,
+                  actorId,
+                  x: at.x,
+                  y: at.y,
+                  z: 0,
+                },
+              },
+              "ui",
+            );
+            onClose();
           }}
         >
           <div className="grid gap-1.5">
@@ -895,11 +903,6 @@ function PlaceTokenDialog({
               </p>
             ) : null}
           </div>
-          {error ? (
-            <p role="alert" className="text-xs text-destructive">
-              {error}
-            </p>
-          ) : null}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={onClose}>
               Cancel

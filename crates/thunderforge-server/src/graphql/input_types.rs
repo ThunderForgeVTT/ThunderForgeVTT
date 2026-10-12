@@ -366,6 +366,11 @@ pub struct GraphQLDeleteWorldPayload {
 /// Input for creating a new token on a scene
 #[derive(InputObject, Debug, Clone)]
 pub struct GraphQLCreateTokenInput {
+    /// The new token's id, minted by the client. Omitted, the server mints
+    /// one. A client that shows the token before the server answers names it
+    /// here, so its optimistic copy and the stored row are one token rather
+    /// than two. An id already in use is refused, never overwritten.
+    pub token_id: Option<Uuid>,
     pub scene_id: Uuid,
     /// Which level it goes on. Omitted: the scene's entry level.
     pub level_id: Option<Uuid>,

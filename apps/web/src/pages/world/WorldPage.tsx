@@ -509,7 +509,7 @@ export default function WorldPage() {
   // Playtest 2026-09-10 P1: the actors pane's Place creates a token where it
   // is dropped. `selectedSceneId`, not `sceneId`: the alias is declared
   // further down.
-  usePlaceActorTokens(selectedSceneId, isSceneOwner);
+  usePlaceActorTokens(worldStore, selectedSceneId, isSceneOwner);
 
   /**
    * Bumped whenever something might have changed the approval queue, so it
@@ -3579,6 +3579,7 @@ export default function WorldPage() {
                   </button>
                   <TokenPanel
                     sceneId={sceneId}
+                    worldStore={worldStore}
                     currentUserId={user?.id ?? null}
                     isSceneOwner={isSceneOwner}
                     isOpen={tokenPanelOpen}

@@ -696,7 +696,7 @@ pub(crate) async fn create_token_impl(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
     let now = Utc::now().naive_utc();
 
-    let token_id = uuid::Uuid::now_v7();
+    let token_id = input.token_id.unwrap_or_else(uuid::Uuid::now_v7);
     let scene_id = input.scene_id;
     let level_id = input.level_id;
     let actor_id = input.actor_id;
@@ -811,11 +811,14 @@ pub(crate) async fn create_token_impl(
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|e| {
-        refusal_or(
+    .map_err(|e| match e {
+        DieselError::DatabaseError(diesel::result::DatabaseErrorKind::UniqueViolation, _) => {
+            Error::new("A token with that id already exists")
+        }
+        e => refusal_or(
             e,
             "Failed to create token (scene not found or not owned by you)",
-        )
+        ),
     })?;
 
     Ok(inserted_token)

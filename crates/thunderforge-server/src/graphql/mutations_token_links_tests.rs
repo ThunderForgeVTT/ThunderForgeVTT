@@ -158,6 +158,7 @@ fn creature(
 
 fn input(t: &Table, actor_id: Option<Uuid>, linked: Option<bool>) -> GraphQLCreateTokenInput {
     GraphQLCreateTokenInput {
+        token_id: None,
         scene_id: t.scene_id,
         level_id: None,
         actor_id,
@@ -301,6 +302,30 @@ async fn a_token_with_no_actor_cannot_be_placed_linked_nor_one_from_another_worl
             .is_err(),
         "an actor from another world is not copied onto this board"
     );
+}
+
+/// A client that shows a token before the server answers names it, so the
+/// stored row is that token and not a second one. Naming it twice is refused.
+#[tokio::test]
+async fn a_client_minted_id_is_the_stored_id_and_cannot_be_reused() {
+    let state = test_app_state();
+    let t = {
+        let mut conn = state.db_pool.get().expect("conn");
+        table(&mut conn)
+    };
+    let minted = Uuid::now_v7();
+    let named = GraphQLCreateTokenInput {
+        token_id: Some(minted),
+        ..input(&t, None, None)
+    };
+    let created = create_token_impl(&state, t.gm, false, named.clone())
+        .await
+        .expect("placed");
+    assert_eq!(created.id(), minted);
+    let again = create_token_impl(&state, t.gm, false, named)
+        .await
+        .expect_err("an id in use is refused");
+    assert_eq!(again.message, "A token with that id already exists");
 }
 
 /// SC-008: copies of one NPC take damage separately, and none of it reaches

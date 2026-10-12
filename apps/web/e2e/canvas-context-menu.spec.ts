@@ -233,6 +233,57 @@ test("the play field's right-click menu offers each viewer what they may do", as
       expect(added.brightRadius).toBeLessThan(added.radius);
     });
 
+    await test.step("the Game Master places a token from bare board, it shows once everywhere, and removing it takes it off everywhere", async () => {
+      const spot = { x: -150, y: 150 };
+      await openMenuOn(table.gm, null, spot);
+      await table.gm.getByTestId("canvas-menu-place-token").click();
+      const dialog = table.gm.getByTestId("canvas-menu-place-token-dialog");
+      await expect(dialog).toBeVisible();
+      await dialog
+        .getByTestId("canvas-menu-place-token-actor")
+        .selectOption(goblin.actorId);
+      await dialog.getByTestId("canvas-menu-place-token-confirm").click();
+      await expect(dialog).toBeHidden();
+
+      // Exactly one more: the store's optimistic copy and the server's
+      // token are the same token, under the id the client minted.
+      for (const client of [table.gm, aria.page]) {
+        await expect
+          .poll(async () => (await storeCounts(client))?.tokens, {
+            timeout: 15_000,
+          })
+          .toBe(3);
+      }
+      const { tokens } = await must<{ tokens: { tokenId: string }[] }>(
+        table.gm,
+        `query ($sceneId: UUID!) { tokens(sceneId: $sceneId) { tokenId } }`,
+        { sceneId: table.sceneId },
+      );
+      expect(tokens).toHaveLength(3);
+      const placed = tokens.find(
+        (t) => t.tokenId !== hero.tokenId && t.tokenId !== goblin.tokenId,
+      )!.tokenId;
+      await table.gm.waitForTimeout(1_500);
+      expect((await storeCounts(table.gm))?.tokens).toBe(3);
+
+      await openMenuOn(table.gm, placed);
+      await table.gm.getByTestId("canvas-menu-remove").click();
+      await table.gm.getByTestId("canvas-menu-remove-confirm").click();
+      for (const client of [table.gm, aria.page]) {
+        await expect
+          .poll(async () => (await storeCounts(client))?.tokens, {
+            timeout: 15_000,
+          })
+          .toBe(2);
+      }
+      const after = await must<{ tokens: { tokenId: string }[] }>(
+        table.gm,
+        `query ($sceneId: UUID!) { tokens(sceneId: $sceneId) { tokenId } }`,
+        { sceneId: table.sceneId },
+      );
+      expect(after.tokens.map((t) => t.tokenId)).not.toContain(placed);
+    });
+
     await test.step("a player's bare board offers nothing", async () => {
       await rightClickBoard(aria.page, { x: 150, y: 150 });
       await aria.page.waitForTimeout(1_500);
