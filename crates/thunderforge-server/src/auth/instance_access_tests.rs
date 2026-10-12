@@ -106,6 +106,26 @@ fn an_unknown_stored_policy_degrades_to_closed() {
     }
 }
 
+/// The environment fixes the policy admission enforces, the same way the
+/// settings surface reports it as fixed; unset, the row decides.
+#[test]
+fn an_environment_pinned_policy_is_the_one_enforced() {
+    use crate::settings::test_env::thread_env;
+    const VAR: &str = "THUNDERFORGE_INSTANCE_ACCESS_POLICY";
+    thread_env(&[(VAR, Some("open"))], || {
+        assert_eq!(env_pinned_policy(), Some(InstanceAccessPolicy::Open));
+    });
+    thread_env(&[(VAR, Some("invite_only"))], || {
+        assert_eq!(env_pinned_policy(), Some(InstanceAccessPolicy::InviteOnly));
+    });
+    thread_env(&[(VAR, Some("wide-open"))], || {
+        assert_eq!(env_pinned_policy(), Some(InstanceAccessPolicy::Closed));
+    });
+    thread_env(&[(VAR, None)], || {
+        assert_eq!(env_pinned_policy(), None);
+    });
+}
+
 /// FR-001 and the contract's decision table, all three states.
 #[tokio::test]
 async fn the_policy_decides_admission_on_every_route() {

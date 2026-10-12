@@ -94,7 +94,15 @@ impl AdmissionRoute {
 /// fallback exists so a missing row cannot take the instance down, and it
 /// chooses `closed` for the same fail-shut reason [`InstanceAccessPolicy::from_db_str`]
 /// does — a policy nobody set should not be an open door.
+///
+/// The environment comes first, as it does for every declared setting
+/// (ADR-088): where `THUNDERFORGE_INSTANCE_ACCESS_POLICY` is set, the settings
+/// surface reports the policy as fixed by it, so admission must enforce that
+/// policy and not the row underneath it.
 pub async fn load_policy(state: &AppState) -> Result<InstanceAccessPolicy, String> {
+    if let Some(pinned) = env_pinned_policy() {
+        return Ok(pinned);
+    }
     let mut conn = state
         .db_pool
         .get()
@@ -114,6 +122,14 @@ pub async fn load_policy(state: &AppState) -> Result<InstanceAccessPolicy, Strin
     Ok(row
         .map(|r| InstanceAccessPolicy::from_db_str(&r.access_policy))
         .unwrap_or(InstanceAccessPolicy::Closed))
+}
+
+/// The policy the environment fixes, if it fixes one. A value this build does
+/// not understand fails shut, as a stored one does.
+pub fn env_pinned_policy() -> Option<InstanceAccessPolicy> {
+    let declared = crate::settings::registry::declaration("instance.access_policy")?;
+    let name = declared.env_name_in_use()?;
+    crate::settings::registry::read_env(name).map(|v| InstanceAccessPolicy::from_db_str(&v))
 }
 
 /// Writes one append-only access event (FR-004, FR-012).
