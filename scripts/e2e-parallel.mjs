@@ -49,7 +49,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import {
@@ -397,7 +397,10 @@ SELECT shobj_description(oid, 'pg_database') FROM pg_database
 }
 
 function stampTemplate(database, stamp) {
-  psql("postgres", `COMMENT ON DATABASE ${database} IS 'tf-template:${stamp}';`);
+  psql(
+    "postgres",
+    `COMMENT ON DATABASE ${database} IS 'tf-template:${stamp}';`,
+  );
 }
 
 /** Migrate and seed one template database, then clone it per shard. */
@@ -644,9 +647,15 @@ function blankedOauthEnv() {
   const keys = new Set(
     Object.keys(process.env).filter((key) => key.startsWith("OAUTH_")),
   );
-  // `dotenvy` walks up from the working directory, so a worktree inside a
-  // developer's checkout inherits the parent's file too.
-  for (const dir of [ROOT_DIR, join(ROOT_DIR, "..")]) {
+  // `dotenvy` walks up from the working directory to the filesystem root, so
+  // a worktree inside a developer's checkout (`.claude/worktrees/<name>`,
+  // three levels down) inherits the checkout's file too.
+  const dirs = [];
+  for (let dir = ROOT_DIR; ; dir = dirname(dir)) {
+    dirs.push(dir);
+    if (dirname(dir) === dir) break;
+  }
+  for (const dir of dirs) {
     const file = join(dir, ".env");
     if (!existsSync(file)) continue;
     for (const line of readFileSync(file, "utf8").split("\n")) {
