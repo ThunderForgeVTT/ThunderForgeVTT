@@ -98,10 +98,10 @@ refusal.
   - signed out, `/join/<code>` leads to a sign-in page with no **Register**;
   - the list updates when the link is used, with no reload.
 - [X] T024 [P] [US1] Extend `invite-membership.spec.ts` where it asserts the old single message or 5 uses. Also moved every spec that made a link from `/world/:id` to `/world/:id/players` (19 call sites plus `journeyTable.ts`, `access-links`, `abilities-ux`, `map-editor-tooling`, `world-administration`, three journeys).
-- [ ] T025 [P] [US1] Telemetry: `world_link.created`, `world_link.revoked`, `world_link.join`, and the `thunderforge.world_links.joins` counter (contracts/telemetry.md). (waits on 086)
+- [X] T025 [P] [US1] Telemetry: `world_link.created`, `world_link.revoked`, `world_link.join`, and the `thunderforge.world_links.joins` counter (contracts/telemetry.md). *Done: the browser events are `apps/web/src/telemetry/firstSession.ts`, called from `WorldLinksPanel` and `JoinWorldPage`; a link with no limit is `max_uses=none`, which the contract now lists. The counter is `crates/thunderforge-server/src/telemetry/first_session.rs`, from the `joinWorld` resolver, counting a join and the five link refusals and nothing else. All five server instruments and nine events are in the policy crate and `packages/telemetry`'s allow-list, 086's contracts, and Appendix A.2 with the guide.*
 - [X] T026 [US1] `pnpm e2e:accounts`, then `pnpm e2e:which --diff` and each slice it names (not the full suite: Open item 7). accounts 71/0 on 2026-10-09, after fixing the failures in two earlier runs (69/1, 70/1).
 - [X] T027 [US1] Commit: "Spec 088: GM-only world links with an optional use limit and a reason for every refusal". b6929095.
-- [X] T028 [US1] **After `hotfix-invite-uses` is on main.** OAuth sign-in only from a join page (FR-010): the authorize step marks the state `sign_in_only` when `returnTo` is under `/join/`, and the callback (`auth/oauth.rs:394`) refuses to create a user for it, with the FR-010 message and the `thunderforge.world_links.oauth_refused` counter. Tests in `auth/` for `open`, `invite_only` and `closed` modes (SC-002). An e2e case in `world-links.spec.ts` with the mock OAuth provider. Run `pnpm e2e:accounts`. *Done: the mark is the authorization session's own `return_to` (no new column), read in the callback as `sign_in_only`; the refusal is `auth/world_link_sign_in.rs` (403 `world_link_sign_in_only`), checked before the admission gate so no invitation use is judged or burned. Tests: `auth/instance_access_tests.rs` walks `open`, `invite_only` and `closed`. The e2e case is in `oauth-provider.spec.ts` (accounts slice) beside the stub's helpers. The `thunderforge.world_links.oauth_refused` counter is (waits on 086).*
+- [X] T028 [US1] **After `hotfix-invite-uses` is on main.** OAuth sign-in only from a join page (FR-010): the authorize step marks the state `sign_in_only` when `returnTo` is under `/join/`, and the callback (`auth/oauth.rs:394`) refuses to create a user for it, with the FR-010 message and the `thunderforge.world_links.oauth_refused` counter. Tests in `auth/` for `open`, `invite_only` and `closed` modes (SC-002). An e2e case in `world-links.spec.ts` with the mock OAuth provider. Run `pnpm e2e:accounts`. *Done: the mark is the authorization session's own `return_to` (no new column), read in the callback as `sign_in_only`; the refusal is `auth/world_link_sign_in.rs` (403 `world_link_sign_in_only`), checked before the admission gate so no invitation use is judged or burned. Tests: `auth/instance_access_tests.rs` walks `open`, `invite_only` and `closed`. The e2e case is in `oauth-provider.spec.ts` (accounts slice) beside the stub's helpers. The `thunderforge.world_links.oauth_refused` counter is recorded by `refused()` through `telemetry/first_session.rs` (T025).*
 - [X] T029 [US1] Commit: "Spec 088: a world link never creates an account". f178979e.
 
 **Checkpoint**: SC-001 and SC-002 hold. `pnpm e2e:accounts` is green.
@@ -122,7 +122,7 @@ refusal.
 - [X] T034 [P] [US2] `base_maps/routes.rs`: the three HTTP routes, matched by id against the loaded set, signed-in only, with the cache header. A test that `..` and an unknown id are 404.
 - [X] T035 [US2] `baseMaps` and `defaultBaseMapId` queries, and the `MapCredit` type (contracts/graphql.md, FR-021).
 - [X] T036 [US2] Tests for `createWorld`'s `baseMapId`: absent applies the default, `null` applies none, an unknown id is refused before anything is created, and the rescue flow applies none (FR-023, FR-026).
-- [X] T037 [US2] `createWorld` (`mutations_worlds.rs`): after the world's transaction commits, apply the map as contracts/base-maps.md describes: the upload with `base_map_id`, then size, grid, walls (perimeter included, from `maps.json`), doors and lights in one transaction, and `MAP_IMPORTED`. A failure adds `STARTING_MAP_FAILED` and leaves the world (FR-024, FR-025). The `thunderforge.base_maps.applied` counter (waits on 086). T036 passes.
+- [X] T037 [US2] `createWorld` (`mutations_worlds.rs`): after the world's transaction commits, apply the map as contracts/base-maps.md describes: the upload with `base_map_id`, then size, grid, walls (perimeter included, from `maps.json`), doors and lights in one transaction, and `MAP_IMPORTED`. A failure adds `STARTING_MAP_FAILED` and leaves the world (FR-024, FR-025). The `thunderforge.base_maps.applied` counter: `first_session::record_base_map`, `ok`, `upload_failed` (a `Storage` error) or `import_failed`. T036 passes.
 - [X] T038 [P] [US2] Replace the stale `STARTER_SCENE_NAME` comment (`mutations_worlds.rs:22-41`) with the licence as settled (FR-032).
 - [X] T039 [US2] `GraphQLScene.backgroundCredit`, resolved through `base_map_id`, null otherwise, with a test (FR-029).
 - [X] T040 [US2] `apps/web/src/pages/world/BaseMapPicker.tsx` (new): a keyboard-usable radio group of thumbnail cards plus **None**, the default selected, the credit beside it, usable at 375 px. Put it on `CreateWorldPage.tsx`, sending `baseMapId`, and show the `STARTING_MAP_FAILED` notice (FR-027, FR-030).
@@ -131,7 +131,7 @@ refusal.
   - create with the default: the board shows the map and the credit, with no step after Create;
   - create with **None**: the Starting Scene matches today's, field for field (SC-003);
   - the credit's links point at the licence, the source and the catalog.
-- [ ] T043 [P] [US2] Telemetry: `world.created` (contracts/telemetry.md). (waits on 086)
+- [X] T043 [P] [US2] Telemetry: `world.created` (contracts/telemetry.md). *Done: `CreateWorldPage`, after `createWorld` returns; the instance's default map id is kept so the event says `default`, never an id.*
 - [X] T044 [US2] `pnpm e2e:worlds`, `pnpm e2e:scenes`, `pnpm e2e:canvas`, then `pnpm e2e:which --diff` and its slices. worlds 24/0, scenes 19/0, canvas 44/0; the slices `e2e:which --diff` names run with T116.
 - [X] T045 [US2] Commit: "Spec 088: a new world opens on one of our maps, credited".
 
@@ -182,14 +182,14 @@ deleted.
 - [X] T062 [US5] Tests in `roll_feed_tests.rs` and `roll_stream_tests.rs`: after a clear, `worldRolls`, `worldRoll`, `worldRollRecords`, the live stream and the catch-up return no cleared roll, for a player and for the GM. A roll made after the clear is returned. A `ROLL_MADE` event recorded before the clear and replayed after it is not delivered (FR-042).
 - [X] T063 [US5] Apply `cleared` on every path named in T062. T062 passes.
 - [X] T064 [US5] Tests in `mutations_roll_tests.rs`: `clearWorldRolls` by the GM sets `rolls_cleared_at`, records event 39 with `{clearedAt}`, and leaves the `world_roll_records` and `world_attacks` counts unchanged; by a player it is refused; while paused it is refused; for a demoted GM it is refused (FR-040, FR-041).
-- [X] T065 [US5] `clearWorldRolls` in `graphql/mutations_roll.rs`, with the `thunderforge.rolls.cleared` counter. T064 passes. The counter waits on 086.
+- [X] T065 [US5] `clearWorldRolls` in `graphql/mutations_roll.rs`, with the `thunderforge.rolls.cleared` counter. T064 passes. The counter is recorded after the clear commits (T072).
 - [X] T066 [US5] `revealRoll` (`mutations_roll.rs:255`) and `rerollRoll` (`mutations_reroll.rs`) refuse a cleared roll with "That roll was cleared.", with tests (FR-043).
 - [X] T067 [US5] Web: `engine/world/sync/rolls.ts` handles event 39; `hooks/useWorldRolls.ts` drops every entry at or before `clearedAt` and does not animate it again; tests in `sync/__tests__/rolls.test.ts` (FR-044).
 - [X] T068 [P] [US5] Demo, TDD: tests first in the demo's dice and events tests, then `apps/demo/src/backend/handlers/dice.ts` and `events.ts` mirror FR-040 to FR-044 across tabs (FR-046).
 - [X] T069 [US5] **Clear rolls** in the feed's header (`components/world/PlayDock/ChatPanel.tsx`), for those who run the world only, with the FR-045 confirmation.
 - [X] T070 [US5] e2e `apps/web/e2e/rolls-clear.spec.ts` (rolls slice): a GM and two players roll (one for the GM's eyes, one GM only); the GM clears; every feed empties with no reload; a reload and a reconnect bring nothing back; a player sees no **Clear rolls**.
 - [X] T071 [P] [US5] Extend `apps/demo/e2e/rolls-across-tabs.spec.ts` with a clear across two tabs.
-- [ ] T072 [P] [US5] Telemetry: `rolls.cleared`. (waits on 086)
+- [X] T072 [P] [US5] Telemetry: `rolls.cleared`. *Done: `ChatPanel`, after `clearWorldRolls` succeeds.*
 - [X] T073 [US5] `pnpm e2e:rolls`, then `pnpm e2e:which --diff` and its slices. rolls 30/0 (web), the demo\'s tests 160/160 and its e2e 3/0, `rolls-across-tabs` included; the rest of `e2e:which --diff` runs in T116.
 - [X] T074 [US5] Commit: "Spec 088: the GM clears the roll feed for everyone".
 
@@ -206,7 +206,7 @@ deleted.
 - [X] T075 [P] [US6] TDD: `map_import/perimeter_tests.rs` with every fixture in data-model.md (the ambush map's 4 walls, a covered edge, a split edge, a crossing wall, overlapping walls, the 0.5 px tolerance). See them fail.
 - [X] T076 [US6] `map_import/perimeter.rs` (new): `perimeter_walls(placement, existing)` (FR-090). T075 passes.
 - [X] T077 [US6] Tests in `map_import/tests.rs`: importing the ambush map gives `wallsCreated: 4`, `perimeterWallsCreated: 4`; a re-import leaves 4 edge walls; `wallEdges=false` adds none; a moved perimeter wall survives a re-import; the existing wall, door and light tests are unchanged (FR-091, FR-096).
-- [X] T078 [US6] `import_uvtt_impl` (`map_import/mod.rs:115`): the `wallEdges` form field, the replace-then-add in the import's transaction, `perimeter_walls_created` in the `MAP_IMPORTED` payload and the answer, and the `thunderforge.map_import.perimeter_walls` histogram (the histogram waits on 086). T077 passes.
+- [X] T078 [US6] `import_uvtt_impl` (`map_import/mod.rs:115`): the `wallEdges` form field, the replace-then-add in the import's transaction, `perimeter_walls_created` in the `MAP_IMPORTED` payload and the answer, and the `thunderforge.map_import.perimeter_walls` histogram, recorded when the box is ticked, the count capped at 8 (T086). T077 passes.
 - [X] T079 [US6] `import_offline` (`offline.rs:75`) adds the perimeter, marked `perimeter: true` in `maps.json` (FR-094). Update `offline.rs`'s tests, rebuild the demo's maps and `make base-maps`, and check the demo seed and the base maps carry the walls.
 - [X] T080 [US6] Tests in `mutations_levels` tests: `updateSceneLevel` with a new `backgroundAssetId` and `wallEdges` default adds the perimeter for the image's size; a second background moves it; `wallEdges: false` adds none; clearing the background removes none; any other field change leaves walls alone (FR-092).
 - [X] T081 [US6] `updateSceneLevel` (`mutations_levels.rs:116`): `wallEdges` on its input, the perimeter replacement in the level's transaction, and `WALL_CHANGED` (10) events for the walls. T080 passes.
@@ -214,7 +214,7 @@ deleted.
 - [X] T083 [P] [US6] Demo, TDD: `apps/demo/src/backend/mapImport.test.ts` with the same fixtures, then `mapImport.ts` mirrors FR-090 and FR-091 (FR-095).
 - [X] T084 [US6] e2e `apps/web/e2e/canvas-map-edge-walls.spec.ts` (canvas slice; add to `slices.json` if needed): import `grassy-path-ambush.dd2vtt` with the defaults; the scene has 4 walls on its edges; a token dragged 10 cells past an edge ends inside the map; a re-import leaves 4; with the box unticked, none (SC-008). canvas 46/0 (the move off the map through `moveOwnToken`, as `drawn-walls-block.spec.ts` sends its moves).
 - [X] T085 [P] [US6] If US2 has landed, add to `world-base-map.spec.ts`: a world created on the default map has its 4 edge walls. worlds 24/0.
-- [ ] T086 [P] [US6] Telemetry: `map.imported`. (waits on 086)
+- [X] T086 [P] [US6] Telemetry: `map.imported`. *Done: `MapImportTool` (`source=uvtt`) and `useSceneLevels.setBackground` (`source=image`), on success, with the box's `wall_edges`. The server's perimeter histogram counts `.dd2vtt` imports only: a level's new map walls its edges inside the level update's transaction, where nothing is recorded before it commits.*
 - [X] T087 [US6] `pnpm e2e:canvas`, `pnpm e2e:scenes`, the demo's tests, then `pnpm e2e:which --diff` and its slices. So far: canvas 46/0, scenes 19/0, worlds 24/0, the demo's tests 160/160; rolls 30/0 with US5, whose demo `rolls-across-tabs` (3/0) passed on the re-run after failing once (a board never played the die).
 - [X] T088 [US6] Commit: "Spec 088: an imported map is walled at its edges".
 
@@ -236,7 +236,7 @@ losing changes.
 - [X] T094 [US7] `SettingRow` (`InstanceSettingsPanel.tsx:163-339`): follow the `setting` prop while clean (FR-055).
 - [X] T095 [US7] e2e `apps/web/e2e/instance-mail-form.spec.ts` (instance slice): **Save** disabled when clean; change 2 keys and count exactly 2 `updateInstanceSetting` requests by interception (SC-006); the section-switch guard; a refused key stays dirty with its error.
 - [X] T096 [P] [US7] Adjust `instance-mail.spec.ts` and `mail-delivery.spec.ts` where they press a per-row Save. instance-mail.spec.ts pressed no per-row Save; only mail-delivery.spec.ts changed.
-- [ ] T097 [P] [US7] Telemetry: `settings.saved`, `settings.unsaved_warning`. (waits on 086)
+- [X] T097 [P] [US7] Telemetry: `settings.saved`, `settings.unsaved_warning`. *Done: `MailPanel`'s save sends the bucketed outcome and count; `useUnsavedChanges` takes an `onAnswer` for an in-app link's question. The browser's own `beforeunload` prompt reports no answer, so it is not counted.*
 - [X] T098 [US7] `pnpm e2e:instance`, then `pnpm e2e:which --diff` and its slices. instance 45/0 (with instance-mail-form and the reworked mail-delivery).
 - [X] T099 [US7] Commit: "Spec 088: the mail settings save only what changed".
 
@@ -255,7 +255,7 @@ losing changes.
 - [X] T102 [US8] The hero builder dialog full screen at under 640 px, closing back to where it opened (FR-061). No code change: the builder dialog was already full screen at under 640 px; T104 proves it at 375x812.
 - [X] T103 [US8] `?from=players` on the links from the card; `ActorDetailPage` sends its back control to the players page when set (FR-062).
 - [X] T104 [US8] Extend `players-hero-edit.spec.ts` (from the hotfix) at 375 px: card order, control sizes, a full-screen builder, the back control, and the empty state.
-- [ ] T105 [P] [US8] Telemetry: `hero.opened_from_players`. (waits on 086)
+- [X] T105 [P] [US8] Telemetry: `hero.opened_from_players`. *Done: `PlayerHeroControls`, on **Open sheet** (`sheet`) and **Edit look** (`builder`).*
 - [X] T106 [US8] `pnpm e2e:actors`, `pnpm e2e:hero-builder`, then `pnpm e2e:which --diff`. actors 32/0; hero-builder 18/1 (standalone 7/0). The one failure is Quick NPC (hero-builder-npc.spec.ts:468: the preview does not change after Open in builder, then Use), and it fails again alone (6/1). Nothing 088 changes is on that path (QuickNpcDialog, apps/hero-builder and packages/heroes are untouched), so it is not this story. The T116 proof run then passed it: hero-builder 19/0, so the earlier failures were a flake.
 - [X] T107 [US8] Commit: "Spec 088: a player opens their own sheet and look from the players screen".
 

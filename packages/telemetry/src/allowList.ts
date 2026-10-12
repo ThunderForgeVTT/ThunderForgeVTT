@@ -49,6 +49,15 @@ export const ALLOWED_ATTRIBUTES = [
   "tokens.bucket",
   "internal_errors",
   "dropped",
+  "max_uses",
+  "expiry",
+  "outcome",
+  "starting_map",
+  "map_error",
+  "wall_edges",
+  "source",
+  "changed",
+  "target",
 ] as const;
 
 /** What a browser span may carry. The gateway's `BROWSER_SPAN_ATTRIBUTES`. */
@@ -80,6 +89,15 @@ export const EVENT_NAMES = [
   "engine.frames",
   "telemetry.internal",
   "sheet_import.step",
+  "world_link.created",
+  "world_link.revoked",
+  "world_link.join",
+  "world.created",
+  "rolls.cleared",
+  "map.imported",
+  "settings.saved",
+  "settings.unsaved_warning",
+  "hero.opened_from_players",
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];

@@ -58,6 +58,11 @@ pub struct Recorders {
     pub sheet_import_fields: Counter<u64>,
     pub staged_content_decisions: Counter<u64>,
     pub unadopted_use_attempts: Counter<u64>,
+    pub world_link_joins: Counter<u64>,
+    pub world_link_oauth_refusals: Counter<u64>,
+    pub base_maps_applied: Counter<u64>,
+    pub rolls_cleared: Counter<u64>,
+    pub map_import_perimeter_walls: Histogram<f64>,
 }
 
 impl Recorders {
@@ -79,6 +84,16 @@ impl Recorders {
             sheet_import_fields: counter("thunderforge.sheet_import.fields"),
             staged_content_decisions: counter("thunderforge.staged_content.decisions"),
             unadopted_use_attempts: counter("thunderforge.unadopted_use_attempts"),
+            world_link_joins: counter("thunderforge.world_links.joins"),
+            world_link_oauth_refusals: counter("thunderforge.world_links.oauth_refused"),
+            base_maps_applied: counter("thunderforge.base_maps.applied"),
+            rolls_cleared: counter("thunderforge.rolls.cleared"),
+            // A count of walls, not a time: a bucket per count up to 8.
+            map_import_perimeter_walls: meter
+                .f64_histogram("thunderforge.map_import.perimeter_walls")
+                .with_unit(unit("thunderforge.map_import.perimeter_walls"))
+                .with_boundaries(super::first_session::PERIMETER_BOUNDARIES.to_vec())
+                .build(),
         }
     }
 }
@@ -383,6 +398,11 @@ mod tests {
         r.sheet_import_fields.add(1, &none);
         r.staged_content_decisions.add(1, &none);
         r.unadopted_use_attempts.add(1, &none);
+        r.world_link_joins.add(1, &none);
+        r.world_link_oauth_refusals.add(1, &none);
+        r.base_maps_applied.add(1, &none);
+        r.rolls_cleared.add(1, &none);
+        r.map_import_perimeter_walls.record(0.0, &none);
         let seen = m.collect();
         for (name, kind, _) in INSTRUMENTS {
             if matches!(kind, InstrumentKind::Counter | InstrumentKind::Histogram) {

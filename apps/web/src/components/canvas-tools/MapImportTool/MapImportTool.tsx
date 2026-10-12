@@ -4,6 +4,7 @@ import { Panel } from "@/components/ui/panel/Panel";
 import { Loader } from "@/components/ui/loader/Loader";
 import { withCsrf } from "@/api/auth";
 import { Checkbox } from "@/components/ui/checkbox";
+import { recordMapImported } from "@/telemetry/firstSession";
 
 export interface MapImportResult {
   wallsCreated: number;
@@ -115,6 +116,7 @@ export function MapImportTool({
         }
 
         const result = (await response.json()) as MapImportResult;
+        recordMapImported("uvtt", wallEdges);
         setLastResult(result);
         setStatus("idle");
         onImportComplete?.(result);

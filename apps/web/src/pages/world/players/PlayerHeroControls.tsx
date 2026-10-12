@@ -6,6 +6,7 @@ import { BringInSheetButton } from "@/pages/world/actor/import/BringInSheetButto
 import { LazyHeroBuilderDialog } from "@/pages/world/actor/heroBuilderLazy";
 import { heroControlsFor } from "@/pages/world/players/heroControls";
 import type { WorldActorRecord } from "@/types/actor";
+import { recordHeroOpened } from "@/telemetry/firstSession";
 
 export interface PlayerHeroControlsProps {
   worldId: string;
@@ -42,6 +43,7 @@ export function PlayerHeroControls({
   // The builder asks before replacing art the hero already has, so it needs
   // to know which roles are filled; asked for when opened, not for every card.
   const openBuilder = async () => {
+    recordHeroOpened("builder");
     setError(null);
     try {
       const images = await getWorldActorImages(worldId);
@@ -64,6 +66,7 @@ export function PlayerHeroControls({
             <Link
               to={`/world/${worldId}/actor/${actor.id}/edit?from=players`}
               data-testid={`player-hero-sheet-${actor.id}`}
+              onClick={() => recordHeroOpened("sheet")}
             >
               Open sheet
             </Link>

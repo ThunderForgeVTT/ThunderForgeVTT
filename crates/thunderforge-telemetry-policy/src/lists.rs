@@ -125,6 +125,15 @@ pub const BROWSER_RECORD_ATTRIBUTES: &[&str] = &[
     "tokens.bucket",
     "internal_errors",
     "dropped",
+    "max_uses",
+    "expiry",
+    "outcome",
+    "starting_map",
+    "map_error",
+    "wall_edges",
+    "source",
+    "changed",
+    "target",
 ];
 
 /// A browser span's attributes: `SPAN_ATTRIBUTES` in `allowList.ts`.
@@ -253,6 +262,19 @@ pub const INSTRUMENTS: &[(&str, InstrumentKind, &str)] = &[
         "{decision}",
     ),
     ("thunderforge.unadopted_use_attempts", Counter, "{attempt}"),
+    ("thunderforge.world_links.joins", Counter, "{join}"),
+    (
+        "thunderforge.world_links.oauth_refused",
+        Counter,
+        "{refusal}",
+    ),
+    ("thunderforge.base_maps.applied", Counter, "{map}"),
+    ("thunderforge.rolls.cleared", Counter, "{clear}"),
+    (
+        "thunderforge.map_import.perimeter_walls",
+        Histogram,
+        "{wall}",
+    ),
 ];
 
 /// The gateway's own instruments (contracts/telemetry-gateway.md).
@@ -367,10 +389,10 @@ mod tests {
         assert_eq!(ANONYMOUS_RESOURCE_ATTRIBUTES.len(), 7);
         assert_eq!(SERVER_ERROR_ATTRIBUTES.len(), 4);
         assert_eq!(BROWSER_RESOURCE_ATTRIBUTES.len(), 12);
-        assert_eq!(BROWSER_RECORD_ATTRIBUTES.len(), 39);
+        assert_eq!(BROWSER_RECORD_ATTRIBUTES.len(), 48);
         assert_eq!(BROWSER_SPAN_ATTRIBUTES.len(), 7);
         assert_eq!(GATEWAY_LABELS.len(), 8);
-        assert_eq!(INSTRUMENTS.len(), 28);
+        assert_eq!(INSTRUMENTS.len(), 33);
         assert_eq!(GATEWAY_INSTRUMENTS.len(), 4);
     }
 

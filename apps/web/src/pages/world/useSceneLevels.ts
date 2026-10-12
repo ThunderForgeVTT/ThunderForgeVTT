@@ -15,6 +15,7 @@ import {
   resolveLevelView,
   type WorldEventLike,
 } from "@/engine/world/sync";
+import { recordMapImported } from "@/telemetry/firstSession";
 
 /**
  * Which level of the scene this page is showing, and the Game Master's means
@@ -302,6 +303,7 @@ export function useSceneLevels({
             height: asset.heightPx,
             wallEdges,
           });
+          recordMapImported("image", wallEdges);
         });
       },
       clearBackground: async (levelId) => {

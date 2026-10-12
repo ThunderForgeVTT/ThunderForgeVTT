@@ -115,9 +115,14 @@ export function installUnsavedGuard(
   };
 }
 
+/**
+ * `onAnswer` hears how an in-app link's question was answered (`true` for
+ * leaving). The browser's own `beforeunload` prompt reports no answer.
+ */
 export function useUnsavedChanges(
   dirty: boolean,
   message: string = UNSAVED_MESSAGE,
+  onAnswer?: (left: boolean) => void,
 ): void {
   useEffect(() => {
     if (!dirty) {
@@ -127,8 +132,12 @@ export function useUnsavedChanges(
       window,
       document,
       message,
-      (text) => window.confirm(text),
+      (text) => {
+        const left = window.confirm(text);
+        onAnswer?.(left);
+        return left;
+      },
       () => window.location.href,
     );
-  }, [dirty, message]);
+  }, [dirty, message, onAnswer]);
 }

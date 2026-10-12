@@ -98,6 +98,15 @@ test enumerates it.
 | `engine.frames` | `pagehide` with the board open (web and demo) | `fps.p5`, `fps.p50`, `frame_ms.p95`, `tokens.bucket` (`0`, `1-10`, `11-50`, `51-200`, `>200`) | yes |
 | `telemetry.internal` | with the next batch, when the counter is above zero | `internal_errors`, `dropped` | no |
 | `sheet_import.step` | each step of bringing a sheet in (spec 048) | `step` = `opened`, `read`, `reviewed`, `applied`, `declined`, `failed`; `reason` on `failed` only = `encrypted`, `too_large`, `too_many_pages`, `unrecognised`, `unreadable`, `plan_changed` | no |
+| `world_link.created` | the GM makes a world link (spec 088) | `max_uses` = `1`, `2-5`, `6-50`, `none` (no limit); `expiry` = `1d`, `7d`, `30d`, `none` | no |
+| `world_link.revoked` | the GM confirms a revoke (spec 088) | none | no |
+| `world_link.join` | the join page settles (spec 088) | `outcome` = `joined`, `already_member`, `revoked`, `expired`, `used_up`, `unknown`, `signed_out` | no |
+| `world.created` | `createWorld` returns (spec 088) | `starting_map` = `default`, `other`, `none`; `map_error` (boolean) | no |
+| `rolls.cleared` | the GM clears the roll feed (spec 088) | none | no |
+| `map.imported` | a map import or a level's new map succeeds (spec 088) | `source` = `uvtt`, `image`; `wall_edges` (boolean) | no |
+| `settings.saved` | a save of the mail settings settles (spec 088) | `section` = `mail`; `outcome` = `all`, `partial`, `none`; `changed` = `1`, `2-3`, `4+` | no |
+| `settings.unsaved_warning` | an admin answers the unsaved-changes question (spec 088) | `action` = `stayed`, `left` | no |
+| `hero.opened_from_players` | a player opens their sheet or the builder from their card (spec 088) | `target` = `sheet`, `builder` | no |
 
 The funnel steps, in order, are:
 
@@ -163,3 +172,4 @@ step, sent on the first click only.
 | web | `engine.load` and `engine.load_failed` | `apps/web/src/engine/bevy/loadTelemetry.ts`, subscribed to `mountEngine`'s stages |
 | web | `engine.frames` | `apps/web/src/engine/bevy/framesSummary.ts`, which samples `stats.ts` once a second into a fixed 600-entry ring |
 | web | `sheet_import.step` | `apps/web/src/pages/world/actor/import/telemetry.ts`, called by the review's step changes, recording through this package's `telemetry` |
+| web | spec 088's nine events | `apps/web/src/telemetry/firstSession.ts`, called from `WorldLinksPanel`, `JoinWorldPage`, `CreateWorldPage`, `ChatPanel`, `MapImportTool`, `useSceneLevels`, `MailPanel` (and `useUnsavedChanges`'s answer) and `PlayerHeroControls` |

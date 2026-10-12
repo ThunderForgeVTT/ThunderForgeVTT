@@ -25,6 +25,7 @@ import {
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { Textarea } from "@/components/ui/textarea";
 import type { SeoConfig } from "@/types/seo";
+import { recordWorldCreated } from "@/telemetry/firstSession";
 
 export const createWorldPageSeo: SeoConfig = {
   title: "Create world",
@@ -75,6 +76,8 @@ export default function CreateWorldPage() {
   const [baseMapId, setBaseMapId] = useState<string | null | undefined>(
     undefined,
   );
+  /** The instance's default map, so telemetry can say "default" not an id. */
+  const [defaultBaseMapId, setDefaultBaseMapId] = useState<string | null>(null);
   /** Set when the world was made but its map was not (FR-025). */
   const [madeWithoutMap, setMadeWithoutMap] = useState<string | null>(null);
 
@@ -138,6 +141,7 @@ export default function CreateWorldPage() {
       .then((choices) => {
         if (!live) return;
         setBaseMaps(choices.maps);
+        setDefaultBaseMapId(choices.defaultId);
         // Only preselect; never overwrite a choice already made.
         setBaseMapId((current) =>
           current === undefined ? choices.defaultId : current,
@@ -173,6 +177,7 @@ export default function CreateWorldPage() {
         gameSystemId: gameSystemId || null,
         ...(baseMapId === undefined ? {} : { baseMapId }),
       });
+      recordWorldCreated(baseMapId, defaultBaseMapId, startingMapFailed);
 
       // One at a time, and after the world exists, through the same mutation
       // as switching a book on later. A book that is refused does not undo

@@ -49,6 +49,15 @@ test("ALLOWED_ATTRIBUTES is exactly the contract's union", () => {
       "tokens.bucket",
       "internal_errors",
       "dropped",
+      "max_uses",
+      "expiry",
+      "outcome",
+      "starting_map",
+      "map_error",
+      "wall_edges",
+      "source",
+      "changed",
+      "target",
     ],
   );
 });
@@ -71,6 +80,15 @@ test("EVENT_NAMES is exactly the contract's table", () => {
       "engine.frames",
       "telemetry.internal",
       "sheet_import.step",
+      "world_link.created",
+      "world_link.revoked",
+      "world_link.join",
+      "world.created",
+      "rolls.cleared",
+      "map.imported",
+      "settings.saved",
+      "settings.unsaved_warning",
+      "hero.opened_from_players",
     ],
   );
 });

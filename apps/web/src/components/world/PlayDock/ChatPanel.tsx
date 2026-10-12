@@ -12,6 +12,7 @@ import type { WorldRollEntry } from "@/types/roll";
 
 import { feedInstant, feedTime } from "./feedTime";
 import { RollEntry } from "./RollEntry";
+import { recordRollsCleared } from "@/telemetry/firstSession";
 
 type FeedItem =
   | { kind: "message"; at: number; message: ChatMessageRecord }
@@ -151,6 +152,7 @@ export function ChatPanel({
     setError(null);
     try {
       await clearWorldRolls(worldId);
+      recordRollsCleared();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to clear rolls");
     } finally {

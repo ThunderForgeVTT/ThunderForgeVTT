@@ -41,7 +41,7 @@ pub(crate) fn is_world_link_return(return_to: Option<&str>) -> bool {
 
 /// The refusal: no account, no identity link, no session.
 pub(crate) fn refused() -> (StatusCode, Json<OAuthResponse>) {
-    // The `thunderforge.world_links.oauth_refused` counter waits on spec 086.
+    crate::telemetry::first_session::record_oauth_refused();
     super::error_response(
         StatusCode::FORBIDDEN,
         "world_link_sign_in_only",

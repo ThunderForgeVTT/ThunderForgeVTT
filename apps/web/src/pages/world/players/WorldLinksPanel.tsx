@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import type { WorldInviteDoc } from "@/db/collections/worldInvitesCollection";
 import { inviteStateLabel } from "@/db/collections/worldInvitesCollection";
 import { useWorldInvites } from "@/hooks/useWorldInvites";
+import { recordLinkCreated, recordLinkRevoked } from "@/telemetry/firstSession";
 import {
   DEFAULT_LINK_CHOICE,
   EXPIRY_LABELS,
@@ -76,6 +77,7 @@ export function WorldLinksPanel({
         worldId,
         linkOptionsFrom(choice, new Date()),
       );
+      recordLinkCreated(choice.limit, choice.expiry);
       await copyLink(created.inviteCode);
       await refetch();
     } catch (err) {
@@ -106,6 +108,7 @@ export function WorldLinksPanel({
     setBusyId(inviteId);
     try {
       await revoke(inviteId);
+      recordLinkRevoked();
       setConfirmingId(null);
     } catch (err) {
       setActionError(

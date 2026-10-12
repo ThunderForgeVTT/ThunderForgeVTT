@@ -391,6 +391,7 @@ pub async fn clear_world_rolls_impl(
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .inspect(|_| crate::telemetry::first_session::record_rolls_cleared())
 }
 
 #[derive(Default)]

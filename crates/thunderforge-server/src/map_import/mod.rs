@@ -296,6 +296,9 @@ pub async fn import_uvtt_impl(
     .map_err(|_| MapImportError::Io("Failed to spawn blocking task".to_string()))?;
 
     result.map_err(MapImportError::Database)?;
+    if wall_edges {
+        crate::telemetry::first_session::record_perimeter_walls(perimeter_walls_created);
+    }
 
     Ok(ImportResult {
         walls_created,

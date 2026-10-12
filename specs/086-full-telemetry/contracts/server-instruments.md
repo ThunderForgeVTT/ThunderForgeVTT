@@ -56,13 +56,22 @@ All instruments come from `opentelemetry::global::meter("thunderforge")`.
 | `thunderforge.sheet_import.fields` | counter | `{field}` | `certainty` | `thunderforge_sheet_import_fields_total` | `record_fields`, per applied plan (spec 048) |
 | `thunderforge.staged_content.decisions` | counter | `{decision}` | `decision` | `thunderforge_staged_content_decisions_total` | `record_decision`, after the decision commits (spec 048) |
 | `thunderforge.unadopted_use_attempts` | counter | `{attempt}` | `result` | `thunderforge_unadopted_use_attempts_total` | `staged_content::report::record_attempt` (spec 048) |
+| `thunderforge.world_links.joins` | counter | `{join}` | `outcome` | `thunderforge_world_links_joins_total` | `first_session::record_join`, once per settled `joinWorld` that joined or was refused for the link (spec 088) |
+| `thunderforge.world_links.oauth_refused` | counter | `{refusal}` | none | `thunderforge_world_links_oauth_refused_total` | `auth::world_link_sign_in::refused` (spec 088) |
+| `thunderforge.base_maps.applied` | counter | `{map}` | `outcome` | `thunderforge_base_maps_applied_total` | `first_session::record_base_map`, after a new world's starting map is applied or fails (spec 088) |
+| `thunderforge.rolls.cleared` | counter | `{clear}` | none | `thunderforge_rolls_cleared_total` | `clear_world_rolls_impl`, after the clear commits (spec 088) |
+| `thunderforge.map_import.perimeter_walls` | histogram | `{wall}` | none | `thunderforge_map_import_perimeter_walls_{bucket,sum,count}` | `map_import::import_uvtt` with **Wall the map's edges** ticked, the count capped at 8 (spec 088) |
 
 Histogram buckets:
 
 - seconds instruments use `0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10`;
-- the pool wait uses `0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5, 30`.
+- the pool wait uses `0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5, 30`;
+- the perimeter-wall count uses `0, 1, 2, 3, 4, 5, 6, 7`, so each count to 7
+  has its own bucket and 8 and over share the last.
 
-These are set with SDK views in `install.rs`.
+The first two are set with SDK views in `install.rs`; the wall count's are
+the instrument's own (`first_session::PERIMETER_BOUNDARIES`), which those
+views leave alone.
 
 Spec 048's five rows are in the policy's `INSTRUMENTS`, and record through
 `Recorders` from `crates/thunderforge-server/src/sheet_import/telemetry.rs`.
@@ -90,6 +99,8 @@ from a closed set or a pack-declared id, never a name, an id or content.
 | `certainty` | `read`, `uncertain`, `unread`, `corrected` |
 | `decision` | `adopt`, `adopt_all`, `decline`, `revisit` |
 | `result` | `reported`, `suppressed_stale`, `rate_limited` |
+| `outcome` on `thunderforge.world_links.joins` | `joined`, `already_member`, `revoked`, `expired`, `used_up`, `unknown` (spec 088) |
+| `outcome` on `thunderforge.base_maps.applied` | `ok`, `upload_failed`, `import_failed` (spec 088) |
 
 `code` is bounded by the server's own error codes. Nothing outside the server
 can set it, because errors are produced by our resolvers. An `internal`

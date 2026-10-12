@@ -11,11 +11,18 @@ import { useAuth } from "@/hooks/useAuth";
 import type { SeoConfig } from "@/types/seo";
 import { AppFooter } from "@/components/navigation/AppFooter";
 import { joinRefusalOf, type JoinRefusal } from "@/pages/world/joinRefusal";
+import { joinOutcomeOf, recordJoin } from "@/telemetry/firstSession";
 
 /** Spec 088 (FR-008): a refusal the server named, or `null`. */
 function refusalOf(error: unknown): JoinRefusal | null {
   if (!(error instanceof GraphQLRequestError)) return null;
   return joinRefusalOf(error.codes, error.errors[0] ?? error.message);
+}
+
+/** Spec 088's `world_link.join` for a refusal; other failures go uncounted. */
+function recordRefusal(refusal: JoinRefusal | null): void {
+  const outcome = refusal ? joinOutcomeOf(refusal.kind) : undefined;
+  if (outcome) recordJoin(outcome);
 }
 
 interface WorldInfo {
@@ -76,6 +83,7 @@ export default function JoinWorldPage() {
   // When not authenticated, redirect to login
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
+      recordJoin("signed_out");
       navigate(`/login?returnTo=${encodeURIComponent(`/join/${code}`)}`);
     }
   }, [authLoading, isAuthenticated, code, navigate]);
@@ -105,6 +113,7 @@ export default function JoinWorldPage() {
         );
 
         if (active) {
+          if (data.alreadyMember) recordJoin("already_member");
           setWorldState({
             world: data.worldByInviteCode,
             alreadyMember: data.alreadyMember,
@@ -116,6 +125,7 @@ export default function JoinWorldPage() {
       } catch (error) {
         if (active) {
           const refusal = refusalOf(error);
+          recordRefusal(refusal);
           setWorldState({
             world: null,
             alreadyMember: false,
@@ -154,12 +164,14 @@ export default function JoinWorldPage() {
         { input: { inviteCode: code } },
       );
 
+      recordJoin("joined");
       // Redirect to world dashboard
       if (worldState.world) {
         navigate(`/world/${worldState.world.id}`);
       }
     } catch (error) {
       const refusal = refusalOf(error);
+      recordRefusal(refusal);
       setWorldState((current) =>
         refusal?.kind === "ALREADY_MEMBER"
           ? { ...current, alreadyMember: true }

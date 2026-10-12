@@ -698,7 +698,9 @@ impl InviteMutation {
     ) -> GraphQLResult<WorldMembershipPayload> {
         let state = get_app_state(ctx)?;
         let auth_user = get_authenticated_user(ctx)?;
-        join_world_impl(&state, auth_user.user_id, input).await
+        let joined = join_world_impl(&state, auth_user.user_id, input).await;
+        crate::telemetry::first_session::record_join(&joined);
+        joined
     }
 
     /// Update a member's role in a world (Owner/GM only, with permission checks)

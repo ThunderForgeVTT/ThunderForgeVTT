@@ -23,7 +23,11 @@ import {
   type FormState,
   type SaveResult,
 } from "@/pages/admin/settingsForm";
-import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
+import { UNSAVED_MESSAGE, useUnsavedChanges } from "@/hooks/useUnsavedChanges";
+import {
+  recordSettingsSaved,
+  recordUnsavedWarning,
+} from "@/telemetry/firstSession";
 import {
   fetchMailAvailability,
   fetchMailOutbox,
@@ -210,7 +214,7 @@ export function MailPanel() {
   );
 
   const dirty = form ? dirtyKeys(form, FORM_ORDER) : [];
-  useUnsavedChanges(dirty.length > 0);
+  useUnsavedChanges(dirty.length > 0, UNSAVED_MESSAGE, recordUnsavedWarning);
 
   const touched = (key: string) => {
     setSaveResult(null);
@@ -260,6 +264,11 @@ export function MailPanel() {
           form.changes[result.key]?.kind === "clear" ? "Cleared." : "Saved.";
       }
     }
+    recordSettingsSaved(
+      "mail",
+      results.filter((result) => result.saved).length,
+      results.length,
+    );
     setNotices(saved);
     setSaveResult(savedNotice(results));
     setForm((current) => (current ? applyResults(current, results) : current));

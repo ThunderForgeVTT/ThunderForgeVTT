@@ -7,6 +7,7 @@
 //! instance id, the served browser config and the admin status.
 
 pub mod event_names;
+pub mod first_session;
 pub mod graphql_extension;
 pub mod instance_id;
 pub mod instruments;

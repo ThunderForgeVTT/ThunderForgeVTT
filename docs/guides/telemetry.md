@@ -40,14 +40,19 @@ by our endpoint, from the same crate:
 - **Counts**: requests, GraphQL operations by their field name, world
   events by kind, rolls by visibility, open connections, backplane
   deliveries, character sheets brought in (by game system, sheet reader and
-  outcome) with how many of their fields were read, and the GM's decisions
-  on the content they bring.
+  outcome) with how many of their fields were read, the GM's decisions
+  on the content they bring, world links joined (by outcome, such as
+  joined or expired), new worlds' starting maps applied or failed, roll
+  feeds cleared, and how many edge walls a map import added.
 - **Versions and coarse environment**: the ThunderForge version, the
   operating system family and CPU architecture, the browser family and
   major version, a mobile flag, and bucketed screen width, memory and core
   count.
 - **Steps reached** in the demo, on the landing and in bringing a character
-  sheet in, and page views by route pattern (`/world/:worldId/play`, never
+  sheet in; first-session steps (a world link made, revoked or followed, a
+  world created, a map imported, mail settings saved, a hero opened from
+  the players page), each with only a bucket or a choice, never a value
+  typed in; and page views by route pattern (`/world/:worldId/play`, never
   the id itself).
 - **A random install id**: a random UUID made the first time your server
   starts, stored in your database (`instance_settings`,

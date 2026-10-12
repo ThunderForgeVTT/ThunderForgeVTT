@@ -121,10 +121,10 @@ pub async fn create_world_with_map_impl(
     let world = create_world_impl(state, user_id, input).await?;
     let mut starting_map_failed = false;
     if let (Some(base_map_id), Some(scene_id)) = (base_map, world.active_scene_id) {
-        // The `thunderforge.base_maps.applied` counter waits on spec 086.
-        if let Err(error) =
-            crate::base_maps::apply::apply(state, user_id, world.id, scene_id, &base_map_id).await
-        {
+        let applied =
+            crate::base_maps::apply::apply(state, user_id, world.id, scene_id, &base_map_id).await;
+        crate::telemetry::first_session::record_base_map(&applied);
+        if let Err(error) = applied {
             tracing::warn!(
                 world_id = %world.id,
                 base_map_id = %base_map_id,

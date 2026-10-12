@@ -13,7 +13,7 @@ and is marked so in tasks.md.
 
 | Event | Attributes | Sent when |
 | --- | --- | --- |
-| `world_link.created` | `max_uses`: `1`, `2-5`, `6-50`; `expiry`: `1d`, `7d`, `30d`, `none` | the GM creates a link |
+| `world_link.created` | `max_uses`: `1`, `2-5`, `6-50`, `none` (no limit); `expiry`: `1d`, `7d`, `30d`, `none` | the GM creates a link |
 | `world_link.revoked` | none | the GM confirms a revoke |
 | `world_link.join` | `outcome`: `joined`, `already_member`, `revoked`, `expired`, `used_up`, `unknown`, `signed_out` | the join page settles |
 | `world.created` | `starting_map`: `default`, `other`, `none`; `map_error`: `true`/`false` | `createWorld` returns |
@@ -33,7 +33,7 @@ Through `crates/thunderforge-server`'s telemetry API (spec 086):
 | `thunderforge.world_links.oauth_refused` | none: an OAuth sign-in from a join with no account |
 | `thunderforge.base_maps.applied` | `outcome`: `ok`, `upload_failed`, `import_failed` |
 | `thunderforge.rolls.cleared` | none |
-| `thunderforge.map_import.perimeter_walls` | histogram of walls added per import: 0 to 8+ |
+| `thunderforge.map_import.perimeter_walls` | histogram of walls added per `.dd2vtt` import with the edges ticked: 0 to 8+ |
 
 The GraphQL root-field spans of 086 FR-011 already time `createWorld`,
 `joinWorld`, `clearWorldRolls` and `updateSceneLevel`, so no new span is
