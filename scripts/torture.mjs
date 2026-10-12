@@ -262,7 +262,13 @@ try {
       "INSERT INTO users (id, username, password_hash, email, is_admin, " +
         "created_at, updated_at) VALUES (gen_random_uuid(), 'torture-admin', " +
         "'x-not-a-usable-hash', 'torture-admin@example.invalid', true, now(), now()) " +
-        "ON CONFLICT DO NOTHING;",
+        "ON CONFLICT DO NOTHING; " +
+        // That admin also ends the no-administrator bypass of the access
+        // policy, and a fresh install starts `invite_only`, so every player
+        // the storm registers was refused with 409 "not accepting new
+        // accounts". Admission reads this row, not the environment.
+        "UPDATE instance_access_settings SET access_policy = 'open', " +
+        "updated_at = now() WHERE id = 1;",
     ],
     { env: composeEnv },
   );
