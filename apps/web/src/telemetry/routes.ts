@@ -59,6 +59,7 @@ export const ROUTE_TEMPLATES = [
   "/world/:id/players",
   "/world/:id/actor/:actorId/view",
   "/world/:id/actor/:actorId/edit",
+  "/world/:id/actor/:actorId/import",
   "/world/:id/lore/:slug/view",
   "/world/:id/lore/:slug/edit",
   "/world/:id/lore/:slug/history",
