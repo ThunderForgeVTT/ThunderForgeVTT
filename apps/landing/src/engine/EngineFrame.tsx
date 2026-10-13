@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEMO } from "../links.ts";
 import "./engine-frame.css";
 import { FRAME_FAILED, type FrameFailed, type HeldBack } from "./frameEvents.ts";
-import { EngineLoadError, loadEngine, type Engine, type Progress, type Stage } from "./loadEngine.ts";
+import { sendAs, stopped, take, type Send } from "./host.ts";
+import { EngineLoadError, type Progress, type Stage } from "./loadEngine.ts";
 
 // Spec 090 FR-011 to FR-019: the real engine in a frame on the page, only when
 // the visitor asks for it.
@@ -13,9 +14,19 @@ import { EngineLoadError, loadEngine, type Engine, type Progress, type Stage } f
 // it draws is the host's business: `setup` sends the scene, and `onState`
 // hands the host a way to send commands once the engine runs. The encounter
 // mounts the same frame with a different scene.
+//
+// Spec 091: the engine itself lives in `host.ts`, one per page. A frame takes
+// the table from whichever frame had it, and that frame goes `away`.
 
-export type FrameState = "poster" | "unsupported" | "loading" | "running" | "paused" | "failed";
-export type Send = (command: Record<string, unknown>) => void;
+export type FrameState =
+  | "poster"
+  | "unsupported"
+  | "loading"
+  | "running"
+  | "paused"
+  | "away"
+  | "failed";
+export type { Send };
 /** Where a failure happened: a load stage, or the engine stopping later. */
 export type FailStage = Stage | "engine";
 
@@ -25,8 +36,16 @@ interface Props {
   poster: { src: string; width: number; height: number };
   /** The button: "Throw it on the table". */
   action: string;
-  /** The scene, sent once the engine has started. */
+  /** The scene, sent from scratch every time this frame takes the table. */
   setup?: (send: Send) => void;
+  /** Removes what `setup` sent, when another frame takes the table. */
+  teardown?: (send: Send) => void;
+  /** Said while another frame has the table: where it is. */
+  away: string;
+  /** The room: the stage takes the pointer, but never the wheel. */
+  interactive?: boolean;
+  /** Spec 091 FR-022: the smallest WebGL2 `MAX_TEXTURE_SIZE` this scene needs. */
+  maxTextureSize?: number;
   /** Every state change; `send` is set while the engine runs or is paused. */
   onState?: (state: FrameState, send: Send | null) => void;
 }
@@ -37,10 +56,14 @@ const REDUCE = "(prefers-reduced-motion: reduce)";
 const STAGE_W = 960;
 
 /** Why this browser should not get the engine, or null when it should. */
-function holdBack(): { reason: HeldBack; words: string } | null {
+function holdBack(maxTextureSize = 0): { reason: HeldBack; words: string } | null {
   const gl = document.createElement("canvas").getContext("webgl2");
   if (!gl) return { reason: "no_webgl2", words: "no WebGL2" };
+  const texture = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number;
   gl.getExtension("WEBGL_lose_context")?.loseContext();
+  if (texture < maxTextureSize) {
+    return { reason: "small_texture", words: `its largest picture is ${texture} pixels` };
+  }
   const nav = navigator as Navigator & {
     connection?: { saveData?: boolean };
     deviceMemory?: number;
@@ -62,21 +85,21 @@ function report(detail: FrameFailed) {
 
 const mb = (n: number) => (n / 1e6).toFixed(1);
 
-export default function EngineFrame({ id, poster, action, setup, onState }: Props) {
+export default function EngineFrame(props: Props) {
+  const { id, poster, action, away, interactive, maxTextureSize } = props;
   const [state, setState] = useState<FrameState>("poster");
   const [why, setWhy] = useState<string | null>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [stage, setStage] = useState<FailStage | null>(null);
   const root = useRef<HTMLDivElement>(null);
-  const engine = useRef<Engine | null>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const abort = useRef<AbortController | null>(null);
-  // Props read from effects that must not rerun when a parent rerenders.
-  const latest = useRef({ setup, onState });
-  latest.current = { setup, onState };
+  // Props read from effects and the host, which must not rerun or go stale
+  // when a parent rerenders.
+  const latest = useRef(props);
+  latest.current = props;
 
-  const send = useCallback<Send>((command) => {
-    engine.current?.apply_world_command(JSON.stringify(command));
-  }, []);
+  const send = useMemo(() => sendAs(id), [id]);
 
   const go = useCallback(
     (next: FrameState) => {
@@ -97,14 +120,14 @@ export default function EngineFrame({ id, poster, action, setup, onState }: Prop
   );
 
   useEffect(() => {
-    const held = holdBack();
+    const held = holdBack(maxTextureSize);
     if (held) {
       setWhy(held.words);
       go("unsupported");
       report({ stage: "probe", reason: held.reason });
     }
     return () => abort.current?.abort();
-  }, [go]);
+  }, [go, maxTextureSize]);
 
   async function boot() {
     abort.current?.abort();
@@ -114,11 +137,21 @@ export default function EngineFrame({ id, poster, action, setup, onState }: Prop
     setStage(null);
     go("loading");
     try {
-      const e = await loadEngine(`#${id} canvas`, setProgress, ctl.signal);
+      await take(
+        {
+          id,
+          stage: stageRef.current!,
+          setup: (s) => {
+            s({ type: "set_reduced_motion", reduced: matchMedia(REDUCE).matches });
+            latest.current.setup?.(s);
+          },
+          teardown: (s) => latest.current.teardown?.(s),
+          onTaken: () => go("away"),
+        },
+        setProgress,
+        ctl.signal,
+      );
       if (ctl.signal.aborted) return;
-      engine.current = e;
-      send({ type: "set_reduced_motion", reduced: matchMedia(REDUCE).matches });
-      latest.current.setup?.(send);
       go("running");
     } catch (err) {
       if (ctl.signal.aborted) return;
@@ -131,12 +164,12 @@ export default function EngineFrame({ id, poster, action, setup, onState }: Prop
   // A panic traps the module: every later call throws, so the frame says so.
   useEffect(() => {
     if (!live) return;
-    const stopped = () => {
-      engine.current = null;
+    const halt = () => {
+      stopped();
       fail("engine");
     };
-    window.addEventListener(STOPPED, stopped);
-    return () => window.removeEventListener(STOPPED, stopped);
+    window.addEventListener(STOPPED, halt);
+    return () => window.removeEventListener(STOPPED, halt);
   }, [live, fail]);
 
   // FR-016: reduced motion follows the setting, every time it changes.
@@ -174,17 +207,16 @@ export default function EngineFrame({ id, poster, action, setup, onState }: Prop
     };
   }, [live, send, go]);
 
-  // The canvas is a picture of what the tray already says, so it stays out
-  // of the tab order; the engine's window setup puts it in, so put it back.
+  // FR-021: the room's stage takes the pointer for the door icon, but the
+  // wheel scrolls the page, so it stops here before the engine's window
+  // listener sees it.
   useEffect(() => {
-    const canvas = root.current?.querySelector("canvas");
-    if (!canvas) return;
-    const mo = new MutationObserver(() => {
-      if (canvas.tabIndex !== -1) canvas.tabIndex = -1;
-    });
-    mo.observe(canvas, { attributes: true, attributeFilter: ["tabindex"] });
-    return () => mo.disconnect();
-  }, []);
+    const stage = stageRef.current;
+    if (!interactive || !stage) return;
+    const stop = (e: WheelEvent) => e.stopPropagation();
+    stage.addEventListener("wheel", stop, { capture: true, passive: true });
+    return () => stage.removeEventListener("wheel", stop, { capture: true });
+  }, [interactive]);
 
   // The stage is a 960x540 board, scaled to the frame's width.
   useEffect(() => {
@@ -201,7 +233,11 @@ export default function EngineFrame({ id, poster, action, setup, onState }: Prop
   const canRetry = stage !== null && stage !== "start" && stage !== "init" && stage !== "engine";
 
   return (
-    <div id={id} ref={root} className={`engine-frame engine-frame--${state}`}>
+    <div
+      id={id}
+      ref={root}
+      className={`engine-frame engine-frame--${state}${interactive ? " engine-frame--interactive" : ""}`}
+    >
       <img
         className="engine-poster"
         src={poster.src}
@@ -211,15 +247,22 @@ export default function EngineFrame({ id, poster, action, setup, onState }: Prop
         decoding="async"
         loading="lazy"
       />
-      <div className="engine-stage">
-        <canvas aria-hidden="true" tabIndex={-1} />
-      </div>
+      {/* The host puts the page's one canvas here while this frame holds it. */}
+      <div className="engine-stage" ref={stageRef} />
       {!live && (
         <div className="engine-panel">
           {state === "poster" && (
             <button type="button" className="ink-btn ink-btn--blue" onClick={() => void boot()}>
               {action}
             </button>
+          )}
+          {state === "away" && (
+            <>
+              <p className="engine-note">{away}</p>
+              <button type="button" className="ink-btn ink-btn--blue" onClick={() => void boot()}>
+                Bring it back
+              </button>
+            </>
           )}
           {state === "unsupported" && (
             <p className="engine-note">

@@ -207,7 +207,7 @@ the demo's build changes. The full suite is never used as a gate.
 - [x] T021 [US3] `src/engine/loadEngine.ts`: widen `Engine` to
   `set_event_callback`, `set_viewer_token`, `movement_state`,
   `door_icons`, `sight_probe` and `list_interactives`. `tsc` passes.
-- [ ] T022 [US3] `src/engine/host.ts` and `src/engine/dispatch.ts`. The
+- [x] T022 [US3] `src/engine/host.ts` and `src/engine/dispatch.ts`. The
   host:
   - loads once;
   - creates the canvas imperatively;
@@ -219,7 +219,7 @@ the demo's build changes. The full suite is never used as a gate.
   The dispatcher installs the one `set_event_callback`, parses with
   `engineEvents`, and routes to the holder's listener. `sdkError` goes to
   `console.error`.
-- [ ] T023 [US3] `EngineFrame.tsx` and `engine-frame.css`.
+- [x] T023 [US3] `EngineFrame.tsx` and `engine-frame.css`.
   - Take the table from the host instead of `loadEngine`.
   - A new `away` state shows the poster, where the table is, and "Bring it
     back".
@@ -232,8 +232,12 @@ the demo's build changes. The full suite is never used as a gate.
 
   The file stays under 400 lines; the away state goes in its own small
   component if it does not.
-- [ ] T024 [US3] `DiceTray.tsx`: send no throw while the tray is `away`.
+- [x] T024 [US3] `DiceTray.tsx`: send no throw while the tray is `away`.
   The DOM result prints as before.
+
+  Done by T023 itself: `away` is not live, so the tray's `onState` gets
+  `send = null`; and the host's `sendAs` drops a command from a frame that
+  does not hold the table. T025 proves it.
 - [ ] T025 [US3] `e2e/engine-host.spec.ts`: US3 scenarios 1 to 4. Use the
   tray and a minimal second frame until the room exists (T034), then
   switch to the room. `engine-frame.spec.ts` stays green.

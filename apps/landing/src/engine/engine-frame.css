@@ -34,6 +34,10 @@
 .engine-poster {
   object-fit: cover;
 }
+/* Spec 091 FR-021: the room's stage takes the pointer, for the door icon. */
+.engine-frame--interactive .engine-stage {
+  pointer-events: auto;
+}
 .engine-stage canvas {
   display: block;
   width: 100%;
