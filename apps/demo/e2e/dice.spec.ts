@@ -102,7 +102,7 @@ test("a character in the dock rolls from its sheet", async () => {
   await expect(page.getByTestId("in-pane-sheet-body")).toBeVisible({
     timeout: 15_000,
   });
-  // Strength 16, written as the sheet's stat roll: `1d20+16`.
+  // Strength 16 rolls its modifier, as the 5e pack's stat roll: `1d20+3`.
   await page.getByTestId("in-pane-roll-stat-strength").click();
   await expect(page.getByTestId("in-pane-roll-result")).toBeVisible({
     timeout: 15_000,
@@ -116,9 +116,9 @@ test("a character in the dock rolls from its sheet", async () => {
   );
   const records = await history();
   expect(records).toHaveLength(before + 1);
-  expect(records[0].resolution.formula).toBe("1d20+16");
+  expect(records[0].resolution.formula).toBe("1d20+3");
   const d20 = records[0].resolution.dice[0].finalValue;
   expect(d20).toBeGreaterThanOrEqual(1);
   expect(d20).toBeLessThanOrEqual(20);
-  expect(records[0].resolution.resultValue).toBe(d20 + 16);
+  expect(records[0].resolution.resultValue).toBe(d20 + 3);
 });

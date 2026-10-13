@@ -166,7 +166,10 @@ test("a Universal VTT map brings its art, walls, door and light, as on a server"
   expect(answer).toEqual({
     status: 200,
     body: {
-      wallsCreated: 1,
+      // The one wall in the file, and three edges the map is walled at
+      // (spec 088); its fourth edge is the file's own wall.
+      wallsCreated: 4,
+      perimeterWallsCreated: 3,
       doorsCreated: 1,
       lightsCreated: 1,
       backgroundImageSet: true,

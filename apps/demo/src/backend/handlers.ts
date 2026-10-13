@@ -303,6 +303,9 @@ export const queries: Record<string, Handler> = {
     return systemDataOf(state, actorId);
   },
   actorAbilities: () => [],
+  // Nothing is imported in the demo, so a sheet's import history is empty.
+  actorImports: () => [],
+  actorStagedLinks: () => [],
   actorInventory: () => [],
   worldItems: () => [],
   worldAbilities: () => [],
