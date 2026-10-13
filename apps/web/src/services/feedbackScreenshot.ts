@@ -7,7 +7,7 @@
  * configures its context — so `preserveDrawingBuffer` is at its default of
  * `false` and `canvas.toDataURL()` outside the drawing frame returns a blank
  * image. This is already recorded twice in the repository
- * (`apps/web/e2e/canvas-authoring.spec.ts` and
+ * (`apps/web/e2e/canvas-authoring-walls.spec.ts` and
  * `apps/engine-sandbox/src/main.ts`), which is why the only `toDataURL` calls
  * here are in Playwright fixtures. A screenshot built that way would produce
  * an empty rectangle where the map was: the failure mode that looks like

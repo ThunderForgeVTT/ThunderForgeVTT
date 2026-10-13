@@ -9,7 +9,7 @@
  * clicks the map again. Nothing errors; the events simply go to whatever
  * the browser focused instead.
  *
- * That is not just a user-facing annoyance. `e2e/canvas-authoring.spec.ts`
+ * That is not just a user-facing annoyance. `e2e/fixtures/canvasAuthoring.ts`
  * documents the same thing from the other side: its `waitForEngineReady`
  * has to click a deliberately-neutral corner of the canvas purely to focus
  * it, because a keyboard-only interaction on a fresh page load is dropped

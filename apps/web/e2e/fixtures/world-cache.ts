@@ -648,7 +648,7 @@ export async function switchToScene(page: Page, name: string): Promise<void> {
  *
  * The tool lives in the PlayDock's Settings section (`SettingsPanel.tsx`),
  * which is collapsed by default, so the section is opened first — the same
- * gate `canvas-authoring.spec.ts` handles before creating a scene.
+ * gate `fixtures/canvasAuthoring.ts` handles before creating a scene.
  */
 export async function importMapBackground(
   page: Page,

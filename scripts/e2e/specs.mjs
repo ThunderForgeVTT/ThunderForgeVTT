@@ -22,7 +22,9 @@ import { ROOT_DIR } from "../shared.mjs";
  * Chosen by reading their assertions, not by name: these are the files that
  * assert on a duration or a frame rate, so a neighbour competing for the GPU
  * changes their result. `engine-limits` gates `fps > 20` across a token sweep,
- * and `canvas-authoring` holds map import under SC-007's 30 seconds.
+ * and `canvas-authoring-map-import` holds map import under SC-007's 30
+ * seconds. Its siblings from the same split (they were one file until it was
+ * divided by feature) stay with it, so the lane runs what it always ran.
  *
  * Everything else runs sharded, including the `world-cache` family — its
  * assertions are on item and byte counts (`cacheItems`, `networkItems`), which
@@ -36,7 +38,12 @@ export const PERF_LANE_SPECS = [
   "engine-lighting-limits",
   "engine-interaction-limits",
   "engine-loading",
-  "canvas-authoring",
+  "canvas-authoring-map-import",
+  "canvas-authoring-walls",
+  "canvas-authoring-shapes",
+  "canvas-authoring-tool-switching",
+  "canvas-authoring-panning",
+  "canvas-authoring-placement",
   // SC-007's 18.2 ms frame during a 20d6 throw (spec 087 split it out of
   // `rolls-dice-on-screen`, whose other tests assert on faces, not time).
   "rolls-dice-frame-rate",

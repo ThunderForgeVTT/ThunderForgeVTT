@@ -35,7 +35,7 @@ declare global {
  * only runs for edits that actually pass through it. A synthetic dispatch that
  * skipped the canvas would be asserting against a path the application does
  * not take. The mouse choreography below (press, wait a frame, move, wait,
- * release) is copied from `token-authoring.spec.ts` for the reason documented
+ * release) is copied from `fixtures/tokenAuthoring.ts` for the reason documented
  * there — a press and move coalesced into one frame make the engine compute a
  * zero drag offset, and the token silently does not move.
  */
@@ -89,7 +89,7 @@ export async function waitForEngineReady(page: Page): Promise<void> {
   const box = await canvas.boundingBox();
   if (box) {
     // Clear of the dock's icon rail and the dice bar, so the click reaches
-    // the engine and gives the canvas focus (see token-authoring.spec.ts).
+    // the engine and gives the canvas focus (see fixtures/tokenAuthoring.ts).
     await page.mouse.click(box.x + box.width - 200, box.y + 120);
     await page.waitForTimeout(200);
   }
@@ -253,7 +253,7 @@ export const AIM_OFFSETS: { dx: number; dy: number }[] = (() => {
  * next aim point is tried, so a mis-aimed press can never drag a bystander.
  *
  * World units map 1:1 to pixels at the default zoom, origin at the canvas
- * centre, y pointing up — the same convention token-authoring.spec.ts
+ * centre, y pointing up — the same convention fixtures/tokenAuthoring.ts
  * documents and relies on. What that convention does not say, and what cost
  * this test its drags, is that the engine snaps tokens after the store has
  * recorded them: see `AIM_OFFSETS`.

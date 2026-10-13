@@ -1159,8 +1159,8 @@ async function main() {
   //
   // The exception is not negotiable. The measured specs assert on real
   // numbers: `engine-limits` gates `fps > 20` across a token sweep, and
-  // `canvas-authoring` holds map import inside SC-007's 30 seconds. Those were
-  // *already* measured against an unoptimised build once — the map-import
+  // `canvas-authoring-map-import` holds map import inside SC-007's 30
+  // seconds. Those were *already* measured against an unoptimised build once — the map-import
   // budget was failing at 36.1s until the image codecs were given
   // `opt-level = 3` in the dev profile, which took it to 21.9s without the
   // product changing at all. A dev-built number there describes rustc, not the

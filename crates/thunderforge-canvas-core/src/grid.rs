@@ -532,7 +532,7 @@ mod boundary_tie_break_tests {
     /// which breaks halves **away from zero** — so the two agreed on positive
     /// boundaries and disagreed on negative ones.
     ///
-    /// Found by `token-authoring.spec.ts`, dragging a token to (-60, 60) on a
+    /// Found by `token-authoring-players.spec.ts`, dragging a token to (-60, 60) on a
     /// 5-unit grid: y snapped to 62.5 by both routes, x snapped to -57.5 by
     /// one and -62.5 by the other — adjacent cell centres, one cell apart.
     #[test]

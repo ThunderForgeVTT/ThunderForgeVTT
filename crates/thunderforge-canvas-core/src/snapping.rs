@@ -355,7 +355,7 @@ mod tests {
 
     #[test]
     fn square_snapping_matches_the_e2e_suites_expectation() {
-        // `snapWorld` in apps/web/e2e/token-authoring.spec.ts is
+        // `snapWorld` in apps/web/e2e/fixtures/tokenAuthoring.ts is
         // `floor(v / cell) * cell + cell / 2`, and its comment names the
         // function it is modelling: `GridSpec::snap`. A drag aimed at
         // (100, -100) persists as (102.5, -97.5) on the default 5-unit grid.
@@ -430,7 +430,7 @@ mod tests {
         //
         // The earlier note called this "a curiosity rather than a visible bug"
         // on the grounds that a drag rarely lands exactly on a boundary. That
-        // was wrong, and worth recording: `token-authoring.spec.ts` drags to
+        // was wrong, and worth recording: `token-authoring-players.spec.ts` drags to
         // (-60, 60) on a 5-unit grid — both coordinates exactly on boundaries —
         // and had been failing on it. Because `round` and `floor` differ only
         // on the negative side, y was right and x was one cell out, which is
