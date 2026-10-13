@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="A wooden chest">
+  <title>A wooden chest</title>
+  <!-- Spec 091 T030: the room's chest, in the landing's marker ink: flat
+       fills, a black marker outline, and a pale rim so it reads on dark stone.
+       make-room-art.mjs renders it to public/room/chest.webp. -->
+  <defs>
+    <path id="silhouette" d="M38 118 Q38 58 128 54 Q218 58 218 118 L222 206 Q222 214 214 214 L42 214 Q34 214 34 206 Z"/>
+  </defs>
+  <ellipse cx="132" cy="222" rx="104" ry="16" fill="#000000" opacity="0.3"/>
+  <use href="#silhouette" fill="#fbfbf8" stroke="#fbfbf8" stroke-width="20" stroke-linejoin="round"/>
+  <g stroke="#1f2a2e" stroke-linejoin="round" stroke-linecap="round">
+    <!-- body -->
+    <path d="M36 122 L220 122 L222 206 Q222 214 214 214 L42 214 Q34 214 34 206 Z" fill="#9a5f2e" stroke-width="7"/>
+    <path d="M44 152 L212 153 M43 184 L213 183" fill="none" stroke="#6e3f1c" stroke-width="4"/>
+    <!-- lid -->
+    <path d="M38 120 Q38 58 128 54 Q218 58 218 120 Z" fill="#b8763a" stroke-width="7"/>
+    <path d="M58 92 Q128 70 198 92" fill="none" stroke="#8a5428" stroke-width="4"/>
+    <!-- iron bands -->
+    <path d="M66 60 Q60 88 62 120 L62 213 L86 213 L86 120 Q84 86 90 56 Z" fill="#e0a92c" stroke-width="6"/>
+    <path d="M190 60 Q196 88 194 120 L194 213 L170 213 L170 120 Q172 86 166 56 Z" fill="#e0a92c" stroke-width="6"/>
+    <path d="M36 122 L220 122" fill="none" stroke-width="7"/>
+    <!-- lock -->
+    <path d="M110 108 L146 108 L146 146 Q128 160 110 146 Z" fill="#f4c542" stroke-width="6"/>
+    <circle cx="128" cy="124" r="6" fill="#1f2a2e" stroke="none"/>
+    <path d="M128 126 L128 138" fill="none" stroke-width="6"/>
+    <!-- rivets -->
+    <g fill="#1f2a2e" stroke="none">
+      <circle cx="74" cy="140" r="4"/><circle cx="74" cy="198" r="4"/>
+      <circle cx="182" cy="140" r="4"/><circle cx="182" cy="198" r="4"/>
+    </g>
+  </g>
+  <!-- a marker highlight on the lid -->
+  <path d="M100 70 Q120 64 140 66" fill="none" stroke="#fbfbf8" stroke-width="5" stroke-linecap="round" opacity="0.8"/>
+</svg>

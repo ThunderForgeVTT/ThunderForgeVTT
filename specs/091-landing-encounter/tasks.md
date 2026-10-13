@@ -244,10 +244,12 @@ the demo's build changes. The full suite is never used as a gate.
 
 ## Phase 4: The room (US1)
 
-- [ ] T030 [P] [US1] `src/room/chest.svg` in the landing's ink style, and
+- [x] T030 [P] [US1] `src/room/chest.svg` in the landing's ink style, and
   `scripts/make-room-art.mjs`. Write `public/room/{sir-pip,
   mira-starweave,fenna-swiftbow,brother-oak,chest}.webp` at 256×256. Look
   at each one, and commit them.
+  Done: sir-pip 13.0 KB, mira-starweave 11.0 KB, fenna-swiftbow 13.1 KB,
+  brother-oak 12.5 KB, chest 7.2 KB (webp q0.85, transparent outside the token).
 - [ ] T031 [US1] `src/room/script.ts`: the room's fixed facts (plan
   Decisions):
   - the hero's start square;
