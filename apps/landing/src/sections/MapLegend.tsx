@@ -246,6 +246,11 @@ export default function MapLegend() {
                   className="atlas-tile"
                   aria-pressed={i === pick}
                   onClick={() => setPick(i)}
+                  // The browser leaves a tile with a sliver showing where it
+                  // is, so Tab along the strip would land on hidden tiles.
+                  onFocus={(ev) =>
+                    ev.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" })
+                  }
                   onPointerEnter={() => void loadGeometry(e.name).catch(() => undefined)}
                 >
                   <img

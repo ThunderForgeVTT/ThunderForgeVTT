@@ -78,22 +78,28 @@ gate.
     with its ring.
 
   After: `a11y.spec.ts` 18 of 18; the whole landing suite 24 of 24.
-- [ ] T006 [P] [US1] `e2e/hero.spec.ts`:
+- [x] T006 [P] [US1] `e2e/hero.spec.ts`:
   - a focused party token moves one square on an arrow key, and the live
     note says where;
   - a move across a marker wall is refused, and the note says so;
   - a mouse drag snaps to the grid.
-- [ ] T007 [P] [US1] `e2e/dice-tray.spec.ts`:
+- [x] T007 [P] [US1] `e2e/dice-tray.spec.ts`:
   - every preset prints a result whose total is consistent with its dice
     and the formula's modifier;
   - a typed formula rolls;
   - `nonsense` is refused with the message;
   - history keeps the earlier rolls.
-- [ ] T008 [P] [US1] `e2e/map-legend.spec.ts`:
+- [x] T008 [P] [US1] `e2e/map-legend.spec.ts`:
   - picking each map changes the image and the overlay;
   - every layer toggle flips `aria-pressed` and hides or shows its layer;
   - the credit and the catalog link are visible.
-- [ ] T009 [US1] Fix whatever T006–T008 find.
+- [x] T009 [US1] Fix whatever T006–T008 find.
+
+  T006 and T007 found nothing. T008 found one bug: on a phone, Tab along
+  the atlas strip left every other tile hidden past its edge (about 7px
+  showing), because Chromium does not scroll a focused element that is
+  partly visible. Each tile now scrolls itself into view on focus
+  (`block`/`inline: "nearest"`). After: the landing suite 63 of 63.
 - [ ] T010 [US1] `e2e/looks.spec.ts`: a screenshot per section, per
   project, with masks (plan), under light. Under dark, compare against the
   same baselines. Generate the baselines, look at every one, and commit
@@ -105,7 +111,7 @@ gate.
 
 ## Phase 2: Served small (US4)
 
-- [ ] T020 [US4] `apps/demo/vite.config.mts`: a plugin writes `engine.json`
+- [x] T020 [US4] `apps/demo/vite.config.mts`: a plugin writes `engine.json`
   (`js`, `wasm`, `bytes.raw`, `version`). Test: building the demo
   produces it, and its files exist.
 - [ ] T021 [US4] `apps/landing/scripts/compress.mjs`:
@@ -134,6 +140,11 @@ gate.
   `sdk.rs`, `app.rs`) and a unit test of the parse. Then build the dev
   engine, and check that the frame count stops (in the sandbox, by hand,
   recorded here).
+
+  Done (d8b015a0): `plugins/render_pause.rs`; off is a reactive loop that
+  waits only for a user wake-up, and every host command wakes it once so
+  the queue drains. Parse test passes; engine tests 369 of 369. The frame
+  count stopping is still owed: T037 proves it in the browser.
 - [ ] T032 [US2] `src/engine/loadEngine.ts`:
   - fetch `/demo/engine.json`;
   - stream the wasm with byte progress;
