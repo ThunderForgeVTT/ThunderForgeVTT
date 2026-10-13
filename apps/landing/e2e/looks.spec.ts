@@ -62,3 +62,23 @@ for (const scheme of SCHEMES) {
     });
   });
 }
+
+// A section screenshot is cropped to the section, so one that loses its
+// centring but keeps its width still matches. That shipped once: a class
+// shared with the numbers' `.measure` set "What we measure" flush left on
+// a wide screen. Wider than the column, every section shares its edges.
+test("on a wide screen every section sits in the one column", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop", "one wide width is enough");
+  await page.setViewportSize({ width: 2000, height: 1000 });
+  const opened = await openLanding(page);
+  const edges = await page.locator("main > .section").evaluateAll((all) =>
+    all.map((e) => {
+      const r = e.getBoundingClientRect();
+      return `${e.className}: ${Math.round(r.left)}-${Math.round(r.right)}`;
+    }),
+  );
+  expect(edges.length).toBeGreaterThan(5);
+  const column = edges[0].split(": ")[1];
+  expect(edges).toEqual(edges.map((e) => `${e.split(": ")[0]}: ${column}`));
+  expectClean(opened);
+});

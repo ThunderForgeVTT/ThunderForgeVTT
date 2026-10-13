@@ -104,45 +104,49 @@ function Board({ entry, map, on }: { entry: Entry; map: MapData | null; on: Reco
       <image href={`/maps/${entry.name}.thumb.webp`} x={x0} y={y0} width={w} height={h} />
       <image href={`/maps/${entry.name}.webp`} x={x0} y={y0} width={w} height={h} />
       <rect x={x0} y={y0} width={w} height={h} className="map-wash" />
-      {map && on.grid && (
-        <g className="map-grid">
-          {Array.from({ length: Math.ceil(w / map.gridSize) }, (_, i) => (
-            <line key={`v${i}`} x1={x0 + i * map.gridSize} x2={x0 + i * map.gridSize} y1={y0} y2={-y0} />
-          ))}
-          {Array.from({ length: Math.ceil(h / map.gridSize) }, (_, i) => (
-            <line key={`h${i}`} y1={y0 + i * map.gridSize} y2={y0 + i * map.gridSize} x1={x0} x2={-x0} />
-          ))}
-        </g>
-      )}
-      {map && on.lights && (
-        <g className="map-lights">
-          {map.lights.map((l, i) => (
-            <g key={i}>
-              <circle cx={l.x} cy={l.y} r={l.radius} className="light-dim" />
-              <circle cx={l.x} cy={l.y} r={l.brightRadius} className="light-bright" />
-              <circle cx={l.x} cy={l.y} r={22} className="light-dot" />
-            </g>
-          ))}
-        </g>
-      )}
-      {map && on.walls && (
-        <g className="map-walls">
-          {map.walls
-            .filter((wall) => wall.doorState === "none")
-            .map((wall, i) => (
-              <line key={i} x1={wall.x1} y1={wall.y1} x2={wall.x2} y2={wall.y2} />
+      {/* The catalogue is in world units, +y up as the engine has it; SVG's
+          +y is down, so the marker is drawn upside up. */}
+      <g transform="scale(1 -1)">
+        {map && on.grid && (
+          <g className="map-grid">
+            {Array.from({ length: Math.ceil(w / map.gridSize) }, (_, i) => (
+              <line key={`v${i}`} x1={x0 + i * map.gridSize} x2={x0 + i * map.gridSize} y1={y0} y2={-y0} />
             ))}
-        </g>
-      )}
-      {map && on.doors && (
-        <g className="map-doors">
-          {map.walls
-            .filter((wall) => wall.doorState !== "none")
-            .map((wall, i) => (
-              <line key={i} x1={wall.x1} y1={wall.y1} x2={wall.x2} y2={wall.y2} />
+            {Array.from({ length: Math.ceil(h / map.gridSize) }, (_, i) => (
+              <line key={`h${i}`} y1={y0 + i * map.gridSize} y2={y0 + i * map.gridSize} x1={x0} x2={-x0} />
             ))}
-        </g>
-      )}
+          </g>
+        )}
+        {map && on.lights && (
+          <g className="map-lights">
+            {map.lights.map((l, i) => (
+              <g key={i}>
+                <circle cx={l.x} cy={l.y} r={l.radius} className="light-dim" />
+                <circle cx={l.x} cy={l.y} r={l.brightRadius} className="light-bright" />
+                <circle cx={l.x} cy={l.y} r={22} className="light-dot" />
+              </g>
+            ))}
+          </g>
+        )}
+        {map && on.walls && (
+          <g className="map-walls">
+            {map.walls
+              .filter((wall) => wall.doorState === "none")
+              .map((wall, i) => (
+                <line key={i} x1={wall.x1} y1={wall.y1} x2={wall.x2} y2={wall.y2} />
+              ))}
+          </g>
+        )}
+        {map && on.doors && (
+          <g className="map-doors">
+            {map.walls
+              .filter((wall) => wall.doorState !== "none")
+              .map((wall, i) => (
+                <line key={i} x1={wall.x1} y1={wall.y1} x2={wall.x2} y2={wall.y2} />
+              ))}
+          </g>
+        )}
+      </g>
     </svg>
   );
 }

@@ -455,6 +455,34 @@ the demo's build changes. The full suite is never used as a gate.
 
   Record the room's click weight too: the engine bytes, plus the map when
   the legend has not been seen.
+
+  Results so far (2026-10-13, at 0ebcacac, dev engine):
+  - `pnpm e2e:landing` run 1: 127 passed, 34 skipped, 0 failed (13.9 min);
+    check-serving OK. Run 2: 127 passed, 34 skipped, 0 failed (14.6 min);
+    check-serving OK. Run 3 was stopped by the host's low-memory reaper
+    (another project's Playwright suite was running) before it got far, so
+    it has no result. Its rerun gave 125 passed, 34 skipped and 2 failed
+    (15.1 min), both in `room.spec.ts`: a `movement_state` poll ran past
+    5 s, and later the timing budget read 148654 ms against 60000. The
+    host's load average was over 1000 on 32 cores at the time (a local
+    kube cluster restarting, and 22 `rustc` processes from another
+    project). The engine and data had not changed. A diagnostic boot at
+    the same time found the hero, the camera and the grid all correct.
+    These two failures are recorded as load, not as a room defect.
+    Run 3 is still owed on a quiet machine.
+  - Since then (8c45041d, 4d6c3882): the map legend's walls, doors and
+    lights were drawn upside down (the catalogue's +y is up, the SVG's
+    is down). `map-legend.spec.ts` now checks a wall against the picture
+    for each map. `looks.spec.ts` now checks that every section shares
+    one column at 2000 px.
+  - The skips are the engine tests at the phone and tablet widths. The
+    engine boots at the desktop width only.
+  - `pnpm -F @thunderforge/encounter check`: 75/75.
+  - `make lint`: OK, and no file is over 1000 lines.
+  - `pnpm verify`: all 18 checks passed.
+  - Still to do: `pnpm -F @thunderforge/demo e2e` (the engine changed in
+    10859455, so the demo build changed), and the click weight on the
+    release engine.
 - [ ] T061 Hand pass, recorded here. On the release engine served by nginx
   (`check-serving.mjs`'s container, or thunderforge-dev after deploy),
   play the room:
