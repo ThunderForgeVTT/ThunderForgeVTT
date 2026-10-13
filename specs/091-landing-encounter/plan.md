@@ -147,7 +147,8 @@ No engine change is needed (see Decisions).
     south of the door's wall;
   - chest: in the hall, about three and a half squares from the lamp at
     (−2.56, −6.09), inside its dim ring, outside its bright one;
-  - hall probe point: two squares north of the door's middle. It is lit by
+  - hall probe point: two squares past the door's middle, into the hall
+    (T031: the hall is *south*; the engine's +y is north and drawn up). It is lit by
     the lamp, and the door wall hides it from the hero while the door is
     shut;
   - camera: fitted to the middle room and the hall's near half.
@@ -188,10 +189,11 @@ No engine change is needed (see Decisions).
   6. `set_ambient_light` `dark`;
   7. `upsert_token` for the chest (`tokenType: "object"`, its art);
   8. `upsert_interactive`: the chest's region, `enter`, `once`;
-  9. `set_carried_light` for the hero (a torch);
-  10. `upsert_token` for the hero (`tokenType: "character"`, its art);
-  11. `set_token_vision` for the hero, which must come after the token
+  9. `upsert_token` for the hero (`tokenType: "character"`, its art);
+  10. `set_token_vision` for the hero, which must come after the token
       (`app.rs:803`);
+  11. `set_carried_light` for the hero (a torch), after its token as
+      FR-010 orders (T031: the engine takes it either way);
   12. `set_controlled_token` for the hero;
   13. `set_scene_playing` `true`, which arms the region trigger
       (`interaction.rs:299`);

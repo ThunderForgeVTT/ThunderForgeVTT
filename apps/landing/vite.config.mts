@@ -72,6 +72,10 @@ function servedDemo(): Plugin {
 
 export default defineConfig({
   root: __dirname,
+  // One page, and nginx answers 404 for any other path. The SPA fallback
+  // would hand the engine `index.html` for the `.meta` file Bevy asks for
+  // before every image, and the image would never load (spec 091 T031).
+  appType: "mpa",
   plugins: [
     react(),
     // Spec 086: `/telemetry.json` and its `connect-src`, as nginx serves them.

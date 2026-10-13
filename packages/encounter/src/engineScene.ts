@@ -184,14 +184,15 @@ export function roomSetup(
         fireMode: "once",
       },
     },
+    // FR-010: the hero's token first, then what it carries and sees.
+    { type: "upsert_token", token: heroToken(hero, script.start, grid) },
+    { type: "set_token_vision", tokenId: HERO_ID, darkvision: 0 },
     {
       type: "set_carried_light",
       tokenId: HERO_ID,
       bright: scene.torch.bright * grid,
       dim: scene.torch.dim * grid,
     },
-    { type: "upsert_token", token: heroToken(hero, script.start, grid) },
-    { type: "set_token_vision", tokenId: HERO_ID, darkvision: 0 },
     { type: "set_controlled_token", tokenId: HERO_ID },
     { type: "set_scene_playing", playing: true },
     {

@@ -98,6 +98,8 @@ export interface Referee {
     to: Point,
     path?: readonly Point[],
   ): Judged;
+  /** The engine refused a move at `wallId` before the room asked. */
+  refused(state: RoomState, wallId: string): Judged;
   toggleDoor(state: RoomState): Judged;
   doorPressed(state: RoomState, wallId: string): Judged;
   entered(state: RoomState, interactiveId: string): Judged;
@@ -251,6 +253,11 @@ export function createReferee(script: RoomScript): Referee {
       return blocked
         ? refusedAt(state, blocked, true)
         : movedTo(state, toSquares(to, grid));
+    },
+
+    refused(state, wallId) {
+      const wall = walls(state).find((w) => w.id === wallId);
+      return wall ? refusedAt(state, wall, false) : refuse(state, "ignored");
     },
 
     toggleDoor(state) {

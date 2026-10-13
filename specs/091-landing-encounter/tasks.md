@@ -250,7 +250,7 @@ the demo's build changes. The full suite is never used as a gate.
   at each one, and commit them.
   Done: sir-pip 13.0 KB, mira-starweave 11.0 KB, fenna-swiftbow 13.1 KB,
   brother-oak 12.5 KB, chest 7.2 KB (webp q0.85, transparent outside the token).
-- [ ] T031 [US1] `src/room/script.ts`: the room's fixed facts (plan
+- [x] T031 [US1] `src/room/script.ts`: the room's fixed facts (plan
   Decisions):
   - the hero's start square;
   - the chest's square and region;
@@ -264,6 +264,29 @@ the demo's build changes. The full suite is never used as a gate.
     is open;
   - that the chest sits in the lamp's dim ring;
   - the units `set_carried_light` takes.
+
+  Done, proven by `e2e/room-script.spec.ts` (desktop, 1 passed):
+  - **North is +y.** ArrowUp took the hero from y 1.5 to 2.5, and the
+    engine draws +y up: the hall (y −10 to −2) is below the room, so it is
+    *south* of the start. The plan's guess was wrong. `north: 1` in the
+    script and in `provingGround()`; the core's real-map words and walks
+    flipped (74/74). `smallRoom()` keeps −1, so both signs stay tested.
+  - The hall point (−3, −4) is unseen (`sight_probe`) behind the shut door
+    and seen once it opens.
+  - With the torch out and the hero in the hall, `dim_tokens` lists the
+    chest: the lamp's dim ring.
+  - `set_carried_light` takes world units (`carried_lights` reads 468/936
+    at the hero). It held when sent before the hero's `upsert_token`; the
+    setup now sends it after, as FR-010 orders.
+  - The host clears the viewer on every take, so the room calls
+    `set_viewer_token("hero")` after its setup (T034), or nothing is dark.
+  - Camera box moved to y −7..7 (14×14): the first box cut the hall at the
+    lamps.
+  - Two serving fixes the probe found. `vite preview` answered Bevy's
+    `<image>.meta` probe with `index.html`, so no image loaded: the landing
+    is now `appType: "mpa"`, as nginx (404 for any other path). The e2e
+    guard accepts a 404 on `.meta`, which is the engine's
+    `AssetMetaCheck::Always` working, as `assets_serve/canvas.rs` says.
 - [ ] T032 [US1] `src/sections/Room.tsx`, `src/room/room.css` and
   `App.tsx`. Add a lazy `#room` section after `#map`, with:
   - its heading;

@@ -40,9 +40,9 @@ test("the setup runs the plan's fourteen steps, in order", () => {
     "set_ambient_light",
     "upsert_token",
     "upsert_interactive",
-    "set_carried_light",
     "upsert_token",
     "set_token_vision",
+    "set_carried_light",
     "set_controlled_token",
     "set_scene_playing",
     "fit_camera_to",
@@ -160,9 +160,9 @@ test("the setup's values", () => {
   assert.deepEqual(setup[setup.length - 1], {
     type: "fit_camera_to",
     centerX: -292.5,
-    centerY: 234,
+    centerY: 0,
     width: 1638,
-    height: 1872,
+    height: 1638,
   });
 });
 

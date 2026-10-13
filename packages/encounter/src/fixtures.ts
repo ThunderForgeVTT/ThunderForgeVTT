@@ -107,6 +107,9 @@ export function provingGround(): RoomScript {
   const file = JSON.parse(readFileSync(DEMO, "utf8")) as MapFile;
   return {
     ...shared,
+    // On the engine ArrowUp is +y, and the hall is drawn below the room
+    // (spec 091 T031, e2e/room-script.spec.ts): the hall is south.
+    north: 1,
     map: readMap(file),
     start: { x: -3, y: 1.5 },
     doorNames: {
@@ -137,7 +140,7 @@ export function provingGround(): RoomScript {
     scene: {
       background: "/maps/demo.webp",
       torch: { bright: 4, dim: 8 },
-      camera: { x: -9.5, y: -6, width: 14, height: 16 },
+      camera: { x: -9.5, y: -7, width: 14, height: 14 },
     },
   };
 }

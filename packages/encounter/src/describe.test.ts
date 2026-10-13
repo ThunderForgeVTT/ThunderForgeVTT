@@ -21,15 +21,15 @@ const at = (
 test("the start square", () => {
   assert.equal(
     describePlace(script, at(-3, 1.5)),
-    "You stand in a dark room. The door to the hall is four squares north, shut.",
+    "You stand in a dark room. The door to the hall is four squares south, shut.",
   );
 });
 
 test("next to the shut door, with the chest beyond it", () => {
   assert.equal(
     describePlace(script, at(-3, -1.5)),
-    "You stand in a dark room. The door to the hall is within reach to the north, shut. " +
-      "A chest is three squares north-east.",
+    "You stand in a dark room. The door to the hall is within reach to the south, shut. " +
+      "A chest is three squares south-east.",
   );
 });
 
@@ -39,15 +39,15 @@ test("through the open door, in the hall", () => {
   };
   assert.equal(
     describePlace(script, at(-3, -2.5, open)),
-    "You stand in the hall. The door to the hall is within reach to the south, open. " +
-      "A chest is two squares north-east.",
+    "You stand in the hall. The door to the hall is within reach to the north, open. " +
+      "A chest is two squares south-east.",
   );
 });
 
 test("down the hall, the west door is the nearest", () => {
   assert.equal(
     describePlace(script, at(-12, -3.5)),
-    "You stand in the hall. The door to the west room is three squares south-west, shut.",
+    "You stand in the hall. The door to the west room is three squares north-west, shut.",
   );
 });
 

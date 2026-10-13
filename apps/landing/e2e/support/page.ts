@@ -38,7 +38,7 @@ export async function openLanding(
   const problems: string[] = [];
   const requests: string[] = [];
   page.on("console", (m) => {
-    if (m.type() === "error") problems.push(`console: ${m.text()}`);
+    if (m.type() === "error" && !isMetaProbe(m.location().url)) problems.push(`console: ${m.text()}`);
   });
   page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
   page.on("request", (r) => requests.push(r.url()));
@@ -49,7 +49,9 @@ export async function openLanding(
     problems.push(`requestfailed: ${r.url()} ${r.failure()?.errorText}`);
   });
   page.on("response", (r) => {
-    if (r.status() >= 400) problems.push(`http ${r.status()}: ${r.url()}`);
+    if (r.status() >= 400 && !(r.status() === 404 && isMetaProbe(r.url()))) {
+      problems.push(`http ${r.status()}: ${r.url()}`);
+    }
   });
 
   await page.route("**/gh/repo", (route) =>
@@ -91,6 +93,14 @@ export async function settleLanding(page: Page): Promise<void> {
     );
   });
 }
+
+/**
+ * Bevy asks for `<image>.meta` before every image it loads
+ * (`AssetMetaCheck::Always`), and a 404 is the answer it needs: the server's
+ * asset routes give the same one on purpose (`assets_serve/canvas.rs`). So a
+ * 404 on a `.meta` path is the engine working, not a broken page.
+ */
+const isMetaProbe = (url: string) => url.endsWith(".meta");
 
 /** Fails with every problem the guard saw. */
 export function expectClean(opened: Opened): void {

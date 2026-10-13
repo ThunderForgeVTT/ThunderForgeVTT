@@ -69,14 +69,12 @@ test("on the real map, walking west stops at the room's west wall", () => {
 });
 
 test("a step into door-hall while it is shut marks door-reached, once", () => {
-  for (const referee of [small, real]) {
-    const steps = walk(referee, referee.start(), [
-      "north",
-      "north",
-      "north",
-      "north",
-      "north",
-    ]);
+  // The small room's door is north of its start; the real hall is south.
+  for (const [referee, toward] of [
+    [small, "north"],
+    [real, "south"],
+  ] as const) {
+    const steps = walk(referee, referee.start(), Array(5).fill(toward));
     const [fourth, fifth] = [steps[3]!, steps[4]!];
     assert.equal(fourth.outcome.accepted, false);
     assert.equal(fourth.outcome.wallId, "door-hall");
@@ -206,11 +204,11 @@ test("the engine's region report marks chest-found, and any other region is igno
 
 test("on the real map: through the door and east into the chest's region", () => {
   const near = last(
-    walk(real, real.start(), ["north", "north", "north", "north"]),
+    walk(real, real.start(), ["south", "south", "south", "south"]),
   ).state;
   const opened = real.toggleDoor(near);
   assert.equal(opened.outcome.goal, "door-opened");
-  const steps = walk(real, opened.state, ["north", "north", "east"]);
+  const steps = walk(real, opened.state, ["south", "south", "east"]);
   assert.deepEqual(
     steps.map((s) => s.outcome.goal),
     [null, null, "chest-found"],
@@ -252,6 +250,20 @@ test("a roll that is not a total is refused", () => {
   });
   assert.equal(outcome.accepted, false);
   assert.equal(outcome.announcement, "ignored");
+});
+
+test("a wall the engine refused on its own is judged as the step would be", () => {
+  const start = small.start();
+  const door = small.refused(start, "door-hall");
+  assert.equal(door.outcome.accepted, false);
+  assert.equal(door.outcome.announcement, "blocked-by-door");
+  assert.equal(door.outcome.goal, "door-reached");
+  assert.equal(door.outcome.rollback, undefined, "the engine never moved");
+  assert.deepEqual(door.state.hero, start.hero);
+  const wall = small.refused(start, "wall-03");
+  assert.equal(wall.outcome.announcement, "blocked-by-wall");
+  assert.equal(wall.outcome.goal, null);
+  assert.equal(small.refused(start, "no-such-wall").outcome.announcement, "ignored");
 });
 
 test("a move the engine reported and the rule refuses returns the last accepted square", () => {
