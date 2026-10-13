@@ -100,10 +100,15 @@ gate.
   showing), because Chromium does not scroll a focused element that is
   partly visible. Each tile now scrolls itself into view on focus
   (`block`/`inline: "nearest"`). After: the landing suite 63 of 63.
-- [ ] T010 [US1] `e2e/looks.spec.ts`: a screenshot per section, per
+- [x] T010 [US1] `e2e/looks.spec.ts`: a screenshot per section, per
   project, with masks (plan), under light. Under dark, compare against the
   same baselines. Generate the baselines, look at every one, and commit
   them.
+
+  Done (765860e2): 36 baselines, {section}-{phone,tablet,desktop}, each
+  looked at. The dice frame (T034) moved every section below it by a
+  fraction of a pixel; 15 baselines were regenerated with
+  `--update-snapshots=changed`, the dice ones looked at.
 - [ ] T011 [US1] Add a `landing` slice to `scripts/e2e/slices.json`, as in
   the plan. Then:
   - `pnpm verify` finds no orphan specs;
@@ -155,7 +160,7 @@ gate.
   of small words lands every die on the same face (xoshiro's first draw
   barely moves), so the explode test spreads its seed words; seeds from
   `crypto` are unaffected.
-- [ ] T031 [US2] Engine: the `set_rendering` command (`payloads.rs`,
+- [x] T031 [US2] Engine: the `set_rendering` command (`payloads.rs`,
   `sdk.rs`, `app.rs`) and a unit test of the parse. Then build the dev
   engine, and check that the frame count stops (in the sandbox, by hand,
   recorded here).
@@ -164,6 +169,10 @@ gate.
   waits only for a user wake-up, and every host command wakes it once so
   the queue drains. Parse test passes; engine tests 369 of 369. The frame
   count stopping is still owed: T037 proves it in the browser.
+
+  Proved by T037 ("frames stop out of view and in a hidden tab, and
+  resume"): the count holds still for a second out of view and in a hidden
+  tab, then climbs again.
 - [x] T032 [US2] `src/engine/loadEngine.ts`:
   - fetch `/demo/engine.json`;
   - stream the wasm with byte progress;
@@ -178,14 +187,27 @@ gate.
   - retry;
   - `aria-hidden` canvas;
   - the readout in DOM text.
-- [ ] T034 [US2] `DiceTray.tsx`: mount the frame, and send each roll
+- [x] T034 [US2] `DiceTray.tsx`: mount the frame, and send each roll
   through `diceCommand()` once the frame is running. Queue at most the
   latest roll made during the load.
-- [ ] T035 [US2] `scripts/make-poster.mjs`, and the committed
+
+  Done. The frame sits under the tray. The engine draws a 960x540 board
+  scaled to the frame (`--engine-scale`): its dice keep one size in screen
+  pixels, so a frame-sized canvas cut the d20 in half and a Fireball's row
+  off the sides. The stage takes no pointer, so the page keeps the wheel.
+  The panel sits at the top, clear of where the dice land. Winit sets
+  `tabindex=0` on the canvas; the frame holds it at -1 (axe:
+  aria-hidden-focus).
+- [x] T035 [US2] `scripts/make-poster.mjs`, and the committed
   `public/dice-table.webp`.
+
+  Done: 1d20+5 = 17, seeded so the crate rolls it. Xoshiro's first draw
+  reads only the second seed word, so that word is the spread one. The
+  shot is taken at once, at the poster's size and DPR 1: a landed throw
+  holds 2.5 s and a headless shot of a live canvas takes about 1 s.
 - [x] T036 [US2] `vite.config.mts`: the preview middleware that serves
   `../../data/demo` at `/demo/`.
-- [ ] T037 [US2][US3] `e2e/engine-frame.spec.ts`:
+- [x] T037 [US2][US3] `e2e/engine-frame.spec.ts`:
   - no engine request before the click, scrolled top to bottom;
   - the click loads from `/demo/assets/` with progress;
   - seeded throws land on the crate's faces, including Fate and d100;
@@ -195,6 +217,9 @@ gate.
   - capability fallbacks work;
   - a broken manifest leads to the poster, a message and a retry;
   - the a11y checks from T004 pass with the engine running.
+
+  Done: 19 passed at every width, the 7 engine tests at desktop only (14
+  skips by design); the landing suite is 88 passed, 14 skipped.
 - [x] T038 [US3] Telemetry for frame failures, inside the spec 086
   wording or with the wording updated.
 
