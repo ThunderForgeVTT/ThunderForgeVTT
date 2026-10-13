@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { isEngineFile } from "./support/engine.ts";
 import { expectClean, openLanding } from "./support/page.ts";
-import { FIXED_SEEDS, goal, pad, playThrough, room, square } from "./support/room.ts";
+import { FIXED_SEEDS, goal, pad, playThrough, recordSaid, room, said, saidLog, square, stepAndHear } from "./support/room.ts";
 
 /**
  * Spec 091 T051, US2: the room without the canvas. Every goal through the
@@ -92,6 +92,36 @@ test.describe("the room in words", () => {
       expectClean(opened);
     });
   }
+
+  // A disabled button drops focus to <body>: Enter after a throw would do
+  // nothing, and a screen reader would lose its place. The roll is refused
+  // while the dice are out, but the button keeps focus to the end.
+  test("Enter on the roll keeps focus on the roll, throw after throw", async ({ page }) => {
+    const opened = await openLanding(page);
+    await room(page).scrollIntoViewIfNeeded();
+    await expect(said(page)).toBeAttached();
+    await recordSaid(page);
+    for (let i = 0; i < 3; i += 1) await stepAndHear(page, "South", /door to the hall/);
+    await room(page).getByRole("button", { name: "Open the door to the hall" }).click();
+    await expect(goal(page, "door-opened")).toContainText("(done)");
+    await stepAndHear(page, "South", /hall/);
+    await stepAndHear(page, "South", /hall/);
+    await stepAndHear(page, "East", /^You find the chest/);
+
+    const roll = room(page).getByRole("button", { name: "Roll 1d20+2" });
+    await roll.focus();
+    for (let i = 0; i < 30; i += 1) {
+      const n = (await saidLog(page)).length;
+      await page.keyboard.press("Enter");
+      await expect.poll(async () => (await saidLog(page)).length).toBeGreaterThan(n);
+      await expect(roll).toBeFocused();
+      if (/The chest opens\.$/.test((await saidLog(page)).at(-1)!)) break;
+    }
+    await expect(goal(page, "chest-opened")).toContainText("(done)");
+    await expect(roll).toBeFocused();
+    await expect(roll).toHaveAttribute("aria-disabled", "true");
+    expectClean(opened);
+  });
 
   test("keys move the hero inside the room's controls only, and never scroll", async ({ page }) => {
     const opened = await openLanding(page);

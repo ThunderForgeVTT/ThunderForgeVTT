@@ -75,7 +75,14 @@ export default function Controls(props: Props) {
           <p>
             The chest is locked. Roll <code>{formula}</code> and meet DC {dc} to open it.
           </p>
-          <button type="button" className="ink-btn ink-btn--small ink-btn--red" disabled={rolling || opened} onClick={props.onRoll}>
+          {/* aria-disabled, not disabled: a disabled button drops focus to
+              the page, so Enter after a throw would do nothing. */}
+          <button
+            type="button"
+            className="ink-btn ink-btn--small ink-btn--red"
+            aria-disabled={rolling || opened}
+            onClick={() => !rolling && !opened && props.onRoll()}
+          >
             Roll {formula}
           </button>
           {last && (
