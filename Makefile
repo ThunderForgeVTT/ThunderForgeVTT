@@ -40,7 +40,7 @@ help:
 	@echo "  make lint             Run cargo clippy (-D warnings) plus the file-length check"
 	@echo "  make lint-host        Clippy the workspace for the host target (everything but the wasm-only engine)"
 	@echo "  make lint-wasm        Clippy the browser crates for wasm32-unknown-unknown, the target they ship to"
-	@echo "  make check-file-length  Fail if any tracked .rs file exceeds 1000 lines (see scripts/check-file-length.sh)"
+	@echo "  make check-file-length  Fail if any tracked .rs/.ts/.tsx file exceeds 1000 lines (see scripts/check-file-length.sh)"
 	@echo ""
 	@echo "Load/torture tiers (standalone — no other target ever runs these):"
 	@echo "  make test-torture-session  Run the cheap 5-session tier (alias for test-torture-session-5)"
