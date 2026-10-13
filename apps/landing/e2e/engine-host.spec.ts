@@ -1,14 +1,18 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import {
   BOOT_TIMEOUT,
   BUILT,
   bootDiceFrame,
+  diceFrame,
   engine,
   frames,
+  landed,
   landedOf,
   seeded,
+  throwButton,
 } from "./support/engine.ts";
 import { expectClean, openLanding } from "./support/page.ts";
+import { bootRoom, engineHero, goal, pad, recordSaid, roomFrame, saidLog, square } from "./support/room.ts";
 
 /**
  * Spec 091 T001: the probe. Can the one engine the dice tray booted move its
@@ -108,6 +112,115 @@ test.describe("one engine, moved", () => {
 
     expect(await page.evaluate(() => (window as unknown as { lost: number }).lost)).toBe(0);
     console.log(`probe: movement ${JSON.stringify(await engine(page, "movement_state"))}`);
+    expectClean(opened);
+  });
+});
+
+/**
+ * Spec 091 T025, US3: the tray and the room share the one table. Whichever
+ * frame asked last holds the canvas; the other shows its poster and a way
+ * to bring the table back. Nothing is downloaded twice.
+ */
+
+/**
+ * The engine's code and assets. The manifest is left out: the test's own
+ * `engine()` probe reads it on every call. So are Bevy's `.meta` probes.
+ */
+const engineFiles = (requests: string[]) =>
+  requests.filter((u) => new URL(u).pathname.startsWith("/demo/assets/") && !u.endsWith(".meta"));
+
+/** Marks the canvas, so a later look can tell it is the same element. */
+const markCanvas = (page: Page) =>
+  page.evaluate(() => (document.getElementById("thunderforge-table")!.dataset.mark = "first"));
+const canvasIn = (page: Page, frameId: string) =>
+  page.evaluate((id) => document.querySelector(`#${id} #thunderforge-table`)?.getAttribute("data-mark") ?? null, frameId);
+
+const chip = (page: Page, label: string) =>
+  page.locator("#dice").getByRole("group", { name: "Example rolls" }).getByRole("button", { name: label });
+
+test.describe("the tray and the room share one table", () => {
+  test.skip(!BUILT, "no demo build: run pnpm -F @thunderforge/demo run build");
+  test.beforeEach(async ({ page }, info) => {
+    test.skip(info.project.name !== "desktop", "the engine boots at the desktop width only");
+    test.setTimeout(BOOT_TIMEOUT + 180_000);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+  });
+
+  test("tray, then room, then back (US3 scenarios 1, 2 and 4)", async ({ page }) => {
+    const opened = await openLanding(page);
+    await bootDiceFrame(page);
+    await chip(page, "Attack").click();
+    await expect.poll(async () => (await landed(page)).length, { timeout: 30_000 }).toBe(1);
+    await markCanvas(page);
+    const fetched = engineFiles(opened.requests);
+    expect(new Set(fetched).size, "each engine file once").toBe(fetched.length);
+
+    // Scenario 1: the same canvas moves to the room, which sends its scene.
+    await bootRoom(page);
+    expect(await canvasIn(page, "room-table")).toBe("first");
+    await expect.poll(() => engineHero(page)).toEqual({ x: -3, y: 1.5 });
+    await expect(diceFrame(page)).toHaveClass(/engine-frame--away/);
+    await expect(diceFrame(page)).toContainText("The table is in the room below.");
+    await expect(diceFrame(page).getByRole("button", { name: "Bring it back" })).toBeVisible();
+    expect(engineFiles(opened.requests), "no engine file fetched again").toEqual(fetched);
+
+    // Scenario 2: the tray still rolls in words; nothing lands on the table.
+    await chip(page, "Ability score").click();
+    await expect(page.locator("#dice .total code")).toHaveText("4d6kh3");
+    await page.waitForTimeout(1_500);
+    expect(await landed(page)).toHaveLength(1);
+
+    // Scenario 4: the room's frame, out of view, stops drawing.
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(roomFrame(page)).toHaveClass(/engine-frame--paused/);
+    await page.waitForTimeout(300);
+    const stopped = await frames(page);
+    await page.waitForTimeout(1_000);
+    expect(await frames(page), "frames drawn while out of view").toBe(stopped);
+
+    // Back to the tray: the same canvas, the room's hero gone, a throw lands.
+    await diceFrame(page).scrollIntoViewIfNeeded();
+    await diceFrame(page).getByRole("button", { name: "Bring it back" }).click();
+    await expect(diceFrame(page)).toHaveClass(/engine-frame--running/);
+    expect(await canvasIn(page, "dice-table")).toBe("first");
+    await expect(roomFrame(page)).toHaveClass(/engine-frame--away/);
+    await expect.poll(() => engineHero(page)).toBeUndefined();
+    await chip(page, "Fireball").click();
+    await expect.poll(async () => (await landed(page)).length, { timeout: 30_000 }).toBe(2);
+    expect(engineFiles(opened.requests)).toEqual(fetched);
+    expectClean(opened);
+  });
+
+  test("room first, then the tray takes the table (US3 scenario 3)", async ({ page }) => {
+    const opened = await openLanding(page);
+    await bootRoom(page);
+    await recordSaid(page);
+    await markCanvas(page);
+
+    // Goal 1 on the table: three steps to the door, the fourth refused.
+    await pad(page, "North").focus();
+    for (let i = 0; i < 4; i += 1) {
+      const n = (await saidLog(page)).length;
+      await page.keyboard.press("ArrowDown");
+      await expect.poll(async () => (await saidLog(page)).length).toBe(n + 1);
+    }
+    await expect(goal(page, "door-reached")).toContainText("(done)");
+    const fetched = engineFiles(opened.requests);
+
+    await diceFrame(page).scrollIntoViewIfNeeded();
+    await throwButton(page).click();
+    await expect(diceFrame(page)).toHaveClass(/engine-frame--running/);
+    expect(await canvasIn(page, "dice-table")).toBe("first");
+    await expect(roomFrame(page)).toHaveClass(/engine-frame--away/);
+    await expect.poll(() => engineHero(page)).toBeUndefined();
+
+    // The room's words keep their state.
+    expect(await square(page)).toBe("-3,-1.5");
+    await expect(goal(page, "door-reached")).toContainText("(done)");
+
+    await chip(page, "Attack").click();
+    await expect.poll(async () => (await landed(page)).length, { timeout: 30_000 }).toBe(1);
+    expect(engineFiles(opened.requests)).toEqual(fetched);
     expectClean(opened);
   });
 });

@@ -238,9 +238,17 @@ the demo's build changes. The full suite is never used as a gate.
   Done by T023 itself: `away` is not live, so the tray's `onState` gets
   `send = null`; and the host's `sendAs` drops a command from a frame that
   does not hold the table. T025 proves it.
-- [ ] T025 [US3] `e2e/engine-host.spec.ts`: US3 scenarios 1 to 4. Use the
+- [x] T025 [US3] `e2e/engine-host.spec.ts`: US3 scenarios 1 to 4. Use the
   tray and a minimal second frame until the room exists (T034), then
   switch to the room. `engine-frame.spec.ts` stays green.
+  Done, with the room: tray then room then back (scenarios 1, 2, 4), and
+  room first then the tray (scenario 3). The canvas carries a mark from
+  its first frame and keeps it in each frame it moves to; the engine's
+  `/demo/assets/` files are each fetched once (the manifest is left out
+  of that check, since the test's own probe reads it). While the room
+  holds the table, a tray roll is printed and nothing lands; the room's
+  goals and square survive the tray taking the table, and the hero leaves
+  the table. `engine-frame.spec.ts`: 19 passed, 14 skipped (other widths).
 
 ## Phase 4: The room (US1)
 
