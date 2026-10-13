@@ -22,10 +22,6 @@ import {
   StatusPanel,
   type PanelPosition,
 } from "@/components/StatusPanel/StatusPanel";
-import {
-  readTokenStatus,
-  type TokenStatusResource,
-} from "@/engine/bevy/tokenStatus";
 import { railTools } from "@/lib/authoringTools";
 import { usePlaceActorTokens } from "./usePlaceActorTokens";
 import { useGmToolRail } from "./useGmToolRail";
@@ -45,6 +41,7 @@ import { useWorldEventStreams } from "./useWorldEventStreams";
 import { useSceneLiveSync } from "./useSceneLiveSync";
 import { useConnectivity } from "./useConnectivity";
 import { useScenePlay } from "./useScenePlay";
+import { usePinnedTokenStatus } from "./usePinnedTokenStatus";
 import { PeerIndicator } from "@/components/diagnostics/PeerIndicator";
 import { EngineMonitor } from "@/components/diagnostics/EngineMonitor";
 
@@ -146,16 +143,6 @@ export default function WorldPage() {
     };
   }, [id]);
 
-  // Spec 029: the selected token's resources, read back from the engine rather
-  // than held here. React observes; it does not become a second store
-  // (Constitution I, ADR-053).
-  // Keyed by the token it was read for, so a slow read that resolves after
-  // the selection has moved cannot paint one token's resources under
-  // another's name — and so deselection needs no synchronous state write.
-  const [panelStatus, setPanelStatus] = useState<{
-    tokenId: string;
-    resources: TokenStatusResource[] | null;
-  } | null>(null);
   // Spec 029 FR-011a (playtest 2026-09-10 P6): the pinned panel — which
   // token, and where it sits. Selection does not open it; a double-click does.
   const [pinned, setPinned] = useState<{
@@ -483,37 +470,10 @@ export default function WorldPage() {
     setApprovalRevision,
   });
 
-  /** The pinned token's name, for the panel heading. */
-  const pinnedTokenLabel = useMemo(() => {
-    const id = pinned?.tokenId;
-    if (!id) return undefined;
-    return worldState.tokens[id]?.label ?? undefined;
-  }, [pinned?.tokenId, worldState.tokens]);
-
-  // Follow the pin, not the selection (spec 029 FR-012a): read what the
-  // engine would draw for the pinned token, whatever is selected now.
-  useEffect(() => {
-    const tokenId = pinned?.tokenId;
-    if (!tokenId) {
-      return;
-    }
-
-    let cancelled = false;
-    void readTokenStatus(tokenId).then((resources) => {
-      if (!cancelled) setPanelStatus({ tokenId, resources });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [pinned?.tokenId, worldState.tokens]);
-
-  // Derived rather than stored: the panel shows a token's resources only while
-  // that token is the pinned one, so unpinning — or pinning another — can
-  // never show the previous token's numbers.
-  const panelResources =
-    pinned && panelStatus?.tokenId === pinned.tokenId
-      ? panelStatus.resources
-      : null;
+  const { pinnedTokenLabel, panelResources } = usePinnedTokenStatus({
+    pinned,
+    worldState,
+  });
 
   const liveSyncState = useConnectivity({
     id,
