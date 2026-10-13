@@ -459,6 +459,9 @@ pub(crate) enum ExternalCommand {
         center_y: f32,
         width: f32,
         height: f32,
+        /// Land in one frame instead of gliding, for `prefers-reduced-motion`
+        /// (spec 091). Absent means the usual glide.
+        immediate: bool,
     },
     /// Puts a token on screen: "look at this creature" (owner decision
     /// 2026-09-15).

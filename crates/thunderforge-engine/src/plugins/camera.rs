@@ -46,16 +46,23 @@ fn setup_camera(mut commands: Commands) {
 /// the darkness quad would be sized for the wrong area. Keeping zoom in the
 /// projection makes those culls correct by construction.
 fn update_camera_transform(
-    mut cameras: Query<(&mut Transform, &mut Projection), With<Camera2d>>,
+    mut cameras: Query<(&Camera, &mut Transform, &mut Projection), With<Camera2d>>,
     mut camera_mgr: ResMut<CameraManager>,
     time: Res<Time>,
 ) {
+    if camera_mgr.held_fit.is_some() {
+        let viewport = cameras
+            .iter()
+            .next()
+            .and_then(|(c, ..)| c.logical_viewport_size());
+        camera_mgr.refit_for(viewport);
+    }
     // Ease toward the requested camera before writing it out, so zoom and pan
     // glide instead of snapping. See `CameraManager::advance`.
     camera_mgr.advance(time.delta_secs());
     mirror_camera_state(camera_mgr.translation, camera_mgr.scale);
 
-    for (mut transform, mut projection) in cameras.iter_mut() {
+    for (_, mut transform, mut projection) in cameras.iter_mut() {
         transform.translation = camera_mgr.translation.extend(100.0);
         // Left at identity deliberately — see above.
         transform.scale = Vec3::ONE;

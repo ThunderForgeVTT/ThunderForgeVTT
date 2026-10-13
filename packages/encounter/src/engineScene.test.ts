@@ -163,6 +163,15 @@ test("the setup's values", () => {
     centerY: 0,
     width: 1638,
     height: 1638,
+    immediate: false,
+  });
+  assert.deepEqual(roomSetup(script, hero, { reducedMotion: true }).at(-1), {
+    type: "fit_camera_to",
+    centerX: -292.5,
+    centerY: 0,
+    width: 1638,
+    height: 1638,
+    immediate: true,
   });
 });
 

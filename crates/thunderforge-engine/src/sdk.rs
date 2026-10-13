@@ -241,6 +241,10 @@ pub(crate) fn parse_command(input: &str) -> Option<ExternalCommand> {
             center_y: value.get("centerY").and_then(Value::as_f64).unwrap_or(0.0) as f32,
             width: value.get("width")?.as_f64()? as f32,
             height: value.get("height")?.as_f64()? as f32,
+            immediate: value
+                .get("immediate")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
         }),
         "focus_token" => Some(ExternalCommand::FocusToken {
             token_id: value.get("tokenId")?.as_str()?.to_owned(),
@@ -635,6 +639,25 @@ mod selection_command_tests {
         ));
         assert!(parse_command(r#"{"type":"set_rendering"}"#).is_none());
         assert!(parse_command(r#"{"type":"set_rendering","on":"no"}"#).is_none());
+    }
+
+    /// Spec 091: a reduced-motion fit lands at once; an old caller glides.
+    #[test]
+    fn a_fit_is_immediate_only_when_asked() {
+        assert!(matches!(
+            parse_command(r#"{"type":"fit_camera_to","width":10,"height":10,"immediate":true}"#),
+            Some(ExternalCommand::FitCameraTo {
+                immediate: true,
+                ..
+            })
+        ));
+        assert!(matches!(
+            parse_command(r#"{"type":"fit_camera_to","width":10,"height":10}"#),
+            Some(ExternalCommand::FitCameraTo {
+                immediate: false,
+                ..
+            })
+        ));
     }
 
     #[test]

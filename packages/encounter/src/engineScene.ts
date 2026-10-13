@@ -87,6 +87,7 @@ export type EngineCommand =
       centerY: number;
       width: number;
       height: number;
+      immediate: boolean;
     };
 
 const HERO_Z = 2;
@@ -128,8 +129,8 @@ const rect = (r: SquareRect, grid: number): RectGeometry => ({
  *     `detect_entries`);
  * 14. the camera on the room.
  *
- * `fit_camera_to` has no `immediate` field (`sdk.rs`), so the camera eases
- * whatever `reducedMotion` says.
+ * Under reduced motion the camera lands at once (`immediate`); otherwise
+ * it glides there.
  */
 export function roomSetup(
   script: RoomScript,
@@ -201,6 +202,7 @@ export function roomSetup(
       centerY: camera.y + camera.height / 2,
       width: camera.width,
       height: camera.height,
+      immediate: reducedMotion,
     },
   ];
 }

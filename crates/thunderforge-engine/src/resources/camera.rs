@@ -27,7 +27,28 @@ pub struct CameraManager {
     /// Likewise for panning, so a cursor-anchored zoom eases rather than
     /// snapping the world sideways.
     pub target_translation: Vec2,
+    /// The last fit, held while nothing else has moved the camera, and made
+    /// again when the viewport changes size. Bevy's window starts at
+    /// 1280x720 and takes the canvas's size a frame or two later, so a scene
+    /// set up on the engine's first frame (spec 091's room) kept a fit made
+    /// for the wrong board.
+    pub held_fit: Option<HeldFit>,
 }
+
+/// A `fit_to`, with what it was made for.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct HeldFit {
+    pub center: Vec2,
+    pub content_size: Vec2,
+    pub immediate: bool,
+    /// The viewport it was made for.
+    pub viewport: Vec2,
+    /// The zoom it set; a different target means the camera was moved since.
+    pub scale: f32,
+}
+
+/// The viewport a fit assumes until the camera reports its own.
+pub const FALLBACK_VIEWPORT: Vec2 = Vec2::new(1280.0, 720.0);
 
 impl Default for CameraManager {
     fn default() -> Self {
@@ -41,6 +62,7 @@ impl Default for CameraManager {
             // needs roughly 4x. See `ZoomLimits::default`.
             zoom_min: 0.1,
             zoom_max: 12.0,
+            held_fit: None,
         }
     }
 }
@@ -126,6 +148,43 @@ impl CameraManager {
         self.target_translation = center;
     }
 
+    /// `fit_to`, held so `refit_for` can make it again for a new viewport
+    /// size. Without a viewport yet, the fallback stands in. `immediate`
+    /// lands it with no glide.
+    pub fn fit_and_hold(
+        &mut self,
+        center: Vec2,
+        content_size: Vec2,
+        viewport: Option<Vec2>,
+        immediate: bool,
+    ) {
+        let viewport = viewport.unwrap_or(FALLBACK_VIEWPORT);
+        self.fit_to(center, content_size, viewport);
+        self.held_fit = Some(HeldFit {
+            center,
+            content_size,
+            immediate,
+            viewport,
+            scale: self.target_scale,
+        });
+        if immediate {
+            self.snap_to_target();
+        }
+    }
+
+    /// Makes the held fit again if the viewport changed size, unless the
+    /// camera has been moved since; a move lets the fit go.
+    pub fn refit_for(&mut self, viewport: Option<Vec2>) {
+        let Some(fit) = self.held_fit else { return };
+        if self.target_translation != fit.center || self.target_scale != fit.scale {
+            self.held_fit = None;
+            return;
+        }
+        if let Some(viewport) = viewport.filter(|v| *v != fit.viewport) {
+            self.fit_and_hold(fit.center, fit.content_size, Some(viewport), fit.immediate);
+        }
+    }
+
     /// Reset camera to initial state (pan=0, zoom=1:1).
     pub fn reset(&mut self) {
         self.target_translation = Vec2::ZERO;
@@ -190,6 +249,42 @@ mod tests {
     fn settled(cam: &mut CameraManager) -> &mut CameraManager {
         cam.snap_to_target();
         cam
+    }
+
+    #[test]
+    fn a_held_fit_is_made_again_when_the_viewport_changes_size() {
+        let mut cam = CameraManager::default();
+        let (center, size) = (Vec2::new(-292.5, 0.0), Vec2::splat(1638.0));
+        cam.fit_and_hold(center, size, Some(Vec2::new(1280.0, 720.0)), true);
+        let first = cam.scale;
+
+        cam.refit_for(None);
+        cam.refit_for(Some(Vec2::new(1280.0, 720.0)));
+        assert_eq!(cam.scale, first, "no new size: nothing changes");
+
+        cam.refit_for(Some(Vec2::new(960.0, 540.0)));
+        assert_eq!(cam.translation, center);
+        assert!((cam.scale - 1638.0 / 540.0).abs() < 1e-4, "{}", cam.scale);
+        assert!(cam.held_fit.is_some());
+    }
+
+    #[test]
+    fn a_moved_camera_lets_the_fit_go() {
+        let mut cam = CameraManager::default();
+        cam.fit_and_hold(
+            Vec2::ZERO,
+            Vec2::splat(1080.0),
+            Some(Vec2::new(960.0, 540.0)),
+            false,
+        );
+        assert_eq!(cam.target_scale, 2.0);
+        assert_eq!(cam.scale, 1.0, "not immediate: it glides from where it was");
+
+        cam.pan(Vec2::new(10.0, 0.0));
+        cam.refit_for(Some(Vec2::new(1920.0, 1080.0)));
+        assert_eq!(cam.held_fit, None);
+        assert_eq!(cam.target_scale, 2.0);
+        assert_eq!(cam.target_translation, Vec2::new(10.0, 0.0));
     }
 
     #[test]

@@ -756,20 +756,23 @@ pub(crate) fn apply_external_commands(
                 center_y,
                 width,
                 height,
+                immediate,
             } => {
                 if let Some(camera_mgr) = scene.camera.as_deref_mut() {
                     // The viewport in *world units at 1:1* is just its pixel
                     // size, since one world unit is one pixel at scale 1.
+                    // Held, and made again if the viewport changes size: on
+                    // the engine's first frames it is not the canvas's yet.
                     let viewport = scene
                         .camera_viewport
                         .single()
                         .ok()
-                        .and_then(|camera| camera.logical_viewport_size())
-                        .unwrap_or(Vec2::new(1280.0, 720.0));
-                    camera_mgr.fit_to(
+                        .and_then(|camera| camera.logical_viewport_size());
+                    camera_mgr.fit_and_hold(
                         Vec2::new(center_x, center_y),
                         Vec2::new(width, height),
                         viewport,
+                        immediate,
                     );
                     info!(
                         target: "camera",
