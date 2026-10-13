@@ -1,0 +1,184 @@
+/* Spec 091: the room. The table on the left, the room in words on the right;
+   one column below 900px, the table first. */
+
+.room-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: calc(var(--cell) * 1);
+  align-items: start;
+}
+.room-layout--loading {
+  min-height: 30rem;
+}
+@media (max-width: 899px) {
+  .room-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.room-table {
+  margin: 0;
+}
+.room-caption {
+  margin-top: 0.6rem;
+  font-size: 0.95rem;
+  color: var(--text-soft);
+}
+
+.room-side {
+  display: grid;
+  gap: 1.1rem;
+}
+.room-subhead {
+  margin: 0 0 0.4rem;
+  font: 700 1.05rem/1.3 var(--font-body);
+}
+.room-hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.95rem;
+  color: var(--text-soft);
+}
+
+.room-heroes {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.room-heroes legend {
+  padding: 0;
+  font: 700 1.05rem/1.3 var(--font-body);
+}
+.room-heroes-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.room-hero {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 48px;
+  padding: 0.25rem 0.5rem;
+  background: var(--paper);
+  border: 2px solid var(--grid-major);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.room-hero:has(input:checked) {
+  border-color: var(--ink-black);
+  box-shadow: 0 0 0 1px var(--ink-black);
+  font-weight: 700;
+}
+.room-hero:has(input:focus-visible) {
+  outline: 3px solid var(--text-blue);
+  outline-offset: 2px;
+}
+
+.room-goals ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: goal;
+}
+.room-goal {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.15rem 0;
+}
+.room-goal-mark {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 1.4rem;
+  height: 1.4rem;
+  border: 2px solid var(--ink-black);
+  border-radius: 4px;
+  color: var(--text-green);
+  font-weight: 700;
+  line-height: 1;
+}
+.room-goal-state {
+  color: var(--text-soft);
+}
+.room-goal--done {
+  font-weight: 700;
+}
+
+.room-place,
+.room-said {
+  margin: 0;
+}
+.room-said {
+  padding: 0.6rem 0.8rem;
+  background: var(--paper);
+  border-left: 4px solid var(--text-blue);
+}
+.room-said:empty {
+  display: none;
+}
+
+.room-controls {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+}
+.room-pad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(5.5rem, auto));
+  grid-template-areas:
+    ". north ."
+    "west . east"
+    ". south .";
+  gap: 0.4rem;
+}
+.room-pad-btn {
+  min-height: 48px;
+  padding: 0.3rem 0.6rem;
+  font: 700 0.95rem/1.2 var(--font-body);
+  color: var(--ink-black);
+  background: var(--paper);
+  border: 2.5px solid var(--ink-black);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.room-pad-btn:focus-visible {
+  outline: 3px solid var(--text-blue);
+  outline-offset: 2px;
+}
+.room-pad-btn--north {
+  grid-area: north;
+}
+.room-pad-btn--south {
+  grid-area: south;
+}
+.room-pad-btn--east {
+  grid-area: east;
+}
+.room-pad-btn--west {
+  grid-area: west;
+}
+
+.room-actions,
+.room-roll {
+  display: grid;
+  gap: 0.4rem;
+  justify-items: start;
+}
+.room-roll p {
+  margin: 0;
+}
+.room-roll code {
+  color: var(--text-blue);
+}
+
+.room-ending {
+  padding: 1rem;
+  background: var(--paper);
+  border: 2.5px solid var(--ink-black);
+  border-radius: 6px;
+}
+.room-ending p {
+  margin: 0 0 0.6rem;
+}

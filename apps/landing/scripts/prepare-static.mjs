@@ -5,7 +5,7 @@
 // The maps are generated, not committed (`pnpm -F @thunderforge/demo run
 // maps`); without them the page still builds and the map section says the
 // maps live in the demo. Credit travels with the maps: MBRound18, CC BY-SA 4.0.
-import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -38,9 +38,11 @@ if (existsSync(catalog)) {
     await copyFile(path.join(source, `${file}.webp`), path.join(out, `${file}.webp`));
     await copyFile(path.join(source, `${file}.thumb.webp`), path.join(out, `${file}.thumb.webp`));
     const { name, width, height, gridSize, walls, lights } = map;
+    // The room states the image's weight beside its button (spec 091).
+    const imageBytes = (await stat(path.join(out, `${file}.webp`))).size;
     await writeFile(
       path.join(out, `${file}.json`),
-      JSON.stringify({ name, width, height, gridSize, walls, lights }),
+      JSON.stringify({ name, width, height, gridSize, walls, lights, imageBytes }),
     );
     const doors = walls.filter((w) => w.doorState !== "none").length;
     index.push({

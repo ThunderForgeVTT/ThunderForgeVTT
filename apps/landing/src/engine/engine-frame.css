@@ -65,6 +65,12 @@
   background: rgb(from var(--paper) r g b / 0.94);
   border-bottom: var(--marker-thin) solid var(--ink-black);
 }
+/* The room's poster has its map in the upper half: the panel goes below. */
+.engine-frame--interactive .engine-panel {
+  inset: auto 0 0;
+  border-top: var(--marker-thin) solid var(--ink-black);
+  border-bottom: 0;
+}
 .engine-note {
   flex: 1 1 16rem;
   margin: 0;

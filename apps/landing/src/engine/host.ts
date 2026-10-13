@@ -64,6 +64,14 @@ export function sendAs(id: string): Send {
 export const holderId = () => holder?.id ?? null;
 export const running = () => engine;
 
+/** The canvas, while the engine runs and `id` holds the table. */
+export const canvasOf = (id: string) => (engine && holder?.id === id ? canvas : null);
+
+/** Sets whose sight the board shows, while `id` holds the table. */
+export function viewAs(id: string, tokenId: string) {
+  if (engine && holder?.id === id) engine.set_viewer_token(tokenId);
+}
+
 /** Runs `fn` with the engine once it has started, now if it already has. */
 export function whenReady(fn: (e: Engine) => void) {
   if (engine) fn(engine);

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { diceCommand, type Resolution } from "@thunderforge/dice-throw";
+import { dice, seed } from "../dice.ts";
 import EngineFrame, { type FrameState, type Send } from "../engine/EngineFrame.tsx";
 
 // The dice crate the server rolls with, compiled to WebAssembly and running
@@ -11,15 +12,6 @@ import EngineFrame, { type FrameState, type Send } from "../engine/EngineFrame.t
 type Sides = Resolution["dice"][number]["sides"];
 type Command = ReturnType<typeof diceCommand>;
 
-type DiceModule = typeof import("@thunderforge/dice");
-let loaded: Promise<DiceModule> | null = null;
-function dice(): Promise<DiceModule> {
-  loaded ??= import("@thunderforge/dice").then(async (m) => {
-    await m.default();
-    return m;
-  });
-  return loaded;
-}
 
 const PRESETS = [
   { label: "Attack", formula: "1d20+5" },
@@ -55,10 +47,6 @@ function face(sides: Sides, v: number): string {
   if (sides === "Fate") return v > 0 ? "+" : v < 0 ? "−" : "·";
   if (sides === "Coin") return v ? "H" : "T";
   return String(v);
-}
-
-function seed() {
-  return crypto.getRandomValues(new Uint32Array(4));
 }
 
 /**

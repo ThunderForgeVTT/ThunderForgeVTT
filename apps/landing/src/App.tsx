@@ -9,11 +9,12 @@ import { WhatWeMeasure } from "./sections/WhatWeMeasure.tsx";
 import { Support } from "./sections/Support.tsx";
 import { Footer } from "./sections/Footer.tsx";
 
-// The dice (WebAssembly) and the map (a large image and its geometry) load
-// after the first viewport, each in its own chunk.
+// The dice (WebAssembly), the map (a large image and its geometry) and the
+// room load after the first viewport, each in its own chunk.
 const DiceTray = lazy(() => import("./sections/DiceTray.tsx"));
 const MapLegend = lazy(() => import("./sections/MapLegend.tsx"));
 const StarChart = lazy(() => import("./sections/StarChart.tsx"));
+const Room = lazy(() => import("./sections/Room.tsx"));
 
 export function App() {
   return (
@@ -45,6 +46,18 @@ export function App() {
           </h2>
           <Suspense fallback={<div className="legend-layout legend-layout--loading" />}>
             <MapLegend />
+          </Suspense>
+        </section>
+        <section id="room" className="section room-section" aria-labelledby="room-title">
+          <h2 id="room-title" className="marker-head">
+            Play one room.
+          </h2>
+          <p className="lede">
+            <strong>A simulation.</strong> This room runs in your browser. The page plays the server's part: it checks every move
+            and opens every door, as a ThunderForge server would.
+          </p>
+          <Suspense fallback={<div className="room-layout room-layout--loading" />}>
+            <Room />
           </Suspense>
         </section>
         <Systems />

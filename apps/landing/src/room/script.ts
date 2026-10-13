@@ -50,13 +50,19 @@ export function roomScript(file: MapFile): RoomScript {
   };
 }
 
-let pending: Promise<RoomScript> | null = null;
+export interface LoadedRoom {
+  script: RoomScript;
+  /** The background's weight, which the room states beside its button. */
+  imageBytes: number | null;
+}
+
+let pending: Promise<LoadedRoom> | null = null;
 
 /** The room's script, its walls read from the map file once per page. */
-export function loadRoomScript(): Promise<RoomScript> {
+export function loadRoomScript(): Promise<LoadedRoom> {
   pending ??= fetch(MAP)
-    .then((r) => (r.ok ? (r.json() as Promise<MapFile>) : Promise.reject(new Error(`${MAP}: ${r.status}`))))
-    .then(roomScript);
+    .then((r) => (r.ok ? (r.json() as Promise<MapFile & { imageBytes?: number }>) : Promise.reject(new Error(`${MAP}: ${r.status}`))))
+    .then((file) => ({ script: roomScript(file), imageBytes: file.imageBytes ?? null }));
   pending.catch(() => (pending = null));
   return pending;
 }
