@@ -114,18 +114,31 @@ gate.
 - [x] T020 [US4] `apps/demo/vite.config.mts`: a plugin writes `engine.json`
   (`js`, `wasm`, `bytes.raw`, `version`). Test: building the demo
   produces it, and its files exist.
-- [ ] T021 [US4] `apps/landing/scripts/compress.mjs`:
+- [x] T021 [US4] `apps/landing/scripts/compress.mjs`:
   - write `.br` beside each compressible asset in `dist/assets` and
     `data/demo/assets`;
   - fill `bytes.br` and `bytes.gz` in `data/demo/engine.json`;
   - write `marketing/landing-engine.json`.
 
   Run it from the Dockerfile's landing stage, after both builds.
-- [ ] T022 [US4] `nginx.conf.template`:
+- [x] T022 [US4] `nginx.conf.template`:
   - the `$br_suffix` map, `try_files` and the `.br` location;
   - `/demo/engine.json` served with `no-cache`.
-- [ ] T023 [US4] `apps/landing/scripts/check-serving.mjs`: the nginx header
+- [x] T023 [US4] `apps/landing/scripts/check-serving.mjs`: the nginx header
   proof (plan). Add it to the slice command.
+
+  Done (2026-10-13). Notes for whoever touches this next:
+  - `try_files $uri.br` would type the response by `.br`, so a compressible
+    asset is rewritten to its twin, and nested `\.<ext>\.br$` locations
+    set the original type. `add_header`s are inherited, so they are
+    written once on the `.br` location.
+  - `marketing/landing-engine.json` is written only with `--marketing` (and
+    quality 11): this checkout's dev-profile wasm is 335.7 MB raw and
+    18.5 MB brotli at q5, not a number to publish.
+  - The check mounts both trees under `/srv` and links the web root to
+    them: a bind cannot be created inside a read-only bind.
+  - Result: 21 of 21 header and length checks pass. The slice command
+    gains it in T011.
 
 ## Phase 3: The frame (US2, US3)
 

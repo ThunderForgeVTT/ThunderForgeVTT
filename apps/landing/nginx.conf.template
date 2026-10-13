@@ -61,6 +61,14 @@ map $telemetry_origin $telemetry_connect {
   default "connect-src 'self' data: blob: $telemetry_origin";
 }
 
+# Spec 090 US4: the build writes a brotli twin, `<file>.br`, beside every
+# compressible asset (scripts/compress.mjs); stock nginx has no brotli module.
+# `.br` when the browser accepts br, else nothing.
+map $http_accept_encoding $br_suffix {
+  default      "";
+  "~*\bbr\b"  ".br";
+}
+
 # Spec 086 FR-027: the access log is JSON and holds no visitor. No address,
 # no X-Forwarded-For, no user agent, no query string, and the referrer only
 # as its origin. The path is the one asked for, before try_files rewrote it.
@@ -102,6 +110,8 @@ server {
   # Behind the gateway, a redirect must not name this pod's port or scheme.
   absolute_redirect off;
   gzip on;
+  # compress.mjs measures bytes.gz at this level.
+  gzip_comp_level 6;
   gzip_types text/css application/javascript application/json image/svg+xml application/wasm;
 
   add_header X-Content-Type-Options nosniff always;
@@ -110,6 +120,46 @@ server {
   # Hashed build output never changes under the same name.
   location ~ ^/(demo/)?assets/ {
     add_header Cache-Control "public, max-age=31536000, immutable";
+    add_header X-Content-Type-Options nosniff always;
+    try_files $uri =404;
+
+    # A compressible file goes to its brotli twin when the browser takes br
+    # and the twin exists. A rewrite and not try_files: try_files would type
+    # the response by `.br`, and the twin's location types it properly.
+    location ~ \.(js|css|wasm|svg|json)$ {
+      add_header Cache-Control "public, max-age=31536000, immutable";
+      add_header X-Content-Type-Options nosniff always;
+      add_header Vary Accept-Encoding;
+      set $br_pick $br_suffix;
+      if (-f $request_filename.br) {
+        set $br_pick "${br_pick}+";
+      }
+      if ($br_pick = ".br+") {
+        rewrite ^(.*)$ $1.br last;
+      }
+      try_files $uri =404;
+    }
+
+    location ~ \.br$ {
+      gzip off;
+      add_header Content-Encoding br;
+      add_header Vary Accept-Encoding;
+      add_header Cache-Control "public, max-age=31536000, immutable";
+      add_header X-Content-Type-Options nosniff always;
+      types { }
+      default_type application/octet-stream;
+      location ~ \.js\.br$   { default_type text/javascript; }
+      location ~ \.css\.br$  { default_type text/css; }
+      location ~ \.wasm\.br$ { default_type application/wasm; }
+      location ~ \.svg\.br$  { default_type image/svg+xml; }
+      location ~ \.json\.br$ { default_type application/json; }
+    }
+  }
+
+  # Spec 090: which engine the landing loads. It names hashed files, so it
+  # must be asked again on every visit.
+  location = /demo/engine.json {
+    add_header Cache-Control "no-cache" always;
     add_header X-Content-Type-Options nosniff always;
     try_files $uri =404;
   }

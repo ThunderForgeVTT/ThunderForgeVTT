@@ -178,7 +178,10 @@ RUN pnpm -F @thunderforge/demo run build
 # thunderforge.dev: apps/landing at / and the demo at /demo/, served by nginx.
 # Build it with `--target landing`; the server stays the default (last) stage.
 FROM build AS landing-build
-RUN pnpm -F @thunderforge/landing run build
+# Then a .br beside every asset of both, and the engine's sizes in the demo's
+# engine.json (spec 090 US4): nginx has no brotli module, so it sends these.
+RUN pnpm -F @thunderforge/landing run build \
+  && node apps/landing/scripts/compress.mjs
 
 FROM nginx:stable-alpine AS landing
 # The image fills in the template at start; an empty token is allowed and
@@ -191,7 +194,7 @@ ENV TELEMETRY=true \
   THUNDERFORGE_BROWSER_TELEMETRY_SAMPLE_RATE=1.0
 COPY apps/landing/nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=landing-build /build/apps/landing/dist /usr/share/nginx/html
-COPY --from=build /build/data/demo /usr/share/nginx/html/demo
+COPY --from=landing-build /build/data/demo /usr/share/nginx/html/demo
 EXPOSE 8080
 
 # --- the public telemetry gateway (spec 086) ---------------------------------
