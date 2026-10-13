@@ -25,8 +25,6 @@ PENDING=(
   "apps/web/src/pages/world/WorldPage.tsx"
   "apps/web/src/pages/admin/PlayPausesPage.tsx"
   "packs/systems/roll_for_shoes/web/src/game.test.ts"
-  "apps/web/playtest/combat.ts"
-  "apps/demo/e2e/demo.spec.ts"
 )
 
 cd "$(git rev-parse --show-toplevel)"
