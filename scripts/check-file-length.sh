@@ -23,7 +23,6 @@ EXEMPT=(
 # stays here after it stops needing to.
 PENDING=(
   "apps/web/src/pages/world/WorldPage.tsx"
-  "packs/systems/dnd5e/web/src/ActorSheet.tsx"
   "apps/web/e2e/token-authoring.spec.ts"
   "apps/web/e2e/canvas-authoring.spec.ts"
   "apps/web/e2e/world-cache-isolated.spec.ts"
