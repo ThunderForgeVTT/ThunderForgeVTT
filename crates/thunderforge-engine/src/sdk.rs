@@ -345,6 +345,9 @@ pub(crate) fn parse_command(input: &str) -> Option<ExternalCommand> {
         "set_reduced_motion" => Some(ExternalCommand::SetReducedMotion {
             reduced: value.get("reduced")?.as_bool()?,
         }),
+        "set_rendering" => Some(ExternalCommand::SetRendering {
+            on: value.get("on")?.as_bool()?,
+        }),
         _ => None,
     }
 }
@@ -371,6 +374,8 @@ pub fn apply_world_command(json_command: &str) {
             if let Ok(mut queue) = external_command_queue().lock() {
                 queue.push(command);
             }
+            // A paused engine runs no systems; this update applies the queue.
+            plugins::render_pause::wake();
         }
         Err(error) => emit_event(serde_json::json!({
             "type": "sdkError",
@@ -616,6 +621,20 @@ mod selection_command_tests {
             selection(r#"{"type":"select_tokens","tokenIds":["top","under"]}"#),
             Some(vec!["top".to_string(), "under".to_string()])
         );
+    }
+
+    #[test]
+    fn rendering_is_switched_by_a_bool() {
+        assert!(matches!(
+            parse_command(r#"{"type":"set_rendering","on":false}"#),
+            Some(ExternalCommand::SetRendering { on: false })
+        ));
+        assert!(matches!(
+            parse_command(r#"{"type":"set_rendering","on":true}"#),
+            Some(ExternalCommand::SetRendering { on: true })
+        ));
+        assert!(parse_command(r#"{"type":"set_rendering"}"#).is_none());
+        assert!(parse_command(r#"{"type":"set_rendering","on":"no"}"#).is_none());
     }
 
     #[test]

@@ -111,6 +111,8 @@ pub fn start(canvas_selector: &str) {
         // `AssetServer` exactly as it did before (Constitution Principle II
         // — see the module docs in `plugins/cached_assets.rs`).
         .add_plugins(CachedAssetsPlugin)
+        // Spec 090: `set_rendering` stops and resumes drawing.
+        .add_plugins(plugins::render_pause::RenderPausePlugin)
         // Phase 4.7.F2: System Registration & Plugin Setup
         // Phase 4.7: Canvas Rendering Infrastructure
         // Which authoring tool is armed. Registered early because other

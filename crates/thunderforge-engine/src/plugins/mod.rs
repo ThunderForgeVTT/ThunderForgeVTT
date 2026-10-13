@@ -22,6 +22,7 @@ pub mod lore_link;
 pub mod nameplate;
 pub mod navigation;
 pub mod placement;
+pub mod render_pause;
 pub mod render_probe;
 pub mod scene;
 pub mod scene_transition;

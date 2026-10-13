@@ -561,6 +561,11 @@ pub(crate) enum ExternalCommand {
     SetReducedMotion {
         reduced: bool,
     },
+    /// Whether to draw at all (spec 090). Off waits for the next command;
+    /// see `plugins/render_pause.rs`.
+    SetRendering {
+        on: bool,
+    },
 }
 
 /// A `WorldRoll` as the web fetched it, in its GraphQL field names.

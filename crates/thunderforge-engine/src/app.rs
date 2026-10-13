@@ -145,6 +145,8 @@ pub(crate) struct SceneParams<'w, 's> {
     selected_token: Option<ResMut<'w, resources::SelectedToken>>,
     // Spec 082: exists once `ShapePlugin` is registered.
     viewer_user: Option<ResMut<'w, resources::ViewerUserId>>,
+    // Spec 090: exists once `RenderPausePlugin` is registered.
+    rendering: Option<ResMut<'w, plugins::render_pause::Rendering>>,
 }
 
 /// The interaction plugin's resources, grouped.
@@ -901,6 +903,12 @@ pub(crate) fn apply_external_commands(
             ExternalCommand::SetReducedMotion { reduced } => {
                 if let Some(inbox) = dice_inbox.as_deref_mut() {
                     inbox.reduced = Some(reduced);
+                }
+            }
+            ExternalCommand::SetRendering { on } => {
+                if let Some(rendering) = scene.rendering.as_mut() {
+                    // `set_if_neq`, so a repeat leaves the change tick alone.
+                    rendering.set_if_neq(plugins::render_pause::Rendering { on });
                 }
             }
         }
