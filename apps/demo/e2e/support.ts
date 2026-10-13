@@ -8,7 +8,8 @@ import {
 /**
  * What the demo's feature specs share: a page whose every request outside
  * the demo's own files is logged, and the backend asked the way the app asks
- * it. `demo.spec.ts` keeps its own copies; it predates this file.
+ * it. The sitting specs (`demo-board`, `demo-pages`, `demo-limits`) build
+ * on this in `sitting.ts`.
  */
 
 export const WORLD_ID = "d0000000-0000-4000-0002-000000000001";
