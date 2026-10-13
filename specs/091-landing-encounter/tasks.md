@@ -332,12 +332,25 @@ the demo's build changes. The full suite is never used as a gate.
   because `fit_camera_to` on the 14x14 box shows about 10.5 rows, so the
   room's frame puts its panel at the bottom. The camera fit is not
   root-caused.
-- [ ] T040 [US1] `e2e/support/room.ts` and `e2e/room.spec.ts`: US1
+- [x] T040 [US1] `e2e/support/room.ts` and `e2e/room.spec.ts`: US1
   scenarios 1 to 9 through the engine. It reads the engine through
   `movement_state`, `door_icons`, `sight_probe` (with `expect.poll`),
   `list_interactives` and `dice_landed`. The roll uses a seed that
   succeeds, and one that fails then succeeds. SC-006 and SC-007 are
   recorded here.
+
+  Done. Page events are not exposed to the test; each scenario is read
+  from the engine's own probes (`token_footprints`, `movement_state`,
+  `sight_probe`, `dice_landed`) and from the DOM. The counter seeds give
+  one failed roll, then a success.
+  - SC-006: every throw's kept faces plus 2 equal the total the page
+    states (2 throws).
+  - SC-007: 42.1 s from the running table to the open chest, with
+    reduced motion, three runs within 5 ms of each other. This machine's
+    headless Chromium draws at 6 fps, and Playwright's clicks wait for
+    stable frames (about 3 s each), so most of that is the harness.
+  - The engine answered every forwarded step before the 1000 ms
+    fallback; instrumented once, the fallback fired zero times in four steps.
 - [ ] T041 [US1] `e2e/room-parity.spec.ts` (plan Decisions):
   - the fixed walk;
   - the Node-side verdict from `@thunderforge/encounter`;

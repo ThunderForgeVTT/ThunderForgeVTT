@@ -1,6 +1,16 @@
 import { expect, test, type Page } from "@playwright/test";
 import { isEngineFile } from "./support/engine.ts";
 import { expectClean, openLanding } from "./support/page.ts";
+import {
+  FIXED_SEEDS,
+  goal,
+  pad,
+  recordSaid,
+  room,
+  saidLog,
+  square,
+  stepAndHear,
+} from "./support/room.ts";
 
 /**
  * Spec 091 T051, US2: the room without the canvas. Every goal through the
@@ -12,45 +22,6 @@ import { expectClean, openLanding } from "./support/page.ts";
  * steps south reach the door's square; the fourth is refused by the shut
  * door (goal 1). Open it, two steps south and one east reach the chest.
  */
-
-/** The page's seeds, from a counter: the same rolls on every run. */
-const FIXED_SEEDS = () => {
-  let n = 1;
-  crypto.getRandomValues = <T extends ArrayBufferView | null>(array: T): T => {
-    const a = array as unknown as Uint32Array;
-    for (let i = 0; i < a.length; i += 1) a[i] = (n++ * 2654435761) >>> 0;
-    return array;
-  };
-};
-
-const room = (page: Page) => page.locator("#room");
-const said = (page: Page) => room(page).locator(".room-said");
-const square = (page: Page) => room(page).locator(".room-layout").getAttribute("data-square");
-const pad = (page: Page, dir: string) =>
-  room(page).getByRole("group", { name: "Move one square" }).getByRole("button", { name: dir });
-const goal = (page: Page, id: string) => room(page).locator(`[data-goal="${id}"]`);
-
-/** Every text the live region took, in order, read from its mutations. */
-async function recordSaid(page: Page) {
-  await page.evaluate(() => {
-    const el = document.querySelector("#room .room-said")!;
-    const w = window as unknown as { saidLog: string[] };
-    w.saidLog = [];
-    new MutationObserver(() => {
-      const t = (el.textContent ?? "").replace(/ $/, "");
-      if (t) w.saidLog.push(t);
-    }).observe(el, { childList: true, characterData: true, subtree: true });
-  });
-}
-const saidLog = (page: Page) =>
-  page.evaluate(() => (window as unknown as { saidLog: string[] }).saidLog);
-
-async function stepAndHear(page: Page, dir: string, words: RegExp) {
-  const before = (await saidLog(page)).length;
-  await pad(page, dir).click();
-  await expect.poll(async () => (await saidLog(page)).slice(before)).toHaveLength(1);
-  expect((await saidLog(page)).at(-1)).toMatch(words);
-}
 
 /** Plays all four goals with the page's controls alone. */
 async function playThrough(page: Page) {
