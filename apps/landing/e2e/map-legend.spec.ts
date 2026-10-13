@@ -18,8 +18,15 @@ interface Geometry {
   width: number;
   height: number;
   gridSize: number;
-  walls: { doorState: string }[];
+  walls: Wall[];
   lights: unknown[];
+}
+interface Wall {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  doorState: string;
 }
 interface Expected {
   walls: number;
@@ -87,6 +94,31 @@ async function expectShowing(page: Page, entry: Entry, want: Expected): Promise<
   }
 }
 
+/**
+ * The first wall of `name` sits where the map has it. The catalogue is in
+ * world units, +y up; the board's own units are SVG's, +y down. So the
+ * wall's middle (x, y) belongs at (x, -y) in the board's units, and the
+ * board's screen matrix says where that is on the page.
+ */
+async function expectInPlace(page: Page, name: string): Promise<void> {
+  const res = await page.request.get(`/maps/${name}.json`);
+  const g = (await res.json()) as Geometry;
+  const wall = g.walls[0];
+  if (!wall) return;
+  const layer = wall.doorState === "none" ? ".map-walls" : ".map-doors";
+  const at = await board(page)
+    .locator(`${layer} line`)
+    .first()
+    .evaluate((line, w) => {
+      const svg = (line as SVGLineElement).ownerSVGElement!;
+      const p = new DOMPoint((w.x1 + w.x2) / 2, -(w.y1 + w.y2) / 2).matrixTransform(svg.getScreenCTM()!);
+      const box = line.getBoundingClientRect();
+      return { want: { x: p.x, y: p.y }, got: { x: box.x + box.width / 2, y: box.y + box.height / 2 } };
+    }, wall);
+  expect(Math.abs(at.got.x - at.want.x), `${name} x`).toBeLessThan(2);
+  expect(Math.abs(at.got.y - at.want.y), `${name} y`).toBeLessThan(2);
+}
+
 /** Only the tile at `index` is pressed. */
 async function expectPicked(page: Page, index: number): Promise<void> {
   const all = tiles(page);
@@ -110,6 +142,7 @@ test.describe("the atlas", () => {
     // The first map is up before anything is picked.
     await expectPicked(page, 0);
     await expectShowing(page, list[0], await expected(page, list[0].name));
+    await expectInPlace(page, list[0].name);
 
     // Every other map, then back to the first.
     const order = [...list.keys()].slice(1).concat(0);
@@ -119,6 +152,7 @@ test.describe("the atlas", () => {
       await tile.click();
       await expectPicked(page, i);
       await expectShowing(page, list[i], await expected(page, list[i].name));
+      await expectInPlace(page, list[i].name);
     }
     expectClean(opened);
   });
