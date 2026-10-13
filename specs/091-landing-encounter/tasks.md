@@ -492,6 +492,44 @@ the demo's build changes. The full suite is never used as a gate.
   - with a screen reader (Orca and Chromium), DOM-only.
 
   Note anything that reads wrong, feels slow, or announces twice.
+
+  Scripted pass (2026-10-13, at 9d8984f7). The release engine and the
+  landing's `dist` were served by stock `nginx:stable-alpine` with
+  `nginx.conf.template`, as `check-serving.mjs` does. Playwright Chromium
+  ran on the GPU, with a load average under 6. Each pass played the
+  whole room through the page's own controls.
+
+  | pass | boot after the click | frames | step answer (median, slowest) |
+  | --- | --- | --- | --- |
+  | 390 px, touch | 822 ms | 60.3 fps | 52 ms, 72 ms |
+  | 1440 px, mouse | 696 ms | 60.0 fps | 132 ms, 149 ms |
+  | keyboard only | 821 ms | 60.3 fps | 105 ms, 110 ms |
+
+  - No line was announced twice, and every step's line arrived within
+    150 ms.
+  - Click weight (T060): 5,306,989 bytes on the wire after the click.
+    The engine is 5,192,368 of them (32.0 MB raw, 5.2 MB brotli); its
+    JS is 14,447, the table 76,104, and Sir Pip and the chest 21,441.
+    The map was already cached from the legend above the room. When the
+    legend has not been seen, add `/maps/demo.webp`, 1,953,402 bytes:
+    about 7.26 MB in all.
+  - Keyboard: from the top of the page, "Play the room" is the 43rd Tab.
+    "North" is 68 more, past the map legend's controls and the hero
+    picker. Then "Open the door to the hall" is 4, "Roll 1d20+2" 4, and
+    "Open the demo" 2.
+  - Found and fixed (9d8984f7): the Roll button was `disabled` while the
+    dice were out. That dropped focus to the page, so the next Enter did
+    nothing and a screen reader lost its place. It is now aria-disabled,
+    and `room-words.spec.ts` presses Enter throw after throw.
+  - Each pass logged four failed requests, and so does thunderforge.dev:
+    - three 404s for `<image>.meta`: Bevy's meta probe, expected (see
+      `e2e/support/page.ts`);
+    - one 401 from `/gh/stargazers`: GitHub now requires a token to list
+      stargazers, and the landing deployment sets no `GITHUB_TOKEN`, so
+      the star chart has no stargazers live. The owner needs to add a
+      read-only token to the deployment's secret.
+  - Still owed to the owner: the Orca + Chromium screen-reader pass. A
+    script cannot judge how the room sounds.
 - [ ] T062 Owner: approve or replace the copy (spec Open question 1; plan
   Decisions): the simulation sentence, each goal's announcement, the
   ending, and the away state.
