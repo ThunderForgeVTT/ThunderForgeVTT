@@ -1,4 +1,5 @@
 {
+  "uid": "thunderforge-landing",
   "title": "ThunderForge: Landing",
   "description": "thunderforge.dev: nginx's health and access log, and what visitors do on the page (spec 086 US4).",
   "tags": ["thunderforge", "spec-086"],

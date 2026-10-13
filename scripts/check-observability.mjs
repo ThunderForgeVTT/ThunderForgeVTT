@@ -251,6 +251,7 @@ function main() {
 
   const dashDir = join(OBS_DIR, "dashboards");
   const dashboards = readdirSync(dashDir).filter((f) => f.endsWith(".json"));
+  const uids = new Set();
   for (const file of dashboards) {
     const rel = relative(ROOT, join(dashDir, file));
     let doc;
@@ -260,6 +261,12 @@ function main() {
       problems.push(`${rel}: does not parse: ${e.message}`);
       continue;
     }
+    // Grafana runs two replicas on one database: a dashboard without a uid
+    // is provisioned once per replica under a random uid, so it shows twice.
+    if (!doc.uid) problems.push(`${rel}: no fixed uid`);
+    else if (uids.has(doc.uid))
+      problems.push(`${rel}: uid ${doc.uid} is taken`);
+    else uids.add(doc.uid);
     const vars = new Set((doc.templating?.list ?? []).map((v) => v.name));
     for (const v of ["prometheus", "loki", "tempo"]) {
       if (!vars.has(v)) problems.push(`${rel}: no \${${v}} variable`);

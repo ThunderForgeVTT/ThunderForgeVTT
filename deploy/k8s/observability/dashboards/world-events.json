@@ -1,4 +1,5 @@
 {
+  "uid": "thunderforge-world-events",
   "title": "ThunderForge: World events and rolls",
   "description": "World events by name, record failures, and rolls by event and visibility.",
   "tags": [

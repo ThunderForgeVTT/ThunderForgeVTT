@@ -1,4 +1,5 @@
 {
+  "uid": "thunderforge-backplane",
   "title": "ThunderForge: Backplane",
   "description": "The NOTIFY/LISTEN backplane and the subscriptions it feeds.",
   "tags": [
