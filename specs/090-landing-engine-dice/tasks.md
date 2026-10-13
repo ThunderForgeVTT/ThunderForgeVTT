@@ -164,13 +164,13 @@ gate.
   waits only for a user wake-up, and every host command wakes it once so
   the queue drains. Parse test passes; engine tests 369 of 369. The frame
   count stopping is still owed: T037 proves it in the browser.
-- [ ] T032 [US2] `src/engine/loadEngine.ts`:
+- [x] T032 [US2] `src/engine/loadEngine.ts`:
   - fetch `/demo/engine.json`;
   - stream the wasm with byte progress;
   - import the JS;
   - init the engine with the bytes;
   - `start("#engine-frame canvas")`.
-- [ ] T033 [US2][US3] `src/engine/EngineFrame.tsx`:
+- [x] T033 [US2][US3] `src/engine/EngineFrame.tsx`:
   - its states (poster, unsupported, loading, running, paused, failed);
   - the capability check;
   - reduced motion;
@@ -183,7 +183,7 @@ gate.
   latest roll made during the load.
 - [ ] T035 [US2] `scripts/make-poster.mjs`, and the committed
   `public/dice-table.webp`.
-- [ ] T036 [US2] `vite.config.mts`: the preview middleware that serves
+- [x] T036 [US2] `vite.config.mts`: the preview middleware that serves
   `../../data/demo` at `/demo/`.
 - [ ] T037 [US2][US3] `e2e/engine-frame.spec.ts`:
   - no engine request before the click, scrolled top to bottom;
@@ -195,8 +195,17 @@ gate.
   - capability fallbacks work;
   - a broken manifest leads to the poster, a message and a retry;
   - the a11y checks from T004 pass with the engine running.
-- [ ] T038 [US3] Telemetry for frame failures, inside the spec 086
+- [x] T038 [US3] Telemetry for frame failures, inside the spec 086
   wording or with the wording updated.
+
+  Done: the frame raises `thunderforge:engine-frame-failed` on the window
+  and `telemetry.ts` sends it as `engine.load_failed` `{stage, reason}`,
+  the event spec 086 already allow-lists (the plan's `landing_error` is
+  not allow-listed, so it was dropped). The 086 contract row lists the
+  landing's stages (`probe`, `manifest`, `wasm`, `js`, `init`, `start`,
+  `engine`) and reasons (`no_webgl2`, `save_data`, `low_memory`, `error`).
+  "Try again" is offered only before `init`: a trapped engine cannot
+  start twice in one page, so later failures offer "Reload the page".
 
 ## Phase 4: Proof
 

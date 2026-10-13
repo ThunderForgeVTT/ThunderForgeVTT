@@ -13,6 +13,7 @@
  * (contracts/browser-events.md).
  */
 import { bootTelemetry, telemetry } from "@thunderforge/telemetry";
+import { FRAME_FAILED, type FrameFailed } from "./engine/frameEvents.ts";
 
 export function ctaOf(
   target: EventTarget | null,
@@ -38,6 +39,12 @@ export function bootLandingTelemetry(): void {
     },
     { capture: true },
   );
+  // Spec 090 FR-018: the engine frame held back or failed. The closed stage
+  // and reason only; the frame's words are for the visitor.
+  addEventListener(FRAME_FAILED, (e) => {
+    const { stage, reason } = (e as CustomEvent<FrameFailed>).detail;
+    telemetry.event("engine.load_failed", { stage, reason });
+  });
   void bootTelemetry({
     configUrl: "/telemetry.json",
     load: () => import("./telemetryChunk.ts").then((m) => m.start),

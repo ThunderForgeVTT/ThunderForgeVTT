@@ -1,0 +1,59 @@
+/* Spec 090: the engine's frame. The poster and the canvas share one box, so
+   the page does not move when the engine takes over from the picture. */
+
+.engine-frame {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  /* The engine's ClearColor, so the box never flashes white. */
+  background: #222831;
+  border: var(--marker-w) solid var(--ink-black);
+  border-radius: 10px 14px 8px 12px / 12px 8px 14px 10px;
+}
+.engine-poster,
+.engine-stage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.engine-poster {
+  object-fit: cover;
+}
+.engine-stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+/* The canvas exists from the start (the engine is handed it by selector) but
+   shows only once the engine draws into it. */
+.engine-frame:not(.engine-frame--running, .engine-frame--paused) .engine-stage {
+  visibility: hidden;
+}
+.engine-frame--running .engine-poster,
+.engine-frame--paused .engine-poster {
+  visibility: hidden;
+}
+.engine-panel {
+  position: absolute;
+  inset: auto 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+  padding: 0.9rem 1rem;
+  color: var(--text);
+  background: rgb(from var(--paper) r g b / 0.94);
+  border-top: var(--marker-thin) solid var(--ink-black);
+}
+.engine-note {
+  flex: 1 1 16rem;
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+.engine-panel progress {
+  flex: 1 1 100%;
+  height: 0.6rem;
+  accent-color: var(--ink-blue);
+}

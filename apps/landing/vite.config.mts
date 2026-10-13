@@ -1,6 +1,7 @@
+import { createReadStream, existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { servedTelemetry } from "@thunderforge/telemetry/vite";
 
@@ -35,6 +36,40 @@ const ghProxy = {
   },
 };
 
+// Spec 090 T036: the demo's build at `/demo/`, as the image serves it beside
+// the landing, so `vite preview` (and the e2e run against it) can load the
+// engine the frame boots. Preview only: the production build never sees it,
+// and with no demo build the path is simply not found.
+const DEMO_DIR = path.resolve(__dirname, "../../data/demo");
+const TYPES: Record<string, string> = {
+  ".js": "text/javascript",
+  ".wasm": "application/wasm",
+  ".json": "application/json",
+  ".css": "text/css",
+  ".html": "text/html",
+  ".svg": "image/svg+xml",
+  ".webp": "image/webp",
+  ".png": "image/png",
+  ".woff2": "font/woff2",
+};
+function servedDemo(): Plugin {
+  return {
+    name: "thunderforge-served-demo",
+    configurePreviewServer(server) {
+      server.middlewares.use("/demo/", (req, res, next) => {
+        const rel = decodeURIComponent((req.url ?? "/").split("?")[0]);
+        const file = path.join(DEMO_DIR, rel);
+        if (!file.startsWith(DEMO_DIR + path.sep)) return next();
+        if (!existsSync(file) || !statSync(file).isFile()) return next();
+        res.setHeader("Content-Type", TYPES[path.extname(file)] ?? "application/octet-stream");
+        res.setHeader("Content-Length", statSync(file).size);
+        res.setHeader("Cache-Control", "no-cache");
+        createReadStream(file).pipe(res);
+      });
+    },
+  };
+}
+
 export default defineConfig({
   root: __dirname,
   plugins: [
@@ -42,6 +77,7 @@ export default defineConfig({
     // Spec 086: `/telemetry.json` and its `connect-src`, as nginx serves them.
     // Off unless THUNDERFORGE_PREVIEW_TELEMETRY holds a config.
     servedTelemetry({ paths: ["/telemetry.json", "/demo/telemetry.json"] }),
+    servedDemo(),
   ],
   resolve: {
     dedupe: ["react", "react-dom"],
