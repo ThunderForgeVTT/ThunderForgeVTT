@@ -4,9 +4,9 @@
 
 **Created**: 2026-09-10
 
-**Status**: Draft. This is the specification only. It ships in four phases,
-(a) to (d), and each one is shippable by itself. Phase (a) needs nothing from
-the server.
+**Status**: Implemented, all four phases, (a) to (d); every task in `tasks.md`
+is done, the last (T101) proven by slices on 2026-10-12. Each phase was
+shippable by itself, and phase (a) needs nothing from the server.
 
 **Input**: Project owner: "Spec a hero builder … the goal would be a frontend project like engine but specifically designed for us to generate and eventually for users to build heroes or GMs to build NPCs fast."
 

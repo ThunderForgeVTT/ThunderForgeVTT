@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-02
 
-**Status**: Implemented, pending the first-run lane's green run
+**Status**: Implemented; the first-run lane ran green 2026-10-12 (`e2e:instance`, 45 passed)
 
 **Depends on**: [spec 052, What an Access Mode Obliges](../052-access-mode-and-legal-duty/spec.md)
 

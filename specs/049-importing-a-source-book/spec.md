@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-12
 
-**Status**: Draft
+**Status**: Implemented 2026-09-16, built as one arc with spec 050. Two things are not established: SC-002's spell recall still needs the hand count it names (measurements.md, Phase 4: 91% and 89% by structural cross-check, which is not that count), and SC-004's 30 seconds for a 350-page book has not been timed. T105's quickstart on a real book is the owner's.
 
 **Input**: User description: "Wrote it up in a spec honestly and the biggest thing I think we should do is before committing to the server with the data give them a confirmation window of everything it parsed and if it looks right have a submit button. But because books and text can get huge show then a progress bar of whats being sent to us and maybe we get a little fancy with it too — i'd love for them to be able to explore their content by compendium, like if I upload the Dungeon Master's Guide that gets saved as a compendium of everything we loaded from the pdf, like a bucket of content — but because its commercial the share is disabled citing its commercialized work and cannot be shared."
 
@@ -519,7 +519,10 @@ correct content, and confirm the system registry check still passes.
   book are found, measured against a hand-counted sample of at least three
   books. *(A target, not yet an observation. FR-060's measurement run will
   either meet it or replace this number with the one it found — the creature
-  reader's 717 creatures were arrived at the same way.)*
+  reader's 717 creatures were arrived at the same way.)* *(2026-10-12: not
+  established. The run found 91% and 89% of spells against `Duration` lines
+  and an exact match against `Components` lines, in two books; neither is a
+  hand count. See measurements.md, "Spell recall".)*
 - **SC-003**: No entry in any measurement run carries a mechanical value that
   is not present in the book — verified by sampling, and any instance is a
   release blocker.

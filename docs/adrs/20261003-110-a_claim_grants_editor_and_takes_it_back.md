@@ -1,7 +1,7 @@
 # ADR-110: A Claim Grants Editor, and Takes It Back
 
 **Date:** 2026-10-03
-**Status:** **PROPOSED** 2026-10-03 with spec 063. The server rules are implemented and proven by the server's own tests; acceptance waits on the e2e proof of the `actors` slice (spec 063 SC-007).
+**Status:** **ACCEPTED** 2026-10-12. Proposed 2026-10-03 with spec 063; the server rules are proven by the server's own tests, and the `actors` slice ran green on 2026-10-12 (32 passed, 0 failed, 7.8 min on one shard), which is spec 063 SC-007.
 **Participants:** ThunderForgeVTT Team
 **Related:** spec 063 (FR-001 to FR-021), ADR-105 (a character's look belongs to whoever holds it — superseded in part, see below), ADR-050 (permission declaration), spec 017 (actor claiming), spec 062 (where the gap was found), spec 044 (FR-030a, FR-030b, FR-032)
 

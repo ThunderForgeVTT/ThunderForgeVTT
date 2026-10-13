@@ -539,14 +539,21 @@ telemetry`, `make observability-check` and the image build pass.
 **Purpose**: Ship the images, then the dashboards, rules, exporter and
 in-cluster endpoint, then the gateway, then the Flux changes.
 
-- [ ] T086 Ship both images with the existing targets, so the server exports and the landing serves `telemetry.json`:
+- [X] T086 Ship both images with the existing targets, so the server exports and the landing serves `telemetry.json`:
 
   ```sh
   make push
   make push-landing
   ```
 
-- [ ] T087 Check and apply the observability manifests:
+  *(2026-10-12: both shipped, now through Flux — `make push` and
+  `make push-landing` commit a SHA tag to fluxified. The server
+  (`sha-20183b5d`) exports to the in-cluster collector, and 120
+  `thunderforge_*` series are in Prometheus. The landing
+  (`landing-sha-3cd48ef3`) serves `/telemetry.json` and
+  `/demo/telemetry.json`.)*
+
+- [X] T087 Check and apply the observability manifests:
 
   ```sh
   make observability-check
@@ -556,6 +563,13 @@ in-cluster endpoint, then the gateway, then the Flux changes.
   kubectl --context <your context> -n monitoring get configmap -l grafana_dashboard=1
   kubectl --context <your context> -n thunderforge-dev get prometheusrule,podmonitor
   ```
+
+  *(2026-10-12: `make observability-check` reads 7 dashboards, 14 Prometheus
+  and 1 Loki alert expressions, all against names that are sent (promtool is
+  not installed, so rule syntax was not checked). Applied: the 7
+  `thunderforge-dashboard-*` ConfigMaps, `prometheusrule/thunderforge` and
+  `podmonitor/thunderforge-landing`; both deployments rolled out, and the
+  landing exporter's `nginx_up` is 1.)*
 
   Grafana's **ThunderForge** folder holds the seven dashboards. **Backplane** shows poll rates from vtt-dev within 2 minutes, and **Landing** shows `nginx_up 1`.
   - Partly done (2026-10-09, context `default`). `make observability-check` passes, and `kubectl apply -k deploy/k8s/observability` created `loki-thunderforge-rules`, the seven dashboard ConfigMaps, the `thunderforge-landing` PodMonitor and the `thunderforge` PrometheusRule (with T090's alerts). Not done, because it waits on T086: the landing's exporter sidecar patch, the app's `set env`, and the two rollouts. The app was not redeployed.

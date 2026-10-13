@@ -173,7 +173,7 @@ listed in T031 and T032.
   - copy the worktree engine over main's `dist/engine`.
 - [x] T062 Confirm `git grep -n "0\.19" -- crates/thunderforge-engine crates/thunderforge-canvas-core apps/engine-sandbox docs/CONTRIBUTING.md` shows no stale reference.
 - [x] T063 Set spec.md **Status** to "Implemented". Record the final numbers in spec.md under **What exists** for the next upgrade.
-- [ ] T064 Merge: `mcp__gitops__merge_ff_only` from main onto `087-bevy-0-20`. If it refuses because 086 has landed, stop and report (Open item 2). Do not rebase without the owner. Afterwards, rebuild main's own engine (`node scripts/build.mjs --only-wasm`) and remove the worktree.
+- [X] T064 Merge: `mcp__gitops__merge_ff_only` from main onto `087-bevy-0-20`. If it refuses because 086 has landed, stop and report (Open item 2). Do not rebase without the owner. Afterwards, rebuild main's own engine (`node scripts/build.mjs --only-wasm`) and remove the worktree. *(2026-10-12: landed on main by cherry-pick, ending at `ebc6390f` (2026-10-09); `git cherry main 087-bevy-0-20` finds all 13 of the branch's commits already there. `../ThunderForgeVTT-087` removed 2026-10-12; the branch is kept.)*
 
 ---
 

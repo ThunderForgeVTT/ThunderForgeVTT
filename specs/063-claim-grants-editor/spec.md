@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-23
 
-**Status**: Draft
+**Status**: Implemented. SC-007 met 2026-10-12: the `actors` slice ran 32 passed, 0 failed in 7.8 min on one shard; ADR-110 accepted the same day.
 
 **Input**: User description: "Claiming a character grants that player Editor access on it, in the same transaction as the claim, and releasing the claim takes that access back."
 

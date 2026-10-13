@@ -120,9 +120,10 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20260922-107](./20260922-107-a_feature_is_proven_by_a_declared_slice.md) | Accepted | A Feature Is Proven by a Declared Slice |
 | [20260923-108](./20260923-108-a_generic_world_settings_surface_is_deferred.md) | Accepted | A Generic World-Settings Surface Is Deferred, Not Rejected |
 | [20261002-109](./20261002-109-an_instance_states_whether_it_publishes.md) | Accepted | An Instance States Whether It Publishes, and That Statement Decides What It Is Asked For |
-| [20261003-110](./20261003-110-a_claim_grants_editor_and_takes_it_back.md) | Proposed | A Claim Grants Editor, and Takes It Back |
+| [20261003-110](./20261003-110-a_claim_grants_editor_and_takes_it_back.md) | Accepted | A Claim Grants Editor, and Takes It Back |
 | [20261004-111](./20261004-111-four_homes_and_why_packs_is_its_own.md) | Accepted | Four Homes, and Why `packs/` Is Its Own |
 | [20261004-112](./20261004-112-a_world_s_system_settings_are_declared_rows.md) | Accepted | A World's System Settings Are Declared Rows |
+| [20261006-113](./20261006-113-the_rules_of_a_fight_are_one_crate.md) | Accepted | The Rules of a Fight Are One Crate |
 | [20261007-114](./20261007-114-telemetry_is_on_and_the_operators_to_redirect.md) | Accepted | Telemetry Is On, Anonymous, and the Operator's to Redirect |
 | [20261008-115](./20261008-115-character_sheets_are_read_twice_by_one_reader.md) | Accepted | Character Sheets Are Read Twice, by One Reader |
 

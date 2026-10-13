@@ -508,7 +508,12 @@ test.describe("Quick NPC (US4)", () => {
         expect(
           strip(await builder.getByTestId("hero-preview-portrait").innerHTML()),
         ).toBe(strip(carried));
-        await builder.getByTestId(`hero-choice-hair-${OTHER_HAIR}`).check();
+        // The roll is random, so it may already wear OTHER_HAIR: pick any hair
+        // it is not wearing, or the choice changes nothing.
+        await builder
+          .locator('[data-testid^="hero-choice-hair-"]:not(:checked)')
+          .first()
+          .check();
         await builder.getByTestId("hero-dialog-use").click();
         await expect(builder).toBeHidden();
         await expect.poll(previewHtml).not.toBe(carried);

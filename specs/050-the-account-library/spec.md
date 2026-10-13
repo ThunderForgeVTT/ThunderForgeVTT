@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-12
 
-**Status**: Draft
+**Status**: Implemented 2026-09-16 with spec 049, which holds its plan, tasks and measurements. SC-001 and SC-002 were measured on a local instance with a synthetic book (049 measurements.md, Phase 9), not on a real one; SC-004's margin was fixed by measurement on 2026-09-13.
 
 **Input**: User description: "Maybe we do per account dedupe but more explicitly move compendiums outside worlds and have worlds be able to inherit content and delta it, like change per world. That covers our bacon, and when the account's gone the compendiums are gone." Following from: "how can we reduce the size on disk too for us as the operator — if a GM has 8 worlds and they upload the book 8 times… think like a graph db but for tabletop PDFs?" And: "can a user who GMs a world have worlds and compendiums where they select a game system and can upload PDFs, allowing them to preseed their worlds with content?"
 

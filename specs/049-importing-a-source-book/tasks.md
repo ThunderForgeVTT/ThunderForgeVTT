@@ -345,11 +345,11 @@ verified by inspection rather than by assertion.
 
 ## Phase 16: Polish & cross-cutting
 
-- [ ] T102 [P] Update `specs/049-importing-a-source-book/spec.md` and `specs/050-the-account-library/spec.md` status to what shipped, and correct any Success Criterion the measurements contradicted
-- [ ] T103 [P] `docs/adrs/README.md` gains ADR-096, ADR-097 and ADR-098 — five accepted ADRs were once found missing from that index, so it is checked rather than assumed
-- [ ] T104 [P] Run `node scripts/e2e-parallel.mjs` in full and record the suite's time and result beside the 29.7 minutes of 2026-09-11
+- [X] T102 [P] Update `specs/049-importing-a-source-book/spec.md` and `specs/050-the-account-library/spec.md` status to what shipped, and correct any Success Criterion the measurements contradicted
+- [X] T103 [P] `docs/adrs/README.md` gains ADR-096, ADR-097 and ADR-098 — five accepted ADRs were once found missing from that index, so it is checked rather than assumed. *(2026-10-12: all three are listed; the check found ADR-113 missing instead, and added it.)*
+- [x] T104 [P] Run `node scripts/e2e-parallel.mjs` in full and record the suite's time and result beside the 29.7 minutes of 2026-09-11 — **Done 2026-10-12 by slices, not the full suite (ADR-107):** `e2e:book-import` 17 passed (56 s), `e2e:collections` 31 passed (305 s), `e2e:compendium` 26 passed (245 s), `e2e:actors` 32 passed (477 s), all with 0 failed.
 - [ ] T105 Run `pnpm quickstart` checks from `quickstart.md` end to end, on a **real book**, not a fixture
-- [ ] T106 Run `pnpm verify` and `pnpm -F @thunderforge/web exec tsc --noEmit`, and fix what they report **in the code this arc added**. A repo-wide lint remediation folded in here would bury the feature work; wide passes get their own commit
+- [X] T106 Run `pnpm verify` and `pnpm -F @thunderforge/web exec tsc --noEmit`, and fix what they report **in the code this arc added**. A repo-wide lint remediation folded in here would bury the feature work; wide passes get their own commit *(2026-10-12, at `03f05481`: `pnpm verify` passes all 18 checks (it is the pre-push hook) and `tsc --noEmit` is clean, so there was nothing to fix.)*
 
 ---
 
