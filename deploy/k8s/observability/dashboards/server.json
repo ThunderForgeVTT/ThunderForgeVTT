@@ -1,4 +1,5 @@
 {
+  "uid": "thunderforge-server",
   "title": "ThunderForge: Server",
   "description": "HTTP request rate, error ratio and latency by route (FR-012).",
   "tags": [

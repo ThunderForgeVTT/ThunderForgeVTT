@@ -1,4 +1,5 @@
 {
+  "uid": "thunderforge-graphql",
   "title": "ThunderForge: GraphQL operations",
   "description": "Top root fields by rate, p95 and error ratio, and errors by code. A slow field links to its traces.",
   "tags": [
