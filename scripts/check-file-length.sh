@@ -23,8 +23,6 @@ EXEMPT=(
 # stays here after it stops needing to.
 PENDING=(
   "apps/web/src/pages/world/WorldPage.tsx"
-  "apps/web/src/pages/admin/PlayPausesPage.tsx"
-  "packs/systems/roll_for_shoes/web/src/game.test.ts"
 )
 
 cd "$(git rev-parse --show-toplevel)"

@@ -741,6 +741,7 @@
         "apps/web/src/engine/world/sync/__tests__/{playPausedReconcile,worldEventsPauseAnnounce}.test.ts",
         "apps/web/src/hooks/{usePlayPauseRedirect,useWorldPlayState}.ts",
         "apps/web/src/pages/admin/PlayPausesPage.tsx",
+        "apps/web/src/pages/admin/play-pauses/**",
         "apps/web/src/pages/world/settings/PlayPauseHistoryCard.tsx",
         "apps/web/src/pages/world/{PlayPausedPage.tsx,playPauseStatus.ts,__tests__/playPauseStatus.test.ts}",
         "apps/thunderforge/src/play_pause_surface_tests.rs",
