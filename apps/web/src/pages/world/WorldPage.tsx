@@ -11,9 +11,6 @@ import { WorldLayout } from "@/layouts/world-layout/WorldLayout";
 import type { SeoConfig } from "@/types/seo";
 import { createWorldStore } from "@/engine/world/store";
 import {
-  refreshInteractives,
-  setScenePlaying,
-  startTriggerBridge,
   loadLightsIntoStore,
   loadShapesIntoStore,
   loadWallsIntoStore,
@@ -29,7 +26,6 @@ import {
   readTokenStatus,
   type TokenStatusResource,
 } from "@/engine/bevy/tokenStatus";
-import { onOpenLore } from "@/engine/bevy";
 import { railTools } from "@/lib/authoringTools";
 import { usePlaceActorTokens } from "./usePlaceActorTokens";
 import { useGmToolRail } from "./useGmToolRail";
@@ -48,6 +44,7 @@ import { useSceneContent } from "./useSceneContent";
 import { useWorldEventStreams } from "./useWorldEventStreams";
 import { useSceneLiveSync } from "./useSceneLiveSync";
 import { useConnectivity } from "./useConnectivity";
+import { useScenePlay } from "./useScenePlay";
 import { PeerIndicator } from "@/components/diagnostics/PeerIndicator";
 import { EngineMonitor } from "@/components/diagnostics/EngineMonitor";
 
@@ -81,7 +78,6 @@ import { GmToolRail } from "@/components/world/GmToolRail/GmToolRail";
 import { SelectionFilterMenu } from "@/components/world/GmToolRail/SelectionFilterMenu";
 import { PlacedItemPrompt } from "@/components/world/PlacedItemPrompt";
 import { toast } from "sonner";
-import { getMyActorClaim } from "@/api/actorClaims";
 import {
   WorldDock,
   type DockSection,
@@ -99,7 +95,6 @@ import { HelpPanel } from "@/components/world/PlayDock/HelpPanel";
 import type { CanvasImageAsset } from "@/api/assets";
 import type { WorldRecord } from "@/types/world";
 import type { SceneRecord } from "@/types/scene";
-import { appHref } from "@/lib/appHref";
 import {
   describeSceneLoad,
   LOADING_PLATE,
@@ -478,92 +473,15 @@ export default function WorldPage() {
     isSceneOwner,
   );
 
-  /**
-   * Spec 030: interactive elements.
-   *
-   * Three things, and they belong together because each is useless without the
-   * others: load what this viewer may interact with, tell the engine the scene
-   * is being *played* (region entry fires on nothing otherwise — FR-032), and
-   * bridge engine-detected triggers back to the server, which decides.
-   */
-  useEffect(() => {
-    // Scene levels: gated on the engine's grant like the other loaders, and
-    // re-run by the load generation. Interactives are per level, and a level
-    // switch changes neither `sceneId` nor `bridgeReady` — without the grant
-    // in this list the new floor's stairs would never be read.
-    if (!sceneId || !bridgeReady || !sceneLoadGranted) {
-      return;
-    }
-
-    void refreshInteractives(worldStore, sceneId).catch((error: unknown) => {
-      console.error("Failed to load interactive elements:", error);
-    });
-
-    // The play view is, by definition, play. Preparation happens on the
-    // staging route, which does not mount this.
-    setScenePlaying(worldStore, true);
-
-    const stopTriggers = startTriggerBridge(worldStore, (result) => {
-      if (result.outcome === "requested") {
-        setApprovalRevision((n) => n + 1);
-      }
-    });
-
-    return () => {
-      stopTriggers();
-      // A scene nobody is looking at is not being played, and leaving this on
-      // would let a background tab's stale positions fire a region.
-      setScenePlaying(worldStore, false);
-    };
-  }, [sceneId, bridgeReady, worldStore, sceneLoadGranted, sceneLoadGeneration]);
-
-  /**
-   * Which character the person at this keyboard is playing.
-   *
-   * Needed only to know where a picked-up item goes (spec 031 FR-015). `null`
-   * is an ordinary answer, not a failure: a Game Master has no claim, and the
-   * pickup prompt says so rather than offering an action that cannot work.
-   */
-  const [claimedActorId, setClaimedActorId] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    getMyActorClaim(id)
-      .then((claim) => {
-        if (active) {
-          setClaimedActorId(claim?.actorId ?? null);
-        }
-      })
-      .catch(() => {
-        // A claim that cannot be read leaves Pick up unavailable and explained,
-        // which is the same state as having no claim. Nothing on the map
-        // depends on this, so there is nothing to report.
-        if (active) {
-          setClaimedActorId(null);
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [id]);
-
-  /**
-   * Spec 030: an interactive asked for a lore page to be opened.
-   *
-   * The engine resolves *which* entry; opening a tab needs this application's
-   * URL structure, which is chrome and belongs on this side (Principle I).
-   */
-  useEffect(
-    () =>
-      onOpenLore((event) => {
-        window.open(
-          appHref(`/world/${id}/lore/${event.entryId}`),
-          "_blank",
-          "noopener,noreferrer",
-        );
-      }),
-    [id],
-  );
+  const claimedActorId = useScenePlay({
+    id,
+    sceneId,
+    worldStore,
+    bridgeReady,
+    sceneLoadGranted,
+    sceneLoadGeneration,
+    setApprovalRevision,
+  });
 
   /** The pinned token's name, for the panel heading. */
   const pinnedTokenLabel = useMemo(() => {
