@@ -518,7 +518,9 @@ then boot the room. Check that:
 - **FR-003**: When a frame takes the table, its scene MUST be sent again
   from scratch (`setup`). The scene it replaces MUST be removed first:
   every token, wall, light, interactive and background the previous scene
-  sent.
+  sent. The tray therefore gets an explicit scene of its own (ambient light,
+  no viewer token) instead of relying on the engine's start state, which the
+  room changes.
 - **FR-004**: The host MUST own the single `set_event_callback` and hand
   each event to the frame that holds the table.
 - **FR-005**: `loadEngine`'s `Engine` type MUST name every export this spec
@@ -561,8 +563,9 @@ then boot the room. Check that:
 - **FR-011**: The referee MUST be a scripted state machine in the page,
   with no network and no randomness except the dice crate's. It MUST:
   - accept or refuse every `upsert_token` the engine emits for the hero;
-  - send the accepted position back, or the last accepted one on a
-    refusal;
+  - send the last accepted position back only when it overturns the engine
+    (a refusal); an accepted move is never echoed, so a route never
+    stutters;
   - set door state on a door request;
   - judge the roll against the DC;
   - mark goals.
@@ -574,10 +577,20 @@ then boot the room. Check that:
   is never blocked. The e2e MUST prove parity: for every step the e2e takes
   in the room, including steps into each wall of the middle room and into
   the shut door, the referee's verdict equals the engine's
-  (`movement_blocked` emitted or not).
+  (`movement_blocked` emitted or not). Because a refusal rolls the hero
+  back, the page cannot show a disagreement after the fact. So:
+  - the room logs any disagreement with `console.error`, which every
+    landing e2e fails on through the console guard;
+  - the parity e2e works out the rule's verdict in Node from the package.
+  The Rust rule compares in f32, and centred half-square coordinates can
+  pass 2^24, where f32 and f64 disagree. The port rounds with
+  `Math.fround`, and a unit test pins a case where they differ.
 - **FR-013**: The goals MUST be exactly these, in order. Each MUST be
   marked from what the referee accepted, never from the canvas alone.
   1. **Walk to the door**: done when a step into the shut door is refused.
+  The map has two doors. Only the middle room's door to the hall
+  (`door-hall`) counts for goals 1 and 2; the door button acts on whichever
+  door is in reach and names it.
   2. **Open the door**: done when the referee opens it. That needs the hero
      within one square of the door, the same rule as the icon
      (`thunderforge_canvas_core::door_icon`).
@@ -621,9 +634,16 @@ then boot the room. Check that:
   keys pressed inside the room's controls MUST be forwarded to the canvas
   as key events, so the engine's own rule refuses first. Forwarding MUST be
   scoped to the room's controls, never the window. The canvas MUST stay
-  `aria-hidden` and `tabIndex=-1`.
+  `aria-hidden` and `tabIndex=-1`. Spec 090's stage has
+  `pointer-events: none` so the page keeps the mouse wheel; the room's
+  frame takes the pointer (for the door icon), and the wheel is stopped
+  before the engine sees it, so the page still scrolls.
 - **FR-022**: The room's capability check MUST add, to spec 090's checks, a
-  WebGL2 `MAX_TEXTURE_SIZE` of at least 4096.
+  WebGL2 `MAX_TEXTURE_SIZE` of at least 4096. A browser below it reports a
+  new `engine.load_failed` reason, `small_texture`. Spec 086's
+  `contracts/browser-events.md` lists those reasons as a closed set, so it
+  gains the row in the same commit. This is the room's only telemetry
+  change.
 - **FR-023**: Every check spec 090 runs on the page MUST pass with the room
   rendered, booted and completed: axe, focus, overlap, overflow, clipping,
   console, and per-section screenshots at three widths and two schemes.
