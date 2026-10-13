@@ -401,6 +401,7 @@ These journeys go through the product the way people do: UI only, no GraphQL sho
 - [x] T063 [P] Update `apps/web/PRODUCT.md` with the pause as an operator lever, and the notice's tone rule. Update spec 015's tasks and notes (`specs/015-dmca-notice-takedown/`) to point the withdrawn "takedowns reach live tables" item at spec 051.
 - [x] T064 [P] Add "Found in implementation" to ADR-100 in `docs/adrs/20260913-100-an_operator_can_pause_a_worlds_play.md`: anything the surface test caught, any gated field that surprised, and whether the trigger backstop is still unneeded.
 - [ ] T065 Run the full e2e suite for regressions (sharded as usual), every journey (`pnpm journeys`), the full server test suite, clippy for host and wasm (`make lint`) and `pnpm verify`. Fix what this feature broke, and record pre-existing flakes as such. Then tick this ledger and commit.
+  *2026-10-12: every journey green (run 15e51737, 16/16, 12.5 min). Still owed: the full server test suite.*
 - [x] T073 Write the capstone `apps/web/e2e/journeys/the-whole-story.journey.spec.ts`, as one long, deliberately sequential journey with no GraphQL shortcuts:
   1. A table plays two scenes.
   2. A DMCA notice is filed through the form.
