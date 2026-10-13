@@ -149,6 +149,9 @@ importers:
       '@thunderforge/dice-throw':
         specifier: workspace:^
         version: link:../../packages/dice-throw
+      '@thunderforge/encounter':
+        specifier: workspace:^
+        version: link:../../packages/encounter
       '@thunderforge/heroes':
         specifier: workspace:^
         version: link:../../packages/heroes
@@ -418,6 +421,15 @@ importers:
         version: 6.0.3
 
   packages/downloads:
+    devDependencies:
+      '@types/node':
+        specifier: ^26.2.0
+        version: 26.2.0
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
+  packages/encounter:
     devDependencies:
       '@types/node':
         specifier: ^26.2.0

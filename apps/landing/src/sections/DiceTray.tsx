@@ -61,6 +61,20 @@ function seed() {
   return crypto.getRandomValues(new Uint32Array(4));
 }
 
+/**
+ * Spec 091 T020: the engine's own start state, sent on every take, so the
+ * table is the tray's again after the room has had it. Read on a fresh boot:
+ * camera at the origin at scale 1, no background, bright ambient, a visible
+ * 128 square grid, nothing controlled.
+ */
+function traySetup(send: Send) {
+  send({ type: "set_scene_background", backgroundImagePath: null, width: 0, height: 0 });
+  send({ type: "set_scene_grid", gridType: "square", size: 128, visible: true });
+  send({ type: "set_ambient_light", level: "bright" });
+  send({ type: "set_controlled_token", tokenId: null });
+  send({ type: "set_camera", x: 0, y: 0, zoom: 1 });
+}
+
 export default function DiceTray() {
   const [formula, setFormula] = useState("2d20kh1+5");
   const [result, setResult] = useState<Resolution | null>(null);
@@ -198,6 +212,8 @@ export default function DiceTray() {
         id="dice-table"
         poster={{ src: "/dice-table.webp", width: 1200, height: 675 }}
         action="Throw it on the table"
+        away="The table is in the room below."
+        setup={traySetup}
         onState={onState}
       />
     </div>

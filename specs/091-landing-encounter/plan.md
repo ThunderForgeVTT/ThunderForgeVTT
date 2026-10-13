@@ -99,6 +99,11 @@ No engine change is needed (see Decisions).
 
 ## Decisions (spec open choices, closed here)
 
+- **One engine, moved canvas (T002).** The T001 probe passed every check:
+  the canvas moved into another element keeps drawing, throwing and
+  taking keys, with no lost context. The host moves the canvas between
+  frames; the reload (FR-006) stays as the fallback only for a failure.
+
 - **No engine change.** Everything the room needs already exists:
   - `set_scene_playing` is an SDK command (`sdk.rs:154`), so no wasm export
     is needed to turn the region trigger on;

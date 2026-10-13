@@ -33,7 +33,7 @@ the demo's build changes. The full suite is never used as a gate.
 
 ## Phase 1: The probe (US3)
 
-- [ ] T001 [US3] `e2e/engine-host.spec.ts`, its first test, the probe.
+- [x] T001 [US3] `e2e/engine-host.spec.ts`, its first test, the probe.
   Against spec 090's page as it is, boot the tray's frame and throw once.
   Then, in `page.evaluate`, move the canvas into a new 960×540 element
   elsewhere on the page, and check:
@@ -47,7 +47,20 @@ the demo's build changes. The full suite is never used as a gate.
     `movement_state()`'s presses.
 
   Record the result here, with the evidence.
-- [ ] T002 [US3] Record the decision from T001 in plan.md Decisions:
+
+  **Result, 2026-10-13: every check passed**, twice (desktop, dev engine;
+  the second run beside the 20 engine-frame tests, 20 passed, 3.0m).
+  - Frames climbed by more than 10 within 10 s of the move.
+  - No `webglcontextlost`.
+  - The seeded `4d6kh3` thrown after the move landed on the crate's faces.
+  - The moved canvas shot 960×540 with 18 distinct sampled colours.
+  - ArrowRight on the moved canvas: `presses` 0 → 1, the hero's x
+    175 → 292.5, one cell (`movement_state()` =
+    `{named:"probe-hero",found:true,tagged:1,grid:true,runs:113,presses:1}`).
+
+  The shared helpers moved to `e2e/support/engine.ts`; engine-frame.spec.ts
+  imports them.
+- [x] T002 [US3] Record the decision from T001 in plan.md Decisions:
   - **moved canvas**, if every T001 check passed; or
   - **reload fallback** (FR-006, accepted by the owner on 2026-10-13), if
     any failed.
@@ -59,7 +72,7 @@ the demo's build changes. The full suite is never used as a gate.
 
 ## Phase 2: The core, test first
 
-- [ ] T010 `packages/encounter`:
+- [x] T010 `packages/encounter`:
   - `package.json` (`@thunderforge/encounter`, AGPL-3.0-or-later, source
     exports, scripts `test`, `typecheck` and `check` as in dice-throw);
   - `tsconfig.json` copied from dice-throw;
@@ -68,7 +81,10 @@ the demo's build changes. The full suite is never used as a gate.
   `scripts/e2e/slices.json` `landing`: add `packages/encounter/**` to the
   paths, and `pnpm -F @thunderforge/encounter check &&` to the front of
   the standalone command. `pnpm install` links it. `pnpm verify` passes.
-- [ ] T011 [P] `src/walls.test.ts`. Port the movement and intersection
+  Done: `pnpm verify`'s e2e-slices check fails until the package is tracked
+  and root `package.json`'s `e2e:landing:standalone` is regenerated
+  (`pnpm verify --fix`); both are outside this task's reach.
+- [x] T011 [P] `src/walls.test.ts`. Port the movement and intersection
   cases from `crates/thunderforge-canvas-core/src/wall_tests.rs` and
   `wall_room_and_clear_tests.rs`, plus:
   - touching counts: ending on a wall, and passing through the point where
@@ -81,11 +97,13 @@ the demo's build changes. The full suite is never used as a gate.
     in reach; one and a half squares is not (`icon_shown`'s token test).
 
   Seen failing.
-- [ ] T012 `src/walls.ts`: `segmentsIntersect`, `movementBlockedBy`,
+  Done: 21 tests, seen failing on the missing module.
+- [x] T012 `src/walls.ts`: `segmentsIntersect`, `movementBlockedBy`,
   `pathBlockedBy`, `distanceToSegment` and `doorInReach`. Every arithmetic
   step goes through `Math.fround`. Each function's comment names the Rust
   function it ports, with its file. T011 green.
-- [ ] T013 [P] `src/map.test.ts`, then `src/map.ts`. It reads a
+  Done: also `currentlyBlocksMovement` (`wall.rs`).
+- [x] T013 [P] `src/map.test.ts`, then `src/map.ts`. It reads a
   `demo.json`-shaped map into:
   - walls with stable ids (`wall-00` to `wall-32`, with `door-hall` and
     `door-west` for the two doors);
@@ -95,10 +113,12 @@ the demo's build changes. The full suite is never used as a gate.
   The tests use the real `apps/landing/public/maps/demo.json`: 33 walls,
   2 doors, both `closed`, 12 lights, and `door-hall` at x −3.5 to −2.5
   squares on y −2.
-- [ ] T014 [P] `src/goals.ts`. Export the four goal ids as a closed union
+  Done: 7 tests. The doors are indices 31 and 32, so ids run `wall-00` to
+  `wall-30`, then `door-hall` and `door-west`.
+- [x] T014 [P] `src/goals.ts`. Export the four goal ids as a closed union
   (`door-reached`, `door-opened`, `chest-found`, `chest-opened`), their
   order, and `GOAL_EVENT = "thunderforge:encounter-goal"`.
-- [ ] T015 `src/referee.test.ts`. One test per rule, against a small
+- [x] T015 `src/referee.test.ts`. One test per rule, against a small
   fixture room and against the real map. It covers:
   - a step into a wall is refused and the hero stays;
   - a step into `door-hall` while it is shut marks `door-reached`, once;
@@ -119,7 +139,9 @@ the demo's build changes. The full suite is never used as a gate.
   - `reset()` returns the starting state exactly.
 
   Seen failing.
-- [ ] T016 `src/referee.ts`: the state machine. Its state is the accepted
+  Done: 24 tests. Fixtures in `src/fixtures.ts`; the room's type in
+  `src/script.ts`.
+- [x] T016 `src/referee.ts`: the state machine. Its state is the accepted
   square, the door states, the goals and the roll history. Its actions
   are:
   - `step(dir)` and `judgeMove(from, to, path?)`;
@@ -130,13 +152,17 @@ the demo's build changes. The full suite is never used as a gate.
 
   It is pure: no DOM, no engine, no randomness. It returns the new state
   and the outcome. T015 green.
-- [ ] T017 [P] `src/describe.test.ts`, then `src/describe.ts`. It puts the
+  Done: `createReferee(script)` returns pure functions that take the state
+  first. The north sign comes from the script: the engine's `Step::North` is
+  +y, the hall is at -y. T031 confirms.
+- [x] T017 [P] `src/describe.test.ts`, then `src/describe.ts`. It puts the
   hero's place in words: the room or hall it is in, the nearest door and
   its state with a distance and a direction, and the chest when it is
   within five squares. For example: "You stand in a dark room. The door to
   the hall is four squares north, shut." The test pins the start square's
   sentence and three others.
-- [ ] T018 [P] `src/engineScene.test.ts`, then `src/engineScene.ts`.
+  Done: 6 tests; exported as `describePlace`.
+- [x] T018 [P] `src/engineScene.test.ts`, then `src/engineScene.ts`.
   - `roomSetup(script, hero, { reducedMotion })` returns the plan's
     fourteen-step list, and the test pins its order. Two orderings are
     asserted on their own: the hero's `upsert_token` comes before
@@ -146,21 +172,39 @@ the demo's build changes. The full suite is never used as a gate.
   - `doorCommand(wall, state)` returns the `upsert_wall` for a door.
   - `rollbackCommand(hero, square)` returns the `upsert_token` that sends
     the hero back.
-- [ ] T019 [P] `src/engineEvents.test.ts`, then `src/engineEvents.ts`. It
+  Done: 8 tests. `fit_camera_to` has no `immediate` field; teardown also
+  puts out the torch; `rollbackCommand` takes the grid size too.
+- [x] T019 [P] `src/engineEvents.test.ts`, then `src/engineEvents.ts`. It
   parses the engine's JSON strings into typed `upsert_token`,
   `movement_blocked`, `door_icon_pressed`, `interactionTriggered` and
   `sdkError` events. Anything else, and anything malformed, becomes
   `null`. The shapes are checked against `apps/web/src/engine/bevy/engineEvents.ts`'s
   guards. `index.ts` re-exports the package. `pnpm -F
   @thunderforge/encounter check` passes.
+  Done: 8 tests. `check`: tsc clean, 74 tests pass.
 
 ## Phase 3: One table (US3)
 
-- [ ] T020 [US3] Read the engine's start state on a fresh boot: the
+- [x] T020 [US3] Read the engine's start state on a fresh boot: the
   camera, the background, the ambient light, the viewer and the grid.
   Record it here. Then give `DiceTray` an explicit `setup` that sends that
   state, so the tray's table is the same after a room visit.
-- [ ] T021 [US3] `src/engine/loadEngine.ts`: widen `Engine` to
+
+  **Read 2026-10-13** on a fresh desktop boot, from the exports and, where
+  none reads it back, from source:
+  - camera: `camera_state()` = `{x:0,y:0,scale:1}`;
+  - background: none (`ClearColor` 0.133/0.157/0.192, `startup.rs:52`);
+  - ambient: bright (`SceneAmbient` = daylight, `resources/vision.rs:17`);
+  - viewer: none; `token_vision()` = `{}`;
+  - grid: square, 128 (`GridSpec::default`, canvas-core `grid.rs:79`),
+    visible (`GridVisible` true); `movement_state().grid` = true;
+  - nothing on the board: 0 tokens, lights, walls; `list_interactives()`
+    = `[]`.
+
+  `traySetup` in `DiceTray.tsx` sends the background, grid, ambient,
+  controlled token and camera. The viewer is an export, not a command, so
+  the host's teardown clears it (T022).
+- [x] T021 [US3] `src/engine/loadEngine.ts`: widen `Engine` to
   `set_event_callback`, `set_viewer_token`, `movement_state`,
   `door_icons`, `sight_probe` and `list_interactives`. `tsc` passes.
 - [ ] T022 [US3] `src/engine/host.ts` and `src/engine/dispatch.ts`. The

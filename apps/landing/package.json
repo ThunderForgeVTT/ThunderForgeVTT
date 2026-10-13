@@ -19,6 +19,7 @@
     "@fontsource/permanent-marker": "^5.3.0",
     "@thunderforge/dice": "workspace:^",
     "@thunderforge/dice-throw": "workspace:^",
+    "@thunderforge/encounter": "workspace:^",
     "@thunderforge/heroes": "workspace:^",
     "@thunderforge/telemetry": "workspace:^",
     "react": "^19.2.5",

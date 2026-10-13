@@ -20,6 +20,15 @@ export interface Engine {
   apply_world_command(json: string): void;
   engine_stats(): string;
   dice_landed(): string;
+  /** Spec 091: the one listener for the engine's events, JSON strings. */
+  set_event_callback(callback: (json: string) => void): void;
+  /** Whose sight the board shows; `""` for none. */
+  set_viewer_token(tokenId: string): boolean;
+  // Read-backs the room's tests and its DOM path ask instead of the canvas.
+  movement_state(): string;
+  door_icons(): string;
+  sight_probe(x: number, y: number): string;
+  list_interactives(): string;
 }
 
 /** Which step failed, as telemetry reports it (T038). */

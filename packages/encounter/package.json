@@ -1,0 +1,20 @@
+{
+  "name": "@thunderforge/encounter",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "description": "The landing's one room: the wall rule, the map, the referee and the engine's commands and events",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --test src/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "check": "tsc --noEmit && node --test src/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "typescript": "6.0.3"
+  }
+}

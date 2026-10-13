@@ -643,9 +643,10 @@
         "apps/landing/{public,scripts,e2e}/**",
         "apps/landing/src/**",
         "packages/dice-throw/**",
+        "packages/encounter/**",
         "apps/demo/vite.config.mts"
       ],
-      "standalone": "pnpm -F @thunderforge/dice-throw check && pnpm -F @thunderforge/demo run build && pnpm -F @thunderforge/landing e2e && node apps/landing/scripts/compress.mjs && node apps/landing/scripts/check-serving.mjs"
+      "standalone": "pnpm -F @thunderforge/encounter check && pnpm -F @thunderforge/dice-throw check && pnpm -F @thunderforge/demo run build && pnpm -F @thunderforge/landing e2e && node apps/landing/scripts/compress.mjs && node apps/landing/scripts/check-serving.mjs"
     },
     {
       "name": "lighting",
