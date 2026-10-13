@@ -417,20 +417,32 @@ the demo's build changes. The full suite is never used as a gate.
     `e2e/support/room.ts`, so each state runs the same ones.
   - One test-only catch: a radio focused from script after a click is not
     `:focus-visible`, so the walk reaches it by keyboard.
-- [ ] T053 [US2] Reduced motion (US2 scenario 6):
+- [x] T053 [US2] Reduced motion (US2 scenario 6):
   - `set_reduced_motion` is the first command;
   - `fit_camera_to` is sent with `immediate`;
   - the dice take the reduced time;
   - the room's CSS adds no motion.
+  Done in `room-motion.spec.ts`; the order of the setup is the encounter
+  package's unit test. It found two defects, both fixed:
+  - The boot fit was made for Bevy's default 1280x720 window, before the
+    window took the canvas's 960x540, so the room booted at scale 2.275
+    instead of 3.033. The engine now holds a fit and makes it again when
+    the viewport changes size, until the camera is moved. `fit_camera_to`
+    gained `immediate`; under reduce the camera lands in one frame.
+  - `.ink-btn` ran its hover transition under reduce. It no longer does,
+    site-wide.
 - [x] T054 [P] [US2] `looks.spec.ts`: the room at rest, per width. Then
   regenerate the baselines below `#map` with
   `--update-snapshots=changed`, look at each one, and commit them.
-- [ ] T055 [P] `telemetry.spec.ts`: completing every goal sends no beacon
+- [x] T055 [P] `telemetry.spec.ts`: completing every goal sends no beacon
   beyond those it sends today (FR-019). With `TELEMETRY=false`, nothing is
   sent.
-- [ ] T056 Request log (FR-025, SC-001): scrolled top to bottom, no engine
+  Done: all four goal events go out on `window`, and the beacons are the
+  visit's own (funnel, page view and the perf events), none naming the room.
+- [x] T056 Request log (FR-025, SC-001): scrolled top to bottom, no engine
   file, no `public/room/*` art and no second `/maps/demo.webp` is fetched
   before the click.
+  Done in `engine-frame.spec.ts`'s scroll test.
 
 ## Phase 6: Proof
 

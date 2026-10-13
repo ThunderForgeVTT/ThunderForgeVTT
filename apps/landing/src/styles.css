@@ -210,6 +210,15 @@ img {
   transform: none;
   box-shadow: none;
 }
+/* The ring alone says hover; the lift is motion. */
+@media (prefers-reduced-motion: reduce) {
+  .ink-btn {
+    transition: none;
+  }
+  .ink-btn:hover {
+    transform: none;
+  }
+}
 .ink-btn:disabled {
   opacity: 0.5;
   cursor: progress;

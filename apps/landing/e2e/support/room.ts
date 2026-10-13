@@ -96,6 +96,8 @@ export async function seen(page: Page, at: Point) {
 /** Plays all four goals with the page's controls alone. */
 export async function playThrough(page: Page) {
   await room(page).scrollIntoViewIfNeeded();
+  // The room renders when it nears the screen.
+  await expect(said(page)).toBeAttached();
   await recordSaid(page);
   expect(await square(page)).toBe("-3,1.5");
 

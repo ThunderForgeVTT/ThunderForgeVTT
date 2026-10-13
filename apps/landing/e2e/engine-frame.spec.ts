@@ -32,6 +32,11 @@ test.describe("before the click", () => {
     const opened = await openLanding(page);
     await expect(throwButton(page)).toBeVisible();
     expect(opened.requests.filter(isEngineFile)).toEqual([]);
+    // Spec 091 FR-025: the room's art waits for its click, and the map the
+    // room shares with the legend is fetched once.
+    const paths = opened.requests.map((u) => new URL(u).pathname);
+    expect(paths.filter((p) => p.startsWith("/room/"))).toEqual([]);
+    expect(paths.filter((p) => p === "/maps/demo.webp").length).toBeLessThanOrEqual(1);
     expectClean(opened);
   });
 

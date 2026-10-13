@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
+import { GOAL_EVENT } from "@thunderforge/encounter";
 import { connectSrcFor } from "@thunderforge/telemetry/vite";
+import { FIXED_SEEDS, playThrough } from "./support/room.ts";
 
 /**
  * Spec 086 US1: the landing sends `landing_viewed`, the funnel's first step,
@@ -272,5 +274,49 @@ test("with Global Privacy Control, the landing sends errors only", async ({ page
   expect([...new Set(records(telemetry).map((r) => attr(r.attributes, "event.name")))]).toEqual([
     "error",
   ]);
+  expect(outside).toEqual([]);
+});
+
+/**
+ * Spec 091 T055, FR-019: the room adds no telemetry. Each goal goes out on
+ * `window` for a later badges spec to count; until then, playing the room
+ * through sends exactly what a visit sends, and with telemetry off, nothing.
+ */
+async function hearGoals(page: Page) {
+  await page.addInitScript(FIXED_SEEDS);
+  await page.addInitScript((name) => {
+    const w = window as unknown as { goals: string[] };
+    w.goals = [];
+    window.addEventListener(name, (e) => w.goals.push((e as CustomEvent<{ goal: string }>).detail.goal));
+  }, GOAL_EVENT);
+}
+const goals = (page: Page) => page.evaluate(() => (window as unknown as { goals: string[] }).goals);
+
+test("every goal of the room goes out on window, and sends nothing more", async ({ page }) => {
+  await hearGoals(page);
+  const { telemetry, outside } = await open(page, CONFIG);
+  await expect.poll(() => named(telemetry, "page_view").length, { timeout: 30_000 }).toBe(1);
+
+  await playThrough(page);
+  expect(await goals(page)).toEqual(["door-reached", "door-opened", "chest-found", "chest-opened"]);
+  await page.waitForTimeout(6_000); // past one flush interval
+
+  // What any visit sends: the view, the funnel's first step, the page's
+  // own performance. Nothing named for the room.
+  const VISIT = ["funnel", "long_task", "nav_timing", "page_view", "web_vital"];
+  const names = new Set(records(telemetry).map((r) => attr(r.attributes, "event.name")));
+  expect([...names].filter((n) => !VISIT.includes(n!))).toEqual([]);
+  expect(named(telemetry, "funnel")).toHaveLength(1);
+  expect(telemetry.join("\n")).not.toMatch(/door|chest|goal|room/i);
+  expect(outside).toEqual([]);
+});
+
+test("with the served config off, the room played through posts nothing", async ({ page }) => {
+  await hearGoals(page);
+  const { telemetry, outside } = await open(page, null);
+  await playThrough(page);
+  expect(await goals(page)).toHaveLength(4);
+  await page.waitForTimeout(6_000); // past one flush interval
+  expect(telemetry).toEqual([]);
   expect(outside).toEqual([]);
 });
