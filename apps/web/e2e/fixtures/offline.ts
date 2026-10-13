@@ -155,10 +155,25 @@ export async function createToken(page: Page): Promise<string> {
   };
   const tokenId = body.data?.createToken?.tokenId;
   if (!tokenId) throw new Error("no tokenId in createToken response");
-  await page.keyboard.press("Escape");
-  await page.keyboard.press("Escape");
-  await page.waitForTimeout(500);
+  await closeDialogs(page);
   return tokenId;
+}
+
+/**
+ * Escape out of every open dialog, one press per dialog, and no further.
+ *
+ * A blind second Escape is not a no-op: on the Select tool it opens the
+ * dock's Settings pane (canvas-escape.spec.ts), which then sits over the
+ * canvas and the Tokens button.
+ */
+export async function closeDialogs(page: Page): Promise<void> {
+  const dialogs = page.getByRole("dialog");
+  for (let i = 0; i < 4 && (await dialogs.count()) > 0; i += 1) {
+    const before = await dialogs.count();
+    await page.keyboard.press("Escape");
+    await expect.poll(() => dialogs.count()).toBeLessThan(before);
+  }
+  await expect(dialogs).toHaveCount(0);
 }
 
 /**

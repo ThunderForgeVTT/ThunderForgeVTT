@@ -2,6 +2,7 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 import { expectNoAxeViolations } from "../fixtures/axe";
 import { openDockTab, uniqueSuffix } from "../fixtures/helpers";
 import {
+  closeDialogs,
   createToken,
   dragToken,
   tokenPosition,
@@ -292,8 +293,7 @@ test.describe("spec 051 US4 journey: play resumes as it was", () => {
             { timeout: 15_000 },
           )
           .toBe(`${playerId}|t`);
-        await gm.keyboard.press("Escape");
-        await gm.keyboard.press("Escape");
+        await closeDialogs(gm);
       });
 
       await test.step("the Game Master has the scene remember what players explore", async () => {

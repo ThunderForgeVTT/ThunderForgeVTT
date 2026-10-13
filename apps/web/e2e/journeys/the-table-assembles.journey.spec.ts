@@ -4,6 +4,7 @@ import { uniqueSuffix, waitForWallsLoaded } from "../fixtures/helpers";
 import { createNpcViaCompendium } from "../fixtures/content";
 import { seatATable } from "../fixtures/journeyTable";
 import {
+  closeDialogs,
   tokenPosition,
   waitForEngineReady,
   waitForTokenTrafficToSettle,
@@ -204,8 +205,7 @@ async function stageEnemy(gm: Page, npcId: string): Promise<string> {
   // Out of the dialog and out of the panel, the way the other engine-facing
   // specs do it, so the next interaction reaches the canvas and not an
   // overlay that happens to be on top of it.
-  await gm.keyboard.press("Escape");
-  await gm.keyboard.press("Escape");
+  await closeDialogs(gm);
   return tokenId;
 }
 
