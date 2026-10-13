@@ -17,14 +17,6 @@ EXEMPT=(
   "crates/thunderforge-server/src/models.rs"   # Queryable/Insertable structs only, no logic to split out
 )
 
-# Files that were already over the limit when TypeScript joined the gate. Each
-# is a split owed, not an exemption: the list only shrinks. A file that drops
-# under the limit fails the check until its entry is removed, so nothing
-# stays here after it stops needing to.
-PENDING=(
-  "apps/web/src/pages/world/WorldPage.tsx"
-)
-
 cd "$(git rev-parse --show-toplevel)"
 
 listed() {
@@ -41,28 +33,14 @@ while IFS= read -r -d '' file; do
   listed "$file" "${EXEMPT[@]}" && continue
   [[ -f "$file" ]] || continue  # tracked but deleted-in-worktree (not yet staged)
   lines=$(wc -l < "$file")
-  if listed "$file" "${PENDING[@]}"; then
-    if [[ "$lines" -le "$MAX_LINES" ]]; then
-      echo "FAIL: $file is down to $lines lines — remove it from PENDING in scripts/check-file-length.sh"
-      failed=1
-    fi
-    continue
-  fi
   if [[ "$lines" -gt "$MAX_LINES" ]]; then
     echo "FAIL: $file has $lines lines (max $MAX_LINES) — split it by responsibility (Rust: a module directory, see auth/ and map_import/; TypeScript: sibling modules or hooks, see pages/world/)"
     failed=1
   fi
 done < <(git ls-files -z -- '*.rs' '*.ts' '*.tsx' '*.mts' '*.cts')
 
-for file in "${PENDING[@]}"; do
-  if [[ ! -f "$file" ]]; then
-    echo "FAIL: $file is in PENDING but no longer exists — remove its entry"
-    failed=1
-  fi
-done
-
 if [[ "$failed" -eq 0 ]]; then
-  echo "OK: no tracked .rs/.ts/.tsx file exceeds $MAX_LINES lines (outside the exempt list; ${#PENDING[@]} splits owed)."
+  echo "OK: no tracked .rs/.ts/.tsx file exceeds $MAX_LINES lines (outside the exempt list)."
 fi
 
 exit "$failed"

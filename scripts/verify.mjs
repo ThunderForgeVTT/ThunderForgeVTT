@@ -269,9 +269,9 @@ const steps = [
     // everyone to bypass it, which is exactly what happened to `make lint`
     // before it was split by target.
     //
-    // TypeScript joined on 2026-10-12 with a backlog of eleven files, so it
-    // came in with a PENDING list rather than red: the list only shrinks, and
-    // the check fails on an entry that no longer needs to be there.
+    // TypeScript joined on 2026-10-12 with a backlog of eleven files, carried
+    // as owed splits until the last of them came under the limit the same
+    // day; it now holds TypeScript to the same cap as Rust, with no backlog.
     //
     // Cheap: `git ls-files` plus a `wc -l` each, so it belongs in the class
     // that runs on every commit rather than on push.

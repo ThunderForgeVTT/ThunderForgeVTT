@@ -1133,7 +1133,7 @@
         "apps/web/src/pages/world/components/**",
         "apps/web/src/pages/world/settings/{WorldAppearanceSettingsCard,AuthoringToolGrantsCard}.tsx",
         "apps/web/src/pages/world/worldsView.ts",
-        "apps/web/src/pages/world/{WorldListPage,CreateWorldPage,JoinWorldPage,WorldDashboardPage,WorldPage,BaseMapPicker,useDockSections}.tsx",
+        "apps/web/src/pages/world/{WorldListPage,CreateWorldPage,JoinWorldPage,WorldDashboardPage,WorldPage,BaseMapPicker,useDockSections,WorldBoardOverlays}.tsx",
         "apps/web/src/pages/world/{worldPageHelpers,useSceneLoadState,useSceneRecord,useEngineCanvas,useGmToolRail,useBoardInput,useEngineBridge,useExploration,useSceneTransition,useSceneContent,useWorldEventStreams,useSceneLiveSync,useConnectivity,useScenePlay,usePinnedTokenStatus,useMapImport}.ts",
         "apps/web/src/types/{world,seo}.ts",
         "apps/web/src/utils/env.ts",
