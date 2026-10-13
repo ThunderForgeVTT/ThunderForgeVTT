@@ -157,7 +157,9 @@ export function validateSlices(document) {
 
     requireString(slice, "summary", named);
     requireStringArray(slice, "own", named);
-    if (slice.own.length === 0) {
+    // A feature whose e2e lives outside apps/web (the landing) is proven by
+    // its standalone half alone; any other slice must own a web spec.
+    if (slice.own.length === 0 && !("standalone" in slice)) {
       throw new SliceError(`${named}: "own" must name at least one spec`);
     }
     requireStringArray(slice, "paths", named);
@@ -262,6 +264,11 @@ export function resolveSlice(name, slices, specFiles = allSpecFiles()) {
   if (!slice) {
     throw new SliceError(
       `unknown slice "${name}". Valid slices: ${slices.map((s) => s.name).join(", ")}`,
+    );
+  }
+  if (slice.own.length === 0) {
+    throw new SliceError(
+      `slice "${name}" owns no web spec — run pnpm e2e:${name}, which runs its standalone half`,
     );
   }
   const chosen = new Set(

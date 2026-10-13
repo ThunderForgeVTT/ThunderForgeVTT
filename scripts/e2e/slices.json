@@ -634,6 +634,20 @@
       ]
     },
     {
+      "name": "landing",
+      "summary": "The front page at thunderforge.dev: proven at three widths, and the demo's engine thrown in its dice section (specs/090-landing-engine-dice); its specs live in apps/landing/e2e, so it has no integration half",
+      "own": [],
+      "neighbours": [],
+      "paths": [
+        "apps/landing/{index.html,package.json,playwright.config.ts,tsconfig.json,vite.config.mts,nginx.conf.template}",
+        "apps/landing/{public,scripts,e2e}/**",
+        "apps/landing/src/**",
+        "packages/dice-throw/**",
+        "apps/demo/vite.config.mts"
+      ],
+      "standalone": "pnpm -F @thunderforge/dice-throw check && pnpm -F @thunderforge/demo run build && pnpm -F @thunderforge/landing e2e && node apps/landing/scripts/compress.mjs && node apps/landing/scripts/check-serving.mjs"
+    },
+    {
       "name": "lighting",
       "summary": "Light, darkvision and reach of light (specs/030-interactive-elements, specs/045-token-movement-and-vision); owns scene-lighting and interactive-lighting by exact name, over the scene- and interactive- prefixes",
       "own": [

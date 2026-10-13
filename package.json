@@ -62,6 +62,8 @@
     "e2e:instance:integration": "node ./scripts/e2e-parallel.mjs --shards=1 --slice=instance",
     "e2e:interactive": "pnpm run e2e:interactive:integration",
     "e2e:interactive:integration": "node ./scripts/e2e-parallel.mjs --shards=1 --slice=interactive",
+    "e2e:landing": "pnpm run e2e:landing:standalone",
+    "e2e:landing:standalone": "pnpm -F @thunderforge/dice-throw check && pnpm -F @thunderforge/demo run build && pnpm -F @thunderforge/landing e2e && node apps/landing/scripts/compress.mjs && node apps/landing/scripts/check-serving.mjs",
     "e2e:lighting": "pnpm run e2e:lighting:integration",
     "e2e:lighting:integration": "node ./scripts/e2e-parallel.mjs --shards=1 --slice=lighting",
     "e2e:lore": "pnpm run e2e:lore:integration",

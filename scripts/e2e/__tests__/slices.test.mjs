@@ -156,6 +156,14 @@ describe("resolveSlice", () => {
     );
   });
 
+  test("a slice whose specs all live outside apps/web has nothing to run here", () => {
+    const outside = [slice("landing", [], [], { standalone: "pnpm -F app e2e" })];
+    assert.throws(
+      () => resolveSlice("landing", outside, SPECS),
+      /slice "landing" owns no web spec — run pnpm e2e:landing/,
+    );
+  });
+
   test("a neighbour that does not exist throws", () => {
     const broken = [slice("combat", ["combat-"], ["combat-old.spec.ts"])];
     assert.throws(
@@ -209,6 +217,15 @@ describe("validateSlices", () => {
     const reserved = valid();
     reserved.slices = [slice("which", ["which-"])];
     assert.throws(() => validateSlices(reserved), /reserved/);
+  });
+
+  test("an empty own is allowed only beside a standalone half", () => {
+    const bare = valid();
+    bare.slices[0].own = [];
+    assert.throws(() => validateSlices(bare), /"own" must name at least one spec/);
+    const outside = valid();
+    outside.slices[0] = slice("alpha", [], [], { standalone: "pnpm -F app e2e" });
+    assert.equal(validateSlices(outside).slices[0].own.length, 0);
   });
 
   test("rejects a neighbour given as a prefix", () => {

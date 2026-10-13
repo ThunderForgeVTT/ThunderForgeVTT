@@ -276,7 +276,10 @@ pnpm e2e:slices           # every slice, its specs and how long it takes
 
 `pnpm e2e:<slice>` runs the slice's stack-free suite first where it has
 one, then `pnpm e2e:<slice>:integration`, which runs its specs against the
-real stack.
+real stack. A feature with no specs under `apps/web/e2e` has nothing
+for the integration half to run, so its slice has an empty `own` and
+`pnpm e2e:<slice>` runs only the standalone suite. The landing
+(`pnpm e2e:landing`) is the example.
 
 **The full suite is the gate when a cross-cutting path changes.** Those are
 the paths any slice could depend on: the GraphQL schema, auth, migrations,

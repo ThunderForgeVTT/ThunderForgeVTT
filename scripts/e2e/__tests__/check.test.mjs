@@ -243,6 +243,16 @@ describe("checkSlices", () => {
     );
   });
 
+  test("rule 6: a slice with only a standalone suite has no integration half", () => {
+    assert.deepEqual(
+      canonicalScripts(slice("landing", [], { standalone: "pnpm -F app e2e" })),
+      {
+        "e2e:landing": "pnpm run e2e:landing:standalone",
+        "e2e:landing:standalone": "pnpm -F app e2e",
+      },
+    );
+  });
+
   test("rule 7: a standalone naming a script its package lacks", () => {
     const slices = [
       ...SLICES.slice(0, 2),

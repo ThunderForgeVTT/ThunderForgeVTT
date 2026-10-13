@@ -94,6 +94,12 @@ const SLICE_SCRIPT =
 export function canonicalScripts(slice) {
   const integration = `node ./scripts/e2e-parallel.mjs --shards=1 --slice=${slice.name}`;
   const scripts = {};
+  if (slice.own.length === 0) {
+    // Nothing under apps/web to run: the standalone half is the whole proof.
+    scripts[`e2e:${slice.name}`] = `pnpm run e2e:${slice.name}:standalone`;
+    scripts[`e2e:${slice.name}:standalone`] = slice.standalone;
+    return scripts;
+  }
   if (slice.standalone) {
     scripts[`e2e:${slice.name}`] =
       `pnpm run e2e:${slice.name}:standalone && pnpm run e2e:${slice.name}:integration`;
