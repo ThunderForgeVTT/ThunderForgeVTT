@@ -363,7 +363,7 @@ the demo's build changes. The full suite is never used as a gate.
   the live region below the controls, so a first announcement moves
   nothing under the pointer. Unlike the map and the dice, the room carries
   no `data-section`: scroll depth does not count it (badges only).
-- [ ] T051 [US2] `e2e/room-words.spec.ts`:
+- [x] T051 [US2] `e2e/room-words.spec.ts`:
   - US2 scenario 1: all four goals DOM-only, every outcome announced once,
     no engine request (SC-003);
   - scenario 2: each hold-back reason, including `small_texture` (stub
