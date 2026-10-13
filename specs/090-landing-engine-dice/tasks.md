@@ -109,10 +109,13 @@ gate.
   looked at. The dice frame (T034) moved every section below it by a
   fraction of a pixel; 15 baselines were regenerated with
   `--update-snapshots=changed`, the dice ones looked at.
-- [ ] T011 [US1] Add a `landing` slice to `scripts/e2e/slices.json`, as in
+- [x] T011 [US1] Add a `landing` slice to `scripts/e2e/slices.json`, as in
   the plan. Then:
   - `pnpm verify` finds no orphan specs;
   - `pnpm e2e:landing` is green three times.
+
+  Done 2026-10-13: `pnpm verify` passed all 18 checks; `pnpm e2e:landing`
+  passed three runs in a row (see T050).
 
 ## Phase 2: Served small (US4)
 
@@ -234,11 +237,27 @@ gate.
 
 ## Phase 4: Proof
 
-- [ ] T050 Run, and record the results here:
+- [x] T050 Run, and record the results here:
   - `pnpm e2e:landing` (three times);
   - `pnpm -F @thunderforge/demo e2e`;
   - the telemetry slice;
   - `make lint`;
   - `pnpm verify`.
-- [ ] T051 Owner: approve or replace the readout and unsupported copy (plan
+
+  Results, 2026-10-13, at `146a3826`, demo engine dev build
+  `327e5f420a532a1f`:
+  - `pnpm e2e:landing`: 88 passed, 14 skipped, three runs (4.5m, 3.6m,
+    3.4m). The skips are the engine tests at the phone and tablet widths,
+    by design. Every run: engine 335.8 MB raw, 27.7 MB gzip, 14.6 MB brotli
+    (q11); "nginx serves the brotli twins".
+  - `pnpm -F @thunderforge/demo e2e`: 51 passed (6.5m).
+  - `pnpm e2e:telemetry`: 9 passed, 0 failed, 0 flaky (1.2m).
+  - `make lint`: exit 0 (host and wasm32); no file over 1000 lines.
+  - `pnpm verify`: all 18 checks passed.
+- [x] T051 Owner: approve or replace the readout and unsupported copy (plan
   Decisions).
+
+  Approved by the owner on 2026-10-13, as written: "Loading the table: X of Y
+  MB. Once; the demo reuses it." and "Your browser can't run the table here
+  ({why}). The dice above are the same code. Try the demo on another
+  device."
