@@ -24,6 +24,7 @@
     "react-dom": "^19.2.5"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@playwright/test": "^1.62.1",
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.14",

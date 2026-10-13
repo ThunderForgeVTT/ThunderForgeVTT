@@ -156,6 +156,9 @@ importers:
         specifier: ^19.2.5
         version: 19.2.5(react@19.2.5)
     devDependencies:
+      '@axe-core/playwright':
+        specifier: 4.13.0
+        version: 4.13.0(playwright-core@1.62.1)
       '@playwright/test':
         specifier: ^1.62.1
         version: 1.62.1

@@ -51,6 +51,8 @@
 html {
   scrollbar-color: var(--ink-black) var(--mat-deep);
   scroll-behavior: smooth;
+  /* A focused control scrolls in with its focus ring, not flush to the edge. */
+  scroll-padding-block: 3rem;
   -webkit-text-size-adjust: 100%;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -120,6 +122,25 @@ img {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+.skip-link {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 100;
+  padding: 0.6rem 1rem;
+  background: var(--ink-black);
+  color: #fff;
+  font-weight: 700;
+  border-radius: 4px;
+  transform: translateY(-200%);
+}
+.skip-link:focus {
+  transform: none;
+}
+#content:focus {
+  outline: none;
 }
 
 .icon {
@@ -1299,6 +1320,10 @@ main {
   font-size: 0.95rem;
   line-height: 1.75;
   scrollbar-color: #56e0c7 transparent;
+}
+.terminal pre:focus-visible {
+  outline-offset: -4px;
+  outline-color: #56e0c7;
 }
 .terminal code::selection {
   background: rgb(86 224 199 / 0.35);

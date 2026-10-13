@@ -24,11 +24,21 @@ export function Nav() {
           <a href="#self-host">Self-host</a>
         </li>
         <li>
-          <a className="nav-star" data-cta="github" data-placement="nav" href={REPO}>
+          <a
+            className="nav-star"
+            data-cta="github"
+            data-placement="nav"
+            href={REPO}
+            aria-label={
+              stars === null
+                ? "Star ThunderForge on GitHub"
+                : `Star ThunderForge on GitHub, ${stars.toLocaleString("en-US")} stars`
+            }
+          >
             <GitHubMark />
             <span className="wide-only">Star</span>
             {stars !== null && (
-              <span className="count" aria-label={`${stars} stars`}>
+              <span className="count">
                 <StarMark />
                 {stars.toLocaleString("en-US")}
               </span>

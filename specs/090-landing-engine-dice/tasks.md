@@ -28,18 +28,18 @@ gate.
 
 ## Phase 1: The floor (US1)
 
-- [ ] T001 [US1] Add `@axe-core/playwright` 4.13.0 to `apps/landing`
+- [x] T001 [US1] Add `@axe-core/playwright` 4.13.0 to `apps/landing`
   devDependencies.
-- [ ] T002 [US1] `playwright.config.ts`: the `phone` (390×844, touch),
+- [x] T002 [US1] `playwright.config.ts`: the `phone` (390×844, touch),
   `tablet` (768×1024) and `desktop` (1440×900) projects.
   `telemetry.spec.ts` stays on `desktop` only.
-- [ ] T003 [US1] `e2e/support/page.ts`:
+- [x] T003 [US1] `e2e/support/page.ts`:
   - `openLanding(page, { scheme })`, with reduced motion;
   - wait for `document.fonts.ready`;
   - scroll through so every lazy section renders;
   - wait for the map image's `decode()`;
   - a console and failed-request guard that fails the test (FR-007).
-- [ ] T004 [US1] `e2e/a11y.spec.ts`. In each scheme:
+- [x] T004 [US1] `e2e/a11y.spec.ts`. In each scheme:
   - axe (wcag2a, wcag2aa, wcag21a, wcag21aa, wcag22aa, best-practice) on
     the whole page;
   - a focus walk: the first stop is the skip link, every stop shows a
@@ -49,10 +49,35 @@ gate.
   - no text box clips its text.
 
   Run it and record what it finds in this ledger.
-- [ ] T005 [US1] Fix every T004 finding in the page. Each finding is
+
+  First run (2026-10-13): 2 of 18 passed. It found:
+  - axe `listitem` (serious), every width: `ul.atlas-list` carried
+    `role="group"`, so its `li`s were outside a list;
+  - axe `scrollable-region-focusable` (serious), phone and tablet: the
+    self-host terminal's `pre` scrolls sideways with no keyboard access;
+  - no skip link: the first Tab landed on the brand;
+  - the nav GitHub link had no name on a phone when the star count
+    failed: its only text is "Star", which a phone hides;
+  - tablet: a legend toggle focused by Tab scrolled in flush with the
+    bottom edge, its focus ring below the fold;
+  - the overflow check flagged the atlas strip's tiles and the terminal's
+    code past 390px and 768px. Both live in deliberate sideways scrollers,
+    so the check now skips what is inside an `overflow-x: auto|scroll`
+    box. The scroller itself must still fit.
+- [x] T005 [US1] Fix every T004 finding in the page. Each finding is
   listed here, with its fix. Known in advance:
-  - the skip link (FR-001);
-  - the nav GitHub link name (FR-002).
+  - the skip link (FR-001): "Skip to content", first in the page,
+    shown on focus, to `<main id="content" tabindex="-1">`;
+  - the nav GitHub link name (FR-002): "Star ThunderForge on GitHub",
+    with ", N stars" when the count is known;
+  - `atlas-list`: `role="group"` dropped; the list keeps its
+    `aria-labelledby`;
+  - the terminal `pre`: `tabindex="0"`, named "The commands", with an
+    inset focus ring (the terminal clips overflow);
+  - `html { scroll-padding-block: 3rem }`, so a focused control scrolls in
+    with its ring.
+
+  After: `a11y.spec.ts` 18 of 18; the whole landing suite 24 of 24.
 - [ ] T006 [P] [US1] `e2e/hero.spec.ts`:
   - a focused party token moves one square on an arrow key, and the live
     note says where;

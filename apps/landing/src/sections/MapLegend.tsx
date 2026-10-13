@@ -238,7 +238,7 @@ export default function MapLegend() {
           <h3 id="atlas-title" className="atlas-title">
             {atlas.length} maps in the demo, all of them free to play.
           </h3>
-          <ul className="atlas-list" role="group" aria-labelledby="atlas-title">
+          <ul className="atlas-list" aria-labelledby="atlas-title">
             {atlas.map((e, i) => (
               <li key={e.name}>
                 <button

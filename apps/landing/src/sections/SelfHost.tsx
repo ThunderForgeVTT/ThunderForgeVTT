@@ -46,7 +46,8 @@ export function SelfHost() {
             {copied ? "Copied" : "Copy"}
           </button>
         </div>
-        <pre>
+        {/* Focusable so a keyboard can scroll it sideways on a phone. */}
+        <pre tabIndex={0} aria-label="The commands">
           <code>{COMMANDS}</code>
         </pre>
       </figure>

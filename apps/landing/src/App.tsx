@@ -18,8 +18,11 @@ const StarChart = lazy(() => import("./sections/StarChart.tsx"));
 export function App() {
   return (
     <>
+      <a className="skip-link" href="#content">
+        Skip to content
+      </a>
       <Hero />
-      <main>
+      <main id="content" tabIndex={-1}>
         <Dream />
         <section id="dice" data-section="dice" className="section dice-section" aria-labelledby="dice-title">
           <div className="dice-copy">

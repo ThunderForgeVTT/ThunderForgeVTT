@@ -26,9 +26,28 @@ export default defineConfig({
       },
     },
   },
+  // Spec 090: the page is proved at a phone, a tablet and a desktop width.
+  // Telemetry is about events, not layout, so it runs at one of them.
   projects: [
     {
-      name: "built",
+      name: "phone",
+      testIgnore: /telemetry\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 390, height: 844 },
+        hasTouch: true,
+      },
+    },
+    {
+      name: "tablet",
+      testIgnore: /telemetry\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 768, height: 1024 },
+      },
+    },
+    {
+      name: "desktop",
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1440, height: 900 },
