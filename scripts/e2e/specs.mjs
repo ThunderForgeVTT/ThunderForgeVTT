@@ -26,8 +26,9 @@ import { ROOT_DIR } from "../shared.mjs";
  *
  * Everything else runs sharded, including the `world-cache` family — its
  * assertions are on item and byte counts (`cacheItems`, `networkItems`), which
- * contention cannot move. That matters: `world-cache-isolated` alone is 6.4
- * minutes of the sweep, and keeping it in the parallel lane is most of the win.
+ * contention cannot move. That matters: the `world-cache-isolated-*` specs
+ * alone are 6.4 minutes of the sweep, and keeping them in the parallel lane is
+ * most of the win.
  */
 export const PERF_LANE_SPECS = [
   "engine-limits",

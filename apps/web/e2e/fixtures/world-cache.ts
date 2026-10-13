@@ -953,7 +953,7 @@ export async function sessionKeyState(page: Page): Promise<string> {
 /**
  * The peer module's own counters, as the app reports them.
  *
- * Shared by `world-cache-peer.spec.ts` and `world-cache-isolated.spec.ts`:
+ * Shared by `world-cache-peer.spec.ts` and `fixtures/world-cache-adjudication.ts`:
  * the distribution suite uses it to see bytes move, and the adjudication
  * suite uses it to know a channel is genuinely open *before* the server is
  * taken away — which is the one ordering that produces the server-isolated

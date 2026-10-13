@@ -215,7 +215,7 @@ apps/web/e2e/
 ├── book-import-commit.spec.ts       # ph6: all-or-nothing
 ├── content-origin.spec.ts           # ph8: no route out for uploaded content
 ├── library-book-list.spec.ts        # ph9: stored once; switching off leaves nothing
-└── library-deltas.spec.ts           # ph11: isolation · ph15: sync-back's asymmetry
+└── library-deltas-*.spec.ts         # ph11: isolation, roles, book lifecycle · ph15: sync-back's asymmetry
 docs/adrs/
 ├── …-096-content_patterns_as_a_manifest_extension_point.md   # ph2
 ├── …-097-origin_as_a_non_editable_invariant.md               # ph8, owner-signed

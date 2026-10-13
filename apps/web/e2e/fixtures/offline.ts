@@ -12,7 +12,7 @@ declare global {
  * The machinery for testing a client that has lost the server (spec 028 US7).
  *
  * Extracted from `world-cache-offline.spec.ts` when the peer-adjudication
- * suite (`world-cache-isolated.spec.ts`) needed the same severing and the
+ * suite (`world-cache-isolated-*.spec.ts`) needed the same severing and the
  * same drag. Two copies of `dragToken` would have been two sets of aim
  * offsets drifting apart, and the drag is the single piece of this suite that
  * has already been got wrong twice.

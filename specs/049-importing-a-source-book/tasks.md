@@ -239,7 +239,7 @@ other world.
 - [X] T074 [P] [050-US2] Restore: a Game Master can see what an entry was before their world changed it, and put it back (050 FR-024)
 - [X] T075 [P] [050-US2] Removing a world removes its deltas and touches no base and no other world (050 FR-028)
 - [X] T076 [050-US2] Measure resolution cost and **fix 050 SC-004 / FR-072's margin from the measurement**, which the spec deliberately left as a number to be measured rather than guessed
-- [X] T077 [050-US2] `apps/web/e2e/library-deltas.spec.ts` — edit in one world, other world unchanged, **base byte-identical to what the import produced**; addition absent elsewhere; hidden entry present elsewhere; and the origin split provable on the changed-versus-added pair
+- [X] T077 [050-US2] `apps/web/e2e/library-deltas-isolation.spec.ts` and `library-deltas-roles.spec.ts` — edit in one world, other world unchanged, **base byte-identical to what the import produced**; addition absent elsewhere; hidden entry present elsewhere; and the origin split provable on the changed-versus-added pair
 - [X] T078 [050-US2] Proved: that e2e green, the latency margin recorded in `measurements.md`, `cargo test` and `tsc --noEmit` green
 
 > **Phase 11 notes (verified 2026-09-13, commit `dd0e81b`).** Deltas are one table keyed by kind and name with a per-entry origin. Changed deltas store only what differs; the "before" view is the base itself, with no copy kept. FR-025a ambiguity is refused at write time, and a delta that becomes ambiguous after a re-read is kept and reported as unattached, not dropped. Read-cost margins are measured and recorded (FR-072: at most 1.5× the plain fetch up to 10% changed, 2.5× all changed).
@@ -265,7 +265,7 @@ re-attach are reported by name.
 > **Phase 12 notes (verified 2026-09-16).** Most of the phase was already true by construction: a re-import replaced the entries whole in one transaction, and deltas attach by kind and name, so they survived it and the world's read already reported what did not attach. What was missing, and is now built:
 > - **A version to name.** `compendiums.base_version` starts at 1 and each re-import moves it on, inside the same transaction, so a failed re-read never claims a version. This answers Phase 9's "FR-015's base version in force has no version to name".
 > - **Telling the person who re-read the book.** `compendiumUnattachedDeltas` lists, per world, every change the reading in force no longer takes, with why. The library asks it after a replace and names the stranded changes there, so nobody has to find them table by table.
-> - **Proved:** `reimport_tests.rs` covers two worlds surviving a re-read with a corrected field and a new entry; a rename, a new twin and a shadowed addition each named and still stored; and a re-read failing in its second batch of rows, which leaves the base byte for byte, the version, the counts and every delta. `library-deltas.spec.ts` re-reads the book through the page with the goblin unticked: version 2, every delta row identical, the other table's hide still applying, and the stranded goblin change named on the library and at its table. 10/10 across `library-deltas`, `book-import-commit` and `account-library`.
+> - **Proved:** `reimport_tests.rs` covers two worlds surviving a re-read with a corrected field and a new entry; a rename, a new twin and a shadowed addition each named and still stored; and a re-read failing in its second batch of rows, which leaves the base byte for byte, the version, the counts and every delta. `library-deltas-book-lifecycle.spec.ts` re-reads the book through the page with the goblin unticked: version 2, every delta row identical, the other table's hide still applying, and the stranded goblin change named on the library and at its table. 10/10 across `library-deltas`, `book-import-commit` and `account-library`.
 
 ---
 
@@ -331,7 +331,7 @@ verified by inspection rather than by assertion.
 - [X] T097 [050-US6] **No route at all** from a world to an imported compendium's base, at any volume of change (050 FR-101), and the reason stated where the absence would be noticed (050 FR-102)
 - [X] T098 [P] [050-US6] Syncing back shows what will change on the shelf and requires explicit confirmation (050 FR-103) — it writes to something every other world is reading
 - [X] T099 [050-US6] A world that has synced no longer holds the change as a delta (050 FR-105); other worlds' deltas behave exactly as after a re-import
-- [X] T100 [050-US6] Extend `apps/web/e2e/library-deltas.spec.ts` — a synced change reaches a world started afterwards; the syncing world no longer holds it; and **no route exists** from a world to an imported base, attempted through every surface that offers the sync for collections (050 FR-089, FR-089a)
+- [X] T100 [050-US6] Extend `apps/web/e2e/library-deltas-sync-back.spec.ts` — a synced change reaches a world started afterwards; the syncing world no longer holds it; and **no route exists** from a world to an imported base, attempted through every surface that offers the sync for collections (050 FR-089, FR-089a)
 - [X] T101 [050-US6] Proved: that e2e green; ADR-098 ACCEPTED and owner-signed; `pnpm verify` green
 
 > **Phase 15 notes (verified 2026-09-16).** Sync-back is for collections on the owner's shelf, and a book read in has no route to its base at all.

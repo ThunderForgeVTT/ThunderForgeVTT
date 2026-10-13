@@ -1074,9 +1074,11 @@
     },
     {
       "name": "world-cache-core",
-      "summary": "The world cache's isolation, offline, peer and multitab behaviour, split from world-cache because world-cache-isolated alone is about six minutes (specs/028-client-world-cache)",
+      "summary": "The world cache's isolation, offline, peer and multitab behaviour, split from world-cache because the world-cache-isolated specs alone are about six minutes (specs/028-client-world-cache)",
       "own": [
-        "world-cache-isolated.spec.ts",
+        "world-cache-isolated-adjudication.spec.ts",
+        "world-cache-isolated-discrepancy.spec.ts",
+        "world-cache-isolated-trust.spec.ts",
         "world-cache-offline.spec.ts",
         "world-cache-peer.spec.ts",
         "world-cache-multitab.spec.ts"

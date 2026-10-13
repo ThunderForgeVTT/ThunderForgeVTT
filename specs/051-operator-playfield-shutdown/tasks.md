@@ -220,7 +220,7 @@ Commit.
 - [x] T038 [P] [US2] Handle `PlayPaused` in `apps/web/src/engine/world/sync/offlineQueue.ts` `reconcileWorld`. Revert the rejected changes through the existing `revert` path, keep the count, and hand it to the notice (for example via navigation state) so `PlayPausedPage.tsx` shows "{n} change(s) you made while offline weren't kept". Add a vitest case.
 - [x] T039 [US2] Make sure the page refuses at entry: opening `/world/:id/play` on a paused world surfaces the `WORLD_PLAY_PAUSED` from `worldSyncPlan` as the notice, not a generic load error, in `apps/web/src/pages/world/WorldPage.tsx`.
 - [x] T040 [US2] Run `play-pause-holds.spec.ts` and `play-pause.spec.ts` until both pass. Run `cargo test -q --lib` (surface test included) and `tsc --noEmit`. Re-run the existing e2e that touch the changed paths:
-  - `live-sync.spec.ts`, `world-event-catchup.spec.ts`, `world-cache-offline.spec.ts`, `world-cache-isolated.spec.ts`, `companion-offline.spec.ts`;
+  - `live-sync.spec.ts`, `world-event-catchup.spec.ts`, `world-cache-offline.spec.ts`, `world-cache-isolated-*.spec.ts`, `companion-offline.spec.ts`;
   - the interactives and library e2e.
 
 - [x] T074 [US2] Close the gap T036 found: system packs merge their own root fields only in the app crate (`src/app/src/schema_roots.rs`), so the lib surface test cannot see them. The Genie pack's 13 session mutations (`packs/systems/genie/server/src/session/`) are ungated.

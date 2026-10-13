@@ -29,7 +29,7 @@ import {
  * they put it once the connection comes back.
  *
  * The severing, the drag and the registration flow live in
- * `fixtures/offline.ts`, shared with `world-cache-isolated.spec.ts`; the
+ * `fixtures/offline.ts`, shared with the `world-cache-isolated-*` specs; the
  * reasoning behind each is documented there.
  */
 
