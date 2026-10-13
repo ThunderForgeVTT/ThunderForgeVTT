@@ -499,8 +499,24 @@ function isDevModuleRequest(request: Outbound): boolean {
   );
 }
 
+/**
+ * The page asking the operator whether telemetry is on (spec 086).
+ *
+ * `GET /telemetry.json` has "telemetry" in its path, so the name scan caught
+ * it, and again correctly by its rules and wrongly in substance: it is a read
+ * of the operator's setting, with no body and no query, and it carries
+ * nothing of the client's. Only that exact read is skipped. Whatever the
+ * telemetry then *sends* is a POST, and is read in full like everything else.
+ */
+function isTelemetrySettingRead(request: Outbound): boolean {
+  if (request.method !== "GET" || request.body) return false;
+  const url = new URL(request.url, "http://localhost:5173");
+  return url.pathname === "/telemetry.json" && url.search === "";
+}
+
 function carriesStatistics(request: Outbound, values: number[]): string | null {
   if (isDevModuleRequest(request)) return null;
+  if (isTelemetrySettingRead(request)) return null;
   const haystack = `${request.url}\n${request.body ?? ""}`;
   const lowered = haystack.toLowerCase();
   for (const key of STATISTIC_KEYS) {
