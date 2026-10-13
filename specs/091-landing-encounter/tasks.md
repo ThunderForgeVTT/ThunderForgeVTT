@@ -315,13 +315,19 @@ the demo's build changes. The full suite is never used as a gate.
   - The referee judges the roll, and `diceCommand` throws it when the room
     holds the table.
   - The DOM prints the total no later than the throw lands.
-- [ ] T037 [US1] The door. The icon press goes through `doorPressed`; the
+- [x] T037 [US1] The door. The icon press goes through `doorPressed`; the
   DOM button names the door in reach, or is disabled with the reason. At
   390, 768 and 1440 px, check that:
   - a click on the icon's place opens the door through the CSS `scale`;
   - the wheel over the room scrolls the page.
 
   Fix the pointer mapping in the frame if it is off. Record here.
+  Done, no fix needed: `e2e/room-door.spec.ts` clicks the icon's place,
+  worked out from `door_icons()` and `camera_state()` and the stage's
+  on-screen box, at 1440, 768 and 390 px; the door opens each time, said
+  once, and the hall comes into sight. The wheel over the table scrolls
+  the page and leaves the camera's zoom alone. The engine draws only while
+  its frame is on screen, so sight is read after scrolling to it.
 - [x] T038 [US1] The ending (FR-016), with the demo link and the credit
   again, and "Start over" (FR-017).
 - [x] T039 [P] [US1] `scripts/make-room-poster.mjs`, and the committed
