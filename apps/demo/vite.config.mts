@@ -4,6 +4,7 @@ import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { servedTelemetry } from "@thunderforge/telemetry/vite";
+import { engineManifestPlugin } from "./src/build/engineManifest.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const web = path.resolve(__dirname, "../web");
@@ -84,6 +85,8 @@ export default defineConfig({
     tailwindcss(),
     react(),
     sealedPage(),
+    // Spec 090: `engine.json`, so the landing can load this engine.
+    engineManifestPlugin(),
     // Spec 086 R14: `telemetry.json` and its `connect-src` in dev and preview,
     // off unless THUNDERFORGE_PREVIEW_TELEMETRY holds a config.
     servedTelemetry({ paths: ["/telemetry.json", "/demo/telemetry.json"] }),
