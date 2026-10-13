@@ -1,90 +1,92 @@
-import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+import { axeReport, focusStop, overflowReport, stopProblems } from "./support/a11y.ts";
+import { BOOT_TIMEOUT, BUILT } from "./support/engine.ts";
 import { expectClean, openLanding, SCHEMES } from "./support/page.ts";
+import { bootRoom, FIXED_SEEDS, playThrough, room, roomFrame } from "./support/room.ts";
 
 /**
  * Spec 090 US1 (FR-003, FR-004): the whole front page, at this project's
- * width, in both colour schemes.
- *
- * Axe runs the WCAG 2.2 A/AA rules and the best-practice set (landmarks,
- * one h1, region, skip link), which the web app's fixture leaves out. No
- * rule is exempted.
+ * width, in both colour schemes. Spec 091 SC-005 adds the room's states:
+ * at rest (the page as it loads), completed in words, and with the engine
+ * running in the room's frame.
  */
 
-const TAGS = [
-  "wcag2a",
-  "wcag2aa",
-  "wcag21a",
-  "wcag21aa",
-  "wcag22aa",
-  "best-practice",
-];
+async function expectAccessible(page: Page, what: string) {
+  const axe = await axeReport(page);
+  expect(axe, `${what}: axe\n${axe.join("\n")}`).toEqual([]);
+  const overflow = await overflowReport(page);
+  expect(overflow, `${what}: overflow\n${overflow.join("\n")}`).toEqual([]);
+}
 
 for (const scheme of SCHEMES) {
   test.describe(`${scheme} scheme`, () => {
     test("axe finds nothing on the whole page", async ({ page }) => {
       const opened = await openLanding(page, { scheme });
-      const { violations } = await new AxeBuilder({ page }).withTags(TAGS).analyze();
-      const report = violations.map(
-        (v) =>
-          `${v.id} (${v.impact}): ${v.help}\n${v.nodes
-            .slice(0, 5)
-            .map((n) => `    ${n.target.join(" ")}`)
-            .join("\n")}`,
-      );
+      const report = await axeReport(page);
       expect(report, report.join("\n")).toEqual([]);
       expectClean(opened);
     });
 
     test("nothing runs past the right edge, and no text is clipped", async ({ page }) => {
       const opened = await openLanding(page, { scheme });
-      const found = await page.evaluate(() => {
-        const width = document.documentElement.clientWidth;
-        const out: string[] = [];
-        const name = (el: Element) =>
-          `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ""}${
-            el.classList.length ? `.${[...el.classList].join(".")}` : ""
-          }`;
-        if (document.documentElement.scrollWidth > width) {
-          out.push(`page scrolls sideways: ${document.documentElement.scrollWidth} > ${width}`);
-        }
-        for (const el of document.querySelectorAll("body *")) {
-          const style = getComputedStyle(el);
-          if (style.display === "none" || style.visibility === "hidden") continue;
-          if (el.closest("[aria-hidden='true'], .sr-only, svg")) continue;
-          const box = el.getBoundingClientRect();
-          if (box.width === 0 || box.height === 0) continue;
-          // Inside a sideways scroller (the atlas strip, the terminal) running
-          // past the edge is the design; the scroller itself must still fit.
-          const scroller = (start: Element | null) => {
-            for (let p = start; p; p = p.parentElement) {
-              if (["auto", "scroll"].includes(getComputedStyle(p).overflowX)) return true;
-            }
-            return false;
-          };
-          if (style.position !== "fixed" && box.right > width + 1 && !scroller(el.parentElement)) {
-            out.push(`${name(el)} ends at ${Math.round(box.right)} > ${width}`);
-          }
-          const clips = ["hidden", "clip"].includes(style.overflowX) ||
-            ["hidden", "clip"].includes(style.overflowY);
-          const hasText = [...el.childNodes].some(
-            (n) => n.nodeType === Node.TEXT_NODE && n.textContent!.trim() !== "",
-          );
-          if (
-            clips &&
-            hasText &&
-            (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1)
-          ) {
-            out.push(`${name(el)} clips its text`);
-          }
-        }
-        return out;
-      });
+      const found = await overflowReport(page);
       expect(found, found.join("\n")).toEqual([]);
+      expectClean(opened);
+    });
+
+    test("with the room completed in words, axe and the edges still find nothing", async ({ page }) => {
+      await page.addInitScript(FIXED_SEEDS);
+      const opened = await openLanding(page, { scheme });
+      await playThrough(page);
+      await expectAccessible(page, `completed, ${scheme}`);
       expectClean(opened);
     });
   });
 }
+
+test.describe("with the engine running in the room", () => {
+  test.skip(!BUILT, "no demo build: run pnpm -F @thunderforge/demo run build");
+  test.beforeEach(({}, info) => {
+    test.skip(info.project.name !== "desktop", "the engine boots at the desktop width only");
+    test.setTimeout(BOOT_TIMEOUT + 300_000);
+  });
+
+  // One boot, then each width and scheme: the frame follows both live.
+  test("axe, the edges and the room's focus stops, at three widths and two schemes (US2 scenarios 4 and 5)", async ({
+    page,
+  }) => {
+    const opened = await openLanding(page);
+    await bootRoom(page);
+    const canvas = roomFrame(page).locator("canvas");
+    await expect(canvas).toHaveAttribute("aria-hidden", "true");
+    await expect(canvas).toHaveAttribute("tabindex", "-1");
+
+    for (const width of [1440, 768, 390]) {
+      for (const scheme of SCHEMES) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.emulateMedia({ colorScheme: scheme });
+        await expectAccessible(page, `booted, ${width}px, ${scheme}`);
+      }
+
+      // The room's stops, from the hero picker to Start over, over the
+      // running frame: each one shown, on screen and uncovered.
+      // Arrive by keyboard, as a visitor would: a focus from script after
+      // the click on "Play the room" is not :focus-visible.
+      await room(page).getByRole("radio").first().focus();
+      await page.keyboard.press("Shift+Tab");
+      await page.keyboard.press("Tab");
+      const problems: string[] = [];
+      for (let i = 0; i < 30; i += 1) {
+        const stop = await focusStop(page);
+        if (!stop || !(await page.evaluate(() => !!document.activeElement?.closest("#room")))) break;
+        problems.push(...stopProblems(stop).map((p) => `${width}px ${p}`));
+        await page.keyboard.press("Tab");
+      }
+      expect(problems, problems.join("\n")).toEqual([]);
+    }
+    expectClean(opened);
+  });
+});
 
 test("the keyboard walk starts with a skip link, and every stop is shown and on screen", async ({
   page,
@@ -106,39 +108,10 @@ test("the keyboard walk starts with a skip link, and every stop is shown and on 
   const seen = new Set<string>();
   for (let i = 0; i < 200; i++) {
     await page.keyboard.press("Tab");
-    const stop = await page.evaluate(() => {
-      const el = document.activeElement as HTMLElement | null;
-      if (!el || el === document.body) return null;
-      const box = el.getBoundingClientRect();
-      const style = getComputedStyle(el);
-      const ring =
-        (style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0) ||
-        style.boxShadow !== "none";
-      // What is drawn at the centre of the stop: the stop itself, something
-      // inside it, or something on top of it.
-      const cx = Math.min(Math.max(box.left + box.width / 2, 0), window.innerWidth - 1);
-      const cy = Math.min(Math.max(box.top + box.height / 2, 0), window.innerHeight - 1);
-      const top = document.elementFromPoint(cx, cy);
-      const covered = !!top && top !== el && !el.contains(top) && !top.contains(el);
-      const path = el.outerHTML.slice(0, 90);
-      return {
-        key: path + Math.round(box.top + window.scrollY),
-        path,
-        where: `${Math.round(box.left)},${Math.round(box.top)} to ${Math.round(box.right)},${Math.round(box.bottom)} in ${window.innerWidth}x${window.innerHeight}`,
-        ring,
-        covered,
-        inView:
-          box.top >= -1 &&
-          box.left >= -1 &&
-          box.bottom <= window.innerHeight + 1 &&
-          box.right <= window.innerWidth + 1,
-      };
-    });
+    const stop = await focusStop(page);
     if (!stop || seen.has(stop.key)) break;
     seen.add(stop.key);
-    if (!stop.ring) problems.push(`no visible focus: ${stop.path}`);
-    if (!stop.inView) problems.push(`not fully on screen (${stop.where}): ${stop.path}`);
-    if (stop.covered) problems.push(`covered by something else: ${stop.path}`);
+    problems.push(...stopProblems(stop));
   }
   expect(seen.size).toBeGreaterThan(10);
   expect(problems, problems.join("\n")).toEqual([]);

@@ -402,10 +402,21 @@ the demo's build changes. The full suite is never used as a gate.
     `getParameter`), leaves a working DOM room;
   - scenario 3: keys inside the room move the hero, while keys on the
     hero mat or in the dice formula do not, and the page does not scroll.
-- [ ] T052 [US2] `a11y.spec.ts`: axe, the focus walk, overflow and
+- [x] T052 [US2] `a11y.spec.ts`: axe, the focus walk, overflow and
   clipping with the room at rest, booted and completed, at three widths
   and two schemes (SC-005, US2 scenarios 4 and 5). Fix what it finds and
   list each finding and fix here.
+  Done; it found nothing to fix.
+  - At rest: the existing whole-page tests (3 widths × 2 schemes).
+  - Completed in words: a new test per scheme at each project width.
+  - Booted: one boot on desktop, then 1440, 768 and 390 px × light and
+    dark. The canvas is `aria-hidden` with tabindex -1, and the room's
+    focus stops from the picker to Start over are shown, on screen and
+    uncovered at each width.
+  - The checks moved into `e2e/support/a11y.ts`, and `playThrough` into
+    `e2e/support/room.ts`, so each state runs the same ones.
+  - One test-only catch: a radio focused from script after a click is not
+    `:focus-visible`, so the walk reaches it by keyboard.
 - [ ] T053 [US2] Reduced motion (US2 scenario 6):
   - `set_reduced_motion` is the first command;
   - `fit_camera_to` is sent with `immediate`;

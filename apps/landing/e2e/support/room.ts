@@ -92,3 +92,45 @@ export async function seen(page: Page, at: Point) {
     [w.x, w.y] as const,
   );
 }
+
+/** Plays all four goals with the page's controls alone. */
+export async function playThrough(page: Page) {
+  await room(page).scrollIntoViewIfNeeded();
+  await recordSaid(page);
+  expect(await square(page)).toBe("-3,1.5");
+
+  for (const y of ["0.5", "-0.5", "-1.5"]) {
+    await stepAndHear(page, "South", /door to the hall/);
+    expect(await square(page)).toBe(`-3,${y}`);
+  }
+  await expect(goal(page, "door-reached")).toContainText("(not yet)");
+  await stepAndHear(page, "South", /^The door is shut\. Walls and closed doors refuse a move/);
+  expect(await square(page)).toBe("-3,-1.5");
+  await expect(goal(page, "door-reached")).toContainText("(done)");
+
+  const door = room(page).getByRole("button", { name: "Open the door to the hall" });
+  await expect(door).toBeEnabled();
+  const before = (await saidLog(page)).length;
+  await door.click();
+  await expect.poll(async () => (await saidLog(page)).slice(before)).toHaveLength(1);
+  expect((await saidLog(page)).at(-1)).toMatch(/^You open the door to the hall\./);
+  await expect(goal(page, "door-opened")).toContainText("(done)");
+
+  await stepAndHear(page, "South", /hall/);
+  await stepAndHear(page, "South", /hall/);
+  await stepAndHear(page, "East", /^You find the chest\. It is locked: roll 1d20\+2 and meet 12/);
+  await expect(goal(page, "chest-found")).toContainText("(done)");
+
+  const roll = room(page).getByRole("button", { name: "Roll 1d20+2" });
+  for (let i = 0; i < 30; i += 1) {
+    const n = (await saidLog(page)).length;
+    await roll.click();
+    await expect.poll(async () => (await saidLog(page)).length).toBe(n + 1);
+    const line = (await saidLog(page)).at(-1)!;
+    if (/The chest opens\.$/.test(line)) break;
+    expect(line).toMatch(/^You rolled \d+\. Not enough: you need 12\. Roll again\.$/);
+  }
+  await expect(goal(page, "chest-opened")).toContainText("(done)");
+  await expect(roll).toBeDisabled();
+  await expect(room(page).getByRole("link", { name: "Open the demo" })).toBeVisible();
+}
