@@ -25,8 +25,6 @@ PENDING=(
   "apps/web/src/pages/world/WorldPage.tsx"
   "apps/web/e2e/token-authoring.spec.ts"
   "apps/web/e2e/canvas-authoring.spec.ts"
-  "apps/web/e2e/world-cache-isolated.spec.ts"
-  "apps/web/e2e/library-deltas.spec.ts"
   "apps/web/src/pages/admin/PlayPausesPage.tsx"
   "packs/systems/roll_for_shoes/web/src/game.test.ts"
   "apps/web/playtest/combat.ts"
