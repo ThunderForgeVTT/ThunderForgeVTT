@@ -351,13 +351,18 @@ the demo's build changes. The full suite is never used as a gate.
     stable frames (about 3 s each), so most of that is the harness.
   - The engine answered every forwarded step before the 1000 ms
     fallback; instrumented once, the fallback fired zero times in four steps.
-- [ ] T041 [US1] `e2e/room-parity.spec.ts` (plan Decisions):
+- [x] T041 [US1] `e2e/room-parity.spec.ts` (plan Decisions):
   - the fixed walk;
   - the Node-side verdict from `@thunderforge/encounter`;
   - zero disagreements (SC-004).
 
   The page's own `console.error` check catches the rest. Record the step
   count here.
+  Done: 67 steps, 8 refused (the shut door, both jambs, all four walls,
+  and the jamb again from the hall), 0 disagreements; 2.2 min on desktop.
+  The pad takes only four ways, so the corner is met as a jamb from each
+  side rather than diagonally. Each step is checked three ways: Node's
+  referee, the page's `data-square`, and the engine's token.
 
 ## Phase 5: Without the canvas (US2)
 
