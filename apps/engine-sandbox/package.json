@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@thunderforge/dice": "workspace:^",
+    "@thunderforge/dice-throw": "workspace:^",
     "@thunderforge/engine": "workspace:^"
   },
   "devDependencies": {

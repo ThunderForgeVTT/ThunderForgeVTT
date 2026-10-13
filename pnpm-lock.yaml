@@ -81,6 +81,9 @@ importers:
       '@thunderforge/dice':
         specifier: workspace:^
         version: link:../../dist/dice
+      '@thunderforge/dice-throw':
+        specifier: workspace:^
+        version: link:../../packages/dice-throw
       '@thunderforge/engine':
         specifier: workspace:^
         version: link:../../dist/engine
@@ -398,6 +401,18 @@ importers:
   dist/sheet-dnd5e: {}
 
   dist/sheet-roll_for_shoes: {}
+
+  packages/dice-throw:
+    devDependencies:
+      '@thunderforge/dice':
+        specifier: workspace:^
+        version: link:../../dist/dice
+      '@types/node':
+        specifier: ^26.2.0
+        version: 26.2.0
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
 
   packages/downloads:
     devDependencies:

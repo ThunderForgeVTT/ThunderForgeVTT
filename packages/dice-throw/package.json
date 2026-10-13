@@ -1,0 +1,21 @@
+{
+  "name": "@thunderforge/dice-throw",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "description": "A dice roll, as the engine's trigger_dice_roll command",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --test src/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "check": "tsc --noEmit && node --test src/*.test.ts"
+  },
+  "devDependencies": {
+    "@thunderforge/dice": "workspace:^",
+    "@types/node": "^26.2.0",
+    "typescript": "6.0.3"
+  }
+}

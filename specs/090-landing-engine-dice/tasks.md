@@ -142,13 +142,19 @@ gate.
 
 ## Phase 3: The frame (US2, US3)
 
-- [ ] T030 [US2] `packages/dice-throw`: `diceCommand()` moved from the
+- [x] T030 [US2] `packages/dice-throw`: `diceCommand()` moved from the
   sandbox, with unit tests covering:
   - numeric, Fate and d100 dice;
   - kept and dropped dice;
   - success-count rolls.
 
   The sandbox imports it.
+
+  Done: it takes the resolution, not a formula, so the throw shows the
+  very roll the page printed. The tests roll with the real crate. A seed
+  of small words lands every die on the same face (xoshiro's first draw
+  barely moves), so the explode test spreads its seed words; seeds from
+  `crypto` are unaffected.
 - [ ] T031 [US2] Engine: the `set_rendering` command (`payloads.rs`,
   `sdk.rs`, `app.rs`) and a unit test of the parse. Then build the dev
   engine, and check that the frame count stops (in the sandbox, by hand,
