@@ -1,4 +1,8 @@
 import type { PanelPosition } from "@/components/StatusPanel/StatusPanel";
+import type {
+  ReconcileOutcome,
+  SubmittedChange,
+} from "@/engine/world/sync/reconcile";
 
 /**
  * Where the viewer last left a pinned status panel (spec 029 FR-011a). Per
@@ -57,4 +61,23 @@ export function describeSceneLoad(pending: readonly string[]): string {
     return "Putting the last of it on the board.";
   }
   return `Loading the scene's ${rest.join(", ")}.`;
+}
+
+/**
+ * What the reconcile panel is currently showing.
+ *
+ * `superseded` is not part of a reconcile *response* — it accumulates
+ * afterwards, from world events, as other clients reconnect and override what
+ * this one already applied. Keeping it in the same value is what lets one
+ * panel tell the whole story of an offline session rather than two competing
+ * notices appearing minutes apart.
+ */
+export interface ReconcileReportState {
+  applied: SubmittedChange[];
+  rejected: { change: SubmittedChange; outcome: ReconcileOutcome }[];
+  unanswered: SubmittedChange[];
+  stillQueued: SubmittedChange[];
+  superseded: { change: SubmittedChange; byRole: string }[];
+  /** Peer-adjudicated refusals submitted for another player (spec 028 T103). */
+  onBehalf?: { change: SubmittedChange; outcome: ReconcileOutcome }[];
 }
