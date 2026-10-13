@@ -10,12 +10,26 @@
   border: var(--marker-w) solid var(--ink-black);
   border-radius: 10px 14px 8px 12px / 12px 8px 14px 10px;
 }
-.engine-poster,
-.engine-stage {
+.engine-poster {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+}
+/* The engine draws a board-sized table, 960x540, scaled to the frame: its
+   dice keep one size in screen pixels, so a frame-sized canvas would cut a
+   Fireball's row off. The engine measures the box, which the transform
+   leaves alone. Nothing in it is for the pointer: the page keeps the wheel
+   and the drag. */
+.engine-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 960px;
+  height: 540px;
+  transform-origin: 0 0;
+  scale: var(--engine-scale, 1);
+  pointer-events: none;
 }
 .engine-poster {
   object-fit: cover;
@@ -36,7 +50,8 @@
 }
 .engine-panel {
   position: absolute;
-  inset: auto 0 0;
+  /* At the top: the dice land in the lower third. */
+  inset: 0 0 auto;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -44,7 +59,7 @@
   padding: 0.9rem 1rem;
   color: var(--text);
   background: rgb(from var(--paper) r g b / 0.94);
-  border-top: var(--marker-thin) solid var(--ink-black);
+  border-bottom: var(--marker-thin) solid var(--ink-black);
 }
 .engine-note {
   flex: 1 1 16rem;

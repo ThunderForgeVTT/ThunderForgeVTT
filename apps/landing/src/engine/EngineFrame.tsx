@@ -33,6 +33,8 @@ interface Props {
 
 const STOPPED = "thunderforge:engine-stopped";
 const REDUCE = "(prefers-reduced-motion: reduce)";
+/** The board the engine draws, in CSS pixels; the frame is its 16:9. */
+const STAGE_W = 960;
 
 /** Why this browser should not get the engine, or null when it should. */
 function holdBack(): { reason: HeldBack; words: string } | null {
@@ -171,6 +173,29 @@ export default function EngineFrame({ id, poster, action, setup, onState }: Prop
       document.removeEventListener("visibilitychange", apply);
     };
   }, [live, send, go]);
+
+  // The canvas is a picture of what the tray already says, so it stays out
+  // of the tab order; the engine's window setup puts it in, so put it back.
+  useEffect(() => {
+    const canvas = root.current?.querySelector("canvas");
+    if (!canvas) return;
+    const mo = new MutationObserver(() => {
+      if (canvas.tabIndex !== -1) canvas.tabIndex = -1;
+    });
+    mo.observe(canvas, { attributes: true, attributeFilter: ["tabindex"] });
+    return () => mo.disconnect();
+  }, []);
+
+  // The stage is a 960x540 board, scaled to the frame's width.
+  useEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      el.style.setProperty("--engine-scale", String(el.clientWidth / STAGE_W));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // A trapped engine cannot start twice in one page.
   const canRetry = stage !== null && stage !== "start" && stage !== "init" && stage !== "engine";

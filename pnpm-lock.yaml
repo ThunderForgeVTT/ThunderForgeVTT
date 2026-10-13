@@ -146,6 +146,9 @@ importers:
       '@thunderforge/dice':
         specifier: workspace:^
         version: link:../../dist/dice
+      '@thunderforge/dice-throw':
+        specifier: workspace:^
+        version: link:../../packages/dice-throw
       '@thunderforge/heroes':
         specifier: workspace:^
         version: link:../../packages/heroes

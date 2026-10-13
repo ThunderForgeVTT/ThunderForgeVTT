@@ -1,20 +1,15 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { diceCommand, type Resolution } from "@thunderforge/dice-throw";
+import EngineFrame, { type FrameState, type Send } from "../engine/EngineFrame.tsx";
 
 // The dice crate the server rolls with, compiled to WebAssembly and running
 // right here. Loaded with this section, never with the first viewport.
+//
+// Spec 090: once the visitor asks for the table, every roll printed here is
+// also thrown on it, face for face. The tray never waits for the engine.
 
-type Sides = { Numeric: number } | "Fate" | "Coin";
-interface Die {
-  sides: Sides;
-  rolls: number[];
-  kept: boolean;
-  final_value: number;
-}
-interface Resolution {
-  formula: string;
-  dice: Die[];
-  kind: { Total: number } | { SuccessCount: number };
-}
+type Sides = Resolution["dice"][number]["sides"];
+type Command = ReturnType<typeof diceCommand>;
 
 type DiceModule = typeof import("@thunderforge/dice");
 let loaded: Promise<DiceModule> | null = null;
@@ -73,6 +68,24 @@ export default function DiceTray() {
   const [error, setError] = useState("");
   const [ready, setReady] = useState(false);
   const count = useRef(0);
+  // The engine, while it runs; and the one roll made while it loads.
+  const send = useRef<Send | null>(null);
+  const loading = useRef(false);
+  const pending = useRef<Command | null>(null);
+
+  const onState = useCallback((state: FrameState, live: Send | null) => {
+    send.current = live;
+    loading.current = state === "loading";
+    if (live && pending.current) live(pending.current);
+    if (state !== "loading") pending.current = null;
+  }, []);
+
+  function thrown(r: Resolution) {
+    if (!send.current && !loading.current) return;
+    const command = diceCommand(r, { rollerName: "You" });
+    if (send.current) send.current(command);
+    else pending.current = command;
+  }
 
   useEffect(() => {
     void dice()
@@ -91,6 +104,7 @@ export default function DiceTray() {
       const r = JSON.parse(m.roll(f, "{}", seed())) as Resolution;
       setError("");
       setResult(r);
+      thrown(r);
       count.current += 1;
       const total = "Total" in r.kind ? r.kind.Total : `${r.kind.SuccessCount} successes`;
       setHistory((h) => [`${r.formula} → ${total}`, ...h].slice(0, 4));
@@ -179,6 +193,13 @@ export default function DiceTray() {
           </ol>
         )}
       </div>
+
+      <EngineFrame
+        id="dice-table"
+        poster={{ src: "/dice-table.webp", width: 1200, height: 675 }}
+        action="Throw it on the table"
+        onState={onState}
+      />
     </div>
   );
 }
