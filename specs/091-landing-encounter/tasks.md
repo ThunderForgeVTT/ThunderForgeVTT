@@ -287,7 +287,7 @@ the demo's build changes. The full suite is never used as a gate.
     is now `appType: "mpa"`, as nginx (404 for any other path). The e2e
     guard accepts a 404 on `.meta`, which is the engine's
     `AssetMetaCheck::Always` working, as `assets_serve/canvas.rs` says.
-- [ ] T032 [US1] `src/sections/Room.tsx`, `src/room/room.css` and
+- [x] T032 [US1] `src/sections/Room.tsx`, `src/room/room.css` and
   `App.tsx`. Add a lazy `#room` section after `#map`, with:
   - its heading;
   - the simulation sentence above the frame;
@@ -295,21 +295,21 @@ the demo's build changes. The full suite is never used as a gate.
     frame;
   - the frame, with its poster;
   - the map's weight stated beside the button.
-- [ ] T033 [P] [US1] `src/room/HeroPicker.tsx` (four radios, Sir Pip
+- [x] T033 [P] [US1] `src/room/HeroPicker.tsx` (four radios, Sir Pip
   default; a change starts the room over) and `src/room/GoalList.tsx` (the
   four goals in order, with done or not done in text, not colour alone).
-- [ ] T034 [US1] `src/room/useRoom.ts`. It holds one referee and wires it
+- [x] T034 [US1] `src/room/useRoom.ts`. It holds one referee and wires it
   to the host's events and the DOM:
   - the rollback;
   - the parity comparison, with `console.error` on a disagreement;
   - one announcement per outcome;
   - `GOAL_EVENT` dispatched once per goal;
   - `set_viewer_token` after setup.
-- [ ] T035 [US1] `src/engine/keys.ts`. Forward arrows and WASD from inside
+- [x] T035 [US1] `src/engine/keys.ts`. Forward arrows and WASD from inside
   the room's controls only, as a synthetic keydown/keyup pair on the
   canvas, and suppress scroll for those keys. The pad's buttons forward the
   same way while the engine runs.
-- [ ] T036 [US1] `src/room/roll.ts` and the roll control.
+- [x] T036 [US1] `src/room/roll.ts` and the roll control.
   - The DC and formula are shown before the roll.
   - Roll with the crate and a `crypto` seed.
   - The referee judges the roll, and `diceCommand` throws it when the room
@@ -322,11 +322,16 @@ the demo's build changes. The full suite is never used as a gate.
   - the wheel over the room scrolls the page.
 
   Fix the pointer mapping in the frame if it is off. Record here.
-- [ ] T038 [US1] The ending (FR-016), with the demo link and the credit
+- [x] T038 [US1] The ending (FR-016), with the demo link and the credit
   again, and "Start over" (FR-017).
-- [ ] T039 [P] [US1] `scripts/make-room-poster.mjs`, and the committed
+- [x] T039 [P] [US1] `scripts/make-room-poster.mjs`, and the committed
   `public/room-table.webp`. Rerun it when the engine's look or the room's
   art changes.
+
+  Done: 75,484 bytes. In this poster the map fills only the upper half,
+  because `fit_camera_to` on the 14x14 box shows about 10.5 rows, so the
+  room's frame puts its panel at the bottom. The camera fit is not
+  root-caused.
 - [ ] T040 [US1] `e2e/support/room.ts` and `e2e/room.spec.ts`: US1
   scenarios 1 to 9 through the engine. It reads the engine through
   `movement_state`, `door_icons`, `sight_probe` (with `expect.poll`),
@@ -343,7 +348,7 @@ the demo's build changes. The full suite is never used as a gate.
 
 ## Phase 5: Without the canvas (US2)
 
-- [ ] T050 [US2] `src/room/RoomControls.tsx`. It holds:
+- [x] T050 [US2] `src/room/RoomControls.tsx`. It holds:
   - the pad (four buttons named by direction);
   - the door button;
   - the roll;
@@ -353,6 +358,11 @@ the demo's build changes. The full suite is never used as a gate.
 
   All of it works with no engine and drives the same referee. Split off
   the description into its own component if the file passes 250 lines.
+
+  Done: the description and the live region sit in `Room.tsx` instead,
+  the live region below the controls, so a first announcement moves
+  nothing under the pointer. Unlike the map and the dice, the room carries
+  no `data-section`: scroll depth does not count it (badges only).
 - [ ] T051 [US2] `e2e/room-words.spec.ts`:
   - US2 scenario 1: all four goals DOM-only, every outcome announced once,
     no engine request (SC-003);
@@ -369,7 +379,7 @@ the demo's build changes. The full suite is never used as a gate.
   - `fit_camera_to` is sent with `immediate`;
   - the dice take the reduced time;
   - the room's CSS adds no motion.
-- [ ] T054 [P] [US2] `looks.spec.ts`: the room at rest, per width. Then
+- [x] T054 [P] [US2] `looks.spec.ts`: the room at rest, per width. Then
   regenerate the baselines below `#map` with
   `--update-snapshots=changed`, look at each one, and commit them.
 - [ ] T055 [P] `telemetry.spec.ts`: completing every goal sends no beacon

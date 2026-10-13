@@ -22,6 +22,9 @@ const SECTIONS: { name: string; selector: string }[] = [
   { name: "dream", selector: '[data-section="dream"]' },
   { name: "dice", selector: '[data-section="dice"]' },
   { name: "map", selector: '[data-section="map"]' },
+  // The room carries no data-section either: telemetry counts badges, never
+  // the room (spec 091).
+  { name: "room", selector: "section#room" },
   // Systems carries no data-section (telemetry does not track it).
   { name: "systems", selector: "section.systems" },
   { name: "numbers", selector: '[data-section="numbers"]' },

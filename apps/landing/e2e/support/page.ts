@@ -85,6 +85,7 @@ export async function settleLanding(page: Page): Promise<void> {
   });
   await expect(page.locator(".tray--loading")).toHaveCount(0);
   await expect(page.locator(".legend-layout--loading")).toHaveCount(0);
+  await expect(page.locator(".room-layout--loading")).toHaveCount(0);
   await expect(page.getByText("Pick a roll.")).toBeVisible();
   await page.evaluate(async () => {
     await document.fonts.ready;
