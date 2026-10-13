@@ -104,6 +104,7 @@ import { useSceneRecord } from "./useSceneRecord";
 import { useEngineCanvas } from "./useEngineCanvas";
 import { useBoardInput } from "./useBoardInput";
 import { useEngineBridge } from "./useEngineBridge";
+import { useExplorationPersistence } from "./useExploration";
 import {
   getPeerTransferState,
   subscribeToPeerTransfer,
@@ -455,71 +456,15 @@ export default function WorldPage() {
   // per step. A session that ends unsaved loses a few seconds of walking,
   // which a player recovers by standing still.
   const explorationEpoch = useRef(0);
-  const explorationLevelId = sceneLevel?.levelId ?? null;
-  const explorationLevelIsEntry = sceneLevel?.isEntry ?? false;
-  useEffect(() => {
-    // Scene levels: what a player has explored is remembered per floor, so
-    // this waits to be told which floor. Starting on the scene's own key and
-    // moving to the level's a moment later would save the first under the
-    // second's name on the way out.
-    if (!engineReady || !id || !sceneId || !user?.id || !sceneLevelSettled) {
-      return;
-    }
-    const userId = user.id;
-    const worldId = id;
-    const scene = sceneId;
-    const level = explorationLevelId
-      ? { levelId: explorationLevelId, isEntry: explorationLevelIsEntry }
-      : undefined;
-    let stopped = false;
-
-    void import("@/engine/world/sync/exploration").then(
-      async ({ loadExploration }) => {
-        const epoch = await loadExploration(userId, worldId, scene, level);
-        if (!stopped) {
-          explorationEpoch.current = epoch;
-        }
-      },
-    );
-
-    const timer = window.setInterval(() => {
-      void import("@/engine/world/sync/exploration").then(
-        ({ saveExploration }) =>
-          saveExploration(
-            userId,
-            worldId,
-            scene,
-            explorationEpoch.current,
-            level,
-          ),
-      );
-    }, 10_000);
-
-    return () => {
-      stopped = true;
-      window.clearInterval(timer);
-      // One last save on the way out, so leaving a scene deliberately does
-      // not cost the walk that led to leaving it.
-      void import("@/engine/world/sync/exploration").then(
-        ({ saveExploration }) =>
-          saveExploration(
-            userId,
-            worldId,
-            scene,
-            explorationEpoch.current,
-            level,
-          ),
-      );
-    };
-  }, [
-    engineReady,
+  useExplorationPersistence({
     id,
     sceneId,
-    user?.id,
+    userId: user?.id,
+    engineReady,
+    sceneLevel,
     sceneLevelSettled,
-    explorationLevelId,
-    explorationLevelIsEntry,
-  ]);
+    explorationEpoch,
+  });
 
   // Spec 045 FR-013/FR-015: when the engine stops a move at a wall, say so.
   //
