@@ -9,7 +9,6 @@ import { SEO } from "@/components/seo/SEO";
 import { WorldLayout } from "@/layouts/world-layout/WorldLayout";
 import type { SeoConfig } from "@/types/seo";
 import { createWorldStore } from "@/engine/world/store";
-import {} from "@/engine/world/sync";
 import type { AppliedChange } from "@/engine/world/sync/reconcile";
 import {
   StatusPanel,
