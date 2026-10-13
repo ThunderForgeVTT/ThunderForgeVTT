@@ -230,7 +230,11 @@ the engine's request from its network guard (`apps/demo/src/guard/rasterize.ts`,
   `/demo/` through spec 090's frame and loader. About 5MB brotli on the
   click is accepted.
 - **Badges** are wanted and may be counted in telemetry, with the spec 086
-  disclosure updated.
+  disclosure updated. That disclosure counts badges only, never progress
+  through the room (owner, 2026-10-13).
+- **The fallback is a reload.** If the canvas cannot move between frames,
+  FR-006's reload is acceptable, history and progress lost included
+  (owner, 2026-10-13).
 - **Gate.** Spec 045 (walls block, doors, keyboard movement, vision) is
   built, and the playtest gate is met.
 - **Accessibility is the floor.** The goals live in the DOM. A DOM-only path
@@ -526,7 +530,8 @@ then boot the room. Check that:
     here";
   - that reloads the page with the target in the URL, and the engine boots
     there from the browser cache.
-  The fallback MUST be recorded in the plan with the evidence.
+  The fallback MUST be recorded in the plan with the evidence. The owner
+  accepted the reload on 2026-10-13.
 
 **The room (US1)**
 
@@ -719,10 +724,3 @@ The full e2e suite is not a gate.
    - each goal's announcement (above all goal 1's, which speaks for the
      server);
    - the ending.
-2. **Badges' disclosure scope.** When the badges spec changes Appendix A.5,
-   should it also count progress through the room (which goals were
-   reached), or badges only?
-3. **The FR-006 fallback.** If moving the canvas between frames fails, is a
-   page reload acceptable when the visitor moves the table? It is cheap
-   from the browser cache, but it loses the tray's history and the room's
-   progress.
