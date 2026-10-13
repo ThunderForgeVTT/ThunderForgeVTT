@@ -45,8 +45,20 @@ export function Numbers() {
               <span className="unit">{m.unit}</span>
               <span className="then">{m.then}</span>
             </p>
-            <p className="what">{m.what}</p>
-            <p className="source">{m.source}</p>
+            <div className="measure-note">
+              <p className="what">{m.what}</p>
+              {/* Each part stays whole; the separator in front of whichever
+                  part starts a line is clipped (see .dot-row in styles.css). */}
+              <p className="source">
+                <span className="dot-row">
+                  {m.source.split(" · ").map((part) => (
+                    <span key={part} className="dot-item">
+                      {part}
+                    </span>
+                  ))}
+                </span>
+              </p>
+            </div>
           </li>
         ))}
       </ul>

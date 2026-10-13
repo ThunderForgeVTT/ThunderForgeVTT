@@ -393,7 +393,9 @@ export function Hero() {
               </a>
               <a className="ink-btn ink-btn--line" data-cta="github" data-placement="hero" href={REPO}>
                 <StarMark />
-                Star<span className="wide-only"> on GitHub</span>
+                <span>
+                  Star<span className="wide-only"> on GitHub</span>
+                </span>
               </a>
             </div>
           </div>

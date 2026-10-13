@@ -10,7 +10,7 @@ export function WhatWeMeasure() {
     <section
       id="telemetry"
       data-section="telemetry"
-      className="section measure"
+      className="section telemetry"
       aria-labelledby="telemetry-title"
     >
       <h2 id="telemetry-title" className="marker-head">
@@ -32,7 +32,9 @@ export function WhatWeMeasure() {
           ThunderForge you run yourself sends us the same kind of anonymous diagnostics by default,
           so we hear about the bugs we would otherwise never see. Its operator can send them to
           their own collector instead, or turn them off with <code>TELEMETRY=false</code>.{" "}
-          <a href={TELEMETRY_GUIDE}>How</a>
+          <a href={TELEMETRY_GUIDE} aria-label="How to redirect or turn off self-hosted diagnostics">
+            How
+          </a>
         </p>
       </div>
     </section>

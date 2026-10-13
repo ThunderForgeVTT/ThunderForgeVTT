@@ -7,6 +7,9 @@ const port = Number(process.env.THUNDERFORGE_LANDING_E2E_PORT ?? 5211);
 export default defineConfig({
   testDir: "./e2e",
   outputDir: "./test-results",
+  // Spec 090 plan: baselines are committed under `e2e/__screenshots__/`,
+  // made on Linux only, so the name carries no platform.
+  snapshotPathTemplate: "{testDir}/__screenshots__/{testFilePath}/{arg}-{projectName}{ext}",
   fullyParallel: false,
   workers: 1,
   forbidOnly: !!process.env.CI,

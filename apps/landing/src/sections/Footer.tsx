@@ -13,7 +13,7 @@ export function Footer() {
         <a href={REPO}>Source on GitHub</a>. <a href="#telemetry">What we measure</a>.
       </p>
       <p>
-        Example map by MBRound18, from <a href={MAPS_SOURCE}>vtt-maps</a>, shared under{" "}
+        Example maps by MBRound18, from <a href={MAPS_SOURCE}>vtt-maps</a>, shared under{" "}
         <a href={CC_BY_SA}>CC BY-SA 4.0</a>. Tokens drawn by the hero generator in this repository.
       </p>
     </footer>

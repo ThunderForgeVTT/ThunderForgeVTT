@@ -262,13 +262,19 @@ export default function MapLegend() {
                     decoding="async"
                   />
                   <span className="atlas-name">{e.title}</span>
+                  {/* Separators are drawn by .dot-row in styles.css, so none
+                      dangles at the end of a wrapped line. */}
                   <span className="atlas-tally">
-                    {tally(e).map((t, j) => (
-                      <span key={t}>
-                        {j > 0 && " · "}
-                        <span className={/^\d/.test(t) ? "atlas-tally-item" : undefined}>{t}</span>
-                      </span>
-                    ))}
+                    <span className="dot-row">
+                      {tally(e).map((t) => (
+                        <span
+                          key={t}
+                          className={/^\d/.test(t) ? "dot-item is-count" : "dot-item"}
+                        >
+                          {t}
+                        </span>
+                      ))}
+                    </span>
                   </span>
                 </button>
               </li>
