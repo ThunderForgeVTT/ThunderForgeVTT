@@ -18,16 +18,9 @@ import { WorldLayout } from "@/layouts/world-layout/WorldLayout";
 import type { SeoConfig } from "@/types/seo";
 import { createWorldStore } from "@/engine/world/store";
 import {
-  applyInteractiveWorldEvent,
-  applyLightWorldEvent,
   refreshInteractives,
   setScenePlaying,
   startTriggerBridge,
-  applyShapeWorldEvent,
-  applyTokenWorldEvent,
-  applyTokenVisionWorldEvent,
-  applyTokenGridWorldEvent,
-  applyWallWorldEvent,
   getLiveSyncState,
   loadLightsIntoStore,
   loadShapesIntoStore,
@@ -35,9 +28,7 @@ import {
   loadWallsIntoStore,
   catchUpWorldEvents,
   subscribeToLiveSyncState,
-  subscribeToWorldEvents,
 } from "@/engine/world/sync";
-import { parseMapImportedEvent } from "@/engine/world/sync/scenes";
 import {
   queueAdjudicatedChange,
   reconcileWorld,
@@ -64,16 +55,6 @@ import {
   type TokenStatusResource,
 } from "@/engine/bevy/tokenStatus";
 import {
-  applyTokenStatusWorldEvent,
-  refreshTokenStatus,
-} from "@/engine/world/sync/tokenStatus";
-import {
-  applySceneLightingWorldEvent,
-  asAmbientLevel,
-  setSceneAmbient,
-  type AmbientLevel,
-} from "@/engine/world/sync/sceneLighting";
-import {
   beginPeerAdjudication,
   endPeerAdjudication,
   onOpenLore,
@@ -93,6 +74,7 @@ import { useExplorationPersistence } from "./useExploration";
 import { useSceneTransition } from "./useSceneTransition";
 import { useSceneContent } from "./useSceneContent";
 import { useWorldEventStreams } from "./useWorldEventStreams";
+import { useSceneLiveSync } from "./useSceneLiveSync";
 import {
   getPeerTransferState,
   subscribeToPeerTransfer,
@@ -103,7 +85,7 @@ import { EngineMonitor } from "@/components/diagnostics/EngineMonitor";
 import { EngineLoader } from "@/components/engine/EngineLoader";
 import { EngineStopped } from "@/components/engine/EngineStopped";
 import { BoardLoading } from "@/components/engine/BoardLoading";
-import { getScene, getScenes, updateSceneAmbientLight } from "@/api/scenes";
+import { getScene, getScenes } from "@/api/scenes";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import { useWorldMembers } from "@/hooks/useWorldMembers";
@@ -361,25 +343,6 @@ export default function WorldPage() {
       setScenes,
       setScenesFetchedForWorld,
     });
-  // Playtest 2026-09-10 P9: a scene's light as last heard — from a change
-  // event or this Game Master's own control — ahead of the scene list, which
-  // is fetched once and would otherwise go on holding the old level.
-  //
-  // Scene levels: the light is the *level's* now, and the level list is
-  // re-read whenever a level changes — so what was last heard is trusted only
-  // until the list it was heard against is replaced. `against` is that list;
-  // a newer one carries the server's own answer and outranks it. Without that
-  // an old "last heard" would go on masking a light another Game Master has
-  // since changed, and would follow this one from floor to floor.
-  const [ambientBySceneId, setAmbientBySceneId] = useState<
-    Record<string, { level: AmbientLevel; against: readonly SceneLevel[] }>
-  >({});
-  const heardAmbient = sceneId ? ambientBySceneId[sceneId] : undefined;
-  const sceneAmbient: AmbientLevel =
-    (heardAmbient?.against === sceneLevelList
-      ? heardAmbient.level
-      : undefined) ??
-    asAmbientLevel(sceneLevel?.ambientLight ?? selectedScene?.ambientLight);
 
   const {
     containerRef,
@@ -506,171 +469,28 @@ export default function WorldPage() {
     setReconcileReport,
   });
 
-  // Live cross-client sync: one subscription per mounted scene, feeding
-  // every apply*WorldEvent for this scene's canvas primitives — each of
-  // those already filters by its own event code internally (walls=10,
-  // tokens=14, etc, see their own doc comments), so a single shared
-  // subscription driving all four is correct and avoids opening four
-  // separate WebSocket subscriptions for the same event stream. The
-  // backend transport (Postgres listener -> broadcast channel -> this
-  // `worldEventsCreated` GraphQL subscription -> /api/ws) already existed
-  // in full; this is the first thing in apps/web to actually open it.
   // Read through a ref by the world-event loop below, which is declared
   // before the callback and must not reopen its stream when it changes.
   const reloadImportedSceneRef = useRef<(importedSceneId: string) => void>(
     () => {},
   );
-  useEffect(() => {
-    if (!id || !sceneId || !bridgeReady) {
-      return;
-    }
-
-    // Prime before the stream opens: the first paint should already carry
-    // bars rather than waiting for something to change.
-    void refreshTokenStatus(worldStore, sceneId).catch((error) => {
-      console.error("Failed to load token status:", error);
-    });
-
-    // Not an AbortController + in-loop flag check: a `for await` loop
-    // only re-checks anything between events, so if the world goes quiet
-    // (no new events) the loop hangs forever awaiting the next one and
-    // the subscription would never actually close on unmount/scene
-    // change. Holding the iterator directly and calling `.return()` on
-    // it unblocks that pending `next()` immediately (it synchronously
-    // disposes the underlying graphql-ws subscription, which resolves
-    // the pending promise via the `complete` callback) — this is why
-    // `for await...of` itself calls `.return()` on early exit, and why a
-    // manual cleanup needs to do the same explicitly.
-    const iterator = subscribeToWorldEvents(id)[Symbol.asyncIterator]();
-    let cancelled = false;
-
-    (async () => {
-      try {
-        while (!cancelled) {
-          const { value: event, done } = await iterator.next();
-          if (done || cancelled || !event) break;
-          // Scene levels: a level changed, or a token changed floor. Told
-          // first and not awaited — it re-reads which level this viewer is on
-          // and reloads the board itself if the answer moved.
-          onLevelWorldEvent(event);
-          // A map was imported into this scene. Nothing else announces its
-          // walls, lights or art, so they are re-read here.
-          if (parseMapImportedEvent(event) === sceneId) {
-            reloadImportedSceneRef.current(sceneId);
-          }
-          await Promise.all([
-            applyWallWorldEvent(worldStore, sceneId, event),
-            applyTokenWorldEvent(worldStore, sceneId, event),
-            applyShapeWorldEvent(worldStore, sceneId, event),
-            applyLightWorldEvent(worldStore, sceneId, event),
-            applyTokenStatusWorldEvent(worldStore, sceneId, event),
-            applyInteractiveWorldEvent(worldStore, sceneId, event),
-            // Spec 045 FR-067: a character's sheet moving changes what their
-            // token can see, and until spec 045 a sheet edit announced
-            // nothing at all.
-            applyTokenVisionWorldEvent(worldStore, sceneId, event, () =>
-              Object.keys(worldStore.getState().tokens),
-            ),
-            // Spec 046 US4: a sheet's size is the squares its tokens fill.
-            applyTokenGridWorldEvent(worldStore, sceneId, event, () =>
-              Object.keys(worldStore.getState().tokens),
-            ),
-          ]);
-          // Spec 045 US7: a Game Master reset the fog. Re-read rather than
-          // trusting the payload — a reset aimed at one player and one aimed
-          // at everyone are the same event on the bus, and only the server
-          // can say which applies to whoever is holding this browser.
-          if (user?.id) {
-            const epoch = await import("@/engine/world/sync/exploration").then(
-              ({ applyExplorationWorldEvent }) =>
-                applyExplorationWorldEvent(
-                  user.id,
-                  id,
-                  sceneId,
-                  event,
-                  sceneLevelRef.current
-                    ? {
-                        levelId: sceneLevelRef.current.levelId,
-                        isEntry: sceneLevelRef.current.isEntry,
-                      }
-                    : undefined,
-                ),
-            );
-            if (epoch !== null) {
-              explorationEpoch.current = epoch;
-            }
-          }
-          // Scene levels: the scene's own light is its entry level's. On
-          // any other floor a change to it is news about a board this client
-          // is not showing, and applying it would relight the wrong one.
-          const shownLevel = sceneLevelRef.current;
-          const ambient =
-            shownLevel === null || shownLevel.isEntry
-              ? applySceneLightingWorldEvent(worldStore, sceneId, event)
-              : null;
-          if (ambient) {
-            const against = sceneLevelListRef.current;
-            setAmbientBySceneId((current) => ({
-              ...current,
-              [sceneId]: { level: ambient, against },
-            }));
-          }
-          // The approval queue is server state, so a nudge on the bus is all
-          // this side needs — it re-reads rather than holding a copy.
-          setApprovalRevision((n) => n + 1);
-        }
-      } catch (error) {
-        console.error("World events live-sync error:", error);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      void iterator.return?.();
-    };
-    // `user?.id` because the exploration handler above resets *this
-    // player's* fog: a subscription that outlived a change of user would
-    // carry the previous one's id and reset the wrong person's map.
-  }, [id, sceneId, bridgeReady, worldStore, user?.id, onLevelWorldEvent]);
-
-  // Playtest 2026-09-10 P9: hand the engine the scene's light. Nothing did,
-  // so every scene rendered in daylight and no wall ever cast a shadow.
-  useEffect(() => {
-    if (!sceneId || !bridgeReady) {
-      return;
-    }
-    setSceneAmbient(worldStore, sceneAmbient);
-  }, [sceneId, bridgeReady, sceneAmbient, worldStore]);
-
-  const changeSceneAmbient = useCallback(
-    (level: AmbientLevel) => {
-      if (!sceneId) {
-        return;
-      }
-      const previous = sceneAmbient;
-      const against = sceneLevelList;
-      setAmbientBySceneId((current) => ({
-        ...current,
-        [sceneId]: { level, against },
-      }));
-      if (sceneLevel) {
-        // Scene levels: the control lights the floor on the board, not the
-        // scene. No rollback to write — the level list is re-read whether the
-        // server agreed or refused, and a re-read list outranks what was set
-        // here a moment ago (see `ambientBySceneId`).
-        void levelActions.setAmbient(sceneLevel.levelId, level);
-        return;
-      }
-      updateSceneAmbientLight(sceneId, level).catch((error: unknown) => {
-        console.error("Failed to change the scene's light:", error);
-        setAmbientBySceneId((current) => ({
-          ...current,
-          [sceneId]: { level: previous, against },
-        }));
-      });
-    },
-    [sceneId, sceneAmbient, sceneLevel, sceneLevelList, levelActions],
-  );
+  const { sceneAmbient, changeSceneAmbient } = useSceneLiveSync({
+    id,
+    sceneId,
+    user,
+    worldStore,
+    bridgeReady,
+    selectedScene,
+    sceneLevel,
+    sceneLevelList,
+    levelActions,
+    onLevelWorldEvent,
+    sceneLevelRef,
+    sceneLevelListRef,
+    reloadImportedSceneRef,
+    explorationEpochRef: explorationEpoch,
+    setApprovalRevision,
+  });
 
   // Spec 045 US7: the Game Master's two controls — whether this scene
   // remembers, and resetting what it has remembered.
