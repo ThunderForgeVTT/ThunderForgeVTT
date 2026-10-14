@@ -345,6 +345,7 @@ pub(crate) fn handle_token_drag(
             // only make the board disagree with the world.
             if !is_gm.0
                 && crate::systems::token_move::refuse_at_wall(
+                    &identity.0,
                     from,
                     transform.translation.truncate(),
                     &walls,

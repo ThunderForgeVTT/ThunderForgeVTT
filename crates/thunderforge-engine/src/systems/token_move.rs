@@ -152,7 +152,7 @@ pub(crate) fn handle_token_movement_input(
             Step::West => Vec2::new(-grid.size, 0.0),
         };
         let destination = current + nudge;
-        if refuse_at_wall(current, destination, &walls) {
+        if refuse_at_wall(&identity.0, current, destination, &walls) {
             return;
         }
         transform.translation += nudge.extend(0.0);
@@ -179,7 +179,7 @@ pub(crate) fn handle_token_movement_input(
             .map_or_else(|| grid.world_to_cell(current), |path| path.head());
         let from = grid.cell_center(head);
         let to = grid.cell_center(step.apply(head, grid.kind));
-        if refuse_at_wall(from, to, &walls) {
+        if refuse_at_wall(&identity.0, from, to, &walls) {
             return;
         }
         plan.path
@@ -194,7 +194,7 @@ pub(crate) fn handle_token_movement_input(
     // The whole footprint steps one square (spec 046 FR-031). Snapping the
     // next cell's centre left a Large token unable to step west or south.
     let snapped = thunderforge_canvas_core::movement::step_token(&grid, current, footprint, step);
-    if refuse_at_wall(current, snapped, &walls) {
+    if refuse_at_wall(&identity.0, current, snapped, &walls) {
         return;
     }
     transform.translation.x = snapped.x;
@@ -214,6 +214,7 @@ pub(crate) fn handle_token_movement_input(
 /// Same geometry as the server's, from the crate both depend on, so the two
 /// cannot disagree about where a wall is.
 pub(crate) fn refuse_at_wall(
+    token_id: &str,
     from: Vec2,
     to: Vec2,
     walls: &crate::resources::wall::WallSet,
@@ -222,10 +223,13 @@ pub(crate) fn refuse_at_wall(
         return false;
     };
     // The application decides how to say it; the engine says only that it
-    // happened, and where. A secret door is a wall here as everywhere — the
-    // event names the segment, never what kind of segment it is (FR-019).
+    // happened, to whom, and where. A secret door is a wall here as
+    // everywhere — the event names the segment, never what kind of segment it
+    // is (FR-019). The token is named so a listener that cares about one
+    // token (the landing room's hero) can let the others' bumps pass.
     emit_event(json!({
         "type": "movement_blocked",
+        "tokenId": token_id,
         "wallId": wall.id,
         "at": { "x": to.x, "y": to.y },
     }));

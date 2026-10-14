@@ -281,7 +281,8 @@ fn detect_entries(
     tokens: Query<(&TokenIdentity, &Transform)>,
 ) {
     let mut seen: BTreeSet<String> = BTreeSet::new();
-    let mut crossed: Vec<String> = Vec::new();
+    // Each crossing with the token that made it.
+    let mut crossed: Vec<(String, String)> = Vec::new();
 
     for (token, transform) in &tokens {
         let current = transform.translation.truncate();
@@ -299,14 +300,19 @@ fn detect_entries(
         if !playing.0 {
             continue;
         }
-        crossed.extend(interactives.entries_crossed(before, current));
+        crossed.extend(
+            interactives
+                .entries_crossed(before, current)
+                .into_iter()
+                .map(|id| (token.0.clone(), id)),
+        );
     }
 
     // Forget tokens that have gone, so a token id reused later does not
     // inherit a stale position and read as an enormous jump.
     previous.0.retain(|id, _| seen.contains(id));
 
-    for id in crossed {
+    for (token_id, id) in crossed {
         let Some(interactive) = interactives.get(&id) else {
             continue;
         };
@@ -324,9 +330,12 @@ fn detect_entries(
         //
         // The application turns this into the same activation a click makes,
         // and the permitted effect comes back through the same command a
-        // click's does — so there is one path, not two.
+        // click's does — so there is one path, not two. The token is named
+        // so the application can tell whose crossing it was: the landing
+        // room counts the hero's entry, never a dragged chest's.
         crate::emit_event(serde_json::json!({
             "type": "interactionTriggered",
+            "tokenId": token_id,
             "interactiveId": interactive.id,
             "trigger": "enter",
         }));

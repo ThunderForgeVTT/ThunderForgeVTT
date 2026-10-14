@@ -448,10 +448,11 @@ pub(crate) fn drive_group_drag(
         }
         if sent.is_empty() {
             // Nothing to count: the one notice is the wall's own.
-            if let (Some(Member::Token { at, .. }), Some(walls)) = (refused.first(), walls.as_ref())
+            if let (Some(Member::Token { id, at, .. }), Some(walls)) =
+                (refused.first(), walls.as_ref())
             {
                 let from = at.truncate();
-                crate::systems::token_move::refuse_at_wall(from, from + offset, walls);
+                crate::systems::token_move::refuse_at_wall(id, from, from + offset, walls);
             }
             return;
         }

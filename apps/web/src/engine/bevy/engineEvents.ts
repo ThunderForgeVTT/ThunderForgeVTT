@@ -84,6 +84,8 @@ export function asPickUpItem(event: unknown): PickUpItemEvent | null {
  */
 export interface MovementBlockedEvent {
   type: "movement_blocked";
+  /** The token refused. */
+  tokenId?: string;
   wallId: string;
   at: { x: number; y: number };
 }
@@ -417,6 +419,8 @@ export function reportOpenLore(event: OpenLoreEvent): void {
  */
 export interface InteractionTriggeredEvent {
   type: "interactionTriggered";
+  /** The token that crossed in. */
+  tokenId?: string;
   interactiveId: string;
   trigger: "enter";
 }

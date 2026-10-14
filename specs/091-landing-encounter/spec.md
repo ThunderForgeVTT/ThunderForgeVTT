@@ -156,7 +156,7 @@ There is no polling queue for these, unlike `dice_landed()`.
 - `upsert_token`, for a keyboard step or a drag
   (`systems/token_move.rs:257`, `systems/token.rs`). It carries the token's
   new x, y and `worldId`. The engine moves the token first, optimistically.
-- `movement_blocked`, with `wallId` and `at` (`systems/token_move.rs:216-232`).
+- `movement_blocked`, with `tokenId`, `wallId` and `at` (`systems/token_move.rs`).
   It is emitted for a keyboard step (lines 155, 182, 197) and for a drag
   (`systems/token.rs:437`). It uses the same rule the server uses,
   `thunderforge_canvas_core::wall::movement_blocked_by`
@@ -166,7 +166,7 @@ There is no polling queue for these, unlike `dice_landed()`.
   The icon shows while the controlled token is within one square of the
   door. It is pressed **only by a mouse or touch click**. No key presses
   it.
-- `interactionTriggered`, with `interactiveId` and `trigger: "enter"`
+- `interactionTriggered`, with `tokenId`, `interactiveId` and `trigger: "enter"`
   (`plugins/interaction.rs:328`). It fires **only when a token enters a
   region**. A click on an interactive emits nothing from the engine. In
   `apps/web` the click path goes through the app's own menu.
