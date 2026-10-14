@@ -136,9 +136,10 @@ build: gc
 # target/ no build has used for GC_DAYS: incremental caches for feature and
 # profile combinations nothing builds any more, and dependencies an older
 # Cargo.lock compiled. Docker's build cache is capped at GC_DOCKER_KEEP, least
-# recently used first; each Cargo.lock change leaves a cargo-chef dependency
-# layer of several GB behind. Neither tool is required: a missing one is
-# skipped with a note, never a failed build.
+# recently used first; the `target/` cache mount every Rust stage of the
+# Dockerfile shares grows by several GB with each Cargo.lock change, and the
+# cap is what trims it. Neither tool is required: a missing one is skipped
+# with a note, never a failed build.
 GC_DAYS ?= 14
 GC_DOCKER_KEEP ?= 40GB
 gc:
