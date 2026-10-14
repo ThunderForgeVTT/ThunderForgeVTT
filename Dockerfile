@@ -184,9 +184,11 @@ RUN pnpm -F @thunderforge/landing run build \
   && node apps/landing/scripts/compress.mjs
 
 FROM nginx:stable-alpine AS landing
-# The image fills in the template at start; an empty token is allowed and
-# leaves the star chart to contributors only.
+# github-auth.sh signs the GitHub App's JWT with openssl. With no App and an
+# empty token the star chart shows contributors only.
+RUN apk add --no-cache openssl
 ENV GITHUB_TOKEN=""
+COPY --chmod=755 apps/landing/github-auth.sh /docker-entrypoint.d/40-github-auth.sh
 # Spec 086: browser telemetry to the project's endpoint, on by default.
 # `TELEMETRY=false` serves `{"enabled":false}` and the pages load nothing for it.
 ENV TELEMETRY=true \

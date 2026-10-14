@@ -18,6 +18,7 @@ const ROOT = resolve(HERE, "../../..");
 const DIST = resolve(HERE, "../dist");
 const DEMO = join(ROOT, "data/demo");
 const TEMPLATE = resolve(HERE, "../nginx.conf.template");
+const GITHUB_AUTH = resolve(HERE, "../github-auth.sh");
 const IMAGE = "nginx:stable-alpine";
 
 for (const need of [join(DIST, "index.html"), join(DEMO, "engine.json")]) {
@@ -71,6 +72,7 @@ docker(
   "-e", "THUNDERFORGE_BROWSER_TELEMETRY_ENDPOINT=https://telemetry.thunderforge.dev",
   "-e", "THUNDERFORGE_BROWSER_TELEMETRY_SAMPLE_RATE=1.0",
   "-v", `${TEMPLATE}:/etc/nginx/templates/default.conf.template:ro`,
+  "-v", `${GITHUB_AUTH}:/docker-entrypoint.d/40-github-auth.sh:ro`,
   // A bind cannot be made inside a read-only bind, so both trees go under
   // /srv and the web root links to them, as the image's two COPYs lay out.
   "-v", `${DIST}:/srv/landing:ro`,
@@ -89,6 +91,10 @@ try {
     if (!up) await new Promise((r) => setTimeout(r, 100));
   }
   if (!up) throw new Error(`check-serving: nginx did not come up\n${docker("logs", name)}`);
+
+  // With no App and no token, github-auth.sh still writes the include, empty.
+  expect("github auth: no App, no token", docker("exec", name, "cat", "/etc/nginx/github-auth.conf").trim(),
+    'map "" $github_auth {\n  default "";\n}');
 
   const wasm = `/demo/${manifest.wasm}`;
   const br = await get(wasm, "gzip, deflate, br, zstd");
