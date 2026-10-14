@@ -219,7 +219,8 @@ img {
     transform: none;
   }
 }
-.ink-btn:disabled {
+.ink-btn:disabled,
+.ink-btn[aria-disabled="true"] {
   opacity: 0.5;
   cursor: progress;
 }

@@ -446,7 +446,7 @@ the demo's build changes. The full suite is never used as a gate.
 
 ## Phase 6: Proof
 
-- [ ] T060 Run, and record the results here:
+- [X] T060 Run, and record the results here:
   - `pnpm e2e:landing` (three times, SC-008);
   - `pnpm -F @thunderforge/encounter check`;
   - `make lint` (and no file over 1000 lines);
@@ -480,9 +480,17 @@ the demo's build changes. The full suite is never used as a gate.
   - `pnpm -F @thunderforge/encounter check`: 75/75.
   - `make lint`: OK, and no file is over 1000 lines.
   - `pnpm verify`: all 18 checks passed.
-  - Still to do: `pnpm -F @thunderforge/demo e2e` (the engine changed in
-    10859455, so the demo build changed), and the click weight on the
-    release engine.
+  - Three fresh runs at cbad3fda (dev engine, load average under 10):
+    each gave 127 passed, 36 skipped and 4 failed, about 10.5 min each.
+    The 4 were the same in every run: `looks.spec.ts`, the map section in
+    light and dark at the tablet and desktop widths. 8c45041d turned the
+    overlay right way up but left those baselines mirrored. The baselines
+    were refreshed from the run (the dark images are byte-identical to the
+    light ones), and `looks.spec.ts` then gave 7 passed and 2 skipped.
+    The other 127 tests passed in all three runs. The two extra skips are
+    the 2000 px column check, which runs at the desktop width only.
+  - `pnpm -F @thunderforge/demo e2e`: 51 passed (2.8 min).
+  - Click weight on the release engine: see T061.
 - [ ] T061 Hand pass, recorded here. On the release engine served by nginx
   (`check-serving.mjs`'s container, or thunderforge-dev after deploy),
   play the room:
@@ -492,6 +500,44 @@ the demo's build changes. The full suite is never used as a gate.
   - with a screen reader (Orca and Chromium), DOM-only.
 
   Note anything that reads wrong, feels slow, or announces twice.
+
+  Scripted pass (2026-10-13, at 9d8984f7). The release engine and the
+  landing's `dist` were served by stock `nginx:stable-alpine` with
+  `nginx.conf.template`, as `check-serving.mjs` does. Playwright Chromium
+  ran on the GPU, with a load average under 6. Each pass played the
+  whole room through the page's own controls.
+
+  | pass | boot after the click | frames | step answer (median, slowest) |
+  | --- | --- | --- | --- |
+  | 390 px, touch | 822 ms | 60.3 fps | 52 ms, 72 ms |
+  | 1440 px, mouse | 696 ms | 60.0 fps | 132 ms, 149 ms |
+  | keyboard only | 821 ms | 60.3 fps | 105 ms, 110 ms |
+
+  - No line was announced twice, and every step's line arrived within
+    150 ms.
+  - Click weight (T060): 5,306,989 bytes on the wire after the click.
+    The engine is 5,192,368 of them (32.0 MB raw, 5.2 MB brotli); its
+    JS is 14,447, the table 76,104, and Sir Pip and the chest 21,441.
+    The map was already cached from the legend above the room. When the
+    legend has not been seen, add `/maps/demo.webp`, 1,953,402 bytes:
+    about 7.26 MB in all.
+  - Keyboard: from the top of the page, "Play the room" is the 43rd Tab.
+    "North" is 68 more, past the map legend's controls and the hero
+    picker. Then "Open the door to the hall" is 4, "Roll 1d20+2" 4, and
+    "Open the demo" 2.
+  - Found and fixed (9d8984f7): the Roll button was `disabled` while the
+    dice were out. That dropped focus to the page, so the next Enter did
+    nothing and a screen reader lost its place. It is now aria-disabled,
+    and `room-words.spec.ts` presses Enter throw after throw.
+  - Each pass logged four failed requests, and so does thunderforge.dev:
+    - three 404s for `<image>.meta`: Bevy's meta probe, expected (see
+      `e2e/support/page.ts`);
+    - one 401 from `/gh/stargazers`: GitHub now requires a token to list
+      stargazers, and the landing deployment sets no `GITHUB_TOKEN`, so
+      the star chart has no stargazers live. The owner needs to add a
+      read-only token to the deployment's secret.
+  - Still owed to the owner: the Orca + Chromium screen-reader pass. A
+    script cannot judge how the room sounds.
 - [ ] T062 Owner: approve or replace the copy (spec Open question 1; plan
   Decisions): the simulation sentence, each goal's announcement, the
   ending, and the away state.
