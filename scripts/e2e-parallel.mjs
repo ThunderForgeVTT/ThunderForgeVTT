@@ -65,6 +65,7 @@ import {
   terminateChildren,
 } from "./shared.mjs";
 import { baseMapsEnv, ensureBaseMaps } from "./e2e/base-maps.mjs";
+import { demoEnv, ensureDemoBuild } from "./e2e/demo.mjs";
 import { checkDependencies, describeProblems } from "./e2e/deps.mjs";
 import { acquireRunLock, releaseRunLock } from "./e2e/run-lock.mjs";
 import { buildOutputHint } from "./clean-builds.mjs";
@@ -724,6 +725,9 @@ async function startShard(
     THUNDERFORGE_REALM_NAME: "ThunderForge (e2e)",
     // Spec 088: the maps are offered, none is the default (e2e/base-maps.mjs).
     ...baseMapsEnv(),
+    // Spec 074: the demo is mounted at `/demo`; whether it is offered is the
+    // `feature.demo` setting, off by default (e2e/demo.mjs).
+    ...demoEnv(),
     // Only the first-run stack, and it is doing double duty. The setup link
     // the server prints is what the e2e follows, so it has to be a real URL
     // rather than the bare path an unconfigured instance logs — and setting it
@@ -1190,6 +1194,7 @@ async function main() {
     prefix: "e2e",
   });
   await ensureBaseMaps();
+  await ensureDemoBuild();
 
   // Spec 089: this checkout's own Postgres and RustFS. Never the shared dev
   // stack as a fallback; a stack that won't come up ends the run here.

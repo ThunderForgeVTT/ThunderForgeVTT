@@ -136,6 +136,7 @@
         "auth-providers.spec.ts",
         "onboarding-flow.spec.ts",
         "anonymous-shell.spec.ts",
+        "demo-offered.spec.ts",
         "concurrent-sessions.spec.ts",
         "user-data-export.spec.ts",
         "account-standing.spec.ts",

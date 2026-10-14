@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "./fixtures/test";
+import { rollD20IntoHistory } from "./fixtures/diceRollProof";
 
 /**
  * specs/014-dice-rolling-engine (US4): triggering a roll from the play
@@ -63,50 +64,7 @@ test("triggering a roll shows a result, and the DM sees it in roll history after
   });
   await expect(page.locator("canvas")).toBeVisible({ timeout: 20_000 });
 
-  const panel = page.getByTestId("dice-roller-panel");
-  await expect(panel).toBeVisible({ timeout: 15_000 });
-  await page.getByTestId("dice-formula-input").fill("1d20");
-  await page.getByTestId("dice-roll-button").click();
-
-  await expect(page.getByTestId("dice-roll-result")).toBeVisible({
-    timeout: 10_000,
-  });
-  const resultText = await page.getByTestId("dice-roll-result").innerText();
-  expect(resultText).toMatch(/1d20:\s*-?\d+/);
-
-  // Confirm the DM's roll history shows the matching record via GraphQL
-  // (worldRollRecords, DM-only) — a lightweight check against the live
-  // session's own cookies rather than adding a full history UI.
-  const historyResponse = await page.evaluate(async (wid) => {
-    const csrfToken = document.cookie
-      .split(";")
-      .map((part) => part.trim())
-      .find((part) => part.startsWith("csrf_token="))
-      ?.slice("csrf_token=".length);
-    const res = await fetch("/api/graphql", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: {
-        "Content-Type": "application/json",
-        ...(csrfToken ? { "x-csrf-token": csrfToken } : {}),
-      },
-      body: JSON.stringify({
-        query: `query($worldId: UUID!) { worldRollRecords(worldId: $worldId, limit: 5) { id resolution { formula resultValue } } }`,
-        variables: { worldId: wid },
-      }),
-    });
-    const text = await res.text();
-    try {
-      return JSON.parse(text);
-    } catch {
-      throw new Error(
-        `Non-JSON response (status ${res.status}): ${text.slice(0, 500)}`,
-      );
-    }
-  }, worldId);
-
-  expect(historyResponse.data.worldRollRecords.length).toBeGreaterThan(0);
-  expect(historyResponse.data.worldRollRecords[0].resolution.formula).toBe(
-    "1d20",
-  );
+  // The proof itself is `fixtures/diceRollProof.ts`, so that the demo can
+  // run the same one (spec 074 SC-008).
+  await rollD20IntoHistory(page, expect, worldId);
 });
