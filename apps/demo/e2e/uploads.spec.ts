@@ -62,9 +62,40 @@ function served(page: Page, url: string) {
   }, url);
 }
 
+/** The upload store's bytes for an asset, read from this browser's IndexedDB. */
+function storedSize(page: Page, assetId: string): Promise<number | null> {
+  return page.evaluate(
+    (id) =>
+      new Promise<number | null>((resolve, reject) => {
+        const opening = indexedDB.open("thunderforge-demo-uploads", 1);
+        opening.onerror = () => reject(opening.error);
+        opening.onsuccess = () => {
+          const db = opening.result;
+          const read = db.transaction("bytes").objectStore("bytes").get(id);
+          read.onerror = () => reject(read.error);
+          read.onsuccess = () => {
+            db.close();
+            resolve(read.result ? (read.result as Blob).size : null);
+          };
+        };
+      }),
+    assetId,
+  );
+}
+
 test("a PNG map becomes the board's background, and is there after a reload", async () => {
   const sceneId = await activeSceneId(page);
   const before = await entryLevel(page, sceneId);
+
+  // T022, FR-014: the picture is never sent anywhere. `outside` already
+  // holds anything past the demo's files; this holds anything that is not a
+  // plain read of them, so an upload posted even to this origin would show.
+  const sent: string[] = [];
+  page.context().on("request", (request) => {
+    if (request.method() !== "GET" && request.method() !== "HEAD") {
+      sent.push(`${request.method()} ${request.url()}`);
+    }
+  });
 
   const png = await page.evaluate(async () => {
     const canvas = new OffscreenCanvas(640, 480);
@@ -111,6 +142,14 @@ test("a PNG map becomes the board's background, and is there after a reload", as
     type: "image/webp",
     size: [640, 480],
   });
+
+  // FR-014: after the reload the bytes come from this browser's own store,
+  // and nothing was posted anywhere on the way.
+  expect(
+    await storedSize(page, after.backgroundAssetId as string),
+  ).toBeGreaterThan(0);
+  expect(sent, "no upload left the page").toEqual([]);
+  expect(outside).toEqual([]);
 });
 
 test("a Universal VTT map brings its art, walls, door and light, as on a server", async () => {

@@ -14,6 +14,10 @@ describe("a refused area's name", () => {
       "Syncing lore with a repository",
     );
     expect(refusalArea("startCombatEncounter")).toBe("Combat");
+    // FR-013: a share link, and the terms the dialog reads before offering one.
+    expect(refusalArea("createActorShareLink")).toBe("Share links");
+    expect(refusalArea("sharedCollection")).toBe("Share links");
+    expect(refusalArea("sharingTerms")).toBe("Share links");
     expect(refusalArea("somethingNobodyNamed")).toBe("That feature");
     expect(refusalArea("Importing a book")).toBe("Importing a book");
   });
