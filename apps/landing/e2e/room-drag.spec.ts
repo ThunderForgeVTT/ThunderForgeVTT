@@ -99,4 +99,34 @@ test.describe("a drag on the table", () => {
     expect(await square(page)).toBe(`${after.x},${after.y}`);
     expectClean(opened);
   });
+
+  test("the chest is furniture: dragged, it goes back to its square", async ({ page }) => {
+    const opened = await openLanding(page);
+    await bootRoom(page);
+    await recordSaid(page);
+    await roomFrame(page).scrollIntoViewIfNeeded();
+    await expect.poll(() => engineHero(page)).toEqual(script.start);
+
+    // The engine lets a press pick any token up, as the client does; there
+    // the server refuses a move of a token that is not yours. The room is
+    // the server here: the chest is sent back, the hero has not moved, and
+    // the room says nothing of it, not even of the wall the drag crossed.
+    const n = (await saidLog(page)).length;
+    const home = script.chest.square;
+    await drag(page, home, { x: home.x + 2, y: home.y + 1 });
+    await expect.poll(() => engineChest(page), { timeout: 5_000 }).toEqual(home);
+    await page.waitForTimeout(500);
+    expect(await engineChest(page)).toEqual(home);
+    expect(await engineHero(page)).toEqual(script.start);
+    expect(await square(page)).toBe(`${script.start.x},${script.start.y}`);
+    expect((await saidLog(page)).length).toBe(n);
+    expectClean(opened);
+  });
 });
+
+/** Where the engine has the chest, in squares, rounded to the half-square. */
+async function engineChest(page: Page) {
+  const all = await engine<{ tokenId: string; x: number; y: number }[]>(page, "token_footprints");
+  const c = all.find((t) => t.tokenId === script.chest.tokenId);
+  return near(c && { x: c.x / grid, y: c.y / grid });
+}

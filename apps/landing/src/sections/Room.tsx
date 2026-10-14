@@ -62,7 +62,7 @@ function RoomBody({ script, imageBytes }: LoadedRoom) {
         </figcaption>
       </figure>
 
-      {/* A strip under the table in the play field's manner, small: the
+      {/* A strip under the table in the page's own ink, small: the
           quest log on one side, the controls in the middle, the referee's
           words on the other. */}
       <div className="room-hud">

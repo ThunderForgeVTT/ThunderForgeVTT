@@ -101,14 +101,15 @@ export async function playThrough(page: Page) {
   await recordSaid(page);
   expect(await square(page)).toBe("-3,1.5");
 
+  await expect(goal(page, "door-reached")).toContainText("(not yet)");
   for (const y of ["0.5", "-0.5", "-1.5"]) {
     await stepAndHear(page, "South", /door to the hall/);
     expect(await square(page)).toBe(`-3,${y}`);
   }
-  await expect(goal(page, "door-reached")).toContainText("(not yet)");
+  // Within reach of the door is having reached it; the bump teaches the rule.
+  await expect(goal(page, "door-reached")).toContainText("(done)");
   await stepAndHear(page, "South", /^The door is shut\. Walls and closed doors refuse a move/);
   expect(await square(page)).toBe("-3,-1.5");
-  await expect(goal(page, "door-reached")).toContainText("(done)");
 
   const door = room(page).getByRole("button", { name: "Open the door to the hall" });
   await expect(door).toBeEnabled();

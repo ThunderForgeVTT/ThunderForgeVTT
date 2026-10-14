@@ -20,6 +20,8 @@ export interface TokenMovedEvent {
 /** A move refused at a wall: `refuse_at_wall` (`token_move.rs`). It names no token. */
 export interface MovementBlockedEvent {
   type: "movement_blocked";
+  /** The token refused; absent from an engine built before it was named. */
+  tokenId?: string;
   wallId: string;
   at: Point;
 }
@@ -34,6 +36,8 @@ export interface DoorIconPressedEvent {
 /** A region entered: `detect_entries` (`interaction.rs`). */
 export interface InteractionTriggeredEvent {
   type: "interactionTriggered";
+  /** The token that crossed in; absent from an engine built before it was named. */
+  tokenId?: string;
   interactiveId: string;
   trigger: "enter";
 }
@@ -92,9 +96,14 @@ function tokenMoved(event: Fields): TokenMovedEvent | null {
 
 function movementBlocked(event: Fields): MovementBlockedEvent | null {
   const at = asPoint(event.at);
-  return isString(event.wallId) && at
-    ? { type: "movement_blocked", wallId: event.wallId, at }
-    : null;
+  if (!isString(event.wallId) || !at) return null;
+  const blocked: MovementBlockedEvent = {
+    type: "movement_blocked",
+    wallId: event.wallId,
+    at,
+  };
+  if (isString(event.tokenId)) blocked.tokenId = event.tokenId;
+  return blocked;
 }
 
 function doorIconPressed(event: Fields): DoorIconPressedEvent | null {
@@ -110,13 +119,14 @@ function doorIconPressed(event: Fields): DoorIconPressedEvent | null {
 }
 
 function interactionTriggered(event: Fields): InteractionTriggeredEvent | null {
-  return isString(event.interactiveId) && event.trigger === "enter"
-    ? {
-        type: "interactionTriggered",
-        interactiveId: event.interactiveId,
-        trigger: "enter",
-      }
-    : null;
+  if (!isString(event.interactiveId) || event.trigger !== "enter") return null;
+  const entered: InteractionTriggeredEvent = {
+    type: "interactionTriggered",
+    interactiveId: event.interactiveId,
+    trigger: "enter",
+  };
+  if (isString(event.tokenId)) entered.tokenId = event.tokenId;
+  return entered;
 }
 
 function sdkError(event: Fields): SdkErrorEvent | null {

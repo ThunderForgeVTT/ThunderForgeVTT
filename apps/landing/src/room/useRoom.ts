@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { diceCommand } from "@thunderforge/dice-throw";
 import {
+  chestCommand,
   createReferee,
   GOAL_EVENT,
   HERO_ID,
@@ -148,6 +149,14 @@ export function useRoom(script: RoomScript, frameId: string) {
       const state = now.current;
       switch (event.type) {
         case "upsert_token": {
+          // The engine lets a press pick any token up, as the client does;
+          // there the server refuses a move of a token that is not yours and
+          // the board snaps back. Here the room is the server, and it
+          // refuses the same way: the chest goes back where it stood.
+          if (event.token.id === script.chest.tokenId) {
+            engine.current.send?.(chestCommand(script, state.goals.includes("chest-opened")));
+            return;
+          }
           if (event.token.id !== HERO_ID) return;
           const from = toWorld(state.hero, grid);
           const to = { x: event.token.x, y: event.token.y };
@@ -158,6 +167,9 @@ export function useRoom(script: RoomScript, frameId: string) {
           return;
         }
         case "movement_blocked":
+          // Only the hero's bumps are the hero's. A dragged chest stopping
+          // at a wall is the furniture being put back, not a move refused.
+          if (event.tokenId !== undefined && event.tokenId !== HERO_ID) return;
           compare(false);
           apply(referee.refused(state, event.wallId));
           return;
@@ -165,6 +177,8 @@ export function useRoom(script: RoomScript, frameId: string) {
           apply(referee.doorPressed(state, event.wallId));
           return;
         case "interactionTriggered":
+          // The chest put back on its square crosses into its own region.
+          if (event.tokenId !== undefined && event.tokenId !== HERO_ID) return;
           // A step into the region already found the chest; say it once.
           apply(referee.entered(state, event.interactiveId), { quiet: true });
           return;
