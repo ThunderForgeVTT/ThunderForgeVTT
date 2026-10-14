@@ -82,9 +82,13 @@ export function AppHeader({ brandHref, navItems }: AppHeaderProps) {
           to={brandHref}
           className="inline-flex min-w-0 items-center gap-3"
         >
-          <span className="inline-grid size-10 shrink-0 place-items-center rounded-full border border-border bg-secondary">
-            <FantasyIcon name="crown" size={20} />
-          </span>
+          <img
+            src="/brand-mark.svg"
+            alt=""
+            width={40}
+            height={40}
+            className="size-10 shrink-0 rounded-xl"
+          />
           <span className="grid">
             <strong className="text-sm tracking-wide">ThunderForge</strong>
             <small className="text-xs text-muted-foreground">

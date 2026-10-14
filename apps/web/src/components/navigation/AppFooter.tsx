@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
 import { Container } from "@/components/ui/container/Container";
-import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
 import {
   DEMO_LINK,
   SITE_LINK_GROUPS,
@@ -86,7 +85,13 @@ export function AppFooter() {
         <div className="grid gap-8 border-t border-border pt-8 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
           <div className="grid gap-2 self-start">
             <span className="inline-flex items-center gap-2">
-              <FantasyIcon name="crown" size={18} />
+              <img
+                src="/brand-mark.svg"
+                alt=""
+                width={24}
+                height={24}
+                className="size-6 rounded-md"
+              />
               <strong className="text-sm tracking-wide">ThunderForge</strong>
             </span>
             {/* Deliberately free of the product's own nouns. The first
