@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { data, enterPlay, openDemo, WORLD_ID } from "./support";
+import { rollD20IntoHistory } from "../../web/e2e/fixtures/diceRollProof";
 
 /**
  * Spec 074 / spec 014: the demo rolls with the server's dice. Both places a
@@ -121,4 +122,12 @@ test("a character in the dock rolls from its sheet", async () => {
   expect(d20).toBeGreaterThanOrEqual(1);
   expect(d20).toBeLessThanOrEqual(20);
   expect(records[0].resolution.resultValue).toBe(d20 + 3);
+});
+
+test("the web app's own dice proof passes against the demo (SC-008)", async () => {
+  // `apps/web/e2e/dice-roll.spec.ts`, body for body: the same function, on
+  // the demo's world, with no server behind it. The test before this one
+  // left the visitor viewing as the Game Master, whose history this reads.
+  await enterPlay(page);
+  await rollD20IntoHistory(page, expect, WORLD_ID);
 });

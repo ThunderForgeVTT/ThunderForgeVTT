@@ -24,6 +24,9 @@ const EXACT: Record<string, string> = {
 
 const FAMILIES: Array<[RegExp, string]> = [
   [/invite/i, "Invite links"],
+  // FR-013: sharing links. The share dialog asks for the sharing terms before
+  // it asks for a link, so the terms are named for what they lead to.
+  [/share|sharingTerms|attestation/i, "Share links"],
   [/combat|encounter|initiative|attack|damage/i, "Combat"],
   [
     /loreRepository|loreSync|loreIncoming|lorePending/i,

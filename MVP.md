@@ -8,7 +8,10 @@ and it has since carried a size figure that drifted 16% before anyone noticed.
 So each phase below says what was checked and when. `[x] Done`,
 `[~] Partial` (with what is missing), `[ ] Not started`.
 
-**Last verified: 2026-08-31.**
+**Last verified: 2026-10-13**, against `main` at `da60b0fa`, by reading the
+code, the migrations, the e2e files and the spec ledgers — nothing was run.
+Phases 7 and 8 moved; the rest kept their marker and had their text brought
+up to date where it had drifted.
 
 ## Core concepts
 
@@ -158,19 +161,54 @@ ambiguous failure produces exactly one issue because the retry searches for the
 delivery key rather than creating a second. See
 [docs/FEEDBACK.md](docs/FEEDBACK.md).
 
-**Not built**: the by-hand quickstart pass, and the credential-resolution
-screens (US4). Attachments are kept for 30 days and the sweep is implemented,
-but nothing has yet watched one expire.
+**Not built**, re-checked 2026-10-13: the by-hand quickstart passes (037 T078,
+040 T111–T112, 041 T078 are the open rows in their ledgers). The
+credential-resolution screens this document listed as missing are built —
+spec 037 US4, `apps/web/e2e/feedback-credentials.spec.ts`. Attachments are
+kept for 30 days; the sweep (`feedback/schedule.rs`) is unit-tested
+(`the_sweep_takes_expired_evidence_and_leaves_the_report` in
+`feedback/deliver_tests.rs`) and has never been watched end to end.
 
-**There is no password-change path at all.** `password_hash` is only ever
-written at registration, admin bootstrap and OAuth auto-provisioning. Recorded
-because spec 036 FR-008 assumes one, and it is the sort of absence that reads
-as an oversight in a feature list.
+**The password-change path exists.** An earlier revision of this section said
+there was none; spec 036 built one — `POST /authentication/password`
+(`auth/password_change.rs`), which ends every other session for the account,
+proven in `apps/web/e2e/concurrent-sessions.spec.ts`. The stale claim still
+lives on in a comment in `auth/session_registry.rs`.
+
+**Admission is a policy, since 2026-09-06.** `instance_access_settings` holds
+`open`, `invite_only` or `closed` (spec 035, ADR-072; fresh installs start
+invite-only), one gate covers local registration and OAuth sign-in
+(`auth/instance_access.rs`), and since `e54c6893` the environment can pin the
+policy (`THUNDERFORGE_INSTANCE_ACCESS_POLICY`, unknown values fail shut to
+closed). Spec 064 made first run ask only what that mode needs — a private
+instance is not asked for copyright-notice details
+(`instance-first-run-private.spec.ts`, `instance-first-run-public.spec.ts`;
+52/52 tasks, lane green 2026-10-12). Keycloak-style providers take an issuer
+URL (`2026-10-02-090000-0000_oauth_provider_issuer_url`, spec 064 FR-032): the
+endpoints are built from it by a known path pattern, which is not OIDC
+discovery.
 
 ### [x] Phase 2 — World creation
 
 `createWorld` with `game_system_id`/`interface_pack_id`, plus listing and
-deletion.
+deletion. Since spec 088 (109/109) it also takes a `baseMapId`, so a new world
+can open on one of the example maps instead of a blank scene
+(`apps/web/e2e/world-base-map.spec.ts`; the maps are MBRound18's own CC BY-SA
+4.0 work, credited in `examples/maps/credit.json` and shown by
+`MapCredit.tsx`).
+
+**Grown around it, verified 2026-10-13.** A world now has a book list
+(`2026-09-13-100000-0000_world_book_list`, spec 050): which books on the
+owner's shelf it has switched on, nothing copied, and a trigger that refuses
+anyone else's shelf. The shelf itself comes from spec 049 (105/106, the open
+row is the by-hand quickstart on a real book; `book-import-*.spec.ts`, slice
+`book-import`), and a collection is a `compendiums` row of origin `Authored`
+with its earlier versions kept
+(`2026-09-16-220000-0000_collections_on_the_shelf`,
+`2026-09-16-230000-0000_collection_versions`; slice `collections`). Spec 074
+is a world to try: the demo under `apps/demo`, which runs the visitor as Game
+Master entirely in the browser — nothing leaves it, and it is not a shared
+table. Its ledger stands at 7/12.
 
 ### [x] Phase 3 — Scene creation
 
@@ -178,6 +216,23 @@ Scene CRUD, `grid_size`/`grid_type`, background art by `.dd2vtt` import or
 paste-to-canvas (spec 002, on RustFS asset storage). Spec 022 overhauled scene
 management and made which scene a world is _on_ server state rather than a
 per-client selection (ADR-046).
+
+**Since the last pass, verified 2026-10-13.** A scene has an ambient light of
+bright, dim or dark (`2026-09-10-140000-0000_scene_ambient_light`) and an
+exploration switch (`2026-09-12-090000-0000_scene_exploration`, spec 045 US7):
+the server holds only on/off and a reset epoch, what a player has seen stays
+in their own browser. A scene made from an example map carries that map's
+credit (`2026-10-10-110000-0000_base_map_assets`, spec 088). Walls and lights
+snap to the grid or to wall ends, toggled with S (spec 077, implemented
+2026-10-06, `apps/web/e2e/wall-snapping.spec.ts`), and a wall that ends on
+another joins it (spec 078 FR-001 to FR-004). The engine and large scene
+assets download in resumable parts (spec 080, 36/36,
+`resumable-downloads-*.spec.ts`).
+
+Not built: a map that arrives in pieces (spec 059, ADR-104 still proposed —
+the import is one request in `map_import/mod.rs`) and a map in tiles (spec 075;
+`MAX_CANVAS_TEXTURE_DIMENSION` in `storage/transcode.rs` still caps a
+background at 4096). Both are drafts with no tasks.
 
 ### [x] Phase 4 — Token creation
 
@@ -189,9 +244,29 @@ stand-in with real canvas-rendered resize and rotate handles.
 **Closed since the last pass**: tokens now have a kind.
 `thunderforge_canvas_core::token_kind::TokenKind` defines Character, NPC,
 Vehicle and Object, parsed server-side (`parse_token_kind`) and rendered with a
-per-kind palette in the engine (`token_kind_color`, `crates/thunderforge-engine/src/lib.rs`).
+per-kind palette in the engine (`token_kind_color`, now in
+`crates/thunderforge-engine/src/payloads.rs` since `ea104c76`).
 The "no distinct token type or visual representation" gap this document
 recorded is gone.
+
+**Since the last pass, verified 2026-10-13.** A token is linked to its actor
+or a detached copy with its own `system_data` (`2026-09-14-210000-0000_token_links`,
+spec 046), and `tokens.health`/`max_health` are retired into
+`retired_token_health` because HP lives on the sheet
+(`2026-09-14-210100-0000_retire_token_health`, ADR-102). The old
+`world_tokens` table is dropped outright
+(`2026-09-15-090000-0000_drop_world_tokens`); only a comment and a test
+module still say the name. A token's name can be hidden from players
+(`token_name_visibility`), an NPC is invisible to players by default
+(`npc_visible_to_players`), and a world decides whether players may set
+their own actor's art (`player_actor_art`). Since `5191e738` (2026-10-12)
+token creates and deletes go through the world store with a client-minted
+id, the way moves already did (`apps/web/e2e/canvas-context-menu.spec.ts`).
+The board takes touch (spec 069, `canvas-touch.spec.ts`) and says when its
+engine has stopped (spec 070, `canvas-engine-stopped.spec.ts`). The hero
+builder (spec 044, 103/103) makes an actor and its art from a form
+(`hero-builder-*.spec.ts`, slice `hero-builder`). Spec 056 was never built as
+its own spec; 071 and 073 cover its right-click asks.
 
 ### [~] Phase 5 — Actor stats and customisation
 
@@ -216,43 +291,186 @@ displays on — the same as with none.** Before off-screen culling the same boar
 carried 16,003 sprites against 3,203 and ran at 20fps. Figures are generated
 into `marketing/engine-status-capacity.json`, never transcribed.
 
-**Still open — nothing acts on a computed stat.** `DerivedStats.movement_speed`
-exists and is written, and `grep` finds no reader anywhere
-(`crates/thunderforge-engine/src/components.rs:172` is the only hit outside its own writes).
-Movement is _modelled_ but not _enforced_: `movement_budget::cost_path` is
-implemented and unit-tested, while `PlannedPath` still charges one cell per
-step and no caller consults the cost. Gating movement on a computed speed
-belongs to Phase 8.
+**Re-verified 2026-10-13: a computed stat is now read, charged and shown —
+and still never enforced.** The previous pass found `movement_budget::cost_path`
+implemented with no caller. Spec 046 gave it one: every committed move —
+`moveOwnToken`, a GM's `updateToken` drag, and offline replay
+(`graphql/mutations_reconcile.rs`) — passes through
+`crates/thunderforge-server/src/combat/budget.rs::spend_for_move`, which
+resolves the actor's walking speed from its sheet through the system's
+`movement` block in `system.json` (5e's `walk` reads `speed_walk`), prices the
+route with `thunderforge_combat::budget::move_cost` → `cost_path`, and writes
+the spend to `world_combatant_budgets` (migration
+`2026-09-14-230000-0000_combatant_budgets`). The dock shows what is left
+(`apps/web/src/components/world/PlayDock/CombatantBudget.tsx`), and
+`apps/web/e2e/combat-economy.spec.ts` proves it in a browser.
+
+Three limits, all deliberate and all recorded in the code rather than
+discovered here:
+
+- **Charged only while a combat is running in that scene.** Outside a fight
+  `spend_for_move` returns before it prices anything. There is no
+  out-of-combat speed.
+- **Shown, never refused.** The module header says so in those words, and
+  spec 046's decision 2 is why: a spend past the allowance is a *debt*, shown
+  as `overspent`, never a rejected move. The same holds for reach and range
+  (`combat/reach.rs`): flagged on the attack record, never refusing it. So
+  "gating movement on a computed speed", which this document once assigned to
+  Phase 8, is now a decision to overturn rather than a feature to add.
+- **The engine knows none of it.** `PlannedPath::cost_in_cells` still counts
+  one cell per step (`crates/thunderforge-canvas-core/src/movement.rs`), the
+  engine has no `cost_path` caller, and `DerivedStats.movement_speed`
+  (`crates/thunderforge-engine/src/components.rs:166`, now an `Option` that
+  nothing sets) is dead. Difficult terrain has no source: every step is priced
+  as open ground.
+
+What *does* refuse a player's move is the turn check (`turn::turn_check`) and
+walls: `judge_against_walls` in `graphql/mutations_tokens.rs` answers "A wall
+is in the way", and since migration `2026-09-16-090000-0000_walls_block_movement`
+a wall blocks movement by default (spec 045, `apps/web/e2e/token-movement-walls.spec.ts`).
+A GM's drag is not judged, by FR-017.
+
+**Also closed by specs 045 and 046.** Keyboard movement — WASD and arrows,
+Shift to extend a route, Space to commit — is wired in
+`crates/thunderforge-engine/src/systems/token_move.rs` and re-sent from the
+window by `apps/web/src/engine/canvasKeyboard.ts` so keys do not die when
+focus leaves the canvas (`apps/web/e2e/token-keyboard-move.spec.ts`). Hit
+points, temporary hit points and zero-means-out live on the actor, with a
+token either *being* its actor or a copy of it (`2026-09-14-210000-0000_token_links`,
+`…_retire_token_health`, ADR-102). Attacks resolve on the server against
+armour class with an offer the GM takes or declines
+(`combat-attack.spec.ts`, `combat-hit-points.spec.ts`). Conditions exist
+(`2026-10-04-120000-0000_world_actor_conditions`, spec 067) and are drawn;
+nothing in `thunderforge-combat` reads them, so they are display only.
+
+**Characters arrive from their sheets (spec 048, 98/98 tasks).** A D&D Beyond
+PDF or a Roll for Shoes sheet is read in the browser and again on the server
+by the pack's own `sheet/` crate (ADR-115), reviewed before it lands, re-read
+on re-import for only what changed, and rolled back by the GM
+(`apps/web/e2e/sheet-import-*.spec.ts`, the `sheet-import` slice). The
+`playtest/bring-a-character.playtest.ts` run of 2026-10-10 carries one soft
+finding: a spell that comes off a sheet with no dice cannot be cast until the
+GM gives it an effect.
 
 ### [x] Phase 6 — Walls and lighting
 
 Walls, doors and light sources with 2D vision occlusion, and hand-drawn wall
 and shape authoring on the canvas (specs 001, 002).
 
-Spec 003 closed the round-trip trust gap: `map_import.rs` re-queries the
+Spec 003 closed the round-trip trust gap: the map importer (now the directory
+`crates/thunderforge-server/src/map_import/`, split in `6f8ed43f`; the tests
+are `map_import/tests.rs`) re-queries the
 database after an import — and after hand edits on top of one — and asserts
 exact field equality against the source across the richest real fixtures, so
 nothing is silently lost or altered by a reload. It also surfaced previously
 silent field categories as import `warnings` (freestanding portals, non-default
 `ambient_light`, `objects_line_of_sight`).
 
-Live cross-session sync works: `WorldPage.tsx` opens the `worldEventsCreated`
-subscription once per mounted scene and feeds the wall, token, shape, light and
-status appliers from it — one subscription, each applier filtering by its own
-event code.
+Live cross-session sync works: `apps/web/src/pages/world/useSceneLiveSync.ts`
+opens the `worldEventsCreated` subscription once per mounted scene and feeds
+the wall, token, shape, light, status, interactive, vision, grid and
+scene-lighting appliers from it, each filtering by its own event code.
+`WorldPage.tsx` only calls the hook now. A second, world-scoped subscription
+in `useWorldEventStreams.ts` carries scene selection, pause and rolls; its
+comment says two open subscriptions is the accepted trade.
 
-### [ ] Phase 7 — Scene levels
+**Since the last pass, verified 2026-10-13.** A light has a bright reach and
+a dim reach (`2026-09-15-140000-0000_light_bright_radius`); walls block
+movement by default (`2026-09-16-090000-0000_walls_block_movement`, spec 045,
+see Phase 5). Spec 076 (implemented 2026-10-06) reworked sight: line of sight
+hides the map even in a bright scene, never-seen areas are black, a light the
+viewer cannot see lights nothing, and a GM who selects a token sees what it
+sees (`systems/lighting_vision.rs`, `plugins/darkness.rs`;
+`scene-lighting.spec.ts`, slice `lighting`). Doors, lights and drawings have
+right-click menus (specs 071, 073; `interactive-door-menu.spec.ts`,
+`canvas-light-and-drawing-menu.spec.ts`). Players draw their own shapes
+(spec 082, 46/46, see Phase 10). Hidden walls use the existing `walls.secret`
+and the board has box select (spec 085, 37/37, `canvas-box-select.spec.ts`).
+
+### [~] Phase 7 — Scene levels
 
 Upstairs and downstairs, each level with its own walls and token assignments.
-No level concept exists in the schema or the engine. Not started.
+
+**Built on 2026-10-04, in two commits** (`0ef38b66` the server, `ad98425b`
+the board), without a spec folder of its own — which is why this document
+still said "not started" six weeks later. What exists, verified against the
+code:
+
+- **Schema.** `crates/thunderforge-server/migrations/2026-10-04-090000-0000_scene_levels`
+  adds `scene_levels` — a name, an order, one entry level per scene, and a
+  board of its own (background, size, ambient light) — and a `level_id` on
+  `tokens`, `walls`, `light_sources`, `shapes`, `interactives` and
+  `fog_masks`. Every existing scene was backfilled with a "Ground" entry
+  level, and a trigger puts an insert that names no level onto the entry
+  level, so nothing that existed before levels had to learn about them. Fog is
+  now per level.
+- **Server.** `graphql/mutations_levels.rs` (create, update, reorder, delete,
+  `moveTokensToLevel`; up to twelve per scene), `level_travel.rs` for stairs,
+  and `auth/level_visibility.rs`: a GM reads every level, a player reads only
+  the levels where they control a token — or the entry level if none — and a
+  level they may not read is answered as if it did not exist. Event codes 33
+  (`SCENE_LEVEL_CHANGED`) and 34 (`TOKEN_TRAVELLED`, whose payload
+  deliberately names no level).
+- **Travel.** A `nav.travel` interactive with a partner: walking into a stair
+  region travels inside `moveOwnToken`; a door or prop travels through
+  `activateInteractive`. A GM's drag never travels. Arrival counts as a
+  placement, so a token cannot bounce straight back down.
+- **Board.** `apps/web/src/components/world/LevelTabs/` gives the GM a tab per
+  level with a token count and a manager (rename, reorder, make entry, set
+  the background, move tokens, delete); `api/viewedLevel.ts` makes every
+  per-scene read level-aware; `engine/world/sync/levels.ts` applies events 33
+  and 34. The engine itself has no level concept and needs none: switching
+  level reloads the board the way a scene switch does
+  (`pages/world/useSceneLevels.ts`), so vision and lighting are per level
+  because each level's data is loaded alone.
+- **Proven.** `apps/web/e2e/scene-levels.spec.ts` (the `scenes` slice): a
+  player who walks onto the stairs is taken upstairs and *only they are* — the
+  other player stops seeing them and cannot read the upper floor, the GM's
+  tab count moves, a reload keeps them upstairs, and a GM drag across the
+  stairs moves nobody.
+
+**Not done**, and the reason this is `[~]`:
+
+- Clicking a door or prop to travel: the server accepts a `tokenId`, the web
+  never sends one (`CanvasContextMenu/doorActions.ts`,
+  `engine/world/sync/interactives.ts`), so the server answers "Choose which
+  token travels". Only stair *regions* travel from the board today.
+- Drawing a stair region: `components/InteractionAuthor/RegionDraw.tsx`
+  exists and nothing imports it. The e2e creates its regions over GraphQL.
+- Combat does not check that two tokens share a level.
+- `.dd2vtt` import writes only to the entry level
+  (`map_import/scene_write.rs`).
+- No spec or task ledger owns the feature; spec 088 US6 (edge walls for a
+  level's background) is the only spec that mentions it.
 
 ### [~] Phase 8 — Game system integration
 
 Shipped: the system package install and manifest-serving pipeline
-(`crates/thunderforge-server/src/systems.rs`), a registry with eight pack crates, and
-server-side per-system validators that already enforce real rules — Pathfinder
-2e rejects an ability value outside `-5..=10` because it stores modifiers where
-D&D 5e stores raw scores.
+(`crates/thunderforge-server/src/systems.rs`), a registry with eight server
+pack crates plus two `sheet/` reader crates (root `Cargo.toml`,
+`apps/thunderforge/src/system_packs.rs`, whose test asserts each one is
+discovered), and server-side per-system validators that already enforce real
+rules — Pathfinder 2e rejects an ability value outside `-5..=10` because it
+stores modifiers where D&D 5e stores raw scores.
+
+**Where each system stands, re-verified 2026-10-13.** The owner's bar is that
+D&D 5e and Roll for Shoes are field-test ready and the rest keep working.
+Against the manifest contract in `packs/systems/README.md` (the key list is
+enforced by `scripts/check-packs.mjs`):
+
+| System | Declares | Code beyond validators | Proof |
+| --- | --- | --- | --- |
+| `dnd5e` | abilities, resources, movement, vision, combat, conditions, checks (30), settings, skills, damage types, item properties, ability vocabulary, sheet import | rules, roll facets (spec 084, 72/72), stat blocks, content refine, a `sheet/` reader (spec 048), a web sheet and `statRolls` | 61 e2e files: `dnd5e-sheet`, `rolls-facets-*`, `rolls-5e-stats`, `roll-check`, `combat-*`, `sheet-import-*`, `system-world-settings` |
+| `roll_for_shoes` | resources, sheet, starting skills, sheet import | adjudicate (rolls judged on the server, XP paid in the same transaction), its own settings and table-difficulty tables (ADR-063), a `sheet/` reader, a web sheet and three panels; specs 061 (35/35) and 062 (57/57) | `system-roll-for-shoes.spec.ts`, `-extras`, `-table`, `sheet-import-second-system`, `system-world-create` |
+| `genie` | abilities, facets, combat, conditions, movement, wish points | rules, a session domain owning six tables and its GraphQL, a web sheet and four panels | about thirty `genie-*` and `status-*` files |
+| `pathfinder2e`, `blades_in_the_dark` | abilities, resources, movement, sheet | validators only | `status-systems`, `token-attributes`, `abilities-vocabulary`; Pathfinder also in `world-appearance` |
+| `fate_core`, `cypher_system` | sheet (tracks, ladders, slots), groups | validators only | `world-appearance.spec.ts` renders each through `forge`; Fate also in `sheet-import-refusals` |
+| `year_zero_engine` | abilities, resources, sheet | validators only | **no e2e at all** — a registration test and the build-time `check-packs` are its whole evidence |
+| `basic-game-system` | `template: true` | — | not offered in any picker, by design |
+
+So 5e and Roll for Shoes meet the bar on the code and the e2e that exists;
+Year Zero is the system with the least behind it. Spec 049's SC-002 and SC-004
+(a real source book, by hand) are the one 5e item left open.
 
 **Attributes are system-declared, and the 5e formulas are gone.** The engine
 once carried `TokenAbilities` — six fixed fields, strength through charisma —
@@ -275,8 +493,9 @@ execute":
    the way its server crate links into the binary. ADR-062 decided packs extend
    the engine with data, and spec 066 removed the `engine/` crates that nothing
    ever loaded.
-2. **Validation is not enforcement.** Rejecting a bad ability score is not the
-   same as gating movement on a computed speed. See Phase 5's open item.
+2. **Validation is not enforcement — and enforcement is now a decision, not a
+   gap.** A computed speed is read and charged on every move in combat, and
+   never refuses one, by spec 046's decision 2. See Phase 5.
 3. ~~**A vestigial trait.**~~ Resolved by spec 032: `crates/thunderforge-engine/src/systems/core.rs`
    is gone, and the one contract a system implements is
    `thunderforge_canvas_core::system_rules::SystemRules` — in the crate both the
@@ -333,14 +552,31 @@ stake, says in red that the content becomes hidden rather than destroyed, and
 asks twice — with the server refusing an unacknowledged or stale request, so
 the guard holds against a direct call.
 
-What is *not* done, and is recorded rather than glossed: a system pack cannot
-yet contribute **behaviour**. World creation still branches on one system's
-name to insert its session row, because that pack cannot own the table it
-writes while 2,763 lines of that ruleset's GraphQL live in the server. ADR-063
-sizes the move and research § F-5 finds the route — the server compiles as a
-library, which is what lets a pack depend on it. A failing pack surface is
-contained and names its pack, and `packs/systems/README.md` is the published
-contract for authors.
+**A pack now contributes behaviour — closed by ADR-063 on the day it was
+accepted (2026-09-03).** The previous pass recorded that world creation
+branched on one system's name to insert its session row, because that pack
+could not own the table it wrote while 2,763 lines of its GraphQL lived in the
+server. Those lines were Genie's, and they are in the pack: the server
+compiles as a library, `packs/systems/genie/server/src/session/` owns its six
+tables and their GraphQL (`apps/thunderforge/src/schema_roots.rs` merges
+them), and `createWorld` calls `world_hooks::run_world_created`
+(`crates/thunderforge-server/src/world_hooks.rs`), which dispatches through
+`inventory` to whichever pack registered a `WorldCreatedHook`.
+`scripts/check-system-registry.mjs` carries an empty exemption list. What a
+server crate may contribute is one `SystemContribution`
+(`crates/thunderforge-canvas-core/src/system_contribution.rs`): slot
+validators, rules, `refine_content`, `world_setting`, `adjudicate`,
+`roll_facets` and `sheet_import`. A failing pack surface is contained and
+names its pack, and `packs/systems/README.md` is the published contract.
+
+Since then: per-world system settings are declared rows
+(`2026-10-04-100000-0000_world_system_settings`, spec 067, ADR-112 — 5e's
+`inspiration` is the first), a pack's `sheet/` crate reads a character sheet
+(spec 048, ADR-115), and roll facets — advantage, inspiration, rerolls, item
+properties — are a pack contribution (spec 084, migration
+`2026-10-07-120000-0000_roll_facets`). The one ADR-063 step still open is
+moving a pack's migrations into the pack; they live under the server's
+`migrations/` today.
 
 ### [x] Phase 9 — Multiplayer
 
@@ -383,23 +619,79 @@ un-claimed player keeps their membership and returns to the "no character
 selected" state. Covered by `apps/web/e2e/actor-claim.spec.ts`, including two
 players racing to claim the same character with exactly one winner.
 
+**Since the last pass, verified 2026-10-13.** Every seat hears a roll: spec
+081 (47/47) sends rolls to the whole table, with GM-only and GM-eyes rolls and
+a reveal (`apps/web/e2e/rolls-everyone.spec.ts`, `rolls-gm-only`,
+`rolls-gm-eyes`, `rolls-reveal`), and spec 083 (68/68) draws the dice in the
+engine landing on the server's result (`rolls-dice-on-screen.spec.ts`,
+`rolls-dice-frame-rate.spec.ts`). Damage reaches every seat's bars inside one
+second, asserted rather than annotated (spec 046, `e2e/fixtures/seatTiming.ts`).
+An operator can pause a world's play and lift it, and the table is told
+(spec 051, 74/74, migration `2026-09-13-170000-0000_pausing_a_worlds_play`,
+ADR-100; the five `play-pause*.spec.ts` files and
+`journeys/operator-pauses-through-the-portal.journey.spec.ts`). An invite's
+use limit is optional (`2026-10-10-100000-0000_world_invites_optional_limit`,
+spec 088 FR-012): the old default of 0 was a limit the CHECK constraint
+refused.
+
+Still exactly one play field per account: `play_field.rs` keeps one claim,
+there is no release mutation, and `peer_signaling/admission.rs` refuses a peer
+connection from a companion.
+
 ### [~] Phase 10 — Permissions model
 
-A fixed three-tier role model (Owner/GM/Player) over `world_members`, with
-`updateMemberRole` letting an Owner or GM change any member's role, including
-promotion to Owner.
+**Four ranked roles, not three, as of 2026-09-13.** `world_members.role` is
+Owner, GM, TrustedPlayer or Player (migration
+`2026-09-13-110000-0000_trusted_player_role`, ADR-099), ranked in
+`crates/thunderforge-authz/src/role.rs` and backed by a capability matrix in
+`crates/thunderforge-authz/src/capability.rs`. A Trusted Player differs from a
+Player in exactly one capability, `ManageBookMaterial` — switching books on
+the world's list, editing the world's changes to their entries (spec 050), and
+adopting what players bring in (spec 048) — and the matrix's own test pins
+that difference. GM is already the "assistant GM" this document used to ask
+for: full content authority, cannot delete or transfer the world. Proven by
+`apps/web/e2e/library-deltas-roles.spec.ts`, `library-book-list.spec.ts` and
+`sheet-import-adopt.spec.ts`.
 
-Spec 010 added a real per-object layer on top: an ownership block granting any
-member Viewer/Editor/Owner on any actor, with the DM implicitly retaining full
+`updateMemberRole` now has limits (`crates/thunderforge-core/src/models/invites.rs`):
+nobody hands out a role above their own, so only an Owner promotes to Owner,
+and a GM manages only members ranked below GM.
+
+Spec 010 added a real per-object layer: an ownership block granting any member
+Viewer/Editor/Owner on any actor, with the DM implicitly retaining full
 control and a default-Viewer fallback. Enforced server-side
 (`auth/actor_permissions.rs`, gating `updateActorSystemData` and
-`moveOwnToken`). The same shape has since been extended to lore, items and
-abilities (`world_*_permissions` tables).
+`moveOwnToken`). The same shape covers lore, items and abilities
+(`world_*_permissions` tables), and since spec 063 (ADR-110, migration
+`2026-10-03-090000-0000_claim_grants_editor`) claiming a character grants
+Editor on it and releasing the claim takes back only what the claim granted
+(`apps/web/e2e/actor-claim.spec.ts`).
 
-**Missing**: this is per-object, not a general policy system. There is still no
-world-wide "trusted player" or "assistant DM" role beyond the fixed three, and
-no ownership block for scenes or maps. The `policies`/`permission_grants`
-tables remain dead code. Same class of gap as `docs/SECURITY_RBAC.md` records.
+**Players hold authoring tools per member.** Spec 031 FR-046 added
+`world_authoring_tool_grants` — a GM may grant any of select, walls, lights,
+shapes, tokens, interactions (`auth/authoring_tools.rs`,
+`setAuthoringToolGrant`, `AuthoringToolGrantsCard.tsx`) — and spec 082 turned
+select and shapes *on by default* with a revocations table to take them away
+(`2026-10-07-110000-0000_authoring_tool_revocations`,
+`apps/web/e2e/canvas-shapes-by-players.spec.ts`). Granting walls or lights to a
+player by name has only the server's surface table behind it
+(`play_pause_surface_tables.rs`), no e2e.
+
+**Still missing**, checked by grep on 2026-10-13:
+
+- No ownership or visibility block for scenes or maps: nothing named
+  `scene_permissions` exists; scene writes go through `is_dm_of_scene`.
+- No general policy system. `permission_grants` turns out never to have been
+  a table at all — the name survives in `docs/SECURITY_RBAC.md` as history.
+  `policies` *is* still migrated (`2026-05-02-022200-0000_create_policies`)
+  and declared in `schema.rs`, and its only reader is the admin dashboard's
+  row count (`admin.rs`); every other reference is commented out or stubbed.
+- `createWorld` still inserts no Owner row in `world_members`
+  (`graphql/mutations_worlds.rs` says so in a comment); membership checks fall
+  back to `worlds.created_by`.
+- `docs/SECURITY_RBAC.md` is dated 2026-08-20 and knows none of the above —
+  it still says scene-object writes are scoped to `scenes.owner_id`, which
+  they no longer are.
 
 ## Interactive elements — spec 030
 
@@ -435,19 +727,64 @@ greppable rather than a matter of judgement. ADR-054.
 - **Sound.** No audio subsystem exists, so nothing declares a sound effect and
   none is offered. That is the contribution seam working, not a gap in it —
   when audio is built it contributes `audio.play` and nothing else changes.
+  Unchanged on 2026-10-13: no `bevy_audio` in any Cargo file, and spec 038
+  (scene audio) is still a specification only. Spec 058, "a table that hears
+  what happened", is not audio — it is a proposal, nothing built, about more
+  kinds of action reaching the table's feed.
 - **Multi-scene navigation.** `nav.request_scene` raises a request, the GM
   approves or refuses, and the requester is told. Then nothing moves anybody,
   because there is nothing yet to move them with. The request and the decision
-  are the parts this feature owns, and they work.
+  are the parts this feature owns, and they work. (Still true on 2026-10-13:
+  `crates/thunderforge-canvas-core/src/navigation.rs` says so in its header.
+  The one effect that *does* move a token is `nav.travel`, between the levels
+  of one scene — see Phase 7 — and `mutations_interactives_support.rs` moves a
+  token on approval only when `level_travel::is_travel` says so.)
 - **Party tokens.** A GM-controlled token the whole party sees and follows — a
   ship, a caravan — for world-map scenes. Named so the model does not preclude
   it; not built.
 
 ## Health of the test suite
 
-Read `docs/e2e-suite-health.md` before reacting to a failure count; the number
-is not self-explanatory, and most of what it reports has historically been the
-suite rather than the product.
+**The unit of proof is a slice, not the suite** (ADR-107, constitution
+Principle VI, `docs/CONTRIBUTING.md` "Proving a change"). A change is proven
+by `pnpm e2e:<slice>` for the slices `pnpm e2e:which --diff` names;
+`scripts/check-e2e-slices.mjs` runs in `pnpm verify` so a spec file with no
+owner fails the check. `scripts/e2e/slices.json` declares 32 slices over the
+249 `*.spec.ts` files under `apps/web/e2e`. The full `e2e-parallel` run is on
+the order of four hours and nothing gates on it.
+
+`docs/e2e-suite-health.md` is from the spec 030 era (last touched
+2026-08-30, 202 tests and 42 failures) and reads as history now; no
+`.e2e-history.jsonl` exists. What the files record instead, checked
+2026-10-13:
+
+- `scripts/e2e/slice-durations.json` (`9e46385a`, measured 2026-09-22/23):
+  27 slices, 204 spec files, **541 passed, 0 failed, 0 flaky, 1 skipped**,
+  149.7 minutes of wall time summed. Five slices had no duration then
+  (landing, resumable-downloads, rolls, sheet-import, telemetry).
+- Spec 048 T098 (2026-10-10) ran 19 slices one at a time, every one 0
+  failed — sheet-import 46, accounts 69, actors 30, book-import 17, canvas 44,
+  collections 31, combat 26, companion 13, compendium 26, engine-other 9,
+  game-systems 33, genie 21, instance 42, lore 13 (+1 skip), moderation 14,
+  scenes 19, tokens 24, worlds 21 — except `resumable-downloads`, 7 passed
+  and 1 failed (`resumable-downloads-scene`: its 16 KB part override against
+  a 274 MB dev-profile engine, not caused by 048 and not fixed since).
+- `4799da64` (2026-10-12): `e2e:actors` 32 passed in 7.8 minutes; `combat`
+  26 of 27, the odd one passing alone.
+- `abb9f45f` (2026-10-12): the nine journeys in `apps/web/e2e/journeys/`,
+  16 passed, 0 failed, 0 skipped.
+- Spec 089 (36/36, 2026-10-11): `cargo test` 2,205 passed on each of two
+  worktrees at once, each on its own stack (`make e2e-stacks`, two
+  concurrent slots); `book-import` and `feedback` ran side by side.
+- Spec 091: `pnpm e2e:landing` 127 passed, 34 skipped, 0 failed, twice; a
+  later rerun had 2 failures. The demo's own suite
+  (`pnpm -F @thunderforge/demo e2e`) 51 passed.
+- `pnpm playtest` (`apps/web/playtest/*.playtest.ts`, one worker,
+  Chromium) on 2026-10-10: combat-5e and dungeon-crawl green;
+  bring-a-character red on one soft finding (see Phase 5).
+
+No file records a full-suite run after 2026-09-23. That is by design, and it
+also means the honest full-suite number is "unknown since then".
 
 Two rules earned the hard way, and worth more than any individual fix:
 
@@ -460,7 +797,10 @@ Two rules earned the hard way, and worth more than any individual fix:
    intentionally removed behaviour. Weakening an assertion to get green is the
    one outcome worse than leaving it red.
 
-Always `--workers=1` for anything touching the engine.
+Always `--workers=1` for anything touching the engine (the playtest config
+has it; `e2e-parallel` gets its parallelism from shards, not workers). On an
+external stack, `THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT=1` too, or 429s dress
+up as flaky tests.
 
 ## Supported browsers
 
@@ -484,6 +824,14 @@ The end-to-end suite runs Chromium alone, so **any claim about another browser
 is untested by construction**, not merely unverified. Firefox support means
 running the suite against it, not reasoning about feature tables.
 
+Re-checked 2026-10-13: `apps/web/playwright.config.ts` has two projects,
+`chromium` and `first-run`, both `Desktop Chrome`; the demo, hero-builder and
+landing configs are the same. `crates/thunderforge-cache-browser` still rests
+on OPFS, WebCrypto and IndexedDB. The only Firefox-family commits since the
+last pass (`641e2a7d`, `edd9e46e`, 2026-10-05) fix a LibreWolf WebGL panic on
+the demo's engine window and tell the person where that browser keeps its
+WebGL switch; nothing added a Firefox project or spec.
+
 Recorded in the constitution as a project-wide constraint; see also the
 Post-MVP note on connections below, which is the other place MVP 1's operating
 envelope is stated rather than assumed.
@@ -501,9 +849,9 @@ one is a product decision rather than a switch.
   figure is **UNTESTED** — a starting recommendation, not a measurement, and
   labelled that way deliberately, because this document already carried one
   number that drifted 16% before anyone noticed.
-- What _has_ been measured bounds the guess from below: 4.92MB brotli for the
-  engine bundle (2026-09-01, after spec 031; it was 4.15MB before), plus a
-  world's art. Steady-state play is small — token moves
+- What _has_ been measured bounds the guess from below: 5.19MB brotli for the
+  engine bundle (2026-10-09, on Bevy 0.20; 4.92MB on 2026-09-01 after spec
+  031, 4.15MB before that), plus a world's art. Steady-state play is small — token moves
   and dice over one WebSocket.
 - **If you play on something slower, on a metered link, or on mobile data, we
   want to hear about it.** That evidence is worth more than our estimate, and
@@ -559,12 +907,33 @@ drifted 16%.
 Both figures above are measured, not estimated: `brotli -q11` via Python's
 `brotli`, `gzip -9` via `gzip`, on the release build wasm-pack produced.
 
+**Re-measured for Bevy 0.20 (spec 087, 2026-10-09).** The release build was
+30,424,557 bytes raw / 5,069,241 brotli -q11 on Bevy 0.19.1 and is
+**31,939,040 raw / 5,186,179 brotli** on 0.20 — +2.31% on the wire for the
+engine upgrade (`specs/087-bevy-0-20/spec.md`, `research.md`). Spec 091's
+landing build recorded the same engine at 5,192,368 bytes on the wire
+(`specs/091-landing-encounter/tasks.md`). No gzip figure has been recorded
+since 2026-09-01, and `marketing/*.json` holds no bundle size at all — the
+three files there (generated 2026-08-29 and 2026-08-30) are frame rates and
+load tiers. The demo build writes an `engine.json` with raw, brotli and gzip
+bytes (`apps/demo/src/build/engineManifest.ts`, `apps/landing/scripts/compress.mjs`),
+and none has been committed, so the spec files above are the record.
+`scripts/shared.mjs` and ADR-062 still quote 4.92 MB; the engine's
+`Cargo.toml` comment says ~5.19 MB, which is the current one.
+
+The dev profile is a different animal and is not the shipped figure: 0.19.1
+dev was 274,300,485 bytes raw, and spec 087 settled 0.20 dev on
+`line-tables-only` debug info at 335,575,245 raw / 14,610,549 brotli rather
+than full debug info's 352,608,993 / 15,866,613 — `scripts/shared.mjs` sets
+`CARGO_PROFILE_DEV_DEBUG` accordingly and folds it into the `pkg.sum` key.
+
 ### The bundle budget
 
 **The engine is expected to grow as it gains features. The threshold of concern
-is 100MB after compression.** At 4.92MB brotli there is roughly 20x headroom,
-so an 18.5% rise across one spec is growth, not a problem, and does not need
-re-litigating each time a feature lands.
+is 100MB after compression.** At 5.19MB brotli (spec 087, 2026-10-09) there is
+roughly 19x headroom, so an 18.5% rise across one spec, or 2.3% for an engine
+upgrade, is growth, not a problem, and does not need re-litigating each time a
+feature lands.
 
 That budget is as generous as it is because of the downloader, not in spite of
 it: spec 028 caches world content on the device and prefetches ahead of need,
@@ -585,7 +954,9 @@ engine; that is the one the budget is stated in.
   profiles silently serves whichever bundle was already on disk.
 - **Done** — the server was serving the wasm _uncompressed_: `tower-http` had
   no compression feature and no `CompressionLayer`. That was a ~6x gap on
-  first-load bytes on top of the release win. Now brotli and gzip.
+  first-load bytes on top of the release win. Now brotli and gzip
+  (`CompressionLayer::new().br(true).gzip(true)`, which has moved to
+  `apps/thunderforge/src/main.rs`).
 - **Done, and not the same thing** — the load is no longer silent. Spec 028
   shipped byte-level progress, a loading state inside a second, and a real
   explanation with a working retry when the download or startup fails, pinned
@@ -599,9 +970,12 @@ engine; that is the one the budget is stated in.
   instantiated over a stable JS-glue boundary. The natural seam would be
   per system — a world needs only its active system — but no pack carries
   engine code today (ADR-062, spec 066). Real
-  architectural work, and at 4.92MB brotli the case is still much weaker than
-  it looked — though 18.5% closer than it was before spec 031.
+  architectural work, and at 5.19MB brotli the case is still much weaker than
+  it looked.
 - **Open — Bevy feature trim.** `bevy_ui`/`bevy_ui_render` are unused (the
-  debug HUD that needed them was removed) but deliberately retained; `webp`
-  appears unreferenced in the engine crate; `bevy_gizmos` is diagnostic-only and
-  could be feature-gated. None measured, and behind the two items above.
+  debug HUD that needed them was removed) but deliberately retained — the
+  Cargo comment says the win is small; `bevy_gizmos` is diagnostic-only and
+  could be feature-gated. `webp` is *not* unreferenced, as this list once
+  said: `crates/thunderforge-engine/Cargo.toml` records it as the format of
+  DungeonDraft map art that the map importer accepts. None measured, and behind
+  the two items above. The engine is on Bevy 0.20 (spec 087, 42/42).

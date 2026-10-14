@@ -255,6 +255,16 @@ export default defineConfig({
         target: backendOrigin,
         changeOrigin: true,
       },
+      // Spec 074: the demo is a second client the server mounts at `/demo`,
+      // and answers "not found" while the instance does not offer it. Proxied
+      // so that dev and e2e take the same door production does, rather than
+      // the history fallback drawing this client's "no such page". A plain
+      // prefix, not a pattern: vite-plugin-html's history fallback only spares
+      // a path from the index rewrite when it starts with a proxy key.
+      "/demo": {
+        target: backendOrigin,
+        changeOrigin: true,
+      },
     },
   },
 });
