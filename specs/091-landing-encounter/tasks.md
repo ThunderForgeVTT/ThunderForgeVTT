@@ -533,9 +533,12 @@ the demo's build changes. The full suite is never used as a gate.
     - three 404s for `<image>.meta`: Bevy's meta probe, expected (see
       `e2e/support/page.ts`);
     - one 401 from `/gh/stargazers`: GitHub now requires a token to list
-      stargazers, and the landing deployment sets no `GITHUB_TOKEN`, so
-      the star chart has no stargazers live. The owner needs to add a
-      read-only token to the deployment's secret.
+      stargazers, and the landing deployment set no `GITHUB_TOKEN`, so
+      the star chart had no stargazers live. Settled 2026-10-14: the
+      landing asks GitHub as a GitHub App (`github-auth.sh`), and the
+      token it mints holds Contents write, the least GitHub lists
+      stargazers to (its `X-Accepted-GitHub-Permissions` says
+      `metadata=read; contents=write`; metadata alone is a 403).
   - Still owed to the owner: the Orca + Chromium screen-reader pass. A
     script cannot judge how the room sounds.
 - [ ] T062 Owner: approve or replace the copy (spec Open question 1; plan

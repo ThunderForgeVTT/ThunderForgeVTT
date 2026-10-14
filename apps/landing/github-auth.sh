@@ -5,9 +5,11 @@
 #
 # - A GitHub App: LANDING_GITHUB_APP_CLIENT_ID and
 #   LANDING_GITHUB_APP_PRIVATE_KEY_BASE64 (the app's PEM, base64-encoded). The
-#   app must be installed on ThunderForgeVTT/ThunderForgeVTT; it needs no
-#   permission beyond the metadata every app has. An installation token lasts
-#   an hour, so a fresh one is minted every 50 minutes and nginx reloaded.
+#   app must be installed on ThunderForgeVTT/ThunderForgeVTT with Contents
+#   read and write: GitHub answers the stargazers list to a token that holds
+#   contents=write (its X-Accepted-GitHub-Permissions says so), and refuses
+#   one with metadata alone. An installation token lasts an hour, so a fresh
+#   one is minted every 50 minutes and nginx reloaded.
 # - Otherwise GITHUB_TOKEN, as it is.
 # - Otherwise nothing: the star chart shows contributors only.
 #
@@ -55,14 +57,17 @@ github() { # METHOD PATH JWT [BODY]
     ${4:+-d "$4"} "$API$2"
 }
 
-# An installation token for the one repository, read-only metadata only.
+# An installation token for the one repository. Contents write is the least
+# GitHub lists stargazers to; contributors and the repository itself need only
+# metadata. The token never leaves nginx's proxy_pass to api.github.com, which
+# only ever GETs.
 mint() {
   jwt=$(app_jwt) || return 1
   found=$(github GET "/repos/$REPO/installation" "$jwt") || { log "GitHub did not answer"; return 1; }
   id=$(printf '%s' "$found" | tr -d '\n' | sed -n 's/^{ *"id": *\([0-9][0-9]*\).*/\1/p')
   [ -n "$id" ] || { log "no installation on $REPO: $(printf '%s' "$found" | tr -d '\n' | cut -c1-200)"; return 1; }
   made=$(github POST "/app/installations/$id/access_tokens" "$jwt" \
-    "{\"repositories\":[\"${REPO#*/}\"],\"permissions\":{\"metadata\":\"read\"}}") || { log "GitHub did not answer"; return 1; }
+    "{\"repositories\":[\"${REPO#*/}\"],\"permissions\":{\"metadata\":\"read\",\"contents\":\"write\"}}") || { log "GitHub did not answer"; return 1; }
   # Anything up to the closing quote: an installation token is no longer only
   # [A-Za-z0-9_]; since 2026 it carries a dot-separated JWT after its prefix.
   token=$(printf '%s' "$made" | tr -d '\n' | sed -n 's/.*"token": *"\([^"]*\)".*/\1/p')
