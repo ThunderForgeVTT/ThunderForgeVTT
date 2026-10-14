@@ -32,7 +32,8 @@ export function announce(script: RoomScript, state: RoomState, outcome: Outcome)
     case "blocked-by-wall":
       return "A wall. You stay where you are.";
     case "blocked-by-door":
-      return outcome.goal === "door-reached"
+      // The goal door teaches the rule; reaching it was counted on the way.
+      return outcome.wallId === script.goalDoor && state.doors[outcome.wallId] === "closed"
         ? "The door is shut. Walls and closed doors refuse a move, as the server would."
         : `${cap(doorName(script, outcome.wallId ?? ""))} is shut.`;
     case "rolled-back":

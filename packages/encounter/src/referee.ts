@@ -165,7 +165,11 @@ export function createReferee(script: RoomScript): Referee {
     return { state: next, outcome };
   };
 
-  /** A move accepted to `to`. Entering the chest's region finds it. */
+  /**
+   * A move accepted to `to`. Entering the chest's region finds it. Coming
+   * within reach of the goal door while it is shut reaches it: a drag that
+   * stops beside the door never bumps it, and must count all the same.
+   */
   const movedTo = (state: RoomState, to: Point): Judged => {
     const moved = { ...state, hero: { ...to } };
     if (
@@ -179,9 +183,16 @@ export function createReferee(script: RoomScript): Referee {
           outcome: { accepted: true, announcement: "chest-found", goal },
         };
     }
+    const door = walls(moved).find((w) => w.id === script.goalDoor);
+    const [next, goal] =
+      door &&
+      moved.doors[door.id] === "closed" &&
+      doorInReach(door, heroToken(moved), grid)
+        ? meet(moved, "door-reached")
+        : [moved, null];
     return {
-      state: moved,
-      outcome: { accepted: true, announcement: "moved", goal: null },
+      state: next,
+      outcome: { accepted: true, announcement: "moved", goal },
     };
   };
 

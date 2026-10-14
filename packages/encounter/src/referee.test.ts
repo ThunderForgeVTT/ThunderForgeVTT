@@ -68,23 +68,25 @@ test("on the real map, walking west stops at the room's west wall", () => {
   assert.deepEqual(last(steps).state.hero, { x: -9, y: 1.5 });
 });
 
-test("a step into door-hall while it is shut marks door-reached, once", () => {
+test("coming within reach of door-hall while it is shut marks door-reached, once", () => {
   // The small room's door is north of its start; the real hall is south.
+  // Reaching the door is being near enough to open it, not bumping it: a
+  // drag that stops beside the door never bumps it (spec 091).
   for (const [referee, toward] of [
     [small, "north"],
     [real, "south"],
   ] as const) {
     const steps = walk(referee, referee.start(), Array(5).fill(toward));
+    const reached = steps.findIndex((s) => s.outcome.goal === "door-reached");
+    assert.ok(reached >= 0 && reached < 3, `reached on step ${reached + 1}`);
+    assert.equal(steps[reached]!.outcome.accepted, true);
+    assert.equal(steps[reached]!.outcome.announcement, "moved");
     const [fourth, fifth] = [steps[3]!, steps[4]!];
     assert.equal(fourth.outcome.accepted, false);
     assert.equal(fourth.outcome.wallId, "door-hall");
     assert.equal(fourth.outcome.announcement, "blocked-by-door");
-    assert.equal(fourth.outcome.goal, "door-reached");
-    assert.equal(
-      fifth.outcome.goal,
-      null,
-      "the same refusal again marks nothing",
-    );
+    assert.equal(fourth.outcome.goal, null, "the bump marks nothing more");
+    assert.equal(fifth.outcome.goal, null);
     assert.deepEqual(fifth.state.goals, ["door-reached"]);
   }
 });
@@ -189,7 +191,11 @@ test("the chest region entered marks chest-found once; away and back marks nothi
   // The engine's report of the same entry marks nothing more.
   const reported = small.entered(last(steps).state, "chest-region");
   assert.equal(reported.outcome.goal, null);
-  assert.deepEqual(reported.state.goals, ["door-opened", "chest-found"]);
+  assert.deepEqual(reported.state.goals, [
+    "door-reached",
+    "door-opened",
+    "chest-found",
+  ]);
 });
 
 test("the engine's region report marks chest-found, and any other region is ignored", () => {
@@ -263,7 +269,10 @@ test("a wall the engine refused on its own is judged as the step would be", () =
   const wall = small.refused(start, "wall-03");
   assert.equal(wall.outcome.announcement, "blocked-by-wall");
   assert.equal(wall.outcome.goal, null);
-  assert.equal(small.refused(start, "no-such-wall").outcome.announcement, "ignored");
+  assert.equal(
+    small.refused(start, "no-such-wall").outcome.announcement,
+    "ignored",
+  );
 });
 
 test("a move the engine reported and the rule refuses returns the last accepted square", () => {
@@ -289,6 +298,23 @@ test("a move the engine reported and the rule allows is accepted where it landed
   assert.equal(outcome.accepted, true);
   assert.equal(outcome.rollback, undefined);
   assert.deepEqual(state.hero, { x: 2, y: -1.5 });
+});
+
+test("a drag that stops beside the shut goal door reaches it", () => {
+  const { state, outcome } = small.judgeMove(
+    small.start(),
+    { x: 0, y: 150 },
+    { x: 0, y: -150 },
+  );
+  assert.equal(outcome.accepted, true);
+  assert.equal(outcome.goal, "door-reached");
+  assert.deepEqual(state.goals, ["door-reached"]);
+  // Dragged there again, or pressed into the door, it is marked no more.
+  assert.equal(
+    small.judgeMove(state, { x: 0, y: -150 }, { x: 0, y: -150 }).outcome.goal,
+    null,
+  );
+  assert.equal(small.refused(state, "door-hall").outcome.goal, null);
 });
 
 test("a path is accepted only if every leg is", () => {
