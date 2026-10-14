@@ -256,13 +256,16 @@ the renderer.
 
 ## Follow-up (not this feature)
 
-- [ ] F001 Spec clocks separately — Blades' progress clocks and Genie's
+- [x] F001 Spec clocks separately — Blades' progress clocks and Genie's
       puzzle/doom clocks fill toward an event rather than depleting toward
       zero, belong to a situation rather than to a token, and are counted in
       discrete named segments rather than as a proportion. See the
       "Follow-up: clocks" section of [spec.md](./spec.md). Declaring one as a
       token resource to make it fit would be the fixture-shaped mistake this
-      feature twice avoided.
+      feature twice avoided. — Specified as
+      [specs/095-clocks/](../095-clocks/spec.md), 2026-10-13: a clock belongs
+      to a world or a scene, fills toward an event, is drawn in the dock as
+      segments, and its kinds come from the manifest.
 
 ---
 
