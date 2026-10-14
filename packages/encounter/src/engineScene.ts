@@ -105,6 +105,24 @@ function heroToken(hero: Hero, square: Point, grid: number): TokenPayload {
   };
 }
 
+/** The chest's token, shut or open; the engine swaps the art in place. */
+export function chestCommand(script: RoomScript, opened: boolean): EngineCommand {
+  const { chest } = script;
+  const grid = script.map.gridSize;
+  return {
+    type: "upsert_token",
+    token: {
+      id: chest.tokenId,
+      x: chest.square.x * grid,
+      y: chest.square.y * grid,
+      z: CHEST_Z,
+      label: "Chest",
+      tokenType: "object",
+      photoUrl: opened ? chest.openedArt : chest.art,
+    },
+  };
+}
+
 const rect = (r: SquareRect, grid: number): RectGeometry => ({
   shape: "rect",
   x: r.x * grid,
@@ -163,18 +181,7 @@ export function roomSetup(
       (light): EngineCommand => ({ type: "upsert_light", light: { ...light } }),
     ),
     { type: "set_ambient_light", level: "dark" },
-    {
-      type: "upsert_token",
-      token: {
-        id: chest.tokenId,
-        x: chest.square.x * grid,
-        y: chest.square.y * grid,
-        z: CHEST_Z,
-        label: "Chest",
-        tokenType: "object",
-        photoUrl: chest.art,
-      },
-    },
+    chestCommand(script, false),
     {
       type: "upsert_interactive",
       interactive: {

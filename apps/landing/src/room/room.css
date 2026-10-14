@@ -1,19 +1,15 @@
-/* Spec 091: the room. The table on the left, the room in words on the right;
-   one column below 900px, the table first. */
+/* Spec 091: the room. The hero picked first, the table the section's whole
+   width, and under it a strip in the play field's manner, small: the quest
+   log, the controls, the referee's words. One column below 900px. */
 
 .room-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
-  gap: calc(var(--cell) * 1);
+  grid-template-columns: minmax(0, 1fr);
+  gap: calc(var(--cell) * 0.5);
   align-items: start;
 }
 .room-layout--loading {
   min-height: 30rem;
-}
-@media (max-width: 899px) {
-  .room-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 .room-table {
@@ -25,10 +21,68 @@
   color: var(--text-soft);
 }
 
-.room-side {
+/* The strip: dark felt with gold-lined panels, as the play field's panels
+   are, over a paper page. */
+.room-hud {
+  --hud-ink: #f2e8d8;
+  --hud-soft: #cdbfa8;
+  --hud-gold: #d4af37;
+  --hud-line: rgba(214, 178, 122, 0.35);
   display: grid;
-  gap: 1.1rem;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: stretch;
+  padding: 0.75rem;
+  color: var(--hud-ink);
+  background: #1b1612;
+  border: var(--marker-w) solid var(--ink-black);
+  border-radius: 12px 8px 14px 10px / 8px 14px 10px 12px;
 }
+@media (max-width: 899px) {
+  .room-hud {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.room-hud-panel {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.75rem 0.9rem;
+  background: rgba(20, 16, 12, 0.88);
+  border: 1px solid var(--hud-line);
+  border-radius: 6px;
+}
+.room-hud .room-subhead,
+.room-hud .room-roll code,
+.room-hud .room-goal-mark {
+  color: var(--hud-gold);
+}
+.room-hud .room-hint,
+.room-hud .room-goal-state,
+.room-hud .room-place {
+  color: var(--hud-soft);
+}
+.room-hud a:not(.ink-btn) {
+  color: var(--hud-gold);
+}
+.room-hud .room-goal-mark {
+  border-color: var(--hud-line);
+}
+.room-hud .ink-btn--line,
+.room-hud .ink-btn--blue-line {
+  --ink: var(--hud-ink);
+}
+.room-hud .ink-btn--blue-line:not([disabled]) {
+  --ink: var(--hud-gold);
+}
+.room-hud .ink-btn:focus-visible,
+.room-hud .room-pad-btn:focus-visible,
+.room-hud .room-controls:focus-visible {
+  outline: 3px solid var(--hud-gold);
+  outline-offset: 2px;
+}
+
 .room-subhead {
   margin: 0 0 0.4rem;
   font: 700 1.05rem/1.3 var(--font-body);
@@ -50,9 +104,14 @@
 }
 .room-heroes-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.5rem;
   margin-top: 0.5rem;
+}
+@media (max-width: 559px) {
+  .room-heroes-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .room-hero {
   display: flex;
@@ -112,8 +171,8 @@
 }
 .room-said {
   padding: 0.6rem 0.8rem;
-  background: var(--paper);
-  border-left: 4px solid var(--text-blue);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
 }
 .room-said:empty {
   display: none;
@@ -173,6 +232,67 @@
   color: var(--text-blue);
 }
 
+/* The chest's opening: a glow on its square and gold sparks out of it, in
+   board pixels, over the engine's board for a moment (ChestGlitter.tsx). */
+.room-glitter {
+  position: absolute;
+  translate: -50% -50%;
+  pointer-events: none;
+}
+.room-glitter-glow {
+  position: absolute;
+  inset: -30%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 226, 138, 0.85) 0%, rgba(244, 197, 66, 0.45) 40%, rgba(244, 197, 66, 0) 70%);
+  animation: room-glow 1.8s ease-out forwards;
+}
+.room-spark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--spark-size);
+  height: var(--spark-size);
+  margin: calc(var(--spark-size) / -2);
+  border-radius: 50%;
+  background: #ffe28a;
+  box-shadow: 0 0 6px 2px rgba(244, 197, 66, 0.9);
+  rotate: var(--spark-angle);
+  animation: room-spark 1.3s cubic-bezier(0.2, 0.7, 0.3, 1) var(--spark-delay) both;
+}
+@keyframes room-glow {
+  0% {
+    opacity: 0;
+    scale: 0.6;
+  }
+  20% {
+    opacity: 1;
+    scale: 1;
+  }
+  100% {
+    opacity: 0;
+    scale: 1.3;
+  }
+}
+@keyframes room-spark {
+  0% {
+    opacity: 0;
+    transform: translateX(0) scale(0.4);
+  }
+  15% {
+    opacity: 1;
+    transform: translateX(calc(var(--spark-reach) * 0.3)) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(var(--spark-reach)) scale(0.2);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .room-glitter {
+    display: none;
+  }
+}
+
 .room-ending {
   padding: 1rem;
   background: var(--paper);
@@ -181,4 +301,15 @@
 }
 .room-ending p {
   margin: 0 0 0.6rem;
+}
+/* In the HUD the ending is a closing entry of the log, not a card in a card:
+   the panel's ink, with a rule above it. */
+.room-hud .room-ending {
+  margin-top: 0.8rem;
+  padding: 0.8rem 0 0;
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--hud-line);
+  border-radius: 0;
+  color: var(--hud-ink);
 }

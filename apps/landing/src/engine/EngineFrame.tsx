@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { DEMO } from "../links.ts";
 import "./engine-frame.css";
 import { FRAME_FAILED, type FrameFailed, type HeldBack } from "./frameEvents.ts";
@@ -48,6 +48,8 @@ interface Props {
   maxTextureSize?: number;
   /** Every state change; `send` is set while the engine runs or is paused. */
   onState?: (state: FrameState, send: Send | null) => void;
+  /** Drawn over the board, in board pixels (960x540), while the engine runs. */
+  children?: ReactNode;
 }
 
 const STOPPED = "thunderforge:engine-stopped";
@@ -249,6 +251,7 @@ export default function EngineFrame(props: Props) {
       />
       {/* The host puts the page's one canvas here while this frame holds it. */}
       <div className="engine-stage" ref={stageRef} />
+      {props.children !== undefined && <div className="engine-overlay">{props.children}</div>}
       {!live && (
         <div className="engine-panel">
           {state === "poster" && (

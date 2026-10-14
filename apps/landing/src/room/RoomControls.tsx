@@ -1,10 +1,12 @@
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, Ref } from "react";
 import type { Direction, Outcome, RoomScript, RoomState } from "@thunderforge/encounter";
 import { directionOf } from "../engine/keys.ts";
 
 // Spec 091 FR-020 and FR-021: the room without the canvas. Every control
 // works whether or not the engine runs; the arrows and WASD act only while
-// focus is inside these controls, never anywhere else on the page.
+// focus is inside these controls, never anywhere else on the page. The
+// controls take focus themselves (a press on the table puts it here), so a
+// player who clicked the table can go on with the keys.
 
 interface Props {
   script: RoomScript;
@@ -15,6 +17,7 @@ interface Props {
   onDoor: () => void;
   onRoll: () => void;
   onStartOver: () => void;
+  ref?: Ref<HTMLDivElement>;
 }
 
 const PAD: Array<{ dir: Direction; label: string; glyph: string }> = [
@@ -43,7 +46,7 @@ export default function Controls(props: Props) {
   const doorName = door ? (script.doorNames[door.id] ?? "the door") : null;
 
   return (
-    <div className="room-controls" onKeyDown={keys}>
+    <div className="room-controls" ref={props.ref} tabIndex={-1} onKeyDown={keys}>
       <div className="room-pad" role="group" aria-label="Move one square">
         {PAD.map((p) => (
           <button
@@ -56,7 +59,7 @@ export default function Controls(props: Props) {
           </button>
         ))}
       </div>
-      <p className="room-hint">Arrow keys and WASD move too, while focus is on these controls.</p>
+      <p className="room-hint">Arrow keys and WASD move too, after a click on the table or these controls.</p>
 
       <div className="room-actions">
         <button type="button" className="ink-btn ink-btn--small ink-btn--blue-line" disabled={!door} onClick={props.onDoor}

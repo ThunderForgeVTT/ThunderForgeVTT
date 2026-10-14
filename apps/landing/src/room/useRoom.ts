@@ -17,11 +17,11 @@ import {
 } from "@thunderforge/encounter";
 import type { FrameState, Send } from "../engine/EngineFrame.tsx";
 import { listen } from "../engine/dispatch.ts";
-import { canvasOf, viewAs } from "../engine/host.ts";
+import { canvasOf, running, viewAs } from "../engine/host.ts";
 import { pressOnCanvas } from "../engine/keys.ts";
 import { PARTY, type PartyHero } from "./party.ts";
 import { rollFormula } from "./roll.ts";
-import { outcomeCommands, parityError, sceneCommands } from "./scene.ts";
+import { chestOnBoard, outcomeCommands, parityError, sceneCommands, type Camera } from "./scene.ts";
 import { announce } from "./words.ts";
 
 // Spec 091 T034: one referee, answering the DOM room and the engine alike.
@@ -35,6 +35,17 @@ import { announce } from "./words.ts";
 /** How long a forwarded step waits for the engine before the rule decides. */
 const ANSWER_MS = 1000;
 const REDUCE = "(prefers-reduced-motion: reduce)";
+/** How long the gold glitters over the opened chest before the art stands alone. */
+const GLITTER_MS = 1800;
+
+/** The opened chest's moment on the board: where the sparkle plays, in board pixels. */
+export interface Glitter {
+  x: number;
+  y: number;
+  size: number;
+  /** Changes on every opening, so a restart's opening plays again. */
+  n: number;
+}
 
 /** Each goal is announced on the page once, however often the room restarts. */
 const told = new Set<GoalId>();
@@ -58,6 +69,8 @@ export function useRoom(script: RoomScript, frameId: string) {
   const [hero, setHero] = useState<PartyHero>(PARTY[0]!);
   const [said, setSaid] = useState<Said | null>(null);
   const [rolling, setRolling] = useState(false);
+  const [glitter, setGlitter] = useState<Glitter | null>(null);
+  const glitterTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Event handlers read these, never a stale render's copy.
   const now = useRef(state);
@@ -196,6 +209,8 @@ export function useRoom(script: RoomScript, frameId: string) {
   const startOver = useCallback(() => {
     for (const p of pending.current) clearTimeout(p.timer);
     pending.current = [];
+    if (glitterTimer.current) clearTimeout(glitterTimer.current);
+    setGlitter(null);
     apply(referee.reset());
     const send = engine.current.send;
     if (send) {
@@ -216,6 +231,24 @@ export function useRoom(script: RoomScript, frameId: string) {
 
   const door = useCallback(() => apply(referee.toggleDoor(now.current)), [referee, apply]);
 
+  /**
+   * The chest opens on the board: gold glitters over its square for a moment
+   * while the art changes to the open chest, and then the art stands alone.
+   * Under reduced motion only the art changes. Needs the engine's camera, so
+   * only while the table runs.
+   */
+  const sparkle = useCallback(() => {
+    const e = running();
+    if (!e || engine.current.state !== "running" || matchMedia(REDUCE).matches) return;
+    const cam = JSON.parse(e.camera_state()) as Camera;
+    if (glitterTimer.current) clearTimeout(glitterTimer.current);
+    setGlitter((g) => ({ ...chestOnBoard(script, cam), n: (g?.n ?? 0) + 1 }));
+    glitterTimer.current = setTimeout(() => setGlitter(null), GLITTER_MS);
+  }, [script]);
+  useEffect(() => () => {
+    if (glitterTimer.current) clearTimeout(glitterTimer.current);
+  }, []);
+
   const roll = useCallback(async () => {
     setRolling(true);
     try {
@@ -225,12 +258,13 @@ export function useRoom(script: RoomScript, frameId: string) {
       if (judged.outcome.accepted) {
         engine.current.send?.(diceCommand(resolution, { rollerName: heroNow.current.name }));
       }
+      if (judged.outcome.announcement === "roll-succeeded") sparkle();
     } catch {
       say("The dice could not load in this browser.");
     } finally {
       setRolling(false);
     }
-  }, [script, referee, apply, say]);
+  }, [script, referee, apply, say, sparkle]);
 
   /** What the door button would do now: the referee's answer, untaken. */
   const doorPreview = useMemo(() => referee.toggleDoor(state).outcome, [referee, state]);
@@ -240,6 +274,7 @@ export function useRoom(script: RoomScript, frameId: string) {
     hero,
     said,
     rolling,
+    glitter,
     doorPreview,
     step,
     door,

@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="An open wooden chest full of gold">
+  <title>An open wooden chest full of gold</title>
+  <!-- Spec 091: the chest once the roll opens it. The same chest as chest.svg
+       with the lid thrown back and the gold showing; the room's sparkle plays
+       over the interior while the art changes to this. make-room-art.mjs
+       renders it to public/room/chest-open.webp. -->
+  <defs>
+    <path id="silhouette" d="M46 24 Q128 6 210 24 L218 118 L222 206 Q222 214 214 214 L42 214 Q34 214 34 206 L38 118 Z"/>
+  </defs>
+  <ellipse cx="132" cy="222" rx="104" ry="16" fill="#000000" opacity="0.3"/>
+  <use href="#silhouette" fill="#fbfbf8" stroke="#fbfbf8" stroke-width="20" stroke-linejoin="round"/>
+  <g stroke="#1f2a2e" stroke-linejoin="round" stroke-linecap="round">
+    <!-- the lid, thrown back: its inside face shows -->
+    <path d="M46 118 Q50 30 128 24 Q206 30 210 118 Z" fill="#6e3f1c" stroke-width="7"/>
+    <path d="M62 112 Q66 46 128 40 Q190 46 194 112 Z" fill="#8a5428" stroke-width="4"/>
+    <path d="M72 32 Q68 70 70 118 L94 118 Q92 68 96 28 Z" fill="#e0a92c" stroke-width="6"/>
+    <path d="M184 32 Q188 70 186 118 L162 118 Q164 68 160 28 Z" fill="#e0a92c" stroke-width="6"/>
+    <!-- the interior: dark, heaped with gold -->
+    <path d="M38 118 L218 118 L218 134 L38 134 Z" fill="#2a1a10" stroke-width="7"/>
+    <g stroke="none">
+      <path d="M46 134 Q80 96 128 104 Q176 96 210 134 Z" fill="#f4c542"/>
+      <path d="M60 134 Q96 112 128 118 Q160 112 196 134 Z" fill="#ffe28a"/>
+    </g>
+    <g fill="#e0a92c" stroke="#8a5428" stroke-width="3">
+      <ellipse cx="84" cy="120" rx="12" ry="5"/><ellipse cx="128" cy="110" rx="13" ry="5"/>
+      <ellipse cx="170" cy="120" rx="12" ry="5"/><ellipse cx="106" cy="128" rx="11" ry="4"/>
+      <ellipse cx="150" cy="128" rx="11" ry="4"/>
+    </g>
+    <!-- body -->
+    <path d="M36 134 L220 134 L222 206 Q222 214 214 214 L42 214 Q34 214 34 206 Z" fill="#9a5f2e" stroke-width="7"/>
+    <path d="M44 164 L212 165 M43 192 L213 191" fill="none" stroke="#6e3f1c" stroke-width="4"/>
+    <!-- iron bands -->
+    <path d="M62 134 L62 213 L86 213 L86 134 Z" fill="#e0a92c" stroke-width="6"/>
+    <path d="M194 134 L194 213 L170 213 L170 134 Z" fill="#e0a92c" stroke-width="6"/>
+    <path d="M36 134 L220 134" fill="none" stroke-width="7"/>
+    <!-- the lock, hanging open -->
+    <path d="M110 136 L146 136 L146 166 Q128 180 110 166 Z" fill="#f4c542" stroke-width="6"/>
+    <circle cx="128" cy="150" r="6" fill="#1f2a2e" stroke="none"/>
+    <!-- rivets -->
+    <g fill="#1f2a2e" stroke="none">
+      <circle cx="74" cy="150" r="4"/><circle cx="74" cy="200" r="4"/>
+      <circle cx="182" cy="150" r="4"/><circle cx="182" cy="200" r="4"/>
+    </g>
+  </g>
+  <!-- a marker highlight on the gold -->
+  <path d="M104 112 Q124 104 146 108" fill="none" stroke="#fbfbf8" stroke-width="5" stroke-linecap="round" opacity="0.8"/>
+</svg>

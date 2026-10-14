@@ -1,4 +1,5 @@
 import {
+  chestCommand,
   doorCommand,
   rollbackCommand,
   roomSetup,
@@ -7,6 +8,27 @@ import {
   type RoomState,
 } from "@thunderforge/encounter";
 import type { PartyHero } from "./party.ts";
+
+/** The engine's camera, as `camera_state()` reports it. */
+export interface Camera {
+  x: number;
+  y: number;
+  scale: number;
+}
+
+/** The board the engine draws, in its own pixels (`engine-frame.css`). */
+export const BOARD = { w: 960, h: 540 };
+
+/** Where on the board the chest's square is: its centre, and a square's side. */
+export function chestOnBoard(script: RoomScript, cam: Camera): { x: number; y: number; size: number } {
+  const grid = script.map.gridSize;
+  const { x, y } = script.chest.square;
+  return {
+    x: BOARD.w / 2 + (x * grid - cam.x) / cam.scale,
+    y: BOARD.h / 2 - (y * grid - cam.y) / cam.scale,
+    size: grid / cam.scale,
+  };
+}
 
 // Spec 091: what the engine is sent, worked out from the referee's state.
 // Pure, so `useRoom` only decides when.
@@ -29,10 +51,11 @@ export function sceneCommands(
     const wall = script.map.walls.find((w) => w.id === id);
     if (wall && door !== wall.doorState) out.push(doorCommand(wall, door));
   }
+  if (state.goals.includes("chest-opened")) out.push(chestCommand(script, true));
   return out;
 }
 
-/** What a verdict changes on the table: a hero sent back, a door swung. */
+/** What a verdict changes on the table: a hero sent back, a door swung, a chest opened. */
 export function outcomeCommands(
   script: RoomScript,
   hero: PartyHero,
@@ -45,6 +68,7 @@ export function outcomeCommands(
     const wall = script.map.walls.find((w) => w.id === id);
     if (wall) out.push(doorCommand(wall, state));
   }
+  if (outcome.announcement === "roll-succeeded") out.push(chestCommand(script, true));
   return out;
 }
 

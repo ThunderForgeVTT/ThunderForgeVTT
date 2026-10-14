@@ -12,7 +12,7 @@
  */
 
 import type { GoalId } from "./goals.ts";
-import { toSquares, toWorld } from "./map.ts";
+import { toSquareCentre, toWorld } from "./map.ts";
 import { inRect, type RoomScript } from "./script.ts";
 import {
   distanceToSegment,
@@ -252,7 +252,7 @@ export function createReferee(script: RoomScript): Referee {
       const blocked = pathBlockedBy(route, walls(state));
       return blocked
         ? refusedAt(state, blocked, true)
-        : movedTo(state, toSquares(to, grid));
+        : movedTo(state, toSquareCentre(to, grid));
     },
 
     refused(state, wallId) {

@@ -89,6 +89,7 @@ export function smallRoom(): RoomScript {
       interactiveId: "chest-region",
       region: { x: -0.5, y: -6, width: 3, height: 3 },
       art: "/room/chest.webp",
+      openedArt: "/room/chest-open.webp",
     },
     scene: {
       background: "/maps/small.webp",
@@ -136,6 +137,7 @@ export function provingGround(): RoomScript {
       interactiveId: "chest-region",
       region: { x: -2.5, y: -5, width: 3, height: 3 },
       art: "/room/chest.webp",
+      openedArt: "/room/chest-open.webp",
     },
     scene: {
       background: "/maps/demo.webp",

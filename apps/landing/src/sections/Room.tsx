@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { describePlace } from "@thunderforge/encounter";
 import EngineFrame from "../engine/EngineFrame.tsx";
 import { CC_BY_SA, DEMO, MAPS_CATALOG, MAPS_SOURCE } from "../links.ts";
+import ChestGlitter from "../room/ChestGlitter.tsx";
 import RoomControls from "../room/RoomControls.tsx";
 import GoalList from "../room/GoalList.tsx";
 import HeroPicker from "../room/HeroPicker.tsx";
@@ -33,10 +34,15 @@ function RoomBody({ script, imageBytes }: LoadedRoom) {
   const room = useRoom(script, FRAME_ID);
   const { state, said } = room;
   const done = state.goals.includes("chest-opened");
+  // FR-021: the keys act from the room's controls; a press on the table puts
+  // focus there, so the arrows and WASD work right after a click on it.
+  const controls = useRef<HTMLDivElement>(null);
 
   return (
     <div className="room-layout" data-square={`${state.hero.x},${state.hero.y}`}>
-      <figure className="room-table">
+      <HeroPicker hero={room.hero} onPick={room.pick} />
+
+      <figure className="room-table" onPointerDown={() => controls.current?.focus({ preventScroll: true })}>
         <EngineFrame
           id={FRAME_ID}
           poster={{ src: "/room-table.webp", width: 1200, height: 675 }}
@@ -47,45 +53,59 @@ function RoomBody({ script, imageBytes }: LoadedRoom) {
           setup={room.frame.setup}
           teardown={room.frame.teardown}
           onState={room.frame.onState}
-        />
+        >
+          {room.glitter && <ChestGlitter {...room.glitter} />}
+        </EngineFrame>
         <figcaption className="room-caption">
           {imageBytes !== null && <>Playing loads the map, {mb(imageBytes)} MB, and the table if the dice haven't. </>}
           <Credit />
         </figcaption>
       </figure>
 
-      <div className="room-side">
-        <HeroPicker hero={room.hero} onPick={room.pick} />
-        <GoalList met={state.goals} />
-        <p className="room-place">{describePlace(script, state)}</p>
-        <RoomControls
-          script={script}
-          state={state}
-          doorPreview={room.doorPreview}
-          rolling={room.rolling}
-          onStep={room.step}
-          onDoor={room.door}
-          onRoll={() => void room.roll()}
-          onStartOver={room.startOver}
-        />
-        {/* Below the controls, so a first announcement moves nothing under the
-            pointer. */}
-        <p className="room-said" aria-live="polite">
-          {said ? said.text + (said.n % 2 ? " " : "") : ""}
-        </p>
-        {done && (
-          <div className="room-ending">
-            <p>{ENDING}</p>
-            <p>
-              <a className="ink-btn ink-btn--small ink-btn--blue" href={DEMO}>
-                Open the demo
-              </a>
-            </p>
-            <p className="room-hint">
-              <Credit />
-            </p>
-          </div>
-        )}
+      {/* A strip under the table in the play field's manner, small: the
+          quest log on one side, the controls in the middle, the referee's
+          words on the other. */}
+      <div className="room-hud">
+        <div className="room-hud-panel room-hud-quest">
+          <GoalList met={state.goals} />
+          <p className="room-place">{describePlace(script, state)}</p>
+        </div>
+        <div className="room-hud-panel room-hud-controls">
+          <RoomControls
+            ref={controls}
+            script={script}
+            state={state}
+            doorPreview={room.doorPreview}
+            rolling={room.rolling}
+            onStep={room.step}
+            onDoor={room.door}
+            onRoll={() => void room.roll()}
+            onStartOver={room.startOver}
+          />
+        </div>
+        <div className="room-hud-panel room-hud-log">
+          <h3 className="room-subhead">The referee says</h3>
+          {/* Its own panel, so a first announcement moves nothing under the
+              pointer. The alternate is a no-break space: the same words said
+              twice still change the node. */}
+          <p className="room-said" aria-live="polite">
+            {said ? said.text + (said.n % 2 ? " " : "") : ""}
+          </p>
+          {!said && <p className="room-hint">Make a move, and the referee's answer lands here.</p>}
+          {done && (
+            <div className="room-ending">
+              <p>{ENDING}</p>
+              <p>
+                <a className="ink-btn ink-btn--small ink-btn--blue" href={DEMO}>
+                  Open the demo
+                </a>
+              </p>
+              <p className="room-hint">
+                <Credit />
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
