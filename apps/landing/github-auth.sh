@@ -63,7 +63,9 @@ mint() {
   [ -n "$id" ] || { log "no installation on $REPO: $(printf '%s' "$found" | tr -d '\n' | cut -c1-200)"; return 1; }
   made=$(github POST "/app/installations/$id/access_tokens" "$jwt" \
     "{\"repositories\":[\"${REPO#*/}\"],\"permissions\":{\"metadata\":\"read\"}}") || { log "GitHub did not answer"; return 1; }
-  token=$(printf '%s' "$made" | tr -d '\n' | sed -n 's/.*"token": *"\([A-Za-z0-9_]*\)".*/\1/p')
+  # Anything up to the closing quote: an installation token is no longer only
+  # [A-Za-z0-9_]; since 2026 it carries a dot-separated JWT after its prefix.
+  token=$(printf '%s' "$made" | tr -d '\n' | sed -n 's/.*"token": *"\([^"]*\)".*/\1/p')
   [ -n "$token" ] || { log "no token: $(printf '%s' "$made" | tr -d '\n' | cut -c1-200)"; return 1; }
   printf '%s' "$token"
 }
