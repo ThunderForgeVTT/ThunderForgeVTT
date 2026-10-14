@@ -404,6 +404,57 @@ img {
   min-height: calc(var(--cell) * 8);
 }
 
+/* The note at the foot of the first screen: a word in marker and a drawn
+   arrow on a slip of paper, pinned to the viewport's lower right on wide
+   screens, where the hero fills the first screen and often runs a little
+   past it. It bobs gently and leaves once the visitor has scrolled. */
+.scroll-cue {
+  position: fixed;
+  right: var(--cell);
+  bottom: calc(var(--cell) * 0.4);
+  z-index: 5;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+  padding: 0.35rem 0.9rem 0.2rem;
+  transform: rotate(1.5deg);
+  background: var(--paper);
+  border: 2.5px solid var(--ink-black);
+  border-radius: 5px 7px 6px 4px / 6px 4px 7px 5px;
+  box-shadow: 2px 3px 0 rgb(31 42 46 / 0.18);
+  font-family: var(--font-marker);
+  font-size: 1.05rem;
+  line-height: 1.2;
+  color: var(--text-blue);
+  text-decoration: none;
+  transition: opacity 320ms var(--ease-out);
+}
+@media (min-width: 900px) {
+  .scroll-cue {
+    display: flex;
+  }
+}
+.scroll-cue.is-gone {
+  opacity: 0;
+  visibility: hidden;
+}
+.scroll-cue-arrow {
+  width: 1.4rem;
+  height: 1.9rem;
+  animation: cue-bob 1.8s ease-in-out infinite;
+}
+@keyframes cue-bob {
+  50% {
+    transform: translateY(4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scroll-cue-arrow {
+    animation: none;
+  }
+}
+
 .mat-ink {
   position: absolute;
   inset: 0;

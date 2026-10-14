@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -225,6 +226,19 @@ export function Hero() {
   const [spots, setSpots] = useState<Record<string, Spot>>({});
   const [drag, setDrag] = useState<Drag | null>(null);
   const [said, setSaid] = useState("");
+  // The hero fills the first screen on wide viewports, so nothing there says
+  // the page goes on. A small note at its foot does, until the first scroll.
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const seen = () => {
+      if (window.scrollY < 40) return;
+      setScrolled(true);
+      removeEventListener("scroll", seen);
+    };
+    seen();
+    addEventListener("scroll", seen, { passive: true });
+    return () => removeEventListener("scroll", seen);
+  }, []);
   const layoutKey = useRef("");
 
   useLayoutEffect(() => {
@@ -517,6 +531,20 @@ export function Hero() {
                 : `${ruler.feet} ft`}
         </span>
       )}
+
+      <a className={`scroll-cue${scrolled ? " is-gone" : ""}`} href="#dream">
+        Scroll for more
+        <svg className="scroll-cue-arrow" viewBox="0 0 24 32" aria-hidden="true">
+          <path
+            d="M12 3c-1 8-.4 16 .6 24M5 21c2.6 2.4 5 5 7.4 7.6C15 26 17.4 23.6 20 21.2"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </a>
 
       <p className="sr-only" aria-live="polite">
         {said}
