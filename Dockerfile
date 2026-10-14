@@ -165,13 +165,29 @@ COPY apps/telemetry-gateway apps/telemetry-gateway
 # `dist/engine`, `dist/pdf`, `dist/dice`, `dist/combat` and `dist/sheet-*`:
 # pnpm workspace packages that wasm-pack writes, which `apps/web`, `apps/demo`
 # and `apps/landing` depend on, so they exist before any `pnpm install`.
-# `wasm-opt` over the release engine is minutes on its own and single-threaded,
-# which is why this is a stage of its own that only a Rust edit re-runs.
+# `wasm-opt` over the release engine is minutes on its own (it already uses
+# every core; whole-module passes are the serial part), which is why this is a
+# stage of its own that only a Rust edit re-runs.
+#
+# And why the outputs are kept between builds: every package in `dist/` carries
+# a `pkg.sum` over its sources, both manifests, the lockfile, the profile and
+# the build env, and `build.mjs` skips a package whose sum still matches. In an
+# image build that check never fired, because `dist/` is in `.dockerignore` and
+# each run started from an empty tree — so a server-crate edit, or the same
+# commit built from another checkout, paid the engine's wasm-opt again. The
+# previous `dist/` is copied in from a cache mount before the build and copied
+# back out only after it succeeds, so a failed run never leaves a half-written
+# package behind a valid sum. The toolchain is not in the sum, so the mount is
+# keyed on the wasm-pack version: a bump starts from nothing.
 FROM rust-src AS wasm
+ARG WASM_PACK_VERSION
 COPY scripts/build.mjs scripts/shared.mjs scripts/
 RUN --mount=type=cache,target=/build/target,id=thunderforge-target \
   --mount=type=cache,target=/root/.cache,id=thunderforge-wasm-pack-cache \
-  node scripts/build.mjs --only-wasm
+  --mount=type=cache,target=/cache/dist,id=thunderforge-dist-wasm-pack-${WASM_PACK_VERSION} \
+  mkdir -p dist && cp -a /cache/dist/. dist/ \
+  && node scripts/build.mjs --only-wasm \
+  && rm -rf /cache/dist/* && cp -a dist/. /cache/dist/
 
 # --- the base maps -------------------------------------------------------------
 #

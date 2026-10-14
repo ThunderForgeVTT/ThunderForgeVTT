@@ -291,10 +291,12 @@ export function engineProfile(defaultProfile = "release") {
  * Whether to skip `wasm-opt` on a release build.
  *
  * Measured on this repo: `cargo build --release` takes about 35 seconds and
- * `wasm-opt` takes the rest of a multi-minute build. Neither scales with
- * cores — `[profile.release]` sets `codegen-units = 1` on purpose, and
- * `wasm-opt` is single-threaded over a ~25MB module — so a bigger machine does
- * not help. Skipping the optimiser is the only lever that moves the number.
+ * `wasm-opt` takes the rest of a multi-minute build. Neither gets much from
+ * more cores — `[profile.release]` sets `codegen-units = 1` on purpose, and
+ * `wasm-opt` (binaryen 117, 2026-10-14) already runs its function passes on
+ * every core, with whole-module passes serial between them — so a bigger
+ * machine does not help. Skipping the optimiser is the only lever that moves
+ * the number; keeping the output (`pkg.sum`) is what avoids paying it again.
  *
  * The cost is real: an unoptimised module is larger for the browser to fetch
  * and compile, and slower to run. That is why this is opt-in per run rather
