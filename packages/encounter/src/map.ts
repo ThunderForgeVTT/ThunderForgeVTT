@@ -111,3 +111,12 @@ export function toWorld(square: Point, gridSize: number): Point {
 export function toSquares(world: Point, gridSize: number): Point {
   return { x: world.x / gridSize, y: world.y / gridSize };
 }
+
+/**
+ * The square a token the engine moved sits on: its snapped position, which
+ * carries float noise (`-3, 0.5000004`), to the half-square the room keeps.
+ */
+export function toSquareCentre(world: Point, gridSize: number): Point {
+  const { x, y } = toSquares(world, gridSize);
+  return { x: Math.round(x * 2) / 2, y: Math.round(y * 2) / 2 };
+}

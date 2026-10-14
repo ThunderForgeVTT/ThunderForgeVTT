@@ -1,12 +1,13 @@
 // Spec 091 T030: the room's token art, drawn once and committed.
 //
 // Renders each hero of the front page's PARTY with `createHero(spec).token()`
-// from @thunderforge/heroes, and `src/room/chest.svg`, to 256x256 webp files
+// from @thunderforge/heroes, and `src/room/chest.svg` and `chest-open.svg`,
+// to 256x256 webp files
 // in `public/room/<id>.webp`. Chromium draws each SVG into a canvas on a blank
 // page; no server, no engine. Outside the token the image is transparent.
 //
 // Rerun by hand when packages/heroes changes the token's look, when PARTY in
-// src/sections/Hero.tsx changes, or when chest.svg is redrawn:
+// src/sections/Hero.tsx changes, or when a chest SVG is redrawn:
 //   node apps/landing/scripts/make-room-art.mjs
 // The landing slice does not run it, so packages/heroes stays out of it.
 
@@ -28,7 +29,9 @@ const art = PARTY.map((slug) => {
   if (!preset) throw new Error(`make-room-art: no preset hero "${slug}"`);
   return { id: slug, svg: createHero(preset.spec).token() };
 });
-art.push({ id: "chest", svg: readFileSync(join(LANDING, "src/room/chest.svg"), "utf8") });
+for (const id of ["chest", "chest-open"]) {
+  art.push({ id, svg: readFileSync(join(LANDING, `src/room/${id}.svg`), "utf8") });
+}
 
 mkdirSync(OUT, { recursive: true });
 const browser = await chromium.launch();

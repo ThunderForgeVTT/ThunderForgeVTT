@@ -26,6 +26,8 @@ export interface Engine {
   set_viewer_token(tokenId: string): boolean;
   // Read-backs the room's tests and its DOM path ask instead of the canvas.
   movement_state(): string;
+  /** `{ x, y, scale }`: the world point at the board's centre, and world units per board pixel. */
+  camera_state(): string;
   door_icons(): string;
   sight_probe(x: number, y: number): string;
   list_interactives(): string;

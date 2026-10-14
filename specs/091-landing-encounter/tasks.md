@@ -541,6 +541,39 @@ the demo's build changes. The full suite is never used as a gate.
       `metadata=read; contents=write`; metadata alone is a 403).
   - Still owed to the owner: the Orca + Chromium screen-reader pass. A
     script cannot judge how the room sounds.
+  - Owner's play on 2026-10-14, three findings, all fixed:
+    - A drag on the table carried the hero across walls, and a drop past
+      one was then refused in words while the engine kept the token
+      there. The engine now holds a player's dragged token at a wall
+      while it is carried (`handle_token_drag`, the GM's exemption of
+      spec 045 FR-017 kept), and a release off the canvas finishes the
+      drag where the token is instead of leaving it mid-air.
+      `room-drag.spec.ts` drags into the shut door, into the west wall,
+      and lets go off the table.
+    - Keys: the arrows and WASD already moved the hero while the controls
+      had focus (FR-021); a press on the table now puts focus there, so
+      they work right after a click on it, and the hint says so.
+    - The chest's opening: the chest token swaps to open art
+      (`chest-open.webp`, drawn beside the shut one) and, outside reduced
+      motion, gold glitters over its square for 1.8 s, in the page over
+      the board (`ChestGlitter.tsx`). `room-chest.spec.ts` counts one
+      glitter at `chestOnBoard` and the chest still on the table after.
+    - Layout, the same day: the hero picked above a table the section's
+      whole width, and under it a strip in the play field's manner,
+      small: goals and place, the controls, the referee's words. The
+      room's three `looks` baselines were retaken, and so were every
+      section's below it: each section's height is fractional, so a new
+      room height shifts the sub-pixel phase of everything under it, and
+      those baselines differ by anti-aliasing alone (checked side by
+      side). `map-phone` drifted the same way on its own.
+    - An alignment and accessibility pass over the strip, after: the
+      ending inside the dark strip took the page's ink on paper and
+      failed contrast, so in the strip it is a closing entry of the log
+      in the strip's ink under a rule, with the credit's links gold; the
+      referee's line lost its coloured left border; an idle hint sits
+      where the first announcement lands, so nothing moves under the
+      pointer. The layout detector finds nothing; `a11y.spec.ts` passes
+      at every width and scheme, the room completed included.
 - [ ] T062 Owner: approve or replace the copy (spec Open question 1; plan
   Decisions): the simulation sentence, each goal's announcement, the
   ending, and the away state.

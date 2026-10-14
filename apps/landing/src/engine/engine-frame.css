@@ -31,6 +31,22 @@
   scale: var(--engine-scale, 1);
   pointer-events: none;
 }
+/* What the page draws over the board, in the board's pixels: the same box
+   and scale as the stage, and nothing in it is for the pointer either. */
+.engine-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 960px;
+  height: 540px;
+  transform-origin: 0 0;
+  scale: var(--engine-scale, 1);
+  pointer-events: none;
+  overflow: hidden;
+}
+.engine-frame:not(.engine-frame--running) .engine-overlay {
+  visibility: hidden;
+}
 .engine-poster {
   object-fit: cover;
 }

@@ -314,6 +314,80 @@ pub(crate) fn handle_token_drag(
         return;
     }
 
+    // The release first, and without the cursor: a drag let go outside the
+    // canvas (the pointer is captured, so the release still arrives) has no
+    // cursor position, and must still finish, where the token is. Before
+    // this the system returned early and the token hung mid-drag, carried
+    // but never dropped, and the page was never told where it was.
+    if mouse_button.just_released(MouseButton::Left) {
+        let dragged = std::mem::take(&mut dragging.0);
+        if dragged.is_empty() {
+            return;
+        }
+
+        for (mut transform, identity, _) in token_query.iter_mut() {
+            let Some(from) = dragged
+                .iter()
+                .find(|d| d.id == identity.0)
+                .map(|d| d.origin)
+            else {
+                continue;
+            };
+
+            // Spec 045 FR-015: a drag dropped across a wall puts the token
+            // back where the drag began, and sends nothing.
+            //
+            // A drag is judged as the straight line from where it was picked
+            // up to where it was dropped — which is exactly what a drag is,
+            // and the same line the server will judge when no route is sent.
+            // A Game Master is never judged (FR-017): they may put any token
+            // anywhere, and the server agrees, so refusing them here would
+            // only make the board disagree with the world.
+            if !is_gm.0
+                && crate::systems::token_move::refuse_at_wall(
+                    from,
+                    transform.translation.truncate(),
+                    &walls,
+                )
+            {
+                transform.translation.x = from.x;
+                transform.translation.y = from.y;
+                continue;
+            }
+            // Include scale/rotation, not just position: this event
+            // fires on *every* select-click release, not only a real
+            // drag (dragging is set on press, released here even
+            // for a plain click-to-select with no movement). Omitting
+            // them made the world-store reducer's full-replace
+            // `upsert_token` case silently wipe a token's
+            // already-persisted scale/rotation from the *client-side*
+            // store back to `undefined` on every reselect — the
+            // server value was untouched (this event's mutation
+            // bridge input only forwards fields that are present),
+            // but `TokenTool.tsx`'s displayed size/facing reverted to
+            // default the moment a GM clicked the token again after a
+            // reload, discovered live while building T020's e2e
+            // coverage (spec 004 US2).
+            //
+            // One event per dragged token: the mutation bridge is
+            // keyed by token id, and a stack move is genuinely N
+            // separate persisted changes.
+            let rotation_radians = transform.rotation.to_euler(EulerRot::ZYX).0;
+            emit_event(json!({
+                "type": "upsert_token",
+                "token": {
+                    "id": identity.0,
+                    "x": transform.translation.x,
+                    "y": transform.translation.y,
+                    "z": transform.translation.z,
+                    "scale": transform.scale.x,
+                    "rotation": rotation_radians,
+                },
+                "worldId": active_world.0,
+            }));
+        }
+    }
+
     let Some(cursor_world) = cursor_world_position(&pointer, &camera_query) else {
         return;
     };
@@ -402,79 +476,25 @@ pub(crate) fn handle_token_drag(
         for (mut transform, identity, _) in token_query.iter_mut() {
             if let Some(dragged) = dragging.0.iter().find(|d| d.id == identity.0) {
                 let new_pos = cursor_world + dragged.offset;
+                // A player's token stops at a wall while it is carried, as it
+                // does at a keyboard step: the pointer may cross, the token
+                // does not. Judged from where the token is, so a drag that
+                // goes around through a doorway still goes; the drop below
+                // judges the straight line, as the server will. A Game
+                // Master is never judged (spec 045 FR-017).
+                if !is_gm.0
+                    && thunderforge_canvas_core::wall::movement_blocked_by(
+                        transform.translation.truncate(),
+                        new_pos,
+                        &walls,
+                    )
+                    .is_some()
+                {
+                    continue;
+                }
                 transform.translation.x = new_pos.x;
                 transform.translation.y = new_pos.y;
             }
-        }
-        return;
-    }
-
-    if mouse_button.just_released(MouseButton::Left) {
-        let dragged = std::mem::take(&mut dragging.0);
-        if dragged.is_empty() {
-            return;
-        }
-
-        for (mut transform, identity, _) in token_query.iter_mut() {
-            let Some(from) = dragged
-                .iter()
-                .find(|d| d.id == identity.0)
-                .map(|d| d.origin)
-            else {
-                continue;
-            };
-
-            // Spec 045 FR-015: a drag dropped across a wall puts the token
-            // back where the drag began, and sends nothing.
-            //
-            // A drag is judged as the straight line from where it was picked
-            // up to where it was dropped — which is exactly what a drag is,
-            // and the same line the server will judge when no route is sent.
-            // A Game Master is never judged (FR-017): they may put any token
-            // anywhere, and the server agrees, so refusing them here would
-            // only make the board disagree with the world.
-            if !is_gm.0
-                && crate::systems::token_move::refuse_at_wall(
-                    from,
-                    transform.translation.truncate(),
-                    &walls,
-                )
-            {
-                transform.translation.x = from.x;
-                transform.translation.y = from.y;
-                continue;
-            }
-            // Include scale/rotation, not just position: this event
-            // fires on *every* select-click release, not only a real
-            // drag (dragging is set on press, released here even
-            // for a plain click-to-select with no movement). Omitting
-            // them made the world-store reducer's full-replace
-            // `upsert_token` case silently wipe a token's
-            // already-persisted scale/rotation from the *client-side*
-            // store back to `undefined` on every reselect — the
-            // server value was untouched (this event's mutation
-            // bridge input only forwards fields that are present),
-            // but `TokenTool.tsx`'s displayed size/facing reverted to
-            // default the moment a GM clicked the token again after a
-            // reload, discovered live while building T020's e2e
-            // coverage (spec 004 US2).
-            //
-            // One event per dragged token: the mutation bridge is
-            // keyed by token id, and a stack move is genuinely N
-            // separate persisted changes.
-            let rotation_radians = transform.rotation.to_euler(EulerRot::ZYX).0;
-            emit_event(json!({
-                "type": "upsert_token",
-                "token": {
-                    "id": identity.0,
-                    "x": transform.translation.x,
-                    "y": transform.translation.y,
-                    "z": transform.translation.z,
-                    "scale": transform.scale.x,
-                    "rotation": rotation_radians,
-                },
-                "worldId": active_world.0,
-            }));
         }
     }
 }

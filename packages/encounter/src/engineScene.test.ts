@@ -2,13 +2,14 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   HERO_ID,
+  chestCommand,
   doorCommand,
   rollbackCommand,
   roomSetup,
   roomTeardown,
   type EngineCommand,
 } from "./engineScene.ts";
-import { provingGround } from "./fixtures.ts";
+import { provingGround, smallRoom } from "./fixtures.ts";
 
 const script = provingGround();
 const hero = { name: "Sir Pip", art: "/room/sir-pip.webp" };
@@ -241,6 +242,24 @@ test("doorCommand sends the door with its new state", () => {
     wall: { ...door, doorState: "open" },
   });
   assert.equal(door.doorState, "closed", "the map's wall is not changed");
+});
+
+test("chestCommand sends the chest shut or open, in its place", () => {
+  const script = smallRoom();
+  const shut = chestCommand(script, false);
+  const open = chestCommand(script, true);
+  assert.equal(shut.type, "upsert_token");
+  assert.equal(open.type, "upsert_token");
+  if (shut.type !== "upsert_token" || open.type !== "upsert_token") return;
+  assert.equal(shut.token.photoUrl, "/room/chest.webp");
+  assert.equal(open.token.photoUrl, "/room/chest-open.webp");
+  assert.deepEqual({ ...open.token, photoUrl: shut.token.photoUrl }, shut.token);
+  assert.deepEqual(
+    roomSetup(script, hero, { reducedMotion: true }).find(
+      (c) => c.type === "upsert_token" && c.token.id === "chest",
+    ),
+    shut,
+  );
 });
 
 test("rollbackCommand sends the hero back to a square", () => {

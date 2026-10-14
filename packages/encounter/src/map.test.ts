@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { readMap, toSquares, toWorld, type MapFile } from "./map.ts";
+import { readMap, toSquareCentre, toSquares, toWorld, type MapFile } from "./map.ts";
 
 // The landing's own copy of the Proving Ground map, read and never written.
 const DEMO = new URL(
@@ -84,4 +84,9 @@ test("squares and world units convert both ways", () => {
   assert.deepEqual(toSquares({ x: -409.5, y: 234 }, 117), { x: -3.5, y: 2 });
   const there = { x: -2.5625, y: -6.09375 };
   assert.deepEqual(toSquares(toWorld(there, 117), 117), there);
+});
+
+test("a moved token's square is read to the half-square", () => {
+  assert.deepEqual(toSquareCentre({ x: -351, y: 58.50004959 }, 117), { x: -3, y: 0.5 });
+  assert.deepEqual(toSquareCentre({ x: -350.99998, y: -409.5 }, 117), { x: -3, y: -3.5 });
 });

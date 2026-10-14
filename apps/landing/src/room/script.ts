@@ -40,6 +40,7 @@ export function roomScript(file: MapFile): RoomScript {
       interactiveId: "chest-region",
       region: { x: -2.5, y: -5, width: 3, height: 3 },
       art: "/room/chest.webp",
+      openedArt: "/room/chest-open.webp",
     },
     roll: { formula: "1d20+2", dc: 12 },
     scene: {

@@ -45,7 +45,9 @@ export interface RoomScript {
     /** The engine region whose entry finds the chest. */
     interactiveId: string;
     region: SquareRect;
+    /** The chest shut, and the chest once the roll opens it. */
     art: string;
+    openedArt: string;
   };
   roll: { formula: string; dc: number };
   scene: {
