@@ -446,7 +446,7 @@ the demo's build changes. The full suite is never used as a gate.
 
 ## Phase 6: Proof
 
-- [ ] T060 Run, and record the results here:
+- [X] T060 Run, and record the results here:
   - `pnpm e2e:landing` (three times, SC-008);
   - `pnpm -F @thunderforge/encounter check`;
   - `make lint` (and no file over 1000 lines);
@@ -480,9 +480,17 @@ the demo's build changes. The full suite is never used as a gate.
   - `pnpm -F @thunderforge/encounter check`: 75/75.
   - `make lint`: OK, and no file is over 1000 lines.
   - `pnpm verify`: all 18 checks passed.
-  - Still to do: `pnpm -F @thunderforge/demo e2e` (the engine changed in
-    10859455, so the demo build changed), and the click weight on the
-    release engine.
+  - Three fresh runs at cbad3fda (dev engine, load average under 10):
+    each gave 127 passed, 36 skipped and 4 failed, about 10.5 min each.
+    The 4 were the same in every run: `looks.spec.ts`, the map section in
+    light and dark at the tablet and desktop widths. 8c45041d turned the
+    overlay right way up but left those baselines mirrored. The baselines
+    were refreshed from the run (the dark images are byte-identical to the
+    light ones), and `looks.spec.ts` then gave 7 passed and 2 skipped.
+    The other 127 tests passed in all three runs. The two extra skips are
+    the 2000 px column check, which runs at the desktop width only.
+  - `pnpm -F @thunderforge/demo e2e`: 51 passed (2.8 min).
+  - Click weight on the release engine: see T061.
 - [ ] T061 Hand pass, recorded here. On the release engine served by nginx
   (`check-serving.mjs`'s container, or thunderforge-dev after deploy),
   play the room:
