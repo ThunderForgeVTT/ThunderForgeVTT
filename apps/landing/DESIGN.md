@@ -69,7 +69,7 @@ spacing:
   cell: "48px"
   cell-tablet: "40px"
   cell-phone: "32px"
-  section-y: "calc(var(--cell) * 3)"
+  section-y: "calc(var(--cell) * 2)"
   column-gap: "calc(var(--cell) * 2)"
   control-gap: "0.85rem"
 components:
@@ -218,7 +218,7 @@ A near-neutral vinyl ground carrying four saturated marker inks, each with a har
 
 The spatial unit is the grid cell, `--cell`: 48px at 900px and up, 40px from 560 to 899px, 32px below 560px. The body background prints the grid from the page origin (`background-position: 0 0`), and the hero's room and tokens are laid out from that same origin so walls and tokens sit exactly on the printed lines.
 
-Sections are centered at `min(100% - 2 * var(--cell), 75rem)` (phones: `100% - 32px`) with three cells of vertical padding (2.5 on phones). Most sections are a two-column grid with a column gap of 1.5 to 2 cells and asymmetric fractions (7fr/5fr in the hero, 1.1fr/1fr, 0.8fr/1.2fr, 1.55fr/1fr for the map legend), collapsing to one column below 900px (1024px for the map). The nav is two cells tall with one cell of side padding. Reading measure is capped at 68ch for body and 38em for ledes.
+Sections are centered at `min(100% - 2 * var(--cell), 75rem)` (phones: `100% - 32px`) with two cells of vertical padding (1.75 on phones). Most sections are a two-column grid with a column gap of 1.5 to 2 cells and asymmetric fractions (7fr/5fr in the hero, 1.1fr/1fr, 0.8fr/1.2fr, 1.55fr/1fr for the map legend), collapsing to one column below 900px (1024px for the map). The nav is two cells tall with one cell of side padding. Reading measure is capped at 68ch for body and 38em for ledes.
 
 The hero is a full-bleed mat at least one viewport (or 16 cells) tall; below 900px it stacks and drops the minimum height, and below 560px the hero actions become full-width rows.
 

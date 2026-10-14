@@ -610,12 +610,12 @@ main {
   position: relative;
   width: min(100% - 2 * var(--cell), 75rem);
   margin: 0 auto;
-  padding: calc(var(--cell) * 3) 0;
+  padding: calc(var(--cell) * 2) 0;
 }
 @media (max-width: 559px) {
   .section {
     width: calc(100% - 32px);
-    padding: calc(var(--cell) * 2.5) 0;
+    padding: calc(var(--cell) * 1.75) 0;
   }
 }
 .marker-head {
@@ -677,7 +677,7 @@ main {
   box-decoration-break: clone;
 }
 .dream-wanted {
-  padding-top: calc(var(--cell) * 2);
+  padding-top: calc(var(--cell) * 1.5);
 }
 .checked li {
   display: flex;
@@ -1524,7 +1524,7 @@ main {
 }
 
 .support {
-  padding-top: calc(var(--cell) * 3);
+  padding-top: calc(var(--cell) * 2);
 }
 .support-ways {
   display: grid;
