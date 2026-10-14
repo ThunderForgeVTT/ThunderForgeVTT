@@ -321,3 +321,22 @@ test("a mouse drag lets go off the grid and the token snaps to a square", async 
   await expect(note(page)).toHaveText(`${piece.name} moved ${feet} feet.`);
   expectClean(opened);
 });
+
+test("on a wide screen the hero says there is more below, until the visitor scrolls", async ({
+  page,
+}, info) => {
+  test.skip(info.project.name !== "desktop", "the cue shows where the hero fills the screen");
+  // Settling scrolls the whole page, which is exactly what sends the cue away.
+  const opened = await openLanding(page, { settle: false });
+  const cue = page.getByRole("link", { name: "Scroll for more" });
+  await expect(cue).toBeVisible();
+  await expect(cue).toBeInViewport();
+
+  // Following it lands on the next section, and the note is gone from then on.
+  await cue.click();
+  await expect(page.locator('[data-section="dream"]')).toBeInViewport();
+  await expect(cue).toBeHidden();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(cue).toBeHidden();
+  expectClean(opened);
+});
