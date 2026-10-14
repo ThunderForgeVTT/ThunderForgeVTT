@@ -29,9 +29,12 @@
 # A cold build is long — tens of minutes on a laptop — because the workspace's
 # release profile is `lto = true, codegen-units = 1` and `wasm-opt` is
 # single-threaded over a ~25MB module. Neither scales with cores. cargo-chef
-# keeps every compiled dependency in a layer of its own (the `cook` stage), so
-# a rebuild after a source change compiles only this workspace's crates, and
-# BUILD_PROFILE=dev (what `make push` uses) skips LTO and wasm-opt altogether.
+# compiles every dependency before any source arrives (the `cook` stage), and
+# everything cargo writes lives in one BuildKit cache mount that outlives the
+# build, so a rebuild after a source change compiles only the workspace crates
+# that edit touched. The homepage image (`--target landing`) never builds the
+# server: its stages fork off before it. BUILD_PROFILE=dev (what `make push`
+# uses) skips LTO and wasm-opt altogether.
 
 ARG RUST_VERSION=1.98
 ARG NODE_VERSION=24
@@ -93,20 +96,23 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,id=thunderforge-cargo-re
 # --- the dependencies (cargo-chef) -------------------------------------------
 #
 # `planner` reduces the workspace to its manifests and lockfile (recipe.json);
-# `cook` compiles every dependency from that recipe alone. The cooked `target/`
-# and the registry it was fetched from are ordinary layers, so they stay valid
-# until a dependency changes, a source edit never invalidates them, and unlike
-# a cache mount they can be exported (`--cache-to`) and pushed: a CI job run in
-# the `cook` image starts with every dependency compiled, at these paths, with
-# this rustc and this glibc.
+# `cook` compiles every dependency from that recipe alone, so a source edit
+# never recompiles a dependency.
+#
+# Everything cargo writes goes to one BuildKit cache mount, `target/`, shared
+# by every stage below. The mount outlives the build, so the second build of a
+# tree compiles only the crates whose sources changed: the workspace's own 39
+# crates, which a layer could never keep (the `COPY` that brings the sources
+# in makes a new layer, and a new layer starts from the cooked `target/`
+# alone). The mount is per machine and `make gc` can trim it; when it is cold
+# or gone cargo simply builds what is missing, the cook included, and the
+# result is the same.
 #
 # Each cook below has to build its crate exactly as the build stage will —
 # same target, profile and features — or cargo sees different dependencies and
 # compiles them again. The engine follows BUILD_PROFILE (with `debug-names` on
 # dev, as `scripts/shared.mjs` builds it); dice, pdf and combat are always
-# release with `wasm`; the server follows BUILD_PROFILE with its defaults,
-# which is also what its demo-maps binary needs (that feature enables nothing
-# in a dependency).
+# release with `wasm`; the server follows BUILD_PROFILE with its defaults.
 FROM toolchain AS planner
 WORKDIR /build
 COPY . .
@@ -123,7 +129,8 @@ ENV ENGINE_PROFILE=${BUILD_PROFILE} \
 # `[env]` in the cargo config is part of what a build sees.
 COPY .cargo .cargo
 COPY --from=planner /build/recipe.json recipe.json
-RUN if [ "$BUILD_PROFILE" = dev ]; then flag=""; engine="--features debug-names"; else flag=--release; engine=""; fi \
+RUN --mount=type=cache,target=/build/target,id=thunderforge-target \
+  if [ "$BUILD_PROFILE" = dev ]; then flag=""; engine="--features debug-names"; else flag=--release; engine=""; fi \
   && cargo chef cook $flag --recipe-path recipe.json -p thunderforge \
   && cargo chef cook $flag --recipe-path recipe.json --target wasm32-unknown-unknown \
   -p thunderforge-engine $engine \
@@ -132,52 +139,112 @@ RUN if [ "$BUILD_PROFILE" = dev ]; then flag=""; engine="--features debug-names"
   -p "$crate" --features wasm || exit 1; \
   done
 
-# --- the build ----------------------------------------------------------------
-FROM cook AS build
-ARG BUILD_PROFILE
+# --- the Rust sources ---------------------------------------------------------
+#
+# Only what cargo reads: the workspace needs every member's manifest and
+# sources to resolve, so all of them come in, with the files the server
+# crate `include_str!`s from outside its own tree (config, legal, the map
+# credit) — but nothing of the web apps, packages or docs. An edit to the
+# homepage or the demo leaves these layers, and the wasm and base-maps stages
+# built on them, untouched. The same list again in `base-maps`: a stage can
+# copy from another but not share a step with it.
+FROM cook AS rust-src
+COPY Cargo.toml Cargo.lock ./
+COPY crates crates
+COPY packs packs
+COPY config config
+COPY legal legal
+COPY examples/maps examples/maps
+COPY apps/thunderforge apps/thunderforge
+COPY apps/thunderforge-crucible-server apps/thunderforge-crucible-server
+COPY apps/thunderforge-mapforge-server apps/thunderforge-mapforge-server
+COPY apps/telemetry-gateway apps/telemetry-gateway
 
-COPY . .
-
-# Order matters. `dist/engine`, `dist/pdf`, `dist/dice` and `dist/sheet-*` are pnpm workspace
-# packages that wasm-pack writes, and `apps/web` and `apps/demo` depend on
-# them, so they have to exist before `pnpm install` can resolve the
-# workspace. `target/` is the cooked one from the stage above: only this
-# workspace's own crates compile here.
-RUN --mount=type=cache,target=/root/.cache,id=thunderforge-wasm-pack-cache \
+# --- the wasm ------------------------------------------------------------------
+#
+# `dist/engine`, `dist/pdf`, `dist/dice`, `dist/combat` and `dist/sheet-*`:
+# pnpm workspace packages that wasm-pack writes, which `apps/web`, `apps/demo`
+# and `apps/landing` depend on, so they exist before any `pnpm install`.
+# `wasm-opt` over the release engine is minutes on its own and single-threaded,
+# which is why this is a stage of its own that only a Rust edit re-runs.
+FROM rust-src AS wasm
+COPY scripts/build.mjs scripts/shared.mjs scripts/
+RUN --mount=type=cache,target=/build/target,id=thunderforge-target \
+  --mount=type=cache,target=/root/.cache,id=thunderforge-wasm-pack-cache \
   node scripts/build.mjs --only-wasm
 
+# --- the base maps -------------------------------------------------------------
+#
+# The example maps imported (spec 088): what a new world can open on, and
+# what the demo's scenes are made of. The importer is a second binary of the
+# server crate, built here in the dev profile — a map import does not need an
+# optimised binary, and the release server with fat LTO is the longest step of
+# the whole build. This stage shares nothing with it, so BuildKit runs the two
+# side by side, and a landing build never waits on the server at all.
+FROM toolchain AS base-maps-cook
+WORKDIR /build
+ENV CARGO_TERM_COLOR=never
+COPY .cargo .cargo
+COPY --from=planner /build/recipe.json recipe.json
+RUN --mount=type=cache,target=/build/target,id=thunderforge-target \
+  cargo chef cook --recipe-path recipe.json -p thunderforge
+
+FROM base-maps-cook AS base-maps
+COPY Cargo.toml Cargo.lock ./
+COPY crates crates
+COPY packs packs
+COPY config config
+COPY legal legal
+COPY examples/maps examples/maps
+COPY apps/thunderforge apps/thunderforge
+COPY apps/thunderforge-crucible-server apps/thunderforge-crucible-server
+COPY apps/thunderforge-mapforge-server apps/thunderforge-mapforge-server
+COPY apps/telemetry-gateway apps/telemetry-gateway
+RUN --mount=type=cache,target=/build/target,id=thunderforge-target \
+  cargo run -q -p thunderforge --bin thunderforge-demo-maps \
+  --features demo-maps -- examples/maps /out/base-maps \
+  && test -f /out/base-maps/NOTICE.txt
+
+# --- the site: the demo, and whatever is built beside it ----------------------
+#
+# The whole tree now, for the pnpm workspace: `--frozen-lockfile` resolves
+# every package the lockfile knows. The steps from here are seconds, so a
+# layer that any edit invalidates costs nothing.
+FROM wasm AS site
+COPY . .
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=thunderforge-pnpm-store \
   pnpm install --frozen-lockfile
+
+# The demo (spec 074), written to data/demo: static files and nothing else.
+# Its scenes are the example maps the base-maps stage imported.
+COPY --from=base-maps /out/base-maps apps/demo/public/maps
+RUN pnpm -F @thunderforge/demo run build
+
+# --- the build ----------------------------------------------------------------
+FROM site AS build
+ARG BUILD_PROFILE
 
 # The client bundle, written to data/client.
 RUN pnpm -F @thunderforge/web run build
 
 # The server in BUILD_PROFILE, stripped: a debug binary carries about 1.4GB
-# of symbols and nothing in a container needs them. The same step runs the
-# demo's map importer, a second binary of the same crate, in the same profile
-# so it reuses what the server build compiled.
-RUN if [ "$BUILD_PROFILE" = dev ]; then flag=""; dir=debug; else flag=--release; dir=release; fi \
+# of symbols and nothing in a container needs them.
+RUN --mount=type=cache,target=/build/target,id=thunderforge-target \
+  if [ "$BUILD_PROFILE" = dev ]; then flag=""; dir=debug; else flag=--release; dir=release; fi \
   && cargo build $flag -p thunderforge \
   && mkdir -p /out \
   && install -m 755 target/$dir/thunderforge /out/thunderforge \
   && strip /out/thunderforge \
   && install -m 755 /usr/local/cargo/bin/diesel /out/diesel \
-  && strip /out/diesel \
-  && cargo run $flag -q -p thunderforge --bin thunderforge-demo-maps \
-  --features demo-maps -- examples/maps apps/demo/public/maps \
-  && test -f apps/demo/public/maps/NOTICE.txt \
-  && cp -r apps/demo/public/maps /out/base-maps
-
-# The demo (spec 074), written to data/demo: static files and nothing else.
-# Its scenes are the example maps the step above just imported, which is why
-# it is built after the server and not beside the client.
-RUN pnpm -F @thunderforge/demo run build
+  && strip /out/diesel
 
 # --- the homepage ------------------------------------------------------------
 #
 # thunderforge.dev: apps/landing at / and the demo at /demo/, served by nginx.
 # Build it with `--target landing`; the server stays the default (last) stage.
-FROM build AS landing-build
+# It starts from `site`, not `build`: the homepage needs the demo and the wasm,
+# never the server binary or the client bundle.
+FROM site AS landing-build
 # Then a .br beside every asset of both, and the engine's sizes in the demo's
 # engine.json (spec 090 US4): nginx has no brotli module, so it sends these.
 RUN pnpm -F @thunderforge/landing run build \
@@ -210,11 +277,13 @@ WORKDIR /build
 ENV CARGO_TERM_COLOR=never
 COPY .cargo .cargo
 COPY --from=planner /build/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json -p thunderforge-telemetry-gateway
+RUN --mount=type=cache,target=/build/target,id=thunderforge-target \
+  cargo chef cook --release --recipe-path recipe.json -p thunderforge-telemetry-gateway
 
 FROM gateway-cook AS gateway-build
 COPY . .
-RUN cargo build --release -p thunderforge-telemetry-gateway \
+RUN --mount=type=cache,target=/build/target,id=thunderforge-target \
+  cargo build --release -p thunderforge-telemetry-gateway \
   && install -D target/release/thunderforge-telemetry-gateway /out/thunderforge-telemetry-gateway \
   && strip /out/thunderforge-telemetry-gateway
 
@@ -267,7 +336,7 @@ COPY --from=build /build/data/demo /srv/thunderforge/demo
 # The maps a new world can open on (spec 088): the same import the demo's
 # scenes come from, with its credit and NOTICE.txt. Not under the data
 # directory, for the client's reason: an image rebuild replaces them.
-COPY --from=build /out/base-maps /srv/base-maps
+COPY --from=base-maps /out/base-maps /srv/base-maps
 
 COPY scripts/container-entrypoint.sh /usr/local/bin/thunderforge-entrypoint
 # Belt and braces: COPY carries the host's mode, and a script that arrives
