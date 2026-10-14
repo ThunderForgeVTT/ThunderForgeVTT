@@ -1,9 +1,10 @@
 # thunderforge.dev: the homepage at /, the browser demo at /demo/, and a
 # cached read-only window onto the repository's GitHub stars.
 #
-# A template: the nginx image substitutes ${GITHUB_TOKEN} at start. GitHub only
-# lists stargazers to an authenticated caller, so the token stays here and no
-# browser ever sees it. Without one the star chart shows contributors only.
+# GitHub only lists stargazers to an authenticated caller. The image's
+# github-auth.sh writes the Authorization below before nginx starts, from a
+# GitHub App or a GITHUB_TOKEN, and keeps an App's token fresh. No browser
+# ever sees it. Without one the star chart shows contributors only.
 
 upstream github_api {
   server api.github.com:443;
@@ -15,10 +16,7 @@ upstream github_api {
 # serves the last good answer instead (kept for a week).
 proxy_cache_path /var/cache/nginx/github levels=1:2 keys_zone=github:1m max_size=20m inactive=7d use_temp_path=off;
 
-map "${GITHUB_TOKEN}" $github_auth {
-  ""      "";
-  default "Bearer ${GITHUB_TOKEN}";
-}
+include /etc/nginx/github-auth.conf;
 
 # Spec 086: browser telemetry for the landing and the demo
 # (specs/086-full-telemetry/contracts/served-config-and-csp.md). The image
