@@ -22,6 +22,7 @@ pub mod content_patterns;
 pub mod dice_throw;
 pub mod door_icon;
 pub mod frame_trace;
+pub mod glide;
 pub mod grid;
 pub mod interaction;
 pub mod item;

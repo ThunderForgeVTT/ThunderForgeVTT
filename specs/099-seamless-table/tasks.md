@@ -4,7 +4,7 @@
 
 ## Phase 1: Glide (US1)
 
-- [ ] T001 [US1] Core `glide.rs` and its tests (FR-002, FR-003).
+- [x] T001 [US1] Core `glide.rs` and its tests (FR-002, FR-003).
 - [ ] T002 [US1] Engine `token_glide.rs`: track hops, draw glides, carried
   lights from the drawn token, `drawnX`/`drawnY` (SC-001, SC-002).
 - [ ] T003 [US1] Reduced motion reaches the glide.
