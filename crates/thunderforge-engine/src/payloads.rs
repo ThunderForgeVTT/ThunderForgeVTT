@@ -396,6 +396,8 @@ pub(crate) enum ExternalCommand {
         path: Option<String>,
         width: f32,
         height: f32,
+        /// The map by night (spec 099), from `nightImagePath`.
+        night_path: Option<String>,
     },
     /// FR-010: whether the local session may author walls/shapes
     /// (`WallPlugin`/`ShapePlugin` gate all authoring input on

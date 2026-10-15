@@ -635,6 +635,7 @@ pub(crate) fn apply_external_commands(
                 path,
                 width,
                 height,
+                night_path,
             } => {
                 if let Some(background) = background.as_deref_mut() {
                     // Bug fix: writing through `ResMut::deref_mut` trips
@@ -656,11 +657,13 @@ pub(crate) fn apply_external_commands(
                     // nothing actually changed.
                     let unchanged = background.path == path
                         && background.width == width
-                        && background.height == height;
+                        && background.height == height
+                        && background.night_path == night_path;
                     if !unchanged {
                         background.path = path;
                         background.width = width;
                         background.height = height;
+                        background.night_path = night_path;
                     }
                 }
             }

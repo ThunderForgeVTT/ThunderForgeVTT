@@ -185,10 +185,15 @@ pub(crate) fn parse_command(input: &str) -> Option<ExternalCommand> {
             };
             let width = value.get("width")?.as_f64()? as f32;
             let height = value.get("height")?.as_f64()? as f32;
+            let night_path = value
+                .get("nightImagePath")
+                .and_then(Value::as_str)
+                .map(str::to_owned);
             Some(ExternalCommand::SetSceneBackground {
                 path,
                 width,
                 height,
+                night_path,
             })
         }
         "set_scene_grid" => Some(ExternalCommand::SetSceneGrid {

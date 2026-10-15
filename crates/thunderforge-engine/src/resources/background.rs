@@ -23,6 +23,9 @@ pub struct SceneBackground {
     pub path: Option<String>,
     pub width: f32,
     pub height: f32,
+    /// The same map by night (spec 099 US3), faded in over `path` as the
+    /// darkness rises. Loaded only when named.
+    pub night_path: Option<String>,
 }
 
 /// One placed (pasted) canvas image asset (spec 002, US3/FR-011),

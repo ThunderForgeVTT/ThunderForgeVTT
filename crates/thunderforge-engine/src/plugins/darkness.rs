@@ -259,7 +259,12 @@ impl Plugin for DarknessPlugin {
             .init_resource::<super::time_of_day::TimeOfDay>()
             .add_systems(
                 Update,
-                (super::time_of_day::tick_time_of_day, sync_darkness).chain(),
+                (
+                    super::time_of_day::tick_time_of_day,
+                    sync_darkness,
+                    super::time_of_day::fade_night_background,
+                )
+                    .chain(),
             );
     }
 }
@@ -280,7 +285,11 @@ fn darkness_strength(level: Illumination) -> f32 {
 
 /// How dark the map is drawn (spec 099 FR-006): an explicit shade, then the
 /// clock, then the ambient level.
-fn drawn_darkness(shade: Option<&AmbientShade>, clock: Option<f32>, level: Illumination) -> f32 {
+pub(crate) fn drawn_darkness(
+    shade: Option<&AmbientShade>,
+    clock: Option<f32>,
+    level: Illumination,
+) -> f32 {
     shade
         .and_then(|shade| shade.0)
         .or(clock)

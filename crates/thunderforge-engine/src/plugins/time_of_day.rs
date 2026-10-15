@@ -13,6 +13,8 @@ use serde_json::json;
 use thunderforge_canvas_core::daylight::{Clock, NIGHT, darkness_at, follow};
 
 use crate::emit_event;
+use crate::resources::{AmbientShade, SceneAmbient};
+use crate::systems::background::NightBackgroundSprite;
 
 #[derive(Resource, Default)]
 pub struct TimeOfDay {
@@ -81,6 +83,27 @@ pub(crate) fn tick_time_of_day(time: Res<Time>, mut tod: ResMut<TimeOfDay>) {
     }
 }
 
+/// The night map shows as much as the night lights burn (FR-007): no
+/// swap, no flash.
+pub(crate) fn fade_night_background(
+    tod: Res<TimeOfDay>,
+    shade: Option<Res<AmbientShade>>,
+    ambient: Option<Res<SceneAmbient>>,
+    mut night: Query<&mut Sprite, With<NightBackgroundSprite>>,
+) {
+    let level = ambient.map_or(
+        thunderforge_canvas_core::vision::Illumination::Bright,
+        |a| a.0.level,
+    );
+    let darkness = super::darkness::drawn_darkness(shade.as_deref(), tod.shade(), level);
+    let alpha = TimeOfDay::night_factor(darkness);
+    for mut sprite in night.iter_mut() {
+        if (sprite.color.alpha() - alpha).abs() > 0.001 {
+            sprite.color.set_alpha(alpha);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -113,6 +136,32 @@ mod tests {
         let (fast, _) = drive(144);
         assert!((slow - fast).abs() <= 0.01, "{slow} against {fast}");
         assert!(worst <= 0.02 + 1e-5, "{worst}");
+    }
+
+    #[test]
+    fn the_night_map_shows_by_night_and_not_by_day() {
+        let mut world = World::new();
+        world.init_resource::<TimeOfDay>();
+        let map = world
+            .spawn((
+                Sprite {
+                    color: Color::WHITE.with_alpha(0.0),
+                    ..default()
+                },
+                NightBackgroundSprite,
+            ))
+            .id();
+        let mut schedule = Schedule::default();
+        schedule.add_systems(fade_night_background);
+        let alpha = |world: &mut World, hour: f32, schedule: &mut Schedule| {
+            world.resource_mut::<TimeOfDay>().set(Some(hour), None);
+            schedule.run(world);
+            world.get::<Sprite>(map).unwrap().color.alpha()
+        };
+        assert_eq!(alpha(&mut world, 0.0, &mut schedule), 1.0);
+        assert_eq!(alpha(&mut world, 12.0, &mut schedule), 0.0);
+        let dusk = alpha(&mut world, 19.0, &mut schedule);
+        assert!(dusk > 0.0 && dusk < 1.0, "{dusk}");
     }
 
     #[test]
