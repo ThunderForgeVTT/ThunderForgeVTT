@@ -678,15 +678,12 @@ main {
 }
 .section {
   position: relative;
-  width: min(100% - 2 * var(--cell), 75rem);
-  margin: 0 auto;
+  /* The column's edges stand on grid lines: whole cells wide, its left edge
+     a whole number of cells from the page's corner, where the grid starts. */
+  --column: round(down, min(100% - 2 * var(--cell), 75rem), var(--cell));
+  width: var(--column);
+  margin: 0 0 0 round(nearest, (100% - var(--column)) / 2, var(--cell));
   padding: calc(var(--cell) * 2) 0;
-}
-@media (max-width: 559px) {
-  .section {
-    width: calc(100% - 32px);
-    padding: calc(var(--cell) * 1.75) 0;
-  }
 }
 .marker-head {
   margin: 0 0 1.1rem;
@@ -716,7 +713,7 @@ main {
 
 .dream {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  grid-template-columns: round(nearest, (100% - var(--cell) * 2) * 0.524, var(--cell)) minmax(0, 1fr);
   gap: calc(var(--cell) * 2);
   align-items: start;
 }
@@ -791,8 +788,8 @@ main {
 
 .dice-section {
   display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
-  gap: calc(var(--cell) * 1.5);
+  grid-template-columns: round(nearest, (100% - var(--cell) * 2) * 0.4, var(--cell)) minmax(0, 1fr);
+  gap: calc(var(--cell) * 2);
   align-items: start;
 }
 @media (max-width: 899px) {
@@ -979,8 +976,8 @@ main {
 
 .legend-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
-  gap: calc(var(--cell) * 1);
+  grid-template-columns: round(nearest, (100% - var(--cell)) * 0.608, var(--cell)) minmax(0, 1fr);
+  gap: var(--cell);
   align-items: start;
 }
 .legend-layout--loading {
@@ -1252,7 +1249,7 @@ main {
 
 .systems {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: round(nearest, (100% - var(--cell) * 2) * 0.5, var(--cell)) minmax(0, 1fr);
   gap: calc(var(--cell) * 2);
   align-items: start;
 }
@@ -1326,7 +1323,7 @@ main {
 }
 .measures li {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: round(nearest, (100% - var(--cell)) / 2, var(--cell)) minmax(0, 1fr);
   gap: 0.25rem calc(var(--cell) * 1);
   align-items: baseline;
 }
@@ -1384,8 +1381,8 @@ main {
 
 .self-host {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
-  gap: calc(var(--cell) * 1.5);
+  grid-template-columns: round(nearest, (100% - var(--cell) * 2) * 0.444, var(--cell)) minmax(0, 1fr);
+  gap: calc(var(--cell) * 2);
   align-items: center;
 }
 @media (max-width: 899px) {
@@ -1472,8 +1469,8 @@ main {
 
 .stance {
   display: grid;
-  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
-  gap: calc(var(--cell) * 1.5);
+  grid-template-columns: round(nearest, (100% - var(--cell) * 2) * 0.35, var(--cell)) minmax(0, 1fr);
+  gap: calc(var(--cell) * 2);
   align-items: center;
 }
 .screen {
@@ -1598,7 +1595,7 @@ main {
 }
 .support-ways {
   display: grid;
-  grid-template-columns: 1.3fr 1fr 1fr;
+  grid-template-columns: round(nearest, 100% * 0.394, var(--cell)) round(nearest, 100% * 0.303, var(--cell)) minmax(0, 1fr);
   gap: 0;
   margin-top: calc(var(--cell) * 1);
   border-top: var(--marker-w) solid rgb(196 53 42 / 0.9);
