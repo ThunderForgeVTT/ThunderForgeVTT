@@ -148,6 +148,7 @@ export default function PageTable() {
   const [spec, setSpec] = useState<HeroSpec>(() => presetSpec(hero.slug));
   const [busy, setBusy] = useState(false);
   const stage = useRef<HTMLDivElement>(null);
+  const note = useRef<HTMLElement>(null);
 
   // What the frame loop and the listeners read; never a stale render's copy.
   const live = useRef({
@@ -186,6 +187,8 @@ export default function PageTable() {
     rejoin: false,
     /** The foes that are down, as last sent. */
     down: "",
+    /** Where the hero stood on the screen when the note last looked. */
+    behind: "",
   });
   live.current.hero = hero;
 
@@ -730,6 +733,18 @@ export default function PageTable() {
       raf = requestAnimationFrame(step);
       const L = live.current;
       if (L.phase !== "running") return;
+      // The note steps back while the hero stands behind it, unless open.
+      const vy = L.pos.y - window.scrollY;
+      const key = `${Math.round(L.pos.x)},${Math.round(vy)}`;
+      if (note.current && key !== L.behind) {
+        L.behind = key;
+        const r = note.current.getBoundingClientRect();
+        const half = L.cell / 2;
+        const under =
+          L.pos.x + half > r.left && L.pos.x - half < r.right && vy + half > r.top && vy - half < r.bottom;
+        if (under) note.current.dataset.behind = "";
+        else delete note.current.dataset.behind;
+      }
       if (seatedAt() && !stand()) return;
       if (L.route && !L.free) {
         // Along the route, never across it (FR-004).
@@ -828,6 +843,7 @@ export default function PageTable() {
         aria-hidden="true"
       />
       <aside
+        ref={note}
         className={`journey${open ? " journey--open" : ""}${open && mode === "build" ? " journey--build" : ""}`}
         aria-label="Your hero's walk"
         style={{ ["--journey" as string]: pct / 100 }}

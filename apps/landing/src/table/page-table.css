@@ -57,6 +57,11 @@ body.in-engine .camp-map img {
   box-shadow: 3px 4px 0 rgb(31 42 46 / 0.18);
   font-size: 0.95rem;
   line-height: 1.3;
+  transition: opacity 0.2s;
+}
+/* The hero stands behind the note: it steps back, until a hand comes near. */
+.journey[data-behind]:not(.journey--open):not(:hover):not(:focus-within) {
+  opacity: 0.3;
 }
 .journey-face {
   padding: 0;
