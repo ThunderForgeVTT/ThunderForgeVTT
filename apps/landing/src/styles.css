@@ -423,7 +423,7 @@ img {
 /* Under the headline, the goblins stand on the grass below the map. */
 @media (max-width: 1199px) {
   .hero--tavern .hero-tavern {
-    padding-bottom: calc(var(--cell) * 5.5);
+    padding-bottom: calc(var(--cell) * 6.5);
   }
 }
 /* A phone: the map fits between 16px gutters, centred, at up to a cell a

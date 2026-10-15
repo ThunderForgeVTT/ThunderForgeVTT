@@ -11,6 +11,8 @@ import { publishMat, type MatPiece, type MatSeg } from "../table/heroMat.ts";
 const MAP = "/maps/tavern-sample.webp";
 /** `styles.css`: under this the map shrinks to fit the screen. */
 const PHONE = "(max-width: 559px)";
+/** `styles.css`: under this the credit runs below the map, under the goblins. */
+const STACKED = "(max-width: 1199px)";
 /** The map's size in squares (`tavern-sample.json`: 1408×1024 at 128). */
 const COLS = 11;
 const ROWS = 8;
@@ -60,6 +62,7 @@ export function HeroTavern({ party, foes = [] }: { party: TavernPiece[]; foes?: 
   const boxRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const [cell, setCell] = useState(0);
+  const [below, setBelow] = useState(0);
 
   // The map snaps to the page's grid lines, then says where it lies.
   useLayoutEffect(() => {
@@ -74,6 +77,10 @@ export function HeroTavern({ party, foes = [] }: { party: TavernPiece[]; foes?: 
       // between the gutters and lies where it falls.
       const size = r.width / COLS || 48;
       const snap = !matchMedia(PHONE).matches;
+      // Stacked, the credit wraps under the map: the goblins stand a row
+      // lower, clear of it.
+      const below = matchMedia(STACKED).matches ? 1 : 0;
+      setBelow(below);
       const left = r.left + window.scrollX;
       const top = r.top + window.scrollY;
       const x = snap ? Math.round(left / size) * size : left;
@@ -96,7 +103,7 @@ export function HeroTavern({ party, foes = [] }: { party: TavernPiece[]; foes?: 
           name: p.name,
           src: p.src,
           x: x + FOE_SPOTS[i]!.c * size,
-          y: y + FOE_SPOTS[i]!.r * size,
+          y: y + (FOE_SPOTS[i]!.r + below) * size,
           side: size,
           foe: true,
         }),
@@ -156,7 +163,12 @@ export function HeroTavern({ party, foes = [] }: { party: TavernPiece[]; foes?: 
               className="hero-tavern-token"
               src={p.src}
               alt={p.name}
-              style={{ left: FOE_SPOTS[i]!.c * cell, top: FOE_SPOTS[i]!.r * cell, width: cell, height: cell }}
+              style={{
+                left: FOE_SPOTS[i]!.c * cell,
+                top: (FOE_SPOTS[i]!.r + below) * cell,
+                width: cell,
+                height: cell,
+              }}
             />
           ))}
       </div>
