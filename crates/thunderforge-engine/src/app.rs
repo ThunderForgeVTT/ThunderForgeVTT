@@ -149,6 +149,8 @@ pub(crate) struct SceneParams<'w, 's> {
     viewer_user: Option<ResMut<'w, resources::ViewerUserId>>,
     // Spec 090: exists once `RenderPausePlugin` is registered.
     rendering: Option<ResMut<'w, plugins::render_pause::Rendering>>,
+    // Spec 099: exists once `TokenPlugin` is registered.
+    reduced_motion: Option<ResMut<'w, crate::systems::token_glide::ReducedMotion>>,
 }
 
 /// The interaction plugin's resources, grouped.
@@ -936,6 +938,9 @@ pub(crate) fn apply_external_commands(
             ExternalCommand::SetReducedMotion { reduced } => {
                 if let Some(inbox) = dice_inbox.as_deref_mut() {
                     inbox.reduced = Some(reduced);
+                }
+                if let Some(motion) = scene.reduced_motion.as_mut() {
+                    motion.0 = reduced;
                 }
             }
             ExternalCommand::SetRendering { on } => {

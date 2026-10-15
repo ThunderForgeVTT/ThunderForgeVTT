@@ -453,7 +453,11 @@ fn sync_darkness(
     mut shadows: ResMut<ShadowMap>,
     mut stats: ResMut<ShadowStats>,
     eyes: Option<Res<Eyes>>,
-    tokens: Query<(&Transform, &TokenIdentity)>,
+    tokens: Query<(
+        &Transform,
+        &TokenIdentity,
+        Option<&crate::systems::token_glide::TokenGlide>,
+    )>,
     cameras: Query<(&Projection, &GlobalTransform), With<Camera2d>>,
     mut existing: Query<
         (Entity, &MeshMaterial2d<DarknessMaterial>, &mut Transform),
@@ -470,7 +474,11 @@ fn sync_darkness(
 
     let positions: HashMap<String, Vec2> = tokens
         .iter()
-        .map(|(transform, identity)| (identity.0.clone(), transform.translation.truncate()))
+        // Where the token is drawn, so a carried torch glides with it.
+        .map(|(transform, identity, glide)| {
+            let drawn = transform.translation.truncate() + glide.map_or(Vec2::ZERO, |g| g.offset());
+            (identity.0.clone(), drawn)
+        })
         .collect();
     // Where the viewer stands, if this client looks through a token (spec
     // 076). A token named but not in the scene is nobody's eyes.
