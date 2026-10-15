@@ -8,6 +8,7 @@ import { Stance } from "./sections/Stance.tsx";
 import { WhatWeMeasure } from "./sections/WhatWeMeasure.tsx";
 import { Support } from "./sections/Support.tsx";
 import { Footer } from "./sections/Footer.tsx";
+import PageTable from "./table/PageTable.tsx";
 
 // The dice (WebAssembly), the map (a large image and its geometry) and the
 // room load after the first viewport, each in its own chunk.
@@ -22,6 +23,7 @@ export function App() {
       <a className="skip-link" href="#content">
         Skip to content
       </a>
+      <PageTable />
       <Hero />
       <main id="content" tabIndex={-1}>
         <Dream />
