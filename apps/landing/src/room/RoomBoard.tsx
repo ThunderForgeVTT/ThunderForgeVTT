@@ -157,11 +157,16 @@ export default function RoomBoard({ script, room }: { script: RoomScript; room: 
   // Only the hero's square holds a finger; a swipe anywhere else scrolls.
   const pass = (e: React.PointerEvent<HTMLDivElement>) => {
     const canvas = canvasOf(FRAME_ID);
-    if (!canvas) return;
+    // The board's own buttons keep their presses.
+    if (!canvas || (e.target as Element).closest("button")) return;
     if (e.type === "pointerdown") e.currentTarget.setPointerCapture(e.pointerId);
     canvas.dispatchEvent(new PointerEvent(e.type, e.nativeEvent));
   };
-  const { hero } = room.state;
+  const { hero, goals } = room.state;
+  // A found chest asks for its roll where it stands, so a phone need not
+  // scroll down to the controls and back to see the throw.
+  const chest = script.chest;
+  const asks = seated && chest && goals.includes("chest-found") && !goals.includes("chest-opened");
 
   return (
     <div className="room-board-box" ref={box}>
@@ -178,6 +183,23 @@ export default function RoomBoard({ script, room }: { script: RoomScript; room: 
         })}
       >
         <img className="room-board-art" src={script.scene.background} alt="" width={width} height={height} />
+        {asks && (
+          <button
+            type="button"
+            className="ink-btn ink-btn--small ink-btn--red room-board-roll"
+            // Over the chest's name, held to the board's side the chest is on.
+            style={{
+              top: `calc(var(--cell) * ${rows / 2 - chest.square.y - 1})`,
+              ...(chest.square.x > 0
+                ? { right: `calc(var(--cell) * ${cols / 2 - chest.square.x - 0.5})` }
+                : { left: `calc(var(--cell) * ${chest.square.x + cols / 2 - 0.5})` }),
+            }}
+            aria-disabled={room.rolling}
+            onClick={() => !room.rolling && void room.roll()}
+          >
+            Roll to open
+          </button>
+        )}
         {seated && (
           <div
             className="room-board-hero"

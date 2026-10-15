@@ -269,3 +269,10 @@ body.in-engine .room-board-art {
 .room-board-hero:active {
   cursor: grabbing;
 }
+.room-board-roll {
+  position: absolute;
+  translate: 0 calc(-100% - 4px);
+  white-space: nowrap;
+  touch-action: manipulation;
+  z-index: 1;
+}

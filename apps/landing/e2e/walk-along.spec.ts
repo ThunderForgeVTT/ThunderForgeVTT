@@ -419,7 +419,7 @@ test.describe("the hero stays on a phone's screen", () => {
     expect(Math.abs(after.y - on.y - (on.height / cell / 2 - hy! - 0.5) * cell)).toBeLessThan(2);
   });
 
-  test("a tap on the door's icon on the page's table opens it", async ({ page }) => {
+  test("on the page's table, a tap on the door's icon opens it and the found chest asks for its roll", async ({ page }) => {
     await page.setViewportSize({ width: 384, height: 686 });
     await openLanding(page, { settle: false });
     await page.emulateMedia({ reducedMotion: "no-preference" });
@@ -483,6 +483,27 @@ test.describe("the hero stays on a phone's screen", () => {
         return Math.round(Math.hypot(there.x - at.x, there.y - at.y));
       })
       .toBeLessThan(2);
+
+    // Found, the chest asks for its roll where it stands, on the board.
+    const roll = page.locator(".room-board-roll");
+    await expect(roll).toHaveCount(0);
+    await pad(page, "North").focus();
+    for (const key of ["ArrowDown", "ArrowDown", "ArrowRight"]) {
+      const k = (await saidLog(page)).length;
+      await page.keyboard.press(key);
+      await expect.poll(async () => (await saidLog(page)).length).toBe(k + 1);
+    }
+    expect((await saidLog(page)).at(-1)).toMatch(/^You find the chest\./);
+    await scrollAndSettle(page, seatAt);
+    await expect(roll).toBeInViewport();
+    const chest = (await page.locator("#room-table").boundingBox())!;
+    const box = (await roll.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(chest.x);
+    expect(box.x + box.width).toBeLessThanOrEqual(chest.x + chest.width + 1);
+    const r = (await saidLog(page)).length;
+    await roll.click();
+    await expect.poll(async () => (await saidLog(page)).length, { timeout: 15_000 }).toBeGreaterThan(r);
+    expect((await saidLog(page)).slice(r).join(" ")).toMatch(/1d20\+2|\b12\b|open/i);
   });
 });
 
