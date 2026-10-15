@@ -313,3 +313,81 @@ test.describe("the dusk on a big screen", () => {
     });
   }
 });
+
+/** One frame of the walker: where it stands, where it is drawn, and the
+ * engine's frame count. */
+interface Drawn {
+  x: number;
+  y: number;
+  drawnX: number;
+  drawnY: number;
+  frame: number;
+}
+
+test.describe("the walker glides between squares (spec 099)", () => {
+  test.skip(!BUILT, "no demo build: run pnpm -F @thunderforge/demo run build");
+  test.beforeEach(({}, info) => {
+    test.skip(info.project.name !== "desktop", "the walk is the wide page's");
+    test.setTimeout(BOOT_TIMEOUT + 120_000);
+  });
+
+  test("its drawn place moves on every frame while it crosses a square, never far from it (SC-005)", async ({
+    page,
+  }) => {
+    await openLanding(page, { settle: false });
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.reload();
+    await expect(page.locator("body.in-engine")).toBeAttached({ timeout: BOOT_TIMEOUT });
+    await expect(page.locator("#page-table[data-walker]")).toBeAttached();
+    await watchWalker(page);
+    await scrollAndSettle(page, 0);
+    // The walker, once a frame, while the scroll walks it: from the engine's
+    // per-frame mirror of what glides, or where it stands when it does not.
+    const seen = await page.evaluate(async (y) => {
+      const m = await (await fetch("/demo/engine.json")).json();
+      const e = await import(`/demo/${m.js}`);
+      const out: Drawn[] = [];
+      const until = performance.now() + 2500;
+      scrollTo({ top: y, behavior: "instant" });
+      await new Promise<void>((done) => {
+        const tick = () => {
+          const frame = JSON.parse(e.engine_stats()).frames as number;
+          const glides = JSON.parse(e.token_glides()) as Array<Drawn & { tokenId: string }>;
+          const g = glides.find((t) => t.tokenId === "walker");
+          if (g) out.push({ x: g.x, y: g.y, drawnX: g.drawnX, drawnY: g.drawnY, frame });
+          else {
+            const all = JSON.parse(e.token_footprints()) as Array<Drawn & { tokenId: string }>;
+            const w = all.find((t) => t.tokenId === "walker");
+            if (w) out.push({ x: w.x, y: w.y, drawnX: w.x, drawnY: w.y, frame });
+          }
+          if (performance.now() < until) requestAnimationFrame(tick);
+          else done();
+        };
+        requestAnimationFrame(tick);
+      });
+      return out;
+    }, Math.round((await page.evaluate(() => innerHeight)) * 0.8));
+    // The square: the smallest step between the places it stood.
+    const steps = seen
+      .slice(1)
+      .flatMap((f, i) => [Math.abs(f.x - seen[i]!.x), Math.abs(f.y - seen[i]!.y)])
+      .filter((d) => d > 0.5);
+    expect(steps.length, "it walks at all").toBeGreaterThan(0);
+    const square = Math.min(...steps);
+    const away = (f: Drawn) => Math.hypot(f.drawnX - f.x, f.drawnY - f.y);
+    const gliding = seen.filter((f) => away(f) > 0.5);
+    expect(gliding.length, "it glides at all").toBeGreaterThan(5);
+    let moved = 0;
+    let still = 0;
+    for (let i = 1; i < seen.length; i++) {
+      const [a, b] = [seen[i - 1]!, seen[i]!];
+      // Mid-glide, on a frame the engine drew: the picture moved.
+      if (away(a) <= 0.5 || b.frame === a.frame) continue;
+      if (Math.hypot(b.drawnX - a.drawnX, b.drawnY - a.drawnY) > 0.01) moved++;
+      else still++;
+    }
+    expect(still, `${moved} frames moved mid-glide`).toBe(0);
+    // A fast scroll's walker trails its square by a square and a half at most.
+    expect(Math.max(...seen.map(away))).toBeLessThanOrEqual(1.5 * square + 0.5);
+  });
+});

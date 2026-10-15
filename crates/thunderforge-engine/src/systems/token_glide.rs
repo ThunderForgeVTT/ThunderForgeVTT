@@ -92,6 +92,41 @@ pub(crate) fn draw_token_glides(
     }
 }
 
+/// Every frame's gliding tokens, for [`token_glides`].
+static GLIDES: std::sync::Mutex<Vec<serde_json::Value>> = std::sync::Mutex::new(Vec::new());
+
+/// Mirrors, every frame, where each gliding token stands and where it is
+/// drawn. Only gliding tokens, so a still board costs nothing.
+pub(crate) fn mirror_token_glides(tokens: Query<(&TokenIdentity, &Transform, &TokenGlide)>) {
+    let list: Vec<_> = tokens
+        .iter()
+        .filter(|(_, _, glide)| glide.glide.is_gliding())
+        .map(|(identity, transform, glide)| {
+            let at = transform.translation.truncate();
+            let drawn = at + glide.offset();
+            serde_json::json!({
+                "tokenId": identity.0,
+                "x": at.x,
+                "y": at.y,
+                "drawnX": drawn.x,
+                "drawnY": drawn.y,
+            })
+        })
+        .collect();
+    if let Ok(mut slot) = GLIDES.lock() {
+        *slot = list;
+    }
+}
+
+/// The tokens gliding this frame: `[{"tokenId","x","y","drawnX","drawnY"}]`
+/// in world units; a token not listed is drawn where it stands. Read-only,
+/// for tests (spec 099 SC-005).
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn token_glides() -> String {
+    let list = GLIDES.lock().map(|l| l.clone()).unwrap_or_default();
+    serde_json::Value::from(list).to_string()
+}
+
 fn draw_carried(
     entity: Entity,
     parent: GlobalTransform,

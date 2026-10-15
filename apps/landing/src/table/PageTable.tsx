@@ -11,9 +11,8 @@ import "./page-table.css";
 import { currentMat, watchMat } from "./heroMat.ts";
 import {
   along,
-  dawning,
-  duskAt,
   fraction,
+  hourAt,
   pathDown,
   toWorld,
   torchesAlong,
@@ -21,6 +20,7 @@ import {
   type Doc,
   type Pt,
 } from "./journey.ts";
+import { darknessAt } from "./daylight.ts";
 import { downAt } from "./goblins.ts";
 import { centreOf, MatScene } from "./matScene.ts";
 import { pickedTile, watchPick } from "./mapPick.ts";
@@ -62,22 +62,14 @@ const LANTERN = "walker-lantern";
 /** The walker's lantern: enough to find the hero by, never a glare. */
 const LANTERN_GLOW = 0.35;
 const REDUCE = "(prefers-reduced-motion: reduce)";
-/** The grid's ink on the paper mat: the page's black, faint. */
-const GRID_INK = "#1f2a2e2e";
-/** The same grid after dark: chalk instead of ink. */
-const GRID_CHALK = "#eceee924";
-/** Past this much dusk the page's words go light (`html.dusk`). */
+/** The grid: a grey that reads as ink on the day mat and as chalk on the night one,
+ * so it never flips while the engine crossfades them (spec 099 US3). */
+const GRID_INK = "#5f665f38";
+/** Past this much dark the page's words go light (`html.dusk`). */
 const LIGHTS_ON = 0.8;
-/**
- * Past this much dusk the torches are lit and the mat is firelit; they burn
- * up to full by `LIGHTS_ON`. At dawn they go out before the day mat returns,
- * so a torch never pools white on paper.
- */
-const EMBERS = 0.5;
-/** The dark as dawn breaks: amber, warming the paper rather than greying it. */
-const DAWN_TINT = "#4a2c14";
-/** How long the dark takes to catch up with the scroll, in ms (a time constant). */
-const DUSK_MS = 260;
+/** How long the engine's clock takes to reach the hour the scroll asks for, in
+ * seconds: a flick on a phone crosses the evening over time, not in a frame. */
+const CLOCK_SECS = 0.3;
 /** What a tap on counts as the table, not the page's words. */
 const SURFACES = "html, body, main, header.hero, .hero-body, .section";
 
@@ -173,20 +165,12 @@ export default function PageTable() {
     /** Where day ends and the night is deepest, in scroll pixels. */
     dayEnds: 0,
     nightAt: 1,
-    dawnAt: 2,
     /** The torches, in page pixels. */
     torchAt: [] as Pt[],
-    /** The dusk last sent, and how many torches are on the table. */
-    shade: -1,
+    /** The hour last sent to the engine's clock (-1: none yet), and how many
+     * torches are on the table. */
+    hour: -1,
     torches: 0,
-    /** How brightly the torches burn, 0 to 1. */
-    glow: 0,
-    /** The dusk the table is fading towards, its tint, and the tint last sent. */
-    goal: 0,
-    tint: undefined as string | undefined,
-    sentTint: undefined as string | undefined,
-    /** Whether a fade is running. */
-    fading: false,
     /** A wide page's route (spec 098), the hero's distance along it, the
      * distance the scroll asks for, and whether the hero is on it yet. */
     route: null as Route | null,
@@ -301,6 +285,9 @@ export default function PageTable() {
       listen(PAGE, (e) => {
         const L = live.current;
         const el = stage.current;
+        // The words go light with the dark the engine draws, not ahead of it.
+        if (e.type === "time_of_day" && e.hour !== null && !seatedAt())
+          document.documentElement.classList.toggle("dusk", e.darkness > LIGHTS_ON);
         if (e.type !== "cameraFitted" || L.moving === null || !el) return;
         const want = toWorld({ x: 0, y: L.moving + (L.stageH || el.clientHeight) / 2 }, L.doc).y;
         if (Math.abs(e.centerY - want) < 0.5) moveTo(L.moving);
@@ -401,33 +388,32 @@ export default function PageTable() {
     else L.route = null;
   }, [route]);
 
-  /** The page's grid, in ink by day and chalk by night. */
-  const grid = useCallback(
-    (night: boolean) => {
-      const L = live.current;
-      send({
-        type: "set_scene_grid",
-        gridType: "square",
-        size: L.cell,
-        mapWidth: L.doc.w,
-        mapHeight: L.doc.h,
-        visible: true,
-        color: night ? GRID_CHALK : GRID_INK,
-      });
-      // By night the mat is lit only where a flame reaches it: firelight.
-      send({
-        type: "set_scene_background",
-        backgroundImagePath: night ? "/table/mat-night.png" : "/table/mat.png",
-        width: L.doc.w,
-        height: L.doc.h,
-      });
-    },
-    [send],
-  );
+  /** The page's grid and its mat, by day and by night. */
+  const grid = useCallback(() => {
+    const L = live.current;
+    send({
+      type: "set_scene_grid",
+      gridType: "square",
+      size: L.cell,
+      mapWidth: L.doc.w,
+      mapHeight: L.doc.h,
+      visible: true,
+      color: GRID_INK,
+    });
+    // By night the mat is lit only where a flame reaches it: firelight. The
+    // engine crossfades the two with its clock (spec 099 US3).
+    send({
+      type: "set_scene_background",
+      backgroundImagePath: "/table/mat.png",
+      nightImagePath: "/table/mat-night.png",
+      width: L.doc.w,
+      height: L.doc.h,
+    });
+  }, [send]);
 
-  /** Torch `i`, burning at `glow` (0 out, 1 full); the engine makes it flicker. */
+  /** Torch `i`; the engine lights it with the dark and makes it flicker. */
   const torch = useCallback(
-    (i: number, glow: number) => {
+    (i: number) => {
       const L = live.current;
       const at = toWorld(L.torchAt[i]!, L.doc);
       send({
@@ -441,7 +427,9 @@ export default function PageTable() {
           color: "#ffd9a8",
           // Firelight to read by, not to squint at: a full torch burns at
           // `TORCH`, and the words beside it keep their contrast.
-          intensity: glow * TORCH,
+          intensity: TORCH,
+          // Out by day, catching as the dark falls (spec 099 US3).
+          byNight: true,
           flicker: 0.5,
           castsShadows: false,
         },
@@ -456,7 +444,7 @@ export default function PageTable() {
       const L = live.current;
       const torches = torchesAlong(boxes, L.doc, L.cell);
       L.torchAt = torches;
-      torches.forEach((_, i) => torch(i, L.glow));
+      torches.forEach((_, i) => torch(i));
       for (let i = torches.length; i < L.torches; i++) send({ type: "remove_light", lightId: `torch-${i}` });
       L.torches = torches.length;
       // Not a carried light: the engine burns those at full strength, which
@@ -481,65 +469,26 @@ export default function PageTable() {
     [send, torch],
   );
 
-  /** Darkens the table to `shade`: the ambient, the words, the mat and the torches. */
-  const shadeTo = useCallback(
-    (shade: number) => {
-      const L = live.current;
-      // The seated dungeon keeps its own dark (spec 098 FR-008).
-      if (seatedAt()) return;
-      if (Math.abs(shade - L.shade) < 0.001 && L.tint === L.sentTint) return;
-      const wasLit = L.shade > EMBERS;
-      L.shade = shade;
-      L.sentTint = L.tint;
-      send({ type: "set_ambient_light", level: "bright", shade, color: L.tint });
-      document.documentElement.classList.toggle("dusk", shade > LIGHTS_ON);
-      const lit = shade > EMBERS;
-      if (lit !== wasLit) grid(lit);
-      // The torches catch and gutter with the dark, in steps fine enough
-      // that no one sees them: each step is a changed light set.
-      const glow = Math.round(Math.min(1, Math.max(0, (shade - EMBERS) / (LIGHTS_ON - EMBERS))) * 32) / 32;
-      if (glow !== L.glow) {
-        L.glow = glow;
-        L.torchAt.forEach((_, i) => torch(i, glow));
-      }
-    },
-    [send, grid, torch],
-  );
-
   /**
-   * The dusk for where the visitor has scrolled to; the words light up past
-   * `LIGHTS_ON`. The dark follows the scroll over time, not in one step: a
-   * flick on a phone crosses the evening within a frame, and the page went
-   * from day to night, and the words from ink to chalk, in a blink.
+   * Sets the engine's clock to the hour for where the visitor has scrolled
+   * to (spec 099 US4). The engine eases the dark, its tint, the mat and the
+   * torches toward that hour itself, a frame at a time: the page only says
+   * what time it is.
    */
-  const dusk = useCallback(() => {
+  const clock = useCallback(() => {
     const L = live.current;
-    const vh = window.innerHeight;
-    L.goal = duskAt(window.scrollY, L.dayEnds, L.nightAt, L.dawnAt, vh);
-    // The night is blue; as dawn breaks the dark warms to amber.
-    L.tint = dawning(window.scrollY, L.dawnAt, vh) > 0 ? DAWN_TINT : undefined;
-    if (L.shade < 0 || matchMedia(REDUCE).matches) {
-      shadeTo(L.goal);
-      return;
-    }
-    if (L.fading) return;
-    L.fading = true;
-    let last = performance.now();
-    const step = (now: number) => {
-      const L = live.current;
-      if (L.phase !== "running") {
-        L.fading = false;
-        return;
-      }
-      const k = 1 - Math.exp(-(now - last) / DUSK_MS);
-      last = now;
-      const next = Math.abs(L.goal - L.shade) < 0.002 ? L.goal : L.shade + (L.goal - L.shade) * k;
-      shadeTo(next);
-      if (next === L.goal) L.fading = false;
-      else requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }, [shadeTo]);
+    // The seated dungeon keeps its own dark (spec 098 FR-008).
+    if (seatedAt()) return;
+    const hour = Math.round(hourAt(window.scrollY, L.dayEnds, L.nightAt, window.innerHeight) * 1000) / 1000;
+    if (hour === L.hour) return;
+    const first = L.hour < 0;
+    L.hour = hour;
+    send({
+      type: "set_time_of_day",
+      hour,
+      ...(first || matchMedia(REDUCE).matches ? {} : { overSecs: CLOCK_SECS }),
+    });
+  }, [send]);
 
   /** Measures the page and sends it as a scene: grid, mat, the room. */
   const layout = useCallback(() => {
@@ -558,19 +507,17 @@ export default function PageTable() {
     const room = boxes.find((b) => b.id === "tavern") ?? boxes.find((b) => b.id === "room");
     L.dayEnds = first ? first.y + first.h - vh / 2 : 0;
     L.nightAt = room ? room.y - vh / 4 : doc.h;
-    // The night holds to the page's end: the star chart is in a night sky.
-    L.dawnAt = doc.h * 2;
-    grid(L.shade > EMBERS);
+    grid();
     light(boxes);
     if (!L.free) L.target = along(L.path, fraction(window.scrollY, doc, window.innerHeight));
     drawMat();
     // The world's origin is the page's middle, so a page that grew moved
     // everything on it: a hero standing still must be told where it is now.
     if (L.phase === "running" && !seatedAt()) send(heroToken(L.hero, toWorld(L.pos, doc)));
-    L.shade = -1;
-    dusk();
+    L.hour = -1;
+    clock();
     place(true);
-  }, [send, place, size, drawMat, grid, light, dusk]);
+  }, [send, place, size, drawMat, grid, light, clock]);
 
   const setup = useCallback(
     (s: Send) => {
@@ -592,11 +539,11 @@ export default function PageTable() {
     boardArt.current!.clear();
     for (let i = 0; i < L.torches; i++) s({ type: "remove_light", lightId: `torch-${i}` });
     L.torches = 0;
-    L.glow = 0;
     s({ type: "remove_light", lightId: LANTERN });
     s({ type: "remove_light", lightId: CAMP_FIRE });
+    s({ type: "set_time_of_day", hour: null });
     s({ type: "set_ambient_light", level: "bright" });
-    L.shade = -1;
+    L.hour = -1;
     s({ type: "set_scene_playing", playing: false });
     s({ type: "remove_token", tokenId: WALKER });
     mat.current!.clear();
@@ -651,7 +598,7 @@ export default function PageTable() {
       const L = live.current;
       const t = fraction(window.scrollY, L.doc, window.innerHeight);
       setPct(Math.round(t * 100));
-      const shade = duskAt(window.scrollY, L.dayEnds, L.nightAt, L.dawnAt, window.innerHeight);
+      const shade = darknessAt(hourAt(window.scrollY, L.dayEnds, L.nightAt, window.innerHeight));
       // For the dusk's tests (SC-006): the dark the page is heading for.
       if (stage.current) stage.current.dataset.dusk = shade.toFixed(4);
       if (L.phase === "away") {
@@ -673,7 +620,7 @@ export default function PageTable() {
       L.free = false;
       L.target = along(L.path, t);
       if (L.route) L.goalS = goalOf(L.route);
-      dusk();
+      clock();
       place();
     };
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -682,7 +629,7 @@ export default function PageTable() {
       clearTimeout(settle);
       window.removeEventListener("scroll", onScroll);
     };
-  }, [place, boot, dusk, goalOf]);
+  }, [place, boot, clock, goalOf]);
 
   // A tap on the mat walks the hero there.
   useEffect(() => {
@@ -726,7 +673,10 @@ export default function PageTable() {
     const m = startMark(b);
     if (!b || !m || L.free || L.s !== m.s || L.goalS !== m.s || canvasOf(PAGE) === null) return;
     seat(placeOf(b, L.doc, L.cell, WALKER));
-  }, []);
+    // The clock stops: the room's own dark rules until it stands up.
+    send({ type: "set_time_of_day", hour: null });
+    L.hour = -1;
+  }, [send]);
 
   /** Whether the room stays seated; when not, it stands up, and the walker
    * walks on from where the room left it, under the page's own dusk. */
@@ -745,10 +695,10 @@ export default function PageTable() {
       L.rejoin = true;
     }
     L.joined = false;
-    L.shade = -1;
-    dusk();
+    L.hour = -1;
+    clock();
     return true;
-  }, [dusk]);
+  }, [clock]);
 
   // The dungeon's board laid or moved: drawn again, and a room seated on
   // the old place stands up. Played or not changes neither.

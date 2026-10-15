@@ -85,6 +85,8 @@ impl Plugin for TokenPlugin {
                     .before(bevy::transform::TransformSystems::Propagate),
                 crate::systems::token_glide::draw_token_glides
                     .after(bevy::transform::TransformSystems::Propagate),
+                crate::systems::token_glide::mirror_token_glides
+                    .after(crate::systems::token_glide::track_token_glides),
             ),
         );
     }

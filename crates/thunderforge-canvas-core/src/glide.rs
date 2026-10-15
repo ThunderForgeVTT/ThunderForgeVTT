@@ -22,6 +22,10 @@ pub const MAX_GLIDE_SECS: f32 = 0.25;
 pub const MIN_HOP_SQUARES: f32 = 0.25;
 /// A hop longer than this, in squares, is a jump: a scene load, a teleport.
 pub const MAX_HOP_SQUARES: f32 = 4.0;
+/// The furthest the picture trails its token, in squares: a token stepping
+/// every frame (a fast scroll's walker) would otherwise pile its hops up and
+/// be drawn several squares from where it stands.
+pub const MAX_LAG_SQUARES: f32 = 1.5;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Glide {
@@ -58,7 +62,7 @@ impl Glide {
             return;
         }
         // The picture stays where it was drawn, and sets off from there.
-        self.offset -= delta;
+        self.offset = (self.offset - delta).clamp_length_max(MAX_LAG_SQUARES * square);
         let secs = self.since_hop.clamp(MIN_GLIDE_SECS, MAX_GLIDE_SECS);
         self.speed = self.offset.length() / secs;
         self.since_hop = 0.0;
@@ -156,5 +160,20 @@ mod tests {
         assert!(g.offset.x < -SQUARE);
         g.step(MIN_GLIDE_SECS + 0.001);
         assert!(!g.is_gliding());
+    }
+
+    #[test]
+    fn a_token_stepping_every_frame_trails_it_by_at_most_the_lag() {
+        let mut g = Glide::default();
+        for _ in 0..120 {
+            g.hop(EAST, SQUARE, false);
+            assert!(
+                g.offset.length() <= MAX_LAG_SQUARES * SQUARE + 0.01,
+                "{:?}",
+                g.offset
+            );
+            g.step(1.0 / 60.0);
+        }
+        assert!(g.offset.length() > SQUARE / 2.0, "still glides behind it");
     }
 }

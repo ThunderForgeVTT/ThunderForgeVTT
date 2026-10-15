@@ -23,9 +23,9 @@
 
 ## Phase 4: Landing (US4)
 
-- [ ] T008 [US4] `hourAt` and the clock on the page. Remove the fade loop,
+- [x] T008 [US4] `hourAt` and the clock on the page. Remove the fade loop,
   torch steps and swaps.
-- [ ] T009 [US4] e2e: the walker glides (SC-005), and 098 SC-006 holds.
+- [x] T009 [US4] e2e: the walker glides (SC-005), and 098 SC-006 holds.
 
 ## Phase 5: The table's time (US5)
 

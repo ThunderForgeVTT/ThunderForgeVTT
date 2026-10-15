@@ -5,6 +5,8 @@
 // boxes as the visitor scrolls. These are the sums, kept pure so they can be
 // tested without a browser.
 
+import { eveningFor } from "./daylight.ts";
+
 /** A box on the page, in page pixels (y down from the document's top). */
 export interface Box {
   id: string;
@@ -102,28 +104,25 @@ const FALL_PX = (1.5 * EVENING) / MAX_DUSK_PER_PX;
  * The dusk over the page at `scrollY`, 0 (daylight) to `NIGHT`. Day holds
  * until `dayEnds`, the evening falls over the next `FALL_PX` of the page (a
  * screen, if a screen is taller), and the night deepens slowly until
- * `nightAt`, the room. Dawn breaks over the screen
- * before `dawnAt` and it is day again by it.
+ * `nightAt`, the room, and holds to the page's end.
  */
-export function duskAt(
-  scrollY: number,
-  dayEnds: number,
-  nightAt: number,
-  dawnAt: number,
-  viewportH: number,
-): number {
-  if (scrollY <= dayEnds || scrollY >= dawnAt) return 0;
+export function duskAt(scrollY: number, dayEnds: number, nightAt: number, viewportH: number): number {
+  if (scrollY <= dayEnds) return 0;
   const falls = Math.max(FALL_PX, viewportH);
   const fall = Math.min(1, (scrollY - dayEnds) / falls);
   const span = Math.max(1, nightAt - dayEnds - falls);
   const deep = Math.min(1, (scrollY - dayEnds - falls) / span);
-  const dark = fall < 1 ? EVENING * smooth(fall) : EVENING + (NIGHT - EVENING) * deep;
-  return dark * (1 - smooth(dawning(scrollY, dawnAt, viewportH)));
+  return fall < 1 ? EVENING * smooth(fall) : EVENING + (NIGHT - EVENING) * deep;
 }
 
-/** How far dawn has broken at `scrollY`, 0 (night) to 1 (day, at `dawnAt`). */
-export function dawning(scrollY: number, dawnAt: number, viewportH: number): number {
-  return Math.min(1, Math.max(0, 1 - (dawnAt - scrollY) / Math.max(FALL_PX, viewportH)));
+/**
+ * Spec 099 US4: the hour at `scrollY`, for the engine's clock. The
+ * afternoon passes over the first screen; from `dayEnds` on, the hour is
+ * the one whose dark is `duskAt`'s, so the page darkens as 098 measured it.
+ */
+export function hourAt(scrollY: number, dayEnds: number, nightAt: number, viewportH: number): number {
+  if (scrollY <= dayEnds) return 12 + (6 * Math.max(0, scrollY)) / Math.max(1, dayEnds);
+  return eveningFor(duskAt(scrollY, dayEnds, nightAt, viewportH));
 }
 
 const smooth = (t: number) => t * t * (3 - 2 * t);

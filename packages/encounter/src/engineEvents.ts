@@ -57,8 +57,18 @@ export interface CameraFittedEvent {
   centerY: number;
 }
 
+/** Spec 099: the scene's clock, as the engine draws it (every 0.01 of dark). */
+export interface TimeOfDayEvent {
+  type: "time_of_day";
+  /** The hour, 0 to 24; null while no clock runs. */
+  hour: number | null;
+  /** The darkness drawn, 0 (day) to 1. */
+  darkness: number;
+}
+
 export type EngineEvent =
   | CameraFittedEvent
+  | TimeOfDayEvent
   | TokenMovedEvent
   | MovementBlockedEvent
   | DoorIconPressedEvent
@@ -159,6 +169,12 @@ function cameraFitted(event: Fields): CameraFittedEvent | null {
   return { type: "cameraFitted", centerX: event.centerX, centerY: event.centerY };
 }
 
+function timeOfDay(event: Fields): TimeOfDayEvent | null {
+  const hour = event.hour ?? null;
+  if (!(hour === null || isNumber(hour)) || !isNumber(event.darkness)) return null;
+  return { type: "time_of_day", hour, darkness: event.darkness };
+}
+
 export function parseEngineEvent(raw: string): EngineEvent | null {
   let event: unknown;
   try {
@@ -180,6 +196,8 @@ export function parseEngineEvent(raw: string): EngineEvent | null {
       return sdkError(event);
     case "cameraFitted":
       return cameraFitted(event);
+    case "time_of_day":
+      return timeOfDay(event);
     default:
       return null;
   }
