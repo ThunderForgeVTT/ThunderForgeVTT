@@ -19,6 +19,9 @@
   --text-red: #b72f25;
   --text-green: #1d6e3b;
   --paper: #fbfbf8;
+  /* The black that stays black: a terminal and a skip link are dark by day
+     and by night, where --ink-black turns to chalk. */
+  --ink-fixed: #1f2a2e;
 
   --marker-w: 7px;
   --marker-thin: 3.5px;
@@ -130,7 +133,7 @@ img {
   left: 0.5rem;
   z-index: 100;
   padding: 0.6rem 1rem;
-  background: var(--ink-black);
+  background: var(--ink-fixed);
   color: #fff;
   font-weight: 700;
   border-radius: 4px;
@@ -1417,7 +1420,9 @@ main {
 }
 .terminal {
   margin: 0;
-  background: var(--ink-black);
+  background: var(--ink-fixed);
+  /* By night the mat is as dark as the terminal; the edge keeps it a card. */
+  outline: 1.5px solid rgb(233 236 239 / 0.22);
   color: #e9ecef;
   border-radius: 6px 9px 5px 8px;
   overflow: hidden;
@@ -1439,7 +1444,7 @@ main {
   min-height: 40px;
   padding: 0 0.9rem;
   font: 700 0.9rem var(--font-body);
-  color: var(--ink-black);
+  color: var(--ink-fixed);
   background: #f5f8ff;
   border: 0;
   border-radius: 4px;

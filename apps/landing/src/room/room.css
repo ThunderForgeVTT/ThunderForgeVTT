@@ -151,7 +151,9 @@
 }
 .room-pad {
   display: grid;
-  grid-template-columns: repeat(3, minmax(5.5rem, auto));
+  /* Three even columns that fit a phone's panel; past 18rem they stop. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: 18rem;
   grid-template-areas:
     ". north ."
     "west . east"
@@ -159,8 +161,9 @@
   gap: 0.4rem;
 }
 .room-pad-btn {
+  min-width: 0;
   min-height: 48px;
-  padding: 0.3rem 0.6rem;
+  padding: 0.3rem 0.35rem;
   font: 700 0.95rem/1.2 var(--font-body);
   color: var(--ink-black);
   background: var(--paper);
