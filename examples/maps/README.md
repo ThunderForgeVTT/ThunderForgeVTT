@@ -60,6 +60,13 @@ resized or re-encoded copy is offered under the same licence (ShareAlike).
   correctly rejects (FR-015), making this fixture unimportable; the rest
   of its shape was already fully UVTT-0.3-compatible, so this was a
   one-field metadata fix, not a reshape.
+- `dungeon-sample.dd2vtt` — drawn for the landing page's room: 11x8
+  squares at 128 px, 24 walls, one closed portal (the door to the hall),
+  no lights. Its top and bottom edges are open on purpose, so the hero
+  walks in from above; the landing drops the importer's perimeter walls.
+- `tavern-sample.dd2vtt` — the landing page's second room, a tavern on
+  grass: 11x8 squares at 128 px, 12 walls, two portals (north and south
+  doors), a PNG background.
 
 None of the 64 source files surveyed when picking this set had a
 `freestanding: true` portal or a non-empty `objects_line_of_sight[]`

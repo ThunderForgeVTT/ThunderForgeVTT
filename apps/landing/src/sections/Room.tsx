@@ -10,12 +10,12 @@ import { useRoom } from "../room/useRoom.ts";
 import { AWAY, ENDING } from "../room/words.ts";
 import "../room/room.css";
 
-// Spec 091 US1 and US2: one room of the Proving Ground, on the engine when
+// Spec 091 US1 and US2: one small dungeon, on the engine when
 // the visitor asks for it, and in words always. The page plays the server's
 // part with a scripted referee; nothing here is a game master.
 
 const FRAME_ID = "room-table";
-/** FR-022: the Proving Ground's background is 4095 pixels wide. */
+/** FR-022: no room map is wider than this. */
 const MAX_TEXTURE = 4096;
 
 const mb = (n: number) => (n / 1e6).toFixed(1);
@@ -23,7 +23,7 @@ const mb = (n: number) => (n / 1e6).toFixed(1);
 function Credit() {
   return (
     <>
-      The Proving Ground, by MBRound18 (<a href={MAPS_SOURCE}>vtt-maps</a>,{" "}
+      Map by MBRound18 (<a href={MAPS_SOURCE}>vtt-maps</a>,{" "}
       <a href={MAPS_CATALOG}>catalog</a>), <a href={CC_BY_SA}>CC BY-SA 4.0</a>.
     </>
   );

@@ -45,7 +45,7 @@ async function walkToDoor(page: Page) {
     await page.keyboard.press("ArrowDown");
     await expect.poll(async () => (await saidLog(page)).length).toBe(n + 1);
   }
-  expect(await square(page)).toBe("-3,-1.5");
+  expect(await square(page)).toBe("2,0.5");
 }
 
 test.describe("the door on the table", () => {

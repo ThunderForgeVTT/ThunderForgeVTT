@@ -7,6 +7,10 @@
   grid-template-columns: minmax(0, 1fr);
   gap: calc(var(--cell) * 0.5);
   align-items: start;
+  /* The strip's words change length with every step. Left to anchor on
+     them, the browser scrolls the page to keep them still, and the table
+     creeps off the screen while it is played. */
+  overflow-anchor: none;
 }
 .room-layout--loading {
   min-height: 30rem;

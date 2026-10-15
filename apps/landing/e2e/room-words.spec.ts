@@ -10,9 +10,9 @@ import { FIXED_SEEDS, goal, pad, playThrough, recordSaid, room, said, saidLog, s
  * engine file fetched. Then each reason the frame holds the engine back
  * leaves the same working room, and the room's keys act only inside it.
  *
- * The route, on the Proving Ground: the hall is south of the start. Three
- * steps south reach the door's square; the fourth is refused by the shut
- * door (goal 1). Open it, two steps south and one east reach the chest.
+ * The route, in the dungeon: the hall is south of the start. Three steps
+ * south reach the door's square; the fourth is refused by the shut door
+ * (goal 1). Open it, two steps south and one east reach the chest.
  */
 
 test.describe("the room in words", () => {
@@ -32,7 +32,7 @@ test.describe("the room in words", () => {
 
     // Start over: back to the start, every goal open again, no reload.
     await room(page).getByRole("button", { name: "Start over" }).click();
-    expect(await square(page)).toBe("-3,1.5");
+    expect(await square(page)).toBe("2,3.5");
     for (const id of ["door-reached", "door-opened", "chest-found", "chest-opened"]) {
       await expect(goal(page, id)).toContainText("(not yet)");
     }
@@ -135,11 +135,11 @@ test.describe("the room in words", () => {
     await pad(page, "North").focus();
     const y0 = await page.evaluate(() => scrollY);
     await page.keyboard.press("ArrowDown");
-    await expect.poll(() => square(page)).toBe("-3,0.5");
+    await expect.poll(() => square(page)).toBe("2,2.5");
     await page.keyboard.press("s");
-    await expect.poll(() => square(page)).toBe("-3,-0.5");
+    await expect.poll(() => square(page)).toBe("2,1.5");
     await page.keyboard.press("ArrowUp");
-    await expect.poll(() => square(page)).toBe("-3,0.5");
+    await expect.poll(() => square(page)).toBe("2,2.5");
     expect(await page.evaluate(() => scrollY)).toBe(y0);
 
     // In the dice formula: letters are typed, the hero does not move.
@@ -148,14 +148,14 @@ test.describe("the room in words", () => {
     await formula.pressSequentially("wasd");
     await expect(formula).toHaveValue("wasd");
     await formula.press("ArrowDown");
-    expect(await square(page)).toBe("-3,0.5");
+    expect(await square(page)).toBe("2,2.5");
 
     // On the hero mat: the hero section's own controls, not the room's.
     const mat = page.locator("[data-section=hero] button").first();
     await mat.focus();
     await page.keyboard.press("ArrowDown");
     await page.keyboard.press("s");
-    expect(await square(page)).toBe("-3,0.5");
+    expect(await square(page)).toBe("2,2.5");
     expectClean(opened);
   });
 });

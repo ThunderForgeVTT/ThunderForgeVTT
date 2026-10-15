@@ -158,7 +158,7 @@ test.describe("the tray and the room share one table", () => {
     // Scenario 1: the same canvas moves to the room, which sends its scene.
     await bootRoom(page);
     expect(await canvasIn(page, "room-table")).toBe("first");
-    await expect.poll(() => engineHero(page)).toEqual({ x: -3, y: 1.5 });
+    await expect.poll(() => engineHero(page)).toEqual({ x: 2, y: 3.5 });
     await expect(diceFrame(page)).toHaveClass(/engine-frame--away/);
     await expect(diceFrame(page)).toContainText("The table is in the room below.");
     await expect(diceFrame(page).getByRole("button", { name: "Bring it back" })).toBeVisible();
@@ -215,7 +215,7 @@ test.describe("the tray and the room share one table", () => {
     await expect.poll(() => engineHero(page)).toBeUndefined();
 
     // The room's words keep their state.
-    expect(await square(page)).toBe("-3,-1.5");
+    expect(await square(page)).toBe("2,0.5");
     await expect(goal(page, "door-reached")).toContainText("(done)");
 
     await chip(page, "Attack").click();

@@ -7,7 +7,7 @@ import { describePlace, type Outcome, type RoomScript, type RoomState } from "@t
 // outside the lazy chunk, so it is on the page before the room is.
 
 export const ENDING =
-  "That was the engine your table runs on. The rest of the Proving Ground is in the demo.";
+  "That was the engine your table runs on. More maps wait in the demo.";
 
 /** While the dice tray has the table; the frame adds "Bring it back". */
 export const AWAY = "The table is with the dice above.";

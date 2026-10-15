@@ -19,7 +19,7 @@ import { expectClean, openLanding } from "./support/page.ts";
  */
 
 const file = JSON.parse(
-  readFileSync(new URL("../public/maps/demo.json", import.meta.url), "utf8"),
+  readFileSync(new URL("../public/maps/dungeon-sample.json", import.meta.url), "utf8"),
 ) as MapFile;
 const script = roomScript(file);
 const grid = script.map.gridSize;
@@ -66,7 +66,7 @@ test.describe("the room script on the engine", () => {
     test.setTimeout(BOOT_TIMEOUT + 120_000);
   });
 
-  test("north, sight through the door, the lamp's ring and the torch's units", async ({ page }) => {
+  test("north, sight through the door, the chest in the torch's ring and the torch's units", async ({ page }) => {
     const opened = await openLanding(page);
     await bootDiceFrame(page);
 
@@ -104,13 +104,12 @@ test.describe("the room script on the engine", () => {
     await send(page, doorCommand(door, "open"));
     await expect.poll(() => seen(page, HALL_POINT)).toEqual({ looking: true, seen: true });
 
-    // In the hall with the torch out, the lamp alone lights the chest: dimly.
-    await send(page, { type: "set_carried_light", tokenId: HERO_ID, bright: 0, dim: 0 });
+    // In the hall, the torch brings the chest into sight.
     await send(page, {
       type: "upsert_token",
       token: { id: HERO_ID, ...toWorld(HALL_POINT, grid), z: 2, label: hero.name, tokenType: "character", photoUrl: hero.art },
     });
-    await expect.poll(() => engine<string[]>(page, "dim_tokens")).toContain(script.chest.tokenId);
+    await expect.poll(() => seen(page, script.chest.square)).toEqual({ looking: true, seen: true });
 
     await page.locator("#thunderforge-table").screenshot({ path: test.info().outputPath("hall.png") });
     expectClean(opened);

@@ -26,7 +26,7 @@ const SETTLE_MS = 2500;
 
 for (const need of [
   join(LANDING, "dist/index.html"),
-  join(LANDING, "dist/maps/demo.json"),
+  join(LANDING, "dist/maps/dungeon-sample.json"),
   join(ROOT, "data/demo/engine.json"),
 ]) {
   if (!existsSync(need)) throw new Error(`make-room-poster: ${need} is missing; build first`);
@@ -58,7 +58,8 @@ try {
   const frame = page.locator("#room-table");
   await frame.scrollIntoViewIfNeeded();
   await page.addStyleTag({
-    content: `#room-table { position: fixed; inset: 0 auto auto 0; z-index: 9; width: ${W}px; border: 0; border-radius: 0; }`,
+    content: `#room-table { position: fixed; inset: 0 auto auto 0; z-index: 9; width: ${W}px; border: 0; border-radius: 0; }
+      .journey { display: none; }`,
   });
   await frame.getByRole("button", { name: "Play the room" }).click();
   await frame.and(page.locator(".engine-frame--running")).waitFor({ timeout: 300_000 });

@@ -11,10 +11,11 @@ import { bootRoom, engineHero, pad, recordSaid, room, saidLog, script, square } 
  * square and the engine's token must both land where Node said; the page's
  * `console.error` on a disagreement fails `expectClean` too.
  *
- * The middle room spans x -9.5 to 4.5 and y -2 to 10 in squares; the door
- * to the hall is the one square of its south wall at x -3. The walk meets
- * the shut door, both jambs, all four walls, then goes through the door and
- * meets the jamb again from the hall side.
+ * The dark room spans x -4.5 to 4.5 and y 0 to 4 in squares, open to the
+ * north; the door to the hall is the one square of its south wall at x 2.
+ * The walk meets the shut door, both jambs, the east and west walls, the
+ * table's edge past the open north, the step in the south wall, then goes
+ * through the door and meets the passage and the hall's ceiling.
  */
 
 const S = "south";
@@ -28,16 +29,17 @@ const BEFORE_DOOR: Direction[] = [
   E, S, // the east jamb
   ...times(2, W), S, // the west jamb
   E, // back in front of the door
-  ...times(7, E), E, // the east wall
-  ...times(11, N), N, // the north wall
-  ...times(13, W), W, // the west wall
-  ...times(11, S), S, // the south wall, west of the door
-  ...times(6, E), // in front of the door again
+  ...times(2, E), E, // the east wall
+  ...times(4, N), N, // out the open north, to the table's edge
+  S, ...times(8, W), W, // the west wall
+  ...times(2, S), S, // the step in the south wall
+  ...times(4, E), S, S, // round the step, down to the south wall
+  ...times(2, E), // in front of the door again
 ];
 const AFTER_DOOR: Direction[] = [
-  S, // through the open door
-  E, N, // the east jamb, from the hall
-  W, N, // back into the room
+  S, E, // through the open door, the passage wall
+  S, W, N, // into the hall, its ceiling
+  E, N, N, // back up into the room
 ];
 
 const label: Record<Direction, string> = { north: "North", south: "South", east: "East", west: "West" };
@@ -85,7 +87,7 @@ test.describe("the rule and the engine agree", () => {
     };
 
     await walk(BEFORE_DOOR);
-    expect(at(state.hero)).toBe("-3,-1.5");
+    expect(at(state.hero)).toBe("2,0.5");
 
     const door = referee.toggleDoor(state);
     expect(door.outcome.accepted).toBe(true);
@@ -94,7 +96,7 @@ test.describe("the rule and the engine agree", () => {
     await pad(page, "North").focus();
 
     await walk(AFTER_DOOR);
-    expect(at(state.hero)).toBe("-3,-1.5");
+    expect(at(state.hero)).toBe("2,0.5");
 
     test.info().annotations.push({ type: "SC-004", description: `${steps} steps, ${refused} refused, 0 disagreements` });
     expectClean(opened);
