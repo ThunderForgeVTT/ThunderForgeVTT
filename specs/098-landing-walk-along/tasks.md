@@ -34,10 +34,10 @@ phase. Phone and tablet run at the end of each phase to prove FR-001.
 
 ## Phase 4: Dungeon (US5)
 
-- [ ] T009 [US5] `pageRoom.ts` adapter, with node tests.
-- [ ] T010 [US5] Wire the wide Room to the page table: play gives a top
+- [x] T009 [US5] `pageRoom.ts` adapter, with node tests.
+- [x] T010 [US5] Wire the wide Room to the page table: play gives a top
   entry; not played walks round.
-- [ ] T011 [US5] e2e (SC-005): the existing room specs pass on desktop.
+- [x] T011 [US5] e2e (SC-005): the existing room specs pass on desktop.
 
 ## Phase 5: Campfire (US6)
 

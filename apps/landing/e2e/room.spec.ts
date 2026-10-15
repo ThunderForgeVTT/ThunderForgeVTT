@@ -6,6 +6,7 @@ import { expectClean, openLanding } from "./support/page.ts";
 import {
   bootRoom,
   engineHero,
+  heroToken,
   FIXED_SEEDS,
   goal,
   pressAndHear,
@@ -141,12 +142,18 @@ test.describe("the room on the engine", () => {
     // The landing's tests hold still; this one is about a page that moves.
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await page.reload();
-    await roomFrame(page).evaluate((el) => el.scrollIntoView({ block: "center" }));
+    // A wide page swaps the frame for its board on the page's grid (spec 098
+    // FR-008): scroll again until whichever stands is on screen.
+    await expect(async () => {
+      await roomFrame(page).evaluate((el) => el.scrollIntoView({ block: "center", behavior: "instant" }));
+      await expect(roomFrame(page)).toBeInViewport({ timeout: 500 });
+    }).toPass();
     await expect(roomFrame(page)).toHaveClass(/engine-frame--running/, { timeout: BOOT_TIMEOUT });
     await expect(roomFrame(page).getByRole("button")).toHaveCount(0);
+    const named = await heroToken(page);
     await expect
       .poll(() => engine<{ named?: string; found?: boolean }>(page, "movement_state"))
-      .toMatchObject({ named: HERO_ID, found: true });
+      .toMatchObject({ named, found: true });
     expectClean(opened);
   });
 

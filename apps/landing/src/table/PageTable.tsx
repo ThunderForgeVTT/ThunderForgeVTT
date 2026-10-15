@@ -25,7 +25,7 @@ import { downAt } from "./goblins.ts";
 import { centreOf, MatScene } from "./matScene.ts";
 import { pickedTile, watchPick } from "./mapPick.ts";
 import { currentBoard, leftAt, seat, seatedAt, watchBoard, type Board } from "../room/pageBoard.ts";
-import { BoardArt, blockedCells, boardStops, inside, placeOf, standUp } from "./roomOnPage.ts";
+import { BoardArt, boardHold, blockedCells, boardStops, inside, placeOf, standUp } from "./roomOnPage.ts";
 import {
   buildRoute,
   pageStations,
@@ -192,6 +192,8 @@ export default function PageTable() {
     s: 0,
     goalS: 0,
     joined: true,
+    /** Whether the route waits where it is until the hero is back on it. */
+    rejoin: false,
     /** The foes that are down, as last sent. */
     down: "",
   });
@@ -351,15 +353,21 @@ export default function PageTable() {
     (seat: Pt | null, exit: Pt) => {
       const L = live.current;
       const hold = Math.round(window.innerHeight * 0.2);
-      const stops = () => [...underPick(L.cell, hold), ...boardStops(currentBoard(), hold)];
+      const stops = () => [
+        ...underPick(L.cell, hold),
+        ...boardStops(currentBoard(), boardHold(window.innerHeight, L.cell)),
+      ];
       const stations = () => pageStations(seat, exit, L.rest, L.cell, hold, stops());
       const use = (r: Route) => {
         L.route = r;
         L.goalS = goalOf(r);
         L.s = L.goalS;
         L.joined = false;
+        L.rejoin = false;
       };
-      use(buildRoute(stations(), null));
+      // Straight lines cross the dungeon's board: a planned route stays
+      // until the new plan comes.
+      if (!L.route || !currentBoard()) use(buildRoute(stations(), null));
       clearTimeout(planned.current);
       planned.current = setTimeout(() => {
         const plan = planner();
@@ -718,6 +726,12 @@ export default function PageTable() {
     seat(null);
     const at = leftAt();
     if (at) L.pos = at;
+    // Back to the first square before on along the route, out by the top:
+    // never straight across the board.
+    if (m) {
+      L.s = m.s;
+      L.rejoin = true;
+    }
     L.joined = false;
     L.shade = -1;
     dusk();
@@ -752,7 +766,7 @@ export default function PageTable() {
       if (seatedAt() && !stand()) return;
       if (L.route && !L.free) {
         // Along the route, never across it (FR-004).
-        L.s = stepToward(L.s, L.goalS);
+        if (!L.rejoin) L.s = stepToward(L.s, L.goalS);
         L.target = pointAt(L.route, L.s);
         // The goblins fall as the hero passes them (spec 098 US2).
         const foes = (currentMat()?.pieces ?? []).filter((p) => p.foe).map((p) => ({ id: p.id, at: centreOf(p) }));
@@ -777,6 +791,7 @@ export default function PageTable() {
       const dist = Math.hypot(dx, dy);
       if (dist < 0.5) {
         L.joined = true;
+        L.rejoin = false;
         return;
       }
       // Never past the target: a step that overshot would send a move every

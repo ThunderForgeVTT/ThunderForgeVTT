@@ -28,7 +28,10 @@ export default function RoomBoard({ script, room }: { script: RoomScript; room: 
   const now = useRef({ room, state: room.state });
   now.current = { room, state: room.state };
 
+  /** A press in the room's controls: its scroll lands before its state does. */
+  const touched = useRef(false);
   const played = (s: RoomState) =>
+    touched.current ||
     s.goals.length > 0 || s.hero.x !== script.start.x || s.hero.y !== script.start.y;
   /** A square's centre on the page. */
   const onPage = (p: { x: number; y: number }) => {
@@ -91,6 +94,24 @@ export default function RoomBoard({ script, room }: { script: RoomScript; room: 
   // The page's table walks the hero on by when the room has not been played.
   const wasPlayed = played(room.state);
   useEffect(() => latest.current(), [wasPlayed]);
+
+  // A visitor at the controls has played: said at once, before the press
+  // scrolls the page and the table asks whether to walk the hero on.
+  useEffect(() => {
+    const layout = box.current?.closest(".room-layout");
+    if (!layout) return;
+    const press = () => {
+      if (touched.current) return;
+      touched.current = true;
+      latest.current();
+    };
+    layout.addEventListener("pointerdown", press, true);
+    layout.addEventListener("keydown", press, true);
+    return () => {
+      layout.removeEventListener("pointerdown", press, true);
+      layout.removeEventListener("keydown", press, true);
+    };
+  }, []);
 
   // Seated and stood up by the page's table.
   useEffect(() => {

@@ -23,6 +23,10 @@ export const FIXED_SEEDS = () => {
 
 export const room = (page: Page) => page.locator("#room");
 export const roomFrame = (page: Page) => page.locator("#room-table");
+/** The engine's name for the room's hero: on a wide page's grid the room
+ * plays on the page's own walker (spec 098 FR-008). */
+export const heroToken = async (page: Page) =>
+  (await roomFrame(page).evaluate((el) => el.classList.contains("room-board"))) ? "walker" : HERO_ID;
 export const said = (page: Page) => room(page).locator(".room-said");
 export const square = (page: Page) =>
   room(page).locator(".room-layout").getAttribute("data-square");

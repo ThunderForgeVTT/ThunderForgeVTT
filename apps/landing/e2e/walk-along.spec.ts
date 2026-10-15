@@ -192,4 +192,42 @@ test.describe("the hero walks a wide page", () => {
     expect(at.y).toBeGreaterThan(fifth.bottom);
     expect(at.y).toBeLessThan(fifth.bottom + 2 * cell);
   });
+
+  test("it walks into the dungeon by its top, and round it when the room is not played", async ({ page }) => {
+    await openLanding(page, { settle: false });
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.reload();
+    await expect(page.locator("body.in-engine")).toBeAttached({ timeout: BOOT_TIMEOUT });
+    await watchWalker(page);
+    const vh = page.viewportSize()!.height;
+    const frame = page.locator("#room-table");
+    await expect(frame).toHaveClass(/room-board/, { timeout: 30_000 });
+    const board = await frame.evaluate((el) => {
+      const cell = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--cell"));
+      const r = el.getBoundingClientRect();
+      return { cell, x: r.left, y: r.top + scrollY, w: r.width, h: r.height };
+    });
+    const inside = (p: Pt) => p.x > board.x && p.x < board.x + board.w && p.y > board.y && p.y < board.y + board.h;
+
+    // SC-005: down to the room, the hero goes in by its top and the room sits.
+    const seatAt = board.y + board.cell / 2 - vh / 2;
+    for (let y = seatAt - vh; y <= seatAt; y += 96) await scrollAndSettle(page, y);
+    await expect(frame).toHaveClass(/engine-frame--running/, { timeout: 15_000 });
+    const into = (await walk(page)).filter(inside);
+    expect(into.length).toBeGreaterThan(0);
+    for (const p of into) expect(p.y, "in by the top row only").toBeLessThan(board.y + board.cell);
+
+    // Left alone and scrolled on, it stands up, out by the top and round.
+    const past = board.y + board.h + vh;
+    for (let y = seatAt; y <= past; y += 96) await scrollAndSettle(page, y);
+    await expect(frame).not.toHaveClass(/engine-frame--running/);
+    const below = (await walker(page))!;
+    expect(below.y).toBeGreaterThan(board.y + board.h);
+    for (const p of (await walk(page)).filter(inside)) expect(p.y).toBeLessThan(board.y + board.cell);
+
+    // Scrolled back up, the walk runs backwards and the room sits again.
+    for (let y = past; y >= seatAt; y -= 96) await scrollAndSettle(page, y);
+    await expect(frame).toHaveClass(/engine-frame--running/, { timeout: 15_000 });
+    for (const p of (await walk(page)).filter(inside)) expect(p.y).toBeLessThan(board.y + board.cell);
+  });
 });

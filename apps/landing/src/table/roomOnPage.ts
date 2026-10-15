@@ -36,13 +36,19 @@ export function placeOf(b: Board, doc: Doc, cell: number, walker: string): Place
 }
 
 /** The room stands up once its controls, under the board, have gone up
- * off the screen: a visitor reading or pressing them is at the room. Back
- * up the page, it stands up as its board goes off the bottom, or, while no
- * one has played it, as its hero is about to. */
+ * off the screen. Not yet played, it lets its hero go as the hero is about
+ * to leave the screen, at the top or the bottom. */
 export function standUp(b: Board, scroll: number, vh: number, cell: number): boolean {
   if (b.bottom < scroll) return true;
-  return b.played ? b.y > scroll + vh : b.start.y > scroll + vh - cell * 1.5;
+  if (b.played) return b.y > scroll + vh;
+  const edge = cell * 1.5;
+  return b.start.y < scroll + edge || b.start.y > scroll + vh - edge;
 }
+
+/** How long the hero waits on the room's first square, in page scroll: the
+ * wait is centred on the square at the screen's middle, so it runs from the
+ * square near the screen's bottom to the square near its top. */
+export const boardHold = (vh: number, cell: number) => Math.round(Math.max(vh * 0.2, vh - cell * 4));
 
 const EDGES = ["n", "e", "s", "w"].map((side) => `room-edge-${side}`);
 
