@@ -30,7 +30,8 @@ test.describe("the mat on the page's table", () => {
   });
 
   test("the mat's tokens come back whole after the room had the table", async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 1400 });
+    // Under the inn's width: there the inn holds the table from the start.
+    await page.setViewportSize({ width: 1100, height: 1400 });
     await openLanding(page, { settle: false });
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await page.reload();

@@ -91,6 +91,9 @@ function report(detail: FrameFailed) {
   window.dispatchEvent(new CustomEvent<FrameFailed>(FRAME_FAILED, { detail }));
 }
 
+/** How long a frame stays in view before it takes the table. */
+const SETTLE = 300;
+
 const mb = (n: number) => (n / 1e6).toFixed(1);
 
 export default function EngineFrame(props: Props) {
@@ -181,17 +184,24 @@ export default function EngineFrame(props: Props) {
 
   // `auto`: in view, the frame takes the table back from the page. The page
   // takes it again only once this frame is a screen away, so they never
-  // trade it back and forth at an edge.
+  // trade it back and forth at an edge. A flick past it takes nothing: the
+  // frame must stay in view for SETTLE first, since a take swaps the scene
+  // and costs a phone a frame or two of jank.
   useEffect(() => {
     if (!auto || (state !== "poster" && state !== "away") || !root.current) return;
+    let wait: ReturnType<typeof setTimeout> | undefined;
     const io = new IntersectionObserver(
       ([entry]) => {
-        if (entry?.isIntersecting) void boot();
+        clearTimeout(wait);
+        if (entry?.isIntersecting) wait = setTimeout(() => void boot(), SETTLE);
       },
       { threshold: 0.5 },
     );
     io.observe(root.current);
-    return () => io.disconnect();
+    return () => {
+      clearTimeout(wait);
+      io.disconnect();
+    };
     // `boot` is a fresh closure every render; the state decides.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auto, state]);

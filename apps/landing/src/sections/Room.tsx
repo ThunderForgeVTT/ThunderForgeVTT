@@ -5,8 +5,8 @@ import { CC_BY_SA, DEMO, MAPS_CATALOG, MAPS_SOURCE } from "../links.ts";
 import ChestGlitter from "../room/ChestGlitter.tsx";
 import RoomControls from "../room/RoomControls.tsx";
 import GoalList from "../room/GoalList.tsx";
-import { loadRoomScript, type LoadedRoom, type RoomName } from "../room/script.ts";
-import { useRoom } from "../room/useRoom.ts";
+import { INN_COMPANY, loadRoomScript, type LoadedRoom, type RoomName } from "../room/script.ts";
+import { useRoom, type RoomOptions } from "../room/useRoom.ts";
 import { AWAY, ENDING, ROAD_ON } from "../room/words.ts";
 import "../room/room.css";
 
@@ -16,7 +16,15 @@ import "../room/room.css";
 // One engine serves both: the frame in view holds the table.
 
 /** Each room's frame, and the still it shows before the engine draws it. */
-const FRAMES: Record<RoomName, { id: string; poster: string; goals: string }> = {
+const FRAMES: Record<RoomName, { id: string; poster: string; goals: string; options?: RoomOptions }> = {
+  // The tavern beside the headline on a wide page, the party inside, lit
+  // until the visitor scrolls: every adventure starts in a tavern.
+  inn: {
+    id: "inn-table",
+    poster: "/tavern-table.webp",
+    goals: "The tavern's goals",
+    options: { company: INN_COMPANY, opening: true },
+  },
   tavern: { id: "tavern-table", poster: "/tavern-table.webp", goals: "The tavern's goals" },
   dungeon: { id: "room-table", poster: "/room-table.webp", goals: "The dungeon's goals" },
 };
@@ -42,9 +50,11 @@ function followDown() {
 
 function RoomBody({ name, script, imageBytes }: LoadedRoom & { name: RoomName }) {
   const frame = FRAMES[name];
-  const room = useRoom(script, frame.id);
+  const room = useRoom(script, frame.id, frame.options);
   const { state, said } = room;
   const goals = goalsOf(script);
+  // In the hero the room sits under the h1, with no section heading between.
+  const Heading = name === "inn" ? "h2" : "h3";
   const done = state.goals.includes(goals[goals.length - 1]!);
   // FR-021: the keys act from the room's controls; a press on the table puts
   // focus there, so the arrows and WASD work right after a click on it.
@@ -78,7 +88,7 @@ function RoomBody({ name, script, imageBytes }: LoadedRoom & { name: RoomName })
           words on the other. */}
       <div className="room-hud">
         <div className="room-hud-panel room-hud-quest">
-          <GoalList goals={goals} met={state.goals} label={frame.goals} />
+          <GoalList goals={goals} met={state.goals} label={frame.goals} Heading={Heading} />
           <p className="room-place">{describePlace(script, state)}</p>
         </div>
         <div className="room-hud-panel room-hud-controls">
@@ -95,7 +105,7 @@ function RoomBody({ name, script, imageBytes }: LoadedRoom & { name: RoomName })
           />
         </div>
         <div className="room-hud-panel room-hud-log">
-          <h3 className="room-subhead">The referee says</h3>
+          <Heading className="room-subhead">The referee says</Heading>
           {/* Its own panel, so a first announcement moves nothing under the
               pointer. The alternate is a no-break space: the same words said
               twice still change the node. */}

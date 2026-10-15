@@ -13,6 +13,12 @@ import { expectClean, openLanding } from "./support/page.ts";
  * `src/sections/Hero.tsx` does, and plans its moves from that model.
  */
 
+// From 1200px the first screen is the tavern (`inn.spec.ts`); the marker
+// room and the lower tavern are proven just under that width.
+test.beforeEach(async ({ page }, info) => {
+  if (info.project.name === "desktop") await page.setViewportSize({ width: 1100, height: 900 });
+});
+
 const FEET_PER_SQUARE = 5;
 const SUFFIX = ". Arrow keys move one square.";
 

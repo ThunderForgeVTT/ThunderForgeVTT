@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -14,12 +16,19 @@ import { DEMO, REPO, SPONSORS } from "../links.ts";
 import { ArrowMark, HeartMark, StarMark } from "../Icons.tsx";
 import { stroke } from "../ink/marker.ts";
 import { publishMat } from "../table/heroMat.ts";
+import { useWide } from "../useWide.ts";
+
+const Room = lazy(() => import("./Room.tsx"));
 
 // The first viewport is a stretch of battle mat. The room is drawn in marker
 // around the headline, snapped outward to the printed grid; the party waits
 // outside its door. Tokens drag and snap like they do at the table, and the
 // walls block them the way the server's walls do: a move whose straight line
 // crosses a wall is refused.
+//
+// A wide page opens on the tavern instead, beside the headline: the whole
+// party inside, the lights up until the first scroll. Every adventure starts
+// in a tavern.
 
 interface Piece {
   id: string;
@@ -246,11 +255,18 @@ export function Hero() {
     return () => removeEventListener("scroll", seen);
   }, []);
   const layoutKey = useRef("");
+  const wide = useWide();
 
   useLayoutEffect(() => {
     const hero = heroRef.current;
     const room = roomRef.current;
     const field = fieldRef.current;
+    if (wide) {
+      layoutKey.current = "";
+      setLayout(null);
+      publishMat({ walls: [], door: null, doorOpen: false, pieces: [] });
+      return;
+    }
     if (!hero || !room || !field) return;
     const update = () => {
       const next = measure(hero, room, field, pieces);
@@ -269,7 +285,7 @@ export function Hero() {
     ro.observe(room);
     void document.fonts?.ready.then(update);
     return () => ro.disconnect();
-  }, [pieces]);
+  }, [pieces, wide]);
 
   const sizeOf = useCallback((id: string) => pieces.find((p) => p.id === id)?.size ?? 1, [pieces]);
 
@@ -418,7 +434,7 @@ export function Hero() {
       : null;
 
   return (
-    <header className="hero" data-section="hero" ref={heroRef}>
+    <header className={`hero${wide ? " hero--tavern" : ""}`} data-section="hero" ref={heroRef}>
       <Nav />
       <div className="hero-body">
         <div className="room" ref={roomRef}>
@@ -454,7 +470,19 @@ export function Hero() {
             Not released yet. Built in the open, every day, by one person who loves this hobby.
           </p>
         </div>
-        <div className="field" ref={fieldRef} />
+        {wide ? (
+          <div className="hero-tavern">
+            <Suspense fallback={<div className="room-layout room-layout--loading" />}>
+              <Room name="inn" />
+            </Suspense>
+            <p className="hero-tavern-lede">
+              <strong>A simulation.</strong> The page plays the server's part: it checks every move
+              and opens every door, as a ThunderForge server would.
+            </p>
+          </div>
+        ) : (
+          <div className="field" ref={fieldRef} />
+        )}
       </div>
 
       {layout && (

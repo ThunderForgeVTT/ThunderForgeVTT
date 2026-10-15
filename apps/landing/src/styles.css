@@ -408,6 +408,38 @@ img {
   min-height: calc(var(--cell) * 8);
 }
 
+/* A wide page: the tavern beside the headline, the party inside it. The
+   map takes the larger column; its strip of goals, controls and the
+   referee folds to two rows to fit. */
+.hero--tavern .hero-body {
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: calc(var(--cell) * 1.25);
+  align-items: start;
+}
+.hero--tavern .room h1 {
+  font-size: clamp(3rem, 1.5rem + 3.4vw, 5.5rem);
+}
+.hero-tavern {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+.hero-tavern-lede {
+  margin: 0.75rem 0 0;
+  color: var(--text-soft);
+  font-size: 0.95rem;
+}
+.hero-tavern .room-hud {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.hero-tavern .room-hud-log {
+  grid-column: 1 / -1;
+}
+/* The tavern runs past the first screen; no note is needed to say so. */
+.hero--tavern .scroll-cue {
+  display: none;
+}
+
 /* The note at the foot of the first screen: a word in marker and a drawn
    arrow on a slip of paper, pinned to the viewport's lower right on wide
    screens, where the hero fills the first screen and often runs a little

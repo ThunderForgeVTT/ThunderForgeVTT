@@ -8,7 +8,7 @@ import {
   type RoomScript,
   type RoomState,
 } from "@thunderforge/encounter";
-import type { PartyHero } from "./party.ts";
+import { PARTY, type PartyHero } from "./party.ts";
 
 /** The engine's camera, as `camera_state()` reports it. */
 export interface Camera {
@@ -54,6 +54,24 @@ export function sceneCommands(
   if (state.goals.includes("chest-opened")) out.push(...chestCommand(script, true));
   return out;
 }
+
+const companyId = (slug: string) => `company-${slug}`;
+
+/** The rest of the party, standing on `squares`: everyone but the hero played. */
+export function companyCommands(script: RoomScript, hero: PartyHero, squares: readonly Point[]): Command[] {
+  const grid = script.map.gridSize;
+  const rest = PARTY.filter((p) => p.slug !== hero.slug);
+  return squares.flatMap((sq, i) => {
+    const p = rest[i];
+    if (!p) return [];
+    const token = { id: companyId(p.slug), x: sq.x * grid, y: sq.y * grid, z: 2, label: p.name, tokenType: "character", photoUrl: p.art };
+    return [{ type: "upsert_token", token }];
+  });
+}
+
+/** Takes every company token away, whoever stood where. */
+export const companyTeardown = (): Command[] =>
+  PARTY.map((p) => ({ type: "remove_token", tokenId: companyId(p.slug) }));
 
 /** What a verdict changes on the table: a hero sent back, a door swung, a chest opened. */
 export function outcomeCommands(

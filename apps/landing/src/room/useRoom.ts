@@ -12,6 +12,7 @@ import {
   type EngineEvent,
   type GoalEventDetail,
   type Judged,
+  type Point,
   type RoomScript,
   type RoomState,
 } from "@thunderforge/encounter";
@@ -23,7 +24,15 @@ import { pressOnCanvas } from "../engine/keys.ts";
 import { journeyHero, watchJourneyHero, type Walker } from "../table/journeyHero.ts";
 import type { PartyHero } from "./party.ts";
 import { rollFormula } from "./roll.ts";
-import { squareOnBoard, outcomeCommands, parityError, sceneCommands, type Camera } from "./scene.ts";
+import {
+  companyCommands,
+  companyTeardown,
+  squareOnBoard,
+  outcomeCommands,
+  parityError,
+  sceneCommands,
+  type Camera,
+} from "./scene.ts";
 import { announce } from "./words.ts";
 
 // Spec 091 T034: one referee, answering the DOM room and the engine alike.
@@ -69,7 +78,18 @@ function asRoomHero(h: Walker): PartyHero {
   return h.data ? { slug: h.slug, name: h.name, art: h.art, photoData: h.data } : h;
 }
 
-export function useRoom(script: RoomScript, frameId: string) {
+/** The page has been scrolled: an opening room goes dark from here on. */
+let scrolledOnce = false;
+const scrolledNow = () => (scrolledOnce ||= window.scrollY > 40);
+
+export interface RoomOptions {
+  /** The rest of the party, standing on these squares. */
+  company?: readonly Point[];
+  /** Lit, with no fog, until the page's first scroll; then the dark and the hero's sight. */
+  opening?: boolean;
+}
+
+export function useRoom(script: RoomScript, frameId: string, { company, opening }: RoomOptions = {}) {
   const referee = useMemo(() => createReferee(script), [script]);
   const grid = script.map.gridSize;
   const [state, setState] = useState<RoomState>(() => referee.start());
@@ -203,17 +223,35 @@ export function useRoom(script: RoomScript, frameId: string) {
     (send: Send) => {
       const reduced = matchMedia(REDUCE).matches;
       for (const c of sceneCommands(script, heroNow.current, now.current, reduced)) send(c);
-      viewAs(frameId, HERO_ID);
+      if (company) for (const c of companyCommands(script, heroNow.current, company)) send(c);
+      if (opening && !scrolledNow()) {
+        send({ type: "set_ambient_light", level: "bright" });
+        viewAs(frameId, "");
+      } else viewAs(frameId, HERO_ID);
     },
-    [script, frameId],
+    [script, frameId, company, opening],
   );
+
+  // The opening's lights go out on the first scroll, and the hero's sight takes over.
+  useEffect(() => {
+    if (!opening || scrolledNow()) return;
+    const dusk = () => {
+      if (!scrolledNow()) return;
+      removeEventListener("scroll", dusk);
+      engine.current.send?.({ type: "set_ambient_light", level: "dark" });
+      viewAs(frameId, HERO_ID);
+    };
+    addEventListener("scroll", dusk, { passive: true });
+    return () => removeEventListener("scroll", dusk);
+  }, [opening, frameId]);
 
   const teardown = useCallback(
     (send: Send) => {
       for (const p of [...pending.current]) settle(p);
       for (const command of roomTeardown(script)) send(command);
+      if (company) for (const command of companyTeardown()) send(command);
     },
-    [script, settle],
+    [script, settle, company],
   );
 
   const onState = useCallback(
@@ -234,9 +272,10 @@ export function useRoom(script: RoomScript, frameId: string) {
     const send = engine.current.send;
     if (send) {
       for (const command of roomTeardown(script)) send(command);
+      if (company) for (const command of companyTeardown()) send(command);
       setup(send);
     }
-  }, [referee, script, apply, setup]);
+  }, [referee, script, apply, setup, company]);
 
   /** FR-010: a new hero starts the room over. */
   const pick = useCallback(

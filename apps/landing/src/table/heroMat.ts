@@ -26,7 +26,8 @@ export interface MatPiece {
 
 export interface Mat {
   walls: MatSeg[];
-  door: MatSeg;
+  /** None while the first screen has no marker room (a wide page's tavern). */
+  door: MatSeg | null;
   doorOpen: boolean;
   pieces: MatPiece[];
 }

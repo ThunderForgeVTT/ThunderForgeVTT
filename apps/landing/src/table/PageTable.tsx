@@ -66,6 +66,11 @@ const DUSK_MS = 260;
 /** What a tap on counts as the table, not the page's words. */
 const SURFACES = "html, body, main, header.hero, .hero-body, .section";
 
+/** The tavern a wide page opens on (`Hero.tsx`). */
+const OPENING = ".hero-tavern";
+/** How long the scroll rests before the page takes the table back. */
+const SETTLE = 300;
+
 type Phase = "idle" | "held" | "loading" | "running" | "away" | "failed";
 
 const mb = (n: number) => (n / 1e6).toFixed(0);
@@ -134,8 +139,10 @@ export default function PageTable() {
     target: { x: 0, y: 0 } as Pt,
     free: false,
     cell: 48,
-    /** Where the stage stands on the page, in page pixels. */
+    /** Where the stage stands on the page, and its height, in page pixels. */
     top: 0,
+    stageW: 0,
+    stageH: 0,
     /** Where it moves once the engine draws the camera sent for it. */
     moving: null as number | null,
     /** Where day ends and the night is deepest, in scroll pixels. */
@@ -174,13 +181,16 @@ export default function PageTable() {
     const el = stage.current;
     if (!el) return;
     const { doc } = live.current;
-    const c = toWorld({ x: el.clientWidth / 2, y: top + el.clientHeight / 2 }, doc);
+    // Kept from `size`: a layout read here would force one on every jump.
+    const width = live.current.stageW || el.clientWidth;
+    const height = live.current.stageH || el.clientHeight;
+    const c = toWorld({ x: width / 2, y: top + height / 2 }, doc);
     send({
       type: "fit_camera_to",
       centerX: c.x,
       centerY: c.y,
-      width: el.clientWidth,
-      height: el.clientHeight,
+      width,
+      height,
       immediate: true,
     });
   }, [send]);
@@ -214,7 +224,8 @@ export default function PageTable() {
       const L = live.current;
       const y = window.scrollY;
       const vh = window.innerHeight;
-      const h = el.clientHeight;
+      // Kept from `size`: a layout read here would force one on every scroll.
+      const h = L.stageH || el.clientHeight;
       const margin = (h - vh) / 2;
       const top = Math.max(0, Math.min(Math.floor((y - margin) / L.cell) * L.cell, L.doc.h - h));
       if (force) {
@@ -242,7 +253,7 @@ export default function PageTable() {
         const L = live.current;
         const el = stage.current;
         if (e.type !== "cameraFitted" || L.moving === null || !el) return;
-        const want = toWorld({ x: 0, y: L.moving + el.clientHeight / 2 }, L.doc).y;
+        const want = toWorld({ x: 0, y: L.moving + (L.stageH || el.clientHeight) / 2 }, L.doc).y;
         if (Math.abs(e.centerY - want) < 0.5) moveTo(L.moving);
       }),
     [moveTo],
@@ -255,7 +266,9 @@ export default function PageTable() {
     const L = live.current;
     const vh = window.innerHeight;
     const margin = Math.max(1, Math.round(vh / 3 / L.cell)) * L.cell;
-    el.style.height = `${Math.min(vh + 2 * margin, L.doc.h)}px`;
+    L.stageH = Math.min(vh + 2 * margin, L.doc.h);
+    el.style.height = `${L.stageH}px`;
+    L.stageW = el.clientWidth;
   }, []);
 
   /** The first screen's room on the table, and the walker's start in it. */
@@ -498,6 +511,12 @@ export default function PageTable() {
       return;
     }
     gl.getExtension("WEBGL_lose_context")?.loseContext();
+    // A wide page opens on the tavern beside the headline, which takes the
+    // table itself; the page's table waits until the tavern is left behind.
+    if (document.querySelector(OPENING)) {
+      go("away");
+      return;
+    }
     const t = setTimeout(() => void boot(), 400);
     return () => clearTimeout(t);
     // Once, on mount.
@@ -507,19 +526,24 @@ export default function PageTable() {
   // Scroll drives the journey and the camera; a frame that took the table
   // gives it back once it is well out of view.
   useEffect(() => {
+    let settle: ReturnType<typeof setTimeout> | undefined;
     const onScroll = () => {
       const L = live.current;
-      const doc = { w: document.documentElement.clientWidth, h: document.documentElement.scrollHeight };
-      setPct(Math.round(fraction(window.scrollY, doc, window.innerHeight) * 100));
       const t = fraction(window.scrollY, L.doc, window.innerHeight);
+      setPct(Math.round(t * 100));
       if (L.phase === "away") {
         // The room holds the table, but the page's night still follows.
         const shade = duskAt(window.scrollY, L.dayEnds, L.nightAt, L.dawnAt, window.innerHeight);
         document.documentElement.classList.toggle("dusk", shade > LIGHTS_ON);
-        const holder = holderId();
-        const el = holder ? document.getElementById(holder) : null;
-        const r = el?.getBoundingClientRect();
-        if (r && (r.bottom < -window.innerHeight || r.top > 2 * window.innerHeight)) void boot();
+        // Taken back once the scroll settles, not in the middle of a flick.
+        clearTimeout(settle);
+        settle = setTimeout(() => {
+          if (live.current.phase !== "away") return;
+          const holder = holderId();
+          const el = holder ? document.getElementById(holder) : document.querySelector(OPENING);
+          const r = el?.getBoundingClientRect();
+          if (r && (r.bottom < -window.innerHeight || r.top > 2 * window.innerHeight)) void boot();
+        }, SETTLE);
         return;
       }
       if (L.phase !== "running") return;
@@ -530,7 +554,10 @@ export default function PageTable() {
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
-    return () => window.removeEventListener("scroll", onScroll);
+    return () => {
+      clearTimeout(settle);
+      window.removeEventListener("scroll", onScroll);
+    };
   }, [place, boot, dusk]);
 
   // A tap on the mat walks the hero there.

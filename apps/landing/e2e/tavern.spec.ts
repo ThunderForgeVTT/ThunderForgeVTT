@@ -9,6 +9,12 @@ import { roomFrame } from "./support/room.ts";
  * engine serves both rooms; the frame in view holds the table.
  */
 
+// From 1200px the first screen is the tavern (`inn.spec.ts`); the marker
+// room and the lower tavern are proven just under that width.
+test.beforeEach(async ({ page }, info) => {
+  if (info.project.name === "desktop") await page.setViewportSize({ width: 1100, height: 900 });
+});
+
 const tavern = (page: Page) => page.locator("#tavern");
 const tavernFrame = (page: Page) => page.locator("#tavern-table");
 const square = (page: Page) => tavern(page).locator(".room-layout").getAttribute("data-square");
@@ -63,7 +69,7 @@ test("the table follows the hero down: the tavern holds it, then the dungeon", a
   test.setTimeout(BOOT_TIMEOUT + 60_000);
   const opened = await openLanding(page); // emulates reduce
   // A frame and its controls on one screen, as `bootRoom` has it.
-  await page.setViewportSize({ width: 1280, height: 1400 });
+  await page.setViewportSize({ width: 1100, height: 1400 });
   // Under reduced motion a frame waits to be asked; this is the walk itself.
   await page.emulateMedia({ reducedMotion: "no-preference" });
 
