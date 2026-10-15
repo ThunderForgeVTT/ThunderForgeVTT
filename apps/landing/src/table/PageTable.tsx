@@ -130,6 +130,8 @@ export default function PageTable() {
     target: { x: 0, y: 0 } as Pt,
     free: false,
     cell: 48,
+    /** Where the stage stands on the page, in page pixels. */
+    top: 0,
     /** Where day ends and the night is deepest, in scroll pixels. */
     dayEnds: 0,
     nightAt: 1,
@@ -155,12 +157,12 @@ export default function PageTable() {
     announcePage();
   }, []);
 
-  /** The camera over the viewport, exactly: the grid is the page's grid. */
+  /** The camera over the stage, exactly: the grid is the page's grid. */
   const aim = useCallback(() => {
     const el = stage.current;
     if (!el) return;
-    const { doc } = live.current;
-    const c = toWorld({ x: el.clientWidth / 2, y: window.scrollY + el.clientHeight / 2 }, doc);
+    const { doc, top } = live.current;
+    const c = toWorld({ x: el.clientWidth / 2, y: top + el.clientHeight / 2 }, doc);
     send({
       type: "fit_camera_to",
       centerX: c.x,
@@ -170,6 +172,41 @@ export default function PageTable() {
       immediate: true,
     });
   }, [send]);
+
+  /**
+   * The stage is a window onto the table that scrolls with the page, a margin
+   * taller than the screen each way, so the browser moves it with the words
+   * and the grid never trails them. Only when the screen nears its edge do the
+   * window and the camera jump together, by whole cells, where the grid looks
+   * the same either side of the jump.
+   */
+  const place = useCallback(
+    (force = false) => {
+      const el = stage.current;
+      if (!el) return;
+      const L = live.current;
+      const y = window.scrollY;
+      const vh = window.innerHeight;
+      const h = el.clientHeight;
+      if (!force && y >= L.top && y + vh <= L.top + h) return;
+      const margin = (h - vh) / 2;
+      const snapped = Math.floor((y - margin) / L.cell) * L.cell;
+      L.top = Math.max(0, Math.min(snapped, L.doc.h - h));
+      el.style.top = `${L.top}px`;
+      aim();
+    },
+    [aim],
+  );
+
+  /** The stage's height: the screen and a margin of whole cells each way. */
+  const size = useCallback(() => {
+    const el = stage.current;
+    if (!el) return;
+    const L = live.current;
+    const vh = window.innerHeight;
+    const margin = Math.max(1, Math.round(vh / 3 / L.cell)) * L.cell;
+    el.style.height = `${Math.min(vh + 2 * margin, L.doc.h)}px`;
+  }, []);
 
   /** The first screen's room on the table, and the walker's start in it. */
   const drawMat = useCallback(() => {
@@ -269,9 +306,13 @@ export default function PageTable() {
   /** Measures the page and sends it as a scene: grid, mat, the room. */
   const layout = useCallback(() => {
     const L = live.current;
+    // Out of the page's way while it is measured, so it never adds to it.
+    stage.current?.style.setProperty("top", "0px");
+    stage.current?.style.setProperty("height", "0px");
     const { boxes, doc } = measure();
     L.cell = cellSize();
     L.doc = doc;
+    size();
     L.rest = pathDown(boxes, doc, L.cell);
     L.path = L.rest;
     const vh = window.innerHeight;
@@ -279,8 +320,8 @@ export default function PageTable() {
     const room = boxes.find((b) => b.id === "room");
     L.dayEnds = first ? first.y + first.h - vh / 2 : 0;
     L.nightAt = room ? room.y - vh / 4 : doc.h;
-    const support = boxes.find((b) => b.id === "support");
-    L.dawnAt = support ? Math.min(support.y - vh / 4, doc.h - vh) : doc.h * 2;
+    // The night holds to the page's end: the star chart is in a night sky.
+    L.dawnAt = doc.h * 2;
     grid(L.shade > EMBERS);
     light(boxes);
     if (!L.free) L.target = along(L.path, fraction(window.scrollY, doc, window.innerHeight));
@@ -290,8 +331,8 @@ export default function PageTable() {
     if (L.phase === "running") send(heroToken(L.hero, toWorld(L.pos, doc)));
     L.shade = -1;
     dusk();
-    aim();
-  }, [send, aim, drawMat, grid, light, dusk]);
+    place(true);
+  }, [send, place, size, drawMat, grid, light, dusk]);
 
   const setup = useCallback(
     (s: Send) => {
@@ -378,12 +419,12 @@ export default function PageTable() {
       L.free = false;
       L.target = along(L.path, t);
       dusk();
-      aim();
+      place();
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
     return () => window.removeEventListener("scroll", onScroll);
-  }, [aim, boot, dusk]);
+  }, [place, boot, dusk]);
 
   // A tap on the mat walks the hero there.
   useEffect(() => {

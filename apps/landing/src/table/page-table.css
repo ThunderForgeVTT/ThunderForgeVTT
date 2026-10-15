@@ -1,10 +1,15 @@
-/* Prototype: the page on the engine's table. The canvas fills the viewport
-   behind everything; while it draws, the page's own printed grid gives way
-   to the engine's, and the mat colour comes from the table's background. */
+/* Prototype: the page on the engine's table. The canvas is a window onto the
+   table behind everything, scrolled by the browser with the page itself and
+   moved by `place` only near its edges; its height is set from the screen.
+   While it draws, the page's own printed grid gives way to the engine's, and
+   the mat colour comes from the table's background. */
 
 .page-table {
-  position: fixed;
-  inset: 0;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
   z-index: -1;
   background: var(--mat);
 }
@@ -332,6 +337,16 @@ body.in-engine .hero .token img {
 :root.dusk .marker-head {
   /* Firelight on the headings. */
   text-shadow: 0 0 18px rgb(255 179 92 / 0.28);
+}
+:root.dusk .sc-point {
+  /* By night the star chart is in the sky: starlight, not ink. */
+  stroke: #f4e3a6;
+  fill: rgb(244 227 166 / 0.12);
+  filter: drop-shadow(0 0 5px rgb(255 228 150 / 0.55));
+}
+:root.dusk .sc-links .marker {
+  stroke: #cdd8f5;
+  opacity: 0.45;
 }
 @media (prefers-reduced-motion: reduce) {
   :root {
