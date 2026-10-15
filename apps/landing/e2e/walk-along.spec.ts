@@ -154,4 +154,42 @@ test.describe("the hero walks a wide page", () => {
       expect(x).toBeLessThan(inn.x + 6 * inn.cell);
     }
   });
+
+  test("it goes to stand under the map picked in the atlas", async ({ page }) => {
+    await openLanding(page, { settle: false });
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.reload();
+    await expect(page.locator("body.in-engine")).toBeAttached({ timeout: BOOT_TIMEOUT });
+    await watchWalker(page);
+
+    const tiles = page.locator(".atlas-tile");
+    await expect(tiles.first()).toBeVisible({ timeout: 30_000 });
+    const under = (i: number) =>
+      tiles.nth(i).evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return { x: r.left + r.width / 2, bottom: r.bottom + scrollY };
+      });
+    const cell = await page.evaluate(() =>
+      parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--cell")),
+    );
+    const vh = page.viewportSize()!.height;
+
+    // SC-004: with the first map picked, the hero waits under it.
+    const first = await under(0);
+    for (let y = first.bottom - vh; y <= first.bottom - vh / 2; y += 120) await scrollAndSettle(page, y);
+    let at = await scrollAndSettle(page, first.bottom - vh / 2);
+    expect(Math.abs(at.x - first.x)).toBeLessThan(cell);
+    expect(at.y).toBeGreaterThan(first.bottom);
+    expect(at.y).toBeLessThan(first.bottom + 2 * cell);
+
+    // Another map picked: the hero walks over to it, scroll untouched.
+    await tiles.nth(5).click();
+    const fifth = await under(5);
+    await expect
+      .poll(async () => Math.abs((await walker(page))!.x - fifth.x), { timeout: 15_000 })
+      .toBeLessThan(cell);
+    at = (await walker(page))!;
+    expect(at.y).toBeGreaterThan(fifth.bottom);
+    expect(at.y).toBeLessThan(fifth.bottom + 2 * cell);
+  });
 });

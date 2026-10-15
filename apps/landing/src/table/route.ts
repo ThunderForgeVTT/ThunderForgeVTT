@@ -155,15 +155,26 @@ export function stepToward(s: number, goal: number): number {
 /**
  * A wide page's stations so far: the hero's seat (if it has one), the
  * tavern's back door, straight down from it to the gutter path, and the
- * gutter path on down the page.
+ * gutter path on down the page, with the `stops` (the picked map) slotted
+ * in where they come on the way down.
  */
-export function pageStations(seat: Pt | null, exit: Pt, rest: Pt[], cell: number, hold: number): Station[] {
-  const below = rest.filter((p) => p.y > exit.y + cell);
+export function pageStations(
+  seat: Pt | null,
+  exit: Pt,
+  rest: Pt[],
+  cell: number,
+  hold: number,
+  stops: Station[] = [],
+): Station[] {
+  const below: Station[] = [
+    ...rest.filter((p) => p.y > exit.y + cell).map((at) => ({ at })),
+    ...stops.filter((st) => st.at.y > exit.y + cell),
+  ].sort((a, b) => a.at.y - b.at.y);
   const out: Station[] = [];
   if (seat) out.push({ at: seat, hold });
   out.push({ at: exit, hold: seat ? 0 : hold });
   const first = below[0];
-  if (first && Math.abs(first.x - exit.x) > 1) out.push({ at: { x: exit.x, y: first.y } });
-  for (const p of below) out.push({ at: p });
+  if (first && Math.abs(first.at.x - exit.x) > 1) out.push({ at: { x: exit.x, y: first.at.y } });
+  out.push(...below);
   return out;
 }

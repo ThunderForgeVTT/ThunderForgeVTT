@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { CC_BY_SA, DEMO, MAPS_CATALOG, MAPS_SOURCE } from "../links.ts";
+import { announcePick } from "../table/mapPick.ts";
 
 // The demo world's own maps, each with its own walls, doors and lights laid
 // over it in marker: the geometry the server enforces, read from the generated
@@ -171,6 +172,10 @@ export default function MapLegend() {
   }, []);
 
   const entry = atlas?.[pick] ?? null;
+  // The hero on the page goes to stand under the new pick (spec 098).
+  useEffect(() => {
+    if (atlas) announcePick();
+  }, [atlas, pick]);
   useEffect(() => {
     if (!entry || maps[entry.name]) return;
     let live = true;

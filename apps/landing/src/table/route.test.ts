@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildRoute, length, pointAt, sAt, stepToward, type Planner } from "./route.ts";
+import { buildRoute, length, pageStations, pointAt, sAt, stepToward, type Planner } from "./route.ts";
 
 // Run with `node --test src/table/route.test.ts` (Node strips the types).
 
@@ -74,4 +74,18 @@ test("the step closes on the goal from either side and never passes it", () => {
   assert.equal(stepToward(0, 1000), 120);
   assert.equal(stepToward(1000, 0), 880);
   assert.equal(stepToward(9, 10), 10);
+});
+
+test("a stop slots into the way down where it comes, and keeps its hold", () => {
+  const rest = [{ x: 24, y: 1000 }, { x: 24, y: 2000 }, { x: 24, y: 3000 }];
+  const tile = { at: { x: 600, y: 2500 }, hold: 180 };
+  const st = pageStations(null, { x: 24, y: 500 }, rest, 48, 180, [tile]);
+  assert.deepEqual(
+    st.map((s) => s.at.y),
+    [500, 1000, 2000, 2500, 3000],
+  );
+  assert.equal(st[3]!.hold, 180);
+  // A stop above the door is not on the way down.
+  const high = pageStations(null, { x: 24, y: 500 }, rest, 48, 180, [{ at: { x: 0, y: 100 } }]);
+  assert.equal(high.length, 4);
 });

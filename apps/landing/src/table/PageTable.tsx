@@ -23,7 +23,17 @@ import {
 } from "./journey.ts";
 import { downAt } from "./goblins.ts";
 import { centreOf, MatScene } from "./matScene.ts";
-import { buildRoute, pageStations, pointAt, sAt, stepToward, type Planner, type Route } from "./route.ts";
+import { pickedTile, watchPick } from "./mapPick.ts";
+import {
+  buildRoute,
+  pageStations,
+  pointAt,
+  sAt,
+  stepToward,
+  type Planner,
+  type Route,
+  type Station,
+} from "./route.ts";
 
 // Prototype: the whole page on the engine's table.
 //
@@ -99,6 +109,15 @@ function measure(): { boxes: Box[]; doc: Doc } {
   });
   boxes.sort((a, b) => a.y - b.y);
   return { boxes, doc };
+}
+
+/** Spec 098 FR-007: the cell under the picked atlas tile, held a while. */
+function underPick(cell: number, hold: number): Station[] {
+  const r = pickedTile()?.getBoundingClientRect();
+  if (!r || r.width === 0) return [];
+  const x = Math.floor((r.left + r.width / 2) / cell) * cell + cell / 2;
+  const y = Math.ceil((r.bottom + window.scrollY) / cell) * cell + cell / 2;
+  return [{ at: { x, y }, hold }];
 }
 
 /** The pixel size the built hero is drawn at: crisp in a cell on a 3x screen. */
@@ -323,8 +342,8 @@ export default function PageTable() {
   const route = useCallback(
     (seat: Pt | null, exit: Pt) => {
       const L = live.current;
-      const stations = () =>
-        pageStations(seat, exit, L.rest, L.cell, Math.round(window.innerHeight * 0.2));
+      const hold = Math.round(window.innerHeight * 0.2);
+      const stations = () => pageStations(seat, exit, L.rest, L.cell, hold, underPick(L.cell, hold));
       const use = (r: Route) => {
         L.route = r;
         L.goalS = goalOf(r);
@@ -717,6 +736,8 @@ export default function PageTable() {
 
   // A token dragged or a door swung on the first screen.
   useEffect(() => watchMat(() => live.current.phase === "running" && drawMat()), [drawMat]);
+  // Another map picked in the atlas: the hero goes to stand under it.
+  useEffect(() => watchPick(() => live.current.phase === "running" && drawMat()), [drawMat]);
 
   /** The built hero, drawn to pixels and sent to walk. */
   const apply = async () => {

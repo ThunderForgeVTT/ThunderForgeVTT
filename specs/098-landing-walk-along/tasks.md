@@ -28,9 +28,9 @@ phase. Phone and tablet run at the end of each phase to prove FR-001.
 
 ## Phase 3: Map selection (US4)
 
-- [ ] T007 [US4] `MapLegend` publishes the pick, and the station follows
+- [x] T007 [US4] `MapLegend` publishes the pick, and the station follows
   it.
-- [ ] T008 [US4] e2e (SC-004).
+- [x] T008 [US4] e2e (SC-004).
 
 ## Phase 4: Dungeon (US5)
 
