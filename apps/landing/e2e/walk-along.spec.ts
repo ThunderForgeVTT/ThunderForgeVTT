@@ -272,6 +272,38 @@ test.describe("the hero walks a wide page", () => {
   });
 });
 
+test.describe("the hero stays on a phone's screen", () => {
+  test.skip(!BUILT, "no demo build: run pnpm -F @thunderforge/demo run build");
+  test.beforeEach(({}, info) => {
+    test.skip(info.project.name !== "desktop", "the engine boots at the desktop width only");
+    test.setTimeout(BOOT_TIMEOUT + 120_000);
+  });
+
+  // The dungeon had a frame of its own under 1200px: it took the canvas,
+  // and the walker with it, for screens either side of the room.
+  test("past the dungeon, the walker is always in view", async ({ page }) => {
+    await page.setViewportSize({ width: 384, height: 686 });
+    await openLanding(page, { settle: false });
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.reload();
+    await expect(page.locator("body.in-engine")).toBeAttached({ timeout: BOOT_TIMEOUT });
+    await watchWalker(page);
+
+    const room = await page.evaluate(() => {
+      const r = document.querySelector("#room")!.getBoundingClientRect();
+      return { top: r.top + scrollY, bottom: r.bottom + scrollY };
+    });
+    const vh = 686;
+    for (let y = Math.max(0, room.top - vh); y <= room.bottom; y += Math.round(vh / 3)) {
+      const at = await scrollAndSettle(page, y);
+      const top = await page.evaluate(() => scrollY);
+      expect(at.y, `scrolled to ${top}`).toBeGreaterThan(top);
+      expect(at.y, `scrolled to ${top}`).toBeLessThan(top + vh);
+    }
+    await expect(page.locator("#room-table #thunderforge-table")).toHaveCount(0);
+  });
+});
+
 test.describe("the dusk on a big screen", () => {
   test.skip(!BUILT, "no demo build: run pnpm -F @thunderforge/demo run build");
   test.beforeEach(({}, info) => {

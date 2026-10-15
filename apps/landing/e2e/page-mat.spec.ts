@@ -29,8 +29,8 @@ test.describe("the mat on the page's table", () => {
     test.setTimeout(BOOT_TIMEOUT + 120_000);
   });
 
-  test("the mat's tokens come back whole after the room had the table", async ({ page }) => {
-    // The marker room's mat: from 1200px the first screen is the tavern instead.
+  test("the mat's tokens stay whole while the dungeon plays on the page", async ({ page }) => {
+    // Under 1200px, where the dungeon once took the table to a frame of its own.
     await page.setViewportSize({ width: 1100, height: 1400 });
     await openLanding(page, { settle: false });
     await page.emulateMedia({ reducedMotion: "no-preference" });
@@ -41,11 +41,11 @@ test.describe("the mat on the page's table", () => {
     const first = await matTokens(page);
 
     await roomFrame(page).scrollIntoViewIfNeeded();
-    await expect(roomFrame(page).locator("#thunderforge-table")).toBeAttached({ timeout: 60_000 });
-    await expect.poll(async () => Object.keys(await matTokens(page)).length).toBe(0);
+    await expect(page.locator(".room-board")).toBeVisible({ timeout: 60_000 });
+    await page.waitForTimeout(1500);
+    await expect(page.locator("#page-table #thunderforge-table")).toHaveCount(1);
 
     await page.evaluate(() => window.scrollTo(0, 0));
-    await expect(page.locator("body.in-engine")).toBeAttached({ timeout: 60_000 });
     await expect.poll(() => matTokens(page)).toEqual(first);
   });
 });

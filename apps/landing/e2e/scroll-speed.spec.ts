@@ -5,11 +5,11 @@ import { expectClean, openLanding } from "./support/page.ts";
 /**
  * A visitor flicks, not strolls. A frame takes the table only once the
  * scroll rests on it: a take swaps the scene, and a flick that swapped two
- * scenes on the way past stuttered on a phone. A slow scroll still hands the
- * table to each room it stops at.
+ * scenes on the way past stuttered on a phone. The tavern and the dungeon
+ * lie on the page's own table at every width, so neither takes it.
  */
 
-// The lower tavern is there under 1200px (`inn.spec.ts` has the wide page).
+// Under 1200px, where both rooms once had frames of their own.
 test.beforeEach(async ({ page }, info) => {
   test.skip(!BUILT, "no demo build: run pnpm -F @thunderforge/demo run build");
   test.skip(info.project.name !== "desktop", "the engine boots at the desktop width only");
@@ -63,7 +63,7 @@ test("a fast flick past the tavern and the dungeon hands the table to neither", 
   await expectClean(opened);
 });
 
-test("a slow scroll hands the table to the tavern, then to the dungeon", async ({ page }) => {
+test("a slow scroll keeps the table on the page, past the tavern and the dungeon", async ({ page }) => {
   const opened = await bootPage(page);
   await watchHolders(page);
   const end = await pastRoom(page);
@@ -74,6 +74,6 @@ test("a slow scroll hands the table to the tavern, then to the dungeon", async (
     await page.waitForTimeout(90);
   }
   await page.waitForTimeout(1500);
-  expect(await holders(page)).toEqual(["page-table", "room-table", "tavern-table"]);
+  expect(await holders(page)).toEqual(["page-table"]);
   await expectClean(opened);
 });

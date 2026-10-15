@@ -10,7 +10,6 @@ import { loadRoomScript, type LoadedRoom, type RoomName } from "../room/script.t
 import { useRoom } from "../room/useRoom.ts";
 import { AWAY, ENDING, ROAD_ON } from "../room/words.ts";
 import { watchPage } from "../table/onPage.ts";
-import { useWide } from "../useWide.ts";
 import "../room/room.css";
 
 // Spec 091 US1 and US2: a tavern the hero walks through, then one small
@@ -43,12 +42,13 @@ function followDown() {
   document.getElementById("room")?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
 }
 
-/** Spec 098 FR-008: a wide page whose table runs lays the dungeon on it. */
+/** Spec 098 FR-008: a page whose table runs lays the dungeon on it, at any
+ * width: a frame of its own would take the canvas, and the page's walker
+ * with it, for screens either side of the room. */
 function useOnPage(name: RoomName): boolean {
-  const wide = useWide();
   const [on, setOn] = useState(false);
   useEffect(() => watchPage(setOn), []);
-  return name === "dungeon" && wide && on;
+  return name === "dungeon" && on;
 }
 
 function RoomBody({ name, script, imageBytes }: LoadedRoom & { name: RoomName }) {
