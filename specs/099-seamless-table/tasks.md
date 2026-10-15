@@ -18,7 +18,7 @@
 
 ## Phase 3: Night lights and map (US3)
 
-- [ ] T006 [US3] `byNight` lights.
+- [x] T006 [US3] `byNight` lights.
 - [ ] T007 [US3] `nightImagePath` crossfade.
 
 ## Phase 4: Landing (US4)

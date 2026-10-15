@@ -6,9 +6,11 @@
 //! `thunderforge_canvas_core::daylight`. A scene with no time of day has no
 //! clock, and its darkness comes from `set_ambient_light` as before.
 
+use std::collections::HashSet;
+
 use bevy::prelude::*;
 use serde_json::json;
-use thunderforge_canvas_core::daylight::{Clock, darkness_at, follow};
+use thunderforge_canvas_core::daylight::{Clock, NIGHT, darkness_at, follow};
 
 use crate::emit_event;
 
@@ -19,6 +21,9 @@ pub struct TimeOfDay {
     pub shown: f32,
     /// The darkness last told to the page, in hundredths.
     told: Option<i32>,
+    /// Lights sent with `byNight` (US3): lit by night, out by day. Kept
+    /// here, not on the light, so the server's light type is untouched.
+    pub night_lights: HashSet<String>,
 }
 
 impl TimeOfDay {
@@ -26,7 +31,9 @@ impl TimeOfDay {
     /// clock away. A jump is a scene load: the darkness jumps with it.
     pub fn set(&mut self, hour: Option<f32>, over: Option<f32>) {
         let Some(hour) = hour.filter(|h| h.is_finite()) else {
-            *self = Self::default();
+            self.clock = None;
+            self.shown = 0.0;
+            self.told = None;
             return;
         };
         let jumped = match self.clock.as_mut() {
@@ -40,6 +47,12 @@ impl TimeOfDay {
             self.shown = darkness_at(hour);
         }
         self.told = None;
+    }
+
+    /// How much of a night light's intensity burns at `darkness`: none by
+    /// day, all of it by night, rising and falling with the dusk.
+    pub fn night_factor(darkness: f32) -> f32 {
+        (darkness / NIGHT).clamp(0.0, 1.0)
     }
 
     /// The clock's darkness, while there is a clock.
@@ -109,5 +122,7 @@ mod tests {
         assert!(tod.shade().unwrap() >= 0.98);
         tod.set(None, None);
         assert_eq!(tod.shade(), None);
+        assert_eq!(TimeOfDay::night_factor(0.0), 0.0);
+        assert_eq!(TimeOfDay::night_factor(0.98), 1.0);
     }
 }

@@ -251,6 +251,9 @@ pub(crate) struct WorldLightPayload {
     pub(crate) attached_token_id: Option<String>,
     #[serde(rename = "castsShadows")]
     pub(crate) casts_shadows: bool,
+    /// Lit by night only, with the clock (spec 099 US3).
+    #[serde(rename = "byNight", default)]
+    pub(crate) by_night: bool,
 }
 
 /// Confirmed/authoritative shape state from the server (T053), matching

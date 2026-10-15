@@ -582,6 +582,12 @@ pub(crate) fn apply_external_commands(
                 }
             }
             ExternalCommand::UpsertLight { light } => {
+                if let Some(tod) = scene.table_time.time_of_day.as_mut() {
+                    match light.by_night {
+                        true => tod.night_lights.insert(light.id.clone()),
+                        false => tod.night_lights.remove(&light.id),
+                    };
+                }
                 if let Some(light_set) = light_set.as_deref_mut() {
                     light_set.upsert(EngineLight {
                         id: light.id,
@@ -600,6 +606,9 @@ pub(crate) fn apply_external_commands(
                 }
             }
             ExternalCommand::RemoveLight { light_id } => {
+                if let Some(tod) = scene.table_time.time_of_day.as_mut() {
+                    tod.night_lights.remove(&light_id);
+                }
                 if let Some(light_set) = light_set.as_deref_mut() {
                     light_set.remove(&light_id);
                 }
