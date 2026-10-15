@@ -15,6 +15,7 @@ fn source(id: &str, x: f32, y: f32, radius: f32, casts_shadows: bool) -> LightSo
         attached_token_id: None,
         casts_shadows,
         bright_radius: None,
+        flicker: 0.0,
     }
 }
 
@@ -223,6 +224,7 @@ mod apply_light_illumination_tests {
             attached_token_id: None,
             casts_shadows: true,
             bright_radius: None,
+            flicker: 0.0,
         });
 
         app.update();
@@ -346,6 +348,7 @@ mod apply_light_illumination_tests {
             attached_token_id: None,
             casts_shadows: false,
             bright_radius: None,
+            flicker: 0.0,
         });
 
         app.update();

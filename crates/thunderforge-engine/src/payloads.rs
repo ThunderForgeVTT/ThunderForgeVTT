@@ -238,6 +238,9 @@ pub(crate) struct WorldLightPayload {
     /// it, which draws the light as it always was: bright to half its radius.
     #[serde(rename = "brightRadius", default)]
     pub(crate) bright_radius: Option<f32>,
+    /// How much the flame wavers, 0 to 1. Absent is a steady light.
+    #[serde(default)]
+    pub(crate) flicker: Option<f32>,
     pub(crate) intensity: f32,
     pub(crate) color: Option<String>,
     #[serde(rename = "attachedTokenId")]

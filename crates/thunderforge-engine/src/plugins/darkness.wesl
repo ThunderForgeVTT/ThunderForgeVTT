@@ -49,7 +49,15 @@ struct Darkness {
     lights: array<vec4<f32>, 128>,
     // rgb = light colour, a = intensity.
     light_colors: array<vec4<f32>, 128>,
+    // x = how much the light flickers, y = its phase.
+    light_flicker: array<vec4<f32>, 128>,
 };
+
+// A flame's waver at `t` seconds, 0..1: two sines out of step, so it never
+// settles into a visible beat.
+fn flame(t: f32, phase: f32) -> f32 {
+    return 0.5 + 0.3 * sin(t * 7.3 + phase) + 0.2 * sin(t * 13.1 + phase * 2.4);
+}
 
 @group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> darkness: Darkness;
 // One row per light, one texel per direction: the reach, as a fraction of the
@@ -99,14 +107,19 @@ fn fragment(mesh: VertexOutput) -> @location(0) vec4<f32> {
 
         let offset = world - light.xy;
         let distance = length(offset);
-        let bright = light.z;
-        let dim = max(light.w, bright);
+        let steady_dim = max(light.w, light.z);
+        // A flicker only ever shrinks and dims the pool, so it can never
+        // light past the walls the shadow row was cut for.
+        let waver = darkness.light_flicker[i];
+        let low = waver.x * (1.0 - flame(darkness.params.y, waver.y));
+        let bright = light.z * (1.0 - 0.15 * low);
+        let dim = steady_dim * (1.0 - 0.1 * low);
         if (distance > dim) {
             continue;
         }
         // Behind one of this light's walls: nothing from this light. The
         // small margin keeps the wall's own face lit rather than flickering.
-        if (distance > reach(i, offset, dim) + 1.0) {
+        if (distance > reach(i, offset, steady_dim) + 1.0) {
             continue;
         }
 
@@ -118,7 +131,7 @@ fn fragment(mesh: VertexOutput) -> @location(0) vec4<f32> {
             contribution = 1.0 - (distance - bright) / max(dim - bright, 0.0001);
         }
 
-        contribution = contribution * clamp(color.a, 0.0, 1.0);
+        contribution = contribution * clamp(color.a, 0.0, 1.0) * (1.0 - 0.25 * low);
 
         if (contribution > lit) {
             lit = contribution;

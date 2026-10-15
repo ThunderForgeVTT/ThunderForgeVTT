@@ -574,6 +574,7 @@ pub(crate) fn apply_external_commands(
                         // Its own bright reach (FR-061), or half its radius
                         // when none was sent (FR-062).
                         bright_radius: light.bright_radius,
+                        flicker: light.flicker.unwrap_or(0.0).clamp(0.0, 1.0),
                     });
                 }
             }
