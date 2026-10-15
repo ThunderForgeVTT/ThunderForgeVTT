@@ -161,6 +161,8 @@ pub fn start(canvas_selector: &str) {
         // Spec 067 Story 4: a marker for each condition a token's character
         // is under.
         .add_plugins(plugins::condition_markers::ConditionMarkersPlugin)
+        // Spec 097: the host asks for a way round the walls.
+        .add_plugins(plugins::pathing::PathingPlugin)
         // Native canvas authoring (specs/001-bevy-canvas-authoring): shared
         // layer-ordering resource, must be added before Wall/Lighting/Shape
         // plugins so it exists when they build (Constitution Principle II)

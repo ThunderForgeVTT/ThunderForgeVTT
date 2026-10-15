@@ -32,6 +32,7 @@ pub mod movement;
 pub mod movement_budget;
 pub mod navigation;
 pub mod party;
+pub mod pathfinding;
 pub mod resource_display;
 pub mod roll_facets;
 /// Spec 030, US7. A contributor that exists only to be added and removed —

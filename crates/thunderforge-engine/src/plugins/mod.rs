@@ -22,6 +22,7 @@ pub mod lore_link;
 pub mod mesh2d_uv_fix;
 pub mod nameplate;
 pub mod navigation;
+pub mod pathing;
 pub mod placement;
 pub mod render_pause;
 pub mod render_probe;
