@@ -142,6 +142,10 @@ pub(crate) struct WorldTokenPayload {
     /// list is the one that clears them.
     #[serde(default)]
     pub(crate) conditions: Option<Vec<ConditionPayload>>,
+    /// Spec 096: the host says this token is down (greyed under a skull)
+    /// or up. Absent leaves it as it was, the way `conditions` does.
+    #[serde(default)]
+    pub(crate) defeated: Option<bool>,
     /// Who owns the token (spec 085): a player's box takes only their own.
     ///
     /// Three states, because a positional update says nothing about the

@@ -311,6 +311,11 @@ pub(crate) fn apply_external_commands(
                                 &token.owner_user_id,
                             ));
                     }
+                    if let Some(defeated) = token.defeated {
+                        commands
+                            .entity(existing_entity)
+                            .insert(crate::plugins::token_defeated::TokenDefeated(defeated));
+                    }
                     if let Some(conditions) = &token.conditions {
                         commands.entity(existing_entity).insert(
                             crate::plugins::condition_markers::TokenConditions::from_payload(
@@ -411,6 +416,11 @@ pub(crate) fn apply_external_commands(
                         None,
                         &token.owner_user_id,
                     ));
+                if let Some(defeated) = token.defeated {
+                    commands
+                        .entity(entity)
+                        .insert(crate::plugins::token_defeated::TokenDefeated(defeated));
+                }
                 if let Some(conditions) = &token.conditions {
                     commands.entity(entity).insert(
                         crate::plugins::condition_markers::TokenConditions::from_payload(
