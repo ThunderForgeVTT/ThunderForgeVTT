@@ -19,6 +19,7 @@ pub mod box_select;
 pub mod camera;
 pub mod content_entry;
 pub mod content_patterns;
+pub mod daylight;
 pub mod dice_throw;
 pub mod door_icon;
 pub mod frame_trace;

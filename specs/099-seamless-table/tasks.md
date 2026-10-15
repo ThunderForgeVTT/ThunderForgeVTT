@@ -11,7 +11,7 @@
 
 ## Phase 2: Clock (US2)
 
-- [ ] T004 [US2] Core `daylight.rs`: curve, OKLab tint, clock, and tests
+- [x] T004 [US2] Core `daylight.rs`: curve, OKLab tint, clock, and tests
   (SC-003).
 - [ ] T005 [US2] Engine: `TimeOfDay`, `set_time_of_day`, darkness from the
   clock, `time_of_day` events (SC-004).
