@@ -355,6 +355,13 @@ pub(crate) fn parse_command(input: &str) -> Option<ExternalCommand> {
         "set_reduced_motion" => Some(ExternalCommand::SetReducedMotion {
             reduced: value.get("reduced")?.as_bool()?,
         }),
+        "set_time_of_day" => Some(ExternalCommand::SetTimeOfDay {
+            hour: value.get("hour").and_then(Value::as_f64).map(|h| h as f32),
+            over_secs: value
+                .get("overSecs")
+                .and_then(Value::as_f64)
+                .map(|s| s as f32),
+        }),
         "set_rendering" => Some(ExternalCommand::SetRendering {
             on: value.get("on")?.as_bool()?,
         }),

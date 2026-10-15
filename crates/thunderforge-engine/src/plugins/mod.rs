@@ -33,6 +33,7 @@ pub mod selection;
 pub mod selection_filter;
 pub mod shape;
 pub mod status_display;
+pub mod time_of_day;
 pub mod token;
 pub mod token_culling;
 pub mod token_defeated;

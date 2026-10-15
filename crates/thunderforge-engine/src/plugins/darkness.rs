@@ -256,7 +256,11 @@ impl Plugin for DarknessPlugin {
             .init_resource::<AmbientShade>()
             .init_resource::<ShadowMap>()
             .init_resource::<ShadowStats>()
-            .add_systems(Update, sync_darkness);
+            .init_resource::<super::time_of_day::TimeOfDay>()
+            .add_systems(
+                Update,
+                (super::time_of_day::tick_time_of_day, sync_darkness).chain(),
+            );
     }
 }
 
@@ -444,6 +448,7 @@ fn sync_darkness(
     mut commands: Commands,
     ambient: Option<Res<SceneAmbient>>,
     shade: Option<Res<AmbientShade>>,
+    time_of_day: Option<Res<super::time_of_day::TimeOfDay>>,
     time: Res<Time>,
     light_set: Res<LightSet>,
     wall_set: Res<WallSet>,
@@ -468,8 +473,11 @@ fn sync_darkness(
         thunderforge_canvas_core::vision::AmbientLight::daylight,
         |a| a.0,
     );
+    // Spec 099 FR-006: an explicit shade, then the clock, then the level.
+    let clock = time_of_day.and_then(|t| t.shade());
     let strength = shade
         .and_then(|shade| shade.0)
+        .or(clock)
         .unwrap_or_else(|| darkness_strength(ambient.level));
 
     let positions: HashMap<String, Vec2> = tokens
@@ -530,11 +538,15 @@ fn sync_darkness(
 
     let mut uniform = DarknessUniform {
         ambient: {
-            let tint = ambient.color.unwrap_or(Rgb {
-                r: 0.02,
-                g: 0.03,
-                b: 0.08,
-            });
+            // The clock owns the shadow's colour: amber at dusk, blue by night.
+            let tint = match clock {
+                Some(_) => thunderforge_canvas_core::daylight::tint_at(strength),
+                None => ambient.color.unwrap_or(Rgb {
+                    r: 0.02,
+                    g: 0.03,
+                    b: 0.08,
+                }),
+            };
             Vec4::new(tint.r, tint.g, tint.b, strength)
         },
         ..Default::default()

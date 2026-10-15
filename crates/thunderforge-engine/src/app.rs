@@ -149,8 +149,17 @@ pub(crate) struct SceneParams<'w, 's> {
     viewer_user: Option<ResMut<'w, resources::ViewerUserId>>,
     // Spec 090: exists once `RenderPausePlugin` is registered.
     rendering: Option<ResMut<'w, plugins::render_pause::Rendering>>,
-    // Spec 099: exists once `TokenPlugin` is registered.
+    // Spec 099: grouped, as Bevy caps a parameter set at 16.
+    table_time: TableTime<'w>,
+}
+
+/// Spec 099's resources: the glide's motion preference and the clock.
+#[derive(bevy::ecs::system::SystemParam)]
+pub(crate) struct TableTime<'w> {
+    // Exists once `TokenPlugin` is registered.
     reduced_motion: Option<ResMut<'w, crate::systems::token_glide::ReducedMotion>>,
+    // Exists once `DarknessPlugin` is registered.
+    time_of_day: Option<ResMut<'w, plugins::time_of_day::TimeOfDay>>,
 }
 
 /// The interaction plugin's resources, grouped.
@@ -939,8 +948,13 @@ pub(crate) fn apply_external_commands(
                 if let Some(inbox) = dice_inbox.as_deref_mut() {
                     inbox.reduced = Some(reduced);
                 }
-                if let Some(motion) = scene.reduced_motion.as_mut() {
+                if let Some(motion) = scene.table_time.reduced_motion.as_mut() {
                     motion.0 = reduced;
+                }
+            }
+            ExternalCommand::SetTimeOfDay { hour, over_secs } => {
+                if let Some(tod) = scene.table_time.time_of_day.as_mut() {
+                    tod.set(hour, over_secs);
                 }
             }
             ExternalCommand::SetRendering { on } => {

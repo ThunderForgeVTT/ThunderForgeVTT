@@ -587,6 +587,12 @@ pub(crate) enum ExternalCommand {
     SetReducedMotion {
         reduced: bool,
     },
+    /// The table's hour (spec 099): at once, or over `over_secs`. Hours past
+    /// 24 are the next day. `None` takes the clock away.
+    SetTimeOfDay {
+        hour: Option<f32>,
+        over_secs: Option<f32>,
+    },
     /// Whether to draw at all (spec 090). Off waits for the next command;
     /// see `plugins/render_pause.rs`.
     SetRendering {

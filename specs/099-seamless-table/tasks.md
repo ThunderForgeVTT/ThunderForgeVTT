@@ -13,7 +13,7 @@
 
 - [x] T004 [US2] Core `daylight.rs`: curve, OKLab tint, clock, and tests
   (SC-003).
-- [ ] T005 [US2] Engine: `TimeOfDay`, `set_time_of_day`, darkness from the
+- [x] T005 [US2] Engine: `TimeOfDay`, `set_time_of_day`, darkness from the
   clock, `time_of_day` events (SC-004).
 
 ## Phase 3: Night lights and map (US3)
