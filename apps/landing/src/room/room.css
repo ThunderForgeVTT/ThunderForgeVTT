@@ -259,3 +259,13 @@
 body.in-engine .room-board-art {
   visibility: hidden;
 }
+.room-board-hero {
+  position: absolute;
+  width: var(--cell);
+  height: var(--cell);
+  cursor: grab;
+  touch-action: none;
+}
+.room-board-hero:active {
+  cursor: grabbing;
+}

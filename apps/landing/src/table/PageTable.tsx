@@ -515,6 +515,7 @@ export default function PageTable() {
     stage.current?.style.setProperty("top", "0px");
     stage.current?.style.setProperty("height", "0px");
     const { boxes, doc } = measure();
+    const moved = doc.w !== L.doc.w || doc.h !== L.doc.h;
     L.cell = cellSize();
     L.doc = doc;
     size();
@@ -532,6 +533,11 @@ export default function PageTable() {
     // The world's origin is the page's middle, so a page that grew moved
     // everything on it: a hero standing still must be told where it is now.
     if (L.phase === "running" && !seatedAt()) send(heroToken(L.hero, toWorld(L.pos, doc)));
+    // A seated room was sent in the old world's units: an opened door that
+    // grew the page left its walls and fog a half-cell off the map. It sits
+    // down again where the board now lies.
+    const b = currentBoard();
+    if (moved && b && seatedAt()) seat(placeOf(b, doc, L.cell, WALKER));
     L.hour = -1;
     clock();
     place(true);

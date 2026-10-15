@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { BOOT_TIMEOUT, BUILT, engine } from "./support/engine.ts";
 import { openLanding } from "./support/page.ts";
+import { pad, recordSaid, saidLog, square } from "./support/room.ts";
 
 /**
  * Spec 098: on a wide page the hero walks the page with the visitor. Left
@@ -365,6 +366,123 @@ test.describe("the hero stays on a phone's screen", () => {
       expect(seen).toBe("seen");
     }
     await expect(page.locator("#room-table #thunderforge-table")).toHaveCount(0);
+  });
+
+  // The table lies behind the page, so a finger on the hero never reached
+  // it: a handle on the hero's square takes the drag for the room.
+  test("a drag on the hero in the dungeon walks it a square at a time", async ({ page }) => {
+    await page.setViewportSize({ width: 384, height: 686 });
+    await openLanding(page, { settle: false });
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.reload();
+    await expect(page.locator("body.in-engine")).toBeAttached({ timeout: BOOT_TIMEOUT });
+    await watchWalker(page);
+    const vh = 686;
+    const frame = page.locator("#room-table");
+    await expect(frame).toHaveClass(/room-board/, { timeout: 30_000 });
+    const board = await frame.evaluate((el) => {
+      const cell = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--cell"));
+      return { cell, y: el.getBoundingClientRect().top + scrollY };
+    });
+    const seatAt = board.y + board.cell / 2 - vh / 2;
+    for (let y = seatAt - vh; y <= seatAt; y += 96) await scrollAndSettle(page, y);
+    await expect(frame).toHaveClass(/engine-frame--running/, { timeout: 15_000 });
+
+    const layout = page.locator(".room-layout");
+    const handle = page.getByTestId("room-board-hero");
+    const before = await layout.getAttribute("data-square");
+    let moved = false;
+    for (const [dx, dy] of [[0, 1], [1, 0], [-1, 0], [0, -1]] as const) {
+      const box = (await handle.boundingBox())!;
+      const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.waitForTimeout(40);
+      for (let i = 1; i <= 8; i += 1) {
+        await page.mouse.move(x + (dx * box.width * i) / 8, y + (dy * box.height * i) / 8);
+        await page.waitForTimeout(40);
+      }
+      await page.mouse.up();
+      await page.waitForTimeout(600);
+      if ((await layout.getAttribute("data-square")) !== before) {
+        moved = true;
+        break;
+      }
+    }
+    expect(moved, "no drag moved the hero").toBe(true);
+    // The handle follows the hero to its new square.
+    const after = (await handle.boundingBox())!;
+    const [hx, hy] = (await layout.getAttribute("data-square"))!.split(",").map(Number);
+    const on = (await frame.boundingBox())!;
+    const { cell } = board;
+    expect(Math.abs(after.x - on.x - (hx! + on.width / cell / 2 - 0.5) * cell)).toBeLessThan(2);
+    expect(Math.abs(after.y - on.y - (on.height / cell / 2 - hy! - 0.5) * cell)).toBeLessThan(2);
+  });
+
+  test("a tap on the door's icon on the page's table opens it", async ({ page }) => {
+    await page.setViewportSize({ width: 384, height: 686 });
+    await openLanding(page, { settle: false });
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.reload();
+    await expect(page.locator("body.in-engine")).toBeAttached({ timeout: BOOT_TIMEOUT });
+    await watchWalker(page);
+    const vh = 686;
+    const frame = page.locator("#room-table");
+    await expect(frame).toHaveClass(/room-board/, { timeout: 30_000 });
+    const board = await frame.evaluate((el) => {
+      const cell = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--cell"));
+      return { cell, y: el.getBoundingClientRect().top + scrollY };
+    });
+    const seatAt = board.y + board.cell / 2 - vh / 2;
+    for (let y = seatAt - vh; y <= seatAt; y += 96) await scrollAndSettle(page, y);
+    await expect(frame).toHaveClass(/engine-frame--running/, { timeout: 15_000 });
+
+    // Three steps south, to the door's square, by keys inside the controls.
+    await recordSaid(page);
+    await pad(page, "North").focus();
+    for (let i = 0; i < 3; i += 1) {
+      const n = (await saidLog(page)).length;
+      await page.keyboard.press("ArrowDown");
+      await expect.poll(async () => (await saidLog(page)).length).toBe(n + 1);
+    }
+    expect(await square(page)).toBe("2,0.5");
+    await scrollAndSettle(page, seatAt);
+
+    let icon: { wallId: string; icon: string; x: number; y: number } | undefined;
+    await expect
+      .poll(async () => (icon = (await engine<(typeof icon)[]>(page, "door_icons")).find((i) => i!.wallId === "door-hall"))?.icon)
+      .toBe("open");
+    const at = await page.evaluate(
+      (p) => ({
+        x: p.x + document.documentElement.clientWidth / 2,
+        y: document.documentElement.scrollHeight / 2 - p.y - scrollY,
+      }),
+      icon!,
+    );
+    const n = (await saidLog(page)).length;
+    await page.mouse.move(at.x, at.y);
+    await page.waitForTimeout(400);
+    await page.mouse.down();
+    await page.waitForTimeout(200);
+    await page.mouse.up();
+    await expect.poll(async () => (await saidLog(page)).slice(n)).toHaveLength(1);
+    expect((await saidLog(page)).at(-1)).toMatch(/^You open the door to the hall\./);
+
+    // The opened door grew the page by a line; the world is centred on the
+    // page, so the room sits again: its door stays on the map's door.
+    await expect
+      .poll(async () => {
+        const now = (await engine<(typeof icon)[]>(page, "door_icons")).find((i) => i!.wallId === "door-hall");
+        const there = await page.evaluate(
+          (p) => ({
+            x: p.x + document.documentElement.clientWidth / 2,
+            y: document.documentElement.scrollHeight / 2 - p.y - scrollY,
+          }),
+          now!,
+        );
+        return Math.round(Math.hypot(there.x - at.x, there.y - at.y));
+      })
+      .toBeLessThan(2);
   });
 });
 

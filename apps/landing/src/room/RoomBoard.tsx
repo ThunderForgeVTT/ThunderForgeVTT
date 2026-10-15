@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { HERO_ID, type RoomScript, type RoomState } from "@thunderforge/encounter";
-import { seatGuest, sendAs, type Send } from "../engine/host.ts";
+import { canvasOf, seatGuest, sendAs, type Send } from "../engine/host.ts";
 import { PAGE_TABLE } from "../table/onPage.ts";
 import { leaveAt, publishBoard, watchSeat } from "./pageBoard.ts";
 import { fromPage, toPage } from "./pageRoom.ts";
@@ -152,6 +152,17 @@ export default function RoomBoard({ script, room }: { script: RoomScript; room: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The table lies behind the page, so the board hands its pointer to the
+  // engine's canvas: a press on a door's icon, a drag of the hero, a hover.
+  // Only the hero's square holds a finger; a swipe anywhere else scrolls.
+  const pass = (e: React.PointerEvent<HTMLDivElement>) => {
+    const canvas = canvasOf(FRAME_ID);
+    if (!canvas) return;
+    if (e.type === "pointerdown") e.currentTarget.setPointerCapture(e.pointerId);
+    canvas.dispatchEvent(new PointerEvent(e.type, e.nativeEvent));
+  };
+  const { hero } = room.state;
+
   return (
     <div className="room-board-box" ref={box}>
       <div
@@ -159,8 +170,25 @@ export default function RoomBoard({ script, room }: { script: RoomScript; room: 
         ref={map}
         className={`room-board${seated ? " engine-frame--running" : ""}`}
         data-testid="room-board"
+        {...(seated && {
+          onPointerDown: pass,
+          onPointerMove: pass,
+          onPointerUp: pass,
+          onPointerCancel: pass,
+        })}
       >
         <img className="room-board-art" src={script.scene.background} alt="" width={width} height={height} />
+        {seated && (
+          <div
+            className="room-board-hero"
+            data-testid="room-board-hero"
+            aria-hidden="true"
+            style={{
+              left: `calc(var(--cell) * ${hero.x + cols / 2 - 0.5})`,
+              top: `calc(var(--cell) * ${rows / 2 - hero.y - 0.5})`,
+            }}
+          />
+        )}
       </div>
     </div>
   );
