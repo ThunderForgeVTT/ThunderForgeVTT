@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { DEMO } from "../links.ts";
 import "./engine-frame.css";
 import { FRAME_FAILED, type FrameFailed, type HeldBack } from "./frameEvents.ts";
-import { sendAs, stopped, take, type Send } from "./host.ts";
+import { sendAs, stopped, take, whenReady, type Send } from "./host.ts";
 import { EngineLoadError, type Progress, type Stage } from "./loadEngine.ts";
 
 // Spec 090 FR-011 to FR-019: the real engine in a frame on the page, only when
@@ -132,13 +132,26 @@ export default function EngineFrame(props: Props) {
   );
 
   useEffect(() => {
+    let mounted = true;
     const held = holdBack(maxTextureSize);
     if (held) {
       setWhy(held.words);
       go("unsupported");
       report({ stage: "probe", reason: held.reason });
+      // Saving data holds back the download, not the table: once the page's
+      // mat has loaded the engine, the frame may use it.
+      if (held.reason === "save_data") {
+        whenReady(() => {
+          if (!mounted) return;
+          setWhy(null);
+          go("poster");
+        });
+      }
     }
-    return () => abort.current?.abort();
+    return () => {
+      mounted = false;
+      abort.current?.abort();
+    };
   }, [go, maxTextureSize]);
 
   async function boot() {
