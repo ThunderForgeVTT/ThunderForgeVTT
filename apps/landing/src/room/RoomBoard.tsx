@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { HERO_ID, type RoomScript, type RoomState } from "@thunderforge/encounter";
+import { HERO_ID, type RollTry, type RoomScript, type RoomState } from "@thunderforge/encounter";
 import { canvasOf, seatGuest, sendAs, type Send } from "../engine/host.ts";
 import { PAGE_TABLE } from "../table/onPage.ts";
 import { leaveAt, publishBoard, watchSeat } from "./pageBoard.ts";
@@ -13,6 +13,12 @@ import type { useRoom } from "./useRoom.ts";
 // The still under it is for the moment before the engine draws.
 
 const FRAME_ID = "room-table";
+const REDUCE = "(prefers-reduced-motion: reduce)";
+/** The engine's dice land this long after the throw (`dice_throw::TIMINGS`). */
+const LANDS_MS = 1200;
+const LANDS_REDUCED_MS = 150;
+/** How long the total stays over the chest. */
+const TOLD_MS = 3500;
 
 type Room = ReturnType<typeof useRoom>;
 
@@ -167,6 +173,28 @@ export default function RoomBoard({ script, room }: { script: RoomScript; room: 
   // scroll down to the controls and back to see the throw.
   const chest = script.chest;
   const asks = seated && chest && goals.includes("chest-found") && !goals.includes("chest-opened");
+  // The throw's total stands over the chest once the dice have landed, and
+  // a miss asks again after it.
+  const tries = room.state.rolls.length;
+  const [told, setTold] = useState<RollTry | null>(null);
+  useEffect(() => {
+    const last = now.current.state.rolls[tries - 1];
+    setTold(null);
+    if (!last) return;
+    const lands = matchMedia(REDUCE).matches ? LANDS_REDUCED_MS : LANDS_MS;
+    const show = setTimeout(() => setTold(last), lands);
+    const hide = setTimeout(() => setTold(null), lands + TOLD_MS);
+    return () => {
+      clearTimeout(show);
+      clearTimeout(hide);
+    };
+  }, [tries]);
+  const overChest = chest && {
+    top: `calc(var(--cell) * ${rows / 2 - chest.square.y - 1})`,
+    ...(chest.square.x > 0
+      ? { right: `calc(var(--cell) * ${cols / 2 - chest.square.x - 0.5})` }
+      : { left: `calc(var(--cell) * ${chest.square.x + cols / 2 - 0.5})` }),
+  };
 
   return (
     <div className="room-board-box" ref={box}>
@@ -183,21 +211,27 @@ export default function RoomBoard({ script, room }: { script: RoomScript; room: 
         })}
       >
         <img className="room-board-art" src={script.scene.background} alt="" width={width} height={height} />
-        {asks && (
+        {seated && overChest && told && (
+          // The room's words say it too; this is the picture of it.
+          <p
+            className={`room-board-told room-board-told--${told.success ? "hit" : "miss"}`}
+            data-testid="room-board-told"
+            aria-hidden="true"
+            style={overChest}
+          >
+            <strong>{told.total}</strong> vs DC {told.dc} · {told.success ? "it opens!" : "not enough"}
+          </p>
+        )}
+        {asks && !told && (
           <button
             type="button"
             className="ink-btn ink-btn--small ink-btn--red room-board-roll"
             // Over the chest's name, held to the board's side the chest is on.
-            style={{
-              top: `calc(var(--cell) * ${rows / 2 - chest.square.y - 1})`,
-              ...(chest.square.x > 0
-                ? { right: `calc(var(--cell) * ${cols / 2 - chest.square.x - 0.5})` }
-                : { left: `calc(var(--cell) * ${chest.square.x + cols / 2 - 0.5})` }),
-            }}
+            style={overChest || undefined}
             aria-disabled={room.rolling}
             onClick={() => !room.rolling && void room.roll()}
           >
-            Roll to open
+            {tries ? "Roll again" : "Roll to open"}
           </button>
         )}
         {seated && (
