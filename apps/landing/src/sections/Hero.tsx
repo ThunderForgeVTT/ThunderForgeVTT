@@ -1,6 +1,4 @@
 import {
-  lazy,
-  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -17,8 +15,8 @@ import { ArrowMark, HeartMark, StarMark } from "../Icons.tsx";
 import { stroke } from "../ink/marker.ts";
 import { publishMat } from "../table/heroMat.ts";
 import { useWide } from "../useWide.ts";
+import { HeroTavern } from "./HeroTavern.tsx";
 
-const Room = lazy(() => import("./Room.tsx"));
 
 // The first viewport is a stretch of battle mat. The room is drawn in marker
 // around the headline, snapped outward to the printed grid; the party waits
@@ -26,9 +24,8 @@ const Room = lazy(() => import("./Room.tsx"));
 // walls block them the way the server's walls do: a move whose straight line
 // crosses a wall is refused.
 //
-// A wide page opens on the tavern instead, beside the headline: the whole
-// party inside, the lights up until the first scroll. Every adventure starts
-// in a tavern.
+// A wide page opens on the tavern instead, beside the headline, with the
+// whole party inside (`HeroTavern.tsx`). Every adventure starts in a tavern.
 
 interface Piece {
   id: string;
@@ -232,6 +229,7 @@ interface Drag {
 
 export function Hero() {
   const pieces = usePieces();
+  const party = useMemo(() => pieces.filter((p) => !p.foe), [pieces]);
   const heroRef = useRef<HTMLElement>(null);
   const roomRef = useRef<HTMLDivElement>(null);
   const fieldRef = useRef<HTMLDivElement>(null);
@@ -264,7 +262,6 @@ export function Hero() {
     if (wide) {
       layoutKey.current = "";
       setLayout(null);
-      publishMat({ walls: [], door: null, doorOpen: false, pieces: [] });
       return;
     }
     if (!hero || !room || !field) return;
@@ -471,15 +468,7 @@ export function Hero() {
           </p>
         </div>
         {wide ? (
-          <div className="hero-tavern">
-            <Suspense fallback={<div className="room-layout room-layout--loading" />}>
-              <Room name="inn" />
-            </Suspense>
-            <p className="hero-tavern-lede">
-              <strong>A simulation.</strong> The page plays the server's part: it checks every move
-              and opens every door, as a ThunderForge server would.
-            </p>
-          </div>
+          <HeroTavern party={party} />
         ) : (
           <div className="field" ref={fieldRef} />
         )}

@@ -30,6 +30,10 @@ export interface Mat {
   door: MatSeg | null;
   doorOpen: boolean;
   pieces: MatPiece[];
+  /** A map under it all (a wide page's tavern), its top-left and size. */
+  map?: { src: string; x: number; y: number; w: number; h: number };
+  /** Where the walker leaves the mat for the page: the tavern's back door. */
+  exit?: { x: number; y: number };
 }
 
 const CHANGED = "thunderforge:hero-mat";

@@ -91,28 +91,6 @@ export function tavernScript(file: MapFile): RoomScript {
   };
 }
 
-/**
- * The tavern at the top of a wide page: every adventure starts in one. The
- * hero starts inside with the rest of the party, and leaves by the back
- * door. The same map and walls as the tavern above.
- */
-export function innScript(file: MapFile): RoomScript {
-  const tavern = tavernScript(file);
-  return {
-    ...tavern,
-    goalDoor: "door-south",
-    // By the bar, a few squares from the back door.
-    start: { x: -1, y: 1.5 },
-  };
-}
-
-/** Where the rest of the party waits in the inn, one square each. */
-export const INN_COMPANY: readonly Point[] = [
-  { x: 2, y: 2.5 },
-  { x: 2, y: 0.5 },
-  { x: -0.5, y: -0.5 },
-];
-
 export interface LoadedRoom {
   script: RoomScript;
   /** The background's weight, which the room states beside its button. */
@@ -121,7 +99,6 @@ export interface LoadedRoom {
 
 /** The page's rooms, in the order the hero walks them. */
 export const ROOMS = {
-  inn: { map: TAVERN_MAP, build: innScript },
   tavern: { map: TAVERN_MAP, build: tavernScript },
   dungeon: { map: MAP, build: roomScript },
 } as const;

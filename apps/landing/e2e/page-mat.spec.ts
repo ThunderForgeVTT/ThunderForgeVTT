@@ -30,7 +30,7 @@ test.describe("the mat on the page's table", () => {
   });
 
   test("the mat's tokens come back whole after the room had the table", async ({ page }) => {
-    // Under the inn's width: there the inn holds the table from the start.
+    // The marker room's mat: from 1200px the first screen is the tavern instead.
     await page.setViewportSize({ width: 1100, height: 1400 });
     await openLanding(page, { settle: false });
     await page.emulateMedia({ reducedMotion: "no-preference" });

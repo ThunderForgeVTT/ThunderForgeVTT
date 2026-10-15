@@ -25,6 +25,9 @@ export class MatScene {
   private sent = new Set<string>();
   private art = new Map<string, string>();
   private drawing = new Set<string>();
+  /** The map image on the table, by an id that changes when it moves: the
+   * engine places an image once and never moves it. */
+  private map: string | null = null;
 
   /** `live`: the engine runs and the page holds it. While it does not, sends
    * are dropped, so nothing may count as on the table. */
@@ -49,6 +52,18 @@ export class MatScene {
     }
     for (const id of this.walls) if (!seen.has(id)) this.send({ type: "remove_wall", wallId: id });
     this.walls = seen;
+
+    const m = mat.map;
+    const mapId = m ? `mat-map-${[m.x, m.y, m.w, m.h, doc.w, doc.h].map(Math.round).join("-")}` : null;
+    if (this.map && this.map !== mapId) {
+      this.send({ type: "remove_canvas_image_asset", assetId: this.map });
+      this.map = null;
+    }
+    if (m && mapId && !this.map && this.live()) {
+      const c = toWorld({ x: m.x + m.w / 2, y: m.y + m.h / 2 }, doc);
+      this.send({ type: "upsert_canvas_image_asset", assetId: mapId, path: m.src, x: c.x, y: c.y, width: m.w, height: m.h });
+      this.map = mapId;
+    }
 
     const kept = new Set<string>();
     for (const p of mat.pieces) {
@@ -102,6 +117,8 @@ export class MatScene {
   clear() {
     for (const id of this.walls) this.send({ type: "remove_wall", wallId: id });
     for (const id of this.sent) this.send({ type: "remove_token", tokenId: id });
+    if (this.map) this.send({ type: "remove_canvas_image_asset", assetId: this.map });
+    this.map = null;
     this.walls.clear();
     this.tokens.clear();
     this.sent.clear();

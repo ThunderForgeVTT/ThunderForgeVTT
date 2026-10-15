@@ -9,16 +9,14 @@ interface Props {
   met: readonly GoalId[];
   /** The list's name, unique on the page: each room has its own. */
   label: string;
-  /** h2 in the hero, where there is no section heading above it. */
-  Heading?: "h2" | "h3";
 }
 
-export default function GoalList({ goals, met, label, Heading = "h3" }: Props) {
+export default function GoalList({ goals, met, label }: Props) {
   return (
     <section className="room-goals" aria-label={label}>
-      <Heading className="room-subhead">
+      <h3 className="room-subhead">
         Goals
-      </Heading>
+      </h3>
       <ol>
         {goals.map((goal) => {
           const done = met.includes(goal);

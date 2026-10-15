@@ -66,8 +66,6 @@ const DUSK_MS = 260;
 /** What a tap on counts as the table, not the page's words. */
 const SURFACES = "html, body, main, header.hero, .hero-body, .section";
 
-/** The tavern a wide page opens on (`Hero.tsx`). */
-const OPENING = ".hero-tavern";
 /** How long the scroll rests before the page takes the table back. */
 const SETTLE = 300;
 
@@ -279,7 +277,8 @@ export default function PageTable() {
     const own = L.hero.data ? null : L.hero.slug;
     const spot = m.pieces.find((p) => p.id === own);
     mat.current!.draw(m, L.doc, L.cell, spot ? own : null);
-    L.path = spot ? [centreOf(spot), ...L.rest] : L.rest;
+    const from = spot ? [centreOf(spot)] : [];
+    L.path = [...from, ...(m.exit ? [m.exit] : []), ...L.rest];
     if (!L.free) L.target = along(L.path, fraction(window.scrollY, L.doc, window.innerHeight));
   }, []);
 
@@ -511,12 +510,6 @@ export default function PageTable() {
       return;
     }
     gl.getExtension("WEBGL_lose_context")?.loseContext();
-    // A wide page opens on the tavern beside the headline, which takes the
-    // table itself; the page's table waits until the tavern is left behind.
-    if (document.querySelector(OPENING)) {
-      go("away");
-      return;
-    }
     const t = setTimeout(() => void boot(), 400);
     return () => clearTimeout(t);
     // Once, on mount.
@@ -540,7 +533,7 @@ export default function PageTable() {
         settle = setTimeout(() => {
           if (live.current.phase !== "away") return;
           const holder = holderId();
-          const el = holder ? document.getElementById(holder) : document.querySelector(OPENING);
+          const el = holder ? document.getElementById(holder) : null;
           const r = el?.getBoundingClientRect();
           if (r && (r.bottom < -window.innerHeight || r.top > 2 * window.innerHeight)) void boot();
         }, SETTLE);

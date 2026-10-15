@@ -408,9 +408,7 @@ img {
   min-height: calc(var(--cell) * 8);
 }
 
-/* A wide page: the tavern beside the headline, the party inside it. The
-   map takes the larger column; its strip of goals, controls and the
-   referee folds to two rows to fit. */
+/* A wide page: the tavern beside the headline, the party inside it. */
 .hero--tavern .hero-body {
   grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
   gap: calc(var(--cell) * 1.25);
@@ -424,16 +422,26 @@ img {
   z-index: 1;
   min-width: 0;
 }
-.hero-tavern-lede {
-  margin: 0.75rem 0 0;
+/* One map square to one page cell, so its lines are the page's lines. */
+.hero-tavern-map {
+  position: relative;
+  width: calc(var(--cell) * 11);
+  height: calc(var(--cell) * 8);
+}
+.hero-tavern-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.hero-tavern-token {
+  position: absolute;
+  pointer-events: none;
+}
+.hero-tavern-credit {
+  margin: 0.5rem 0 0;
+  max-width: calc(var(--cell) * 11);
   color: var(--text-soft);
-  font-size: 0.95rem;
-}
-.hero-tavern .room-hud {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-}
-.hero-tavern .room-hud-log {
-  grid-column: 1 / -1;
+  font-size: 0.9rem;
 }
 /* The tavern runs past the first screen; no note is needed to say so. */
 .hero--tavern .scroll-cue {
