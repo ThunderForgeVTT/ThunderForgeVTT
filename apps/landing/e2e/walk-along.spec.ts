@@ -231,45 +231,52 @@ test.describe("the hero walks a wide page", () => {
     for (const p of (await walk(page)).filter(inside)) expect(p.y).toBeLessThan(board.y + board.cell);
   });
 
-  test("at the camp, the party sits on the logs and the hero parks on the empty seat", async ({ page }) => {
-    await openLanding(page, { settle: false });
-    await page.emulateMedia({ reducedMotion: "no-preference" });
-    await page.reload();
-    await expect(page.locator("body.in-engine")).toBeAttached({ timeout: BOOT_TIMEOUT });
-    await watchWalker(page);
-    const camp = await page.locator("[data-testid=camp]").evaluate((el) => {
-      const cell = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--cell"));
-      const r = el.getBoundingClientRect();
-      return { cell, x: r.left + scrollX, y: r.top + scrollY };
+  // A wide page has the camp beside "Pull up a chair."; a phone, under the thanks.
+  for (const size of [null, { width: 384, height: 686 }]) {
+    const where = size ? " on a phone" : "";
+    test(`at the camp${where}, the party sits on the logs and the hero parks on the empty seat`, async ({
+      page,
+    }) => {
+      if (size) await page.setViewportSize(size);
+      await openLanding(page, { settle: false });
+      await page.emulateMedia({ reducedMotion: "no-preference" });
+      await page.reload();
+      await expect(page.locator("body.in-engine")).toBeAttached({ timeout: BOOT_TIMEOUT });
+      await watchWalker(page);
+      const camp = await page.locator("[data-testid=camp]").evaluate((el) => {
+        const cell = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--cell"));
+        const r = el.getBoundingClientRect();
+        return { cell, x: r.left + scrollX, y: r.top + scrollY };
+      });
+      const square = (p: Pt) => [Math.floor((p.x - camp.x) / camp.cell), Math.floor((p.y - camp.y) / camp.cell)];
+
+      // To the page's end: the walk ends on the top log, over the fire.
+      const end = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
+      const vh = page.viewportSize()!.height;
+      for (let y = end - 2 * vh; y <= end; y += vh / 3) await scrollAndSettle(page, y);
+      const parked = await scrollAndSettle(page, end);
+      expect(square(parked)).toEqual([3, 1]);
+
+      // Everyone the visitor did not pick is on a log seat (FR-010).
+      const doc = await page.evaluate(() => ({
+        w: document.documentElement.clientWidth,
+        h: document.documentElement.scrollHeight,
+      }));
+      await expect
+        .poll(async () => {
+          const all = await engine<Array<{ tokenId: string; x: number; y: number }>>(page, "token_footprints");
+          return all
+            .filter((t) => t.tokenId.startsWith("camp-"))
+            .map((t) => square({ x: t.x + doc.w / 2, y: doc.h / 2 - t.y }))
+            .sort();
+        })
+        .toEqual([
+          [1, 1],
+          [6, 3],
+          [6, 5],
+        ]);
     });
-    const square = (p: Pt) => [Math.floor((p.x - camp.x) / camp.cell), Math.floor((p.y - camp.y) / camp.cell)];
-
-    // To the page's end: the walk ends on the top log, over the fire.
-    const end = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
-    const vh = page.viewportSize()!.height;
-    for (let y = end - 2 * vh; y <= end; y += vh / 3) await scrollAndSettle(page, y);
-    const parked = await scrollAndSettle(page, end);
-    expect(square(parked)).toEqual([3, 1]);
-
-    // Everyone the visitor did not pick is on a log seat (FR-010).
-    const doc = await page.evaluate(() => ({
-      w: document.documentElement.clientWidth,
-      h: document.documentElement.scrollHeight,
-    }));
-    await expect
-      .poll(async () => {
-        const all = await engine<Array<{ tokenId: string; x: number; y: number }>>(page, "token_footprints");
-        return all
-          .filter((t) => t.tokenId.startsWith("camp-"))
-          .map((t) => square({ x: t.x + doc.w / 2, y: doc.h / 2 - t.y }))
-          .sort();
-      })
-      .toEqual([
-        [1, 1],
-        [6, 3],
-        [6, 5],
-      ]);
-  });
+  }
 });
 
 test.describe("the hero stays on a phone's screen", () => {
@@ -290,6 +297,22 @@ test.describe("the hero stays on a phone's screen", () => {
     await page.reload();
     await expect(page.locator("body.in-engine")).toBeAttached({ timeout: BOOT_TIMEOUT });
     await watchWalker(page);
+
+    // Leaving the tavern, the hero stands at the screen's foot, behind the
+    // note in the corner: the note steps back.
+    await scrollAndSettle(page, 0);
+    await expect.poll(() => walker(page), { timeout: 15_000 }).not.toBeNull();
+    await page.waitForTimeout(1000);
+    // Where it stops differs run to run, so sweep the first screens.
+    let faded = 0;
+    for (let y = 20; y <= 300 && !faded; y += 20) {
+      await scrollAndSettle(page, y);
+      if (await page.locator(".journey[data-behind]").count()) faded = y;
+    }
+    expect(faded, "the hero never passed behind the note").toBeGreaterThan(0);
+    await expect(page.locator(".journey")).toHaveCSS("opacity", "0.3");
+    await scrollAndSettle(page, 480);
+    await expect(page.locator(".journey")).not.toHaveAttribute("data-behind");
 
     const [from, to] = await page.evaluate(() => {
       const top = (s: string) => document.querySelector(s)!.getBoundingClientRect().top + scrollY;

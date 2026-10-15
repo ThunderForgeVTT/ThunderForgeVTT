@@ -1673,6 +1673,11 @@ main {
   gap: var(--cell);
   align-items: start;
 }
+/* A narrower page has the camp under the thanks, in the middle. */
+.support > .camp {
+  width: fit-content;
+  margin: var(--cell) auto 0;
+}
 /* The camp, beside the heading: one map square to one page cell. */
 .camp {
   position: relative;

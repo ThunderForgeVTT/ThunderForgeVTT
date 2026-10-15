@@ -20,7 +20,8 @@ export function Support() {
             there faster.
           </p>
         </div>
-        {/* Where the walk ends: the party round a fire (spec 098 US6). */}
+        {/* Where the walk ends: the party round a fire (spec 098 US6), beside
+            the heading on a wide page and under the thanks on a narrower one. */}
         {wide && <Campfire />}
       </div>
       <div className="support-ways">
@@ -64,6 +65,7 @@ export function Support() {
         </div>
       </div>
       <p className="thanks">Thank you for your patience. See you at the table.</p>
+      {!wide && <Campfire />}
     </section>
   );
 }
