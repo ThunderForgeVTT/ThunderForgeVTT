@@ -779,6 +779,16 @@ pub(crate) fn apply_external_commands(
                         "fit {width}x{height} into {viewport:?} -> zoom {}",
                         camera_mgr.scale,
                     );
+                    // Said from inside the update that draws the new view, so
+                    // a page moving its canvas to match (the landing's scroll
+                    // window) moves it in the same painted frame.
+                    if immediate {
+                        emit_event(json!({
+                            "type": "cameraFitted",
+                            "centerX": center_x,
+                            "centerY": center_y,
+                        }));
+                    }
                 }
             }
             ExternalCommand::SetTokenVision {

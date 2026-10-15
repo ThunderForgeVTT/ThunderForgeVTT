@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { createHero, PRESET_HEROES, type HeroSpec } from "@thunderforge/heroes";
 import { holderId, sendAs, take, type Send } from "../engine/host.ts";
+import { listen } from "../engine/dispatch.ts";
 import type { Progress } from "../engine/loadEngine.ts";
 import { PARTY, type PartyHero } from "../room/party.ts";
 import { rasterize, svgUrl } from "./heroArt.ts";
@@ -37,6 +38,8 @@ import { centreOf, MatScene } from "./matScene.ts";
 
 const HeroBuilder = lazy(() => import("./HeroBuilder.tsx"));
 
+/** A full torch's intensity. */
+const TORCH = 0.6;
 const PAGE = PAGE_TABLE;
 const WALKER = "walker";
 const REDUCE = "(prefers-reduced-motion: reduce)";
@@ -132,6 +135,8 @@ export default function PageTable() {
     cell: 48,
     /** Where the stage stands on the page, in page pixels. */
     top: 0,
+    /** Where it moves once the engine draws the camera sent for it. */
+    moving: null as number | null,
     /** Where day ends and the night is deepest, in scroll pixels. */
     dayEnds: 0,
     nightAt: 1,
@@ -158,10 +163,10 @@ export default function PageTable() {
   }, []);
 
   /** The camera over the stage, exactly: the grid is the page's grid. */
-  const aim = useCallback(() => {
+  const aim = useCallback((top = live.current.top) => {
     const el = stage.current;
     if (!el) return;
-    const { doc, top } = live.current;
+    const { doc } = live.current;
     const c = toWorld({ x: el.clientWidth / 2, y: top + el.clientHeight / 2 }, doc);
     send({
       type: "fit_camera_to",
@@ -176,10 +181,25 @@ export default function PageTable() {
   /**
    * The stage is a window onto the table that scrolls with the page, a margin
    * taller than the screen each way, so the browser moves it with the words
-   * and the grid never trails them. Only when the screen nears its edge do the
-   * window and the camera jump together, by whole cells, where the grid looks
-   * the same either side of the jump.
+   * and the grid never trails them. As the screen nears its edge, the window
+   * and the camera jump together, by whole cells, where the grid looks the
+   * same either side of the jump.
+   *
+   * Together means in one painted frame. The torches and the hero do not
+   * repeat like the grid: a window that moved a frame before the engine drew
+   * the camera for it showed them a jump away, and on a phone, where frames
+   * are slow, they blinked. So the camera goes first, and the window follows
+   * from inside the engine's update that draws it (`cameraFitted`). The jump
+   * starts a half margin early, while the old window still covers the
+   * screen, so the frames it waits are never bare.
    */
+  const moveTo = useCallback((top: number) => {
+    const L = live.current;
+    L.moving = null;
+    L.top = top;
+    if (stage.current) stage.current.style.top = `${top}px`;
+  }, []);
+
   const place = useCallback(
     (force = false) => {
       const el = stage.current;
@@ -188,14 +208,37 @@ export default function PageTable() {
       const y = window.scrollY;
       const vh = window.innerHeight;
       const h = el.clientHeight;
-      if (!force && y >= L.top && y + vh <= L.top + h) return;
       const margin = (h - vh) / 2;
-      const snapped = Math.floor((y - margin) / L.cell) * L.cell;
-      L.top = Math.max(0, Math.min(snapped, L.doc.h - h));
-      el.style.top = `${L.top}px`;
-      aim();
+      const top = Math.max(0, Math.min(Math.floor((y - margin) / L.cell) * L.cell, L.doc.h - h));
+      if (force) {
+        moveTo(top);
+        aim(top);
+        return;
+      }
+      const guard = margin / 2;
+      if (y >= L.top + guard && y + vh <= L.top + h - guard) return;
+      if (top === L.top || top === L.moving) return;
+      L.moving = top;
+      aim(top);
+      // An engine that never says so (an older build) still gets its window.
+      setTimeout(() => {
+        if (live.current.moving === top) moveTo(top);
+      }, 250);
     },
-    [aim],
+    [aim, moveTo],
+  );
+
+  // The engine drew the camera a jump asked for: the window joins it now.
+  useEffect(
+    () =>
+      listen(PAGE, (e) => {
+        const L = live.current;
+        const el = stage.current;
+        if (e.type !== "cameraFitted" || L.moving === null || !el) return;
+        const want = toWorld({ x: 0, y: L.moving + el.clientHeight / 2 }, L.doc).y;
+        if (Math.abs(e.centerY - want) < 0.5) moveTo(L.moving);
+      }),
+    [moveTo],
   );
 
   /** The stage's height: the screen and a margin of whole cells each way. */
@@ -256,10 +299,12 @@ export default function PageTable() {
           x: at.x,
           y: at.y,
           radius: L.cell * 2,
-          brightRadius: L.cell * 0.6,
+          brightRadius: L.cell * 0.4,
           color: "#ffd9a8",
-          intensity: glow,
-          flicker: 0.7,
+          // Firelight to read by, not to squint at: a full torch burns at
+          // `TORCH`, and the words beside it keep their contrast.
+          intensity: glow * TORCH,
+          flicker: 0.5,
           castsShadows: false,
         },
       });
