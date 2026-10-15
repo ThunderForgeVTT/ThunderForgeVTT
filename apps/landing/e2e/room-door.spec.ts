@@ -67,7 +67,8 @@ test.describe("the door on the table", () => {
       await walkToDoor(page);
       // The engine draws only while its frame is on screen; sight comes from drawing.
       await roomFrame(page).scrollIntoViewIfNeeded();
-      await expect.poll(() => seen(page, HALL_POINT), { message: `${width}px` }).toBe(false);
+      // The landing shows the whole map: the shut door hides nothing.
+      await expect.poll(() => seen(page, HALL_POINT), { message: `${width}px` }).toBe(true);
       const at = await iconOnPage(page, "door-hall");
       const n = (await saidLog(page)).length;
       await page.mouse.move(at.x, at.y);
