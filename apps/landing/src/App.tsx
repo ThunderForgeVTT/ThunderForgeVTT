@@ -1,6 +1,5 @@
 import { lazy, Suspense } from "react";
 import { Hero } from "./sections/Hero.tsx";
-import { useWide } from "./useWide.ts";
 import { Dream } from "./sections/Dream.tsx";
 import { Systems } from "./sections/Systems.tsx";
 import { Numbers } from "./sections/Numbers.tsx";
@@ -20,8 +19,6 @@ const Room = lazy(() => import("./sections/Room.tsx"));
 const PageTable = lazy(() => import("./table/PageTable.tsx"));
 
 export function App() {
-  // A wide page opens in the tavern (`Hero.tsx`), so it is not met again here.
-  const wide = useWide();
   return (
     <>
       <a className="skip-link" href="#content">
@@ -56,20 +53,6 @@ export function App() {
             <MapLegend />
           </Suspense>
         </section>
-        {!wide && (
-          <section id="tavern" className="section room-section" aria-labelledby="tavern-title">
-            <h2 id="tavern-title" className="marker-head">
-              Walk through the tavern.
-            </h2>
-            <p className="lede">
-              <strong>A simulation.</strong> These rooms run in your browser. The page plays the server's part: it checks every
-              move and opens every door, as a ThunderForge server would.
-            </p>
-            <Suspense fallback={<div className="room-layout room-layout--loading" />}>
-              <Room name="tavern" />
-            </Suspense>
-          </section>
-        )}
         <section id="room" className="section room-section" aria-labelledby="room-title">
           <h2 id="room-title" className="marker-head">
             Then play one room.

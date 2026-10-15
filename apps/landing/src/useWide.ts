@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
-// Wide enough for the tavern beside the headline. Narrower pages keep the
-// marker room on the first screen and the tavern further down.
+// Wide enough for the tavern beside the headline, and for the extras that
+// sit beside the page's sections (the campfire, the dungeon on the table).
 const WIDE = "(min-width: 1200px)";
 
 export function useWide(): boolean {

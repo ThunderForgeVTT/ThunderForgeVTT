@@ -3,9 +3,10 @@ import { BOOT_TIMEOUT, BUILT, engine } from "./support/engine.ts";
 import { expectClean, openLanding } from "./support/page.ts";
 
 /**
- * A wide page opens in the tavern, beside the headline: the map lies on the
- * page's own grid with the party inside, and the page's table draws it.
- * Narrower pages keep the marker room.
+ * The page opens in the tavern: beside the headline on a wide page, under it
+ * on a narrower one. The map lies on the page's own grid with the party
+ * inside (on a phone it fits between the gutters), and the page's table
+ * draws it.
  */
 
 const inn = (page: Page) => page.locator("[data-testid=hero-tavern]");
@@ -34,13 +35,34 @@ test("a wide page starts in the tavern, on the page's grid", async ({ page }, in
   await expectClean(opened);
 });
 
-test("a narrower page keeps the marker room, and the tavern further down", async ({ page }, info) => {
-  test.skip(info.project.name !== "desktop", "one narrow width is enough");
-  await page.setViewportSize({ width: 1100, height: 900 });
+test("a narrower page has the tavern under the headline, inside the screen", async ({ page }, info) => {
+  if (info.project.name === "desktop") await page.setViewportSize({ width: 1100, height: 900 });
   const opened = await openLanding(page);
-  await expect(page.locator(".field")).toHaveCount(1);
-  await expect(inn(page)).toHaveCount(0);
-  await expect(page.locator("#tavern")).toHaveCount(1);
+  await expect(inn(page)).toBeVisible();
+  await expect(inn(page).locator("img")).toHaveCount(8);
+  const box = await page.evaluate(() => {
+    const cell = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--cell"));
+    const h1 = document.querySelector("h1")!.getBoundingClientRect();
+    const r = document.querySelector("[data-testid=hero-tavern]")!.getBoundingClientRect();
+    return {
+      cell,
+      h1: h1.bottom,
+      top: r.top,
+      left: r.left,
+      right: innerWidth - r.right,
+      w: r.width,
+      h: r.height,
+      scroll: document.documentElement.scrollWidth - innerWidth,
+    };
+  });
+  expect(box.top).toBeGreaterThan(box.h1);
+  // Eleven squares by eight, a cell a square at most, with a gutter each side.
+  expect(box.w / box.h).toBeCloseTo(11 / 8, 2);
+  expect(box.w).toBeLessThanOrEqual(11 * box.cell + 0.5);
+  expect(box.left).toBeGreaterThanOrEqual(16);
+  expect(box.right).toBeGreaterThanOrEqual(15.5);
+  expect(box.scroll).toBe(0);
+  await expect(page.locator("#tavern")).toHaveCount(0);
   await expectClean(opened);
 });
 

@@ -408,11 +408,39 @@ img {
   min-height: calc(var(--cell) * 8);
 }
 
-/* A wide page: the tavern beside the headline, the party inside it. */
+/* The tavern under the headline, the party inside it; beside it once the
+   page is wide enough for both (eleven cells of map). */
 .hero--tavern .hero-body {
-  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: calc(var(--cell) * 1.25);
   align-items: start;
+}
+@media (min-width: 1200px) {
+  .hero--tavern .hero-body {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  }
+}
+/* Under the headline, the goblins stand on the grass below the map. */
+@media (max-width: 1199px) {
+  .hero--tavern .hero-tavern {
+    padding-bottom: calc(var(--cell) * 5.5);
+  }
+}
+/* A phone: the map fits between 16px gutters, centred, at up to a cell a
+   square. */
+@media (max-width: 559px) {
+  .hero--tavern .hero-tavern {
+    margin-inline: calc(16px - var(--cell));
+  }
+  .hero-tavern-map {
+    width: min(calc(var(--cell) * 11), 100%);
+    height: auto;
+    aspect-ratio: 11 / 8;
+    margin-inline: auto;
+  }
+  .hero-tavern-credit {
+    padding-inline: calc(var(--cell) - 16px);
+  }
 }
 .hero--tavern .room h1 {
   font-size: clamp(3rem, 1.5rem + 3.4vw, 5.5rem);

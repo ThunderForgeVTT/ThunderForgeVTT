@@ -2,13 +2,15 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { CC_BY_SA, MAPS_CATALOG, MAPS_SOURCE } from "../links.ts";
 import { publishMat, type MatPiece, type MatSeg } from "../table/heroMat.ts";
 
-// A wide page opens in the tavern, beside the headline: every adventure
-// starts in one. The map lies on the page's own grid, one square to a cell,
+// The page opens in the tavern, beside the headline or under it: every
+// adventure starts in one. The map lies on the page's own grid, one square to a cell,
 // with the party inside. While the page holds the table, `PageTable` draws
 // the map and the party on the engine and these pictures step aside; the
 // hero walks out of the back door and down the page.
 
 const MAP = "/maps/tavern-sample.webp";
+/** `styles.css`: under this the map shrinks to fit the screen. */
+const PHONE = "(max-width: 559px)";
 /** The map's size in squares (`tavern-sample.json`: 1408×1024 at 128). */
 const COLS = 11;
 const ROWS = 8;
@@ -66,13 +68,16 @@ export function HeroTavern({ party, foes = [] }: { party: TavernPiece[]; foes?: 
     if (!box || !el) return;
     let walls: MapWall[] = [];
     const update = () => {
-      const size = parseFloat(getComputedStyle(el).getPropertyValue("--cell")) || 48;
       box.style.translate = "";
       const r = el.getBoundingClientRect();
+      // A square is a page cell, or less on a phone, where the map fits
+      // between the gutters and lies where it falls.
+      const size = r.width / COLS || 48;
+      const snap = !matchMedia(PHONE).matches;
       const left = r.left + window.scrollX;
       const top = r.top + window.scrollY;
-      const x = Math.round(left / size) * size;
-      const y = Math.round(top / size) * size;
+      const x = snap ? Math.round(left / size) * size : left;
+      const y = snap ? Math.round(top / size) * size : top;
       // The credit moves with it.
       box.style.translate = `${x - left}px ${y - top}px`;
       setCell(size);
