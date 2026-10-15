@@ -1,0 +1,85 @@
+import type { Send } from "../engine/host.ts";
+import type { Board } from "../room/pageBoard.ts";
+import type { Place } from "../room/pageRoom.ts";
+import { toWorld, type Doc, type Pt } from "./journey.ts";
+import type { Station } from "./route.ts";
+
+// Spec 098 FR-008: the dungeon on a wide page's table, the table's side.
+// The room says where its board lies (`pageBoard.ts`); this draws the map
+// there, routes the walker in by its top and out again, and says when the
+// room sits. Page pixels throughout, y down, as the route.
+
+/** The walk into the dungeon and out again: in by the top, to its first
+ * square, where the hero waits `hold` of scroll, and back out the top. */
+export function boardStops(b: Board | null, hold: number): Station[][] {
+  if (!b) return [];
+  return [[{ at: b.entry }, { at: b.start, hold }, { at: b.entry }]];
+}
+
+export const inside = (b: Board, p: Pt) => p.x > b.x && p.x < b.x + b.w && p.y > b.y && p.y < b.y + b.h;
+
+/** The board's squares, as the planner names cells: the walker goes round. */
+export function blockedCells(b: Board | null, cell: number): Array<{ q: number; r: number }> {
+  if (!b) return [];
+  const out: Array<{ q: number; r: number }> = [];
+  const q0 = Math.round(b.x / cell);
+  const r0 = Math.round(b.y / cell);
+  for (let q = q0; q < q0 + Math.round(b.w / cell); q++) {
+    for (let r = r0; r < r0 + Math.round(b.h / cell); r++) out.push({ q, r: -(r + 1) });
+  }
+  return out;
+}
+
+/** Where the room's world sits on the table. */
+export function placeOf(b: Board, doc: Doc, cell: number, walker: string): Place {
+  return { ...toWorld({ x: b.x + b.w / 2, y: b.y + b.h / 2 }, doc), k: cell / b.grid, walker };
+}
+
+/** The room stands up once its controls, under the board, have gone up
+ * off the screen: a visitor reading or pressing them is at the room. Back
+ * up the page, it stands up as its board goes off the bottom, or, while no
+ * one has played it, as its hero is about to. */
+export function standUp(b: Board, scroll: number, vh: number, cell: number): boolean {
+  if (b.bottom < scroll) return true;
+  return b.played ? b.y > scroll + vh : b.start.y > scroll + vh - cell * 1.5;
+}
+
+const EDGES = ["n", "e", "s", "w"].map((side) => `room-edge-${side}`);
+
+/** The board's map on the table, by an id that changes when it moves: the
+ * engine places an image once and never moves it. Its edges are walls to
+ * sight, not to feet: the room's own walls leave its outline open, and a
+ * torch in it lit the page around. */
+export class BoardArt {
+  private id: string | null = null;
+  private send: Send;
+  constructor(send: Send) {
+    this.send = send;
+  }
+
+  draw(b: Board | null, doc: Doc, live: boolean) {
+    const id = b ? `room-map-${[b.x, b.y, b.w, b.h, doc.w, doc.h].map(Math.round).join("-")}` : null;
+    if (this.id && this.id !== id) this.clear();
+    if (!b || !id || this.id || !live) return;
+    const c = toWorld({ x: b.x + b.w / 2, y: b.y + b.h / 2 }, doc);
+    this.send({ type: "upsert_canvas_image_asset", assetId: id, path: b.src, x: c.x, y: c.y, width: b.w, height: b.h });
+    const [nw, se] = [toWorld({ x: b.x, y: b.y }, doc), toWorld({ x: b.x + b.w, y: b.y + b.h }, doc)];
+    const corners = [nw, { x: se.x, y: nw.y }, se, { x: nw.x, y: se.y }];
+    EDGES.forEach((wallId, i) => {
+      const a = corners[i]!;
+      const z = corners[(i + 1) % 4]!;
+      this.send({
+        type: "upsert_wall",
+        wall: { id: wallId, x1: a.x, y1: a.y, x2: z.x, y2: z.y, blocksVision: true, blocksMovement: false, doorState: "none" },
+      });
+    });
+    this.id = id;
+  }
+
+  clear() {
+    if (!this.id) return;
+    this.send({ type: "remove_canvas_image_asset", assetId: this.id });
+    for (const wallId of EDGES) this.send({ type: "remove_wall", wallId });
+    this.id = null;
+  }
+}

@@ -3,11 +3,14 @@ import { describePlace, goalsOf } from "@thunderforge/encounter";
 import EngineFrame from "../engine/EngineFrame.tsx";
 import { CC_BY_SA, DEMO, MAPS_CATALOG, MAPS_SOURCE } from "../links.ts";
 import ChestGlitter from "../room/ChestGlitter.tsx";
+import RoomBoard from "../room/RoomBoard.tsx";
 import RoomControls from "../room/RoomControls.tsx";
 import GoalList from "../room/GoalList.tsx";
 import { loadRoomScript, type LoadedRoom, type RoomName } from "../room/script.ts";
 import { useRoom } from "../room/useRoom.ts";
 import { AWAY, ENDING, ROAD_ON } from "../room/words.ts";
+import { watchPage } from "../table/onPage.ts";
+import { useWide } from "../useWide.ts";
 import "../room/room.css";
 
 // Spec 091 US1 and US2: a tavern the hero walks through, then one small
@@ -40,9 +43,18 @@ function followDown() {
   document.getElementById("room")?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
 }
 
+/** Spec 098 FR-008: a wide page whose table runs lays the dungeon on it. */
+function useOnPage(name: RoomName): boolean {
+  const wide = useWide();
+  const [on, setOn] = useState(false);
+  useEffect(() => watchPage(setOn), []);
+  return name === "dungeon" && wide && on;
+}
+
 function RoomBody({ name, script, imageBytes }: LoadedRoom & { name: RoomName }) {
   const frame = FRAMES[name];
   const room = useRoom(script, frame.id);
+  const onPage = useOnPage(name);
   const { state, said } = room;
   const goals = goalsOf(script);
   const done = state.goals.includes(goals[goals.length - 1]!);
@@ -53,20 +65,24 @@ function RoomBody({ name, script, imageBytes }: LoadedRoom & { name: RoomName })
   return (
     <div className="room-layout" data-square={`${state.hero.x},${state.hero.y}`}>
       <figure className="room-table" onPointerDown={() => controls.current?.focus({ preventScroll: true })}>
-        <EngineFrame
-          id={frame.id}
-          poster={{ src: frame.poster, width: 1200, height: 675 }}
-          action="Play the room"
-          auto
-          away={AWAY}
-          interactive
-          maxTextureSize={MAX_TEXTURE}
-          setup={room.frame.setup}
-          teardown={room.frame.teardown}
-          onState={room.frame.onState}
-        >
-          {room.glitter && <ChestGlitter {...room.glitter} />}
-        </EngineFrame>
+        {onPage ? (
+          <RoomBoard script={script} room={room} />
+        ) : (
+          <EngineFrame
+            id={frame.id}
+            poster={{ src: frame.poster, width: 1200, height: 675 }}
+            action="Play the room"
+            auto
+            away={AWAY}
+            interactive
+            maxTextureSize={MAX_TEXTURE}
+            setup={room.frame.setup}
+            teardown={room.frame.teardown}
+            onState={room.frame.onState}
+          >
+            {room.glitter && <ChestGlitter {...room.glitter} />}
+          </EngineFrame>
+        )}
         <figcaption className="room-caption">
           {imageBytes !== null && <>The map is {mb(imageBytes)} MB. You play the hero walking the page. </>}
           <Credit />

@@ -25,7 +25,9 @@ export interface Place {
 }
 
 const out = (p: Pt, at: Place): Pt => ({ x: at.x + p.x * at.k, y: at.y + p.y * at.k });
-const back = (p: Pt, at: Place): Pt => ({ x: (p.x - at.x) / at.k, y: (p.y - at.y) / at.k });
+// Rounded: the room compares squares exactly, and a scale leaves dust.
+const unit = (v: number) => Math.round(v * 1000) / 1000;
+const back = (p: Pt, at: Place): Pt => ({ x: unit((p.x - at.x) / at.k), y: unit((p.y - at.y) / at.k) });
 const tokenOut = (id: string, at: Place) => (id === HERO_ID ? at.walker : id);
 const tokenBack = (id: string | undefined, at: Place) => (id === at.walker ? HERO_ID : id);
 

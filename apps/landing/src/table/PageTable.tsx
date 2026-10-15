@@ -24,6 +24,8 @@ import {
 import { downAt } from "./goblins.ts";
 import { centreOf, MatScene } from "./matScene.ts";
 import { pickedTile, watchPick } from "./mapPick.ts";
+import { currentBoard, leftAt, seat, seatedAt, watchBoard, type Board } from "../room/pageBoard.ts";
+import { BoardArt, blockedCells, boardStops, inside, placeOf, standUp } from "./roomOnPage.ts";
 import {
   buildRoute,
   pageStations,
@@ -208,6 +210,8 @@ export default function PageTable() {
   }).current;
   const mat = useRef<MatScene | null>(null);
   mat.current ??= new MatScene(send, () => canvasOf(PAGE) !== null);
+  const boardArt = useRef<BoardArt | null>(null);
+  boardArt.current ??= new BoardArt(send);
 
   const go = useCallback((next: Phase) => {
     live.current.phase = next;
@@ -326,8 +330,12 @@ export default function PageTable() {
     const { doc, cell } = L;
     const grid = { size: cell, originX: -doc.w / 2, originY: doc.h / 2 };
     const bounds = { min: { q: 0, r: -Math.ceil(doc.h / cell) }, max: { q: Math.ceil(doc.w / cell) - 1, r: -1 } };
+    // Round the dungeon's board, but straight into it and out by its top.
+    const board = currentBoard();
+    const blocked = blockedCells(board, cell);
     return (a, b) => {
-      const ask = { from: toWorld(a, doc), to: toWorld(b, doc), grid, bounds, maxNodes: 40000 };
+      if (board && (inside(board, a) || inside(board, b))) return null;
+      const ask = { from: toWorld(a, doc), to: toWorld(b, doc), grid, bounds, blocked, maxNodes: 40000 };
       const way = (JSON.parse(e.plan_path!(JSON.stringify(ask))) as { path: Pt[] | null }).path;
       return way?.map((p) => ({ x: p.x + doc.w / 2, y: doc.h / 2 - p.y })) ?? null;
     };
@@ -343,7 +351,8 @@ export default function PageTable() {
     (seat: Pt | null, exit: Pt) => {
       const L = live.current;
       const hold = Math.round(window.innerHeight * 0.2);
-      const stations = () => pageStations(seat, exit, L.rest, L.cell, hold, underPick(L.cell, hold));
+      const stops = () => [...underPick(L.cell, hold), ...boardStops(currentBoard(), hold)];
+      const stations = () => pageStations(seat, exit, L.rest, L.cell, hold, stops());
       const use = (r: Route) => {
         L.route = r;
         L.goalS = goalOf(r);
@@ -368,6 +377,7 @@ export default function PageTable() {
     const own = L.hero.data ? null : L.hero.slug;
     const spot = m.pieces.find((p) => p.id === own);
     mat.current!.draw(m, L.doc, L.cell, spot ? own : null);
+    boardArt.current!.draw(currentBoard(), L.doc, canvasOf(PAGE) !== null);
     const from = spot ? [centreOf(spot)] : [];
     L.path = [...from, ...(m.exit ? [m.exit] : []), ...L.rest];
     if (!L.free) L.target = along(L.path, fraction(window.scrollY, L.doc, window.innerHeight));
@@ -459,6 +469,8 @@ export default function PageTable() {
   const shadeTo = useCallback(
     (shade: number) => {
       const L = live.current;
+      // The seated dungeon keeps its own dark (spec 098 FR-008).
+      if (seatedAt()) return;
       if (Math.abs(shade - L.shade) < 0.001 && L.tint === L.sentTint) return;
       const wasLit = L.shade > EMBERS;
       L.shade = shade;
@@ -538,7 +550,7 @@ export default function PageTable() {
     drawMat();
     // The world's origin is the page's middle, so a page that grew moved
     // everything on it: a hero standing still must be told where it is now.
-    if (L.phase === "running") send(heroToken(L.hero, toWorld(L.pos, doc)));
+    if (L.phase === "running" && !seatedAt()) send(heroToken(L.hero, toWorld(L.pos, doc)));
     L.shade = -1;
     dusk();
     place(true);
@@ -560,6 +572,8 @@ export default function PageTable() {
 
   const teardown = useCallback((s: Send) => {
     const L = live.current;
+    seat(null);
+    boardArt.current!.clear();
     for (let i = 0; i < L.torches; i++) s({ type: "remove_light", lightId: `torch-${i}` });
     L.torches = 0;
     L.glow = 0;
@@ -680,6 +694,54 @@ export default function PageTable() {
     };
   }, [layout]);
 
+  /** The dungeon's first square on the route, while it has a board. */
+  const startMark = (b: Board | null) =>
+    b && live.current.route?.marks.find((m) => m.hold > 0 && m.at.x === b.start.x && m.at.y === b.start.y);
+
+  /** Spec 098 FR-008: the hero stands still on the dungeon's first square,
+   * and the room sits down to play. */
+  const sit = useCallback(() => {
+    const L = live.current;
+    const b = currentBoard();
+    const m = startMark(b);
+    if (!b || !m || L.free || L.s !== m.s || L.goalS !== m.s || canvasOf(PAGE) === null) return;
+    seat(placeOf(b, L.doc, L.cell, WALKER));
+  }, []);
+
+  /** Whether the room stays seated; when not, it stands up, and the walker
+   * walks on from where the room left it, under the page's own dusk. */
+  const stand = useCallback(() => {
+    const L = live.current;
+    const b = currentBoard();
+    const m = startMark(b);
+    if (b && m && !standUp(b, window.scrollY, window.innerHeight, L.cell)) return false;
+    seat(null);
+    const at = leftAt();
+    if (at) L.pos = at;
+    L.joined = false;
+    L.shade = -1;
+    dusk();
+    return true;
+  }, [dusk]);
+
+  // The dungeon's board laid or moved: drawn again, and a room seated on
+  // the old place stands up. Played or not changes neither.
+  const boardKey = useRef("");
+  useEffect(
+    () =>
+      watchBoard((b) => {
+        const key = b ? [b.x, b.y, b.w, b.h].join() : "";
+        if (key === boardKey.current) return;
+        boardKey.current = key;
+        if (seatedAt()) {
+          seat(null);
+          live.current.joined = false;
+        }
+        if (live.current.phase === "running") drawMat();
+      }),
+    [drawMat],
+  );
+
   // The walk: the hero closes on the target at a believable pace.
   useEffect(() => {
     let raf = 0;
@@ -687,6 +749,7 @@ export default function PageTable() {
       raf = requestAnimationFrame(step);
       const L = live.current;
       if (L.phase !== "running") return;
+      if (seatedAt() && !stand()) return;
       if (L.route && !L.free) {
         // Along the route, never across it (FR-004).
         L.s = stepToward(L.s, L.goalS);
@@ -700,7 +763,10 @@ export default function PageTable() {
           mat.current!.setDown(down);
         }
         if (L.joined) {
-          if (L.target.x === L.pos.x && L.target.y === L.pos.y) return;
+          if (L.target.x === L.pos.x && L.target.y === L.pos.y) {
+            sit();
+            return;
+          }
           L.pos = L.target;
           send(heroToken(L.hero, toWorld(L.pos, L.doc)));
           return;
@@ -721,7 +787,7 @@ export default function PageTable() {
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [send]);
+  }, [send, sit, stand]);
 
   const pick = (h: Walker) => {
     setHero(h);

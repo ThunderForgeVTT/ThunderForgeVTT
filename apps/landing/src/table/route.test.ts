@@ -89,3 +89,18 @@ test("a stop slots into the way down where it comes, and keeps its hold", () => 
   const high = pageStations(null, { x: 24, y: 500 }, rest, 48, 180, [{ at: { x: 0, y: 100 } }]);
   assert.equal(high.length, 4);
 });
+
+test("a stop that is a list keeps its order: into the dungeon by its top and out again", () => {
+  const rest = [{ x: 24, y: 1000 }, { x: 24, y: 3000 }];
+  const visit = [
+    { at: { x: 360, y: 1992 } },
+    { at: { x: 360, y: 2040 }, hold: 180 },
+    { at: { x: 360, y: 1992 } },
+  ];
+  const st = pageStations(null, { x: 24, y: 500 }, rest, 48, 180, [visit]);
+  assert.deepEqual(
+    st.map((s) => s.at.y),
+    [500, 1000, 1992, 2040, 1992, 3000],
+  );
+  assert.equal(st[3]!.hold, 180);
+});

@@ -155,8 +155,9 @@ export function stepToward(s: number, goal: number): number {
 /**
  * A wide page's stations so far: the hero's seat (if it has one), the
  * tavern's back door, straight down from it to the gutter path, and the
- * gutter path on down the page, with the `stops` (the picked map) slotted
- * in where they come on the way down.
+ * gutter path on down the page, with the `stops` slotted in where they come
+ * on the way down. A stop that is a list (the dungeon: in by its top, its
+ * first square, out again) keeps its order, slotted in by its first.
  */
 export function pageStations(
   seat: Pt | null,
@@ -164,17 +165,17 @@ export function pageStations(
   rest: Pt[],
   cell: number,
   hold: number,
-  stops: Station[] = [],
+  stops: Array<Station | Station[]> = [],
 ): Station[] {
-  const below: Station[] = [
-    ...rest.filter((p) => p.y > exit.y + cell).map((at) => ({ at })),
-    ...stops.filter((st) => st.at.y > exit.y + cell),
-  ].sort((a, b) => a.at.y - b.at.y);
+  const below: Station[][] = [
+    ...rest.filter((p) => p.y > exit.y + cell).map((at) => [{ at }]),
+    ...stops.map((st) => (Array.isArray(st) ? st : [st])).filter((g) => g.length > 0 && g[0]!.at.y > exit.y + cell),
+  ].sort((a, b) => a[0]!.at.y - b[0]!.at.y);
   const out: Station[] = [];
   if (seat) out.push({ at: seat, hold });
   out.push({ at: exit, hold: seat ? 0 : hold });
-  const first = below[0];
+  const first = below[0]?.[0];
   if (first && Math.abs(first.at.x - exit.x) > 1) out.push({ at: { x: exit.x, y: first.at.y } });
-  out.push(...below);
+  out.push(...below.flat());
   return out;
 }

@@ -1,10 +1,10 @@
 import { parseEngineEvent, type EngineEvent } from "@thunderforge/encounter";
-import { holderId, whenReady } from "./host.ts";
+import { guestOf, holderId, whenReady } from "./host.ts";
 
 // Spec 091: the engine has one event callback (`sdk.rs`, a single slot), so
 // the page installs it once, here. Each string is parsed once and handed to
-// the frame that holds the table; a frame that does not hold it hears
-// nothing.
+// the frame that holds the table, and to a frame seated at it; any other
+// frame hears nothing.
 
 type Listener = (event: EngineEvent) => void;
 
@@ -19,6 +19,10 @@ function route(raw: string) {
   if (event.type === "sdkError") console.error(`engine refused a command: ${event.code}: ${event.message}`);
   const id = holderId();
   if (id) listeners.get(id)?.(event);
+  // A frame seated at the holder's table hears it too, in its own terms.
+  const guest = guestOf();
+  const heard = guest && guest.id !== id ? guest.hear(event) : null;
+  if (guest && heard) listeners.get(guest.id)?.(heard);
 }
 
 /** Hear the engine's events while frame `id` holds the table. */
