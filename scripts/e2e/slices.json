@@ -651,12 +651,13 @@
     },
     {
       "name": "lighting",
-      "summary": "Light, darkvision and reach of light (specs/030-interactive-elements, specs/045-token-movement-and-vision); owns scene-lighting and interactive-lighting by exact name, over the scene- and interactive- prefixes",
+      "summary": "Light, darkvision and reach of light (specs/030-interactive-elements, specs/045-token-movement-and-vision); owns scene-lighting, scene-time and interactive-lighting by exact name, over the scene- and interactive- prefixes",
       "own": [
         "carried-light.spec.ts",
         "darkvision-range.spec.ts",
         "light-reach.spec.ts",
         "scene-lighting.spec.ts",
+        "scene-time.spec.ts",
         "interactive-lighting.spec.ts"
       ],
       "neighbours": [
@@ -853,7 +854,7 @@
     },
     {
       "name": "scenes",
-      "summary": "Scenes, staging and the player's active scene (specs/009-gm-staging-page, specs/010-world-staging-actors, specs/022-scene-management-overhaul); scene-lighting and scene-preload are owned elsewhere by exact name",
+      "summary": "Scenes, staging and the player's active scene (specs/009-gm-staging-page, specs/010-world-staging-actors, specs/022-scene-management-overhaul); scene-lighting, scene-time and scene-preload are owned elsewhere by exact name",
       "own": [
         "scene-",
         "player-active-scene.spec.ts",

@@ -63,15 +63,36 @@ impl TimeOfDay {
     }
 }
 
+/// The clock as last ticked, for [`time_of_day_state`].
+static STATE: std::sync::Mutex<Option<(f32, f32)>> = std::sync::Mutex::new(None);
+
+/// The table's clock: `{"hour","darkness"}`, or `null` with no clock.
+/// Read-only, for tests (spec 099 SC-006): the `time_of_day` event is only
+/// sent when the darkness moves, so it cannot say the clock reached an hour
+/// deep in the night.
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn time_of_day_state() -> String {
+    match STATE.lock().ok().and_then(|s| *s) {
+        Some((hour, darkness)) => json!({ "hour": hour, "darkness": darkness }).to_string(),
+        None => "null".to_owned(),
+    }
+}
+
 pub(crate) fn tick_time_of_day(time: Res<Time>, mut tod: ResMut<TimeOfDay>) {
     let dt = time.delta_secs();
     let tod = tod.as_mut();
     let Some(clock) = tod.clock.as_mut() else {
+        if let Ok(mut slot) = STATE.lock() {
+            *slot = None;
+        }
         return;
     };
     clock.step(dt);
     let hour = clock.hour;
     tod.shown = follow(tod.shown, darkness_at(hour), dt);
+    if let Ok(mut slot) = STATE.lock() {
+        *slot = Some((hour, tod.shown));
+    }
     let hundredths = (tod.shown * 100.0).round() as i32;
     if tod.told != Some(hundredths) {
         tod.told = Some(hundredths);

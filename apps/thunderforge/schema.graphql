@@ -235,6 +235,11 @@ type AppMutationRoot {
 	"""
 	resetSceneExploration(sceneId: UUID!, forUser: UUID): Int!
 	"""
+	Spec 099 US5: set the hour a scene's clock shows, at once or over
+	`overSecs`; `null` stops the clock. Game Masters only.
+	"""
+	setSceneTimeOfDay(sceneId: UUID!, hour: Float, overSecs: Float): GraphQLScene!
+	"""
 	Set one of this world's system settings. Game Master only.
 	"""
 	setWorldSystemSetting(worldId: UUID!, key: String!, value: JSON!): WorldSystemSetting!
@@ -5003,6 +5008,11 @@ type GraphQLScene {
 	client showing this scene hands its engine.
 	"""
 	ambientLight: String!
+	"""
+	Spec 099 US5: the hour the scene's clock shows, 0 to 24, or `null`
+	for no clock.
+	"""
+	timeOfDay: Float
 	"""
 	Spec 088 (FR-029): whose the background is, when it is one of the
 	base maps; `null` for any other background, or none.

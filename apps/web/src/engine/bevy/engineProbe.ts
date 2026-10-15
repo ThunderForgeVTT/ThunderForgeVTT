@@ -46,7 +46,18 @@ export function installEngineProbe(wasm: BevyWasmModule): void {
     .selection_state;
   const diceEntityCount = (wasm as { dice_entity_count?: () => number })
     .dice_entity_count;
+  const timeOfDayState = (wasm as { time_of_day_state?: () => string })
+    .time_of_day_state;
   (window as unknown as Record<string, unknown>).__engineProbe = {
+    // Spec 099 SC-006: the table's clock — its hour and the darkness drawn
+    // from it — or `null` when the scene has none.
+    timeOfDay: (): { hour: number; darkness: number } | null =>
+      timeOfDayState
+        ? (JSON.parse(timeOfDayState()) as {
+            hour: number;
+            darkness: number;
+          } | null)
+        : null,
     // Spec 085: the walls this canvas draws a sprite for, sorted. A wall
     // hidden from the table is absent on a player's board and present on the
     // Game Master's; it blocks on both.

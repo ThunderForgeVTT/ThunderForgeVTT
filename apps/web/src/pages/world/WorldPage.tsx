@@ -396,23 +396,24 @@ export default function WorldPage() {
   const reloadImportedSceneRef = useRef<(importedSceneId: string) => void>(
     () => {},
   );
-  const { sceneAmbient, changeSceneAmbient } = useSceneLiveSync({
-    id,
-    sceneId,
-    user,
-    worldStore,
-    bridgeReady,
-    selectedScene,
-    sceneLevel,
-    sceneLevelList,
-    levelActions,
-    onLevelWorldEvent,
-    sceneLevelRef,
-    sceneLevelListRef,
-    reloadImportedSceneRef,
-    explorationEpochRef: explorationEpoch,
-    setApprovalRevision,
-  });
+  const { sceneAmbient, changeSceneAmbient, sceneTime, changeSceneTime } =
+    useSceneLiveSync({
+      id,
+      sceneId,
+      user,
+      worldStore,
+      bridgeReady,
+      selectedScene,
+      sceneLevel,
+      sceneLevelList,
+      levelActions,
+      onLevelWorldEvent,
+      sceneLevelRef,
+      sceneLevelListRef,
+      reloadImportedSceneRef,
+      explorationEpochRef: explorationEpoch,
+      setApprovalRevision,
+    });
 
   const {
     explorationOn,
@@ -631,6 +632,10 @@ export default function WorldPage() {
                           ambientLight={sceneAmbient}
                           onAmbientLightChange={
                             sceneId ? changeSceneAmbient : undefined
+                          }
+                          timeOfDay={sceneTime}
+                          onTimeOfDayChange={
+                            sceneId ? changeSceneTime : undefined
                           }
                           explorationEnabled={explorationOn}
                           onExplorationChange={
