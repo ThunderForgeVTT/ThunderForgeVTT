@@ -66,7 +66,12 @@ function serveDemo(server: ViteDevServer | PreviewServer) {
     if (!existsSync(file) || !statSync(file).isFile()) return next();
     res.setHeader("Content-Type", TYPES[path.extname(file)] ?? "application/octet-stream");
     res.setHeader("Content-Length", statSync(file).size);
-    res.setHeader("Cache-Control", "no-cache");
+    // As nginx: hashed build output never changes under its name, so the
+    // browser keeps it; the manifest that names it is always asked again.
+    res.setHeader(
+      "Cache-Control",
+      rel.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache",
+    );
     createReadStream(file).pipe(res);
   });
 }
