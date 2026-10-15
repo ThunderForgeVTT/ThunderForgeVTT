@@ -1,9 +1,16 @@
 <svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1200" height="630" rx="32" fill="#0A1018"/>
-  <circle cx="1010" cy="110" r="220" fill="#133047"/>
-  <circle cx="220" cy="560" r="260" fill="#132A3B"/>
-  <path d="M270 170H560L520 280H420L370 520L270 560L318 280H220L270 170Z" fill="#F5F8FF"/>
-  <path d="M480 388L760 130L822 240L542 498L480 388Z" fill="#56E0C7"/>
-  <text x="620" y="268" fill="#F5F8FF" font-size="80" font-family="Arial, Helvetica, sans-serif" font-weight="700">ThunderForge VTT</text>
-  <text x="620" y="348" fill="#8EA2B8" font-size="34" font-family="Arial, Helvetica, sans-serif">Persistent worlds, secure setup, and collaborative tabletop play.</text>
+  <rect width="1200" height="630" fill="#0A1018"/>
+  <circle cx="1040" cy="90" r="230" fill="#133047"/>
+  <circle cx="160" cy="590" r="250" fill="#132A3B"/>
+  <g transform="translate(96 143) scale(1.35)">
+    <rect width="256" height="256" rx="52" fill="#0A1018" stroke="#1C3A52" stroke-width="4"/>
+    <path d="M73 63H183L168 101H134L115 193L79 206L96 101H58L73 63Z" fill="#F5F8FF"/>
+    <path d="M153 142L201 90L211 124L163 176L153 142Z" fill="#56E0C7"/>
+  </g>
+  <text x="500" y="268" fill="#F5F8FF" font-size="84" font-family="Arial, Helvetica, sans-serif" font-weight="700">ThunderForge</text>
+  <text x="502" y="328" fill="#56E0C7" font-size="40" font-family="Arial, Helvetica, sans-serif" font-weight="700">Get back to the fantasy.</text>
+  <text x="502" y="396" fill="#8EA2B8" font-size="31" font-family="Arial, Helvetica, sans-serif">A free, open source virtual tabletop</text>
+  <text x="502" y="440" fill="#8EA2B8" font-size="31" font-family="Arial, Helvetica, sans-serif">you host yourself. In person, online,</text>
+  <text x="502" y="484" fill="#8EA2B8" font-size="31" font-family="Arial, Helvetica, sans-serif">or both at once.</text>
+  <text x="502" y="546" fill="#5E7390" font-size="26" font-family="Arial, Helvetica, sans-serif">thunderforge.dev</text>
 </svg>
