@@ -280,8 +280,10 @@ test.describe("the hero stays on a phone's screen", () => {
   });
 
   // The dungeon had a frame of its own under 1200px: it took the canvas,
-  // and the walker with it, for screens either side of the room.
-  test("past the dungeon, the walker is always in view", async ({ page }) => {
+  // and the walker with it, for screens either side of the room. And the
+  // legend lies under the atlas's tiles: a stop under the picked tile stood
+  // the hero behind it.
+  test("from the atlas past the dungeon, the walker is in view and behind no card", async ({ page }) => {
     await page.setViewportSize({ width: 384, height: 686 });
     await openLanding(page, { settle: false });
     await page.emulateMedia({ reducedMotion: "no-preference" });
@@ -289,16 +291,25 @@ test.describe("the hero stays on a phone's screen", () => {
     await expect(page.locator("body.in-engine")).toBeAttached({ timeout: BOOT_TIMEOUT });
     await watchWalker(page);
 
-    const room = await page.evaluate(() => {
-      const r = document.querySelector("#room")!.getBoundingClientRect();
-      return { top: r.top + scrollY, bottom: r.bottom + scrollY };
+    const [from, to] = await page.evaluate(() => {
+      const top = (s: string) => document.querySelector(s)!.getBoundingClientRect().top + scrollY;
+      const bottom = (s: string) => document.querySelector(s)!.getBoundingClientRect().bottom + scrollY;
+      return [top("[data-section=map]"), bottom("#room")];
     });
     const vh = 686;
-    for (let y = Math.max(0, room.top - vh); y <= room.bottom; y += Math.round(vh / 3)) {
+    for (let y = Math.max(0, from - vh); y <= to; y += Math.round(vh / 3)) {
       const at = await scrollAndSettle(page, y);
-      const top = await page.evaluate(() => scrollY);
-      expect(at.y, `scrolled to ${top}`).toBeGreaterThan(top);
-      expect(at.y, `scrolled to ${top}`).toBeLessThan(top + vh);
+      const seen = await page.evaluate((at) => {
+        const vy = at.y - scrollY;
+        if (vy < 0 || vy > innerHeight) return `out of view at ${scrollY}`;
+        for (const e of document.elementsFromPoint(at.x, vy)) {
+          if (e.closest("#page-table") || e === document.body) break;
+          const c = getComputedStyle(e).backgroundColor.match(/[\d.]+/g);
+          if (c && (c.length < 4 || +c[3]! > 0.5)) return `behind .${e.className} at ${scrollY}`;
+        }
+        return "seen";
+      }, at);
+      expect(seen).toBe("seen");
     }
     await expect(page.locator("#room-table #thunderforge-table")).toHaveCount(0);
   });

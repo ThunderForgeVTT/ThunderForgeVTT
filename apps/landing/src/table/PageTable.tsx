@@ -112,6 +112,11 @@ function underPick(cell: number, hold: number): Station[] {
   if (!r || r.width === 0) return [];
   const x = Math.floor((r.left + r.width / 2) / cell) * cell + cell / 2;
   const y = Math.ceil((r.bottom + window.scrollY) / cell) * cell + cell / 2;
+  // On a narrow page the legend lies under the tiles: the hero would stand
+  // behind it, and keeps to its gutter instead.
+  const card = document.querySelector(".legend")?.getBoundingClientRect();
+  const vy = y - window.scrollY;
+  if (card && x > card.left && x < card.right && vy > card.top - cell && vy < card.bottom) return [];
   return [{ at: { x, y }, hold }];
 }
 
