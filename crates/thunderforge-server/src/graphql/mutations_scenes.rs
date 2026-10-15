@@ -293,6 +293,7 @@ impl SceneMutation {
                 // The column's default: a new scene is lit as every scene
                 // always has been, until a Game Master says otherwise.
                 ambient_light: "bright".to_string(),
+                time_of_day: None,
             };
 
             let values = (

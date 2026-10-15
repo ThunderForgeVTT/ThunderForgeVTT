@@ -29,6 +29,6 @@
 
 ## Phase 5: The table's time (US5)
 
-- [ ] T010 [US5] Migration, GraphQL mutation and broadcast.
+- [x] T010 [US5] Migration, GraphQL mutation and broadcast.
 - [ ] T011 [US5] Web: apply the scene's time, plus the GM control.
 - [ ] T012 [US5] e2e (SC-006).

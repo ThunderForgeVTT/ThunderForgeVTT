@@ -111,6 +111,9 @@ appearing there.
    same clock and the same transition.
 3. A player who joins mid-transition lands at the same hour as everyone
    else.
+   *Decided at T010*: the scene stores the hour it is going to, so a player
+   who joins mid-transition lands at the end of it at once. A transition
+   lasts seconds (at most 600), so the gap is that long and no longer.
 
 ## Requirements
 

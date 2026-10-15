@@ -594,6 +594,9 @@ pub struct Scene {
     /// or `dark` — which the engine's darkness layer draws from. Bright
     /// unless a Game Master or an imported map says otherwise.
     pub ambient_light: String,
+    /// Spec 099 US5: the hour, 0 to 24, the scene's clock shows; `None`
+    /// runs no clock, and the scene is lit by `ambient_light` alone.
+    pub time_of_day: Option<f32>,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]

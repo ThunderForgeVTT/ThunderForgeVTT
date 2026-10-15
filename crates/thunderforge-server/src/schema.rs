@@ -827,6 +827,7 @@ diesel::table! {
         ambient_light -> Text,
         exploration_enabled -> Bool,
         exploration_epoch -> Int4,
+        time_of_day -> Nullable<Float4>,
     }
 }
 
