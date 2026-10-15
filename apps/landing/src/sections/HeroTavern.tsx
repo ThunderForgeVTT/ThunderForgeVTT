@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { CC_BY_SA, MAPS_CATALOG, MAPS_SOURCE } from "../links.ts";
-import { publishMat, type MatPiece } from "../table/heroMat.ts";
+import { publishMat, type MatPiece, type MatSeg } from "../table/heroMat.ts";
 
 // A wide page opens in the tavern, beside the headline: every adventure
 // starts in one. The map lies on the page's own grid, one square to a cell,
@@ -22,6 +22,25 @@ const SPOTS = [
 /** The back door, in the south wall: the way out to the page. */
 const EXIT = { c: 5.5, r: 7.5 };
 
+/** A wall of the map's own (`tavern-sample.json`): map pixels, centred, +y up. */
+interface MapWall {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  doorState: string;
+  perimeter?: boolean;
+}
+
+/** The tavern's walls, fetched once: the engine plans the hero's way round
+ * them (spec 098 FR-005). */
+let mapWalls: Promise<MapWall[]> | null = null;
+const wallsOfMap = () =>
+  (mapWalls ??= fetch(MAP.replace(".webp", ".json"))
+    .then((r) => (r.ok ? r.json() : { walls: [] }))
+    .then((m: { walls?: MapWall[] }) => (m.walls ?? []).filter((w) => !w.perimeter))
+    .catch(() => []));
+
 export interface TavernPiece {
   id: string;
   name: string;
@@ -38,6 +57,7 @@ export function HeroTavern({ party }: { party: TavernPiece[] }) {
     const box = boxRef.current;
     const el = mapRef.current;
     if (!box || !el) return;
+    let walls: MapWall[] = [];
     const update = () => {
       const size = parseFloat(getComputedStyle(el).getPropertyValue("--cell")) || 48;
       box.style.translate = "";
@@ -58,8 +78,18 @@ export function HeroTavern({ party }: { party: TavernPiece[] }) {
         side: size,
         foe: false,
       }));
+      // The map's pixels to the page's: 128 to a square there, `size` here.
+      const seg = (w: MapWall): MatSeg => ({
+        x1: x + (w.x1 / 128 + COLS / 2) * size,
+        y1: y + (ROWS / 2 - w.y1 / 128) * size,
+        x2: x + (w.x2 / 128 + COLS / 2) * size,
+        y2: y + (ROWS / 2 - w.y2 / 128) * size,
+      });
+      // The south door stands open: the hero leaves by it.
+      const south = (w: MapWall) => w.y1 < 0 && w.y2 < 0;
       publishMat({
-        walls: [],
+        walls: walls.filter((w) => w.doorState === "none").map(seg),
+        doors: walls.filter((w) => w.doorState !== "none").map((w) => ({ seg: seg(w), open: south(w) })),
         door: null,
         doorOpen: false,
         pieces,
@@ -68,10 +98,18 @@ export function HeroTavern({ party }: { party: TavernPiece[] }) {
       });
     };
     update();
+    let gone = false;
+    void wallsOfMap().then((w) => {
+      walls = w;
+      if (!gone) update();
+    });
     const ro = new ResizeObserver(update);
     ro.observe(document.body);
     void document.fonts?.ready.then(update);
-    return () => ro.disconnect();
+    return () => {
+      gone = true;
+      ro.disconnect();
+    };
   }, [party]);
 
   return (

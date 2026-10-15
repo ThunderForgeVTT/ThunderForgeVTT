@@ -40,6 +40,7 @@ export class MatScene {
   draw(mat: Mat, doc: Doc, cell: number, skip: string | null) {
     const walls = mat.walls.map((w, i) => ({ id: `mat-wall-${i}`, seg: w, doorState: "none" }));
     if (mat.door) walls.push({ id: "mat-door", seg: mat.door, doorState: mat.doorOpen ? "open" : "closed" });
+    mat.doors?.forEach((d, i) => walls.push({ id: `mat-door-${i}`, seg: d.seg, doorState: d.open ? "open" : "closed" }));
     const seen = new Set<string>();
     for (const { id, seg, doorState } of walls) {
       const a = toWorld({ x: seg.x1, y: seg.y1 }, doc);

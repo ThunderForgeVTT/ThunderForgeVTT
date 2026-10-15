@@ -8,16 +8,16 @@ phase. Phone and tablet run at the end of each phase to prove FR-001.
 
 ## Phase 1: Route (US1, US3)
 
-- [ ] T001 [US1] Send the tavern's walls and south door from
+- [x] T001 [US1] Send the tavern's walls and south door from
   `tavern-sample.json`, scaled to the page cell.
-- [ ] T002 [US3] `route.ts`:
+- [x] T002 [US3] `route.ts`:
   - stations;
   - legs (plan_path or gutter);
   - `sAt(scroll)`;
   - `pointAt(s)`.
   Unit-test it in node.
-- [ ] T003 [US1] PageTable eases `s` and draws the walker at `pointAt(s)`.
-- [ ] T004 [US1] [US3] e2e `walk-along.spec.ts`: the door exit (SC-001)
+- [x] T003 [US1] PageTable eases `s` and draws the walker at `pointAt(s)`.
+- [x] T004 [US1] [US3] e2e `walk-along.spec.ts`: the door exit (SC-001)
   and the centre band (SC-003).
 
 ## Phase 2: Goblins (US2)

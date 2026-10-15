@@ -33,6 +33,10 @@ export interface Engine {
   door_icons(): string;
   sight_probe(x: number, y: number): string;
   list_interactives(): string;
+  /** Spec 097: a way round the walls, `{"path":[{x,y},…]|null}`. Absent from older builds. */
+  plan_path?(request: string): string;
+  /** Spec 096: the ids of the tokens that are down, as a JSON array. */
+  token_defeated?(): string;
 }
 
 /** Which step failed, as telemetry reports it (T038). */

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { createHero, PRESET_HEROES, type HeroSpec } from "@thunderforge/heroes";
-import { canvasOf, holderId, sendAs, take, type Send } from "../engine/host.ts";
+import { canvasOf, holderId, running, sendAs, take, type Send } from "../engine/host.ts";
 import { listen } from "../engine/dispatch.ts";
 import type { Progress } from "../engine/loadEngine.ts";
 import { PARTY } from "../room/party.ts";
@@ -22,6 +22,7 @@ import {
   type Pt,
 } from "./journey.ts";
 import { centreOf, MatScene } from "./matScene.ts";
+import { buildRoute, pageStations, pointAt, sAt, stepToward, type Planner, type Route } from "./route.ts";
 
 // Prototype: the whole page on the engine's table.
 //
@@ -65,6 +66,9 @@ const DAWN_TINT = "#4a2c14";
 const DUSK_MS = 260;
 /** What a tap on counts as the table, not the page's words. */
 const SURFACES = "html, body, main, header.hero, .hero-body, .section";
+
+/** How long the engine takes to hold walls just sent, before a plan round them. */
+const PLAN_AFTER = 150;
 
 /** How long the scroll rests before the page takes the table back. */
 const SETTLE = 300;
@@ -160,10 +164,26 @@ export default function PageTable() {
     sentTint: undefined as string | undefined,
     /** Whether a fade is running. */
     fading: false,
+    /** A wide page's route (spec 098), the hero's distance along it, the
+     * distance the scroll asks for, and whether the hero is on it yet. */
+    route: null as Route | null,
+    s: 0,
+    goalS: 0,
+    joined: true,
   });
   live.current.hero = hero;
 
-  const send = useRef<Send>(sendAs(PAGE)).current;
+  const sendAll = useRef<Send>(sendAs(PAGE)).current;
+  /** Sends, and says on the stage where the walker was sent: the engine
+   * snaps it to its square, and the walk's tests want the way it took. */
+  const send = useRef<Send>((command) => {
+    const token = command.token as { id?: string; x?: number; y?: number } | undefined;
+    if (command.type === "upsert_token" && token?.id === WALKER && stage.current) {
+      const { doc } = live.current;
+      stage.current.dataset.walker = `${Math.round(token.x! + doc.w / 2)},${Math.round(doc.h / 2 - token.y!)}`;
+    }
+    sendAll(command);
+  }).current;
   const mat = useRef<MatScene | null>(null);
   mat.current ??= new MatScene(send, () => canvasOf(PAGE) !== null);
 
@@ -269,6 +289,55 @@ export default function PageTable() {
     L.stageW = el.clientWidth;
   }, []);
 
+  /** Where the scroll puts the hero on the route. */
+  const goalOf = useCallback((r: Route) => {
+    const L = live.current;
+    const vh = window.innerHeight;
+    return sAt(r, window.scrollY, vh, Math.max(0, L.doc.h - vh));
+  }, []);
+
+  /** The engine's way round the walls on the table, in page pixels. */
+  const planner = useCallback((): Planner | null => {
+    const e = running();
+    if (!e?.plan_path || canvasOf(PAGE) === null) return null;
+    const L = live.current;
+    const { doc, cell } = L;
+    const grid = { size: cell, originX: -doc.w / 2, originY: doc.h / 2 };
+    const bounds = { min: { q: 0, r: -Math.ceil(doc.h / cell) }, max: { q: Math.ceil(doc.w / cell) - 1, r: -1 } };
+    return (a, b) => {
+      const ask = { from: toWorld(a, doc), to: toWorld(b, doc), grid, bounds, maxNodes: 40000 };
+      const way = (JSON.parse(e.plan_path!(JSON.stringify(ask))) as { path: Pt[] | null }).path;
+      return way?.map((p) => ({ x: p.x + doc.w / 2, y: doc.h / 2 - p.y })) ?? null;
+    };
+  }, []);
+
+  /**
+   * A wide page's route (spec 098): straight at once, then round the walls
+   * once the engine holds them. The hero walks onto each new route from
+   * where it stands, never jumps.
+   */
+  const planned = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const route = useCallback(
+    (seat: Pt | null, exit: Pt) => {
+      const L = live.current;
+      const stations = () =>
+        pageStations(seat, exit, L.rest, L.cell, Math.round(window.innerHeight * 0.2));
+      const use = (r: Route) => {
+        L.route = r;
+        L.goalS = goalOf(r);
+        L.s = L.goalS;
+        L.joined = false;
+      };
+      use(buildRoute(stations(), null));
+      clearTimeout(planned.current);
+      planned.current = setTimeout(() => {
+        const plan = planner();
+        if (plan && live.current.route) use(buildRoute(stations(), plan));
+      }, PLAN_AFTER);
+    },
+    [goalOf, planner],
+  );
+
   /** The first screen's room on the table, and the walker's start in it. */
   const drawMat = useCallback(() => {
     const L = live.current;
@@ -280,7 +349,9 @@ export default function PageTable() {
     const from = spot ? [centreOf(spot)] : [];
     L.path = [...from, ...(m.exit ? [m.exit] : []), ...L.rest];
     if (!L.free) L.target = along(L.path, fraction(window.scrollY, L.doc, window.innerHeight));
-  }, []);
+    if (m.map && m.exit) route(spot ? centreOf(spot) : null, m.exit);
+    else L.route = null;
+  }, [route]);
 
   /** The page's grid, in ink by day and chalk by night. */
   const grid = useCallback(
@@ -455,7 +526,8 @@ export default function PageTable() {
     (s: Send) => {
       const L = live.current;
       layout();
-      L.pos = { ...L.target };
+      L.pos = L.route ? pointAt(L.route, L.s) : { ...L.target };
+      L.joined = true;
       s(heroToken(L.hero, toWorld(L.pos, L.doc), true));
       s({ type: "set_controlled_token", tokenId: WALKER });
       s({ type: "set_scene_playing", playing: true });
@@ -540,8 +612,10 @@ export default function PageTable() {
         return;
       }
       if (L.phase !== "running") return;
+      if (L.free) L.joined = false;
       L.free = false;
       L.target = along(L.path, t);
+      if (L.route) L.goalS = goalOf(L.route);
       dusk();
       place();
     };
@@ -551,7 +625,7 @@ export default function PageTable() {
       clearTimeout(settle);
       window.removeEventListener("scroll", onScroll);
     };
-  }, [place, boot, dusk]);
+  }, [place, boot, dusk, goalOf]);
 
   // A tap on the mat walks the hero there.
   useEffect(() => {
@@ -561,6 +635,7 @@ export default function PageTable() {
       const el = e.target as Element | null;
       if (!el || !el.matches(SURFACES)) return;
       L.free = true;
+      L.joined = false;
       L.target = { x: e.pageX, y: e.pageY };
     };
     document.addEventListener("click", onClick);
@@ -589,10 +664,24 @@ export default function PageTable() {
       raf = requestAnimationFrame(step);
       const L = live.current;
       if (L.phase !== "running") return;
+      if (L.route && !L.free) {
+        // Along the route, never across it (FR-004).
+        L.s = stepToward(L.s, L.goalS);
+        L.target = pointAt(L.route, L.s);
+        if (L.joined) {
+          if (L.target.x === L.pos.x && L.target.y === L.pos.y) return;
+          L.pos = L.target;
+          send(heroToken(L.hero, toWorld(L.pos, L.doc)));
+          return;
+        }
+      }
       const dx = L.target.x - L.pos.x;
       const dy = L.target.y - L.pos.y;
       const dist = Math.hypot(dx, dy);
-      if (dist < 0.5) return;
+      if (dist < 0.5) {
+        L.joined = true;
+        return;
+      }
       // Never past the target: a step that overshot would send a move every
       // frame for ever, and each one wakes the engine before it can draw.
       const speed = Math.min(dist, Math.max(3, dist * 0.12));
