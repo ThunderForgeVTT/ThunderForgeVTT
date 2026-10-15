@@ -116,9 +116,28 @@ test.describe("the hero walks a wide page", () => {
     expect(through[0]! / inn.cell).toBeGreaterThan(0);
     expect(through[0]! / inn.cell).toBeLessThan(1);
 
+    // SC-002: past the goblins, all three are down.
+    const goblins = await page.evaluate(() =>
+      [...document.querySelectorAll<HTMLImageElement>("[data-testid=hero-tavern] img[alt^=Goblin]")].map(
+        (img) => img.getBoundingClientRect().bottom + scrollY,
+      ),
+    );
+    expect(goblins).toHaveLength(3);
+    const down = () => engine<string[]>(page, "token_defeated").then((ids) => ids.filter((id) => id.includes("goblin")).sort());
+    await expect.poll(down).toEqual(["mat-goblin-0", "mat-goblin-1", "mat-goblin-2"]);
+    // Scrolled back until the hero is between the first two, only the first is.
+    const [first, second] = goblins.map((b) => b - inn.cell / 2);
+    let at = await scrollAndSettle(page, second! - vh / 2 + 200);
+    for (let y = second! - vh / 2 + 200; y > 0 && at!.y >= second!; y -= 16) {
+      at = await scrollAndSettle(page, y);
+    }
+    expect(at!.y).toBeGreaterThanOrEqual(first!);
+    await expect.poll(down).toEqual(["mat-goblin-0"]);
+
     // Back to the top: back to the seat, by the same door.
     const back = await scrollAndSettle(page, 0);
     expect(Math.hypot(back.x - seat.x, back.y - seat.y)).toBeLessThan(1);
+    await expect.poll(down).toEqual([]);
 
     // SC-001: out and back, it crossed the south wall in the doorway (cells
     // 5 to 6), and never crossed the walls' line anywhere else.

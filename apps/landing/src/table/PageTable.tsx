@@ -21,6 +21,7 @@ import {
   type Doc,
   type Pt,
 } from "./journey.ts";
+import { downAt } from "./goblins.ts";
 import { centreOf, MatScene } from "./matScene.ts";
 import { buildRoute, pageStations, pointAt, sAt, stepToward, type Planner, type Route } from "./route.ts";
 
@@ -170,6 +171,8 @@ export default function PageTable() {
     s: 0,
     goalS: 0,
     joined: true,
+    /** The foes that are down, as last sent. */
+    down: "",
   });
   live.current.hero = hero;
 
@@ -547,6 +550,7 @@ export default function PageTable() {
     s({ type: "set_scene_playing", playing: false });
     s({ type: "remove_token", tokenId: WALKER });
     mat.current!.clear();
+    L.down = "";
     s({ type: "set_scene_background", backgroundImagePath: null, width: 0, height: 0 });
   }, []);
 
@@ -668,6 +672,14 @@ export default function PageTable() {
         // Along the route, never across it (FR-004).
         L.s = stepToward(L.s, L.goalS);
         L.target = pointAt(L.route, L.s);
+        // The goblins fall as the hero passes them (spec 098 US2).
+        const foes = (currentMat()?.pieces ?? []).filter((p) => p.foe).map((p) => ({ id: p.id, at: centreOf(p) }));
+        const down = downAt(L.route, foes, L.s);
+        const key = [...down].join();
+        if (key !== L.down) {
+          L.down = key;
+          mat.current!.setDown(down);
+        }
         if (L.joined) {
           if (L.target.x === L.pos.x && L.target.y === L.pos.y) return;
           L.pos = L.target;

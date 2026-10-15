@@ -19,6 +19,13 @@ const SPOTS = [
   { c: 7, r: 2 },
   { c: 8, r: 5 },
 ];
+/** Three goblins on the grass below, either side of the hero's way down
+ * from the back door (spec 098 US2). Squares from the map's corner. */
+const FOE_SPOTS = [
+  { c: 4, r: 10 },
+  { c: 6, r: 12 },
+  { c: 4, r: 14 },
+];
 /** The back door, in the south wall: the way out to the page. */
 const EXIT = { c: 5.5, r: 7.5 };
 
@@ -47,7 +54,7 @@ export interface TavernPiece {
   src: string;
 }
 
-export function HeroTavern({ party }: { party: TavernPiece[] }) {
+export function HeroTavern({ party, foes = [] }: { party: TavernPiece[]; foes?: TavernPiece[] }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const [cell, setCell] = useState(0);
@@ -78,6 +85,17 @@ export function HeroTavern({ party }: { party: TavernPiece[] }) {
         side: size,
         foe: false,
       }));
+      foes.slice(0, FOE_SPOTS.length).forEach((p, i) =>
+        pieces.push({
+          id: p.id,
+          name: p.name,
+          src: p.src,
+          x: x + FOE_SPOTS[i]!.c * size,
+          y: y + FOE_SPOTS[i]!.r * size,
+          side: size,
+          foe: true,
+        }),
+      );
       // The map's pixels to the page's: 128 to a square there, `size` here.
       const seg = (w: MapWall): MatSeg => ({
         x1: x + (w.x1 / 128 + COLS / 2) * size,
@@ -110,7 +128,7 @@ export function HeroTavern({ party }: { party: TavernPiece[] }) {
       gone = true;
       ro.disconnect();
     };
-  }, [party]);
+  }, [party, foes]);
 
   return (
     <div className="hero-tavern" ref={boxRef}>
@@ -124,6 +142,16 @@ export function HeroTavern({ party }: { party: TavernPiece[] }) {
               src={p.src}
               alt={p.name}
               style={{ left: SPOTS[i]!.c * cell, top: SPOTS[i]!.r * cell, width: cell, height: cell }}
+            />
+          ))}
+        {cell > 0 &&
+          foes.slice(0, FOE_SPOTS.length).map((p, i) => (
+            <img
+              key={p.id}
+              className="hero-tavern-token"
+              src={p.src}
+              alt={p.name}
+              style={{ left: FOE_SPOTS[i]!.c * cell, top: FOE_SPOTS[i]!.r * cell, width: cell, height: cell }}
             />
           ))}
       </div>

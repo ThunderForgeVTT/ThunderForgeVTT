@@ -22,9 +22,9 @@ phase. Phone and tablet run at the end of each phase to prove FR-001.
 
 ## Phase 2: Goblins (US2)
 
-- [ ] T005 [US2] Add `goblins.ts`: three tokens below the tavern, and
+- [x] T005 [US2] Add `goblins.ts`: three tokens below the tavern, and
   `defeated` from `s`.
-- [ ] T006 [US2] e2e (SC-002).
+- [x] T006 [US2] e2e (SC-002).
 
 ## Phase 3: Map selection (US4)
 

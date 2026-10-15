@@ -14,7 +14,8 @@ test("a wide page starts in the tavern, on the page's grid", async ({ page }, in
   test.skip(info.project.name !== "desktop", "the tavern opens the page from 1200px");
   const opened = await openLanding(page);
   await expect(inn(page)).toBeVisible();
-  await expect(inn(page).locator("img")).toHaveCount(5);
+  // The map, the party of four, and three goblins on the grass below.
+  await expect(inn(page).locator("img")).toHaveCount(8);
   // Beside the headline, its corner on a grid line, one square to a cell.
   const box = await page.evaluate(() => {
     const cell = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--cell"));
@@ -53,13 +54,14 @@ test("the page's table holds the tavern from the start, the company in it", asyn
 
   await expect(page.locator("body.in-engine")).toBeAttached({ timeout: BOOT_TIMEOUT });
   await expect(page.locator("#page-table canvas")).toHaveCount(1);
-  // Everyone but the walker stands in the tavern as an engine token.
+  // Everyone but the walker stands in the tavern as an engine token, and
+  // the three goblins on the grass below.
   await expect
     .poll(async () => {
       const all = await engine<{ tokenId: string }[]>(page, "token_footprints");
       return all.filter((t) => t.tokenId.startsWith("mat-")).length;
     })
-    .toBe(3);
+    .toBe(6);
   await expect(inn(page).locator(".hero-tavern-art")).toHaveCSS("visibility", "hidden");
   await expectClean(opened);
 });

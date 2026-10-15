@@ -230,6 +230,7 @@ interface Drag {
 export function Hero() {
   const pieces = usePieces();
   const party = useMemo(() => pieces.filter((p) => !p.foe), [pieces]);
+  const goblins = useMemo(() => pieces.filter((p) => p.foe && p.size === 1), [pieces]);
   const heroRef = useRef<HTMLElement>(null);
   const roomRef = useRef<HTMLDivElement>(null);
   const fieldRef = useRef<HTMLDivElement>(null);
@@ -468,7 +469,7 @@ export function Hero() {
           </p>
         </div>
         {wide ? (
-          <HeroTavern party={party} />
+          <HeroTavern party={party} foes={goblins} />
         ) : (
           <div className="field" ref={fieldRef} />
         )}

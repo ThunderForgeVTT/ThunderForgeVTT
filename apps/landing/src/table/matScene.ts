@@ -25,6 +25,8 @@ export class MatScene {
   private sent = new Set<string>();
   private art = new Map<string, string>();
   private drawing = new Set<string>();
+  /** The pieces that are down (spec 096), by token id. */
+  private down = new Set<string>();
   /** The map image on the table, by an id that changes when it moves: the
    * engine places an image once and never moves it. */
   private map: string | null = null;
@@ -73,7 +75,15 @@ export class MatScene {
       const at = toWorld(centreOf(p), doc);
       kept.add(id);
       this.tokens.set(id, {
-        token: { id, x: at.x, y: at.y, z: 5, label: p.name, tokenType: p.foe ? "npc" : "character" },
+        token: {
+          id,
+          x: at.x,
+          y: at.y,
+          z: 5,
+          label: p.name,
+          tokenType: p.foe ? "npc" : "character",
+          ...(p.foe ? { defeated: this.down.has(id) } : {}),
+        },
         footprint: p.side / cell,
       });
       if (this.art.has(id)) this.put(id);
@@ -114,12 +124,26 @@ export class MatScene {
     );
   }
 
+  /** Puts the pieces `ids` (their mat ids) down and every other foe up. */
+  setDown(ids: Set<string>) {
+    for (const [id, want] of this.tokens) {
+      if (!("defeated" in want.token)) continue;
+      const down = ids.has(id.slice("mat-".length));
+      if (want.token.defeated === down) continue;
+      want.token = { ...want.token, defeated: down };
+      if (down) this.down.add(id);
+      else this.down.delete(id);
+      if (this.art.has(id)) this.put(id);
+    }
+  }
+
   /** Takes all of it off the table. */
   clear() {
     for (const id of this.walls) this.send({ type: "remove_wall", wallId: id });
     for (const id of this.sent) this.send({ type: "remove_token", tokenId: id });
     if (this.map) this.send({ type: "remove_canvas_image_asset", assetId: this.map });
     this.map = null;
+    this.down.clear();
     this.walls.clear();
     this.tokens.clear();
     this.sent.clear();
