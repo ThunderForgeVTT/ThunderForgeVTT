@@ -26,7 +26,16 @@ import { centreOf, MatScene } from "./matScene.ts";
 import { pickedTile, watchPick } from "./mapPick.ts";
 import { currentBoard, leftAt, seat, seatedAt, watchBoard, type Board } from "../room/pageBoard.ts";
 import { BoardArt, boardHold, blockedCells, boardStops, inside, placeOf, standUp } from "./roomOnPage.ts";
-import { beforeCamp, CAMP_FIRE, campFire, campMat, campStops, currentCamp, watchCamp } from "./campMat.ts";
+import {
+  beforeCamp,
+  CAMP_FIRE,
+  CAMP_GLOW,
+  campFire,
+  campMat,
+  campStops,
+  currentCamp,
+  watchCamp,
+} from "./campMat.ts";
 import {
   buildRoute,
   pageStations,
@@ -388,7 +397,8 @@ export default function PageTable() {
     const c = currentCamp();
     if (c) camp.current!.draw(campMat(c, own), L.doc, L.cell, null);
     else camp.current!.clear();
-    send(c ? campFire(c, L.doc) : { type: "remove_light", lightId: CAMP_FIRE });
+    if (c) campFire(c, L.doc).forEach(send);
+    else for (const lightId of [CAMP_FIRE, ...CAMP_GLOW]) send({ type: "remove_light", lightId });
     const from = spot ? [centreOf(spot)] : [];
     L.path = [...from, ...(m.exit ? [m.exit] : []), ...L.rest];
     if (!L.free) L.target = along(L.path, fraction(window.scrollY, L.doc, window.innerHeight));
@@ -549,6 +559,7 @@ export default function PageTable() {
     L.torches = 0;
     s({ type: "remove_light", lightId: LANTERN });
     s({ type: "remove_light", lightId: CAMP_FIRE });
+    for (const lightId of CAMP_GLOW) s({ type: "remove_light", lightId });
     s({ type: "set_time_of_day", hour: null });
     s({ type: "set_ambient_light", level: "bright" });
     L.hour = -1;

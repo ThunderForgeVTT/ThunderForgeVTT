@@ -32,6 +32,7 @@ export interface Camp {
 }
 
 export const CAMP_FIRE = "camp-fire";
+export const CAMP_GLOW = ["camp-glow", "camp-haze"] as const;
 
 const CHANGED = "thunderforge:camp";
 let camp: Camp | null = null;
@@ -61,24 +62,33 @@ export function campMat(c: Camp, own: string | null): Mat {
   };
 }
 
-/** The fire, lighting the logs: brighter than a torch, it is the camp's
- * only light by night. */
+/** The fire, lighting the logs: the camp's only light by night. The page
+ * is dark past the map's edge, so no pool reaches beyond it. The engine's
+ * light falls off in a straight line and takes the brightest pool, so three
+ * pools of falling strength curve the edge, where one ends in a ring. */
 export function campFire(c: Camp, doc: Doc) {
   const at = toWorld(c.fire, doc);
-  return {
+  const room = Math.min(c.fire.x - c.x, c.x + c.w - c.fire.x, c.fire.y - c.y, c.y + c.h - c.fire.y);
+  const reach = Math.max(c.cell, room);
+  const light = (id: string, radius: number, brightRadius: number, intensity: number) => ({
     type: "upsert_light",
     light: {
-      id: CAMP_FIRE,
+      id,
       x: at.x,
       y: at.y,
-      radius: c.cell * 3.5,
-      brightRadius: c.cell,
-      color: "#ffb36b",
-      intensity: 0.7,
-      flicker: 0.6,
+      radius,
+      brightRadius,
+      color: "#ff9a3d",
+      intensity,
+      flicker: 0.25,
       castsShadows: false,
     },
-  };
+  });
+  return [
+    light(CAMP_FIRE, reach * 0.6, c.cell, 1),
+    light(CAMP_GLOW[0], reach * 0.85, 0, 0.75),
+    light(CAMP_GLOW[1], reach, 0, 0.45),
+  ];
 }
 
 /** The walk's end: in by the top, over the park's column, onto the log. */
