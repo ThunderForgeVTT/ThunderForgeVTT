@@ -47,8 +47,8 @@ phase. Phone and tablet run at the end of each phase to prove FR-001.
 
 ## Phase 6: Dusk (US7)
 
-- [ ] T014 [US7] Rework the page-distance ramp with a slew cap.
-- [ ] T015 [US7] e2e at 1920 and 2560 (SC-006).
+- [x] T014 [US7] Rework the page-distance ramp with a slew cap.
+- [x] T015 [US7] e2e at 1920 and 2560 (SC-006).
 
 ## Phase 7: Greenlight
 

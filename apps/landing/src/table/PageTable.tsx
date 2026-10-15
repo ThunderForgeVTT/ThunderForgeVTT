@@ -651,9 +651,11 @@ export default function PageTable() {
       const L = live.current;
       const t = fraction(window.scrollY, L.doc, window.innerHeight);
       setPct(Math.round(t * 100));
+      const shade = duskAt(window.scrollY, L.dayEnds, L.nightAt, L.dawnAt, window.innerHeight);
+      // For the dusk's tests (SC-006): the dark the page is heading for.
+      if (stage.current) stage.current.dataset.dusk = shade.toFixed(4);
       if (L.phase === "away") {
         // The room holds the table, but the page's night still follows.
-        const shade = duskAt(window.scrollY, L.dayEnds, L.nightAt, L.dawnAt, window.innerHeight);
         document.documentElement.classList.toggle("dusk", shade > LIGHTS_ON);
         // Taken back once the scroll settles, not in the middle of a flick.
         clearTimeout(settle);

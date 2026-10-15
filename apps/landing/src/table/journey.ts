@@ -90,9 +90,19 @@ export const EVENING = 0.95;
 export const NIGHT = 0.985;
 
 /**
+ * The most the dark may change per pixel scrolled (spec 098 FR-012): 0.07
+ * per 100 px. The evening used to fall over one screen's height, so a tall
+ * screen still crossed it in a few flicks and a short one in fewer.
+ */
+export const MAX_DUSK_PER_PX = 0.0007;
+/** The evening's fall in page pixels: a smoothstep's steepest slope is 1.5. */
+const FALL_PX = (1.5 * EVENING) / MAX_DUSK_PER_PX;
+
+/**
  * The dusk over the page at `scrollY`, 0 (daylight) to `NIGHT`. Day holds
- * until `dayEnds`, the evening falls over the screen after it, and the
- * night deepens slowly until `nightAt`, the room. Dawn breaks over the screen
+ * until `dayEnds`, the evening falls over the next `FALL_PX` of the page (a
+ * screen, if a screen is taller), and the night deepens slowly until
+ * `nightAt`, the room. Dawn breaks over the screen
  * before `dawnAt` and it is day again by it.
  */
 export function duskAt(
@@ -103,16 +113,17 @@ export function duskAt(
   viewportH: number,
 ): number {
   if (scrollY <= dayEnds || scrollY >= dawnAt) return 0;
-  const fall = Math.min(1, (scrollY - dayEnds) / viewportH);
-  const span = Math.max(1, nightAt - dayEnds - viewportH);
-  const deep = Math.min(1, (scrollY - dayEnds - viewportH) / span);
+  const falls = Math.max(FALL_PX, viewportH);
+  const fall = Math.min(1, (scrollY - dayEnds) / falls);
+  const span = Math.max(1, nightAt - dayEnds - falls);
+  const deep = Math.min(1, (scrollY - dayEnds - falls) / span);
   const dark = fall < 1 ? EVENING * smooth(fall) : EVENING + (NIGHT - EVENING) * deep;
   return dark * (1 - smooth(dawning(scrollY, dawnAt, viewportH)));
 }
 
 /** How far dawn has broken at `scrollY`, 0 (night) to 1 (day, at `dawnAt`). */
 export function dawning(scrollY: number, dawnAt: number, viewportH: number): number {
-  return Math.min(1, Math.max(0, 1 - (dawnAt - scrollY) / viewportH));
+  return Math.min(1, Math.max(0, 1 - (dawnAt - scrollY) / Math.max(FALL_PX, viewportH)));
 }
 
 const smooth = (t: number) => t * t * (3 - 2 * t);

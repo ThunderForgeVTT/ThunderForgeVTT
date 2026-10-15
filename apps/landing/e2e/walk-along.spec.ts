@@ -271,3 +271,45 @@ test.describe("the hero walks a wide page", () => {
       ]);
   });
 });
+
+test.describe("the dusk on a big screen", () => {
+  test.skip(!BUILT, "no demo build: run pnpm -F @thunderforge/demo run build");
+  test.beforeEach(({}, info) => {
+    test.skip(info.project.name !== "desktop", "the big screens are desktops");
+    test.setTimeout(BOOT_TIMEOUT + 120_000);
+  });
+
+  for (const [width, height] of [
+    [1920, 1080],
+    [2560, 1440],
+  ] as const) {
+    test(`at ${width}x${height}, no 100 px of scroll darkens the page by more than 0.08 (SC-006)`, async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await openLanding(page, { settle: false });
+      await page.emulateMedia({ reducedMotion: "no-preference" });
+      await page.reload();
+      await expect(page.locator("body.in-engine")).toBeAttached({ timeout: BOOT_TIMEOUT });
+      // The page has laid its day and night out once its walker is on the table.
+      await expect(page.locator("#page-table[data-walker]")).toBeAttached();
+      const end = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
+      const dark: number[] = [];
+      for (let y = 0; y <= end; y += 100) {
+        // The dark the page is heading for, once the scroll at `y` is heard.
+        const goal = await page.evaluate(
+          (y) =>
+            new Promise<number>((done) => {
+              scrollTo({ top: y, behavior: "instant" });
+              requestAnimationFrame(() =>
+                requestAnimationFrame(() => done(Number(document.getElementById("page-table")!.dataset.dusk))),
+              );
+            }),
+          y,
+        );
+        dark.push(goal);
+      }
+      const steps = dark.slice(1).map((d, i) => Math.abs(d - dark[i]!));
+      expect(Math.max(...dark), "night falls at all").toBeGreaterThan(0.9);
+      expect(Math.max(...steps)).toBeLessThanOrEqual(0.08);
+    });
+  }
+});
