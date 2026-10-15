@@ -347,6 +347,12 @@ body.in-engine .hero .token img {
   fill: rgb(244 227 166 / 0.12);
   filter: drop-shadow(0 0 5px rgb(255 228 150 / 0.55));
 }
+:root.dusk .sc-point,
+:root.dusk .sc-links .marker {
+  /* Ink multiplies into paper; light adds to the sky. Multiplied onto the
+     night, the stars came out the colour of the night. */
+  mix-blend-mode: screen;
+}
 :root.dusk .sc-links .marker {
   stroke: #cdd8f5;
   opacity: 0.45;
