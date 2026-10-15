@@ -6,13 +6,16 @@ import { PARTY, type PartyHero } from "../room/party.ts";
 import { rasterize, svgUrl } from "./heroArt.ts";
 import { announcePage, PAGE_TABLE } from "./onPage.ts";
 import "./page-table.css";
-import { along, fraction, pathDown, toWorld, wallsOf, type Box, type Doc, type Pt } from "./journey.ts";
+import { currentMat, watchMat } from "./heroMat.ts";
+import { along, fraction, pathDown, toWorld, type Box, type Doc, type Pt } from "./journey.ts";
+import { centreOf, MatScene } from "./matScene.ts";
 
 // Prototype: the whole page on the engine's table.
 //
-// One engine canvas fills the viewport behind the page. The sections are
-// walled blocks on it; the hero, picked or drawn by lot, walks a path down
-// the page as the visitor scrolls, and goes where a tap on the table says.
+// One engine canvas fills the viewport behind the page. The first screen's
+// room is on it with real walls and a real door (`matScene.ts`); the hero,
+// picked or drawn by lot, steps off the mat and walks a path down the page
+// as the visitor scrolls, and goes where a tap on the table says.
 // The camera is locked to the page, so the engine's grid is the page's grid.
 //
 // Touch first: a tap on the mat walks the hero there, on any screen.
@@ -26,6 +29,8 @@ const HeroBuilder = lazy(() => import("./HeroBuilder.tsx"));
 const PAGE = PAGE_TABLE;
 const WALKER = "walker";
 const REDUCE = "(prefers-reduced-motion: reduce)";
+/** The grid's ink on the paper mat: the page's black, faint. */
+const GRID_INK = "#1f2a2e2e";
 /** What a tap on counts as the table, not the page's words. */
 const SURFACES = "html, body, main, header.hero, .hero-body, .section";
 
@@ -96,7 +101,8 @@ export default function PageTable() {
     hero: PARTY[0]! as Walker,
     doc: { w: 1, h: 1 } as Doc,
     path: [] as Pt[],
-    wallIds: [] as string[],
+    /** The path below the first screen; `path` is this from the hero's mat spot. */
+    rest: [] as Pt[],
     pos: { x: 0, y: 0 } as Pt,
     target: { x: 0, y: 0 } as Pt,
     free: false,
@@ -105,6 +111,8 @@ export default function PageTable() {
   live.current.hero = hero;
 
   const send = useRef<Send>(sendAs(PAGE)).current;
+  const mat = useRef<MatScene | null>(null);
+  mat.current ??= new MatScene(send);
 
   const go = useCallback((next: Phase) => {
     live.current.phase = next;
@@ -129,16 +137,26 @@ export default function PageTable() {
     });
   }, [send]);
 
-  /** Measures the page and sends it as a scene: grid, mat, walls. */
+  /** The first screen's room on the table, and the walker's start in it. */
+  const drawMat = useCallback(() => {
+    const L = live.current;
+    const m = currentMat();
+    if (!m || L.phase === "idle") return;
+    const own = L.hero.data ? null : L.hero.slug;
+    const spot = m.pieces.find((p) => p.id === own);
+    mat.current!.draw(m, L.doc, L.cell, spot ? own : null);
+    L.path = spot ? [centreOf(spot), ...L.rest] : L.rest;
+    if (!L.free) L.target = along(L.path, fraction(window.scrollY, L.doc, window.innerHeight));
+  }, []);
+
+  /** Measures the page and sends it as a scene: grid, mat, the room. */
   const layout = useCallback(() => {
     const L = live.current;
     const { boxes, doc } = measure();
     L.cell = cellSize();
     L.doc = doc;
-    L.path = pathDown(boxes, doc, L.cell);
-    for (const id of L.wallIds) send({ type: "remove_wall", wallId: id });
-    const walls = wallsOf(boxes, doc);
-    L.wallIds = walls.map((w) => w.id);
+    L.rest = pathDown(boxes, doc, L.cell);
+    L.path = L.rest;
     send({
       type: "set_scene_grid",
       gridType: "square",
@@ -146,12 +164,16 @@ export default function PageTable() {
       mapWidth: doc.w,
       mapHeight: doc.h,
       visible: true,
+      color: GRID_INK,
     });
     send({ type: "set_scene_background", backgroundImagePath: "/table/mat.png", width: doc.w, height: doc.h });
-    for (const wall of walls) send({ type: "upsert_wall", wall });
     if (!L.free) L.target = along(L.path, fraction(window.scrollY, doc, window.innerHeight));
+    drawMat();
+    // The world's origin is the page's middle, so a page that grew moved
+    // everything on it: a hero standing still must be told where it is now.
+    if (L.phase === "running") send(heroToken(L.hero, toWorld(L.pos, doc)));
     aim();
-  }, [send, aim]);
+  }, [send, aim, drawMat]);
 
   const setup = useCallback(
     (s: Send) => {
@@ -167,11 +189,9 @@ export default function PageTable() {
   );
 
   const teardown = useCallback((s: Send) => {
-    const L = live.current;
     s({ type: "set_scene_playing", playing: false });
     s({ type: "remove_token", tokenId: WALKER });
-    for (const id of L.wallIds) s({ type: "remove_wall", wallId: id });
-    L.wallIds = [];
+    mat.current!.clear();
     s({ type: "set_scene_background", backgroundImagePath: null, width: 0, height: 0 });
   }, []);
 
@@ -292,8 +312,14 @@ export default function PageTable() {
     setHero(h);
     live.current.hero = h;
     if (!h.data) setSpec(presetSpec(h.slug));
-    if (live.current.phase === "running") send(heroToken(h, toWorld(live.current.pos, live.current.doc), true));
+    if (live.current.phase === "running") {
+      send(heroToken(h, toWorld(live.current.pos, live.current.doc), true));
+      drawMat();
+    }
   };
+
+  // A token dragged or a door swung on the first screen.
+  useEffect(() => watchMat(() => live.current.phase === "running" && drawMat()), [drawMat]);
 
   /** The built hero, drawn to pixels and sent to walk. */
   const apply = async () => {
@@ -403,3 +429,4 @@ export default function PageTable() {
     </>
   );
 }
+

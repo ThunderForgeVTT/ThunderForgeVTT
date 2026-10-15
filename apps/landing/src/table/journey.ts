@@ -1,11 +1,9 @@
 // Prototype: the whole page on the engine's table.
 //
 // The page's words stay in the DOM. Behind them one engine canvas fills the
-// viewport; each section's box is a walled block on the table, and the hero
-// walks a path down the page between them as the visitor scrolls. These are
-// the sums, kept pure so they can be tested without a browser.
-
-import type { Wall } from "@thunderforge/encounter";
+// viewport, and the hero walks a path down the page between the sections'
+// boxes as the visitor scrolls. These are the sums, kept pure so they can be
+// tested without a browser.
 
 /** A box on the page, in page pixels (y down from the document's top). */
 export interface Box {
@@ -74,30 +72,6 @@ export function along(path: Pt[], t: number): Pt {
     left -= len;
   }
   return path[path.length - 1]!;
-}
-
-/** Each box as four walls on the table, so the hero paths around it. */
-export function wallsOf(boxes: Box[], doc: Doc): Wall[] {
-  const out: Wall[] = [];
-  for (const box of boxes) {
-    const tl = toWorld({ x: box.x, y: box.y }, doc);
-    const br = toWorld({ x: box.x + box.w, y: box.y + box.h }, doc);
-    const corners: Pt[] = [tl, { x: br.x, y: tl.y }, br, { x: tl.x, y: br.y }];
-    corners.forEach((a, i) => {
-      const b = corners[(i + 1) % 4]!;
-      out.push({
-        id: `page-${box.id}-${i}`,
-        x1: a.x,
-        y1: a.y,
-        x2: b.x,
-        y2: b.y,
-        blocksVision: false,
-        blocksMovement: true,
-        doorState: "none",
-      });
-    });
-  }
-  return out;
 }
 
 /** How far down the page the visitor is, 0 at the top and 1 at the bottom. */

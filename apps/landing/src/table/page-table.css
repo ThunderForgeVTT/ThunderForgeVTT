@@ -24,6 +24,13 @@ body.in-engine .scroll-cue {
   display: none;
 }
 
+/* The first screen's walls, door and tokens are the engine's now
+   (`heroMat.ts`): the page keeps only the handles, to drag and to read. */
+body.in-engine .mat-ink .walls,
+body.in-engine .hero .token img {
+  visibility: hidden;
+}
+
 /* The hero's journey: a paper note that stays on screen, with the hero's
    face, how far down the page they are, and the party to pick from. */
 .journey {

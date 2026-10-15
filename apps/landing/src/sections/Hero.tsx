@@ -13,6 +13,7 @@ import { Nav } from "../Nav.tsx";
 import { DEMO, REPO, SPONSORS } from "../links.ts";
 import { ArrowMark, HeartMark, StarMark } from "../Icons.tsx";
 import { stroke } from "../ink/marker.ts";
+import { publishMat } from "../table/heroMat.ts";
 
 // The first viewport is a stretch of battle mat. The room is drawn in marker
 // around the headline, snapped outward to the printed grid; the party waits
@@ -46,7 +47,8 @@ interface Layout {
   rows: number;
   wide: boolean;
   walls: Seg[];
-  door: { hinge: { x: number; y: number }; leaf: { x: number; y: number }; arc: string };
+  /** `gap`: the doorway, which the door fills while it is shut. */
+  door: { gap: Seg; hinge: { x: number; y: number }; leaf: { x: number; y: number }; arc: string };
   spots: Record<string, Spot>;
   note: { x: number; y: number; w: number };
 }
@@ -150,6 +152,7 @@ function measure(
     const hinge = { x: P(x1), y: P(d0 + 2) };
     const leaf = { x: hinge.x + Math.sin(-a) * leafLen, y: hinge.y - Math.cos(a) * leafLen };
     door = {
+      gap: { x1: P(x1), y1: P(d0), x2: P(x1), y2: P(d0 + 2) },
       hinge,
       leaf,
       arc: `M${hinge.x} ${hinge.y - leafLen} A${leafLen} ${leafLen} 0 0 1 ${leaf.x.toFixed(1)} ${leaf.y.toFixed(1)}`,
@@ -168,6 +171,7 @@ function measure(
     const hinge = { x: P(d0 + 2), y: P(y1) };
     const leaf = { x: hinge.x - Math.cos(a) * leafLen, y: hinge.y + Math.sin(a) * leafLen };
     door = {
+      gap: { x1: P(d0), y1: P(y1), x2: P(d0 + 2), y2: P(y1) },
       hinge,
       leaf,
       arc: `M${hinge.x - leafLen} ${hinge.y} A${leafLen} ${leafLen} 0 0 0 ${leaf.x.toFixed(1)} ${leaf.y.toFixed(1)}`,
@@ -226,6 +230,8 @@ export function Hero() {
   const [spots, setSpots] = useState<Record<string, Spot>>({});
   const [drag, setDrag] = useState<Drag | null>(null);
   const [said, setSaid] = useState("");
+  // The door starts shut: "use the door" is a thing to do, not a gap.
+  const [doorOpen, setDoorOpen] = useState(false);
   // The hero fills the first screen on wide viewports, so nothing there says
   // the page goes on. A small note at its foot does, until the first scroll.
   const [scrolled, setScrolled] = useState(false);
@@ -281,7 +287,7 @@ export function Hero() {
       const c = layout.cell;
       if (
         crossesWall(
-          layout.walls,
+          doorOpen ? layout.walls : [...layout.walls, layout.door.gap],
           from.c * c + half,
           from.r * c + half,
           to.c * c + half,
@@ -291,8 +297,39 @@ export function Hero() {
         return "wall";
       return "ok";
     },
-    [layout, pieces, sizeOf, spots],
+    [layout, pieces, sizeOf, spots, doorOpen],
   );
+
+  // The page's table draws this mat when it holds the canvas (`PageTable`).
+  useEffect(() => {
+    const el = heroRef.current;
+    if (!layout || !el) return;
+    const r = el.getBoundingClientRect();
+    const ox = r.left + window.scrollX;
+    const oy = r.top + window.scrollY;
+    const at = (seg: Seg) => ({ x1: seg.x1 + ox, y1: seg.y1 + oy, x2: seg.x2 + ox, y2: seg.y2 + oy });
+    publishMat({
+      walls: layout.walls.map(at),
+      door: at(layout.door.gap),
+      doorOpen,
+      pieces: pieces.flatMap((p) => {
+        const spot = spots[p.id];
+        if (!spot) return [];
+        const dragging = drag?.id === p.id;
+        return [
+          {
+            id: p.id,
+            name: p.name.split(" (")[0]!,
+            src: p.src,
+            x: ox + (dragging ? drag.x : spot.c * layout.cell),
+            y: oy + (dragging ? drag.y : spot.r * layout.cell),
+            side: p.size * layout.cell,
+            foe: p.foe,
+          },
+        ];
+      }),
+    });
+  }, [layout, spots, drag, doorOpen, pieces]);
 
   const target = useMemo(() => {
     if (!drag || !layout) return null;
@@ -438,25 +475,43 @@ export function Hero() {
                 d={stroke(w.x1, w.y1, w.x2, w.y2, i + 7, { overshoot: 6, bow: 3 })}
               />
             ))}
-            <path
-              pathLength={1}
-              style={{ ["--i" as string]: layout.walls.length }}
-              className="marker marker--door"
-              d={stroke(
-                layout.door.hinge.x,
-                layout.door.hinge.y,
-                layout.door.leaf.x,
-                layout.door.leaf.y,
-                41,
-                { overshoot: 0, bow: 1 },
-              )}
-            />
-            <path
-              pathLength={1}
-              style={{ ["--i" as string]: layout.walls.length + 1 }}
-              className="marker marker--swing"
-              d={layout.door.arc}
-            />
+            {doorOpen ? (
+              <>
+                <path
+                  pathLength={1}
+                  style={{ ["--i" as string]: layout.walls.length }}
+                  className="marker marker--door"
+                  d={stroke(
+                    layout.door.hinge.x,
+                    layout.door.hinge.y,
+                    layout.door.leaf.x,
+                    layout.door.leaf.y,
+                    41,
+                    { overshoot: 0, bow: 1 },
+                  )}
+                />
+                <path
+                  pathLength={1}
+                  style={{ ["--i" as string]: layout.walls.length + 1 }}
+                  className="marker marker--swing"
+                  d={layout.door.arc}
+                />
+              </>
+            ) : (
+              <path
+                pathLength={1}
+                style={{ ["--i" as string]: layout.walls.length }}
+                className="marker marker--door"
+                d={stroke(
+                  layout.door.gap.x1,
+                  layout.door.gap.y1,
+                  layout.door.gap.x2,
+                  layout.door.gap.y2,
+                  41,
+                  { overshoot: 0, bow: 1 },
+                )}
+              />
+            )}
           </g>
           {ruler && target && (
             <g className={`ruler ruler--${target.verdict}`}>
@@ -480,8 +535,26 @@ export function Hero() {
           className="drag-note"
           style={{ left: layout.note.x, top: layout.note.y, maxWidth: layout.note.w }}
         >
-          Drag a token. It snaps to the squares, and the walls block it. Use the door.
+          Drag a token. It snaps to the squares, and the walls block it. Open the door.
         </p>
+      )}
+
+      {layout && (
+        <button
+          type="button"
+          className={`door-toggle${doorOpen ? " is-open" : ""}`}
+          style={{
+            left: (layout.door.gap.x1 + layout.door.gap.x2) / 2,
+            top: (layout.door.gap.y1 + layout.door.gap.y2) / 2,
+          }}
+          aria-pressed={doorOpen}
+          onClick={() => {
+            setDoorOpen(!doorOpen);
+            setSaid(doorOpen ? "The door is shut." : "The door is open.");
+          }}
+        >
+          {doorOpen ? "Shut the door" : "Open the door"}
+        </button>
       )}
 
       {layout &&
