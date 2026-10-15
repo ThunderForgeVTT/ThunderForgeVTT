@@ -149,10 +149,13 @@ at 1440. No single wheel notch darkens the page by more than a set step.
 - **FR-010**: The camp uses `camp-sample` (the owner's map, CC BY-SA
   4.0, credited like the tavern). It is drawn on the page grid to the right
   of the "Pull up a chair" heading.
-  - The log seats (top-left cell, map cells) are the top log (2,1),
-    (4,1) and (5,1), and the right log (6,3) and (6,5).
-  - The unused heroes take (2,1), (5,1), (6,3) and (6,5).
-  - The walker parks on (4,1), the empty seat above the fire.
+  - The log seats (top-left cell, map cells) are the top log (1,1),
+    (3,1) and (5,1), and the right log (6,3) and (6,5). Seats are two
+    squares apart so the nameplates never overlap.
+  - The unused heroes take (1,1), (6,3), (6,5), then (5,1).
+  - The walker parks on (3,1), the empty seat above the fire.
+  - The fire, centred on (4,4), is a light: by night it is the camp's only
+    light.
   - The camp has no walls, so its leg is planned only round the page's
     other walls.
 - **FR-011**: Under reduced motion, the hero stands at each station

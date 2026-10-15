@@ -16,10 +16,13 @@ export function boardStops(b: Board | null, hold: number): Station[][] {
   return [[{ at: b.entry }, { at: b.start, hold }, { at: b.entry }]];
 }
 
-export const inside = (b: Board, p: Pt) => p.x > b.x && p.x < b.x + b.w && p.y > b.y && p.y < b.y + b.h;
+/** A map's place on the page: the dungeon's board, or the camp. */
+export type Box = { x: number; y: number; w: number; h: number };
 
-/** The board's squares, as the planner names cells: the walker goes round. */
-export function blockedCells(b: Board | null, cell: number): Array<{ q: number; r: number }> {
+export const inside = (b: Box, p: Pt) => p.x > b.x && p.x < b.x + b.w && p.y > b.y && p.y < b.y + b.h;
+
+/** A map's squares, as the planner names cells: the walker goes round. */
+export function blockedCells(b: Box | null, cell: number): Array<{ q: number; r: number }> {
   if (!b) return [];
   const out: Array<{ q: number; r: number }> = [];
   const q0 = Math.round(b.x / cell);

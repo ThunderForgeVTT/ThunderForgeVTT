@@ -41,9 +41,9 @@ phase. Phone and tablet run at the end of each phase to prove FR-001.
 
 ## Phase 5: Campfire (US6)
 
-- [ ] T012 [US6] `camp-sample` is in `examples/maps` and
+- [x] T012 [US6] `camp-sample` is in `examples/maps` and
   `prepare-static.mjs`'s ROOMS; add `Campfire.tsx` beside "Pull up a chair".
-- [ ] T013 [US6] e2e: the unused heroes are on the logs, and the walker parks on (4,1).
+- [x] T013 [US6] e2e: the unused heroes are on the logs, and the walker parks on (3,1), two squares clear of the next seat.
 
 ## Phase 6: Dusk (US7)
 

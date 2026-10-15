@@ -33,16 +33,22 @@ export class MatScene {
 
   /** `live`: the engine runs and the page holds it. While it does not, sends
    * are dropped, so nothing may count as on the table. */
-  constructor(
-    private send: Send,
-    private live: () => boolean,
-  ) {}
+  private send: Send;
+  private live: () => boolean;
+  /** Its ids' prefix: one scene per map on the page. */
+  private kind: string;
+
+  constructor(send: Send, live: () => boolean, kind = "mat") {
+    this.send = send;
+    this.live = live;
+    this.kind = kind;
+  }
 
   /** Sends what changed. `skip`: the piece the page's walker stands in for. */
   draw(mat: Mat, doc: Doc, cell: number, skip: string | null) {
-    const walls = mat.walls.map((w, i) => ({ id: `mat-wall-${i}`, seg: w, doorState: "none" }));
-    if (mat.door) walls.push({ id: "mat-door", seg: mat.door, doorState: mat.doorOpen ? "open" : "closed" });
-    mat.doors?.forEach((d, i) => walls.push({ id: `mat-door-${i}`, seg: d.seg, doorState: d.open ? "open" : "closed" }));
+    const walls = mat.walls.map((w, i) => ({ id: `${this.kind}-wall-${i}`, seg: w, doorState: "none" }));
+    if (mat.door) walls.push({ id: `${this.kind}-door`, seg: mat.door, doorState: mat.doorOpen ? "open" : "closed" });
+    mat.doors?.forEach((d, i) => walls.push({ id: `${this.kind}-door-${i}`, seg: d.seg, doorState: d.open ? "open" : "closed" }));
     const seen = new Set<string>();
     for (const { id, seg, doorState } of walls) {
       const a = toWorld({ x: seg.x1, y: seg.y1 }, doc);
@@ -57,7 +63,7 @@ export class MatScene {
     this.walls = seen;
 
     const m = mat.map;
-    const mapId = m ? `mat-map-${[m.x, m.y, m.w, m.h, doc.w, doc.h].map(Math.round).join("-")}` : null;
+    const mapId = m ? `${this.kind}-map-${[m.x, m.y, m.w, m.h, doc.w, doc.h].map(Math.round).join("-")}` : null;
     if (this.map && this.map !== mapId) {
       this.send({ type: "remove_canvas_image_asset", assetId: this.map });
       this.map = null;
@@ -71,7 +77,7 @@ export class MatScene {
     const kept = new Set<string>();
     for (const p of mat.pieces) {
       if (p.id === skip) continue;
-      const id = `mat-${p.id}`;
+      const id = `${this.kind}-${p.id}`;
       const at = toWorld(centreOf(p), doc);
       kept.add(id);
       this.tokens.set(id, {
@@ -128,7 +134,7 @@ export class MatScene {
   setDown(ids: Set<string>) {
     for (const [id, want] of this.tokens) {
       if (!("defeated" in want.token)) continue;
-      const down = ids.has(id.slice("mat-".length));
+      const down = ids.has(id.slice(this.kind.length + 1));
       if (want.token.defeated === down) continue;
       want.token = { ...want.token, defeated: down };
       if (down) this.down.add(id);

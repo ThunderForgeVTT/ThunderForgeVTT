@@ -26,6 +26,7 @@ import { centreOf, MatScene } from "./matScene.ts";
 import { pickedTile, watchPick } from "./mapPick.ts";
 import { currentBoard, leftAt, seat, seatedAt, watchBoard, type Board } from "../room/pageBoard.ts";
 import { BoardArt, boardHold, blockedCells, boardStops, inside, placeOf, standUp } from "./roomOnPage.ts";
+import { beforeCamp, CAMP_FIRE, campFire, campMat, campStops, currentCamp, watchCamp } from "./campMat.ts";
 import {
   buildRoute,
   pageStations,
@@ -212,6 +213,8 @@ export default function PageTable() {
   }).current;
   const mat = useRef<MatScene | null>(null);
   mat.current ??= new MatScene(send, () => canvasOf(PAGE) !== null);
+  const camp = useRef<MatScene | null>(null);
+  camp.current ??= new MatScene(send, () => canvasOf(PAGE) !== null, "camp");
   const boardArt = useRef<BoardArt | null>(null);
   boardArt.current ??= new BoardArt(send);
 
@@ -332,11 +335,11 @@ export default function PageTable() {
     const { doc, cell } = L;
     const grid = { size: cell, originX: -doc.w / 2, originY: doc.h / 2 };
     const bounds = { min: { q: 0, r: -Math.ceil(doc.h / cell) }, max: { q: Math.ceil(doc.w / cell) - 1, r: -1 } };
-    // Round the dungeon's board, but straight into it and out by its top.
-    const board = currentBoard();
-    const blocked = blockedCells(board, cell);
+    // Round the dungeon's board and the camp, but straight into them by their top.
+    const maps = [currentBoard(), currentCamp()].filter((m) => m !== null);
+    const blocked = maps.flatMap((m) => blockedCells(m, cell));
     return (a, b) => {
-      if (board && (inside(board, a) || inside(board, b))) return null;
+      if (maps.some((m) => inside(m, a) || inside(m, b))) return null;
       const ask = { from: toWorld(a, doc), to: toWorld(b, doc), grid, bounds, blocked, maxNodes: 40000 };
       const way = (JSON.parse(e.plan_path!(JSON.stringify(ask))) as { path: Pt[] | null }).path;
       return way?.map((p) => ({ x: p.x + doc.w / 2, y: doc.h / 2 - p.y })) ?? null;
@@ -356,8 +359,9 @@ export default function PageTable() {
       const stops = () => [
         ...underPick(L.cell, hold),
         ...boardStops(currentBoard(), boardHold(window.innerHeight, L.cell)),
+        ...campStops(currentCamp()),
       ];
-      const stations = () => pageStations(seat, exit, L.rest, L.cell, hold, stops());
+      const stations = () => pageStations(seat, exit, beforeCamp(L.rest, currentCamp()), L.cell, hold, stops());
       const use = (r: Route) => {
         L.route = r;
         L.goalS = goalOf(r);
@@ -386,6 +390,10 @@ export default function PageTable() {
     const spot = m.pieces.find((p) => p.id === own);
     mat.current!.draw(m, L.doc, L.cell, spot ? own : null);
     boardArt.current!.draw(currentBoard(), L.doc, canvasOf(PAGE) !== null);
+    const c = currentCamp();
+    if (c) camp.current!.draw(campMat(c, own), L.doc, L.cell, null);
+    else camp.current!.clear();
+    send(c ? campFire(c, L.doc) : { type: "remove_light", lightId: CAMP_FIRE });
     const from = spot ? [centreOf(spot)] : [];
     L.path = [...from, ...(m.exit ? [m.exit] : []), ...L.rest];
     if (!L.free) L.target = along(L.path, fraction(window.scrollY, L.doc, window.innerHeight));
@@ -586,11 +594,13 @@ export default function PageTable() {
     L.torches = 0;
     L.glow = 0;
     s({ type: "remove_light", lightId: LANTERN });
+    s({ type: "remove_light", lightId: CAMP_FIRE });
     s({ type: "set_ambient_light", level: "bright" });
     L.shade = -1;
     s({ type: "set_scene_playing", playing: false });
     s({ type: "remove_token", tokenId: WALKER });
     mat.current!.clear();
+    camp.current!.clear();
     L.down = "";
     s({ type: "set_scene_background", backgroundImagePath: null, width: 0, height: 0 });
   }, []);
@@ -819,6 +829,8 @@ export default function PageTable() {
   useEffect(() => watchMat(() => live.current.phase === "running" && drawMat()), [drawMat]);
   // Another map picked in the atlas: the hero goes to stand under it.
   useEffect(() => watchPick(() => live.current.phase === "running" && drawMat()), [drawMat]);
+  // The camp laid or moved, or its party known (spec 098 US6).
+  useEffect(() => watchCamp(() => live.current.phase === "running" && drawMat()), [drawMat]);
 
   /** The built hero, drawn to pixels and sent to walk. */
   const apply = async () => {

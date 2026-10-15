@@ -33,7 +33,8 @@ body.in-engine .scroll-cue {
    (`heroMat.ts`): the page keeps only the handles, to drag and to read. */
 body.in-engine .mat-ink .walls,
 body.in-engine .hero .token img,
-body.in-engine .hero-tavern-map img {
+body.in-engine .hero-tavern-map img,
+body.in-engine .camp-map img {
   visibility: hidden;
 }
 
