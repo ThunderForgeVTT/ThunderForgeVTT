@@ -248,3 +248,11 @@ body.in-engine .scroll-cue {
   background: none;
   cursor: pointer;
 }
+
+/* The tray while the page is the table: a line in place of its frame. */
+.tray-on-page {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-family: var(--font-marker);
+  color: var(--text-blue);
+}

@@ -2,12 +2,18 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { diceCommand, type Resolution } from "@thunderforge/dice-throw";
 import { dice, seed } from "../dice.ts";
 import EngineFrame, { type FrameState, type Send } from "../engine/EngineFrame.tsx";
+import { sendAs } from "../engine/host.ts";
+import { onPage, PAGE_TABLE, watchPage } from "../table/onPage.ts";
 
 // The dice crate the server rolls with, compiled to WebAssembly and running
 // right here. Loaded with this section, never with the first viewport.
 //
 // Spec 090: once the visitor asks for the table, every roll printed here is
 // also thrown on it, face for face. The tray never waits for the engine.
+//
+// While the page itself is the table (`table/PageTable.tsx`), the roll goes
+// there instead: the dice tumble over the page, and the tray offers no frame
+// of its own, which would only take the canvas away from the page.
 
 type Sides = Resolution["dice"][number]["sides"];
 type Command = ReturnType<typeof diceCommand>;
@@ -74,6 +80,10 @@ export default function DiceTray() {
   const send = useRef<Send | null>(null);
   const loading = useRef(false);
   const pending = useRef<Command | null>(null);
+  const [page, setPage] = useState(false);
+  const toPage = useRef<Send>(sendAs(PAGE_TABLE)).current;
+
+  useEffect(() => watchPage(setPage), []);
 
   const onState = useCallback((state: FrameState, live: Send | null) => {
     send.current = live;
@@ -83,8 +93,12 @@ export default function DiceTray() {
   }, []);
 
   function thrown(r: Resolution) {
-    if (!send.current && !loading.current) return;
     const command = diceCommand(r, { rollerName: "You" });
+    if (onPage()) {
+      toPage(command);
+      return;
+    }
+    if (!send.current && !loading.current) return;
     if (send.current) send.current(command);
     else pending.current = command;
   }
@@ -196,14 +210,18 @@ export default function DiceTray() {
         )}
       </div>
 
-      <EngineFrame
-        id="dice-table"
-        poster={{ src: "/dice-table.webp", width: 1200, height: 675 }}
-        action="Throw it on the table"
-        away="The table is in the room below."
-        setup={traySetup}
-        onState={onState}
-      />
+      {page ? (
+        <p className="tray-on-page">Every roll lands on the page. Watch below the tray.</p>
+      ) : (
+        <EngineFrame
+          id="dice-table"
+          poster={{ src: "/dice-table.webp", width: 1200, height: 675 }}
+          action="Throw it on the table"
+          away="The table is in the room below."
+          setup={traySetup}
+          onState={onState}
+        />
+      )}
     </div>
   );
 }

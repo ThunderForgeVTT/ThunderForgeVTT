@@ -4,6 +4,7 @@ import { holderId, sendAs, take, type Send } from "../engine/host.ts";
 import type { Progress } from "../engine/loadEngine.ts";
 import { PARTY, type PartyHero } from "../room/party.ts";
 import { rasterize, svgUrl } from "./heroArt.ts";
+import { announcePage, PAGE_TABLE } from "./onPage.ts";
 import "./page-table.css";
 import { along, fraction, pathDown, toWorld, wallsOf, type Box, type Doc, type Pt } from "./journey.ts";
 
@@ -22,7 +23,7 @@ import { along, fraction, pathDown, toWorld, wallsOf, type Box, type Doc, type P
 
 const HeroBuilder = lazy(() => import("./HeroBuilder.tsx"));
 
-const PAGE = "page-table";
+const PAGE = PAGE_TABLE;
 const WALKER = "walker";
 const REDUCE = "(prefers-reduced-motion: reduce)";
 /** What a tap on counts as the table, not the page's words. */
@@ -109,6 +110,7 @@ export default function PageTable() {
     live.current.phase = next;
     setPhase(next);
     document.body.classList.toggle("in-engine", next === "running");
+    announcePage();
   }, []);
 
   /** The camera over the viewport, exactly: the grid is the page's grid. */
@@ -276,7 +278,9 @@ export default function PageTable() {
       const dy = L.target.y - L.pos.y;
       const dist = Math.hypot(dx, dy);
       if (dist < 0.5) return;
-      const speed = Math.max(3, Math.min(dist, dist * 0.12));
+      // Never past the target: a step that overshot would send a move every
+      // frame for ever, and each one wakes the engine before it can draw.
+      const speed = Math.min(dist, Math.max(3, dist * 0.12));
       L.pos = { x: L.pos.x + (dx / dist) * speed, y: L.pos.y + (dy / dist) * speed };
       send(heroToken(L.hero, toWorld(L.pos, L.doc)));
     };
