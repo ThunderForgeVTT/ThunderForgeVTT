@@ -348,6 +348,11 @@ body.in-engine .camp-map img {
   /* Firelight on the headings. */
   text-shadow: 0 0 18px rgb(255 179 92 / 0.28);
 }
+:root.dusk .marker {
+  /* Ink multiplies into paper; chalk on the night board must not. Multiplied,
+     the legend's swatches and the GM's screen came out the colour of the night. */
+  mix-blend-mode: normal;
+}
 :root.dusk .sc-point {
   /* By night the star chart is in the sky: starlight, not ink. */
   stroke: #f4e3a6;
