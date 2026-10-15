@@ -11,7 +11,7 @@ use bevy::prelude::*;
 use thunderforge_canvas_core::glide::Glide;
 
 use crate::TokenIdentity;
-use crate::resources::SceneGrid;
+use crate::resources::{DraggingToken, SceneGrid};
 
 /// Whether the viewer prefers reduced motion: every move jumps (FR-004).
 /// `set_reduced_motion` writes it.
@@ -42,12 +42,18 @@ pub(crate) fn track_token_glides(
     time: Res<Time>,
     grid: Option<Res<SceneGrid>>,
     reduced: Option<Res<ReducedMotion>>,
-    mut tokens: Query<(Entity, &Transform, Option<&mut TokenGlide>), With<TokenIdentity>>,
+    dragging: Option<Res<DraggingToken>>,
+    mut tokens: Query<(Entity, &TokenIdentity, &Transform, Option<&mut TokenGlide>)>,
 ) {
     let square = grid.map_or(0.0, |g| g.size);
     let reduced = reduced.is_some_and(|r| r.0);
     let dt = time.delta_secs();
-    for (entity, transform, glide) in tokens.iter_mut() {
+    let carried = |id: &str| {
+        dragging
+            .as_ref()
+            .is_some_and(|d| d.0.iter().any(|t| t.id == id))
+    };
+    for (entity, identity, transform, glide) in tokens.iter_mut() {
         let at = transform.translation.truncate();
         let Some(mut glide) = glide else {
             commands.entity(entity).insert(TokenGlide {
@@ -56,6 +62,13 @@ pub(crate) fn track_token_glides(
             });
             continue;
         };
+        // A carried token follows the hand square by square: a picture
+        // gliding after it would trail the finger and catch up in jerks.
+        if carried(&identity.0) {
+            glide.glide = Glide::default();
+            glide.last = at;
+            continue;
+        }
         let delta = at - glide.last;
         if delta != Vec2::ZERO {
             glide.glide.hop(delta, square, reduced);
@@ -149,6 +162,7 @@ fn draw_carried(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::resources::DraggedToken;
     use bevy::transform::TransformSystems;
     use thunderforge_canvas_core::grid::GridSpec;
 
@@ -207,6 +221,37 @@ mod tests {
             .spawn((TokenIdentity("hero".into()), Transform::default()))
             .id();
         app.update();
+        app.world_mut()
+            .get_mut::<Transform>(token)
+            .unwrap()
+            .translation
+            .x = 100.0;
+        app.update();
+        let drawn = app
+            .world()
+            .get::<GlobalTransform>(token)
+            .unwrap()
+            .translation();
+        assert_eq!(drawn.x, 100.0);
+    }
+
+    #[test]
+    fn a_carried_token_is_drawn_under_the_hand() {
+        let mut app = app();
+        app.init_resource::<DraggingToken>();
+        let token = app
+            .world_mut()
+            .spawn((TokenIdentity("hero".into()), Transform::default()))
+            .id();
+        app.update();
+        app.world_mut()
+            .resource_mut::<DraggingToken>()
+            .0
+            .push(DraggedToken {
+                id: "hero".into(),
+                offset: Vec2::ZERO,
+                origin: Vec2::ZERO,
+            });
         app.world_mut()
             .get_mut::<Transform>(token)
             .unwrap()
