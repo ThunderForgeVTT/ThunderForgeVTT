@@ -23,7 +23,7 @@ pub use scene_data::{GridType, SceneData};
 pub use selection::{DraggedToken, DraggingToken, SelectedToken};
 pub use shape::{ActiveShapeTool, SelectedShape, Shape, ShapeEdit, ShapeKind, ShapeSet};
 pub use token_grid::{GridSnapEnabled, TokenGridBehaviour};
-pub use vision::{LightingOverlay, SceneAmbient, TokenVision};
+pub use vision::{AmbientShade, LightingOverlay, SceneAmbient, TokenVision};
 pub use wall::{
     ActiveWallPrimitive, DoorState, IsGameMaster, SelectedWall, ViewerUserId, Wall, WallEdit,
     WallPrimitive, WallSet, is_visible,

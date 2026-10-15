@@ -137,6 +137,7 @@ pub(crate) struct SceneParams<'w, 's> {
     grid_visible: Option<ResMut<'w, GridVisible>>,
     grid_ink: Option<ResMut<'w, GridInk>>,
     ambient: Option<ResMut<'w, SceneAmbient>>,
+    ambient_shade: Option<ResMut<'w, AmbientShade>>,
     lighting_overlay: Option<ResMut<'w, LightingOverlay>>,
     camera: Option<ResMut<'w, CameraManager>>,
     grid_snap: Option<ResMut<'w, GridSnapEnabled>>,
@@ -829,7 +830,17 @@ pub(crate) fn apply_external_commands(
                     }
                 }
             }
-            ExternalCommand::SetAmbientLight { level, color } => {
+            ExternalCommand::SetAmbientLight {
+                level,
+                color,
+                shade,
+            } => {
+                if let Some(held) = scene.ambient_shade.as_deref_mut() {
+                    let next = AmbientShade(shade.map(|s| s.clamp(0.0, 1.0)));
+                    if *held != next {
+                        *held = next;
+                    }
+                }
                 if let Some(ambient) = scene.ambient.as_deref_mut() {
                     ambient.level = match level.trim().to_ascii_lowercase().as_str() {
                         "dark" | "dark_ness" | "darkness" | "unlit" => Illumination::Dark,

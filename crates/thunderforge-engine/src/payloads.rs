@@ -548,6 +548,9 @@ pub(crate) enum ExternalCommand {
     SetAmbientLight {
         level: String,
         color: Option<String>,
+        /// How dark the map looks, 0 to 1, overriding the level's own (a
+        /// dusk). Absent: the level decides.
+        shade: Option<f32>,
     },
     /// Draws the lighting/vision debug overlay: light radii and vision cones.
     SetLightingOverlay {

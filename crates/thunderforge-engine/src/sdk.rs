@@ -317,6 +317,7 @@ pub(crate) fn parse_command(input: &str) -> Option<ExternalCommand> {
                 .get("color")
                 .and_then(Value::as_str)
                 .map(str::to_owned),
+            shade: value.get("shade").and_then(Value::as_f64).map(|f| f as f32),
         }),
         "set_lighting_overlay" => Some(ExternalCommand::SetLightingOverlay {
             enabled: value.get("enabled")?.as_bool()?,
@@ -736,5 +737,34 @@ mod viewer_command_tests {
             panic!("upsert_shape without a creator should parse");
         };
         assert_eq!(shape.created_by, None);
+    }
+}
+
+#[cfg(test)]
+mod ambient_command_tests {
+    use super::*;
+
+    fn shade(input: &str) -> Option<Option<f32>> {
+        match parse_command(input)? {
+            ExternalCommand::SetAmbientLight { shade, .. } => Some(shade),
+            _ => None,
+        }
+    }
+
+    /// A dusk: a bright scene drawn darker without hiding anyone.
+    #[test]
+    fn a_shade_is_read_beside_the_level() {
+        assert_eq!(
+            shade(r#"{"type":"set_ambient_light","level":"bright","shade":0.5}"#),
+            Some(Some(0.5))
+        );
+    }
+
+    #[test]
+    fn without_a_shade_the_level_decides() {
+        assert_eq!(
+            shade(r#"{"type":"set_ambient_light","level":"dark"}"#),
+            Some(None)
+        );
     }
 }

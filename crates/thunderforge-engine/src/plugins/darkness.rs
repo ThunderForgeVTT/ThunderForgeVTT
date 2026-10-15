@@ -58,7 +58,7 @@ use bevy::sprite_render::{AlphaMode2d, Material2d, Material2dPlugin};
 
 use super::darkness_probe;
 use crate::TokenIdentity;
-use crate::resources::{CanvasLayer, LightSet, SceneAmbient, WallSet};
+use crate::resources::{AmbientShade, CanvasLayer, LightSet, SceneAmbient, WallSet};
 #[cfg(test)]
 use crate::systems::lighting::effective_light_position;
 use crate::systems::lighting::live_light_position;
@@ -249,6 +249,7 @@ impl Plugin for DarknessPlugin {
             // was always `None` — the command reported success and changed
             // nothing, and the whole lighting layer saw permanent daylight.
             .init_resource::<SceneAmbient>()
+            .init_resource::<AmbientShade>()
             .init_resource::<ShadowMap>()
             .init_resource::<ShadowStats>()
             .add_systems(Update, sync_darkness);
@@ -429,6 +430,7 @@ fn new_shadow_image() -> Image {
 fn sync_darkness(
     mut commands: Commands,
     ambient: Option<Res<SceneAmbient>>,
+    shade: Option<Res<AmbientShade>>,
     light_set: Res<LightSet>,
     wall_set: Res<WallSet>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -448,7 +450,9 @@ fn sync_darkness(
         thunderforge_canvas_core::vision::AmbientLight::daylight,
         |a| a.0,
     );
-    let strength = darkness_strength(ambient.level);
+    let strength = shade
+        .and_then(|shade| shade.0)
+        .unwrap_or_else(|| darkness_strength(ambient.level));
 
     let positions: HashMap<String, Vec2> = tokens
         .iter()
