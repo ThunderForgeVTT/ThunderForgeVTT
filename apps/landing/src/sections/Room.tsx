@@ -1,20 +1,25 @@
 import { useEffect, useRef, useState } from "react";
-import { describePlace } from "@thunderforge/encounter";
+import { describePlace, goalsOf } from "@thunderforge/encounter";
 import EngineFrame from "../engine/EngineFrame.tsx";
 import { CC_BY_SA, DEMO, MAPS_CATALOG, MAPS_SOURCE } from "../links.ts";
 import ChestGlitter from "../room/ChestGlitter.tsx";
 import RoomControls from "../room/RoomControls.tsx";
 import GoalList from "../room/GoalList.tsx";
-import { loadRoomScript, type LoadedRoom } from "../room/script.ts";
+import { loadRoomScript, type LoadedRoom, type RoomName } from "../room/script.ts";
 import { useRoom } from "../room/useRoom.ts";
-import { AWAY, ENDING } from "../room/words.ts";
+import { AWAY, ENDING, ROAD_ON } from "../room/words.ts";
 import "../room/room.css";
 
-// Spec 091 US1 and US2: one small dungeon, on the engine when
-// the visitor asks for it, and in words always. The page plays the server's
-// part with a scripted referee; nothing here is a game master.
+// Spec 091 US1 and US2: a tavern the hero walks through, then one small
+// dungeon, on the engine when in view and in words always. The page plays
+// the server's part with a scripted referee; nothing here is a game master.
+// One engine serves both: the frame in view holds the table.
 
-const FRAME_ID = "room-table";
+/** Each room's frame, and the still it shows before the engine draws it. */
+const FRAMES: Record<RoomName, { id: string; poster: string; goals: string }> = {
+  tavern: { id: "tavern-table", poster: "/tavern-table.webp", goals: "The tavern's goals" },
+  dungeon: { id: "room-table", poster: "/room-table.webp", goals: "The dungeon's goals" },
+};
 /** FR-022: no room map is wider than this. */
 const MAX_TEXTURE = 4096;
 
@@ -29,10 +34,18 @@ function Credit() {
   );
 }
 
-function RoomBody({ script, imageBytes }: LoadedRoom) {
-  const room = useRoom(script, FRAME_ID);
+/** Down the page to the dungeon, the way the hero walks. */
+function followDown() {
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  document.getElementById("room")?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+}
+
+function RoomBody({ name, script, imageBytes }: LoadedRoom & { name: RoomName }) {
+  const frame = FRAMES[name];
+  const room = useRoom(script, frame.id);
   const { state, said } = room;
-  const done = state.goals.includes("chest-opened");
+  const goals = goalsOf(script);
+  const done = state.goals.includes(goals[goals.length - 1]!);
   // FR-021: the keys act from the room's controls; a press on the table puts
   // focus there, so the arrows and WASD work right after a click on it.
   const controls = useRef<HTMLDivElement>(null);
@@ -41,8 +54,8 @@ function RoomBody({ script, imageBytes }: LoadedRoom) {
     <div className="room-layout" data-square={`${state.hero.x},${state.hero.y}`}>
       <figure className="room-table" onPointerDown={() => controls.current?.focus({ preventScroll: true })}>
         <EngineFrame
-          id={FRAME_ID}
-          poster={{ src: "/room-table.webp", width: 1200, height: 675 }}
+          id={frame.id}
+          poster={{ src: frame.poster, width: 1200, height: 675 }}
           action="Play the room"
           auto
           away={AWAY}
@@ -65,7 +78,7 @@ function RoomBody({ script, imageBytes }: LoadedRoom) {
           words on the other. */}
       <div className="room-hud">
         <div className="room-hud-panel room-hud-quest">
-          <GoalList met={state.goals} />
+          <GoalList goals={goals} met={state.goals} label={frame.goals} />
           <p className="room-place">{describePlace(script, state)}</p>
         </div>
         <div className="room-hud-panel room-hud-controls">
@@ -90,7 +103,17 @@ function RoomBody({ script, imageBytes }: LoadedRoom) {
             {said ? said.text + (said.n % 2 ? " " : "") : ""}
           </p>
           {!said && <p className="room-hint">Make a move, and the referee's answer lands here.</p>}
-          {done && (
+          {done && !script.chest && (
+            <div className="room-ending">
+              <p>{ROAD_ON}</p>
+              <p>
+                <button type="button" className="ink-btn ink-btn--small ink-btn--blue" onClick={followDown}>
+                  Follow the path down
+                </button>
+              </p>
+            </div>
+          )}
+          {done && script.chest && (
             <div className="room-ending">
               <p>{ENDING}</p>
               <p>
@@ -109,7 +132,7 @@ function RoomBody({ script, imageBytes }: LoadedRoom) {
   );
 }
 
-export default function Room() {
+export default function Room({ name = "dungeon" }: { name?: RoomName }) {
   const [loaded, setLoaded] = useState<LoadedRoom | null>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -117,14 +140,14 @@ export default function Room() {
   useEffect(() => {
     let live = true;
     setFailed(false);
-    loadRoomScript().then(
+    loadRoomScript(name).then(
       (r) => live && setLoaded(r),
       () => live && setFailed(true),
     );
     return () => {
       live = false;
     };
-  }, [attempt]);
+  }, [name, attempt]);
 
   if (failed) {
     return (
@@ -138,5 +161,5 @@ export default function Room() {
     );
   }
   if (!loaded) return <div className="room-layout room-layout--loading" />;
-  return <RoomBody {...loaded} />;
+  return <RoomBody name={name} {...loaded} />;
 }

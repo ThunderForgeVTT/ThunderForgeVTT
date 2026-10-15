@@ -17,7 +17,11 @@ export const GOAL_LABELS = {
   "door-opened": "Open the door",
   "chest-found": "Find the chest",
   "chest-opened": "Open the chest",
+  "room-left": "Leave by the back door",
 } as const;
+
+/** The tavern's ending: the road goes on, down the page. */
+export const ROAD_ON = "The path runs on, down the page, to a dungeon.";
 
 const doorName = (script: RoomScript, id: string) => script.doorNames[id] ?? "the door";
 
@@ -48,6 +52,8 @@ export function announce(script: RoomScript, state: RoomState, outcome: Outcome)
       return `You rolled ${lastRoll?.total}. Not enough: you need ${dc}. Roll again.`;
     case "roll-succeeded":
       return `You rolled ${lastRoll?.total}. The chest opens.`;
+    case "room-left":
+      return "You step out of the back door onto the path. It runs down the page.";
     case "chest-already-open":
       return "The chest is already open.";
     case "reset":

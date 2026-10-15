@@ -78,7 +78,7 @@ function cellSize(): number {
 function measure(): { boxes: Box[]; doc: Doc } {
   const doc = { w: document.documentElement.clientWidth, h: document.documentElement.scrollHeight };
   const boxes: Box[] = [];
-  document.querySelectorAll<HTMLElement>("[data-section], #room").forEach((el) => {
+  document.querySelectorAll<HTMLElement>("[data-section], #tavern, #room").forEach((el) => {
     const r = el.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) return;
     boxes.push({
@@ -422,7 +422,7 @@ export default function PageTable() {
     L.path = L.rest;
     const vh = window.innerHeight;
     const first = boxes[0];
-    const room = boxes.find((b) => b.id === "room");
+    const room = boxes.find((b) => b.id === "tavern") ?? boxes.find((b) => b.id === "room");
     L.dayEnds = first ? first.y + first.h - vh / 2 : 0;
     L.nightAt = room ? room.y - vh / 4 : doc.h;
     // The night holds to the page's end: the star chart is in a night sky.

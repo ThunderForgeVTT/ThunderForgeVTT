@@ -11,7 +11,6 @@ import {
   type Direction,
   type EngineEvent,
   type GoalEventDetail,
-  type GoalId,
   type Judged,
   type RoomScript,
   type RoomState,
@@ -24,7 +23,7 @@ import { pressOnCanvas } from "../engine/keys.ts";
 import { journeyHero, watchJourneyHero, type Walker } from "../table/journeyHero.ts";
 import type { PartyHero } from "./party.ts";
 import { rollFormula } from "./roll.ts";
-import { chestOnBoard, outcomeCommands, parityError, sceneCommands, type Camera } from "./scene.ts";
+import { squareOnBoard, outcomeCommands, parityError, sceneCommands, type Camera } from "./scene.ts";
 import { announce } from "./words.ts";
 
 // Spec 091 T034: one referee, answering the DOM room and the engine alike.
@@ -50,8 +49,8 @@ export interface Glitter {
   n: number;
 }
 
-/** Each goal is announced on the page once, however often the room restarts. */
-const told = new Set<GoalId>();
+/** Each room's goals are announced on the page once, however often it restarts. */
+const told = new Set<string>();
 
 interface Pending {
   dir: Direction;
@@ -96,8 +95,8 @@ export function useRoom(script: RoomScript, frameId: string) {
       now.current = next;
       setState(next);
       if (!quiet || outcome.goal) say(announce(script, next, outcome));
-      if (outcome.goal && !told.has(outcome.goal)) {
-        told.add(outcome.goal);
+      if (outcome.goal && !told.has(`${frameId}:${outcome.goal}`)) {
+        told.add(`${frameId}:${outcome.goal}`);
         window.dispatchEvent(
           new CustomEvent<GoalEventDetail>(GOAL_EVENT, { detail: { goal: outcome.goal } }),
         );
@@ -105,7 +104,7 @@ export function useRoom(script: RoomScript, frameId: string) {
       const send = engine.current.send;
       if (send) for (const c of outcomeCommands(script, heroNow.current, judged)) send(c);
     },
-    [script, say],
+    [script, frameId, say],
   );
 
   /** The engine never answered: the rule decides, and the engine is told. */
@@ -159,8 +158,8 @@ export function useRoom(script: RoomScript, frameId: string) {
           // there the server refuses a move of a token that is not yours and
           // the board snaps back. Here the room is the server, and it
           // refuses the same way: the chest goes back where it stood.
-          if (event.token.id === script.chest.tokenId) {
-            engine.current.send?.(chestCommand(script, state.goals.includes("chest-opened")));
+          if (event.token.id === script.chest?.tokenId) {
+            for (const c of chestCommand(script, state.goals.includes("chest-opened"))) engine.current.send?.(c);
             return;
           }
           if (event.token.id !== HERO_ID) return;
@@ -261,10 +260,11 @@ export function useRoom(script: RoomScript, frameId: string) {
    */
   const sparkle = useCallback(() => {
     const e = running();
-    if (!e || engine.current.state !== "running" || matchMedia(REDUCE).matches) return;
+    const chest = script.chest;
+    if (!e || !chest || engine.current.state !== "running" || matchMedia(REDUCE).matches) return;
     const cam = JSON.parse(e.camera_state()) as Camera;
     if (glitterTimer.current) clearTimeout(glitterTimer.current);
-    setGlitter((g) => ({ ...chestOnBoard(script, cam), n: (g?.n ?? 0) + 1 }));
+    setGlitter((g) => ({ ...squareOnBoard(script, chest.square, cam), n: (g?.n ?? 0) + 1 }));
     glitterTimer.current = setTimeout(() => setGlitter(null), GLITTER_MS);
   }, [script]);
   useEffect(() => () => {

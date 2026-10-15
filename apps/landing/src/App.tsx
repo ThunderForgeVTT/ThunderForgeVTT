@@ -53,16 +53,27 @@ export function App() {
             <MapLegend />
           </Suspense>
         </section>
-        <section id="room" className="section room-section" aria-labelledby="room-title">
-          <h2 id="room-title" className="marker-head">
-            Play one room.
+        <section id="tavern" className="section room-section" aria-labelledby="tavern-title">
+          <h2 id="tavern-title" className="marker-head">
+            Walk through the tavern.
           </h2>
           <p className="lede">
-            <strong>A simulation.</strong> This room runs in your browser. The page plays the server's part: it checks every move
-            and opens every door, as a ThunderForge server would.
+            <strong>A simulation.</strong> These rooms run in your browser. The page plays the server's part: it checks every
+            move and opens every door, as a ThunderForge server would.
           </p>
           <Suspense fallback={<div className="room-layout room-layout--loading" />}>
-            <Room />
+            <Room name="tavern" />
+          </Suspense>
+        </section>
+        <section id="room" className="section room-section" aria-labelledby="room-title">
+          <h2 id="room-title" className="marker-head">
+            Then play one room.
+          </h2>
+          <p className="lede">
+            <strong>A simulation.</strong> The path ends at a dungeon: a door, a hall, and a chest that wants a roll.
+          </p>
+          <Suspense fallback={<div className="room-layout room-layout--loading" />}>
+            <Room name="dungeon" />
           </Suspense>
         </section>
         <Systems />

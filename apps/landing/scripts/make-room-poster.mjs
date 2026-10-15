@@ -1,15 +1,17 @@
-// Spec 091 FR-018 (T039): the room frame's poster, drawn by the engine.
+// Spec 091 FR-018 (T039): a room frame's poster, drawn by the engine.
 //
 // Serves the built landing with the demo's engine, as `make-poster.mjs`
 // does, presses "Play the room" with Sir Pip, waits until the hero's sight
 // is drawn and the camera has settled, and saves the frame as a 1200x675
-// webp in `public/room-table.webp`. The webp is committed.
+// webp in `public/<frame>.webp`. The webps are committed. The room is the
+// first argument, `dungeon` (`room-table`) or `tavern` (`tavern-table`).
 //
 // Rerun by hand when the engine's look or the room's art changes, after
 // both builds:
 //   pnpm -F @thunderforge/demo run build
 //   pnpm -F @thunderforge/landing run build
-//   node apps/landing/scripts/make-room-poster.mjs
+//   node apps/landing/scripts/make-room-poster.mjs dungeon
+//   node apps/landing/scripts/make-room-poster.mjs tavern
 import { spawn } from "node:child_process";
 import { existsSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
@@ -19,14 +21,20 @@ import { chromium } from "@playwright/test";
 const HERE = new URL(".", import.meta.url).pathname;
 const LANDING = resolve(HERE, "..");
 const ROOT = resolve(LANDING, "../..");
-const OUT = join(LANDING, "public/room-table.webp");
+const ROOMS = {
+  dungeon: { frame: "room-table", map: "dungeon-sample" },
+  tavern: { frame: "tavern-table", map: "tavern-sample" },
+};
+const ROOM = ROOMS[process.argv[2] ?? "dungeon"];
+if (!ROOM) throw new Error(`make-room-poster: no room ${process.argv[2]}; one of ${Object.keys(ROOMS)}`);
+const OUT = join(LANDING, `public/${ROOM.frame}.webp`);
 const [W, H] = [1200, 675];
 /** `fit_camera_to` eases whatever reduced motion says; let it arrive. */
 const SETTLE_MS = 2500;
 
 for (const need of [
   join(LANDING, "dist/index.html"),
-  join(LANDING, "dist/maps/dungeon-sample.json"),
+  join(LANDING, `dist/maps/${ROOM.map}.json`),
   join(ROOT, "data/demo/engine.json"),
 ]) {
   if (!existsSync(need)) throw new Error(`make-room-poster: ${need} is missing; build first`);
@@ -55,10 +63,10 @@ try {
     reducedMotion: "reduce",
   });
   await page.goto(base);
-  const frame = page.locator("#room-table");
+  const frame = page.locator(`#${ROOM.frame}`);
   await frame.scrollIntoViewIfNeeded();
   await page.addStyleTag({
-    content: `#room-table { position: fixed; inset: 0 auto auto 0; z-index: 9; width: ${W}px; border: 0; border-radius: 0; }
+    content: `#${ROOM.frame} { position: fixed; inset: 0 auto auto 0; z-index: 9; width: ${W}px; border: 0; border-radius: 0; }
       .journey { display: none; }`,
   });
   await frame.getByRole("button", { name: "Play the room" }).click();

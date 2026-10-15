@@ -1,4 +1,4 @@
-import type { KeyboardEvent, Ref } from "react";
+import { useId, type KeyboardEvent, type Ref } from "react";
 import type { Direction, Outcome, RoomScript, RoomState } from "@thunderforge/encounter";
 import { directionOf } from "../engine/keys.ts";
 
@@ -33,6 +33,7 @@ export default function Controls(props: Props) {
   const found = state.goals.includes("chest-found");
   const opened = state.goals.includes("chest-opened");
   const last = state.rolls[state.rolls.length - 1];
+  const why = useId();
 
   function keys(e: KeyboardEvent) {
     if (e.target instanceof HTMLInputElement) return;
@@ -63,11 +64,11 @@ export default function Controls(props: Props) {
 
       <div className="room-actions">
         <button type="button" className="ink-btn ink-btn--small ink-btn--blue-line" disabled={!door} onClick={props.onDoor}
-          aria-describedby={door ? undefined : "room-door-why"}>
+          aria-describedby={door ? undefined : why}>
           {door ? `${door.state === "open" ? "Open" : "Close"} ${doorName}` : "Open the door"}
         </button>
         {!door && (
-          <p id="room-door-why" className="room-hint">
+          <p id={why} className="room-hint">
             {doorPreview.reason}
           </p>
         )}

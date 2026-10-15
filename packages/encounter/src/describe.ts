@@ -92,6 +92,7 @@ function doorSentence(script: RoomScript, state: RoomState): string | null {
 }
 
 function chestSentence(script: RoomScript, state: RoomState): string | null {
+  if (!script.chest) return null;
   const chest = script.chest.square;
   const far = distance(state.hero, chest);
   if (far > CHEST_RANGE) return null;
