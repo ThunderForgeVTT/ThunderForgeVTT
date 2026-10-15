@@ -43,6 +43,9 @@ const HeroBuilder = lazy(() => import("./HeroBuilder.tsx"));
 const TORCH = 0.3;
 const PAGE = PAGE_TABLE;
 const WALKER = "walker";
+const LANTERN = "walker-lantern";
+/** The walker's lantern: enough to find the hero by, never a glare. */
+const LANTERN_GLOW = 0.35;
 const REDUCE = "(prefers-reduced-motion: reduce)";
 /** The grid's ink on the paper mat: the page's black, faint. */
 const GRID_INK = "#1f2a2e2e";
@@ -58,6 +61,8 @@ const LIGHTS_ON = 0.8;
 const EMBERS = 0.5;
 /** The dark as dawn breaks: amber, warming the paper rather than greying it. */
 const DAWN_TINT = "#4a2c14";
+/** How long the dark takes to catch up with the scroll, in ms (a time constant). */
+const DUSK_MS = 260;
 /** What a tap on counts as the table, not the page's words. */
 const SURFACES = "html, body, main, header.hero, .hero-body, .section";
 
@@ -142,8 +147,14 @@ export default function PageTable() {
     /** The dusk last sent, and how many torches are on the table. */
     shade: -1,
     torches: 0,
-    /** How brightly the torches burn, in eighths. */
+    /** How brightly the torches burn, 0 to 1. */
     glow: 0,
+    /** The dusk the table is fading towards, its tint, and the tint last sent. */
+    goal: 0,
+    tint: undefined as string | undefined,
+    sentTint: undefined as string | undefined,
+    /** Whether a fade is running. */
+    fading: false,
   });
   live.current.hero = hero;
 
@@ -317,32 +328,85 @@ export default function PageTable() {
       torches.forEach((_, i) => torch(i, L.glow));
       for (let i = torches.length; i < L.torches; i++) send({ type: "remove_light", lightId: `torch-${i}` });
       L.torches = torches.length;
-      send({ type: "set_carried_light", tokenId: WALKER, bright: L.cell * 0.35, dim: L.cell * 1.4 });
+      // Not a carried light: the engine burns those at full strength, which
+      // on the page is a glare. This one goes where the walker goes and
+      // burns as low as the torches.
+      send({
+        type: "upsert_light",
+        light: {
+          id: LANTERN,
+          x: 0,
+          y: 0,
+          attachedTokenId: WALKER,
+          radius: L.cell * 1.2,
+          brightRadius: 0,
+          color: "#ffd9a8",
+          intensity: LANTERN_GLOW,
+          flicker: 0.3,
+          castsShadows: false,
+        },
+      });
     },
     [send, torch],
   );
 
-  /** The dusk for where the visitor has scrolled to; the words light up past `LIGHTS_ON`. */
+  /** Darkens the table to `shade`: the ambient, the words, the mat and the torches. */
+  const shadeTo = useCallback(
+    (shade: number) => {
+      const L = live.current;
+      if (Math.abs(shade - L.shade) < 0.001 && L.tint === L.sentTint) return;
+      const wasLit = L.shade > EMBERS;
+      L.shade = shade;
+      L.sentTint = L.tint;
+      send({ type: "set_ambient_light", level: "bright", shade, color: L.tint });
+      document.documentElement.classList.toggle("dusk", shade > LIGHTS_ON);
+      const lit = shade > EMBERS;
+      if (lit !== wasLit) grid(lit);
+      // The torches catch and gutter with the dark, in steps fine enough
+      // that no one sees them: each step is a changed light set.
+      const glow = Math.round(Math.min(1, Math.max(0, (shade - EMBERS) / (LIGHTS_ON - EMBERS))) * 32) / 32;
+      if (glow !== L.glow) {
+        L.glow = glow;
+        L.torchAt.forEach((_, i) => torch(i, glow));
+      }
+    },
+    [send, grid, torch],
+  );
+
+  /**
+   * The dusk for where the visitor has scrolled to; the words light up past
+   * `LIGHTS_ON`. The dark follows the scroll over time, not in one step: a
+   * flick on a phone crosses the evening within a frame, and the page went
+   * from day to night, and the words from ink to chalk, in a blink.
+   */
   const dusk = useCallback(() => {
     const L = live.current;
     const vh = window.innerHeight;
-    const shade = duskAt(window.scrollY, L.dayEnds, L.nightAt, L.dawnAt, vh);
-    if (Math.abs(shade - L.shade) < 0.01 && (shade > 0 || L.shade === 0)) return;
-    const wasLit = L.shade > EMBERS;
-    L.shade = shade;
+    L.goal = duskAt(window.scrollY, L.dayEnds, L.nightAt, L.dawnAt, vh);
     // The night is blue; as dawn breaks the dark warms to amber.
-    const color = dawning(window.scrollY, L.dawnAt, vh) > 0 ? DAWN_TINT : undefined;
-    send({ type: "set_ambient_light", level: "bright", shade, color });
-    document.documentElement.classList.toggle("dusk", shade > LIGHTS_ON);
-    const lit = shade > EMBERS;
-    if (lit !== wasLit) grid(lit);
-    // The torches catch and gutter in steps: each step is a changed light set.
-    const glow = Math.round(Math.min(1, Math.max(0, (shade - EMBERS) / (LIGHTS_ON - EMBERS))) * 8) / 8;
-    if (glow !== L.glow) {
-      L.glow = glow;
-      L.torchAt.forEach((_, i) => torch(i, glow));
+    L.tint = dawning(window.scrollY, L.dawnAt, vh) > 0 ? DAWN_TINT : undefined;
+    if (L.shade < 0 || matchMedia(REDUCE).matches) {
+      shadeTo(L.goal);
+      return;
     }
-  }, [send, grid, torch]);
+    if (L.fading) return;
+    L.fading = true;
+    let last = performance.now();
+    const step = (now: number) => {
+      const L = live.current;
+      if (L.phase !== "running") {
+        L.fading = false;
+        return;
+      }
+      const k = 1 - Math.exp(-(now - last) / DUSK_MS);
+      last = now;
+      const next = Math.abs(L.goal - L.shade) < 0.002 ? L.goal : L.shade + (L.goal - L.shade) * k;
+      shadeTo(next);
+      if (next === L.goal) L.fading = false;
+      else requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }, [shadeTo]);
 
   /** Measures the page and sends it as a scene: grid, mat, the room. */
   const layout = useCallback(() => {
@@ -393,7 +457,7 @@ export default function PageTable() {
     for (let i = 0; i < L.torches; i++) s({ type: "remove_light", lightId: `torch-${i}` });
     L.torches = 0;
     L.glow = 0;
-    s({ type: "set_carried_light", tokenId: WALKER, bright: 0, dim: 0 });
+    s({ type: "remove_light", lightId: LANTERN });
     s({ type: "set_ambient_light", level: "bright" });
     L.shade = -1;
     s({ type: "set_scene_playing", playing: false });

@@ -91,7 +91,7 @@ export const NIGHT = 0.985;
 
 /**
  * The dusk over the page at `scrollY`, 0 (daylight) to `NIGHT`. Day holds
- * until `dayEnds`, the evening falls within half a screen after it, and the
+ * until `dayEnds`, the evening falls over the screen after it, and the
  * night deepens slowly until `nightAt`, the room. Dawn breaks over the screen
  * before `dawnAt` and it is day again by it.
  */
@@ -103,9 +103,9 @@ export function duskAt(
   viewportH: number,
 ): number {
   if (scrollY <= dayEnds || scrollY >= dawnAt) return 0;
-  const fall = Math.min(1, (scrollY - dayEnds) / (viewportH / 2));
-  const span = Math.max(1, nightAt - dayEnds - viewportH / 2);
-  const deep = Math.min(1, (scrollY - dayEnds - viewportH / 2) / span);
+  const fall = Math.min(1, (scrollY - dayEnds) / viewportH);
+  const span = Math.max(1, nightAt - dayEnds - viewportH);
+  const deep = Math.min(1, (scrollY - dayEnds - viewportH) / span);
   const dark = fall < 1 ? EVENING * smooth(fall) : EVENING + (NIGHT - EVENING) * deep;
   return dark * (1 - smooth(dawning(scrollY, dawnAt, viewportH)));
 }
