@@ -68,11 +68,11 @@ test.describe("with the engine running in the room", () => {
         await expectAccessible(page, `booted, ${width}px, ${scheme}`);
       }
 
-      // The room's stops, from the hero picker to Start over, over the
+      // The room's stops, from the controls to Start over, over the
       // running frame: each one shown, on screen and uncovered.
-      // Arrive by keyboard, as a visitor would: a focus from script after
-      // the click on "Play the room" is not :focus-visible.
-      await room(page).getByRole("radio").first().focus();
+      // Arrive by keyboard, as a visitor would: a focus from script is not
+      // :focus-visible.
+      await room(page).getByRole("button", { name: /North/ }).focus();
       await page.keyboard.press("Shift+Tab");
       await page.keyboard.press("Tab");
       const problems: string[] = [];

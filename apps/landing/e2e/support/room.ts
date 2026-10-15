@@ -60,10 +60,20 @@ export async function pressAndHear(
   expect((await saidLog(page)).at(-1)).toMatch(words);
 }
 
-/** Click "Play the room" and wait for the engine to run in the room's frame. */
+/**
+ * Bring the room on screen and wait for the engine to run in its frame. It
+ * takes the table by itself; under reduced motion the visitor still asks.
+ */
 export async function bootRoom(page: Page) {
-  await roomFrame(page).scrollIntoViewIfNeeded();
-  await roomFrame(page).getByRole("button", { name: "Play the room" }).click();
+  // The table and its controls on one screen: a click scrolls to its
+  // button, and a frame scrolled out of view pauses the engine (FR-017).
+  const size = page.viewportSize();
+  if (size && size.height < 1400) await page.setViewportSize({ width: size.width, height: 1400 });
+  await roomFrame(page).evaluate((el) => el.scrollIntoView({ block: "start" }));
+  const play = roomFrame(page).getByRole("button", { name: "Play the room" });
+  if (await page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches)) {
+    await play.click();
+  }
   await expect(roomFrame(page)).toHaveClass(/engine-frame--running/, { timeout: BOOT_TIMEOUT });
 }
 

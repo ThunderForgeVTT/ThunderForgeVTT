@@ -21,6 +21,8 @@ export const HERO_ID = "hero";
 export interface Hero {
   name: string;
   art: string;
+  /** Art the host already drew: PNG base64, sent in place of `art`. */
+  photoData?: string;
 }
 
 /** `payloads.rs` `WorldTokenPayload`, the fields the room sends. */
@@ -31,7 +33,8 @@ export interface TokenPayload {
   z: number;
   label: string;
   tokenType: "character" | "object";
-  photoUrl: string;
+  photoUrl?: string;
+  photoData?: string;
 }
 
 /** `RegionGeometry::Rect` (canvas-core `interaction.rs`), in world units. */
@@ -101,7 +104,7 @@ function heroToken(hero: Hero, square: Point, grid: number): TokenPayload {
     z: HERO_Z,
     label: hero.name,
     tokenType: "character",
-    photoUrl: hero.art,
+    ...(hero.photoData ? { photoData: hero.photoData } : { photoUrl: hero.art }),
   };
 }
 

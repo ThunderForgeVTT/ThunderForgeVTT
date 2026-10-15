@@ -3,7 +3,8 @@ import { createHero, PRESET_HEROES, type HeroSpec } from "@thunderforge/heroes";
 import { holderId, sendAs, take, type Send } from "../engine/host.ts";
 import { listen } from "../engine/dispatch.ts";
 import type { Progress } from "../engine/loadEngine.ts";
-import { PARTY, type PartyHero } from "../room/party.ts";
+import { PARTY } from "../room/party.ts";
+import { journeyHero, setJourneyHero, type Walker } from "./journeyHero.ts";
 import { rasterize, svgUrl } from "./heroArt.ts";
 import { announcePage, PAGE_TABLE } from "./onPage.ts";
 import "./page-table.css";
@@ -39,7 +40,7 @@ import { centreOf, MatScene } from "./matScene.ts";
 const HeroBuilder = lazy(() => import("./HeroBuilder.tsx"));
 
 /** A full torch's intensity. */
-const TORCH = 0.6;
+const TORCH = 0.3;
 const PAGE = PAGE_TABLE;
 const WALKER = "walker";
 const REDUCE = "(prefers-reduced-motion: reduce)";
@@ -87,11 +88,6 @@ function measure(): { boxes: Box[]; doc: Doc } {
   return { boxes, doc };
 }
 
-/** Who walks: one of the party, or a hero built here (`data`: PNG base64). */
-interface Walker extends PartyHero {
-  data?: string;
-}
-
 /** The pixel size the built hero is drawn at: crisp in a cell on a 3x screen. */
 const ART_PX = 192;
 
@@ -113,7 +109,7 @@ export default function PageTable() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [why, setWhy] = useState("");
   const [progress, setProgress] = useState<Progress | null>(null);
-  const [hero, setHero] = useState<Walker>(() => PARTY[Math.floor(Math.random() * PARTY.length)]!);
+  const [hero, setHero] = useState<Walker>(journeyHero);
   const [pct, setPct] = useState(0);
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"party" | "build">("party");
@@ -298,8 +294,8 @@ export default function PageTable() {
           id: `torch-${i}`,
           x: at.x,
           y: at.y,
-          radius: L.cell * 2,
-          brightRadius: L.cell * 0.4,
+          radius: L.cell * 1.5,
+          brightRadius: L.cell * 0.2,
           color: "#ffd9a8",
           // Firelight to read by, not to squint at: a full torch burns at
           // `TORCH`, and the words beside it keep their contrast.
@@ -321,7 +317,7 @@ export default function PageTable() {
       torches.forEach((_, i) => torch(i, L.glow));
       for (let i = torches.length; i < L.torches; i++) send({ type: "remove_light", lightId: `torch-${i}` });
       L.torches = torches.length;
-      send({ type: "set_carried_light", tokenId: WALKER, bright: L.cell * 0.6, dim: L.cell * 1.6 });
+      send({ type: "set_carried_light", tokenId: WALKER, bright: L.cell * 0.35, dim: L.cell * 1.4 });
     },
     [send, torch],
   );
@@ -400,7 +396,6 @@ export default function PageTable() {
     s({ type: "set_carried_light", tokenId: WALKER, bright: 0, dim: 0 });
     s({ type: "set_ambient_light", level: "bright" });
     L.shade = -1;
-    document.documentElement.classList.remove("dusk");
     s({ type: "set_scene_playing", playing: false });
     s({ type: "remove_token", tokenId: WALKER });
     mat.current!.clear();
@@ -454,6 +449,9 @@ export default function PageTable() {
       setPct(Math.round(fraction(window.scrollY, doc, window.innerHeight) * 100));
       const t = fraction(window.scrollY, L.doc, window.innerHeight);
       if (L.phase === "away") {
+        // The room holds the table, but the page's night still follows.
+        const shade = duskAt(window.scrollY, L.dayEnds, L.nightAt, L.dawnAt, window.innerHeight);
+        document.documentElement.classList.toggle("dusk", shade > LIGHTS_ON);
         const holder = holderId();
         const el = holder ? document.getElementById(holder) : null;
         const r = el?.getBoundingClientRect();
@@ -523,6 +521,7 @@ export default function PageTable() {
 
   const pick = (h: Walker) => {
     setHero(h);
+    setJourneyHero(h);
     live.current.hero = h;
     if (!h.data) setSpec(presetSpec(h.slug));
     if (live.current.phase === "running") {
@@ -557,7 +556,7 @@ export default function PageTable() {
       : phase === "running"
         ? "Tap the mat to walk there."
         : phase === "away"
-          ? "The table is in the frame above."
+          ? "The table is in the room."
           : phase === "failed"
             ? `The table could not be set: ${why}`
             : phase === "held"
@@ -574,11 +573,7 @@ export default function PageTable() {
       />
       <aside
         className={`journey${open ? " journey--open" : ""}${open && mode === "build" ? " journey--build" : ""}`}
-        role="progressbar"
-        aria-label="How far down the page"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={pct}
+        aria-label="Your hero's walk"
         style={{ ["--journey" as string]: pct / 100 }}
       >
         <button
@@ -592,17 +587,24 @@ export default function PageTable() {
         </button>
         <div className="journey-words">
           <p className="journey-title">{pct >= 99 ? "That's the lot." : `${hero.name.split(" ")[0]} scrolls on`}</p>
-          <div className="journey-track">
+          <div
+            className="journey-track"
+            role="progressbar"
+            aria-label="How far down the page"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={pct}
+          >
             <div className="journey-ink" />
           </div>
           <p className="journey-status">{status}</p>
         </div>
         {open && (
-          <div className="journey-tools" role="tablist" aria-label="Who walks">
-            <button type="button" role="tab" aria-pressed={mode === "party"} onClick={() => setMode("party")}>
+          <div className="journey-tools" role="group" aria-label="Who walks">
+            <button type="button" aria-pressed={mode === "party"} onClick={() => setMode("party")}>
               The party
             </button>
-            <button type="button" role="tab" aria-pressed={mode === "build"} onClick={() => setMode("build")}>
+            <button type="button" aria-pressed={mode === "build"} onClick={() => setMode("build")}>
               Build a hero
             </button>
           </div>

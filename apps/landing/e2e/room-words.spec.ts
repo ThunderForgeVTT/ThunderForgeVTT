@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { isEngineFile } from "./support/engine.ts";
+import { PARTY } from "../src/room/party.ts";
 import { expectClean, openLanding } from "./support/page.ts";
 import { FIXED_SEEDS, goal, pad, playThrough, recordSaid, room, said, saidLog, square, stepAndHear } from "./support/room.ts";
 
@@ -24,7 +25,10 @@ test.describe("the room in words", () => {
     await playThrough(page);
 
     expect(opened.requests.filter(isEngineFile)).toEqual([]);
-    expect(opened.requests.filter((u) => new URL(u).pathname.startsWith("/room/"))).toEqual([]);
+    // The party's portraits are the hero builder's pictures, not the room's.
+    const portraits = new Set(PARTY.map((h) => h.art));
+    const roomFiles = opened.requests.map((u) => new URL(u).pathname);
+    expect(roomFiles.filter((p) => p.startsWith("/room/") && !portraits.has(p))).toEqual([]);
 
     // Start over: back to the start, every goal open again, no reload.
     await room(page).getByRole("button", { name: "Start over" }).click();

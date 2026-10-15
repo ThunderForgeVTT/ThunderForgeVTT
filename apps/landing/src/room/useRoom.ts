@@ -21,7 +21,8 @@ import { listen } from "../engine/dispatch.ts";
 import { canvasOf, running, viewAs } from "../engine/host.ts";
 import { throwId } from "../dice.ts";
 import { pressOnCanvas } from "../engine/keys.ts";
-import { PARTY, type PartyHero } from "./party.ts";
+import { journeyHero, watchJourneyHero, type Walker } from "../table/journeyHero.ts";
+import type { PartyHero } from "./party.ts";
 import { rollFormula } from "./roll.ts";
 import { chestOnBoard, outcomeCommands, parityError, sceneCommands, type Camera } from "./scene.ts";
 import { announce } from "./words.ts";
@@ -64,11 +65,15 @@ export interface Said {
   n: number;
 }
 
+/** The journey's hero as the room draws it: a built one brings its bytes. */
+function asRoomHero(h: Walker): PartyHero {
+  return h.data ? { slug: h.slug, name: h.name, art: h.art, photoData: h.data } : h;
+}
+
 export function useRoom(script: RoomScript, frameId: string) {
   const referee = useMemo(() => createReferee(script), [script]);
   const grid = script.map.gridSize;
   const [state, setState] = useState<RoomState>(() => referee.start());
-  const [hero, setHero] = useState<PartyHero>(PARTY[0]!);
   const [said, setSaid] = useState<Said | null>(null);
   const [rolling, setRolling] = useState(false);
   const [glitter, setGlitter] = useState<Glitter | null>(null);
@@ -76,7 +81,7 @@ export function useRoom(script: RoomScript, frameId: string) {
 
   // Event handlers read these, never a stale render's copy.
   const now = useRef(state);
-  const heroNow = useRef(hero);
+  const heroNow = useRef<PartyHero>(asRoomHero(journeyHero()));
   const engine = useRef<{ state: FrameState; send: Send | null }>({ state: "poster", send: null });
   const pending = useRef<Pending[]>([]);
 
@@ -238,11 +243,13 @@ export function useRoom(script: RoomScript, frameId: string) {
   const pick = useCallback(
     (next: PartyHero) => {
       heroNow.current = next;
-      setHero(next);
       startOver();
     },
     [startOver],
   );
+
+  // The hero walking the page walks into the room.
+  useEffect(() => watchJourneyHero((h) => pick(asRoomHero(h))), [pick]);
 
   const door = useCallback(() => apply(referee.toggleDoor(now.current)), [referee, apply]);
 
@@ -287,7 +294,6 @@ export function useRoom(script: RoomScript, frameId: string) {
 
   return {
     state,
-    hero,
     said,
     rolling,
     glitter,
@@ -295,7 +301,6 @@ export function useRoom(script: RoomScript, frameId: string) {
     step,
     door,
     roll,
-    pick,
     startOver,
     frame: { setup, teardown, onState },
   };

@@ -55,7 +55,8 @@ html {
   scrollbar-color: var(--ink-black) var(--mat-deep);
   scroll-behavior: smooth;
   /* A focused control scrolls in with its focus ring, not flush to the edge. */
-  scroll-padding-block: 3rem;
+  /* The bottom keeps a focused stop clear of the journey card. */
+  scroll-padding-block: 3rem 9rem;
   -webkit-text-size-adjust: 100%;
 }
 @media (prefers-reduced-motion: reduce) {

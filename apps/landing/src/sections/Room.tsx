@@ -5,7 +5,6 @@ import { CC_BY_SA, DEMO, MAPS_CATALOG, MAPS_SOURCE } from "../links.ts";
 import ChestGlitter from "../room/ChestGlitter.tsx";
 import RoomControls from "../room/RoomControls.tsx";
 import GoalList from "../room/GoalList.tsx";
-import HeroPicker from "../room/HeroPicker.tsx";
 import { loadRoomScript, type LoadedRoom } from "../room/script.ts";
 import { useRoom } from "../room/useRoom.ts";
 import { AWAY, ENDING } from "../room/words.ts";
@@ -40,13 +39,12 @@ function RoomBody({ script, imageBytes }: LoadedRoom) {
 
   return (
     <div className="room-layout" data-square={`${state.hero.x},${state.hero.y}`}>
-      <HeroPicker hero={room.hero} onPick={room.pick} />
-
       <figure className="room-table" onPointerDown={() => controls.current?.focus({ preventScroll: true })}>
         <EngineFrame
           id={FRAME_ID}
           poster={{ src: "/room-table.webp", width: 1200, height: 675 }}
           action="Play the room"
+          auto
           away={AWAY}
           interactive
           maxTextureSize={MAX_TEXTURE}
@@ -57,7 +55,7 @@ function RoomBody({ script, imageBytes }: LoadedRoom) {
           {room.glitter && <ChestGlitter {...room.glitter} />}
         </EngineFrame>
         <figcaption className="room-caption">
-          {imageBytes !== null && <>Playing loads the map, {mb(imageBytes)} MB, and the table if the dice haven't. </>}
+          {imageBytes !== null && <>The map is {mb(imageBytes)} MB. You play the hero walking the page. </>}
           <Credit />
         </figcaption>
       </figure>
