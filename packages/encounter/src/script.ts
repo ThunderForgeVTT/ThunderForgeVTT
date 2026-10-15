@@ -6,6 +6,7 @@
  * Positions are in squares unless a field says otherwise.
  */
 
+import type { GoalId } from "./goals.ts";
 import type { RoomMap } from "./map.ts";
 import type { Point } from "./walls.ts";
 
@@ -38,7 +39,8 @@ export interface RoomScript {
   /** Each door's name in the words, by wall id: "the door to the hall". */
   doorNames: Record<string, string>;
   areas: Area[];
-  chest: {
+  /** The chest the room ends on. A room without one ends at its `exit`. */
+  chest?: {
     tokenId: string;
     /** The centre of the chest's square. */
     square: Point;
@@ -49,6 +51,11 @@ export interface RoomScript {
     art: string;
     openedArt: string;
   };
+  /**
+   * Where the hero leaves a walk-through room: a step from `from` into
+   * `region` meets `room-left`.
+   */
+  exit?: { from: SquareRect; region: SquareRect };
   roll: { formula: string; dc: number };
   scene: {
     background: string;
@@ -67,4 +74,14 @@ export function inRect(point: Point, rect: SquareRect): boolean {
     point.y >= rect.y &&
     point.y <= rect.y + rect.height
   );
+}
+
+/** The goals a room plays, in order: the goal door's, then its ending's. */
+export function goalsOf(script: RoomScript): GoalId[] {
+  return [
+    "door-reached",
+    "door-opened",
+    ...(script.chest ? (["chest-found", "chest-opened"] as const) : []),
+    ...(script.exit ? (["room-left"] as const) : []),
+  ];
 }

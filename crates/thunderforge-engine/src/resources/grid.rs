@@ -60,3 +60,22 @@ impl Default for GridVisible {
         Self(true)
     }
 }
+
+/// The colour the grid overlay is drawn in.
+///
+/// Pale by default, for the dark tables and painted maps the app plays on. A
+/// light table (the landing page's paper) sends its own ink with
+/// `set_scene_grid`, or the lines vanish into it. Every `set_scene_grid`
+/// says it again, so a scene that does not name one gets the default back.
+#[derive(Resource, Clone, Copy, Debug)]
+pub struct GridInk(pub Color);
+
+impl GridInk {
+    pub const DEFAULT: Color = Color::srgba(0.85, 0.87, 0.92, 0.16);
+}
+
+impl Default for GridInk {
+    fn default() -> Self {
+        Self(Self::DEFAULT)
+    }
+}

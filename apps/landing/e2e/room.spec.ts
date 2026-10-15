@@ -33,8 +33,13 @@ const onSquare = async (page: Page) => {
   return { dom: s, engine: at && `${at.x},${at.y}` };
 };
 
-/** The DOM's square and the engine's agree, and are `want`. */
+/**
+ * The DOM's square and the engine's agree, and are `want`. A click below the
+ * frame can scroll it off screen, and a frame out of view is paused: the
+ * engine catches up once it is seen again, so look at it first.
+ */
 async function standsAt(page: Page, want: string) {
+  await roomFrame(page).evaluate((el) => el.scrollIntoView({ block: "nearest" }));
   await expect.poll(() => onSquare(page)).toEqual({ dom: want, engine: want });
 }
 
@@ -63,21 +68,21 @@ test.describe("the room on the engine", () => {
     await expect
       .poll(() => engine<{ named?: string; found?: boolean }>(page, "movement_state"))
       .toMatchObject({ named: HERO_ID, found: true });
-    await standsAt(page, "-3,1.5");
+    await standsAt(page, "2,3.5");
     await expect.poll(() => seen(page, HALL_POINT)).toBe(false);
     for (const id of ["door-reached", "door-opened", "chest-found", "chest-opened"]) {
       await expect(goal(page, id)).toContainText("(not yet)");
     }
 
     // The engine moves the hero; the page agrees, square by square.
-    for (const y of ["0.5", "-0.5", "-1.5"]) {
+    for (const y of ["2.5", "1.5", "0.5"]) {
       await stepAndHear(page, "South", /door to the hall/);
-      await standsAt(page, `-3,${y}`);
+      await standsAt(page, `2,${y}`);
     }
 
     // Scenario 3: the shut door refuses the step, said once.
     await stepAndHear(page, "South", /^The door is shut\. Walls and closed doors refuse a move/);
-    await standsAt(page, "-3,-1.5");
+    await standsAt(page, "2,0.5");
     await expect(goal(page, "door-reached")).toContainText("(done)");
 
     // Scenario 4: the door opens on the table, and the hall comes into sight.
@@ -91,10 +96,10 @@ test.describe("the room on the engine", () => {
 
     // Scenario 6: into the hall and beside the chest; found once.
     await stepAndHear(page, "South", /hall/);
-    await standsAt(page, "-3,-2.5");
+    await standsAt(page, "2,-0.5");
     await stepAndHear(page, "South", /hall/);
     await stepAndHear(page, "East", /^You find the chest\./);
-    await standsAt(page, "-2,-3.5");
+    await standsAt(page, "3,-1.5");
     await expect(goal(page, "chest-found")).toContainText("(done)");
     await page.waitForTimeout(500);
     expect((await saidLog(page)).filter((l) => l.startsWith("You find the chest"))).toHaveLength(1);
@@ -107,6 +112,8 @@ test.describe("the room on the engine", () => {
     for (let i = 0; i < 30; i += 1) {
       await pressAndHear(page, roll, /^You rolled \d+\./);
       throws += 1;
+      // The throw waits, paused, if the click took the frame off screen.
+      await roomFrame(page).evaluate((el) => el.scrollIntoView({ block: "nearest" }));
       const total = Number(/You rolled (\d+)/.exec((await saidLog(page)).at(-1)!)![1]);
       let last: Landed | undefined;
       await expect
@@ -129,11 +136,25 @@ test.describe("the room on the engine", () => {
     expectClean(opened);
   });
 
+  test("on screen, the room takes the table by itself, with no button", async ({ page }) => {
+    const opened = await openLanding(page);
+    // The landing's tests hold still; this one is about a page that moves.
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.reload();
+    await roomFrame(page).evaluate((el) => el.scrollIntoView({ block: "center" }));
+    await expect(roomFrame(page)).toHaveClass(/engine-frame--running/, { timeout: BOOT_TIMEOUT });
+    await expect(roomFrame(page).getByRole("button")).toHaveCount(0);
+    await expect
+      .poll(() => engine<{ named?: string; found?: boolean }>(page, "movement_state"))
+      .toMatchObject({ named: HERO_ID, found: true });
+    expectClean(opened);
+  });
+
   test("a door out of reach, and Start over (US1 scenarios 5 and 8)", async ({ page }) => {
     const opened = await openLanding(page);
     await bootRoom(page);
     await recordSaid(page);
-    await standsAt(page, "-3,1.5");
+    await standsAt(page, "2,3.5");
 
     // Scenario 5: no door in reach: the button says why, the hall stays dark.
     const door = room(page).getByRole("button", { name: "Open the door" });
@@ -145,13 +166,13 @@ test.describe("the room on the engine", () => {
     await room(page).getByRole("button", { name: "Open the door to the hall" }).click();
     await expect.poll(() => seen(page, HALL_POINT)).toBe(true);
     await stepAndHear(page, "South", /hall/);
-    await standsAt(page, "-3,-2.5");
+    await standsAt(page, "2,-0.5");
 
     // Scenario 8: back to the start on the table and in the page, the door
     // shut again, no goal done, and no reload.
     await page.evaluate(() => ((window as unknown as { kept: number }).kept = 1));
     await room(page).getByRole("button", { name: "Start over" }).click();
-    await standsAt(page, "-3,1.5");
+    await standsAt(page, "2,3.5");
     await expect.poll(() => seen(page, HALL_POINT)).toBe(false);
     for (const id of ["door-reached", "door-opened", "chest-found", "chest-opened"]) {
       await expect(goal(page, id)).toContainText("(not yet)");

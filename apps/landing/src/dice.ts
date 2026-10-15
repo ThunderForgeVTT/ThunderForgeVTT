@@ -17,3 +17,11 @@ export function dice(): Promise<DiceModule> {
 export function seed() {
   return crypto.getRandomValues(new Uint32Array(4));
 }
+
+/**
+ * An id for one throw. `crypto.randomUUID` exists only on secure origins, so
+ * a phone on a LAN address would throw on every roll.
+ */
+export function throwId() {
+  return Array.from(crypto.getRandomValues(new Uint32Array(4)), (n) => n.toString(16)).join("-");
+}

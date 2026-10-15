@@ -315,6 +315,8 @@ impl SceneSight {
                 casts_shadows,
                 // The stored bright reach, as every board draws it (FR-061).
                 bright_radius: Some(bright_radius as f32),
+                // A flicker is drawn only; sight reads the light as steady.
+                flicker: 0.0,
             };
             sight.lights.push(resolved(&light, at));
         }

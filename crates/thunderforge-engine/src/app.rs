@@ -135,7 +135,9 @@ pub(crate) fn emit_player_state(
 pub(crate) struct SceneParams<'w, 's> {
     grid: Option<ResMut<'w, SceneGrid>>,
     grid_visible: Option<ResMut<'w, GridVisible>>,
+    grid_ink: Option<ResMut<'w, GridInk>>,
     ambient: Option<ResMut<'w, SceneAmbient>>,
+    ambient_shade: Option<ResMut<'w, AmbientShade>>,
     lighting_overlay: Option<ResMut<'w, LightingOverlay>>,
     camera: Option<ResMut<'w, CameraManager>>,
     grid_snap: Option<ResMut<'w, GridSnapEnabled>>,
@@ -216,10 +218,10 @@ pub(crate) fn apply_external_commands(
     // graceful-degradation rationale as `wall_set` above. One inbox for both
     // dice commands, so this system takes one parameter for them.
     dice_inbox: Option<ResMut<plugins::dice::DiceInbox>>,
-    // For token art (`upsert_token`'s optional `image`). Not `Option`: the
-    // asset server is part of `DefaultPlugins`, not a plugin this crate can
-    // choose to leave out.
-    asset_server: Res<AssetServer>,
+    // For token art (`upsert_token`'s `photoUrl` and `photoData`). Not
+    // `Option`: the asset server and the image store are part of
+    // `DefaultPlugins`, not a plugin this crate can choose to leave out.
+    mut art: TokenArt,
     // `Appearance` only exists once `StatusDisplayPlugin` is registered, same
     // graceful-degradation rationale as `wall_set` above. An appearance
     // command with no status plugin to apply it to is a no-op rather than a
@@ -284,16 +286,11 @@ pub(crate) fn apply_external_commands(
                         // on the handle rather than assigned outright,
                         // because `Sprite` is change-detected and assigning
                         // an identical handle would re-extract the token to
-                        // the render world for nothing. Clearing the size
-                        // hands it back to `size_tokens_to_grid`, which
-                        // re-fits it once the new art's dimensions are
-                        // known — the old art's aspect must not stick.
-                        if let Some(path) = token.photo_url.clone() {
-                            let handle = asset_server.load(path);
-                            if sprite.image != handle {
-                                sprite.image = handle;
-                                sprite.custom_size = None;
-                            }
+                        // the render world for nothing.
+                        if let Some(handle) = art.handle_for(&token)
+                            && sprite.image != handle
+                        {
+                            put_art(&mut sprite, handle);
                         }
                     }
                     // Playtest 2026-09-10 P7: the name on every update. It was
@@ -332,11 +329,9 @@ pub(crate) fn apply_external_commands(
                     transform.rotation = Quat::from_rotation_z(rotation);
                 }
 
-                let sprite = match token.photo_url.clone() {
-                    Some(path) => Sprite {
-                        // Owned: `AssetServer::load` borrows for `'static`,
-                        // and `token` is dropped at the end of this arm.
-                        image: asset_server.load(path),
+                let sprite = match art.handle_for(&token) {
+                    Some(image) => Sprite {
+                        image,
                         // Left for `size_tokens_to_grid` to set once the
                         // image's real dimensions are known. Guessing here
                         // would just be overwritten a frame later.
@@ -579,6 +574,7 @@ pub(crate) fn apply_external_commands(
                         // Its own bright reach (FR-061), or half its radius
                         // when none was sent (FR-062).
                         bright_radius: light.bright_radius,
+                        flicker: light.flicker.unwrap_or(0.0).clamp(0.0, 1.0),
                     });
                 }
             }
@@ -657,6 +653,7 @@ pub(crate) fn apply_external_commands(
                 origin_x,
                 origin_y,
                 visible,
+                color,
             } => {
                 if let Some(scene_grid) = scene.grid.as_deref_mut() {
                     *scene_grid = match map_size {
@@ -675,6 +672,9 @@ pub(crate) fn apply_external_commands(
                 }
                 if let Some(grid_visible) = scene.grid_visible.as_deref_mut() {
                     grid_visible.0 = visible;
+                }
+                if let Some(grid_ink) = scene.grid_ink.as_deref_mut() {
+                    grid_ink.0 = color.unwrap_or(GridInk::DEFAULT);
                 }
             }
             ExternalCommand::FocusToken {
@@ -779,6 +779,16 @@ pub(crate) fn apply_external_commands(
                         "fit {width}x{height} into {viewport:?} -> zoom {}",
                         camera_mgr.scale,
                     );
+                    // Said from inside the update that draws the new view, so
+                    // a page moving its canvas to match (the landing's scroll
+                    // window) moves it in the same painted frame.
+                    if immediate {
+                        emit_event(json!({
+                            "type": "cameraFitted",
+                            "centerX": center_x,
+                            "centerY": center_y,
+                        }));
+                    }
                 }
             }
             ExternalCommand::SetTokenVision {
@@ -831,7 +841,17 @@ pub(crate) fn apply_external_commands(
                     }
                 }
             }
-            ExternalCommand::SetAmbientLight { level, color } => {
+            ExternalCommand::SetAmbientLight {
+                level,
+                color,
+                shade,
+            } => {
+                if let Some(held) = scene.ambient_shade.as_deref_mut() {
+                    let next = AmbientShade(shade.map(|s| s.clamp(0.0, 1.0)));
+                    if *held != next {
+                        *held = next;
+                    }
+                }
                 if let Some(ambient) = scene.ambient.as_deref_mut() {
                     ambient.level = match level.trim().to_ascii_lowercase().as_str() {
                         "dark" | "dark_ness" | "darkness" | "unlit" => Illumination::Dark,

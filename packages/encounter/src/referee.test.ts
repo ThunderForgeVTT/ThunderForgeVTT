@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { provingGround, smallRoom } from "./fixtures.ts";
+import { provingGround, smallRoom, walkThrough } from "./fixtures.ts";
 import {
   ANNOUNCEMENTS,
   createReferee,
@@ -9,6 +9,7 @@ import {
   type Referee,
   type RoomState,
 } from "./referee.ts";
+import { goalsOf } from "./script.ts";
 
 const total = (value: number) => ({
   formula: "1d20+2",
@@ -343,6 +344,52 @@ test("a path is accepted only if every leg is", () => {
   const accepted = small.judgeMove(start, around[0]!, around[2]!, around);
   assert.equal(accepted.outcome.accepted, true);
   assert.deepEqual(accepted.state.hero, { x: 1, y: 0.5 });
+});
+
+test("a walk-through room is left through its door: room-left, once", () => {
+  const through = createReferee(walkThrough());
+  const near = last(
+    walk(through, through.start(), ["north", "north", "north"]),
+  ).state;
+  const open = through.toggleDoor(near).state;
+  const out = through.step(open, "north");
+  assert.equal(out.outcome.announcement, "room-left");
+  assert.equal(out.outcome.goal, "room-left");
+  assert.deepEqual(out.state.goals, [
+    "door-reached",
+    "door-opened",
+    "room-left",
+  ]);
+  const back = through.step(out.state, "south");
+  const again = through.step(back.state, "north");
+  assert.equal(again.outcome.goal, null, "met once");
+});
+
+test("a walk-through room has no chest to find or roll for", () => {
+  const through = createReferee(walkThrough());
+  const start = through.start();
+  assert.equal(
+    through.entered(start, "chest-region").outcome.announcement,
+    "ignored",
+  );
+  assert.equal(
+    through.rolled(start, total(20)).outcome.announcement,
+    "ignored",
+  );
+});
+
+test("goalsOf: the chest's goals for a chest, room-left for an exit", () => {
+  assert.deepEqual(goalsOf(smallRoom()), [
+    "door-reached",
+    "door-opened",
+    "chest-found",
+    "chest-opened",
+  ]);
+  assert.deepEqual(goalsOf(walkThrough()), [
+    "door-reached",
+    "door-opened",
+    "room-left",
+  ]);
 });
 
 test("every outcome carries one announcement key", () => {

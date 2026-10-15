@@ -7,6 +7,7 @@ import "@fontsource/atkinson-hyperlegible-mono/400.css";
 import "./styles.css";
 import { App } from "./App.tsx";
 import { bootLandingTelemetry } from "./telemetry.ts";
+import { snapToGrid } from "./snap.ts";
 
 bootLandingTelemetry();
 
@@ -15,3 +16,5 @@ createRoot(document.getElementById("root")!).render(
     <App />
   </StrictMode>,
 );
+
+snapToGrid();

@@ -7,7 +7,7 @@ import { BOOT_TIMEOUT, engine } from "./engine.ts";
 /** Spec 091: the room, read from the DOM and from the engine. */
 
 export const script = roomScript(
-  JSON.parse(readFileSync(new URL("../../public/maps/demo.json", import.meta.url), "utf8")) as MapFile,
+  JSON.parse(readFileSync(new URL("../../public/maps/dungeon-sample.json", import.meta.url), "utf8")) as MapFile,
 );
 const grid = script.map.gridSize;
 
@@ -60,10 +60,20 @@ export async function pressAndHear(
   expect((await saidLog(page)).at(-1)).toMatch(words);
 }
 
-/** Click "Play the room" and wait for the engine to run in the room's frame. */
+/**
+ * Bring the room on screen and wait for the engine to run in its frame. It
+ * takes the table by itself; under reduced motion the visitor still asks.
+ */
 export async function bootRoom(page: Page) {
-  await roomFrame(page).scrollIntoViewIfNeeded();
-  await roomFrame(page).getByRole("button", { name: "Play the room" }).click();
+  // The table and its controls on one screen: a click scrolls to its
+  // button, and a frame scrolled out of view pauses the engine (FR-017).
+  const size = page.viewportSize();
+  if (size && size.height < 1400) await page.setViewportSize({ width: size.width, height: 1400 });
+  await roomFrame(page).evaluate((el) => el.scrollIntoView({ block: "start" }));
+  const play = roomFrame(page).getByRole("button", { name: "Play the room" });
+  if (await page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches)) {
+    await play.click();
+  }
   await expect(roomFrame(page)).toHaveClass(/engine-frame--running/, { timeout: BOOT_TIMEOUT });
 }
 
@@ -99,17 +109,17 @@ export async function playThrough(page: Page) {
   // The room renders when it nears the screen.
   await expect(said(page)).toBeAttached();
   await recordSaid(page);
-  expect(await square(page)).toBe("-3,1.5");
+  expect(await square(page)).toBe("2,3.5");
 
   await expect(goal(page, "door-reached")).toContainText("(not yet)");
-  for (const y of ["0.5", "-0.5", "-1.5"]) {
+  for (const y of ["2.5", "1.5", "0.5"]) {
     await stepAndHear(page, "South", /door to the hall/);
-    expect(await square(page)).toBe(`-3,${y}`);
+    expect(await square(page)).toBe(`2,${y}`);
   }
   // Within reach of the door is having reached it; the bump teaches the rule.
   await expect(goal(page, "door-reached")).toContainText("(done)");
   await stepAndHear(page, "South", /^The door is shut\. Walls and closed doors refuse a move/);
-  expect(await square(page)).toBe("-3,-1.5");
+  expect(await square(page)).toBe("2,0.5");
 
   const door = room(page).getByRole("button", { name: "Open the door to the hall" });
   await expect(door).toBeEnabled();

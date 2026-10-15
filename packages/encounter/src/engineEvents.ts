@@ -50,7 +50,15 @@ export interface SdkErrorEvent {
   command: string | null;
 }
 
+/** An immediate `fit_camera_to` took effect, in the update that draws it. */
+export interface CameraFittedEvent {
+  type: "cameraFitted";
+  centerX: number;
+  centerY: number;
+}
+
 export type EngineEvent =
+  | CameraFittedEvent
   | TokenMovedEvent
   | MovementBlockedEvent
   | DoorIconPressedEvent
@@ -146,6 +154,11 @@ function sdkError(event: Fields): SdkErrorEvent | null {
 }
 
 /** One engine event string, typed; null for any other kind and anything malformed. */
+function cameraFitted(event: Fields): CameraFittedEvent | null {
+  if (!isNumber(event.centerX) || !isNumber(event.centerY)) return null;
+  return { type: "cameraFitted", centerX: event.centerX, centerY: event.centerY };
+}
+
 export function parseEngineEvent(raw: string): EngineEvent | null {
   let event: unknown;
   try {
@@ -165,6 +178,8 @@ export function parseEngineEvent(raw: string): EngineEvent | null {
       return interactionTriggered(event);
     case "sdkError":
       return sdkError(event);
+    case "cameraFitted":
+      return cameraFitted(event);
     default:
       return null;
   }

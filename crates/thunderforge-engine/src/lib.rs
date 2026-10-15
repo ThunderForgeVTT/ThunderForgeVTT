@@ -49,8 +49,8 @@ use plugins::{
 };
 use plugins::{RenderProbeEnabled, ResolvedResource, TokenStatus};
 use resources::{
-    CameraManager, DoorState, GridSnapEnabled, GridVisible, IsGameMaster, LightSet,
-    LightSource as EngineLight, LightingOverlay, PlacedCanvasImage, PlacedCanvasImages,
+    AmbientShade, CameraManager, DoorState, GridInk, GridSnapEnabled, GridVisible, IsGameMaster,
+    LightSet, LightSource as EngineLight, LightingOverlay, PlacedCanvasImage, PlacedCanvasImages,
     SceneAmbient, SceneBackground, SceneGrid, Shape as EngineShape, ShapeKind, ShapeSet,
     TokenGridBehaviour, TokenVision, Wall as EngineWall, WallSet,
 };
@@ -77,3 +77,6 @@ mod startup;
 
 mod app;
 pub(crate) use app::*;
+
+mod token_art;
+pub(crate) use token_art::*;

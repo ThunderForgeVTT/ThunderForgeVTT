@@ -64,11 +64,14 @@ export type DoorId = (typeof DOOR_IDS)[number];
 const numbered = (prefix: string, index: number): string =>
   `${prefix}-${String(index).padStart(2, "0")}`;
 
-/** Read a `demo.json`-shaped map. The file is not changed. */
-export function readMap(file: MapFile): RoomMap {
+/**
+ * Read a `demo.json`-shaped map. The file is not changed. `doorIds` names
+ * the doors in the order the map lists them; the Proving Ground's by default.
+ */
+export function readMap(file: MapFile, doorIds: readonly string[] = DOOR_IDS): RoomMap {
   let doors = 0;
   const walls = file.walls.map((wall, index): Wall => {
-    const name = wall.doorState === "none" ? undefined : DOOR_IDS[doors++];
+    const name = wall.doorState === "none" ? undefined : doorIds[doors++];
     return {
       id: name ?? numbered("wall", index),
       x1: wall.x1,

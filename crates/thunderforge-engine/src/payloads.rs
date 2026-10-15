@@ -105,6 +105,17 @@ pub(crate) struct WorldTokenPayload {
     /// almost no real token art is square.
     #[serde(default, rename = "photoUrl")]
     pub(crate) photo_url: Option<String>,
+    /// Token art as the image itself: a base64 PNG (or WebP) the host drew a
+    /// moment ago and never put at a URL — a hero built on the page, a
+    /// portrait painted in a canvas. `photoUrl` is for art that has an
+    /// address; this is for art that has none yet.
+    ///
+    /// Wins over `photoUrl` when both are sent. Decoded once, on the update
+    /// that carries it; a later positional update without it leaves the art
+    /// alone, like `photoUrl`. Bytes that do not decode keep the previous art
+    /// and log why.
+    #[serde(default, rename = "photoData")]
+    pub(crate) photo_data: Option<String>,
     /// What this token represents, deciding the colour it is drawn in when
     /// it has no art.
     ///
@@ -227,6 +238,9 @@ pub(crate) struct WorldLightPayload {
     /// it, which draws the light as it always was: bright to half its radius.
     #[serde(rename = "brightRadius", default)]
     pub(crate) bright_radius: Option<f32>,
+    /// How much the flame wavers, 0 to 1. Absent is a steady light.
+    #[serde(default)]
+    pub(crate) flicker: Option<f32>,
     pub(crate) intensity: f32,
     pub(crate) color: Option<String>,
     #[serde(rename = "attachedTokenId")]
@@ -420,6 +434,8 @@ pub(crate) enum ExternalCommand {
         origin_x: f32,
         origin_y: f32,
         visible: bool,
+        /// The grid's ink; `None` is the default pale line.
+        color: Option<Color>,
     },
     /// Sets a token's grid behaviour: how many cells across it is, and whether
     /// it snaps. Tokens are one cell and snapping unless told otherwise.
@@ -535,6 +551,9 @@ pub(crate) enum ExternalCommand {
     SetAmbientLight {
         level: String,
         color: Option<String>,
+        /// How dark the map looks, 0 to 1, overriding the level's own (a
+        /// dusk). Absent: the level decides.
+        shade: Option<f32>,
     },
     /// Draws the lighting/vision debug overlay: light radii and vision cones.
     SetLightingOverlay {

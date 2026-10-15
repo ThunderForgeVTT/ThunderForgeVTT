@@ -52,10 +52,16 @@ mod web {
     use bevy::prelude::*;
     use bevy::winit::{EventLoopProxyWrapper, UpdateMode, WinitSettings, WinitUserEvent};
     use std::sync::OnceLock;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
 
     type Waker = Box<dyn Fn() + Send + Sync>;
     static WAKER: OnceLock<Waker> = OnceLock::new();
+    /// Whether the loop is paused. A running loop already updates every
+    /// frame, and a wake-up sent to it cancels the frame it had asked the
+    /// browser for: a host sending a command every frame (a token walking)
+    /// would then never see a frame drawn.
+    static PAUSED: AtomicBool = AtomicBool::new(false);
 
     pub(super) fn keep_waker(proxy: Option<Res<EventLoopProxyWrapper>>) {
         if let Some(proxy) = proxy {
@@ -67,6 +73,9 @@ mod web {
     }
 
     pub(super) fn wake() {
+        if !PAUSED.load(Ordering::Relaxed) {
+            return;
+        }
         if let Some(wake) = WAKER.get() {
             wake();
         }
@@ -82,6 +91,7 @@ mod web {
         let Some(mut settings) = settings else {
             return;
         };
+        PAUSED.store(!rendering.on, Ordering::Relaxed);
         if rendering.on {
             *settings = WinitSettings::game();
         } else {

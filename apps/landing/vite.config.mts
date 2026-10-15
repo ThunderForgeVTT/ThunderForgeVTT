@@ -1,7 +1,13 @@
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createReadStream, existsSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { defineConfig, type Plugin } from "vite";
+import {
+  defineConfig,
+  searchForWorkspaceRoot,
+  type Plugin,
+  type PreviewServer,
+  type ViteDevServer,
+} from "vite";
 import react from "@vitejs/plugin-react";
 import { servedTelemetry } from "@thunderforge/telemetry/vite";
 
@@ -37,9 +43,9 @@ const ghProxy = {
 };
 
 // Spec 090 T036: the demo's build at `/demo/`, as the image serves it beside
-// the landing, so `vite preview` (and the e2e run against it) can load the
-// engine the frame boots. Preview only: the production build never sees it,
-// and with no demo build the path is simply not found.
+// the landing, so `vite preview` (and the e2e run against it) and `vite` (dev,
+// with hot reload) can load the engine the frame boots. The production build
+// never sees it, and with no demo build the path is simply not found.
 const DEMO_DIR = path.resolve(__dirname, "../../data/demo");
 const TYPES: Record<string, string> = {
   ".js": "text/javascript",
@@ -52,22 +58,34 @@ const TYPES: Record<string, string> = {
   ".png": "image/png",
   ".woff2": "font/woff2",
 };
+function serveDemo(server: ViteDevServer | PreviewServer) {
+  server.middlewares.use("/demo/", (req, res, next) => {
+    const rel = decodeURIComponent((req.url ?? "/").split("?")[0]);
+    const file = path.join(DEMO_DIR, rel);
+    if (!file.startsWith(DEMO_DIR + path.sep)) return next();
+    if (!existsSync(file) || !statSync(file).isFile()) return next();
+    res.setHeader("Content-Type", TYPES[path.extname(file)] ?? "application/octet-stream");
+    res.setHeader("Content-Length", statSync(file).size);
+    // As nginx: hashed build output never changes under its name, so the
+    // browser keeps it; the manifest that names it is always asked again.
+    res.setHeader(
+      "Cache-Control",
+      rel.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache",
+    );
+    createReadStream(file).pipe(res);
+  });
+}
 function servedDemo(): Plugin {
   return {
     name: "thunderforge-served-demo",
-    configurePreviewServer(server) {
-      server.middlewares.use("/demo/", (req, res, next) => {
-        const rel = decodeURIComponent((req.url ?? "/").split("?")[0]);
-        const file = path.join(DEMO_DIR, rel);
-        if (!file.startsWith(DEMO_DIR + path.sep)) return next();
-        if (!existsSync(file) || !statSync(file).isFile()) return next();
-        res.setHeader("Content-Type", TYPES[path.extname(file)] ?? "application/octet-stream");
-        res.setHeader("Content-Length", statSync(file).size);
-        res.setHeader("Cache-Control", "no-cache");
-        createReadStream(file).pipe(res);
-      });
-    },
+    configureServer: serveDemo,
+    configurePreviewServer: serveDemo,
   };
+}
+
+function diceDir(): string[] {
+  const dir = path.resolve(__dirname, "node_modules/@thunderforge/dice");
+  return existsSync(dir) ? [realpathSync(dir)] : [];
 }
 
 export default defineConfig({
@@ -93,7 +111,15 @@ export default defineConfig({
       ),
     },
   },
-  server: { host: "127.0.0.1", port: devPort, strictPort: true, proxy: ghProxy },
+  server: {
+    host: "127.0.0.1",
+    port: devPort,
+    strictPort: true,
+    proxy: ghProxy,
+    // The dice build may be a link out of this checkout (a worktree shares
+    // the main checkout's `dist/dice`); the dev server must serve its wasm.
+    fs: { allow: [searchForWorkspaceRoot(__dirname), ...diceDir()] },
+  },
   preview: { host: "127.0.0.1", port: previewPort, strictPort: true, proxy: ghProxy },
   build: { outDir: "dist", emptyOutDir: true },
 });

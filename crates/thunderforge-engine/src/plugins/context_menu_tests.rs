@@ -88,6 +88,7 @@ fn light(id: &str, x: f32, y: f32) -> LightSource {
         attached_token_id: None,
         casts_shadows: true,
         bright_radius: None,
+        flicker: 0.0,
     }
 }
 

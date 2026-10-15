@@ -20,6 +20,12 @@ impl Default for SceneAmbient {
     }
 }
 
+/// How dark the map looks, 0 to 1, in place of the ambient level's own
+/// darkness. Only the picture changes: who can be seen still follows the
+/// level, so a dusk can fall over a bright scene without hiding anyone.
+#[derive(Resource, Clone, Copy, Debug, Default, PartialEq)]
+pub struct AmbientShade(pub Option<f32>);
+
 /// One token's eyes. Absent means unaided, omnidirectional sight.
 #[derive(Component, Clone, Copy, Debug, Default, Deref, DerefMut)]
 pub struct TokenVision(pub VisionProfile);

@@ -4,6 +4,7 @@ import {
   rollbackCommand,
   roomSetup,
   type Judged,
+  type Point,
   type RoomScript,
   type RoomState,
 } from "@thunderforge/encounter";
@@ -19,10 +20,9 @@ export interface Camera {
 /** The board the engine draws, in its own pixels (`engine-frame.css`). */
 export const BOARD = { w: 960, h: 540 };
 
-/** Where on the board the chest's square is: its centre, and a square's side. */
-export function chestOnBoard(script: RoomScript, cam: Camera): { x: number; y: number; size: number } {
+/** Where on the board a square is: its centre, and a square's side. */
+export function squareOnBoard(script: RoomScript, { x, y }: Point, cam: Camera): { x: number; y: number; size: number } {
   const grid = script.map.gridSize;
-  const { x, y } = script.chest.square;
   return {
     x: BOARD.w / 2 + (x * grid - cam.x) / cam.scale,
     y: BOARD.h / 2 - (y * grid - cam.y) / cam.scale,
@@ -51,7 +51,7 @@ export function sceneCommands(
     const wall = script.map.walls.find((w) => w.id === id);
     if (wall && door !== wall.doorState) out.push(doorCommand(wall, door));
   }
-  if (state.goals.includes("chest-opened")) out.push(chestCommand(script, true));
+  if (state.goals.includes("chest-opened")) out.push(...chestCommand(script, true));
   return out;
 }
 
@@ -68,7 +68,7 @@ export function outcomeCommands(
     const wall = script.map.walls.find((w) => w.id === id);
     if (wall) out.push(doorCommand(wall, state));
   }
-  if (outcome.announcement === "roll-succeeded") out.push(chestCommand(script, true));
+  if (outcome.announcement === "roll-succeeded") out.push(...chestCommand(script, true));
   return out;
 }
 

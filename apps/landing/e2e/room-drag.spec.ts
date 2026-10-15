@@ -41,6 +41,9 @@ async function drag(
   const to = await onPage(page, toWorld(b, grid));
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
+  // The engine hit-tests a press where the pointer is on the frame that
+  // sees it: let that frame pass before the first move, as a hand does.
+  await page.waitForTimeout(40);
   for (let i = 1; i <= 8; i += 1) {
     await page.mouse.move(from.x + ((to.x - from.x) * i) / 8, from.y + ((to.y - from.y) * i) / 8);
     await page.waitForTimeout(40);
@@ -63,13 +66,13 @@ test.describe("a drag on the table", () => {
     await roomFrame(page).scrollIntoViewIfNeeded();
     await expect.poll(() => engineHero(page)).toEqual(script.start);
 
-    // Towards the shut door to the hall, five squares south: the token stops
+    // Towards the shut door to the hall, three squares south: the token stops
     // at the door while it is carried, and the drop lands it there, in front.
     const n = (await saidLog(page)).length;
     await drag(page, script.start, { x: script.start.x, y: script.start.y - 5 });
     await expect.poll(async () => (await saidLog(page)).length).toBeGreaterThan(n);
     expect((await saidLog(page)).at(-1)).toMatch(/door to the hall is within reach to the south, shut/);
-    const atDoor = { x: script.start.x, y: -1.5 };
+    const atDoor = { x: script.start.x, y: 0.5 };
     await expect.poll(async () => near(await engineHero(page))).toEqual(atDoor);
     await expect.poll(() => square(page)).toBe(`${atDoor.x},${atDoor.y}`);
     expect((await engine<{ tokenId: string }[]>(page, "token_footprints")).some((t) => t.tokenId === HERO_ID)).toBe(true);
@@ -81,11 +84,11 @@ test.describe("a drag on the table", () => {
     await expect.poll(async () => near(await engineHero(page))).toEqual(at);
     await expect.poll(() => square(page)).toBe(`${at.x},${at.y}`);
 
-    // Carried west through the room's plain wall at x = -9.5 and held there:
+    // Carried west through the room's plain wall at x = -4.5 and held there:
     // the token stops at the wall while the pointer goes on.
-    await drag(page, at, { x: -12, y: at.y }, { release: false });
+    await drag(page, at, { x: -7, y: at.y }, { release: false });
     const held = (await engineHero(page))!;
-    expect(held.x, `held at ${JSON.stringify(held)}`).toBeGreaterThan(-9.5);
+    expect(held.x, `held at ${JSON.stringify(held)}`).toBeGreaterThan(-4.5);
     expect(held.x).toBeLessThan(at.x);
 
     // Let go off the table entirely: the token is put back, not left across.
@@ -94,7 +97,7 @@ test.describe("a drag on the table", () => {
     await page.mouse.up();
     await page.waitForTimeout(800);
     const after = near(await engineHero(page))!;
-    expect(after.x).toBeGreaterThan(-9.5);
+    expect(after.x).toBeGreaterThan(-4.5);
     expect(after.y).toBe(at.y);
     expect(await square(page)).toBe(`${after.x},${after.y}`);
     expectClean(opened);

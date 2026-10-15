@@ -7,6 +7,8 @@
 // of decoded bytes, because fetch decodes the body, so the total is
 // `bytes.raw`; the readout shows the wire size beside it.
 
+import { cachedWasm, keepWasm } from "./wasmCache.ts";
+
 export interface Manifest {
   js: string;
   wasm: string;
@@ -79,10 +81,15 @@ async function readWasm(
   onProgress: (p: Progress) => void,
   signal?: AbortSignal,
 ): Promise<Uint8Array> {
-  const res = await fetch(BASE + m.wasm, { signal });
-  if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
   const total = m.bytes.raw;
   const wire = m.bytes.br ?? m.bytes.gz ?? total;
+  const kept = await cachedWasm(m.wasm, total);
+  if (kept) {
+    onProgress({ loaded: total, total, wire });
+    return kept;
+  }
+  const res = await fetch(BASE + m.wasm, { signal });
+  if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
   const out = new Uint8Array(total);
   const reader = res.body.getReader();
   let loaded = 0;
@@ -96,6 +103,7 @@ async function readWasm(
     onProgress({ loaded, total, wire });
   }
   if (loaded !== total) throw new Error(`${loaded} of ${total} bytes`);
+  void keepWasm(m.wasm, out);
   return out;
 }
 

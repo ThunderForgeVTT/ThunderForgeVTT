@@ -1,5 +1,6 @@
 /**
- * Spec 091: the room's four goals.
+ * Spec 091: the rooms' goals. A room with a chest plays the first four; a
+ * room the hero walks through plays the doors and `room-left`.
  *
  * The page announces each goal as a DOM event, `GOAL_EVENT`, with
  * `detail: { goal }`. Nothing is sent anywhere.
@@ -11,6 +12,7 @@ export const GOALS = [
   "door-opened",
   "chest-found",
   "chest-opened",
+  "room-left",
 ] as const;
 
 /** One goal id. The union is closed: no other id exists. */
@@ -23,7 +25,7 @@ export interface GoalEventDetail {
   goal: GoalId;
 }
 
-/** Whether a string is one of the four goal ids. */
+/** Whether a string is one of the goal ids. */
 export function isGoalId(value: unknown): value is GoalId {
   return (
     typeof value === "string" && (GOALS as readonly string[]).includes(value)

@@ -1,17 +1,24 @@
-import { GOALS, type GoalId } from "@thunderforge/encounter";
+import type { GoalId } from "@thunderforge/encounter";
 import { GOAL_LABELS } from "./words.ts";
 
-// Spec 091 FR-013: the four goals in order, done or not said in words, not
+// Spec 091 FR-013: the room's goals in order, done or not said in words, not
 // colour alone.
 
-export default function GoalList({ met }: { met: readonly GoalId[] }) {
+interface Props {
+  goals: readonly GoalId[];
+  met: readonly GoalId[];
+  /** The list's name, unique on the page: each room has its own. */
+  label: string;
+}
+
+export default function GoalList({ goals, met, label }: Props) {
   return (
-    <section className="room-goals" aria-labelledby="room-goals-title">
-      <h3 id="room-goals-title" className="room-subhead">
+    <section className="room-goals" aria-label={label}>
+      <h3 className="room-subhead">
         Goals
       </h3>
       <ol>
-        {GOALS.map((goal) => {
+        {goals.map((goal) => {
           const done = met.includes(goal);
           return (
             <li key={goal} className={done ? "room-goal room-goal--done" : "room-goal"} data-goal={goal}>

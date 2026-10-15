@@ -5,6 +5,7 @@
  *   grid of 100. Its north door is `door-hall`, its west door `door-west`.
  * - `provingGround`: the landing's real map, with the facts the plan
  *   proposes (T031 confirms them on the engine).
+ * - `walkThrough`: `smallRoom` with no chest, left by the hall door.
  */
 
 import { readFileSync } from "node:fs";
@@ -143,6 +144,17 @@ export function provingGround(): RoomScript {
       background: "/maps/demo.webp",
       torch: { bright: 4, dim: 8 },
       camera: { x: -9.5, y: -7, width: 14, height: 14 },
+    },
+  };
+}
+
+export function walkThrough(): RoomScript {
+  const { chest: _, ...room } = smallRoom();
+  return {
+    ...room,
+    exit: {
+      from: { x: -2.5, y: -2, width: 5, height: 4 },
+      region: { x: -2.5, y: -6, width: 5, height: 4 },
     },
   };
 }

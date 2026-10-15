@@ -35,8 +35,9 @@ test.describe("before the click", () => {
     // Spec 091 FR-025: the room's art waits for its click, and the map the
     // room shares with the legend is fetched once.
     const paths = opened.requests.map((u) => new URL(u).pathname);
-    expect(paths.filter((p) => p.startsWith("/room/"))).toEqual([]);
-    expect(paths.filter((p) => p === "/maps/demo.webp").length).toBeLessThanOrEqual(1);
+    // The party's portraits belong to the first screen's table now.
+    expect(paths.filter((p) => p.startsWith("/room/chest"))).toEqual([]);
+    expect(paths.filter((p) => p === "/maps/dungeon-sample.webp").length).toBeLessThanOrEqual(1);
     expectClean(opened);
   });
 
@@ -128,7 +129,9 @@ test.describe("the engine", () => {
   test("reduced motion follows the setting, before the first throw and on change", async ({ page }) => {
     const opened = await openLanding(page); // emulates reduce
     await boot(page);
+    const before = (await landed(page)).length;
     await page.getByRole("button", { name: /Attack/ }).click();
+    await expect.poll(async () => (await landed(page)).length, { timeout: 30_000 }).toBe(before + 1);
     expect((await landed(page)).at(-1)!.reducedMotion).toBe(true);
     await page.emulateMedia({ reducedMotion: "no-preference" });
     const count = (await landed(page)).length;

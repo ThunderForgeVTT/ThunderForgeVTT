@@ -21,6 +21,8 @@ export const HERO_ID = "hero";
 export interface Hero {
   name: string;
   art: string;
+  /** Art the host already drew: PNG base64, sent in place of `art`. */
+  photoData?: string;
 }
 
 /** `payloads.rs` `WorldTokenPayload`, the fields the room sends. */
@@ -31,7 +33,8 @@ export interface TokenPayload {
   z: number;
   label: string;
   tokenType: "character" | "object";
-  photoUrl: string;
+  photoUrl?: string;
+  photoData?: string;
 }
 
 /** `RegionGeometry::Rect` (canvas-core `interaction.rs`), in world units. */
@@ -101,26 +104,35 @@ function heroToken(hero: Hero, square: Point, grid: number): TokenPayload {
     z: HERO_Z,
     label: hero.name,
     tokenType: "character",
-    photoUrl: hero.art,
+    ...(hero.photoData ? { photoData: hero.photoData } : { photoUrl: hero.art }),
   };
 }
 
-/** The chest's token, shut or open; the engine swaps the art in place. */
-export function chestCommand(script: RoomScript, opened: boolean): EngineCommand {
+/**
+ * The chest's token, shut or open; the engine swaps the art in place. None
+ * for a room without a chest.
+ */
+export function chestCommand(
+  script: RoomScript,
+  opened: boolean,
+): EngineCommand[] {
   const { chest } = script;
+  if (!chest) return [];
   const grid = script.map.gridSize;
-  return {
-    type: "upsert_token",
-    token: {
-      id: chest.tokenId,
-      x: chest.square.x * grid,
-      y: chest.square.y * grid,
-      z: CHEST_Z,
-      label: "Chest",
-      tokenType: "object",
-      photoUrl: opened ? chest.openedArt : chest.art,
+  return [
+    {
+      type: "upsert_token",
+      token: {
+        id: chest.tokenId,
+        x: chest.square.x * grid,
+        y: chest.square.y * grid,
+        z: CHEST_Z,
+        label: "Chest",
+        tokenType: "object",
+        photoUrl: opened ? chest.openedArt : chest.art,
+      },
     },
-  };
+  ];
 }
 
 const rect = (r: SquareRect, grid: number): RectGeometry => ({
@@ -139,7 +151,7 @@ const rect = (r: SquareRect, grid: number): RectGeometry => ({
  * 3. the background;
  * 4. the walls, doors shut, and 5. the lights;
  * 6. the dark;
- * 7. the chest and 8. its region;
+ * 7. the chest and 8. its region, when the room has a chest;
  * 9. the hero's torch, 10. the hero, and 11. its vision, which needs the
  *    token first (`app.rs`, `SetTokenVision`);
  * 12. the hero under the player's hand;
@@ -181,17 +193,21 @@ export function roomSetup(
       (light): EngineCommand => ({ type: "upsert_light", light: { ...light } }),
     ),
     { type: "set_ambient_light", level: "dark" },
-    chestCommand(script, false),
-    {
-      type: "upsert_interactive",
-      interactive: {
-        id: chest.interactiveId,
-        subjectKind: "region",
-        geometry: rect(chest.region, grid),
-        trigger: "enter",
-        fireMode: "once",
-      },
-    },
+    ...chestCommand(script, false),
+    ...(chest
+      ? [
+          {
+            type: "upsert_interactive",
+            interactive: {
+              id: chest.interactiveId,
+              subjectKind: "region",
+              geometry: rect(chest.region, grid),
+              trigger: "enter",
+              fireMode: "once",
+            },
+          } satisfies EngineCommand,
+        ]
+      : []),
     // FR-010: the hero's token first, then what it carries and sees.
     { type: "upsert_token", token: heroToken(hero, script.start, grid) },
     { type: "set_token_vision", tokenId: HERO_ID, darkvision: 0 },
@@ -221,13 +237,21 @@ export function roomSetup(
  * A cleared background still needs a width and a height (`sdk.rs`).
  */
 export function roomTeardown(script: RoomScript): EngineCommand[] {
+  const chestTeardown: EngineCommand[] = script.chest
+    ? [
+        { type: "remove_token", tokenId: script.chest.tokenId },
+        {
+          type: "remove_interactive",
+          interactiveId: script.chest.interactiveId,
+        },
+      ]
+    : [];
   return [
     { type: "set_scene_playing", playing: false },
     { type: "set_controlled_token", tokenId: null },
     { type: "set_carried_light", tokenId: HERO_ID, bright: 0, dim: 0 },
     { type: "remove_token", tokenId: HERO_ID },
-    { type: "remove_token", tokenId: script.chest.tokenId },
-    { type: "remove_interactive", interactiveId: script.chest.interactiveId },
+    ...chestTeardown,
     ...script.map.walls.map(
       (wall): EngineCommand => ({ type: "remove_wall", wallId: wall.id }),
     ),

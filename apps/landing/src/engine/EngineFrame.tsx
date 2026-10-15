@@ -42,6 +42,12 @@ interface Props {
   teardown?: (send: Send) => void;
   /** Said while another frame has the table: where it is. */
   away: string;
+  /**
+   * Takes the table by itself once half the frame is on screen, with no
+   * button: the room is part of the page. Not under reduced motion, where
+   * the visitor still asks for it.
+   */
+  auto?: boolean;
   /** The room: the stage takes the pointer, but never the wheel. */
   interactive?: boolean;
   /** Spec 091 FR-022: the smallest WebGL2 `MAX_TEXTURE_SIZE` this scene needs. */
@@ -93,6 +99,7 @@ export default function EngineFrame(props: Props) {
   const [why, setWhy] = useState<string | null>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [stage, setStage] = useState<FailStage | null>(null);
+  const [reduced, setReduced] = useState(() => matchMedia(REDUCE).matches);
   const root = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const abort = useRef<AbortController | null>(null);
@@ -162,6 +169,32 @@ export default function EngineFrame(props: Props) {
   }
 
   const live = state === "running" || state === "paused";
+  const auto = props.auto === true && !reduced;
+
+  // A visitor who turns motion back on gets the room by itself again.
+  useEffect(() => {
+    const mq = matchMedia(REDUCE);
+    const changed = () => setReduced(mq.matches);
+    mq.addEventListener("change", changed);
+    return () => mq.removeEventListener("change", changed);
+  }, []);
+
+  // `auto`: in view, the frame takes the table back from the page. The page
+  // takes it again only once this frame is a screen away, so they never
+  // trade it back and forth at an edge.
+  useEffect(() => {
+    if (!auto || (state !== "poster" && state !== "away") || !root.current) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) void boot();
+      },
+      { threshold: 0.5 },
+    );
+    io.observe(root.current);
+    return () => io.disconnect();
+    // `boot` is a fresh closure every render; the state decides.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auto, state]);
 
   // A panic traps the module: every later call throws, so the frame says so.
   useEffect(() => {
@@ -254,12 +287,12 @@ export default function EngineFrame(props: Props) {
       {props.children !== undefined && <div className="engine-overlay">{props.children}</div>}
       {!live && (
         <div className="engine-panel">
-          {state === "poster" && (
+          {state === "poster" && !auto && (
             <button type="button" className="ink-btn ink-btn--blue" onClick={() => void boot()}>
               {action}
             </button>
           )}
-          {state === "away" && (
+          {state === "away" && !auto && (
             <>
               <p className="engine-note">{away}</p>
               <button type="button" className="ink-btn ink-btn--blue" onClick={() => void boot()}>

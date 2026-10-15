@@ -488,6 +488,16 @@ EXECUTE FUNCTION notify_world_event();
 
 ---
 
+## Local Development Builds
+
+Locally, build for iteration speed, not for size:
+
+- **Engine:** build the wasm engine with the dev profile (`node scripts/build.mjs`, which is dev outside CI, or `wasm-pack build --dev`). A dev build is ~300 MB but incremental; release (`ENGINE_PROFILE=release`: LTO, one codegen unit, wasm-opt) takes minutes and rebuilds from scratch. Build release only to measure size or performance.
+- **Frontends:** run `pnpm dev` (Vite with hot module replacement) for apps/web, apps/landing and apps/demo wherever a change can be hot-swapped. Use `vite build` plus `vite preview` only to check the production bundle itself.
+- **Server:** `cargo build -p thunderforge` stays dev.
+
+---
+
 ## Common Patterns & Anti-Patterns
 
 ### ✅ Do's

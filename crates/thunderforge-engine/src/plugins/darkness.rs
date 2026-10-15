@@ -58,7 +58,7 @@ use bevy::sprite_render::{AlphaMode2d, Material2d, Material2dPlugin};
 
 use super::darkness_probe;
 use crate::TokenIdentity;
-use crate::resources::{CanvasLayer, LightSet, SceneAmbient, WallSet};
+use crate::resources::{AmbientShade, CanvasLayer, LightSet, SceneAmbient, WallSet};
 #[cfg(test)]
 use crate::systems::lighting::effective_light_position;
 use crate::systems::lighting::live_light_position;
@@ -125,6 +125,9 @@ pub struct DarknessUniform {
     pub lights: [Vec4; MAX_LIGHTS],
     /// rgb = colour, a = intensity.
     pub light_colors: [Vec4; MAX_LIGHTS],
+    /// x = how much the light flickers (0 steady), y = its phase, so two
+    /// torches never waver in step.
+    pub light_flicker: [Vec4; MAX_LIGHTS],
 }
 
 impl Default for DarknessUniform {
@@ -135,6 +138,7 @@ impl Default for DarknessUniform {
             sight: Vec4::ZERO,
             lights: [Vec4::ZERO; MAX_LIGHTS],
             light_colors: [Vec4::ZERO; MAX_LIGHTS],
+            light_flicker: [Vec4::ZERO; MAX_LIGHTS],
         }
     }
 }
@@ -249,6 +253,7 @@ impl Plugin for DarknessPlugin {
             // was always `None` — the command reported success and changed
             // nothing, and the whole lighting layer saw permanent daylight.
             .init_resource::<SceneAmbient>()
+            .init_resource::<AmbientShade>()
             .init_resource::<ShadowMap>()
             .init_resource::<ShadowStats>()
             .add_systems(Update, sync_darkness);
@@ -386,6 +391,15 @@ fn pack_row(distances: &[f32], reach: f32) -> Vec<u8> {
     texels
 }
 
+/// Where in its waver a light starts, from its id: the same light always
+/// flickers the same way, and neighbours differ.
+fn phase_of(id: &str) -> f32 {
+    let hash = id.bytes().fold(2_166_136_261u32, |h, b| {
+        (h ^ u32::from(b)).wrapping_mul(16_777_619)
+    });
+    (hash % 1000) as f32 / 1000.0 * std::f32::consts::TAU
+}
+
 /// A row for a light that casts no shadows: it reaches its full radius in
 /// every direction.
 fn unshadowed_row() -> Vec<u8> {
@@ -429,6 +443,8 @@ fn new_shadow_image() -> Image {
 fn sync_darkness(
     mut commands: Commands,
     ambient: Option<Res<SceneAmbient>>,
+    shade: Option<Res<AmbientShade>>,
+    time: Res<Time>,
     light_set: Res<LightSet>,
     wall_set: Res<WallSet>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -448,7 +464,9 @@ fn sync_darkness(
         thunderforge_canvas_core::vision::AmbientLight::daylight,
         |a| a.0,
     );
-    let strength = darkness_strength(ambient.level);
+    let strength = shade
+        .and_then(|shade| shade.0)
+        .unwrap_or_else(|| darkness_strength(ambient.level));
 
     let positions: HashMap<String, Vec2> = tokens
         .iter()
@@ -526,6 +544,9 @@ fn sync_darkness(
             .and_then(Rgb::parse_hex)
             .unwrap_or(Rgb::WHITE);
         uniform.light_colors[index] = Vec4::new(color.r, color.g, color.b, light.intensity);
+        if light.flicker > 0.0 {
+            uniform.light_flicker[index] = Vec4::new(light.flicker, phase_of(&light.id), 0.0, 0.0);
+        }
 
         // The fingerprint is taken afresh only when it can have changed: the
         // walls did, or the light moved to where other walls are.
@@ -569,6 +590,11 @@ fn sync_darkness(
         }
     }
     uniform.params.x = in_view.len() as f32;
+    // The clock only while a flame in view needs it: a changed uniform is a
+    // rebuilt bind group, so a steady scene keeps writing nothing.
+    if in_view.iter().any(|p| p.light.flicker > 0.0) {
+        uniform.params.y = time.elapsed_secs_wrapped();
+    }
 
     // The viewer's own line of sight, cached like a light's row: recomputed
     // when the viewer moves, the view's reach steps, or a wall near them
@@ -779,6 +805,13 @@ mod tests {
     }
 
     #[test]
+    fn a_light_flickers_the_same_way_every_time_and_unlike_its_neighbour() {
+        assert_eq!(phase_of("torch-0"), phase_of("torch-0"));
+        assert_ne!(phase_of("torch-0"), phase_of("torch-1"));
+        assert!((0.0..std::f32::consts::TAU).contains(&phase_of("torch-0")));
+    }
+
+    #[test]
     fn a_carried_light_is_culled_by_where_its_token_is() {
         let torch = LightSource {
             id: "torch".into(),
@@ -790,6 +823,7 @@ mod tests {
             attached_token_id: Some("hero".into()),
             casts_shadows: true,
             bright_radius: None,
+            flicker: 0.0,
         };
         let positions: HashMap<String, Vec2> =
             [("hero".to_string(), Vec2::new(5000.0, 0.0))].into();

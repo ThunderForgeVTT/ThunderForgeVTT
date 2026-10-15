@@ -9,7 +9,7 @@ import {
   roomTeardown,
   type EngineCommand,
 } from "./engineScene.ts";
-import { provingGround, smallRoom } from "./fixtures.ts";
+import { provingGround, smallRoom, walkThrough } from "./fixtures.ts";
 
 const script = provingGround();
 const hero = { name: "Sir Pip", art: "/room/sir-pip.webp" };
@@ -246,8 +246,9 @@ test("doorCommand sends the door with its new state", () => {
 
 test("chestCommand sends the chest shut or open, in its place", () => {
   const script = smallRoom();
-  const shut = chestCommand(script, false);
-  const open = chestCommand(script, true);
+  const [shut] = chestCommand(script, false);
+  const [open] = chestCommand(script, true);
+  assert.ok(shut && open);
   assert.equal(shut.type, "upsert_token");
   assert.equal(open.type, "upsert_token");
   if (shut.type !== "upsert_token" || open.type !== "upsert_token") return;
@@ -260,6 +261,16 @@ test("chestCommand sends the chest shut or open, in its place", () => {
     ),
     shut,
   );
+});
+
+test("a room without a chest sends no chest and no region, up or down", () => {
+  const room = walkThrough();
+  assert.deepEqual(chestCommand(room, true), []);
+  const sent = [
+    ...roomSetup(room, hero, { reducedMotion: true }),
+    ...roomTeardown(room),
+  ];
+  assert.ok(!JSON.stringify(sent).includes("chest"));
 });
 
 test("rollbackCommand sends the hero back to a square", () => {

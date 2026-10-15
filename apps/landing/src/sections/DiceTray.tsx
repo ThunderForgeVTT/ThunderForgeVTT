@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { diceCommand, type Resolution } from "@thunderforge/dice-throw";
-import { dice, seed } from "../dice.ts";
+import { dice, seed, throwId } from "../dice.ts";
 import EngineFrame, { type FrameState, type Send } from "../engine/EngineFrame.tsx";
+import { sendAs } from "../engine/host.ts";
+import { onPage, PAGE_TABLE, watchPage } from "../table/onPage.ts";
 
 // The dice crate the server rolls with, compiled to WebAssembly and running
 // right here. Loaded with this section, never with the first viewport.
 //
 // Spec 090: once the visitor asks for the table, every roll printed here is
 // also thrown on it, face for face. The tray never waits for the engine.
+//
+// While the page itself is the table (`table/PageTable.tsx`), the roll goes
+// there instead: the dice tumble over the page, and the tray offers no frame
+// of its own, which would only take the canvas away from the page.
 
 type Sides = Resolution["dice"][number]["sides"];
 type Command = ReturnType<typeof diceCommand>;
@@ -74,6 +80,10 @@ export default function DiceTray() {
   const send = useRef<Send | null>(null);
   const loading = useRef(false);
   const pending = useRef<Command | null>(null);
+  const [page, setPage] = useState(false);
+  const toPage = useRef<Send>(sendAs(PAGE_TABLE)).current;
+
+  useEffect(() => watchPage(setPage), []);
 
   const onState = useCallback((state: FrameState, live: Send | null) => {
     send.current = live;
@@ -83,8 +93,12 @@ export default function DiceTray() {
   }, []);
 
   function thrown(r: Resolution) {
+    const command = diceCommand(r, { rollerName: "You", id: throwId() });
+    if (onPage()) {
+      toPage(command);
+      return;
+    }
     if (!send.current && !loading.current) return;
-    const command = diceCommand(r, { rollerName: "You" });
     if (send.current) send.current(command);
     else pending.current = command;
   }
@@ -97,22 +111,25 @@ export default function DiceTray() {
 
   async function roll(f: string) {
     setFormula(f);
+    let r: Resolution;
     try {
       const m = await dice();
       if (!m.validateFormula(f)) {
         setError(`"${f}" is not a formula the dice understand.`);
         return;
       }
-      const r = JSON.parse(m.roll(f, "{}", seed())) as Resolution;
-      setError("");
-      setResult(r);
-      thrown(r);
-      count.current += 1;
-      const total = "Total" in r.kind ? r.kind.Total : `${r.kind.SuccessCount} successes`;
-      setHistory((h) => [`${r.formula} → ${total}`, ...h].slice(0, 4));
+      r = JSON.parse(m.roll(f, "{}", seed())) as Resolution;
     } catch {
       setError(`"${f}" is not a formula the dice understand.`);
+      return;
     }
+    setError("");
+    setResult(r);
+    count.current += 1;
+    const total = "Total" in r.kind ? r.kind.Total : `${r.kind.SuccessCount} successes`;
+    setHistory((h) => [`${r.formula} → ${total}`, ...h].slice(0, 4));
+    // Last, so a table that fails to draw the throw still leaves the result.
+    thrown(r);
   }
 
   function submit(e: FormEvent) {
@@ -196,14 +213,18 @@ export default function DiceTray() {
         )}
       </div>
 
-      <EngineFrame
-        id="dice-table"
-        poster={{ src: "/dice-table.webp", width: 1200, height: 675 }}
-        action="Throw it on the table"
-        away="The table is in the room below."
-        setup={traySetup}
-        onState={onState}
-      />
+      {page ? (
+        <p className="tray-on-page">Every roll lands on the page. Watch below the tray.</p>
+      ) : (
+        <EngineFrame
+          id="dice-table"
+          poster={{ src: "/dice-table.webp", width: 1200, height: 675 }}
+          action="Throw it on the table"
+          away="The table is in the room below."
+          setup={traySetup}
+          onState={onState}
+        />
+      )}
     </div>
   );
 }

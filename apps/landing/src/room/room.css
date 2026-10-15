@@ -7,6 +7,10 @@
   grid-template-columns: minmax(0, 1fr);
   gap: calc(var(--cell) * 0.5);
   align-items: start;
+  /* The strip's words change length with every step. Left to anchor on
+     them, the browser scrolls the page to keep them still, and the table
+     creeps off the screen while it is played. */
+  overflow-anchor: none;
 }
 .room-layout--loading {
   min-height: 30rem;
@@ -57,47 +61,6 @@
   margin: 0.25rem 0 0;
   font-size: 0.95rem;
   color: var(--text-soft);
-}
-
-.room-heroes {
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-.room-heroes legend {
-  padding: 0;
-  font: 700 1.05rem/1.3 var(--font-body);
-}
-.room-heroes-list {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
-@media (max-width: 559px) {
-  .room-heroes-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-.room-hero {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-height: 48px;
-  padding: 0.25rem 0.5rem;
-  background: var(--paper);
-  border: 2px solid var(--grid-major);
-  border-radius: 6px;
-  cursor: pointer;
-}
-.room-hero:has(input:checked) {
-  border-color: var(--ink-black);
-  box-shadow: 0 0 0 1px var(--ink-black);
-  font-weight: 700;
-}
-.room-hero:has(input:focus-visible) {
-  outline: 3px solid var(--text-blue);
-  outline-offset: 2px;
 }
 
 .room-goals ol {
@@ -151,7 +114,9 @@
 }
 .room-pad {
   display: grid;
-  grid-template-columns: repeat(3, minmax(5.5rem, auto));
+  /* Three even columns that fit a phone's panel; past 18rem they stop. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: 18rem;
   grid-template-areas:
     ". north ."
     "west . east"
@@ -159,8 +124,9 @@
   gap: 0.4rem;
 }
 .room-pad-btn {
+  min-width: 0;
   min-height: 48px;
-  padding: 0.3rem 0.6rem;
+  padding: 0.3rem 0.35rem;
   font: 700 0.95rem/1.2 var(--font-body);
   color: var(--ink-black);
   background: var(--paper);

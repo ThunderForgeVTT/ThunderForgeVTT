@@ -19,6 +19,9 @@
   --text-red: #b72f25;
   --text-green: #1d6e3b;
   --paper: #fbfbf8;
+  /* The black that stays black: a terminal and a skip link are dark by day
+     and by night, where --ink-black turns to chalk. */
+  --ink-fixed: #1f2a2e;
 
   --marker-w: 7px;
   --marker-thin: 3.5px;
@@ -52,7 +55,8 @@ html {
   scrollbar-color: var(--ink-black) var(--mat-deep);
   scroll-behavior: smooth;
   /* A focused control scrolls in with its focus ring, not flush to the edge. */
-  scroll-padding-block: 3rem;
+  /* The bottom keeps a focused stop clear of the journey card. */
+  scroll-padding-block: 3rem 9rem;
   -webkit-text-size-adjust: 100%;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -130,7 +134,7 @@ img {
   left: 0.5rem;
   z-index: 100;
   padding: 0.6rem 1rem;
-  background: var(--ink-black);
+  background: var(--ink-fixed);
   color: #fff;
   font-weight: 700;
   border-radius: 4px;
@@ -549,6 +553,25 @@ img {
   text-wrap: balance;
 }
 
+/* The door's own handle, on the doorway: a tap opens or shuts it. */
+.door-toggle {
+  position: absolute;
+  z-index: 3;
+  transform: translate(-50%, -50%);
+  padding: 0.2rem 0.55rem;
+  font: 700 0.8rem/1.3 var(--font-body);
+  color: var(--paper);
+  background: var(--ink-red);
+  border: 2px solid var(--ink-black);
+  border-radius: 8px 6px 9px 7px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.door-toggle.is-open {
+  color: var(--ink-black);
+  background: var(--paper);
+}
+
 .token {
   position: absolute;
   top: 0;
@@ -659,15 +682,12 @@ main {
 }
 .section {
   position: relative;
-  width: min(100% - 2 * var(--cell), 75rem);
-  margin: 0 auto;
+  /* The column's edges stand on grid lines: whole cells wide, its left edge
+     a whole number of cells from the page's corner, where the grid starts. */
+  --column: round(down, min(100% - 2 * var(--cell), 75rem), var(--cell));
+  width: var(--column);
+  margin: 0 0 0 round(nearest, (100% - var(--column)) / 2, var(--cell));
   padding: calc(var(--cell) * 2) 0;
-}
-@media (max-width: 559px) {
-  .section {
-    width: calc(100% - 32px);
-    padding: calc(var(--cell) * 1.75) 0;
-  }
 }
 .marker-head {
   margin: 0 0 1.1rem;
@@ -697,7 +717,7 @@ main {
 
 .dream {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  grid-template-columns: round(nearest, (100% - var(--cell) * 2) * 0.524, var(--cell)) minmax(0, 1fr);
   gap: calc(var(--cell) * 2);
   align-items: start;
 }
@@ -772,8 +792,8 @@ main {
 
 .dice-section {
   display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
-  gap: calc(var(--cell) * 1.5);
+  grid-template-columns: round(nearest, (100% - var(--cell) * 2) * 0.4, var(--cell)) minmax(0, 1fr);
+  gap: calc(var(--cell) * 2);
   align-items: start;
 }
 @media (max-width: 899px) {
@@ -960,8 +980,8 @@ main {
 
 .legend-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
-  gap: calc(var(--cell) * 1);
+  grid-template-columns: round(nearest, (100% - var(--cell)) * 0.608, var(--cell)) minmax(0, 1fr);
+  gap: var(--cell);
   align-items: start;
 }
 .legend-layout--loading {
@@ -1233,7 +1253,7 @@ main {
 
 .systems {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: round(nearest, (100% - var(--cell) * 2) * 0.5, var(--cell)) minmax(0, 1fr);
   gap: calc(var(--cell) * 2);
   align-items: start;
 }
@@ -1307,7 +1327,7 @@ main {
 }
 .measures li {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: round(nearest, (100% - var(--cell)) / 2, var(--cell)) minmax(0, 1fr);
   gap: 0.25rem calc(var(--cell) * 1);
   align-items: baseline;
 }
@@ -1365,8 +1385,8 @@ main {
 
 .self-host {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
-  gap: calc(var(--cell) * 1.5);
+  grid-template-columns: round(nearest, (100% - var(--cell) * 2) * 0.444, var(--cell)) minmax(0, 1fr);
+  gap: calc(var(--cell) * 2);
   align-items: center;
 }
 @media (max-width: 899px) {
@@ -1401,7 +1421,9 @@ main {
 }
 .terminal {
   margin: 0;
-  background: var(--ink-black);
+  background: var(--ink-fixed);
+  /* By night the mat is as dark as the terminal; the edge keeps it a card. */
+  outline: 1.5px solid rgb(233 236 239 / 0.22);
   color: #e9ecef;
   border-radius: 6px 9px 5px 8px;
   overflow: hidden;
@@ -1423,7 +1445,7 @@ main {
   min-height: 40px;
   padding: 0 0.9rem;
   font: 700 0.9rem var(--font-body);
-  color: var(--ink-black);
+  color: var(--ink-fixed);
   background: #f5f8ff;
   border: 0;
   border-radius: 4px;
@@ -1453,8 +1475,8 @@ main {
 
 .stance {
   display: grid;
-  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
-  gap: calc(var(--cell) * 1.5);
+  grid-template-columns: round(nearest, (100% - var(--cell) * 2) * 0.35, var(--cell)) minmax(0, 1fr);
+  gap: calc(var(--cell) * 2);
   align-items: center;
 }
 .screen {
@@ -1579,7 +1601,7 @@ main {
 }
 .support-ways {
   display: grid;
-  grid-template-columns: 1.3fr 1fr 1fr;
+  grid-template-columns: round(nearest, 100% * 0.394, var(--cell)) round(nearest, 100% * 0.303, var(--cell)) minmax(0, 1fr);
   gap: 0;
   margin-top: calc(var(--cell) * 1);
   border-top: var(--marker-w) solid rgb(196 53 42 / 0.9);

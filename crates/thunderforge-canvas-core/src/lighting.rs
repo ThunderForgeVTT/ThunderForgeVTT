@@ -21,6 +21,10 @@ pub struct LightSource {
     /// of it (spec 045 FR-062). A Game Master sets it on a placed light, and a
     /// game system on a carried one (FR-061).
     pub bright_radius: Option<f32>,
+    /// How much the light wavers, 0 (steady) to 1 (a guttering flame). Drawn
+    /// only: a flicker shrinks and dims the pool, never past `radius`, so
+    /// sight and shadows read the light as steady.
+    pub flicker: f32,
 }
 
 /// The id prefix of a light a game system says a token carries.
@@ -65,6 +69,7 @@ impl LightSource {
             attached_token_id: Some(token_id.to_owned()),
             casts_shadows: true,
             bright_radius: Some(bright),
+            flicker: 0.0,
         })
     }
 
@@ -343,6 +348,7 @@ mod tests {
             attached_token_id: None,
             casts_shadows: true,
             bright_radius: None,
+            flicker: 0.0,
         }
     }
 
@@ -547,6 +553,7 @@ mod clear_tests {
             attached_token_id: None,
             casts_shadows: true,
             bright_radius: None,
+            flicker: 0.0,
         });
         set.push_undo(LightEdit::Move {
             light_id: "l1".to_string(),

@@ -27,12 +27,15 @@ const ATLAS = [
   ["azheim-meeting", "Azheim Meeting"],
 ];
 
+// The rooms' maps: copied with their geometry, but not in the atlas.
+const ROOMS = ["tavern-sample", "dungeon-sample"];
+
 await mkdir(out, { recursive: true });
 const catalog = path.join(source, "maps.json");
 if (existsSync(catalog)) {
   const maps = JSON.parse(await readFile(catalog, "utf8"));
   const index = [];
-  for (const [file, title] of ATLAS) {
+  for (const [file, title] of [...ATLAS, ...ROOMS.map((r) => [r, null])]) {
     const map = maps.find((m) => m.name === file);
     if (!map) continue;
     await copyFile(path.join(source, `${file}.webp`), path.join(out, `${file}.webp`));
@@ -44,6 +47,7 @@ if (existsSync(catalog)) {
       path.join(out, `${file}.json`),
       JSON.stringify({ name, width, height, gridSize, walls, lights, imageBytes }),
     );
+    if (title === null) continue;
     const doors = walls.filter((w) => w.doorState !== "none").length;
     index.push({
       name,

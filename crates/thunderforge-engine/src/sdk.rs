@@ -211,6 +211,11 @@ pub(crate) fn parse_command(input: &str) -> Option<ExternalCommand> {
                 .get("visible")
                 .and_then(Value::as_bool)
                 .unwrap_or(true),
+            color: value
+                .get("color")
+                .and_then(Value::as_str)
+                .and_then(|hex| Srgba::hex(hex).ok())
+                .map(Color::from),
         }),
         "set_token_grid" => Some(ExternalCommand::SetTokenGrid {
             token_id: value.get("tokenId")?.as_str()?.to_owned(),
@@ -312,6 +317,7 @@ pub(crate) fn parse_command(input: &str) -> Option<ExternalCommand> {
                 .get("color")
                 .and_then(Value::as_str)
                 .map(str::to_owned),
+            shade: value.get("shade").and_then(Value::as_f64).map(|f| f as f32),
         }),
         "set_lighting_overlay" => Some(ExternalCommand::SetLightingOverlay {
             enabled: value.get("enabled")?.as_bool()?,
@@ -641,6 +647,30 @@ mod selection_command_tests {
         assert!(parse_command(r#"{"type":"set_rendering","on":"no"}"#).is_none());
     }
 
+    /// A light table names its grid's ink; a scene that does not gets the
+    /// default back, and ink that is not a colour is ignored, not refused.
+    #[test]
+    fn a_grid_takes_its_ink_only_when_named() {
+        let ink = |input: &str| match parse_command(input) {
+            Some(ExternalCommand::SetSceneGrid { color, .. }) => color,
+            _ => panic!("not a grid: {input}"),
+        };
+        assert_eq!(
+            ink(r##"{"type":"set_scene_grid","size":48,"color":"#1f2a2e33"}"##),
+            Some(Color::from(Srgba::new(
+                0x1f as f32 / 255.0,
+                0x2a as f32 / 255.0,
+                0x2e as f32 / 255.0,
+                0x33 as f32 / 255.0
+            )))
+        );
+        assert_eq!(ink(r#"{"type":"set_scene_grid","size":48}"#), None);
+        assert_eq!(
+            ink(r#"{"type":"set_scene_grid","size":48,"color":"ink"}"#),
+            None
+        );
+    }
+
     /// Spec 091: a reduced-motion fit lands at once; an old caller glides.
     #[test]
     fn a_fit_is_immediate_only_when_asked() {
@@ -707,5 +737,34 @@ mod viewer_command_tests {
             panic!("upsert_shape without a creator should parse");
         };
         assert_eq!(shape.created_by, None);
+    }
+}
+
+#[cfg(test)]
+mod ambient_command_tests {
+    use super::*;
+
+    fn shade(input: &str) -> Option<Option<f32>> {
+        match parse_command(input)? {
+            ExternalCommand::SetAmbientLight { shade, .. } => Some(shade),
+            _ => None,
+        }
+    }
+
+    /// A dusk: a bright scene drawn darker without hiding anyone.
+    #[test]
+    fn a_shade_is_read_beside_the_level() {
+        assert_eq!(
+            shade(r#"{"type":"set_ambient_light","level":"bright","shade":0.5}"#),
+            Some(Some(0.5))
+        );
+    }
+
+    #[test]
+    fn without_a_shade_the_level_decides() {
+        assert_eq!(
+            shade(r#"{"type":"set_ambient_light","level":"dark"}"#),
+            Some(None)
+        );
     }
 }

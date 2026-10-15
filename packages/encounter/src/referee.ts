@@ -53,6 +53,7 @@ export const ANNOUNCEMENTS = [
   "door-closed",
   "no-door-in-reach",
   "chest-found",
+  "room-left",
   "roll-too-soon",
   "roll-failed",
   "roll-succeeded",
@@ -172,9 +173,19 @@ export function createReferee(script: RoomScript): Referee {
    */
   const movedTo = (state: RoomState, to: Point): Judged => {
     const moved = { ...state, hero: { ...to } };
+    const { chest, exit } = script;
+    if (exit && inRect(state.hero, exit.from) && inRect(to, exit.region)) {
+      const [next, goal] = meet(moved, "room-left");
+      if (goal)
+        return {
+          state: next,
+          outcome: { accepted: true, announcement: "room-left", goal },
+        };
+    }
     if (
-      !inRect(state.hero, script.chest.region) &&
-      inRect(to, script.chest.region)
+      chest &&
+      !inRect(state.hero, chest.region) &&
+      inRect(to, chest.region)
     ) {
       const [next, goal] = meet(moved, "chest-found");
       if (goal)
@@ -301,7 +312,7 @@ export function createReferee(script: RoomScript): Referee {
     },
 
     entered(state, interactiveId) {
-      if (interactiveId !== script.chest.interactiveId)
+      if (interactiveId !== script.chest?.interactiveId)
         return refuse(state, "ignored");
       const [next, goal] = meet(state, "chest-found");
       return {
@@ -311,7 +322,8 @@ export function createReferee(script: RoomScript): Referee {
     },
 
     rolled(state, result) {
-      if (!("Total" in result.kind)) return refuse(state, "ignored");
+      if (!script.chest || !("Total" in result.kind))
+        return refuse(state, "ignored");
       if (!state.goals.includes("chest-found")) {
         return refuse(
           state,
